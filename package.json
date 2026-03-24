@@ -1,0 +1,31 @@
+{
+  "name": "venture-template",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "echo 'Configure your dev server'",
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm run format:check && npm run lint && npm run test",
+    "prepare": "node -e \"if(process.env.CI)process.exit(0)\" && husky"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "eslint": "^9.18.0",
+    "globals": "^15.0.0",
+    "husky": "^9.1.0",
+    "lint-staged": "^15.4.0",
+    "prettier": "^3.4.0",
+    "typescript": "^5.3.0",
+    "typescript-eslint": "^8.20.0",
+    "vitest": "^1.0.0"
+  }
+}

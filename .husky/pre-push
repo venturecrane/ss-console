@@ -1,0 +1,2 @@
+echo "Running pre-push verification..."
+npm run verify

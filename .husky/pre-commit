@@ -1,0 +1,7 @@
+# Secret detection (gitleaks)
+if command -v gitleaks &> /dev/null; then
+  gitleaks protect --staged --no-banner
+fi
+
+# Formatting + linting (lint-staged)
+npx lint-staged
