@@ -50,8 +50,8 @@ All tokens use the `--ss-` prefix.
 
 ### Core Palette
 
-| Token                     | Value   | Purpose                               |
-| ------------------------- | ------- | ------------------------------------- |
+| Token                 | Value | Purpose                               |
+| --------------------- | ----- | ------------------------------------- |
 | `--ss-chrome`         | `TBD` | Site chrome (header, footer, page bg) |
 | `--ss-surface`        | `TBD` | Content area background               |
 | `--ss-surface-raised` | `TBD` | Elevated surface (cards, modals)      |
@@ -64,8 +64,8 @@ All tokens use the `--ss-` prefix.
 
 ### Status Colors
 
-| Token              | Value   | Purpose       |
-| ------------------ | ------- | ------------- |
+| Token          | Value | Purpose       |
+| -------------- | ----- | ------------- |
 | `--ss-success` | `TBD` | Success state |
 | `--ss-warning` | `TBD` | Warning state |
 | `--ss-error`   | `TBD` | Error state   |
@@ -87,8 +87,8 @@ All tokens use the `--ss-` prefix.
 
 Base unit: 4px. Scale: 4, 8, 12, 16, 24, 32, 48, 64.
 
-| Token               | Value |
-| ------------------- | ----- |
+| Token           | Value |
+| --------------- | ----- |
 | `--ss-space-1`  | 4px   |
 | `--ss-space-2`  | 8px   |
 | `--ss-space-3`  | 12px  |
@@ -100,8 +100,8 @@ Base unit: 4px. Scale: 4, 8, 12, 16, 24, 32, 48, 64.
 
 ## Surface Hierarchy
 
-| Tier    | Token                     | Purpose                          |
-| ------- | ------------------------- | -------------------------------- |
+| Tier    | Token                 | Purpose                          |
+| ------- | --------------------- | -------------------------------- |
 | Base    | `--ss-chrome`         | Page background, header, footer  |
 | Content | `--ss-surface`        | Main content area                |
 | Raised  | `--ss-surface-raised` | Cards, modals, elevated elements |
