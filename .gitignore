@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.astro/
+
+# Environment
+.env
+.env.*
+.dev.vars
+
+# Cloudflare
+.wrangler/
+
+# Secrets
+.infisical.json
+
+# OS
+.DS_Store
+
+# Testing
+coverage/
+
+# Performance
+.lighthouseci/
