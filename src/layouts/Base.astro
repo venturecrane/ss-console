@@ -1,0 +1,47 @@
+---
+import '../styles/global.css'
+import JsonLd from '../components/JsonLd.astro'
+
+interface Props {
+  title: string
+  description?: string
+}
+
+const {
+  title,
+  description = 'SMD Services — Operations consulting for Phoenix small businesses.',
+} = Astro.props
+
+const canonicalUrl = new URL(Astro.url.pathname, 'https://smd.services')
+const ogImageUrl = new URL('/og-image.png', 'https://smd.services')
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={canonicalUrl.href} />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl.href} />
+    <meta property="og:image" content={ogImageUrl.href} />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageUrl.href} />
+
+    <title>{title}</title>
+    <JsonLd />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

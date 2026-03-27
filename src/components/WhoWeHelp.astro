@@ -1,0 +1,44 @@
+---
+const verticals = [
+  {
+    title: 'Home Services',
+    subtitle: 'Plumbers, HVAC, Electricians, Contractors',
+    pain: 'Scheduling chaos, leads falling through cracks, no visibility into what your crew is doing',
+    fix: 'Centralized scheduling, automated follow-up, team accountability systems',
+  },
+  {
+    title: 'Professional Services',
+    subtitle: 'Accountants, Attorneys, Consultants',
+    pain: 'Everything runs through you, clients waiting on responses, pipeline tracked in your head',
+    fix: 'Documented processes, client communication systems, pipeline management',
+  },
+]
+---
+
+<section class="bg-gray-50 px-4 py-16 sm:py-24">
+  <div class="mx-auto max-w-screen-lg">
+    <h2 class="text-center text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+      Who We Help
+    </h2>
+    <div class="mt-12 grid grid-cols-1 gap-8 md:grid-cols-2">
+      {
+        verticals.map((v) => (
+          <div class="rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
+            <h3 class="text-xl font-bold text-gray-900">{v.title}</h3>
+            <p class="mt-1 text-sm text-gray-500">{v.subtitle}</p>
+            <div class="mt-6">
+              <p class="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                Sound familiar?
+              </p>
+              <p class="mt-2 text-gray-700">{v.pain}</p>
+            </div>
+            <div class="mt-4">
+              <p class="text-sm font-semibold uppercase tracking-wide text-brand">We fix this</p>
+              <p class="mt-2 text-gray-700">{v.fix}</p>
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>

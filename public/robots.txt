@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://smd.services/sitemap-index.xml

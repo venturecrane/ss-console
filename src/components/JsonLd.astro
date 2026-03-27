@@ -1,0 +1,29 @@
+---
+const schema = {
+  '@context': 'https://schema.org',
+  '@type': 'LocalBusiness',
+  name: 'SMD Services',
+  description:
+    'Operations consulting for Phoenix small businesses. We diagnose bottlenecks, choose the right tools, and implement real solutions in a 10-day sprint.',
+  url: 'https://smd.services',
+  email: 'scott@smd.services',
+  address: {
+    '@type': 'PostalAddress',
+    addressLocality: 'Phoenix',
+    addressRegion: 'AZ',
+    addressCountry: 'US',
+  },
+  areaServed: {
+    '@type': 'GeoCircle',
+    geoMidpoint: {
+      '@type': 'GeoCoordinates',
+      latitude: 33.4484,
+      longitude: -112.074,
+    },
+    geoRadius: '80467',
+  },
+  serviceType: 'Operations Consulting',
+}
+---
+
+<script is:inline type="application/ld+json" set:html={JSON.stringify(schema)} />

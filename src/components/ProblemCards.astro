@@ -1,0 +1,26 @@
+---
+const problems = [
+  { name: 'Owner Bottleneck', quote: "I can't take a day off" },
+  { name: 'Lead Leakage', quote: 'Leads fall through the cracks' },
+  { name: 'Financial Blindness', quote: "I have no idea if we're making money" },
+  { name: 'Scheduling Chaos', quote: 'Double-bookings happen all the time' },
+  { name: 'Manual Communication', quote: 'I personally text every customer' },
+  { name: 'Team Invisibility', quote: "I don't know what my team is doing" },
+]
+---
+
+<section class="bg-gray-50 px-4 py-16 sm:py-24">
+  <div class="mx-auto max-w-screen-lg">
+    <h2 class="text-center text-3xl font-bold text-gray-900">Sound Familiar?</h2>
+    <div class="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        problems.map((problem) => (
+          <div class="rounded-lg bg-white p-6 shadow-sm">
+            <p class="text-lg italic text-gray-700">"{problem.quote}"</p>
+            <p class="mt-4 font-semibold text-brand">{problem.name}</p>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>

@@ -1,0 +1,25 @@
+---
+interface Props {
+  variant?: 'primary' | 'outline' | 'outline-white'
+  href?: string
+  class?: string
+}
+
+const {
+  variant = 'primary',
+  href = 'mailto:scott@smd.services?subject=Assessment%20Call%20Request',
+  class: className = '',
+} = Astro.props
+
+const base =
+  'inline-block rounded-lg px-6 py-3 font-semibold transition focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2'
+const variants = {
+  primary: 'bg-brand text-white hover:bg-brand-dark',
+  outline: 'border-2 border-brand text-brand hover:bg-brand hover:text-white',
+  'outline-white': 'border-2 border-white text-white hover:bg-white hover:text-brand',
+}
+---
+
+<a href={href} class:list={[base, variants[variant], className]}>
+  <slot />
+</a>
