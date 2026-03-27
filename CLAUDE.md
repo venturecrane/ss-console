@@ -48,34 +48,34 @@ This creates a session, loads documentation, and establishes handoff context.
 
 Every 5–50 employee business has 3–4 of these. The assessment call identifies which 2–3 are most acute.
 
-| # | Problem | Owner Says | What's Actually Broken |
-|---|---------|-----------|----------------------|
-| 1 | Owner bottleneck | "I can't take a day off" | No documented processes — everything lives in the owner's head |
-| 2 | Lead leakage | "Leads fall through the cracks" | No CRM, no follow-up system, pipeline runs on memory |
-| 3 | Financial blindness | "I have no idea if we're making money" | QuickBooks 3 months behind, pricing based on gut feel |
-| 4 | Scheduling chaos | "Double-bookings happen all the time" | No centralized scheduling, no automated reminders |
-| 5 | Manual communication | "I personally text every customer" | Every message is manual, one-off, no templates or automation |
-| 6 | Team invisibility | "I don't know what my team is doing" | No task tracking, no accountability systems, no quality checklists |
+| #   | Problem              | Owner Says                             | What's Actually Broken                                             |
+| --- | -------------------- | -------------------------------------- | ------------------------------------------------------------------ |
+| 1   | Owner bottleneck     | "I can't take a day off"               | No documented processes — everything lives in the owner's head     |
+| 2   | Lead leakage         | "Leads fall through the cracks"        | No CRM, no follow-up system, pipeline runs on memory               |
+| 3   | Financial blindness  | "I have no idea if we're making money" | QuickBooks 3 months behind, pricing based on gut feel              |
+| 4   | Scheduling chaos     | "Double-bookings happen all the time"  | No centralized scheduling, no automated reminders                  |
+| 5   | Manual communication | "I personally text every customer"     | Every message is manual, one-off, no templates or automation       |
+| 6   | Team invisibility    | "I don't know what my team is doing"   | No task tracking, no accountability systems, no quality checklists |
 
 ### Pain Clusters by Vertical
 
-| Business Type | Lead With |
-|--------------|-----------|
-| Home services (plumber, HVAC) | Scheduling + lead follow-up + team visibility |
-| Professional services (accountant, attorney) | Owner bottleneck + manual communication + pipeline |
-| Retail/salon/spa | Scheduling + communication + financial visibility |
-| Contractor/trades | Estimating/quoting + scheduling + team accountability |
-| Restaurant/food service | Team communication + inventory + financial visibility |
+| Business Type                                | Lead With                                             |
+| -------------------------------------------- | ----------------------------------------------------- |
+| Home services (plumber, HVAC)                | Scheduling + lead follow-up + team visibility         |
+| Professional services (accountant, attorney) | Owner bottleneck + manual communication + pipeline    |
+| Retail/salon/spa                             | Scheduling + communication + financial visibility     |
+| Contractor/trades                            | Estimating/quoting + scheduling + team accountability |
+| Restaurant/food service                      | Team communication + inventory + financial visibility |
 
 ### Delivery Timeline (10-Day Playbook)
 
-| Days | Phase | Activities |
-|------|-------|-----------|
-| 1 | Audit call (60–90 min) | Walk through their day, "show me how you do X," identify top 3 pain points, write scope document |
-| 2–3 | Solution design | Choose simplest tools, build templates/workflows/docs, configure tools and integrations |
-| 4–5 | Implementation | Migrate data, connect systems, test end-to-end |
-| 6–7 | Training | 60-min walkthrough, hands-on practice, deliver "how to" docs, identify internal champion |
-| 8–10 | Buffer + polish | Handle feedback, adjust based on real use, final handoff |
+| Days | Phase                  | Activities                                                                                       |
+| ---- | ---------------------- | ------------------------------------------------------------------------------------------------ |
+| 1    | Audit call (60–90 min) | Walk through their day, "show me how you do X," identify top 3 pain points, write scope document |
+| 2–3  | Solution design        | Choose simplest tools, build templates/workflows/docs, configure tools and integrations          |
+| 4–5  | Implementation         | Migrate data, connect systems, test end-to-end                                                   |
+| 6–7  | Training               | 60-min walkthrough, hands-on practice, deliver "how to" docs, identify internal champion         |
+| 8–10 | Buffer + polish        | Handle feedback, adjust based on real use, final handoff                                         |
 
 ### Pricing
 
@@ -86,6 +86,7 @@ Every 5–50 employee business has 3–4 of these. The assessment call identifie
 ### The Assessment Call Is the Product
 
 The value is NOT configuring HubSpot. Anyone can do that. The value is:
+
 1. An experienced outsider seeing their operations with fresh eyes
 2. Identifying the problems they can't see because they're too close
 3. Prioritizing ruthlessly — "these 3 things first, everything else later"
@@ -96,24 +97,28 @@ The value is NOT configuring HubSpot. Anyone can do that. The value is:
 We are in the **pre-launch phase**. Nothing has been sold yet. The immediate priorities are:
 
 ### Priority 1: Collateral to Start Selling
+
 - [ ] Assessment call script (the structured conversation guide for the audit call)
 - [ ] Proposal/SOW template (what gets sent after the assessment call)
 - [ ] Pricing framework (decision tree for $2,500 vs $3,500 scoping)
 - [ ] One-pager / leave-behind (physical or PDF for networking)
 
 ### Priority 2: Go-to-Market
+
 - [ ] Vertical selection for initial targeting (pick ONE vertical to start)
 - [ ] Outreach strategy (how to find and reach first 5 prospects)
 - [ ] Landing page (smd.services — simple, credibility-focused)
 - [ ] Pipeline math (how many conversations → proposals → closes to hit $5K)
 
 ### Priority 3: Delivery Readiness
+
 - [ ] Tool recommendation matrix (for each of the 6 problems, 2–3 tool options by business size/type)
 - [ ] SOP templates (reusable frameworks the consultant fills in per client)
 - [ ] Client onboarding checklist (what we need from them before Day 1)
 - [ ] Quality checklist templates (reusable across engagements)
 
 ### Priority 4: Business Model Refinement
+
 - [ ] Payment terms (50/50? milestone-based? on completion?)
 - [ ] Paid assessment as separate entry point ($250 standalone)
 - [ ] Recurring retainer model ($200–500/mo post-delivery)
@@ -151,16 +156,17 @@ npm run format          # Format with Prettier
 
 Fetch the relevant module when working in that domain.
 
-| Module              | Key Rule                                             | Fetch for details                             |
-| ------------------- | ---------------------------------------------------- | --------------------------------------------- |
-| `secrets.md`        | Verify secret VALUES, not just key existence         | Infisical, vault, API keys                    |
-| `content-policy.md` | Never auto-save to VCMS; agents ARE the voice        | VCMS tags, storage rules, editorial, style    |
-| `team-workflow.md`  | All changes through PRs; never push to main          | Full workflow, QA grades, escalation triggers |
+| Module              | Key Rule                                      | Fetch for details                             |
+| ------------------- | --------------------------------------------- | --------------------------------------------- |
+| `secrets.md`        | Verify secret VALUES, not just key existence  | Infisical, vault, API keys                    |
+| `content-policy.md` | Never auto-save to VCMS; agents ARE the voice | VCMS tags, storage rules, editorial, style    |
+| `team-workflow.md`  | All changes through PRs; never push to main   | Full workflow, QA grades, escalation triggers |
 
 Fetch with: `crane_doc('global', '<module>')`
 
 ## Key Reference
 
+- **Decision Stack:** `docs/adr/decision-stack.md` (29 locked decisions across 6 layers — buy box, scope, pricing, assessment, distribution, delivery. Source of truth for all collateral and processes.)
 - **Package 2 Deep Dive:** `~/Desktop/services-package-2-deep-dive.md` (full problem analysis, delivery model, positioning)
 - `docs/` — Venture documentation as it develops
 
