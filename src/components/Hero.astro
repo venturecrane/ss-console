@@ -2,18 +2,18 @@
 import CtaButton from './CtaButton.astro'
 ---
 
-<section class="bg-primary px-4 py-24 sm:py-32">
-  <div class="mx-auto max-w-screen-lg text-center">
-    <h1 class="text-4xl font-extrabold tracking-tight text-white sm:text-6xl">
+<section class="relative overflow-hidden px-6 pb-32 pt-24">
+  <div class="mx-auto max-w-4xl text-center">
+    <h1
+      class="mb-8 text-5xl font-extrabold leading-[1.1] tracking-tight text-slate-900 md:text-7xl"
+    >
       Growing Businesses Need Better Systems. We Can Help.
     </h1>
-    <p class="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-300">
+    <p class="mx-auto mb-12 max-w-2xl text-xl leading-relaxed text-slate-600">
       You know your business better than anyone. We know how to pick the right tools and make them
       actually work. We're a small business too, and we work with you to figure out which changes
       will make the biggest difference.
     </p>
-    <div class="mt-10">
-      <CtaButton variant="accent" href="/book">Book Your Assessment Call</CtaButton>
-    </div>
+    <CtaButton href="/book">Book Your Assessment Call</CtaButton>
   </div>
 </section>

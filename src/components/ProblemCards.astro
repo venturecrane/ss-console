@@ -9,17 +9,18 @@ const problems = [
 ]
 ---
 
-<section class="bg-surface px-4 py-16 sm:py-24">
-  <div class="mx-auto max-w-screen-lg">
-    <h2 class="text-center text-3xl font-bold text-gray-900">Sound Familiar?</h2>
-    <div class="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+<section class="bg-slate-50 px-6 py-24">
+  <div class="mx-auto max-w-5xl">
+    <div class="mb-16 text-center">
+      <span class="text-xs font-semibold uppercase tracking-wider text-primary">The Reality</span>
+      <h2 class="mt-4 text-3xl font-bold text-slate-900">Sound Familiar?</h2>
+    </div>
+    <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
       {
         problems.map((problem) => (
-          <div class="rounded-lg bg-white p-6 shadow-sm">
-            <p class="text-lg italic leading-snug text-slate-800">"{problem.quote}"</p>
-            <p class="mt-4 text-xs font-bold uppercase tracking-wider text-accent">
-              {problem.name}
-            </p>
+          <div class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+            <p class="italic leading-relaxed text-slate-700">"{problem.quote}"</p>
+            <p class="mt-6 text-sm font-medium text-slate-500">{problem.name}</p>
           </div>
         ))
       }

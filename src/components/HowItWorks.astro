@@ -1,45 +1,45 @@
 ---
 const steps = [
   {
-    day: 'Day 1',
     title: 'Audit Call',
     description:
       'We get on the phone for an hour and walk through your day. How do jobs get scheduled? Where do leads go? What happens when something goes wrong? We figure out where things break down.',
   },
   {
-    day: 'Days 2\u20135',
     title: 'Build It Out',
     description:
       'We pick the tools, set them up, build the workflows, and connect everything. You keep running your business while we work.',
   },
   {
-    day: 'Days 6\u20137',
     title: 'Train Your Team',
     description:
       'Hands-on walkthrough with your team. Everyone gets written docs so nobody has to remember how it works.',
   },
-  {
-    day: 'Days 8\u201310',
-    title: 'Adjust and Wrap Up',
-    description:
-      "Your team uses the new systems for real. We're on call to fix anything that doesn't work the way it should.",
-  },
 ]
 ---
 
-<section class="bg-white px-4 py-16 sm:py-24">
-  <div class="mx-auto max-w-screen-lg">
-    <h2 class="text-center text-3xl font-bold text-gray-900">How It Works</h2>
-    <div class="mt-12 space-y-8 border-l-2 border-primary pl-8">
+<section class="bg-white px-6 py-24">
+  <div class="mx-auto max-w-3xl">
+    <div class="mb-16 text-center">
+      <h2 class="text-3xl font-bold text-slate-900">How we work</h2>
+      <p class="mt-4 text-slate-500">Three stages to operational clarity.</p>
+    </div>
+    <div class="space-y-12">
       {
-        steps.map((step) => (
-          <div class="relative">
-            <div class="absolute -left-[calc(2rem+5px)] top-1 h-2.5 w-2.5 rounded-full bg-primary" />
-            <span class="inline-flex items-center rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white">
-              {step.day}
-            </span>
-            <h3 class="mt-2 text-xl font-bold text-gray-900">{step.title}</h3>
-            <p class="mt-1 text-slate-600">{step.description}</p>
+        steps.map((step, i) => (
+          <div class="flex gap-8">
+            <div
+              class:list={[
+                'flex h-12 w-12 flex-none items-center justify-center rounded-full text-xl font-bold',
+                i === 0 ? 'bg-primary text-white' : 'bg-slate-100 text-slate-900',
+              ]}
+            >
+              {i + 1}
+            </div>
+            <div>
+              <h3 class="mb-2 text-xl font-bold text-slate-900">{step.title}</h3>
+              <p class="text-slate-600">{step.description}</p>
+            </div>
           </div>
         ))
       }

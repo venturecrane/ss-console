@@ -1,0 +1,314 @@
+<!doctype html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>SMD Services | Operations Consulting</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&amp;family=Inter:wght@400;500;600&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                DEFAULT: '#1e40af', // Confident Navy/Blue
+                hover: '#1e3a8a',
+              },
+              slate: {
+                50: '#f8fafc',
+                100: '#f1f5f9',
+                200: '#e2e8f0',
+                400: '#94a3b8',
+                500: '#64748b',
+                600: '#475569',
+                700: '#334155',
+                800: '#1e293b',
+                900: '#0f172a',
+                950: '#020617',
+              },
+            },
+            fontFamily: {
+              headline: ['Plus Jakarta Sans', 'sans-serif'],
+              body: ['Inter', 'sans-serif'],
+              label: ['Inter', 'sans-serif'],
+            },
+            borderRadius: {
+              DEFAULT: '0.25rem',
+              lg: '0.5rem',
+              xl: '0.75rem',
+              full: '9999px',
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings:
+          'FILL' 0,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24;
+        vertical-align: middle;
+      }
+      body {
+        font-family: 'Inter', sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      h1,
+      h2,
+      h3 {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+      }
+    </style>
+  </head>
+  <body class="bg-white text-slate-900 selection:bg-primary selection:text-white">
+    <!-- TopAppBar -->
+    <header class="bg-white border-b border-slate-100 sticky top-0 z-50">
+      <div class="flex justify-between items-center h-16 px-6 max-w-5xl mx-auto w-full">
+        <div class="text-lg font-bold tracking-tight text-slate-900">SMD Services</div>
+        <nav class="hidden md:flex space-x-8 items-center">
+          <a class="text-slate-900 font-semibold transition-colors" href="#">Home</a>
+          <a class="text-slate-500 hover:text-slate-900 transition-colors" href="#process"
+            >Process</a
+          >
+          <a class="text-slate-500 hover:text-slate-900 transition-colors" href="#pricing"
+            >Pricing</a
+          >
+          <a
+            class="bg-primary text-white px-5 py-2 rounded font-medium hover:opacity-80 transition-opacity"
+            href="/book"
+            >Book Assessment</a
+          >
+        </nav>
+        <button class="md:hidden text-slate-900">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+      </div>
+    </header>
+    <main>
+      <!-- Hero Section -->
+      <section class="relative pt-24 pb-32 px-6 overflow-hidden">
+        <div class="max-w-4xl mx-auto text-center">
+          <h1
+            class="text-5xl md:text-7xl font-extrabold tracking-tight text-slate-900 mb-8 leading-[1.1]"
+          >
+            Growing Businesses Need Better Systems.
+          </h1>
+          <p class="text-xl text-slate-600 mb-12 max-w-2xl mx-auto leading-relaxed">
+            You've built something that works. Now let's build the operations that allow it to scale
+            without you being involved in every single decision.
+          </p>
+          <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <a
+              class="inline-flex items-center justify-center px-8 py-4 bg-primary text-white font-semibold rounded-lg hover:bg-primary-hover transition-all shadow-sm group"
+              href="/book"
+            >
+              Book Your Assessment Call
+              <span
+                class="material-symbols-outlined ml-2 transition-transform group-hover:translate-x-1"
+                >arrow_forward</span
+              >
+            </a>
+          </div>
+        </div>
+        <!-- Subtle Decorative Element: Minimalist line art representing structure -->
+        <div class="absolute inset-0 -z-10 pointer-events-none opacity-20">
+          <div
+            class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full"
+            style="
+              background-image: radial-gradient(circle at 2px 2px, #e2e8f0 1px, transparent 0);
+              background-size: 40px 40px;
+            "
+          ></div>
+        </div>
+      </section>
+      <!-- Problem Recognition / Bento Grid Narrative -->
+      <section class="py-24 bg-slate-50 px-6">
+        <div class="max-w-5xl mx-auto">
+          <div class="text-center mb-16">
+            <span class="text-primary font-semibold tracking-wider uppercase text-xs"
+              >The Reality</span
+            >
+            <h2 class="text-3xl font-bold mt-4 text-slate-900">
+              It's getting harder to manage, isn't it?
+            </h2>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div
+              class="bg-white p-8 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between"
+            >
+              <p class="text-slate-700 italic leading-relaxed">
+                "I spent four hours today just answering questions my team should already know the
+                answer to."
+              </p>
+              <div class="mt-6 flex items-center gap-3">
+                <div class="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-slate-400">person</span>
+                </div>
+                <span class="text-sm font-medium text-slate-500">— HVAC Business Owner</span>
+              </div>
+            </div>
+            <div
+              class="bg-white p-8 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between md:scale-105 ring-2 ring-primary ring-opacity-10"
+            >
+              <p class="text-slate-700 italic leading-relaxed">
+                "We missed three follow-ups last week because the lead sheet didn't get updated.
+                That's real money lost."
+              </p>
+              <div class="mt-6 flex items-center gap-3">
+                <div class="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-slate-400">person</span>
+                </div>
+                <span class="text-sm font-medium text-slate-500">— Landscaping CEO</span>
+              </div>
+            </div>
+            <div
+              class="bg-white p-8 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between"
+            >
+              <p class="text-slate-700 italic leading-relaxed">
+                "I can't even take a weekend off without the phone ringing every twenty minutes."
+              </p>
+              <div class="mt-6 flex items-center gap-3">
+                <div class="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-slate-400">person</span>
+                </div>
+                <span class="text-sm font-medium text-slate-500">— Electrical Contractor</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <!-- Vertical Timeline Process -->
+      <section class="py-24 px-6 bg-white" id="process">
+        <div class="max-w-3xl mx-auto">
+          <div class="text-center mb-16">
+            <h2 class="text-3xl font-bold text-slate-900">How we work</h2>
+            <p class="text-slate-500 mt-4">Three stages to operational clarity.</p>
+          </div>
+          <div class="space-y-12">
+            <div class="flex gap-8">
+              <div
+                class="flex-none w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center font-bold text-xl"
+              >
+                1
+              </div>
+              <div>
+                <h3 class="text-xl font-bold text-slate-900 mb-2">The Assessment</h3>
+                <p class="text-slate-600">
+                  A 60-minute deep dive into your current friction points. We identify the two most
+                  expensive problems in your business today.
+                </p>
+              </div>
+            </div>
+            <div class="flex gap-8">
+              <div
+                class="flex-none w-12 h-12 rounded-full bg-slate-100 text-slate-900 flex items-center justify-center font-bold text-xl"
+              >
+                2
+              </div>
+              <div>
+                <h3 class="text-xl font-bold text-slate-900 mb-2">Systems Build</h3>
+                <p class="text-slate-600">
+                  We work alongside you to design and implement the fixes. Whether it's automated
+                  follow-ups or a custom internal dashboard, we build what works.
+                </p>
+              </div>
+            </div>
+            <div class="flex gap-8">
+              <div
+                class="flex-none w-12 h-12 rounded-full bg-slate-100 text-slate-900 flex items-center justify-center font-bold text-xl"
+              >
+                3
+              </div>
+              <div>
+                <h3 class="text-xl font-bold text-slate-900 mb-2">Handoff &amp; Support</h3>
+                <p class="text-slate-600">
+                  We train your team and monitor the new systems for 30 days to ensure they actually
+                  stick and solve the problem.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <!-- Pricing Card -->
+      <section class="py-24 bg-slate-900 text-white px-6" id="pricing">
+        <div class="max-w-4xl mx-auto">
+          <div class="grid md:grid-cols-2 gap-12 items-center">
+            <div>
+              <h2 class="text-3xl font-bold mb-6">Simple, Transparent Pricing</h2>
+              <p class="text-slate-400 text-lg mb-8">
+                We don't do complex retainers or vague hourly bills. We solve specific problems for
+                a flat fee.
+              </p>
+              <ul class="space-y-4">
+                <li class="flex items-center gap-3">
+                  <span class="material-symbols-outlined text-primary">check_circle</span>
+                  <span>Specific, measurable deliverables</span>
+                </li>
+                <li class="flex items-center gap-3">
+                  <span class="material-symbols-outlined text-primary">check_circle</span>
+                  <span>Unlimited team training for new systems</span>
+                </li>
+                <li class="flex items-center gap-3">
+                  <span class="material-symbols-outlined text-primary">check_circle</span>
+                  <span>30 days of post-launch technical support</span>
+                </li>
+              </ul>
+            </div>
+            <div class="bg-white text-slate-900 p-8 rounded-2xl shadow-xl">
+              <div class="mb-6">
+                <span class="text-slate-500 uppercase text-xs font-bold tracking-widest"
+                  >Single Engagement</span
+                >
+                <div class="text-5xl font-extrabold mt-2">$4,500</div>
+                <p class="text-slate-400 mt-2 text-sm">One-time payment or 50% split.</p>
+              </div>
+              <a
+                class="block w-full text-center bg-primary text-white py-4 rounded-lg font-bold hover:bg-primary-hover transition-colors"
+                href="/book"
+              >
+                Book Assessment
+              </a>
+              <p class="text-center text-xs text-slate-400 mt-4">
+                No commitment until after the assessment call.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <!-- Footer -->
+    <footer class="bg-slate-50 border-t border-slate-200 py-12">
+      <div
+        class="flex flex-col md:flex-row justify-between items-center px-6 max-w-5xl mx-auto w-full"
+      >
+        <div class="mb-6 md:mb-0">
+          <div class="text-sm font-semibold text-slate-800">SMD Services</div>
+          <p class="text-sm text-slate-500 mt-1">© 2024 SMD Services. Phoenix, Arizona.</p>
+        </div>
+        <div class="flex gap-8">
+          <a class="text-sm text-slate-500 hover:text-slate-700 transition-colors" href="#"
+            >Privacy Policy</a
+          >
+          <a class="text-sm text-slate-900 font-medium underline" href="/book">Book Now</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
