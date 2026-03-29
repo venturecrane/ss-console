@@ -9,15 +9,17 @@ const problems = [
 ]
 ---
 
-<section class="bg-gray-50 px-4 py-16 sm:py-24">
+<section class="bg-surface px-4 py-16 sm:py-24">
   <div class="mx-auto max-w-screen-lg">
     <h2 class="text-center text-3xl font-bold text-gray-900">Sound Familiar?</h2>
     <div class="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {
         problems.map((problem) => (
           <div class="rounded-lg bg-white p-6 shadow-sm">
-            <p class="text-lg italic text-gray-700">"{problem.quote}"</p>
-            <p class="mt-4 font-semibold text-brand">{problem.name}</p>
+            <p class="text-lg italic leading-snug text-slate-800">"{problem.quote}"</p>
+            <p class="mt-4 text-xs font-bold uppercase tracking-wider text-accent">
+              {problem.name}
+            </p>
           </div>
         ))
       }

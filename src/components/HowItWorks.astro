@@ -4,7 +4,7 @@ const steps = [
     day: 'Day 1',
     title: 'Audit Call',
     description:
-      'We get on the phone for an hour and walk through your day. How do jobs get scheduled? Where do leads go? What happens when a customer calls? We figure out where things break down.',
+      'We get on the phone for an hour and walk through your day. How do jobs get scheduled? Where do leads go? What happens when something goes wrong? We figure out where things break down.',
   },
   {
     day: 'Days 2\u20135',
@@ -30,16 +30,16 @@ const steps = [
 <section class="bg-white px-4 py-16 sm:py-24">
   <div class="mx-auto max-w-screen-lg">
     <h2 class="text-center text-3xl font-bold text-gray-900">How It Works</h2>
-    <div class="mt-12 space-y-8 border-l-2 border-brand pl-8">
+    <div class="mt-12 space-y-8 border-l-2 border-primary pl-8">
       {
         steps.map((step) => (
           <div class="relative">
-            <div class="absolute -left-[calc(2rem+5px)] top-1 h-2.5 w-2.5 rounded-full bg-brand" />
-            <span class="inline-flex items-center rounded-full bg-brand px-3 py-1 text-sm font-semibold text-white">
+            <div class="absolute -left-[calc(2rem+5px)] top-1 h-2.5 w-2.5 rounded-full bg-primary" />
+            <span class="inline-flex items-center rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white">
               {step.day}
             </span>
             <h3 class="mt-2 text-xl font-bold text-gray-900">{step.title}</h3>
-            <p class="mt-1 text-gray-600">{step.description}</p>
+            <p class="mt-1 text-slate-600">{step.description}</p>
           </div>
         ))
       }
