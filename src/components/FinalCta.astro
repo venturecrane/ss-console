@@ -1,3 +1,7 @@
+---
+import CtaButton from './CtaButton.astro'
+---
+
 <section id="book" class="bg-brand px-4 py-16 sm:py-24">
   <div class="mx-auto max-w-screen-lg text-center">
     <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">
@@ -7,14 +11,8 @@
       Book a 60-minute assessment call. We'll identify your top 3 problems and show you exactly how
       we'd solve them.
     </p>
-    <div class="mx-auto mt-10 max-w-3xl overflow-hidden rounded-xl bg-white shadow-lg">
-      <div
-        class="calendly-inline-widget"
-        data-url="https://calendly.com/smd-services/assessment?hide_gdpr_banner=1"
-        style="min-width:320px;height:700px;"
-      >
-      </div>
+    <div class="mt-10">
+      <CtaButton variant="outline-white" href="/book">Book Your Assessment Call</CtaButton>
     </div>
   </div>
 </section>
-<script is:inline src="https://assets.calendly.com/assets/external/widget.js" async></script>

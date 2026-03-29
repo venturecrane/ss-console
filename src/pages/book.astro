@@ -1,0 +1,136 @@
+---
+import Base from '../layouts/Base.astro'
+import Footer from '../components/Footer.astro'
+---
+
+<Base
+  title="Book Your Assessment Call — SMD Services"
+  description="Schedule a 60-minute operations assessment with SMD Services. We'll identify your top 3 bottlenecks and show you exactly how we'd fix them."
+>
+  <main>
+    <!-- Header -->
+    <section class="border-b border-gray-200 bg-white px-4 py-4">
+      <div class="mx-auto flex max-w-screen-lg items-center justify-between">
+        <a href="/" class="text-lg font-bold text-brand hover:text-brand-dark transition">
+          SMD Services
+        </a>
+        <a href="/" class="text-sm text-gray-500 hover:text-gray-700 transition">
+          &larr; Back to home
+        </a>
+      </div>
+    </section>
+
+    <!-- Booking Section -->
+    <section class="bg-gray-50 px-4 py-12 sm:py-16">
+      <div class="mx-auto max-w-screen-lg">
+        <div class="text-center">
+          <h1 class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+            Book Your Assessment Call
+          </h1>
+          <p class="mx-auto mt-4 max-w-2xl text-lg text-gray-600">
+            60 minutes. No sales pitch. We'll walk through your operations, identify the biggest
+            bottlenecks, and show you what we'd fix first.
+          </p>
+        </div>
+        <div class="mx-auto mt-10 max-w-3xl overflow-hidden rounded-xl bg-white shadow-lg">
+          <div
+            class="calendly-inline-widget"
+            data-url="https://calendly.com/smd-services/assessment?hide_gdpr_banner=1"
+            style="min-width:320px;height:700px;"
+          >
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- What to Expect -->
+    <section class="bg-white px-4 py-12 sm:py-16">
+      <div class="mx-auto max-w-screen-lg">
+        <h2 class="text-center text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+          What to Expect
+        </h2>
+        <div class="mx-auto mt-10 grid max-w-3xl gap-8 sm:grid-cols-3">
+          <div class="text-center">
+            <div
+              class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-light text-brand font-bold text-lg"
+            >
+              1
+            </div>
+            <h3 class="mt-4 font-semibold text-gray-900">We talk about your day</h3>
+            <p class="mt-2 text-sm text-gray-600">
+              Walk us through how things actually work — not how they're supposed to. Where do
+              things break down? What keeps you up at night?
+            </p>
+          </div>
+          <div class="text-center">
+            <div
+              class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-light text-brand font-bold text-lg"
+            >
+              2
+            </div>
+            <h3 class="mt-4 font-semibold text-gray-900">We identify the top 3 problems</h3>
+            <p class="mt-2 text-sm text-gray-600">
+              Most businesses have the same core issues. We'll pinpoint which ones are costing you
+              the most time and money right now.
+            </p>
+          </div>
+          <div class="text-center">
+            <div
+              class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-light text-brand font-bold text-lg"
+            >
+              3
+            </div>
+            <h3 class="mt-4 font-semibold text-gray-900">You get a clear plan</h3>
+            <p class="mt-2 text-sm text-gray-600">
+              We'll outline exactly what we'd fix, what tools we'd use, and what the 10-day sprint
+              looks like. No obligation.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="bg-gray-50 px-4 py-12 sm:py-16">
+      <div class="mx-auto max-w-screen-lg">
+        <h2 class="text-center text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+          Common Questions
+        </h2>
+        <dl class="mx-auto mt-10 max-w-2xl space-y-8">
+          <div>
+            <dt class="font-semibold text-gray-900">What does the assessment call cost?</dt>
+            <dd class="mt-2 text-gray-600">
+              Nothing. The assessment call is free with no obligation. If we're a fit, we'll send a
+              proposal within 48 hours. If not, you'll still walk away with clarity on your biggest
+              operational issues.
+            </dd>
+          </div>
+          <div>
+            <dt class="font-semibold text-gray-900">How should I prepare?</dt>
+            <dd class="mt-2 text-gray-600">
+              No prep needed. We'll ask you to walk us through a typical day and show us the tools
+              you use. The more honest you are about what's broken, the more useful the call will
+              be.
+            </dd>
+          </div>
+          <div>
+            <dt class="font-semibold text-gray-900">What happens after the call?</dt>
+            <dd class="mt-2 text-gray-600">
+              If we identify problems we can solve, you'll receive a fixed-price proposal within 48
+              hours. It includes the exact scope, timeline, and cost. No surprises.
+            </dd>
+          </div>
+          <div>
+            <dt class="font-semibold text-gray-900">What size business do you work with?</dt>
+            <dd class="mt-2 text-gray-600">
+              We work with Phoenix-area businesses with 5 to 50 employees — the "too big for one
+              person, too small for a COO" zone. If that's you, we can help.
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  </main>
+  <Footer />
+  <script is:inline src="https://assets.calendly.com/assets/external/widget.js" async></script>
+</Base>

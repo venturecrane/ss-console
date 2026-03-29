@@ -5,11 +5,7 @@ interface Props {
   class?: string
 }
 
-const {
-  variant = 'primary',
-  href = 'https://calendly.com/smd-services/assessment',
-  class: className = '',
-} = Astro.props
+const { variant = 'primary', href = '/book', class: className = '' } = Astro.props
 
 const base =
   'inline-block rounded-lg px-6 py-3 font-semibold transition focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2'
