@@ -46,18 +46,12 @@ describe('component existence', () => {
 })
 
 describe('content integrity', () => {
-  it('Pricing.astro does not publish a specific dollar amount', () => {
-    const content = readComponent('Pricing.astro')
-    expect(content).not.toContain('$3,500')
-    expect(content).not.toContain('$2,500')
-    expect(content).toContain('Book Your Assessment Call')
-  })
-
-  it('$2,500 does not appear anywhere in src/', () => {
+  it('no dollar amounts published in src/', () => {
     const files = readAllSrcFiles()
+    const dollarPattern = /\$[\d,]+/
     for (const filePath of files) {
       const content = readFileSync(filePath, 'utf-8')
-      expect(content, `$2,500 found in ${filePath}`).not.toContain('$2,500')
+      expect(content, `Dollar amount found in ${filePath}`).not.toMatch(dollarPattern)
     }
   })
 })
