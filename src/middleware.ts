@@ -37,7 +37,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // Determine route type
   const isAdminRoute = pathname.startsWith('/admin')
   const isAdminApiRoute = pathname.startsWith('/api/admin')
-  const isPortalRoute = pathname.startsWith('/portal') || isPortalSubdomain
+  const isPortalRoute = pathname.startsWith('/portal')
   const isPortalApiRoute = pathname.startsWith('/api/portal')
   const isProtectedRoute = isAdminRoute || isAdminApiRoute || isPortalRoute || isPortalApiRoute
 
