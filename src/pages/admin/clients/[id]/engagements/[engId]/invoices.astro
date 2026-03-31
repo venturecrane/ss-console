@@ -1,0 +1,431 @@
+---
+import '../../../../../../styles/global.css'
+import { getClient } from '../../../../../../lib/db/clients'
+import { getEngagement } from '../../../../../../lib/db/engagements'
+import { listInvoices, INVOICE_STATUSES } from '../../../../../../lib/db/invoices'
+
+/**
+ * Invoice list per engagement — admin page.
+ *
+ * Lists invoices with type, amount, status badge, Stripe link, and dates.
+ * Provides actions to create, send, void, and manually mark paid.
+ *
+ * Protected by auth middleware (session guaranteed).
+ */
+
+const session = Astro.locals.session!
+const env = Astro.locals.runtime.env
+const { id: clientId, engId: engagementId } = Astro.params
+
+if (!clientId || !engagementId) {
+  return Astro.redirect('/admin/clients')
+}
+
+const client = await getClient(env.DB, session.orgId, clientId)
+if (!client) {
+  return Astro.redirect('/admin/clients?error=not_found')
+}
+
+const engagement = await getEngagement(env.DB, session.orgId, engagementId)
+if (!engagement) {
+  return Astro.redirect(`/admin/clients/${clientId}?error=engagement_not_found`)
+}
+
+const invoices = await listInvoices(env.DB, session.orgId, {
+  engagementId,
+})
+
+const url = Astro.url
+const saved = url.searchParams.get('saved') === '1'
+const created = url.searchParams.get('created') === '1'
+const errorParam = url.searchParams.get('error') || ''
+
+const errorMessages: Record<string, string> = {
+  server: 'Something went wrong. Please try again.',
+  missing: 'Required fields are missing.',
+  not_found: 'Invoice not found.',
+  invalid_transition: 'That status transition is not allowed.',
+  invalid_type: 'Invalid invoice type.',
+  invalid_amount: 'Amount must be a positive number.',
+}
+
+const errorMessage = errorParam ? (errorMessages[errorParam] ?? 'An error occurred.') : ''
+
+// Status badge colors
+const statusColorMap: Record<string, string> = {
+  draft: 'bg-slate-100 text-slate-600',
+  sent: 'bg-blue-100 text-blue-800',
+  paid: 'bg-green-100 text-green-800',
+  overdue: 'bg-red-100 text-red-800',
+  void: 'bg-slate-100 text-slate-400',
+}
+
+// Type label map
+const typeLabels: Record<string, string> = {
+  deposit: 'Deposit',
+  completion: 'Completion',
+  milestone: 'Milestone',
+  assessment: 'Assessment',
+  retainer: 'Retainer',
+}
+
+// Invoice total
+const totalInvoiced = invoices.reduce(
+  (sum, inv) => sum + (inv.status !== 'void' ? inv.amount : 0),
+  0
+)
+const totalPaid = invoices.reduce((sum, inv) => sum + (inv.status === 'paid' ? inv.amount : 0), 0)
+const totalOutstanding = invoices.reduce(
+  (sum, inv) => sum + (inv.status === 'sent' || inv.status === 'overdue' ? inv.amount : 0),
+  0
+)
+
+function formatCurrency(amount: number): string {
+  return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return '--'
+  return new Date(iso).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>Invoices — {client.business_name} — SMD Services Admin</title>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white border-b border-slate-200">
+      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <a href="/admin" class="text-lg font-bold text-slate-900 hover:text-slate-700"
+            >SMD Services</a
+          >
+          <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">Admin</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="text-sm text-slate-600">{session.email}</span>
+          <form method="POST" action="/api/auth/logout">
+            <button
+              type="submit"
+              class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto px-4 py-8">
+      <!-- Breadcrumb -->
+      <nav class="mb-6">
+        <ol class="flex items-center gap-2 text-sm text-slate-500">
+          <li><a href="/admin/clients" class="hover:text-slate-700">Clients</a></li>
+          <li class="text-slate-300">/</li>
+          <li>
+            <a href={`/admin/clients/${client.id}`} class="hover:text-slate-700"
+              >{client.business_name}</a
+            >
+          </li>
+          <li class="text-slate-300">/</li>
+          <li>
+            <a
+              href={`/admin/clients/${client.id}/engagements/${engagement.id}`}
+              class="hover:text-slate-700">Engagement</a
+            >
+          </li>
+          <li class="text-slate-300">/</li>
+          <li class="text-slate-900 font-medium">Invoices</li>
+        </ol>
+      </nav>
+
+      <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-slate-900">
+          Invoices
+          <span class="text-sm font-normal text-slate-400 ml-1">({invoices.length})</span>
+        </h1>
+      </div>
+
+      {
+        saved && (
+          <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+            Invoice updated successfully.
+          </div>
+        )
+      }
+
+      {
+        created && (
+          <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+            Invoice created successfully.
+          </div>
+        )
+      }
+
+      {
+        errorMessage && (
+          <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            {errorMessage}
+          </div>
+        )
+      }
+
+      <!-- Summary cards -->
+      <div class="grid grid-cols-3 gap-4 mb-6">
+        <div class="bg-white rounded-lg border border-slate-200 p-4">
+          <p class="text-xs text-slate-500">Total Invoiced</p>
+          <p class="text-lg font-semibold text-slate-900">{formatCurrency(totalInvoiced)}</p>
+        </div>
+        <div class="bg-white rounded-lg border border-slate-200 p-4">
+          <p class="text-xs text-slate-500">Paid</p>
+          <p class="text-lg font-semibold text-green-600">{formatCurrency(totalPaid)}</p>
+        </div>
+        <div class="bg-white rounded-lg border border-slate-200 p-4">
+          <p class="text-xs text-slate-500">Outstanding</p>
+          <p
+            class:list={[
+              'text-lg font-semibold',
+              totalOutstanding > 0 ? 'text-amber-600' : 'text-slate-900',
+            ]}
+          >
+            {formatCurrency(totalOutstanding)}
+          </p>
+        </div>
+      </div>
+
+      <!-- Invoice list -->
+      {
+        invoices.length > 0 ? (
+          <div class="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+            {invoices.map((inv) => (
+              <div class="px-4 py-3">
+                <div class="flex items-center justify-between">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                      <p class="text-sm font-medium text-slate-900">
+                        {typeLabels[inv.type] ?? inv.type}
+                      </p>
+                      <span
+                        class={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusColorMap[inv.status] ?? 'bg-slate-100 text-slate-600'}`}
+                      >
+                        {INVOICE_STATUSES.find((s) => s.value === inv.status)?.label ?? inv.status}
+                      </span>
+                    </div>
+                    <div class="flex items-center gap-3 mt-1 text-xs text-slate-400">
+                      <span class="text-sm font-semibold text-slate-700">
+                        {formatCurrency(inv.amount)}
+                      </span>
+                      <span>Created: {formatDate(inv.created_at)}</span>
+                      {inv.due_date && <span>Due: {formatDate(inv.due_date)}</span>}
+                      {inv.paid_at && <span>Paid: {formatDate(inv.paid_at)}</span>}
+                      {inv.stripe_hosted_url && inv.stripe_hosted_url !== '#dev-mode' && (
+                        <a
+                          href={inv.stripe_hosted_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="text-primary hover:text-primary-hover"
+                        >
+                          Stripe
+                        </a>
+                      )}
+                    </div>
+                    {inv.description && (
+                      <p class="text-xs text-slate-500 mt-1">{inv.description}</p>
+                    )}
+                    {inv.notes && <p class="text-xs text-slate-400 mt-0.5 italic">{inv.notes}</p>}
+                  </div>
+                  <div class="flex items-center gap-1 flex-shrink-0 ml-2">
+                    {/* Send button — draft invoices only */}
+                    {inv.status === 'draft' && (
+                      <form method="POST" action={`/api/admin/invoices/${inv.id}`} class="inline">
+                        <input type="hidden" name="action" value="send" />
+                        <input
+                          type="hidden"
+                          name="redirect_url"
+                          value={`/admin/clients/${clientId}/engagements/${engagementId}/invoices`}
+                        />
+                        <button
+                          type="submit"
+                          class="px-3 py-1.5 rounded text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                        >
+                          Send
+                        </button>
+                      </form>
+                    )}
+                    {/* Void button — draft or sent invoices */}
+                    {(inv.status === 'draft' || inv.status === 'sent') && (
+                      <form
+                        method="POST"
+                        action={`/api/admin/invoices/${inv.id}`}
+                        class="inline"
+                        onsubmit="return confirm('Void this invoice? This cannot be undone.')"
+                      >
+                        <input type="hidden" name="action" value="void" />
+                        <input
+                          type="hidden"
+                          name="redirect_url"
+                          value={`/admin/clients/${clientId}/engagements/${engagementId}/invoices`}
+                        />
+                        <button
+                          type="submit"
+                          class="px-3 py-1.5 rounded text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                        >
+                          Void
+                        </button>
+                      </form>
+                    )}
+                    {/* Mark Paid button — sent or overdue invoices (manual override for offline payments) */}
+                    {(inv.status === 'sent' || inv.status === 'overdue') && (
+                      <form method="POST" action={`/api/admin/invoices/${inv.id}`} class="inline">
+                        <input type="hidden" name="action" value="mark_paid" />
+                        <input
+                          type="hidden"
+                          name="redirect_url"
+                          value={`/admin/clients/${clientId}/engagements/${engagementId}/invoices`}
+                        />
+                        <button
+                          type="submit"
+                          class="px-3 py-1.5 rounded text-xs font-medium bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
+                        >
+                          Mark Paid
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div class="bg-white rounded-lg border border-slate-200 border-dashed p-6 text-center">
+            <p class="text-sm text-slate-400 mb-2">No invoices yet.</p>
+          </div>
+        )
+      }
+
+      <!-- Create Invoice Form -->
+      <div class="mt-6 bg-white rounded-lg border border-slate-200 p-6">
+        <h3 class="text-sm font-medium text-slate-700 mb-3">Create Invoice</h3>
+        <form method="POST" action="/api/admin/invoices" class="space-y-4">
+          <input type="hidden" name="engagement_id" value={engagement.id} />
+          <input type="hidden" name="client_id" value={client.id} />
+          <input
+            type="hidden"
+            name="redirect_url"
+            value={`/admin/clients/${clientId}/engagements/${engagementId}/invoices`}
+          />
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label for="invoice_type" class="block text-sm font-medium text-slate-700 mb-1">
+                Type <span class="text-red-500">*</span>
+              </label>
+              <select
+                id="invoice_type"
+                name="type"
+                required
+                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+              >
+                <option value="deposit">Deposit</option>
+                <option value="completion">Completion</option>
+                <option value="milestone">Milestone</option>
+                <option value="assessment">Assessment</option>
+                <option value="retainer">Retainer</option>
+              </select>
+            </div>
+            <div>
+              <label for="invoice_amount" class="block text-sm font-medium text-slate-700 mb-1">
+                Amount ($) <span class="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                id="invoice_amount"
+                name="amount"
+                step="0.01"
+                min="0.01"
+                required
+                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label for="invoice_due_date" class="block text-sm font-medium text-slate-700 mb-1">
+                Due Date
+              </label>
+              <input
+                type="date"
+                id="invoice_due_date"
+                name="due_date"
+                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label
+                for="invoice_description"
+                class="block text-sm font-medium text-slate-700 mb-1"
+              >
+                Description
+              </label>
+              <input
+                type="text"
+                id="invoice_description"
+                name="description"
+                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                placeholder="Brief description..."
+              />
+            </div>
+          </div>
+
+          <div>
+            <label for="invoice_notes" class="block text-sm font-medium text-slate-700 mb-1">
+              Notes (internal)
+            </label>
+            <input
+              type="text"
+              id="invoice_notes"
+              name="notes"
+              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+              placeholder="Internal notes..."
+            />
+          </div>
+
+          <div class="flex justify-end">
+            <button
+              type="submit"
+              class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"
+            >
+              Create Invoice
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Back link -->
+      <div class="mt-6">
+        <a
+          href={`/admin/clients/${client.id}/engagements/${engagement.id}`}
+          class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+        >
+          Back to Engagement
+        </a>
+      </div>
+    </main>
+  </body>
+</html>

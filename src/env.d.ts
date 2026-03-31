@@ -18,6 +18,8 @@ type CfEnv = {
   ANTHROPIC_API_KEY?: string
   SIGNWELL_API_KEY?: string
   SIGNWELL_WEBHOOK_SECRET?: string
+  STRIPE_API_KEY?: string
+  STRIPE_WEBHOOK_SECRET?: string
 }
 
 type Runtime = import('@astrojs/cloudflare').Runtime<CfEnv>

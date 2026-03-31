@@ -814,6 +814,19 @@ const showSafetyNet = engagement.status === 'handoff' || engagement.status === '
         </div>
       </div>
 
+      <!-- Invoices Section -->
+      <div class="mt-8">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-slate-900">Invoices</h2>
+          <a
+            href={`/admin/clients/${client.id}/engagements/${engagement.id}/invoices`}
+            class="text-sm text-primary hover:text-primary-hover font-medium transition-colors"
+          >
+            Manage Invoices
+          </a>
+        </div>
+      </div>
+
       <!-- Parking Lot Section -->
       <div class="mt-8">
         <div class="flex items-center justify-between mb-4">

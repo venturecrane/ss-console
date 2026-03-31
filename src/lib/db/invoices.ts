@@ -1,0 +1,322 @@
+/**
+ * Invoice data access layer.
+ *
+ * All queries are parameterized to prevent SQL injection.
+ * Primary keys use crypto.randomUUID() (ULID-like uniqueness for D1).
+ *
+ * Business rules:
+ * - Deposit invoice: 50% at signing, auto-created by SignWell webhook (Decision #14)
+ * - Completion invoice: remaining balance at engagement completion
+ * - Milestone invoices: for 40+ hour engagements (3-milestone billing)
+ * - Assessment invoice: standalone paid assessment
+ * - Retainer invoice: monthly post-delivery support
+ * - Status machine enforced at application layer
+ * - Client sees total project price only, never hourly breakdown (Decision #16)
+ */
+
+export interface Invoice {
+  id: string
+  org_id: string
+  engagement_id: string | null
+  client_id: string
+  type: string
+  amount: number
+  description: string | null
+  status: string
+  stripe_invoice_id: string | null
+  stripe_hosted_url: string | null
+  due_date: string | null
+  sent_at: string | null
+  paid_at: string | null
+  payment_method: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type InvoiceType = 'deposit' | 'completion' | 'milestone' | 'assessment' | 'retainer'
+
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'void'
+
+export const INVOICE_STATUSES: { value: InvoiceStatus; label: string }[] = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'sent', label: 'Sent' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'void', label: 'Void' },
+]
+
+/**
+ * Valid status transitions enforced at the application layer.
+ *
+ * draft    -> sent | void
+ * sent     -> paid | overdue | void
+ * overdue  -> paid | void
+ * paid     -> (terminal)
+ * void     -> (terminal)
+ */
+export const VALID_TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
+  draft: ['sent', 'void'],
+  sent: ['paid', 'overdue', 'void'],
+  overdue: ['paid', 'void'],
+  paid: [],
+  void: [],
+}
+
+export interface CreateInvoiceData {
+  client_id: string
+  engagement_id?: string | null
+  type: InvoiceType
+  amount: number
+  description?: string | null
+  due_date?: string | null
+  notes?: string | null
+}
+
+export interface UpdateInvoiceData {
+  amount?: number
+  description?: string | null
+  due_date?: string | null
+  notes?: string | null
+  stripe_invoice_id?: string | null
+  stripe_hosted_url?: string | null
+}
+
+export interface InvoiceFilters {
+  clientId?: string
+  engagementId?: string
+  status?: InvoiceStatus
+}
+
+/**
+ * List invoices for an organization, optionally filtered by client, engagement, or status.
+ */
+export async function listInvoices(
+  db: D1Database,
+  orgId: string,
+  filters?: InvoiceFilters
+): Promise<Invoice[]> {
+  const conditions: string[] = ['org_id = ?']
+  const params: (string | number)[] = [orgId]
+
+  if (filters?.clientId) {
+    conditions.push('client_id = ?')
+    params.push(filters.clientId)
+  }
+
+  if (filters?.engagementId) {
+    conditions.push('engagement_id = ?')
+    params.push(filters.engagementId)
+  }
+
+  if (filters?.status) {
+    conditions.push('status = ?')
+    params.push(filters.status)
+  }
+
+  const where = conditions.join(' AND ')
+  const sql = `SELECT * FROM invoices WHERE ${where} ORDER BY created_at DESC`
+
+  const result = await db
+    .prepare(sql)
+    .bind(...params)
+    .all<Invoice>()
+  return result.results
+}
+
+/**
+ * Get a single invoice by ID, scoped to an organization.
+ */
+export async function getInvoice(
+  db: D1Database,
+  orgId: string,
+  invoiceId: string
+): Promise<Invoice | null> {
+  const result = await db
+    .prepare('SELECT * FROM invoices WHERE id = ? AND org_id = ?')
+    .bind(invoiceId, orgId)
+    .first<Invoice>()
+
+  return result ?? null
+}
+
+/**
+ * Create a new invoice. Returns the created invoice record.
+ */
+export async function createInvoice(
+  db: D1Database,
+  orgId: string,
+  data: CreateInvoiceData
+): Promise<Invoice> {
+  const id = crypto.randomUUID()
+  const now = new Date().toISOString()
+
+  await db
+    .prepare(
+      `INSERT INTO invoices (id, org_id, client_id, engagement_id, type, amount, description, status, due_date, notes, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?)`
+    )
+    .bind(
+      id,
+      orgId,
+      data.client_id,
+      data.engagement_id ?? null,
+      data.type,
+      data.amount,
+      data.description ?? null,
+      data.due_date ?? null,
+      data.notes ?? null,
+      now,
+      now
+    )
+    .run()
+
+  const invoice = await getInvoice(db, orgId, id)
+  if (!invoice) {
+    throw new Error('Failed to retrieve created invoice')
+  }
+  return invoice
+}
+
+/**
+ * Update an existing invoice. Returns the updated invoice record.
+ * Only draft invoices should be updated (caller enforces this).
+ */
+export async function updateInvoice(
+  db: D1Database,
+  orgId: string,
+  invoiceId: string,
+  data: UpdateInvoiceData
+): Promise<Invoice | null> {
+  const existing = await getInvoice(db, orgId, invoiceId)
+  if (!existing) {
+    return null
+  }
+
+  const fields: string[] = []
+  const params: (string | number | null)[] = []
+
+  if (data.amount !== undefined) {
+    fields.push('amount = ?')
+    params.push(data.amount)
+  }
+
+  if (data.description !== undefined) {
+    fields.push('description = ?')
+    params.push(data.description)
+  }
+
+  if (data.due_date !== undefined) {
+    fields.push('due_date = ?')
+    params.push(data.due_date)
+  }
+
+  if (data.notes !== undefined) {
+    fields.push('notes = ?')
+    params.push(data.notes)
+  }
+
+  if (data.stripe_invoice_id !== undefined) {
+    fields.push('stripe_invoice_id = ?')
+    params.push(data.stripe_invoice_id)
+  }
+
+  if (data.stripe_hosted_url !== undefined) {
+    fields.push('stripe_hosted_url = ?')
+    params.push(data.stripe_hosted_url)
+  }
+
+  if (fields.length === 0) {
+    return existing
+  }
+
+  fields.push("updated_at = datetime('now')")
+
+  const sql = `UPDATE invoices SET ${fields.join(', ')} WHERE id = ? AND org_id = ?`
+  params.push(invoiceId, orgId)
+
+  await db
+    .prepare(sql)
+    .bind(...params)
+    .run()
+
+  return getInvoice(db, orgId, invoiceId)
+}
+
+/**
+ * Transition invoice status with validation.
+ * Returns the updated record or null if the invoice was not found.
+ * Throws if the transition is invalid.
+ *
+ * Side effects:
+ * - Any -> paid: sets paid_at to now
+ * - draft -> sent: sets sent_at to now
+ */
+export async function updateInvoiceStatus(
+  db: D1Database,
+  orgId: string,
+  invoiceId: string,
+  newStatus: InvoiceStatus
+): Promise<Invoice | null> {
+  const existing = await getInvoice(db, orgId, invoiceId)
+  if (!existing) {
+    return null
+  }
+
+  const currentStatus = existing.status as InvoiceStatus
+  const validNext = VALID_TRANSITIONS[currentStatus] ?? []
+
+  if (!validNext.includes(newStatus)) {
+    throw new Error(
+      `Invalid status transition: ${currentStatus} -> ${newStatus}. Valid transitions: ${validNext.join(', ') || 'none (terminal state)'}`
+    )
+  }
+
+  const updates: string[] = ['status = ?']
+  const params: (string | number | null)[] = [newStatus]
+
+  if (newStatus === 'paid' && !existing.paid_at) {
+    updates.push('paid_at = ?')
+    params.push(new Date().toISOString())
+  }
+
+  if (newStatus === 'sent' && !existing.sent_at) {
+    updates.push('sent_at = ?')
+    params.push(new Date().toISOString())
+  }
+
+  updates.push("updated_at = datetime('now')")
+
+  const sql = `UPDATE invoices SET ${updates.join(', ')} WHERE id = ? AND org_id = ?`
+  params.push(invoiceId, orgId)
+
+  await db
+    .prepare(sql)
+    .bind(...params)
+    .run()
+
+  return getInvoice(db, orgId, invoiceId)
+}
+
+/**
+ * Portal-facing statuses visible to clients.
+ * Draft and void invoices are internal-only.
+ */
+const PORTAL_VISIBLE_STATUSES = ['sent', 'paid', 'overdue'] as const
+
+/**
+ * List invoices for a specific client (portal access).
+ *
+ * Scoped by client_id (NOT org_id) — portal users access via their client_id.
+ * Only returns invoices visible to clients (sent, paid, overdue).
+ */
+export async function listInvoicesForClient(db: D1Database, clientId: string): Promise<Invoice[]> {
+  const placeholders = PORTAL_VISIBLE_STATUSES.map(() => '?').join(', ')
+  const sql = `SELECT * FROM invoices WHERE client_id = ? AND status IN (${placeholders}) ORDER BY created_at DESC`
+
+  const result = await db
+    .prepare(sql)
+    .bind(clientId, ...PORTAL_VISIBLE_STATUSES)
+    .all<Invoice>()
+  return result.results
+}
