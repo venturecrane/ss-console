@@ -1,0 +1,585 @@
+---
+import '../../../../../styles/global.css'
+import { getClient } from '../../../../../lib/db/clients'
+import {
+  getAssessment,
+  ASSESSMENT_STATUSES,
+  VALID_TRANSITIONS,
+} from '../../../../../lib/db/assessments'
+import type { AssessmentStatus } from '../../../../../lib/db/assessments'
+import { PROBLEM_IDS, PROBLEM_LABELS } from '../../../../../portal/assessments/extraction-schema'
+import type { ProblemId } from '../../../../../portal/assessments/extraction-schema'
+
+/**
+ * Assessment detail/edit page.
+ *
+ * Protected by auth middleware (session guaranteed).
+ * Displays all assessment fields in an editable form.
+ * Supports transcript upload, extraction JSON paste, problem mapping,
+ * champion capture, disqualification flags, and status transitions.
+ */
+
+const session = Astro.locals.session!
+const env = Astro.locals.runtime.env
+const { id: clientId, assessmentId } = Astro.params
+
+if (!clientId || !assessmentId) {
+  return Astro.redirect('/admin/clients')
+}
+
+const client = await getClient(env.DB, session.orgId, clientId)
+if (!client) {
+  return Astro.redirect('/admin/clients?error=not_found')
+}
+
+const assessment = await getAssessment(env.DB, session.orgId, assessmentId)
+if (!assessment) {
+  return Astro.redirect(`/admin/clients/${clientId}?error=assessment_not_found`)
+}
+
+const url = Astro.url
+const saved = url.searchParams.get('saved') === '1'
+const errorParam = url.searchParams.get('error') || ''
+const warningParam = url.searchParams.get('warning') || ''
+
+const errorMessages: Record<string, string> = {
+  server: 'Something went wrong. Please try again.',
+  invalid_status: 'Invalid status selection.',
+  invalid_transition: 'That status transition is not allowed.',
+}
+
+const errorMessage = errorParam ? (errorMessages[errorParam] ?? 'An error occurred.') : ''
+
+// Parse JSON fields
+const problems: ProblemId[] = assessment.problems ? JSON.parse(assessment.problems) : []
+const disqualifiers = assessment.disqualifiers
+  ? JSON.parse(assessment.disqualifiers)
+  : { hard: {}, soft: {}, notes: '' }
+
+// Status transitions
+const currentStatus = assessment.status as AssessmentStatus
+const validNextStatuses = VALID_TRANSITIONS[currentStatus] ?? []
+
+// Status indicator colors
+const statusColorMap: Record<string, string> = {
+  scheduled: 'bg-blue-100 text-blue-800',
+  completed: 'bg-green-100 text-green-800',
+  disqualified: 'bg-red-100 text-red-800',
+  converted: 'bg-purple-100 text-purple-800',
+}
+
+// Financial prerequisite warning (OQ-004)
+const showFinancialWarning = warningParam === 'financial_prerequisite'
+const hasFinancialProblem = problems.includes('financial_blindness')
+const booksBehind = disqualifiers?.soft?.books_behind === true
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>Assessment — {client.business_name} — SMD Services Admin</title>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white border-b border-slate-200">
+      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <a href="/admin" class="text-lg font-bold text-slate-900 hover:text-slate-700"
+            >SMD Services</a
+          >
+          <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">Admin</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="text-sm text-slate-600">{session.email}</span>
+          <form method="POST" action="/api/auth/logout">
+            <button
+              type="submit"
+              class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto px-4 py-8">
+      <!-- Breadcrumb -->
+      <nav class="mb-6">
+        <ol class="flex items-center gap-2 text-sm text-slate-500">
+          <li><a href="/admin/clients" class="hover:text-slate-700">Clients</a></li>
+          <li class="text-slate-300">/</li>
+          <li>
+            <a href={`/admin/clients/${client.id}`} class="hover:text-slate-700"
+              >{client.business_name}</a
+            >
+          </li>
+          <li class="text-slate-300">/</li>
+          <li class="text-slate-900 font-medium">Assessment</li>
+        </ol>
+      </nav>
+
+      <div class="flex items-center gap-3 mb-2">
+        <h1 class="text-2xl font-bold text-slate-900">Assessment</h1>
+        <span
+          class={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColorMap[assessment.status] ?? 'bg-slate-100 text-slate-600'}`}
+        >
+          {
+            ASSESSMENT_STATUSES.find((s) => s.value === assessment.status)?.label ??
+              assessment.status
+          }
+        </span>
+      </div>
+      <p class="text-sm text-slate-500 mb-6">
+        {client.business_name}
+      </p>
+
+      {
+        saved && (
+          <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+            Assessment updated successfully.
+          </div>
+        )
+      }
+
+      {
+        errorMessage && (
+          <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            {errorMessage}
+          </div>
+        )
+      }
+
+      {
+        showFinancialWarning && (
+          <div
+            id="financial-warning"
+            class="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg"
+          >
+            <p class="text-sm font-medium text-amber-800 mb-2">
+              Financial Prerequisite Warning (OQ-004)
+            </p>
+            <p class="text-sm text-amber-700 mb-3">
+              This assessment has "Financial blindness" identified as a problem and/or indicates the
+              books are more than 30 days behind. Converting with unresolved financial issues may
+              affect engagement scope and timeline.
+            </p>
+            <form
+              method="POST"
+              action={`/api/admin/assessments/${assessment.id}`}
+              class="flex items-center gap-3"
+            >
+              <input type="hidden" name="action" value="transition_status" />
+              <input type="hidden" name="new_status" value="converted" />
+              <input type="hidden" name="financial_confirmed" value="yes" />
+              <button
+                type="submit"
+                class="bg-amber-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-amber-700 transition-colors"
+              >
+                Confirm and Convert
+              </button>
+              <a
+                href={`/admin/clients/${client.id}/assessments/${assessment.id}`}
+                class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+              >
+                Cancel
+              </a>
+            </form>
+          </div>
+        )
+      }
+
+      <!-- Status Transitions -->
+      {
+        validNextStatuses.length > 0 && (
+          <div class="mb-6 bg-white rounded-lg border border-slate-200 p-4">
+            <h2 class="text-sm font-medium text-slate-700 mb-3">Status Transition</h2>
+            <div class="flex flex-wrap gap-2">
+              {validNextStatuses.map((nextStatus) => (
+                <form
+                  method="POST"
+                  action={`/api/admin/assessments/${assessment.id}`}
+                  class="inline"
+                >
+                  <input type="hidden" name="action" value="transition_status" />
+                  <input type="hidden" name="new_status" value={nextStatus} />
+                  <button
+                    type="submit"
+                    class:list={[
+                      'px-4 py-2 rounded-md text-sm font-medium transition-colors',
+                      nextStatus === 'completed' && 'bg-green-600 text-white hover:bg-green-700',
+                      nextStatus === 'disqualified' && 'bg-red-600 text-white hover:bg-red-700',
+                      nextStatus === 'converted' && 'bg-purple-600 text-white hover:bg-purple-700',
+                    ]}
+                  >
+                    {ASSESSMENT_STATUSES.find((s) => s.value === nextStatus)?.label ?? nextStatus}
+                  </button>
+                </form>
+              ))}
+            </div>
+          </div>
+        )
+      }
+
+      <!-- Main edit form -->
+      <form
+        method="POST"
+        action={`/api/admin/assessments/${assessment.id}`}
+        enctype="multipart/form-data"
+        class="space-y-6"
+      >
+        <!-- Scheduling -->
+        <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+          <h2 class="text-base font-semibold text-slate-900">Scheduling</h2>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label for="scheduled_at" class="block text-sm font-medium text-slate-700 mb-1">
+                Scheduled Date/Time
+              </label>
+              <input
+                type="datetime-local"
+                id="scheduled_at"
+                name="scheduled_at"
+                value={assessment.scheduled_at ? assessment.scheduled_at.slice(0, 16) : ''}
+                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label for="duration_minutes" class="block text-sm font-medium text-slate-700 mb-1">
+                Duration (minutes)
+              </label>
+              <input
+                type="number"
+                id="duration_minutes"
+                name="duration_minutes"
+                min="1"
+                value={assessment.duration_minutes ?? ''}
+                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Transcript Upload -->
+        <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+          <h2 class="text-base font-semibold text-slate-900">Transcript</h2>
+
+          {
+            assessment.transcript_path ? (
+              <div class="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <svg
+                  class="w-5 h-5 text-green-600 flex-shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-green-800">Transcript uploaded</p>
+                  <p class="text-xs text-green-600 truncate">{assessment.transcript_path}</p>
+                </div>
+                <a
+                  href={`/api/admin/assessments/${assessment.id}/transcript`}
+                  class="text-sm text-green-700 hover:text-green-900 font-medium underline"
+                >
+                  Download
+                </a>
+              </div>
+            ) : (
+              <p class="text-sm text-slate-400">No transcript uploaded yet.</p>
+            )
+          }
+
+          <div>
+            <label for="transcript" class="block text-sm font-medium text-slate-700 mb-1">
+              {assessment.transcript_path ? 'Replace transcript' : 'Upload transcript'}
+            </label>
+            <input
+              type="file"
+              id="transcript"
+              name="transcript"
+              accept=".txt,.md,.srt,.vtt,.json"
+              class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+            />
+            <p class="mt-1 text-xs text-slate-400">
+              Accepts .txt, .md, .srt, .vtt, or .json from MacWhisper.
+            </p>
+          </div>
+        </div>
+
+        <!-- Extraction JSON -->
+        <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+          <h2 class="text-base font-semibold text-slate-900">Extraction JSON</h2>
+          <p class="text-sm text-slate-500">
+            Paste the structured JSON output from Claude after processing the transcript.
+          </p>
+          <div>
+            <label for="extraction" class="block text-sm font-medium text-slate-700 mb-1">
+              Extraction Data
+            </label>
+            <textarea
+              id="extraction"
+              name="extraction"
+              rows="10"
+              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 font-mono focus:border-primary focus:ring-1 focus:ring-primary"
+              placeholder='{"schema_version": "1.0", ...}'>{assessment.extraction ?? ''}</textarea
+            >
+          </div>
+        </div>
+
+        <!-- Problem Mapping -->
+        <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+          <h2 class="text-base font-semibold text-slate-900">Identified Problems</h2>
+          <p class="text-sm text-slate-500">
+            Select the problems identified during this assessment.
+          </p>
+
+          <div class="space-y-3">
+            {
+              PROBLEM_IDS.map((problemId) => (
+                <label class="flex items-start gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name={`problem_${problemId}`}
+                    checked={problems.includes(problemId)}
+                    class="mt-0.5 rounded border-slate-300 text-primary focus:ring-primary"
+                  />
+                  <div>
+                    <span class="text-sm font-medium text-slate-900">
+                      {PROBLEM_LABELS[problemId]}
+                    </span>
+                    <p class="text-xs text-slate-400 mt-0.5">
+                      {
+                        {
+                          owner_bottleneck: '"I can\'t take a day off" — No documented processes',
+                          lead_leakage:
+                            '"Leads fall through the cracks" — No CRM, no follow-up system',
+                          financial_blindness:
+                            '"I have no idea if we\'re making money" — Books behind, gut-feel pricing',
+                          scheduling_chaos:
+                            '"Double-bookings happen all the time" — No centralized scheduling',
+                          manual_communication:
+                            '"I personally text every customer" — Every message is manual',
+                          team_invisibility:
+                            '"I don\'t know what my team is doing" — No task tracking or accountability',
+                        }[problemId]
+                      }
+                    </p>
+                  </div>
+                </label>
+              ))
+            }
+          </div>
+        </div>
+
+        <!-- Champion Candidate -->
+        <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+          <h2 class="text-base font-semibold text-slate-900">Champion Candidate</h2>
+          <p class="text-sm text-slate-500">
+            The internal person who will own the solution post-delivery.
+          </p>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label for="champion_name" class="block text-sm font-medium text-slate-700 mb-1">
+                Name
+              </label>
+              <input
+                type="text"
+                id="champion_name"
+                name="champion_name"
+                value={assessment.champion_name ?? ''}
+                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                placeholder="e.g. Derek"
+              />
+            </div>
+            <div>
+              <label for="champion_role" class="block text-sm font-medium text-slate-700 mb-1">
+                Role
+              </label>
+              <input
+                type="text"
+                id="champion_role"
+                name="champion_role"
+                value={assessment.champion_role ?? ''}
+                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                placeholder="e.g. Office manager"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Disqualification Flags -->
+        <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+          <h2 class="text-base font-semibold text-slate-900">Disqualification Flags</h2>
+
+          <div>
+            <h3 class="text-sm font-medium text-red-700 mb-2">Hard Disqualifiers</h3>
+            <p class="text-xs text-slate-400 mb-3">Any true value is an automatic no.</p>
+            <div class="space-y-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="dq_not_decision_maker"
+                  checked={disqualifiers?.hard?.not_decision_maker === true}
+                  class="rounded border-slate-300 text-red-600 focus:ring-red-500"
+                />
+                <span class="text-sm text-slate-700">Not speaking to the owner/check-writer</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="dq_scope_exceeds_sprint"
+                  checked={disqualifiers?.hard?.scope_exceeds_sprint === true}
+                  class="rounded border-slate-300 text-red-600 focus:ring-red-500"
+                />
+                <span class="text-sm text-slate-700"
+                  >Scope exceeds engagement (multi-location, ERP, franchise)</span
+                >
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="dq_no_tech_baseline"
+                  checked={disqualifiers?.hard?.no_tech_baseline === true}
+                  class="rounded border-slate-300 text-red-600 focus:ring-red-500"
+                />
+                <span class="text-sm text-slate-700">No tech baseline (no email, no internet)</span>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <h3 class="text-sm font-medium text-amber-700 mb-2">Soft Disqualifiers</h3>
+            <p class="text-xs text-slate-400 mb-3">Yellow flags that need probing.</p>
+            <div class="space-y-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="dq_no_champion"
+                  checked={disqualifiers?.soft?.no_champion === true}
+                  class="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                />
+                <span class="text-sm text-slate-700">No internal champion identified</span>
+              </label>
+              <label id="books-behind-label" class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="dq_books_behind"
+                  checked={disqualifiers?.soft?.books_behind === true}
+                  class="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                />
+                <span class="text-sm text-slate-700">Books more than 30 days behind</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="dq_no_willingness_to_change"
+                  checked={disqualifiers?.soft?.no_willingness_to_change === true}
+                  class="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                />
+                <span class="text-sm text-slate-700">No willingness to change</span>
+              </label>
+            </div>
+          </div>
+
+          {
+            (booksBehind || (hasFinancialProblem && booksBehind)) && (
+              <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+                <strong>OQ-004 Notice:</strong> Books are flagged as more than 30 days behind. This
+                is a soft warning for the financial prerequisite gate — conversion will require
+                admin confirmation.
+              </div>
+            )
+          }
+
+          <div>
+            <label for="dq_notes" class="block text-sm font-medium text-slate-700 mb-1">
+              Disqualification Notes
+            </label>
+            <textarea
+              id="dq_notes"
+              name="dq_notes"
+              rows="2"
+              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+              placeholder="Notes on any flags triggered...">{disqualifiers?.notes ?? ''}</textarea
+            >
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+          <h2 class="text-base font-semibold text-slate-900">Notes</h2>
+          <div>
+            <textarea
+              id="notes"
+              name="notes"
+              rows="3"
+              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+              placeholder="General notes about this assessment..."
+              >{assessment.notes ?? ''}</textarea
+            >
+          </div>
+        </div>
+
+        <!-- Metadata -->
+        <div
+          class="bg-white rounded-lg border border-slate-200 p-6 grid grid-cols-2 gap-4 text-xs text-slate-400"
+        >
+          <div>
+            <span class="font-medium">Created:</span>
+            {
+              new Date(assessment.created_at).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              })
+            }
+          </div>
+          {
+            assessment.completed_at && (
+              <div>
+                <span class="font-medium">Completed:</span>
+                {new Date(assessment.completed_at).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </div>
+            )
+          }
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-between pt-2">
+          <a
+            href={`/admin/clients/${client.id}`}
+            class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+          >
+            Back to Client
+          </a>
+          <button
+            type="submit"
+            class="bg-primary text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"
+          >
+            Save Changes
+          </button>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>
