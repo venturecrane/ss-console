@@ -1,6 +1,8 @@
 ---
 import '../../styles/global.css'
 import { listFollowUps } from '../../lib/db/follow-ups'
+import { getPipelineConversion } from '../../lib/db/analytics'
+import { listEngagements } from '../../lib/db/engagements'
 
 /**
  * Admin dashboard — protected by auth middleware.
@@ -12,14 +14,32 @@ import { listFollowUps } from '../../lib/db/follow-ups'
 const session = Astro.locals.session!
 const env = Astro.locals.runtime.env
 
-// Fetch follow-up counts for dashboard card
-const [upcomingFollowUps, overdueFollowUps] = await Promise.all([
+// Fetch follow-up counts and analytics data in parallel
+const [upcomingFollowUps, overdueFollowUps, pipeline, allEngagements] = await Promise.all([
   listFollowUps(env.DB, session.orgId, { upcoming: true }),
   listFollowUps(env.DB, session.orgId, { overdue: true }),
+  getPipelineConversion(env.DB, session.orgId),
+  listEngagements(env.DB, session.orgId),
 ])
 
 const upcomingCount = upcomingFollowUps.length
 const overdueCount = overdueFollowUps.length
+
+// Dashboard metrics
+const totalClients =
+  pipeline.prospect +
+  pipeline.assessed +
+  pipeline.quoted +
+  pipeline.active +
+  pipeline.completed +
+  pipeline.dead
+const activeEngagements = allEngagements.filter(
+  (e) => e.status === 'active' || e.status === 'handoff' || e.status === 'safety_net'
+).length
+const pipelineConversionRate =
+  totalClients > 0
+    ? Math.round(((pipeline.active + pipeline.completed) / totalClients) * 1000) / 10
+    : 0
 ---
 
 <!doctype html>
@@ -104,6 +124,43 @@ const overdueCount = overdueFollowUps.length
           <p class="text-sm text-slate-500 mt-1">
             Manage follow-up cadences — proposal follow-ups, review requests, referral asks, and
             feedback surveys.
+          </p>
+        </a>
+
+        <a
+          href="/admin/analytics"
+          class="bg-white rounded-lg border border-slate-200 p-6 hover:border-slate-300 transition-colors group"
+        >
+          <div class="flex items-center justify-between">
+            <h3
+              class="text-base font-semibold text-slate-900 group-hover:text-primary transition-colors"
+            >
+              Analytics
+            </h3>
+            <div class="flex items-center gap-2">
+              <span
+                class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium"
+              >
+                {totalClients} clients
+              </span>
+              {
+                activeEngagements > 0 && (
+                  <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                    {activeEngagements} active
+                  </span>
+                )
+              }
+              {
+                pipelineConversionRate > 0 && (
+                  <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                    {pipelineConversionRate}% conversion
+                  </span>
+                )
+              }
+            </div>
+          </div>
+          <p class="text-sm text-slate-500 mt-1">
+            Pipeline funnel, quote accuracy, revenue, engagement health, and follow-up compliance.
           </p>
         </a>
       </div>
