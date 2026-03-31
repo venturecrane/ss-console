@@ -142,15 +142,15 @@ For our use case, a single page per query is enough. Save the credits.
 
 ## Error Handling
 
-| HTTP Status                | Meaning              | Action                         |
-| -------------------------- | -------------------- | ------------------------------ |
-| 200                        | Success              | Process results                |
-| 200 + empty `jobs_results` | No matching jobs     | Normal — skip, no error        |
-| 401                        | Invalid API key      | Alert in Slack, stop scenario  |
-| 429                        | Rate limited         | Retry after 60 seconds         |
-| 500+                       | SerpAPI server error | Retry once, then skip this run |
+| HTTP Status                | Meaning              | Action                                    |
+| -------------------------- | -------------------- | ----------------------------------------- |
+| 200                        | Success              | Process results                           |
+| 200 + empty `jobs_results` | No matching jobs     | Normal — skip, no error                   |
+| 401                        | Invalid API key      | Send alert email via Gmail, stop scenario |
+| 429                        | Rate limited         | Retry after 60 seconds                    |
+| 500+                       | SerpAPI server error | Retry once, then skip this run            |
 
-In Make.com: add an error handler route on the HTTP module. Route 429/500 errors to a Slack notification. Route 401 to a "break" directive (stops and alerts).
+In Make.com: add an error handler route on the HTTP module. Route 429/500 errors to a Gmail alert email. Route 401 to a "break" directive (stops and alerts).
 
 ---
 

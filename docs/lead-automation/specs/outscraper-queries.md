@@ -173,7 +173,7 @@ This Make.com expression:
 3. For each batch, call Outscraper Reviews API with `cutoff` = 7 days ago
 4. For businesses with new reviews (reviews_data not empty):
    - Pass to Claude review scoring prompt (batch 5-10 businesses per prompt call)
-   - For scored businesses with pain_score >= 7: write to Google Sheet + Slack notification
+   - For scored businesses with pain_score >= 7: write to Google Sheet (included in daily digest email)
    - Update `seen_businesses` Data Store with `last_scanned` and `last_pain_score`
 5. For businesses with no new reviews: skip (no API cost, no operations spent)
 

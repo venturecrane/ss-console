@@ -8,7 +8,6 @@
 - Outscraper API key (Medium plan or pay-as-you-go)
 - Anthropic API key
 - Google Sheets: "SMD Lead Generation" spreadsheet with "Review Signal Leads" tab (see google-sheets-schema.md)
-- Slack: #lead-signals channel created
 - Make.com Data Store: `seen_businesses` created (see make-data-store-schema.md)
 
 ---
@@ -168,7 +167,7 @@ The `place_id` is a globally unique identifier for each business — it is the n
 
 ## Scenario B: Weekly Review Scan
 
-Pulls recent reviews for all businesses in the master list, scores them with Claude for operational pain signals, and writes qualified leads to Google Sheets with Slack notifications.
+Pulls recent reviews for all businesses in the master list, scores them with Claude for operational pain signals, and writes qualified leads to Google Sheets.
 
 ### Scenario Overview
 
@@ -184,13 +183,12 @@ Schedule (every Monday 6am)
       -> Parse JSON
       -> Filter: pain_score >= 7
       -> Google Sheets: append to "Review Signal Leads"
-      -> Slack: notification to #lead-signals
       -> Data Store: update seen_businesses (last_scanned, last_pain_score)
 ```
 
-**Total modules per scored business:** ~8
+**Total modules per scored business:** ~7
 **Expected weekly volume:** 200-500 businesses checked. Of those, maybe 20-50 have new reviews. Of those, maybe 5-15 score >= 7.
-**Operations per run:** ~500-1,500 (depends on how many businesses have new reviews)
+**Operations per run:** ~450-1,350 (depends on how many businesses have new reviews)
 
 ---
 
@@ -363,23 +361,7 @@ Businesses scoring 1-6 are not worth outreach. They either have no operational s
 | L: Date Found     | `{{formatDate(now; "YYYY-MM-DD")}}`                                 |
 | M: Status         | `New`                                                               |
 
-#### Step 14: Module 10 — Slack (Notification)
-
-**Module: Slack -> Create a Message**
-
-- Channel: `#lead-signals`
-- Text:
-
-```
-:mag: *New Review Signal Lead*
-*Business:* {{json.business_name}}
-*Pain Score:* {{json.pain_score}}/10
-*Top Problems:* {{join(json.top_problems; ", ")}}
-*Outreach Angle:* {{json.outreach_angle}}
-*Google Rating:* {{iterator2.rating}}/5 ({{iterator2.reviews}} reviews)
-```
-
-#### Step 15: Module 11 — Data Store (Update Business Record)
+#### Step 14: Module 10 — Data Store (Update Business Record)
 
 **Module: Data Store -> Add/replace a record**
 
@@ -395,7 +377,7 @@ Businesses scoring 1-6 are not worth outreach. They either have no operational s
 | `last_review_date` | `{{iterator2.reviews_data[1].review_datetime_utc}}` (most recent review date) |
 | `last_pain_score`  | `{{json.pain_score}}`                                                         |
 
-**Important:** This module should also run for businesses that scored below 7 — update `last_scanned` regardless of score. To achieve this, place this module on a separate path BEFORE the pain score filter, or duplicate it. The simplest approach: use a **Router** after the JSON parse module. One path goes through the pain score filter to Sheets and Slack. The other path always runs the Data Store update.
+**Important:** This module should also run for businesses that scored below 7 — update `last_scanned` regardless of score. To achieve this, place this module on a separate path BEFORE the pain score filter, or duplicate it. The simplest approach: use a **Router** after the JSON parse module. One path goes through the pain score filter to Sheets. The other path always runs the Data Store update.
 
 ---
 
@@ -417,9 +399,8 @@ Businesses scoring 1-6 are not worth outreach. They either have no operational s
 - [ ] Verify businesses with no new reviews are filtered out
 - [ ] Verify Claude produces valid JSON (check Anthropic module output — valid ReviewScoring schema)
 - [ ] Verify businesses with pain_score >= 7 appear in the Google Sheet
-- [ ] Verify Slack notification arrives in #lead-signals with correct formatting
 - [ ] Verify `seen_businesses` Data Store records are updated with `last_scanned` and `last_pain_score`
-- [ ] Check operations count — should be within estimated 500-1,500 per run
+- [ ] Check operations count — should be within estimated 450-1,350 per run
 - [ ] Let scenario run automatically for 3+ weeks, then review all scored leads for accuracy
 
 ---
@@ -439,3 +420,5 @@ After 2-3 weeks of running:
 5. **High Outscraper costs:** Reduce the batch frequency from weekly to biweekly. Or filter the `seen_businesses` list to only scan businesses that have been added or updated in the past 90 days (use the cleanup rule from make-data-store-schema.md).
 
 6. **Operations budget:** Batch scoring (multiple businesses per Claude call) significantly reduces operations. Implement batch scoring once single-business scoring is validated.
+
+> **Note:** Notifications are handled by the Daily Digest scenario (see pipeline-2-job-monitor.md, Daily Digest Scenario section), not per-lead.

@@ -12,10 +12,10 @@ External accounts, API keys, and configurations required to run all 5 lead gener
 2. **Sign up for new services** (5-10 min)
 3. **Configure Google Cloud** if needed (5-10 min)
 4. **Create Make.com connections** (5-10 min)
-5. **Set up Slack channel and Google Sheets** (5 min)
+5. **Set up Google Sheets** (5 min)
 6. **Create Make.com Data Stores** (5 min)
 
-Pipeline 2 (Job Monitor) requires only: SerpAPI + Anthropic + Google Sheets + Slack. Complete those first and validate the pipeline before configuring the remaining accounts.
+Pipeline 2 (Job Monitor) requires only: SerpAPI + Anthropic + Google Sheets + Gmail. Complete those first and validate the pipeline before configuring the remaining accounts.
 
 ---
 
@@ -41,9 +41,6 @@ These accounts should already exist. Verify access and confirm API keys are avai
 - [ ] **Buttondown** — For Pipeline 5 (Nurture Sequences).
   - Log in and go to **Settings → API** to verify your API key.
   - Signup: [buttondown.com](https://buttondown.com)
-
-- [ ] **Slack workspace** — For `#lead-signals` notifications.
-  - Confirm you have admin access to install apps and create channels.
 
 ---
 
@@ -102,11 +99,6 @@ Configure these connections inside Make.com at **Settings → Connections → Ad
   - Settings → Connections → Add → search "Google Sheets".
   - Authenticate via OAuth with the Google account that owns the lead gen spreadsheet.
 
-- [ ] **Slack connection**
-  - Settings → Connections → Add → search "Slack".
-  - Authenticate via OAuth. Grant access to post messages.
-  - Select the workspace where `#lead-signals` will live.
-
 ### After Pipeline 2 is validated:
 
 - [ ] **SerpAPI connection**
@@ -124,7 +116,7 @@ Configure these connections inside Make.com at **Settings → Connections → Ad
 - [ ] **Gmail connection**
   - Settings → Connections → Add → search "Gmail".
   - Authenticate via OAuth.
-  - Used for Pipeline 3 (ACC/ADOR email intake) and Pipeline 5 (outreach).
+  - Used for Pipeline 3 (ACC/ADOR email intake), Pipeline 5 (outreach drafts), and the daily lead digest email sent each morning summarizing new finds across all pipelines.
 
 - [ ] **Buttondown connection**
   - No native Make.com module. Use an **HTTP → Make a request** module.
@@ -137,19 +129,7 @@ Configure these connections inside Make.com at **Settings → Connections → Ad
 
 ---
 
-## 5. Slack Setup
-
-- [ ] **Create the `#lead-signals` channel**.
-  - In Slack, click **+** next to Channels → Create a channel.
-  - Name: `lead-signals`.
-  - Set to private if preferred.
-
-- [ ] **Invite the Make.com Slack app** to the channel.
-  - In `#lead-signals`, type `/invite @Make` (or the name of the Slack bot created by the Make.com connection).
-
----
-
-## 6. Google Sheets Setup
+## 5. Google Sheets Setup
 
 - [ ] **Create a new Google Sheet** named "SMD Lead Generation".
 
@@ -165,7 +145,7 @@ Configure these connections inside Make.com at **Settings → Connections → Ad
 
 ---
 
-## 7. Make.com Data Stores
+## 6. Make.com Data Stores
 
 - [ ] **Create 4 Data Stores** as defined in `make-data-store-schema.md`:
   - `seen_businesses` (Pipeline 1 dedup)
@@ -179,13 +159,14 @@ See [make-data-store-schema.md](make-data-store-schema.md) for full table schema
 
 ## Quick Reference: What Each Pipeline Needs
 
-| Pipeline                       | External Services                                       |
-| ------------------------------ | ------------------------------------------------------- |
-| Pipeline 1 — Review Mining     | Outscraper, Google Places API, Anthropic, Sheets, Slack |
-| Pipeline 2 — Job Monitor       | SerpAPI, Anthropic, Sheets, Slack                       |
-| Pipeline 3 — New Business      | SODA APIs, Gmail, Anthropic, Sheets, Slack              |
-| Pipeline 4 — Social Listening  | Reddit (no auth), Google Alerts (Gmail), Sheets, Slack  |
-| Pipeline 5 — Nurture Sequences | Buttondown, Gmail, Sheets                               |
-| All Pipelines                  | Make.com (Pro), Google Sheets, Make.com Data Stores     |
+| Pipeline                       | External Services                                        |
+| ------------------------------ | -------------------------------------------------------- |
+| Pipeline 1 — Review Mining     | Outscraper, Google Places API, Anthropic, Sheets, Gmail  |
+| Pipeline 2 — Job Monitor       | SerpAPI, Anthropic, Sheets, Gmail                        |
+| Pipeline 3 — New Business      | SODA APIs, Gmail, Anthropic, Sheets                      |
+| Pipeline 4 — Social Listening  | Reddit (no auth), Google Alerts (Gmail), Sheets          |
+| Pipeline 5 — Nurture Sequences | Buttondown, Gmail, Sheets                                |
+| All Pipelines                  | Make.com (Pro), Google Sheets, Make.com Data Stores      |
+| Daily Digest (cross-pipeline)  | Gmail (one morning summary email of all new leads found) |
 
 Start with Pipeline 2. It has the fewest dependencies and the fastest path to a working end-to-end test.

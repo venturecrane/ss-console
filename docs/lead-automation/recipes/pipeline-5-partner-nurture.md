@@ -7,9 +7,8 @@
 - Google Sheets: "SMD Lead Generation" spreadsheet with "Referral Partners" tab populated (see google-sheets-schema.md, Sheet 5)
 - Gmail connection in Make.com (for creating drafts)
 - Anthropic API key
-- Slack: #lead-signals channel created
 
-**No external API accounts needed.** This pipeline uses only Gmail, Google Sheets, Anthropic, and Slack — all of which are already configured for Pipelines 1-4.
+**No external API accounts needed.** This pipeline uses only Gmail, Google Sheets, and Anthropic — all of which are already configured for Pipelines 1-4.
 
 ---
 
@@ -28,7 +27,7 @@ Schedule (every Friday 8am)
     -> Parse JSON
     -> Gmail: create draft (to: partner email, subject + body from Claude output)
     -> Google Sheets: update row (Last Contact Date, Next Check-in Date)
-  -> Slack: summary notification ("3 partner check-in drafts ready in Gmail")
+  -> Gmail: send summary email to self ("{count} partner check-in drafts ready")
 ```
 
 **Total modules per partner:** ~5
@@ -76,7 +75,7 @@ This returns all partners whose Next Check-in Date has arrived (or passed) and w
 - Condition: `{{E: Email}}` is not empty
 - Label: "Has email address"
 
-Partners without email addresses cannot receive check-in emails. Skip them. These partners may need manual outreach (phone call, LinkedIn message) — a Slack notification could flag these separately if desired.
+Partners without email addresses cannot receive check-in emails. Skip them. These partners may need manual outreach (phone call, LinkedIn message) — a separate notification could flag these if desired.
 
 #### Step 5: Module 2 — Iterator (Each Partner)
 
@@ -185,20 +184,27 @@ For the initial build, a uniform 14-day cadence for all stages is simpler and re
 - Aggregate function: Count
 - This counts how many drafts were created during this run
 
-#### Step 11: Module 8 — Slack (Summary Notification)
+#### Step 11: Module 8 — Gmail (Summary Email to Self)
 
-**Module: Slack -> Create a Message**
+**Module: Gmail -> Send an Email**
 
-- Channel: `#lead-signals`
-- Text:
+| Setting      | Value                                                        |
+| ------------ | ------------------------------------------------------------ |
+| To           | Your business email address                                  |
+| Subject      | `Partner Nurture — {{numericAggregator.count}} drafts ready` |
+| Content      | See below                                                    |
+| Content type | Plain text                                                   |
+
+**Email body:**
 
 ```
-:handshake: *Partner Check-in Drafts Ready*
+Partner Check-in Drafts Ready
+
 {{numericAggregator.count}} partner check-in email draft(s) created in Gmail.
 Review and send by {{formatDate(addDays(now; 4); "dddd")}} ({{formatDate(addDays(now; 4); "YYYY-MM-DD")}}).
 ```
 
-This posts a single summary message after the entire loop completes — not one notification per partner. The suggested send date is 4 days from Friday (Tuesday), which aligns with the optimal B2B send window.
+This sends a single summary email after the entire loop completes — not one email per partner. The suggested send date is 4 days from Friday (Tuesday), which aligns with the optimal B2B send window.
 
 ---
 
@@ -212,7 +218,7 @@ When the partner list grows to 10+ active partners, add a monthly broadcast scen
 Schedule (1st of month)
   -> Anthropic: draft monthly insights email
   -> HTTP: POST to Buttondown API /v1/emails (status: "draft")
-  -> Slack: "Monthly partner email draft ready in Buttondown"
+  -> Gmail: send email to self ("Monthly partner email draft ready in Buttondown")
 ```
 
 **Module 1: Anthropic**
@@ -252,7 +258,7 @@ The email appears in Buttondown's dashboard as a draft. The human reviews and pu
 - [ ] Verify the draft email contains no dollar amounts or fixed timeframes
 - [ ] Verify the Gmail draft appears in the Drafts folder with correct To, Subject, and Body
 - [ ] Verify the Google Sheet row is updated: Last Contact Date = today, Next Check-in Date = today + 14 (or 21)
-- [ ] Verify the Slack summary message shows the correct count of drafts created
+- [ ] Verify the Gmail summary email shows the correct count of drafts created
 - [ ] Run the scenario twice in a row — the second run should find no partners due for check-in (dates were pushed forward)
 - [ ] Check operations count — should be within estimated 30-80 per run
 - [ ] Let scenario run automatically for 3+ weeks, then review draft quality and cadence
@@ -274,3 +280,5 @@ After 2-3 weeks of running:
 5. **Partner progressed to a new stage:** When a partner moves from "Prospect" to "Intro Call Done" (or any stage change), update the Relationship Stage in the Google Sheet manually. Claude uses this field to select the appropriate email variant. The scenario does not auto-advance stages.
 
 6. **Want to track email opens:** Switch from Gmail drafts to Buttondown for 1:1 emails once the volume justifies it. Buttondown provides open/click tracking that Gmail does not. See `buttondown-integration.md` for the trade-offs (tag-based targeting vs. Gmail simplicity).
+
+> **Note:** Notifications are handled by the Daily Digest scenario (see pipeline-2-job-monitor.md, Daily Digest Scenario section), not per-lead.

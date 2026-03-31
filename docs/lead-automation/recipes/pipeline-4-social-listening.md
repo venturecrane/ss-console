@@ -1,16 +1,15 @@
 # Make.com Recipe: Pipeline 4 — Social Listening
 
-**Purpose:** Step-by-step guide to build a Make.com scenario that monitors Reddit and Google Alerts for conversations relevant to Phoenix-area small business operations, then delivers a curated daily digest to Slack.
+**Purpose:** Step-by-step guide to build a Make.com scenario that monitors Reddit and Google Alerts for conversations relevant to Phoenix-area small business operations, then delivers a curated daily digest via Gmail.
 
 **Prerequisites:**
 
 - Reddit API credentials (OAuth2 app — see setup instructions below)
 - Google Alerts configured and delivering to Gmail with a specific label
 - Gmail connection in Make.com
-- Slack: #lead-signals channel created
 - Make.com Data Store: `seen_social` created (see make-data-store-schema.md)
 
-**No Google Sheets output for this pipeline.** The daily digest goes straight to Slack for human review. The human decides which conversations to engage with. If volume warrants tracking responses, add the "Social Opportunities" sheet later (see google-sheets-schema.md, Sheet 4).
+**No Google Sheets output for this pipeline.** The daily digest is sent via Gmail for human review. The human decides which conversations to engage with. If volume warrants tracking responses, add the "Social Opportunities" sheet later (see google-sheets-schema.md, Sheet 4).
 
 ---
 
@@ -84,7 +83,7 @@ Schedule (daily 7am)
           -> Aggregator: collect all new alerts
   -> (after both paths merge:)
   -> Text Aggregator: combine all results into a single digest
-  -> Slack: post daily digest to #lead-signals
+  -> Gmail: send daily digest email
 ```
 
 **Total modules:** ~15-20
@@ -381,28 +380,38 @@ If either section is empty, note that in the output:
 {{ifempty(alerts_aggregator_text; "(No new Google Alerts today)")}}
 ```
 
-#### Step 21: Filter — Only Post if Content Exists
+#### Step 21: Filter — Only Send if Content Exists
 
-**Add a filter before the Slack module:**
+**Add a filter before the Gmail module:**
 
 - Condition: The combined digest is NOT empty (at least one new Reddit post or Google Alert exists)
 - Label: "Has content"
 
-This prevents posting an empty digest to Slack on quiet days.
+This prevents sending an empty digest on quiet days.
 
-#### Step 22: Module 17 — Slack (Daily Digest)
+#### Step 22: Module 17 — Gmail (Send Daily Digest Email)
 
-**Module: Slack -> Create a Message**
+**Module: Gmail -> Send an Email**
 
-- Channel: `#lead-signals`
-- Text:
+| Setting      | Value                                               |
+| ------------ | --------------------------------------------------- |
+| To           | Your business email address                         |
+| Subject      | `Social Digest — {{formatDate(now; "YYYY-MM-DD")}}` |
+| Content      | See below                                           |
+| Content type | Plain text                                          |
+
+**Email body:**
 
 ```
-:speech_balloon: *Daily Social Digest — {{formatDate(now; "YYYY-MM-DD")}}*
+Social Digest — {{formatDate(now; "YYYY-MM-DD")}}
 
-{{digest}}
+REDDIT
+{{ifempty(reddit_aggregator_text; "(No new Reddit posts today)")}}
 
-_Review these conversations. Reply to relevant threads where SMD Services can add value. Do NOT pitch — contribute genuinely useful advice._
+GOOGLE ALERTS
+{{ifempty(alerts_aggregator_text; "(No new Google Alerts today)")}}
+
+Review these conversations. Reply to relevant threads where SMD Services can add value. Do NOT pitch — contribute genuinely useful advice.
 ```
 
 ---
@@ -415,8 +424,8 @@ _Review these conversations. Reply to relevant threads where SMD Services can ad
 - [ ] Verify dedup works: run twice, second run should skip all previously seen posts
 - [ ] Verify Google Alert emails are picked up by the Gmail module
 - [ ] Verify alert URLs and titles are extracted correctly from email HTML
-- [ ] Verify the combined digest appears in Slack with proper formatting
-- [ ] Verify empty days produce no Slack message (or a "no new content" message, depending on filter choice)
+- [ ] Verify the combined digest arrives via email with proper formatting
+- [ ] Verify empty days produce no email (or a "no new content" message, depending on filter choice)
 - [ ] Check operations count — should be within estimated 100-300 per run
 - [ ] Let scenario run automatically for 5+ days, then review the digests for relevance and signal quality
 

@@ -7,7 +7,6 @@
 - SerpAPI account with API key (Developer plan, $50/mo)
 - Anthropic API key
 - Google Sheets: "SMD Lead Generation" spreadsheet with "Job Signal Leads" tab (see google-sheets-schema.md)
-- Slack: #lead-signals channel created
 - Make.com Data Store: `seen_jobs` created (see make-data-store-schema.md)
 
 ---
@@ -23,13 +22,12 @@ Schedule (daily 6am)
     → Anthropic: qualify with Claude
     → Filter: only qualified = true
     → Google Sheets: append row
-    → Slack: notification
     → Data Store: mark as seen
 ```
 
-**Total modules per job processed:** ~8
+**Total modules per job processed:** ~7
 **Expected daily volume:** 5-15 new jobs across 8 queries
-**Operations per run:** ~100-200 (8 queries × ~10 results × ~8 modules for new ones, minus filtered dupes)
+**Operations per run:** ~90-180 (8 queries × ~10 results × ~7 modules for new ones, minus filtered dupes)
 
 ---
 
@@ -191,24 +189,7 @@ Produce a single JSON object matching the JobQualification schema.
 | L: Date Found            | `{{formatDate(now; "YYYY-MM-DD")}}`      |
 | M: Status                | `New`                                    |
 
-### Step 13: Module 9 — Slack (Notification)
-
-**Module: Slack → Create a Message**
-
-- Channel: `#lead-signals`
-- Text:
-
-```
-:briefcase: *New Job Signal Lead*
-*Company:* {{json.company}}
-*Job Posted:* {{iterator2.title}}
-*Confidence:* {{json.confidence}}
-*Problems:* {{join(json.problems_signaled; ", ")}}
-*Outreach Angle:* {{json.outreach_angle}}
-*Link:* {{iterator2.apply_options[1].link}}
-```
-
-### Step 14: Module 10 — Data Store (Mark as Seen)
+### Step 13: Module 9 — Data Store (Mark as Seen)
 
 **Module: Data Store → Add/replace a record**
 
@@ -232,7 +213,7 @@ Add a second path to the scenario for Craigslist:
 - Max items: 10
 - Schedule: Every 6 hours (separate from the main daily SerpAPI run, or triggered by the same schedule)
 
-Connect the RSS output to the same Anthropic → Filter → Sheets → Slack chain.
+Connect the RSS output to the same Anthropic → Filter → Sheets → Data Store chain.
 
 **Differences for Craigslist:**
 
@@ -252,8 +233,7 @@ To monitor multiple Craigslist queries: use a Router module after the schedule t
 - [ ] Verify dedup works: run twice, second run should skip all previously seen jobs
 - [ ] Verify Claude produces valid JSON (check Anthropic module output)
 - [ ] Verify qualified jobs appear in the Google Sheet
-- [ ] Verify Slack notification arrives in #lead-signals
-- [ ] Check operations count — should be within estimated 100-200 per run
+- [ ] Check operations count — should be within estimated 90-180 per run
 - [ ] Let it run for 3 days automatically, then review all qualified leads for accuracy
 
 ---
@@ -266,3 +246,137 @@ After a week of running:
 2. **False negatives:** If small businesses are being incorrectly disqualified, review the disqualified results (they're still in the Data Store with `qualified: false`) and adjust the prompt.
 3. **Volume too low:** Add the expansion queries (see serpapi-queries.md) or increase `chips` from `3days` to `week`.
 4. **Volume too high:** Add a filter for `confidence` — only pass `high` and `medium` to Sheets.
+
+> **Note:** Notifications are handled by the Daily Digest scenario (see below), not per-lead.
+
+---
+
+## Daily Digest Scenario
+
+A separate Make.com scenario that sends one morning email summarizing all new leads across all pipelines.
+
+### Scenario Overview
+
+```
+Schedule (daily 6:30am, runs AFTER all pipeline scenarios)
+  → Google Sheets: search "Job Signal Leads" for rows where Date Found = today
+  → Google Sheets: search "Review Signal Leads" for rows where Date Found = today
+  → Google Sheets: search "New Business Leads" for rows where Date Found = today
+  → Text Aggregator: compile all new leads into a digest
+  → Gmail: send email to self
+```
+
+### Step-by-Step Build
+
+#### Step 1: Create the Scenario
+
+1. In Make.com → Scenarios → Create a new scenario
+2. Name: `Lead Gen: Daily Digest`
+3. Set the schedule: **Every day at 6:30 AM** (MST/Arizona time — Arizona does not observe DST)
+
+This runs 30 minutes after the earliest pipeline (P2 Job Monitor at 6:00 AM) and after P3 City Permits (7:00 AM). All pipelines will have completed by 6:30 AM on most days. If P3 runs later, adjust to 7:30 AM.
+
+#### Step 2: Module 1 — Google Sheets (Search Job Signal Leads)
+
+**Module: Google Sheets → Search Rows**
+
+- Spreadsheet: "SMD Lead Generation"
+- Sheet: "Job Signal Leads"
+- Filter: `L: Date Found` equals `{{formatDate(now; "YYYY-MM-DD")}}`
+
+#### Step 3: Module 2 — Google Sheets (Search Review Signal Leads)
+
+**Module: Google Sheets → Search Rows**
+
+- Spreadsheet: "SMD Lead Generation"
+- Sheet: "Review Signal Leads"
+- Filter: `L: Date Found` equals `{{formatDate(now; "YYYY-MM-DD")}}`
+
+#### Step 4: Module 3 — Google Sheets (Search New Business Leads)
+
+**Module: Google Sheets → Search Rows**
+
+- Spreadsheet: "SMD Lead Generation"
+- Sheet: "New Business Leads"
+- Filter: `J: Date Found` equals `{{formatDate(now; "YYYY-MM-DD")}}`
+
+#### Step 5: Module 4 — Text Aggregator (Compile Digest)
+
+**Module: Tools → Set multiple variables**
+
+Build the digest body from the three sheet search results. Use `ifempty` to handle days with no results for a given pipeline.
+
+- Variable: `digest_body`
+- Value:
+
+```
+REVIEW SIGNALS ({{length(sheetsModule2.results)}})
+{{#each sheetsModule2.results}}
+- {{this.A: Business Name}} | Pain: {{this.H: Pain Score}}/10 | {{this.I: Top Problems}} | {{this.K: Outreach Angle}}
+{{/each}}
+
+JOB SIGNALS ({{length(sheetsModule1.results)}})
+{{#each sheetsModule1.results}}
+- {{this.A: Company Name}} hiring {{this.B: Job Title Posted}} | {{this.G: Confidence}} | {{this.H: Problems Signaled}} | {{this.J: Outreach Angle}}
+{{/each}}
+
+NEW BUSINESSES ({{length(sheetsModule3.results)}})
+{{#each sheetsModule3.results}}
+- {{this.A: Business Name}} | {{this.E: Source}} | {{this.G: Vertical Match}} | {{this.I: Outreach Timing}}
+{{/each}}
+
+Full details in the Lead Generation spreadsheet.
+```
+
+**Note on iteration:** Make.com does not support `{{#each}}` natively. Use Text Aggregator modules after each Google Sheets search to concatenate the rows into formatted text blocks, then combine them in a Set Variable module. Alternatively, use Iterator → Text Aggregator chains for each sheet result set.
+
+- Variable: `total_count`
+- Value: `{{length(sheetsModule1.results) + length(sheetsModule2.results) + length(sheetsModule3.results)}}`
+
+#### Step 6: Filter — Only Send if Leads Exist
+
+**Add a filter before the Gmail module:**
+
+- Condition: `{{total_count}}` is greater than `0`
+- Label: "Has new leads"
+
+This prevents sending an empty digest on quiet days.
+
+#### Step 7: Module 5 — Gmail (Send Digest Email)
+
+**Module: Gmail → Send an Email**
+
+| Setting      | Value                                                                             |
+| ------------ | --------------------------------------------------------------------------------- |
+| To           | Your business email address                                                       |
+| Subject      | `Lead Gen Digest — {{formatDate(now; "YYYY-MM-DD")}} — {{total_count}} new leads` |
+| Content      | `{{digest_body}}`                                                                 |
+| Content type | Plain text                                                                        |
+
+**Email format:**
+
+```
+Subject: Lead Gen Digest — {date} — {total_count} new leads
+
+REVIEW SIGNALS ({count})
+- {business_name} | Pain: {score}/10 | {top_problems} | {outreach_angle}
+
+JOB SIGNALS ({count})
+- {company} hiring {title} | {confidence} | {problems} | {outreach_angle}
+
+NEW BUSINESSES ({count})
+- {business_name} | {source} | {vertical} | {outreach_timing}
+
+SOCIAL ({count})
+- {platform}: {title} — {url}
+
+Full details in the Lead Generation spreadsheet.
+```
+
+### Operations Estimate
+
+~50 ops/day (3 sheet searches + aggregation + email)
+
+### Note
+
+This scenario runs once daily after all other scenarios complete. All pipelines write their results to Google Sheets; this scenario reads from those sheets and compiles a single morning summary.

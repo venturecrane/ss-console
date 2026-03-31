@@ -5,7 +5,6 @@
 **Prerequisites:**
 
 - Google Sheets: "SMD Lead Generation" spreadsheet with "New Business Leads" tab (see google-sheets-schema.md)
-- Slack: #lead-signals channel created
 - Anthropic API key
 - Make.com Data Store: `seen_permits` created (see make-data-store-schema.md)
 - Gmail connection (for Scenario B — ACC/ADOR file intake)
@@ -35,13 +34,12 @@ Schedule (daily 7am)
       -> Parse JSON
       -> Filter: outreach_timing != "not_recommended"
       -> Google Sheets: append to "New Business Leads"
-      -> Slack: notification (if vertical_match is home_services or professional_services)
       -> Data Store: mark as seen
 ```
 
-**Total modules per qualified permit:** ~8
+**Total modules per qualified permit:** ~7
 **Expected daily volume:** 0-10 new commercial permits per day across all 3 cities. Most days will be low volume.
-**Operations per run:** ~50-150 (low volume source)
+**Operations per run:** ~40-130 (low volume source)
 
 ---
 
@@ -248,31 +246,7 @@ This passes permits where Claude recommends "immediate", "wait_30_days", or "wai
 | J: Date Found         | `{{formatDate(now; "YYYY-MM-DD")}}`                                                |
 | K: Status             | `New`                                                                              |
 
-#### Step 14: Module 8 — Slack (Conditional Notification)
-
-**Module: Slack -> Create a Message**
-
-Add a filter BEFORE the Slack module:
-
-- Condition: `{{json.vertical_match}}` equals `home_services` OR `{{json.vertical_match}}` equals `professional_services`
-- Label: "Primary verticals only"
-
-This ensures Slack notifications only fire for businesses in our launch verticals. Other verticals still go to the Google Sheet but don't generate noise in the Slack channel.
-
-- Channel: `#lead-signals`
-- Text:
-
-```
-:building_construction: *New Business Detected*
-*Business:* {{json.business_name}}
-*Source:* {{json.source}}
-*Vertical:* {{json.vertical_match}}
-*Outreach Timing:* {{json.outreach_timing}}
-*Area:* {{json.area}}
-*Outreach Angle:* {{json.outreach_angle}}
-```
-
-#### Step 15: Module 9 — Data Store (Mark as Seen)
+#### Step 14: Module 8 — Data Store (Mark as Seen)
 
 **Module: Data Store -> Add/replace a record**
 
@@ -428,7 +402,7 @@ These modules are identical to Scenario A Steps 11-15:
 3. **Google Sheets** — Append to "New Business Leads" (same column mapping as Scenario A, with `source` reflecting `acc_filing` or `ador_tpt`)
 4. **Data Store** — Mark as seen in `seen_permits`
 
-No Slack notification for this scenario — the volume is higher per run and the filings are less time-sensitive than permits. Review the Google Sheet periodically instead.
+No per-lead notification for this scenario — the volume is higher per run and the filings are less time-sensitive than permits. New leads appear in the Daily Digest email (see pipeline-2-job-monitor.md). Review the Google Sheet periodically for additional detail.
 
 ---
 
@@ -442,8 +416,7 @@ No Slack notification for this scenario — the volume is higher per run and the
 - [ ] Verify dedup works: run twice, second run should skip all previously seen permits
 - [ ] Verify Claude produces valid JSON (check Anthropic module output)
 - [ ] Verify qualified permits appear in the Google Sheet with correct source values
-- [ ] Verify Slack notification fires only for `home_services` and `professional_services` verticals
-- [ ] Check operations count — should be within estimated 50-150 per run
+- [ ] Check operations count — should be within estimated 40-130 per run
 - [ ] Let scenario run automatically for 5+ days, then review all qualified leads for accuracy
 
 ### Scenario B (ACC/ADOR Intake)
@@ -470,3 +443,5 @@ After 1-2 weeks of running:
 4. **Claude over-qualifying:** If too many holding companies, franchises, or non-operational entities are passing qualification, add more disqualification examples to the system prompt. The existing prompt handles common cases but may need tuning for local patterns.
 
 5. **ACC/ADOR file format changes:** When ACC or ADOR changes their file format, the CSV/Excel parse module will break. Update the column mappings and iterator references to match the new format. Keep a sample of each file format for reference.
+
+> **Note:** Notifications are handled by the Daily Digest scenario (see pipeline-2-job-monitor.md, Daily Digest Scenario section), not per-lead.

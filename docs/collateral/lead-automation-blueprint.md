@@ -40,8 +40,8 @@ Google Places API          Outscraper (review text)         Claude API
                                                     +---------+---------+
                                                     |                   |
                                                     v                   v
-                                            Google Sheet          Slack alert
-                                          "Qualified Leads"    "#lead-signals"
+                                            Google Sheet
+                                          "Qualified Leads"
 ```
 
 ### How It Works
@@ -107,7 +107,7 @@ Return JSON:
 }
 ```
 
-**Step 4 — Route and notify.** Filter for pain_score >= 7. Push qualified leads to a Google Sheet with columns: Business Name, Phone, Website, Category, Area, Pain Score, Top Problems, Evidence Quotes, Suggested Outreach Angle, Date Found. Send a Slack notification for each.
+**Step 4 — Route and record.** Filter for pain_score >= 7. Push qualified leads to a Google Sheet with columns: Business Name, Phone, Website, Category, Area, Pain Score, Top Problems, Evidence Quotes, Suggested Outreach Angle, Date Found. New leads appear in the daily digest email (see Daily Digest Scenario).
 
 ### Cost Estimate
 
@@ -131,8 +131,8 @@ Return JSON:
 SerpAPI (Google Jobs)        Claude API                 Google Sheet
 (daily job search)    -->   (analyze job desc)   -->   "Job Signal Leads"
        |                          |                          |
-  Job listings              Qualification:               Slack alert
-  (title, company,          - Is this a small co?        "#lead-signals"
+  Job listings              Qualification:               Google Sheet
+  (title, company,          - Is this a small co?        "Job Signal Leads"
    description,             - Is the pain operational?
    location, date)          - Which of the 6 problems?
                             - Draft outreach angle
@@ -200,7 +200,7 @@ Return JSON:
 }
 ```
 
-**Step 4 — Route qualified leads.** Push to the "Job Signal Leads" sheet. Slack notification.
+**Step 4 — Route qualified leads.** Push to the "Job Signal Leads" sheet. Appears in the daily digest email.
 
 **The outreach timing advantage:** The company just posted the job. They're actively feeling the pain. Your outreach arrives while the wound is fresh — not 6 months later when they've already hired someone and forgotten how bad it was.
 
@@ -337,7 +337,7 @@ Set up a Make.com scenario that:
 - Queries Reddit API for keyword matches in target subreddits
 - Watches a Google Alerts Gmail label for new alerts
 - Deduplicates against Data Store
-- Sends a daily Slack digest: "Here are today's conversations worth joining"
+- Sends a daily Gmail digest: "Here are today's conversations worth joining"
 
 You spend 15 minutes in the morning reading the digest and responding where you can add value.
 
@@ -377,7 +377,7 @@ This is the simplest pipeline — it's a CRM drip, not a data mining operation.
    - If relationship is "intro call done" but no referrals yet: Draft a gentle touch
    - If relationship is "prospect" with no intro call: Draft a follow-up to the original outreach
 4. Push drafts to Gmail draft folder for human review and send
-5. Send Slack reminder: "3 partner check-ins ready in your drafts"
+5. Send a summary email to self: "3 partner check-ins ready in your drafts"
 
 **The AI layer:** Claude drafts the check-in emails, personalized per partner based on their firm's focus areas and your relationship history. You review and send — never fully automated outreach.
 
@@ -398,16 +398,17 @@ This is the simplest pipeline — it's a CRM drip, not a data mining operation.
 
 ### Scenario Map
 
-| Scenario         | Trigger     | Schedule                         | Est. Ops/Month |
-| ---------------- | ----------- | -------------------------------- | -------------- |
-| Review Discovery | Scheduled   | Monthly (rebuild business list)  | 500            |
-| Review Scan      | Scheduled   | Weekly (pull new reviews, score) | 2,000          |
-| Job Monitor      | Scheduled   | Daily (query SerpAPI, qualify)   | 3,000          |
-| City Permits     | Scheduled   | Daily (SODA API query)           | 1,000          |
-| ACC/ADOR Intake  | Gmail watch | On new email (process filings)   | 500            |
-| Social Digest    | Scheduled   | Daily (Reddit + Google Alerts)   | 500            |
-| Partner Nurture  | Scheduled   | Weekly (check-ins)               | 200            |
-| **Total**        |             |                                  | **~7,700/mo**  |
+| Scenario         | Trigger     | Schedule                                    | Est. Ops/Month |
+| ---------------- | ----------- | ------------------------------------------- | -------------- |
+| Review Discovery | Scheduled   | Monthly (rebuild business list)             | 500            |
+| Review Scan      | Scheduled   | Weekly (pull new reviews, score)            | 1,500          |
+| Job Monitor      | Scheduled   | Daily (query SerpAPI, qualify)              | 2,500          |
+| City Permits     | Scheduled   | Daily (SODA API query)                      | 800            |
+| ACC/ADOR Intake  | Gmail watch | On new email (process filings)              | 500            |
+| Social Digest    | Scheduled   | Daily (Reddit + Google Alerts → email)      | 500            |
+| Partner Nurture  | Scheduled   | Weekly (check-ins → Gmail drafts)           | 200            |
+| Daily Digest     | Scheduled   | Daily 6:30am (morning email, all pipelines) | 1,500          |
+| **Total**        |             |                                             | **~8,000/mo**  |
 
 The Make.com Pro plan ($16/mo, 10,000 ops) covers this. If volume grows, additional ops are ~$9/10K.
 
@@ -429,7 +430,7 @@ The Make.com Pro plan ($16/mo, 10,000 ops) covers this. If volume grows, additio
 - "Referral Partners" — bookkeeper/CPA tracking (already exists)
 - "Master Pipeline" — consolidated view of all qualified leads across sources
 
-**Slack Channel:** `#lead-signals` — real-time notifications for high-scoring leads from any pipeline.
+**Daily Digest Email:** A single morning email via Gmail summarizing all new leads across all pipelines from the past 24 hours. Google Sheets are the dashboard — the digest is a daily nudge to check them.
 
 ---
 
@@ -456,7 +457,7 @@ For context: one closed engagement at our rates covers 6+ months of this entire 
 Build Pipeline 2 (Job Posting Monitor) first. Why:
 
 - SerpAPI is a single API with excellent docs
-- The Make.com scenario is straightforward (HTTP → Iterator → Claude → Filter → Sheets → Slack)
+- The Make.com scenario is straightforward (HTTP → Iterator → Claude → Filter → Sheets)
 - Job postings are the strongest intent signal — these companies are actively trying to solve the problem
 - Daily cadence means you see results immediately
 
@@ -465,11 +466,11 @@ Also set up Pipeline 4 (Social Listening) — Google Alerts and Reddit monitorin
 **Deliverables:**
 
 - [ ] SerpAPI account, Google Jobs endpoint tested
-- [ ] Make.com scenario: Job Monitor (8 queries → dedup → Claude qualify → Sheets + Slack)
+- [ ] Make.com scenario: Job Monitor (8 queries → dedup → Claude qualify → Sheets)
 - [ ] Google Alerts configured for target keywords
-- [ ] Make.com scenario: Social Digest (Reddit API + Gmail alerts → daily Slack digest)
+- [ ] Make.com scenario: Social Digest (Reddit API + Gmail alerts → daily email digest)
+- [ ] Make.com scenario: Daily Digest (morning email summarizing all new leads)
 - [ ] Google Sheets created: "Job Signal Leads," "Social Opportunities"
-- [ ] Slack channel: #lead-signals
 
 ### Phase 2: The Review Engine (Week 3-4)
 
@@ -480,7 +481,7 @@ Build Pipeline 1 (Review Mining). This is the most complex pipeline but the most
 - [ ] Outscraper account, review extraction tested
 - [ ] Google Places API: business discovery queries built for each target vertical
 - [ ] Make.com scenario: Review Discovery (monthly business list refresh)
-- [ ] Make.com scenario: Review Scan (weekly review pull → Claude scoring → Sheets + Slack)
+- [ ] Make.com scenario: Review Scan (weekly review pull → Claude scoring → Sheets)
 - [ ] Google Sheet: "Review Signal Leads"
 - [ ] Claude prompt tuned on real review data (test against known businesses)
 
@@ -504,7 +505,7 @@ Build Pipeline 5 (Referral Partner Nurture). By now you have active bookkeeper r
 **Deliverables:**
 
 - [ ] Bookkeeper prospect sheet enhanced with check-in tracking columns
-- [ ] Make.com scenario: Partner Nurture (weekly → identify due check-ins → Claude draft → Gmail drafts → Slack reminder)
+- [ ] Make.com scenario: Partner Nurture (weekly → identify due check-ins → Claude draft → Gmail drafts → summary email)
 
 ### Phase 5: Optimization (Ongoing)
 
@@ -606,4 +607,4 @@ Step-by-step build guides for each Make.com scenario:
 - #108 — Pipeline 3: New Business Detection
 - #109 — Pipeline 4: Social Listening
 - #110 — Pipeline 5: Partner Nurture + Buttondown
-- #111 — API accounts, Make.com setup, Slack channel
+- #111 — API accounts, Make.com setup, Gmail digest
