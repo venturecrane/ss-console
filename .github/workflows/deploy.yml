@@ -34,7 +34,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=ss-console
+          command: pages deploy dist --project-name=ss-web
 
       - name: Run D1 migrations
         if: ${{ vars.D1_MIGRATIONS_ENABLED == 'true' }}

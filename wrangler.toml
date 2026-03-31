@@ -9,7 +9,7 @@
 # All domains are served by this single Pages project.
 # Routing is handled by Astro middleware, not separate deployments.
 
-name = "ss-console"
+name = "ss-web"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "dist"

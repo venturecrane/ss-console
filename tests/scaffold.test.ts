@@ -71,9 +71,9 @@ describe('cloudflare SSR scaffolding', () => {
     expect(notFound).toContain('export const prerender = true')
   })
 
-  it('deploy workflow targets ss-console project', () => {
+  it('deploy workflow targets ss-web project', () => {
     const deploy = readFileSync(resolve('.github/workflows/deploy.yml'), 'utf-8')
-    expect(deploy).toContain('--project-name=ss-console')
+    expect(deploy).toContain('--project-name=ss-web')
   })
 
   it('deploy workflow includes D1 migration step', () => {
