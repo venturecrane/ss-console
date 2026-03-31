@@ -16,6 +16,20 @@ import { parseSessionToken, validateSession, renewSession } from './lib/auth/ses
  */
 export const onRequest = defineMiddleware(async (context, next) => {
   const { pathname } = context.url
+  const hostname = context.url.hostname
+
+  // Subdomain routing: portal.smd.services rewrites to /portal/* paths
+  const isPortalSubdomain = hostname.startsWith('portal.')
+  if (
+    isPortalSubdomain &&
+    !pathname.startsWith('/portal') &&
+    !pathname.startsWith('/api/portal') &&
+    !pathname.startsWith('/auth')
+  ) {
+    // Rewrite the URL to the /portal path prefix
+    const portalPath = pathname === '/' ? '/portal' : `/portal${pathname}`
+    return context.rewrite(new Request(new URL(portalPath, context.url), context.request))
+  }
 
   // Initialize session as null for all routes
   context.locals.session = null
@@ -23,7 +37,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // Determine route type
   const isAdminRoute = pathname.startsWith('/admin')
   const isAdminApiRoute = pathname.startsWith('/api/admin')
-  const isPortalRoute = pathname.startsWith('/portal')
+  const isPortalRoute = pathname.startsWith('/portal') || isPortalSubdomain
   const isPortalApiRoute = pathname.startsWith('/api/portal')
   const isProtectedRoute = isAdminRoute || isAdminApiRoute || isPortalRoute || isPortalApiRoute
 
