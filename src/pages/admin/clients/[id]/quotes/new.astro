@@ -1,0 +1,432 @@
+---
+import '../../../../../styles/global.css'
+import { getClient } from '../../../../../lib/db/clients'
+import { listAssessments } from '../../../../../lib/db/assessments'
+import { PROBLEM_LABELS } from '../../../../../portal/assessments/extraction-schema'
+
+/**
+ * New quote form page.
+ *
+ * Protected by auth middleware (session guaranteed).
+ * Allows creating a new quote for a client:
+ * - Select from completed/converted assessments
+ * - Dynamic line item editor with problem dropdowns
+ * - Auto-calculated totals
+ * - Rate and deposit configuration
+ */
+
+const session = Astro.locals.session!
+const env = Astro.locals.runtime.env
+const { id: clientId } = Astro.params
+
+if (!clientId) {
+  return Astro.redirect('/admin/clients')
+}
+
+const client = await getClient(env.DB, session.orgId, clientId)
+if (!client) {
+  return Astro.redirect('/admin/clients?error=not_found')
+}
+
+// Only show assessments that are completed or converted
+const allAssessments = await listAssessments(env.DB, session.orgId, clientId)
+const assessments = allAssessments.filter(
+  (a) => a.status === 'completed' || a.status === 'converted'
+)
+
+const url = Astro.url
+const errorParam = url.searchParams.get('error') || ''
+
+const errorMessages: Record<string, string> = {
+  missing: 'Required fields are missing.',
+  invalid_line_items: 'Line items data is invalid.',
+  missing_line_items: 'At least one line item is required.',
+  invalid_rate: 'Rate must be a positive number.',
+  server: 'Something went wrong. Please try again.',
+}
+
+const errorMessage = errorParam ? (errorMessages[errorParam] ?? 'An error occurred.') : ''
+
+// Problem options for dropdown
+const problemOptions = Object.entries(PROBLEM_LABELS).map(([value, label]) => ({
+  value,
+  label,
+}))
+
+// Default rate at launch tier
+const defaultRate = 150
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>New Quote — {client.business_name} — SMD Services Admin</title>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white border-b border-slate-200">
+      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <a href="/admin" class="text-lg font-bold text-slate-900 hover:text-slate-700"
+            >SMD Services</a
+          >
+          <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">Admin</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="text-sm text-slate-600">{session.email}</span>
+          <form method="POST" action="/api/auth/logout">
+            <button
+              type="submit"
+              class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto px-4 py-8">
+      <!-- Breadcrumb -->
+      <nav class="mb-6">
+        <ol class="flex items-center gap-2 text-sm text-slate-500">
+          <li><a href="/admin/clients" class="hover:text-slate-700">Clients</a></li>
+          <li class="text-slate-300">/</li>
+          <li>
+            <a href={`/admin/clients/${client.id}`} class="hover:text-slate-700"
+              >{client.business_name}</a
+            >
+          </li>
+          <li class="text-slate-300">/</li>
+          <li class="text-slate-900 font-medium">New Quote</li>
+        </ol>
+      </nav>
+
+      <h1 class="text-2xl font-bold text-slate-900 mb-2">New Quote</h1>
+      <p class="text-sm text-slate-500 mb-6">{client.business_name}</p>
+
+      {
+        errorMessage && (
+          <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            {errorMessage}
+          </div>
+        )
+      }
+
+      {
+        assessments.length === 0 ? (
+          <div class="bg-white rounded-lg border border-slate-200 border-dashed p-6 text-center">
+            <p class="text-sm text-slate-400 mb-2">
+              No completed assessments found for this client.
+            </p>
+            <p class="text-xs text-slate-400">Complete an assessment before creating a quote.</p>
+            <a
+              href={`/admin/clients/${client.id}`}
+              class="text-sm text-primary hover:text-primary-hover mt-2 inline-block"
+            >
+              Back to Client
+            </a>
+          </div>
+        ) : (
+          <form id="quote-form" method="POST" action="/api/admin/quotes" class="space-y-6">
+            <input type="hidden" name="client_id" value={client.id} />
+            <input type="hidden" id="line_items_json" name="line_items" value="[]" />
+
+            {/* Assessment Selection */}
+            <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+              <h2 class="text-base font-semibold text-slate-900">Assessment</h2>
+              <div>
+                <label for="assessment_id" class="block text-sm font-medium text-slate-700 mb-1">
+                  Select Assessment <span class="text-red-500">*</span>
+                </label>
+                <select
+                  id="assessment_id"
+                  name="assessment_id"
+                  required
+                  class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">Choose an assessment</option>
+                  {assessments.map((a) => (
+                    <option value={a.id}>
+                      {a.scheduled_at
+                        ? new Date(a.scheduled_at).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                          })
+                        : 'Unscheduled'}{' '}
+                      — {a.status}
+                      {a.champion_name ? ` (Champion: ${a.champion_name})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Line Items */}
+            <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+              <div class="flex items-center justify-between">
+                <h2 class="text-base font-semibold text-slate-900">Line Items</h2>
+                <button
+                  type="button"
+                  id="add-line-item"
+                  class="inline-flex items-center gap-1 text-sm text-primary hover:text-primary-hover font-medium"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 4v16m8-8H4"
+                    />
+                  </svg>
+                  Add Line Item
+                </button>
+              </div>
+
+              <div id="line-items-container" class="space-y-4">
+                {/* Line items rendered by JavaScript */}
+              </div>
+
+              <p id="no-items-msg" class="text-sm text-slate-400 text-center py-4">
+                Click "Add Line Item" to start building the quote.
+              </p>
+            </div>
+
+            {/* Pricing */}
+            <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+              <h2 class="text-base font-semibold text-slate-900">Pricing</h2>
+
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label for="rate" class="block text-sm font-medium text-slate-700 mb-1">
+                    Rate ($/hr) <span class="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    id="rate"
+                    name="rate"
+                    required
+                    min="1"
+                    step="0.01"
+                    value={defaultRate}
+                    class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                  />
+                  <p class="mt-1 text-xs text-slate-400">Internal rate, not shown to client</p>
+                </div>
+                <div>
+                  <label for="deposit_pct" class="block text-sm font-medium text-slate-700 mb-1">
+                    Deposit %
+                  </label>
+                  <input
+                    type="number"
+                    id="deposit_pct"
+                    name="deposit_pct"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.5"
+                    class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                  />
+                  <p class="mt-1 text-xs text-slate-400">Default 0.50 (50%)</p>
+                </div>
+              </div>
+
+              {/* Auto-calculated totals display */}
+              <div
+                id="totals-display"
+                class="p-4 bg-slate-50 rounded-lg border border-slate-200 hidden"
+              >
+                <div class="grid grid-cols-2 gap-y-2 text-sm">
+                  <span class="text-slate-500">Total Hours:</span>
+                  <span id="total-hours" class="text-right font-medium text-slate-900">
+                    0
+                  </span>
+                  <span class="text-slate-500">Total Price:</span>
+                  <span id="total-price" class="text-right font-medium text-slate-900">
+                    --
+                  </span>
+                  <span class="text-slate-500">Deposit Amount:</span>
+                  <span id="deposit-amount" class="text-right font-medium text-slate-900">
+                    --
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+              <h2 class="text-base font-semibold text-slate-900">Notes</h2>
+              <div>
+                <textarea
+                  id="notes"
+                  name="notes"
+                  rows="3"
+                  class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                  placeholder="Internal notes or engagement overview..."
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div class="flex items-center justify-between pt-2">
+              <a
+                href={`/admin/clients/${client.id}`}
+                class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+              >
+                Back to Client
+              </a>
+              <button
+                type="submit"
+                class="bg-primary text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"
+              >
+                Create Quote
+              </button>
+            </div>
+          </form>
+        )
+      }
+    </main>
+
+    <script define:vars={{ problemOptions }}>
+      // Dynamic line item management
+      const container = document.getElementById('line-items-container')
+      const addBtn = document.getElementById('add-line-item')
+      const noItemsMsg = document.getElementById('no-items-msg')
+      const lineItemsInput = document.getElementById('line_items_json')
+      const totalsDisplay = document.getElementById('totals-display')
+      const totalHoursEl = document.getElementById('total-hours')
+      const totalPriceEl = document.getElementById('total-price')
+      const depositAmountEl = document.getElementById('deposit-amount')
+      const rateInput = document.getElementById('rate')
+      const depositPctInput = document.getElementById('deposit_pct')
+      const form = document.getElementById('quote-form')
+
+      let lineItemCount = 0
+
+      function createLineItem() {
+        lineItemCount++
+        const index = lineItemCount
+
+        const div = document.createElement('div')
+        div.className = 'line-item p-4 bg-slate-50 rounded-lg border border-slate-200'
+        div.dataset.index = String(index)
+
+        // Problem dropdown options
+        const options = problemOptions
+          .map((o) => `<option value="${o.value}">${o.label}</option>`)
+          .join('')
+
+        div.innerHTML = `
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-medium text-slate-500">Item ${index}</span>
+            <button type="button" class="remove-item text-xs text-red-500 hover:text-red-700">Remove</button>
+          </div>
+          <div class="grid grid-cols-1 gap-3">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Problem</label>
+              <select class="item-problem w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary">
+                <option value="">Select a problem</option>
+                ${options}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+              <textarea class="item-description w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary" rows="2" placeholder="What will be delivered for this line item..."></textarea>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Estimated Hours</label>
+              <input type="number" class="item-hours w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary" min="0.5" step="0.5" placeholder="0" />
+            </div>
+          </div>
+        `
+
+        container.appendChild(div)
+
+        // Remove button
+        div.querySelector('.remove-item').addEventListener('click', () => {
+          div.remove()
+          updateTotals()
+          renumberItems()
+          toggleNoItemsMsg()
+        })
+
+        // Listen for changes to recalculate
+        div.querySelectorAll('input, select, textarea').forEach((el) => {
+          el.addEventListener('input', updateTotals)
+        })
+
+        toggleNoItemsMsg()
+        updateTotals()
+      }
+
+      function renumberItems() {
+        const items = container.querySelectorAll('.line-item')
+        items.forEach((item, i) => {
+          const label = item.querySelector('span')
+          if (label) label.textContent = `Item ${i + 1}`
+        })
+      }
+
+      function toggleNoItemsMsg() {
+        const hasItems = container.querySelectorAll('.line-item').length > 0
+        noItemsMsg.style.display = hasItems ? 'none' : 'block'
+        totalsDisplay.classList.toggle('hidden', !hasItems)
+      }
+
+      function getLineItems() {
+        const items = []
+        container.querySelectorAll('.line-item').forEach((div) => {
+          const problem = div.querySelector('.item-problem').value
+          const description = div.querySelector('.item-description').value
+          const hours = parseFloat(div.querySelector('.item-hours').value) || 0
+          if (problem && hours > 0) {
+            items.push({ problem, description, estimated_hours: hours })
+          }
+        })
+        return items
+      }
+
+      function updateTotals() {
+        const items = getLineItems()
+        const rate = parseFloat(rateInput.value) || 0
+        const depositPct = parseFloat(depositPctInput.value) || 0.5
+
+        const totalHours = items.reduce((sum, item) => sum + item.estimated_hours, 0)
+        const totalPrice = totalHours * rate
+        const depositAmount = totalPrice * depositPct
+
+        totalHoursEl.textContent = totalHours.toFixed(1)
+        totalPriceEl.textContent =
+          '$' + totalPrice.toLocaleString('en-US', { minimumFractionDigits: 0 })
+        depositAmountEl.textContent =
+          '$' + depositAmount.toLocaleString('en-US', { minimumFractionDigits: 0 })
+
+        // Update hidden field
+        lineItemsInput.value = JSON.stringify(items)
+      }
+
+      addBtn.addEventListener('click', createLineItem)
+      rateInput.addEventListener('input', updateTotals)
+      depositPctInput.addEventListener('input', updateTotals)
+
+      // Serialize line items before form submit
+      form.addEventListener('submit', (e) => {
+        const items = getLineItems()
+        if (items.length === 0) {
+          e.preventDefault()
+          alert('Please add at least one line item with a problem and hours.')
+          return
+        }
+        lineItemsInput.value = JSON.stringify(items)
+      })
+    </script>
+  </body>
+</html>
