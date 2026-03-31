@@ -12,19 +12,19 @@ A complete record of every strategic decision made across 6 layers of the SMD Se
 
 ## Quick Reference
 
-|                         |                                                                        |
-| ----------------------- | ---------------------------------------------------------------------- |
-| **Business**            | SMD Services - fixed-price operations consulting                       |
-| **Core offering**       | Package 2 - Operations Cleanup ($3,500 per engagement)                 |
-| **Sprint length**       | 10 days                                                                |
-| **Target market**       | Phoenix metro, 10-25 employees, home services + professional services  |
-| **Revenue target**      | $5,000 in 30 days (2 closed engagements)                               |
-| **Price**               | $3,500 published. $2,500 discretionary floor. Never publish the floor. |
-| **Payment terms**       | 50% at signing, 50% on Day 8                                           |
-| **Assessment**          | Free for first 3 clients, then $250 applied toward engagement          |
-| **Voice standard**      | We / our team throughout. Never I / the consultant.                    |
-| **Decisions locked**    | 29 decisions across 6 layers                                           |
-| **Deliverables queued** | 11 artifacts ready to build                                            |
+|                         |                                                                       |
+| ----------------------- | --------------------------------------------------------------------- |
+| **Business**            | SMD Services - operations consulting                                  |
+| **Core offering**       | Operations Cleanup - scope-based pricing per engagement               |
+| **Engagement length**   | Variable - scoped per engagement based on assessment findings         |
+| **Target market**       | Phoenix metro, 10-25 employees, home services + professional services |
+| **Objective**           | Launch the agency and reach profitability                             |
+| **Rate**                | $150/hr at launch → $175/hr → $200/hr with volume and case studies    |
+| **Payment terms**       | 50% deposit at signing, 50% at completion                             |
+| **Assessment**          | Free for first 3 clients, then $250 applied toward engagement         |
+| **Voice standard**      | We / our team throughout. Never I / the consultant.                   |
+| **Decisions locked**    | 29 decisions across 6 layers                                          |
+| **Deliverables queued** | 11 artifacts ready to build                                           |
 
 ---
 
@@ -34,12 +34,12 @@ A complete record of every strategic decision made across 6 layers of the SMD Se
 >
 > SMD Services is a multi-disciplined consulting team. The principal is the point of entry and client relationship owner. The team is the delivery mechanism. All external-facing and internal content defaults to "we" voice. Never "I" or "the consultant." This is not a solo operator. The agent team is real capacity.
 
-|                    |                                                                                                      |
-| ------------------ | ---------------------------------------------------------------------------------------------------- |
-| **Always use**     | We / our team / we'll fix / our approach / we deliver                                                |
-| **Never use**      | I / the consultant / my approach / I'll fix                                                          |
-| **Scope**          | All client-facing collateral, all issue bodies, all delivery playbook language, all website copy     |
-| **Why it matters** | Removes the "what if you're sick" objection. Positions the engagement as a capable agency at $3,500. |
+|                    |                                                                                                                 |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| **Always use**     | We / our team / we'll fix / our approach / we deliver                                                           |
+| **Never use**      | I / the consultant / my approach / I'll fix                                                                     |
+| **Scope**          | All client-facing collateral, all issue bodies, all delivery playbook language, all website copy                |
+| **Why it matters** | Removes the "what if you're sick" objection. Positions the engagement as a capable agency, not a solo operator. |
 
 ---
 
@@ -60,7 +60,7 @@ The 5-50 range in the original deep dive was too wide. A 5-person plumbing shop 
 **Rationale**
 
 - Below 10: owner can often justify DIY; $2,500 is a hard sell
-- Above 25: multi-department complexity cracks the fixed-price model
+- Above 25: multi-department complexity pushes scope beyond what a single engagement can solve cleanly
 - 10-25: owner is still the sole decision-maker AND has enough staff that operational pain is felt daily
 
 **Risks Accepted**
@@ -78,7 +78,7 @@ The 5-50 range in the original deep dive was too wide. A 5-person plumbing shop 
 
 **Home Services (plumber, HVAC, electrical, pest control, landscaping)**
 
-- Pain cluster: scheduling chaos, lead leakage, team visibility
+- Pain cluster: scheduling chaos, lead leakage, employee retention
 - High target density in Phoenix
 - Owner is always the buyer, fast decision-making
 - Concrete ROI: missed appointments = measurable lost revenue
@@ -104,7 +104,7 @@ Financial blindness is emotionally resonant. Owners respond to it. But "fix thei
 
 - Books must be current within 30 days at time of assessment - hard gate, no exceptions
 - If prerequisite not met: swap the problem for another from the six on the call
-- Framing the swap: "We focus on problems we can actually fix in 10 days"
+- Framing the swap: "We focus on problems we can solve within the engagement scope"
 - Refer bookkeeping remediation to a partner - creates a reciprocal relationship
 
 ---
@@ -118,7 +118,7 @@ Financial blindness is emotionally resonant. Owners respond to it. But "fix thei
 **Hard Disqualifiers - Automatic No**
 
 1. Not speaking to the owner/check-writer - no proxy decisions
-2. Scope clearly exceeds 10 days (multi-location, ERP, franchise)
+2. Scope clearly exceeds a single engagement (multi-location, ERP, franchise)
 3. No tech baseline at all - no email, no internet, no existing tools
 
 **Soft Disqualifiers - Yellow Flag, Probe on Call**
@@ -199,13 +199,13 @@ Problem diagnosis, process documentation, tool configuration, one handoff traini
 
 **Issue:** smdservices/ss-console #11
 
-**Decision: Parking lot protocol - log everything, resolve on Day 8**
+**Decision: Parking lot protocol - log everything, resolve at pre-handoff review**
 
-- Day 1: tell the client - everything outside the three agreed problems goes into a parking lot doc
-- During sprint: team logs every out-of-scope request with a one-line description. No in-the-moment no.
-- Day 8 review: each item gets one of three outcomes - fold into handoff, propose as follow-on, or drop with explanation
+- Day 1: tell the client — everything outside the agreed problems goes into a parking lot doc
+- During engagement: team logs every out-of-scope request with a one-line description. No in-the-moment no.
+- Pre-handoff review (scheduled as the second-to-last session): each parking lot item gets one of three outcomes — fold into handoff, propose as follow-on, or drop with explanation
 
-> **Why parking lot over change orders:** The parking lot protects scope without saying no in the moment, creates a natural Day 8 conversation that surfaces follow-on revenue, and demonstrates to the client that nothing got lost. That last point is a referral driver.
+> **Why parking lot over change orders:** The parking lot protects scope without saying no in the moment, creates a natural conversation that surfaces follow-on revenue, and demonstrates to the client that nothing got lost. That last point is a referral driver.
 
 ---
 
@@ -213,17 +213,38 @@ Problem diagnosis, process documentation, tool configuration, one handoff traini
 
 ---
 
-## Decision #16 - Launch Price
+## Decision #16 - Pricing Model
 
 **Issue:** smdservices/ss-console #16
 
-**Decision: $3,500 from day one. $2,500 discretionary floor, never published.**
+**Decision: Scope-based pricing. No published price. Rate-based quoting from assessment findings.**
 
-- External published price: $3,500. Never publish $2,500 anywhere.
-- Internal floor: $2,500. Use only if the prospect is the right fit, pushes back, and we need the revenue or the case study.
-- Trigger to move the ceiling above $3,500: first unsolicited referral - someone who called because a client sent them.
+Every engagement is different. The assessment identifies the problems; the solution design determines the scope; the scope determines the price. No fixed price is published externally.
 
-_A 10-25 person owner who recognizes their problem will not lose a deal over $1,000 if the pitch is right. They lose deals over doubt, not dollars._
+**Internal Rate Schedule**
+
+| Tier            | Rate    | Trigger to Advance                               |
+| --------------- | ------- | ------------------------------------------------ |
+| **Launch**      | $150/hr | Starting rate                                    |
+| **Established** | $175/hr | Consistent pipeline + 2-3 completed case studies |
+| **Volume**      | $200/hr | Referral-driven inbound + demonstrated results   |
+
+**How Quoting Works**
+
+1. Assessment call identifies 2-3 problems
+2. Solution design phase estimates hours per problem (tool selection, configuration, documentation, training)
+3. Quote = estimated hours × current rate
+4. Presented as a fixed project price to the client — they see "Operations Cleanup: $X,XXX", not an hourly breakdown
+5. Internal tracking compares estimated vs. actual hours per engagement to calibrate future quotes
+
+**Pricing Guardrails**
+
+- Never publish a dollar amount on the website or marketing materials
+- Never share the hourly rate with clients — they see a project price
+- The assessment call is the pricing conversation — "we'll design a solution and send you a scope and price"
+- Typical engagement range at launch rate: $3,000-$9,000+ depending on scope
+
+_The value is not the hours. The value is an experienced team that can see the problems the owner can't, make decisions fast, and implement in days. The rate is internal math — the client pays for outcomes._
 
 ---
 
@@ -231,13 +252,19 @@ _A 10-25 person owner who recognizes their problem will not lose a deal over $1,
 
 **Issue:** smdservices/ss-console #14
 
-**Decision: 50% at signing. 50% due on Day 8 - not on completion.**
+**Decision: 50% deposit at signing. 50% at completion.**
 
-- 50% at contract signing to book the sprint start date
-- 50% due on Day 8 - the parking lot review and handoff prep session
-- SOW language: "Day 8 payment is due regardless of scope additions surfaced during the sprint"
+- 50% at contract signing to book the engagement start date
+- 50% due at engagement completion — defined as the handoff session
+- SOW language specifies the completion milestone clearly so there is no ambiguity
 
-Day 8 is not the final day - it is the highest-satisfaction checkpoint. Moving the second payment here removes the "I'll pay when I'm satisfied" dynamic that makes completion payments adversarial.
+**Why completion, not a mid-engagement checkpoint:**
+
+With variable-length engagements, a fixed day number no longer works. Completion is the natural trigger — the client has seen the work, the handoff session demonstrates value, and the second payment is expected. The deposit protects against cancellation; the completion payment aligns with delivered value.
+
+**For larger engagements (40+ hours):**
+
+Consider a three-milestone structure: 40% deposit / 30% at mid-engagement checkpoint / 30% at completion. Define the mid-point milestone in the SOW based on the specific deliverables.
 
 ---
 
@@ -262,14 +289,14 @@ Day 8 is not the final day - it is the highest-satisfaction checkpoint. Moving t
 
 The anchor math is not a PDF we email. It is 1-2 questions per problem type asked during the assessment. When the owner says the number out loud, it is theirs - not ours. That is the close.
 
-| Problem                  | Questions and Anchor                                                                             |
-| ------------------------ | ------------------------------------------------------------------------------------------------ |
-| **Owner bottleneck**     | Hours/week they spend on approvals x their hourly rate. 10 hrs x $150 = $1,500/week constrained. |
-| **Lead leakage**         | Lost leads/month x average job value. 2 leads x $500 = $1,000/month walking out.                 |
-| **Scheduling chaos**     | Missed appointments/month x cost per. 4 x $200 = $800/month.                                     |
-| **Manual communication** | Pain opener, not a math closer. Owner recognizes it immediately.                                 |
-| **Financial blindness**  | Pivot to pain framing. Cost is peace of mind, not a recoverable dollar.                          |
-| **Team invisibility**    | Ask them to name a recent dropped ball. Cost is the example they give.                           |
+| Problem                  | Questions and Anchor                                                                                                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Owner bottleneck**     | Hours/week they spend on approvals x their hourly rate. 10 hrs x $150 = $1,500/week constrained.                                                                             |
+| **Lead leakage**         | Lost leads/month x average job value. 2 leads x $500 = $1,000/month walking out.                                                                                             |
+| **Scheduling chaos**     | Missed appointments/month x cost per. 4 x $200 = $800/month.                                                                                                                 |
+| **Manual communication** | Pain opener, not a math closer. Owner recognizes it immediately.                                                                                                             |
+| **Financial blindness**  | Pivot to pain framing. Cost is peace of mind, not a recoverable dollar.                                                                                                      |
+| **Employee retention**   | "How many people have you lost in the last year? What does it cost to hire and train a replacement?" The owner knows the number — and it's always higher than they expected. |
 
 ---
 
@@ -280,10 +307,10 @@ The anchor math is not a PDF we email. It is 1-2 questions per problem type aske
 **Decision: No retainer at launch. Define after first delivery.**
 
 - Internal placeholder: $200-$400/month, single tier, system monitoring + monthly check-in + minor updates
-- Trigger: after first engagement, debrief on what the client asked for that we couldn't deliver in the sprint. That list becomes the retainer scope.
-- Day 8 parking lot items are the retainer product design session - not a pricing exercise done in advance.
+- Trigger: after first engagement, debrief on what the client asked for that we couldn't deliver in the engagement. That list becomes the retainer scope.
+- Pre-handoff parking lot items are the retainer product design session - not a pricing exercise done in advance.
 
-> **If asked on Day 8:** "We offer ongoing support - let us put together a simple proposal after we close out the sprint." Do not improvise scope or price on the spot.
+> **If asked at pre-handoff review:** "We offer ongoing support - let us put together a simple proposal after we close out the engagement." Do not improvise scope or price on the spot.
 
 ---
 
@@ -319,21 +346,28 @@ The anchor math is not a PDF we email. It is 1-2 questions per problem type aske
 
 **Issue:** smdservices/ss-console #18
 
-**Decision: Verbal close attempt on call. SOW out within 2 hours.**
+**Decision: Assessment identifies problems. Solution design produces the quote. Proposal out within 48 hours.**
 
-**Close Language**
+The assessment call is diagnostic, not a closing conversation. Every engagement differs in scope, so the quote requires a solution design phase after the call.
 
-> "Based on what we've found today, we think we can fix X, Y, and Z in 10 days. We'll send over the scope and pricing today - does that work?"
+**Post-Assessment Flow**
 
-- If yes: confirming details, not selling. SOW goes out same session.
-- If "send it over": still warm. SOW goes out within 2 hours, not 24.
-- SOW includes a soft sprint slot hold: tentative start date with a 3-day confirmation deadline.
+1. **End of call:** Summarize findings verbally. Set expectation: "We'll put together a solution and scope — you'll have it within a couple days."
+2. **Same day:** MacWhisper transcript → Claude extraction → structured capture doc with identified problems, complexity signals, and scope drivers
+3. **Solution design (internal, 1-2 hours):** Select tools, estimate hours per problem, identify dependencies and risks. This produces the quote.
+4. **Proposal out within 48 hours** of the assessment call. Speed still matters — but the quote is now informed, not guessed.
 
 **SOW Format Requirements**
 
-- 1 page max - hard limit
+- 2 pages max — scope section + terms section
 - PDF with DocuSign or Dropbox Sign signature fields
-- No deck, no case studies, no methodology section at this stage
+- Includes: problems being solved, specific deliverables, timeline estimate, project price, payment terms, exclusions
+- No hourly breakdown visible to client — project price only
+- Includes a soft engagement slot hold: tentative start date with a 5-day confirmation deadline
+
+**Call Close Language (Revised)**
+
+> "Based on what we've talked through today, we can see a clear path to fixing X, Y, and Z. We'll design the solution and send you a scope and price within a couple of days. Sound good?"
 
 ---
 
@@ -402,9 +436,9 @@ _Exception: if a prospect explicitly says they need more time, extend the Day 7 
 
 **Issue:** smdservices/ss-console #23
 
-**Decision: No formal incentive. Explicit ask at Day 8. 30-day check-in reinforcement.**
+**Decision: No formal incentive. Explicit ask at handoff. 30-day check-in reinforcement.**
 
-**Day 8 Ask (Primary)**
+**Handoff Ask (Primary)**
 
 > "If you know another owner dealing with the same kind of chaos, we'd genuinely appreciate the introduction. We make it easy for them."
 
@@ -422,11 +456,11 @@ _Exception: if a prospect explicitly says they need more time, extend the Day 7 
 
 **Home Services**
 
-|               |                                                                                                             |
-| ------------- | ----------------------------------------------------------------------------------------------------------- |
-| **One-liner** | We help Phoenix home services companies stop losing jobs to missed calls and scheduling chaos - in 10 days. |
-| **ROI hook**  | If you're losing 2-3 leads a month, that's $1,000+ walking out the door every month.                        |
-| **Channels**  | PHCC/ACCA events, BNI chapter, Greater Phoenix Chamber, shared vendor introductions                         |
+|               |                                                                                                |
+| ------------- | ---------------------------------------------------------------------------------------------- |
+| **One-liner** | We help Phoenix home services companies stop losing jobs to missed calls and scheduling chaos. |
+| **ROI hook**  | If you're losing 2-3 leads a month, that's $1,000+ walking out the door every month.           |
+| **Channels**  | PHCC/ACCA events, BNI chapter, Greater Phoenix Chamber, shared vendor introductions            |
 
 **Professional Services**
 
@@ -451,13 +485,13 @@ _Exception: if a prospect explicitly says they need more time, extend the Day 7 
 | Assessment - proposal sent       | 80%  | If they booked, they are interested        |
 | Proposal - close                 | 35%  | No social proof, new market, first 30 days |
 
-**Working Backwards from 2 Closes**
+**Working Backwards from Steady State (2 active engagements/month)**
 
 - 2 closes / 35% = **6 proposals needed**
 - 6 proposals / 80% = **7-8 assessments needed**
 - 8 assessments / 40% = **20 conversations needed**
 - 20 conversations / 20% = **100 outreach touches needed**
-- Over 30 days = **~25 outreach touches per week**
+- ~25 outreach touches per week to maintain pipeline
 
 **Weekly Pipeline Health Check**
 
@@ -476,7 +510,7 @@ _Exception: if a prospect explicitly says they need more time, extend the Day 7 
 
 **Issue:** smdservices/ss-console #28
 
-**Decision: Identify at assessment. Orient on Day 1. 3-part enablement standard by Day 10.**
+**Decision: Identify at assessment. Orient on Day 1. 3-part enablement standard by handoff.**
 
 **At Assessment Call**
 Ask: "Who on your team would own this after we finish - someone who'd be the go-to person for the new process?" No credible answer is a soft disqualifier.
@@ -484,7 +518,7 @@ Ask: "Who on your team would own this after we finish - someone who'd be the go-
 **On Day 1**
 Orient the champion directly. 15-minute briefing: what we're building, why, and what their role will be at handoff.
 
-**The Enablement Standard - All 3 by Day 10**
+**The Enablement Standard - All 3 by Handoff**
 
 1. Can explain why the system was built the way it was - the reasoning, not just the steps
 2. Can operate it without our team present
@@ -499,20 +533,20 @@ Accept it, but bound the role. The handoff doc includes a "Champion Tasks" secti
 
 **Issue:** smdservices/ss-console #27
 
-**Decision: 2-week async stabilization period ending at Day 24**
+**Decision: 2-week async stabilization period starting at handoff**
 
-**Day 10 Language**
+**Handoff Language**
 
-> "For the next two weeks, if anything comes up with the systems we built - a question, something behaving unexpectedly, a team member who needs a second walkthrough - reach out and we'll sort it out. After Day 24, any new work goes through a follow-on scope conversation."
+> "For the next two weeks, if anything comes up with the systems we built - a question, something behaving unexpectedly, a team member who needs a second walkthrough - reach out and we'll sort it out. After that, any new work goes through a follow-on scope conversation."
 
 **Channel and Terms**
 
-- Dedicated email thread started on Day 10 - not a phone number
-- 24-hour response time, business days only. Set this expectation on Day 10.
+- Dedicated email thread started at handoff - not a phone number
+- 24-hour response time, business days only. Set this expectation at handoff.
 - Included: questions about systems we built, minor config fixes under 30 minutes, one additional team member walkthrough
 - Not included: new problems, changes beyond fixing what's broken, anything scope-adjacent
 
-Out-of-scope requests during the safety net window: _"That's outside what we built in the sprint - happy to put together a quick scope for a follow-on. Want us to take a look?"_
+Out-of-scope requests during the safety net window: _"That's outside what we built in the engagement - happy to put together a quick scope for a follow-on. Want us to take a look?"_
 
 ---
 
@@ -520,9 +554,9 @@ Out-of-scope requests during the safety net window: _"That's outside what we bui
 
 **Issue:** smdservices/ss-console #29
 
-**Decision: Verbal Day 10, written survey Day 30**
+**Decision: Verbal at handoff, written survey 30 days post-handoff**
 
-**Day 10 - Verbal Check-in (5 minutes, end of handoff)**
+**Handoff Session - Verbal Check-in (5 minutes, end of handoff)**
 
 1. What worked better than you expected?
 2. What would you change?
@@ -530,7 +564,7 @@ Out-of-scope requests during the safety net window: _"That's outside what we bui
 
 _Capture responses in a notes doc immediately after - not during. Asking while taking notes kills the conversation._
 
-**Day 30 - Written Survey (4 questions, sent in 30-day check-in email)**
+**30 Days Post-Handoff - Written Survey (4 questions, sent in check-in email)**
 
 1. Are the systems we built still being used day-to-day?
 2. What's the most noticeable change in how your team operates? (open text)
@@ -545,13 +579,13 @@ Question 4 doubles as a referral prompt. Same email, same moment, no extra step.
 
 **Issue:** smdservices/ss-console #26
 
-**Decision: Verbal ask Day 8. Automated email with links Day 10.**
+**Decision: Verbal ask at handoff session. Automated email 2 days post-handoff.**
 
-**Day 8 - Verbal Ask**
+**Handoff Session - Verbal Ask**
 
 > "We'd really appreciate a Google review when you get a chance - we'll send you a direct link so it takes two minutes."
 
-**Day 10 - Automated Email**
+**Post-Handoff Email (2 days after handoff)**
 
 - Google Business review link (primary - shows up in search, highest value)
 - LinkedIn recommendation link (secondary - valuable for professional services vertical)
@@ -591,19 +625,19 @@ Question 4 doubles as a referral prompt. Same email, same moment, no extra step.
 
 All 11 artifacts are scaffolded as GitHub issues in smdservices/ss-console. Every deliverable is fully specified - the decisions that define it are locked. Ready to build.
 
-| #   | Deliverable                                | Week | Layer                  |
-| --- | ------------------------------------------ | ---- | ---------------------- |
-| 31  | Accountant and bookkeeper intro email      | 1    | Layer 5 - Distribution |
-| 32  | Vertical one-liners for networking events  | 1    | Layer 5 - Distribution |
-| 33  | LinkedIn profile copy                      | 1    | Layer 5 - Distribution |
-| 34  | MacWhisper extraction prompt               | 1    | Layer 4 - Assessment   |
-| 35  | SOW template                               | 1    | Layer 4 - Assessment   |
-| 36  | Assessment call script with ROI anchors    | 2    | Layer 4 - Assessment   |
-| 37  | 3-touch follow-up email sequence           | 2    | Layer 4 - Assessment   |
-| 38  | Day 8 close language and review ask script | 2    | Layer 6 - Delivery     |
-| 39  | Handoff document template                  | 3    | Layer 6 - Delivery     |
-| 40  | Day 30 feedback survey                     | 3    | Layer 6 - Delivery     |
-| 41  | Case study template and agent prompt       | 3    | Layer 6 - Delivery     |
+| #   | Deliverable                               | Week | Layer                  |
+| --- | ----------------------------------------- | ---- | ---------------------- |
+| 31  | Accountant and bookkeeper intro email     | 1    | Layer 5 - Distribution |
+| 32  | Vertical one-liners for networking events | 1    | Layer 5 - Distribution |
+| 33  | LinkedIn profile copy                     | 1    | Layer 5 - Distribution |
+| 34  | MacWhisper extraction prompt              | 1    | Layer 4 - Assessment   |
+| 35  | SOW template                              | 1    | Layer 4 - Assessment   |
+| 36  | Assessment call script with ROI anchors   | 2    | Layer 4 - Assessment   |
+| 37  | 3-touch follow-up email sequence          | 2    | Layer 4 - Assessment   |
+| 38  | Pre-handoff review and completion script  | 2    | Layer 6 - Delivery     |
+| 39  | Handoff document template                 | 3    | Layer 6 - Delivery     |
+| 40  | Day 30 feedback survey                    | 3    | Layer 6 - Delivery     |
+| 41  | Case study template and agent prompt      | 3    | Layer 6 - Delivery     |
 
 ## Build Order Rationale
 
@@ -619,7 +653,7 @@ All 11 artifacts are scaffolded as GitHub issues in smdservices/ss-console. Ever
 
 - #36 Assessment call script: structured guide with ROI anchors baked in
 - #37 Follow-up email sequence: three ready-to-send templates
-- #38 Day 8 close script: parking lot review, referral ask, review plant
+- #38 Pre-handoff review script: parking lot review, referral ask, review request
 
 **Week 3+ - Closes the loop**
 
@@ -640,25 +674,25 @@ All 11 artifacts are scaffolded as GitHub issues in smdservices/ss-console. Ever
 | #6    | Financial visibility - in core with 30-day prerequisite gate        |
 | #9    | Tool evaluation framework - rubric-based, bias toward keep          |
 | #10   | Scope boundary language - positive definition + 5 exclusions        |
-| #11   | Scope creep protocol - parking lot, Day 8 review                    |
+| #11   | Scope creep protocol - parking lot, pre-handoff review              |
 | #12   | Retainer model - no retainer at launch, define after first delivery |
 | #13   | Paid assessment - free for first 3, then $250                       |
-| #14   | Payment terms - 50% at signing, 50% Day 8                           |
+| #14   | Payment terms - 50% deposit at signing, 50% at completion           |
 | #15   | ROI anchor math - owner does the math, we ask the questions         |
-| #16   | Launch price - $3,500 published, $2,500 discretionary floor         |
+| #16   | Pricing model - scope-based, $150/hr → $175 → $200 rate progression |
 | #17   | Assessment capture - MacWhisper Pro + Claude extraction             |
-| #18   | Assessment to proposal - verbal close + SOW within 2 hours          |
+| #18   | Assessment to proposal - solution design phase, SOW within 48 hours |
 | #19   | Follow-up cadence - 3-touch over 7 days, then mark dead             |
 | #20   | Positioning standard - we voice, team framing (venture-wide)        |
 | #21   | Networking strategy - BNI + chambers + vertical associations        |
 | #22   | Accountant partnership - co-value, no fee, warm handoff             |
-| #23   | Client referral incentive - no formal incentive, intentional ask    |
+| #23   | Client referral incentive - no formal incentive, ask at handoff     |
 | #24   | Outreach messaging - vertical-specific message and channel          |
 | #25   | Pipeline math - 25 touches/week, 2 assessments/week, 35% close      |
-| #26   | Review request - verbal Day 8, automated email Day 10               |
-| #27   | Safety net - 2-week async, Day 24 cutoff                            |
+| #26   | Review request - verbal at handoff, automated email 2 days later    |
+| #27   | Safety net - 2-week async from handoff                              |
 | #28   | Internal champion - identify at assessment, orient Day 1            |
-| #29   | Feedback collection - verbal Day 10, survey Day 30                  |
+| #29   | Feedback collection - verbal at handoff, survey 30 days later       |
 | #30   | Case study workflow - agent-drafted, client-approved, one page      |
 
 ---

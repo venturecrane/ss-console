@@ -90,23 +90,23 @@ Always "we" / "our team." Never "I" / "the consultant." See Decision Stack #20 f
 
 Every 5–50 employee business has 3–4 of these. The assessment call identifies which 2–3 are most acute.
 
-| #   | Problem              | Owner Says                             | What's Actually Broken                                             |
-| --- | -------------------- | -------------------------------------- | ------------------------------------------------------------------ |
-| 1   | Owner bottleneck     | "I can't take a day off"               | No documented processes — everything lives in the owner's head     |
-| 2   | Lead leakage         | "Leads fall through the cracks"        | No CRM, no follow-up system, pipeline runs on memory               |
-| 3   | Financial blindness  | "I have no idea if we're making money" | QuickBooks 3 months behind, pricing based on gut feel              |
-| 4   | Scheduling chaos     | "Double-bookings happen all the time"  | No centralized scheduling, no automated reminders                  |
-| 5   | Manual communication | "I personally text every customer"     | Every message is manual, one-off, no templates or automation       |
-| 6   | Team invisibility    | "I don't know what my team is doing"   | No task tracking, no accountability systems, no quality checklists |
+| #   | Problem              | Owner Says                             | What's Actually Broken                                                                                           |
+| --- | -------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 1   | Owner bottleneck     | "I can't take a day off"               | No documented processes — everything lives in the owner's head                                                   |
+| 2   | Lead leakage         | "Leads fall through the cracks"        | No CRM, no follow-up system, pipeline runs on memory                                                             |
+| 3   | Financial blindness  | "I have no idea if we're making money" | QuickBooks 3 months behind, pricing based on gut feel                                                            |
+| 4   | Scheduling chaos     | "Double-bookings happen all the time"  | No centralized scheduling, no automated reminders                                                                |
+| 5   | Manual communication | "I personally text every customer"     | Every message is manual, one-off, no templates or automation                                                     |
+| 6   | Employee retention   | "I keep losing good people"            | No structured onboarding, inconsistent workflows, no way to know if you're doing well until something goes wrong |
 
 ### Pain Clusters by Vertical
 
 | Business Type                                | Lead With                                             |
 | -------------------------------------------- | ----------------------------------------------------- |
-| Home services (plumber, HVAC)                | Scheduling + lead follow-up + team visibility         |
+| Home services (plumber, HVAC)                | Scheduling + lead follow-up + employee retention      |
 | Professional services (accountant, attorney) | Owner bottleneck + manual communication + pipeline    |
 | Retail/salon/spa                             | Scheduling + communication + financial visibility     |
-| Contractor/trades                            | Estimating/quoting + scheduling + team accountability |
+| Contractor/trades                            | Estimating/quoting + scheduling + employee retention  |
 | Restaurant/food service                      | Team communication + inventory + financial visibility |
 
 ### Engagement Phases
