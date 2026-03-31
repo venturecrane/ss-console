@@ -1,0 +1,198 @@
+---
+import '../../../styles/global.css'
+import { listEngagements } from '../../../lib/db/engagements'
+import { listMilestones } from '../../../lib/db/milestones'
+import type { Milestone } from '../../../lib/db/milestones'
+
+/**
+ * Client portal — engagement progress page.
+ *
+ * Shows the client's active engagement with milestone progress,
+ * scope summary, and timeline. Protected by auth middleware (role=client).
+ *
+ * Looks up the user's client_id via the users table to scope data.
+ */
+
+const session = Astro.locals.session!
+const env = Astro.locals.runtime.env
+
+// Look up client_id from the users table
+interface UserRow {
+  id: string
+  client_id: string | null
+}
+
+const user = await env.DB.prepare('SELECT id, client_id FROM users WHERE id = ?')
+  .bind(session.userId)
+  .first<UserRow>()
+
+const clientId = user?.client_id
+
+let engagement = null
+let milestones: Milestone[] = []
+
+if (clientId) {
+  // Get active engagement (not completed or cancelled)
+  const engagements = await listEngagements(env.DB, session.orgId, clientId)
+  engagement = engagements.find((e) => e.status !== 'completed' && e.status !== 'cancelled') ?? null
+
+  if (engagement) {
+    milestones = await listMilestones(env.DB, engagement.id)
+  }
+}
+
+// Status indicator helpers
+const statusIcon: Record<string, { color: string; icon: string; label: string }> = {
+  pending: { color: 'text-slate-400 bg-slate-100', icon: '&#9675;', label: 'Pending' },
+  in_progress: { color: 'text-blue-600 bg-blue-50', icon: '&#8635;', label: 'In Progress' },
+  completed: { color: 'text-green-600 bg-green-50', icon: '&#10003;', label: 'Completed' },
+  skipped: { color: 'text-slate-400 bg-slate-50', icon: '&#8212;', label: 'Skipped' },
+}
+
+const engagementStatusLabel: Record<string, string> = {
+  scheduled: 'Scheduled',
+  active: 'Active',
+  handoff: 'Handoff',
+  safety_net: 'Support Window',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return 'TBD'
+  return new Date(iso).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>Engagement Progress — SMD Services</title>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white border-b border-slate-200">
+      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <a
+            href="/portal"
+            class="text-lg font-bold text-slate-900 hover:text-primary transition-colors"
+            >SMD Services</a
+          >
+          <span class="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">Portal</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="text-sm text-slate-600">{session.email}</span>
+          <form method="POST" action="/api/auth/logout">
+            <button
+              type="submit"
+              class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 py-8">
+      <nav class="text-sm text-slate-500 mb-4">
+        <a href="/portal" class="hover:text-primary transition-colors">Portal</a>
+        <span class="mx-1">/</span>
+        <span class="text-slate-900">Engagement</span>
+      </nav>
+
+      <h2 class="text-xl font-semibold text-slate-900 mb-6">Engagement Progress</h2>
+
+      {
+        !engagement ? (
+          <div class="bg-white rounded-lg border border-slate-200 p-6">
+            <p class="text-slate-600">
+              No active engagement. When your engagement begins, progress will appear here.
+            </p>
+          </div>
+        ) : (
+          <div class="space-y-6">
+            {/* Status and Timeline */}
+            <div class="bg-white rounded-lg border border-slate-200 p-6">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-base font-semibold text-slate-900">Overview</h3>
+                <span class="text-sm font-medium text-blue-700 bg-blue-50 px-3 py-1 rounded-full">
+                  {engagementStatusLabel[engagement.status] ?? engagement.status}
+                </span>
+              </div>
+
+              {engagement.scope_summary && (
+                <p class="text-sm text-slate-600 mb-4">{engagement.scope_summary}</p>
+              )}
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <span class="text-slate-500">Started</span>
+                  <p class="font-medium text-slate-900">{formatDate(engagement.start_date)}</p>
+                </div>
+                <div>
+                  <span class="text-slate-500">Estimated Completion</span>
+                  <p class="font-medium text-slate-900">{formatDate(engagement.estimated_end)}</p>
+                </div>
+                <div>
+                  <span class="text-slate-500">Current Phase</span>
+                  <p class="font-medium text-slate-900">
+                    {engagementStatusLabel[engagement.status] ?? engagement.status}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Milestones */}
+            <div class="bg-white rounded-lg border border-slate-200 p-6">
+              <h3 class="text-base font-semibold text-slate-900 mb-4">Milestones</h3>
+
+              {milestones.length === 0 ? (
+                <p class="text-sm text-slate-500">
+                  Milestones will appear here as your engagement progresses.
+                </p>
+              ) : (
+                <div class="space-y-3">
+                  {milestones.map((m) => {
+                    const indicator = statusIcon[m.status] ?? statusIcon.pending
+                    return (
+                      <div class="flex items-start gap-3 py-2">
+                        <span
+                          class={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-medium shrink-0 mt-0.5 ${indicator.color}`}
+                          set:html={indicator.icon}
+                        />
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm font-medium text-slate-900">{m.name}</p>
+                          {m.description && (
+                            <p class="text-sm text-slate-500 mt-0.5">{m.description}</p>
+                          )}
+                          <div class="flex items-center gap-3 mt-1 text-xs text-slate-400">
+                            <span>{indicator.label}</span>
+                            {m.due_date && <span>Due: {formatDate(m.due_date)}</span>}
+                            {m.completed_at && <span>Completed: {formatDate(m.completed_at)}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      }
+    </main>
+  </body>
+</html>
