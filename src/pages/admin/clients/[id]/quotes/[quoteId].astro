@@ -1,0 +1,637 @@
+---
+import '../../../../../styles/global.css'
+import { getClient } from '../../../../../lib/db/clients'
+import { getQuote, QUOTE_STATUSES } from '../../../../../lib/db/quotes'
+import type { QuoteStatus, LineItem } from '../../../../../lib/db/quotes'
+import { PROBLEM_LABELS } from '../../../../../portal/assessments/extraction-schema'
+import type { ProblemId } from '../../../../../portal/assessments/extraction-schema'
+
+/**
+ * Quote detail/edit page.
+ *
+ * Protected by auth middleware (session guaranteed).
+ * Displays all quote fields, line items, totals, and status.
+ * Supports editing draft quotes, generating SOW PDFs, and sending to client.
+ */
+
+const session = Astro.locals.session!
+const env = Astro.locals.runtime.env
+const { id: clientId, quoteId } = Astro.params
+
+if (!clientId || !quoteId) {
+  return Astro.redirect('/admin/clients')
+}
+
+const client = await getClient(env.DB, session.orgId, clientId)
+if (!client) {
+  return Astro.redirect('/admin/clients?error=not_found')
+}
+
+const quote = await getQuote(env.DB, session.orgId, quoteId)
+if (!quote) {
+  return Astro.redirect(`/admin/clients/${clientId}?error=quote_not_found`)
+}
+
+const lineItems: LineItem[] = JSON.parse(quote.line_items)
+
+const url = Astro.url
+const saved = url.searchParams.get('saved') === '1'
+const errorParam = url.searchParams.get('error') || ''
+
+const errorMessages: Record<string, string> = {
+  server: 'Something went wrong. Please try again.',
+  invalid_transition: 'That status transition is not allowed.',
+  client_not_found: 'Client not found.',
+}
+
+const errorMessage = errorParam ? (errorMessages[errorParam] ?? 'An error occurred.') : ''
+
+// Status helpers
+const currentStatus = quote.status as QuoteStatus
+const isDraft = currentStatus === 'draft'
+const hasSow = !!quote.sow_path
+
+// Status badge colors
+const statusColorMap: Record<string, string> = {
+  draft: 'bg-slate-100 text-slate-600',
+  sent: 'bg-blue-100 text-blue-800',
+  accepted: 'bg-green-100 text-green-800',
+  declined: 'bg-red-100 text-red-800',
+  expired: 'bg-amber-100 text-amber-800',
+  superseded: 'bg-slate-100 text-slate-600',
+}
+
+// Format currency
+const formatCurrency = (amount: number) =>
+  `$${amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+
+// Expiration countdown
+let expirationText = ''
+if (quote.status === 'sent' && quote.expires_at) {
+  const expiresAt = new Date(quote.expires_at)
+  const now = new Date()
+  const diffMs = expiresAt.getTime() - now.getTime()
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+  if (diffDays > 0) {
+    expirationText = `Expires in ${diffDays} day${diffDays !== 1 ? 's' : ''}`
+  } else {
+    expirationText = 'Expired'
+  }
+}
+
+// Problem label helper
+const getProblemLabel = (problem: string) => {
+  return PROBLEM_LABELS[problem as ProblemId] ?? problem
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>Quote — {client.business_name} — SMD Services Admin</title>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white border-b border-slate-200">
+      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <a href="/admin" class="text-lg font-bold text-slate-900 hover:text-slate-700"
+            >SMD Services</a
+          >
+          <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">Admin</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="text-sm text-slate-600">{session.email}</span>
+          <form method="POST" action="/api/auth/logout">
+            <button
+              type="submit"
+              class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto px-4 py-8">
+      <!-- Breadcrumb -->
+      <nav class="mb-6">
+        <ol class="flex items-center gap-2 text-sm text-slate-500">
+          <li><a href="/admin/clients" class="hover:text-slate-700">Clients</a></li>
+          <li class="text-slate-300">/</li>
+          <li>
+            <a href={`/admin/clients/${client.id}`} class="hover:text-slate-700"
+              >{client.business_name}</a
+            >
+          </li>
+          <li class="text-slate-300">/</li>
+          <li class="text-slate-900 font-medium">Quote</li>
+        </ol>
+      </nav>
+
+      <div class="flex items-center gap-3 mb-2">
+        <h1 class="text-2xl font-bold text-slate-900">Quote</h1>
+        <span
+          class={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColorMap[quote.status] ?? 'bg-slate-100 text-slate-600'}`}
+        >
+          {QUOTE_STATUSES.find((s) => s.value === quote.status)?.label ?? quote.status}
+        </span>
+      </div>
+      <p class="text-sm text-slate-500 mb-6">
+        {client.business_name}
+        {
+          expirationText && (
+            <span
+              class={`ml-2 ${expirationText === 'Expired' ? 'text-red-500' : 'text-amber-500'}`}
+            >
+              {expirationText}
+            </span>
+          )
+        }
+      </p>
+
+      {
+        saved && (
+          <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+            Quote updated successfully.
+          </div>
+        )
+      }
+
+      {
+        errorMessage && (
+          <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            {errorMessage}
+          </div>
+        )
+      }
+
+      <!-- Action Buttons -->
+      <div class="mb-6 flex flex-wrap gap-3">
+        {
+          isDraft && (
+            <form method="POST" action={`/api/admin/quotes/${quote.id}`} class="inline">
+              <input type="hidden" name="action" value="generate-pdf" />
+              <button
+                type="submit"
+                class="px-4 py-2 rounded-md text-sm font-medium transition-colors bg-slate-600 text-white hover:bg-slate-700"
+              >
+                Generate SOW
+              </button>
+            </form>
+          )
+        }
+        {
+          isDraft && hasSow && (
+            <form method="POST" action={`/api/admin/quotes/${quote.id}`} class="inline">
+              <input type="hidden" name="action" value="send" />
+              <button
+                type="submit"
+                class="px-4 py-2 rounded-md text-sm font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Send to Client
+              </button>
+            </form>
+          )
+        }
+        {
+          quote.status === 'sent' && (
+            <>
+              <form method="POST" action={`/api/admin/quotes/${quote.id}`} class="inline">
+                <input type="hidden" name="action" value="transition" />
+                <input type="hidden" name="new_status" value="accepted" />
+                <button
+                  type="submit"
+                  class="px-4 py-2 rounded-md text-sm font-medium transition-colors bg-green-600 text-white hover:bg-green-700"
+                >
+                  Mark Accepted
+                </button>
+              </form>
+              <form method="POST" action={`/api/admin/quotes/${quote.id}`} class="inline">
+                <input type="hidden" name="action" value="transition" />
+                <input type="hidden" name="new_status" value="declined" />
+                <button
+                  type="submit"
+                  class="px-4 py-2 rounded-md text-sm font-medium transition-colors bg-red-600 text-white hover:bg-red-700"
+                >
+                  Mark Declined
+                </button>
+              </form>
+            </>
+          )
+        }
+      </div>
+
+      <!-- SOW PDF Section -->
+      {
+        hasSow && (
+          <div class="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div class="flex items-center gap-3">
+              <svg
+                class="w-5 h-5 text-green-600 flex-shrink-0"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <div class="flex-1">
+                <p class="text-sm font-medium text-green-800">SOW PDF generated</p>
+                <p class="text-xs text-green-600 truncate">{quote.sow_path}</p>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      <!-- Line Items Table -->
+      <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
+        <h2 class="text-base font-semibold text-slate-900 mb-4">Scope</h2>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-slate-200">
+                <th class="text-left py-2 pr-4 text-xs font-medium text-slate-500">#</th>
+                <th class="text-left py-2 pr-4 text-xs font-medium text-slate-500">Problem</th>
+                <th class="text-left py-2 pr-4 text-xs font-medium text-slate-500">Description</th>
+                <th class="text-right py-2 text-xs font-medium text-slate-500">Hours</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                lineItems.map((item, index) => (
+                  <tr class="border-b border-slate-100 last:border-0">
+                    <td class="py-2 pr-4 text-slate-400">{index + 1}</td>
+                    <td class="py-2 pr-4 font-medium text-slate-900">
+                      {getProblemLabel(item.problem)}
+                    </td>
+                    <td class="py-2 pr-4 text-slate-600">{item.description}</td>
+                    <td class="py-2 text-right text-slate-900">{item.estimated_hours}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Pricing Summary -->
+      <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
+        <h2 class="text-base font-semibold text-slate-900 mb-4">Pricing</h2>
+
+        <div class="grid grid-cols-2 gap-y-3 text-sm">
+          <span class="text-slate-500">Total Hours</span>
+          <span class="text-right font-medium text-slate-900">{quote.total_hours}</span>
+
+          <span class="text-slate-500">Rate (internal)</span>
+          <span class="text-right font-medium text-slate-900">{formatCurrency(quote.rate)}/hr</span>
+
+          <span class="text-slate-500 border-t border-slate-200 pt-3">Project Total</span>
+          <span class="text-right font-bold text-slate-900 text-lg border-t border-slate-200 pt-3">
+            {formatCurrency(quote.total_price)}
+          </span>
+
+          <span class="text-slate-500">Deposit ({(quote.deposit_pct * 100).toFixed(0)}%)</span>
+          <span class="text-right font-medium text-slate-900">
+            {formatCurrency(quote.deposit_amount ?? 0)}
+          </span>
+
+          <span class="text-slate-500">Balance Due</span>
+          <span class="text-right font-medium text-slate-900">
+            {formatCurrency(quote.total_price - (quote.deposit_amount ?? 0))}
+          </span>
+        </div>
+
+        <p class="mt-3 text-xs text-slate-400">
+          Client sees project total only. Hourly rate is internal.
+        </p>
+      </div>
+
+      <!-- Status Timeline -->
+      <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
+        <h2 class="text-base font-semibold text-slate-900 mb-4">Timeline</h2>
+
+        <div class="grid grid-cols-2 gap-y-2 text-sm">
+          <span class="text-slate-500">Created</span>
+          <span class="text-right text-slate-900">
+            {
+              new Date(quote.created_at).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              })
+            }
+          </span>
+
+          {
+            quote.sent_at && (
+              <>
+                <span class="text-slate-500">Sent</span>
+                <span class="text-right text-slate-900">
+                  {new Date(quote.sent_at).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </span>
+              </>
+            )
+          }
+
+          {
+            quote.expires_at && (
+              <>
+                <span class="text-slate-500">Expires</span>
+                <span
+                  class={`text-right ${expirationText === 'Expired' ? 'text-red-500' : 'text-slate-900'}`}
+                >
+                  {new Date(quote.expires_at).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </span>
+              </>
+            )
+          }
+
+          {
+            quote.accepted_at && (
+              <>
+                <span class="text-slate-500">Accepted</span>
+                <span class="text-right text-green-600 font-medium">
+                  {new Date(quote.accepted_at).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </span>
+              </>
+            )
+          }
+        </div>
+      </div>
+
+      <!-- Notes -->
+      {
+        quote.notes && (
+          <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
+            <h2 class="text-base font-semibold text-slate-900 mb-2">Notes</h2>
+            <p class="text-sm text-slate-600 whitespace-pre-wrap">{quote.notes}</p>
+          </div>
+        )
+      }
+
+      <!-- Edit Form (draft only) -->
+      {
+        isDraft && (
+          <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
+            <h2 class="text-base font-semibold text-slate-900 mb-4">Edit Quote</h2>
+
+            <form
+              id="edit-form"
+              method="POST"
+              action={`/api/admin/quotes/${quote.id}`}
+              class="space-y-4"
+            >
+              <input type="hidden" name="action" value="update" />
+              <input
+                type="hidden"
+                id="edit_line_items_json"
+                name="line_items"
+                value={quote.line_items}
+              />
+
+              <div id="edit-line-items-container" class="space-y-4">
+                {/* Populated by JavaScript from existing line items */}
+              </div>
+
+              <button
+                type="button"
+                id="edit-add-line-item"
+                class="inline-flex items-center gap-1 text-sm text-primary hover:text-primary-hover font-medium"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 4v16m8-8H4"
+                  />
+                </svg>
+                Add Line Item
+              </button>
+
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label
+                    for="edit_deposit_pct"
+                    class="block text-sm font-medium text-slate-700 mb-1"
+                  >
+                    Deposit %
+                  </label>
+                  <input
+                    type="number"
+                    id="edit_deposit_pct"
+                    name="deposit_pct"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={quote.deposit_pct}
+                    class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label for="edit_notes" class="block text-sm font-medium text-slate-700 mb-1">
+                  Notes
+                </label>
+                <textarea
+                  id="edit_notes"
+                  name="notes"
+                  rows="3"
+                  class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                >
+                  {quote.notes ?? ''}
+                </textarea>
+              </div>
+
+              <div class="flex items-center justify-end pt-2">
+                <button
+                  type="submit"
+                  class="bg-primary text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        )
+      }
+
+      <!-- Back link -->
+      <div class="pt-2">
+        <a
+          href={`/admin/clients/${client.id}`}
+          class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+        >
+          Back to Client
+        </a>
+      </div>
+    </main>
+
+    <div
+      id="edit-data"
+      class="hidden"
+      data-line-items={JSON.stringify(lineItems)}
+      data-problem-options={JSON.stringify(
+        Object.entries(PROBLEM_LABELS).map(([value, label]) => ({ value, label }))
+      )}
+    >
+    </div>
+
+    <script>
+      // Edit form line item management
+      ;(function () {
+        const editDataEl = document.getElementById('edit-data')
+        if (!editDataEl) return
+
+        const existingLineItems = JSON.parse(editDataEl.dataset.lineItems || '[]')
+        const problemOptions = JSON.parse(editDataEl.dataset.problemOptions || '[]')
+
+        const editContainer = document.getElementById('edit-line-items-container')!
+        const editAddBtn = document.getElementById('edit-add-line-item')!
+        const editLineItemsInput = document.getElementById(
+          'edit_line_items_json'
+        ) as HTMLInputElement
+        const editForm = document.getElementById('edit-form')!
+
+        if (!editContainer || !editAddBtn || !editLineItemsInput || !editForm) return
+
+        let editItemCount = 0
+
+        function createEditLineItem(problem: string, description: string, hours: number | string) {
+          editItemCount++
+          const index = editItemCount
+
+          const div = document.createElement('div')
+          div.className = 'edit-line-item p-4 bg-slate-50 rounded-lg border border-slate-200'
+
+          const options = problemOptions
+            .map(function (o: { value: string; label: string }) {
+              return (
+                '<option value="' +
+                o.value +
+                '"' +
+                (o.value === problem ? ' selected' : '') +
+                '>' +
+                o.label +
+                '</option>'
+              )
+            })
+            .join('')
+
+          div.innerHTML =
+            '<div class="flex items-center justify-between mb-3">' +
+            '<span class="text-xs font-medium text-slate-500">Item ' +
+            index +
+            '</span>' +
+            '<button type="button" class="edit-remove-item text-xs text-red-500 hover:text-red-700">Remove</button>' +
+            '</div>' +
+            '<div class="grid grid-cols-1 gap-3">' +
+            '<div>' +
+            '<label class="block text-sm font-medium text-slate-700 mb-1">Problem</label>' +
+            '<select class="edit-item-problem w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary">' +
+            '<option value="">Select a problem</option>' +
+            options +
+            '</select>' +
+            '</div>' +
+            '<div>' +
+            '<label class="block text-sm font-medium text-slate-700 mb-1">Description</label>' +
+            '<textarea class="edit-item-description w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary" rows="2">' +
+            (description || '') +
+            '</textarea>' +
+            '</div>' +
+            '<div>' +
+            '<label class="block text-sm font-medium text-slate-700 mb-1">Estimated Hours</label>' +
+            '<input type="number" class="edit-item-hours w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary" min="0.5" step="0.5" value="' +
+            (hours || '') +
+            '" />' +
+            '</div>' +
+            '</div>'
+
+          editContainer.appendChild(div)
+
+          div.querySelector('.edit-remove-item')!.addEventListener('click', () => {
+            div.remove()
+            updateEditLineItems()
+            renumberEditItems()
+          })
+
+          div.querySelectorAll('input, select, textarea').forEach((el) => {
+            el.addEventListener('input', updateEditLineItems)
+          })
+        }
+
+        function renumberEditItems() {
+          editContainer.querySelectorAll('.edit-line-item').forEach((item, i) => {
+            const label = item.querySelector('span')
+            if (label) label.textContent = 'Item ' + (i + 1)
+          })
+        }
+
+        function updateEditLineItems() {
+          const items: Array<{ problem: string; description: string; estimated_hours: number }> = []
+          editContainer.querySelectorAll('.edit-line-item').forEach((div) => {
+            const problemEl = div.querySelector(
+              '.edit-item-problem'
+            ) as unknown as HTMLSelectElement | null
+            const descEl = div.querySelector(
+              '.edit-item-description'
+            ) as unknown as HTMLTextAreaElement | null
+            const hoursEl = div.querySelector(
+              '.edit-item-hours'
+            ) as unknown as HTMLInputElement | null
+            const problem = problemEl ? problemEl.value : ''
+            const description = descEl ? descEl.value : ''
+            const hours = hoursEl ? parseFloat(hoursEl.value) || 0 : 0
+            if (problem && hours > 0) {
+              items.push({ problem, description, estimated_hours: hours })
+            }
+          })
+          editLineItemsInput.value = JSON.stringify(items)
+        }
+
+        // Populate with existing line items
+        existingLineItems.forEach(
+          (item: { problem: string; description: string; estimated_hours: number }) => {
+            createEditLineItem(item.problem, item.description, item.estimated_hours)
+          }
+        )
+
+        editAddBtn.addEventListener('click', () => {
+          createEditLineItem('', '', '')
+        })
+
+        editForm.addEventListener('submit', () => {
+          updateEditLineItems()
+        })
+      })()
+    </script>
+  </body>
+</html>
