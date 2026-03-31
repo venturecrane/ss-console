@@ -1,0 +1,31 @@
+# SMD Services — Cloudflare Pages project configuration
+# Single Astro app serving marketing site, admin, and client portal.
+# See PRD Section 10: Architecture & Technical Design.
+#
+# Custom domains (configured in Cloudflare Pages dashboard):
+#   smd.services         — marketing site (public pages)
+#   portal.smd.services  — client portal
+#
+# All domains are served by this single Pages project.
+# Routing is handled by Astro middleware, not separate deployments.
+
+name = "ss-console"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "dist"
+
+# ---------- D1 (structured data) ----------
+[[d1_databases]]
+binding = "DB"
+database_name = "ss-console-db"
+database_id = "LOCAL_D1_PLACEHOLDER"
+
+# ---------- R2 (documents, transcripts, SOWs) ----------
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "ss-console-storage"
+
+# ---------- Workers KV (sessions) ----------
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "LOCAL_KV_PLACEHOLDER"
