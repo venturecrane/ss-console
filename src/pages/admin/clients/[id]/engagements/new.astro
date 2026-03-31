@@ -1,0 +1,333 @@
+---
+import '../../../../../styles/global.css'
+import { getClient } from '../../../../../lib/db/clients'
+
+/**
+ * Create new engagement form.
+ *
+ * Protected by auth middleware (session guaranteed).
+ * Form POSTs to /api/admin/engagements which creates the record and redirects.
+ *
+ * Loads accepted quotes for the client to populate the quote dropdown.
+ */
+
+const session = Astro.locals.session!
+const env = Astro.locals.runtime.env
+const { id: clientId } = Astro.params
+
+if (!clientId) {
+  return Astro.redirect('/admin/clients')
+}
+
+const client = await getClient(env.DB, session.orgId, clientId)
+
+if (!client) {
+  return Astro.redirect('/admin/clients?error=not_found')
+}
+
+// Load accepted quotes for this client
+const quotesResult = await env.DB.prepare(
+  "SELECT id, total_hours, total_price, version, created_at FROM quotes WHERE org_id = ? AND client_id = ? AND status = 'accepted' ORDER BY created_at DESC"
+)
+  .bind(session.orgId, clientId)
+  .all<{
+    id: string
+    total_hours: number
+    total_price: number
+    version: number
+    created_at: string
+  }>()
+
+const quotes = quotesResult.results
+
+const url = Astro.url
+const errorParam = url.searchParams.get('error') || ''
+
+const errorMessages: Record<string, string> = {
+  server: 'Something went wrong. Please try again.',
+  missing: 'Required fields are missing.',
+}
+
+const errorMessage = errorParam ? (errorMessages[errorParam] ?? 'An error occurred.') : ''
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>New Engagement — {client.business_name} — SMD Services Admin</title>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white border-b border-slate-200">
+      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <a href="/admin" class="text-lg font-bold text-slate-900 hover:text-slate-700"
+            >SMD Services</a
+          >
+          <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">Admin</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="text-sm text-slate-600">{session.email}</span>
+          <form method="POST" action="/api/auth/logout">
+            <button
+              type="submit"
+              class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto px-4 py-8">
+      <!-- Breadcrumb -->
+      <nav class="mb-6">
+        <ol class="flex items-center gap-2 text-sm text-slate-500">
+          <li><a href="/admin/clients" class="hover:text-slate-700">Clients</a></li>
+          <li class="text-slate-300">/</li>
+          <li>
+            <a href={`/admin/clients/${client.id}`} class="hover:text-slate-700"
+              >{client.business_name}</a
+            >
+          </li>
+          <li class="text-slate-300">/</li>
+          <li class="text-slate-900 font-medium">New Engagement</li>
+        </ol>
+      </nav>
+
+      <h1 class="text-2xl font-bold text-slate-900 mb-6">New Engagement</h1>
+      <p class="text-sm text-slate-500 mb-6">
+        Create a new engagement for <strong>{client.business_name}</strong>.
+      </p>
+
+      {
+        errorMessage && (
+          <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            {errorMessage}
+          </div>
+        )
+      }
+
+      {
+        quotes.length === 0 && (
+          <div class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+            No accepted quotes found for this client. An accepted quote is required to create an
+            engagement.
+          </div>
+        )
+      }
+
+      <form method="POST" action="/api/admin/engagements" class="space-y-6">
+        <input type="hidden" name="client_id" value={client.id} />
+
+        <!-- Quote Selection -->
+        <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+          <h2 class="text-base font-semibold text-slate-900">Quote</h2>
+
+          <div>
+            <label for="quote_id" class="block text-sm font-medium text-slate-700 mb-1">
+              Accepted Quote <span class="text-red-500">*</span>
+            </label>
+            <select
+              id="quote_id"
+              name="quote_id"
+              required
+              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+            >
+              <option value="">Select a quote</option>
+              {
+                quotes.map((q) => (
+                  <option value={q.id}>
+                    v{q.version} — {q.total_hours}h — ${q.total_price.toLocaleString()} —{' '}
+                    {new Date(q.created_at).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </option>
+                ))
+              }
+            </select>
+          </div>
+        </div>
+
+        <!-- Dates & Hours -->
+        <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+          <h2 class="text-base font-semibold text-slate-900">Schedule</h2>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label for="start_date" class="block text-sm font-medium text-slate-700 mb-1">
+                Start Date
+              </label>
+              <input
+                type="date"
+                id="start_date"
+                name="start_date"
+                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label for="estimated_end" class="block text-sm font-medium text-slate-700 mb-1">
+                Estimated End
+              </label>
+              <input
+                type="date"
+                id="estimated_end"
+                name="estimated_end"
+                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label for="estimated_hours" class="block text-sm font-medium text-slate-700 mb-1">
+              Estimated Hours
+            </label>
+            <input
+              type="number"
+              id="estimated_hours"
+              name="estimated_hours"
+              step="0.5"
+              min="0"
+              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+            />
+          </div>
+        </div>
+
+        <!-- Scope -->
+        <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+          <h2 class="text-base font-semibold text-slate-900">Scope</h2>
+
+          <div>
+            <label for="scope_summary" class="block text-sm font-medium text-slate-700 mb-1">
+              Scope Summary
+            </label>
+            <textarea
+              id="scope_summary"
+              name="scope_summary"
+              rows="3"
+              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+              placeholder="Brief description of what this engagement covers..."></textarea>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+          <h2 class="text-base font-semibold text-slate-900">Notes</h2>
+
+          <div>
+            <textarea
+              id="notes"
+              name="notes"
+              rows="3"
+              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+              placeholder="Any additional notes..."></textarea>
+          </div>
+        </div>
+
+        <!-- Default Milestones -->
+        <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+          <h2 class="text-base font-semibold text-slate-900">Default Milestones</h2>
+          <p class="text-sm text-slate-500">
+            Add milestones to create with this engagement. You can add more later.
+          </p>
+
+          <div id="milestones-container" class="space-y-3">
+            <!-- Default milestones will be added via JS -->
+          </div>
+
+          <button
+            type="button"
+            id="add-milestone-btn"
+            class="inline-flex items-center gap-2 text-sm text-primary hover:text-primary-hover font-medium transition-colors"
+          >
+            <svg
+              class="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 4v16m8-8H4"></path>
+            </svg>
+            Add Milestone
+          </button>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-between pt-4 border-t border-slate-200">
+          <a
+            href={`/admin/clients/${client.id}`}
+            class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+          >
+            Cancel
+          </a>
+          <button
+            type="submit"
+            class="bg-primary text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"
+          >
+            Create Engagement
+          </button>
+        </div>
+      </form>
+    </main>
+
+    <script>
+      const container = document.getElementById('milestones-container')!
+      const addBtn = document.getElementById('add-milestone-btn')!
+      let milestoneCount = 0
+
+      function addMilestoneRow() {
+        const row = document.createElement('div')
+        row.className = 'p-3 border border-slate-200 rounded-lg space-y-3'
+        row.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-slate-500">Milestone ${milestoneCount + 1}</span>
+            <button type="button" class="remove-milestone text-xs text-red-500 hover:text-red-700">Remove</button>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <input type="text" name="milestone_name" placeholder="Name *" required
+                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary" />
+            </div>
+            <div>
+              <input type="date" name="milestone_due_date"
+                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary" />
+            </div>
+          </div>
+          <div>
+            <input type="text" name="milestone_description" placeholder="Description"
+              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary" />
+          </div>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" name="milestone_payment_trigger"
+              class="rounded border-slate-300 text-primary focus:ring-primary" />
+            <span class="text-sm text-slate-700">Payment trigger</span>
+          </label>
+        `
+
+        row.querySelector('.remove-milestone')!.addEventListener('click', () => {
+          row.remove()
+        })
+
+        container.appendChild(row)
+        milestoneCount++
+      }
+
+      addBtn.addEventListener('click', addMilestoneRow)
+    </script>
+  </body>
+</html>
