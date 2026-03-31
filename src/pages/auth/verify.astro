@@ -1,0 +1,73 @@
+---
+import '../../styles/global.css'
+import { verifyMagicLink } from '../../lib/auth/magic-link'
+import { createSession, buildSessionCookie } from '../../lib/auth/session'
+
+/**
+ * Magic link verification page — GET /auth/verify?token=...
+ *
+ * When a client clicks their magic link, this page:
+ *   1. Validates the token (exists, not expired, not used)
+ *   2. Looks up the user by email
+ *   3. Creates a session (7-day expiry)
+ *   4. Redirects to /portal with session cookie set
+ *
+ * On failure, redirects to portal login with an error message.
+ */
+
+const token = Astro.url.searchParams.get('token')
+
+if (!token) {
+  return Astro.redirect('/auth/portal-login?error=invalid')
+}
+
+const env = Astro.locals.runtime.env
+
+// Verify the magic link token
+const email = await verifyMagicLink(env.DB, token)
+
+if (!email) {
+  // Token is invalid, expired, or already used
+  return Astro.redirect('/auth/portal-login?error=invalid')
+}
+
+// Look up the client user by email
+interface UserRow {
+  id: string
+  org_id: string
+  email: string
+  name: string
+  role: string
+  client_id: string | null
+}
+
+const user = await env.DB.prepare(`SELECT * FROM users WHERE email = ? AND role = 'client'`)
+  .bind(email)
+  .first<UserRow>()
+
+if (!user) {
+  return Astro.redirect('/auth/portal-login?error=no_account')
+}
+
+// Update last_login_at
+await env.DB.prepare(`UPDATE users SET last_login_at = datetime('now') WHERE id = ?`)
+  .bind(user.id)
+  .run()
+
+// Create session
+const sessionToken = await createSession(env.DB, env.SESSIONS, {
+  id: user.id,
+  orgId: user.org_id,
+  role: user.role,
+  email: user.email,
+})
+
+// Redirect to portal with session cookie
+return new Response(null, {
+  status: 302,
+  headers: {
+    Location: '/portal',
+    'Set-Cookie': buildSessionCookie(sessionToken),
+  },
+})
+---

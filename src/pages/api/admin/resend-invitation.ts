@@ -1,0 +1,119 @@
+import type { APIRoute } from 'astro'
+import { createMagicLink } from '../../../lib/auth/magic-link'
+import { sendEmail } from '../../../lib/email/resend'
+import { buildMagicLinkUrl, portalInvitationEmailHtml } from '../../../lib/email/templates'
+
+interface UserRow {
+  id: string
+  org_id: string
+  email: string
+  name: string
+  role: string
+  client_id: string | null
+}
+
+/**
+ * POST /api/admin/resend-invitation
+ *
+ * Admin endpoint to re-send a portal invitation to a client.
+ * Used when the original invitation email bounced (OQ-010: admin corrects
+ * email and re-sends).
+ *
+ * Protected by middleware — requires admin role session.
+ *
+ * Request body (JSON):
+ *   { "userId": string, "email"?: string }
+ *
+ * If email is provided, updates the user's email before sending.
+ * This supports the OQ-010 flow where admin corrects a bounced email.
+ */
+export const POST: APIRoute = async ({ request, locals, url }) => {
+  // Verify admin session (middleware already checks /admin/* routes,
+  // but this is under /api/admin/* so we verify explicitly)
+  const session = locals.session
+  if (!session || session.role !== 'admin') {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  try {
+    const body = (await request.json()) as { userId?: string; email?: string }
+    const { userId, email: newEmail } = body
+
+    if (!userId || typeof userId !== 'string') {
+      return new Response(JSON.stringify({ error: 'userId is required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const env = locals.runtime.env
+
+    // Look up the client user
+    const user = await env.DB.prepare(`SELECT * FROM users WHERE id = ? AND role = 'client'`)
+      .bind(userId)
+      .first<UserRow>()
+
+    if (!user) {
+      return new Response(JSON.stringify({ error: 'Client user not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    // If a new email is provided, update the user's email (OQ-010 bounce recovery)
+    let targetEmail = user.email
+    if (newEmail && typeof newEmail === 'string') {
+      const normalizedEmail = newEmail.toLowerCase().trim()
+      if (normalizedEmail !== user.email) {
+        await env.DB.prepare(`UPDATE users SET email = ? WHERE id = ?`)
+          .bind(normalizedEmail, userId)
+          .run()
+        targetEmail = normalizedEmail
+      }
+    }
+
+    // Create magic link
+    const token = await createMagicLink(env.DB, targetEmail)
+
+    // Build verification URL
+    const baseUrl = `${url.protocol}//${url.host}`
+    const magicLinkUrl = buildMagicLinkUrl(baseUrl, token)
+
+    // Send invitation email
+    const html = portalInvitationEmailHtml(user.name, magicLinkUrl)
+    const result = await sendEmail(env.RESEND_API_KEY, {
+      to: targetEmail,
+      subject: 'You have a proposal from SMD Services',
+      html,
+    })
+
+    if (!result.success) {
+      console.error(`[resend-invitation] Failed to send to ${targetEmail}: ${result.error}`)
+      return new Response(JSON.stringify({ error: 'Failed to send email' }), {
+        status: 502,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        emailId: result.id,
+        sentTo: targetEmail,
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
+  } catch (err) {
+    console.error('[resend-invitation] Error:', err)
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+}

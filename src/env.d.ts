@@ -14,6 +14,7 @@ type CfEnv = {
   DB: D1Database
   STORAGE: R2Bucket
   SESSIONS: KVNamespace
+  RESEND_API_KEY?: string
 }
 
 type Runtime = import('@astrojs/cloudflare').Runtime<CfEnv>
@@ -31,7 +32,7 @@ interface AuthSession {
 
 declare namespace App {
   interface Locals extends Runtime {
-    /** Populated by auth middleware on /admin/* routes. Null on public routes. */
+    /** Populated by auth middleware on /admin/* and /portal/* routes. Null on public routes. */
     session: AuthSession | null
   }
 }

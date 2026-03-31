@@ -29,3 +29,8 @@ bucket_name = "ss-console-storage"
 [[kv_namespaces]]
 binding = "SESSIONS"
 id = "LOCAL_KV_PLACEHOLDER"
+
+# ---------- Secrets (set via wrangler secret put) ----------
+# RESEND_API_KEY — Resend transactional email API key
+# Set with: wrangler secret put RESEND_API_KEY
+# In dev: emails are logged to console when this secret is absent
