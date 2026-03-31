@@ -14,6 +14,8 @@ import {
 } from '../../../../../lib/db/milestones'
 import type { MilestoneStatus } from '../../../../../lib/db/milestones'
 import { getEngagementContacts, ENGAGEMENT_CONTACT_ROLES } from '../../../../../lib/db/contacts'
+import { listTimeEntries } from '../../../../../lib/db/time-entries'
+import { listParkingLotItems } from '../../../../../lib/db/parking-lot'
 
 /**
  * Engagement detail/edit page.
@@ -42,6 +44,20 @@ if (!engagement) {
 
 const milestones = await listMilestones(env.DB, engagementId)
 const engagementContacts = await getEngagementContacts(env.DB, engagementId)
+const timeEntries = await listTimeEntries(env.DB, engagementId)
+const parkingLotItems = await listParkingLotItems(env.DB, engagementId)
+
+// Time tracking summary
+const totalLoggedHours = timeEntries.reduce((sum, e) => sum + e.hours, 0)
+const estimatedHours = engagement.estimated_hours ?? 0
+const hoursPercentage =
+  estimatedHours > 0 ? Math.round((totalLoggedHours / estimatedHours) * 100) : 0
+const hoursVariance = totalLoggedHours - estimatedHours
+const isOverBudget = estimatedHours > 0 && totalLoggedHours > estimatedHours
+
+// Parking lot summary
+const parkingLotTotal = parkingLotItems.length
+const parkingLotUndispositioned = parkingLotItems.filter((i) => !i.disposition).length
 
 const url = Astro.url
 const saved = url.searchParams.get('saved') === '1'
@@ -714,6 +730,130 @@ const showSafetyNet = engagement.status === 'handoff' || engagement.status === '
             </div>
           )
         }
+      </div>
+
+      <!-- Time Tracking Section -->
+      <div class="mt-8">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-slate-900">
+            Time Tracking
+            <span class="text-sm font-normal text-slate-400 ml-1"
+              >({timeEntries.length} entries)</span
+            >
+          </h2>
+          <a
+            href={`/admin/clients/${client.id}/engagements/${engagement.id}/time`}
+            class="text-sm text-primary hover:text-primary-hover font-medium transition-colors"
+          >
+            View All
+          </a>
+        </div>
+
+        <div class="bg-white rounded-lg border border-slate-200 p-4">
+          <div class="grid grid-cols-3 gap-4 mb-3">
+            <div>
+              <p class="text-xs text-slate-500">Estimated</p>
+              <p class="text-sm font-semibold text-slate-900">
+                {estimatedHours > 0 ? `${estimatedHours}h` : '--'}
+              </p>
+            </div>
+            <div>
+              <p class="text-xs text-slate-500">Actual</p>
+              <p
+                class:list={[
+                  'text-sm font-semibold',
+                  isOverBudget ? 'text-red-600' : 'text-slate-900',
+                ]}
+              >
+                {totalLoggedHours}h
+              </p>
+            </div>
+            <div>
+              <p class="text-xs text-slate-500">Variance</p>
+              <p
+                class:list={[
+                  'text-sm font-semibold',
+                  hoursVariance > 0
+                    ? 'text-red-600'
+                    : hoursVariance < 0
+                      ? 'text-green-600'
+                      : 'text-slate-900',
+                ]}
+              >
+                {
+                  estimatedHours > 0
+                    ? `${hoursVariance > 0 ? '+' : ''}${hoursVariance.toFixed(1)}h`
+                    : '--'
+                }
+              </p>
+            </div>
+          </div>
+          {
+            estimatedHours > 0 && (
+              <div>
+                <div class="flex items-center justify-between text-xs text-slate-500 mb-1">
+                  <span>Progress</span>
+                  <span>{hoursPercentage}%</span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-2">
+                  <div
+                    class:list={[
+                      'h-2 rounded-full transition-all',
+                      isOverBudget
+                        ? 'bg-red-500'
+                        : hoursPercentage >= 80
+                          ? 'bg-amber-500'
+                          : 'bg-primary',
+                    ]}
+                    style={`width: ${Math.min(hoursPercentage, 100)}%`}
+                  />
+                </div>
+              </div>
+            )
+          }
+        </div>
+      </div>
+
+      <!-- Parking Lot Section -->
+      <div class="mt-8">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-slate-900">
+            Parking Lot
+            <span class="text-sm font-normal text-slate-400 ml-1">({parkingLotTotal} items)</span>
+          </h2>
+          <a
+            href={`/admin/clients/${client.id}/engagements/${engagement.id}/parking-lot`}
+            class="text-sm text-primary hover:text-primary-hover font-medium transition-colors"
+          >
+            View All
+          </a>
+        </div>
+
+        <div class="bg-white rounded-lg border border-slate-200 p-4">
+          {
+            parkingLotTotal > 0 ? (
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <p class="text-xs text-slate-500">Total Items</p>
+                  <p class="text-sm font-semibold text-slate-900">{parkingLotTotal}</p>
+                </div>
+                <div>
+                  <p class="text-xs text-slate-500">Needs Review</p>
+                  <p
+                    class:list={[
+                      'text-sm font-semibold',
+                      parkingLotUndispositioned > 0 ? 'text-amber-600' : 'text-slate-900',
+                    ]}
+                  >
+                    {parkingLotUndispositioned}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p class="text-sm text-slate-400 text-center">No parking lot items yet.</p>
+            )
+          }
+        </div>
       </div>
     </main>
   </body>

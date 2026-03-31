@@ -1,0 +1,345 @@
+---
+import '../../../../../../styles/global.css'
+import { getClient } from '../../../../../../lib/db/clients'
+import { getEngagement } from '../../../../../../lib/db/engagements'
+import { listTimeEntries, TIME_ENTRY_CATEGORIES } from '../../../../../../lib/db/time-entries'
+
+/**
+ * Time tracking page for an engagement.
+ *
+ * Protected by auth middleware (session guaranteed).
+ * Lists time entries, shows estimated vs actual hours, and provides add/delete forms.
+ */
+
+const session = Astro.locals.session!
+const env = Astro.locals.runtime.env
+const { id: clientId, engId: engagementId } = Astro.params
+
+if (!clientId || !engagementId) {
+  return Astro.redirect('/admin/clients')
+}
+
+const client = await getClient(env.DB, session.orgId, clientId)
+if (!client) {
+  return Astro.redirect('/admin/clients?error=not_found')
+}
+
+const engagement = await getEngagement(env.DB, session.orgId, engagementId)
+if (!engagement) {
+  return Astro.redirect(`/admin/clients/${clientId}?error=engagement_not_found`)
+}
+
+const entries = await listTimeEntries(env.DB, engagementId)
+
+const url = Astro.url
+const saved = url.searchParams.get('saved') === '1'
+const deleted = url.searchParams.get('deleted') === '1'
+const errorParam = url.searchParams.get('error') || ''
+
+const errorMessages: Record<string, string> = {
+  server: 'Something went wrong. Please try again.',
+  missing: 'Required fields are missing.',
+  not_found: 'Record not found.',
+}
+
+const errorMessage = errorParam ? (errorMessages[errorParam] ?? 'An error occurred.') : ''
+
+// Hours comparison
+const estimated = engagement.estimated_hours ?? 0
+const actual = engagement.actual_hours ?? 0
+const percentage = estimated > 0 ? Math.round((actual / estimated) * 100) : 0
+const variance = actual - estimated
+const isOverBudget = estimated > 0 && actual > estimated
+
+// Category label helper
+const categoryLabel = (cat: string | null) =>
+  TIME_ENTRY_CATEGORIES.find((c) => c.value === cat)?.label ?? cat ?? 'Uncategorized'
+
+// Today's date for default value
+const today = new Date().toISOString().split('T')[0]
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>Time Tracking — {client.business_name} — SMD Services Admin</title>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white border-b border-slate-200">
+      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <a href="/admin" class="text-lg font-bold text-slate-900 hover:text-slate-700"
+            >SMD Services</a
+          >
+          <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">Admin</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="text-sm text-slate-600">{session.email}</span>
+          <form method="POST" action="/api/auth/logout">
+            <button
+              type="submit"
+              class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto px-4 py-8">
+      <!-- Breadcrumb -->
+      <nav class="mb-6">
+        <ol class="flex items-center gap-2 text-sm text-slate-500">
+          <li><a href="/admin/clients" class="hover:text-slate-700">Clients</a></li>
+          <li class="text-slate-300">/</li>
+          <li>
+            <a href={`/admin/clients/${client.id}`} class="hover:text-slate-700"
+              >{client.business_name}</a
+            >
+          </li>
+          <li class="text-slate-300">/</li>
+          <li>
+            <a
+              href={`/admin/clients/${client.id}/engagements/${engagement.id}`}
+              class="hover:text-slate-700">Engagement</a
+            >
+          </li>
+          <li class="text-slate-300">/</li>
+          <li class="text-slate-900 font-medium">Time Tracking</li>
+        </ol>
+      </nav>
+
+      <h1 class="text-2xl font-bold text-slate-900 mb-2">Time Tracking</h1>
+      <p class="text-sm text-slate-500 mb-6">{client.business_name}</p>
+
+      {
+        saved && (
+          <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+            Time entry saved successfully.
+          </div>
+        )
+      }
+
+      {
+        deleted && (
+          <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+            Time entry deleted.
+          </div>
+        )
+      }
+
+      {
+        errorMessage && (
+          <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            {errorMessage}
+          </div>
+        )
+      }
+
+      <!-- Hours Summary -->
+      <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
+        <h2 class="text-base font-semibold text-slate-900 mb-4">Hours Summary</h2>
+        <div class="grid grid-cols-3 gap-4 mb-4">
+          <div>
+            <p class="text-xs text-slate-500 mb-1">Estimated</p>
+            <p class="text-xl font-bold text-slate-900">
+              {estimated > 0 ? `${estimated}h` : '--'}
+            </p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-500 mb-1">Actual</p>
+            <p class:list={['text-xl font-bold', isOverBudget ? 'text-red-600' : 'text-slate-900']}>
+              {actual}h
+            </p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-500 mb-1">Variance</p>
+            <p
+              class:list={[
+                'text-xl font-bold',
+                variance > 0 ? 'text-red-600' : variance < 0 ? 'text-green-600' : 'text-slate-900',
+              ]}
+            >
+              {estimated > 0 ? `${variance > 0 ? '+' : ''}${variance.toFixed(1)}h` : '--'}
+            </p>
+          </div>
+        </div>
+
+        {
+          estimated > 0 && (
+            <div>
+              <div class="flex items-center justify-between text-xs text-slate-500 mb-1">
+                <span>Progress</span>
+                <span>{percentage}%</span>
+              </div>
+              <div class="w-full bg-slate-100 rounded-full h-2.5">
+                <div
+                  class:list={[
+                    'h-2.5 rounded-full transition-all',
+                    isOverBudget ? 'bg-red-500' : percentage >= 80 ? 'bg-amber-500' : 'bg-primary',
+                  ]}
+                  style={`width: ${Math.min(percentage, 100)}%`}
+                />
+              </div>
+            </div>
+          )
+        }
+      </div>
+
+      <!-- Add Entry Form -->
+      <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
+        <h2 class="text-base font-semibold text-slate-900 mb-3">Add Entry</h2>
+        <form method="POST" action="/api/admin/time-entries" class="space-y-4">
+          <input type="hidden" name="engagement_id" value={engagement.id} />
+          <input type="hidden" name="client_id" value={client.id} />
+
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label for="entry_date" class="block text-sm font-medium text-slate-700 mb-1">
+                Date <span class="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                id="entry_date"
+                name="date"
+                required
+                value={today}
+                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label for="entry_hours" class="block text-sm font-medium text-slate-700 mb-1">
+                Hours <span class="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                id="entry_hours"
+                name="hours"
+                required
+                step="0.25"
+                min="0.25"
+                placeholder="1.5"
+                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label for="entry_category" class="block text-sm font-medium text-slate-700 mb-1">
+                Category
+              </label>
+              <select
+                id="entry_category"
+                name="category"
+                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+              >
+                <option value="">Select...</option>
+                {TIME_ENTRY_CATEGORIES.map((c) => <option value={c.value}>{c.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label for="entry_description" class="block text-sm font-medium text-slate-700 mb-1">
+              Description
+            </label>
+            <input
+              type="text"
+              id="entry_description"
+              name="description"
+              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+              placeholder="What was done..."
+            />
+          </div>
+
+          <div class="flex justify-end">
+            <button
+              type="submit"
+              class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"
+            >
+              Add Entry
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Time Entries List -->
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-slate-900">
+            Entries
+            <span class="text-sm font-normal text-slate-400 ml-1">({entries.length})</span>
+          </h2>
+        </div>
+
+        {
+          entries.length > 0 ? (
+            <div class="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+              {entries.map((entry) => (
+                <div class="px-4 py-3">
+                  <div class="flex items-center justify-between">
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2">
+                        <p class="text-sm font-medium text-slate-900">{entry.hours}h</p>
+                        <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                          {categoryLabel(entry.category)}
+                        </span>
+                        <span class="text-xs text-slate-400">
+                          {new Date(entry.date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </span>
+                      </div>
+                      {entry.description && (
+                        <p class="text-xs text-slate-500 mt-0.5">{entry.description}</p>
+                      )}
+                    </div>
+                    <form
+                      method="POST"
+                      action={`/api/admin/time-entries/${entry.id}`}
+                      class="flex-shrink-0 ml-2"
+                      onsubmit="return confirm('Delete this time entry?')"
+                    >
+                      <input type="hidden" name="_method" value="DELETE" />
+                      <input type="hidden" name="client_id" value={client.id} />
+                      <button
+                        type="submit"
+                        class="px-2 py-1 rounded text-xs font-medium bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div class="bg-white rounded-lg border border-slate-200 border-dashed p-6 text-center">
+              <p class="text-sm text-slate-400 mb-2">No time entries yet.</p>
+              <p class="text-xs text-slate-400">Use the form above to log time.</p>
+            </div>
+          )
+        }
+      </div>
+
+      <!-- Back link -->
+      <div class="mt-6">
+        <a
+          href={`/admin/clients/${client.id}/engagements/${engagement.id}`}
+          class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+        >
+          Back to Engagement
+        </a>
+      </div>
+    </main>
+  </body>
+</html>
