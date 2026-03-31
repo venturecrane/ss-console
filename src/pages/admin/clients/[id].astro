@@ -4,6 +4,7 @@ import { getClient, CLIENT_STATUSES, CLIENT_VERTICALS } from '../../../lib/db/cl
 import type { ClientStatus } from '../../../lib/db/clients'
 import { listContacts } from '../../../lib/db/contacts'
 import { listAssessments, ASSESSMENT_STATUSES } from '../../../lib/db/assessments'
+import { listEngagements, ENGAGEMENT_STATUSES } from '../../../lib/db/engagements'
 
 /**
  * Client detail/edit page.
@@ -29,6 +30,7 @@ if (!client) {
 
 const contacts = await listContacts(env.DB, session.orgId, id)
 const assessments = await listAssessments(env.DB, session.orgId, id)
+const engagements = await listEngagements(env.DB, session.orgId, id)
 
 const url = Astro.url
 const saved = url.searchParams.get('saved') === '1'
@@ -91,6 +93,26 @@ const assessmentStatusColor = (s: string) => {
       return 'bg-red-100 text-red-800'
     case 'converted':
       return 'bg-purple-100 text-purple-800'
+    default:
+      return 'bg-slate-100 text-slate-600'
+  }
+}
+
+// Engagement status color helper
+const engagementStatusColor = (s: string) => {
+  switch (s) {
+    case 'scheduled':
+      return 'bg-blue-100 text-blue-800'
+    case 'active':
+      return 'bg-green-100 text-green-800'
+    case 'handoff':
+      return 'bg-amber-100 text-amber-800'
+    case 'safety_net':
+      return 'bg-purple-100 text-purple-800'
+    case 'completed':
+      return 'bg-emerald-100 text-emerald-800'
+    case 'cancelled':
+      return 'bg-red-100 text-red-800'
     default:
       return 'bg-slate-100 text-slate-600'
   }
@@ -544,6 +566,106 @@ const assessmentStatusColor = (s: string) => {
                 class="text-sm text-primary hover:text-primary-hover font-medium"
               >
                 Schedule the first assessment
+              </a>
+            </div>
+          )
+        }
+      </div>
+
+      <!-- Engagements Section -->
+      <div class="mt-8">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-slate-900">Engagements</h2>
+          <a
+            href={`/admin/clients/${client.id}/engagements/new`}
+            class="inline-flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"
+          >
+            <svg
+              class="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 4v16m8-8H4"></path>
+            </svg>
+            New Engagement
+          </a>
+        </div>
+
+        {
+          engagements.length > 0 ? (
+            <div class="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+              {engagements.map((e) => (
+                <a
+                  href={`/admin/clients/${client.id}/engagements/${e.id}`}
+                  class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+                >
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                      <p class="text-sm font-medium text-slate-900">
+                        {e.start_date
+                          ? new Date(e.start_date).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                            })
+                          : 'Not scheduled'}
+                        {e.estimated_end && (
+                          <span class="text-slate-400">
+                            {' '}
+                            &mdash;{' '}
+                            {new Date(e.estimated_end).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </span>
+                        )}
+                      </p>
+                      <span
+                        class={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${engagementStatusColor(e.status)}`}
+                      >
+                        {ENGAGEMENT_STATUSES.find((s) => s.value === e.status)?.label ?? e.status}
+                      </span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                      {e.scope_summary
+                        ? e.scope_summary.length > 80
+                          ? e.scope_summary.slice(0, 80) + '...'
+                          : e.scope_summary
+                        : 'No scope summary'}
+                      {e.estimated_hours ? ` · ${e.estimated_hours}h estimated` : ''}
+                    </p>
+                  </div>
+                  <svg
+                    class="w-4 h-4 text-slate-400 flex-shrink-0 ml-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <div class="bg-white rounded-lg border border-slate-200 border-dashed p-6 text-center">
+              <p class="text-sm text-slate-400 mb-2">No engagements yet.</p>
+              <a
+                href={`/admin/clients/${client.id}/engagements/new`}
+                class="text-sm text-primary hover:text-primary-hover font-medium"
+              >
+                Create the first engagement
               </a>
             </div>
           )
