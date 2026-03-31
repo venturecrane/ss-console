@@ -1,0 +1,350 @@
+---
+import '../../../styles/global.css'
+import {
+  listClients,
+  listClientSources,
+  CLIENT_STATUSES,
+  CLIENT_VERTICALS,
+} from '../../../lib/db/clients'
+import type { ClientStatus } from '../../../lib/db/clients'
+
+/**
+ * Pipeline view — lists all clients with status/vertical/source filters.
+ *
+ * Protected by auth middleware (session guaranteed).
+ */
+
+const session = Astro.locals.session!
+const env = Astro.locals.runtime.env
+
+// Read filters from query params
+const url = Astro.url
+const filterStatus = url.searchParams.get('status') || ''
+const filterVertical = url.searchParams.get('vertical') || ''
+const filterSource = url.searchParams.get('source') || ''
+const errorParam = url.searchParams.get('error') || ''
+
+const filters: Record<string, string> = {}
+if (filterStatus) filters.status = filterStatus
+if (filterVertical) filters.vertical = filterVertical
+if (filterSource) filters.source = filterSource
+
+const clients = await listClients(env.DB, session.orgId, filters)
+const sources = await listClientSources(env.DB, session.orgId)
+
+// Group clients by status for the pipeline view
+const statusOrder: ClientStatus[] = [
+  'prospect',
+  'assessed',
+  'quoted',
+  'active',
+  'completed',
+  'dead',
+]
+const grouped = new Map<string, typeof clients>()
+for (const s of statusOrder) {
+  grouped.set(s, [])
+}
+for (const client of clients) {
+  const group = grouped.get(client.status)
+  if (group) {
+    group.push(client)
+  }
+}
+
+// Helper to get vertical label
+const verticalLabel = (v: string | null) => {
+  if (!v) return '—'
+  return CLIENT_VERTICALS.find((cv) => cv.value === v)?.label ?? v
+}
+
+// Helper to get status badge color
+const statusColor = (s: string) => {
+  switch (s) {
+    case 'prospect':
+      return 'bg-blue-100 text-blue-800'
+    case 'assessed':
+      return 'bg-amber-100 text-amber-800'
+    case 'quoted':
+      return 'bg-purple-100 text-purple-800'
+    case 'active':
+      return 'bg-green-100 text-green-800'
+    case 'completed':
+      return 'bg-slate-100 text-slate-600'
+    case 'dead':
+      return 'bg-red-100 text-red-800'
+    default:
+      return 'bg-slate-100 text-slate-600'
+  }
+}
+
+const hasActiveFilters = filterStatus || filterVertical || filterSource
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>Clients — SMD Services Admin</title>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white border-b border-slate-200">
+      <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <a href="/admin" class="text-lg font-bold text-slate-900 hover:text-slate-700"
+            >SMD Services</a
+          >
+          <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">Admin</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="text-sm text-slate-600">{session.email}</span>
+          <form method="POST" action="/api/auth/logout">
+            <button
+              type="submit"
+              class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 py-8">
+      <!-- Page header -->
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-900">Clients</h1>
+          <p class="text-sm text-slate-500 mt-1">
+            {clients.length} client{clients.length !== 1 ? 's' : ''}
+            {hasActiveFilters ? ' (filtered)' : ''}
+          </p>
+        </div>
+        <a
+          href="/admin/clients/new"
+          class="inline-flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"
+        >
+          <svg
+            class="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"
+            ></path>
+          </svg>
+          Add Client
+        </a>
+      </div>
+
+      {
+        errorParam === 'not_found' && (
+          <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            Client not found.
+          </div>
+        )
+      }
+
+      <!-- Filters -->
+      <form method="GET" action="/admin/clients" class="mb-6">
+        <div class="bg-white rounded-lg border border-slate-200 p-4 flex flex-wrap items-end gap-4">
+          <div class="flex-1 min-w-[150px]">
+            <label for="filter-status" class="block text-xs font-medium text-slate-500 mb-1"
+              >Status</label
+            >
+            <select
+              id="filter-status"
+              name="status"
+              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+            >
+              <option value="">All statuses</option>
+              {
+                CLIENT_STATUSES.map((s) => (
+                  <option value={s.value} selected={filterStatus === s.value}>
+                    {s.label}
+                  </option>
+                ))
+              }
+            </select>
+          </div>
+          <div class="flex-1 min-w-[150px]">
+            <label for="filter-vertical" class="block text-xs font-medium text-slate-500 mb-1"
+              >Vertical</label
+            >
+            <select
+              id="filter-vertical"
+              name="vertical"
+              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+            >
+              <option value="">All verticals</option>
+              {
+                CLIENT_VERTICALS.map((v) => (
+                  <option value={v.value} selected={filterVertical === v.value}>
+                    {v.label}
+                  </option>
+                ))
+              }
+            </select>
+          </div>
+          <div class="flex-1 min-w-[150px]">
+            <label for="filter-source" class="block text-xs font-medium text-slate-500 mb-1"
+              >Source</label
+            >
+            <select
+              id="filter-source"
+              name="source"
+              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+            >
+              <option value="">All sources</option>
+              {
+                sources.map((s) => (
+                  <option value={s} selected={filterSource === s}>
+                    {s}
+                  </option>
+                ))
+              }
+            </select>
+          </div>
+          <div class="flex gap-2">
+            <button
+              type="submit"
+              class="bg-slate-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-slate-800 transition-colors"
+            >
+              Filter
+            </button>
+            {
+              hasActiveFilters && (
+                <a
+                  href="/admin/clients"
+                  class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                >
+                  Clear
+                </a>
+              )
+            }
+          </div>
+        </div>
+      </form>
+
+      <!-- Pipeline columns (when no status filter active) -->
+      {
+        !filterStatus ? (
+          <div class="space-y-6">
+            {statusOrder.map((status) => {
+              const group = grouped.get(status) ?? []
+              const statusInfo = CLIENT_STATUSES.find((s) => s.value === status)
+              return (
+                <div>
+                  <div class="flex items-center gap-2 mb-3">
+                    <span
+                      class={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor(status)}`}
+                    >
+                      {statusInfo?.label ?? status}
+                    </span>
+                    <span class="text-xs text-slate-400">{group.length}</span>
+                  </div>
+                  {group.length > 0 ? (
+                    <div class="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+                      {group.map((client) => (
+                        <a
+                          href={`/admin/clients/${client.id}`}
+                          class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+                        >
+                          <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium text-slate-900 truncate">
+                              {client.business_name}
+                            </p>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                              {verticalLabel(client.vertical)}
+                              {client.employee_count ? ` · ${client.employee_count} employees` : ''}
+                              {client.source ? ` · ${client.source}` : ''}
+                            </p>
+                          </div>
+                          <svg
+                            class="w-4 h-4 text-slate-400 flex-shrink-0 ml-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M9 5l7 7-7 7"
+                            />
+                          </svg>
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <div class="bg-white rounded-lg border border-slate-200 border-dashed p-4 text-center">
+                      <p class="text-sm text-slate-400">No clients</p>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          /* Flat list when status filter is active */
+          <div>
+            {clients.length > 0 ? (
+              <div class="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+                {clients.map((client) => (
+                  <a
+                    href={`/admin/clients/${client.id}`}
+                    class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+                  >
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2">
+                        <p class="text-sm font-medium text-slate-900 truncate">
+                          {client.business_name}
+                        </p>
+                        <span
+                          class={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusColor(client.status)}`}
+                        >
+                          {CLIENT_STATUSES.find((s) => s.value === client.status)?.label ??
+                            client.status}
+                        </span>
+                      </div>
+                      <p class="text-xs text-slate-500 mt-0.5">
+                        {verticalLabel(client.vertical)}
+                        {client.employee_count ? ` · ${client.employee_count} employees` : ''}
+                        {client.source ? ` · ${client.source}` : ''}
+                      </p>
+                    </div>
+                    <svg
+                      class="w-4 h-4 text-slate-400 flex-shrink-0 ml-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <div class="bg-white rounded-lg border border-slate-200 border-dashed p-8 text-center">
+                <p class="text-sm text-slate-400">No clients match the current filters.</p>
+              </div>
+            )}
+          </div>
+        )
+      }
+    </main>
+  </body>
+</html>

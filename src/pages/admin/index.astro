@@ -47,10 +47,21 @@ const session = Astro.locals.session!
 
     <main class="max-w-5xl mx-auto px-4 py-8">
       <h2 class="text-xl font-semibold text-slate-900 mb-4">Dashboard</h2>
-      <div class="bg-white rounded-lg border border-slate-200 p-6">
-        <p class="text-slate-600">
-          Welcome back. The admin portal is under construction — more features coming soon.
-        </p>
+      <div class="grid gap-4">
+        <a
+          href="/admin/clients"
+          class="bg-white rounded-lg border border-slate-200 p-6 hover:border-slate-300 transition-colors group"
+        >
+          <h3
+            class="text-base font-semibold text-slate-900 group-hover:text-primary transition-colors"
+          >
+            Clients
+          </h3>
+          <p class="text-sm text-slate-500 mt-1">
+            Manage your client pipeline — create, edit, and track clients through the engagement
+            lifecycle.
+          </p>
+        </a>
       </div>
     </main>
   </body>
