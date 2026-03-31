@@ -18,7 +18,20 @@ type CfEnv = {
 
 type Runtime = import('@astrojs/cloudflare').Runtime<CfEnv>
 
+/**
+ * Session data attached by auth middleware on authenticated routes.
+ */
+interface AuthSession {
+  userId: string
+  orgId: string
+  role: string
+  email: string
+  expiresAt: string
+}
+
 declare namespace App {
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-  interface Locals extends Runtime {}
+  interface Locals extends Runtime {
+    /** Populated by auth middleware on /admin/* routes. Null on public routes. */
+    session: AuthSession | null
+  }
 }

@@ -1,0 +1,57 @@
+---
+import '../../styles/global.css'
+
+/**
+ * Admin dashboard placeholder — protected by auth middleware.
+ *
+ * If you're seeing this page, the session is valid.
+ * Session data is available via Astro.locals.session.
+ */
+
+const session = Astro.locals.session!
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>Admin — SMD Services</title>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white border-b border-slate-200">
+      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <h1 class="text-lg font-bold text-slate-900">SMD Services</h1>
+          <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">Admin</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="text-sm text-slate-600">{session.email}</span>
+          <form method="POST" action="/api/auth/logout">
+            <button
+              type="submit"
+              class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 py-8">
+      <h2 class="text-xl font-semibold text-slate-900 mb-4">Dashboard</h2>
+      <div class="bg-white rounded-lg border border-slate-200 p-6">
+        <p class="text-slate-600">
+          Welcome back. The admin portal is under construction — more features coming soon.
+        </p>
+      </div>
+    </main>
+  </body>
+</html>
