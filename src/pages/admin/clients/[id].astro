@@ -2,6 +2,7 @@
 import '../../../styles/global.css'
 import { getClient, CLIENT_STATUSES, CLIENT_VERTICALS } from '../../../lib/db/clients'
 import type { ClientStatus } from '../../../lib/db/clients'
+import { listContacts } from '../../../lib/db/contacts'
 
 /**
  * Client detail/edit page.
@@ -25,13 +26,18 @@ if (!client) {
   return Astro.redirect('/admin/clients?error=not_found')
 }
 
+const contacts = await listContacts(env.DB, session.orgId, id)
+
 const url = Astro.url
 const saved = url.searchParams.get('saved') === '1'
+const contactsSaved = url.searchParams.get('contacts_saved') === '1'
+const contactDeleted = url.searchParams.get('contact_deleted') === '1'
 const errorParam = url.searchParams.get('error') || ''
 
 const errorMessages: Record<string, string> = {
   missing: 'Business name and source are required.',
   server: 'Something went wrong. Please try again.',
+  contact_not_found: 'Contact not found.',
 }
 
 const errorMessage = errorParam ? (errorMessages[errorParam] ?? 'An error occurred.') : ''
@@ -151,6 +157,22 @@ const outsideBuyBox =
         saved && (
           <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
             Client updated successfully.
+          </div>
+        )
+      }
+
+      {
+        contactsSaved && (
+          <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+            Contact added successfully.
+          </div>
+        )
+      }
+
+      {
+        contactDeleted && (
+          <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+            Contact deleted.
           </div>
         )
       }
@@ -348,6 +370,82 @@ const outsideBuyBox =
           </button>
         </div>
       </form>
+
+      <!-- Contacts Section -->
+      <div class="mt-8">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-slate-900">
+            Contacts
+            <span class="text-sm font-normal text-slate-400 ml-1">({contacts.length})</span>
+          </h2>
+          <a
+            href={`/admin/clients/${client.id}/contacts/new`}
+            class="inline-flex items-center gap-2 bg-primary text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"
+          >
+            <svg
+              class="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 4v16m8-8H4"></path>
+            </svg>
+            Add Contact
+          </a>
+        </div>
+
+        {
+          contacts.length > 0 ? (
+            <div class="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+              {contacts.map((contact) => (
+                <a
+                  href={`/admin/clients/${client.id}/contacts/${contact.id}`}
+                  class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+                >
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-slate-900 truncate">{contact.name}</p>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                      {contact.title ?? ''}
+                      {contact.title && contact.email ? ' · ' : ''}
+                      {contact.email ?? ''}
+                      {(contact.title || contact.email) && contact.phone ? ' · ' : ''}
+                      {contact.phone ?? ''}
+                    </p>
+                  </div>
+                  <svg
+                    class="w-4 h-4 text-slate-400 flex-shrink-0 ml-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <div class="bg-white rounded-lg border border-slate-200 border-dashed p-6 text-center">
+              <p class="text-sm text-slate-400">No contacts yet.</p>
+              <a
+                href={`/admin/clients/${client.id}/contacts/new`}
+                class="text-sm text-primary hover:text-primary-hover mt-1 inline-block"
+              >
+                Add the first contact
+              </a>
+            </div>
+          )
+        }
+      </div>
     </main>
 
     <script>
