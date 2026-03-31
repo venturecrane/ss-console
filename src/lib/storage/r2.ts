@@ -123,3 +123,33 @@ export function getPdfUrl(orgId: string, quoteId: string): string {
 export async function getPdf(r2: R2Bucket, key: string): Promise<R2ObjectBody | null> {
   return r2.get(key)
 }
+
+// ---------------------------------------------------------------------------
+// Document listing and streaming helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * List all R2 objects under a given prefix.
+ *
+ * Used to enumerate documents for a client engagement:
+ *   {orgId}/engagements/{engId}/docs/*
+ *
+ * @param r2 - The R2 bucket binding
+ * @param prefix - The key prefix to list under
+ * @returns Array of R2Object metadata
+ */
+export async function listDocuments(r2: R2Bucket, prefix: string): Promise<R2Object[]> {
+  const listed = await r2.list({ prefix })
+  return listed.objects
+}
+
+/**
+ * Get an R2 object for streaming download.
+ *
+ * @param r2 - The R2 bucket binding
+ * @param key - The R2 key of the document
+ * @returns The R2ObjectBody for streaming, or null if not found
+ */
+export async function streamDocument(r2: R2Bucket, key: string): Promise<R2ObjectBody | null> {
+  return r2.get(key)
+}

@@ -1,0 +1,171 @@
+---
+import '../../../styles/global.css'
+import { listEngagements } from '../../../lib/db/engagements'
+import { listDocuments } from '../../../lib/storage/r2'
+
+/**
+ * Client portal — document library page.
+ *
+ * Lists all R2 documents under the client's engagement path,
+ * plus the SOW PDF from the accepted quote.
+ * Protected by auth middleware (role=client).
+ */
+
+const session = Astro.locals.session!
+const env = Astro.locals.runtime.env
+
+// Look up client_id from the users table
+interface UserRow {
+  id: string
+  client_id: string | null
+}
+
+const user = await env.DB.prepare('SELECT id, client_id FROM users WHERE id = ?')
+  .bind(session.userId)
+  .first<UserRow>()
+
+const clientId = user?.client_id
+
+interface DocumentEntry {
+  name: string
+  key: string
+  uploaded: string
+  isPdf: boolean
+}
+
+const documents: DocumentEntry[] = []
+let engagement = null
+
+if (clientId) {
+  // Get active engagement (or most recent one)
+  const engagements = await listEngagements(env.DB, session.orgId, clientId)
+  engagement =
+    engagements.find((e) => e.status !== 'completed' && e.status !== 'cancelled') ??
+    engagements[0] ??
+    null
+
+  if (engagement) {
+    // List engagement documents from R2
+    const prefix = `${session.orgId}/engagements/${engagement.id}/docs/`
+    const r2Objects = await listDocuments(env.STORAGE, prefix)
+
+    for (const obj of r2Objects) {
+      const name = obj.key.split('/').pop() ?? obj.key
+      documents.push({
+        name,
+        key: obj.key,
+        uploaded: obj.uploaded.toISOString(),
+        isPdf: name.toLowerCase().endsWith('.pdf'),
+      })
+    }
+
+    // Include SOW PDF from the quote if available
+    if (engagement.quote_id) {
+      interface QuoteRow {
+        sow_path: string | null
+      }
+
+      const quote = await env.DB.prepare('SELECT sow_path FROM quotes WHERE id = ? AND org_id = ?')
+        .bind(engagement.quote_id, session.orgId)
+        .first<QuoteRow>()
+
+      if (quote?.sow_path) {
+        documents.unshift({
+          name: 'Statement of Work (SOW)',
+          key: quote.sow_path,
+          uploaded: engagement.created_at,
+          isPdf: true,
+        })
+      }
+    }
+  }
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>Documents — SMD Services</title>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white border-b border-slate-200">
+      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <a
+            href="/portal"
+            class="text-lg font-bold text-slate-900 hover:text-primary transition-colors"
+            >SMD Services</a
+          >
+          <span class="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">Portal</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="text-sm text-slate-600">{session.email}</span>
+          <form method="POST" action="/api/auth/logout">
+            <button
+              type="submit"
+              class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 py-8">
+      <nav class="text-sm text-slate-500 mb-4">
+        <a href="/portal" class="hover:text-primary transition-colors">Portal</a>
+        <span class="mx-1">/</span>
+        <span class="text-slate-900">Documents</span>
+      </nav>
+
+      <h2 class="text-xl font-semibold text-slate-900 mb-6">Documents</h2>
+
+      {
+        documents.length === 0 ? (
+          <div class="bg-white rounded-lg border border-slate-200 p-6">
+            <p class="text-slate-600">Documents will appear here as your engagement progresses.</p>
+          </div>
+        ) : (
+          <div class="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+            {documents.map((doc) => (
+              <div class="flex items-center justify-between px-6 py-4">
+                <div class="flex items-center gap-3 min-w-0">
+                  <span class={`text-lg ${doc.isPdf ? 'text-red-500' : 'text-slate-400'}`}>
+                    {doc.isPdf ? '&#128196;' : '&#128462;'}
+                  </span>
+                  <div class="min-w-0">
+                    <p class="text-sm font-medium text-slate-900 truncate">{doc.name}</p>
+                    <p class="text-xs text-slate-400">{formatDate(doc.uploaded)}</p>
+                  </div>
+                </div>
+                <a
+                  href={`/api/portal/documents/${doc.key}`}
+                  class="text-sm text-primary hover:text-primary/80 font-medium transition-colors shrink-0 ml-4"
+                >
+                  {doc.isPdf ? 'View' : 'Download'}
+                </a>
+              </div>
+            ))}
+          </div>
+        )
+      }
+    </main>
+  </body>
+</html>

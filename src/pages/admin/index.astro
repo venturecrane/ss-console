@@ -1,14 +1,25 @@
 ---
 import '../../styles/global.css'
+import { listFollowUps } from '../../lib/db/follow-ups'
 
 /**
- * Admin dashboard placeholder — protected by auth middleware.
+ * Admin dashboard — protected by auth middleware.
  *
  * If you're seeing this page, the session is valid.
  * Session data is available via Astro.locals.session.
  */
 
 const session = Astro.locals.session!
+const env = Astro.locals.runtime.env
+
+// Fetch follow-up counts for dashboard card
+const [upcomingFollowUps, overdueFollowUps] = await Promise.all([
+  listFollowUps(env.DB, session.orgId, { upcoming: true }),
+  listFollowUps(env.DB, session.orgId, { overdue: true }),
+])
+
+const upcomingCount = upcomingFollowUps.length
+const overdueCount = overdueFollowUps.length
 ---
 
 <!doctype html>
@@ -60,6 +71,39 @@ const session = Astro.locals.session!
           <p class="text-sm text-slate-500 mt-1">
             Manage your client pipeline — create, edit, and track clients through the engagement
             lifecycle.
+          </p>
+        </a>
+
+        <a
+          href="/admin/follow-ups"
+          class="bg-white rounded-lg border border-slate-200 p-6 hover:border-slate-300 transition-colors group"
+        >
+          <div class="flex items-center justify-between">
+            <h3
+              class="text-base font-semibold text-slate-900 group-hover:text-primary transition-colors"
+            >
+              Follow-ups
+            </h3>
+            <div class="flex items-center gap-2">
+              {
+                overdueCount > 0 && (
+                  <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
+                    {overdueCount} overdue
+                  </span>
+                )
+              }
+              {
+                upcomingCount > 0 && (
+                  <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                    {upcomingCount} upcoming
+                  </span>
+                )
+              }
+            </div>
+          </div>
+          <p class="text-sm text-slate-500 mt-1">
+            Manage follow-up cadences — proposal follow-ups, review requests, referral asks, and
+            feedback surveys.
           </p>
         </a>
       </div>

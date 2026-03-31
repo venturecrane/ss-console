@@ -6,6 +6,7 @@ import { listContacts } from '../../../../lib/db/contacts'
 import { uploadPdf } from '../../../../lib/storage/r2'
 import { renderSow } from '../../../../lib/pdf/render'
 import type { SOWTemplateProps } from '../../../../lib/pdf/sow-template'
+import { scheduleProposalCadence } from '../../../../lib/follow-ups/scheduler'
 
 /**
  * POST /api/admin/quotes/:id
@@ -146,6 +147,15 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
           `/admin/clients/${existing.client_id}/quotes/${quoteId}?error=invalid_transition`,
           302
         )
+      }
+
+      // Schedule proposal follow-up cadence (Decision #19: Day 2, Day 5, Day 7)
+      try {
+        const sentAt = new Date().toISOString()
+        await scheduleProposalCadence(env.DB, session.orgId, quoteId, existing.client_id, sentAt)
+      } catch (err) {
+        // Non-blocking — log but don't fail the send action
+        console.error('[api/admin/quotes/[id]] Follow-up scheduling error:', err)
       }
 
       return redirect(`/admin/clients/${existing.client_id}/quotes/${quoteId}?saved=1`, 302)
