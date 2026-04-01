@@ -40,6 +40,18 @@ import Footer from '../components/Footer.astro'
           >
           </div>
         </div>
+        <p
+          id="booked-fallback"
+          class="mx-auto mt-6 hidden max-w-3xl text-center text-sm text-slate-500"
+        >
+          Already booked?
+          <a
+            href="/book/thanks"
+            class="font-medium text-primary hover:text-primary/80 transition-colors"
+          >
+            Tell us a bit about your business &rarr;
+          </a>
+        </p>
       </div>
     </section>
 
@@ -132,4 +144,19 @@ import Footer from '../components/Footer.astro'
   </main>
   <Footer />
   <script is:inline src="https://assets.calendly.com/assets/external/widget.js" async></script>
+  <script is:inline>
+    // Detect Calendly booking completion and redirect to intake form
+    window.addEventListener('message', function (e) {
+      if (e.data && e.data.event === 'calendly.event_scheduled') {
+        window.location.href = '/book/thanks'
+      }
+    })
+    // Show fallback link after widget loads (in case message event doesn't fire)
+    window.addEventListener('load', function () {
+      setTimeout(function () {
+        const fallback = document.getElementById('booked-fallback')
+        if (fallback) fallback.classList.remove('hidden')
+      }, 3000)
+    })
+  </script>
 </Base>
