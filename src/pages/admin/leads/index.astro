@@ -1,0 +1,291 @@
+---
+import '../../../styles/global.css'
+import { listLeadSignals, TRIAGE_STATUSES } from '../../../lib/db/lead-signals'
+import type { LeadSignal, TriageStatus } from '../../../lib/db/lead-signals'
+import { PIPELINE_LABELS } from '../../../lead-gen/schemas/lead-scoring-schema'
+import type { PipelineId } from '../../../lead-gen/schemas/lead-scoring-schema'
+import { PROBLEM_LABELS } from '../../../portal/assessments/extraction-schema'
+import type { ProblemId } from '../../../portal/assessments/extraction-schema'
+
+/**
+ * Lead Inbox — triage incoming signals from automated pipelines.
+ *
+ * Signals are sorted by pain score (highest first), then date found.
+ * Actions: Promote (pre-fill new client form), Link (to existing client), Dismiss.
+ *
+ * Protected by auth middleware (requires admin role).
+ */
+
+const session = Astro.locals.session!
+const env = Astro.locals.runtime.env
+
+// Filters from URL params
+const filterStatus = (Astro.url.searchParams.get('status') ?? 'new') as TriageStatus
+const filterPipeline = Astro.url.searchParams.get('pipeline') ?? ''
+
+const signals = await listLeadSignals(env.DB, session.orgId, {
+  triage_status: filterStatus,
+  ...(filterPipeline ? { source_pipeline: filterPipeline } : {}),
+})
+
+const success = Astro.url.searchParams.get('saved')
+const dismissed = Astro.url.searchParams.get('dismissed')
+
+// Pipeline display labels (only the 4 lead pipelines)
+const LEAD_PIPELINES: { value: string; label: string }[] = [
+  { value: 'review_mining', label: 'Review Mining' },
+  { value: 'job_monitor', label: 'Job Monitor' },
+  { value: 'new_business', label: 'New Business' },
+  { value: 'social_listening', label: 'Social Listening' },
+]
+
+// Pipeline badge colors
+function pipelineBadgeClass(pipeline: string): string {
+  switch (pipeline) {
+    case 'review_mining':
+      return 'bg-amber-100 text-amber-700'
+    case 'job_monitor':
+      return 'bg-blue-100 text-blue-700'
+    case 'new_business':
+      return 'bg-green-100 text-green-700'
+    case 'social_listening':
+      return 'bg-purple-100 text-purple-700'
+    default:
+      return 'bg-slate-100 text-slate-600'
+  }
+}
+
+// Pain score color
+function painScoreClass(score: number | null): string {
+  if (!score) return 'text-slate-400'
+  if (score >= 8) return 'text-red-600 font-bold'
+  if (score >= 6) return 'text-amber-600 font-semibold'
+  return 'text-slate-500'
+}
+
+// Parse top_problems JSON
+function parseProblems(json: string | null): string[] {
+  if (!json) return []
+  try {
+    return JSON.parse(json) as string[]
+  } catch {
+    return []
+  }
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+// Build promote URL with query params for pre-filling the client form
+function promoteUrl(signal: LeadSignal): string {
+  const params = new URLSearchParams()
+  params.set('from_signal', signal.id)
+  params.set('business_name', signal.business_name)
+
+  const pipelineLabel =
+    PIPELINE_LABELS[signal.source_pipeline as PipelineId] ?? signal.source_pipeline
+  params.set('source', pipelineLabel)
+
+  // Combine evidence + outreach angle into notes
+  const noteParts: string[] = []
+  if (signal.evidence_summary) noteParts.push(`Evidence: ${signal.evidence_summary}`)
+  if (signal.outreach_angle) noteParts.push(`Outreach angle: ${signal.outreach_angle}`)
+  if (noteParts.length > 0) params.set('notes', noteParts.join('\n\n'))
+
+  return `/admin/clients/new?${params.toString()}`
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>Lead Inbox — SMD Services</title>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white border-b border-slate-200">
+      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <a
+            href="/admin"
+            class="text-lg font-bold text-slate-900 hover:text-primary transition-colors"
+            >SMD Services</a
+          >
+          <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">Admin</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="text-sm text-slate-600">{session.email}</span>
+          <form method="POST" action="/api/auth/logout">
+            <button
+              type="submit"
+              class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 py-8">
+      <nav class="text-sm text-slate-500 mb-4">
+        <a href="/admin" class="hover:text-primary transition-colors">Dashboard</a>
+        <span class="mx-1">/</span>
+        <span class="text-slate-900">Lead Inbox</span>
+      </nav>
+
+      {
+        success && (
+          <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg mb-4">
+            Signal linked to client successfully.
+          </div>
+        )
+      }
+      {
+        dismissed && (
+          <div class="bg-slate-50 border border-slate-200 text-slate-600 text-sm px-4 py-3 rounded-lg mb-4">
+            Signal dismissed.
+          </div>
+        )
+      }
+
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-semibold text-slate-900">Lead Inbox</h2>
+
+        <form method="GET" class="flex items-center gap-2">
+          <input type="hidden" name="status" value={filterStatus} />
+          <select
+            name="pipeline"
+            class="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700"
+            onchange="this.form.submit()"
+          >
+            <option value="">All pipelines</option>
+            {
+              LEAD_PIPELINES.map((p) => (
+                <option value={p.value} selected={filterPipeline === p.value}>
+                  {p.label}
+                </option>
+              ))
+            }
+          </select>
+        </form>
+      </div>
+
+      {/* Status tabs */}
+      <div class="flex gap-1 mb-6 border-b border-slate-200">
+        {
+          TRIAGE_STATUSES.map((s) => (
+            <a
+              href={`/admin/leads?status=${s.value}${filterPipeline ? `&pipeline=${filterPipeline}` : ''}`}
+              class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                filterStatus === s.value
+                  ? s.value === 'new'
+                    ? 'border-primary text-primary'
+                    : s.value === 'dismissed'
+                      ? 'border-slate-400 text-slate-600'
+                      : s.value === 'promoted'
+                        ? 'border-green-500 text-green-600'
+                        : 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {s.label}
+            </a>
+          ))
+        }
+      </div>
+
+      {/* Signal list */}
+      {
+        signals.length === 0 ? (
+          <div class="bg-white rounded-lg border border-slate-200 p-6">
+            <p class="text-slate-500 text-sm">
+              {filterStatus === 'new' && 'No new signals to review.'}
+              {filterStatus === 'reviewed' && 'No reviewed signals.'}
+              {filterStatus === 'promoted' && 'No promoted signals.'}
+              {filterStatus === 'dismissed' && 'No dismissed signals.'}
+            </p>
+          </div>
+        ) : (
+          <div class="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+            {signals.map((s: LeadSignal) => {
+              const problems = parseProblems(s.top_problems)
+              return (
+                <div class="px-6 py-4">
+                  <div class="flex items-start justify-between gap-4">
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="text-sm font-medium text-slate-900">{s.business_name}</span>
+                        <span
+                          class={`text-xs px-2 py-0.5 rounded ${pipelineBadgeClass(s.source_pipeline)}`}
+                        >
+                          {PIPELINE_LABELS[s.source_pipeline as PipelineId] ?? s.source_pipeline}
+                        </span>
+                        {s.pain_score && (
+                          <span class={`text-xs ${painScoreClass(s.pain_score)}`}>
+                            Pain: {s.pain_score}/10
+                          </span>
+                        )}
+                      </div>
+
+                      {problems.length > 0 && (
+                        <div class="flex gap-1 mb-1">
+                          {problems.map((p) => (
+                            <span class="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                              {PROBLEM_LABELS[p as ProblemId] ?? p}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {s.evidence_summary && (
+                        <p class="text-xs text-slate-500 mt-1 line-clamp-2">{s.evidence_summary}</p>
+                      )}
+
+                      <div class="flex items-center gap-3 text-xs text-slate-400 mt-1.5">
+                        <span>{formatDate(s.date_found)}</span>
+                        {s.area && <span>{s.area}</span>}
+                        {s.category && <span>{s.category}</span>}
+                      </div>
+                    </div>
+
+                    {s.triage_status === 'new' && (
+                      <div class="flex items-center gap-2 shrink-0">
+                        <a
+                          href={promoteUrl(s)}
+                          class="text-xs bg-primary text-white px-3 py-1.5 rounded-md hover:bg-primary/90 transition-colors"
+                        >
+                          Promote
+                        </a>
+                        <form method="POST" action={`/api/admin/leads/${s.id}/dismiss`}>
+                          <button
+                            type="submit"
+                            class="text-xs bg-slate-50 text-slate-600 px-3 py-1.5 rounded-md hover:bg-slate-100 transition-colors"
+                          >
+                            Dismiss
+                          </button>
+                        </form>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      }
+    </main>
+  </body>
+</html>

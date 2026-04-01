@@ -3,6 +3,7 @@ import '../../styles/global.css'
 import { listFollowUps } from '../../lib/db/follow-ups'
 import { getPipelineConversion } from '../../lib/db/analytics'
 import { listEngagements } from '../../lib/db/engagements'
+import { countNewSignals } from '../../lib/db/lead-signals'
 
 /**
  * Admin dashboard — protected by auth middleware.
@@ -15,12 +16,14 @@ const session = Astro.locals.session!
 const env = Astro.locals.runtime.env
 
 // Fetch follow-up counts and analytics data in parallel
-const [upcomingFollowUps, overdueFollowUps, pipeline, allEngagements] = await Promise.all([
-  listFollowUps(env.DB, session.orgId, { upcoming: true }),
-  listFollowUps(env.DB, session.orgId, { overdue: true }),
-  getPipelineConversion(env.DB, session.orgId),
-  listEngagements(env.DB, session.orgId),
-])
+const [upcomingFollowUps, overdueFollowUps, pipeline, allEngagements, newSignalCount] =
+  await Promise.all([
+    listFollowUps(env.DB, session.orgId, { upcoming: true }),
+    listFollowUps(env.DB, session.orgId, { overdue: true }),
+    getPipelineConversion(env.DB, session.orgId),
+    listEngagements(env.DB, session.orgId),
+    countNewSignals(env.DB, session.orgId),
+  ])
 
 const upcomingCount = upcomingFollowUps.length
 const overdueCount = overdueFollowUps.length
@@ -91,6 +94,31 @@ const pipelineConversionRate =
           <p class="text-sm text-slate-500 mt-1">
             Manage your client pipeline — create, edit, and track clients through the engagement
             lifecycle.
+          </p>
+        </a>
+
+        <a
+          href="/admin/leads"
+          class="bg-white rounded-lg border border-slate-200 p-6 hover:border-slate-300 transition-colors group"
+        >
+          <div class="flex items-center justify-between">
+            <h3
+              class="text-base font-semibold text-slate-900 group-hover:text-primary transition-colors"
+            >
+              Lead Inbox
+            </h3>
+            <div class="flex items-center gap-2">
+              {
+                newSignalCount > 0 && (
+                  <span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                    {newSignalCount} new
+                  </span>
+                )
+              }
+            </div>
+          </div>
+          <p class="text-sm text-slate-500 mt-1">
+            Review and triage lead signals from automated pipelines — promote to clients or dismiss.
           </p>
         </a>
 

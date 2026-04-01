@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro'
 import { createClient } from '../../../../lib/db/clients'
+import { linkToClient } from '../../../../lib/db/lead-signals'
 
 /**
  * POST /api/admin/clients
@@ -72,6 +73,12 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
       status: status && typeof status === 'string' && status.trim() ? status.trim() : 'prospect',
       notes: notes && typeof notes === 'string' && notes.trim() ? notes.trim() : null,
     })
+
+    // Link lead signal if this client was promoted from one
+    const fromSignal = formData.get('from_signal')
+    if (fromSignal && typeof fromSignal === 'string' && fromSignal.trim()) {
+      await linkToClient(env.DB, session.orgId, fromSignal.trim(), client.id)
+    }
 
     return redirect(`/admin/clients/${client.id}`, 302)
   } catch (err) {

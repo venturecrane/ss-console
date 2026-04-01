@@ -20,6 +20,12 @@ const errorMessages: Record<string, string> = {
 }
 
 const errorMessage = errorParam ? (errorMessages[errorParam] ?? 'An error occurred.') : ''
+
+// Pre-fill from lead signal promote action
+const fromSignal = url.searchParams.get('from_signal') || ''
+const prefillName = url.searchParams.get('business_name') || ''
+const prefillSource = url.searchParams.get('source') || ''
+const prefillNotes = url.searchParams.get('notes') || ''
 ---
 
 <!doctype html>
@@ -71,6 +77,14 @@ const errorMessage = errorParam ? (errorMessages[errorParam] ?? 'An error occurr
       <h1 class="text-2xl font-bold text-slate-900 mb-6">Add Client</h1>
 
       {
+        fromSignal && (
+          <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+            Creating from lead signal — review and complete the details.
+          </div>
+        )
+      }
+
+      {
         errorMessage && (
           <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
             {errorMessage}
@@ -83,6 +97,8 @@ const errorMessage = errorParam ? (errorMessages[errorParam] ?? 'An error occurr
         action="/api/admin/clients"
         class="bg-white rounded-lg border border-slate-200 p-6 space-y-6"
       >
+        {fromSignal && <input type="hidden" name="from_signal" value={fromSignal} />}
+
         <!-- Business Name -->
         <div>
           <label for="business_name" class="block text-sm font-medium text-slate-700 mb-1">
@@ -93,6 +109,7 @@ const errorMessage = errorParam ? (errorMessages[errorParam] ?? 'An error occurr
             id="business_name"
             name="business_name"
             required
+            value={prefillName}
             class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
             placeholder="e.g. Phoenix Plumbing Co."
           />
@@ -156,6 +173,7 @@ const errorMessage = errorParam ? (errorMessages[errorParam] ?? 'An error occurr
             id="source"
             name="source"
             required
+            value={prefillSource}
             class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
             placeholder="e.g. BNI, Chamber, Referral, Website"
           />
@@ -201,7 +219,8 @@ const errorMessage = errorParam ? (errorMessages[errorParam] ?? 'An error occurr
             name="notes"
             rows="3"
             class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
-            placeholder="Any additional context..."></textarea>
+            placeholder="Any additional context...">{prefillNotes}</textarea
+          >
         </div>
 
         <!-- Actions -->
