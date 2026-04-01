@@ -1,11 +1,12 @@
 import type { APIRoute } from 'astro'
 import { validateApiKey } from '../../../lib/auth/api-key'
 import { createLeadSignal } from '../../../lib/db/lead-signals'
+import { ORG_ID } from '../../../lib/constants'
 
 /**
  * POST /api/ingest/leads
  *
- * Ingest endpoint for Make.com lead generation pipelines.
+ * Ingest endpoint for lead generation pipelines.
  * Accepts qualified lead signals and writes them to D1.
  *
  * Auth: Bearer token (LEAD_INGEST_API_KEY), not session cookies.
@@ -15,8 +16,6 @@ import { createLeadSignal } from '../../../lib/db/lead-signals'
  * Same pipeline + same business = duplicate (200).
  * Different pipeline + same business = cross-match (201, auto-linked if prior signal has client_id).
  */
-
-const ORG_ID = '01JQFK0000SMDSERVICES000'
 const MAX_BODY_SIZE = 10 * 1024 // 10KB
 
 const ALLOWED_PIPELINES = ['review_mining', 'job_monitor', 'new_business', 'social_listening']

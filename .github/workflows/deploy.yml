@@ -43,3 +43,14 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 migrations apply ss-console-db --remote
+
+      - name: Install Job Monitor Worker deps
+        run: cd workers/job-monitor && npm ci
+
+      - name: Deploy Job Monitor Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/job-monitor
+          command: deploy

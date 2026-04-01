@@ -37,3 +37,6 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Build Job Monitor Worker
+        run: cd workers/job-monitor && npm ci && npx wrangler deploy --dry-run --outdir=dist
