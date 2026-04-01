@@ -26,6 +26,8 @@ const fromSignal = url.searchParams.get('from_signal') || ''
 const prefillName = url.searchParams.get('business_name') || ''
 const prefillSource = url.searchParams.get('source') || ''
 const prefillNotes = url.searchParams.get('notes') || ''
+const prefillVertical = url.searchParams.get('vertical') || ''
+const prefillEmployeeCount = url.searchParams.get('employee_count') || ''
 ---
 
 <!doctype html>
@@ -126,7 +128,13 @@ const prefillNotes = url.searchParams.get('notes') || ''
             class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
           >
             <option value="">Select a vertical</option>
-            {CLIENT_VERTICALS.map((v) => <option value={v.value}>{v.label}</option>)}
+            {
+              CLIENT_VERTICALS.map((v) => (
+                <option value={v.value} selected={prefillVertical === v.value}>
+                  {v.label}
+                </option>
+              ))
+            }
           </select>
         </div>
 
@@ -140,6 +148,7 @@ const prefillNotes = url.searchParams.get('notes') || ''
             id="employee_count"
             name="employee_count"
             min="1"
+            value={prefillEmployeeCount}
             class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
             placeholder="e.g. 15"
           />
@@ -247,14 +256,29 @@ const prefillNotes = url.searchParams.get('notes') || ''
       const buyBoxWarning = document.getElementById('buy-box-warning') as HTMLElement
 
       if (employeeInput && buyBoxWarning) {
-        employeeInput.addEventListener('input', () => {
+        function checkBuyBox() {
           const val = parseInt(employeeInput.value, 10)
           if (!isNaN(val) && (val < 10 || val > 25)) {
             buyBoxWarning.classList.remove('hidden')
           } else {
             buyBoxWarning.classList.add('hidden')
           }
-        })
+        }
+        // Check on load (handles pre-filled values from promote)
+        checkBuyBox()
+        employeeInput.addEventListener('input', checkBuyBox)
+      }
+
+      // Auto-resize notes textarea to fit content
+      const notesTextarea = document.getElementById('notes') as HTMLTextAreaElement
+      if (notesTextarea) {
+        notesTextarea.style.overflowY = 'hidden'
+        function autoResizeNotes() {
+          notesTextarea.style.height = 'auto'
+          notesTextarea.style.height = notesTextarea.scrollHeight + 'px'
+        }
+        autoResizeNotes()
+        notesTextarea.addEventListener('input', autoResizeNotes)
       }
     </script>
   </body>

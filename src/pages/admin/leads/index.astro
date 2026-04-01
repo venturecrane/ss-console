@@ -81,6 +81,52 @@ function formatDate(iso: string): string {
   })
 }
 
+// Valid verticals for pre-fill validation
+const VALID_VERTICALS = new Set([
+  'home_services',
+  'professional_services',
+  'contractor_trades',
+  'retail_salon',
+  'restaurant',
+  'other',
+])
+
+// Extract vertical and size estimate from source_metadata JSON.
+// Vertical lives in source_metadata.vertical_match (new_business pipeline only).
+// Size lives in source_metadata.size_estimate or .company_size_estimate depending on pipeline.
+// signal.category is NOT a valid vertical — review_mining stores Google Places display names there.
+function parseSourceMetadata(metadata: string | null): {
+  vertical: string | null
+  employeeCount: number | null
+} {
+  if (!metadata) return { vertical: null, employeeCount: null }
+  try {
+    const data = JSON.parse(metadata)
+
+    // Vertical: only trust vertical_match from new_business pipeline
+    const rawVertical: unknown = data.vertical_match
+    const vertical =
+      typeof rawVertical === 'string' && VALID_VERTICALS.has(rawVertical) ? rawVertical : null
+
+    // Size: try both field names
+    const rawSize: unknown = data.company_size_estimate ?? data.size_estimate
+    let employeeCount: number | null = null
+    if (typeof rawSize === 'string' && rawSize !== 'unknown') {
+      const rangeMatch = rawSize.match(/^(\d+)\s*-\s*(\d+)$/)
+      if (rangeMatch) {
+        employeeCount = Math.round((parseInt(rangeMatch[1], 10) + parseInt(rangeMatch[2], 10)) / 2)
+      } else {
+        const num = parseInt(rawSize, 10)
+        if (!isNaN(num)) employeeCount = num
+      }
+    }
+
+    return { vertical, employeeCount }
+  } catch {
+    return { vertical: null, employeeCount: null }
+  }
+}
+
 // Build promote URL with query params for pre-filling the client form
 function promoteUrl(signal: LeadSignal): string {
   const params = new URLSearchParams()
@@ -96,6 +142,11 @@ function promoteUrl(signal: LeadSignal): string {
   if (signal.evidence_summary) noteParts.push(`Evidence: ${signal.evidence_summary}`)
   if (signal.outreach_angle) noteParts.push(`Outreach angle: ${signal.outreach_angle}`)
   if (noteParts.length > 0) params.set('notes', noteParts.join('\n\n'))
+
+  // Extract enrichment data from source_metadata
+  const { vertical, employeeCount } = parseSourceMetadata(signal.source_metadata)
+  if (vertical) params.set('vertical', vertical)
+  if (employeeCount !== null) params.set('employee_count', String(employeeCount))
 
   return `/admin/clients/new?${params.toString()}`
 }

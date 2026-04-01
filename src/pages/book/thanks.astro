@@ -1,0 +1,261 @@
+---
+export const prerender = false
+
+import Base from '../../layouts/Base.astro'
+import Footer from '../../components/Footer.astro'
+import { CLIENT_VERTICALS } from '../../lib/db/clients'
+---
+
+<Base
+  title="You're All Set — SMD Services"
+  description="Thanks for booking. Help us prepare for your call by telling us a bit about your business."
+>
+  <main>
+    <!-- Header -->
+    <header class="sticky top-0 z-50 border-b border-slate-100 bg-white">
+      <div class="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-6">
+        <a href="/" class="text-lg font-bold tracking-tight text-slate-900">SMD Services</a>
+        <a href="/" class="text-sm text-slate-500 transition hover:text-slate-700">
+          &larr; Back to home
+        </a>
+      </div>
+    </header>
+
+    <!-- Confirmation + Intake -->
+    <section class="bg-slate-50 px-6 py-16 sm:py-24">
+      <div class="mx-auto max-w-2xl">
+        <!-- Thank you -->
+        <div class="text-center">
+          <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+            <svg
+              class="h-8 w-8 text-green-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="2"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"></path>
+            </svg>
+          </div>
+          <h1 class="mt-6 text-3xl font-bold tracking-tight text-slate-900">You're all set</h1>
+          <p class="mt-3 text-lg text-slate-600">
+            We'll see you on the call. In the meantime, a few quick questions to help us prepare.
+          </p>
+        </div>
+
+        <!-- Intake form -->
+        <div id="intake-form-container" class="mt-12 rounded-xl bg-white p-8 shadow-sm">
+          <h2 class="text-xl font-bold text-slate-900">Help us prepare for your call</h2>
+          <p class="mt-2 text-sm text-slate-500">
+            The more we understand up front, the more useful the conversation will be.
+          </p>
+
+          <form id="intake-form" class="mt-8 space-y-6">
+            <!-- Honeypot — hidden from humans, bots fill it in -->
+            <div class="absolute -left-[9999px]" aria-hidden="true">
+              <input type="text" name="website_url" tabindex="-1" autocomplete="off" />
+            </div>
+
+            <!-- Name + Email -->
+            <div class="grid gap-6 sm:grid-cols-2">
+              <div>
+                <label for="name" class="block text-sm font-medium text-slate-700">
+                  Your name <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  required
+                  class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                  placeholder="e.g. Maria Garcia"
+                />
+              </div>
+              <div>
+                <label for="email" class="block text-sm font-medium text-slate-700">
+                  Email <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  required
+                  class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                  placeholder="maria@example.com"
+                />
+              </div>
+            </div>
+
+            <!-- Business name -->
+            <div>
+              <label for="business_name" class="block text-sm font-medium text-slate-700">
+                Business name <span class="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                id="business_name"
+                name="business_name"
+                required
+                class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                placeholder="e.g. Phoenix Plumbing Co."
+              />
+            </div>
+
+            <!-- Vertical + Employee count -->
+            <div class="grid gap-6 sm:grid-cols-2">
+              <div>
+                <label for="vertical" class="block text-sm font-medium text-slate-700">
+                  What kind of business?
+                </label>
+                <select
+                  id="vertical"
+                  name="vertical"
+                  class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">Select one</option>
+                  {CLIENT_VERTICALS.map((v) => <option value={v.value}>{v.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label for="employee_count" class="block text-sm font-medium text-slate-700">
+                  How many employees?
+                </label>
+                <input
+                  type="number"
+                  id="employee_count"
+                  name="employee_count"
+                  min="1"
+                  class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                  placeholder="e.g. 15"
+                />
+              </div>
+            </div>
+
+            <!-- Years in business -->
+            <div class="sm:w-1/2">
+              <label for="years_in_business" class="block text-sm font-medium text-slate-700">
+                Years in business
+              </label>
+              <input
+                type="number"
+                id="years_in_business"
+                name="years_in_business"
+                min="0"
+                class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                placeholder="e.g. 8"
+              />
+            </div>
+
+            <!-- Biggest challenge / objective -->
+            <div>
+              <label for="biggest_challenge" class="block text-sm font-medium text-slate-700">
+                What are you trying to accomplish?
+              </label>
+              <p class="mt-0.5 text-xs text-slate-400">
+                What would make the biggest difference in how your business runs day to day?
+              </p>
+              <textarea
+                id="biggest_challenge"
+                name="biggest_challenge"
+                rows="3"
+                class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                placeholder="e.g. I want to stop being the bottleneck for every decision..."
+              ></textarea>
+            </div>
+
+            <!-- How they found us -->
+            <div>
+              <label for="how_heard" class="block text-sm font-medium text-slate-700">
+                How did you find us?
+              </label>
+              <input
+                type="text"
+                id="how_heard"
+                name="how_heard"
+                class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                placeholder="e.g. Google, referral from my accountant, BNI..."
+              />
+            </div>
+
+            <!-- Error message -->
+            <div id="error-message" class="hidden rounded-lg bg-red-50 p-3 text-sm text-red-700">
+              Something went wrong. Please try again.
+            </div>
+
+            <!-- Submit -->
+            <button
+              id="submit-btn"
+              type="submit"
+              class="w-full rounded-lg bg-primary px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+            >
+              Send
+            </button>
+          </form>
+        </div>
+
+        <!-- Success state (hidden by default) -->
+        <div id="success-message" class="mt-12 hidden text-center">
+          <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+            <svg
+              class="h-8 w-8 text-green-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="2"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"></path>
+            </svg>
+          </div>
+          <h2 class="mt-6 text-2xl font-bold text-slate-900">Thanks for sharing</h2>
+          <p class="mt-3 text-lg text-slate-600">
+            We'll review this before your call so we can make the most of our time together.
+          </p>
+          <a
+            href="/"
+            class="mt-8 inline-block text-sm font-medium text-primary transition-colors hover:text-primary/80"
+          >
+            &larr; Back to home
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <Footer />
+
+  <script is:inline>
+    const form = document.getElementById('intake-form')
+    const submitBtn = document.getElementById('submit-btn')
+    const errorMsg = document.getElementById('error-message')
+    const formContainer = document.getElementById('intake-form-container')
+    const successMsg = document.getElementById('success-message')
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault()
+      submitBtn.disabled = true
+      submitBtn.textContent = 'Sending...'
+      errorMsg.classList.add('hidden')
+
+      const formData = new FormData(form)
+      const data = {}
+      formData.forEach(function (value, key) {
+        data[key] = value
+      })
+
+      fetch('/api/booking/intake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+        .then(function (res) {
+          if (!res.ok) throw new Error('Failed')
+          formContainer.classList.add('hidden')
+          successMsg.classList.remove('hidden')
+        })
+        .catch(function () {
+          errorMsg.classList.remove('hidden')
+          submitBtn.disabled = false
+          submitBtn.textContent = 'Send'
+        })
+    })
+  </script>
+</Base>
