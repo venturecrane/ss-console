@@ -55,6 +55,38 @@ const problemOptions = Object.entries(PROBLEM_LABELS).map(([value, label]) => ({
 
 // Default rate at launch tier
 const defaultRate = 150
+
+// Build trimmed extraction map for QB-10 pre-fill.
+// Only send fields needed by client-side JS — not the full extraction
+// (which contains owner quotes, champion evidence, budget signals, etc.)
+const extractionMap: Record<
+  string,
+  {
+    recommended_problems: string[]
+    estimated_complexity: string
+    identified_problems: Array<{ problem_id: string; summary: string }>
+  }
+> = {}
+
+for (const a of assessments) {
+  if (a.extraction) {
+    try {
+      const ext = JSON.parse(a.extraction as string)
+      extractionMap[a.id] = {
+        recommended_problems: ext.quote_drivers?.recommended_problems ?? [],
+        estimated_complexity: ext.quote_drivers?.estimated_complexity ?? 'medium',
+        identified_problems: (ext.identified_problems ?? []).map(
+          (p: { problem_id: string; summary: string }) => ({
+            problem_id: p.problem_id,
+            summary: p.summary,
+          })
+        ),
+      }
+    } catch {
+      // Skip assessments with invalid extraction JSON
+    }
+  }
+}
 ---
 
 <!doctype html>
@@ -191,6 +223,13 @@ const defaultRate = 150
                 </button>
               </div>
 
+              <div
+                id="prefill-indicator"
+                class="hidden px-3 py-2 bg-blue-50 border border-blue-200 rounded-md text-xs text-blue-700"
+              >
+                Pre-filled from assessment extraction. Review and adjust as needed.
+              </div>
+
               <div id="line-items-container" class="space-y-4">
                 {/* Line items rendered by JavaScript */}
               </div>
@@ -295,7 +334,7 @@ const defaultRate = 150
       }
     </main>
 
-    <script define:vars={{ problemOptions }}>
+    <script define:vars={{ problemOptions, extractionMap }}>
       // Dynamic line item management
       const container = document.getElementById('line-items-container')
       const addBtn = document.getElementById('add-line-item')
@@ -309,7 +348,67 @@ const defaultRate = 150
       const depositPctInput = document.getElementById('deposit_pct')
       const form = document.getElementById('quote-form')
 
+      const assessmentSelect = document.getElementById('assessment_id')
+      const prefillIndicator = document.getElementById('prefill-indicator')
+
       let lineItemCount = 0
+
+      /**
+       * QB-10: Pre-fill line items from assessment extraction.
+       *
+       * When an assessment is selected, reads the trimmed extraction data and
+       * auto-creates line items from recommended_problems. Hours are derived from
+       * the engagement-level complexity range divided by problem count:
+       *   - low: 17.5h / count  (midpoint of 15-20h range)
+       *   - medium: 25h / count (midpoint of 20-30h range)
+       *   - high: 35h / count   (midpoint of 30-40h range)
+       */
+      function prefillFromExtraction(assessmentId) {
+        const extraction = extractionMap[assessmentId]
+        if (!extraction || !extraction.recommended_problems.length) return
+
+        // Clear existing line items
+        container.innerHTML = ''
+        lineItemCount = 0
+
+        const count = extraction.recommended_problems.length
+        const complexityMidpoints = { low: 17.5, medium: 25, high: 35 }
+        const midpoint = complexityMidpoints[extraction.estimated_complexity] || 25
+        const hoursPerProblem = Math.round((midpoint / count) * 2) / 2 // round to 0.5
+
+        for (const problemId of extraction.recommended_problems) {
+          // Find matching identified problem for summary
+          const identified = extraction.identified_problems.find((p) => p.problem_id === problemId)
+
+          createLineItem()
+
+          // Find the last added line item and populate it
+          const items = container.querySelectorAll('.line-item')
+          const lastItem = items[items.length - 1]
+          if (lastItem) {
+            const problemSelect = lastItem.querySelector('.item-problem')
+            const descriptionField = lastItem.querySelector('.item-description')
+            const hoursField = lastItem.querySelector('.item-hours')
+
+            if (problemSelect) problemSelect.value = problemId
+            if (descriptionField && identified) descriptionField.value = identified.summary
+            if (hoursField) hoursField.value = String(hoursPerProblem)
+          }
+        }
+
+        prefillIndicator.classList.remove('hidden')
+        updateTotals()
+      }
+
+      if (assessmentSelect) {
+        assessmentSelect.addEventListener('change', (e) => {
+          const selectedId = e.target.value
+          prefillIndicator.classList.add('hidden')
+          if (selectedId && extractionMap[selectedId]) {
+            prefillFromExtraction(selectedId)
+          }
+        })
+      }
 
       function createLineItem() {
         lineItemCount++

@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# Script cache (extraction test results)
+.cache/
+
 # Build output
 dist/
 .astro/
