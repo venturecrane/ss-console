@@ -98,7 +98,9 @@ const hasActiveFilters = filterStatus || filterVertical || filterSource
     <header class="bg-white border-b border-slate-200">
       <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <a href="/admin" class="text-lg font-bold text-slate-900 hover:text-slate-700"
+          <a
+            href="/admin"
+            class="text-lg font-bold text-slate-900 hover:text-primary transition-colors"
             >SMD Services</a
           >
           <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">Admin</span>
@@ -118,6 +120,12 @@ const hasActiveFilters = filterStatus || filterVertical || filterSource
     </header>
 
     <main class="max-w-6xl mx-auto px-4 py-8">
+      <nav class="text-sm text-slate-500 mb-4">
+        <a href="/admin" class="hover:text-primary transition-colors">Dashboard</a>
+        <span class="mx-1">/</span>
+        <span class="text-slate-900">Clients</span>
+      </nav>
+
       <!-- Page header -->
       <div class="flex items-center justify-between mb-6">
         <div>
