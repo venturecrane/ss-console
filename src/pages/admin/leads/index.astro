@@ -251,7 +251,22 @@ function promoteUrl(signal: LeadSignal): string {
                       )}
 
                       {s.evidence_summary && (
-                        <p class="text-xs text-slate-500 mt-1 line-clamp-2">{s.evidence_summary}</p>
+                        <details class="mt-1 group">
+                          <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-700 line-clamp-2 group-open:line-clamp-none">
+                            {s.evidence_summary}
+                          </summary>
+                        </details>
+                      )}
+
+                      {s.outreach_angle && (
+                        <details class="mt-1">
+                          <summary class="text-xs text-blue-500 cursor-pointer hover:text-blue-700">
+                            Outreach angle
+                          </summary>
+                          <p class="text-xs text-slate-600 mt-1 pl-2 border-l-2 border-blue-200">
+                            {s.outreach_angle}
+                          </p>
+                        </details>
                       )}
 
                       <div class="flex items-center gap-3 text-xs text-slate-400 mt-1.5">

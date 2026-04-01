@@ -54,3 +54,25 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: workers/job-monitor
           command: deploy
+
+      - name: Install New Business Worker deps
+        run: cd workers/new-business && npm ci
+
+      - name: Deploy New Business Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/new-business
+          command: deploy
+
+      - name: Install Review Mining Worker deps
+        run: cd workers/review-mining && npm ci
+
+      - name: Deploy Review Mining Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/review-mining
+          command: deploy

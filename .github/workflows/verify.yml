@@ -40,3 +40,9 @@ jobs:
 
       - name: Build Job Monitor Worker
         run: cd workers/job-monitor && npm ci && npx wrangler deploy --dry-run --outdir=dist
+
+      - name: Build New Business Worker
+        run: cd workers/new-business && npm ci && npx wrangler deploy --dry-run --outdir=dist
+
+      - name: Build Review Mining Worker
+        run: cd workers/review-mining && npm ci && npx wrangler deploy --dry-run --outdir=dist
