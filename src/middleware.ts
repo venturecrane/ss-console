@@ -24,7 +24,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     isPortalSubdomain &&
     !pathname.startsWith('/portal') &&
     !pathname.startsWith('/api/portal') &&
-    !pathname.startsWith('/auth')
+    !pathname.startsWith('/auth') &&
+    !pathname.startsWith('/api/auth')
   ) {
     // Rewrite the URL to the /portal path prefix
     const portalPath = pathname === '/' ? '/portal' : `/portal${pathname}`
