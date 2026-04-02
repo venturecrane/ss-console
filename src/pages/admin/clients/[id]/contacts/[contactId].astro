@@ -169,18 +169,6 @@ const errorMessage = errorParam ? (errorMessages[errorParam] ?? 'An error occurr
           />
         </div>
 
-        <!-- Notes -->
-        <div>
-          <label for="notes" class="block text-sm font-medium text-slate-700 mb-1">Notes</label>
-          <textarea
-            id="notes"
-            name="notes"
-            rows="3"
-            class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
-            >{contact.notes ?? ''}</textarea
-          >
-        </div>
-
         <!-- Metadata -->
         <div class="pt-4 border-t border-slate-200 text-xs text-slate-400">
           <span class="font-medium">Added:</span>

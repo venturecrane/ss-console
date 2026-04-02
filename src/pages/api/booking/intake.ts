@@ -52,13 +52,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
   try {
     // Dedup: check if a contact with this email already exists
     const existing = await env.DB.prepare(
-      'SELECT id, client_id FROM contacts WHERE org_id = ? AND email = ? LIMIT 1'
+      'SELECT id, entity_id FROM contacts WHERE org_id = ? AND email = ? LIMIT 1'
     )
       .bind(ORG_ID, email)
-      .first<{ id: string; client_id: string }>()
+      .first<{ id: string; entity_id: string }>()
 
     if (existing) {
-      return jsonResponse(200, { ok: true, client_id: existing.client_id })
+      return jsonResponse(200, { ok: true, client_id: existing.entity_id })
     }
 
     // Build notes from intake answers
@@ -84,9 +84,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     })
 
     // Create assessment record (status defaults to 'scheduled')
-    await createAssessment(env.DB, ORG_ID, client.id, {
-      notes: notes ? `Booked via website.\n\n${notes}` : 'Booked via website.',
-    })
+    await createAssessment(env.DB, ORG_ID, client.id, {})
 
     return jsonResponse(201, { ok: true, client_id: client.id })
   } catch (err) {

@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro'
 import { getPortalClient } from '../../../../../lib/portal/session'
-import { getQuoteForClient } from '../../../../../lib/db/quotes'
+import { getQuoteForEntity } from '../../../../../lib/db/quotes'
 import { getPdf } from '../../../../../lib/storage/r2'
 
 /**
@@ -40,7 +40,7 @@ export const GET: APIRoute = async ({ locals, params }) => {
   }
 
   // Get quote scoped to this client
-  const quote = await getQuoteForClient(env.DB, portalData.client.id, quoteId)
+  const quote = await getQuoteForEntity(env.DB, portalData.client.id, quoteId)
   if (!quote) {
     return new Response(JSON.stringify({ error: 'Quote not found' }), {
       status: 404,

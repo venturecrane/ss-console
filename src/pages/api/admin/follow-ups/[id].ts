@@ -53,16 +53,14 @@ export const POST: APIRoute = async ({ request, locals, redirect, params, url })
 
     const formData = await request.formData()
     const action = formData.get('action')
-    const notes = formData.get('notes')
-    const notesStr = notes && typeof notes === 'string' ? notes.trim() || null : null
 
     if (action === 'complete') {
-      await completeFollowUp(env.DB, session.orgId, followUpId, notesStr)
+      await completeFollowUp(env.DB, session.orgId, followUpId)
       return redirect('/admin/follow-ups?saved=1', 302)
     }
 
     if (action === 'skip') {
-      await skipFollowUp(env.DB, session.orgId, followUpId, notesStr)
+      await skipFollowUp(env.DB, session.orgId, followUpId)
       return redirect('/admin/follow-ups?saved=1', 302)
     }
 
@@ -71,7 +69,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params, url })
       const client = await env.DB.prepare(
         'SELECT id, business_name FROM clients WHERE id = ? AND org_id = ?'
       )
-        .bind(followUp.client_id, session.orgId)
+        .bind(followUp.entity_id, session.orgId)
         .first<ClientRow>()
 
       if (!client) {
@@ -80,9 +78,9 @@ export const POST: APIRoute = async ({ request, locals, redirect, params, url })
 
       // Look up primary contact email
       const contact = await env.DB.prepare(
-        'SELECT name, email FROM contacts WHERE client_id = ? AND org_id = ? LIMIT 1'
+        'SELECT name, email FROM contacts WHERE entity_id = ? AND org_id = ? LIMIT 1'
       )
-        .bind(followUp.client_id, session.orgId)
+        .bind(followUp.entity_id, session.orgId)
         .first<ContactRow>()
 
       if (!contact?.email) {
@@ -119,7 +117,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params, url })
       }
 
       // Mark as completed after successful send
-      await completeFollowUp(env.DB, session.orgId, followUpId, `Email sent: ${result.id}`)
+      await completeFollowUp(env.DB, session.orgId, followUpId)
       return redirect('/admin/follow-ups?saved=1', 302)
     }
 

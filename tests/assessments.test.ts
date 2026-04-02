@@ -46,9 +46,9 @@ describe('assessments: data access layer', () => {
     expect(code).toContain('org_id = ?')
   })
 
-  it('supports optional client_id filter in listAssessments', () => {
+  it('supports optional entity_id filter in listAssessments', () => {
     const code = source()
-    expect(code).toContain("'client_id = ?'")
+    expect(code).toContain("'entity_id = ?'")
   })
 
   it('defines all valid assessment statuses', () => {
@@ -181,27 +181,10 @@ describe('assessments: API routes', () => {
     expect(code).toContain('extraction')
   })
 
-  it('update endpoint handles problem mapping via checkboxes', () => {
+  it('update endpoint stores extraction result directly', () => {
     const code = readFileSync(resolve('src/pages/api/admin/assessments/[id].ts'), 'utf-8')
-    expect(code).toContain('PROBLEM_IDS')
-    expect(code).toContain('selectedProblems')
-  })
-
-  it('update endpoint handles disqualification flags', () => {
-    const code = readFileSync(resolve('src/pages/api/admin/assessments/[id].ts'), 'utf-8')
-    expect(code).toContain('dq_not_decision_maker')
-    expect(code).toContain('dq_scope_exceeds_sprint')
-    expect(code).toContain('dq_no_tech_baseline')
-    expect(code).toContain('dq_no_champion')
-    expect(code).toContain('dq_books_behind')
-    expect(code).toContain('dq_no_willingness_to_change')
-  })
-
-  it('update endpoint implements financial prerequisite gate (OQ-004)', () => {
-    const code = readFileSync(resolve('src/pages/api/admin/assessments/[id].ts'), 'utf-8')
-    expect(code).toContain('financial_confirmed')
-    expect(code).toContain('financial_blindness')
-    expect(code).toContain('financial_prerequisite')
+    expect(code).toContain('extraction')
+    expect(code).toContain('updateAssessment')
   })
 
   it('endpoints verify admin session', () => {
@@ -318,31 +301,28 @@ describe('assessments: detail/edit page', () => {
     expect(code).toContain('Extraction JSON')
   })
 
-  it('includes problem mapping checkboxes for all 6 problems', () => {
+  it('displays extraction result section with problem labels', () => {
     const code = source()
-    expect(code).toContain('PROBLEM_IDS')
     expect(code).toContain('PROBLEM_LABELS')
-    expect(code).toContain('problem_${problemId}')
+    expect(code).toContain('extraction-result')
+    expect(code).toContain('Extraction Results')
   })
 
-  it('includes champion name and role fields', () => {
+  it('displays champion candidate from extraction data', () => {
     const code = source()
-    expect(code).toContain('name="champion_name"')
-    expect(code).toContain('name="champion_role"')
+    expect(code).toContain('champion_candidate')
+    expect(code).toContain('Champion Candidate')
   })
 
-  it('includes hard disqualification flag checkboxes', () => {
+  it('displays disqualification flags from extraction data', () => {
     const code = source()
-    expect(code).toContain('name="dq_not_decision_maker"')
-    expect(code).toContain('name="dq_scope_exceeds_sprint"')
-    expect(code).toContain('name="dq_no_tech_baseline"')
+    expect(code).toContain('disqualification_flags')
+    expect(code).toContain('Disqualification Flags')
   })
 
-  it('includes soft disqualification flag checkboxes', () => {
+  it('notes that problems and champion info now live in context entries', () => {
     const code = source()
-    expect(code).toContain('name="dq_no_champion"')
-    expect(code).toContain('name="dq_books_behind"')
-    expect(code).toContain('name="dq_no_willingness_to_change"')
+    expect(code).toContain('context entries')
   })
 
   it('shows status transition buttons', () => {
@@ -374,10 +354,10 @@ describe('assessments: detail/edit page', () => {
     expect(code).toContain('Confirm and Convert')
   })
 
-  it('shows OQ-004 notice when books_behind is flagged', () => {
+  it('shows OQ-004 financial prerequisite warning via query param', () => {
     const code = source()
-    expect(code).toContain('booksBehind')
-    expect(code).toContain('OQ-004 Notice')
+    expect(code).toContain('financial_prerequisite')
+    expect(code).toContain('OQ-004')
   })
 
   it('is not indexed by search engines', () => {

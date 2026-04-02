@@ -246,7 +246,6 @@ function formatDate(iso: string | null): string {
                     {inv.description && (
                       <p class="text-xs text-slate-500 mt-1">{inv.description}</p>
                     )}
-                    {inv.notes && <p class="text-xs text-slate-400 mt-0.5 italic">{inv.notes}</p>}
                   </div>
                   <div class="flex items-center gap-1 flex-shrink-0 ml-2">
                     {/* Send button — draft invoices only */}
@@ -391,19 +390,6 @@ function formatDate(iso: string | null): string {
                 placeholder="Brief description..."
               />
             </div>
-          </div>
-
-          <div>
-            <label for="invoice_notes" class="block text-sm font-medium text-slate-700 mb-1">
-              Notes (internal)
-            </label>
-            <input
-              type="text"
-              id="invoice_notes"
-              name="notes"
-              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
-              placeholder="Internal notes..."
-            />
           </div>
 
           <div class="flex justify-end">

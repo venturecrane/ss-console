@@ -30,24 +30,24 @@ export async function scheduleProposalCadence(
   db: D1Database,
   orgId: string,
   quoteId: string,
-  clientId: string,
+  entityId: string,
   sentAt: string
 ): Promise<void> {
   const followUps: CreateFollowUpData[] = [
     {
-      client_id: clientId,
+      entity_id: entityId,
       quote_id: quoteId,
       type: 'proposal_day2',
       scheduled_for: addDays(sentAt, 2),
     },
     {
-      client_id: clientId,
+      entity_id: entityId,
       quote_id: quoteId,
       type: 'proposal_day5',
       scheduled_for: addDays(sentAt, 5),
     },
     {
-      client_id: clientId,
+      entity_id: entityId,
       quote_id: quoteId,
       type: 'proposal_day7',
       scheduled_for: addDays(sentAt, 7),
@@ -70,30 +70,30 @@ export async function scheduleEngagementCadence(
   db: D1Database,
   orgId: string,
   engagementId: string,
-  clientId: string,
+  entityId: string,
   handoffDate: string
 ): Promise<void> {
   const followUps: CreateFollowUpData[] = [
     {
-      client_id: clientId,
+      entity_id: entityId,
       engagement_id: engagementId,
       type: 'referral_ask',
       scheduled_for: handoffDate,
     },
     {
-      client_id: clientId,
+      entity_id: entityId,
       engagement_id: engagementId,
       type: 'review_request',
       scheduled_for: addDays(handoffDate, 2),
     },
     {
-      client_id: clientId,
+      entity_id: entityId,
       engagement_id: engagementId,
       type: 'safety_net_checkin',
       scheduled_for: addDays(handoffDate, 7),
     },
     {
-      client_id: clientId,
+      entity_id: entityId,
       engagement_id: engagementId,
       type: 'feedback_30day',
       scheduled_for: addDays(handoffDate, 30),

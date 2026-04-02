@@ -54,7 +54,7 @@ async function getClientPrimaryEmail(
 ): Promise<string | null> {
   const contact = await db
     .prepare(
-      'SELECT email FROM contacts WHERE org_id = ? AND client_id = ? AND email IS NOT NULL ORDER BY created_at ASC LIMIT 1'
+      'SELECT email FROM contacts WHERE org_id = ? AND entity_id = ? AND email IS NOT NULL ORDER BY created_at ASC LIMIT 1'
     )
     .bind(orgId, clientId)
     .first<{ email: string }>()
@@ -124,27 +124,27 @@ export async function handleDocumentCompleted(
           `UPDATE clients SET status = 'active', updated_at = ?
          WHERE id = ? AND org_id = ?`
         )
-        .bind(now, quote.client_id, quote.org_id),
+        .bind(now, quote.entity_id, quote.org_id),
 
       // 3. Create engagement from quote data
       db
         .prepare(
-          `INSERT INTO engagements (id, org_id, client_id, quote_id, status, estimated_hours, created_at, updated_at)
+          `INSERT INTO engagements (id, org_id, entity_id, quote_id, status, estimated_hours, created_at, updated_at)
          VALUES (?, ?, ?, ?, 'scheduled', ?, ?, ?)`
         )
-        .bind(engagementId, quote.org_id, quote.client_id, quote.id, quote.total_hours, now, now),
+        .bind(engagementId, quote.org_id, quote.entity_id, quote.id, quote.total_hours, now, now),
 
       // 4. Create deposit invoice (draft status)
       db
         .prepare(
-          `INSERT INTO invoices (id, org_id, engagement_id, client_id, type, amount, status, created_at, updated_at)
+          `INSERT INTO invoices (id, org_id, engagement_id, entity_id, type, amount, status, created_at, updated_at)
          VALUES (?, ?, ?, ?, 'deposit', ?, 'draft', ?, ?)`
         )
         .bind(
           invoiceId,
           quote.org_id,
           engagementId,
-          quote.client_id,
+          quote.entity_id,
           quote.deposit_amount,
           now,
           now
@@ -192,11 +192,11 @@ export async function handleDocumentCompleted(
   // 2c. Send confirmation email to client
   if (resendApiKey) {
     try {
-      const clientEmail = await getClientPrimaryEmail(db, quote.org_id, quote.client_id)
+      const clientEmail = await getClientPrimaryEmail(db, quote.org_id, quote.entity_id)
       if (clientEmail) {
         const client = await db
           .prepare('SELECT business_name FROM clients WHERE id = ? AND org_id = ?')
-          .bind(quote.client_id, quote.org_id)
+          .bind(quote.entity_id, quote.org_id)
           .first<{ business_name: string }>()
 
         await fetch('https://api.resend.com/emails', {

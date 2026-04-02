@@ -61,44 +61,47 @@ export const POST: APIRoute = async ({ locals, redirect, params, url }) => {
 
     if (quote.status !== 'draft' && quote.status !== 'sent') {
       return redirect(
-        `/admin/clients/${quote.client_id}/quotes/${quoteId}?error=invalid_transition`,
+        `/admin/entities/${quote.entity_id}/quotes/${quoteId}?error=invalid_transition`,
         302
       )
     }
 
     if (!quote.sow_path) {
-      return redirect(`/admin/clients/${quote.client_id}/quotes/${quoteId}?error=no_sow`, 302)
+      return redirect(`/admin/entities/${quote.entity_id}/quotes/${quoteId}?error=no_sow`, 302)
     }
 
     if (quote.signwell_doc_id) {
-      return redirect(`/admin/clients/${quote.client_id}/quotes/${quoteId}?error=already_sent`, 302)
+      return redirect(
+        `/admin/entities/${quote.entity_id}/quotes/${quoteId}?error=already_sent`,
+        302
+      )
     }
 
     // 2. Get SOW PDF from R2
     const pdfObject = await getPdf(env.STORAGE, quote.sow_path)
     if (!pdfObject) {
       console.error(`[api/admin/quotes/[id]/sign] SOW PDF not found in R2: ${quote.sow_path}`)
-      return redirect(`/admin/clients/${quote.client_id}/quotes/${quoteId}?error=server`, 302)
+      return redirect(`/admin/entities/${quote.entity_id}/quotes/${quoteId}?error=server`, 302)
     }
 
     const pdfBuffer = await pdfObject.arrayBuffer()
     const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(pdfBuffer)))
 
     // 3. Get client and primary contact for signer details
-    const client = await getClient(env.DB, session.orgId, quote.client_id)
+    const client = await getClient(env.DB, session.orgId, quote.entity_id)
     if (!client) {
       return redirect(
-        `/admin/clients/${quote.client_id}/quotes/${quoteId}?error=client_not_found`,
+        `/admin/entities/${quote.entity_id}/quotes/${quoteId}?error=client_not_found`,
         302
       )
     }
 
-    const contacts = await listContacts(env.DB, session.orgId, quote.client_id)
+    const contacts = await listContacts(env.DB, session.orgId, quote.entity_id)
     const primaryContact = contacts.find((c) => c.email) ?? contacts[0]
 
     if (!primaryContact?.email) {
       return redirect(
-        `/admin/clients/${quote.client_id}/quotes/${quoteId}?error=no_contact_email`,
+        `/admin/entities/${quote.entity_id}/quotes/${quoteId}?error=no_contact_email`,
         302
       )
     }
@@ -177,7 +180,7 @@ export const POST: APIRoute = async ({ locals, redirect, params, url }) => {
       .bind(...updateParams)
       .run()
 
-    return redirect(`/admin/clients/${quote.client_id}/quotes/${quoteId}?saved=1`, 302)
+    return redirect(`/admin/entities/${quote.entity_id}/quotes/${quoteId}?saved=1`, 302)
   } catch (err) {
     console.error('[api/admin/quotes/[id]/sign] Error:', err)
     return redirect('/admin/clients?error=server', 302)

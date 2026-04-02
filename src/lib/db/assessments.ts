@@ -8,18 +8,13 @@
 export interface Assessment {
   id: string
   org_id: string
-  client_id: string
+  entity_id: string
   scheduled_at: string | null
   completed_at: string | null
   duration_minutes: number | null
   transcript_path: string | null
   extraction: string | null
-  problems: string | null
-  disqualifiers: string | null
-  champion_name: string | null
-  champion_role: string | null
   status: string
-  notes: string | null
   created_at: string
 }
 
@@ -49,7 +44,6 @@ export const VALID_TRANSITIONS: Record<AssessmentStatus, AssessmentStatus[]> = {
 
 export interface CreateAssessmentData {
   scheduled_at?: string | null
-  notes?: string | null
 }
 
 export interface UpdateAssessmentData {
@@ -58,27 +52,22 @@ export interface UpdateAssessmentData {
   duration_minutes?: number | null
   transcript_path?: string | null
   extraction?: string | null
-  problems?: string | null
-  disqualifiers?: string | null
-  champion_name?: string | null
-  champion_role?: string | null
-  notes?: string | null
 }
 
 /**
- * List assessments for an organization, optionally filtered by client.
+ * List assessments for an organization, optionally filtered by entity.
  */
 export async function listAssessments(
   db: D1Database,
   orgId: string,
-  clientId?: string
+  entityId?: string
 ): Promise<Assessment[]> {
   const conditions: string[] = ['org_id = ?']
   const params: (string | number)[] = [orgId]
 
-  if (clientId) {
-    conditions.push('client_id = ?')
-    params.push(clientId)
+  if (entityId) {
+    conditions.push('entity_id = ?')
+    params.push(entityId)
   }
 
   const where = conditions.join(' AND ')
@@ -108,12 +97,12 @@ export async function getAssessment(
 }
 
 /**
- * Create a new assessment linked to a client. Returns the created record.
+ * Create a new assessment linked to an entity. Returns the created record.
  */
 export async function createAssessment(
   db: D1Database,
   orgId: string,
-  clientId: string,
+  entityId: string,
   data: CreateAssessmentData
 ): Promise<Assessment> {
   const id = crypto.randomUUID()
@@ -121,10 +110,10 @@ export async function createAssessment(
 
   await db
     .prepare(
-      `INSERT INTO assessments (id, org_id, client_id, scheduled_at, status, notes, created_at)
-     VALUES (?, ?, ?, ?, 'scheduled', ?, ?)`
+      `INSERT INTO assessments (id, org_id, entity_id, scheduled_at, status, created_at)
+     VALUES (?, ?, ?, ?, 'scheduled', ?)`
     )
-    .bind(id, orgId, clientId, data.scheduled_at ?? null, data.notes ?? null, now)
+    .bind(id, orgId, entityId, data.scheduled_at ?? null, now)
     .run()
 
   const assessment = await getAssessment(db, orgId, id)
@@ -174,31 +163,6 @@ export async function updateAssessment(
   if (data.extraction !== undefined) {
     fields.push('extraction = ?')
     params.push(data.extraction)
-  }
-
-  if (data.problems !== undefined) {
-    fields.push('problems = ?')
-    params.push(data.problems)
-  }
-
-  if (data.disqualifiers !== undefined) {
-    fields.push('disqualifiers = ?')
-    params.push(data.disqualifiers)
-  }
-
-  if (data.champion_name !== undefined) {
-    fields.push('champion_name = ?')
-    params.push(data.champion_name)
-  }
-
-  if (data.champion_role !== undefined) {
-    fields.push('champion_role = ?')
-    params.push(data.champion_role)
-  }
-
-  if (data.notes !== undefined) {
-    fields.push('notes = ?')
-    params.push(data.notes)
   }
 
   if (fields.length === 0) {

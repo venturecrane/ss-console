@@ -1,7 +1,8 @@
 ---
 import '../../../styles/global.css'
 import { getPortalClient } from '../../../lib/portal/session'
-import { listQuotesForClient } from '../../../lib/db/quotes'
+import { listQuotesForEntity } from '../../../lib/db/quotes'
+import type { Quote } from '../../../lib/db/quotes'
 
 /**
  * Portal quote list — shows all quotes visible to this client.
@@ -20,7 +21,7 @@ if (!portalData) {
 }
 
 const { client } = portalData
-const quotes = await listQuotesForClient(env.DB, client.id)
+const quotes = await listQuotesForEntity(env.DB, client.id)
 
 // Helpers
 const formatCurrency = (amount: number) =>
@@ -115,7 +116,7 @@ const statusLabelMap: Record<string, string> = {
           </div>
         ) : (
           <div class="space-y-4">
-            {quotes.map((quote) => (
+            {quotes.map((quote: Quote) => (
               <a
                 href={`/portal/quotes/${quote.id}`}
                 class="block bg-white rounded-lg border border-slate-200 p-5 sm:p-6 hover:border-slate-300 hover:shadow-sm transition-all"

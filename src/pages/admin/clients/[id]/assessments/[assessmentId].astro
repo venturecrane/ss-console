@@ -7,7 +7,7 @@ import {
   VALID_TRANSITIONS,
 } from '../../../../../lib/db/assessments'
 import type { AssessmentStatus } from '../../../../../lib/db/assessments'
-import { PROBLEM_IDS, PROBLEM_LABELS } from '../../../../../portal/assessments/extraction-schema'
+import { PROBLEM_LABELS } from '../../../../../portal/assessments/extraction-schema'
 import type { ProblemId } from '../../../../../portal/assessments/extraction-schema'
 
 /**
@@ -74,11 +74,7 @@ const hasApiKey = !!Astro.locals.runtime.env.ANTHROPIC_API_KEY
 // transcript exists AND extraction is empty/null
 const showExtractButton = !!assessment.transcript_path && !assessment.extraction
 
-// Parse JSON fields
-const problems: ProblemId[] = assessment.problems ? JSON.parse(assessment.problems) : []
-const disqualifiers = assessment.disqualifiers
-  ? JSON.parse(assessment.disqualifiers)
-  : { hard: {}, soft: {}, notes: '' }
+// Problems and disqualifiers removed from Assessment type — now in context entries
 
 // Status transitions
 const currentStatus = assessment.status as AssessmentStatus
@@ -94,8 +90,6 @@ const statusColorMap: Record<string, string> = {
 
 // Financial prerequisite warning (OQ-004)
 const showFinancialWarning = warningParam === 'financial_prerequisite'
-const hasFinancialProblem = problems.includes('financial_blindness')
-const booksBehind = disqualifiers?.soft?.books_behind === true
 ---
 
 <!doctype html>
@@ -648,200 +642,13 @@ const booksBehind = disqualifiers?.soft?.books_behind === true
           </div>
         </div>
 
-        <!-- Problem Mapping -->
-        <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
-          <h2 class="text-base font-semibold text-slate-900">Identified Problems</h2>
-          <p class="text-sm text-slate-500">
-            Select the problems identified during this assessment.
-          </p>
+        <!-- Problems now stored in context entries; see entity detail page -->
 
-          <div class="space-y-3">
-            {
-              PROBLEM_IDS.map((problemId) => (
-                <label class="flex items-start gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name={`problem_${problemId}`}
-                    checked={problems.includes(problemId)}
-                    class="mt-0.5 rounded border-slate-300 text-primary focus:ring-primary"
-                  />
-                  <div>
-                    <span class="text-sm font-medium text-slate-900">
-                      {PROBLEM_LABELS[problemId]}
-                    </span>
-                    <p class="text-xs text-slate-400 mt-0.5">
-                      {
-                        {
-                          owner_bottleneck: '"I can\'t take a day off" — No documented processes',
-                          lead_leakage:
-                            '"Leads fall through the cracks" — No CRM, no follow-up system',
-                          financial_blindness:
-                            '"I have no idea if we\'re making money" — Books behind, gut-feel pricing',
-                          scheduling_chaos:
-                            '"Double-bookings happen all the time" — No centralized scheduling',
-                          manual_communication:
-                            '"I personally text every customer" — Every message is manual',
-                          team_invisibility:
-                            '"I don\'t know what my team is doing" — No task tracking or accountability',
-                        }[problemId]
-                      }
-                    </p>
-                  </div>
-                </label>
-              ))
-            }
-          </div>
-        </div>
+        <!-- Champion info now lives in context entries; see entity detail page -->
 
-        <!-- Champion Candidate -->
-        <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
-          <h2 class="text-base font-semibold text-slate-900">Champion Candidate</h2>
-          <p class="text-sm text-slate-500">
-            The internal person who will own the solution post-delivery.
-          </p>
+        <!-- Disqualification flags now stored in context entries; see entity detail page -->
 
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label for="champion_name" class="block text-sm font-medium text-slate-700 mb-1">
-                Name
-              </label>
-              <input
-                type="text"
-                id="champion_name"
-                name="champion_name"
-                value={assessment.champion_name ?? ''}
-                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
-                placeholder="e.g. Derek"
-              />
-            </div>
-            <div>
-              <label for="champion_role" class="block text-sm font-medium text-slate-700 mb-1">
-                Role
-              </label>
-              <input
-                type="text"
-                id="champion_role"
-                name="champion_role"
-                value={assessment.champion_role ?? ''}
-                class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
-                placeholder="e.g. Office manager"
-              />
-            </div>
-          </div>
-        </div>
-
-        <!-- Disqualification Flags -->
-        <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
-          <h2 class="text-base font-semibold text-slate-900">Disqualification Flags</h2>
-
-          <div>
-            <h3 class="text-sm font-medium text-red-700 mb-2">Hard Disqualifiers</h3>
-            <p class="text-xs text-slate-400 mb-3">Any true value is an automatic no.</p>
-            <div class="space-y-2">
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="dq_not_decision_maker"
-                  checked={disqualifiers?.hard?.not_decision_maker === true}
-                  class="rounded border-slate-300 text-red-600 focus:ring-red-500"
-                />
-                <span class="text-sm text-slate-700">Not speaking to the owner/check-writer</span>
-              </label>
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="dq_scope_exceeds_sprint"
-                  checked={disqualifiers?.hard?.scope_exceeds_sprint === true}
-                  class="rounded border-slate-300 text-red-600 focus:ring-red-500"
-                />
-                <span class="text-sm text-slate-700"
-                  >Scope exceeds engagement (multi-location, ERP, franchise)</span
-                >
-              </label>
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="dq_no_tech_baseline"
-                  checked={disqualifiers?.hard?.no_tech_baseline === true}
-                  class="rounded border-slate-300 text-red-600 focus:ring-red-500"
-                />
-                <span class="text-sm text-slate-700">No tech baseline (no email, no internet)</span>
-              </label>
-            </div>
-          </div>
-
-          <div>
-            <h3 class="text-sm font-medium text-amber-700 mb-2">Soft Disqualifiers</h3>
-            <p class="text-xs text-slate-400 mb-3">Yellow flags that need probing.</p>
-            <div class="space-y-2">
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="dq_no_champion"
-                  checked={disqualifiers?.soft?.no_champion === true}
-                  class="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-                />
-                <span class="text-sm text-slate-700">No internal champion identified</span>
-              </label>
-              <label id="books-behind-label" class="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="dq_books_behind"
-                  checked={disqualifiers?.soft?.books_behind === true}
-                  class="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-                />
-                <span class="text-sm text-slate-700">Books more than 30 days behind</span>
-              </label>
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="dq_no_willingness_to_change"
-                  checked={disqualifiers?.soft?.no_willingness_to_change === true}
-                  class="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-                />
-                <span class="text-sm text-slate-700">No willingness to change</span>
-              </label>
-            </div>
-          </div>
-
-          {
-            (booksBehind || (hasFinancialProblem && booksBehind)) && (
-              <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-                <strong>OQ-004 Notice:</strong> Books are flagged as more than 30 days behind. This
-                is a soft warning for the financial prerequisite gate — conversion will require
-                admin confirmation.
-              </div>
-            )
-          }
-
-          <div>
-            <label for="dq_notes" class="block text-sm font-medium text-slate-700 mb-1">
-              Disqualification Notes
-            </label>
-            <textarea
-              id="dq_notes"
-              name="dq_notes"
-              rows="2"
-              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
-              placeholder="Notes on any flags triggered...">{disqualifiers?.notes ?? ''}</textarea
-            >
-          </div>
-        </div>
-
-        <!-- Notes -->
-        <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
-          <h2 class="text-base font-semibold text-slate-900">Notes</h2>
-          <div>
-            <textarea
-              id="notes"
-              name="notes"
-              rows="3"
-              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
-              placeholder="General notes about this assessment..."
-              >{assessment.notes ?? ''}</textarea
-            >
-          </div>
-        </div>
+        <!-- Notes now stored in context entries; see entity detail page -->
 
         <!-- Metadata -->
         <div

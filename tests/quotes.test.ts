@@ -46,9 +46,9 @@ describe('quotes: data access layer', () => {
     expect(code).toContain('org_id = ?')
   })
 
-  it('supports optional client_id filter in listQuotes', () => {
+  it('supports optional entity_id filter in listQuotes', () => {
     const code = source()
-    expect(code).toContain("'client_id = ?'")
+    expect(code).toContain("'entity_id = ?'")
   })
 
   it('defines all valid quote statuses', () => {
@@ -209,7 +209,7 @@ describe('quotes: API routes', () => {
 
   it('create endpoint validates required fields', () => {
     const code = readFileSync(resolve('src/pages/api/admin/quotes/index.ts'), 'utf-8')
-    expect(code).toContain('client_id')
+    expect(code).toContain('entity_id')
     expect(code).toContain('assessment_id')
     expect(code).toContain('line_items')
     expect(code).toContain('rate')

@@ -18,7 +18,7 @@ export interface Invoice {
   id: string
   org_id: string
   engagement_id: string | null
-  client_id: string
+  entity_id: string
   type: string
   amount: number
   description: string | null
@@ -29,7 +29,6 @@ export interface Invoice {
   sent_at: string | null
   paid_at: string | null
   payment_method: string | null
-  notes: string | null
   created_at: string
   updated_at: string
 }
@@ -64,32 +63,30 @@ export const VALID_TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
 }
 
 export interface CreateInvoiceData {
-  client_id: string
+  entity_id: string
   engagement_id?: string | null
   type: InvoiceType
   amount: number
   description?: string | null
   due_date?: string | null
-  notes?: string | null
 }
 
 export interface UpdateInvoiceData {
   amount?: number
   description?: string | null
   due_date?: string | null
-  notes?: string | null
   stripe_invoice_id?: string | null
   stripe_hosted_url?: string | null
 }
 
 export interface InvoiceFilters {
-  clientId?: string
+  entityId?: string
   engagementId?: string
   status?: InvoiceStatus
 }
 
 /**
- * List invoices for an organization, optionally filtered by client, engagement, or status.
+ * List invoices for an organization, optionally filtered by entity, engagement, or status.
  */
 export async function listInvoices(
   db: D1Database,
@@ -99,9 +96,9 @@ export async function listInvoices(
   const conditions: string[] = ['org_id = ?']
   const params: (string | number)[] = [orgId]
 
-  if (filters?.clientId) {
-    conditions.push('client_id = ?')
-    params.push(filters.clientId)
+  if (filters?.entityId) {
+    conditions.push('entity_id = ?')
+    params.push(filters.entityId)
   }
 
   if (filters?.engagementId) {
@@ -153,19 +150,18 @@ export async function createInvoice(
 
   await db
     .prepare(
-      `INSERT INTO invoices (id, org_id, client_id, engagement_id, type, amount, description, status, due_date, notes, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?)`
+      `INSERT INTO invoices (id, org_id, entity_id, engagement_id, type, amount, description, status, due_date, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`
     )
     .bind(
       id,
       orgId,
-      data.client_id,
+      data.entity_id,
       data.engagement_id ?? null,
       data.type,
       data.amount,
       data.description ?? null,
       data.due_date ?? null,
-      data.notes ?? null,
       now,
       now
     )
@@ -209,11 +205,6 @@ export async function updateInvoice(
   if (data.due_date !== undefined) {
     fields.push('due_date = ?')
     params.push(data.due_date)
-  }
-
-  if (data.notes !== undefined) {
-    fields.push('notes = ?')
-    params.push(data.notes)
   }
 
   if (data.stripe_invoice_id !== undefined) {
@@ -305,18 +296,18 @@ export async function updateInvoiceStatus(
 const PORTAL_VISIBLE_STATUSES = ['sent', 'paid', 'overdue'] as const
 
 /**
- * List invoices for a specific client (portal access).
+ * List invoices for a specific entity (portal access).
  *
- * Scoped by client_id (NOT org_id) — portal users access via their client_id.
+ * Scoped by entity_id (NOT org_id) — portal users access via their entity_id.
  * Only returns invoices visible to clients (sent, paid, overdue).
  */
-export async function listInvoicesForClient(db: D1Database, clientId: string): Promise<Invoice[]> {
+export async function listInvoicesForEntity(db: D1Database, entityId: string): Promise<Invoice[]> {
   const placeholders = PORTAL_VISIBLE_STATUSES.map(() => '?').join(', ')
-  const sql = `SELECT * FROM invoices WHERE client_id = ? AND status IN (${placeholders}) ORDER BY created_at DESC`
+  const sql = `SELECT * FROM invoices WHERE entity_id = ? AND status IN (${placeholders}) ORDER BY created_at DESC`
 
   const result = await db
     .prepare(sql)
-    .bind(clientId, ...PORTAL_VISIBLE_STATUSES)
+    .bind(entityId, ...PORTAL_VISIBLE_STATUSES)
     .all<Invoice>()
   return result.results
 }

@@ -57,9 +57,9 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
 
       // Look up client email for Stripe
       const contact = await env.DB.prepare(
-        'SELECT email FROM contacts WHERE org_id = ? AND client_id = ? AND email IS NOT NULL ORDER BY created_at ASC LIMIT 1'
+        'SELECT email FROM contacts WHERE org_id = ? AND entity_id = ? AND email IS NOT NULL ORDER BY created_at ASC LIMIT 1'
       )
-        .bind(session.orgId, existing.client_id)
+        .bind(session.orgId, existing.entity_id)
         .first<{ email: string }>()
 
       const clientEmail = contact?.email
@@ -68,7 +68,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       const clientRow = await env.DB.prepare(
         'SELECT business_name FROM clients WHERE id = ? AND org_id = ?'
       )
-        .bind(existing.client_id, session.orgId)
+        .bind(existing.entity_id, session.orgId)
         .first<{ business_name: string }>()
 
       const clientName = clientRow?.business_name ?? 'there'
@@ -169,13 +169,6 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
     if (action === 'mark_paid') {
       if (existing.status !== 'sent' && existing.status !== 'overdue') {
         return redirect(`${target}?error=invalid_transition`, 302)
-      }
-
-      const notes = formData.get('notes')
-      if (notes && typeof notes === 'string' && notes.trim()) {
-        await updateInvoice(env.DB, session.orgId, invoiceId, {
-          notes: notes.trim(),
-        })
       }
 
       try {

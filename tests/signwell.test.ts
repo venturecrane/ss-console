@@ -377,7 +377,7 @@ describe('signwell: send-for-signature route', () => {
 
   it('redirects back to quote detail page on success', () => {
     const code = source()
-    expect(code).toContain('/admin/clients/')
+    expect(code).toContain('/admin/entities/')
     expect(code).toContain('saved=1')
   })
 

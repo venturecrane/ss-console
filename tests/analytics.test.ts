@@ -75,16 +75,16 @@ describe('analytics: query layer', () => {
     expect(complianceSection).toContain('org_id = ?')
   })
 
-  it('getPipelineConversion counts by client status', () => {
+  it('getPipelineConversion counts by entity stage', () => {
     const code = source()
-    expect(code).toContain('GROUP BY status')
-    expect(code).toContain('FROM clients')
+    expect(code).toContain('GROUP BY stage')
+    expect(code).toContain('FROM entities')
   })
 
-  it('getQuoteAccuracy joins engagements with clients', () => {
+  it('getQuoteAccuracy joins engagements with entities', () => {
     const code = source()
     expect(code).toContain('FROM engagements')
-    expect(code).toContain('JOIN clients')
+    expect(code).toContain('JOIN entities')
   })
 
   it('getQuoteAccuracy only includes completed engagements', () => {
@@ -107,10 +107,10 @@ describe('analytics: query layer', () => {
     expect(code).toContain('GROUP BY')
   })
 
-  it('getRevenueReport groups by client vertical', () => {
+  it('getRevenueReport groups by entity vertical', () => {
     const code = source()
-    expect(code).toContain('c.vertical')
-    expect(code).toContain('JOIN clients')
+    expect(code).toContain('en.vertical')
+    expect(code).toContain('JOIN entities')
   })
 
   it('getEngagementHealth calculates average days to completion', () => {

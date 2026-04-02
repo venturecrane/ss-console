@@ -14,7 +14,6 @@ import { createContact } from '../../../../../../lib/db/contacts'
  *   - email
  *   - phone
  *   - title
- *   - notes
  */
 export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
   const session = locals.session
@@ -53,14 +52,12 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
     const email = formData.get('email')
     const phone = formData.get('phone')
     const title = formData.get('title')
-    const notes = formData.get('notes')
 
     await createContact(env.DB, session.orgId, clientId, {
       name: name.trim(),
       email: email && typeof email === 'string' && email.trim() ? email.trim() : null,
       phone: phone && typeof phone === 'string' && phone.trim() ? phone.trim() : null,
       title: title && typeof title === 'string' && title.trim() ? title.trim() : null,
-      notes: notes && typeof notes === 'string' && notes.trim() ? notes.trim() : null,
     })
 
     return redirect(`/admin/clients/${clientId}?contacts_saved=1`, 302)

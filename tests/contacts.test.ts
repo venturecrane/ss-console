@@ -29,20 +29,9 @@ describe('contacts: data access layer', () => {
     expect(source()).toContain('export async function deleteContact')
   })
 
-  it('exports assignEngagementRole function', () => {
-    expect(source()).toContain('export async function assignEngagementRole')
-  })
-
-  it('exports getEngagementContacts function', () => {
-    expect(source()).toContain('export async function getEngagementContacts')
-  })
-
-  it('exports removeEngagementRole function', () => {
-    expect(source()).toContain('export async function removeEngagementRole')
-  })
-
-  it('exports setEngagementPrimary function', () => {
-    expect(source()).toContain('export async function setEngagementPrimary')
+  it('Contact interface includes role field', () => {
+    const code = source()
+    expect(code).toContain('role: string | null')
   })
 
   it('uses parameterized queries (no string interpolation in SQL)', () => {
@@ -62,44 +51,24 @@ describe('contacts: data access layer', () => {
     expect(code).toContain('org_id = ?')
   })
 
-  it('defines all valid engagement contact roles', () => {
+  it('CreateContactData includes optional role field', () => {
     const code = source()
-    expect(code).toContain("'owner'")
-    expect(code).toContain("'decision_maker'")
-    expect(code).toContain("'champion'")
+    expect(code).toContain('role?: string | null')
   })
 
-  it('exports ENGAGEMENT_CONTACT_ROLES constant', () => {
-    expect(source()).toContain('export const ENGAGEMENT_CONTACT_ROLES')
-  })
-
-  it('exports EngagementContactRole type', () => {
-    expect(source()).toContain('export type EngagementContactRole')
-  })
-
-  it('supports primary POC flag per engagement', () => {
+  it('UpdateContactData includes optional role field', () => {
     const code = source()
-    expect(code).toContain('is_primary')
+    expect(code).toContain('role?: string | null')
   })
 
-  it('clears existing primary flags when setting new primary', () => {
+  it('updateContact handles role field updates', () => {
     const code = source()
-    expect(code).toContain('UPDATE engagement_contacts SET is_primary = 0')
+    expect(code).toContain("fields.push('role = ?')")
   })
 
-  it('joins contacts table when listing engagement contacts', () => {
+  it('createContact stores role in INSERT', () => {
     const code = source()
-    expect(code).toContain('JOIN contacts c ON c.id = ec.contact_id')
-  })
-
-  it('orders engagement contacts with primary first', () => {
-    const code = source()
-    expect(code).toContain('ORDER BY ec.is_primary DESC')
-  })
-
-  it('cleans up engagement_contacts on contact delete', () => {
-    const code = source()
-    expect(code).toContain('DELETE FROM engagement_contacts WHERE contact_id = ?')
+    expect(code).toContain('data.role ?? null')
   })
 })
 

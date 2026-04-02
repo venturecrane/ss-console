@@ -8,7 +8,7 @@
 export interface Engagement {
   id: string
   org_id: string
-  client_id: string
+  entity_id: string
   quote_id: string
   scope_summary: string | null
   start_date: string | null
@@ -19,7 +19,6 @@ export interface Engagement {
   status: string
   estimated_hours: number | null
   actual_hours: number
-  notes: string | null
   created_at: string
   updated_at: string
 }
@@ -61,13 +60,12 @@ export const VALID_TRANSITIONS: Record<EngagementStatus, EngagementStatus[]> = {
 }
 
 export interface CreateEngagementData {
-  client_id: string
+  entity_id: string
   quote_id: string
   scope_summary?: string | null
   start_date?: string | null
   estimated_end?: string | null
   estimated_hours?: number | null
-  notes?: string | null
 }
 
 export interface UpdateEngagementData {
@@ -79,23 +77,22 @@ export interface UpdateEngagementData {
   safety_net_end?: string | null
   estimated_hours?: number | null
   actual_hours?: number | null
-  notes?: string | null
 }
 
 /**
- * List engagements for an organization, optionally filtered by client.
+ * List engagements for an organization, optionally filtered by entity.
  */
 export async function listEngagements(
   db: D1Database,
   orgId: string,
-  clientId?: string
+  entityId?: string
 ): Promise<Engagement[]> {
   const conditions: string[] = ['org_id = ?']
   const params: (string | number)[] = [orgId]
 
-  if (clientId) {
-    conditions.push('client_id = ?')
-    params.push(clientId)
+  if (entityId) {
+    conditions.push('entity_id = ?')
+    params.push(entityId)
   }
 
   const where = conditions.join(' AND ')
@@ -137,19 +134,18 @@ export async function createEngagement(
 
   await db
     .prepare(
-      `INSERT INTO engagements (id, org_id, client_id, quote_id, scope_summary, start_date, estimated_end, status, estimated_hours, notes, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?)`
+      `INSERT INTO engagements (id, org_id, entity_id, quote_id, scope_summary, start_date, estimated_end, status, estimated_hours, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, ?)`
     )
     .bind(
       id,
       orgId,
-      data.client_id,
+      data.entity_id,
       data.quote_id,
       data.scope_summary ?? null,
       data.start_date ?? null,
       data.estimated_end ?? null,
       data.estimated_hours ?? null,
-      data.notes ?? null,
       now,
       now
     )
@@ -217,11 +213,6 @@ export async function updateEngagement(
   if (data.actual_hours !== undefined) {
     fields.push('actual_hours = ?')
     params.push(data.actual_hours)
-  }
-
-  if (data.notes !== undefined) {
-    fields.push('notes = ?')
-    params.push(data.notes)
   }
 
   if (fields.length === 0) {

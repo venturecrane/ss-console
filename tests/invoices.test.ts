@@ -72,9 +72,9 @@ describe('invoices: data layer', () => {
     expect(code).toContain('org_id = ?')
   })
 
-  it('listInvoices supports optional filters (client, engagement, status)', () => {
+  it('listInvoices supports optional filters (entity, engagement, status)', () => {
     const code = source()
-    expect(code).toContain('filters?.clientId')
+    expect(code).toContain('filters?.entityId')
     expect(code).toContain('filters?.engagementId')
     expect(code).toContain('filters?.status')
   })
@@ -114,10 +114,10 @@ describe('invoices: data layer', () => {
     expect(code).toContain('sent_at')
   })
 
-  it('exports listInvoicesForClient for portal access', () => {
+  it('exports listInvoicesForEntity for portal access', () => {
     const code = source()
-    expect(code).toContain('export async function listInvoicesForClient')
-    expect(code).toContain('client_id = ?')
+    expect(code).toContain('export async function listInvoicesForEntity')
+    expect(code).toContain('entity_id = ?')
   })
 
   it('portal-visible statuses exclude draft and void', () => {
@@ -440,8 +440,8 @@ describe('invoices: portal view', () => {
     expect(existsSync(resolve('src/pages/portal/invoices/index.astro'))).toBe(true)
   })
 
-  it('uses listInvoicesForClient for client-scoped access', () => {
-    expect(source()).toContain('listInvoicesForClient')
+  it('uses listInvoicesForEntity for entity-scoped access', () => {
+    expect(source()).toContain('listInvoicesForEntity')
   })
 
   it('looks up client_id from user session', () => {

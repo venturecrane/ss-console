@@ -1,7 +1,7 @@
 ---
 import '../../../styles/global.css'
 import { getPortalClient } from '../../../lib/portal/session'
-import { getQuoteForClient } from '../../../lib/db/quotes'
+import { getQuoteForEntity } from '../../../lib/db/quotes'
 import type { LineItem } from '../../../lib/db/quotes'
 import { PROBLEM_LABELS } from '../../../portal/assessments/extraction-schema'
 import type { ProblemId } from '../../../portal/assessments/extraction-schema'
@@ -30,7 +30,7 @@ if (!portalData) {
 const { client } = portalData
 
 // Get quote scoped to this client
-const quote = await getQuoteForClient(env.DB, client.id, quoteId)
+const quote = await getQuoteForEntity(env.DB, client.id, quoteId)
 if (!quote) {
   return Astro.redirect('/portal/quotes')
 }

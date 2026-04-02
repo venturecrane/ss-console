@@ -47,7 +47,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       const newStatus = formData.get('new_status')
       if (!newStatus || typeof newStatus !== 'string') {
         return redirect(
-          `/admin/clients/${existing.client_id}/engagements/${engagementId}?error=invalid_status`,
+          `/admin/entities/${existing.entity_id}/engagements/${engagementId}?error=invalid_status`,
           302
         )
       }
@@ -62,13 +62,13 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       } catch (err) {
         console.error('[api/admin/engagements/[id]] Status transition error:', err)
         return redirect(
-          `/admin/clients/${existing.client_id}/engagements/${engagementId}?error=invalid_transition`,
+          `/admin/entities/${existing.entity_id}/engagements/${engagementId}?error=invalid_transition`,
           302
         )
       }
 
       return redirect(
-        `/admin/clients/${existing.client_id}/engagements/${engagementId}?saved=1`,
+        `/admin/entities/${existing.entity_id}/engagements/${engagementId}?saved=1`,
         302
       )
     }
@@ -79,7 +79,6 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
     const estimatedEnd = formData.get('estimated_end')
     const estimatedHours = formData.get('estimated_hours')
     const actualHours = formData.get('actual_hours')
-    const notes = formData.get('notes')
 
     await updateEngagement(env.DB, session.orgId, engagementId, {
       scope_summary:
@@ -98,10 +97,12 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
         actualHours && typeof actualHours === 'string' && actualHours.trim()
           ? parseFloat(actualHours) || null
           : undefined,
-      notes: notes && typeof notes === 'string' ? notes.trim() || null : undefined,
     })
 
-    return redirect(`/admin/clients/${existing.client_id}/engagements/${engagementId}?saved=1`, 302)
+    return redirect(
+      `/admin/entities/${existing.entity_id}/engagements/${engagementId}?saved=1`,
+      302
+    )
   } catch (err) {
     console.error('[api/admin/engagements/[id]] Update error:', err)
     return redirect('/admin/clients?error=server', 302)

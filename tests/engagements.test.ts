@@ -46,9 +46,9 @@ describe('engagements: data access layer', () => {
     expect(code).toContain('org_id = ?')
   })
 
-  it('supports optional client_id filter in listEngagements', () => {
+  it('supports optional entity_id filter in listEngagements', () => {
     const code = source()
-    expect(code).toContain("'client_id = ?'")
+    expect(code).toContain("'entity_id = ?'")
   })
 
   it('defines all valid engagement statuses', () => {
@@ -352,11 +352,10 @@ describe('engagements: detail/edit page', () => {
     expect(code).toContain('Payment Trigger')
   })
 
-  it('displays engagement contact role assignments', () => {
+  it('displays engagement milestones and time tracking', () => {
     const code = source()
-    expect(code).toContain('getEngagementContacts')
-    expect(code).toContain('ENGAGEMENT_CONTACT_ROLES')
-    expect(code).toContain('Contact Roles')
+    expect(code).toContain('listMilestones')
+    expect(code).toContain('listTimeEntries')
   })
 
   it('displays safety net end date when in handoff or safety_net status', () => {

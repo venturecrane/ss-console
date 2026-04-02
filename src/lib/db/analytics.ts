@@ -9,15 +9,15 @@
 // ── Pipeline Conversion ─────────────────────────────────────────────
 export interface PipelineConversion {
   prospect: number
-  assessed: number
-  quoted: number
-  active: number
-  completed: number
-  dead: number
+  assessing: number
+  proposing: number
+  engaged: number
+  delivered: number
+  lost: number
 }
 
 /**
- * Count clients at each pipeline stage.
+ * Count entities at each pipeline stage.
  */
 export async function getPipelineConversion(
   db: D1Database,
@@ -25,26 +25,26 @@ export async function getPipelineConversion(
 ): Promise<PipelineConversion> {
   const result = await db
     .prepare(
-      `SELECT status, COUNT(*) as count
-       FROM clients
+      `SELECT stage, COUNT(*) as count
+       FROM entities
        WHERE org_id = ?
-       GROUP BY status`
+       GROUP BY stage`
     )
     .bind(orgId)
-    .all<{ status: string; count: number }>()
+    .all<{ stage: string; count: number }>()
 
   const counts: PipelineConversion = {
     prospect: 0,
-    assessed: 0,
-    quoted: 0,
-    active: 0,
-    completed: 0,
-    dead: 0,
+    assessing: 0,
+    proposing: 0,
+    engaged: 0,
+    delivered: 0,
+    lost: 0,
   }
 
   for (const row of result.results) {
-    if (row.status in counts) {
-      counts[row.status as keyof PipelineConversion] = row.count
+    if (row.stage in counts) {
+      counts[row.stage as keyof PipelineConversion] = row.count
     }
   }
 
@@ -70,11 +70,11 @@ export async function getQuoteAccuracy(db: D1Database, orgId: string): Promise<Q
     .prepare(
       `SELECT
          e.id AS engagement_id,
-         c.business_name AS client_name,
+         en.business_name AS client_name,
          e.estimated_hours,
          e.actual_hours
        FROM engagements e
-       JOIN clients c ON c.id = e.client_id AND c.org_id = ?
+       JOIN entities en ON en.id = e.entity_id AND en.org_id = ?
        WHERE e.org_id = ?
          AND e.status = 'completed'
          AND e.estimated_hours IS NOT NULL
@@ -156,13 +156,13 @@ export async function getRevenueReport(
   const byVerticalResult = await db
     .prepare(
       `SELECT
-         COALESCE(c.vertical, 'unknown') AS vertical,
+         COALESCE(en.vertical, 'unknown') AS vertical,
          SUM(i.amount) AS amount
        FROM invoices i
-       JOIN clients c ON c.id = i.client_id AND c.org_id = ?
+       JOIN entities en ON en.id = i.entity_id AND en.org_id = ?
        WHERE i.org_id = ?
          AND i.status = 'paid'
-       GROUP BY c.vertical
+       GROUP BY en.vertical
        ORDER BY amount DESC`
     )
     .bind(orgId, orgId)

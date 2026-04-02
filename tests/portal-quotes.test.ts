@@ -5,23 +5,23 @@ import { resolve } from 'path'
 describe('portal quotes: data access layer', () => {
   const source = () => readFileSync(resolve('src/lib/db/quotes.ts'), 'utf-8')
 
-  it('exports listQuotesForClient function', () => {
-    expect(source()).toContain('export async function listQuotesForClient')
+  it('exports listQuotesForEntity function', () => {
+    expect(source()).toContain('export async function listQuotesForEntity')
   })
 
-  it('exports getQuoteForClient function', () => {
-    expect(source()).toContain('export async function getQuoteForClient')
+  it('exports getQuoteForEntity function', () => {
+    expect(source()).toContain('export async function getQuoteForEntity')
   })
 
-  it('listQuotesForClient scopes by client_id (not org_id)', () => {
+  it('listQuotesForEntity scopes by entity_id (not org_id)', () => {
     const code = source()
-    // Should use client_id = ? without org_id in the portal function
-    expect(code).toContain('SELECT * FROM quotes WHERE client_id = ?')
+    // Should use entity_id = ? without org_id in the portal function
+    expect(code).toContain('SELECT * FROM quotes WHERE entity_id = ?')
   })
 
-  it('getQuoteForClient scopes by client_id and quote_id (not org_id)', () => {
+  it('getQuoteForEntity scopes by entity_id and quote_id (not org_id)', () => {
     const code = source()
-    expect(code).toContain('SELECT * FROM quotes WHERE id = ? AND client_id = ?')
+    expect(code).toContain('SELECT * FROM quotes WHERE id = ? AND entity_id = ?')
   })
 
   it('portal queries filter to visible statuses only (sent, accepted, declined, expired)', () => {
@@ -33,13 +33,13 @@ describe('portal quotes: data access layer', () => {
 
   it('portal functions do not use org_id parameter', () => {
     const code = source()
-    // Extract just the listQuotesForClient function signature
-    const listMatch = code.match(/export async function listQuotesForClient\([^)]+\)/)
+    // Extract just the listQuotesForEntity function signature
+    const listMatch = code.match(/export async function listQuotesForEntity\([^)]+\)/)
     expect(listMatch).toBeTruthy()
     expect(listMatch![0]).not.toContain('orgId')
 
-    // Extract just the getQuoteForClient function signature
-    const getMatch = code.match(/export async function getQuoteForClient\([^)]+\)/)
+    // Extract just the getQuoteForEntity function signature
+    const getMatch = code.match(/export async function getQuoteForEntity\([^)]+\)/)
     expect(getMatch).toBeTruthy()
     expect(getMatch![0]).not.toContain('orgId')
   })
@@ -79,8 +79,8 @@ describe('portal quotes: dashboard', () => {
     expect(code).toContain('proposal')
   })
 
-  it('loads quotes via listQuotesForClient', () => {
-    expect(source()).toContain('listQuotesForClient')
+  it('loads quotes via listQuotesForEntity', () => {
+    expect(source()).toContain('listQuotesForEntity')
   })
 
   it('resolves client via getPortalClient', () => {
@@ -129,8 +129,8 @@ describe('portal quotes: quote list page', () => {
     expect(existsSync(resolve('src/pages/portal/quotes/index.astro'))).toBe(true)
   })
 
-  it('loads quotes via listQuotesForClient', () => {
-    expect(source()).toContain('listQuotesForClient')
+  it('loads quotes via listQuotesForEntity', () => {
+    expect(source()).toContain('listQuotesForEntity')
   })
 
   it('resolves client via getPortalClient', () => {
@@ -196,8 +196,8 @@ describe('portal quotes: quote detail page', () => {
     expect(existsSync(resolve('src/pages/portal/quotes/[id].astro'))).toBe(true)
   })
 
-  it('loads quote via getQuoteForClient', () => {
-    expect(source()).toContain('getQuoteForClient')
+  it('loads quote via getQuoteForEntity', () => {
+    expect(source()).toContain('getQuoteForEntity')
   })
 
   it('resolves client via getPortalClient', () => {
@@ -309,9 +309,9 @@ describe('portal quotes: SOW download API route', () => {
     expect(code).toContain("session.role !== 'client'")
   })
 
-  it('scopes quote to client via getQuoteForClient', () => {
+  it('scopes quote to entity via getQuoteForEntity', () => {
     const code = readFileSync(resolve('src/pages/api/portal/quotes/[id]/sow.ts'), 'utf-8')
-    expect(code).toContain('getQuoteForClient')
+    expect(code).toContain('getQuoteForEntity')
     expect(code).toContain('getPortalClient')
   })
 

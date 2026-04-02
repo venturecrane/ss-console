@@ -31,17 +31,17 @@ const overdueCount = overdueFollowUps.length
 // Dashboard metrics
 const totalClients =
   pipeline.prospect +
-  pipeline.assessed +
-  pipeline.quoted +
-  pipeline.active +
-  pipeline.completed +
-  pipeline.dead
+  pipeline.assessing +
+  pipeline.proposing +
+  pipeline.engaged +
+  pipeline.delivered +
+  pipeline.lost
 const activeEngagements = allEngagements.filter(
   (e) => e.status === 'active' || e.status === 'handoff' || e.status === 'safety_net'
 ).length
 const pipelineConversionRate =
   totalClients > 0
-    ? Math.round(((pipeline.active + pipeline.completed) / totalClients) * 1000) / 10
+    ? Math.round(((pipeline.engaged + pipeline.delivered) / totalClients) * 1000) / 10
     : 0
 ---
 

@@ -1,6 +1,7 @@
 ---
 import '../../../styles/global.css'
-import { listInvoicesForClient, INVOICE_STATUSES } from '../../../lib/db/invoices'
+import { listInvoicesForEntity, INVOICE_STATUSES } from '../../../lib/db/invoices'
+import type { Invoice } from '../../../lib/db/invoices'
 
 /**
  * Client portal — invoices page.
@@ -26,10 +27,10 @@ const user = await env.DB.prepare('SELECT id, client_id FROM users WHERE id = ?'
 
 const clientId = user?.client_id
 
-let invoices: Awaited<ReturnType<typeof listInvoicesForClient>> = []
+let invoices: Awaited<ReturnType<typeof listInvoicesForEntity>> = []
 
 if (clientId) {
-  invoices = await listInvoicesForClient(env.DB, clientId)
+  invoices = await listInvoicesForEntity(env.DB, clientId)
 }
 
 // Status badge colors for portal-visible statuses
@@ -118,7 +119,7 @@ function formatDate(iso: string | null): string {
           </div>
         ) : (
           <div class="space-y-3">
-            {invoices.map((inv) => (
+            {invoices.map((inv: Invoice) => (
               <div class="bg-white rounded-lg border border-slate-200 p-4">
                 <div class="flex items-center justify-between">
                   <div class="flex-1 min-w-0">

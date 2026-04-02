@@ -31,7 +31,6 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     const amountStr = formData.get('amount')
     const description = formData.get('description')
     const dueDate = formData.get('due_date')
-    const notes = formData.get('notes')
     const redirectUrl = formData.get('redirect_url')
 
     if (
@@ -58,14 +57,13 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     }
 
     await createInvoice(env.DB, session.orgId, {
-      client_id: clientId,
+      entity_id: clientId,
       engagement_id: typeof engagementId === 'string' && engagementId.trim() ? engagementId : null,
       type: type as InvoiceType,
       amount,
       description:
         typeof description === 'string' && description.trim() ? description.trim() : null,
       due_date: typeof dueDate === 'string' && dueDate.trim() ? dueDate.trim() : null,
-      notes: typeof notes === 'string' && notes.trim() ? notes.trim() : null,
     })
 
     const target = typeof redirectUrl === 'string' ? redirectUrl : '/admin/clients'

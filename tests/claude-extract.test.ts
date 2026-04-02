@@ -137,10 +137,7 @@ describe('claude extraction: API route integration', () => {
   it('API route updates assessment with extraction result', () => {
     const code = source()
     expect(code).toContain('JSON.stringify(result)')
-    expect(code).toContain('result.identified_problems.map')
-    expect(code).toContain('result.champion_candidate?.name')
-    expect(code).toContain('result.champion_candidate?.role')
-    expect(code).toContain('result.disqualification_flags')
+    expect(code).toContain('extraction: JSON.stringify(result)')
   })
 
   it('API route redirects with extracted=1 on success', () => {

@@ -24,16 +24,15 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   try {
     const formData = await request.formData()
 
-    const clientId = formData.get('client_id')
+    const entityId = formData.get('entity_id')
     const assessmentId = formData.get('assessment_id')
     const lineItemsJson = formData.get('line_items')
     const rateStr = formData.get('rate')
     const depositPctStr = formData.get('deposit_pct')
-    const notes = formData.get('notes')
 
     if (
-      !clientId ||
-      typeof clientId !== 'string' ||
+      !entityId ||
+      typeof entityId !== 'string' ||
       !assessmentId ||
       typeof assessmentId !== 'string' ||
       !lineItemsJson ||
@@ -41,38 +40,36 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
       !rateStr ||
       typeof rateStr !== 'string'
     ) {
-      return redirect(`/admin/clients/${clientId ?? ''}?error=missing`, 302)
+      return redirect(`/admin/entities/${entityId ?? ''}?error=missing`, 302)
     }
 
     let lineItems: LineItem[]
     try {
       lineItems = JSON.parse(lineItemsJson)
     } catch {
-      return redirect(`/admin/clients/${clientId}?error=invalid_line_items`, 302)
+      return redirect(`/admin/entities/${entityId}?error=invalid_line_items`, 302)
     }
 
     if (!Array.isArray(lineItems) || lineItems.length === 0) {
-      return redirect(`/admin/clients/${clientId}?error=missing_line_items`, 302)
+      return redirect(`/admin/entities/${entityId}?error=missing_line_items`, 302)
     }
 
     const rate = parseFloat(rateStr)
     if (isNaN(rate) || rate <= 0) {
-      return redirect(`/admin/clients/${clientId}?error=invalid_rate`, 302)
+      return redirect(`/admin/entities/${entityId}?error=invalid_rate`, 302)
     }
 
     const depositPct = depositPctStr ? parseFloat(depositPctStr as string) : 0.5
-    const notesStr = notes && typeof notes === 'string' && notes.trim() ? notes.trim() : null
 
     const quote = await createQuote(env.DB, session.orgId, {
-      clientId,
+      entityId,
       assessmentId,
       lineItems,
       rate,
       depositPct: isNaN(depositPct) ? 0.5 : depositPct,
-      notes: notesStr,
     })
 
-    return redirect(`/admin/clients/${clientId}/quotes/${quote.id}?saved=1`, 302)
+    return redirect(`/admin/entities/${entityId}/quotes/${quote.id}?saved=1`, 302)
   } catch (err) {
     console.error('[api/admin/quotes] Create error:', err)
     return redirect('/admin/clients?error=server', 302)

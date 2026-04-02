@@ -1,7 +1,7 @@
 ---
 import '../../styles/global.css'
 import { getPortalClient } from '../../lib/portal/session'
-import { listQuotesForClient } from '../../lib/db/quotes'
+import { listQuotesForEntity } from '../../lib/db/quotes'
 import type { Quote } from '../../lib/db/quotes'
 
 /**
@@ -27,7 +27,7 @@ if (!portalData) {
 const { client } = portalData
 
 // Load quotes for this client
-const quotes = await listQuotesForClient(env.DB, client.id)
+const quotes = await listQuotesForEntity(env.DB, client.id)
 const pendingQuotes = quotes.filter((q: Quote) => q.status === 'sent')
 
 // Load active engagement (if any)

@@ -61,7 +61,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
     const method = formData.get('_method')
     const action = formData.get('action')
 
-    const detailUrl = `/admin/clients/${engagement.client_id}/engagements/${engagementId}`
+    const detailUrl = `/admin/entities/${engagement.entity_id}/engagements/${engagementId}`
 
     // Handle DELETE
     if (method === 'DELETE') {

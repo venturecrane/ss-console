@@ -15,18 +15,22 @@
 export interface FollowUp {
   id: string
   org_id: string
-  client_id: string
+  entity_id: string
   engagement_id: string | null
   quote_id: string | null
   type: string
   scheduled_for: string
   completed_at: string | null
   status: string
-  notes: string | null
   created_at: string
 }
 
 export type FollowUpType =
+  | 'initial_outreach'
+  | 'outreach_followup_d3'
+  | 'outreach_followup_d7'
+  | 're_engage_30d'
+  | 're_engage_90d'
   | 'proposal_day2'
   | 'proposal_day5'
   | 'proposal_day7'
@@ -34,10 +38,16 @@ export type FollowUpType =
   | 'referral_ask'
   | 'safety_net_checkin'
   | 'feedback_30day'
+  | 'custom'
 
 export type FollowUpStatus = 'scheduled' | 'completed' | 'skipped'
 
 export const FOLLOW_UP_TYPES: { value: FollowUpType; label: string }[] = [
+  { value: 'initial_outreach', label: 'Initial Outreach' },
+  { value: 'outreach_followup_d3', label: 'Outreach Follow-up - Day 3' },
+  { value: 'outreach_followup_d7', label: 'Outreach Follow-up - Day 7' },
+  { value: 're_engage_30d', label: 'Re-engage - 30 Days' },
+  { value: 're_engage_90d', label: 'Re-engage - 90 Days' },
   { value: 'proposal_day2', label: 'Proposal - Day 2' },
   { value: 'proposal_day5', label: 'Proposal - Day 5' },
   { value: 'proposal_day7', label: 'Proposal - Day 7' },
@@ -45,6 +55,7 @@ export const FOLLOW_UP_TYPES: { value: FollowUpType; label: string }[] = [
   { value: 'referral_ask', label: 'Referral Ask' },
   { value: 'safety_net_checkin', label: 'Safety Net Check-in' },
   { value: 'feedback_30day', label: '30-Day Feedback' },
+  { value: 'custom', label: 'Custom' },
 ]
 
 export interface FollowUpFilters {
@@ -55,12 +66,11 @@ export interface FollowUpFilters {
 }
 
 export interface CreateFollowUpData {
-  client_id: string
+  entity_id: string
   engagement_id?: string | null
   quote_id?: string | null
   type: FollowUpType
   scheduled_for: string
-  notes?: string | null
 }
 
 /**
@@ -132,18 +142,17 @@ export async function createFollowUp(
 
   await db
     .prepare(
-      `INSERT INTO follow_ups (id, org_id, client_id, engagement_id, quote_id, type, scheduled_for, status, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'scheduled', ?)`
+      `INSERT INTO follow_ups (id, org_id, entity_id, engagement_id, quote_id, type, scheduled_for, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'scheduled')`
     )
     .bind(
       id,
       orgId,
-      data.client_id,
+      data.entity_id,
       data.engagement_id ?? null,
       data.quote_id ?? null,
       data.type,
-      data.scheduled_for,
-      data.notes ?? null
+      data.scheduled_for
     )
     .run()
 
@@ -155,66 +164,44 @@ export async function createFollowUp(
 }
 
 /**
- * Mark a follow-up as completed with optional notes.
+ * Mark a follow-up as completed.
  */
 export async function completeFollowUp(
   db: D1Database,
   orgId: string,
-  id: string,
-  notes?: string | null
+  id: string
 ): Promise<FollowUp | null> {
   const existing = await getFollowUp(db, orgId, id)
   if (!existing) {
     return null
   }
 
-  const params: (string | null)[] = [new Date().toISOString()]
-  let sql = `UPDATE follow_ups SET status = 'completed', completed_at = ?`
-
-  if (notes !== undefined) {
-    sql += ', notes = ?'
-    params.push(notes ?? null)
-  }
-
-  sql += ' WHERE id = ? AND org_id = ?'
-  params.push(id, orgId)
-
   await db
-    .prepare(sql)
-    .bind(...params)
+    .prepare(
+      `UPDATE follow_ups SET status = 'completed', completed_at = ? WHERE id = ? AND org_id = ?`
+    )
+    .bind(new Date().toISOString(), id, orgId)
     .run()
 
   return getFollowUp(db, orgId, id)
 }
 
 /**
- * Mark a follow-up as skipped with optional notes.
+ * Mark a follow-up as skipped.
  */
 export async function skipFollowUp(
   db: D1Database,
   orgId: string,
-  id: string,
-  notes?: string | null
+  id: string
 ): Promise<FollowUp | null> {
   const existing = await getFollowUp(db, orgId, id)
   if (!existing) {
     return null
   }
 
-  const params: (string | null)[] = []
-  let sql = `UPDATE follow_ups SET status = 'skipped'`
-
-  if (notes !== undefined) {
-    sql += ', notes = ?'
-    params.push(notes ?? null)
-  }
-
-  sql += ' WHERE id = ? AND org_id = ?'
-  params.push(id, orgId)
-
   await db
-    .prepare(sql)
-    .bind(...params)
+    .prepare(`UPDATE follow_ups SET status = 'skipped' WHERE id = ? AND org_id = ?`)
+    .bind(id, orgId)
     .run()
 
   return getFollowUp(db, orgId, id)

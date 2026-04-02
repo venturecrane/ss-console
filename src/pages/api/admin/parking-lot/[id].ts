@@ -65,9 +65,9 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
     const formData = await request.formData()
     const clientId = formData.get('client_id')
     const clientIdStr =
-      clientId && typeof clientId === 'string' ? clientId.trim() : engagement.client_id
+      clientId && typeof clientId === 'string' ? clientId.trim() : engagement.entity_id
 
-    const parkingLotUrl = `/admin/clients/${clientIdStr}/engagements/${item.engagement_id}/parking-lot`
+    const parkingLotUrl = `/admin/entities/${clientIdStr}/engagements/${item.engagement_id}/parking-lot`
 
     const method = formData.get('_method')
     const action = formData.get('action')

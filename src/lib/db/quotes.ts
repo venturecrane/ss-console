@@ -14,7 +14,7 @@
 export interface Quote {
   id: string
   org_id: string
-  client_id: string
+  entity_id: string
   assessment_id: string
   version: number
   parent_quote_id: string | null
@@ -31,7 +31,6 @@ export interface Quote {
   sow_path: string | null
   signed_sow_path: string | null
   signwell_doc_id: string | null
-  notes: string | null
   created_at: string
   updated_at: string
 }
@@ -73,36 +72,34 @@ export const VALID_TRANSITIONS: Record<QuoteStatus, QuoteStatus[]> = {
 }
 
 export interface CreateQuoteData {
-  clientId: string
+  entityId: string
   assessmentId: string
   lineItems: LineItem[]
   rate: number
   depositPct?: number
-  notes?: string | null
 }
 
 export interface UpdateQuoteData {
   lineItems?: LineItem[]
   rate?: number
   depositPct?: number
-  notes?: string | null
   sow_path?: string | null
 }
 
 /**
- * List quotes for an organization, optionally filtered by client.
+ * List quotes for an organization, optionally filtered by entity.
  */
 export async function listQuotes(
   db: D1Database,
   orgId: string,
-  clientId?: string
+  entityId?: string
 ): Promise<Quote[]> {
   const conditions: string[] = ['org_id = ?']
   const params: (string | number)[] = [orgId]
 
-  if (clientId) {
-    conditions.push('client_id = ?')
-    params.push(clientId)
+  if (entityId) {
+    conditions.push('entity_id = ?')
+    params.push(entityId)
   }
 
   const where = conditions.join(' AND ')
@@ -152,13 +149,13 @@ export async function createQuote(
 
   await db
     .prepare(
-      `INSERT INTO quotes (id, org_id, client_id, assessment_id, version, line_items, total_hours, rate, total_price, deposit_pct, deposit_amount, status, notes, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`
+      `INSERT INTO quotes (id, org_id, entity_id, assessment_id, version, line_items, total_hours, rate, total_price, deposit_pct, deposit_amount, status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`
     )
     .bind(
       id,
       orgId,
-      data.clientId,
+      data.entityId,
       data.assessmentId,
       JSON.stringify(data.lineItems),
       totalHours,
@@ -166,7 +163,6 @@ export async function createQuote(
       totalPrice,
       depositPct,
       depositAmount,
-      data.notes ?? null,
       now,
       now
     )
@@ -218,11 +214,6 @@ export async function updateQuote(
   if (data.depositPct !== undefined) {
     fields.push('deposit_pct = ?')
     params.push(data.depositPct)
-  }
-
-  if (data.notes !== undefined) {
-    fields.push('notes = ?')
-    params.push(data.notes)
   }
 
   if (data.sow_path !== undefined) {
@@ -284,38 +275,38 @@ export async function updateQuote(
 const PORTAL_VISIBLE_STATUSES = ['sent', 'accepted', 'declined', 'expired'] as const
 
 /**
- * List quotes for a specific client (portal access).
+ * List quotes for a specific entity (portal access).
  *
- * Scoped by client_id (NOT org_id) — portal users access via their client_id.
+ * Scoped by entity_id (NOT org_id) — portal users access via their entity_id.
  * Only returns quotes visible to clients (sent, accepted, declined, expired).
  */
-export async function listQuotesForClient(db: D1Database, clientId: string): Promise<Quote[]> {
+export async function listQuotesForEntity(db: D1Database, entityId: string): Promise<Quote[]> {
   const placeholders = PORTAL_VISIBLE_STATUSES.map(() => '?').join(', ')
-  const sql = `SELECT * FROM quotes WHERE client_id = ? AND status IN (${placeholders}) ORDER BY updated_at DESC`
+  const sql = `SELECT * FROM quotes WHERE entity_id = ? AND status IN (${placeholders}) ORDER BY updated_at DESC`
 
   const result = await db
     .prepare(sql)
-    .bind(clientId, ...PORTAL_VISIBLE_STATUSES)
+    .bind(entityId, ...PORTAL_VISIBLE_STATUSES)
     .all<Quote>()
   return result.results
 }
 
 /**
- * Get a single quote for a client (portal access).
+ * Get a single quote for an entity (portal access).
  *
- * Scoped by client_id (NOT org_id) — same status filter as list.
+ * Scoped by entity_id (NOT org_id) — same status filter as list.
  */
-export async function getQuoteForClient(
+export async function getQuoteForEntity(
   db: D1Database,
-  clientId: string,
+  entityId: string,
   quoteId: string
 ): Promise<Quote | null> {
   const placeholders = PORTAL_VISIBLE_STATUSES.map(() => '?').join(', ')
-  const sql = `SELECT * FROM quotes WHERE id = ? AND client_id = ? AND status IN (${placeholders})`
+  const sql = `SELECT * FROM quotes WHERE id = ? AND entity_id = ? AND status IN (${placeholders})`
 
   const result = await db
     .prepare(sql)
-    .bind(quoteId, clientId, ...PORTAL_VISIBLE_STATUSES)
+    .bind(quoteId, entityId, ...PORTAL_VISIBLE_STATUSES)
     .first<Quote>()
 
   return result ?? null

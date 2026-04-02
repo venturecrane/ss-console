@@ -35,7 +35,7 @@ const [upcoming, overdue, completed] = await Promise.all([
 
 // Look up client names for follow-ups
 const allFollowUps = [...upcoming, ...overdue, ...completed]
-const clientIds = [...new Set(allFollowUps.map((f) => f.client_id))]
+const clientIds = [...new Set(allFollowUps.map((f) => f.entity_id))]
 
 interface ClientRow {
   id: string
@@ -220,7 +220,7 @@ const success = Astro.url.searchParams.get('saved')
                     <div class="min-w-0 flex-1">
                       <div class="flex items-center gap-2 mb-1">
                         <span class="text-sm font-medium text-slate-900">
-                          {clientMap[f.client_id] ?? 'Unknown'}
+                          {clientMap[f.entity_id] ?? 'Unknown'}
                         </span>
                         <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
                           {getTypeLabel(f.type)}
@@ -241,7 +241,6 @@ const success = Astro.url.searchParams.get('saved')
                         )}
                         {f.completed_at && <span>Completed: {formatDate(f.completed_at)}</span>}
                       </div>
-                      {f.notes && <p class="text-xs text-slate-500 mt-1">{f.notes}</p>}
                     </div>
 
                     {f.status === 'scheduled' && (

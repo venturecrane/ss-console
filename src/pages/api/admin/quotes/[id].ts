@@ -49,15 +49,15 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
 
     // ----- ACTION: generate-pdf -----
     if (action === 'generate-pdf') {
-      const client = await getClient(env.DB, session.orgId, existing.client_id)
+      const client = await getClient(env.DB, session.orgId, existing.entity_id)
       if (!client) {
         return redirect(
-          `/admin/clients/${existing.client_id}/quotes/${quoteId}?error=client_not_found`,
+          `/admin/entities/${existing.entity_id}/quotes/${quoteId}?error=client_not_found`,
           302
         )
       }
 
-      const contacts = await listContacts(env.DB, session.orgId, existing.client_id)
+      const contacts = await listContacts(env.DB, session.orgId, existing.entity_id)
       const primaryContact = contacts[0]
 
       const lineItems: LineItem[] = JSON.parse(existing.line_items)
@@ -114,8 +114,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
           sowNumber,
         },
         engagement: {
-          overview:
-            existing.notes ?? 'Operations cleanup engagement as discussed during assessment.',
+          overview: 'Operations cleanup engagement as discussed during assessment.',
           startDate: 'TBD upon deposit',
           endDate: 'TBD based on scope',
         },
@@ -134,7 +133,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       const sowPath = await uploadPdf(env.STORAGE, session.orgId, quoteId, pdf)
       await updateQuote(env.DB, session.orgId, quoteId, { sow_path: sowPath })
 
-      return redirect(`/admin/clients/${existing.client_id}/quotes/${quoteId}?saved=1`, 302)
+      return redirect(`/admin/entities/${existing.entity_id}/quotes/${quoteId}?saved=1`, 302)
     }
 
     // ----- ACTION: send -----
@@ -144,7 +143,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       } catch (err) {
         console.error('[api/admin/quotes/[id]] Send error:', err)
         return redirect(
-          `/admin/clients/${existing.client_id}/quotes/${quoteId}?error=invalid_transition`,
+          `/admin/entities/${existing.entity_id}/quotes/${quoteId}?error=invalid_transition`,
           302
         )
       }
@@ -152,19 +151,18 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       // Schedule proposal follow-up cadence (Decision #19: Day 2, Day 5, Day 7)
       try {
         const sentAt = new Date().toISOString()
-        await scheduleProposalCadence(env.DB, session.orgId, quoteId, existing.client_id, sentAt)
+        await scheduleProposalCadence(env.DB, session.orgId, quoteId, existing.entity_id, sentAt)
       } catch (err) {
         // Non-blocking — log but don't fail the send action
         console.error('[api/admin/quotes/[id]] Follow-up scheduling error:', err)
       }
 
-      return redirect(`/admin/clients/${existing.client_id}/quotes/${quoteId}?saved=1`, 302)
+      return redirect(`/admin/entities/${existing.entity_id}/quotes/${quoteId}?saved=1`, 302)
     }
 
     // ----- ACTION: update (default) -----
     const lineItemsJson = formData.get('line_items')
     const depositPctStr = formData.get('deposit_pct')
-    const notes = formData.get('notes')
 
     const updateData: Record<string, unknown> = {}
 
@@ -186,13 +184,9 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       }
     }
 
-    if (notes !== null && notes !== undefined) {
-      updateData.notes = typeof notes === 'string' ? notes.trim() || null : null
-    }
-
     await updateQuote(env.DB, session.orgId, quoteId, updateData)
 
-    return redirect(`/admin/clients/${existing.client_id}/quotes/${quoteId}?saved=1`, 302)
+    return redirect(`/admin/entities/${existing.entity_id}/quotes/${quoteId}?saved=1`, 302)
   } catch (err) {
     console.error('[api/admin/quotes/[id]] Update error:', err)
     return redirect('/admin/clients?error=server', 302)

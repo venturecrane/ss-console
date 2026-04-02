@@ -61,14 +61,12 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
     const email = formData.get('email')
     const phone = formData.get('phone')
     const title = formData.get('title')
-    const notes = formData.get('notes')
 
     const updated = await updateContact(env.DB, session.orgId, contactId, {
       name: name.trim(),
       email: email && typeof email === 'string' && email.trim() ? email.trim() : null,
       phone: phone && typeof phone === 'string' && phone.trim() ? phone.trim() : null,
       title: title && typeof title === 'string' && title.trim() ? title.trim() : null,
-      notes: notes && typeof notes === 'string' ? notes.trim() || null : null,
     })
 
     if (!updated) {

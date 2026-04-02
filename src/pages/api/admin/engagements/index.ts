@@ -17,7 +17,6 @@ import { createMilestone } from '../../../../lib/db/milestones'
  *   - estimated_end
  *   - scope_summary
  *   - estimated_hours
- *   - notes
  *   - milestone_name[] (repeatable)
  *   - milestone_description[] (repeatable)
  *   - milestone_due_date[] (repeatable)
@@ -53,10 +52,9 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     const estimatedEnd = formData.get('estimated_end')
     const scopeSummary = formData.get('scope_summary')
     const estimatedHours = formData.get('estimated_hours')
-    const notes = formData.get('notes')
 
     const engagement = await createEngagement(env.DB, session.orgId, {
-      client_id: clientId.trim(),
+      entity_id: clientId.trim(),
       quote_id: quoteId.trim(),
       start_date:
         startDate && typeof startDate === 'string' && startDate.trim() ? startDate.trim() : null,
@@ -72,7 +70,6 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
         estimatedHours && typeof estimatedHours === 'string' && estimatedHours.trim()
           ? parseFloat(estimatedHours) || null
           : null,
-      notes: notes && typeof notes === 'string' && notes.trim() ? notes.trim() : null,
     })
 
     // Create default milestones if provided
@@ -101,7 +98,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
       })
     }
 
-    return redirect(`/admin/clients/${clientId.trim()}/engagements/${engagement.id}`, 302)
+    return redirect(`/admin/entities/${clientId.trim()}/engagements/${engagement.id}`, 302)
   } catch (err) {
     console.error('[api/admin/engagements] Create error:', err)
     const formData = await request
@@ -110,7 +107,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
       .catch(() => null)
     const clientId = formData?.get('client_id')
     if (clientId && typeof clientId === 'string') {
-      return redirect(`/admin/clients/${clientId}/engagements/new?error=server`, 302)
+      return redirect(`/admin/entities/${clientId}/engagements/new?error=server`, 302)
     }
     return redirect('/admin/clients?error=server', 302)
   }
