@@ -19,6 +19,41 @@ function addDays(isoDate: string, days: number): string {
 }
 
 /**
+ * Schedule the prospect outreach follow-up cadence.
+ *
+ * Triggered when an entity is promoted from signal → prospect.
+ * - Immediate: initial_outreach (captain reviews and sends)
+ * - Day 3: follow up if no response
+ * - Day 7: final follow up, then auto-demote to lost
+ */
+export async function scheduleProspectCadence(
+  db: D1Database,
+  orgId: string,
+  entityId: string,
+  promotedAt: string
+): Promise<void> {
+  const followUps: CreateFollowUpData[] = [
+    {
+      entity_id: entityId,
+      type: 'initial_outreach',
+      scheduled_for: promotedAt,
+    },
+    {
+      entity_id: entityId,
+      type: 'outreach_followup_d3',
+      scheduled_for: addDays(promotedAt, 3),
+    },
+    {
+      entity_id: entityId,
+      type: 'outreach_followup_d7',
+      scheduled_for: addDays(promotedAt, 7),
+    },
+  ]
+
+  await bulkCreateFollowUps(db, orgId, followUps)
+}
+
+/**
  * Schedule the 3-touch proposal follow-up cadence.
  *
  * Per Decision #19:

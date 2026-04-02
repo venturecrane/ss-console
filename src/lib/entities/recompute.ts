@@ -10,8 +10,8 @@
  *   area           — latest non-null
  *   employee_count — latest non-null (extraction > enrichment > signal)
  *
- * LLM-derived attributes (tier, summary) are NOT recomputed here.
- * Those are updated async via batch triage or on-demand on page view.
+ * Tier is now also deterministic — derived from pain_score + signal count.
+ * Summary remains LLM-derived (async/on-demand).
  */
 
 export async function recomputeDeterministicCache(
@@ -32,6 +32,7 @@ export async function recomputeDeterministicCache(
   let vertical: string | null = null
   let area: string | null = null
   let employeeCount: number | null = null
+  let signalCount = 0
 
   for (const entry of entries.results) {
     if (!entry.metadata) continue
@@ -42,6 +43,9 @@ export async function recomputeDeterministicCache(
     } catch {
       continue
     }
+
+    // Signal count for tier computation
+    if (entry.type === 'signal') signalCount++
 
     // Pain score: max across all signals
     if (typeof meta.pain_score === 'number' && meta.pain_score >= 1 && meta.pain_score <= 10) {
@@ -71,6 +75,10 @@ export async function recomputeDeterministicCache(
     }
   }
 
+  // Tier: derived from pain_score + signal count
+  // Multi-signal corroboration boosts tier
+  const tier = computeTier(painScore, signalCount)
+
   await db
     .prepare(
       `UPDATE entities SET
@@ -78,11 +86,31 @@ export async function recomputeDeterministicCache(
         vertical = COALESCE(?, vertical),
         area = COALESCE(?, area),
         employee_count = COALESCE(?, employee_count),
+        tier = ?,
         updated_at = datetime('now')
       WHERE id = ? AND org_id = ?`
     )
-    .bind(painScore, vertical, area, employeeCount, entityId, orgId)
+    .bind(painScore, vertical, area, employeeCount, tier, entityId, orgId)
     .run()
+}
+
+/**
+ * Derive tier from pain score and signal count.
+ *
+ * Rules:
+ * - hot:  pain >= 8, OR pain >= 7 with 2+ corroborating signals
+ * - warm: pain 6-7 (single signal), OR pain >= 5 with 2+ signals
+ * - cool: pain 4-5 (single signal)
+ * - cold: pain <= 3, or no pain score
+ */
+function computeTier(painScore: number | null, signalCount: number): string | null {
+  if (!painScore) return signalCount > 0 ? 'cold' : null
+
+  // Multi-signal corroboration boosts tier
+  if (painScore >= 8 || (painScore >= 7 && signalCount >= 2)) return 'hot'
+  if (painScore >= 6 || (painScore >= 5 && signalCount >= 2)) return 'warm'
+  if (painScore >= 4) return 'cool'
+  return 'cold'
 }
 
 /**
