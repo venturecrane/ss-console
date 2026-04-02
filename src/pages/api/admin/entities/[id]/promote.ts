@@ -5,7 +5,7 @@ import { generateOutreachDraft } from '../../../../../lib/claude/outreach'
 import { scheduleProspectCadence } from '../../../../../lib/follow-ups/scheduler'
 import { lookupGooglePlaces } from '../../../../../lib/enrichment/google-places'
 import { analyzeWebsite } from '../../../../../lib/enrichment/website-analyzer'
-import { lookupYelp } from '../../../../../lib/enrichment/yelp'
+import { lookupOutscraper } from '../../../../../lib/enrichment/outscraper'
 import { lookupAcc } from '../../../../../lib/enrichment/acc'
 import { lookupRoc } from '../../../../../lib/enrichment/roc'
 import { analyzeReviewPatterns } from '../../../../../lib/enrichment/review-analysis'
@@ -146,22 +146,54 @@ export const POST: APIRoute = async ({ params, locals, redirect }) => {
       }
     }
 
-    // 2c. Yelp Fusion cross-reference
-    if (env.YELP_API_KEY) {
+    // 2c. Outscraper full business profile (owner, social, emails, hours, tech signals)
+    if (env.OUTSCRAPER_API_KEY) {
       try {
-        const yelp = await lookupYelp(entity.name, entity.area, env.YELP_API_KEY as string)
-        if (yelp) {
+        const osc = await lookupOutscraper(
+          entity.name,
+          entity.area,
+          env.OUTSCRAPER_API_KEY as string
+        )
+        if (osc) {
+          // Update entity with discovered contact info
+          await updateEntity(env.DB, session.orgId, entityId, {
+            phone: osc.phone ?? entity.phone ?? undefined,
+            website: osc.website ?? entity.website ?? undefined,
+          })
+          if (osc.website && !entity.website) {
+            const refreshed = await getEntity(env.DB, session.orgId, entityId)
+            if (refreshed) Object.assign(entity, refreshed)
+          }
+
+          const contentParts = [
+            'Outscraper business profile:',
+            osc.owner_name ? `Owner: ${osc.owner_name}` : null,
+            osc.emails.length > 0 ? `Email: ${osc.emails.join(', ')}` : null,
+            osc.phone ? `Phone: ${osc.phone}` : null,
+            osc.working_hours ? `Hours: ${osc.working_hours}` : null,
+            osc.verified ? 'Google listing: Verified' : 'Google listing: Unverified',
+            osc.rating != null ? `Rating: ${osc.rating} (${osc.review_count ?? 0} reviews)` : null,
+            osc.booking_link ? `Online booking: Yes` : 'Online booking: Not detected',
+            osc.facebook ? `Facebook: ${osc.facebook}` : null,
+            osc.instagram ? `Instagram: ${osc.instagram}` : null,
+            osc.linkedin ? `LinkedIn: ${osc.linkedin}` : null,
+            osc.website_generator ? `Platform: ${osc.website_generator}` : null,
+            osc.has_facebook_pixel ? 'Has Facebook Pixel' : null,
+            osc.has_google_tag_manager ? 'Has Google Tag Manager' : null,
+            osc.about ? `About: ${osc.about}` : null,
+          ].filter(Boolean)
+
           await appendContext(env.DB, session.orgId, {
             entity_id: entityId,
             type: 'enrichment',
-            content: `Yelp: ${yelp.rating} stars (${yelp.review_count} reviews). ${yelp.claimed ? 'Claimed' : 'Unclaimed'} profile. Categories: ${yelp.categories.join(', ')}.`,
-            source: 'yelp',
-            metadata: yelp as unknown as Record<string, unknown>,
+            content: contentParts.join('\n'),
+            source: 'outscraper',
+            metadata: osc as unknown as Record<string, unknown>,
           })
-          enrichmentResults.push('yelp')
+          enrichmentResults.push('outscraper')
         }
       } catch (err) {
-        console.error('[promote] Yelp enrichment failed:', err)
+        console.error('[promote] Outscraper enrichment failed:', err)
       }
     }
 
