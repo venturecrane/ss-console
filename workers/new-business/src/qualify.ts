@@ -64,9 +64,12 @@ export async function qualifyNewBusiness(
   const text = data.content?.[0]?.text
   if (!text) return null
 
+  // Strip markdown code fences if present (Haiku sometimes wraps JSON)
+  const cleaned = text.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '')
+
   let parsed: unknown
   try {
-    parsed = JSON.parse(text)
+    parsed = JSON.parse(cleaned)
   } catch {
     console.error(`Failed to parse Claude response: ${text.slice(0, 200)}`)
     return null
