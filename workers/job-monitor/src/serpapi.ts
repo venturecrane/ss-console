@@ -11,6 +11,7 @@ export interface SerpApiJob {
   description: string
   job_id: string
   apply_options?: Array<{ title: string; link: string }>
+  company_url?: string
 }
 
 interface SerpApiResponse {

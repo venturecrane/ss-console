@@ -126,6 +126,8 @@ async function run(env: Env): Promise<RunSummary> {
       const { entity } = await findOrCreateEntity(env.DB, ORG_ID, {
         name: scoring.business_name,
         area: business.area,
+        phone: business.phone,
+        website: business.website,
         source_pipeline: 'review_mining',
       })
 

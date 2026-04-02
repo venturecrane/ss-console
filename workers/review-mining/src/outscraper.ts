@@ -13,6 +13,8 @@ export interface DiscoveredBusiness {
   rating: number
   total_reviews: number
   category: string
+  phone: string | null
+  website: string | null
 }
 
 export interface BusinessWithReviews {
@@ -23,6 +25,8 @@ export interface BusinessWithReviews {
   area: string
   rating: number
   total_reviews: number
+  phone: string | null
+  website: string | null
   reviews: ReviewData[]
 }
 
@@ -64,7 +68,7 @@ export async function discoverBusinesses(
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': apiKey,
       'X-Goog-FieldMask':
-        'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.primaryTypeDisplayName',
+        'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.primaryTypeDisplayName,places.nationalPhoneNumber,places.websiteUri',
     },
     body: JSON.stringify({
       textQuery: query,
@@ -92,6 +96,8 @@ export async function discoverBusinesses(
       rating?: number
       userRatingCount?: number
       primaryTypeDisplayName?: { text: string }
+      nationalPhoneNumber?: string
+      websiteUri?: string
     }>
   }
 
@@ -102,6 +108,8 @@ export async function discoverBusinesses(
     rating: p.rating ?? 0,
     total_reviews: p.userRatingCount ?? 0,
     category: p.primaryTypeDisplayName?.text ?? query.split(' ')[0],
+    phone: p.nationalPhoneNumber ?? null,
+    website: p.websiteUri ?? null,
   }))
 }
 
@@ -173,6 +181,8 @@ export async function fetchReviews(
           area: extractArea(business.address),
           rating: business.rating,
           total_reviews: business.total_reviews,
+          phone: business.phone,
+          website: business.website,
           reviews: recentReviews,
         })
       }

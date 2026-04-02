@@ -100,6 +100,7 @@ async function run(env: Env): Promise<RunSummary> {
       const { entity } = await findOrCreateEntity(env.DB, ORG_ID, {
         name: qualification.company,
         area: job.location,
+        website: job.company_url ?? null,
         source_pipeline: 'job_monitor',
       })
 
