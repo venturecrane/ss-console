@@ -31,6 +31,19 @@ binding = "SESSIONS"
 id = "4570dcc1e154476f889bc9fcfc28b2b9"
 
 # ---------- Secrets (set via wrangler secret put) ----------
-# RESEND_API_KEY — Resend transactional email API key
-# Set with: wrangler secret put RESEND_API_KEY
-# In dev: emails are logged to console when this secret is absent
+# All secrets are set per-project. Workers have their own copies.
+#
+# RESEND_API_KEY          — Resend transactional email
+# ANTHROPIC_API_KEY       — Claude API (outreach gen, website analysis, dossier)
+# GOOGLE_PLACES_API_KEY   — Google Places Text Search (enrichment)
+# OUTSCRAPER_API_KEY      — Outscraper business profile + email enrichment
+# SERPAPI_API_KEY          — SerpAPI Google Search (news/press enrichment)
+# LEAD_INGEST_API_KEY     — Bearer token for pipeline Worker ingestion
+# SIGNWELL_API_KEY        — SignWell e-signature
+# SIGNWELL_WEBHOOK_SECRET — SignWell webhook verification
+# STRIPE_API_KEY          — Stripe invoicing
+# STRIPE_WEBHOOK_SECRET   — Stripe webhook verification
+# PROXYCURL_API_KEY       — LinkedIn company data (optional, Tier 4 dossier)
+#
+# Set with: npx wrangler secret put SECRET_NAME
+# In dev: add to .dev.vars (gitignored)

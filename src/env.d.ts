@@ -21,6 +21,10 @@ type CfEnv = {
   STRIPE_API_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
   LEAD_INGEST_API_KEY?: string
+  GOOGLE_PLACES_API_KEY?: string
+  OUTSCRAPER_API_KEY?: string
+  SERPAPI_API_KEY?: string
+  PROXYCURL_API_KEY?: string
 }
 
 type Runtime = import('@astrojs/cloudflare').Runtime<CfEnv>
