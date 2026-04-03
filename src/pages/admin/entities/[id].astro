@@ -210,6 +210,8 @@ const reviewSynthEntry = contextEntries.filter((e) => e.source === 'review_synth
 const deepWebsiteEntry = contextEntries.filter((e) => e.source === 'deep_website').pop()
 const competitorEntry = contextEntries.filter((e) => e.source === 'competitors').pop()
 const outreachEntry = contextEntries.filter((e) => e.type === 'outreach_draft').pop()
+const outreachMeta = parseMetadata(outreachEntry?.metadata ?? null)
+const outreachFromDossier = outreachMeta?.trigger === 'dossier'
 
 const hasDossier = !!dossierBrief
 const reviewMeta = parseMetadata(reviewSynthEntry?.metadata ?? null) as {
@@ -604,9 +606,11 @@ function confidenceColor(confidence: string): string {
                 <div class="flex items-center justify-between mb-2">
                   <div class="text-xs font-medium text-slate-500 uppercase tracking-wide">
                     Outreach Draft
-                    <span class="normal-case font-normal text-slate-400 ml-2">
-                      Based on initial signal data
-                    </span>
+                    {!outreachFromDossier && (
+                      <span class="normal-case font-normal text-slate-400 ml-2">
+                        Pre-dossier draft
+                      </span>
+                    )}
                   </div>
                   <button
                     id="copy-outreach-btn"

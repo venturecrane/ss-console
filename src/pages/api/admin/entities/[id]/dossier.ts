@@ -6,6 +6,7 @@ import type { DeepWebsiteAnalysis } from '../../../../../lib/enrichment/deep-web
 import { synthesizeReviews } from '../../../../../lib/enrichment/review-synthesis'
 import { lookupLinkedIn } from '../../../../../lib/enrichment/linkedin'
 import { generateDossier } from '../../../../../lib/enrichment/dossier'
+import { generateOutreachDraft } from '../../../../../lib/claude/outreach'
 
 /**
  * POST /api/admin/entities/[id]/dossier
@@ -110,6 +111,23 @@ export const POST: APIRoute = async ({ params, locals, redirect }) => {
           metadata: { model: 'claude-sonnet-4-20250514', trigger: 'dossier' },
         })
       }
+    }
+
+    // Regenerate outreach draft with full dossier context
+    try {
+      const outreachContext = await assembleEntityContext(env.DB, entityId, { maxBytes: 24_000 })
+      if (outreachContext) {
+        const draft = await generateOutreachDraft(anthropicKey, entity.name, outreachContext)
+        await appendContext(env.DB, session.orgId, {
+          entity_id: entityId,
+          type: 'outreach_draft',
+          content: draft,
+          source: 'claude',
+          metadata: { model: 'claude-sonnet-4-20250514', trigger: 'dossier' },
+        })
+      }
+    } catch (err) {
+      console.error('[dossier] Outreach draft regeneration failed:', err)
     }
 
     return redirect(`/admin/entities/${entityId}?dossier=1`, 302)
