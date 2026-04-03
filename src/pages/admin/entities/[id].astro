@@ -203,6 +203,84 @@ function parseMetadata(json: string | null): Record<string, unknown> | null {
     return null
   }
 }
+
+// --- Dossier summary data extraction ---
+const dossierBrief = contextEntries.filter((e) => e.source === 'intelligence_brief').pop()
+const reviewSynthEntry = contextEntries.filter((e) => e.source === 'review_synthesis').pop()
+const deepWebsiteEntry = contextEntries.filter((e) => e.source === 'deep_website').pop()
+const competitorEntry = contextEntries.filter((e) => e.source === 'competitors').pop()
+const outreachEntry = contextEntries.filter((e) => e.type === 'outreach_draft').pop()
+
+const hasDossier = !!dossierBrief
+const reviewMeta = parseMetadata(reviewSynthEntry?.metadata ?? null) as {
+  unified_rating?: number | null
+  total_reviews_across_platforms?: number
+  sentiment_trend?: string
+  top_themes?: string[]
+  operational_problems?: Array<{ problem: string; confidence: string; evidence: string }>
+} | null
+const websiteMeta = parseMetadata(deepWebsiteEntry?.metadata ?? null) as {
+  digital_maturity?: { score: number; reasoning: string }
+} | null
+const competitorMeta = parseMetadata(competitorEntry?.metadata ?? null) as {
+  entity_rank_by_rating?: number | null
+  total_competitors?: number
+} | null
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function renderSimpleMarkdown(md: string): string {
+  // Escape HTML first to prevent XSS from LLM-generated content
+  let html = escapeHtml(md)
+
+  // Headings: ## -> h4 (sized for card context)
+  html = html.replace(
+    /^## (.+)$/gm,
+    '<h4 class="font-semibold text-sm text-slate-900 mt-4 mb-1">$1</h4>'
+  )
+  // Bold
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  // Unordered list items
+  html = html.replace(/^- (.+)$/gm, '<li class="ml-4 list-disc text-sm text-slate-700">$1</li>')
+  // Numbered list items
+  html = html.replace(
+    /^\d+\. (.+)$/gm,
+    '<li class="ml-4 list-decimal text-sm text-slate-700">$1</li>'
+  )
+  // Wrap consecutive <li> in <ul>/<ol>
+  html = html.replace(
+    /((?:<li class="ml-4 list-disc[^>]*>[^<]*<\/li>\n?)+)/g,
+    '<ul class="mb-2">$1</ul>'
+  )
+  html = html.replace(
+    /((?:<li class="ml-4 list-decimal[^>]*>[^<]*<\/li>\n?)+)/g,
+    '<ol class="mb-2">$1</ol>'
+  )
+  // Paragraphs: non-empty lines that aren't already wrapped
+  html = html.replace(/^(?!<[hulo])(.+)$/gm, '<p class="text-sm text-slate-700 mb-2">$1</p>')
+  // Clean up empty paragraphs
+  html = html.replace(/<p class="text-sm text-slate-700 mb-2"><\/p>/g, '')
+
+  return html
+}
+
+function sentimentColor(trend: string): string {
+  if (trend === 'improving') return 'text-green-700 bg-green-50'
+  if (trend === 'declining') return 'text-red-700 bg-red-50'
+  return 'text-slate-600 bg-slate-50'
+}
+
+function confidenceColor(confidence: string): string {
+  if (confidence === 'high') return 'bg-rose-100 text-rose-700'
+  if (confidence === 'medium') return 'bg-amber-100 text-amber-700'
+  return 'bg-slate-100 text-slate-600'
+}
 ---
 
 <!doctype html>
@@ -392,10 +470,15 @@ function parseMetadata(json: string | null): Record<string, unknown> | null {
             }
             {
               showDossierButton && (
-                <form method="POST" action={`/api/admin/entities/${entity.id}/dossier`}>
+                <form
+                  method="POST"
+                  action={`/api/admin/entities/${entity.id}/dossier`}
+                  id="dossier-form"
+                >
                   <button
                     type="submit"
-                    class="text-xs px-3 py-1.5 rounded-md transition-colors bg-cyan-600 text-white hover:bg-cyan-700"
+                    id="dossier-btn"
+                    class="text-xs px-3 py-1.5 rounded-md transition-colors bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Generate Dossier
                   </button>
@@ -424,6 +507,119 @@ function parseMetadata(json: string | null): Record<string, unknown> | null {
           </button>
         </form>
       </div>
+
+      {/* Dossier Summary */}
+      {
+        hasDossier && (
+          <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
+            <h3 class="text-base font-semibold text-slate-900 mb-4">Dossier Summary</h3>
+
+            {/* Zone 1: Quick Stats */}
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+              {reviewMeta?.unified_rating != null && (
+                <div class="bg-slate-50 rounded-lg p-3">
+                  <div class="text-2xl font-bold text-slate-900">
+                    {reviewMeta.unified_rating.toFixed(1)}
+                    <span class="text-sm font-normal text-slate-400"> / 5</span>
+                  </div>
+                  <div class="text-xs text-slate-500">
+                    {reviewMeta.total_reviews_across_platforms ?? 0} reviews
+                  </div>
+                </div>
+              )}
+              {reviewMeta?.sentiment_trend &&
+                reviewMeta.sentiment_trend !== 'insufficient_data' && (
+                  <div class="bg-slate-50 rounded-lg p-3">
+                    <div
+                      class={`text-sm font-semibold px-2 py-0.5 rounded inline-block ${sentimentColor(reviewMeta.sentiment_trend)}`}
+                    >
+                      {reviewMeta.sentiment_trend}
+                    </div>
+                    <div class="text-xs text-slate-500 mt-1">Sentiment trend</div>
+                  </div>
+                )}
+              {websiteMeta?.digital_maturity?.score != null && (
+                <div class="bg-slate-50 rounded-lg p-3">
+                  <div class="text-2xl font-bold text-slate-900">
+                    {websiteMeta.digital_maturity.score}
+                    <span class="text-sm font-normal text-slate-400"> / 10</span>
+                  </div>
+                  <div class="text-xs text-slate-500">Digital maturity</div>
+                </div>
+              )}
+              {competitorMeta?.entity_rank_by_rating != null &&
+                competitorMeta?.total_competitors != null && (
+                  <div class="bg-slate-50 rounded-lg p-3">
+                    <div class="text-2xl font-bold text-slate-900">
+                      #{competitorMeta.entity_rank_by_rating}
+                      <span class="text-sm font-normal text-slate-400">
+                        {' '}
+                        of {competitorMeta.total_competitors}
+                      </span>
+                    </div>
+                    <div class="text-xs text-slate-500">Local ranking</div>
+                  </div>
+                )}
+            </div>
+
+            {/* Zone 2: Identified Problems */}
+            {reviewMeta?.operational_problems && reviewMeta.operational_problems.length > 0 && (
+              <div class="mb-5">
+                <div class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
+                  Identified Problems
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  {reviewMeta.operational_problems.map((p) => (
+                    <span
+                      class={`text-xs px-2.5 py-1 rounded-full font-medium ${confidenceColor(p.confidence)}`}
+                      title={p.evidence}
+                    >
+                      {p.problem.replace(/_/g, ' ')}
+                      <span class="opacity-60 ml-1">({p.confidence})</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Zone 3: Intelligence Brief */}
+            <div class="border-t border-slate-100 pt-4 mb-4">
+              <details open>
+                <summary class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3 cursor-pointer">
+                  Intelligence Brief
+                </summary>
+                <div class="prose-sm" set:html={renderSimpleMarkdown(dossierBrief!.content)} />
+              </details>
+            </div>
+
+            {/* Zone 4: Outreach Draft */}
+            {outreachEntry && (
+              <div class="border-t border-slate-100 pt-4">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Outreach Draft
+                    <span class="normal-case font-normal text-slate-400 ml-2">
+                      Based on initial signal data
+                    </span>
+                  </div>
+                  <button
+                    id="copy-outreach-btn"
+                    class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <pre
+                  id="outreach-content"
+                  class="text-sm text-slate-700 whitespace-pre-wrap bg-slate-50 rounded-lg p-4 border border-slate-100"
+                >
+                  {outreachEntry.content}
+                </pre>
+              </div>
+            )}
+          </div>
+        )
+      }
 
       {/* Context Timeline */}
       <div class="mb-6">
@@ -636,5 +832,27 @@ function parseMetadata(json: string | null): Record<string, unknown> | null {
         )
       }
     </main>
+    <script>
+      const form = document.getElementById('dossier-form')
+      const btn = document.getElementById('dossier-btn') as HTMLButtonElement | null
+      if (form && btn) {
+        form.addEventListener('submit', () => {
+          btn.disabled = true
+          btn.textContent = 'Generating...'
+        })
+      }
+
+      const copyBtn = document.getElementById('copy-outreach-btn')
+      const outreachEl = document.getElementById('outreach-content')
+      if (copyBtn && outreachEl) {
+        copyBtn.addEventListener('click', async () => {
+          await navigator.clipboard.writeText(outreachEl.textContent ?? '')
+          copyBtn.textContent = 'Copied!'
+          setTimeout(() => {
+            copyBtn.textContent = 'Copy'
+          }, 2000)
+        })
+      }
+    </script>
   </body>
 </html>
