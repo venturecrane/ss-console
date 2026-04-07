@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro'
+import { buildPortalUrl } from '../../../../lib/config/app-url'
 import { getInvoice, updateInvoice, updateInvoiceStatus } from '../../../../lib/db/invoices'
 import type { InvoiceStatus } from '../../../../lib/db/invoices'
 import {
@@ -123,7 +124,9 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       if (clientEmail) {
         try {
           const formattedAmount = `$${existing.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-          const portalUrl = new URL('/portal/invoices', request.url).toString()
+          // Build portal URL from canonical PORTAL_BASE_URL (falls back to
+          // APP_BASE_URL). Never derive from request host — see issue #173.
+          const portalUrl = buildPortalUrl(env, '/portal/invoices')
 
           await sendEmail(env.RESEND_API_KEY, {
             to: clientEmail,

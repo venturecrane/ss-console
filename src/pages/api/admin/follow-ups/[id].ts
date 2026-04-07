@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro'
+import { buildPortalUrl } from '../../../../lib/config/app-url'
 import { getFollowUp, completeFollowUp, skipFollowUp } from '../../../../lib/db/follow-ups'
 import { getFollowUpTemplate } from '../../../../lib/email/follow-up-templates'
 import type { FollowUpEmailData } from '../../../../lib/email/follow-up-templates'
@@ -26,7 +27,7 @@ interface ContactRow {
  *
  * Protected by auth middleware (requires admin role).
  */
-export const POST: APIRoute = async ({ request, locals, redirect, params, url }) => {
+export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
   const session = locals.session
   if (!session || session.role !== 'admin') {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -93,9 +94,9 @@ export const POST: APIRoute = async ({ request, locals, redirect, params, url })
         return redirect('/admin/follow-ups?error=no_template', 302)
       }
 
-      // Build portal URL
-      const baseUrl = `${url.protocol}//${url.host}`
-      const portalUrl = `${baseUrl}/portal`
+      // Build portal URL from the canonical PORTAL_BASE_URL (falls back to
+      // APP_BASE_URL). Never derive from request host — see issue #173.
+      const portalUrl = buildPortalUrl(env)
 
       const emailData: FollowUpEmailData = {
         clientName: contact.name,

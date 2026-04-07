@@ -1,0 +1,29 @@
+# Local development environment variables
+#
+# Copy this file to `.dev.vars` and fill in the secret values for your
+# machine. `.dev.vars` is gitignored — never commit real secrets.
+#
+# Wrangler loads `.dev.vars` automatically when running `wrangler pages dev`
+# and `astro dev` (via the platformProxy adapter config).
+
+# ---------- Canonical URLs ----------
+# Used to build outbound auth, portal, and webhook callback links. In dev
+# we point at localhost so magic links and email previews open the right
+# environment. See src/lib/config/app-url.ts and issue #173.
+APP_BASE_URL="http://localhost:4321"
+PORTAL_BASE_URL="http://localhost:4321"
+
+# ---------- Secrets (set with: wrangler secret put <NAME>) ----------
+# These are documented for reference. Actual values must come from the
+# team vault — never commit real keys.
+RESEND_API_KEY=""
+ANTHROPIC_API_KEY=""
+SIGNWELL_API_KEY=""
+SIGNWELL_WEBHOOK_SECRET=""
+STRIPE_API_KEY=""
+STRIPE_WEBHOOK_SECRET=""
+LEAD_INGEST_API_KEY=""
+GOOGLE_PLACES_API_KEY=""
+OUTSCRAPER_API_KEY=""
+SERPAPI_API_KEY=""
+PROXYCURL_API_KEY=""

@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro'
 import { createMagicLink } from '../../../lib/auth/magic-link'
+import { requireAppBaseUrl } from '../../../lib/config/app-url'
 import { sendEmail } from '../../../lib/email/resend'
 import { buildMagicLinkUrl, portalInvitationEmailHtml } from '../../../lib/email/templates'
 
@@ -27,7 +28,7 @@ interface UserRow {
  * If email is provided, updates the user's email before sending.
  * This supports the OQ-010 flow where admin corrects a bounced email.
  */
-export const POST: APIRoute = async ({ request, locals, url }) => {
+export const POST: APIRoute = async ({ request, locals }) => {
   // Verify admin session (middleware already checks /admin/* routes,
   // but this is under /api/admin/* so we verify explicitly)
   const session = locals.session
@@ -78,8 +79,9 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     // Create magic link
     const token = await createMagicLink(env.DB, targetEmail)
 
-    // Build verification URL
-    const baseUrl = `${url.protocol}//${url.host}`
+    // Build verification URL from the canonical APP_BASE_URL.
+    // Never derive from request host — see issue #173.
+    const baseUrl = requireAppBaseUrl(env)
     const magicLinkUrl = buildMagicLinkUrl(baseUrl, token)
 
     // Send invitation email

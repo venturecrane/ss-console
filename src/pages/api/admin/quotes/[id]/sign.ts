@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro'
+import { buildAppUrl } from '../../../../../lib/config/app-url'
 import { getQuote } from '../../../../../lib/db/quotes'
 import { getEntity } from '../../../../../lib/db/entities'
 import { listContacts } from '../../../../../lib/db/contacts'
@@ -26,7 +27,7 @@ import type { SignWellCreateDocumentRequest } from '../../../../../lib/signwell/
  *
  * Protected by auth middleware (requires admin role).
  */
-export const POST: APIRoute = async ({ locals, redirect, params, url }) => {
+export const POST: APIRoute = async ({ locals, redirect, params }) => {
   const session = locals.session
   if (!session || session.role !== 'admin') {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -106,8 +107,9 @@ export const POST: APIRoute = async ({ locals, redirect, params, url }) => {
       )
     }
 
-    // 4. Build the webhook callback URL
-    const callbackUrl = new URL('/api/webhooks/signwell', url.origin).toString()
+    // 4. Build the webhook callback URL from the canonical APP_BASE_URL.
+    // Never derive from request host — see issue #173.
+    const callbackUrl = buildAppUrl(env, '/api/webhooks/signwell')
 
     // 5. Create signature request in SignWell
     const signerId = crypto.randomUUID()

@@ -14,6 +14,20 @@ type CfEnv = {
   DB: D1Database
   STORAGE: R2Bucket
   SESSIONS: KVNamespace
+  /**
+   * Canonical absolute URL for the marketing/admin app, e.g.
+   * `https://smd.services`. Used to build outbound auth, portal,
+   * and webhook callback links — never derive from request host.
+   * See `src/lib/config/app-url.ts` and GitHub issue #173.
+   */
+  APP_BASE_URL?: string
+  /**
+   * Canonical absolute URL for the client portal, e.g.
+   * `https://portal.smd.services`. Optional — falls back to
+   * `APP_BASE_URL` when unset (the portal is the same Pages
+   * deployment served under a subdomain rewrite).
+   */
+  PORTAL_BASE_URL?: string
   RESEND_API_KEY?: string
   ANTHROPIC_API_KEY?: string
   SIGNWELL_API_KEY?: string

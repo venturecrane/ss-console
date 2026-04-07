@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro'
 import { createMagicLink } from '../../../lib/auth/magic-link'
+import { requireAppBaseUrl } from '../../../lib/config/app-url'
 import { sendEmail } from '../../../lib/email/resend'
 import { buildMagicLinkUrl, magicLinkEmailHtml } from '../../../lib/email/templates'
 
@@ -24,7 +25,7 @@ interface UserRow {
  * Security: Always returns the same response whether or not the email
  * exists, to prevent email enumeration.
  */
-export const POST: APIRoute = async ({ request, locals, redirect, url }) => {
+export const POST: APIRoute = async ({ request, locals, redirect }) => {
   try {
     const formData = await request.formData()
     const email = formData.get('email')
@@ -50,8 +51,9 @@ export const POST: APIRoute = async ({ request, locals, redirect, url }) => {
     // Create magic link token
     const token = await createMagicLink(env.DB, normalizedEmail)
 
-    // Build the verification URL
-    const baseUrl = `${url.protocol}//${url.host}`
+    // Build the verification URL from the canonical APP_BASE_URL.
+    // Never derive from request host — see issue #173.
+    const baseUrl = requireAppBaseUrl(env)
     const magicLinkUrl = buildMagicLinkUrl(baseUrl, token)
 
     // Send the email
