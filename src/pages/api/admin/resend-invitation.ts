@@ -51,9 +51,12 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
     const env = locals.runtime.env
 
-    // Look up the client user
-    const user = await env.DB.prepare(`SELECT * FROM users WHERE id = ? AND role = 'client'`)
-      .bind(userId)
+    // Look up the client user — scoped to the admin's org to prevent
+    // cross-tenant access (issue #172).
+    const user = await env.DB.prepare(
+      `SELECT * FROM users WHERE id = ? AND org_id = ? AND role = 'client'`
+    )
+      .bind(userId, session.orgId)
       .first<UserRow>()
 
     if (!user) {
@@ -68,9 +71,24 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     if (newEmail && typeof newEmail === 'string') {
       const normalizedEmail = newEmail.toLowerCase().trim()
       if (normalizedEmail !== user.email) {
-        await env.DB.prepare(`UPDATE users SET email = ? WHERE id = ?`)
-          .bind(normalizedEmail, userId)
+        // Update is org-scoped as a defense-in-depth measure even though the
+        // preceding SELECT already gates on org_id.
+        const updateResult = await env.DB.prepare(
+          `UPDATE users SET email = ? WHERE id = ? AND org_id = ?`
+        )
+          .bind(normalizedEmail, userId, session.orgId)
           .run()
+
+        // D1 returns meta.changes for affected row count. If zero, the row
+        // disappeared between the SELECT and UPDATE (or somehow slipped org
+        // scoping) — fail closed rather than send an invitation we can't trust.
+        if (!updateResult.meta || updateResult.meta.changes === 0) {
+          return new Response(JSON.stringify({ error: 'Client user not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
+
         targetEmail = normalizedEmail
       }
     }
