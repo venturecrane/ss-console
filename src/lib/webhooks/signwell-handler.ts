@@ -26,6 +26,7 @@
 import type { SignWellWebhookPayload } from '../signwell/types'
 import { getSignedPdf } from '../signwell/client'
 import type { Quote } from '../db/quotes'
+import { sendEmail } from '../email/resend'
 
 /**
  * Look up a quote by its SignWell document ID.
@@ -190,33 +191,23 @@ export async function handleDocumentCompleted(
   }
 
   // 2c. Send confirmation email to client
-  if (resendApiKey) {
-    try {
-      const clientEmail = await getClientPrimaryEmail(db, quote.org_id, quote.entity_id)
-      if (clientEmail) {
-        const entity = await db
-          .prepare('SELECT name FROM entities WHERE id = ? AND org_id = ?')
-          .bind(quote.entity_id, quote.org_id)
-          .first<{ name: string }>()
+  try {
+    const clientEmail = await getClientPrimaryEmail(db, quote.org_id, quote.entity_id)
+    if (clientEmail) {
+      const entity = await db
+        .prepare('SELECT name FROM entities WHERE id = ? AND org_id = ?')
+        .bind(quote.entity_id, quote.org_id)
+        .first<{ name: string }>()
 
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${resendApiKey}`,
-          },
-          body: JSON.stringify({
-            from: 'SMD Services <noreply@smd.services>',
-            to: clientEmail,
-            subject: 'SOW Signed — Next Steps',
-            html: signatureConfirmationEmailHtml(entity?.name ?? 'there'),
-          }),
-        })
-      }
-    } catch (err) {
-      console.error('[signwell-handler] Failed to send confirmation email:', err)
-      // Non-fatal: admin can trigger manually
+      await sendEmail(resendApiKey, {
+        to: clientEmail,
+        subject: 'SOW Signed — Next Steps',
+        html: signatureConfirmationEmailHtml(entity?.name ?? 'there'),
+      })
     }
+  } catch (err) {
+    console.error('[signwell-handler] Failed to send confirmation email:', err)
+    // Non-fatal: admin can trigger manually
   }
 
   return new Response(JSON.stringify({ ok: true }), {

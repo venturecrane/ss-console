@@ -207,9 +207,10 @@ describe('signwell: webhook handler', () => {
     expect(code).toContain('signedSowPath')
   })
 
-  it('sends confirmation email via Resend in Phase 2', () => {
+  it('sends confirmation email via shared sendEmail helper in Phase 2', () => {
     const code = source()
-    expect(code).toContain('api.resend.com/emails')
+    expect(code).toContain("import { sendEmail } from '../email/resend'")
+    expect(code).toContain('await sendEmail(resendApiKey,')
     expect(code).toContain('SOW Signed')
   })
 
