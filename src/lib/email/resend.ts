@@ -20,6 +20,7 @@ export interface EmailPayload {
   to: string
   subject: string
   html: string
+  reply_to?: string
   attachments?: EmailAttachment[]
 }
 
@@ -55,6 +56,7 @@ export async function sendEmail(
     to: [payload.to],
     subject: payload.subject,
     html: payload.html,
+    ...(payload.reply_to ? { reply_to: payload.reply_to } : {}),
   }
 
   if (payload.attachments?.length) {
