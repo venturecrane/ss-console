@@ -107,16 +107,24 @@ import { ENTITY_VERTICALS } from '../../lib/db/entities'
                   <option value="">Select one</option>
                   {ENTITY_VERTICALS.map((v) => <option value={v.value}>{v.label}</option>)}
                 </select>
+                <input
+                  type="text"
+                  id="vertical_other"
+                  name="vertical_other"
+                  class="mt-2 hidden w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                  placeholder="Describe your business type"
+                />
               </div>
               <div>
                 <label for="employee_count" class="block text-sm font-medium text-slate-700">
                   How many employees?
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
                   id="employee_count"
                   name="employee_count"
-                  min="1"
                   class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
                   placeholder="e.g. 15"
                 />
@@ -129,10 +137,11 @@ import { ENTITY_VERTICALS } from '../../lib/db/entities'
                 Years in business
               </label>
               <input
-                type="number"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]*"
                 id="years_in_business"
                 name="years_in_business"
-                min="0"
                 class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
                 placeholder="e.g. 8"
               />
@@ -160,12 +169,26 @@ import { ENTITY_VERTICALS } from '../../lib/db/entities'
               <label for="how_heard" class="block text-sm font-medium text-slate-700">
                 How did you find us?
               </label>
-              <input
-                type="text"
+              <select
                 id="how_heard"
                 name="how_heard"
                 class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
-                placeholder="e.g. Google, referral from my accountant, BNI..."
+              >
+                <option value="">Select one</option>
+                <option value="Google Search">Google Search</option>
+                <option value="Referral">Referral</option>
+                <option value="BNI / Networking group">BNI / Networking group</option>
+                <option value="Chamber of Commerce">Chamber of Commerce</option>
+                <option value="Social Media">Social Media</option>
+                <option value="SCORE / SBA">SCORE / SBA</option>
+                <option value="other">Other</option>
+              </select>
+              <input
+                type="text"
+                id="how_heard_other"
+                name="how_heard_other"
+                class="mt-2 hidden w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                placeholder="Tell us more"
               />
             </div>
 
@@ -215,6 +238,31 @@ import { ENTITY_VERTICALS } from '../../lib/db/entities'
   <Footer />
 
   <script is:inline>
+    // "Other" toggle for vertical
+    const verticalSelect = document.getElementById('vertical')
+    const verticalOther = document.getElementById('vertical_other')
+    verticalSelect.addEventListener('change', function () {
+      if (this.value === 'other') {
+        verticalOther.classList.remove('hidden')
+      } else {
+        verticalOther.classList.add('hidden')
+        verticalOther.value = ''
+      }
+    })
+
+    // "Other" toggle for how_heard
+    const howHeardSelect = document.getElementById('how_heard')
+    const howHeardOther = document.getElementById('how_heard_other')
+    howHeardSelect.addEventListener('change', function () {
+      if (this.value === 'other') {
+        howHeardOther.classList.remove('hidden')
+      } else {
+        howHeardOther.classList.add('hidden')
+        howHeardOther.value = ''
+      }
+    })
+
+    // Form submission
     const form = document.getElementById('intake-form')
     const submitBtn = document.getElementById('submit-btn')
     const errorMsg = document.getElementById('error-message')
@@ -233,17 +281,33 @@ import { ENTITY_VERTICALS } from '../../lib/db/entities'
         data[key] = value
       })
 
+      // Resolve "Other" fields into their parent values
+      if (data.vertical === 'other' && data.vertical_other) {
+        data.vertical = data.vertical_other
+      }
+      delete data.vertical_other
+
+      if (data.how_heard === 'other' && data.how_heard_other) {
+        data.how_heard = data.how_heard_other
+      }
+      delete data.how_heard_other
+
       fetch('/api/booking/intake', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       })
         .then(function (res) {
-          if (!res.ok) throw new Error('Failed')
+          if (!res.ok) {
+            return res.json().then(function (body) {
+              throw new Error(body.error || 'Failed')
+            })
+          }
           formContainer.classList.add('hidden')
           successMsg.classList.remove('hidden')
         })
-        .catch(function () {
+        .catch(function (err) {
+          errorMsg.textContent = err.message || 'Something went wrong. Please try again.'
           errorMsg.classList.remove('hidden')
           submitBtn.disabled = false
           submitBtn.textContent = 'Send'
