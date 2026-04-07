@@ -2,6 +2,7 @@
 export const prerender = true
 
 import Base from '../layouts/Base.astro'
+import Nav from '../components/Nav.astro'
 import Footer from '../components/Footer.astro'
 ---
 
@@ -9,17 +10,8 @@ import Footer from '../components/Footer.astro'
   title="Let's Talk | SMD Services"
   description="Schedule a conversation about your business. We'll learn how things run, understand what you're trying to accomplish, and share how we can help."
 >
+  <Nav />
   <main>
-    <!-- Header -->
-    <header class="sticky top-0 z-50 border-b border-slate-100 bg-white">
-      <div class="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-6">
-        <a href="/" class="text-lg font-bold tracking-tight text-slate-900">SMD Services</a>
-        <a href="/" class="text-sm text-slate-500 transition hover:text-slate-700">
-          &larr; Back to home
-        </a>
-      </div>
-    </header>
-
     <!-- Booking Section -->
     <section class="bg-slate-50 px-6 py-16 sm:py-24">
       <div class="mx-auto max-w-5xl">
