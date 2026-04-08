@@ -31,6 +31,7 @@
     "@eslint/js": "^9.18.0",
     "@tailwindcss/vite": "^4.2.2",
     "@types/react": "^19.2.14",
+    "@venturecrane/crane-test-harness": "^0.1.0",
     "eslint": "^9.18.0",
     "eslint-plugin-astro": "^1.6.0",
     "globals": "^15.0.0",
@@ -41,7 +42,7 @@
     "tailwindcss": "^4.2.2",
     "typescript": "^5.3.0",
     "typescript-eslint": "^8.20.0",
-    "vitest": "^1.0.0"
+    "vitest": "^3.0.0"
   },
   "overrides": {
     "defu": "^6.1.7",

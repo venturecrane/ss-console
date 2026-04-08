@@ -13,6 +13,11 @@ jobs:
   audit:
     name: npm audit (high+)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required so npm ci can fetch @venturecrane/crane-test-harness from
+      # GitHub Packages via the workflow's GITHUB_TOKEN.
+      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,8 +27,12 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@venturecrane'
 
       - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm ci
 
       - name: Audit (fail on high or critical)
