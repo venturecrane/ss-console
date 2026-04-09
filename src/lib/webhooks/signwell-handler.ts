@@ -6,12 +6,14 @@
  * Phase 1 — Atomic D1 Batch (all-or-nothing):
  *   1. Look up quote by signwell_doc_id
  *   2. Idempotency check: if quote.status === 'accepted', return early
- *   3. Generate UUIDs for new engagement and deposit invoice BEFORE the batch
+ *   3. Generate UUIDs for new engagement, deposit invoice, milestones, and context entry BEFORE the batch
  *   4. db.batch([
  *        updateQuoteStatus to 'accepted' with accepted_at,
- *        updateClientStatus to 'active',
+ *        updateClientStatus to 'engaged',
  *        createEngagement from quote data,
- *        createDepositInvoice (draft status, amount = quote.deposit_amount)
+ *        createDepositInvoice (draft status, amount = quote.deposit_amount),
+ *        createMilestones (one per quote line item, last gets payment_trigger),
+ *        createContextEntry (stage_change to 'engaged')
  *      ])
  *
  * Phase 2 — Best-effort side effects:
@@ -25,7 +27,7 @@
 
 import type { SignWellWebhookPayload } from '../signwell/types'
 import { getSignedPdf } from '../signwell/client'
-import type { Quote } from '../db/quotes'
+import type { Quote, LineItem } from '../db/quotes'
 import { sendEmail } from '../email/resend'
 
 /**
@@ -109,6 +111,39 @@ export async function handleDocumentCompleted(
   const engagementId = crypto.randomUUID()
   const invoiceId = crypto.randomUUID()
 
+  // Parse line items and generate milestone UUIDs before the batch
+  const lineItems: LineItem[] = JSON.parse(quote.line_items)
+  const milestoneIds = lineItems.map(() => crypto.randomUUID())
+  const contextEntryId = crypto.randomUUID()
+
+  // Build milestone INSERT statements
+  const milestoneStmts = lineItems.map((item, i) =>
+    db
+      .prepare(
+        `INSERT INTO milestones (id, engagement_id, name, description, status, payment_trigger, sort_order, created_at)
+         VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)`
+      )
+      .bind(
+        milestoneIds[i],
+        engagementId,
+        item.problem,
+        item.description,
+        i === lineItems.length - 1 ? 1 : 0,
+        i,
+        now
+      )
+  )
+
+  // Build stage_change context entry
+  const stageChangeContent = 'Stage: proposing \u2192 engaged. SOW signed via SignWell.'
+  const stageChangeMetadata = JSON.stringify({
+    from: 'proposing',
+    to: 'engaged',
+    reason: 'SOW signed via SignWell',
+    quote_id: quote.id,
+    engagement_id: engagementId,
+  })
+
   try {
     await db.batch([
       // 1. Update quote status to 'accepted'
@@ -148,6 +183,25 @@ export async function handleDocumentCompleted(
           quote.entity_id,
           quote.deposit_amount,
           now,
+          now
+        ),
+
+      // 5. Create milestones from quote line items
+      ...milestoneStmts,
+
+      // 6. Record stage_change context entry
+      db
+        .prepare(
+          `INSERT INTO context (id, entity_id, org_id, type, content, source, content_size, metadata, created_at)
+         VALUES (?, ?, ?, 'stage_change', ?, 'signwell-webhook', ?, ?, ?)`
+        )
+        .bind(
+          contextEntryId,
+          quote.entity_id,
+          quote.org_id,
+          stageChangeContent,
+          stageChangeContent.length,
+          stageChangeMetadata,
           now
         ),
     ])
