@@ -72,15 +72,15 @@ CREATE TABLE engagements_bak AS SELECT * FROM engagements;
 CREATE TABLE milestones_bak AS SELECT * FROM milestones;
 CREATE TABLE invoices_bak AS SELECT * FROM invoices;
 -- follow_ups: explicit column list. notes was dropped out-of-band on remote.
--- entity_id formalized in migration 0010.
+-- entity_id does not exist on prod follow_ups (migration 0010 didn't add it
+-- to this table). Backup without it; restore uses NULL.
 CREATE TABLE follow_ups_bak (
   id TEXT, org_id TEXT, engagement_id TEXT, quote_id TEXT, type TEXT,
-  scheduled_for TEXT, completed_at TEXT, status TEXT, created_at TEXT,
-  entity_id TEXT
+  scheduled_for TEXT, completed_at TEXT, status TEXT, created_at TEXT
 );
 INSERT INTO follow_ups_bak
 SELECT id, org_id, engagement_id, quote_id, type,
-  scheduled_for, completed_at, status, created_at, entity_id
+  scheduled_for, completed_at, status, created_at
 FROM follow_ups;
 CREATE TABLE time_entries_bak AS SELECT * FROM time_entries;
 
@@ -310,7 +310,7 @@ INSERT INTO quotes (id, org_id, assessment_id, version, parent_quote_id,
 SELECT id, org_id, assessment_id, version, parent_quote_id,
   line_items, total_hours, rate, total_price, deposit_pct, deposit_amount,
   status, sent_at, expires_at, accepted_at, sow_path, signed_sow_path,
-  signwell_doc_id, notes, created_at, updated_at, entity_id
+  signwell_doc_id, notes, created_at, updated_at, NULL AS entity_id
 FROM quotes_bak;
 
 INSERT INTO engagements (id, org_id, quote_id, scope_summary, start_date,
@@ -318,7 +318,7 @@ INSERT INTO engagements (id, org_id, quote_id, scope_summary, start_date,
   estimated_hours, actual_hours, notes, created_at, updated_at, entity_id)
 SELECT id, org_id, quote_id, scope_summary, start_date,
   estimated_end, actual_end, handoff_date, safety_net_end, status,
-  estimated_hours, actual_hours, notes, created_at, updated_at, entity_id
+  estimated_hours, actual_hours, notes, created_at, updated_at, NULL AS entity_id
 FROM engagements_bak;
 
 -- engagement_contacts: no backup to restore (table may not have existed)
@@ -335,13 +335,13 @@ INSERT INTO invoices (id, org_id, engagement_id, type, amount, description,
   payment_method, notes, created_at, updated_at, entity_id)
 SELECT id, org_id, engagement_id, type, amount, description,
   status, stripe_invoice_id, stripe_hosted_url, due_date, sent_at, paid_at,
-  payment_method, notes, created_at, updated_at, entity_id
+  payment_method, notes, created_at, updated_at, NULL AS entity_id
 FROM invoices_bak;
 
 INSERT INTO follow_ups (id, org_id, engagement_id, quote_id, type,
   scheduled_for, completed_at, status, created_at, entity_id)
 SELECT id, org_id, engagement_id, quote_id, type,
-  scheduled_for, completed_at, status, created_at, entity_id
+  scheduled_for, completed_at, status, created_at, NULL AS entity_id
 FROM follow_ups_bak;
 
 INSERT INTO time_entries (id, org_id, engagement_id, date, hours,
