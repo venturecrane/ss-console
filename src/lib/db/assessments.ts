@@ -18,11 +18,17 @@ export interface Assessment {
   created_at: string
 }
 
-export type AssessmentStatus = 'scheduled' | 'completed' | 'disqualified' | 'converted'
+export type AssessmentStatus =
+  | 'scheduled'
+  | 'completed'
+  | 'disqualified'
+  | 'converted'
+  | 'cancelled'
 
 export const ASSESSMENT_STATUSES: { value: AssessmentStatus; label: string }[] = [
   { value: 'scheduled', label: 'Scheduled' },
   { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
   { value: 'disqualified', label: 'Disqualified' },
   { value: 'converted', label: 'Converted' },
 ]
@@ -30,16 +36,22 @@ export const ASSESSMENT_STATUSES: { value: AssessmentStatus; label: string }[] =
 /**
  * Valid status transitions enforced at the application layer.
  *
- * scheduled   -> completed | disqualified
+ * scheduled   -> completed | disqualified | cancelled
  * completed   -> disqualified | converted
  * disqualified -> (terminal)
  * converted   -> (terminal)
+ * cancelled   -> (terminal — cancelled guests start a new booking flow)
+ *
+ * Cancelled is a first-class status added in migration 0011 to support
+ * guest-initiated cancellation through the booking flow. The CHECK
+ * constraint on assessments.status enforces this set at the DB level.
  */
 export const VALID_TRANSITIONS: Record<AssessmentStatus, AssessmentStatus[]> = {
-  scheduled: ['completed', 'disqualified'],
+  scheduled: ['completed', 'disqualified', 'cancelled'],
   completed: ['disqualified', 'converted'],
   disqualified: [],
   converted: [],
+  cancelled: [],
 }
 
 export interface CreateAssessmentData {

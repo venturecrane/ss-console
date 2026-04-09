@@ -1,5 +1,5 @@
 /**
- * Email templates for magic link and portal invitation emails.
+ * Email templates for magic link, portal invitation, and booking confirmations.
  *
  * All templates produce self-contained HTML emails with inline styles.
  * No external CSS or image dependencies.
@@ -266,6 +266,240 @@ export function portalInvitationEmailHtml(clientName: string, magicLinkUrl: stri
 
       <p style="font-size:12px;color:#94a3b8;margin:24px 0 0;">
         This link expires in 15 minutes. You can request a new link anytime from the portal login page.
+      </p>
+    </div>
+    <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
+      <p style="font-size:11px;color:#94a3b8;margin:0;">
+        &copy; ${new Date().getFullYear()} SMD Services &middot; Phoenix, AZ
+      </p>
+    </div>
+  </div>
+</body>
+</html>`
+}
+
+// ===========================================================================
+// Booking emails (Calendly replacement — added with migration 0011)
+// ===========================================================================
+
+/**
+ * HTML escaping helper used by all booking templates. Prevents intake form
+ * data (business name, challenge text, etc.) from injecting markup into
+ * the email body.
+ */
+function escapeBookingHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+export interface BookingConfirmationEmailInput {
+  guestName: string
+  businessName: string
+  /** Localized slot label, e.g., "Tuesday, April 14 at 9:00 AM (Phoenix)". */
+  slotLabel: string
+  /** Google Meet URL or null if Meet creation failed. */
+  meetUrl: string | null
+  manageUrl: string
+  meetingLabel: string
+}
+
+/**
+ * Sent to the guest immediately after a successful POST /api/booking/reserve.
+ * The email includes the ICS attachment via the Resend `attachments` field.
+ */
+export function bookingConfirmationEmailHtml(input: BookingConfirmationEmailInput): string {
+  const guestName = escapeBookingHtml(input.guestName)
+  const businessName = escapeBookingHtml(input.businessName)
+  const slotLabel = escapeBookingHtml(input.slotLabel)
+  const meetingLabel = escapeBookingHtml(input.meetingLabel)
+  const manageUrl = escapeBookingHtml(input.manageUrl)
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:'Inter',Arial,sans-serif;">
+  <div style="max-width:520px;margin:40px auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
+    <div style="padding:32px 24px;">
+      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">You're booked.</h1>
+      <p style="font-size:14px;color:#64748b;margin:0 0 24px;">SMD Services &middot; ${meetingLabel}</p>
+
+      <p style="font-size:15px;color:#334155;margin:0 0 16px;">Hi ${guestName},</p>
+      <p style="font-size:15px;color:#334155;margin:0 0 16px;">
+        Your assessment call for <strong>${businessName}</strong> is confirmed.
+      </p>
+
+      <div style="background:#f1f5f9;border-radius:6px;padding:16px;margin:0 0 24px;">
+        <p style="font-size:13px;color:#64748b;margin:0 0 4px;text-transform:uppercase;letter-spacing:0.05em;">When</p>
+        <p style="font-size:16px;color:#0f172a;font-weight:600;margin:0;">${slotLabel}</p>
+      </div>
+
+      ${
+        input.meetUrl
+          ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:16px;margin:0 0 24px;">
+              <p style="font-size:13px;color:#1e40af;margin:0 0 8px;font-weight:600;">Join the call</p>
+              <a href="${escapeBookingHtml(input.meetUrl)}" style="font-size:14px;color:#1e40af;word-break:break-all;">${escapeBookingHtml(input.meetUrl)}</a>
+            </div>`
+          : `<p style="font-size:13px;color:#64748b;margin:0 0 24px;">We'll send the video call link shortly.</p>`
+      }
+
+      <p style="font-size:14px;color:#334155;margin:0 0 8px;">
+        Need to reschedule or cancel?
+      </p>
+      <p style="font-size:14px;color:#334155;margin:0 0 24px;">
+        <a href="${manageUrl}" style="color:#1e40af;">Manage your booking →</a>
+      </p>
+
+      <p style="font-size:13px;color:#64748b;margin:0;">
+        Looking forward to talking,<br>
+        Scott Durgan &middot; SMD Services
+      </p>
+    </div>
+    <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
+      <p style="font-size:11px;color:#94a3b8;margin:0;">
+        &copy; ${new Date().getFullYear()} SMD Services &middot; Phoenix, AZ
+      </p>
+    </div>
+  </div>
+</body>
+</html>`
+}
+
+export interface BookingAdminNotificationInput {
+  guestName: string
+  guestEmail: string
+  businessName: string
+  slotLabel: string
+  intakeLines: string[]
+  entityAdminUrl: string
+}
+
+/**
+ * Sent to team@smd.services on every successful reserve. Replaces the
+ * legacy intake notification (which was tied to the Calendly+intake flow).
+ */
+export function bookingAdminNotificationEmailHtml(input: BookingAdminNotificationInput): string {
+  const guestName = escapeBookingHtml(input.guestName)
+  const guestEmail = escapeBookingHtml(input.guestEmail)
+  const businessName = escapeBookingHtml(input.businessName)
+  const slotLabel = escapeBookingHtml(input.slotLabel)
+  const entityAdminUrl = escapeBookingHtml(input.entityAdminUrl)
+  const intakeHtml = input.intakeLines.map((line) => `<p>${escapeBookingHtml(line)}</p>`).join('')
+  return `<p><strong>${guestName}</strong> &lt;${guestEmail}&gt; from <strong>${businessName}</strong> just booked an assessment call.</p>
+<p><strong>When:</strong> ${slotLabel}</p>
+<hr>
+${intakeHtml}
+<hr>
+<p><a href="${entityAdminUrl}">View in admin →</a></p>`
+}
+
+export interface BookingRescheduledEmailInput {
+  guestName: string
+  businessName: string
+  oldSlotLabel: string
+  newSlotLabel: string
+  meetUrl: string | null
+  manageUrl: string
+  meetingLabel: string
+}
+
+/**
+ * Sent to the guest after a successful reschedule. The body explicitly
+ * tells multi-calendar users (Outlook/Apple) to remove the old event,
+ * since SEQUENCE-bumped UPDATEs don't always auto-replace cleanly.
+ */
+export function bookingRescheduledEmailHtml(input: BookingRescheduledEmailInput): string {
+  const guestName = escapeBookingHtml(input.guestName)
+  const businessName = escapeBookingHtml(input.businessName)
+  const oldSlot = escapeBookingHtml(input.oldSlotLabel)
+  const newSlot = escapeBookingHtml(input.newSlotLabel)
+  const manageUrl = escapeBookingHtml(input.manageUrl)
+  const meetingLabel = escapeBookingHtml(input.meetingLabel)
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:'Inter',Arial,sans-serif;">
+  <div style="max-width:520px;margin:40px auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
+    <div style="padding:32px 24px;">
+      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">Your call has been rescheduled.</h1>
+      <p style="font-size:14px;color:#64748b;margin:0 0 24px;">SMD Services &middot; ${meetingLabel}</p>
+
+      <p style="font-size:15px;color:#334155;margin:0 0 16px;">Hi ${guestName},</p>
+      <p style="font-size:15px;color:#334155;margin:0 0 16px;">
+        Your assessment call for <strong>${businessName}</strong> has moved.
+      </p>
+
+      <div style="background:#f1f5f9;border-radius:6px;padding:16px;margin:0 0 16px;">
+        <p style="font-size:12px;color:#94a3b8;margin:0 0 4px;text-decoration:line-through;">${oldSlot}</p>
+        <p style="font-size:16px;color:#0f172a;font-weight:600;margin:0;">${newSlot}</p>
+      </div>
+
+      ${
+        input.meetUrl
+          ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:16px;margin:0 0 24px;">
+              <p style="font-size:13px;color:#1e40af;margin:0 0 8px;font-weight:600;">Join the call</p>
+              <a href="${escapeBookingHtml(input.meetUrl)}" style="font-size:14px;color:#1e40af;word-break:break-all;">${escapeBookingHtml(input.meetUrl)}</a>
+            </div>`
+          : ''
+      }
+
+      <p style="font-size:13px;color:#64748b;margin:0 0 16px;">
+        <strong>Heads up:</strong> if you use Outlook or Apple Calendar, you may see
+        both the old and new entry side-by-side. You can safely remove the old one.
+      </p>
+
+      <p style="font-size:14px;color:#334155;margin:0;">
+        Need to make another change? <a href="${manageUrl}" style="color:#1e40af;">Manage your booking →</a>
+      </p>
+    </div>
+    <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
+      <p style="font-size:11px;color:#94a3b8;margin:0;">
+        &copy; ${new Date().getFullYear()} SMD Services &middot; Phoenix, AZ
+      </p>
+    </div>
+  </div>
+</body>
+</html>`
+}
+
+export interface BookingCancelledEmailInput {
+  guestName: string
+  businessName: string
+  slotLabel: string
+  rebookUrl: string
+}
+
+/**
+ * Sent to the guest after a successful cancellation. Includes a link
+ * to /book so they can rebook if they want to.
+ */
+export function bookingCancelledEmailHtml(input: BookingCancelledEmailInput): string {
+  const guestName = escapeBookingHtml(input.guestName)
+  const businessName = escapeBookingHtml(input.businessName)
+  const slotLabel = escapeBookingHtml(input.slotLabel)
+  const rebookUrl = escapeBookingHtml(input.rebookUrl)
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:'Inter',Arial,sans-serif;">
+  <div style="max-width:520px;margin:40px auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
+    <div style="padding:32px 24px;">
+      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">Your call has been cancelled.</h1>
+      <p style="font-size:14px;color:#64748b;margin:0 0 24px;">SMD Services</p>
+
+      <p style="font-size:15px;color:#334155;margin:0 0 16px;">Hi ${guestName},</p>
+      <p style="font-size:15px;color:#334155;margin:0 0 16px;">
+        Your assessment call for <strong>${businessName}</strong>
+        scheduled for <strong>${slotLabel}</strong> has been cancelled.
+      </p>
+
+      <p style="font-size:14px;color:#334155;margin:0 0 24px;">
+        Whenever you're ready, you can <a href="${rebookUrl}" style="color:#1e40af;">book a new time →</a>
+      </p>
+
+      <p style="font-size:13px;color:#64748b;margin:0;">
+        — Scott Durgan &middot; SMD Services
       </p>
     </div>
     <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
