@@ -332,6 +332,22 @@ export async function updateQuoteStatus(
     )
   }
 
+  // ---------------------------------------------------------------------------
+  // Invariant: accepting a quote requires SignWell signing evidence
+  // ---------------------------------------------------------------------------
+  if (newStatus === 'accepted') {
+    if (!existing.signwell_doc_id) {
+      throw new Error(
+        'Cannot accept quote: signwell_doc_id is not set. Quote must be sent through SignWell first.'
+      )
+    }
+    if (!existing.signed_sow_path) {
+      throw new Error(
+        'Cannot accept quote: signed_sow_path is not set. The SignWell webhook must record the signed document first.'
+      )
+    }
+  }
+
   const updates: string[] = ['status = ?']
   const params: (string | number | null)[] = [newStatus]
 

@@ -7,6 +7,11 @@
  *
  * LLMs read context at retrieval time to generate any artifact.
  *
+ * INVARIANT: This module is append-only. No UPDATE or DELETE operations are
+ * exported. Context entries are immutable once written. The only exception is
+ * entity merges (in entities.ts mergeEntities), which reassign entity_id to
+ * preserve context when two entities are consolidated.
+ *
  * All queries are parameterized to prevent SQL injection.
  */
 

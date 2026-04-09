@@ -89,6 +89,10 @@ export const ENTITY_VERTICALS: { value: EntityVertical; label: string }[] = [
 /**
  * Valid stage transitions. Key = current stage, value = allowed next stages.
  * `lost` is non-terminal: can re-engage back to `prospect`.
+ *
+ * NOTE: signal -> assessing is intentionally absent. Booking flows must walk
+ * through `prospect` as an intermediate state so that enrichment and triage
+ * happen before an assessment is scheduled.
  */
 const VALID_TRANSITIONS: Record<EntityStage, EntityStage[]> = {
   signal: ['prospect', 'lost'],
@@ -99,6 +103,11 @@ const VALID_TRANSITIONS: Record<EntityStage, EntityStage[]> = {
   delivered: ['ongoing', 'prospect', 'lost'],
   ongoing: ['prospect', 'lost'],
   lost: ['prospect'],
+}
+
+export interface TransitionOptions {
+  /** Override reason — bypasses the paid-invoice check for delivered -> ongoing. */
+  force?: string
 }
 
 export interface EntityFilters {
@@ -393,15 +402,21 @@ export async function updateEntity(
 // ---------------------------------------------------------------------------
 
 /**
- * Transition an entity to a new stage. Validates against allowed transitions.
+ * Transition an entity to a new stage. Validates against allowed transitions
+ * and enforces lifecycle invariant pre-conditions.
  * Records a stage_change context entry automatically.
+ *
+ * Pre-conditions:
+ * - proposing -> engaged: requires at least one accepted quote
+ * - delivered -> ongoing: requires paid completion invoice OR force override
  */
 export async function transitionStage(
   db: D1Database,
   orgId: string,
   entityId: string,
   newStage: EntityStage,
-  reason: string
+  reason: string,
+  opts?: TransitionOptions
 ): Promise<Entity | null> {
   const entity = await getEntity(db, orgId, entityId)
   if (!entity) return null
@@ -411,6 +426,40 @@ export async function transitionStage(
     throw new Error(
       `Invalid stage transition: ${entity.stage} → ${newStage}. Allowed: ${allowed?.join(', ')}`
     )
+  }
+
+  // ---------------------------------------------------------------------------
+  // Invariant: proposing -> engaged requires an accepted quote
+  // ---------------------------------------------------------------------------
+  if (entity.stage === 'proposing' && newStage === 'engaged') {
+    const acceptedQuote = await db
+      .prepare(`SELECT 1 FROM quotes WHERE entity_id = ? AND status = 'accepted' LIMIT 1`)
+      .bind(entityId)
+      .first()
+    if (!acceptedQuote) {
+      throw new Error('Cannot transition to engaged: no accepted quote found for this entity')
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Invariant: delivered -> ongoing requires paid completion invoice or override
+  // ---------------------------------------------------------------------------
+  if (entity.stage === 'delivered' && newStage === 'ongoing') {
+    if (opts?.force) {
+      // Log the override reason in context below (included in metadata)
+    } else {
+      const paidCompletion = await db
+        .prepare(
+          `SELECT 1 FROM invoices WHERE entity_id = ? AND type = 'completion' AND status = 'paid' LIMIT 1`
+        )
+        .bind(entityId)
+        .first()
+      if (!paidCompletion) {
+        throw new Error(
+          'Cannot transition to ongoing: no paid completion invoice found. Pass force option with reason to override.'
+        )
+      }
+    }
   }
 
   const now = new Date().toISOString()
@@ -426,21 +475,17 @@ export async function transitionStage(
 
   // Record stage change as context entry
   const contextId = crypto.randomUUID()
+  const metadata: Record<string, unknown> = { from: entity.stage, to: newStage, reason }
+  if (opts?.force) {
+    metadata.force_override = opts.force
+  }
   const content = `Stage: ${entity.stage} → ${newStage}. ${reason}`
   await db
     .prepare(
       `INSERT INTO context (id, entity_id, org_id, type, content, source, content_size, metadata, created_at)
       VALUES (?, ?, ?, 'stage_change', ?, 'system', ?, ?, ?)`
     )
-    .bind(
-      contextId,
-      entityId,
-      orgId,
-      content,
-      content.length,
-      JSON.stringify({ from: entity.stage, to: newStage, reason }),
-      now
-    )
+    .bind(contextId, entityId, orgId, content, content.length, JSON.stringify(metadata), now)
     .run()
 
   // Recompute cache after stage change

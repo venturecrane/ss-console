@@ -34,8 +34,18 @@ export const POST: APIRoute = async ({ params, request, locals, redirect }) => {
       return redirect(`/admin/entities/${entityId}?error=missing_stage`, 302)
     }
 
+    const force = formData.get('force')
+    const forceStr = force && typeof force === 'string' && force.trim() ? force.trim() : undefined
+
     const env = locals.runtime.env
-    await transitionStage(env.DB, session.orgId, entityId, stage, reasonStr)
+    await transitionStage(
+      env.DB,
+      session.orgId,
+      entityId,
+      stage,
+      reasonStr,
+      forceStr ? { force: forceStr } : undefined
+    )
 
     return redirect(`/admin/entities/${entityId}?stage_updated=1`, 302)
   } catch (err) {
