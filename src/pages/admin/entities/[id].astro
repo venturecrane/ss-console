@@ -798,7 +798,10 @@ function confidenceColor(confidence: string): string {
             </summary>
             <div class="px-6 pb-4 divide-y divide-slate-100">
               {quotes.map((q) => (
-                <div class="py-2 flex items-center gap-2">
+                <a
+                  href={`/admin/entities/${entity.id}/quotes/${q.id}`}
+                  class="py-2 flex items-center gap-2 hover:bg-slate-50 -mx-2 px-2 rounded transition-colors"
+                >
                   <span class={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(q.status)}`}>
                     {q.status}
                   </span>
@@ -807,7 +810,7 @@ function confidenceColor(confidence: string): string {
                   </span>
                   <span class="text-xs text-slate-400">{q.total_hours} hrs</span>
                   <span class="text-xs text-slate-400">v{q.version}</span>
-                </div>
+                </a>
               ))}
             </div>
           </details>

@@ -131,7 +131,10 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
 
       const pdf = await renderSow(templateProps)
       const sowPath = await uploadPdf(env.STORAGE, session.orgId, quoteId, pdf)
-      await updateQuote(env.DB, session.orgId, quoteId, { sow_path: sowPath })
+      await updateQuote(env.DB, session.orgId, quoteId, {
+        sow_path: sowPath,
+        sow_generated_at: new Date().toISOString(),
+      })
 
       return redirect(`/admin/entities/${existing.entity_id}/quotes/${quoteId}?saved=1`, 302)
     }
@@ -157,6 +160,34 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
         console.error('[api/admin/quotes/[id]] Follow-up scheduling error:', err)
       }
 
+      return redirect(`/admin/entities/${existing.entity_id}/quotes/${quoteId}?saved=1`, 302)
+    }
+
+    // ----- ACTION: decline -----
+    if (action === 'decline') {
+      try {
+        await updateQuoteStatus(env.DB, session.orgId, quoteId, 'declined' as QuoteStatus)
+      } catch (err) {
+        console.error('[api/admin/quotes/[id]] Decline error:', err)
+        return redirect(
+          `/admin/entities/${existing.entity_id}/quotes/${quoteId}?error=invalid_transition`,
+          302
+        )
+      }
+      return redirect(`/admin/entities/${existing.entity_id}/quotes/${quoteId}?saved=1`, 302)
+    }
+
+    // ----- ACTION: expire -----
+    if (action === 'expire') {
+      try {
+        await updateQuoteStatus(env.DB, session.orgId, quoteId, 'expired' as QuoteStatus)
+      } catch (err) {
+        console.error('[api/admin/quotes/[id]] Expire error:', err)
+        return redirect(
+          `/admin/entities/${existing.entity_id}/quotes/${quoteId}?error=invalid_transition`,
+          302
+        )
+      }
       return redirect(`/admin/entities/${existing.entity_id}/quotes/${quoteId}?saved=1`, 302)
     }
 
