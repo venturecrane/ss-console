@@ -12,3 +12,14 @@ database_id = "65171b23-d615-42a7-84e7-a4fac20d063c"
 # Hourly cron — all lifecycle background automation runs here
 [triggers]
 crons = ["0 * * * *"]
+
+# ---------- Secrets (set via wrangler secret put) ----------
+# Required by the booking-enrichment handler for entity enrichment modules.
+# These are the same secrets used by the Pages project's promote endpoint.
+#
+# GOOGLE_PLACES_API_KEY   — Google Places Text Search (enrichment)
+# ANTHROPIC_API_KEY       — Claude API (website analysis, review analysis)
+# OUTSCRAPER_API_KEY      — Outscraper business profile enrichment
+# SERPAPI_API_KEY          — SerpAPI Google Search (news/press enrichment)
+#
+# Set with: npx wrangler secret put SECRET_NAME --config workers/follow-up-processor/wrangler.toml

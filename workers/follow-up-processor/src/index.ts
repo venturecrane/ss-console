@@ -7,6 +7,7 @@
  *
  * Schedule: Hourly at :00 UTC
  * Handlers:
+ *   - booking-enrichment: enrich booking entities that skipped inline enrichment
  *   - booking-cleanup: prune expired holds and OAuth states
  *   - health-check: write heartbeat row for deploy monitoring
  *
@@ -15,14 +16,18 @@
  *   - Invoice overdue escalation
  *   - Re-engagement surfacing
  *   - Safety net auto-completion
- *   - Booking entity enrichment
  */
 
+import { runBookingEnrichment } from './handlers/booking-enrichment.js'
 import { runBookingCleanup } from './handlers/booking-cleanup.js'
 import { runHealthCheck } from './handlers/health-check.js'
 
 export interface Env {
   DB: D1Database
+  GOOGLE_PLACES_API_KEY?: string
+  ANTHROPIC_API_KEY?: string
+  OUTSCRAPER_API_KEY?: string
+  SERPAPI_API_KEY?: string
 }
 
 interface HandlerResult {
@@ -50,6 +55,7 @@ async function run(env: Env): Promise<HandlerResult[]> {
 
   // Run handlers sequentially — order matters for health-check (it records
   // the full run duration, so it goes last).
+  results.push(await runHandler('booking-enrichment', () => runBookingEnrichment(env)))
   results.push(await runHandler('booking-cleanup', () => runBookingCleanup(env.DB)))
   results.push(await runHandler('health-check', () => runHealthCheck(env.DB, results)))
 
@@ -74,7 +80,6 @@ export default {
     const url = new URL(request.url)
 
     if (url.pathname === '/health') {
-      // Quick liveness check — just confirm the Worker responds
       const latest = await env.DB.prepare(
         `SELECT ran_at, summary FROM worker_heartbeats
          WHERE worker_name = 'follow-up-processor'
