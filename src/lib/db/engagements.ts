@@ -5,6 +5,9 @@
  * Primary keys use crypto.randomUUID() (ULID-like uniqueness for D1).
  */
 
+import { scheduleEngagementCadence } from '../follow-ups/scheduler'
+import { transitionStage } from './entities'
+
 export interface Engagement {
   id: string
   org_id: string
@@ -263,7 +266,8 @@ export async function updateEngagementStatus(
   const updates: string[] = ['status = ?', "updated_at = datetime('now')"]
   const params: (string | number | null)[] = [newStatus]
 
-  // When transitioning to handoff, auto-set handoff_date and safety_net_end
+  // When transitioning to handoff, auto-set handoff_date and safety_net_end,
+  // schedule the engagement follow-up cadence, and transition entity to delivered.
   if (newStatus === 'handoff') {
     const handoffDate = new Date()
     const safetyNetEnd = new Date(handoffDate)
@@ -273,6 +277,18 @@ export async function updateEngagementStatus(
     params.push(handoffDate.toISOString())
     updates.push('safety_net_end = ?')
     params.push(safetyNetEnd.toISOString())
+
+    // Schedule handoff follow-up cadence (referral_ask, review_request, safety_net_checkin, feedback_30day)
+    await scheduleEngagementCadence(
+      db,
+      orgId,
+      engagementId,
+      existing.entity_id,
+      handoffDate.toISOString()
+    )
+
+    // Transition entity stage to delivered
+    await transitionStage(db, orgId, existing.entity_id, 'delivered', 'Engagement entered handoff')
   }
 
   // When transitioning to completed, auto-set actual_end
