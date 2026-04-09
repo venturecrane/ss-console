@@ -9,6 +9,8 @@ import { listAssessments } from '../../../lib/db/assessments'
 import { listEngagements } from '../../../lib/db/engagements'
 import { listQuotes } from '../../../lib/db/quotes'
 import { listInvoices } from '../../../lib/db/invoices'
+import { listRetainersForEntity } from '../../../lib/db/retainers'
+import type { Retainer } from '../../../lib/db/retainers'
 
 /**
  * Entity detail — unified view of a single business across its lifecycle.
@@ -24,14 +26,16 @@ const entityId = Astro.params.id!
 const entity = await getEntity(env.DB, session.orgId, entityId)
 if (!entity) return Astro.redirect('/admin/entities?error=not_found')
 
-const [contextEntries, contacts, assessments, engagements, quotes, invoices] = await Promise.all([
-  listContext(env.DB, entityId),
-  listContacts(env.DB, session.orgId, entityId),
-  listAssessments(env.DB, session.orgId, entityId),
-  listEngagements(env.DB, session.orgId, entityId),
-  listQuotes(env.DB, session.orgId, entityId),
-  listInvoices(env.DB, session.orgId, { entityId }),
-])
+const [contextEntries, contacts, assessments, engagements, quotes, invoices, retainers] =
+  await Promise.all([
+    listContext(env.DB, entityId),
+    listContacts(env.DB, session.orgId, entityId),
+    listAssessments(env.DB, session.orgId, entityId),
+    listEngagements(env.DB, session.orgId, entityId),
+    listQuotes(env.DB, session.orgId, entityId),
+    listInvoices(env.DB, session.orgId, { entityId }),
+    listRetainersForEntity(env.DB, session.orgId, entityId),
+  ])
 
 // Reverse for newest-first display
 const timelineEntries = [...contextEntries].reverse()
@@ -52,6 +56,7 @@ const promoted = Astro.url.searchParams.get('promoted')
 const noteAdded = Astro.url.searchParams.get('note_added')
 const stageUpdated = Astro.url.searchParams.get('stage_updated')
 const dossierGenerated = Astro.url.searchParams.get('dossier')
+const retainerCreated = Astro.url.searchParams.get('retainer_created')
 const error = Astro.url.searchParams.get('error')
 
 // Dossier available for prospect stage and beyond (not signal or lost)
@@ -181,6 +186,7 @@ function statusBadgeClass(status: string): string {
     handoff: 'bg-teal-100 text-teal-700',
     safety_net: 'bg-amber-100 text-amber-700',
     cancelled: 'bg-slate-100 text-slate-500',
+    paused: 'bg-amber-100 text-amber-700',
     draft: 'bg-slate-100 text-slate-600',
     sent: 'bg-blue-100 text-blue-700',
     accepted: 'bg-green-100 text-green-700',
@@ -366,6 +372,13 @@ function confidenceColor(confidence: string): string {
         dossierGenerated && (
           <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg mb-4">
             Intelligence dossier generated. See enrichment entries in the timeline below.
+          </div>
+        )
+      }
+      {
+        retainerCreated && (
+          <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg mb-4">
+            Retainer created.
           </div>
         )
       }
@@ -838,6 +851,187 @@ function confidenceColor(confidence: string): string {
                 </div>
               ))}
             </div>
+          </details>
+        )
+      }
+
+      {/* Retainer Summary */}
+      {
+        retainers.length > 0 && (
+          <details class="bg-white rounded-lg border border-slate-200 mb-4" open>
+            <summary class="px-6 py-4 cursor-pointer font-medium text-slate-900">
+              Retainers ({retainers.length})
+            </summary>
+            <div class="px-6 pb-4 divide-y divide-slate-100">
+              {retainers.map((r: Retainer) => (
+                <div class="py-3">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(r.status)}`}>
+                      {r.status}
+                    </span>
+                    <span class="text-sm font-medium text-slate-700">
+                      ${r.monthly_rate.toLocaleString()}/mo
+                    </span>
+                    {r.included_hours && (
+                      <span class="text-xs text-slate-400">{r.included_hours} hrs/mo</span>
+                    )}
+                  </div>
+                  <div class="flex items-center gap-3 text-xs text-slate-500">
+                    <span>Started {formatDate(r.start_date)}</span>
+                    <span>Next billing: {formatDate(r.next_billing_date)}</span>
+                    {r.last_billed_at && <span>Last billed: {formatDate(r.last_billed_at)}</span>}
+                  </div>
+                  {r.scope_description && (
+                    <p class="text-xs text-slate-500 mt-1">{r.scope_description}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </details>
+        )
+      }
+
+      {/* Create Retainer Form */}
+      {
+        (entity.stage === 'delivered' || entity.stage === 'ongoing') && (
+          <details class="bg-white rounded-lg border border-slate-200 mb-4">
+            <summary class="px-6 py-4 cursor-pointer font-medium text-slate-900">
+              Create Retainer
+            </summary>
+            <form method="POST" action="/api/admin/retainers" class="px-6 pb-6 space-y-4">
+              <input type="hidden" name="entity_id" value={entity.id} />
+              {entity.stage === 'delivered' && (
+                <input type="hidden" name="transition_to_ongoing" value="1" />
+              )}
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-1" for="monthly_rate">
+                    Monthly Rate ($) *
+                  </label>
+                  <input
+                    type="number"
+                    id="monthly_rate"
+                    name="monthly_rate"
+                    step="0.01"
+                    min="0"
+                    required
+                    class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-1" for="included_hours">
+                    Included Hours/Month
+                  </label>
+                  <input
+                    type="number"
+                    id="included_hours"
+                    name="included_hours"
+                    step="0.5"
+                    min="0"
+                    class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-1" for="start_date">
+                    Start Date *
+                  </label>
+                  <input
+                    type="date"
+                    id="start_date"
+                    name="start_date"
+                    required
+                    class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-1" for="end_date">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    id="end_date"
+                    name="end_date"
+                    class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+              {engagements.length > 0 && (
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-1" for="engagement_id">
+                    Originating Engagement
+                  </label>
+                  <select
+                    id="engagement_id"
+                    name="engagement_id"
+                    class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+                  >
+                    <option value="">None</option>
+                    {engagements.map((e) => (
+                      <option value={e.id}>
+                        {e.scope_summary || e.id.slice(0, 8)} ({e.status})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label
+                  class="block text-sm font-medium text-slate-700 mb-1"
+                  for="scope_description"
+                >
+                  Scope Description
+                </label>
+                <textarea
+                  id="scope_description"
+                  name="scope_description"
+                  rows="2"
+                  class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+                  placeholder="What ongoing support is included..."
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1" for="terms">
+                  Terms
+                </label>
+                <textarea
+                  id="terms"
+                  name="terms"
+                  rows="2"
+                  class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+                  placeholder="Payment terms, billing cycle..."
+                />
+              </div>
+              <div>
+                <label
+                  class="block text-sm font-medium text-slate-700 mb-1"
+                  for="cancellation_policy"
+                >
+                  Cancellation Policy
+                </label>
+                <textarea
+                  id="cancellation_policy"
+                  name="cancellation_policy"
+                  rows="2"
+                  class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+                  placeholder="30-day notice, etc."
+                />
+              </div>
+              <div class="pt-2">
+                <button
+                  type="submit"
+                  class="bg-teal-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-teal-700"
+                >
+                  Create Retainer
+                </button>
+                {entity.stage === 'delivered' && (
+                  <span class="text-xs text-slate-500 ml-3">
+                    This will also transition the entity to ongoing.
+                  </span>
+                )}
+              </div>
+            </form>
           </details>
         )
       }
