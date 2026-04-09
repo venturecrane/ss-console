@@ -99,7 +99,15 @@ describe('icsToBase64', () => {
     const ics = 'BEGIN:VCALENDAR\nEND:VCALENDAR'
     const b64 = icsToBase64(ics)
     expect(b64).toMatch(/^[A-Za-z0-9+/]+=*$/)
-    // Round trip via atob
-    expect(atob(b64)).toBe(ics)
+    // Round trip via TextDecoder (UTF-8 aware)
+    const decoded = new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)))
+    expect(decoded).toBe(ics)
+  })
+
+  it('round-trips non-ASCII characters (UTF-8 safe)', () => {
+    const ics = 'BEGIN:VCALENDAR\nSUMMARY:Meeting with Jos\u00e9 Garc\u00eda\nEND:VCALENDAR'
+    const b64 = icsToBase64(ics)
+    const decoded = new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)))
+    expect(decoded).toBe(ics)
   })
 })

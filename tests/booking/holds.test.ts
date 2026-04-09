@@ -1,13 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
+import { toSqliteDatetime } from '../../src/lib/booking/holds'
 
 /**
- * Holds DAL — structural source-string tests.
+ * Holds DAL — structural source-string tests + format validation.
  *
- * Behavioral verification of the upsert-when-expired SQL pattern is done
- * separately via `scripts/test-holds-upsert.sh` (runs against local D1).
- * This file ensures the source contains the critical pieces.
+ * Full behavioral verification of the upsert-when-expired pattern requires
+ * a D1 instance and is covered by integration tests against local D1.
+ * This file ensures the source contains the critical SQL pieces and that
+ * datetime formatting matches SQLite's expectations.
  */
 
 const source = () => readFileSync(resolve('src/lib/booking/holds.ts'), 'utf-8')
@@ -53,5 +55,25 @@ describe('holds DAL: structural', () => {
   it('releaseHold is idempotent — DELETE WHERE id matches', () => {
     const code = source()
     expect(code).toContain('DELETE FROM booking_holds WHERE id = ?')
+  })
+})
+
+describe('toSqliteDatetime', () => {
+  it('produces YYYY-MM-DD HH:MM:SS format (no T separator, no milliseconds, no Z)', () => {
+    const result = toSqliteDatetime(new Date('2026-04-13T16:30:45.123Z'))
+    expect(result).toBe('2026-04-13 16:30:45')
+  })
+
+  it('matches the format returned by SQLite datetime() function', () => {
+    const result = toSqliteDatetime(new Date())
+    // SQLite datetime format: exactly 'YYYY-MM-DD HH:MM:SS'
+    expect(result).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+  })
+
+  it('does not contain ISO-8601 artifacts (T or Z)', () => {
+    const result = toSqliteDatetime(new Date())
+    expect(result).not.toContain('T')
+    expect(result).not.toContain('Z')
+    expect(result).not.toContain('.')
   })
 })

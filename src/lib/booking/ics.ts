@@ -124,8 +124,9 @@ export function buildIcs(input: BuildIcsInput): BuildIcsResult {
  * helper centralizes the encoding so callers don't have to remember.
  */
 export function icsToBase64(ics: string): string {
-  // Workers don't have Buffer; use btoa over a binary string
+  // Encode to UTF-8 bytes first so non-ASCII characters survive base64
+  const utf8Bytes = new TextEncoder().encode(ics)
   let bin = ''
-  for (let i = 0; i < ics.length; i++) bin += String.fromCharCode(ics.charCodeAt(i))
+  for (let i = 0; i < utf8Bytes.length; i++) bin += String.fromCharCode(utf8Bytes[i])
   return btoa(bin)
 }

@@ -4,10 +4,10 @@
 -- replacing Calendly on /book. It does five things:
 --
 --   1. Rewrites the `assessments` table to expand the status CHECK constraint
---      with a new 'cancelled' value. SQLite does not support
---      ALTER TABLE … DROP CONSTRAINT, so a 12-step table rewrite is required.
---      The rewrite preserves all 15 existing columns in their current order
---      (including the additive `entity_id TEXT` column added out-of-band).
+--      with a new 'cancelled' value. D1 enforces foreign keys on DROP TABLE,
+--      so this requires a coordinated rewrite of the entire FK chain rooted at
+--      assessments (9 tables total). Data is backed up, tables are dropped
+--      leaf-first, recreated root-first, and data is restored.
 --
 --   2. Adds a partial unique index on (org_id, scheduled_at) for active
 --      scheduled assessments. This is the database-level last line of defense
@@ -33,15 +33,74 @@
 -- 1. assessments table rewrite (expand CHECK constraint to add 'cancelled')
 -- ============================================================================
 --
--- SQLite recommended 12-step procedure adapted for D1:
---   - D1 cannot disable foreign keys via PRAGMA from migration SQL.
---   - SQLite allows DROP TABLE on a referenced table (FK is enforced on
---     INSERT/UPDATE, not DROP). The dangling FK from quotes(assessment_id)
---     is transient and resolved when the new assessments table is renamed
---     into place with the same name.
---   - quotes(assessment_id) FK rebinds by table name automatically.
+-- D1 enforces FK constraints on DROP TABLE, so we cannot drop assessments
+-- while quotes(assessment_id) references it. The full FK chain is:
+--
+--   assessments <- quotes <- engagements <- engagement_contacts
+--                                        <- milestones
+--                                        <- time_entries
+--                                        <- parking_lot (engagement_id)
+--                                        <- invoices (engagement_id)
+--                                        <- follow_ups (engagement_id)
+--                  quotes <- parking_lot (follow_on_quote_id)
+--                  quotes <- follow_ups (quote_id)
+--
+-- Strategy: backup all 9 tables into constraint-free _bak tables, drop
+-- leaf-first, recreate root-first with the fixed CHECK, restore data,
+-- recreate indexes, drop _bak tables.
 
-CREATE TABLE assessments_new (
+-- ---- Phase 1: Backup data (no constraints) ----
+
+CREATE TABLE assessments_bak AS SELECT * FROM assessments;
+CREATE TABLE quotes_bak AS SELECT * FROM quotes;
+CREATE TABLE engagements_bak AS SELECT * FROM engagements;
+CREATE TABLE engagement_contacts_bak AS SELECT * FROM engagement_contacts;
+CREATE TABLE milestones_bak AS SELECT * FROM milestones;
+CREATE TABLE parking_lot_bak AS SELECT * FROM parking_lot;
+CREATE TABLE invoices_bak AS SELECT * FROM invoices;
+CREATE TABLE follow_ups_bak AS SELECT * FROM follow_ups;
+CREATE TABLE time_entries_bak AS SELECT * FROM time_entries;
+
+-- ---- Phase 2: Drop indexes ----
+
+DROP INDEX IF EXISTS idx_assessments_org_status;
+DROP INDEX IF EXISTS idx_quotes_org_status;
+DROP INDEX IF EXISTS idx_quotes_assessment_id;
+DROP INDEX IF EXISTS idx_quotes_parent_id;
+DROP INDEX IF EXISTS idx_engagements_org_status;
+DROP INDEX IF EXISTS idx_engagements_quote_id;
+DROP INDEX IF EXISTS idx_engagement_contacts_engagement;
+DROP INDEX IF EXISTS idx_engagement_contacts_contact;
+DROP INDEX IF EXISTS idx_milestones_engagement_order;
+DROP INDEX IF EXISTS idx_milestones_status;
+DROP INDEX IF EXISTS idx_parking_lot_engagement;
+DROP INDEX IF EXISTS idx_parking_lot_disposition;
+DROP INDEX IF EXISTS idx_invoices_org_status;
+DROP INDEX IF EXISTS idx_invoices_engagement_id;
+DROP INDEX IF EXISTS idx_invoices_stripe_id;
+DROP INDEX IF EXISTS idx_invoices_due_date;
+DROP INDEX IF EXISTS idx_follow_ups_org_scheduled;
+DROP INDEX IF EXISTS idx_follow_ups_engagement_id;
+DROP INDEX IF EXISTS idx_follow_ups_quote_id;
+DROP INDEX IF EXISTS idx_follow_ups_client_id;
+DROP INDEX IF EXISTS idx_time_entries_engagement;
+DROP INDEX IF EXISTS idx_time_entries_org_date;
+
+-- ---- Phase 3: Drop tables (leaf-first) ----
+
+DROP TABLE engagement_contacts;
+DROP TABLE milestones;
+DROP TABLE time_entries;
+DROP TABLE parking_lot;
+DROP TABLE invoices;
+DROP TABLE follow_ups;
+DROP TABLE engagements;
+DROP TABLE quotes;
+DROP TABLE assessments;
+
+-- ---- Phase 4: Recreate tables (root-first, with expanded CHECK) ----
+
+CREATE TABLE assessments (
   id              TEXT PRIMARY KEY,
   org_id          TEXT NOT NULL REFERENCES organizations(id),
   scheduled_at    TEXT,
@@ -61,22 +120,252 @@ CREATE TABLE assessments_new (
   entity_id       TEXT
 );
 
-INSERT INTO assessments_new (
-  id, org_id, scheduled_at, completed_at, duration_minutes,
-  transcript_path, extraction, problems, disqualifiers,
-  champion_name, champion_role, status, notes, created_at, entity_id
-)
-SELECT
-  id, org_id, scheduled_at, completed_at, duration_minutes,
-  transcript_path, extraction, problems, disqualifiers,
-  champion_name, champion_role, status, notes, created_at, entity_id
-FROM assessments;
+CREATE TABLE quotes (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id),
+  assessment_id   TEXT NOT NULL REFERENCES assessments(id),
+  version         INTEGER NOT NULL DEFAULT 1,
+  parent_quote_id TEXT REFERENCES quotes(id),
+  line_items      TEXT NOT NULL,
+  total_hours     REAL NOT NULL,
+  rate            REAL NOT NULL,
+  total_price     REAL NOT NULL,
+  deposit_pct     REAL DEFAULT 0.5,
+  deposit_amount  REAL,
+  status          TEXT NOT NULL DEFAULT 'draft' CHECK (status IN (
+                    'draft', 'sent', 'accepted', 'declined', 'expired', 'superseded'
+                  )),
+  sent_at         TEXT,
+  expires_at      TEXT,
+  accepted_at     TEXT,
+  sow_path        TEXT,
+  signed_sow_path TEXT,
+  signwell_doc_id TEXT,
+  notes           TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
-DROP TABLE assessments;
-ALTER TABLE assessments_new RENAME TO assessments;
+CREATE TABLE engagements (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id),
+  quote_id        TEXT NOT NULL REFERENCES quotes(id),
+  scope_summary   TEXT,
+  start_date      TEXT,
+  estimated_end   TEXT,
+  actual_end      TEXT,
+  handoff_date    TEXT,
+  safety_net_end  TEXT,
+  status          TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN (
+                    'scheduled', 'active', 'handoff', 'safety_net',
+                    'completed', 'cancelled'
+                  )),
+  estimated_hours REAL,
+  actual_hours    REAL DEFAULT 0,
+  notes           TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
--- Recreate the only existing index on assessments (verified via prod query).
+CREATE TABLE engagement_contacts (
+  id              TEXT PRIMARY KEY,
+  engagement_id   TEXT NOT NULL REFERENCES engagements(id),
+  contact_id      TEXT NOT NULL REFERENCES contacts(id),
+  role            TEXT NOT NULL CHECK (role IN (
+                    'owner', 'decision_maker', 'champion'
+                  )),
+  is_primary      INTEGER DEFAULT 0,
+  notes           TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(engagement_id, contact_id, role)
+);
+
+CREATE TABLE milestones (
+  id              TEXT PRIMARY KEY,
+  engagement_id   TEXT NOT NULL REFERENCES engagements(id),
+  name            TEXT NOT NULL,
+  description     TEXT,
+  due_date        TEXT,
+  completed_at    TEXT,
+  status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN (
+                    'pending', 'in_progress', 'completed', 'skipped'
+                  )),
+  payment_trigger INTEGER DEFAULT 0,
+  sort_order      INTEGER DEFAULT 0,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE parking_lot (
+  id              TEXT PRIMARY KEY,
+  engagement_id   TEXT NOT NULL REFERENCES engagements(id),
+  description     TEXT NOT NULL,
+  requested_by    TEXT,
+  requested_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  disposition     TEXT CHECK (disposition IN (
+                    'fold_in', 'follow_on', 'dropped'
+                  )),
+  disposition_note TEXT,
+  reviewed_at     TEXT,
+  follow_on_quote_id TEXT REFERENCES quotes(id),
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE invoices (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id),
+  engagement_id   TEXT REFERENCES engagements(id),
+  type            TEXT NOT NULL CHECK (type IN (
+                    'deposit', 'completion', 'milestone', 'assessment', 'retainer'
+                  )),
+  amount          REAL NOT NULL,
+  description     TEXT,
+  status          TEXT NOT NULL DEFAULT 'draft' CHECK (status IN (
+                    'draft', 'sent', 'paid', 'overdue', 'void'
+                  )),
+  stripe_invoice_id TEXT,
+  stripe_hosted_url TEXT,
+  due_date        TEXT,
+  sent_at         TEXT,
+  paid_at         TEXT,
+  payment_method  TEXT,
+  notes           TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE follow_ups (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id),
+  engagement_id   TEXT REFERENCES engagements(id),
+  quote_id        TEXT REFERENCES quotes(id),
+  type            TEXT NOT NULL CHECK (type IN (
+                    'proposal_day2', 'proposal_day5', 'proposal_day7',
+                    'review_request', 'referral_ask',
+                    'safety_net_checkin', 'feedback_30day'
+                  )),
+  scheduled_for   TEXT NOT NULL,
+  completed_at    TEXT,
+  status          TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN (
+                    'scheduled', 'completed', 'skipped'
+                  )),
+  notes           TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE time_entries (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id),
+  engagement_id   TEXT NOT NULL REFERENCES engagements(id),
+  date            TEXT NOT NULL,
+  hours           REAL NOT NULL,
+  description     TEXT,
+  category        TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ---- Phase 5: Restore data (root-first, explicit column lists) ----
+
+INSERT INTO assessments (id, org_id, scheduled_at, completed_at, duration_minutes,
+  transcript_path, extraction, problems, disqualifiers, champion_name, champion_role,
+  status, notes, created_at, entity_id)
+SELECT id, org_id, scheduled_at, completed_at, duration_minutes,
+  transcript_path, extraction, problems, disqualifiers, champion_name, champion_role,
+  status, notes, created_at, entity_id
+FROM assessments_bak;
+
+INSERT INTO quotes (id, org_id, assessment_id, version, parent_quote_id,
+  line_items, total_hours, rate, total_price, deposit_pct, deposit_amount,
+  status, sent_at, expires_at, accepted_at, sow_path, signed_sow_path,
+  signwell_doc_id, notes, created_at, updated_at)
+SELECT id, org_id, assessment_id, version, parent_quote_id,
+  line_items, total_hours, rate, total_price, deposit_pct, deposit_amount,
+  status, sent_at, expires_at, accepted_at, sow_path, signed_sow_path,
+  signwell_doc_id, notes, created_at, updated_at
+FROM quotes_bak;
+
+INSERT INTO engagements (id, org_id, quote_id, scope_summary, start_date,
+  estimated_end, actual_end, handoff_date, safety_net_end, status,
+  estimated_hours, actual_hours, notes, created_at, updated_at)
+SELECT id, org_id, quote_id, scope_summary, start_date,
+  estimated_end, actual_end, handoff_date, safety_net_end, status,
+  estimated_hours, actual_hours, notes, created_at, updated_at
+FROM engagements_bak;
+
+INSERT INTO engagement_contacts (id, engagement_id, contact_id, role,
+  is_primary, notes, created_at)
+SELECT id, engagement_id, contact_id, role,
+  is_primary, notes, created_at
+FROM engagement_contacts_bak;
+
+INSERT INTO milestones (id, engagement_id, name, description, due_date,
+  completed_at, status, payment_trigger, sort_order, created_at)
+SELECT id, engagement_id, name, description, due_date,
+  completed_at, status, payment_trigger, sort_order, created_at
+FROM milestones_bak;
+
+INSERT INTO parking_lot (id, engagement_id, description, requested_by,
+  requested_at, disposition, disposition_note, reviewed_at,
+  follow_on_quote_id, created_at)
+SELECT id, engagement_id, description, requested_by,
+  requested_at, disposition, disposition_note, reviewed_at,
+  follow_on_quote_id, created_at
+FROM parking_lot_bak;
+
+INSERT INTO invoices (id, org_id, engagement_id, type, amount, description,
+  status, stripe_invoice_id, stripe_hosted_url, due_date, sent_at, paid_at,
+  payment_method, notes, created_at, updated_at)
+SELECT id, org_id, engagement_id, type, amount, description,
+  status, stripe_invoice_id, stripe_hosted_url, due_date, sent_at, paid_at,
+  payment_method, notes, created_at, updated_at
+FROM invoices_bak;
+
+INSERT INTO follow_ups (id, org_id, engagement_id, quote_id, type,
+  scheduled_for, completed_at, status, notes, created_at)
+SELECT id, org_id, engagement_id, quote_id, type,
+  scheduled_for, completed_at, status, notes, created_at
+FROM follow_ups_bak;
+
+INSERT INTO time_entries (id, org_id, engagement_id, date, hours,
+  description, category, created_at)
+SELECT id, org_id, engagement_id, date, hours,
+  description, category, created_at
+FROM time_entries_bak;
+
+-- ---- Phase 6: Recreate indexes ----
+
 CREATE INDEX idx_assessments_org_status ON assessments(org_id, status);
+CREATE INDEX idx_quotes_org_status ON quotes(org_id, status);
+CREATE INDEX idx_quotes_assessment_id ON quotes(assessment_id);
+CREATE INDEX idx_quotes_parent_id ON quotes(parent_quote_id);
+CREATE INDEX idx_engagements_org_status ON engagements(org_id, status);
+CREATE INDEX idx_engagements_quote_id ON engagements(quote_id);
+CREATE INDEX idx_engagement_contacts_engagement ON engagement_contacts(engagement_id);
+CREATE INDEX idx_engagement_contacts_contact ON engagement_contacts(contact_id);
+CREATE INDEX idx_milestones_engagement_order ON milestones(engagement_id, sort_order);
+CREATE INDEX idx_milestones_status ON milestones(status);
+CREATE INDEX idx_parking_lot_engagement ON parking_lot(engagement_id);
+CREATE INDEX idx_parking_lot_disposition ON parking_lot(disposition);
+CREATE INDEX idx_invoices_org_status ON invoices(org_id, status);
+CREATE INDEX idx_invoices_engagement_id ON invoices(engagement_id);
+CREATE INDEX idx_invoices_stripe_id ON invoices(stripe_invoice_id);
+CREATE INDEX idx_invoices_due_date ON invoices(due_date);
+CREATE INDEX idx_follow_ups_org_scheduled ON follow_ups(org_id, status, scheduled_for);
+CREATE INDEX idx_follow_ups_engagement_id ON follow_ups(engagement_id);
+CREATE INDEX idx_follow_ups_quote_id ON follow_ups(quote_id);
+CREATE INDEX idx_time_entries_engagement ON time_entries(engagement_id);
+CREATE INDEX idx_time_entries_org_date ON time_entries(org_id, date);
+
+-- ---- Phase 7: Drop backup tables ----
+
+DROP TABLE assessments_bak;
+DROP TABLE quotes_bak;
+DROP TABLE engagements_bak;
+DROP TABLE engagement_contacts_bak;
+DROP TABLE milestones_bak;
+DROP TABLE parking_lot_bak;
+DROP TABLE invoices_bak;
+DROP TABLE follow_ups_bak;
+DROP TABLE time_entries_bak;
 
 
 -- ============================================================================

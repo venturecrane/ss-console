@@ -22,6 +22,14 @@
 
 const HOLD_TTL_MINUTES = 5
 
+/** Convert a JS Date to SQLite datetime format ('YYYY-MM-DD HH:MM:SS'). */
+export function toSqliteDatetime(d: Date): string {
+  return d
+    .toISOString()
+    .replace('T', ' ')
+    .replace(/\.\d{3}Z$/, '')
+}
+
 export interface AcquireHoldResult {
   acquired: boolean
   /** The id of the hold row, valid only when `acquired === true`. */
@@ -50,8 +58,8 @@ export async function acquireHold(
   guestEmail: string | null
 ): Promise<AcquireHoldResult> {
   const id = crypto.randomUUID()
-  const nowIso = new Date().toISOString()
-  const expiresIso = new Date(Date.now() + HOLD_TTL_MINUTES * 60_000).toISOString()
+  const now = toSqliteDatetime(new Date())
+  const expires = toSqliteDatetime(new Date(Date.now() + HOLD_TTL_MINUTES * 60_000))
 
   // INSERT … ON CONFLICT … DO UPDATE … WHERE expires_at < now
   // RETURNING id lets us detect whether we won the race.
@@ -67,7 +75,7 @@ export async function acquireHold(
        WHERE booking_holds.expires_at < datetime('now')
        RETURNING id`
     )
-    .bind(id, orgId, slotStartUtc, expiresIso, guestEmail, nowIso)
+    .bind(id, orgId, slotStartUtc, expires, guestEmail, now)
     .first<{ id: string }>()
 
   if (!result || result.id !== id) {
