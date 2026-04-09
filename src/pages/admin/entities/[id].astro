@@ -5,7 +5,12 @@ import type { EntityStage } from '../../../lib/db/entities'
 import { listContext, CONTEXT_TYPES } from '../../../lib/db/context'
 import type { ContextEntry } from '../../../lib/db/context'
 import { listContacts } from '../../../lib/db/contacts'
-import { listAssessments } from '../../../lib/db/assessments'
+import {
+  listAssessments,
+  ASSESSMENT_STATUSES,
+  VALID_TRANSITIONS as ASSESSMENT_TRANSITIONS,
+} from '../../../lib/db/assessments'
+import type { AssessmentStatus } from '../../../lib/db/assessments'
 import { listEngagements } from '../../../lib/db/engagements'
 import { listQuotes } from '../../../lib/db/quotes'
 import { listInvoices } from '../../../lib/db/invoices'
@@ -193,6 +198,10 @@ function statusBadgeClass(status: string): string {
     converted: 'bg-green-100 text-green-700',
   }
   return map[status] ?? 'bg-slate-100 text-slate-600'
+}
+
+function assessmentStatusLabel(status: string): string {
+  return ASSESSMENT_STATUSES.find((s) => s.value === status)?.label ?? status
 }
 
 function parseMetadata(json: string | null): Record<string, unknown> | null {
@@ -745,19 +754,38 @@ function confidenceColor(confidence: string): string {
               Assessments ({assessments.length})
             </summary>
             <div class="px-6 pb-4 divide-y divide-slate-100">
-              {assessments.map((a) => (
-                <div class="py-2 flex items-center gap-2">
-                  <span class={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(a.status)}`}>
-                    {a.status}
-                  </span>
-                  {a.scheduled_at && (
-                    <span class="text-sm text-slate-700">{formatDate(a.scheduled_at)}</span>
-                  )}
-                  {a.duration_minutes && (
-                    <span class="text-xs text-slate-400">{a.duration_minutes} min</span>
-                  )}
-                </div>
-              ))}
+              {assessments.map((a) => {
+                const validNext = ASSESSMENT_TRANSITIONS[a.status as AssessmentStatus] ?? []
+                return (
+                  <div class="py-2 flex items-center gap-2 flex-wrap">
+                    <span class={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(a.status)}`}>
+                      {assessmentStatusLabel(a.status)}
+                    </span>
+                    {a.scheduled_at && (
+                      <span class="text-sm text-slate-700">{formatDate(a.scheduled_at)}</span>
+                    )}
+                    {a.duration_minutes && (
+                      <span class="text-xs text-slate-400">{a.duration_minutes} min</span>
+                    )}
+                    {validNext.length > 0 && (
+                      <div class="ml-auto flex items-center gap-1">
+                        {validNext.map((next: string) => (
+                          <form method="POST" action={`/api/admin/assessments/${a.id}`}>
+                            <input type="hidden" name="action" value="transition_status" />
+                            <input type="hidden" name="new_status" value={next} />
+                            <button
+                              type="submit"
+                              class={`text-xs px-2 py-0.5 rounded transition-colors ${statusBadgeClass(next)} hover:opacity-80`}
+                            >
+                              {assessmentStatusLabel(next)}
+                            </button>
+                          </form>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </details>
         )

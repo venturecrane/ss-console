@@ -51,12 +51,18 @@ describe('assessments: data access layer', () => {
     expect(code).toContain("'entity_id = ?'")
   })
 
-  it('defines all valid assessment statuses', () => {
+  it('defines all valid assessment statuses including cancelled', () => {
     const code = source()
     expect(code).toContain("'scheduled'")
     expect(code).toContain("'completed'")
     expect(code).toContain("'disqualified'")
     expect(code).toContain("'converted'")
+    expect(code).toContain("'cancelled'")
+  })
+
+  it('ASSESSMENT_STATUSES includes cancelled with Cancelled label', () => {
+    const code = source()
+    expect(code).toContain("{ value: 'cancelled', label: 'Cancelled' }")
   })
 
   it('exports ASSESSMENT_STATUSES constant', () => {
@@ -212,5 +218,60 @@ describe('assessments: API routes', () => {
     )
     expect(code).toContain('Content-Disposition')
     expect(code).toContain('attachment')
+  })
+})
+
+describe('assessments: admin UI cancelled status audit', () => {
+  const entityDetailSource = () =>
+    readFileSync(resolve('src/pages/admin/entities/[id].astro'), 'utf-8')
+
+  it('entity detail page imports ASSESSMENT_STATUSES', () => {
+    expect(entityDetailSource()).toContain('ASSESSMENT_STATUSES')
+  })
+
+  it('entity detail page imports VALID_TRANSITIONS as ASSESSMENT_TRANSITIONS', () => {
+    expect(entityDetailSource()).toContain('VALID_TRANSITIONS as ASSESSMENT_TRANSITIONS')
+  })
+
+  it('entity detail page imports AssessmentStatus type', () => {
+    expect(entityDetailSource()).toContain('AssessmentStatus')
+  })
+
+  it('status badge helper includes cancelled with neutral gray styling', () => {
+    const code = entityDetailSource()
+    expect(code).toContain("cancelled: 'bg-slate-100 text-slate-500'")
+  })
+
+  it('assessmentStatusLabel helper maps status to ASSESSMENT_STATUSES labels', () => {
+    const code = entityDetailSource()
+    expect(code).toContain('function assessmentStatusLabel')
+    expect(code).toContain('ASSESSMENT_STATUSES.find')
+  })
+
+  it('assessment list renders labels via assessmentStatusLabel, not raw status', () => {
+    const code = entityDetailSource()
+    expect(code).toContain('{assessmentStatusLabel(a.status)}')
+  })
+
+  it('assessment transition UI reads from ASSESSMENT_TRANSITIONS (not hardcoded)', () => {
+    const code = entityDetailSource()
+    expect(code).toContain('ASSESSMENT_TRANSITIONS[a.status as AssessmentStatus]')
+  })
+
+  it('terminal statuses (cancelled, disqualified, converted) show no transition buttons', () => {
+    const code = entityDetailSource()
+    expect(code).toContain('validNext.length > 0')
+  })
+
+  it('transition buttons post to assessments API with transition_status action', () => {
+    const code = entityDetailSource()
+    expect(code).toContain('value="transition_status"')
+    expect(code).toContain('name="new_status"')
+    expect(code).toContain('/api/admin/assessments/')
+  })
+
+  it('transition buttons reuse statusBadgeClass for consistent styling', () => {
+    const code = entityDetailSource()
+    expect(code).toContain('statusBadgeClass(next)')
   })
 })
