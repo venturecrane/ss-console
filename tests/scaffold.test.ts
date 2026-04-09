@@ -63,10 +63,13 @@ describe('cloudflare SSR scaffolding', () => {
   })
 
   it('static pages are marked for prerendering', () => {
-    const book = readFileSync(resolve('src/pages/book.astro'), 'utf-8')
     const notFound = readFileSync(resolve('src/pages/404.astro'), 'utf-8')
-    expect(book).toContain('export const prerender = true')
     expect(notFound).toContain('export const prerender = true')
+  })
+
+  it('book page is SSR (needs runtime env for Turnstile key)', () => {
+    const book = readFileSync(resolve('src/pages/book.astro'), 'utf-8')
+    expect(book).toContain('export const prerender = false')
   })
 
   it('index page is SSR for portal subdomain routing', () => {
