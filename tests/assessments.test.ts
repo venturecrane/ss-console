@@ -80,10 +80,12 @@ describe('assessments: data access layer', () => {
     expect(code).toContain('completed_at')
   })
 
-  it('defines valid transitions: scheduled -> completed | disqualified', () => {
+  it('defines valid transitions: scheduled -> completed | disqualified | cancelled', () => {
     const code = source()
-    // The VALID_TRANSITIONS object should allow these transitions
-    expect(code).toContain("scheduled: ['completed', 'disqualified']")
+    // The VALID_TRANSITIONS object should allow these transitions.
+    // `cancelled` was added in migration 0011 (booking system) to support
+    // guest-initiated cancellation through the /book manage flow.
+    expect(code).toContain("scheduled: ['completed', 'disqualified', 'cancelled']")
   })
 
   it('defines valid transitions: completed -> disqualified | converted', () => {
@@ -91,10 +93,11 @@ describe('assessments: data access layer', () => {
     expect(code).toContain("completed: ['disqualified', 'converted']")
   })
 
-  it('disqualified and converted are terminal states', () => {
+  it('disqualified, converted, and cancelled are terminal states', () => {
     const code = source()
     expect(code).toContain('disqualified: []')
     expect(code).toContain('converted: []')
+    expect(code).toContain('cancelled: []')
   })
 })
 

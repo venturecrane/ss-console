@@ -24,6 +24,9 @@
     "@formepdf/core": "^0.8.2",
     "@formepdf/react": "^0.8.2",
     "astro": "^5.18.1",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "ics": "^3.11.0",
     "wrangler": "^4.78.0"
   },
   "devDependencies": {

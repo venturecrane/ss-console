@@ -19,9 +19,12 @@ pages_build_output_dir = "dist"
 # All email links and webhook callbacks are built from APP_BASE_URL — never
 # from the inbound request host (see src/lib/config/app-url.ts and issue #173).
 # PORTAL_BASE_URL is optional; when unset it falls back to APP_BASE_URL.
+# PUBLIC_TURNSTILE_SITE_KEY is the Cloudflare Turnstile site key embedded
+# in the /book Turnstile widget; the paired secret is in TURNSTILE_SECRET_KEY.
 [vars]
 APP_BASE_URL = "https://smd.services"
 PORTAL_BASE_URL = "https://portal.smd.services"
+PUBLIC_TURNSTILE_SITE_KEY = "REPLACE_ME_AFTER_TURNSTILE_SETUP"
 
 # ---------- D1 (structured data) ----------
 [[d1_databases]]
@@ -39,6 +42,14 @@ bucket_name = "ss-console-storage"
 binding = "SESSIONS"
 id = "4570dcc1e154476f889bc9fcfc28b2b9"
 
+# ---------- Workers KV (booking rate-limit buckets) ----------
+# Used by /api/booking/reserve for IP-based rate limiting only.
+# No slot cache in v1 (see plan §No availability cache in v1).
+# Create with: npx wrangler kv:namespace create BOOKING_CACHE
+[[kv_namespaces]]
+binding = "BOOKING_CACHE"
+id = "REPLACE_ME_AFTER_CREATION"
+
 # ---------- Secrets (set via wrangler secret put) ----------
 # All secrets are set per-project. Workers have their own copies.
 #
@@ -53,6 +64,12 @@ id = "4570dcc1e154476f889bc9fcfc28b2b9"
 # STRIPE_API_KEY          — Stripe invoicing
 # STRIPE_WEBHOOK_SECRET   — Stripe webhook verification
 # PROXYCURL_API_KEY       — LinkedIn company data (optional, Tier 4 dossier)
+#
+# Booking system (Calendly replacement) — added in migration 0011 era:
+# GOOGLE_CLIENT_ID         — Google Cloud OAuth 2.0 client ID
+# GOOGLE_CLIENT_SECRET     — Google Cloud OAuth 2.0 client secret
+# BOOKING_ENCRYPTION_KEY   — 32-byte base64 random; AES-GCM encryption of refresh tokens
+# TURNSTILE_SECRET_KEY     — Cloudflare Turnstile secret (paired with PUBLIC_TURNSTILE_SITE_KEY)
 #
 # Set with: npx wrangler secret put SECRET_NAME
 # In dev: add to .dev.vars (gitignored)
