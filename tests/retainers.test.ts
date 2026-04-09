@@ -138,12 +138,13 @@ describe('retainers: entity detail page integration', () => {
     expect(detailSource()).toContain('Retainers ({retainers.length})')
   })
 
-  it('shows create retainer button', () => {
-    expect(detailSource()).toContain('showRetainerButton')
-    expect(detailSource()).toContain('Create Retainer')
+  it('shows create retainer form for delivered/ongoing entities', () => {
+    const code = detailSource()
+    expect(code).toContain('Create Retainer')
+    expect(code).toContain("entity.stage === 'delivered'")
   })
 
-  it('links to retainer management page', () => {
-    expect(detailSource()).toContain('/admin/entities/${entity.id}/retainer')
+  it('posts retainer form to /api/admin/retainers', () => {
+    expect(detailSource()).toContain('/api/admin/retainers')
   })
 })
