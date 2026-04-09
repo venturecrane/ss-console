@@ -12,6 +12,7 @@
 
 import { computeSlug } from '../entities/slug.js'
 import { recomputeDeterministicCache } from '../entities/recompute.js'
+import { appendContext } from './context.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -131,6 +132,11 @@ export interface UpdateEntityData {
 export type FindOrCreateResult =
   | { status: 'created'; entity: Entity }
   | { status: 'found'; entity: Entity }
+
+export interface TransitionStageOptions {
+  /** Override reason — bypasses pre-condition checks where documented. */
+  force?: string
+}
 
 // ---------------------------------------------------------------------------
 // Read
@@ -393,7 +399,16 @@ export async function updateEntity(
 // ---------------------------------------------------------------------------
 
 /**
- * Transition an entity to a new stage. Validates against allowed transitions.
+ * Transition an entity to a new stage. Validates against allowed transitions
+ * and enforces lifecycle invariants (pre-conditions) before updating.
+ *
+ * Pre-conditions:
+ * - proposing → engaged: requires at least one accepted quote
+ * - delivered → ongoing: requires paid completion invoice OR force override
+ *
+ * Note: signal → assessing is blocked by VALID_TRANSITIONS. Booking flows
+ * must walk through `prospect` as an intermediate state (signal → prospect → assessing).
+ *
  * Records a stage_change context entry automatically.
  */
 export async function transitionStage(
@@ -401,7 +416,8 @@ export async function transitionStage(
   orgId: string,
   entityId: string,
   newStage: EntityStage,
-  reason: string
+  reason: string,
+  options?: TransitionStageOptions
 ): Promise<Entity | null> {
   const entity = await getEntity(db, orgId, entityId)
   if (!entity) return null
@@ -411,6 +427,53 @@ export async function transitionStage(
     throw new Error(
       `Invalid stage transition: ${entity.stage} → ${newStage}. Allowed: ${allowed?.join(', ')}`
     )
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lifecycle invariant pre-conditions
+  // ---------------------------------------------------------------------------
+
+  // proposing → engaged: must have at least one accepted quote
+  if (entity.stage === 'proposing' && newStage === 'engaged') {
+    const acceptedQuote = await db
+      .prepare(
+        `SELECT 1 FROM quotes WHERE entity_id = ? AND org_id = ? AND status = 'accepted' LIMIT 1`
+      )
+      .bind(entityId, orgId)
+      .first()
+    if (!acceptedQuote) {
+      throw new Error(
+        'Cannot transition to engaged: no accepted quote found. ' +
+          'A quote must be signed and accepted before an engagement can begin.'
+      )
+    }
+  }
+
+  // delivered → ongoing: must have paid completion invoice OR force override
+  if (entity.stage === 'delivered' && newStage === 'ongoing') {
+    if (options?.force) {
+      // Log the override reason to context
+      await appendContext(db, orgId, {
+        entity_id: entityId,
+        type: 'stage_change',
+        content: `Force override: delivered → ongoing. Reason: ${options.force}`,
+        source: 'system',
+        metadata: { override: true, reason: options.force },
+      })
+    } else {
+      const paidCompletion = await db
+        .prepare(
+          `SELECT 1 FROM invoices WHERE entity_id = ? AND org_id = ? AND type = 'completion' AND status = 'paid' LIMIT 1`
+        )
+        .bind(entityId, orgId)
+        .first()
+      if (!paidCompletion) {
+        throw new Error(
+          'Cannot transition to ongoing: completion invoice has not been paid. ' +
+            'Either collect payment or provide a force override reason.'
+        )
+      }
+    }
   }
 
   const now = new Date().toISOString()

@@ -344,6 +344,22 @@ export async function updateQuoteStatus(
     params.push(expiresAt.toISOString())
   }
 
+  // Acceptance guard: require SignWell signing flow completion
+  if (newStatus === 'accepted') {
+    if (!existing.signwell_doc_id) {
+      throw new Error(
+        'Cannot accept quote: signwell_doc_id is null. ' +
+          'The quote must be sent through SignWell before it can be accepted.'
+      )
+    }
+    if (!existing.signed_sow_path) {
+      throw new Error(
+        'Cannot accept quote: signed_sow_path is null. ' +
+          'The signed SOW must be recorded by the SignWell webhook before acceptance.'
+      )
+    }
+  }
+
   if (newStatus === 'accepted' && !existing.accepted_at) {
     updates.push('accepted_at = ?')
     params.push(new Date().toISOString())

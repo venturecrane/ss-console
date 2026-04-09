@@ -1,7 +1,17 @@
 /**
  * Context data access layer.
  *
+ * INVARIANT: APPEND-ONLY
  * The context table is an append-only log of everything we learn about an entity.
+ * This module intentionally exports NO update or delete operations. Context entries
+ * are immutable once written — corrections are modeled as new entries, not edits.
+ *
+ * D1 does not support triggers, so append-only enforcement lives at the
+ * TypeScript layer: this module is the sole write path to the context table,
+ * and it only exposes INSERT operations (appendContext, appendContextRaw).
+ * Any future code review that adds UPDATE or DELETE exports to this file
+ * should be rejected — it would violate the append-only contract.
+ *
  * Signals, enrichment, notes, transcripts, extractions, outreach drafts,
  * engagement logs, follow-up results, feedback, parking lot items — all go here.
  *
