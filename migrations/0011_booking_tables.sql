@@ -51,7 +51,21 @@
 
 -- ---- Phase 1: Backup data (no constraints) ----
 
-CREATE TABLE assessments_bak AS SELECT * FROM assessments;
+-- assessments: explicit column list WITHOUT entity_id. entity_id was added
+-- out-of-band (not in any migration) so it may or may not exist. The target
+-- schema includes entity_id (as NULL); any existing values must be restored
+-- from the pre-migration snapshot if needed.
+CREATE TABLE assessments_bak (
+  id TEXT, org_id TEXT, scheduled_at TEXT, completed_at TEXT,
+  duration_minutes INTEGER, transcript_path TEXT, extraction TEXT,
+  problems TEXT, disqualifiers TEXT, champion_name TEXT, champion_role TEXT,
+  status TEXT, notes TEXT, created_at TEXT
+);
+INSERT INTO assessments_bak
+SELECT id, org_id, scheduled_at, completed_at, duration_minutes,
+  transcript_path, extraction, problems, disqualifiers,
+  champion_name, champion_role, status, notes, created_at
+FROM assessments;
 CREATE TABLE quotes_bak AS SELECT * FROM quotes;
 CREATE TABLE engagements_bak AS SELECT * FROM engagements;
 CREATE TABLE engagement_contacts_bak AS SELECT * FROM engagement_contacts;
@@ -267,10 +281,10 @@ CREATE TABLE time_entries (
 
 INSERT INTO assessments (id, org_id, scheduled_at, completed_at, duration_minutes,
   transcript_path, extraction, problems, disqualifiers, champion_name, champion_role,
-  status, notes, created_at, entity_id)
+  status, notes, created_at)
 SELECT id, org_id, scheduled_at, completed_at, duration_minutes,
   transcript_path, extraction, problems, disqualifiers, champion_name, champion_role,
-  status, notes, created_at, entity_id
+  status, notes, created_at
 FROM assessments_bak;
 
 INSERT INTO quotes (id, org_id, assessment_id, version, parent_quote_id,
