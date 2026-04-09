@@ -14,6 +14,7 @@ export interface Assessment {
   duration_minutes: number | null
   transcript_path: string | null
   extraction: string | null
+  live_notes: string | null
   status: string
   created_at: string
 }
@@ -64,6 +65,7 @@ export interface UpdateAssessmentData {
   duration_minutes?: number | null
   transcript_path?: string | null
   extraction?: string | null
+  live_notes?: string | null
 }
 
 /**
@@ -175,6 +177,11 @@ export async function updateAssessment(
   if (data.extraction !== undefined) {
     fields.push('extraction = ?')
     params.push(data.extraction)
+  }
+
+  if (data.live_notes !== undefined) {
+    fields.push('live_notes = ?')
+    params.push(data.live_notes)
   }
 
   if (fields.length === 0) {
