@@ -262,9 +262,12 @@ CREATE TABLE follow_ups (
   engagement_id   TEXT REFERENCES engagements(id),
   quote_id        TEXT REFERENCES quotes(id),
   type            TEXT NOT NULL CHECK (type IN (
+                    'initial_outreach', 'outreach_followup_d3', 'outreach_followup_d7',
+                    're_engage_30d', 're_engage_90d',
                     'proposal_day2', 'proposal_day5', 'proposal_day7',
                     'review_request', 'referral_ask',
-                    'safety_net_checkin', 'feedback_30day'
+                    'safety_net_checkin', 'feedback_30day',
+                    'custom'
                   )),
   scheduled_for   TEXT NOT NULL,
   completed_at    TEXT,
