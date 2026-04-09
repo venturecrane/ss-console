@@ -46,10 +46,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
     if (action === 'transition_status') {
       const newStatus = formData.get('new_status')
       if (!newStatus || typeof newStatus !== 'string') {
-        return redirect(
-          `/admin/entities/${existing.entity_id}/engagements/${engagementId}?error=invalid_status`,
-          302
-        )
+        return redirect(`/admin/engagements/${engagementId}?error=invalid_status`, 302)
       }
 
       try {
@@ -61,16 +58,10 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
         )
       } catch (err) {
         console.error('[api/admin/engagements/[id]] Status transition error:', err)
-        return redirect(
-          `/admin/entities/${existing.entity_id}/engagements/${engagementId}?error=invalid_transition`,
-          302
-        )
+        return redirect(`/admin/engagements/${engagementId}?error=invalid_transition`, 302)
       }
 
-      return redirect(
-        `/admin/entities/${existing.entity_id}/engagements/${engagementId}?saved=1`,
-        302
-      )
+      return redirect(`/admin/engagements/${engagementId}?saved=1`, 302)
     }
 
     // Handle general update
@@ -99,10 +90,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
           : undefined,
     })
 
-    return redirect(
-      `/admin/entities/${existing.entity_id}/engagements/${engagementId}?saved=1`,
-      302
-    )
+    return redirect(`/admin/engagements/${engagementId}?saved=1`, 302)
   } catch (err) {
     console.error('[api/admin/engagements/[id]] Update error:', err)
     return redirect('/admin/entities?error=server', 302)

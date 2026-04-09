@@ -98,7 +98,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
       })
     }
 
-    return redirect(`/admin/entities/${clientId.trim()}/engagements/${engagement.id}`, 302)
+    return redirect(`/admin/engagements/${engagement.id}`, 302)
   } catch (err) {
     console.error('[api/admin/engagements] Create error:', err)
     const formData = await request

@@ -3,6 +3,7 @@ import { getEngagement } from '../../../../../lib/db/engagements'
 import {
   createMilestone,
   getMilestone,
+  updateMilestone,
   updateMilestoneStatus,
   deleteMilestone,
 } from '../../../../../lib/db/milestones'
@@ -61,7 +62,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
     const method = formData.get('_method')
     const action = formData.get('action')
 
-    const detailUrl = `/admin/entities/${engagement.entity_id}/engagements/${engagementId}`
+    const detailUrl = `/admin/engagements/${engagementId}`
 
     // Handle DELETE
     if (method === 'DELETE') {
@@ -77,6 +78,22 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
 
       await deleteMilestone(env.DB, milestoneId.trim())
       return redirect(`${detailUrl}?milestone_deleted=1`, 302)
+    }
+
+    // Handle payment_trigger toggle
+    if (action === 'toggle_payment_trigger') {
+      const milestoneId = formData.get('milestone_id')
+      if (!milestoneId || typeof milestoneId !== 'string') {
+        return redirect(`${detailUrl}?error=missing`, 302)
+      }
+      const milestone = await getMilestone(env.DB, milestoneId.trim())
+      if (!milestone || milestone.engagement_id !== engagementId) {
+        return redirect(`${detailUrl}?error=not_found`, 302)
+      }
+      await updateMilestone(env.DB, milestoneId.trim(), {
+        payment_trigger: !milestone.payment_trigger,
+      })
+      return redirect(`${detailUrl}?saved=1`, 302)
     }
 
     // Handle status transition
