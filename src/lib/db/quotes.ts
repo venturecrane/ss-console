@@ -31,6 +31,7 @@ export interface Quote {
   sow_path: string | null
   signed_sow_path: string | null
   signwell_doc_id: string | null
+  sow_generated_at: string | null
   created_at: string
   updated_at: string
 }
@@ -84,6 +85,7 @@ export interface UpdateQuoteData {
   rate?: number
   depositPct?: number
   sow_path?: string | null
+  sow_generated_at?: string | null
 }
 
 /**
@@ -219,6 +221,11 @@ export async function updateQuote(
   if (data.sow_path !== undefined) {
     fields.push('sow_path = ?')
     params.push(data.sow_path)
+  }
+
+  if (data.sow_generated_at !== undefined) {
+    fields.push('sow_generated_at = ?')
+    params.push(data.sow_generated_at)
   }
 
   // Recalculate totals if line items or rate changed
