@@ -1,0 +1,470 @@
+---
+/**
+ * SlotPicker — two-column date/time slot selector.
+ *
+ * Left column: 7 visible dates with forward/back navigation arrows.
+ * Right column: time slots for the selected date (30-min in guest tz).
+ *
+ * All interactivity is handled in the <script> tag below. On mount it
+ * detects the guest's timezone, fetches /api/booking/slots, and renders
+ * the first date with availability pre-selected.
+ *
+ * Dispatches a `slot-selected` CustomEvent on the host element when the
+ * guest picks a time. Payload: { start_utc, end_utc, label, date }.
+ *
+ * Used by /book and (future) /book/manage/[token].
+ */
+---
+
+<div id="slot-picker" class="slot-picker" data-component="slot-picker">
+  <!-- Loading skeleton -->
+  <div id="sp-loading" class="flex flex-col items-center justify-center py-12 text-slate-500">
+    <div class="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-primary"></div>
+    <p class="mt-3 text-sm">Loading available times...</p>
+  </div>
+
+  <!-- Error state -->
+  <div id="sp-error" class="hidden py-12 text-center">
+    <p class="text-sm text-red-600" id="sp-error-msg">
+      Something went wrong loading available times.
+    </p>
+    <button
+      id="sp-retry-btn"
+      type="button"
+      class="mt-3 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+    >
+      Try again
+    </button>
+  </div>
+
+  <!-- No slots state -->
+  <div id="sp-empty" class="hidden py-12 text-center">
+    <p class="text-sm text-slate-600">No available times in the next two weeks.</p>
+    <p class="mt-1 text-sm text-slate-500">
+      Please email
+      <a href="mailto:scott@smd.services" class="font-medium text-primary hover:text-primary-hover">
+        scott@smd.services
+      </a>
+      to schedule directly.
+    </p>
+  </div>
+
+  <!-- Stale banner (data older than 5 min) -->
+  <div id="sp-stale" class="mb-4 hidden rounded-md bg-amber-50 px-4 py-2 text-sm text-amber-700">
+    These times may be out of date.
+    <button type="button" id="sp-refresh-btn" class="ml-1 font-medium underline">Refresh</button>
+  </div>
+
+  <!-- Main picker UI -->
+  <div id="sp-main" class="hidden">
+    <!-- Timezone label -->
+    <p class="mb-4 text-xs text-slate-500" id="sp-tz-label"></p>
+
+    <div class="flex flex-col gap-6 sm:flex-row">
+      <!-- Left: Date selector -->
+      <div class="sm:w-1/2">
+        <div class="flex items-center justify-between mb-3">
+          <button
+            type="button"
+            id="sp-prev"
+            class="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed"
+            aria-label="Previous dates"
+          >
+            <svg
+              class="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="2"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"
+              ></path>
+            </svg>
+          </button>
+          <span id="sp-month-label" class="text-sm font-semibold text-slate-900"></span>
+          <button
+            type="button"
+            id="sp-next"
+            class="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed"
+            aria-label="Next dates"
+          >
+            <svg
+              class="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="2"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"
+              ></path>
+            </svg>
+          </button>
+        </div>
+        <div id="sp-dates" class="grid grid-cols-7 gap-1"></div>
+      </div>
+
+      <!-- Right: Time slots for selected date -->
+      <div class="sm:w-1/2">
+        <p id="sp-date-label" class="mb-3 text-sm font-semibold text-slate-900"></p>
+        <div id="sp-slots" class="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1"></div>
+        <p id="sp-no-slots-day" class="hidden py-8 text-center text-sm text-slate-500">
+          No available times on this date.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 503 fallback panel -->
+  <div id="sp-unavailable" class="hidden py-12 text-center">
+    <p class="text-sm text-slate-600">Online booking is temporarily unavailable.</p>
+    <p class="mt-2 text-sm text-slate-500">Please email us directly to schedule your call:</p>
+    <a
+      href="mailto:scott@smd.services?subject=Assessment%20Call%20Request"
+      class="mt-3 inline-block rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+    >
+      Email scott@smd.services
+    </a>
+  </div>
+</div>
+
+<script is:inline>
+  ;(function () {
+    const picker = document.getElementById('slot-picker')
+    const loadingEl = document.getElementById('sp-loading')
+    const errorEl = document.getElementById('sp-error')
+    const errorMsg = document.getElementById('sp-error-msg')
+    const emptyEl = document.getElementById('sp-empty')
+    const staleEl = document.getElementById('sp-stale')
+    const mainEl = document.getElementById('sp-main')
+    const unavailableEl = document.getElementById('sp-unavailable')
+    const tzLabel = document.getElementById('sp-tz-label')
+    const monthLabel = document.getElementById('sp-month-label')
+    const datesContainer = document.getElementById('sp-dates')
+    const slotsContainer = document.getElementById('sp-slots')
+    const dateLabel = document.getElementById('sp-date-label')
+    const noSlotsDay = document.getElementById('sp-no-slots-day')
+    const prevBtn = document.getElementById('sp-prev')
+    const nextBtn = document.getElementById('sp-next')
+    const retryBtn = document.getElementById('sp-retry-btn')
+    const refreshBtn = document.getElementById('sp-refresh-btn')
+
+    let guestTz = 'America/Phoenix'
+    try {
+      guestTz = Intl.DateTimeFormat().resolvedOptions().timeZone || guestTz
+    } catch (_e) {
+      // fallback already set
+    }
+
+    let allDays = [] // Array of { date, slots: [{ start_utc, end_utc, label }] }
+    let dateOffset = 0 // Starting index in the visible 7-day window
+    let selectedDate = null // Currently selected date string (YYYY-MM-DD)
+    let selectedSlot = null // Currently selected slot object
+    let fetchedAt = 0 // Timestamp of last successful fetch
+    const STALE_MS = 5 * 60 * 1000 // 5 minutes
+
+    function show(el) {
+      el.classList.remove('hidden')
+    }
+    function hide(el) {
+      el.classList.add('hidden')
+    }
+    function showOnly(el) {
+      ;[loadingEl, errorEl, emptyEl, mainEl, unavailableEl].forEach(function (e) {
+        hide(e)
+      })
+      show(el)
+    }
+
+    function fetchSlots() {
+      showOnly(loadingEl)
+      hide(staleEl)
+      selectedSlot = null
+
+      fetch('/api/booking/slots?tz=' + encodeURIComponent(guestTz))
+        .then(function (res) {
+          if (res.status === 503) {
+            return res.json().then(function (body) {
+              showOnly(unavailableEl)
+              if (body.fallback && body.fallback.email) {
+                const mailto =
+                  'mailto:' + body.fallback.email + '?subject=Assessment%20Call%20Request'
+                const link = unavailableEl.querySelector('a')
+                if (link) {
+                  link.href = mailto
+                  link.textContent = 'Email ' + body.fallback.email
+                }
+              }
+              throw new Error('__handled__')
+            })
+          }
+          if (!res.ok) {
+            return res.text().then(function (t) {
+              throw new Error('API ' + res.status + ': ' + t)
+            })
+          }
+          return res.json()
+        })
+        .then(function (data) {
+          allDays = (data.days || []).filter(function (d) {
+            return d.slots && d.slots.length > 0
+          })
+          fetchedAt = Date.now()
+
+          if (allDays.length === 0) {
+            showOnly(emptyEl)
+            return
+          }
+
+          tzLabel.textContent = 'Times shown in ' + guestTz.replace(/_/g, ' ')
+          dateOffset = 0
+          selectedDate = allDays[0].date
+          renderDates()
+          renderSlots()
+          showOnly(mainEl)
+        })
+        .catch(function (err) {
+          if (err.message === '__handled__') return
+          console.error('[SlotPicker] fetch failed:', err)
+          errorMsg.textContent = 'Could not load available times. Please try again.'
+          showOnly(errorEl)
+        })
+    }
+
+    function renderDates() {
+      datesContainer.innerHTML = ''
+      if (allDays.length === 0) return
+
+      // Build a list of all calendar dates from first available to last available
+      const firstDate = parseLocalDate(allDays[0].date)
+      const lastDate = parseLocalDate(allDays[allDays.length - 1].date)
+
+      // Build set of dates that have slots
+      const availableDates = {}
+      allDays.forEach(function (d) {
+        availableDates[d.date] = true
+      })
+
+      // Generate array of all dates from first to last
+      const allCalendarDates = []
+      const cursor = new Date(firstDate)
+      while (cursor <= lastDate) {
+        allCalendarDates.push(formatDate(cursor))
+        cursor.setDate(cursor.getDate() + 1)
+      }
+
+      // Clamp dateOffset
+      const maxOffset = Math.max(0, allCalendarDates.length - 7)
+      if (dateOffset > maxOffset) dateOffset = maxOffset
+      if (dateOffset < 0) dateOffset = 0
+
+      const visibleDates = allCalendarDates.slice(dateOffset, dateOffset + 7)
+
+      // Update month label
+      if (visibleDates.length > 0) {
+        const firstVisible = parseLocalDate(visibleDates[0])
+        const lastVisible = parseLocalDate(visibleDates[visibleDates.length - 1])
+        const monthNames = [
+          'January',
+          'February',
+          'March',
+          'April',
+          'May',
+          'June',
+          'July',
+          'August',
+          'September',
+          'October',
+          'November',
+          'December',
+        ]
+        if (firstVisible.getMonth() === lastVisible.getMonth()) {
+          monthLabel.textContent =
+            monthNames[firstVisible.getMonth()] + ' ' + firstVisible.getFullYear()
+        } else {
+          monthLabel.textContent =
+            monthNames[firstVisible.getMonth()].substring(0, 3) +
+            ' - ' +
+            monthNames[lastVisible.getMonth()].substring(0, 3) +
+            ' ' +
+            lastVisible.getFullYear()
+        }
+      }
+
+      // Update arrow states
+      prevBtn.disabled = dateOffset === 0
+      nextBtn.disabled = dateOffset >= maxOffset
+
+      const dayAbbr = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+      visibleDates.forEach(function (dateStr) {
+        const d = parseLocalDate(dateStr)
+        const hasSlots = !!availableDates[dateStr]
+        const isSelected = dateStr === selectedDate
+
+        const btn = document.createElement('button')
+        btn.type = 'button'
+        btn.className =
+          'flex flex-col items-center rounded-lg px-1 py-2 text-center transition-colors '
+        if (isSelected) {
+          btn.className += 'bg-primary text-white'
+        } else if (hasSlots) {
+          btn.className += 'bg-white text-slate-900 hover:bg-slate-100 border border-slate-200'
+        } else {
+          btn.className += 'text-slate-300 cursor-not-allowed'
+        }
+
+        btn.innerHTML =
+          '<span class="text-[10px] font-medium leading-none">' +
+          dayAbbr[d.getDay()] +
+          '</span>' +
+          '<span class="mt-0.5 text-lg font-semibold leading-none">' +
+          d.getDate() +
+          '</span>'
+
+        if (hasSlots) {
+          btn.addEventListener('click', function () {
+            selectedDate = dateStr
+            selectedSlot = null
+            renderDates()
+            renderSlots()
+          })
+        } else {
+          btn.disabled = true
+        }
+
+        datesContainer.appendChild(btn)
+      })
+    }
+
+    function renderSlots() {
+      slotsContainer.innerHTML = ''
+
+      // Find the day entry for selectedDate
+      let dayEntry = null
+      for (let i = 0; i < allDays.length; i++) {
+        if (allDays[i].date === selectedDate) {
+          dayEntry = allDays[i]
+          break
+        }
+      }
+
+      // Date label
+      if (selectedDate) {
+        const d = parseLocalDate(selectedDate)
+        const dayNames = [
+          'Sunday',
+          'Monday',
+          'Tuesday',
+          'Wednesday',
+          'Thursday',
+          'Friday',
+          'Saturday',
+        ]
+        const monthNames = [
+          'January',
+          'February',
+          'March',
+          'April',
+          'May',
+          'June',
+          'July',
+          'August',
+          'September',
+          'October',
+          'November',
+          'December',
+        ]
+        dateLabel.textContent =
+          dayNames[d.getDay()] + ', ' + monthNames[d.getMonth()] + ' ' + d.getDate()
+      }
+
+      if (!dayEntry || dayEntry.slots.length === 0) {
+        show(noSlotsDay)
+        return
+      }
+      hide(noSlotsDay)
+
+      dayEntry.slots.forEach(function (slot) {
+        const btn = document.createElement('button')
+        btn.type = 'button'
+        const isSelected = selectedSlot && selectedSlot.start_utc === slot.start_utc
+
+        btn.className = 'rounded-md border px-3 py-2 text-sm font-medium transition-colors '
+        if (isSelected) {
+          btn.className += 'border-primary bg-primary text-white'
+        } else {
+          btn.className +=
+            'border-slate-200 bg-white text-slate-700 hover:border-primary hover:text-primary'
+        }
+
+        btn.textContent = slot.label
+        btn.addEventListener('click', function () {
+          selectedSlot = slot
+          renderSlots()
+
+          // Dispatch custom event for the parent page
+          picker.dispatchEvent(
+            new CustomEvent('slot-selected', {
+              bubbles: true,
+              detail: {
+                start_utc: slot.start_utc,
+                end_utc: slot.end_utc,
+                label: slot.label,
+                date: selectedDate,
+                timezone: guestTz,
+              },
+            })
+          )
+        })
+
+        slotsContainer.appendChild(btn)
+      })
+    }
+
+    // Parse a YYYY-MM-DD string as a local date (not UTC)
+    function parseLocalDate(str) {
+      const parts = str.split('-')
+      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]))
+    }
+
+    function formatDate(d) {
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return y + '-' + m + '-' + day
+    }
+
+    // Navigation
+    prevBtn.addEventListener('click', function () {
+      dateOffset = Math.max(0, dateOffset - 7)
+      renderDates()
+    })
+
+    nextBtn.addEventListener('click', function () {
+      dateOffset = dateOffset + 7
+      renderDates()
+    })
+
+    // Retry / refresh
+    retryBtn.addEventListener('click', fetchSlots)
+    refreshBtn.addEventListener('click', fetchSlots)
+
+    // Stale check on visibility change
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && fetchedAt > 0 && Date.now() - fetchedAt > STALE_MS) {
+        show(staleEl)
+      }
+    })
+
+    // Public method for parent to refetch (e.g., after a 409)
+    picker.refetchSlots = fetchSlots
+
+    // Public method to get guest tz
+    picker.getGuestTimezone = function () {
+      return guestTz
+    }
+
+    // Initial fetch
+    fetchSlots()
+  })()
+</script>
