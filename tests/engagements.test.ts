@@ -117,6 +117,45 @@ describe('engagements: data access layer', () => {
   })
 })
 
+describe('engagements: handoff wiring', () => {
+  const source = () => readFileSync(resolve('src/lib/db/engagements.ts'), 'utf-8')
+
+  it('imports scheduleEngagementCadence from scheduler', () => {
+    expect(source()).toContain(
+      "import { scheduleEngagementCadence } from '../follow-ups/scheduler'"
+    )
+  })
+
+  it('imports transitionStage from entities', () => {
+    expect(source()).toContain("import { transitionStage } from './entities'")
+  })
+
+  it('calls scheduleEngagementCadence on handoff transition', () => {
+    const code = source()
+    expect(code).toContain('scheduleEngagementCadence(')
+    expect(code).toContain('existing.entity_id')
+  })
+
+  it('passes correct args to scheduleEngagementCadence: db, orgId, engagementId, entityId, handoffDate', () => {
+    const code = source()
+    expect(code).toContain(
+      'scheduleEngagementCadence(\n      db,\n      orgId,\n      engagementId,\n      existing.entity_id,\n      handoffDate.toISOString()\n    )'
+    )
+  })
+
+  it('calls transitionStage to delivered on handoff', () => {
+    const code = source()
+    expect(code).toContain("transitionStage(db, orgId, existing.entity_id, 'delivered'")
+  })
+
+  it('safety_net_end is set to handoff_date + 14 days on handoff', () => {
+    const code = source()
+    expect(code).toContain("newStatus === 'handoff'")
+    expect(code).toContain('safety_net_end')
+    expect(code).toContain('getDate() + 14')
+  })
+})
+
 describe('engagements: API routes', () => {
   it('create endpoint exists at src/pages/api/admin/engagements/index.ts', () => {
     expect(existsSync(resolve('src/pages/api/admin/engagements/index.ts'))).toBe(true)
