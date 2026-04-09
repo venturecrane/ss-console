@@ -68,9 +68,9 @@ SELECT id, org_id, scheduled_at, completed_at, duration_minutes,
 FROM assessments;
 CREATE TABLE quotes_bak AS SELECT * FROM quotes;
 CREATE TABLE engagements_bak AS SELECT * FROM engagements;
-CREATE TABLE engagement_contacts_bak AS SELECT * FROM engagement_contacts;
+-- engagement_contacts and parking_lot were dropped out-of-band on remote.
+-- Skip backup for these; Phase 4 creates them fresh (empty).
 CREATE TABLE milestones_bak AS SELECT * FROM milestones;
-CREATE TABLE parking_lot_bak AS SELECT * FROM parking_lot;
 CREATE TABLE invoices_bak AS SELECT * FROM invoices;
 CREATE TABLE follow_ups_bak AS SELECT * FROM follow_ups;
 CREATE TABLE time_entries_bak AS SELECT * FROM time_entries;
@@ -102,10 +102,10 @@ DROP INDEX IF EXISTS idx_time_entries_org_date;
 
 -- ---- Phase 3: Drop tables (leaf-first) ----
 
-DROP TABLE engagement_contacts;
+DROP TABLE IF EXISTS engagement_contacts;
 DROP TABLE milestones;
 DROP TABLE time_entries;
-DROP TABLE parking_lot;
+DROP TABLE IF EXISTS parking_lot;
 DROP TABLE invoices;
 DROP TABLE follow_ups;
 DROP TABLE engagements;
@@ -305,25 +305,14 @@ SELECT id, org_id, quote_id, scope_summary, start_date,
   estimated_hours, actual_hours, notes, created_at, updated_at
 FROM engagements_bak;
 
-INSERT INTO engagement_contacts (id, engagement_id, contact_id, role,
-  is_primary, notes, created_at)
-SELECT id, engagement_id, contact_id, role,
-  is_primary, notes, created_at
-FROM engagement_contacts_bak;
+-- engagement_contacts: no backup to restore (table may not have existed)
+-- parking_lot: no backup to restore (table may not have existed)
 
 INSERT INTO milestones (id, engagement_id, name, description, due_date,
   completed_at, status, payment_trigger, sort_order, created_at)
 SELECT id, engagement_id, name, description, due_date,
   completed_at, status, payment_trigger, sort_order, created_at
 FROM milestones_bak;
-
-INSERT INTO parking_lot (id, engagement_id, description, requested_by,
-  requested_at, disposition, disposition_note, reviewed_at,
-  follow_on_quote_id, created_at)
-SELECT id, engagement_id, description, requested_by,
-  requested_at, disposition, disposition_note, reviewed_at,
-  follow_on_quote_id, created_at
-FROM parking_lot_bak;
 
 INSERT INTO invoices (id, org_id, engagement_id, type, amount, description,
   status, stripe_invoice_id, stripe_hosted_url, due_date, sent_at, paid_at,
@@ -374,9 +363,7 @@ CREATE INDEX idx_time_entries_org_date ON time_entries(org_id, date);
 DROP TABLE assessments_bak;
 DROP TABLE quotes_bak;
 DROP TABLE engagements_bak;
-DROP TABLE engagement_contacts_bak;
 DROP TABLE milestones_bak;
-DROP TABLE parking_lot_bak;
 DROP TABLE invoices_bak;
 DROP TABLE follow_ups_bak;
 DROP TABLE time_entries_bak;
