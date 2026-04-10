@@ -37,6 +37,8 @@ const [
   outstandingInvoices,
   signals,
   googleIntegration,
+  pipelineFreshness,
+  bookingSyncHealth,
 ] = await Promise.all([
   listFollowUps(env.DB, session.orgId, { overdue: true }),
   listFollowUps(env.DB, session.orgId, { upcoming: true }),
@@ -48,7 +50,25 @@ const [
   listAssessments(env.DB, session.orgId),
   listInvoices(env.DB, session.orgId, { status: 'sent' }),
   listEntities(env.DB, session.orgId, { stage: 'signal' }),
-  getIntegration(env.DB, session.orgId, 'google'),
+  getIntegration(env.DB, session.orgId, 'google', { includeInactive: true }),
+  env.DB.prepare(
+    `SELECT source_pipeline, MAX(created_at) as last_signal
+     FROM entities
+     WHERE org_id = ? AND source_pipeline IS NOT NULL
+     GROUP BY source_pipeline`
+  )
+    .bind(session.orgId)
+    .all<{ source_pipeline: string; last_signal: string }>(),
+  env.DB.prepare(
+    `SELECT
+       SUM(CASE WHEN google_sync_state = 'error' THEN 1 ELSE 0 END) as sync_errors,
+       SUM(CASE WHEN google_sync_state = 'pending'
+         AND updated_at < datetime('now', '-1 hour') THEN 1 ELSE 0 END) as stuck
+     FROM assessment_schedule
+     WHERE org_id = ? AND cancelled_at IS NULL`
+  )
+    .bind(session.orgId)
+    .first<{ sync_errors: number; stuck: number }>(),
 ])
 
 // Today's work
@@ -77,9 +97,47 @@ const activeEngagements = allEngagements.filter(
 // Revenue
 const outstandingTotal = outstandingInvoices.reduce((sum, inv) => sum + (inv.amount ?? 0), 0)
 
-// System health
-const hasGoogleCalendar = !!googleIntegration
-const hasStripe = !!env.STRIPE_API_KEY
+// Automations health
+const calStatus = googleIntegration?.status ?? null // null = not connected, or 'active'/'error'/'revoked'
+const calEmail = googleIntegration?.account_email ?? null
+const calError = googleIntegration?.last_error ?? null
+const syncErrors = bookingSyncHealth?.sync_errors ?? 0
+const syncStuck = bookingSyncHealth?.stuck ?? 0
+
+// Pipeline freshness — thresholds in hours
+const PIPELINE_THRESHOLDS: Record<string, { warn: number; critical: number; label: string }> = {
+  job_monitor: { warn: 36, critical: 72, label: 'Job Posting Monitor' },
+  review_mining: { warn: 216, critical: 336, label: 'Review Mining' }, // 9d / 14d
+  new_business: { warn: 36, critical: 72, label: 'New Business Detection' },
+  social_listening: { warn: 168, critical: 336, label: 'Social Listening' }, // 7d / 14d
+  partner_nurture: { warn: 168, critical: 336, label: 'Referral Partner Nurture' },
+  website_scorecard: { warn: 168, critical: 336, label: 'Website Scorecard' },
+  website_booking: { warn: 168, critical: 336, label: 'Website Booking' },
+}
+
+function hoursAgo(isoDate: string): number {
+  return (Date.now() - new Date(isoDate).getTime()) / 3_600_000
+}
+
+function relativeTime(isoDate: string): string {
+  const h = hoursAgo(isoDate)
+  if (h < 1) return 'just now'
+  if (h < 24) return `${Math.round(h)}h ago`
+  const d = Math.round(h / 24)
+  return `${d}d ago`
+}
+
+const pipelineRows = (pipelineFreshness?.results ?? []).map((r) => {
+  const thresholds = PIPELINE_THRESHOLDS[r.source_pipeline] ?? {
+    warn: 168,
+    critical: 336,
+    label: r.source_pipeline.replace(/_/g, ' '),
+  }
+  const h = hoursAgo(r.last_signal)
+  const color =
+    h < thresholds.warn ? 'bg-green-500' : h < thresholds.critical ? 'bg-amber-400' : 'bg-red-500'
+  return { id: r.source_pipeline, label: thresholds.label, ago: relativeTime(r.last_signal), color }
+})
 ---
 
 <!doctype html>
@@ -381,52 +439,80 @@ const hasStripe = !!env.STRIPE_API_KEY
         </section>
       </div>
 
-      <!-- Card 5: System Health -->
+      <!-- Card 5: Automations -->
       <section class="bg-white rounded-lg border border-slate-200 p-6">
-        <h2 class="text-base font-semibold text-slate-900 mb-4">System Health</h2>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div class="flex items-center gap-2">
-            <div
+        <h2 class="text-base font-semibold text-slate-900 mb-4">Automations</h2>
+        <div class="divide-y divide-slate-100">
+          <!-- Google Calendar -->
+          <div class="flex items-center justify-between py-2">
+            <div class="flex items-center gap-2">
+              <div
+                class:list={[
+                  'w-2 h-2 rounded-full',
+                  calStatus === 'active'
+                    ? 'bg-green-500'
+                    : calStatus === 'error' || calStatus === 'revoked'
+                      ? 'bg-red-500'
+                      : 'bg-slate-300',
+                ]}
+              >
+              </div>
+              <span class="text-sm text-slate-600">Google Calendar</span>
+            </div>
+            <span
               class:list={[
-                'w-2 h-2 rounded-full',
-                hasGoogleCalendar ? 'bg-green-500' : 'bg-slate-300',
+                'text-xs',
+                calStatus === 'error' || calStatus === 'revoked'
+                  ? 'text-red-600'
+                  : 'text-slate-400',
               ]}
             >
-            </div>
-            <span class="text-sm text-slate-600">
-              Google Calendar
-              <span class="text-xs text-slate-400">
-                {hasGoogleCalendar ? 'connected' : 'not connected'}
-              </span>
+              {
+                calStatus === 'active'
+                  ? calEmail
+                  : calStatus === 'error'
+                    ? (calError?.slice(0, 40) ?? 'Error')
+                    : calStatus === 'revoked'
+                      ? 'Reconnect required'
+                      : 'Not connected'
+              }
             </span>
           </div>
 
-          <div class="flex items-center gap-2">
-            <div class:list={['w-2 h-2 rounded-full', hasStripe ? 'bg-green-500' : 'bg-slate-300']}>
-            </div>
-            <span class="text-sm text-slate-600">
-              Stripe
-              <span class="text-xs text-slate-400">
-                {hasStripe ? 'configured' : 'not configured'}
-              </span>
-            </span>
-          </div>
+          {/* Booking sync warnings */}
+          {
+            (syncErrors > 0 || syncStuck > 0) && (
+              <div class="py-2 pl-4">
+                {syncErrors > 0 && (
+                  <p class="text-xs text-red-600">
+                    {syncErrors} booking{syncErrors === 1 ? '' : 's'} failed to sync
+                  </p>
+                )}
+                {syncStuck > 0 && (
+                  <p class="text-xs text-amber-600">
+                    {syncStuck} booking{syncStuck === 1 ? '' : 's'} stuck pending
+                  </p>
+                )}
+              </div>
+            )
+          }
 
-          <div class="flex items-center gap-2">
-            <div class="w-2 h-2 rounded-full bg-slate-300"></div>
-            <span class="text-sm text-slate-600">
-              Follow-up processor
-              <span class="text-xs text-slate-400">not deployed</span>
-            </span>
-          </div>
-
-          <div class="flex items-center gap-2">
-            <div class="w-2 h-2 rounded-full bg-slate-300"></div>
-            <span class="text-sm text-slate-600">
-              Lead-gen Workers
-              <span class="text-xs text-slate-400">not deployed</span>
-            </span>
-          </div>
+          <!-- Lead Pipelines -->
+          {
+            pipelineRows.length > 0 ? (
+              pipelineRows.map((p) => (
+                <div class="flex items-center justify-between py-2">
+                  <div class="flex items-center gap-2">
+                    <div class:list={['w-2 h-2 rounded-full', p.color]} />
+                    <span class="text-sm text-slate-600">{p.label}</span>
+                  </div>
+                  <span class="text-xs text-slate-400">{p.ago}</span>
+                </div>
+              ))
+            ) : (
+              <div class="py-2 text-xs text-slate-400">No pipeline data yet</div>
+            )
+          }
         </div>
       </section>
     </main>

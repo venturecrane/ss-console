@@ -44,17 +44,24 @@ export interface UpsertIntegrationData {
 // Read
 // ---------------------------------------------------------------------------
 
+/**
+ * Get an integration by provider. By default returns only active integrations
+ * (for operational use). Pass `includeInactive: true` for health monitoring
+ * to surface error/revoked states on the dashboard.
+ */
 export async function getIntegration(
   db: D1Database,
   orgId: string,
-  provider: string
+  provider: string,
+  opts?: { includeInactive?: boolean }
 ): Promise<Integration | null> {
+  const statusFilter = opts?.includeInactive ? '' : "AND status = 'active'"
   return (
     (await db
       .prepare(
         `SELECT * FROM integrations
-         WHERE org_id = ? AND provider = ? AND status = 'active'
-         LIMIT 1`
+         WHERE org_id = ? AND provider = ? ${statusFilter}
+         ORDER BY updated_at DESC LIMIT 1`
       )
       .bind(orgId, provider)
       .first<Integration>()) ?? null
