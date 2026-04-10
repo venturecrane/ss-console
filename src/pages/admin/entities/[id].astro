@@ -592,11 +592,14 @@ function confidenceColor(confidence: string): string {
 
             {/* Zone 3: Intelligence Brief */}
             <div class="border-t border-slate-100 pt-4 mb-4">
-              <details open>
+              <details>
                 <summary class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3 cursor-pointer">
                   Intelligence Brief
                 </summary>
-                <div class="prose-sm" set:html={renderSimpleMarkdown(dossierBrief!.content)} />
+                <div
+                  class="max-h-[50vh] overflow-y-auto"
+                  set:html={renderSimpleMarkdown(dossierBrief!.content)}
+                />
               </details>
             </div>
 
