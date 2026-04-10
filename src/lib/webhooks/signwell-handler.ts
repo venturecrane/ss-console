@@ -29,6 +29,7 @@ import type { SignWellWebhookPayload } from '../signwell/types'
 import { getSignedPdf } from '../signwell/client'
 import type { Quote, LineItem } from '../db/quotes'
 import { sendEmail } from '../email/resend'
+import { createStripeInvoice, sendStripeInvoice } from '../stripe/client'
 
 /**
  * Look up a quote by its SignWell document ID.
@@ -80,6 +81,7 @@ export async function handleDocumentCompleted(
   storage: R2Bucket,
   apiKey: string,
   resendApiKey: string | undefined,
+  stripeApiKey: string | undefined,
   payload: SignWellWebhookPayload
 ): Promise<Response> {
   const documentId = payload.data.id
@@ -262,6 +264,73 @@ export async function handleDocumentCompleted(
   } catch (err) {
     console.error('[signwell-handler] Failed to send confirmation email:', err)
     // Non-fatal: admin can trigger manually
+  }
+
+  // 2d. Create and send Stripe deposit invoice
+  try {
+    const clientEmail = await getClientPrimaryEmail(db, quote.org_id, quote.entity_id)
+
+    if (!stripeApiKey) {
+      console.log('[signwell-handler] Stripe not configured, leaving invoice in draft')
+    } else if (!clientEmail) {
+      console.log('[signwell-handler] No client email found, leaving invoice in draft')
+    } else {
+      const depositAmountCents = Math.round((quote.deposit_amount ?? 0) * 100)
+
+      const stripeResult = await createStripeInvoice(stripeApiKey, {
+        customer_email: clientEmail,
+        description: `Deposit — Operations Cleanup Engagement`,
+        line_items: [
+          {
+            amount: depositAmountCents,
+            currency: 'usd',
+            description: 'Deposit (50% of project price)',
+            quantity: 1,
+          },
+        ],
+        days_until_due: 3,
+        metadata: {
+          invoice_id: invoiceId,
+          engagement_id: engagementId,
+          quote_id: quote.id,
+        },
+      })
+
+      const sentResult = await sendStripeInvoice(stripeApiKey, stripeResult.id)
+
+      // Update local invoice with Stripe IDs and mark sent
+      await db
+        .prepare(
+          `UPDATE invoices SET stripe_invoice_id = ?, stripe_hosted_url = ?, status = 'sent', sent_at = ?, updated_at = ?
+           WHERE id = ? AND org_id = ?`
+        )
+        .bind(sentResult.id, sentResult.hosted_invoice_url, now, now, invoiceId, quote.org_id)
+        .run()
+
+      // Audit trail
+      await db
+        .prepare(
+          `INSERT INTO context (id, entity_id, org_id, type, content, source, content_size, metadata, created_at)
+           VALUES (?, ?, ?, 'engagement_log', ?, 'signwell-webhook', ?, ?, ?)`
+        )
+        .bind(
+          crypto.randomUUID(),
+          quote.entity_id,
+          quote.org_id,
+          `Deposit invoice sent via Stripe ($${(depositAmountCents / 100).toFixed(2)})`,
+          `Deposit invoice sent via Stripe`.length,
+          JSON.stringify({
+            invoice_id: invoiceId,
+            stripe_invoice_id: sentResult.id,
+            amount_cents: depositAmountCents,
+          }),
+          now
+        )
+        .run()
+    }
+  } catch (err) {
+    console.error('[signwell-handler] Failed to create/send Stripe deposit invoice:', err)
+    // Non-fatal: invoice remains in draft, admin can send manually
   }
 
   return new Response(JSON.stringify({ ok: true }), {

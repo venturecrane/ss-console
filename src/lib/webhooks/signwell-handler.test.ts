@@ -156,7 +156,14 @@ describe('handleDocumentCompleted — milestone creation', () => {
 
   it('creates milestones from quote line items with correct fields', async () => {
     const r2 = createFakeR2()
-    const res = await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, makePayload())
+    const res = await handleDocumentCompleted(
+      db,
+      r2,
+      'fake-api-key',
+      undefined,
+      undefined,
+      makePayload()
+    )
 
     expect(res.status).toBe(200)
 
@@ -177,7 +184,7 @@ describe('handleDocumentCompleted — milestone creation', () => {
 
   it('sets payment_trigger = true only on the last milestone', async () => {
     const r2 = createFakeR2()
-    await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, makePayload())
+    await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, undefined, makePayload())
 
     const milestones = await db
       .prepare('SELECT * FROM milestones ORDER BY sort_order ASC')
@@ -194,7 +201,7 @@ describe('handleDocumentCompleted — milestone creation', () => {
 
   it('preserves sort_order matching line item index', async () => {
     const r2 = createFakeR2()
-    await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, makePayload())
+    await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, undefined, makePayload())
 
     const milestones = await db
       .prepare('SELECT sort_order, name FROM milestones ORDER BY sort_order ASC')
@@ -206,7 +213,7 @@ describe('handleDocumentCompleted — milestone creation', () => {
 
   it('writes a stage_change context entry', async () => {
     const r2 = createFakeR2()
-    await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, makePayload())
+    await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, undefined, makePayload())
 
     const contextEntries = await db
       .prepare("SELECT * FROM context WHERE entity_id = ? AND type = 'stage_change'")
@@ -228,7 +235,7 @@ describe('handleDocumentCompleted — milestone creation', () => {
 
   it('links milestones to the created engagement', async () => {
     const r2 = createFakeR2()
-    await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, makePayload())
+    await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, undefined, makePayload())
 
     const engagement = await db
       .prepare('SELECT id FROM engagements WHERE quote_id = ?')
@@ -250,10 +257,24 @@ describe('handleDocumentCompleted — milestone creation', () => {
     const r2 = createFakeR2()
     const payload = makePayload()
 
-    const res1 = await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, payload)
+    const res1 = await handleDocumentCompleted(
+      db,
+      r2,
+      'fake-api-key',
+      undefined,
+      undefined,
+      payload
+    )
     expect(res1.status).toBe(200)
 
-    const res2 = await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, payload)
+    const res2 = await handleDocumentCompleted(
+      db,
+      r2,
+      'fake-api-key',
+      undefined,
+      undefined,
+      payload
+    )
     expect(res2.status).toBe(200)
 
     const milestones = await db.prepare('SELECT * FROM milestones').all<Record<string, unknown>>()
@@ -267,7 +288,7 @@ describe('handleDocumentCompleted — milestone creation', () => {
 
   it('creates all records atomically in a single batch', async () => {
     const r2 = createFakeR2()
-    await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, makePayload())
+    await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, undefined, makePayload())
 
     const quote = await db
       .prepare('SELECT status FROM quotes WHERE id = ?')

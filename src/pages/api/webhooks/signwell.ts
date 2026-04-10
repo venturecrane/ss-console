@@ -61,7 +61,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
       })
     }
 
-    return handleDocumentCompleted(env.DB, env.STORAGE, apiKey, env.RESEND_API_KEY, payload)
+    return handleDocumentCompleted(
+      env.DB,
+      env.STORAGE,
+      apiKey,
+      env.RESEND_API_KEY,
+      env.STRIPE_API_KEY,
+      payload
+    )
   }
 
   // Acknowledge all other events without processing
