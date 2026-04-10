@@ -1,0 +1,724 @@
+---
+import { getEngagement, VALID_TRANSITIONS } from '../../../lib/db/engagements'
+import type { EngagementStatus } from '../../../lib/db/engagements'
+import { getEntity } from '../../../lib/db/entities'
+import { getQuote } from '../../../lib/db/quotes'
+import { listMilestones, VALID_TRANSITIONS as MS_TRANSITIONS } from '../../../lib/db/milestones'
+import type { MilestoneStatus } from '../../../lib/db/milestones'
+import { listInvoices } from '../../../lib/db/invoices'
+import { listContext } from '../../../lib/db/context'
+import { listDocuments } from '../../../lib/storage/r2'
+
+const session = Astro.locals.session!
+if (session.role !== 'admin') return Astro.redirect('/login')
+
+const engagementId = Astro.params.id!
+const env = Astro.locals.runtime.env
+
+const engagement = await getEngagement(env.DB, session.orgId, engagementId)
+if (!engagement) return Astro.redirect('/admin/entities?error=not_found')
+
+const entity = await getEntity(env.DB, session.orgId, engagement.entity_id)
+const quote = engagement.quote_id
+  ? await getQuote(env.DB, session.orgId, engagement.quote_id)
+  : null
+const milestones = await listMilestones(env.DB, engagementId)
+const invoices = await listInvoices(env.DB, session.orgId, { engagementId })
+const contextEntries = await listContext(env.DB, engagement.entity_id, {
+  engagement_id: engagementId,
+})
+
+const depositInvoice = invoices.find((i) => i.type === 'deposit')
+
+const prefix = `${session.orgId}/engagements/${engagementId}/docs/`
+const documents = await listDocuments(env.STORAGE, prefix)
+
+const status = engagement.status as EngagementStatus
+const nextStatuses = VALID_TRANSITIONS[status] ?? []
+
+const saved = Astro.url.searchParams.get('saved')
+const error = Astro.url.searchParams.get('error')
+const milestoneAdded = Astro.url.searchParams.get('milestone_added')
+const milestoneDeleted = Astro.url.searchParams.get('milestone_deleted')
+
+function formatDate(d: string | null): string {
+  if (!d) return '--'
+  return new Date(d).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+function statusBadgeClass(s: string): string {
+  switch (s) {
+    case 'scheduled':
+      return 'bg-blue-100 text-blue-700'
+    case 'active':
+      return 'bg-green-100 text-green-700'
+    case 'handoff':
+      return 'bg-yellow-100 text-yellow-700'
+    case 'safety_net':
+      return 'bg-orange-100 text-orange-700'
+    case 'completed':
+      return 'bg-slate-100 text-slate-600'
+    case 'cancelled':
+      return 'bg-red-100 text-red-600'
+    default:
+      return 'bg-slate-100 text-slate-600'
+  }
+}
+
+function msBadgeClass(s: string): string {
+  switch (s) {
+    case 'pending':
+      return 'bg-slate-100 text-slate-600'
+    case 'in_progress':
+      return 'bg-blue-100 text-blue-700'
+    case 'completed':
+      return 'bg-green-100 text-green-700'
+    case 'skipped':
+      return 'bg-red-100 text-red-600'
+    default:
+      return 'bg-slate-100 text-slate-600'
+  }
+}
+
+function invoiceBadgeClass(s: string): string {
+  switch (s) {
+    case 'draft':
+      return 'bg-slate-100 text-slate-600'
+    case 'sent':
+      return 'bg-blue-100 text-blue-700'
+    case 'paid':
+      return 'bg-green-100 text-green-700'
+    case 'overdue':
+      return 'bg-red-100 text-red-600'
+    case 'void':
+      return 'bg-slate-200 text-slate-500'
+    default:
+      return 'bg-slate-100 text-slate-600'
+  }
+}
+
+function contextTypeBadgeClass(t: string): string {
+  switch (t) {
+    case 'note':
+      return 'bg-blue-100 text-blue-700'
+    case 'stage_change':
+      return 'bg-yellow-100 text-yellow-700'
+    case 'engagement_log':
+      return 'bg-green-100 text-green-700'
+    case 'feedback':
+      return 'bg-purple-100 text-purple-700'
+    default:
+      return 'bg-slate-100 text-slate-600'
+  }
+}
+
+function fileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Engagement - {entity?.name ?? 'Unknown'} | Admin</title>
+    <link rel="stylesheet" href="/global.css" />
+  </head>
+  <body class="bg-slate-50 text-slate-900">
+    <header class="bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-4">
+      <a href="/admin" class="text-sm text-slate-500 hover:text-slate-700">Admin</a>
+      <span class="text-slate-300">/</span>
+      {
+        entity && (
+          <>
+            <a
+              href={`/admin/entities/${entity.id}`}
+              class="text-sm text-slate-500 hover:text-slate-700"
+            >
+              {entity.name}
+            </a>
+            <span class="text-slate-300">/</span>
+          </>
+        )
+      }
+      <span class="text-sm font-medium text-slate-900">Engagement</span>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-6 py-8 space-y-6">
+      {
+        saved && (
+          <div class="bg-green-50 border border-green-200 text-green-800 px-4 py-2 rounded text-sm">
+            Changes saved.
+          </div>
+        )
+      }
+      {
+        milestoneAdded && (
+          <div class="bg-green-50 border border-green-200 text-green-800 px-4 py-2 rounded text-sm">
+            Milestone added.
+          </div>
+        )
+      }
+      {
+        milestoneDeleted && (
+          <div class="bg-green-50 border border-green-200 text-green-800 px-4 py-2 rounded text-sm">
+            Milestone deleted.
+          </div>
+        )
+      }
+      {
+        error && (
+          <div class="bg-red-50 border border-red-200 text-red-800 px-4 py-2 rounded text-sm">
+            {error === 'invalid_status'
+              ? 'Invalid status transition.'
+              : error === 'invalid_transition'
+                ? 'Invalid transition.'
+                : error === 'not_found'
+                  ? 'Resource not found.'
+                  : 'An error occurred.'}
+          </div>
+        )
+      }
+
+      <!-- Header -->
+      <div class="bg-white rounded-lg border border-slate-200 p-6">
+        <div class="flex items-start justify-between">
+          <div>
+            <div class="flex items-center gap-3 mb-2">
+              <h1 class="text-2xl font-semibold text-slate-900">
+                {entity?.name ?? 'Unknown Entity'}
+              </h1>
+              <span
+                class={`text-xs px-2.5 py-1 rounded font-medium ${statusBadgeClass(engagement.status)}`}
+              >
+                {engagement.status}
+              </span>
+            </div>
+            <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-500">
+              <span>Start: {formatDate(engagement.start_date)}</span>
+              <span>Est. End: {formatDate(engagement.estimated_end)}</span>
+              {
+                engagement.handoff_date && (
+                  <span>Handoff: {formatDate(engagement.handoff_date)}</span>
+                )
+              }
+              {engagement.actual_end && <span>Completed: {formatDate(engagement.actual_end)}</span>}
+            </div>
+          </div>
+          {
+            nextStatuses.length > 0 && (
+              <div class="flex gap-2">
+                {nextStatuses.map((ns) => (
+                  <form method="POST" action={`/api/admin/engagements/${engagementId}`}>
+                    <input type="hidden" name="action" value="transition_status" />
+                    <input type="hidden" name="new_status" value={ns} />
+                    <button
+                      type="submit"
+                      class={`text-xs px-3 py-1.5 rounded font-medium border transition-colors ${
+                        ns === 'cancelled'
+                          ? 'border-red-300 text-red-700 hover:bg-red-50'
+                          : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {ns === 'active'
+                        ? 'Start'
+                        : ns === 'handoff'
+                          ? 'Mark Handoff'
+                          : ns === 'safety_net'
+                            ? 'Start Safety Net'
+                            : ns === 'completed'
+                              ? 'Mark Complete'
+                              : ns === 'cancelled'
+                                ? 'Cancel'
+                                : ns}
+                    </button>
+                  </form>
+                ))}
+              </div>
+            )
+          }
+        </div>
+
+        {/* Quote summary */}
+        {
+          quote && (
+            <div class="mt-4 pt-4 border-t border-slate-100">
+              <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                <span class="text-slate-500">
+                  Quote:{' '}
+                  <span class="font-medium text-slate-700">
+                    ${quote.total_price.toLocaleString()}
+                  </span>
+                </span>
+                <span class="text-slate-500">
+                  Hours: <span class="font-medium text-slate-700">{quote.total_hours}h est</span>
+                  {engagement.actual_hours > 0 && (
+                    <span class="ml-1">/ {engagement.actual_hours}h actual</span>
+                  )}
+                </span>
+                {quote.deposit_pct != null && (
+                  <span class="text-slate-500">
+                    Deposit:{' '}
+                    <span class="font-medium text-slate-700">
+                      {(quote.deposit_pct * 100).toFixed(0)}%
+                    </span>
+                  </span>
+                )}
+              </div>
+              {depositInvoice && (
+                <div class="mt-2 text-sm">
+                  <span class="text-slate-500">Deposit Invoice:</span>{' '}
+                  <span
+                    class={`text-xs px-2 py-0.5 rounded ${invoiceBadgeClass(depositInvoice.status)}`}
+                  >
+                    {depositInvoice.status}
+                  </span>
+                  <span class="ml-2 text-slate-500">${depositInvoice.amount.toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+          )
+        }
+
+        {
+          engagement.scope_summary && (
+            <div class="mt-4 pt-4 border-t border-slate-100">
+              <p class="text-sm text-slate-600 whitespace-pre-wrap">{engagement.scope_summary}</p>
+            </div>
+          )
+        }
+      </div>
+
+      <!-- Edit Details -->
+      <details class="bg-white rounded-lg border border-slate-200">
+        <summary class="px-6 py-4 cursor-pointer font-medium text-slate-900">
+          Edit Details
+        </summary>
+        <div class="px-6 pb-6">
+          <form method="POST" action={`/api/admin/engagements/${engagementId}`} class="space-y-4">
+            <div>
+              <label for="scope_summary" class="block text-sm font-medium text-slate-700 mb-1">
+                Scope Summary
+              </label>
+              <textarea
+                id="scope_summary"
+                name="scope_summary"
+                rows="3"
+                class="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                >{engagement.scope_summary ?? ''}</textarea
+              >
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label for="start_date" class="block text-sm font-medium text-slate-700 mb-1">
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  id="start_date"
+                  name="start_date"
+                  value={engagement.start_date?.split('T')[0] ?? ''}
+                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label for="estimated_end" class="block text-sm font-medium text-slate-700 mb-1">
+                  Estimated End
+                </label>
+                <input
+                  type="date"
+                  id="estimated_end"
+                  name="estimated_end"
+                  value={engagement.estimated_end?.split('T')[0] ?? ''}
+                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label for="estimated_hours" class="block text-sm font-medium text-slate-700 mb-1">
+                  Estimated Hours
+                </label>
+                <input
+                  type="number"
+                  id="estimated_hours"
+                  name="estimated_hours"
+                  step="0.5"
+                  value={engagement.estimated_hours ?? ''}
+                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label for="actual_hours" class="block text-sm font-medium text-slate-700 mb-1">
+                  Actual Hours
+                </label>
+                <input
+                  type="number"
+                  id="actual_hours"
+                  name="actual_hours"
+                  step="0.5"
+                  value={engagement.actual_hours ?? ''}
+                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div class="flex justify-end">
+              <button
+                type="submit"
+                class="bg-slate-900 text-white text-sm px-4 py-2 rounded hover:bg-slate-800 transition-colors"
+              >
+                Save Changes
+              </button>
+            </div>
+          </form>
+        </div>
+      </details>
+
+      <!-- Milestones -->
+      <div class="bg-white rounded-lg border border-slate-200">
+        <div class="px-6 py-4 border-b border-slate-100">
+          <h2 class="font-medium text-slate-900">Milestones</h2>
+        </div>
+        <div class="divide-y divide-slate-100">
+          {
+            milestones.length === 0 && (
+              <div class="px-6 py-8 text-center text-sm text-slate-400">No milestones yet.</div>
+            )
+          }
+          {
+            milestones.map((ms) => {
+              const msStatus = ms.status as MilestoneStatus
+              const msNext = MS_TRANSITIONS[msStatus] ?? []
+              return (
+                <div class="px-6 py-4 flex items-center justify-between gap-4">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class={`text-xs px-2 py-0.5 rounded ${msBadgeClass(ms.status)}`}>
+                        {ms.status}
+                      </span>
+                      <span class="text-sm font-medium text-slate-900 truncate">{ms.name}</span>
+                      {ms.payment_trigger ? (
+                        <span class="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                          $
+                        </span>
+                      ) : null}
+                    </div>
+                    {ms.description && (
+                      <p class="text-xs text-slate-500 mt-1 truncate">{ms.description}</p>
+                    )}
+                    {ms.due_date && (
+                      <span class="text-xs text-slate-400 mt-1 block">
+                        Due: {formatDate(ms.due_date)}
+                      </span>
+                    )}
+                  </div>
+                  <div class="flex items-center gap-2 flex-shrink-0">
+                    {/* Payment trigger toggle */}
+                    <form
+                      method="POST"
+                      action={`/api/admin/engagements/${engagementId}/milestones`}
+                    >
+                      <input type="hidden" name="action" value="toggle_payment_trigger" />
+                      <input type="hidden" name="milestone_id" value={ms.id} />
+                      <button
+                        type="submit"
+                        title={
+                          ms.payment_trigger ? 'Remove payment trigger' : 'Set as payment trigger'
+                        }
+                        class={`text-xs px-2 py-1 rounded border transition-colors ${
+                          ms.payment_trigger
+                            ? 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100'
+                            : 'border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-300'
+                        }`}
+                      >
+                        $
+                      </button>
+                    </form>
+                    {/* Status transitions */}
+                    {msNext.map((ns) => (
+                      <form
+                        method="POST"
+                        action={`/api/admin/engagements/${engagementId}/milestones`}
+                      >
+                        <input type="hidden" name="action" value="transition_status" />
+                        <input type="hidden" name="milestone_id" value={ms.id} />
+                        <input type="hidden" name="new_status" value={ns} />
+                        <button
+                          type="submit"
+                          class={`text-xs px-2.5 py-1 rounded border transition-colors ${
+                            ns === 'completed'
+                              ? 'border-green-300 text-green-700 hover:bg-green-50'
+                              : ns === 'in_progress'
+                                ? 'border-blue-300 text-blue-700 hover:bg-blue-50'
+                                : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          {ns === 'in_progress'
+                            ? 'Start'
+                            : ns === 'completed'
+                              ? 'Complete'
+                              : ns === 'skipped'
+                                ? 'Skip'
+                                : ns}
+                        </button>
+                      </form>
+                    ))}
+                    {/* Delete */}
+                    {msStatus === 'pending' && (
+                      <form
+                        method="POST"
+                        action={`/api/admin/engagements/${engagementId}/milestones`}
+                      >
+                        <input type="hidden" name="_method" value="DELETE" />
+                        <input type="hidden" name="milestone_id" value={ms.id} />
+                        <button
+                          type="submit"
+                          class="text-xs px-2 py-1 rounded border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
+                          onclick="return confirm('Delete this milestone?')"
+                        >
+                          Del
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                </div>
+              )
+            })
+          }
+        </div>
+
+        {/* Add milestone form */}
+        <details class="border-t border-slate-100">
+          <summary class="px-6 py-3 cursor-pointer text-sm text-slate-500 hover:text-slate-700">
+            + Add Milestone
+          </summary>
+          <div class="px-6 pb-4">
+            <form
+              method="POST"
+              action={`/api/admin/engagements/${engagementId}/milestones`}
+              class="space-y-3"
+            >
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label for="ms_name" class="block text-xs font-medium text-slate-600 mb-1">
+                    Name *
+                  </label>
+                  <input
+                    type="text"
+                    id="ms_name"
+                    name="name"
+                    required
+                    class="w-full border border-slate-300 rounded px-3 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label for="ms_due" class="block text-xs font-medium text-slate-600 mb-1">
+                    Due Date
+                  </label>
+                  <input
+                    type="date"
+                    id="ms_due"
+                    name="due_date"
+                    class="w-full border border-slate-300 rounded px-3 py-1.5 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label for="ms_desc" class="block text-xs font-medium text-slate-600 mb-1">
+                  Description
+                </label>
+                <input
+                  type="text"
+                  id="ms_desc"
+                  name="description"
+                  class="w-full border border-slate-300 rounded px-3 py-1.5 text-sm"
+                />
+              </div>
+              <div class="flex items-center gap-4">
+                <label class="flex items-center gap-2 text-sm text-slate-600">
+                  <input type="checkbox" name="payment_trigger" value="1" />
+                  Payment trigger
+                </label>
+                <input type="hidden" name="sort_order" value={String(milestones.length)} />
+                <button
+                  type="submit"
+                  class="ml-auto bg-slate-900 text-white text-xs px-3 py-1.5 rounded hover:bg-slate-800 transition-colors"
+                >
+                  Add Milestone
+                </button>
+              </div>
+            </form>
+          </div>
+        </details>
+      </div>
+
+      <!-- Deliverables -->
+      <div class="bg-white rounded-lg border border-slate-200">
+        <div class="px-6 py-4 border-b border-slate-100">
+          <h2 class="font-medium text-slate-900">Deliverables</h2>
+        </div>
+        <div class="px-6 py-4">
+          {
+            documents.length === 0 && (
+              <p class="text-sm text-slate-400 mb-4">No files uploaded yet.</p>
+            )
+          }
+          {
+            documents.length > 0 && (
+              <ul class="space-y-2 mb-4">
+                {documents.map((doc) => {
+                  const name = doc.key.split('/').pop() ?? doc.key
+                  return (
+                    <li class="flex items-center justify-between text-sm">
+                      <a
+                        href={`/api/admin/engagements/${engagementId}/deliverables/${name}`}
+                        class="text-blue-600 hover:underline truncate"
+                      >
+                        {name}
+                      </a>
+                      <span class="text-xs text-slate-400 flex-shrink-0 ml-4">
+                        {fileSize(doc.size)} &middot; {formatDate(doc.uploaded.toISOString())}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            )
+          }
+          <div
+            id="upload-area"
+            class="border-2 border-dashed border-slate-200 rounded-lg p-6 text-center"
+          >
+            <p class="text-sm text-slate-500 mb-2">Drag files here or click to upload</p>
+            <input type="file" id="file-input" class="hidden" multiple />
+            <button
+              type="button"
+              id="upload-btn"
+              class="text-xs px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              Choose Files
+            </button>
+            <div id="upload-status" class="text-xs text-slate-400 mt-2 hidden"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Invoices -->
+      {
+        invoices.length > 0 && (
+          <div class="bg-white rounded-lg border border-slate-200">
+            <div class="px-6 py-4 border-b border-slate-100">
+              <h2 class="font-medium text-slate-900">Invoices</h2>
+            </div>
+            <div class="divide-y divide-slate-100">
+              {invoices.map((inv) => (
+                <div class="px-6 py-3 flex items-center justify-between text-sm">
+                  <div class="flex items-center gap-3">
+                    <span class={`text-xs px-2 py-0.5 rounded ${invoiceBadgeClass(inv.status)}`}>
+                      {inv.status}
+                    </span>
+                    <span class="text-slate-700 capitalize">{inv.type}</span>
+                  </div>
+                  <div class="flex items-center gap-4 text-slate-500">
+                    <span class="font-medium text-slate-700">${inv.amount.toLocaleString()}</span>
+                    {inv.due_date && <span>Due: {formatDate(inv.due_date)}</span>}
+                    {inv.paid_at && <span>Paid: {formatDate(inv.paid_at)}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      }
+
+      <!-- Context Timeline -->
+      <div class="bg-white rounded-lg border border-slate-200">
+        <div class="px-6 py-4 border-b border-slate-100">
+          <h2 class="font-medium text-slate-900">Timeline</h2>
+        </div>
+        {
+          contextEntries.length === 0 && (
+            <div class="px-6 py-8 text-center text-sm text-slate-400">
+              No context entries for this engagement.
+            </div>
+          )
+        }
+        {
+          contextEntries.length > 0 && (
+            <div class="divide-y divide-slate-100">
+              {contextEntries.map((entry) => (
+                <div class="px-6 py-3">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span
+                      class={`text-xs px-2 py-0.5 rounded ${contextTypeBadgeClass(entry.type)}`}
+                    >
+                      {entry.type.replace(/_/g, ' ')}
+                    </span>
+                    <span class="text-xs text-slate-400">{formatDate(entry.created_at)}</span>
+                    <span class="text-xs text-slate-400">via {entry.source}</span>
+                  </div>
+                  <p class="text-sm text-slate-700 whitespace-pre-wrap">{entry.content}</p>
+                </div>
+              ))}
+            </div>
+          )
+        }
+      </div>
+    </main>
+
+    <script define:vars={{ engagementId }}>
+      const fileInput = document.getElementById('file-input')
+      const uploadBtn = document.getElementById('upload-btn')
+      const uploadArea = document.getElementById('upload-area')
+      const uploadStatus = document.getElementById('upload-status')
+
+      uploadBtn.addEventListener('click', () => fileInput.click())
+      fileInput.addEventListener('change', () => uploadFiles(fileInput.files))
+
+      uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault()
+        uploadArea.classList.add('border-blue-400', 'bg-blue-50')
+      })
+      uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('border-blue-400', 'bg-blue-50')
+      })
+      uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault()
+        uploadArea.classList.remove('border-blue-400', 'bg-blue-50')
+        uploadFiles(e.dataTransfer.files)
+      })
+
+      async function uploadFiles(files) {
+        if (!files || files.length === 0) return
+        uploadStatus.classList.remove('hidden')
+
+        for (const file of files) {
+          uploadStatus.textContent = `Uploading ${file.name}...`
+          const form = new FormData()
+          form.append('file', file)
+          try {
+            const res = await fetch(`/api/admin/engagements/${engagementId}/deliverables`, {
+              method: 'POST',
+              body: form,
+            })
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}))
+              uploadStatus.textContent = `Failed: ${data.error || res.statusText}`
+            } else {
+              uploadStatus.textContent = `Uploaded ${file.name}`
+            }
+          } catch (err) {
+            uploadStatus.textContent = `Error: ${err.message}`
+          }
+        }
+        setTimeout(() => location.reload(), 800)
+      }
+    </script>
+  </body>
+</html>
