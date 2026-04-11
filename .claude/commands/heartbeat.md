@@ -15,7 +15,7 @@ Send a heartbeat to prevent your session from timing out.
 - Want to keep session active while reading/researching
 - Need to maintain "active" status visibility
 
-**Not needed if:** You're actively using `/sod`, `/update`, or `/eod` - those all refresh heartbeat automatically.
+**Not needed if:** You're actively using `/sos`, `/update`, or `/eos` - those all refresh heartbeat automatically.
 
 ## Usage
 
@@ -79,7 +79,7 @@ SESSION_ID=$(echo "$ACTIVE_SESSIONS" | jq -r --arg agent "$AGENT_PREFIX" \
 if [ -z "$SESSION_ID" ]; then
   echo "❌ No active session found"
   echo ""
-  echo "Run /sod first to start a session"
+  echo "Run /sos first to start a session"
   exit 1
 fi
 ```
@@ -132,9 +132,9 @@ echo "Your session will stay active for 45 minutes from this heartbeat."
 
 ## Notes
 
-- Automatic heartbeats: `/sod`, `/update`, `/eod` all refresh heartbeat
+- Automatic heartbeats: `/sos`, `/update`, `/eos` all refresh heartbeat
 - Manual heartbeat needed when working >30 minutes without those commands
 - Recommended interval: every 10-15 minutes during long tasks
-- Sessions become "abandoned" after 45 minutes without heartbeat (next `/sod` creates new session)
+- Sessions become "abandoned" after 45 minutes without heartbeat (next `/sos` creates new session)
 - Requires active session and CRANE_CONTEXT_KEY
 - Safe to call frequently (idempotent)

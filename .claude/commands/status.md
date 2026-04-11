@@ -9,11 +9,11 @@ Display current session state, tasks, and git status for situational awareness.
 Query crane-context for current session (if available):
 
 - Session ID
-- Session age (how long since /sod)
+- Session age (how long since /sos)
 - Last heartbeat time
 - Venture context
 
-If no session exists, note: "No active session. Run /sod to start."
+If no session exists, note: "No active session. Run /sos to start."
 
 ### 2. Active Tasks
 

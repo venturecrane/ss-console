@@ -88,7 +88,7 @@ SESSION_ID=$(echo "$ACTIVE_SESSIONS" | jq -r --arg agent "$AGENT_PREFIX" \
 if [ -z "$SESSION_ID" ]; then
   echo "❌ No active session found"
   echo ""
-  echo "Run /sod first to start a session"
+  echo "Run /sos first to start a session"
   exit 1
 fi
 ```
@@ -191,7 +191,7 @@ echo "Your session context is now visible to other agents."
 ## Notes
 
 - Auto-detects git branch and commit
-- Requires active session (run `/sod` first) and CRANE_CONTEXT_KEY
+- Requires active session (run `/sos` first) and CRANE_CONTEXT_KEY
 - Refreshes heartbeat (prevents timeout)
 - Safe to call frequently
 - The `meta` field is freeform JSON - use it for whatever context helps your workflow
