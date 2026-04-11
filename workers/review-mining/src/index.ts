@@ -14,7 +14,6 @@
 import { ORG_ID } from '../../../src/lib/constants.js'
 import { findOrCreateEntity } from '../../../src/lib/db/entities.js'
 import { appendContext } from '../../../src/lib/db/context.js'
-import { computeSlug } from '../../../src/lib/entities/slug.js'
 import { discoverBusinesses, fetchReviews, DISCOVERY_QUERIES } from './outscraper.js'
 import { scoreReviews } from './qualify.js'
 import { sendFailureAlert, type RunSummary } from './alert.js'
@@ -99,12 +98,14 @@ async function run(env: Env): Promise<RunSummary> {
   // Phase 3: Score each business
   for (const business of businessesWithReviews) {
     try {
-      const slug = computeSlug(business.name, business.area)
-      const existing = await env.DB.prepare('SELECT 1 FROM entities WHERE org_id = ? AND slug = ?')
-        .bind(ORG_ID, slug)
+      // Dedup on source_ref (place_id) — skip if we already have this exact signal
+      const alreadyProcessed = await env.DB.prepare(
+        `SELECT 1 FROM context WHERE org_id = ? AND source = 'review_mining' AND source_ref = ?`
+      )
+        .bind(ORG_ID, business.place_id)
         .first()
 
-      if (existing) continue
+      if (alreadyProcessed) continue
 
       summary.newBusinesses++
 
@@ -155,12 +156,13 @@ async function run(env: Env): Promise<RunSummary> {
         date_found: dateFound,
       }
 
-      // Append context
+      // Append context (source_ref = place_id for dedup across runs)
       await appendContext(env.DB, ORG_ID, {
         entity_id: entity.id,
         type: 'signal',
         content,
         source: 'review_mining',
+        source_ref: business.place_id,
         metadata,
       })
 
