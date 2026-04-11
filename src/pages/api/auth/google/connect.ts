@@ -10,12 +10,16 @@ import { requireAppBaseUrl } from '../../../../lib/config/app-url.js'
  * to Google's OAuth consent screen.
  *
  * Scopes requested:
+ * - openid + email (required so the callback can fetch the connecting
+ *   user's email from the userinfo endpoint to populate the integration)
  * - calendar.events (create/update/delete events)
  * - calendar.freebusy (slot availability queries)
  */
 
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 const SCOPES = [
+  'openid',
+  'email',
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/calendar.freebusy',
 ].join(' ')
