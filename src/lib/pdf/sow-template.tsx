@@ -13,6 +13,7 @@
  * @see docs/templates/sow-template.md — full design specification
  */
 
+import React from 'react'
 import { Document, Page, View, Text } from '@formepdf/react'
 
 // ---------------------------------------------------------------------------

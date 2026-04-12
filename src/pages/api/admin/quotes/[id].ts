@@ -219,7 +219,12 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
 
     return redirect(`/admin/entities/${existing.entity_id}/quotes/${quoteId}?saved=1`, 302)
   } catch (err) {
-    console.error('[api/admin/quotes/[id]] Update error:', err)
-    return redirect('/admin/entities?error=server', 302)
+    const msg = err instanceof Error ? err.message : String(err)
+    const stack = err instanceof Error ? err.stack : ''
+    console.error('[api/admin/quotes/[id]] Update error:', msg, stack)
+    return redirect(
+      `/admin/entities?error=server&detail=${encodeURIComponent(msg.slice(0, 200))}`,
+      302
+    )
   }
 }
