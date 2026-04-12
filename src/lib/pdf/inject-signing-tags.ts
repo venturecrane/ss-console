@@ -36,6 +36,9 @@ import { SIGNING_PAGE, PAGE_SIZE } from './signing-layout'
  * @returns Modified PDF bytes with text tags injected
  */
 export async function injectSigningTags(pdfBytes: Uint8Array): Promise<Uint8Array> {
+  console.log(
+    `[inject-signing-tags] Processing ${pdfBytes.length}b PDF, targeting page ${SIGNING_PAGE.pageNumber}`
+  )
   const doc = await PDFDocument.load(pdfBytes)
   const signingPage = doc.getPage(SIGNING_PAGE.pageNumber - 1) // 0-indexed
   const font = await doc.embedFont(StandardFonts.Helvetica)
@@ -70,5 +73,7 @@ export async function injectSigningTags(pdfBytes: Uint8Array): Promise<Uint8Arra
     }
   )
 
-  return new Uint8Array(await doc.save())
+  const result = new Uint8Array(await doc.save())
+  console.log(`[inject-signing-tags] Done: ${pdfBytes.length}b → ${result.length}b`)
+  return result
 }
