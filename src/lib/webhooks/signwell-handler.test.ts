@@ -62,20 +62,27 @@ const LINE_ITEMS: LineItem[] = [
 
 function makePayload(): SignWellWebhookPayload {
   return {
-    event: 'document_completed',
+    event: {
+      type: 'document_completed',
+      time: Math.floor(Date.now() / 1000),
+      hash: 'test-hash',
+    },
     data: {
-      id: SIGNWELL_DOC_ID,
-      name: 'SOW - Test Business',
-      status: 'completed',
-      signers: [
-        {
-          id: 's1',
-          name: 'Test Owner',
-          email: 'owner@test.com',
-          signed_at: new Date().toISOString(),
-        },
-      ],
-      completed_at: new Date().toISOString(),
+      object: {
+        id: SIGNWELL_DOC_ID,
+        name: 'SOW - Test Business',
+        status: 'completed',
+        signers: [
+          {
+            id: 's1',
+            name: 'Test Owner',
+            email: 'owner@test.com',
+            signed_at: new Date().toISOString(),
+          },
+        ],
+        completed_at: new Date().toISOString(),
+      },
+      account_id: 'test-account',
     },
   }
 }

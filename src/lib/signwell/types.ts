@@ -82,15 +82,42 @@ export interface SignWellDocument {
 /**
  * Webhook payload sent by SignWell when a document event occurs.
  *
- * The primary event we handle is `document_completed`.
+ * SignWell wraps event metadata (type, timestamp, HMAC hash) in an
+ * `event` object and the document data in `data.object`.
+ *
+ * Ref: https://developers.signwell.com/reference/event-data
  */
 export interface SignWellWebhookPayload {
-  event: 'document_completed' | 'document_expired' | 'document_cancelled'
+  event: {
+    type:
+      | 'document_completed'
+      | 'document_expired'
+      | 'document_cancelled'
+      | 'document_created'
+      | 'document_sent'
+      | 'document_viewed'
+      | 'document_signed'
+      | 'document_declined'
+      | 'document_bounced'
+      | 'document_error'
+      | 'document_in_progress'
+      | 'document_recipients_updated'
+    /** Unix timestamp of the event */
+    time: number
+    /** HMAC-SHA256 hex digest for verification (key = webhook ID) */
+    hash: string
+    /** Present on view/sign/decline events */
+    related_signer?: { email: string; name: string }
+  }
   data: {
-    id: string
-    name: string
-    status: string
-    signers: SignWellSigner[]
-    completed_at: string | null
+    /** Full document object (matches GET /documents/:id response) */
+    object: {
+      id: string
+      name: string
+      status: string
+      signers?: SignWellSigner[]
+      completed_at: string | null
+    }
+    account_id: string
   }
 }

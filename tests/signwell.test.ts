@@ -244,15 +244,15 @@ describe('signwell: webhook route', () => {
     expect(source()).toContain('export const POST')
   })
 
-  it('implements HMAC-SHA256 signature verification', () => {
+  it('implements HMAC-SHA256 event hash verification', () => {
     const code = source()
-    expect(code).toContain('verifySignature')
+    expect(code).toContain('verifyEventHash')
     expect(code).toContain('HMAC')
     expect(code).toContain('SHA-256')
   })
 
-  it('reads signature from x-signwell-signature header', () => {
-    expect(source()).toContain('x-signwell-signature')
+  it('verifies hash from event.hash in payload body', () => {
+    expect(source()).toContain('event.hash')
   })
 
   it('returns 401 for invalid signatures', () => {
@@ -271,20 +271,27 @@ describe('signwell: webhook route', () => {
 
   it('dispatches document_completed events to handler', () => {
     const code = source()
-    expect(code).toContain("payload.event === 'document_completed'")
+    expect(code).toContain("payload.event.type === 'document_completed'")
     expect(code).toContain('handleDocumentCompleted')
   })
 
   it('acknowledges non-completed events with 200', () => {
     const code = source()
-    expect(code).toContain('payload.event')
+    expect(code).toContain('payload.event.type')
     expect(code).toContain('status: 200')
   })
 
-  it('uses constant-time comparison for signature check', () => {
+  it('uses constant-time comparison for hash check', () => {
     const code = source()
     expect(code).toContain('mismatch |=')
     expect(code).toContain('charCodeAt')
+  })
+
+  it('implements timestamp freshness check for replay protection', () => {
+    const code = source()
+    expect(code).toContain('event.time')
+    expect(code).toContain('MAX_WEBHOOK_AGE_SECONDS')
+    expect(code).toContain('Stale webhook')
   })
 
   it('does NOT use auth middleware (webhooks are unauthenticated)', () => {
