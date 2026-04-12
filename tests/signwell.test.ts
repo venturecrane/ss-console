@@ -353,17 +353,18 @@ describe('signwell: send-for-signature route', () => {
     expect(code).toContain('primaryContact')
   })
 
-  it('calls createSignatureRequest with recipients and text_tags', () => {
+  it('calls createSignatureRequest with recipients and field placements', () => {
     const code = source()
     expect(code).toContain('createSignatureRequest')
     expect(code).toContain('recipients')
-    expect(code).toContain('text_tags: true')
+    expect(code).toContain('fields')
   })
 
-  it('validates SignWell detected text tag fields before proceeding', () => {
+  it('places signature fields on page 2 in AGREEMENT section', () => {
     const code = source()
-    expect(code).toContain('no fields from text tags')
-    expect(code).toContain('no_fields_detected')
+    expect(code).toContain('page: 2')
+    expect(code).toContain('client_signature')
+    expect(code).toContain('client_date')
   })
 
   it('sets callback_url for webhook', () => {

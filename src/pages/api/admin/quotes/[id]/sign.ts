@@ -114,6 +114,10 @@ export const POST: APIRoute = async ({ locals, redirect, params }) => {
     // 5. Create signature request in SignWell
     const signerId = crypto.randomUUID()
 
+    // SignWell field coordinates for page 2 AGREEMENT section.
+    // Derived from rendered PDF analysis: CLIENT signature space runs
+    // from y≈553 to y≈630 (top-left origin, US Letter 792pt).
+    // Date field overlays the "Date: _______________" text at y≈658.
     const signRequest: SignWellCreateDocumentRequest = {
       name: `SOW — ${entity.name}`,
       files: [{ file_base64: pdfBase64, name: 'sow.pdf' }],
@@ -125,7 +129,32 @@ export const POST: APIRoute = async ({ locals, redirect, params }) => {
         },
       ],
       callback_url: callbackUrl,
-      text_tags: true,
+      fields: [
+        [
+          {
+            type: 'signature',
+            required: true,
+            page: 2,
+            x: 72,
+            y: 570,
+            width: 200,
+            height: 40,
+            recipient_id: signerId,
+            api_id: 'client_signature',
+          },
+          {
+            type: 'date',
+            required: true,
+            page: 2,
+            x: 72,
+            y: 650,
+            width: 120,
+            height: 20,
+            recipient_id: signerId,
+            api_id: 'client_date',
+          },
+        ],
+      ],
       draft: false,
       custom_requester_name: 'SMD Services',
       subject: `SOW for Signature — ${entity.name}`,
@@ -133,15 +162,6 @@ export const POST: APIRoute = async ({ locals, redirect, params }) => {
     }
 
     const signwellDoc = await createSignatureRequest(apiKey, signRequest)
-
-    // Validate that SignWell detected the text tags in the PDF
-    if (!signwellDoc.recipients?.[0]?.fields?.length) {
-      console.error('[api/admin/quotes/[id]/sign] SignWell detected no fields from text tags')
-      return redirect(
-        `/admin/entities/${quote.entity_id}/quotes/${quoteId}?error=no_fields_detected`,
-        302
-      )
-    }
 
     // 6. Update quote with signwell_doc_id
     const now = new Date().toISOString()

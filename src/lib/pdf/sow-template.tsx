@@ -549,7 +549,7 @@ export function SOWTemplate(props: SOWTemplateProps) {
           document.
         </Text>
         <View style={{ flexDirection: 'row', gap: 36 }}>
-          {/* Client side — signs via SignWell (text tags detected automatically) */}
+          {/* Client side — signs via SignWell (fields placed by API coordinates) */}
           <View style={{ flex: 1 }}>
             <Text
               style={{
@@ -557,17 +557,11 @@ export function SOWTemplate(props: SOWTemplateProps) {
                 fontWeight: 600,
                 fontSize: 9,
                 color: colors.textPrimary,
-                marginBottom: 4,
+                marginBottom: 60,
               }}
             >
               CLIENT
             </Text>
-            {/* SignWell text tags — 1pt white text, invisible to reader.
-                View dimensions control the rendered field size.
-                Only the client signs via SignWell; SMD signs offline. */}
-            <View style={{ width: 200, height: 30, marginBottom: 4 }}>
-              <Text style={{ fontSize: 1, color: '#ffffff' }}>{'{{signature:1:y}}'}</Text>
-            </View>
             <View style={{ height: 1, backgroundColor: colors.textBody, marginBottom: 4 }} />
             <Text
               style={{
@@ -591,9 +585,17 @@ export function SOWTemplate(props: SOWTemplateProps) {
                 {client.contactTitle}
               </Text>
             )}
-            <View style={{ width: 120, height: 16, marginTop: 4 }}>
-              <Text style={{ fontSize: 1, color: '#ffffff' }}>{'{{date:1:y}}'}</Text>
-            </View>
+            <Text
+              style={{
+                fontFamily: fonts.body,
+                fontWeight: 400,
+                fontSize: 8,
+                color: colors.textMuted,
+                marginTop: 4,
+              }}
+            >
+              Date: _______________
+            </Text>
           </View>
           {/* SMD Services side */}
           <View style={{ flex: 1 }}>
