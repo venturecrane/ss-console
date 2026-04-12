@@ -100,7 +100,7 @@ export const SIGNING_PAGE = {
   /** CLIENT signature field (left column) */
   clientSignature: {
     x: PAGE_MARGINS.left,
-    y: 200,
+    y: 205, // Measured: CLIENT label bottom at 204.5pt from page top
     width: 200,
     height: 50,
   },
@@ -108,7 +108,7 @@ export const SIGNING_PAGE = {
   /** CLIENT date field (left column, below signature) */
   clientDate: {
     x: PAGE_MARGINS.left,
-    y: 293,
+    y: 300, // Measured: "Date: ___" text top at 302.1pt from page top
     width: 120,
     height: 20,
   },
@@ -116,7 +116,7 @@ export const SIGNING_PAGE = {
   /** SMD SERVICES signature field (right column) — reserved for future use */
   smdSignature: {
     x: PAGE_MARGINS.left + COLUMN_WIDTH + COLUMN_GAP,
-    y: 200,
+    y: 205,
     width: 200,
     height: 50,
   },
@@ -124,7 +124,7 @@ export const SIGNING_PAGE = {
   /** SMD SERVICES date field (right column) — reserved for future use */
   smdDate: {
     x: PAGE_MARGINS.left + COLUMN_WIDTH + COLUMN_GAP,
-    y: 293,
+    y: 300,
     width: 120,
     height: 20,
   },
