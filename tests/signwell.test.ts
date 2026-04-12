@@ -360,11 +360,12 @@ describe('signwell: send-for-signature route', () => {
     expect(code).toContain('fields')
   })
 
-  it('uses field config for signing page coordinates', () => {
+  it('uses text_tags for auto field detection with coordinate fallback', () => {
     const code = source()
-    expect(code).toContain('getSowSigningFields')
+    expect(code).toContain('text_tags: true')
     expect(code).toContain('client_signature')
     expect(code).toContain('client_date')
+    expect(code).toContain('getSowSigningFields') // fallback
   })
 
   it('sets callback_url for webhook', () => {

@@ -19,6 +19,7 @@ import { SOWTemplate } from './sow-template'
 import type { SOWTemplateProps } from './sow-template'
 import { ScorecardReportTemplate } from './scorecard-template'
 import type { ScorecardReportProps } from './scorecard-template'
+import { injectSigningTags } from './inject-signing-tags'
 import formeWasm from '@formepdf/core/pkg/forme_bg.wasm'
 
 /**
@@ -45,7 +46,10 @@ function ensureWasm(): Promise<void> {
 export async function renderSow(props: SOWTemplateProps): Promise<Uint8Array> {
   await ensureWasm()
   const pdf = await renderDocument(SOWTemplate(props))
-  return pdf
+  // Post-process: inject SignWell text tags for auto field detection.
+  // Forme's WASM renderer doesn't write text to PDF content streams,
+  // so we use pdf-lib to add tags that SignWell's scanner can find.
+  return injectSigningTags(pdf)
 }
 
 /**

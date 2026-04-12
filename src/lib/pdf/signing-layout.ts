@@ -5,31 +5,21 @@
  * and are consumed in two places:
  *
  *   1. The Forme template (sow-template.tsx) — positions the signing block
- *   2. The SignWell field config (field-config.ts) — places interactive fields
+ *   2. The text tag injection (inject-signing-tags.ts) — places SignWell tags
  *
- * CRITICAL: If you change these values, the template and the SignWell fields
+ * CRITICAL: If you change these values, the template and the text tags
  * move together. That is the entire point of this module.
  *
- * ## How coordinates were measured
+ * ## How tag positions were measured
  *
- * The y-values below were measured from an actual rendered PDF, NOT calculated
- * from font metrics. Procedure:
+ * The y-values below were measured from the actual Forme-rendered PDF using
+ * pdfplumber (not calculated from font metrics):
  *
- *   1. Generate a test SOW via renderSow() or the admin UI
- *   2. Open the PDF in Preview > Tools > Show Inspector (or any PDF coordinate tool)
- *   3. Hover over the top-left corner of the signing space on page 3
- *   4. Read the y-coordinate (Preview uses bottom-left origin — convert to
- *      top-left by subtracting from PAGE_HEIGHT)
- *   5. Update the values below
+ *   python3: pdfplumber.open("sow.pdf").pages[2].extract_words()
+ *   CLIENT label bottom: y=204.5pt from page top
+ *   Date text top:       y=302.1pt from page top
  *
  * Re-measure whenever the signing page layout changes.
- *
- * ## SignWell coordinate system
- *
- * Based on empirical testing:
- * - Origin: top-left of each page (0,0 = top-left corner)
- * - Units: PDF points (1/72 inch)
- * - Pages: 1-indexed (page 1 = first page)
  *
  * @see docs/templates/sow-template.md — Section 5.4 (signing page layout)
  */
@@ -74,30 +64,34 @@ export const SIGNING_PAGE = {
   columnWidth: COLUMN_WIDTH,
 
   // ---------------------------------------------------------------------------
-  // SignWell field coordinates
+  // Text tag injection positions (top-left origin, PDF points)
   //
-  // Initial values derived from the page 3 layout, which has ZERO variable
-  // content — every element is fixed-length static text. This makes the
-  // y-positions deterministic regardless of SOW content on pages 1-2.
-  //
-  // Layout (from page top):
-  //   54pt  top margin
-  //  ~28pt  NEXT STEPS heading (12pt font + 12pt marginBottom + padding/border)
-  //  ~52pt  preamble text (2 lines × 14pt + 24pt marginBottom)
-  //  ~28pt  AGREEMENT heading (same as NEXT STEPS)
-  //  ~44pt  agreement text (2 lines × 14pt + 16pt marginBottom)
-  //  ~12pt  "CLIENT" label (9pt font + spacing)
-  //   = ~218pt cumulative — signing space starts here
-  //  60pt   empty signing space (signingSpaceHeight)
-  //   5pt   divider + margin
-  //  ~24pt  contact name + optional title
-  //  ~16pt  date field area
-  //
-  // IMPORTANT: These values MUST be verified against the actual rendered PDF
-  // before production use. See "How coordinates were measured" above.
+  // These are the positions where pdf-lib injects SignWell text tags.
+  // Measured from the actual Forme-rendered PDF via pdfplumber.
   // ---------------------------------------------------------------------------
 
-  /** CLIENT signature field (left column) */
+  /** Where to inject text tags (top-left origin, converted to bottom-left by inject-signing-tags.ts) */
+  tagInjection: {
+    /** Signature tag position: below CLIENT label, in the 60pt signing space */
+    signature: { x: PAGE_MARGINS.left, y: 215 },
+    /** Date tag position: at the "Date: ___" text area */
+    date: { x: PAGE_MARGINS.left, y: 305 },
+  },
+
+  /** SignWell field dimensions (specified in text tag options) */
+  sigFieldWidth: 200,
+  sigFieldHeight: 50,
+  dateFieldWidth: 120,
+  dateFieldHeight: 20,
+
+  // ---------------------------------------------------------------------------
+  // Coordinate-based fallback (kept per critique recommendation)
+  //
+  // If text tags fail, sign.ts can fall back to explicit field coordinates.
+  // These are the same measured positions used for tag injection.
+  // ---------------------------------------------------------------------------
+
+  /** CLIENT signature field (left column) — fallback coordinates */
   clientSignature: {
     x: PAGE_MARGINS.left,
     y: 205, // Measured: CLIENT label bottom at 204.5pt from page top
@@ -105,7 +99,7 @@ export const SIGNING_PAGE = {
     height: 50,
   },
 
-  /** CLIENT date field (left column, below signature) */
+  /** CLIENT date field (left column) — fallback coordinates */
   clientDate: {
     x: PAGE_MARGINS.left,
     y: 300, // Measured: "Date: ___" text top at 302.1pt from page top
