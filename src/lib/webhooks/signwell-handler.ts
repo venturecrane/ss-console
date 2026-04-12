@@ -84,7 +84,7 @@ export async function handleDocumentCompleted(
   stripeApiKey: string | undefined,
   payload: SignWellWebhookPayload
 ): Promise<Response> {
-  const documentId = payload.data.id
+  const documentId = payload.data.object.id
   const now = new Date().toISOString()
 
   // --- Pre-batch reads (outside transaction) ---
