@@ -1,5 +1,10 @@
 import { defineMiddleware } from 'astro:middleware'
-import { parseSessionToken, validateSession, renewSession } from './lib/auth/session'
+import {
+  parseSessionToken,
+  validateSession,
+  renewSession,
+  buildSessionCookie,
+} from './lib/auth/session'
 
 /**
  * Astro middleware — handles auth for protected routes.
@@ -64,38 +69,48 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  // Unprotected routes: session is attached if valid, but not required
-  if (!isProtectedRoute) {
-    return next()
-  }
-
   // Protected routes: enforce session + role
-  if (!context.locals.session) {
-    if (isAdminApiRoute || isPortalApiRoute) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      })
+  if (isProtectedRoute) {
+    if (!context.locals.session) {
+      if (isAdminApiRoute || isPortalApiRoute) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      if (isPortalRoute) {
+        return context.redirect('/auth/portal-login')
+      }
+      return context.redirect('/auth/login')
     }
-    if (isPortalRoute) {
-      return context.redirect('/auth/portal-login')
+
+    const requiredRole = isAdminRoute || isAdminApiRoute ? 'admin' : 'client'
+    if (context.locals.session.role !== requiredRole) {
+      if (isAdminApiRoute || isPortalApiRoute) {
+        return new Response(JSON.stringify({ error: 'Forbidden' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      if (isPortalRoute) {
+        return context.redirect('/auth/portal-login')
+      }
+      return context.redirect('/auth/login')
     }
-    return context.redirect('/auth/login')
   }
 
-  const requiredRole = isAdminRoute || isAdminApiRoute ? 'admin' : 'client'
-  if (context.locals.session.role !== requiredRole) {
-    if (isAdminApiRoute || isPortalApiRoute) {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), {
-        status: 403,
-        headers: { 'Content-Type': 'application/json' },
-      })
+  const response = await next()
+
+  // Refresh session cookie on authenticated responses (sliding window).
+  // Guard: only refresh when role matches the domain to prevent admin sessions
+  // from leaking cookies onto portal.smd.services (and vice versa).
+  if (context.locals.session && token) {
+    const isPortalHost = context.url.hostname.startsWith('portal.')
+    const isClientSession = context.locals.session.role === 'client'
+    if (isClientSession === isPortalHost) {
+      response.headers.append('Set-Cookie', buildSessionCookie(token, context.locals.session.role))
     }
-    if (isPortalRoute) {
-      return context.redirect('/auth/portal-login')
-    }
-    return context.redirect('/auth/login')
   }
 
-  return next()
+  return response
 })

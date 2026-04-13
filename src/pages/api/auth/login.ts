@@ -60,7 +60,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     })
 
     // Redirect to admin with session cookie
-    const cookie = buildSessionCookie(token)
+    const cookie = buildSessionCookie(token, user.role)
     return new Response(null, {
       status: 302,
       headers: {

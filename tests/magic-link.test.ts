@@ -185,9 +185,9 @@ describe('magic-link: verify page', () => {
     expect(source).toContain('buildSessionCookie')
   })
 
-  it('redirects to /portal on success', () => {
+  it('redirects to portal base URL on success', () => {
     const source = readFileSync(resolve('src/pages/auth/verify.astro'), 'utf-8')
-    expect(source).toContain("'/portal'")
+    expect(source).toContain('getPortalBaseUrl')
   })
 
   it('redirects to portal-login on invalid token', () => {

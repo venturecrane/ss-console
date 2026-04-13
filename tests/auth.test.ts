@@ -66,6 +66,36 @@ describe('auth: session module', () => {
     // D1 fallback
     expect(source).toContain('SELECT * FROM sessions WHERE token')
   })
+
+  it('client session duration is 30 days', () => {
+    const source = readFileSync(resolve('src/lib/auth/session.ts'), 'utf-8')
+    expect(source).toContain('30 * 24 * 60 * 60 * 1000')
+  })
+
+  it('exports getSessionDurationMs helper', () => {
+    const source = readFileSync(resolve('src/lib/auth/session.ts'), 'utf-8')
+    expect(source).toContain('export function getSessionDurationMs')
+  })
+})
+
+describe('auth: buildSessionCookie behavior', () => {
+  it('sets 30-day Max-Age for client role', async () => {
+    const { buildSessionCookie } = await import('../src/lib/auth/session')
+    const cookie = buildSessionCookie('test-token', 'client')
+    expect(cookie).toContain('Max-Age=2592000')
+  })
+
+  it('sets 7-day Max-Age for admin role', async () => {
+    const { buildSessionCookie } = await import('../src/lib/auth/session')
+    const cookie = buildSessionCookie('test-token', 'admin')
+    expect(cookie).toContain('Max-Age=604800')
+  })
+
+  it('defaults to admin duration when role omitted', async () => {
+    const { buildSessionCookie } = await import('../src/lib/auth/session')
+    const cookie = buildSessionCookie('test-token')
+    expect(cookie).toContain('Max-Age=604800')
+  })
 })
 
 describe('auth: middleware', () => {
@@ -92,6 +122,11 @@ describe('auth: middleware', () => {
   it('renews session on each authenticated request', () => {
     const source = readFileSync(resolve('src/middleware.ts'), 'utf-8')
     expect(source).toContain('renewSession')
+  })
+
+  it('refreshes session cookie on authenticated response', () => {
+    const source = readFileSync(resolve('src/middleware.ts'), 'utf-8')
+    expect(source).toContain('buildSessionCookie')
   })
 })
 

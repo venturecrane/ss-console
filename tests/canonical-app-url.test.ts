@@ -140,10 +140,10 @@ describe('canonical app-url helper: URL builders', () => {
 describe('canonical app-url: magic-link endpoint uses canonical helper', () => {
   const path = resolve('src/pages/api/auth/magic-link.ts')
 
-  it('imports requireAppBaseUrl from the config helper', () => {
+  it('imports requirePortalBaseUrl from the config helper', () => {
     const source = readFileSync(path, 'utf-8')
     expect(source).toMatch(/from ['"][^'"]*lib\/config\/app-url['"]/)
-    expect(source).toContain('requireAppBaseUrl')
+    expect(source).toContain('requirePortalBaseUrl')
   })
 
   it('does not derive base URL from request host/protocol', () => {
@@ -162,10 +162,10 @@ describe('canonical app-url: magic-link endpoint uses canonical helper', () => {
 describe('canonical app-url: resend-invitation endpoint uses canonical helper', () => {
   const path = resolve('src/pages/api/admin/resend-invitation.ts')
 
-  it('imports requireAppBaseUrl from the config helper', () => {
+  it('imports requirePortalBaseUrl from the config helper', () => {
     const source = readFileSync(path, 'utf-8')
     expect(source).toMatch(/from ['"][^'"]*lib\/config\/app-url['"]/)
-    expect(source).toContain('requireAppBaseUrl')
+    expect(source).toContain('requirePortalBaseUrl')
   })
 
   it('does not derive base URL from request host/protocol', () => {

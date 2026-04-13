@@ -14,7 +14,19 @@
  */
 
 export const SESSION_COOKIE_NAME = 'session_token'
-export const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+export const ADMIN_SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+export const CLIENT_SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
+
+/** @deprecated Use getSessionDurationMs(role) instead. Kept for backward compat. */
+export const SESSION_DURATION_MS = ADMIN_SESSION_DURATION_MS
+
+/**
+ * Return session duration based on role.
+ * Clients get 30 days (infrequent portal visitors), admins get 7 days.
+ */
+export function getSessionDurationMs(role?: string): number {
+  return role === 'client' ? CLIENT_SESSION_DURATION_MS : ADMIN_SESSION_DURATION_MS
+}
 
 export interface SessionData {
   userId: string
@@ -46,7 +58,8 @@ export async function createSession(
 ): Promise<string> {
   const token = crypto.randomUUID()
   const sessionId = crypto.randomUUID()
-  const expiresAt = new Date(Date.now() + SESSION_DURATION_MS).toISOString()
+  const durationMs = getSessionDurationMs(user.role)
+  const expiresAt = new Date(Date.now() + durationMs).toISOString()
 
   // Write to D1 (source of truth)
   await db
@@ -66,7 +79,7 @@ export async function createSession(
     expiresAt,
   }
 
-  const kvTtlSeconds = Math.floor(SESSION_DURATION_MS / 1000)
+  const kvTtlSeconds = Math.floor(durationMs / 1000)
   await kv.put(`session:${token}`, JSON.stringify(sessionData), {
     expirationTtl: kvTtlSeconds,
   })
@@ -141,7 +154,10 @@ export async function renewSession(
   token: string,
   currentData: SessionData
 ): Promise<void> {
-  const newExpiresAt = new Date(Date.now() + SESSION_DURATION_MS).toISOString()
+  // Role comes from KV-cached session data and may be stale if changed
+  // mid-session by an admin. Self-heals on next KV expiry + D1 fallback.
+  const durationMs = getSessionDurationMs(currentData.role)
+  const newExpiresAt = new Date(Date.now() + durationMs).toISOString()
 
   // Update D1
   await db
@@ -155,7 +171,7 @@ export async function renewSession(
     expiresAt: newExpiresAt,
   }
 
-  const kvTtlSeconds = Math.floor(SESSION_DURATION_MS / 1000)
+  const kvTtlSeconds = Math.floor(durationMs / 1000)
   await kv.put(`session:${token}`, JSON.stringify(updatedData), {
     expirationTtl: kvTtlSeconds,
   })
@@ -178,9 +194,13 @@ export async function destroySession(
 
 /**
  * Build a Set-Cookie header for the session token.
+ *
+ * No Domain= attribute is set intentionally: admin cookies are scoped to
+ * smd.services and portal cookies to portal.smd.services. This isolation
+ * prevents cross-domain cookie leakage between admin and client sessions.
  */
-export function buildSessionCookie(token: string): string {
-  const maxAge = Math.floor(SESSION_DURATION_MS / 1000)
+export function buildSessionCookie(token: string, role?: string): string {
+  const maxAge = Math.floor(getSessionDurationMs(role) / 1000)
   return `${SESSION_COOKIE_NAME}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAge}`
 }
 
