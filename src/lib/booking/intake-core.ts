@@ -1,9 +1,9 @@
 /**
- * Core intake processing — shared between the legacy POST /api/booking/intake
- * endpoint and the new POST /api/booking/reserve flow.
+ * Core intake processing — shared between POST /api/intake (standalone) and
+ * POST /api/booking/reserve (booking flow).
  *
- * Extracts the find-or-create entity + create contact + create assessment
- * pipeline into a single function so both code paths stay in sync.
+ * Handles entity dedup, contact creation, optional assessment creation,
+ * and context append. Callers decide what notifications to send.
  */
 
 import { findOrCreateEntity } from '../db/entities'
@@ -25,7 +25,8 @@ export interface IntakeInput {
 export interface IntakeResult {
   entityId: string
   contactId: string
-  assessmentId: string
+  /** Non-null only when scheduledAt was provided (booking flow). */
+  assessmentId: string | null
   /** Whether the entity was freshly created (vs. found by slug dedup). */
   entityCreated: boolean
   /** Formatted intake lines for use in admin notification emails. */
@@ -40,19 +41,25 @@ export interface IntakeResult {
  *
  * @param scheduledAt - Optional ISO 8601 UTC string. When provided the
  *   assessment is created with `scheduled_at` set (used by /reserve).
- *   The legacy /intake flow passes undefined (assessment has no time yet).
+ *   When null/undefined (standalone intake), no assessment is created —
+ *   the context entry records interest without a phantom "scheduled" row.
+ * @param source - Pipeline identifier for entity creation and context.
+ *   Defaults to `'website_booking'` for backward compatibility.
  */
 export async function processIntakeSubmission(
   db: D1Database,
   orgId: string,
   input: IntakeInput,
-  scheduledAt?: string | null
+  scheduledAt?: string | null,
+  source?: string
 ): Promise<IntakeResult> {
+  const pipeline = source ?? 'website_booking'
+
   // 1. Find or create entity (dedup by business name slug)
   const { status, entity } = await findOrCreateEntity(db, orgId, {
     name: input.businessName,
     stage: 'prospect',
-    source_pipeline: 'website_booking',
+    source_pipeline: pipeline,
   })
 
   // 2. Create contact if one with this email doesn't already exist for this org
@@ -72,10 +79,15 @@ export async function processIntakeSubmission(
     contactId = contact.id
   }
 
-  // 3. Create assessment
-  const assessment = await createAssessment(db, orgId, entity.id, {
-    scheduled_at: scheduledAt ?? null,
-  })
+  // 3. Create assessment only when a call is being booked (scheduledAt provided).
+  //    Standalone intakes record interest via the context entry below.
+  let assessmentId: string | null = null
+  if (scheduledAt) {
+    const assessment = await createAssessment(db, orgId, entity.id, {
+      scheduled_at: scheduledAt,
+    })
+    assessmentId = assessment.id
+  }
 
   // 4. Append intake context
   const intakeLines: string[] = []
@@ -91,7 +103,7 @@ export async function processIntakeSubmission(
       entity_id: entity.id,
       type: 'intake',
       content: intakeLines.join('\n'),
-      source: 'website_booking',
+      source: pipeline,
       metadata: {
         name: input.name,
         email: input.email,
@@ -107,7 +119,7 @@ export async function processIntakeSubmission(
   return {
     entityId: entity.id,
     contactId,
-    assessmentId: assessment.id,
+    assessmentId,
     entityCreated: status === 'created',
     intakeLines,
   }

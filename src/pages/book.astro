@@ -38,6 +38,14 @@ const turnstileSiteKey = Astro.locals.runtime?.env?.PUBLIC_TURNSTILE_SITE_KEY ??
             <SlotPicker />
           </div>
 
+          <!-- Standalone intake escape hatch -->
+          <p class="mt-4 text-center text-sm text-slate-500">
+            Not ready to pick a time?
+            <a href="/get-started" class="font-medium text-primary underline hover:text-primary/80"
+              >Tell us about your business</a
+            > and we'll reach out.
+          </p>
+
           <!-- Step 2: Intake form (appears after slot selection) -->
           <div
             id="intake-section"

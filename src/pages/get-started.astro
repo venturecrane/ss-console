@@ -1,0 +1,377 @@
+---
+export const prerender = false
+
+import Base from '../layouts/Base.astro'
+import Nav from '../components/Nav.astro'
+import Footer from '../components/Footer.astro'
+import { ENTITY_VERTICALS } from '../lib/db/entities'
+
+const turnstileSiteKey = Astro.locals.runtime?.env?.PUBLIC_TURNSTILE_SITE_KEY ?? ''
+---
+
+<Base
+  title="Tell Us About Your Business | SMD Services"
+  description="Share a few details about your business and what you're working on. We'll review it and reach out to start the conversation on your terms."
+>
+  <Nav />
+  <main>
+    <section class="bg-slate-50 px-6 py-16 sm:py-24">
+      <div class="mx-auto max-w-2xl">
+        <!-- Hero -->
+        <div class="text-center">
+          <h1 class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+            Tell Us About Your Business
+          </h1>
+          <p class="mx-auto mt-4 max-w-xl text-lg text-slate-600">
+            Not ready to schedule a call? No problem. Share a few details about your business and
+            what you're working on. We'll review it and reach out to start the conversation on your
+            terms.
+          </p>
+        </div>
+
+        <!-- Intake form -->
+        <div id="intake-form-container" class="mt-10 rounded-xl bg-white p-6 shadow-sm sm:p-8">
+          <form id="intake-form" class="space-y-5" novalidate>
+            <!-- Honeypot -->
+            <div class="absolute -left-[9999px]" aria-hidden="true">
+              <input type="text" name="website_url" tabindex="-1" autocomplete="off" />
+            </div>
+
+            <!-- Name + Email -->
+            <div class="grid gap-5 sm:grid-cols-2">
+              <div>
+                <label for="gs-name" class="block text-sm font-medium text-slate-700">
+                  Full name <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="gs-name"
+                  name="name"
+                  required
+                  maxlength="200"
+                  autocomplete="name"
+                  class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="e.g. Maria Garcia"
+                />
+              </div>
+              <div>
+                <label for="gs-email" class="block text-sm font-medium text-slate-700">
+                  Work email <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  id="gs-email"
+                  name="email"
+                  required
+                  maxlength="254"
+                  autocomplete="email"
+                  class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="maria@example.com"
+                />
+              </div>
+            </div>
+
+            <!-- Business name -->
+            <div>
+              <label for="gs-business" class="block text-sm font-medium text-slate-700">
+                Business name <span class="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                id="gs-business"
+                name="business_name"
+                required
+                maxlength="200"
+                class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="e.g. Phoenix Plumbing Co."
+              />
+            </div>
+
+            <!-- Vertical + Employee count -->
+            <div class="grid gap-5 sm:grid-cols-2">
+              <div>
+                <label for="gs-vertical" class="block text-sm font-medium text-slate-700">
+                  What kind of business?
+                </label>
+                <select
+                  id="gs-vertical"
+                  name="vertical"
+                  class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">Select one</option>
+                  {ENTITY_VERTICALS.map((v) => <option value={v.value}>{v.label}</option>)}
+                </select>
+                <input
+                  type="text"
+                  id="gs-vertical-other"
+                  name="vertical_other"
+                  class="mt-2 hidden w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="Describe your business type"
+                />
+              </div>
+              <div>
+                <label for="gs-employees" class="block text-sm font-medium text-slate-700">
+                  Employee count
+                </label>
+                <select
+                  id="gs-employees"
+                  name="employee_count"
+                  class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">Select one</option>
+                  <option value="1-5">1 - 5</option>
+                  <option value="6-10">6 - 10</option>
+                  <option value="11-25">11 - 25</option>
+                  <option value="26-50">26 - 50</option>
+                  <option value="50+">50+</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Years in business -->
+            <div class="sm:w-1/2">
+              <label for="gs-years" class="block text-sm font-medium text-slate-700">
+                Years in business
+              </label>
+              <select
+                id="gs-years"
+                name="years_in_business"
+                class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="">Select one</option>
+                <option value="<1">Less than 1 year</option>
+                <option value="1-3">1 - 3 years</option>
+                <option value="3-5">3 - 5 years</option>
+                <option value="5-10">5 - 10 years</option>
+                <option value="10+">10+ years</option>
+              </select>
+            </div>
+
+            <!-- Biggest challenge -->
+            <div>
+              <label for="gs-challenge" class="block text-sm font-medium text-slate-700">
+                What's the single biggest operational challenge right now?
+                <span class="text-red-500">*</span>
+              </label>
+              <p class="mt-0.5 text-xs text-slate-400">
+                What would make the biggest difference in how your business runs day to day?
+              </p>
+              <textarea
+                id="gs-challenge"
+                name="biggest_challenge"
+                required
+                rows="3"
+                maxlength="2000"
+                class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="e.g. I want to stop being the bottleneck for every decision..."
+              ></textarea>
+            </div>
+
+            <!-- How heard -->
+            <div>
+              <label for="gs-how-heard" class="block text-sm font-medium text-slate-700">
+                How did you hear about us?
+              </label>
+              <select
+                id="gs-how-heard"
+                name="how_heard"
+                class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="">Select one</option>
+                <option value="Google Search">Google Search</option>
+                <option value="Referral">Referral</option>
+                <option value="BNI / Networking group">BNI / Networking group</option>
+                <option value="Chamber of Commerce">Chamber of Commerce</option>
+                <option value="Social Media">Social Media</option>
+                <option value="SCORE / SBA">SCORE / SBA</option>
+                <option value="other">Other</option>
+              </select>
+              <input
+                type="text"
+                id="gs-how-heard-other"
+                name="how_heard_other"
+                class="mt-2 hidden w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="Tell us more"
+              />
+            </div>
+
+            <!-- Turnstile -->
+            <div id="turnstile-container"></div>
+
+            <!-- Error banner -->
+            <div id="gs-error" class="hidden rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+            </div>
+
+            <!-- Submit -->
+            <button
+              id="gs-submit"
+              type="submit"
+              class="w-full rounded-lg bg-primary px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Send
+            </button>
+          </form>
+        </div>
+
+        <!-- Success state (replaces form on submit) -->
+        <div id="success-panel" class="mt-10 hidden text-center">
+          <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
+            <svg
+              class="h-7 w-7 text-green-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="2"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"></path>
+            </svg>
+          </div>
+          <h2 class="mt-4 text-xl font-bold text-slate-900">Thanks for sharing</h2>
+          <p class="mt-2 text-base text-slate-600">
+            We'll review this and be in touch to start the conversation.
+          </p>
+          <p class="mt-6 text-sm text-slate-500">
+            Ready to schedule a call?
+            <a href="/book" class="font-medium text-primary hover:text-primary/80 underline">
+              Book a time here
+            </a>
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+  <Footer />
+
+  <!-- Turnstile script -->
+  {
+    turnstileSiteKey && (
+      <script
+        is:inline
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+        async
+        defer
+      />
+    )
+  }
+
+  <script is:inline define:vars={{ turnstileSiteKey }}>
+    ;(function () {
+      const form = document.getElementById('intake-form')
+      const formContainer = document.getElementById('intake-form-container')
+      const submitBtn = document.getElementById('gs-submit')
+      const errorBanner = document.getElementById('gs-error')
+      const successPanel = document.getElementById('success-panel')
+      const turnstileContainer = document.getElementById('turnstile-container')
+
+      // "Other" toggles
+      const verticalSelect = document.getElementById('gs-vertical')
+      const verticalOther = document.getElementById('gs-vertical-other')
+      const howHeardSelect = document.getElementById('gs-how-heard')
+      const howHeardOther = document.getElementById('gs-how-heard-other')
+
+      verticalSelect.addEventListener('change', function () {
+        if (this.value === 'other') {
+          verticalOther.classList.remove('hidden')
+        } else {
+          verticalOther.classList.add('hidden')
+          verticalOther.value = ''
+        }
+      })
+
+      howHeardSelect.addEventListener('change', function () {
+        if (this.value === 'other') {
+          howHeardOther.classList.remove('hidden')
+        } else {
+          howHeardOther.classList.add('hidden')
+          howHeardOther.value = ''
+        }
+      })
+
+      // Turnstile
+      let turnstileWidgetId = null
+      let turnstileReady = false
+
+      if (turnstileSiteKey) {
+        const initTurnstile = function () {
+          if (typeof turnstile !== 'undefined' && turnstileContainer && !turnstileReady) {
+            turnstileWidgetId = turnstile.render(turnstileContainer, {
+              sitekey: turnstileSiteKey,
+              callback: function () {},
+              'expired-callback': function () {},
+              'error-callback': function () {},
+            })
+            turnstileReady = true
+          }
+        }
+        initTurnstile()
+        if (!turnstileReady) {
+          const checkInterval = setInterval(function () {
+            initTurnstile()
+            if (turnstileReady) clearInterval(checkInterval)
+          }, 200)
+          setTimeout(function () {
+            clearInterval(checkInterval)
+          }, 10000)
+        }
+      }
+
+      // Form submission
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault()
+        errorBanner.classList.add('hidden')
+        submitBtn.disabled = true
+        submitBtn.textContent = 'Sending...'
+
+        const formData = new FormData(form)
+        const data = {}
+        formData.forEach(function (value, key) {
+          data[key] = value
+        })
+
+        // Resolve "Other" fields
+        if (data.vertical === 'other' && data.vertical_other) {
+          data.vertical = data.vertical_other
+        }
+        delete data.vertical_other
+
+        if (data.how_heard === 'other' && data.how_heard_other) {
+          data.how_heard = data.how_heard_other
+        }
+        delete data.how_heard_other
+
+        // Add Turnstile token
+        if (turnstileSiteKey && typeof turnstile !== 'undefined') {
+          data.turnstile_token = turnstile.getResponse(turnstileWidgetId) || ''
+        }
+
+        try {
+          const res = await fetch('/api/intake', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+          })
+
+          if (res.ok) {
+            formContainer.classList.add('hidden')
+            successPanel.classList.remove('hidden')
+          } else {
+            const body = await res.json()
+            errorBanner.textContent = body.error || 'Something went wrong. Please try again.'
+            errorBanner.classList.remove('hidden')
+            submitBtn.disabled = false
+            submitBtn.textContent = 'Send'
+            // Reset Turnstile on error
+            if (turnstileSiteKey && typeof turnstile !== 'undefined') {
+              turnstile.reset(turnstileWidgetId)
+            }
+          }
+        } catch {
+          errorBanner.textContent = 'Something went wrong. Please try again.'
+          errorBanner.classList.remove('hidden')
+          submitBtn.disabled = false
+          submitBtn.textContent = 'Send'
+        }
+      })
+    })()
+  </script>
+</Base>

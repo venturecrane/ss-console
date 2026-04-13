@@ -186,7 +186,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       slotStartUtc
     )
 
-    assessmentId = intakeResult.assessmentId
+    // assessmentId is guaranteed non-null when scheduledAt is provided
+    assessmentId = intakeResult.assessmentId!
     entityId = intakeResult.entityId
     intakeLines = intakeResult.intakeLines
 
