@@ -261,14 +261,15 @@ describe('portal quotes: quote detail page', () => {
     expect(code).toContain('Download SOW')
   })
 
-  it('shows signing iframe when signwell_doc_id exists', () => {
+  it('shows signing iframe when an open signature request exists', () => {
     const code = source()
-    expect(code).toContain('signwell_doc_id')
+    expect(code).toContain('sowState.openSignatureRequest')
+    expect(code).toContain('provider_request_id')
     expect(code).toContain('iframe')
     expect(code).toContain('signwell.com')
   })
 
-  it('shows "proposal is being prepared" when no signwell_doc_id (UX-004)', () => {
+  it('shows "proposal is being prepared" when no open signature request exists (UX-004)', () => {
     expect(source()).toContain('Your proposal is being prepared')
   })
 
@@ -315,9 +316,10 @@ describe('portal quotes: SOW download API route', () => {
     expect(code).toContain('getPortalClient')
   })
 
-  it('verifies sow_path exists', () => {
+  it('loads the downloadable SOW revision from the lifecycle service', () => {
     const code = readFileSync(resolve('src/pages/api/portal/quotes/[id]/sow.ts'), 'utf-8')
-    expect(code).toContain('sow_path')
+    expect(code).toContain('getSOWStateForQuote')
+    expect(code).toContain('downloadableRevision')
   })
 
   it('streams PDF with correct Content-Type', () => {

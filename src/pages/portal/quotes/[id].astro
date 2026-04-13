@@ -3,6 +3,7 @@ import '../../../styles/global.css'
 import { getPortalClient } from '../../../lib/portal/session'
 import { getQuoteForEntity } from '../../../lib/db/quotes'
 import type { LineItem } from '../../../lib/db/quotes'
+import { getSOWStateForQuote } from '../../../lib/sow/service'
 import {
   PROBLEM_LABELS,
   LEGACY_PROBLEM_LABELS,
@@ -37,6 +38,10 @@ const quote = await getQuoteForEntity(env.DB, client.id, quoteId)
 if (!quote) {
   return Astro.redirect('/portal/quotes')
 }
+
+const sowState = await getSOWStateForQuote(env.DB, session.orgId, quote.id)
+const activeSignatureRequest = sowState.openSignatureRequest
+const downloadableRevision = sowState.downloadableRevision
 
 const lineItems: LineItem[] = JSON.parse(quote.line_items)
 
@@ -85,8 +90,7 @@ if (quote.status === 'sent' && quote.expires_at) {
 }
 
 // SignWell signing
-const hasSignWell = !!quote.signwell_doc_id
-const hasSow = !!quote.sow_path
+const hasSow = !!downloadableRevision
 const isSent = quote.status === 'sent'
 ---
 
@@ -266,7 +270,7 @@ const isSent = quote.status === 'sent'
           >
             <h2 class="text-base font-semibold text-slate-900 mb-3">Review & Sign</h2>
 
-            {hasSignWell ? (
+            {activeSignatureRequest ? (
               <div>
                 <p class="text-sm text-slate-600 mb-4">
                   Review the statement of work below and sign to get started.
@@ -276,7 +280,7 @@ const isSent = quote.status === 'sent'
                   style="min-height: 600px;"
                 >
                   <iframe
-                    src={`https://app.signwell.com/sign/${quote.signwell_doc_id}`}
+                    src={`https://app.signwell.com/sign/${activeSignatureRequest.provider_request_id}`}
                     class="w-full border-0"
                     style="min-height: 600px;"
                     title="Sign Statement of Work"

@@ -215,9 +215,6 @@ CREATE TABLE quotes (
   sent_at         TEXT,
   expires_at      TEXT,
   accepted_at     TEXT,
-  sow_path        TEXT,            -- R2 key for generated SOW PDF
-  signed_sow_path TEXT,            -- R2 key for signed SOW PDF
-  signwell_doc_id TEXT,            -- SignWell document ID
   notes           TEXT,
   created_at      TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at      TEXT NOT NULL DEFAULT (datetime('now'))

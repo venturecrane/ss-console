@@ -328,25 +328,30 @@ Page 3 includes a brief "Next Steps" section above the signature block so the pa
 ┌──────────────────────────────────────────────────────────────┐
 │  NEXT STEPS                                                  │
 │                                                              │
-│  Once both parties sign below, we will send a deposit        │
-│  invoice. Work begins after the deposit is received.         │
-│  We will confirm the kickoff date within one business day.   │
+│  Once you sign below, we will send a deposit invoice.        │
+│  Work begins after the deposit is received. We will          │
+│  confirm the kickoff date within one business day.           │
 │                                                              │
 │  AGREEMENT                                                   │
 │                                                              │
-│  By signing below, both parties agree to the scope,          │
-│  timeline, and terms described in this document.             │
+│  By signing below, the client agrees to the scope,           │
+│  timeline, pricing, and terms described in this              │
+│  document. SMD Services agrees by presenting this            │
+│  Statement of Work for signature.                            │
 │                                                              │
-│  ┌──────────────────────┐   ┌──────────────────────┐        │
-│  │  CLIENT               │   │  SMD SERVICES         │        │
-│  │                       │   │                       │        │
-│  │  {{sig.client}}       │   │  {{sig.smd}}          │        │
-│  │  ___________________  │   │  ___________________  │        │
-│  │  {{client.contact}}   │   │  {{smd.signer_name}}  │        │
-│  │  {{client.title}}     │   │  {{smd.signer_title}} │        │
-│  │  {{sig.client_date}}  │   │  {{sig.smd_date}}     │        │
-│  │                       │   │                       │        │
-│  └──────────────────────┘   └──────────────────────┘        │
+│  ┌──────────────────────┐                                    │
+│  │  CLIENT ACCEPTANCE    │                                    │
+│  │                       │                                    │
+│  │  {{sig.client}}       │                                    │
+│  │  ___________________  │                                    │
+│  │  {{client.contact}}   │                                    │
+│  │  {{client.title}}     │                                    │
+│  │  {{sig.client_date}}  │                                    │
+│  │                       │                                    │
+│  │  SMD Services assents │                                    │
+│  │  by presenting this   │                                    │
+│  │  SOW for signature.   │                                    │
+│  └──────────────────────┘                                    │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -355,32 +360,30 @@ Page 3 includes a brief "Next Steps" section above the signature block so the pa
 
 - Section heading: same style
 - Intro sentence: Inter 400 10pt `#334155`
-- Two-column layout: each column ~45% of printable width, 10% gutter
-- Column header ("CLIENT" / "SMD SERVICES"): Inter 600 9pt `#1e293b`
+- Single signature block aligned to the left signing column geometry
+- Column header ("CLIENT ACCEPTANCE"): Inter 600 9pt `#1e293b`
 - Signature area: 60pt tall empty space for SignWell signature field overlay
 - Signature line: 1pt `#334155` rule, full column width
 - Name and title below line: Inter 400 9pt `#334155`
 - Date field: Inter 400 8pt `#64748b`
+- Assent note below date: Inter 400 8pt `#64748b`
 
 **SignWell field placement architecture:**
 
 - Field coordinates are defined in `src/lib/pdf/signing-layout.ts` (single source of truth)
 - Both the Forme template and SignWell field config import from this module
-- Coordinates are measured from the actual rendered PDF, not calculated from font metrics
-- To re-measure: generate a test PDF, open in Preview > Inspector, update `signing-layout.ts`
+- `signing-layout.ts` stores canonical PDF-point geometry for the signing page
+- The SignWell adapter converts those PDF points into SignWell's signer runtime coordinate space
+- To re-measure: generate a test PDF, inspect the PDF geometry, update `signing-layout.ts`, then verify the provider transform against a live SignWell request
 - See `src/lib/signwell/field-config.ts` for the SignWell API integration
 
 **Placeholder fields:**
 | Field | Source |
 | ------------------------- | ------------------------------- |
 | `{{sig.client}}` | SignWell signature field |
-| `{{sig.smd}}` | SignWell signature field |
 | `{{client.contact_name}}` | Client contact record |
 | `{{client.contact_title}}`| Client contact record |
-| `{{smd.signer_name}}` | Admin user record |
-| `{{smd.signer_title}}` | Admin user title |
 | `{{sig.client_date}}` | SignWell auto-fill |
-| `{{sig.smd_date}}` | SignWell auto-fill |
 
 ### 5.5 Footer
 
@@ -498,10 +501,6 @@ interface SOWTemplateProps {
     milestone?: string // only for three_milestone
     milestoneLabel?: string
   }
-  smd: {
-    signerName: string
-    signerTitle: string
-  }
 }
 ```
 
@@ -535,7 +534,7 @@ All static text in this template has been written in "we" voice per Decision #20
 | Exclusions      | "...we'll propose a separate scope and estimate."       | "we"                 |
 | Terms #2        | "We will confirm the start date..."                     | "we"                 |
 | Terms #3        | "...we will address questions and minor adjustments..." | "we"                 |
-| Agreement       | "...both parties agree to the scope..."                 | Neutral              |
+| Agreement       | "...the client agrees to the scope..."                  | Neutral              |
 
 No instance of "I," "the consultant," or "my" appears anywhere in this document.
 

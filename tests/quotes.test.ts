@@ -174,22 +174,20 @@ describe('quotes: R2 storage helpers', () => {
     expect(existsSync(resolve('src/lib/storage/r2.ts'))).toBe(true)
   })
 
-  it('exports uploadPdf function', () => {
-    expect(source()).toContain('export async function uploadPdf')
-  })
-
-  it('exports getPdfUrl function', () => {
-    expect(source()).toContain('export function getPdfUrl')
+  it('exports revisioned SOW key helpers', () => {
+    const code = source()
+    expect(code).toContain('export function getSowRevisionUnsignedKey')
+    expect(code).toContain('export function getSowRevisionSignedKey')
   })
 
   it('exports getPdf function', () => {
     expect(source()).toContain('export async function getPdf')
   })
 
-  it('uses structured key pattern with org scoping for PDFs', () => {
+  it('uses revisioned org-scoped storage keys for SOW artifacts', () => {
     const code = source()
-    expect(code).toContain('/quotes/')
-    expect(code).toContain('/sow.pdf')
+    expect(code).toContain('orgs/${orgId}/quotes/${quoteId}/sow/${revisionId}/unsigned.pdf')
+    expect(code).toContain('orgs/${orgId}/quotes/${quoteId}/sow/${revisionId}/signed.pdf')
   })
 
   it('stores content type as application/pdf', () => {
@@ -228,14 +226,7 @@ describe('quotes: API routes', () => {
   it('update endpoint handles generate-pdf action', () => {
     const code = readFileSync(resolve('src/pages/api/admin/quotes/[id].ts'), 'utf-8')
     expect(code).toContain('generate-pdf')
-    expect(code).toContain('renderSow')
-    expect(code).toContain('uploadPdf')
-  })
-
-  it('update endpoint handles send action', () => {
-    const code = readFileSync(resolve('src/pages/api/admin/quotes/[id].ts'), 'utf-8')
-    expect(code).toContain("action === 'send'")
-    expect(code).toContain('updateQuoteStatus')
+    expect(code).toContain('createSOWRevisionForQuote')
   })
 
   it('update endpoint handles update action', () => {

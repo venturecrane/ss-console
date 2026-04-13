@@ -129,24 +129,46 @@ describe('signwell: webhook handler', () => {
     expect(source()).toContain('export async function handleDocumentCompleted')
   })
 
-  it('looks up quote by signwell_doc_id', () => {
+  it('delegates completion handling to the SOW finalization service', () => {
     const code = source()
-    expect(code).toContain('signwell_doc_id')
-    expect(code).toContain('getQuoteBySignWellDocId')
+    expect(code).toContain('finalizeCompletedSOWSignature')
+    expect(code).toContain('return finalizeCompletedSOWSignature')
   })
 
-  it('implements idempotency check — returns early if already accepted', () => {
+  it('keeps the wrapper free of persistence logic', () => {
     const code = source()
-    expect(code).toContain("quote.status === 'accepted'")
-    expect(code).toContain('already accepted, skipping')
+    expect(code).not.toContain('await db.batch(')
+    expect(code).not.toContain('INSERT INTO engagements')
+  })
+})
+
+describe('signwell: sow lifecycle service', () => {
+  const source = () => readFileSync(resolve('src/lib/sow/service.ts'), 'utf-8')
+
+  it('looks up requests by provider_request_id', () => {
+    const code = source()
+    expect(code).toContain('getSignatureRequestByProviderRequestId')
+    expect(code).toContain('providerRequestId')
+  })
+
+  it('acknowledges unknown provider request ids as non-retryable', () => {
+    const code = source()
+    expect(code).toContain('unknownDocumentResponse')
+    expect(code).toContain('Unknown SignWell document')
+  })
+
+  it('claims sent requests before artifact persistence to avoid duplicate finalization', () => {
+    const code = source()
+    expect(code).toContain("status = 'completed_pending_artifact'")
+    expect(code).toContain("status = 'sent'")
+    expect(code).toContain('claimResult.meta?.changes')
   })
 
   it('generates UUIDs for engagement and invoice BEFORE the batch', () => {
     const code = source()
-    // engagementId and invoiceId must be generated before db.batch()
     const engagementIdIdx = code.indexOf('const engagementId = crypto.randomUUID()')
     const invoiceIdIdx = code.indexOf('const invoiceId = crypto.randomUUID()')
-    const batchIdx = code.indexOf('await db.batch(')
+    const batchIdx = code.indexOf('await db.batch([', engagementIdIdx)
     expect(engagementIdIdx).toBeGreaterThan(-1)
     expect(invoiceIdIdx).toBeGreaterThan(-1)
     expect(batchIdx).toBeGreaterThan(-1)
@@ -166,7 +188,8 @@ describe('signwell: webhook handler', () => {
 
   it('batch updates entity stage to engaged', () => {
     const code = source()
-    expect(code).toContain("UPDATE entities SET stage = 'engaged'")
+    expect(code).toContain('UPDATE entities')
+    expect(code).toContain("SET stage = 'engaged'")
   })
 
   it('batch creates engagement record', () => {
@@ -182,36 +205,36 @@ describe('signwell: webhook handler', () => {
     expect(code).toContain("'draft'")
   })
 
-  it('follows two-phase structure — returns 200 after Phase 1 even if Phase 2 fails', () => {
+  it('persists the signed artifact before batch finalization and runs outbox jobs afterward', () => {
     const code = source()
-    // Phase 2 side effects are in separate try/catch blocks after the batch
-    expect(code).toContain('Phase 2: Side effects (best-effort)')
-    expect(code).toContain('Non-fatal')
+    expect(code).toContain('uploadSignedSowRevisionPdf')
+    expect(code).toContain('processOutboxJobsForSignatureRequest')
   })
 
-  it('returns 500 on Phase 1 batch failure', () => {
+  it('returns 500 when artifact persistence or finalization fails', () => {
     const code = source()
-    expect(code).toContain('Phase 1 batch failed')
+    expect(code).toContain('Failed to persist signed artifact')
+    expect(code).toContain('Finalization batch failed')
     expect(code).toContain('status: 500')
   })
 
-  it('uploads signed PDF to R2 in Phase 2', () => {
+  it('uploads signed PDF to a revisioned signed artifact key', () => {
     const code = source()
-    expect(code).toContain('signed-sow.pdf')
-    expect(code).toContain('storage.put')
+    expect(code).toContain('getSowRevisionSignedKey')
+    expect(code).toContain('uploadSignedSowRevisionPdf')
   })
 
-  it('updates quote signed_sow_path in Phase 2', () => {
+  it('persists signed artifact state on lifecycle tables during finalization', () => {
     const code = source()
-    expect(code).toContain('signed_sow_path')
-    expect(code).toContain('signedSowPath')
+    expect(code).toContain("SET status = 'completed', signed_storage_key = ?")
+    expect(code).toContain("SET status = 'signed', signed_storage_key = ?")
+    expect(code).toContain("SET status = 'accepted'")
   })
 
-  it('sends confirmation email via shared sendEmail helper in Phase 2', () => {
+  it('enqueues outbox jobs for signed email and deposit invoice', () => {
     const code = source()
-    expect(code).toContain("import { sendEmail } from '../email/resend'")
-    expect(code).toContain('await sendEmail(resendApiKey,')
-    expect(code).toContain('SOW Signed')
+    expect(code).toContain('send_sow_signed_email')
+    expect(code).toContain('send_deposit_invoice')
   })
 
   it('uses parameterized queries with .bind()', () => {
@@ -221,15 +244,22 @@ describe('signwell: webhook handler', () => {
     expect(code).not.toMatch(/prepare\(`[^`]*\$\{/)
   })
 
-  it('returns unknown document as 200 (non-retryable)', () => {
+  it('builds SignWell requests with recipients, coordinates, and webhook callback', () => {
     const code = source()
-    expect(code).toContain('Unknown SignWell document')
-    // Should still return 200 for unknown documents
-    const unknownBlock = code.substring(
-      code.indexOf('Unknown SignWell document'),
-      code.indexOf('Unknown SignWell document') + 200
-    )
-    expect(unknownBlock).toContain('status: 200')
+    expect(code).toContain('recipients')
+    expect(code).toContain('fields')
+    expect(code).toContain('getSowSigningFields')
+    expect(code).toContain('client_signature')
+    expect(code).toContain('client_date')
+    expect(code).toContain('callback_url')
+  })
+
+  it('records send authorization and signature request before updating quote send state', () => {
+    const code = source()
+    expect(code).toContain('createSOWSendAuthorization')
+    expect(code).toContain('createSignatureRequest')
+    expect(code).toContain('sent_at')
+    expect(code).toContain('expires_at')
   })
 })
 
@@ -329,59 +359,21 @@ describe('signwell: send-for-signature route', () => {
     expect(code).toContain("quote.status !== 'sent'")
   })
 
-  it('verifies sow_path exists', () => {
-    expect(source()).toContain('quote.sow_path')
+  it('requires an explicit signer_contact_id', () => {
+    expect(source()).toContain('signer_contact_id')
   })
 
-  it('prevents duplicate signwell sends (checks signwell_doc_id)', () => {
-    expect(source()).toContain('quote.signwell_doc_id')
-  })
-
-  it('retrieves SOW PDF from R2', () => {
+  it('loads the selected signer via getContact', () => {
     const code = source()
-    expect(code).toContain('getPdf')
+    expect(code).toContain('getContact')
+    expect(code).toContain('signerContact')
+  })
+
+  it('delegates send orchestration to authorizeAndSendSOW', () => {
+    const code = source()
+    expect(code).toContain('authorizeAndSendSOW')
     expect(code).toContain('env.STORAGE')
-  })
-
-  it('converts PDF to base64 for SignWell API', () => {
-    expect(source()).toContain('pdfBase64')
-  })
-
-  it('gets client primary contact for signer details', () => {
-    const code = source()
-    expect(code).toContain('listContacts')
-    expect(code).toContain('primaryContact')
-  })
-
-  it('calls createSignatureRequest with recipients and field placements', () => {
-    const code = source()
-    expect(code).toContain('createSignatureRequest')
-    expect(code).toContain('recipients')
-    expect(code).toContain('fields')
-  })
-
-  it('uses field config for signing page coordinates', () => {
-    const code = source()
-    expect(code).toContain('getSowSigningFields')
-    expect(code).toContain('client_signature')
-    expect(code).toContain('client_date')
-  })
-
-  it('sets callback_url for webhook', () => {
-    expect(source()).toContain('callback_url')
-  })
-
-  it('stores signwell_doc_id on the quote', () => {
-    const code = source()
-    expect(code).toContain('signwell_doc_id = ?')
-    expect(code).toContain('signwellDoc.id')
-  })
-
-  it('transitions draft to sent when sending for signature', () => {
-    const code = source()
-    expect(code).toContain("status = 'sent'")
-    expect(code).toContain('sent_at')
-    expect(code).toContain('expires_at')
+    expect(code).toContain('callbackBaseEnv: env')
   })
 
   it('redirects back to quote detail page on success', () => {
@@ -390,9 +382,9 @@ describe('signwell: send-for-signature route', () => {
     expect(code).toContain('saved=1')
   })
 
-  it('uses parameterized queries with .bind()', () => {
+  it('keeps SQL out of the route layer', () => {
     const code = source()
-    expect(code).toContain('.bind(')
+    expect(code).not.toContain('.prepare(')
     expect(code).not.toMatch(/prepare\(`[^`]*\$\{/)
   })
 })

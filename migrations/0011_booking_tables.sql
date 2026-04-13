@@ -161,9 +161,6 @@ CREATE TABLE quotes (
   sent_at         TEXT,
   expires_at      TEXT,
   accepted_at     TEXT,
-  sow_path        TEXT,
-  signed_sow_path TEXT,
-  signwell_doc_id TEXT,
   notes           TEXT,
   created_at      TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
@@ -305,12 +302,10 @@ FROM assessments_bak;
 
 INSERT INTO quotes (id, org_id, assessment_id, version, parent_quote_id,
   line_items, total_hours, rate, total_price, deposit_pct, deposit_amount,
-  status, sent_at, expires_at, accepted_at, sow_path, signed_sow_path,
-  signwell_doc_id, notes, created_at, updated_at, entity_id)
+  status, sent_at, expires_at, accepted_at, notes, created_at, updated_at, entity_id)
 SELECT id, org_id, assessment_id, version, parent_quote_id,
   line_items, total_hours, rate, total_price, deposit_pct, deposit_amount,
-  status, sent_at, expires_at, accepted_at, sow_path, signed_sow_path,
-  signwell_doc_id, notes, created_at, updated_at, entity_id
+  status, sent_at, expires_at, accepted_at, notes, created_at, updated_at, entity_id
 FROM quotes_bak;
 
 INSERT INTO engagements (id, org_id, quote_id, scope_summary, start_date,

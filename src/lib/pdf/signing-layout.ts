@@ -10,15 +10,6 @@
  * CRITICAL: If you change these values, the template and the SignWell fields
  * move together. That is the entire point of this module.
  *
- * ## SignWell coordinate system
- *
- * SignWell field coordinates are PDF points (72 DPI) with top-left page origin,
- * mapping 1:1 to the PDF's coordinate space. Verified empirically by creating
- * a calibration document with fields at known positions.
- *
- * The field positions below were determined by visual inspection of the
- * SignWell signing view against the actual Forme-rendered 3-page SOW PDF.
- *
  * @see docs/templates/sow-template.md — Section 5.4 (signing page layout)
  */
 
@@ -42,11 +33,8 @@ export const PRINTABLE_WIDTH = PAGE_SIZE.width - PAGE_MARGINS.left - PAGE_MARGIN
 // Signing page layout
 // ---------------------------------------------------------------------------
 
-/** Gap between the two signature columns (CLIENT / SMD SERVICES) */
-const COLUMN_GAP = 36
-
-/** Width of each signature column: half of printable width minus gap */
-const COLUMN_WIDTH = (PRINTABLE_WIDTH - COLUMN_GAP) / 2 // 216pt
+/** Width of the client acceptance block on the dedicated signing page */
+const SIGNATURE_BLOCK_WIDTH = 216
 
 export const SIGNING_PAGE = {
   /** 1-indexed page number where the signing block lives */
@@ -55,55 +43,37 @@ export const SIGNING_PAGE = {
   /** Height of the empty space reserved for SignWell signature overlay */
   signingSpaceHeight: 60,
 
-  /** Gap between the two signature columns */
-  columnGap: COLUMN_GAP,
-
-  /** Width of each signature column */
-  columnWidth: COLUMN_WIDTH,
+  /** Width of the client acceptance block */
+  columnWidth: SIGNATURE_BLOCK_WIDTH,
 
   // ---------------------------------------------------------------------------
-  // SignWell field coordinates (top-left origin, PDF points)
+  // PDF field coordinates (top-left origin, PDF points)
   //
-  // SignWell coordinates map 1:1 to PDF points with top-left page origin.
-  // Verified empirically: created a calibration document with fields at
-  // known y positions (50, 150, 250, 350, 450, 600) and confirmed fields
-  // land at exactly those PDF-point positions.
+  // Page 3 geometry from the rendered PDF:
+  // - CLIENT baseline: top ~202.6
+  // - Client underline: top ~266.2
+  // - Printed signer name baseline: top ~280.2
+  // - Printed title baseline: top ~293.0
+  // - Printed date baseline: top ~308.4
   //
-  // Previous values (y=259, y=394) were measured from text-tag auto-detection
-  // in a PoC and landed at the CLIENT label instead of in the signing space.
-  // Corrected by visual inspection of the signing view: the CLIENT label is
-  // at ~y=259, so the signing space below it starts at ~y=275.
+  // These remain the canonical PDF-space coordinates for the dedicated
+  // signing page. Provider-specific coordinate transforms happen at the
+  // provider boundary, not here.
   // ---------------------------------------------------------------------------
 
-  /** CLIENT signature field (left column) — in the 60pt signing space below CLIENT label */
+  /** CLIENT signature field (left column) in PDF points */
   clientSignature: {
     x: PAGE_MARGINS.left,
-    y: 280,
-    width: 200,
-    height: 50,
+    y: 214,
+    width: SIGNATURE_BLOCK_WIDTH,
+    height: 44,
   },
 
-  /** CLIENT date field (left column) — at the "Date: ___" line */
+  /** CLIENT date field (left column) in PDF points */
   clientDate: {
-    x: PAGE_MARGINS.left,
-    y: 400,
-    width: 120,
-    height: 20,
-  },
-
-  /** SMD SERVICES signature field (right column) — reserved for future use */
-  smdSignature: {
-    x: PAGE_MARGINS.left + COLUMN_WIDTH + COLUMN_GAP,
-    y: 280,
-    width: 200,
-    height: 50,
-  },
-
-  /** SMD SERVICES date field (right column) — reserved for future use */
-  smdDate: {
-    x: PAGE_MARGINS.left + COLUMN_WIDTH + COLUMN_GAP,
-    y: 400,
-    width: 120,
-    height: 20,
+    x: PAGE_MARGINS.left + 24,
+    y: 300,
+    width: 96,
+    height: 18,
   },
 } as const

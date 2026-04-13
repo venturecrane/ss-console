@@ -3,6 +3,8 @@ import '../../../../../styles/global.css'
 import { getEntity } from '../../../../../lib/db/entities'
 import { getQuote, QUOTE_STATUSES, VALID_TRANSITIONS } from '../../../../../lib/db/quotes'
 import type { LineItem, QuoteStatus } from '../../../../../lib/db/quotes'
+import { listContacts } from '../../../../../lib/db/contacts'
+import { getSOWStateForQuote } from '../../../../../lib/sow/service'
 
 /**
  * Quote builder — admin page for editing line items, generating SOW PDFs,
@@ -23,9 +25,10 @@ const env = Astro.locals.runtime.env
 const entityId = Astro.params.id!
 const quoteId = Astro.params.quoteId!
 
-const [entity, quote] = await Promise.all([
+const [entity, quote, contacts] = await Promise.all([
   getEntity(env.DB, session.orgId, entityId),
   getQuote(env.DB, session.orgId, quoteId),
+  listContacts(env.DB, session.orgId, entityId),
 ])
 
 if (!entity) return Astro.redirect('/admin/entities?error=not_found')
@@ -37,11 +40,14 @@ const validTransitions = VALID_TRANSITIONS[status] ?? []
 const isDraft = status === 'draft'
 const isTerminal = validTransitions.length === 0
 
+const sowState = await getSOWStateForQuote(env.DB, session.orgId, quoteId)
+const latestSowRevision = sowState.latestRevision
+const activeSignatureRequest = sowState.openSignatureRequest
+
 // Stale PDF detection (OQ-006)
-const hasSow = !!quote.sow_path
-const sowGeneratedAt = quote.sow_generated_at ? new Date(quote.sow_generated_at) : null
-const updatedAt = new Date(quote.updated_at)
-const isSowStale = hasSow && sowGeneratedAt && updatedAt > sowGeneratedAt
+const hasSow = !!latestSowRevision
+const sowGeneratedAt = latestSowRevision ? new Date(latestSowRevision.rendered_at) : null
+const isSowStale = !!latestSowRevision && latestSowRevision.quote_version !== quote.version
 
 // Expiration
 const expiresAt = quote.expires_at ? new Date(quote.expires_at) : null
@@ -381,9 +387,9 @@ function formatCurrency(amount: number): string {
             <h3 class="text-lg font-semibold text-slate-900 mb-2">SOW PDF</h3>
             <div class="text-sm text-slate-600 space-y-1">
               <div>
-                Generated: {sowGeneratedAt ? formatDate(quote.sow_generated_at!) : 'Unknown'}
+                Generated: {sowGeneratedAt ? formatDate(latestSowRevision!.rendered_at) : 'Unknown'}
               </div>
-              {quote.signwell_doc_id && (
+              {activeSignatureRequest?.provider_request_id && (
                 <div class="text-green-700">Sent for signature via SignWell</div>
               )}
             </div>
@@ -440,8 +446,21 @@ function formatCurrency(amount: number): string {
 
           {/* Send via SignWell */}
           {
-            (isDraft || status === 'sent') && hasSow && !quote.signwell_doc_id && (
+            (isDraft || status === 'sent') && hasSow && !activeSignatureRequest && (
               <form method="POST" action={`/api/admin/quotes/${quoteId}/sign`} id="sign-form">
+                <select
+                  name="signer_contact_id"
+                  class="px-3 py-2 border border-slate-300 rounded text-sm bg-white"
+                  required
+                >
+                  {contacts
+                    .filter((contact) => contact.email)
+                    .map((contact) => (
+                      <option value={contact.id}>
+                        {contact.name} {contact.email ? `(${contact.email})` : ''}
+                      </option>
+                    ))}
+                </select>
                 <button
                   type="submit"
                   class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm font-medium"
@@ -452,22 +471,6 @@ function formatCurrency(amount: number): string {
               </form>
             )
           }
-
-          {/* Send (mark as sent without SignWell) */}
-          {
-            isDraft && hasSow && (
-              <form method="POST" action={`/api/admin/quotes/${quoteId}`}>
-                <input type="hidden" name="action" value="send" />
-                <button
-                  type="submit"
-                  class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm font-medium"
-                >
-                  Mark as Sent
-                </button>
-              </form>
-            )
-          }
-
           {/* Decline */}
           {
             validTransitions.includes('declined') && (

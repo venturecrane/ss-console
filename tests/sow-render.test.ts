@@ -53,10 +53,6 @@ const baseProps = {
     deposit: '$1,350',
     completion: '$1,350',
   },
-  smd: {
-    signerName: 'Scott Durgan',
-    signerTitle: 'Principal',
-  },
 }
 
 // Skipped: WASM not available in vitest/Node.js environment.
