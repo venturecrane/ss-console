@@ -130,13 +130,19 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       }
 
       const pdf = await renderSow(templateProps)
+
+      // Diagnostic: write PDF size marker to R2 alongside the PDF
+      await env.STORAGE.put(
+        `${session.orgId}/quotes/${quoteId}/diagnostic.txt`,
+        `pdf_size=${pdf.length} at=${new Date().toISOString()}`
+      )
+
       const sowPath = await uploadPdf(env.STORAGE, session.orgId, quoteId, pdf)
       await updateQuote(env.DB, session.orgId, quoteId, {
         sow_path: sowPath,
         sow_generated_at: new Date().toISOString(),
       })
 
-      // Diagnostic: include PDF size in redirect so we can verify injection ran
       return redirect(
         `/admin/entities/${existing.entity_id}/quotes/${quoteId}?saved=1&pdf_size=${pdf.length}`,
         302
