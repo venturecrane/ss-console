@@ -61,7 +61,7 @@ export const BOOKING_CONFIG: BookingConfig = {
   slot_minutes: 30,
   buffer_minutes: 15,
   min_notice_minutes: 24 * 60,
-  max_lookahead_days: 14,
+  max_lookahead_days: 60,
   weekly_schedule: {
     sun: [],
     mon: [{ start: '09:00', end: '16:00' }],
