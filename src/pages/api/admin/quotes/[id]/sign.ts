@@ -115,8 +115,11 @@ export const POST: APIRoute = async ({ locals, redirect, params }) => {
     // 5. Create signature request in SignWell
     const signerId = crypto.randomUUID()
 
-    // Text tags are embedded in the PDF by inject-signing-tags.ts (called during renderSow).
-    // SignWell auto-detects fields from these tags — no manual coordinates needed.
+    // Field coordinates from signing-layout.ts (measured from the Forme-rendered PDF).
+    // The dedicated signing page (page 3) has zero variable content, so these
+    // coordinates are deterministic regardless of SOW scope/items.
+    const signingFields = getSowSigningFields()
+
     const signRequest: SignWellCreateDocumentRequest = {
       name: `SOW — ${entity.name}`,
       files: [{ file_base64: pdfBase64, name: 'sow.pdf' }],
@@ -128,7 +131,22 @@ export const POST: APIRoute = async ({ locals, redirect, params }) => {
         },
       ],
       callback_url: callbackUrl,
-      text_tags: true,
+      fields: [
+        [
+          {
+            ...signingFields.signature,
+            required: true,
+            recipient_id: signerId,
+            api_id: 'client_signature',
+          },
+          {
+            ...signingFields.date,
+            required: true,
+            recipient_id: signerId,
+            api_id: 'client_date',
+          },
+        ],
+      ],
       draft: false,
       custom_requester_name: 'SMD Services',
       subject: `SOW for Signature — ${entity.name}`,
@@ -136,49 +154,6 @@ export const POST: APIRoute = async ({ locals, redirect, params }) => {
     }
 
     const signwellDoc = await createSignatureRequest(apiKey, signRequest)
-
-    // Verify text tags were detected. If not, fall back to coordinate-based placement.
-    const detectedFields = (
-      (signwellDoc as unknown as { fields?: unknown[][] }).fields || []
-    ).flat()
-    if (detectedFields.length === 0) {
-      console.warn(
-        '[api/admin/quotes/[id]/sign] Text tags not detected — falling back to coordinates'
-      )
-      const fallbackFields = getSowSigningFields()
-      // Re-create with explicit field coordinates
-      const fallbackRequest: SignWellCreateDocumentRequest = {
-        ...signRequest,
-        text_tags: undefined,
-        fields: [
-          [
-            {
-              ...fallbackFields.signature,
-              required: true,
-              recipient_id: signerId,
-              api_id: 'client_signature',
-            },
-            {
-              ...fallbackFields.date,
-              required: true,
-              recipient_id: signerId,
-              api_id: 'client_date',
-            },
-          ],
-        ],
-      }
-      // Delete the fieldless document first
-      try {
-        await fetch(`https://www.signwell.com/api/v1/documents/${signwellDoc.id}`, {
-          method: 'DELETE',
-          headers: { 'X-Api-Key': apiKey },
-        })
-      } catch {
-        // Best effort cleanup
-      }
-      const fallbackDoc = await createSignatureRequest(apiKey, fallbackRequest)
-      Object.assign(signwellDoc, fallbackDoc)
-    }
 
     // 6. Update quote with signwell_doc_id
     const now = new Date().toISOString()

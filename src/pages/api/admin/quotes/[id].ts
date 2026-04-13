@@ -130,33 +130,13 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       }
 
       const pdf = await renderSow(templateProps)
-
-      // Diagnostic: write PDF directly (bypassing uploadPdf) to test R2 Uint8Array handling
-      const sowKey = `${session.orgId}/quotes/${quoteId}/sow.pdf`
-      // Ensure we have a clean ArrayBuffer, not a view into a larger buffer
-      const pdfCopy = new Uint8Array(pdf)
-      await env.STORAGE.put(sowKey, pdfCopy.buffer, {
-        httpMetadata: { contentType: 'application/pdf' },
-        customMetadata: {
-          generatedAt: new Date().toISOString(),
-          quoteId,
-          byteLength: String(pdfCopy.byteLength),
-        },
-      })
-      await env.STORAGE.put(
-        `${session.orgId}/quotes/${quoteId}/diagnostic.txt`,
-        `pdf_size=${pdf.length} copy_size=${pdfCopy.byteLength} buffer_size=${pdfCopy.buffer.byteLength} at=${new Date().toISOString()}`
-      )
-      const sowPath = sowKey
+      const sowPath = await uploadPdf(env.STORAGE, session.orgId, quoteId, pdf)
       await updateQuote(env.DB, session.orgId, quoteId, {
         sow_path: sowPath,
         sow_generated_at: new Date().toISOString(),
       })
 
-      return redirect(
-        `/admin/entities/${existing.entity_id}/quotes/${quoteId}?saved=1&pdf_size=${pdf.length}`,
-        302
-      )
+      return redirect(`/admin/entities/${existing.entity_id}/quotes/${quoteId}?saved=1`, 302)
     }
 
     // ----- ACTION: send -----
