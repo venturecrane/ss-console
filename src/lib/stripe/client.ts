@@ -141,10 +141,9 @@ export async function createStripeInvoice(
     const itemBody = new URLSearchParams()
     itemBody.append('customer', customerId)
     itemBody.append('invoice', invoice.id)
-    itemBody.append('unit_amount', String(Math.round(item.amount / item.quantity)))
+    itemBody.append('amount', String(item.amount))
     itemBody.append('currency', item.currency)
     itemBody.append('description', item.description)
-    itemBody.append('quantity', String(item.quantity))
 
     const itemRes = await fetch(`${STRIPE_API_BASE}/invoiceitems`, {
       method: 'POST',
