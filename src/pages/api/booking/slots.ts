@@ -14,7 +14,7 @@ const FALLBACK_EMAIL = 'scott@smd.services'
 /**
  * GET /api/booking/slots
  *
- * Public endpoint — returns available booking slots for the next 14 days.
+ * Public endpoint — returns available booking slots for the configured lookahead window.
  * No rate limiting (public availability is uninteresting to scrape and
  * rate-limiting punishes legitimate users behind shared NAT).
  *
