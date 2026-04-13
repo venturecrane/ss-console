@@ -112,6 +112,8 @@ Review the codebase across all 7 dimensions listed below. For each dimension:
 - Naming conventions (consistent casing, descriptive names)
 - DRY violations (copy-pasted logic, duplicated patterns)
 - Dead code and unused imports
+- **Dead exports** (HIGH priority): For each worker/package src/ directory, grep for `export` declarations and verify each has at least one importer outside its own file. Exports with zero external importers are dead code shipping in the production bundle. Report each as a finding.
+- **Wiring verification**: When new modules or functions exist, verify they are actually called from a reachable execution path (e.g., a route handler, a CLI entry point), not just exported. Code that compiles but is never invoked is dead code regardless of test coverage.
 
 ### 4. Testing
 - Test framework presence and configuration
@@ -125,6 +127,7 @@ Review the codebase across all 7 dimensions listed below. For each dimension:
 - Check for outdated major versions of key packages (typescript, hono, wrangler, eslint, prettier)
 - Identify unused dependencies (declared but not imported)
 - Evaluate dependency count relative to project complexity
+- **Runtime compatibility** (HIGH priority for Workers): Flag any dependency that uses `eval()`, `new Function()`, or dynamic code generation at runtime. These are prohibited in Cloudflare Workers (workerd) and will throw `EvalError` in production even though they compile and pass tests in Node.js. Known offenders: Ajv (schema compilation), Handlebars (template compilation), some JSON Schema validators. Grep node_modules for patterns if uncertain.
 
 ### 6. Documentation
 - CLAUDE.md completeness (commands, build instructions, architecture notes)
@@ -414,10 +417,10 @@ Concrete thresholds per dimension. The grade is determined by the most severe fi
 
 ### Code Quality
 
-- **A:** Strict TypeScript, consistent error handling, clean naming, no DRY violations, no dead code.
-- **B:** 1-2 minor issues (occasional `any` type, one duplicated pattern).
-- **C:** `strict: false` in tsconfig OR 3+ `any` usages OR inconsistent error handling patterns OR notable DRY violations.
-- **D:** Pervasive `any` usage OR swallowed errors OR significant dead code OR no consistent patterns.
+- **A:** Strict TypeScript, consistent error handling, clean naming, no DRY violations, no dead code, all exports have importers.
+- **B:** 1-2 minor issues (occasional `any` type, one duplicated pattern, 1-2 unused exports).
+- **C:** `strict: false` in tsconfig OR 3+ `any` usages OR inconsistent error handling patterns OR notable DRY violations OR 3+ dead exports.
+- **D:** Pervasive `any` usage OR swallowed errors OR entire dead modules (files with zero importers shipping in bundle) OR no consistent patterns.
 - **F:** No TypeScript strictness, errors silently swallowed throughout, fundamentally inconsistent codebase.
 
 ### Testing
@@ -430,10 +433,10 @@ Concrete thresholds per dimension. The grade is determined by the most severe fi
 
 ### Dependencies
 
-- **A:** No audit vulnerabilities, all major versions current (within 1 major), no unused dependencies.
+- **A:** No audit vulnerabilities, all major versions current (within 1 major), no unused dependencies, no runtime-incompatible dependencies.
 - **B:** Low-severity audit findings only OR 1 major version behind on a key dependency.
 - **C:** Medium-severity audit findings OR 2+ major versions behind OR 3+ unused dependencies.
-- **D:** High-severity audit findings OR severely outdated dependencies (3+ major versions behind).
+- **D:** High-severity audit findings OR severely outdated dependencies (3+ major versions behind) OR runtime-incompatible dependency in a Worker (e.g., Ajv in workerd).
 - **F:** Critical audit vulnerabilities OR dependencies with known exploits in use.
 
 ### Documentation
