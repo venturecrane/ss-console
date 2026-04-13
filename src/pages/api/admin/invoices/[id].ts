@@ -110,14 +110,10 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
         await updateInvoiceStatus(env.DB, session.orgId, invoiceId, 'sent' as InvoiceStatus)
       } catch (err) {
         console.error('[api/admin/invoices/[id]] Stripe send error:', err)
-        // Still transition to sent locally even if Stripe fails
-        // Admin can see the invoice needs attention (no stripe link)
-        try {
-          await updateInvoiceStatus(env.DB, session.orgId, invoiceId, 'sent' as InvoiceStatus)
-        } catch (statusErr) {
-          console.error('[api/admin/invoices/[id]] Status update also failed:', statusErr)
-          return redirect(`${target}?error=server`, 302)
-        }
+        // Leave at draft so admin can retry — advancing to sent with no
+        // stripe_invoice_id creates an unrecoverable state.
+        const message = err instanceof Error ? err.message : 'Stripe error'
+        return redirect(`${target}?error=${encodeURIComponent(message)}`, 302)
       }
 
       // Best-effort: send notification email to client
