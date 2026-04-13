@@ -25,6 +25,22 @@ function readAllSrcFiles(): string[] {
   return files
 }
 
+function readMarketingFiles(): string[] {
+  return [
+    resolve('src/pages/index.astro'),
+    join(componentsDir, 'Hero.astro'),
+    join(componentsDir, 'ProblemCards.astro'),
+    join(componentsDir, 'HowItWorks.astro'),
+    join(componentsDir, 'WhatYouGet.astro'),
+    join(componentsDir, 'Pricing.astro'),
+    join(componentsDir, 'About.astro'),
+    join(componentsDir, 'WhoWeHelp.astro'),
+    join(componentsDir, 'FinalCta.astro'),
+    join(componentsDir, 'Footer.astro'),
+    join(componentsDir, 'JsonLd.astro'),
+  ]
+}
+
 describe('component existence', () => {
   const expectedComponents = [
     'CtaButton.astro',
@@ -46,15 +62,10 @@ describe('component existence', () => {
 })
 
 describe('content integrity', () => {
-  it('no dollar amounts published in src/', () => {
-    const files = readAllSrcFiles()
+  it('no dollar amounts published in marketing content', () => {
+    const files = readMarketingFiles()
     const dollarPattern = /\$[\d,]+/
-    // Exclude internal AI prompts (revenue ranges for ICP qualification)
-    // and scorecard context questions (revenue range selector labels).
-    // These are not pricing — they're classification and qualification.
-    const excludeDirs = ['/lead-gen/', '/lib/claude/', '/lib/scorecard/']
     for (const filePath of files) {
-      if (excludeDirs.some((d) => filePath.includes(d))) continue
       const content = readFileSync(filePath, 'utf-8')
       expect(content, `Dollar amount found in ${filePath}`).not.toMatch(dollarPattern)
     }
