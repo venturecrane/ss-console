@@ -94,15 +94,15 @@ export const SIGNING_PAGE = {
   /** CLIENT signature field (left column) */
   clientSignature: {
     x: PAGE_MARGINS.left,
-    y: 218, // Below CLIENT label (bottom at 204.5pt), inside the 60pt signing space
+    y: 259, // From PoC: SignWell auto-detected text tag at y=258.77 — correct position
     width: 200,
-    height: 40, // 40pt tall to fit within the 60pt space before the signature line
+    height: 40,
   },
 
   /** CLIENT date field (left column) */
   clientDate: {
     x: PAGE_MARGINS.left,
-    y: 302, // At the "Date: ___" text (measured at 302.1pt from page top)
+    y: 394, // From PoC: SignWell auto-detected text tag at y=393.74 — correct position
     width: 120,
     height: 16,
   },
@@ -110,7 +110,7 @@ export const SIGNING_PAGE = {
   /** SMD SERVICES signature field (right column) — reserved for future use */
   smdSignature: {
     x: PAGE_MARGINS.left + COLUMN_WIDTH + COLUMN_GAP,
-    y: 218,
+    y: 259,
     width: 200,
     height: 40,
   },
@@ -118,7 +118,7 @@ export const SIGNING_PAGE = {
   /** SMD SERVICES date field (right column) — reserved for future use */
   smdDate: {
     x: PAGE_MARGINS.left + COLUMN_WIDTH + COLUMN_GAP,
-    y: 302,
+    y: 394,
     width: 120,
     height: 16,
   },
