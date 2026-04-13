@@ -7,10 +7,13 @@ import Footer from '../components/Footer.astro'
 import { ENTITY_VERTICALS } from '../lib/db/entities'
 
 const turnstileSiteKey = Astro.locals.runtime?.env?.PUBLIC_TURNSTILE_SITE_KEY ?? ''
+const isPostBooking = Astro.url.searchParams.has('booked')
 ---
 
 <Base
-  title="Tell Us About Your Business | SMD Services"
+  title={isPostBooking
+    ? 'Help Us Prepare | SMD Services'
+    : 'Tell Us About Your Business | SMD Services'}
   description="Share a few details about your business and what you're working on. We'll review it and reach out to start the conversation on your terms."
 >
   <Nav />
@@ -19,14 +22,45 @@ const turnstileSiteKey = Astro.locals.runtime?.env?.PUBLIC_TURNSTILE_SITE_KEY ??
       <div class="mx-auto max-w-2xl">
         <!-- Hero -->
         <div class="text-center">
-          <h1 class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-            Tell Us About Your Business
-          </h1>
-          <p class="mx-auto mt-4 max-w-xl text-lg text-slate-600">
-            Not ready to schedule a call? No problem. Share a few details about your business and
-            what you're working on. We'll review it and reach out to start the conversation on your
-            terms.
-          </p>
+          {
+            isPostBooking ? (
+              <Fragment>
+                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+                  <svg
+                    class="h-8 w-8 text-green-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="2"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M4.5 12.75l6 6 9-13.5"
+                    />
+                  </svg>
+                </div>
+                <h1 class="mt-6 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                  You're All Set
+                </h1>
+                <p class="mx-auto mt-4 max-w-xl text-lg text-slate-600">
+                  We'll see you on the call. In the meantime, a few quick questions to help us
+                  prepare so we can make the most of our time together.
+                </p>
+              </Fragment>
+            ) : (
+              <Fragment>
+                <h1 class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                  Tell Us About Your Business
+                </h1>
+                <p class="mx-auto mt-4 max-w-xl text-lg text-slate-600">
+                  Not ready to schedule a call? No problem. Share a few details about your business
+                  and what you're working on. We'll review it and reach out to start the
+                  conversation on your terms.
+                </p>
+              </Fragment>
+            )
+          }
         </div>
 
         <!-- Intake form -->
@@ -227,15 +261,25 @@ const turnstileSiteKey = Astro.locals.runtime?.env?.PUBLIC_TURNSTILE_SITE_KEY ??
             </svg>
           </div>
           <h2 class="mt-4 text-xl font-bold text-slate-900">Thanks for sharing</h2>
-          <p class="mt-2 text-base text-slate-600">
-            We'll review this and be in touch to start the conversation.
-          </p>
-          <p class="mt-6 text-sm text-slate-500">
-            Ready to schedule a call?
-            <a href="/book" class="font-medium text-primary hover:text-primary/80 underline">
-              Book a time here
-            </a>
-          </p>
+          {
+            isPostBooking ? (
+              <p class="mt-2 text-base text-slate-600">
+                We'll review this before your call so we can make the most of our time together.
+              </p>
+            ) : (
+              <Fragment>
+                <p class="mt-2 text-base text-slate-600">
+                  We'll review this and be in touch to start the conversation.
+                </p>
+                <p class="mt-6 text-sm text-slate-500">
+                  Ready to schedule a call?
+                  <a href="/book" class="font-medium text-primary hover:text-primary/80 underline">
+                    Book a time here
+                  </a>
+                </p>
+              </Fragment>
+            )
+          }
         </div>
       </div>
     </section>

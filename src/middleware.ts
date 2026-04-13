@@ -32,12 +32,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return context.rewrite(new Request(new URL(portalPath, context.url), context.request))
   }
 
-  // Legacy redirect: /book/thanks → /book
-  // The Calendly+thanks two-step flow is replaced by the unified /book page
-  // (migration 0011 era). Bookmarks from prior bookings still resolve.
-  // Remove this redirect one month after the booking cutover.
+  // Legacy redirect: /book/thanks → /get-started?booked=1
+  // The old post-booking intake form lives at /get-started now.
+  // Bookmarks from prior bookings still resolve.
   if (pathname === '/book/thanks' || pathname.startsWith('/book/thanks/')) {
-    return context.redirect('/book', 301)
+    return context.redirect('/get-started?booked=1', 301)
   }
 
   // Initialize session as null for all routes
