@@ -27,12 +27,12 @@ export interface AssessmentExtraction {
   notes: string
 }
 
-const SYSTEM_PROMPT = `You generate quote line items for SMD Services operations cleanup engagements. Each line item represents a discrete deliverable for a Phoenix-area small business (10-25 employees).
+const SYSTEM_PROMPT = `You generate quote line items for SMD Services operations cleanup engagements. Each line item represents a discrete deliverable for a Phoenix-based growing business (750K to 5M annual revenue).
 
 ## What you produce
 
 A JSON array of line items. Each line item has:
-- "problem": The problem area being addressed (e.g., "Owner Bottleneck", "Lead Leakage")
+- "problem": The solution area being addressed (e.g., "Process Design", "Customer Pipeline")
 - "description": A specific, actionable deliverable description. What we will actually do. Not vague consulting-speak.
 - "estimated_hours": Realistic hours for that deliverable, given the business size and complexity.
 
@@ -41,25 +41,29 @@ A JSON array of line items. Each line item has:
 - Generate 3-6 line items based on the problems identified in the assessment.
 - Each problem checked should map to at least one line item. Related problems can share a line item.
 - Descriptions should be concrete: "Document 5 core workflows and create SOPs" not "Improve processes."
-- Hour estimates should reflect a real engagement: most individual items are 4-16 hours. Total engagement typically 20-60 hours.
-- Consider the business vertical, team size, and tools already in use when sizing.
+- Hour estimates should reflect a real engagement. Engagement complexity tiers:
+  - Low: 20-30 total hours
+  - Medium: 30-45 total hours
+  - High: 45-60+ total hours
+- Most individual line items are 4-16 hours.
+- Consider the business vertical, team size, revenue range, and tools already in use when sizing.
 - If "Other" problems are noted, create line items that address them specifically.
+- Internal rate is 175 per hour. Do not include pricing in the output.
 
-## Problem key mapping
+## Solution area mapping
 
-- owner_bottleneck: Owner Bottleneck — process documentation, delegation frameworks, decision trees
-- lead_leakage: Lead Leakage — CRM setup, follow-up automation, pipeline visibility
-- financial_blindness: Financial Blindness — bookkeeping cleanup, reporting dashboards, pricing review
-- scheduling_chaos: Scheduling Chaos — centralized scheduling, automated reminders, booking flow
-- manual_communication: Manual Communication — templates, automated notifications, communication workflows
-- employee_retention: Employee Retention — onboarding docs, role clarity, feedback loops
+- process_design: Process Design — workflow documentation, delegation frameworks, decision trees, SOP creation
+- tool_systems: Tools & Systems — tool selection, configuration, migration, integration, workflow automation
+- data_visibility: Data & Visibility — bookkeeping cleanup, reporting dashboards, pricing review, KPI setup
+- customer_pipeline: Customer Pipeline — CRM setup, follow-up automation, pipeline visibility, retention workflows
+- team_operations: Team Operations — onboarding docs, role clarity, feedback loops, training materials, accountability
 
 ## Output format
 
 Return ONLY a valid JSON array. No markdown fences, no commentary, no explanation.
 
 Example:
-[{"problem":"Owner Bottleneck","description":"Document 5 core operational workflows as step-by-step SOPs with decision trees for common exceptions","estimated_hours":12},{"problem":"Lead Leakage","description":"Configure HubSpot CRM with custom pipeline stages, import existing contacts, and set up automated follow-up sequences","estimated_hours":10}]`
+[{"problem":"Process Design","description":"Document 5 core operational workflows as step-by-step SOPs with decision trees for common exceptions","estimated_hours":12},{"problem":"Customer Pipeline","description":"Configure CRM with custom pipeline stages, import existing contacts, and set up automated follow-up sequences","estimated_hours":10}]`
 
 /**
  * Generate quote line items from assessment extraction data using Claude.

@@ -1,22 +1,21 @@
 /**
  * Job Qualification Prompt — Pipeline 2
  *
- * Analyzes job postings from Phoenix-area businesses to determine if the
+ * Analyzes job postings from Phoenix-based businesses to determine if the
  * posting signals operational pain that SMD Services could address. A company
  * hiring an "office manager" or "dispatcher" is often trying to solve with
  * a hire what we solve with better processes and tools.
  *
- * Used in: Make.com scenario → Anthropic module → this prompt
+ * Used in: CF Worker → Anthropic API → this prompt
  * Input: Job posting data from SerpAPI (Google Jobs) or Craigslist RSS
  * Output: JobQualification JSON (see job-signal.ts)
  *
- * @see Decision #2 — Employee Count Range (10-25)
- * @see Decision #3 — Launch Verticals (home services + professional services)
  * @see Decision #4 — Disqualification Criteria
  * @see Decision #20 — Voice Standard ("we" voice)
  */
 
 import type { JobPostingInput, JobQualification } from '../schemas/job-signal.js'
+import { PROBLEM_IDS } from '../schemas/lead-scoring-schema.js'
 
 export type { JobQualification, JobPostingInput }
 
@@ -24,27 +23,26 @@ export type { JobQualification, JobPostingInput }
  * System prompt for job posting qualification.
  * Establishes context and scoring criteria for the AI.
  */
-export const JOB_QUALIFICATION_SYSTEM_PROMPT = `You are a lead qualification assistant for SMD Services, an operations consulting team that works with Phoenix-area small businesses (10–25 employees).
+export const JOB_QUALIFICATION_SYSTEM_PROMPT = `You are a lead qualification assistant for SMD Services, an operations consulting team that works with Phoenix-based small and mid-size businesses ($750k–$5M revenue).
 
 Your job is to analyze a job posting and determine whether it signals operational pain that our team could address. Many small businesses try to hire their way out of operational problems — an "office manager" to create order from chaos, a "dispatcher" because scheduling is broken, a "customer service coordinator" because follow-up is nonexistent. These are our ideal prospects.
 
-## The 6 Universal SMB Operations Problems
+## 5 Solution Capability Areas
 
 Map job posting signals to these canonical problem types:
 
-1. **owner_bottleneck** — The owner is involved in everything. Signals: "report directly to owner," "owner currently handles," "wear many hats," responsibilities spanning 4+ domains.
-2. **lead_leakage** — No follow-up system, leads fall through cracks. Signals: "manage incoming leads," "follow up with prospects," "CRM," "no existing sales process."
-3. **financial_blindness** — Books behind, no visibility. Signals: "bring books current," "organize financial records," "QuickBooks cleanup."
-4. **scheduling_chaos** — No centralized scheduling. Signals: "coordinate schedules," "dispatch," "manage appointments," "double-bookings."
-5. **manual_communication** — Every message is manual. Signals: "respond to all customer inquiries," "send appointment reminders," "personal follow-up with every client."
-6. **employee_retention** — No task tracking, no accountability. Signals: "create processes," "document procedures," "implement tracking," "nobody knows who's doing what."
+1. **process_design** — No documented processes, everything runs through the owner. Signals: "report directly to owner," "owner currently handles," "wear many hats," "create processes," responsibilities spanning 4+ domains.
+2. **tool_systems** — Software gaps or migrations needed. Signals: "implement systems," "software migration," "Excel to [tool]," "integrate platforms," "no existing software."
+3. **data_visibility** — Books behind, no financial or operational clarity. Signals: "organize financial records," "create reports," "QuickBooks cleanup," "build dashboards," "bring books current."
+4. **customer_pipeline** — No follow-up system, leads fall through cracks. Signals: "manage incoming leads," "follow up with prospects," "CRM," "sales process," "no existing sales process."
+5. **team_operations** — No task tracking, no accountability, no onboarding. Signals: "document procedures," "training program," "performance tracking," "onboarding," "nobody knows who's doing what."
 
 ## Qualification Criteria
 
 **Qualify (qualified: true) when ALL of these are likely true:**
-- The company appears to have 10-50 employees (some flexibility above our 25 ceiling)
-- The posting signals at least one of the 6 operational problems
-- The company is in or near Phoenix, AZ
+- The company shows revenue signals consistent with $750k–$5M (small team, established but growing, local footprint, not a solo operator or enterprise)
+- The posting signals at least one of the 5 solution capability areas
+- The company is in or near Phoenix, AZ (broader reach considered case-by-case)
 - The role is being created to solve an operational gap, not just to replace a departing employee
 
 **Disqualify (qualified: false) when ANY of these are true:**
@@ -78,7 +76,7 @@ Input company: "Desert Breeze Plumbing"
 Input description: "Small family-owned plumbing company looking for someone to bring order to our growing business. Owner currently handles scheduling, customer calls, and invoicing. We need someone to create processes, manage our schedule, and follow up with customers. Must be organized and comfortable with technology. QuickBooks experience a plus."
 
 Output:
-{"company":"Desert Breeze Plumbing","qualified":true,"confidence":"high","company_size_estimate":"10-20","problems_signaled":["owner_bottleneck","scheduling_chaos","manual_communication"],"evidence":"Owner currently handles scheduling, customer calls, and invoicing. Looking for someone to 'create processes' and 'bring order to our growing business.' Multiple operational domains in one role signals severe owner bottleneck.","outreach_angle":"Before adding payroll for this role, it might be worth a conversation. We help businesses like yours build the scheduling and follow-up processes that make this hire half as big — or channel their time toward growth instead of putting out fires.","disqualification_reason":null}
+{"company":"Desert Breeze Plumbing","qualified":true,"confidence":"high","company_size_estimate":"$1M-$3M revenue","problems_signaled":["process_design","customer_pipeline","data_visibility"],"evidence":"Owner currently handles scheduling, customer calls, and invoicing. Looking for someone to 'create processes' and 'bring order to our growing business.' Multiple operational domains in one role signals the owner is the bottleneck across process, pipeline, and financial visibility.","outreach_angle":"Before adding payroll for this role, it might be worth a conversation. We help businesses like yours build the scheduling and follow-up processes that make this hire half as big — or channel their time toward growth instead of putting out fires.","disqualification_reason":null}
 
 ### Example 2: Disqualified (large company)
 
@@ -87,7 +85,7 @@ Input company: "Southwest Medical Associates"
 Input description: "Multi-location healthcare organization seeking an experienced Operations Manager to oversee daily operations across our 6 Phoenix-area clinics. Requires 5+ years healthcare management experience, familiarity with EMR systems, and proven ability to manage teams of 50+."
 
 Output:
-{"company":"Southwest Medical Associates","qualified":false,"confidence":"high","company_size_estimate":"200+","problems_signaled":[],"evidence":"Multi-location (6 clinics), teams of 50+, enterprise healthcare organization.","outreach_angle":"","disqualification_reason":"Large multi-location healthcare organization, well above the 10-25 employee range. Enterprise-scale operations management, not small business operational pain."}
+{"company":"Southwest Medical Associates","qualified":false,"confidence":"high","company_size_estimate":"$10M+ revenue","problems_signaled":[],"evidence":"Multi-location (6 clinics), teams of 50+, enterprise healthcare organization.","outreach_angle":"","disqualification_reason":"Large multi-location healthcare organization, well above our target revenue range. Enterprise-scale operations management, not small business operational pain."}
 
 ### Example 3: Qualified (medium confidence)
 
@@ -96,7 +94,7 @@ Input company: "Copperstate Electrical"
 Input description: "Established electrical contractor seeks organized admin to answer phones, schedule service calls, file permits, and assist with billing. Part-time to start, may become full-time. No experience required, will train."
 
 Output:
-{"company":"Copperstate Electrical","qualified":true,"confidence":"medium","company_size_estimate":"10-25","problems_signaled":["scheduling_chaos","owner_bottleneck"],"evidence":"Single-person admin role covering phones, scheduling, permits, and billing — classic owner bottleneck where the owner has been doing all of this. Part-time to start suggests smaller company testing the waters.","outreach_angle":"If scheduling and phones are eating up enough time to justify a hire, there may be some quick wins we could help with — process and tools that make whoever fills this role more effective from day one.","disqualification_reason":null}`
+{"company":"Copperstate Electrical","qualified":true,"confidence":"medium","company_size_estimate":"$750k-$2M revenue","problems_signaled":["process_design","customer_pipeline"],"evidence":"Single-person admin role covering phones, scheduling, permits, and billing — classic bottleneck where the owner has been doing all of this. Part-time to start suggests smaller company testing the waters.","outreach_angle":"If scheduling and phones are eating up enough time to justify a hire, there may be some quick wins we could help with — process and tools that make whoever fills this role more effective from day one.","disqualification_reason":null}`
 
 /**
  * Builds the user prompt with job posting data inserted.
@@ -171,14 +169,7 @@ export function validateJobQualification(data: unknown): {
   }
 
   // Problems signaled
-  const validProblemIds = [
-    'owner_bottleneck',
-    'lead_leakage',
-    'financial_blindness',
-    'scheduling_chaos',
-    'manual_communication',
-    'employee_retention',
-  ]
+  const validProblemIds: readonly string[] = PROBLEM_IDS
   if (!Array.isArray(d.problems_signaled)) {
     errors.push('problems_signaled must be an array')
   } else {

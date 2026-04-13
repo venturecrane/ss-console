@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { generateQuoteLineItems, type AssessmentExtraction } from './assessment-to-quote.js'
 
 const mockExtraction: AssessmentExtraction = {
-  problems: ['owner_bottleneck', 'lead_leakage', 'manual_communication'],
+  problems: ['process_design', 'customer_pipeline', 'tool_systems'],
   disqualified: false,
   duration_minutes: 45,
   notes: 'Owner handles all scheduling personally. No CRM. Team of 12.',
@@ -10,17 +10,17 @@ const mockExtraction: AssessmentExtraction = {
 
 const mockLineItems = [
   {
-    problem: 'Owner Bottleneck',
+    problem: 'Process Design',
     description: 'Document 5 core operational workflows as step-by-step SOPs',
     estimated_hours: 12,
   },
   {
-    problem: 'Lead Leakage',
+    problem: 'Customer Pipeline',
     description: 'Configure CRM with pipeline stages and automated follow-up sequences',
     estimated_hours: 10,
   },
   {
-    problem: 'Manual Communication',
+    problem: 'Tools & Systems',
     description: 'Build customer notification templates and automate appointment reminders',
     estimated_hours: 8,
   },
@@ -65,7 +65,7 @@ describe('generateQuoteLineItems', () => {
       expect(typeof item.description).toBe('string')
       expect(typeof item.estimated_hours).toBe('number')
     }
-    expect(result[0].problem).toBe('Owner Bottleneck')
+    expect(result[0].problem).toBe('Process Design')
     expect(result[1].estimated_hours).toBe(10)
   })
 
@@ -151,7 +151,7 @@ describe('generateQuoteLineItems', () => {
 
     const body = JSON.parse((opts as RequestInit).body as string)
     expect(body.model).toBe('claude-sonnet-4-20250514')
-    expect(body.messages[0].content).toContain('owner_bottleneck')
+    expect(body.messages[0].content).toContain('process_design')
     expect(body.messages[0].content).toContain('entity context here')
   })
 })

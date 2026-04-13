@@ -32,7 +32,7 @@ export async function synthesizeReviews(
       body: JSON.stringify({
         model: MODEL,
         max_tokens: MAX_TOKENS,
-        system: `Synthesize all review data for this business across platforms. Map operational issues to these 6 problems: owner_bottleneck, lead_leakage, financial_blindness, scheduling_chaos, manual_communication, employee_retention. Return ONLY valid JSON:
+        system: `Synthesize all review data for this business across platforms. Map operational issues to these 5 solution areas: process_design, tool_systems, data_visibility, customer_pipeline, team_operations. Return ONLY valid JSON:
 {
   "unified_rating": "number 1-5 or null",
   "total_reviews_across_platforms": "number",

@@ -10,66 +10,58 @@
 import type { DimensionId, ScoreLabel } from './questions.js'
 
 export const SCORE_DESCRIPTIONS: Record<DimensionId, Record<ScoreLabel, string>> = {
-  owner_bottleneck: {
+  process_design: {
     needs_attention:
-      "Most decisions and processes run through you. That's common at this stage, but it means the business can't move without you.",
+      "Most of your processes live in people's heads right now. That makes it hard to delegate, train, or take a step back.",
     room_to_grow:
-      "You're still the go-to for a lot of decisions. Documenting key processes would let your team move without waiting on you.",
+      "You've started documenting some things, but key decisions still flow through you. Formalizing a few more workflows would free up your time.",
     getting_there:
-      'Your team handles most of the day-to-day, but a few critical areas still depend on you.',
+      'Your team handles most day-to-day work on their own. A few critical areas still depend on you.',
     strong:
-      "Your team operates independently. You've built processes that work without you in the loop.",
+      "Your business runs on well-documented processes. The team knows the playbook and you don't get pulled into every decision.",
   },
 
-  lead_leakage: {
+  tool_systems: {
     needs_attention:
-      "Leads are coming in, but there's no system catching them. Some are definitely slipping through.",
+      "You're running on manual effort and workarounds. The right tools, set up well, would save your team hours every week.",
     room_to_grow:
-      "You're following up on leads, but it depends on memory or manual effort. A consistent system would close the gap.",
+      "You have tools, but you're only using a fraction of what they can do. Closing those gaps would cut down on busywork.",
     getting_there:
-      'You have a handle on most leads, but there are still gaps in tracking and follow-through.',
+      'Your tools mostly work, but information still moves manually in some places. Better connections between them would help.',
     strong:
-      'Every lead is tracked and followed up on. You know your numbers and your pipeline is visible.',
+      'Your tools handle the routine work and share information without someone re-entering it. The team uses them consistently.',
   },
 
-  financial_blindness: {
+  data_visibility: {
     needs_attention:
-      "You're running the business without a clear picture of the numbers. That's more common than you'd think, but it's risky.",
+      "You're making decisions without a clear picture of the numbers. That's more common than you'd think, but it limits what you can plan for.",
     room_to_grow:
-      'You have a general sense of the money, but the details are fuzzy. Getting current books and real margin data would change how you make decisions.',
+      'You have a general sense of the finances, but the details are fuzzy. Current books and real margin data would sharpen your pricing and planning.',
     getting_there:
-      'Your financials are reasonably current. Closing the gap on job-level profitability would give you sharper pricing.',
-    strong: 'You know your numbers. You price from real data and can see where the money goes.',
-  },
-
-  scheduling_chaos: {
-    needs_attention:
-      'Scheduling is mostly manual, and conflicts happen regularly. A centralized solution would save hours every week.',
-    room_to_grow:
-      'You have some structure, but it still depends on one person or breaks down under volume.',
-    getting_there: "Scheduling mostly works, but changes don't always reach everyone in time.",
-    strong: "Your scheduling is solid. It's automated, visible, and the team stays in sync.",
-  },
-
-  manual_communication: {
-    needs_attention:
-      'Customer communication is manual and reactive. Reminders, follow-ups, and invoices depend on someone remembering to send them.',
-    room_to_grow:
-      'Messages go out, but each one is a manual effort. Automating the routine stuff would free up real time.',
-    getting_there:
-      'Some communication is automated, but there are still gaps where things depend on a person.',
+      'Your financials are reasonably current. Getting more detail on job-level or service-level profitability would give you an edge.',
     strong:
-      "Routine communication runs on autopilot. Your team's time goes to conversations that actually need a human.",
+      'You know your numbers. You price from real data and can see where the money goes without digging.',
   },
 
-  employee_retention: {
+  customer_pipeline: {
     needs_attention:
-      "You don't have a clear picture of what your team is doing day-to-day. Issues surface late, usually when something breaks.",
+      "Leads come in, but there's nothing catching them consistently. Some are slipping through and you might not know it.",
     room_to_grow:
-      "You check in with people individually, but there's no system giving you the full picture.",
+      'You follow up on leads, but it depends on memory or manual effort. A consistent process would keep more of them from going cold.',
     getting_there:
-      'You have some visibility, but onboarding and performance feedback are still informal.',
+      'You have a handle on most leads, but there are still gaps in tracking, follow-up, or staying in touch after the sale.',
     strong:
-      'You know what your team is doing, new hires get up to speed fast, and performance issues surface early.',
+      'Every lead is tracked, follow-up happens on schedule, and you stay in touch with past customers.',
+  },
+
+  team_operations: {
+    needs_attention:
+      "You don't have a clear picture of what your team is doing day-to-day. New hires learn by trial and error, and issues show up late.",
+    room_to_grow:
+      "You check in with people individually, but there's no consistent way to see the full picture. Onboarding is informal.",
+    getting_there:
+      'Your team has some structure, but onboarding and performance feedback could be more consistent.',
+    strong:
+      'New hires get up to speed fast, performance issues surface early, and you can see what the team accomplished without chasing people down.',
   },
 }

@@ -1,6 +1,6 @@
 # Lead Generation Automation Blueprint
 
-**Purpose:** Architecture for automated prospect discovery and qualification. Turns manual networking into a system that surfaces the right 25 people each week — before they know they need help.
+**Purpose:** Architecture for automated prospect discovery and qualification. Turns manual networking into a system that surfaces the right 15-20 people each week -- before they know they need help.
 
 **The advantage:** Every other local operations consultant is at chamber mixers and BNI meetings hoping to bump into the right person. Those channels matter and we use them. But we also have five automated pipelines running in the background, finding businesses whose reviews, job postings, and public filings are already telling us exactly what's broken. We show up to the conversation knowing the problem. That's the edge.
 
@@ -30,7 +30,7 @@ Google Places API          Outscraper (review text)         Claude API
        |                          |                              |
        v                          v                              v
   Business list             Review corpus              Pain signals + score
-  (name, phone,             (full text,                (which of the 6 problems,
+  (name, phone,             (full text,                (which of the 5 categories,
    address, category,        date-filtered,             severity 1-10,
    rating, place_id)         per-business)              specific evidence)
                                                               |
@@ -73,19 +73,18 @@ Alternative: DataForSEO at ~$2 per 1,000 tasks (cheaper but no date filter — y
 
 ```
 You are analyzing Google reviews for a {business_type} called "{business_name}"
-in {city}, AZ. Your job is to identify operational problems — NOT service quality
-or product issues.
+in {city}, AZ. Your job is to identify operational problems that signal a business
+could benefit from solutions consulting -- NOT service quality or product issues.
 
-Look for signals matching these 6 patterns:
-1. Owner bottleneck — "only the owner can help," "had to wait for the boss"
-2. Lead leakage — "never called back," "left a message, no response," "ghosted"
-3. Financial blindness — "surprise charges," "couldn't give me a quote," "billing errors"
-4. Scheduling chaos — "double-booked," "showed up on wrong day," "couldn't get an appointment"
-5. Manual communication — "had to call three times for an update," "no confirmation"
-6. Employee issues — "different person every time," "new guy didn't know what to do"
+Look for signals matching these 5 solution categories:
+1. Process design — "only the owner can help," "had to wait for the boss," "nobody knew the process," "no system for handling X"
+2. Tools & systems — "their software is terrible," "had to use three different apps," "nothing talks to each other," "still using paper forms"
+3. Data & visibility — "surprise charges," "couldn't give me a quote," "billing errors," "didn't know my history," "no record of my last visit"
+4. Customer pipeline — "never called back," "left a message, no response," "ghosted," "no follow-up"
+5. Team operations — "different person every time," "new guy didn't know what to do," "double-booked," "showed up on wrong day"
 
 For each review, extract:
-- The operational signal (which of the 6 problems, if any)
+- The operational signal (which of the 5 solution categories, if any)
 - The exact quote that shows it
 - Severity (1-10)
 
@@ -96,14 +95,14 @@ Return JSON:
 {
   "business_name": "...",
   "pain_score": 8,
-  "top_problems": ["scheduling_chaos", "lead_leakage"],
+  "top_problems": ["customer_pipeline", "tool_systems"],
   "evidence": [
-    {"problem": "lead_leakage", "quote": "Left two messages, never heard back", "severity": 8},
+    {"problem": "customer_pipeline", "quote": "Left two messages, never heard back", "severity": 8},
     ...
   ],
   "outreach_angle": "Their customers love their work but keep complaining about
                       communication gaps. Lead with: 'Your 5-star reviews mention
-                      how hard it is to reach you — we fix that.'"
+                      how hard it is to reach you -- we fix that.'"
 }
 ```
 
@@ -134,7 +133,7 @@ SerpAPI (Google Jobs)        Claude API                 Google Sheet
   Job listings              Qualification:               Google Sheet
   (title, company,          - Is this a small co?        "Job Signal Leads"
    description,             - Is the pain operational?
-   location, date)          - Which of the 6 problems?
+   location, date)          - Which of the 5 categories?
                             - Draft outreach angle
 ```
 
@@ -146,12 +145,16 @@ Monitored search terms (each run as a separate query):
 
 - "office manager" in Phoenix, AZ
 - "operations manager" in Phoenix, AZ
+- "operations director" in Phoenix, AZ
 - "dispatcher" in Phoenix, AZ
 - "scheduling coordinator" in Phoenix, AZ
 - "customer service coordinator" in Phoenix, AZ
 - "office administrator" in Phoenix, AZ
 - "front desk manager" in Phoenix, AZ
 - "service coordinator" in Phoenix, AZ
+- "IT manager" in Phoenix, AZ
+- "systems administrator" in Phoenix, AZ
+- "project coordinator" in Phoenix, AZ
 
 Filter: `date_posted:3days` to catch recent postings. Run daily.
 
@@ -161,7 +164,8 @@ Filter: `date_posted:3days` to catch recent postings. Run daily.
 
 ```
 You are analyzing a job posting to determine if it signals operational pain at
-a small business (10-50 employees) that could benefit from operations consulting.
+a growing business ($750k-$5M revenue range) that could benefit from solutions
+consulting.
 
 Job title: {title}
 Company: {company}
@@ -169,18 +173,24 @@ Location: {location}
 Description: {description}
 
 Evaluate:
-1. Company size signal — Does anything in the posting suggest this is a small business
-   (10-50 employees)? Look for: "small team," "family-owned," "growing company,"
-   single-location indicators, the job combining multiple responsibilities.
+1. Company size/revenue signal — Does anything in the posting suggest this is a
+   growing business in the $750k-$5M range? Look for: "small team," "growing
+   company," single-location indicators, the job combining multiple responsibilities,
+   signals of 10-75 employees.
 
 2. Operational pain signal — Is this role being created because the business has
    outgrown its current operations? Look for: "we need someone to organize,"
    "create processes," "implement systems," "the owner currently handles,"
-   "no existing structure."
+   "no existing structure," "manage our technology," "integrate our tools."
 
-3. Which of the 6 problems does this map to?
+3. Which of the 5 solution categories does this map to?
+   - process_design: Missing or undocumented processes
+   - tool_systems: Tools don't connect, manual workarounds, technology gaps
+   - data_visibility: No reporting, can't track metrics, financial blindness
+   - customer_pipeline: Leads falling through, no CRM, no follow-up system
+   - team_operations: Scheduling chaos, onboarding gaps, retention issues
 
-4. Disqualify if: large company (100+ employees), franchise corporate office,
+4. Disqualify if: large company (200+ employees), franchise corporate office,
    staffing agency, government, or the role is a standard replacement hire
    with no operational pain signals.
 
@@ -189,13 +199,13 @@ Return JSON:
   "company": "...",
   "qualified": true/false,
   "confidence": "high/medium/low",
-  "company_size_estimate": "10-25",
-  "problems_signaled": ["owner_bottleneck", "scheduling_chaos"],
+  "company_size_estimate": "20-50",
+  "problems_signaled": ["process_design", "tool_systems"],
   "evidence": "Job description mentions 'owner currently handles all scheduling'
                and 'no existing processes documented'",
   "outreach_angle": "They're hiring to solve a problem that's really about
                       missing processes. Reach out before they hire: 'Before you
-                      add payroll, let us build the systems that make this role
+                      add payroll, let us build the solution that makes this role
                       half as big.'"
 }
 ```
@@ -215,19 +225,21 @@ Lower signal quality (anonymous postings, less company info) but catches the sma
 
 ### Cost Estimate
 
-| Component                                                             | Monthly Cost                            |
-| --------------------------------------------------------------------- | --------------------------------------- |
-| SerpAPI Google Jobs (~8 queries x 1 run/day x 30 days = 240 searches) | $50/mo (well within 5,000/mo base plan) |
-| Craigslist RSS                                                        | $0                                      |
-| Claude API (qualifying ~20-30 postings/day)                           | $10-15                                  |
-| Make.com (shared plan, ~3,000 ops/month for this pipeline)            | Shared                                  |
-| **Pipeline total**                                                    | **~$60-65/mo**                          |
+| Component                                                              | Monthly Cost                            |
+| ---------------------------------------------------------------------- | --------------------------------------- |
+| SerpAPI Google Jobs (~12 queries x 1 run/day x 30 days = 360 searches) | $50/mo (well within 5,000/mo base plan) |
+| Craigslist RSS                                                         | $0                                      |
+| Claude API (qualifying ~20-30 postings/day)                            | $10-15                                  |
+| Make.com (shared plan, ~3,000 ops/month for this pipeline)             | Shared                                  |
+| **Pipeline total**                                                     | **~$60-65/mo**                          |
 
 ---
 
 ## Pipeline 3: New Business Detection
 
-**The idea:** Catch new and growing businesses from public records — business filings, commercial permits, tax license registrations. These are businesses in formation or expansion. They don't have operations problems yet, but they will. Getting in early means being the trusted advisor before the chaos starts.
+**The idea:** Catch new and growing businesses from public records: business filings, commercial permits, tax license registrations. These are businesses in formation or expansion.
+
+**Note:** This pipeline is deprioritized. New businesses filing paperwork are unlikely to be in the $750k-$5M revenue range yet. The signal is weaker for our current ICP. Keep the architecture documented but build this last, if at all. The pipeline is most useful for catching businesses expanding into new locations (commercial TI permits), which does signal growth.
 
 ### Data Flow
 
@@ -274,7 +286,7 @@ No API, but you can email a weekly public records request for new entity filings
 
 - Make.com watches a Gmail inbox or Google Drive folder for the weekly ACC file
 - Parses the CSV/Excel
-- Runs each new entity through AI qualification (is this a 10-50 person business? what vertical?)
+- Runs each new entity through AI qualification (is this a growing business in the $750k-$5M range? what vertical?)
 - Pushes qualified entities to the prospect sheet
 
 **Arizona Department of Revenue (ADOR) — TPT Licenses:**
@@ -354,13 +366,13 @@ You spend 15 minutes in the morning reading the digest and responding where you 
 
 ## Pipeline 5: Referral Partner Nurture
 
-**The idea:** The bookkeeper/CPA referral channel (the 22 prospects in our prospect list) is the highest-converting source. But relationships decay without maintenance. Automate the stay-in-touch cadence so the relationship stays warm even when you're heads-down on a client engagement.
+**The idea:** Referral partner relationships are the highest-converting source. This includes bookkeepers/CPAs (the original 22 prospects), plus Vistage chairs, EO members, fractional CFOs, and commercial insurance agents. Relationships decay without maintenance. Automate the stay-in-touch cadence so the relationship stays warm even when you're heads-down on a client engagement.
 
 ### Automation Approach
 
 This is the simplest pipeline — it's a CRM drip, not a data mining operation.
 
-**Tracking:** Google Sheet with the bookkeeper prospect list (already created). Add columns:
+**Tracking:** Google Sheet with the referral partner list (started with bookkeepers, expanding to Vistage chairs, fractional CFOs, EO members). Add columns:
 
 - Last Contact Date
 - Next Check-in Date
@@ -427,7 +439,7 @@ The Make.com Pro plan ($16/mo, 10,000 ops) covers this. If volume grows, additio
 - "Job Signal Leads" — companies hiring ops roles
 - "New Business Leads" — new filings and permits
 - "Social Opportunities" — threads worth responding to
-- "Referral Partners" — bookkeeper/CPA tracking (already exists)
+- "Referral Partners" — bookkeeper/CPA, Vistage chairs, fractional CFOs, EO members (already exists)
 - "Master Pipeline" — consolidated view of all qualified leads across sources
 
 **Daily Digest Email:** A single morning email via Gmail summarizing all new leads across all pipelines from the past 24 hours. Google Sheets are the dashboard — the digest is a daily nudge to check them.
@@ -446,7 +458,7 @@ The Make.com Pro plan ($16/mo, 10,000 ops) covers this. If volume grows, additio
 | Reddit API, Craigslist RSS, Google Alerts, SODA APIs | $0               |
 | **Total**                                            | **~$106-149/mo** |
 
-For context: one closed engagement at our rates covers 6+ months of this entire system. The ROI math is almost absurd — the system needs to surface ONE client per year to pay for itself many times over.
+For context: one closed engagement at our average price point covers a full year of this entire system. The ROI math is almost absurd: the system needs to surface ONE client per year to pay for itself many times over.
 
 ---
 
@@ -529,7 +541,7 @@ This system compounds. Every week:
 
 In 6 months, you have a lead generation machine that no other local operations consultant can replicate — not because the technology is hard, but because the system knowledge and prompt tuning took hundreds of iterations to get right.
 
-The manual channels (BNI, chamber, networking) are still essential. They're how you build trust and close deals. But the automated pipelines ensure you're never short on conversations to have. The 25 touches/week target stops being a grind and starts being a selection problem: which of these 40 qualified leads do I reach out to first?
+The manual channels (BNI, chamber, Vistage/EO, LinkedIn) are still essential. They're how you build trust and close deals. But the automated pipelines ensure you're never short on conversations to have. The 15-20 touches/week target stops being a grind and starts being a selection problem: which of these qualified leads do I reach out to first?
 
 ---
 

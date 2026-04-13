@@ -8,17 +8,13 @@
  * @see docs/design/operations-health-scorecard.md — full spec
  */
 
+import type { ProblemId } from '../../portal/assessments/extraction-schema.js'
+
 // ---------------------------------------------------------------------------
 // Dimensions — maps to canonical problem IDs in extraction-schema.ts
 // ---------------------------------------------------------------------------
 
-export type DimensionId =
-  | 'owner_bottleneck'
-  | 'lead_leakage'
-  | 'financial_blindness'
-  | 'scheduling_chaos'
-  | 'manual_communication'
-  | 'employee_retention'
+export type DimensionId = ProblemId
 
 export interface Dimension {
   id: DimensionId
@@ -29,39 +25,33 @@ export interface Dimension {
 
 export const DIMENSIONS: Dimension[] = [
   {
-    id: 'owner_bottleneck',
-    label: 'Owner Independence',
-    icon: 'person_off',
-    sectionHeader: "Let's start with your day-to-day",
+    id: 'process_design',
+    label: 'Process Maturity',
+    icon: 'account_tree',
+    sectionHeader: 'How your business runs day-to-day',
   },
   {
-    id: 'lead_leakage',
-    label: 'Lead Follow-up',
+    id: 'tool_systems',
+    label: 'Tool Effectiveness',
+    icon: 'build',
+    sectionHeader: 'The tools you use',
+  },
+  {
+    id: 'data_visibility',
+    label: 'Data & Visibility',
+    icon: 'monitoring',
+    sectionHeader: 'Seeing the numbers',
+  },
+  {
+    id: 'customer_pipeline',
+    label: 'Customer Pipeline',
     icon: 'leaderboard',
-    sectionHeader: 'How new business comes in',
+    sectionHeader: 'How customers find and stay with you',
   },
   {
-    id: 'financial_blindness',
-    label: 'Financial Visibility',
-    icon: 'account_balance',
-    sectionHeader: 'The money side',
-  },
-  {
-    id: 'scheduling_chaos',
-    label: 'Scheduling',
-    icon: 'calendar_month',
-    sectionHeader: 'Keeping the calendar straight',
-  },
-  {
-    id: 'manual_communication',
-    label: 'Communication',
-    icon: 'forum',
-    sectionHeader: 'Staying in touch with customers',
-  },
-  {
-    id: 'employee_retention',
-    label: 'Employee Retention',
-    icon: 'group_remove',
+    id: 'team_operations',
+    label: 'Team Operations',
+    icon: 'groups',
     sectionHeader: 'Your team',
   },
 ]
@@ -94,6 +84,9 @@ export const CONTEXT_QUESTIONS: ContextQuestion[] = [
       { value: 'contractor_trades', label: 'Contractor / Trades' },
       { value: 'retail_salon', label: 'Retail / Salon / Spa' },
       { value: 'restaurant_food', label: 'Restaurant / Food Service' },
+      { value: 'healthcare', label: 'Healthcare (dental, chiropractic, therapy, etc.)' },
+      { value: 'technology', label: 'Technology / IT Services' },
+      { value: 'manufacturing', label: 'Manufacturing / Production' },
       { value: 'other', label: 'Other' },
     ],
   },
@@ -109,10 +102,23 @@ export const CONTEXT_QUESTIONS: ContextQuestion[] = [
     ],
   },
   {
+    id: 'revenue_range',
+    label: 'What is your approximate annual revenue?',
+    options: [
+      { value: 'under_500k', label: 'Under $500k' },
+      { value: '500k_1m', label: '$500k - $1M' },
+      { value: '1m_3m', label: '$1M - $3M' },
+      { value: '3m_5m', label: '$3M - $5M' },
+      { value: '5m_10m', label: '$5M - $10M' },
+      { value: 'over_10m', label: 'Over $10M' },
+    ],
+  },
+  {
     id: 'role',
     label: "What's your role?",
     options: [
       { value: 'owner', label: 'Owner' },
+      { value: 'coo_vp_ops', label: 'COO / VP Operations' },
       { value: 'office_manager', label: 'Office Manager' },
       { value: 'other', label: 'Other' },
     ],
@@ -137,111 +143,123 @@ export interface ScoredQuestion {
 }
 
 export const QUESTIONS: ScoredQuestion[] = [
-  // --- Owner Bottleneck ---
+  // --- Process Maturity (process_design) ---
   {
     id: 'q1',
-    dimension: 'owner_bottleneck',
-    text: "When a team member needs to make a decision that's outside their normal routine, what happens?",
+    dimension: 'process_design',
+    text: 'How are your core business processes documented?',
     options: [
-      { key: 'a', score: 0, text: 'They wait for me — I make most of the calls' },
-      { key: 'b', score: 1, text: 'They text or call me and I handle it when I can' },
+      { key: 'a', score: 0, text: "They're not. It's all in people's heads." },
+      { key: 'b', score: 1, text: "Some things are written down, but it's scattered or outdated" },
       {
         key: 'c',
         score: 2,
-        text: 'A few senior people can handle it, but anything big comes to me',
+        text: "We have docs for the important stuff, but they're not always followed",
       },
-      {
-        key: 'd',
-        score: 3,
-        text: 'We have clear guidelines for who decides what — I rarely get pulled in',
-      },
+      { key: 'd', score: 3, text: 'Key workflows are documented and the team actually uses them' },
     ],
   },
   {
     id: 'q2',
-    dimension: 'owner_bottleneck',
-    text: 'If you had to take an unplanned week off tomorrow, what would happen to operations?',
+    dimension: 'process_design',
+    text: 'If you had to take an unplanned week off, what would happen?',
     options: [
-      { key: 'a', score: 0, text: "Things would stop — I'm involved in almost everything" },
+      { key: 'a', score: 0, text: "Things would stall. I'm involved in almost everything." },
       {
         key: 'b',
         score: 1,
         text: 'The basics would keep going, but nothing new would move forward',
       },
-      { key: 'c', score: 2, text: 'Most things would be fine, but a few key areas need me' },
-      { key: 'd', score: 3, text: 'The team would handle it — they know the playbook' },
+      { key: 'c', score: 2, text: 'Most things would be fine, but a few key areas still need me' },
+      { key: 'd', score: 3, text: 'The team would handle it. They know the playbook.' },
     ],
   },
   {
     id: 'q3',
-    dimension: 'owner_bottleneck',
-    text: 'How are your core business processes (how jobs get done, how customers get served) documented?',
+    dimension: 'process_design',
+    text: "When a team member hits a decision that's outside their normal routine, what happens?",
     options: [
-      { key: 'a', score: 0, text: "They're not — it's all in my head or people just know" },
-      { key: 'b', score: 1, text: "I've written some things down, but it's scattered or outdated" },
-      { key: 'c', score: 2, text: "We have some docs, but they're not consistently followed" },
-      { key: 'd', score: 3, text: 'Key processes are documented and the team actually uses them' },
-    ],
-  },
-
-  // --- Lead Leakage ---
-  {
-    id: 'q4',
-    dimension: 'lead_leakage',
-    text: 'When a new lead comes in (call, form, referral), what happens next?',
-    options: [
-      { key: 'a', score: 0, text: 'Whoever answers deals with it — no set process' },
-      { key: 'b', score: 1, text: 'I usually handle it personally when I get a chance' },
-      { key: 'c', score: 2, text: "Someone follows up, but there's no system tracking it" },
-      { key: 'd', score: 3, text: 'Every lead goes into a system with assigned follow-up steps' },
-    ],
-  },
-  {
-    id: 'q5',
-    dimension: 'lead_leakage',
-    text: 'How well do you know your lead numbers (how many came in last month, how many converted)?',
-    options: [
-      { key: 'a', score: 0, text: "I don't track that" },
-      { key: 'b', score: 1, text: "I could guess, but I don't have real numbers" },
-      { key: 'c', score: 2, text: 'I have a rough idea but nothing centralized' },
-      { key: 'd', score: 3, text: 'I can pull up our numbers and close rate anytime' },
-    ],
-  },
-  {
-    id: 'q6',
-    dimension: 'lead_leakage',
-    text: "What happens to a lead that doesn't buy right away?",
-    options: [
-      { key: 'a', score: 0, text: 'We probably lose track of them' },
-      { key: 'b', score: 1, text: "I might follow up if I remember, but there's no system" },
-      { key: 'c', score: 2, text: "We try to follow up, but it's inconsistent" },
+      { key: 'a', score: 0, text: 'They wait for me. I make most of the calls.' },
+      { key: 'b', score: 1, text: 'They call or text me and I handle it when I can' },
+      { key: 'c', score: 2, text: 'A few people can handle it, but the big stuff comes to me' },
       {
         key: 'd',
         score: 3,
-        text: 'They go into a nurture sequence — we stay in touch automatically',
+        text: 'We have guidelines for who decides what. I rarely get pulled in.',
       },
     ],
   },
 
-  // --- Financial Blindness ---
+  // --- Tool Effectiveness (tool_systems) ---
+  {
+    id: 'q4',
+    dimension: 'tool_systems',
+    text: 'Think about the tools your business uses every day. How well are they working for you?',
+    options: [
+      {
+        key: 'a',
+        score: 0,
+        text: "We don't really have tools. Mostly spreadsheets, texts, and paper.",
+      },
+      {
+        key: 'b',
+        score: 1,
+        text: "We have some, but we're only using a fraction of what they can do",
+      },
+      { key: 'c', score: 2, text: "They mostly work, but we've got workarounds for the gaps" },
+      {
+        key: 'd',
+        score: 3,
+        text: 'Our tools handle what we need. The team uses them consistently.',
+      },
+    ],
+  },
+  {
+    id: 'q5',
+    dimension: 'tool_systems',
+    text: 'How does information move between the different tools and people in your business?',
+    options: [
+      { key: 'a', score: 0, text: 'Manually. Someone copies info from one place to another.' },
+      { key: 'b', score: 1, text: "Mostly manual, with a few shortcuts we've figured out" },
+      { key: 'c', score: 2, text: 'Some things sync automatically, but plenty of gaps remain' },
+      {
+        key: 'd',
+        score: 3,
+        text: 'Our tools talk to each other. Data flows without someone re-entering it.',
+      },
+    ],
+  },
+  {
+    id: 'q6',
+    dimension: 'tool_systems',
+    text: 'When a schedule changes or a customer needs rescheduling, how does everyone find out?',
+    options: [
+      { key: 'a', score: 0, text: 'Whoever knows calls or texts whoever needs to know' },
+      { key: 'b', score: 1, text: 'I usually handle the communication myself' },
+      { key: 'c', score: 2, text: 'We update a calendar, but sometimes people miss the change' },
+      { key: 'd', score: 3, text: 'Changes sync automatically and notify the right people' },
+    ],
+  },
+
+  // --- Data & Visibility (data_visibility) ---
   {
     id: 'q7',
-    dimension: 'financial_blindness',
+    dimension: 'data_visibility',
     text: 'How current are your books right now?',
     options: [
       {
         key: 'a',
         score: 0,
-        text: "I'm not sure — my bookkeeper/accountant handles it and I don't check often",
+        text: "I'm not sure. My bookkeeper handles it and I don't check often.",
       },
-      { key: 'b', score: 1, text: "They're a few months behind, but I check the bank account" },
-      { key: 'c', score: 2, text: 'Mostly current — within a couple of weeks' },
-      { key: 'd', score: 3, text: 'Up to date — I can see where we stand anytime' },
+      { key: 'b', score: 1, text: 'A few months behind, but I check the bank account' },
+      { key: 'c', score: 2, text: 'Mostly current, within a couple of weeks' },
+      { key: 'd', score: 3, text: 'Up to date. I can see where we stand anytime.' },
     ],
   },
   {
     id: 'q8',
-    dimension: 'financial_blindness',
+    dimension: 'data_visibility',
     text: 'When you price a job or project, how do you decide what to charge?',
     options: [
       { key: 'a', score: 0, text: 'Gut feel based on experience' },
@@ -253,155 +271,77 @@ export const QUESTIONS: ScoredQuestion[] = [
       {
         key: 'c',
         score: 2,
-        text: "I have a pricing framework, but I don't always go back and check profitability",
+        text: "I have a pricing framework, but I don't always check profitability after",
       },
-      {
-        key: 'd',
-        score: 3,
-        text: 'I price based on real cost data and review margins after each job',
-      },
+      { key: 'd', score: 3, text: 'I price from real cost data and review margins after each job' },
     ],
   },
   {
     id: 'q9',
-    dimension: 'financial_blindness',
-    text: 'How well do you know which services or jobs are most profitable?',
+    dimension: 'data_visibility',
+    text: 'If you needed to know your top revenue source this quarter, how quickly could you get that answer?',
     options: [
-      { key: 'a', score: 0, text: 'Not really — revenue comes in and bills go out' },
-      { key: 'b', score: 1, text: "I have a sense, but I've never run the numbers" },
-      { key: 'c', score: 2, text: 'I know broadly, but the details are fuzzy' },
-      { key: 'd', score: 3, text: 'I track profitability by service or job type' },
+      { key: 'a', score: 0, text: "I couldn't. I don't have that data in one place." },
+      { key: 'b', score: 1, text: "I'd have to dig through spreadsheets or ask my bookkeeper" },
+      { key: 'c', score: 2, text: 'I could piece it together, but it would take a while' },
+      { key: 'd', score: 3, text: 'I can pull that up in a few minutes' },
     ],
   },
 
-  // --- Scheduling Chaos ---
+  // --- Customer Pipeline (customer_pipeline) ---
   {
     id: 'q10',
-    dimension: 'scheduling_chaos',
-    text: 'How do you schedule jobs, appointments, or shifts?',
+    dimension: 'customer_pipeline',
+    text: 'When a new lead comes in (call, form, referral), what happens next?',
     options: [
-      { key: 'a', score: 0, text: "Phone calls, texts, maybe a whiteboard — it's manual" },
-      {
-        key: 'b',
-        score: 1,
-        text: "I use a calendar, but it's just mine — the team checks with me",
-      },
-      { key: 'c', score: 2, text: "We have a shared calendar, but people don't always update it" },
-      { key: 'd', score: 3, text: 'We use a scheduling tool that the team and customers can see' },
+      { key: 'a', score: 0, text: 'Whoever answers deals with it. No set process.' },
+      { key: 'b', score: 1, text: 'I usually handle it personally when I get a chance' },
+      { key: 'c', score: 2, text: "Someone follows up, but there's no tool tracking it" },
+      { key: 'd', score: 3, text: 'Every lead goes into a pipeline with assigned follow-up steps' },
     ],
   },
   {
     id: 'q11',
-    dimension: 'scheduling_chaos',
-    text: 'How often do scheduling conflicts (double-bookings, missed appointments, wrong times) happen?',
+    dimension: 'customer_pipeline',
+    text: "What happens to a lead that doesn't buy right away?",
     options: [
-      { key: 'a', score: 0, text: "More than I'd like to admit — at least weekly" },
-      { key: 'b', score: 1, text: 'It happens a few times a month' },
-      { key: 'c', score: 2, text: 'Occasionally, but we usually catch it' },
-      { key: 'd', score: 3, text: 'Rarely — the system prevents most of it' },
+      { key: 'a', score: 0, text: 'We probably lose track of them' },
+      { key: 'b', score: 1, text: "I might follow up if I remember, but there's no process" },
+      { key: 'c', score: 2, text: "We try to follow up, but it's inconsistent" },
+      { key: 'd', score: 3, text: 'They stay in our pipeline and we follow up on a schedule' },
     ],
   },
   {
     id: 'q12',
-    dimension: 'scheduling_chaos',
-    text: 'When a schedule changes (cancellation, delay, reschedule), how does everyone find out?',
+    dimension: 'customer_pipeline',
+    text: 'How do your customers hear from you after the job is done?',
     options: [
-      { key: 'a', score: 0, text: 'Whoever knows calls or texts whoever needs to know' },
-      { key: 'b', score: 1, text: 'I usually handle the communication myself' },
-      { key: 'c', score: 2, text: 'We update the calendar, but sometimes people miss it' },
-      { key: 'd', score: 3, text: 'Changes sync automatically and notify the right people' },
+      { key: 'a', score: 0, text: "They don't, unless they call us" },
+      { key: 'b', score: 1, text: "I'll reach out sometimes, but it depends on the customer" },
+      { key: 'c', score: 2, text: 'We send occasional updates, but nothing consistent' },
+      {
+        key: 'd',
+        score: 3,
+        text: 'We stay in touch through regular check-ins or automated follow-ups',
+      },
     ],
   },
 
-  // --- Manual Communication ---
+  // --- Team Operations (team_operations) ---
   {
     id: 'q13',
-    dimension: 'manual_communication',
-    text: 'How do appointment reminders, confirmations, or follow-ups go out to customers?',
+    dimension: 'team_operations',
+    text: 'When you onboard a new hire, how do they learn the job?',
     options: [
-      { key: 'a', score: 0, text: "They don't, really — customers are expected to remember" },
-      { key: 'b', score: 1, text: 'I or someone on the team manually texts or calls each one' },
-      { key: 'c', score: 2, text: "We send them, but it's a manual process each time" },
-      { key: 'd', score: 3, text: 'They go out automatically — we set it up once and it runs' },
+      { key: 'a', score: 0, text: 'They shadow someone and figure it out' },
+      { key: 'b', score: 1, text: 'I train them myself, which takes me away from everything else' },
+      { key: 'c', score: 2, text: "We have some training materials, but it's mostly hands-on" },
+      { key: 'd', score: 3, text: "There's a structured onboarding process with docs they follow" },
     ],
   },
   {
     id: 'q14',
-    dimension: 'manual_communication',
-    text: 'When a job is done, how does the customer get their invoice?',
-    options: [
-      { key: 'a', score: 0, text: 'When I get around to it — sometimes it takes a while' },
-      { key: 'b', score: 1, text: 'I manually create and send each one' },
-      {
-        key: 'c',
-        score: 2,
-        text: 'We have a process, but it depends on me or one person to do it',
-      },
-      {
-        key: 'd',
-        score: 3,
-        text: 'Invoices generate and send automatically when the job is marked complete',
-      },
-    ],
-  },
-  {
-    id: 'q15',
-    dimension: 'manual_communication',
-    text: "How easy is it for your team to pull up a past customer's full history?",
-    options: [
-      { key: 'a', score: 0, text: "We'd have to piece it together from texts, emails, and memory" },
-      { key: 'b', score: 1, text: 'I could probably find it, but nobody else could' },
-      { key: 'c', score: 2, text: "We have records, but they're in different places" },
-      {
-        key: 'd',
-        score: 3,
-        text: 'Full history is in one place anyone on the team can access',
-      },
-    ],
-  },
-
-  // --- Employee Retention ---
-  {
-    id: 'q16',
-    dimension: 'employee_retention',
-    text: 'How do you know what your team accomplished today?',
-    options: [
-      { key: 'a', score: 0, text: "I don't, unless I was there watching or they told me" },
-      {
-        key: 'b',
-        score: 1,
-        text: 'I check in with people individually — calls, texts, end-of-day chat',
-      },
-      { key: 'c', score: 2, text: "We have a loose check-in process, but it's not consistent" },
-      {
-        key: 'd',
-        score: 3,
-        text: 'We use a system where everyone logs their work — I can check anytime',
-      },
-    ],
-  },
-  {
-    id: 'q17',
-    dimension: 'employee_retention',
-    text: 'When you onboard a new hire, how do they learn the job?',
-    options: [
-      { key: 'a', score: 0, text: 'They shadow someone and figure it out — trial by fire' },
-      {
-        key: 'b',
-        score: 1,
-        text: 'I personally train them, which takes me away from everything else',
-      },
-      { key: 'c', score: 2, text: "We have some training materials, but it's mostly hands-on" },
-      {
-        key: 'd',
-        score: 3,
-        text: "There's a structured onboarding process with documentation they follow",
-      },
-    ],
-  },
-  {
-    id: 'q18',
-    dimension: 'employee_retention',
+    dimension: 'team_operations',
     text: "How do you handle it when someone on the team isn't performing?",
     options: [
       {
@@ -409,16 +349,27 @@ export const QUESTIONS: ScoredQuestion[] = [
         score: 0,
         text: "I usually don't notice until something breaks or a customer complains",
       },
-      {
-        key: 'b',
-        score: 1,
-        text: "I address it when I see it, but there's no regular feedback process",
-      },
+      { key: 'b', score: 1, text: "I address it when I see it, but there's no regular process" },
       { key: 'c', score: 2, text: 'We do occasional check-ins, but nothing formal' },
       {
         key: 'd',
         score: 3,
-        text: 'We have clear expectations and regular reviews — issues surface early',
+        text: 'We have clear expectations and regular reviews. Issues surface early.',
+      },
+    ],
+  },
+  {
+    id: 'q15',
+    dimension: 'team_operations',
+    text: 'How do you know what your team accomplished today?',
+    options: [
+      { key: 'a', score: 0, text: "I don't, unless I was there watching or they told me" },
+      { key: 'b', score: 1, text: 'I check in with people individually throughout the day' },
+      { key: 'c', score: 2, text: "We have a loose check-in process, but it's hit or miss" },
+      {
+        key: 'd',
+        score: 3,
+        text: "Everyone logs their work. I can see the team's output anytime.",
       },
     ],
   },
@@ -448,5 +399,5 @@ export const SCORE_THRESHOLDS: ScoreThreshold[] = [
   { min: 68, max: 100, label: 'strong', displayLabel: 'Strong', color: '#16a34a' },
 ]
 
-/** Total number of steps: 3 context + 18 scored */
+/** Total number of steps: 4 context + 15 scored */
 export const TOTAL_QUESTIONS = CONTEXT_QUESTIONS.length + QUESTIONS.length

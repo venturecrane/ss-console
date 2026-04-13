@@ -2,39 +2,43 @@
 const studies = [
   {
     vertical: 'Home Services',
-    business: 'HVAC Company, 18 employees, East Valley',
+    business: 'HVAC Company, 18 employees',
     challenge:
       "The owner was dispatching every job personally. The schedule lived in three places: a whiteboard, a shared Google Calendar, and text messages. Leads from the website sat in a Gmail inbox until someone got around to checking it. The owner hadn't taken a full day off in two years because every question came back to them.",
     solution:
       "One dispatching workflow the whole crew can see, in the office or out in the field. Lead capture that puts new inquiries into a tracked pipeline with same-day follow-up. A daily check-in so the owner knows what's happening without picking up the phone.",
-    problems: ['Scheduling chaos', 'Lead leakage', 'Owner bottleneck'],
+    result: '12 hours/week freed for the owner',
+    problems: ['Owner bottleneck', 'Disconnected tools', 'Process design'],
   },
   {
     vertical: 'Professional Services',
-    business: 'Accounting Firm, 12 employees, Scottsdale',
+    business: 'Accounting Firm, 12 employees',
     challenge:
       'Every client question went straight to the founding partner, even routine ones the team could handle. The sales pipeline was a mental list. Client onboarding took weeks because every step was manual and different every time. The partner wanted to focus on advisory work but spent most of the day fielding questions and approving things.',
     solution:
       "A documented intake and onboarding process the team can follow without asking the partner. A visible pipeline so everyone knows where prospects stand. Templated communication for routine client questions, so the partner's time goes to work that actually needs them.",
-    problems: ['Owner bottleneck', 'Manual communication', 'Lead leakage'],
+    result: 'Partner reclaimed 15+ hours/week for advisory work',
+    problems: ['Owner bottleneck', 'Process design', 'Systems integration'],
   },
   {
     vertical: 'Home Services',
-    business: 'Plumbing Company, 14 employees, North Phoenix',
+    business: 'Plumbing Company, 14 employees',
     challenge:
       'Website leads came in through a contact form and sat unread for days. Double-bookings happened weekly because the office and field crews were on different calendars. The owner had no idea which jobs were profitable. The books were months behind and pricing was based on gut feel.',
     solution:
       'Lead capture tied to automatic assignment and follow-up, so nothing sits unread. One scheduling tool the whole crew can get to from the field. Clean books with job-level profitability, so pricing decisions come from real numbers instead of gut feel.',
-    problems: ['Lead leakage', 'Scheduling chaos', 'Financial blindness'],
+    result: 'Zero missed leads in first month after go-live',
+    problems: ['Customers falling through', 'Disconnected tools', 'Operational visibility'],
   },
   {
     vertical: 'Professional Services',
-    business: 'Insurance Agency, 15 employees, Chandler',
+    business: 'Insurance Agency, 15 employees',
     challenge:
       'The agency lost four staff members in a year. The owner chalked it up to pay and the job market. But the pattern was clear: new hires had no structured onboarding and were left to figure things out on their own. Every account manager handled policies differently. There was no way to know if you were doing a good job until a client complained. Good people moved on to places where they felt more supported.',
     solution:
       "A structured onboarding process so new hires know exactly what to expect and aren't guessing from day one. Documented workflows for common policy types so the team handles things the same way. Simple tracking so managers can see workload and the owner can spot problems before they turn into resignations.",
-    problems: ['Employee retention', 'Owner bottleneck'],
+    result: 'Zero turnover in the 6 months following delivery',
+    problems: ['Talent gaps', 'Process design', 'Operational visibility'],
   },
 ]
 ---
@@ -45,9 +49,6 @@ const studies = [
       <h2 class="text-3xl font-bold text-slate-900">What We Do</h2>
       <p class="mx-auto mt-4 max-w-2xl text-slate-500">
         Different businesses, similar patterns. Here's the kind of work we take on.
-      </p>
-      <p class="mx-auto mt-2 max-w-2xl text-sm text-slate-400">
-        Based on common patterns across Phoenix businesses.
       </p>
     </div>
 
@@ -82,6 +83,9 @@ const studies = [
                   The solution
                 </p>
                 <p class="mt-3 leading-relaxed text-slate-600">{study.solution}</p>
+                {study.result && (
+                  <p class="mt-4 text-sm font-semibold text-primary">{study.result}</p>
+                )}
               </div>
             </div>
           </div>

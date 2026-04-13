@@ -9,8 +9,8 @@ import { appendContext } from '../../../../../lib/db/context'
 import { createQuote, type LineItem } from '../../../../../lib/db/quotes'
 import { uploadTranscript } from '../../../../../lib/storage/r2'
 
-/** Default hourly rate at launch (per Decision Stack). */
-const DEFAULT_RATE = 150
+/** Default hourly rate at launch (per Decision Stack #16, evolved). */
+const DEFAULT_RATE = 175
 
 /**
  * POST /api/admin/assessments/:id/complete
@@ -54,12 +54,11 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
 
     // 1. Build extraction JSON from form data
     const problemKeys = [
-      'owner_bottleneck',
-      'lead_leakage',
-      'financial_blindness',
-      'scheduling_chaos',
-      'manual_communication',
-      'employee_retention',
+      'process_design',
+      'tool_systems',
+      'data_visibility',
+      'customer_pipeline',
+      'team_operations',
     ]
     const problems: string[] = []
     for (const key of problemKeys) {

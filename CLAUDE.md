@@ -4,13 +4,15 @@ This file provides guidance for Claude Code agents working in this repository.
 
 ## About This Venture
 
-**SMD Services** is a services venture under SMDurgan, LLC. It is NOT a SaaS product — it is a consulting business that sells operations cleanup engagements to Phoenix-area small businesses (10–25 employees).
+**SMD Services** is a solutions consulting venture under SMDurgan, LLC. We sell scope-based consulting engagements to growing businesses ($750k-$5M revenue, expanding to $10M). This is NOT a SaaS product. It is a services business.
 
-**Objective:** Launch the agency and reach profitability.
+**Objective:** Launch the venture and reach profitability.
 
-**Core offering:** Operations Cleanup — scope-based pricing per engagement. We work with the business owner to understand their objectives, identify what's getting in the way, and build the right solution: process documentation, tool selection, configuration, training, and handoff. Engagement length varies based on scope.
+**Core offering:** We work alongside business owners to understand where they're trying to go, figure out what's slowing them down, and build the right solution together. Solutions range from process documentation and tool configuration to custom internal tools, system integrations, and operational dashboards. Engagement length and pricing are scoped per project.
 
-**Positioning:** We help growing businesses figure out what needs to change and build the right solution together. Not "AI-powered" anything. A chef isn't hired for his knife. The value is a collaborative team that works alongside the owner — someone who can see the operation with fresh eyes, make fast decisions on tools and processes, and implement in days what the owner has been meaning to do for months.
+**Geography:** Phoenix-based, in-person default for Phase 1 (first 5 clients), remote-capable.
+
+**Positioning:** The client is the hero, we are the guide. Collaborative, objectives-first. The value is enterprise operational discipline applied to businesses that have never had access to it, delivered at speed and pricing that works for their stage. Not "AI-powered" anything. A chef isn't hired for his knife.
 
 ## What This Repo Is For
 
@@ -86,22 +88,37 @@ Always "we" / "our team." Never "I" / "the consultant." See Decision Stack #20 f
 
 ## The Business Model
 
-### The 6 Universal SMB Operations Problems
+### Problem Framework
 
-Every 5–50 employee business has 3–4 of these. The assessment call identifies which 2–3 are most acute.
+We use a three-layer model to connect research to delivery:
 
-| #   | Problem              | Owner Says                             | What's Actually Broken                                                                                           |
-| --- | -------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| 1   | Owner bottleneck     | "I can't take a day off"               | No documented processes — everything lives in the owner's head                                                   |
-| 2   | Lead leakage         | "Leads fall through the cracks"        | No CRM, no follow-up system, pipeline runs on memory                                                             |
-| 3   | Financial blindness  | "I have no idea if we're making money" | QuickBooks 3 months behind, pricing based on gut feel                                                            |
-| 4   | Scheduling chaos     | "Double-bookings happen all the time"  | No centralized scheduling, no automated reminders                                                                |
-| 5   | Manual communication | "I personally text every customer"     | Every message is manual, one-off, no templates or automation                                                     |
-| 6   | Employee retention   | "I keep losing good people"            | No structured onboarding, inconsistent workflows, no way to know if you're doing well until something goes wrong |
+**1. Four root patterns** (internal, research-grounded):
+
+- The founder ceiling
+- Invisible operational drag
+- Revenue plateau
+- Cash flow fragility
+
+**2. Owner-voiced symptoms** (external, what owners actually say):
+"I can't step away." "I can't find good people." "Customers slip through the cracks." "I don't know if we're making money." "Everything runs on spreadsheets." "Our systems don't talk to each other." "We've stalled."
+
+These are representative, not exhaustive. The assessment listens for whatever comes up.
+
+**3. Five solution categories** (delivery taxonomy):
+
+- Process design
+- Custom internal tools
+- Systems integration
+- Operational visibility
+- Vendor/platform selection
+
+No dollar ranges are attached to solution categories. Pricing comes from scope estimation per engagement.
 
 ### Pain Clusters by Vertical
 
-| Business Type                                | Lead With                                             |
+These suggest where to lead the conversation, not which problems to look for. The assessment listens for whatever comes up across the full range of symptoms.
+
+| Business Type                                | Likely Entry Points                                   |
 | -------------------------------------------- | ----------------------------------------------------- |
 | Home services (plumber, HVAC)                | Scheduling + lead follow-up + employee retention      |
 | Professional services (accountant, attorney) | Owner bottleneck + manual communication + pipeline    |
@@ -121,9 +138,10 @@ Every 5–50 employee business has 3–4 of these. The assessment call identifie
 
 ### Pricing
 
-- **Operations Cleanup:** Scope-based. Internal rate: $150/hr at launch → $175/hr → $200/hr with volume
-- **Paid Assessment (standalone):** $250 — the audit call as a standalone product
-- **Retainer (post-delivery):** $200–500/mo for ongoing support and optimization
+- **Internal rate:** $175/hr at launch, then $200/hr after first case study, then $250/hr, then $300/hr with volume
+- **Engagement range:** $5,000-$15,000+ depending on scope
+- **Paid Assessment:** $250, applied toward engagement if they proceed. First 3 assessments free.
+- **Retainer (post-delivery):** $200-500/mo for ongoing support and optimization. Model holds but we define the details after the first delivery.
 - **No dollar amounts published externally.** Client sees a project price, not hourly rate.
 
 ### The Assessment Call Is the Product
@@ -141,39 +159,40 @@ We are in the **pre-launch phase**. Nothing has been sold yet. The immediate pri
 
 ### Priority 1: Collateral to Start Selling
 
-- [ ] Assessment call script (the structured conversation guide for the audit call)
-- [ ] Proposal/SOW template (what gets sent after the assessment call)
-- [ ] Pricing framework (scope estimation → hours × rate → project price)
-- [ ] One-pager / leave-behind (physical or PDF for networking)
+- [ ] Assessment call script (structured conversation guide, objectives-first)
+- [ ] Proposal/SOW template (what gets sent after the assessment, reflecting full solution range)
+- [ ] Pricing framework (scope estimation across all 5 solution categories)
+- [ ] One-pager / leave-behind (physical or PDF for networking, guide positioning)
 
 ### Priority 2: Go-to-Market
 
 - [ ] Vertical selection for initial targeting (pick ONE vertical to start)
-- [ ] Outreach strategy (how to find and reach first 5 prospects)
-- [ ] Landing page (smd.services — simple, credibility-focused)
-- [ ] Pipeline math (how many conversations → proposals → closes to sustain profitability)
+- [ ] Outreach strategy (how to find and reach first 5 prospects; includes Vistage, EO Arizona, local networking)
+- [ ] Landing page (smd.services, credibility-focused, guide positioning)
+- [ ] Pipeline math (how many conversations to sustain profitability)
+- [ ] Phased geographic approach (Phoenix in-person first, remote-capable after proof of model)
 
 ### Priority 3: Delivery Readiness
 
-- [ ] Tool recommendation matrix (for each of the 6 problems, 2–3 tool options by business size/type)
-- [ ] SOP templates (reusable frameworks the consultant fills in per client)
+- [ ] Tool and solution matrix (across all 5 solution categories, including custom internal tools and integrations)
+- [ ] SOP templates (reusable frameworks filled in per client)
 - [ ] Client onboarding checklist (what we need from them before Day 1)
 - [ ] Quality checklist templates (reusable across engagements)
 
 ### Priority 4: Business Model Refinement
 
-- [x] Payment terms — 50% deposit at signing, 50% at completion (3-milestone for 40+ hr engagements)
-- [ ] Paid assessment as separate entry point ($250 standalone)
-- [ ] Recurring retainer model ($200–500/mo post-delivery)
+- [x] Payment terms (50% deposit at signing, 50% at completion; 3-milestone for 40+ hr engagements)
+- [ ] Paid assessment entry point ($250 applied toward engagement, first 3 free)
+- [ ] Recurring retainer model ($200-500/mo, define after first delivery)
 - [ ] Client data management system (D1 or similar for assessments, quotes, engagements, invoicing)
 
 ## Domain Context
 
-- **Geography:** Phoenix, Arizona metro area
-- **Target:** 10–25 employee businesses — the "too big for one person, too small for a COO" zone
+- **Geography:** Phoenix metro (Phase 1, in-person default), remote-capable
+- **Target:** $750k-$5M revenue businesses, expanding to $10M. The "too big for one person, too small for a COO" framing still works, but the revenue range replaces employee count as the primary gate.
 - **Buyer:** The owner. Sometimes the office manager, but the owner writes the check.
-- **Competition:** Generic "business consultants" (vague), Managed IT providers (technical only), Bookkeepers/accountants (financial only). Nobody is doing the full operations audit + implementation in a scoped engagement with fixed project pricing.
-- **Referral sources:** Local networking groups (BNI, chamber of commerce), accountants/bookkeepers, commercial insurance agents, SBA/SCORE
+- **Competition:** Traditional consultancies ($15-50k+ engagements, slow), fractional CTOs/COOs (ongoing cost, no bounded deliverable), EOS implementers (framework-locked), managed IT providers (technical only). Nobody does assessment + implementation + handoff as bounded, scope-priced engagements.
+- **Referral sources:** Vistage, EO Arizona, fractional CFOs, local networking groups (BNI, chamber of commerce), accountants/bookkeepers, commercial insurance agents, SBA/SCORE
 
 ## Tech Stack
 

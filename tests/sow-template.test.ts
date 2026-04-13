@@ -131,13 +131,12 @@ describe('sow-template: exclusions list (Decision #10)', () => {
     expect(source()).toContain('export const EXCLUSIONS')
   })
 
-  it('includes all 5 hard exclusions from Decision #10', () => {
+  it('includes all 4 hard exclusions from Decision #10 (evolved)', () => {
     const code = source()
     expect(code).toContain('Bookkeeping remediation or catch-up')
     expect(code).toContain('Data migration from legacy systems')
-    expect(code).toContain('Custom software or application development')
+    expect(code).toContain('Ground-up product development (consumer apps, SaaS products)')
     expect(code).toContain('Ongoing support beyond the handoff session')
-    expect(code).toContain('Multi-location or franchise scope')
   })
 
   it('includes parking lot language from Decision #11', () => {

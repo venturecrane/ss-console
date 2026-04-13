@@ -82,7 +82,7 @@ export const SAMPLE_TRANSCRIPT = `[Speaker 1 - SMD Services]: Thanks for taking 
  * produces output that passes validation.
  */
 export const SAMPLE_EXTRACTION_OUTPUT: Record<string, unknown> = {
-  schema_version: '1.0',
+  schema_version: '2.0',
   extracted_at: '2026-03-30T12:00:00Z',
 
   business_name: 'Reeves HVAC',
@@ -90,6 +90,7 @@ export const SAMPLE_EXTRACTION_OUTPUT: Record<string, unknown> = {
   business_type: 'Residential and commercial HVAC',
   years_in_business: 8,
   employee_count: 14,
+  revenue_range: '1m_3m',
   geography: null,
 
   current_tools: [
@@ -122,7 +123,7 @@ export const SAMPLE_EXTRACTION_OUTPUT: Record<string, unknown> = {
 
   identified_problems: [
     {
-      problem_id: 'scheduling_chaos',
+      problem_id: 'tool_systems',
       severity: 'high',
       summary:
         'Double-bookings and missed appointments happening multiple times per month due to a disorganized Google Calendar setup that crews do not consistently check.',
@@ -135,7 +136,7 @@ export const SAMPLE_EXTRACTION_OUTPUT: Record<string, unknown> = {
         'No centralized scheduling system designed for field crews. Google Calendar is a general-purpose tool being forced into a dispatch role with no notifications, no crew assignment logic, and no mobile-first workflow for technicians.',
     },
     {
-      problem_id: 'lead_leakage',
+      problem_id: 'customer_pipeline',
       severity: 'high',
       summary:
         'New leads tracked on sticky notes and phone memory with no follow-up system, resulting in an estimated 5-8 lost leads per month during busy season.',
@@ -148,7 +149,7 @@ export const SAMPLE_EXTRACTION_OUTPUT: Record<string, unknown> = {
         'No CRM or lead intake process. The owner is the sole point of contact for new business, and when he is occupied with operations, leads receive no response. No automated acknowledgment, no assignment, no follow-up cadence.',
     },
     {
-      problem_id: 'owner_bottleneck',
+      problem_id: 'process_design',
       severity: 'medium',
       summary:
         'Owner serves as dispatcher, sales manager, and operations manual simultaneously, receiving 40-50 work texts daily and unable to take time off without operational failures.',
@@ -195,13 +196,16 @@ export const SAMPLE_EXTRACTION_OUTPUT: Record<string, unknown> = {
   disqualification_flags: {
     hard: {
       not_decision_maker: false,
-      scope_exceeds_sprint: false,
+      scope_exceeds_phase: false,
       no_tech_baseline: false,
+      in_crisis: false,
     },
     soft: {
       no_champion: false,
       books_behind: false,
       no_willingness_to_change: false,
+      revenue_too_low: false,
+      too_many_decision_makers: false,
     },
     notes:
       'No disqualification flags triggered. Owner is the decision maker, scope is appropriate for a single engagement (scheduling + lead tracking + basic crew processes), tech baseline exists (Google Workspace, QuickBooks), champion identified (Derek), books are current within 1-2 weeks, and owner is eager to change.',
@@ -211,12 +215,17 @@ export const SAMPLE_EXTRACTION_OUTPUT: Record<string, unknown> = {
     employees_on_payroll: true,
     years_in_business_3_plus: true,
     in_crisis: false,
+    revenue_signals: [
+      '14 employees across 3 full crews plus 2 maintenance techs',
+      '8 years in business',
+      'Average residential call $350-$400, commercial $800-$1,200',
+    ],
     notes:
-      '14 employees, 8 years in business, described as doing significant volume. Business is growing and stable but operationally strained — classic scaling pain, not crisis.',
+      '14 employees, 8 years in business, described as doing significant volume. Business is growing and stable but operationally strained, classic scaling pain, not crisis.',
   },
 
   quote_drivers: {
-    recommended_problems: ['scheduling_chaos', 'lead_leakage', 'owner_bottleneck'],
+    recommended_problems: ['tool_systems', 'customer_pipeline', 'process_design'],
     estimated_complexity: 'medium',
     upward_pressures: [
       '14 employees across 5 sub-teams need to adopt new scheduling workflow',

@@ -60,7 +60,7 @@ export async function searchJobs(query: string, apiKey: string): Promise<SerpApi
   return data.jobs_results ?? []
 }
 
-/** The 8 standard job search queries targeting operational roles. */
+/** Job search queries targeting operational roles. */
 export const JOB_QUERIES = [
   'office manager',
   'operations manager',
@@ -70,4 +70,8 @@ export const JOB_QUERIES = [
   'office administrator',
   'front desk manager',
   'service coordinator',
+  'Director of Operations',
+  'IT Manager',
+  'Systems Administrator',
+  'Technology Coordinator',
 ]

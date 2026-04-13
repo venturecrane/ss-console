@@ -1,16 +1,19 @@
 ---
-const verticals = [
+const segments = [
   {
-    title: 'Home Services',
-    subtitle: 'Plumbers, HVAC, Electricians, Contractors',
-    pain: "Jobs get double-booked because the schedule lives in three places. Leads come in from the website and nobody follows up. You find out a job went sideways after the customer's already angry.",
-    fix: 'One schedule everyone can see, automatic lead follow-up, and visibility into what your crew is doing without calling them.',
+    title: 'Outgrowing Your Tools',
+    pain: 'You started with spreadsheets and free apps. They worked fine at first. Now everything takes longer than it should, data lives in five places, and you spend half your week just keeping things from falling apart.',
+    fix: 'The right tools for where you are now, set up to work together. No more re-entering the same data in three places.',
   },
   {
-    title: 'Professional Services',
-    subtitle: 'Accountants, Attorneys, Consultants',
-    pain: "Every client question routes to you. Your pipeline is a mental list. That thing you've been meaning to document has been on your list for a year.",
-    fix: "Processes your team can follow without asking you, a real pipeline you can look at, and client communication that doesn't depend on one person.",
+    title: 'Stuck in Every Decision',
+    pain: "Nothing moves without you. Your team checks with you on things they should be able to handle. You know you need to delegate, but there's no process to delegate to.",
+    fix: 'Documented workflows your team can follow on their own. Clear enough that people stop asking and start doing.',
+  },
+  {
+    title: 'Ready to Grow but Afraid Things Will Break',
+    pain: "You could take on more work. You could hire. But you know the way things run right now won't hold. Growth feels risky when you can't see what's happening across the business.",
+    fix: 'Visibility into what matters and processes that hold up under pressure. So growth is exciting, not terrifying.',
   },
 ]
 ---
@@ -18,21 +21,20 @@ const verticals = [
 <section class="bg-slate-50 px-6 py-24">
   <div class="mx-auto max-w-5xl">
     <h2 class="mb-12 text-center text-3xl font-bold text-slate-900">Who We Help</h2>
-    <div class="grid grid-cols-1 gap-8 md:grid-cols-2">
+    <div class="grid grid-cols-1 gap-8 md:grid-cols-3">
       {
-        verticals.map((v) => (
+        segments.map((s) => (
           <div class="rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-            <h3 class="text-xl font-bold text-slate-900">{v.title}</h3>
-            <p class="mt-1 text-sm text-slate-500">{v.subtitle}</p>
+            <h3 class="text-xl font-bold text-slate-900">{s.title}</h3>
             <div class="mt-6">
               <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">
                 Sound familiar?
               </p>
-              <p class="mt-2 text-slate-700">{v.pain}</p>
+              <p class="mt-2 text-slate-700">{s.pain}</p>
             </div>
             <div class="mt-4">
               <p class="text-xs font-semibold uppercase tracking-wider text-primary">How we help</p>
-              <p class="mt-2 text-slate-700">{v.fix}</p>
+              <p class="mt-2 text-slate-700">{s.fix}</p>
             </div>
           </div>
         ))

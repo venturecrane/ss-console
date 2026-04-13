@@ -44,7 +44,7 @@ describe('computeDimensionScores', () => {
     const answers: Record<string, number> = {}
     for (const q of QUESTIONS) answers[q.id] = 0
     const dims = computeDimensionScores(answers)
-    expect(dims).toHaveLength(6)
+    expect(dims).toHaveLength(5)
     for (const d of dims) {
       expect(d.raw).toBe(0)
       expect(d.scaled).toBe(0)
@@ -65,7 +65,7 @@ describe('computeDimensionScores', () => {
 
   it('computes mixed scores correctly', () => {
     const answers: Record<string, number> = {}
-    // Owner bottleneck: 0+1+2 = 3 → scaled 33 (room_to_grow)
+    // Process design (q1-q3): 0+1+2 = 3 → scaled 33 (room_to_grow)
     answers['q1'] = 0
     answers['q2'] = 1
     answers['q3'] = 2
@@ -74,15 +74,15 @@ describe('computeDimensionScores', () => {
       if (!(q.id in answers)) answers[q.id] = 3
     }
     const dims = computeDimensionScores(answers)
-    const ownerDim = dims.find((d) => d.id === 'owner_bottleneck')!
-    expect(ownerDim.raw).toBe(3)
-    expect(ownerDim.scaled).toBe(33)
-    expect(ownerDim.scoreLabel).toBe('room_to_grow')
+    const processDim = dims.find((d) => d.id === 'process_design')!
+    expect(processDim.raw).toBe(3)
+    expect(processDim.scaled).toBe(33)
+    expect(processDim.scoreLabel).toBe('room_to_grow')
   })
 
   it('handles skipped questions (-1) by extrapolating', () => {
     const answers: Record<string, number> = {}
-    // Owner bottleneck: q1=2, q2=2, q3=skipped → avg 2, extrapolated raw 6 → scaled 67
+    // Process design: q1=2, q2=2, q3=skipped → avg 2, extrapolated raw 6 → scaled 67
     answers['q1'] = 2
     answers['q2'] = 2
     answers['q3'] = -1
@@ -90,8 +90,8 @@ describe('computeDimensionScores', () => {
       if (!(q.id in answers)) answers[q.id] = 2
     }
     const dims = computeDimensionScores(answers)
-    const ownerDim = dims.find((d) => d.id === 'owner_bottleneck')!
-    expect(ownerDim.scaled).toBe(67) // extrapolated from 2 answered questions
+    const processDim = dims.find((d) => d.id === 'process_design')!
+    expect(processDim.scaled).toBe(67) // extrapolated from 2 answered questions
   })
 
   it('marks fully-skipped dimension as Skipped', () => {
@@ -103,9 +103,9 @@ describe('computeDimensionScores', () => {
       if (!(q.id in answers)) answers[q.id] = 2
     }
     const dims = computeDimensionScores(answers)
-    const ownerDim = dims.find((d) => d.id === 'owner_bottleneck')!
-    expect(ownerDim.displayLabel).toBe('Skipped')
-    expect(ownerDim.scaled).toBe(0)
+    const processDim = dims.find((d) => d.id === 'process_design')!
+    expect(processDim.displayLabel).toBe('Skipped')
+    expect(processDim.scaled).toBe(0)
   })
 })
 
@@ -127,11 +127,11 @@ describe('computeOverallScore', () => {
 describe('identifyTopProblems', () => {
   it('returns bottom 2-3 dimensions', () => {
     const answers: Record<string, number> = {}
-    // Set owner_bottleneck to 0 (raw 0, scaled 0)
+    // Set process_design to 0 (raw 0, scaled 0)
     answers['q1'] = 0
     answers['q2'] = 0
     answers['q3'] = 0
-    // Set lead_leakage to 1 each (raw 3, scaled 33)
+    // Set tool_systems to 1 each (raw 3, scaled 33)
     answers['q4'] = 1
     answers['q5'] = 1
     answers['q6'] = 1
@@ -141,8 +141,8 @@ describe('identifyTopProblems', () => {
     }
     const dims = computeDimensionScores(answers)
     const problems = identifyTopProblems(dims)
-    expect(problems).toContain('owner_bottleneck')
-    expect(problems).toContain('lead_leakage')
+    expect(problems).toContain('process_design')
+    expect(problems).toContain('tool_systems')
     expect(problems.length).toBeLessThanOrEqual(3)
   })
 
@@ -161,7 +161,7 @@ describe('computeScores (integration)', () => {
     for (const q of QUESTIONS) answers[q.id] = 1
     const result = computeScores(answers)
     expect(result.overall).toBeGreaterThan(0)
-    expect(result.dimensions).toHaveLength(6)
+    expect(result.dimensions).toHaveLength(5)
     expect(result.overallLabel).toBeTruthy()
     expect(result.topProblems.length).toBeGreaterThanOrEqual(0)
   })

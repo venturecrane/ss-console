@@ -12,19 +12,19 @@ A complete record of every strategic decision made across 6 layers of the SMD Se
 
 ## Quick Reference
 
-|                         |                                                                       |
-| ----------------------- | --------------------------------------------------------------------- |
-| **Business**            | SMD Services - operations consulting                                  |
-| **Core offering**       | Operations Cleanup - scope-based pricing per engagement               |
-| **Engagement length**   | Variable - scoped per engagement based on assessment findings         |
-| **Target market**       | Phoenix metro, 10-25 employees, home services + professional services |
-| **Objective**           | Launch the agency and reach profitability                             |
-| **Rate**                | $150/hr at launch → $175/hr → $200/hr with volume and case studies    |
-| **Payment terms**       | 50% deposit at signing, 50% at completion                             |
-| **Assessment**          | Free for first 3 clients, then $250 applied toward engagement         |
-| **Voice standard**      | We / our team throughout. Never I / the consultant.                   |
-| **Decisions locked**    | 29 decisions across 6 layers                                          |
-| **Deliverables queued** | 11 artifacts ready to build                                           |
+|                         |                                                                                                       |
+| ----------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Business**            | SMD Services - operations consulting                                                                  |
+| **Core offering**       | Solutions consulting - scope-based pricing per engagement                                             |
+| **Engagement length**   | Variable - scoped per engagement based on assessment findings                                         |
+| **Target market**       | Phoenix metro (Phase 1), $750k-$5M revenue, home services + professional services + contractor/trades |
+| **Objective**           | Launch the agency and reach profitability                                                             |
+| **Rate**                | $175/hr at launch → $200/hr after first case study → $250/hr → $300/hr                                |
+| **Payment terms**       | 50% deposit at signing, 50% at completion                                                             |
+| **Assessment**          | Free for first 3 clients, then $250 applied toward engagement                                         |
+| **Voice standard**      | We / our team throughout. Never I / the consultant.                                                   |
+| **Decisions locked**    | 29 decisions across 6 layers                                                                          |
+| **Deliverables queued** | 11 artifacts ready to build                                                                           |
 
 ---
 
@@ -49,24 +49,24 @@ All five decisions in this layer are foundational. Layers 2-6 build on top of th
 
 ---
 
-## Decision #2 - Employee Count Range
+## Decision #2 - Revenue-Based Qualification
 
 **Issue:** smdservices/ss-console #2
 
-**Decision: 10-25 employees**
+**Decision: Revenue-based qualification ($750k-$5M primary)**
 
-The 5-50 range in the original deep dive was too wide. A 5-person plumbing shop and a 45-person accounting firm are different engagements at the same price point.
+Revenue correlates better to budget and operational complexity than headcount. A $4M professional services firm with 6 employees is a different engagement than a $600k landscaping crew with 12.
 
 **Rationale**
 
-- Below 10: owner can often justify DIY; $2,500 is a hard sell
-- Above 25: multi-department complexity pushes scope beyond what a single engagement can solve cleanly
-- 10-25: owner is still the sole decision-maker AND has enough staff that operational pain is felt daily
+- Primary range: $750k-$5M (the PrimePath plateau zone)
+- Expansion: $5M-$10M after 5+ completed engagements
+- Floor at $750k keeps pipeline accessible at launch
+- Employee count becomes a contextual signal, not a gate
 
 **Risks Accepted**
 
-- Some 8-9 person businesses excluded. Revisit after first few engagements.
-- Some 26-30 person businesses may be viable - use judgment at assessment, default to 25 as ceiling
+- Wider range means more variability in engagement complexity
 
 ---
 
@@ -74,7 +74,7 @@ The 5-50 range in the original deep dive was too wide. A 5-person plumbing shop 
 
 **Issue:** smdservices/ss-console #3
 
-**Decision: Home services + professional services**
+**Decision: Home services + professional services as lead verticals, problem-qualified (not vertical-gated)**
 
 **Home Services (plumber, HVAC, electrical, pest control, landscaping)**
 
@@ -90,7 +90,11 @@ The 5-50 range in the original deep dive was too wide. A 5-person plumbing shop 
 - Strong referral networks - one happy accountant refers three more
 - Longer sales cycle - monitor and adjust if pipeline stalls
 
-> **Not at launch:** Contractor/trades is a natural expansion after first 2-3 engagements. Close enough to home services that learnings transfer. Retail/salon excluded due to margin pressure.
+**Contractor/Trades** added as third vertical after 2-3 home services engagements. Close enough to home services that learnings transfer.
+
+No retail, restaurant, or healthcare in year one.
+
+Any business in the revenue band with qualifying problem signals is eligible regardless of vertical. Vertical expertise deepens with case studies, not by pre-selection.
 
 ---
 
@@ -113,22 +117,25 @@ Financial blindness is emotionally resonant. Owners respond to it. But "fix thei
 
 **Issue:** smdservices/ss-console #4
 
-**Decision: 3 hard disqualifiers + 3 soft flags**
+**Decision: 4 hard disqualifiers + 5 soft flags**
 
 **Hard Disqualifiers - Automatic No**
 
-1. Not speaking to the owner/check-writer - no proxy decisions
-2. Scope clearly exceeds a single engagement (multi-location, ERP, franchise)
+1. Not speaking to the owner/decision-maker
+2. Scope exceeds a single engagement phase (follow-on phases available, but multi-phase scope needs to be broken into discrete engagements)
 3. No tech baseline at all - no email, no internet, no existing tools
+4. Business in crisis mode (active layoffs, pending closure)
 
 **Soft Disqualifiers - Yellow Flag, Probe on Call**
 
-1. No internal champion - at least one employee must own the system post-delivery
-2. Books more than 30 days behind - swap the financial problem, not automatic disqualify
+1. No internal champion - at least one employee must own the solution post-delivery
+2. Books more than 90 days behind - swap the financial problem, not automatic disqualify
 3. No willingness to change - diagnosis with no intent to act, pass
+4. Revenue below $500k
+5. More than 3 decision-makers involved
 
 **Budget Signal Proxy**
-Don't ask for revenue directly. Look for: 2+ employees on payroll (not contractors), 3+ years in business, not in crisis mode (layoffs, pending closure).
+Don't ask for revenue directly. Look for: 3+ years in business, consistent payroll, not in crisis mode.
 
 ---
 
@@ -138,17 +145,16 @@ Don't ask for revenue directly. Look for: 2+ employees on payroll (not contracto
 
 **Decision: Synthesis of all Layer 1 decisions**
 
-|                        |                                                                            |
-| ---------------------- | -------------------------------------------------------------------------- |
-| **Employee count**     | 10-25                                                                      |
-| **Geography**          | Phoenix metro                                                              |
-| **Years in business**  | 3+                                                                         |
-| **Payroll**            | 2+ employees on payroll (not all contractors)                              |
-| **Verticals**          | Home services, Professional services                                       |
-| **Pain profile**       | 2-3 of the 6 universal SMB problems present and acute                      |
-| **Psychographics**     | Owner knows something is broken, will pay to fix it, makes decisions alone |
-| **Disqualifiers**      | Not owner, scope too large, no champion, no tech baseline                  |
-| **Where to find them** | BNI, Phoenix Chamber, PHCC, ACCA, ASCPA, accountant referrals              |
+|                        |                                                                                                                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Revenue**            | $750k-$5M (expansion to $10M after 5+ engagements)                                                                                                                    |
+| **Geography**          | Phoenix metro (Phase 1), in-person default for assessments                                                                                                            |
+| **Years in business**  | 3+                                                                                                                                                                    |
+| **Verticals**          | Home services, professional services, contractor/trades (problem-qualified, not vertical-gated)                                                                       |
+| **Pain profile**       | 2-3 problems surfaced during assessment mapping to solution capability areas (process design, tools & systems, data & visibility, customer pipeline, team operations) |
+| **Psychographics**     | Owner knows something isn't working, will invest to change it, makes decisions without committee                                                                      |
+| **Disqualifiers**      | Not owner, scope exceeds single phase, no champion, no tech baseline, in crisis                                                                                       |
+| **Where to find them** | BNI, Phoenix Chamber, PHCC, ACCA, ASCPA, accountant referrals, Vistage, EO                                                                                            |
 
 ---
 
@@ -180,18 +186,19 @@ We do not lock a default tool stack at the venture level. The team can configure
 
 **Issue:** smdservices/ss-console #10
 
-**Decision: Positive scope definition + 5-item exclusion list**
+**Decision: Positive scope definition + 4-item exclusion list**
 
 **What's In**
 Problem diagnosis, process documentation, tool configuration, one handoff training session, written handoff doc. Scoped to 2-3 problems agreed at assessment.
 
-**What's Out - The Five Hard Exclusions**
+**What's Out - The Four Hard Exclusions**
 
 1. Bookkeeping remediation or catch-up - books must be current at kickoff
 2. Data migration from legacy systems
-3. Custom software or app development
+3. Ground-up product development (consumer apps, SaaS products)
 4. Ongoing support beyond the handoff session
-5. Multi-location or franchise scope
+
+Note: custom internal tools, integrations, dashboards, and workflow automation built to solve a diagnosed problem ARE in scope.
 
 ---
 
@@ -223,11 +230,12 @@ Every engagement is different. The assessment identifies the problems; the solut
 
 **Internal Rate Schedule**
 
-| Tier            | Rate    | Trigger to Advance                               |
-| --------------- | ------- | ------------------------------------------------ |
-| **Launch**      | $150/hr | Starting rate                                    |
-| **Established** | $175/hr | Consistent pipeline + 2-3 completed case studies |
-| **Volume**      | $200/hr | Referral-driven inbound + demonstrated results   |
+| Tier                | Rate    | Trigger to Advance                               |
+| ------------------- | ------- | ------------------------------------------------ |
+| **Launch**          | $175/hr | Starting rate                                    |
+| **First reference** | $200/hr | After first completed engagement with case study |
+| **Established**     | $250/hr | Consistent pipeline + 2-3 case studies           |
+| **Volume**          | $300/hr | Referral-driven inbound + demonstrated results   |
 
 **How Quoting Works**
 
@@ -242,7 +250,7 @@ Every engagement is different. The assessment identifies the problems; the solut
 - Never publish a dollar amount on the website or marketing materials
 - Never share the hourly rate with clients — they see a project price
 - The assessment call is the pricing conversation — "we'll design a solution and send you a scope and price"
-- Typical engagement range at launch rate: $3,000-$9,000+ depending on scope
+- Typical engagement range at launch rate: $5,000-$15,000+ depending on scope
 
 _The value is not the hours. The value is an experienced team that can see the problems the owner can't, make decisions fast, and implement in days. The rate is internal math — the client pays for outcomes._
 
@@ -278,6 +286,7 @@ Consider a three-milestone structure: 40% deposit / 30% at mid-engagement checkp
 - Trigger to flip to paid: first engagement delivered. Once there is something to point to, the $250 is easy to justify.
 - Never publicize the free period - internal policy, not a marketing offer.
 - The $250 applies in full toward the engagement fee if they proceed.
+- Revisit after pipeline is established. Raising to $500 may be appropriate once brand recognition reduces friction.
 
 ---
 
@@ -456,19 +465,27 @@ _Exception: if a prospect explicitly says they need more time, extend the Day 7 
 
 **Home Services**
 
-|               |                                                                                                |
-| ------------- | ---------------------------------------------------------------------------------------------- |
-| **One-liner** | We help Phoenix home services companies stop losing jobs to missed calls and scheduling chaos. |
-| **ROI hook**  | If you're losing 2-3 leads a month, that's $1,000+ walking out the door every month.           |
-| **Channels**  | PHCC/ACCA events, BNI chapter, Greater Phoenix Chamber, shared vendor introductions            |
+|               |                                                                                               |
+| ------------- | --------------------------------------------------------------------------------------------- |
+| **One-liner** | We help home services companies stop losing jobs to scheduling chaos and missed follow-ups.   |
+| **ROI hook**  | Ask them how many leads they lose in a month and what each job is worth. They'll do the math. |
+| **Channels**  | PHCC/ACCA events, BNI chapter, Greater Phoenix Chamber, shared vendor introductions           |
 
 **Professional Services**
 
-|               |                                                                                                                  |
-| ------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **One-liner** | We help Phoenix professional services firms get the owner out of the weeds - so you're billing, not babysitting. |
-| **ROI hook**  | If you're spending 10 hours a week on things only you can approve, that's $1,500/week in constrained capacity.   |
-| **Channels**  | Accountant/bookkeeper referrals, ASCPA events, LinkedIn outreach to firm owners                                  |
+|               |                                                                                                                               |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **One-liner** | We help professional services firms get the owner out of day-to-day operations so the business can grow.                      |
+| **ROI hook**  | Ask them how many hours a week they spend on things only they can approve and what their time is worth. They know the number. |
+| **Channels**  | Accountant/bookkeeper referrals, ASCPA events, LinkedIn outreach to firm owners                                               |
+
+**Technology/Integration**
+
+|               |                                                                                                                            |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **One-liner** | We help growing businesses replace spreadsheet workflows with tools that actually work together.                           |
+| **ROI hook**  | Ask them how many hours a week their team spends copying data between systems. The answer is always worse than they think. |
+| **Channels**  | BNI, Chamber events, accountant/bookkeeper referrals, LinkedIn                                                             |
 
 ---
 
@@ -476,29 +493,37 @@ _Exception: if a prospect explicitly says they need more time, extend the Day 7 
 
 **Issue:** smdservices/ss-console #25
 
-**Decision: Conservative launch model. 25 touches/week. 2 assessments/week. 35% close rate.**
+**Decision: Updated model for higher engagement value. 15-20 warm touches/week. 25-30% close rate.**
 
-| Stage                            | Rate | Rationale                                  |
-| -------------------------------- | ---- | ------------------------------------------ |
-| Outreach touch - conversation    | 20%  | Warm networking context                    |
-| Conversation - assessment booked | 40%  | Pain is real, ask is low-commitment        |
-| Assessment - proposal sent       | 80%  | If they booked, they are interested        |
-| Proposal - close                 | 35%  | No social proof, new market, first 30 days |
+At $7,500 average engagement, the $200k annual target requires roughly 27 engagements per year. That works out to 2-3 closes per month.
 
-**Working Backwards from Steady State (2 active engagements/month)**
+| Stage                            | Rate   | Rationale                                      |
+| -------------------------------- | ------ | ---------------------------------------------- |
+| Outreach touch - conversation    | 20%    | Warm networking context                        |
+| Conversation - assessment booked | 40%    | Pain is real, ask is low-commitment            |
+| Assessment - proposal sent       | 80%    | If they booked, they are interested            |
+| Proposal - close                 | 25-30% | Higher price point, fewer but better-fit deals |
 
-- 2 closes / 35% = **6 proposals needed**
-- 6 proposals / 80% = **7-8 assessments needed**
-- 8 assessments / 40% = **20 conversations needed**
-- 20 conversations / 20% = **100 outreach touches needed**
-- ~25 outreach touches per week to maintain pipeline
+**Working Backwards from Steady State (2-3 engagements/month)**
+
+- 3 closes / 28% = **11 proposals needed**
+- 11 proposals / 80% = **14 assessments needed**
+- 14 assessments / 40% = **35 conversations needed**
+- 35 conversations / 20% = **175 outreach touches needed**
+- ~15-20 warm outreach touches per week to maintain pipeline
+
+Fewer touches than the original model, but higher quality. The shift from 25 cold-ish touches to 15-20 warm ones reflects the networking and referral channels actually producing leads.
+
+**Content and Inbound Channel**
+
+As case studies and the website go live, inbound leads should supplement outreach. The goal is for inbound to carry 30-40% of the pipeline within 6 months of first case study publication.
 
 **Weekly Pipeline Health Check**
 
 - Healthy: 2+ assessment calls booked/completed per week, at least 1 proposal out at any time
 - Anemic: no assessment calls in a given week, proposal out 7+ days with no response
 
-> **The real constraint** is assessment call capacity, not outreach volume. We need 7-8 assessments in 30 days - roughly 2 per week. That's the bottleneck, not the 25 touches.
+> **The real constraint** is still assessment call capacity. We need roughly 3-4 assessments per week at steady state. That's the bottleneck, not the outreach volume.
 
 ---
 
@@ -665,35 +690,35 @@ All 11 artifacts are scaffolded as GitHub issues in smdservices/ss-console. Ever
 
 # Appendix - Decision Index
 
-| Issue | Decision                                                            |
-| ----- | ------------------------------------------------------------------- |
-| #2    | Employee count range - 10-25                                        |
-| #3    | Launch verticals - home services + professional services            |
-| #4    | Disqualification criteria - 3 hard stops, 3 soft flags              |
-| #5    | Ideal client profile - synthesis                                    |
-| #6    | Financial visibility - in core with 30-day prerequisite gate        |
-| #9    | Tool evaluation framework - rubric-based, bias toward keep          |
-| #10   | Scope boundary language - positive definition + 5 exclusions        |
-| #11   | Scope creep protocol - parking lot, pre-handoff review              |
-| #12   | Retainer model - no retainer at launch, define after first delivery |
-| #13   | Paid assessment - free for first 3, then $250                       |
-| #14   | Payment terms - 50% deposit at signing, 50% at completion           |
-| #15   | ROI anchor math - owner does the math, we ask the questions         |
-| #16   | Pricing model - scope-based, $150/hr → $175 → $200 rate progression |
-| #17   | Assessment capture - MacWhisper Pro + Claude extraction             |
-| #18   | Assessment to proposal - solution design phase, SOW within 48 hours |
-| #19   | Follow-up cadence - 3-touch over 7 days, then mark dead             |
-| #20   | Positioning standard - we voice, team framing (venture-wide)        |
-| #21   | Networking strategy - BNI + chambers + vertical associations        |
-| #22   | Accountant partnership - co-value, no fee, warm handoff             |
-| #23   | Client referral incentive - no formal incentive, ask at handoff     |
-| #24   | Outreach messaging - vertical-specific message and channel          |
-| #25   | Pipeline math - 25 touches/week, 2 assessments/week, 35% close      |
-| #26   | Review request - verbal at handoff, automated email 2 days later    |
-| #27   | Safety net - 2-week async from handoff                              |
-| #28   | Internal champion - identify at assessment, orient Day 1            |
-| #29   | Feedback collection - verbal at handoff, survey 30 days later       |
-| #30   | Case study workflow - agent-drafted, client-approved, one page      |
+| Issue | Decision                                                                                        |
+| ----- | ----------------------------------------------------------------------------------------------- |
+| #2    | Revenue-based qualification - $750k-$5M primary                                                 |
+| #3    | Launch verticals - home services + professional services + contractor/trades, problem-qualified |
+| #4    | Disqualification criteria - 4 hard stops, 5 soft flags                                          |
+| #5    | Ideal client profile - synthesis                                                                |
+| #6    | Financial visibility - in core with 30-day prerequisite gate                                    |
+| #9    | Tool evaluation framework - rubric-based, bias toward keep                                      |
+| #10   | Scope boundary language - positive definition + 4 exclusions                                    |
+| #11   | Scope creep protocol - parking lot, pre-handoff review                                          |
+| #12   | Retainer model - no retainer at launch, define after first delivery                             |
+| #13   | Paid assessment - free for first 3, then $250                                                   |
+| #14   | Payment terms - 50% deposit at signing, 50% at completion                                       |
+| #15   | ROI anchor math - owner does the math, we ask the questions                                     |
+| #16   | Pricing model - scope-based, $175/hr → $200 → $250 → $300 rate progression                      |
+| #17   | Assessment capture - MacWhisper Pro + Claude extraction                                         |
+| #18   | Assessment to proposal - solution design phase, SOW within 48 hours                             |
+| #19   | Follow-up cadence - 3-touch over 7 days, then mark dead                                         |
+| #20   | Positioning standard - we voice, team framing (venture-wide)                                    |
+| #21   | Networking strategy - BNI + chambers + vertical associations                                    |
+| #22   | Accountant partnership - co-value, no fee, warm handoff                                         |
+| #23   | Client referral incentive - no formal incentive, ask at handoff                                 |
+| #24   | Outreach messaging - vertical-specific message and channel                                      |
+| #25   | Pipeline math - 15-20 touches/week, 2-3 engagements/month, 25-30% close                         |
+| #26   | Review request - verbal at handoff, automated email 2 days later                                |
+| #27   | Safety net - 2-week async from handoff                                                          |
+| #28   | Internal champion - identify at assessment, orient Day 1                                        |
+| #29   | Feedback collection - verbal at handoff, survey 30 days later                                   |
+| #30   | Case study workflow - agent-drafted, client-approved, one page                                  |
 
 ---
 

@@ -5,7 +5,7 @@
  *
  * Business rules enforced:
  * - No hourly rates or per-item pricing visible (Decision #16)
- * - 5 hard exclusions from Decision #10
+ * - 4 hard exclusions from Decision #10 (evolved)
  * - "We" voice throughout (Decision #20)
  * - 2-part or 3-milestone payment terms (Decision #14)
  * - Max 8 deliverable items (errors above 8)
@@ -56,15 +56,14 @@ export interface SOWTemplateProps {
 }
 
 // ---------------------------------------------------------------------------
-// Exclusions list (Decision #10 — 5 hard exclusions)
+// Exclusions list (Decision #10 — evolved)
 // ---------------------------------------------------------------------------
 
 export const EXCLUSIONS = [
   'Bookkeeping remediation or catch-up',
   'Data migration from legacy systems',
-  'Custom software or application development',
+  'Ground-up product development (consumer apps, SaaS products)',
   'Ongoing support beyond the handoff session',
-  'Multi-location or franchise scope',
 ]
 
 // ---------------------------------------------------------------------------

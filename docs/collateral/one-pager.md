@@ -20,7 +20,7 @@
 
 ### Who We Work With
 
-Phoenix-area businesses with 10-25 employees — the point where you've outgrown doing everything yourself but don't have the bandwidth to fix it.
+$750k-$5M revenue businesses that have outgrown their current operations. Phoenix-based, but the problems are universal: you're past the startup phase and the way things run today won't get you where you're going.
 
 ---
 
@@ -28,12 +28,13 @@ Phoenix-area businesses with 10-25 employees — the point where you've outgrown
 
 Most owners we talk to are dealing with some version of these:
 
-- **"I can't take a day off."** Every decision routes through you. Nothing moves when you're not there.
-- **"Leads fall through the cracks."** No follow-up process. Customers go to whoever calls back first.
-- **"I have no idea if we're making money."** The books are behind. Pricing is based on gut feel.
-- **"Scheduling is chaos."** Double-bookings, missed appointments, customers waiting on vague windows.
-- **"I personally text every customer."** Every message is manual, one-off, and dependent on someone remembering.
-- **"I keep losing good people."** No structured onboarding. New hires are left to figure it out on their own.
+- **"I can't step away from the business."** Every decision routes through you. Nothing moves when you're not there.
+- **"I can't find or keep good people."** No structured onboarding. New hires are left to figure it out on their own.
+- **"Customers slip through the cracks."** No follow-up process. Customers go to whoever calls back first.
+- **"I don't know if we're actually making money."** The books are behind. Pricing is based on gut feel.
+- **"We run everything out of spreadsheets and it's falling apart."** Data lives in five places. Nothing connects.
+- **"Our tools don't talk to each other."** You enter the same information in two or three places and still can't get a clear picture.
+- **"We've stalled and I don't know why."** Growth feels risky when the operation can barely handle what you have now.
 
 ---
 

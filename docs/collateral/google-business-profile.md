@@ -54,13 +54,13 @@ To edit: Profile > Edit profile > Business category
 
 ### Business Description
 
-> We work with small businesses across the Phoenix metro that are past the startup phase but not big enough for a dedicated operations person. The owner is doing everything, leads slip through the cracks, and the team runs on memory instead of process.
+> We work with growing Phoenix businesses that have outgrown the way things run. Processes live in the owner's head, tools don't talk to each other, and the team runs on memory instead of a real solution.
 >
-> We start with a conversation to understand what you're trying to accomplish and where things get stuck. Then we build the right solution: the right tools, documented processes, and training so your team can run it without you in the middle of everything.
+> We start with a conversation to understand where you're trying to go and what's getting in the way. Then we build the right solution: process design, the right tools, custom integrations, and training so your team can run it without you in the middle.
 >
-> We work with home services companies, professional services firms, contractors, and other local businesses with 10 to 25 employees. If your business has outgrown the way you've been running it, that's who we help.
+> If your business is doing well but operations haven't kept up, that's exactly who we work with.
 
-_750 character max. The above is ~680 characters._
+_750 character max. The above is ~570 characters._
 
 ### Contact Information
 
@@ -105,20 +105,20 @@ Go to: Profile > Edit profile > Services
 
 Add these service entries. GBP lets you add a name and optional description for each.
 
-**Service 1: Operations Cleanup**
+**Service 1: Operations Assessment**
 
 ```
-We assess how your business runs today, identify what's slowing you down,
-and build the right solution. Process documentation, tool setup,
-workflow design, and team training, scoped to what you actually need.
+A structured conversation about how your business runs. We walk through
+your day, understand your objectives, and identify the two or three
+things that would make the biggest difference. Zoom or in-person.
 ```
 
-**Service 2: Business Process Documentation**
+**Service 2: Process Design and Documentation**
 
 ```
-We document your core processes so your team can follow them without
-asking you. Covers SOPs, checklists, and workflows for the things
-that matter most to your business.
+We design and document the processes your business needs to run without
+everything going through the owner. SOPs, workflows, and checklists
+built for how your team actually works.
 ```
 
 **Service 3: Tool Selection and Setup**
@@ -129,19 +129,27 @@ and make sure your team knows how to use them. No six-month research
 project. We make the call and get it running.
 ```
 
-**Service 4: Team Training and Handoff**
+**Service 4: Custom Internal Tools and Integrations**
+
+```
+When off-the-shelf tools don't fit, we build what you need. Custom
+dashboards, internal tools, and integrations that connect the software
+your team already uses so data flows instead of getting copied by hand.
+```
+
+**Service 5: Systems Consulting and Vendor Evaluation**
+
+```
+Not sure which platform or vendor to go with? We evaluate the options,
+make a recommendation, and handle the implementation. You get a decision
+in days instead of months of research.
+```
+
+**Service 6: Team Training and Handoff**
 
 ```
 Hands-on training with your team so the knowledge stays in your business.
 Everyone gets written docs and a real walkthrough, not a slide deck.
-```
-
-**Service 5: Operations Assessment**
-
-```
-A structured conversation about how your business runs. We walk through
-your day, understand your objectives, and identify the two or three
-things that would make the biggest difference.
 ```
 
 ---
@@ -179,13 +187,13 @@ Post this as your first update:
 ```
 We just launched SMD Services to help growing Phoenix businesses
 get their operations sorted out. If your business has outgrown
-the way you've been running it and you don't have time to figure
-out what needs to change, that's what we do.
+the way things run and you don't have time to figure out what
+needs to change, that's what we do.
 
-We work with home services companies, professional firms,
-contractors, and other local businesses with 10-25 employees.
+Process design, the right tools, custom integrations, and training.
+We start with a conversation and build the right solution together.
 
-Start with a conversation: smd.services/book
+Start here: smd.services/book
 ```
 
 **Button:** Book online > `https://smd.services/book`
@@ -196,12 +204,13 @@ Start with a conversation: smd.services/book
 
 Post once a week. Rotate through these content types:
 
-| Week | Type                    | Example                                                                                                                                 |
-| ---- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | **Problem recognition** | "If your team texts you every time a decision needs to be made, it's not a people problem. There's just no process for them to follow." |
-| 2    | **What we do**          | Describe a service or part of the engagement in plain language.                                                                         |
-| 3    | **Local relevance**     | Tie to Phoenix business community, a vertical you're targeting, or a local observation.                                                 |
-| 4    | **Credibility**         | Share an insight from 20 years of building software and operations. Not a brag. Just something useful.                                  |
+| Week | Type                     | Example                                                                                                                                 |
+| ---- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | **Problem recognition**  | "If your team texts you every time a decision needs to be made, it's not a people problem. There's just no process for them to follow." |
+| 2    | **What we do**           | Describe a service or part of the engagement in plain language.                                                                         |
+| 3    | **Tools and technology** | A practical take on a common tool decision, integration pattern, or technology choice that growing businesses face.                     |
+| 4    | **Local relevance**      | Tie to Phoenix business community, a vertical you're targeting, or a local observation.                                                 |
+| 5    | **Credibility**          | Share an insight from 20 years of building software and operations. Not a brag. Just something useful.                                  |
 
 **Post format:**
 
@@ -278,7 +287,7 @@ Screenshot monthly and save to `docs/metrics/` for trend tracking.
 - [ ] Service area set (8 Phoenix metro cities)
 - [ ] Hours set
 - [ ] Phone, website, and booking URL added
-- [ ] All 5 services listed with descriptions
+- [ ] All 6 services listed with descriptions
 - [ ] Logo and cover photo uploaded
 - [ ] 3-5 business photos uploaded
 - [ ] First post published

@@ -10,10 +10,40 @@
  */
 
 // ---------------------------------------------------------------------------
-// The 6 universal SMB operations problems — canonical identifiers
+// Solution capability areas — research-grounded problem taxonomy (v2)
+//
+// These replace the original "6 universal SMB problems" (v1). The v1 list
+// was domain intuition; v2 is grounded in NFIB, Fed Reserve, Vistage, EOS,
+// and McKinsey research on what growing businesses actually struggle with.
+//
+// These IDs map to:
+//   - Scorecard dimensions (what the diagnostic measures)
+//   - Assessment extraction (what the team identifies from conversations)
+//   - Lead gen scoring (what signals indicate in reviews/job postings)
+//   - Quote line items (what the team scopes and prices)
 // ---------------------------------------------------------------------------
 
 export const PROBLEM_IDS = [
+  'process_design',
+  'tool_systems',
+  'data_visibility',
+  'customer_pipeline',
+  'team_operations',
+] as const
+
+export type ProblemId = (typeof PROBLEM_IDS)[number]
+
+export const PROBLEM_LABELS: Record<ProblemId, string> = {
+  process_design: 'Process design',
+  tool_systems: 'Tools & systems',
+  data_visibility: 'Data & visibility',
+  customer_pipeline: 'Customer pipeline',
+  team_operations: 'Team operations',
+}
+
+// Legacy v1 problem IDs — used for backward compatibility with existing
+// assessments, quotes, and lead signals stored as schema_version "1.0".
+export const LEGACY_PROBLEM_IDS = [
   'owner_bottleneck',
   'lead_leakage',
   'financial_blindness',
@@ -22,9 +52,9 @@ export const PROBLEM_IDS = [
   'employee_retention',
 ] as const
 
-export type ProblemId = (typeof PROBLEM_IDS)[number]
+export type LegacyProblemId = (typeof LEGACY_PROBLEM_IDS)[number]
 
-export const PROBLEM_LABELS: Record<ProblemId, string> = {
+export const LEGACY_PROBLEM_LABELS: Record<LegacyProblemId, string> = {
   owner_bottleneck: 'Owner bottleneck',
   lead_leakage: 'Lead leakage',
   financial_blindness: 'Financial blindness',
@@ -34,7 +64,7 @@ export const PROBLEM_LABELS: Record<ProblemId, string> = {
 }
 
 // ---------------------------------------------------------------------------
-// Verticals — matching the ICP from Decision #3 and #5
+// Verticals — broader ICP, no longer gated to 2 launch verticals
 // ---------------------------------------------------------------------------
 
 export const VERTICALS = [
@@ -43,10 +73,29 @@ export const VERTICALS = [
   'contractor_trades',
   'retail_salon',
   'restaurant_food',
+  'healthcare',
+  'technology',
+  'manufacturing',
   'other',
 ] as const
 
 export type Vertical = (typeof VERTICALS)[number]
+
+// ---------------------------------------------------------------------------
+// Revenue ranges — primary ICP filter (replaces employee count as gate)
+// ---------------------------------------------------------------------------
+
+export const REVENUE_RANGES = [
+  'under_500k',
+  '500k_1m',
+  '1m_3m',
+  '3m_5m',
+  '5m_10m',
+  'over_10m',
+  'unknown',
+] as const
+
+export type RevenueRange = (typeof REVENUE_RANGES)[number]
 
 // ---------------------------------------------------------------------------
 // Extraction output — the full structured JSON
@@ -132,37 +181,43 @@ export interface ChampionCandidate {
   confidence: 'strong' | 'moderate' | 'weak'
 }
 
-/** Hard and soft disqualification flags from Decision #4. */
+/** Hard and soft disqualification flags — evolved from Decision #4. */
 export interface DisqualificationFlags {
   /**
    * Hard disqualifiers — any true value means automatic no.
-   * 1. Not speaking to the owner/check-writer
-   * 2. Scope clearly exceeds sprint window (multi-location, ERP, franchise)
+   * 1. Not speaking to the owner/decision-maker
+   * 2. Scope exceeds a single engagement phase (follow-on phases OK)
    * 3. No tech baseline (no email, no internet, no existing tools)
+   * 4. Business in crisis mode (active layoffs, pending closure)
    */
   hard: {
     not_decision_maker: boolean
-    scope_exceeds_sprint: boolean
+    scope_exceeds_phase: boolean
     no_tech_baseline: boolean
+    in_crisis: boolean
   }
 
   /**
    * Soft disqualifiers — yellow flags that need probing.
    * 1. No internal champion identified
-   * 2. Books more than 30 days behind
+   * 2. Books more than 90 days behind
    * 3. No willingness to change
+   * 4. Revenue below $500k
+   * 5. More than 3 decision-makers involved
    */
   soft: {
     no_champion: boolean
     books_behind: boolean
     no_willingness_to_change: boolean
+    revenue_too_low: boolean
+    too_many_decision_makers: boolean
   }
 
   /** Free-text notes on any flags that were triggered. */
   notes: string
 }
 
-/** Budget signal proxies from Decision #4 — we never ask for revenue directly. */
+/** Budget signal proxies — we never ask for revenue directly. */
 export interface BudgetSignals {
   /** Does the business have 2+ employees on payroll (not all contractors)? */
   employees_on_payroll: boolean | null
@@ -172,6 +227,9 @@ export interface BudgetSignals {
 
   /** Is the business in crisis mode (layoffs, pending closure)? */
   in_crisis: boolean | null
+
+  /** Revenue signals (office size, fleet size, team size, multiple locations, etc.) */
+  revenue_signals: string[]
 
   /** Any other signals observed. */
   notes: string
@@ -185,7 +243,7 @@ export interface QuoteDrivers {
   /** Recommended problems to address, in priority order (max 3). */
   recommended_problems: ProblemId[]
 
-  /** Estimated total engagement complexity: low (15-20h), medium (20-30h), high (30-40h). */
+  /** Estimated total engagement complexity: low (20-30h), medium (30-45h), high (45-60h+). */
   estimated_complexity: 'low' | 'medium' | 'high'
 
   /** Specific factors that would increase hours beyond baseline. */
@@ -212,8 +270,8 @@ export interface QuoteDrivers {
  * from `champion_candidate` for quick access.
  */
 export interface AssessmentExtraction {
-  /** Schema version for forward compatibility. */
-  schema_version: '1.0'
+  /** Schema version for forward compatibility. '1.0' = legacy 6 problems, '2.0' = solution capability taxonomy. */
+  schema_version: '1.0' | '2.0'
 
   /** ISO 8601 timestamp of when the extraction was performed. */
   extracted_at: string
@@ -235,7 +293,10 @@ export interface AssessmentExtraction {
   /** Employee count, if mentioned or estimated. */
   employee_count: number | null
 
-  /** Phoenix metro sub-area if mentioned (e.g., "Scottsdale", "Mesa", "Chandler"). */
+  /** Estimated annual revenue range, if mentioned or inferred from signals. */
+  revenue_range: RevenueRange
+
+  /** Geographic location if mentioned (city, metro area, state). */
   geography: string | null
 
   /** Tools and software currently in use. */

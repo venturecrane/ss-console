@@ -19,8 +19,8 @@ import { SAMPLE_TRANSCRIPT, SAMPLE_EXTRACTION_OUTPUT } from './fixtures/sample-t
 // ---------------------------------------------------------------------------
 
 describe('extraction schema constants', () => {
-  it('defines exactly 6 universal problem IDs', () => {
-    expect(PROBLEM_IDS).toHaveLength(6)
+  it('defines exactly 5 solution capability IDs', () => {
+    expect(PROBLEM_IDS).toHaveLength(5)
   })
 
   it('every problem ID has a human-readable label', () => {
@@ -31,18 +31,20 @@ describe('extraction schema constants', () => {
     }
   })
 
-  it('problem IDs match the canonical 6', () => {
-    expect(PROBLEM_IDS).toContain('owner_bottleneck')
-    expect(PROBLEM_IDS).toContain('lead_leakage')
-    expect(PROBLEM_IDS).toContain('financial_blindness')
-    expect(PROBLEM_IDS).toContain('scheduling_chaos')
-    expect(PROBLEM_IDS).toContain('manual_communication')
-    expect(PROBLEM_IDS).toContain('employee_retention')
+  it('problem IDs match the canonical 5', () => {
+    expect(PROBLEM_IDS).toContain('process_design')
+    expect(PROBLEM_IDS).toContain('tool_systems')
+    expect(PROBLEM_IDS).toContain('data_visibility')
+    expect(PROBLEM_IDS).toContain('customer_pipeline')
+    expect(PROBLEM_IDS).toContain('team_operations')
   })
 
   it('defines verticals matching Decision #3', () => {
     expect(VERTICALS).toContain('home_services')
     expect(VERTICALS).toContain('professional_services')
+    expect(VERTICALS).toContain('healthcare')
+    expect(VERTICALS).toContain('technology')
+    expect(VERTICALS).toContain('manufacturing')
   })
 })
 
@@ -51,13 +53,12 @@ describe('extraction schema constants', () => {
 // ---------------------------------------------------------------------------
 
 describe('extraction prompt construction', () => {
-  it('system prompt references all 6 universal problems', () => {
-    expect(EXTRACTION_SYSTEM_PROMPT).toContain('Owner bottleneck')
-    expect(EXTRACTION_SYSTEM_PROMPT).toContain('Lead leakage')
-    expect(EXTRACTION_SYSTEM_PROMPT).toContain('Financial blindness')
-    expect(EXTRACTION_SYSTEM_PROMPT).toContain('Scheduling chaos')
-    expect(EXTRACTION_SYSTEM_PROMPT).toContain('Manual communication')
-    expect(EXTRACTION_SYSTEM_PROMPT).toContain('Employee retention')
+  it('system prompt references all 5 solution capability areas', () => {
+    expect(EXTRACTION_SYSTEM_PROMPT).toContain('Process design')
+    expect(EXTRACTION_SYSTEM_PROMPT).toContain('Tools & systems')
+    expect(EXTRACTION_SYSTEM_PROMPT).toContain('Data & visibility')
+    expect(EXTRACTION_SYSTEM_PROMPT).toContain('Customer pipeline')
+    expect(EXTRACTION_SYSTEM_PROMPT).toContain('Team operations')
   })
 
   it('system prompt references disqualification criteria from Decision #4', () => {
@@ -71,9 +72,9 @@ describe('extraction prompt construction', () => {
     expect(EXTRACTION_SYSTEM_PROMPT).toContain('champion')
   })
 
-  it('system prompt references budget signal proxies from Decision #4', () => {
-    expect(EXTRACTION_SYSTEM_PROMPT).toContain('Budget Signal Proxies')
-    expect(EXTRACTION_SYSTEM_PROMPT).toContain('2+ employees on payroll')
+  it('system prompt references revenue and qualification signals', () => {
+    expect(EXTRACTION_SYSTEM_PROMPT).toContain('Revenue and Qualification Signals')
+    expect(EXTRACTION_SYSTEM_PROMPT).toContain('2+ employees, not all contractors')
     expect(EXTRACTION_SYSTEM_PROMPT).toContain('3+ years in business')
   })
 
@@ -162,7 +163,7 @@ describe('validateExtraction', () => {
   })
 
   it('rejects wrong schema version', () => {
-    const data = { ...SAMPLE_EXTRACTION_OUTPUT, schema_version: '2.0' }
+    const data = { ...SAMPLE_EXTRACTION_OUTPUT, schema_version: '1.0' }
     const result = validateExtraction(data)
     expect(result.valid).toBe(false)
     expect(result.errors.some((e) => e.includes('schema_version'))).toBe(true)
@@ -205,7 +206,7 @@ describe('validateExtraction', () => {
       ...SAMPLE_EXTRACTION_OUTPUT,
       identified_problems: [
         {
-          problem_id: 'owner_bottleneck',
+          problem_id: 'process_design',
           severity: 'high',
           summary: 'Test',
           owner_quotes: [],
@@ -318,7 +319,7 @@ describe('schema alignment with D1 assessments table', () => {
     const problems = (extraction.identified_problems as Array<{ problem_id: string }>).map(
       (p) => p.problem_id
     )
-    expect(problems).toEqual(['scheduling_chaos', 'lead_leakage', 'owner_bottleneck'])
+    expect(problems).toEqual(['tool_systems', 'customer_pipeline', 'process_design'])
 
     const champion = extraction.champion_candidate as { name: string; role: string }
     expect(champion.name).toBe('Derek')

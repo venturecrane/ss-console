@@ -17,6 +17,7 @@
  * @see Decision #28 — Internal Champion
  */
 
+import { PROBLEM_IDS, VERTICALS, REVENUE_RANGES } from './extraction-schema.js'
 import type { AssessmentExtraction } from './extraction-schema.js'
 
 // Re-export the type so callers can import both from this module
@@ -27,41 +28,47 @@ export type { AssessmentExtraction }
  * Separated from the user prompt so it can be used as a Claude API
  * system message in Phase 5.
  */
-export const EXTRACTION_SYSTEM_PROMPT = `You are an assessment extraction assistant for SMD Services, an operations consulting firm that works with Phoenix-area small businesses (10–25 employees).
+export const EXTRACTION_SYSTEM_PROMPT = `You are an assessment extraction assistant for SMD Services, an operations consulting firm that works with Phoenix-based small and mid-size businesses (750K to 5M annual revenue).
 
-Your job is to analyze a speaker-separated transcript from an assessment call and produce structured JSON output. The call is between our consulting team and a business owner (or their representative) to understand their operational pain points and determine if we can help.
+Your job is to analyze a speaker-separated transcript from an assessment call and produce structured JSON output. The call is between our consulting team and a business owner (or their representative) to understand their operational challenges and determine if we can help.
 
-## The 6 Universal SMB Operations Problems
+## The 5 Solution Capability Areas
 
-Every small business has 3–4 of these. Your job is to identify which 2–3 are most acute for this business:
+These are the core areas where growing businesses get stuck. Your job is to identify which 2-3 are most acute for this business:
 
-1. **Owner bottleneck** — "I can't take a day off." No documented processes, everything lives in the owner's head.
-2. **Lead leakage** — "Leads fall through the cracks." No CRM, no follow-up system, pipeline runs on memory.
-3. **Financial blindness** — "I have no idea if we're making money." Books behind, pricing based on gut feel.
-4. **Scheduling chaos** — "Double-bookings happen all the time." No centralized scheduling, no automated reminders.
-5. **Manual communication** — "I personally text every customer." Every message is manual, one-off, no templates or automation.
-6. **Employee retention** — "I don't know what my team is doing." No task tracking, no accountability systems, no quality checklists.
+1. **Process design** (process_design) — Workflows live in people's heads. No documentation, unclear delegation, decisions bottleneck at the owner. The business can't run without them.
+2. **Tools & systems** (tool_systems) — Tools are missing, underutilized, or not connected. The team works around gaps with manual effort, duplicate entry, and tribal knowledge about how things "really" work.
+3. **Data & visibility** (data_visibility) — The owner can't see the business in real time. Books are behind, pricing is gut feel, and profitability by job or service is unknown.
+4. **Customer pipeline** (customer_pipeline) — Leads come in but there's no consistent capture, follow-up, or conversion flow. Past customers go cold because nobody stays in touch.
+5. **Team operations** (team_operations) — Hiring is ad hoc, onboarding is trial by fire, performance issues surface late. No structured way to train, track, or give feedback.
 
 ## Disqualification Criteria
 
 Flag these if detected in the conversation:
 
 **Hard disqualifiers (automatic no):**
-- Not speaking to the owner or check-writer — proxy decisions
-- Scope clearly exceeds a single engagement (multi-location rollout, ERP migration, franchise system)
-- No tech baseline at all — no email, no internet, no existing tools
+- Not speaking to the owner or decision-maker (proxy decisions)
+- Scope clearly exceeds a single engagement phase (multi-location rollout, ERP migration, franchise system). Follow-on phases are fine.
+- No tech baseline at all (no email, no internet, no existing tools)
+- Business in crisis mode (active layoffs, pending closure)
 
 **Soft disqualifiers (yellow flags):**
-- No internal champion — nobody identified who would own the solution post-delivery
-- Books more than 30 days behind — financial blindness problem gets swapped, not an automatic disqualify
-- No willingness to change — diagnosis with no intent to act
+- No internal champion identified who would own the solution post-delivery
+- Books more than 90 days behind
+- No willingness to change (diagnosis with no intent to act)
+- Revenue below 500K (signals may not support engagement investment)
+- More than 3 decision-makers involved in the buying process
 
-## Budget Signal Proxies
+## Revenue and Qualification Signals
 
-Never ask for revenue directly. Look for signals:
-- 2+ employees on payroll (not all contractors)
+Look for revenue signals rather than just employee count. Indicators include:
+- Office or shop size, fleet vehicles, multiple locations
+- Team size and payroll (2+ employees, not all contractors)
 - 3+ years in business
-- Not in crisis mode (layoffs, pending closure)
+- Mentions of revenue ranges, annual volume, or contract sizes
+- Industry-specific signals (truck count, chair count, patient volume, etc.)
+
+Classify into a revenue range: under_500k, 500k_1m, 1m_3m, 3m_5m, 5m_10m, over_10m, or unknown.
 
 ## Champion Identification
 
@@ -74,7 +81,7 @@ Look for mentions of a team member who could own the solution after we leave. Th
 - If information is not available from the transcript, use null for nullable fields and empty arrays for array fields.
 - Severity should reflect how much operational pain this problem causes, not just whether the owner mentioned it.
 - Order identified_problems by severity (highest first).
-- recommended_problems in quote_drivers should be the 2–3 most impactful problems to address, which may differ from severity ordering if one problem is easier to fix with high ROI.`
+- recommended_problems in quote_drivers should be the 2-3 most impactful problems to address, which may differ from severity ordering if one problem is easier to fix with high ROI.`
 
 /**
  * Builds the user prompt with the transcript inserted.
@@ -91,15 +98,16 @@ Produce a single JSON object with these fields:
 
 \`\`\`
 {
-  "schema_version": "1.0",
-  "extracted_at": "<ISO 8601 timestamp — use the current time>",
+  "schema_version": "2.0",
+  "extracted_at": "<ISO 8601 timestamp>",
 
   "business_name": "<string>",
-  "vertical": "<home_services | professional_services | contractor_trades | retail_salon | restaurant_food | other>",
-  "business_type": "<specific type, e.g. 'residential HVAC', 'family law'>",
+  "vertical": "<home_services | professional_services | contractor_trades | retail_salon | restaurant_food | healthcare | technology | manufacturing | other>",
+  "business_type": "<specific type, e.g. 'residential HVAC', 'family law', 'dental practice'>",
   "years_in_business": <number or null>,
   "employee_count": <number or null>,
-  "geography": "<Phoenix sub-area or null>",
+  "revenue_range": "<under_500k | 500k_1m | 1m_3m | 3m_5m | 5m_10m | over_10m | unknown>",
+  "geography": "<city or metro area, or null>",
 
   "current_tools": [
     {
@@ -111,7 +119,7 @@ Produce a single JSON object with these fields:
 
   "identified_problems": [
     {
-      "problem_id": "<owner_bottleneck | lead_leakage | financial_blindness | scheduling_chaos | manual_communication | employee_retention>",
+      "problem_id": "<process_design | tool_systems | data_visibility | customer_pipeline | team_operations>",
       "severity": "<high | medium | low>",
       "summary": "<one sentence>",
       "owner_quotes": ["<direct quote from transcript>"],
@@ -135,18 +143,21 @@ Produce a single JSON object with these fields:
     "confidence": "<strong | moderate | weak>"
   } or null,
 
-  "call_participants": ["<name — role>"],
+  "call_participants": ["<name, role>"],
 
   "disqualification_flags": {
     "hard": {
       "not_decision_maker": <boolean>,
-      "scope_exceeds_sprint": <boolean>,
-      "no_tech_baseline": <boolean>
+      "scope_exceeds_phase": <boolean>,
+      "no_tech_baseline": <boolean>,
+      "in_crisis": <boolean>
     },
     "soft": {
       "no_champion": <boolean>,
       "books_behind": <boolean>,
-      "no_willingness_to_change": <boolean>
+      "no_willingness_to_change": <boolean>,
+      "revenue_too_low": <boolean>,
+      "too_many_decision_makers": <boolean>
     },
     "notes": "<explanation of any flags triggered>"
   },
@@ -155,6 +166,7 @@ Produce a single JSON object with these fields:
     "employees_on_payroll": <boolean or null>,
     "years_in_business_3_plus": <boolean or null>,
     "in_crisis": <boolean or null>,
+    "revenue_signals": ["<observed revenue indicator, e.g. '3 service trucks', '12 chairs'>"],
     "notes": "<relevant observations>"
   },
 
@@ -217,8 +229,8 @@ export function validateExtraction(data: unknown): {
   const d = data as Record<string, unknown>
 
   // Schema version
-  if (d.schema_version !== '1.0') {
-    errors.push(`schema_version must be "1.0", got "${String(d.schema_version)}"`)
+  if (d.schema_version !== '2.0') {
+    errors.push(`schema_version must be "2.0", got "${String(d.schema_version)}"`)
   }
 
   // Required strings
@@ -236,30 +248,22 @@ export function validateExtraction(data: unknown): {
   }
 
   // Vertical enum
-  const validVerticals = [
-    'home_services',
-    'professional_services',
-    'contractor_trades',
-    'retail_salon',
-    'restaurant_food',
-    'other',
-  ]
+  const validVerticals: readonly string[] = VERTICALS
   if (typeof d.vertical === 'string' && !validVerticals.includes(d.vertical)) {
     errors.push(`vertical must be one of: ${validVerticals.join(', ')}`)
+  }
+
+  // Revenue range
+  const validRevenueRanges: readonly string[] = REVENUE_RANGES
+  if (typeof d.revenue_range === 'string' && !validRevenueRanges.includes(d.revenue_range)) {
+    errors.push(`revenue_range must be one of: ${validRevenueRanges.join(', ')}`)
   }
 
   // Identified problems
   if (!Array.isArray(d.identified_problems)) {
     errors.push('identified_problems must be an array')
   } else {
-    const validProblemIds = [
-      'owner_bottleneck',
-      'lead_leakage',
-      'financial_blindness',
-      'scheduling_chaos',
-      'manual_communication',
-      'employee_retention',
-    ]
+    const validProblemIds: readonly string[] = PROBLEM_IDS
     for (let i = 0; i < d.identified_problems.length; i++) {
       const p = d.identified_problems[i] as Record<string, unknown>
       if (!p || typeof p !== 'object') {
@@ -287,8 +291,8 @@ export function validateExtraction(data: unknown): {
     if (d.identified_problems.length < 1) {
       errors.push('identified_problems must contain at least 1 problem')
     }
-    if (d.identified_problems.length > 6) {
-      errors.push('identified_problems should contain at most 6 problems')
+    if (d.identified_problems.length > 5) {
+      errors.push('identified_problems should contain at most 5 problems')
     }
   }
 
@@ -339,7 +343,12 @@ export function validateExtraction(data: unknown): {
       errors.push('disqualification_flags.hard must be an object')
     } else {
       const hard = df.hard as Record<string, unknown>
-      for (const field of ['not_decision_maker', 'scope_exceeds_sprint', 'no_tech_baseline']) {
+      for (const field of [
+        'not_decision_maker',
+        'scope_exceeds_phase',
+        'no_tech_baseline',
+        'in_crisis',
+      ]) {
         if (typeof hard[field] !== 'boolean') {
           errors.push(`disqualification_flags.hard.${field} must be a boolean`)
         }
@@ -349,7 +358,13 @@ export function validateExtraction(data: unknown): {
       errors.push('disqualification_flags.soft must be an object')
     } else {
       const soft = df.soft as Record<string, unknown>
-      for (const field of ['no_champion', 'books_behind', 'no_willingness_to_change']) {
+      for (const field of [
+        'no_champion',
+        'books_behind',
+        'no_willingness_to_change',
+        'revenue_too_low',
+        'too_many_decision_makers',
+      ]) {
         if (typeof soft[field] !== 'boolean') {
           errors.push(`disqualification_flags.soft.${field} must be a boolean`)
         }
@@ -360,6 +375,11 @@ export function validateExtraction(data: unknown): {
   // Budget signals
   if (typeof d.budget_signals !== 'object' || d.budget_signals === null) {
     errors.push('budget_signals must be an object')
+  } else {
+    const bs = d.budget_signals as Record<string, unknown>
+    if (!Array.isArray(bs.revenue_signals)) {
+      errors.push('budget_signals.revenue_signals must be an array')
+    }
   }
 
   // Quote drivers

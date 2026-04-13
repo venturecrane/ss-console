@@ -1,20 +1,18 @@
 /**
  * Review Scoring Prompt — Pipeline 1
  *
- * Analyzes Google/Yelp reviews for Phoenix-area businesses to detect
+ * Analyzes Google/Yelp reviews for Phoenix-based businesses to detect
  * operational pain signals. Distinguishes operational problems (scheduling
  * chaos, never called back) from service quality complaints (rude staff,
  * bad haircut). Only operational signals matter for lead qualification.
  *
  * Supports both single-business and batch (5-10 businesses) scoring
- * to optimize Make.com operations budget.
+ * to optimize operations budget.
  *
- * Used in: Make.com scenario → Anthropic module → this prompt
+ * Used in: CF Worker → Anthropic API → this prompt
  * Input: Business data + recent reviews from Outscraper
  * Output: ReviewScoring or BatchReviewScoring JSON (see review-signal.ts)
  *
- * @see Decision #2 — Employee Count Range (10-25)
- * @see Decision #3 — Launch Verticals (home services + professional services)
  * @see Decision #20 — Voice Standard ("we" voice)
  */
 
@@ -23,25 +21,26 @@ import type {
   ReviewScoring,
   BatchReviewScoring,
 } from '../schemas/review-signal.js'
+import { PROBLEM_IDS } from '../schemas/lead-scoring-schema.js'
 
 export type { ReviewScoring, BatchReviewScoring, BusinessReviewInput }
 
 /**
  * System prompt for review-based operational pain scoring.
  */
-export const REVIEW_SCORING_SYSTEM_PROMPT = `You are a review analysis assistant for SMD Services, an operations consulting team that works with Phoenix-area small businesses (10–25 employees).
+export const REVIEW_SCORING_SYSTEM_PROMPT = `You are a review analysis assistant for SMD Services, an operations consulting team that works with Phoenix-based small and mid-size businesses ($750k–$5M revenue).
 
 Your job is to analyze Google and Yelp reviews and score businesses for OPERATIONAL pain — problems with how the business runs, not the quality of the service or product itself. This distinction is critical.
 
 ## Operational vs. Service Quality — The Key Distinction
 
 **OPERATIONAL problems (what we care about):**
-- "Called three times, nobody ever called back" → lead_leakage
-- "They double-booked us and forgot our appointment" → scheduling_chaos
-- "The owner had to come out personally because nobody else could help" → owner_bottleneck
-- "Got a bill 3 months later with no explanation" → financial_blindness
-- "No confirmation text, no reminder, had to call to verify" → manual_communication
-- "Different tech every time, none of them knew what the last one did" → employee_retention
+- "Called three times, nobody ever called back" → customer_pipeline
+- "They double-booked us and forgot our appointment" → process_design
+- "The owner had to come out personally because nobody else could help" → process_design
+- "Got a bill 3 months later with no explanation" → data_visibility
+- "Their software doesn't work, kept losing my info" → tool_systems
+- "Different tech every time, none of them knew what the last one did" → team_operations
 
 **SERVICE QUALITY complaints (NOT what we care about — ignore these):**
 - "The plumber was rude" — personality, not operations
@@ -52,23 +51,22 @@ Your job is to analyze Google and Yelp reviews and score businesses for OPERATIO
 - "Work quality was poor, had to redo it" — skill/competence, not operations
 
 **Gray area (score only if the root cause is operational):**
-- "Waited 2 hours past my appointment" — could be scheduling_chaos (operational) or just running behind (service)
-- "They lost my paperwork" — employee_retention (operational) if systemic, one-off if isolated
-- "Nobody knew the status of my order" — manual_communication (operational) if pattern
+- "Waited 2 hours past my appointment" — could be process_design (operational) or just running behind (service)
+- "They lost my paperwork" — team_operations (operational) if systemic, one-off if isolated
+- "Nobody knew the status of my order" — team_operations (operational) if pattern
 
-## The 6 Universal SMB Operations Problems
+## 5 Solution Capability Areas
 
-1. **owner_bottleneck** — Everything runs through the owner. Signals: "only the owner could help," "had to wait for the boss," "the owner personally came out."
-2. **lead_leakage** — No follow-up system. Signals: "never called back," "left a message, no response," "ghosted after the estimate," "had to chase them down."
-3. **financial_blindness** — Billing chaos. Signals: "surprise charges," "couldn't give me a quote," "billing error," "invoice months later."
-4. **scheduling_chaos** — No centralized scheduling. Signals: "double-booked," "missed appointment," "showed up on the wrong day," "couldn't get scheduled for weeks."
-5. **manual_communication** — No automated touchpoints. Signals: "no confirmation," "no reminder," "had to call to verify," "never received an update."
-6. **employee_retention** — No accountability or tracking. Signals: "different person every time," "left hand doesn't know what the right is doing," "nobody knew the status."
+1. **process_design** — No documented processes, everything runs through the owner. Signals: "only the owner could help," "had to wait for the boss," "nobody knew the process," "showed up on the wrong day," "double-booked."
+2. **tool_systems** — Software doesn't work or doesn't exist. Signals: "their software doesn't work," "kept losing my info," "had to call because their system was down," "no online booking," "website broken."
+3. **data_visibility** — Billing chaos, no financial clarity. Signals: "surprise charges," "couldn't give me a quote," "billing errors," "months late on invoice," "no receipt."
+4. **customer_pipeline** — Leads and follow-ups fall through cracks. Signals: "never called back," "ghosted after estimate," "had to chase them," "no follow-up," "left a message, no response."
+5. **team_operations** — No accountability or consistency across team members. Signals: "different person every time," "new guy didn't know what to do," "nobody knew the status," "left hand doesn't know what the right is doing."
 
 ## Scoring Calibration
 
 - **1-3:** No meaningful operational signals. Complaints are about service quality, pricing, or one-off issues. Not a prospect.
-- **4-6:** Some operational signals but isolated incidents, not patterns. A single "never called me back" in 20 positive reviews is noise, not signal. Worth monitoring but not outreach-ready.
+- **4-6:** Isolated operational signals, not patterns. A single "never called me back" in 20 positive reviews is noise, not signal. Worth monitoring but not outreach-ready.
 - **7-8:** Clear operational pattern across multiple reviews. At least 2-3 reviews independently mentioning the same type of operational failure. This business has a real problem. Worth outreach.
 - **9-10:** Severe, repeated operational failures documented by many customers. Multiple problem types present. The reviews are practically writing the assessment report for us.
 
@@ -94,7 +92,7 @@ Input reviews:
 - ★★★★★ "Owner came out personally to handle our issue since his techs were all booked. Appreciated the personal touch."
 
 Output:
-{"business_name":"Reliable Rooter Plumbing","place_id":"ChIJ_example123","pain_score":8,"top_problems":["lead_leakage","scheduling_chaos","owner_bottleneck"],"signals":[{"problem_id":"lead_leakage","quote":"I had to call three times before anyone picked up. Left two voicemails that were never returned.","review_rating":3,"severity":8},{"problem_id":"scheduling_chaos","quote":"They missed our appointment entirely. No call, no text, just didn't show up.","review_rating":2,"severity":9},{"problem_id":"lead_leakage","quote":"Tried to schedule a repair for 3 weeks. Called multiple times, got bounced around. Finally gave up and called someone else.","review_rating":2,"severity":9},{"problem_id":"owner_bottleneck","quote":"Owner came out personally to handle our issue since his techs were all booked.","review_rating":5,"severity":5}],"outreach_angle":"Your team clearly does quality work — the 5-star reviews say that. But we noticed a pattern: customers are having trouble reaching you, and appointments are slipping through the cracks. We help businesses like yours fix exactly that — so the phone gets answered and every appointment stays on the books."}`
+{"business_name":"Reliable Rooter Plumbing","place_id":"ChIJ_example123","pain_score":8,"top_problems":["customer_pipeline","process_design"],"signals":[{"problem_id":"customer_pipeline","quote":"I had to call three times before anyone picked up. Left two voicemails that were never returned.","review_rating":3,"severity":8},{"problem_id":"process_design","quote":"They missed our appointment entirely. No call, no text, just didn't show up.","review_rating":2,"severity":9},{"problem_id":"customer_pipeline","quote":"Tried to schedule a repair for 3 weeks. Called multiple times, got bounced around. Finally gave up and called someone else.","review_rating":2,"severity":9},{"problem_id":"process_design","quote":"Owner came out personally to handle our issue since his techs were all booked.","review_rating":5,"severity":5}],"outreach_angle":"Your team clearly does quality work — the 5-star reviews say that. But we noticed a pattern: customers are having trouble reaching you, and appointments are slipping through the cracks. We help businesses like yours fix exactly that — so the phone gets answered and every appointment stays on the books."}`
 
 /**
  * Builds the user prompt for scoring a single business's reviews.
@@ -207,14 +205,7 @@ export function validateReviewScoring(data: unknown): {
   }
 
   // Top problems
-  const validProblemIds = [
-    'owner_bottleneck',
-    'lead_leakage',
-    'financial_blindness',
-    'scheduling_chaos',
-    'manual_communication',
-    'employee_retention',
-  ]
+  const validProblemIds: readonly string[] = PROBLEM_IDS
   if (!Array.isArray(d.top_problems)) {
     errors.push('top_problems must be an array')
   } else {

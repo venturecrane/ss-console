@@ -5,7 +5,7 @@
 **Pre-call checklist:**
 
 - MacWhisper Pro running and capturing system audio
-- Prospect name, business name, employee count, vertical noted
+- Prospect name, business name, approximate revenue/employee count, vertical noted
 - Review the vertical pain cluster (below) so you know what to listen for
 
 ---
@@ -53,16 +53,21 @@ This is the core of the assessment. Walk through their actual operations. Don't 
 
 > "Walk me through a typical day. You get to the office — or wherever you start — what happens first?"
 
-**As they describe their day, listen for the 6 universal problems:**
+**As they describe their day, listen for these patterns:**
 
-| Problem              | What to listen for                                                                                               |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Owner bottleneck     | "I have to approve..." / "They wait for me to..." / "I can't take a day off"                                     |
-| Lead leakage         | "Sometimes we forget to call back" / "Leads come in from everywhere" / "I don't know how many we got last month" |
-| Financial blindness  | "I check the bank account" / "My books are behind" / "I don't really know our margins"                           |
-| Scheduling chaos     | "We use a whiteboard" / "Double-bookings happen" / "Customers complain about the window"                         |
-| Manual communication | "I personally text every..." / "Invoices go out whenever I get to it"                                            |
-| Employee retention   | "I keep losing good people" / "New hires don't last" / "It takes forever to get someone up to speed"             |
+| Pattern                   | What to listen for                                                                                               |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Owner bottleneck          | "I have to approve..." / "They wait for me to..." / "I can't step away from the business"                        |
+| Customers falling through | "Sometimes we forget to call back" / "Leads come in from everywhere" / "I don't know how many we got last month" |
+| Financial blindness       | "I check the bank account" / "My books are behind" / "I don't really know our margins"                           |
+| Scheduling gaps           | "We use a whiteboard" / "Double-bookings happen" / "Customers complain about the window"                         |
+| Manual communication      | "I personally text every..." / "Invoices go out whenever I get to it"                                            |
+| Talent gaps               | "I keep losing good people" / "New hires don't last" / "It takes forever to get someone up to speed"             |
+| Spreadsheet workflows     | "We track that in Excel" / "I have a spreadsheet for..." / "Let me pull up the Google Sheet"                     |
+| Disconnected tools        | "We enter it in two places" / "I copy it over from..." / "Nothing syncs"                                         |
+| No reporting              | "I pull from 4 different systems" / "I don't really have a dashboard" / "I just look at the bank account"        |
+| Vendor frustration        | "Our software is useless" / "We're paying for something nobody uses" / "We picked the wrong tool"                |
+| Scaling anxiety           | "I'm afraid to grow because everything will break" / "We can't take on more" / "Adding people makes it worse"    |
 
 **When you hear a problem, go deeper with "show me" questions:**
 
@@ -81,14 +86,19 @@ These are not a pitch. They are 1-2 questions per problem type that let the owne
 
 **Weave these in naturally as each problem surfaces:**
 
-| Problem                  | Anchor question                                                                                                                                                                   |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Owner bottleneck**     | "Roughly how many hours a week do you spend on approvals and decisions that someone else could handle if the process were clear?"                                                 |
-| **Lead leakage**         | "In a typical month, how many leads do you think don't get a follow-up? And what's an average job worth?"                                                                         |
-| **Scheduling chaos**     | "How many appointments fall through or get double-booked in a month? What does a missed appointment cost you?"                                                                    |
-| **Manual communication** | _(Pain opener, not a math closer.)_ "How much of your day is just... sending messages?" — They'll feel this one without doing math.                                               |
-| **Financial blindness**  | _(Pivot to pain framing.)_ "When's the last time you looked at your numbers and felt confident about what they meant?"                                                            |
-| **Employee retention**   | "How many people have you lost in the last year? What does it cost you to hire and train a replacement?" — The owner knows the number, and it's always higher than they expected. |
+| Pattern                       | Anchor question                                                                                                                                                                 |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Owner bottleneck**          | "Roughly how many hours a week do you spend on approvals and decisions that someone else could handle if the process were clear?"                                               |
+| **Customers falling through** | "In a typical month, how many leads do you think don't get a follow-up? And what's an average job worth?"                                                                       |
+| **Scheduling gaps**           | "How many appointments fall through or get double-booked in a month? What does a missed appointment cost you?"                                                                  |
+| **Manual communication**      | _(Pain opener, not a math closer.)_ "How much of your day is just... sending messages?" They'll feel this one without doing math.                                               |
+| **Financial blindness**       | _(Pivot to pain framing.)_ "When's the last time you looked at your numbers and felt confident about what they meant?"                                                          |
+| **Talent gaps**               | "How many people have you lost in the last year? What does it cost you to hire and train a replacement?" The owner knows the number, and it's always higher than they expected. |
+| **Spreadsheet workflows**     | "How many hours a week does your team spend updating spreadsheets or moving data between them?" They always underestimate, then correct themselves upward.                      |
+| **Disconnected tools**        | "When something changes in [tool A], how does [tool B] find out about it?" The answer is almost always "someone re-enters it."                                                  |
+| **No reporting**              | "If I asked you right now how last month went compared to the month before, how long would it take you to answer that?"                                                         |
+| **Vendor frustration**        | "What are you paying per month for the tools that aren't working?" They often don't know, and the total surprises them.                                                         |
+| **Scaling anxiety**           | "What's the next opportunity you'd take on if you knew the operation could handle it?" This reframes fear into a concrete goal.                                                 |
 
 **The owner quantifying their own problem is the most powerful thing that happens on this call.** Don't skip it. Don't do the math for them.
 
@@ -112,14 +122,14 @@ Toward the end of the walkthrough, ask:
 
 As the conversation progresses, confirm these mentally:
 
-- [ ] 10-25 employees (or close enough to proceed)
+- [ ] Revenue roughly $750k-$5M (or close enough to proceed)
 - [ ] Owner is the decision-maker (or is on this call)
 - [ ] 2-3 clear operational problems surfaced
 - [ ] Owner articulated at least one objective beyond "fix this"
-- [ ] Books are reasonably current (if financial visibility is in scope — hard gate: current within 30 days)
+- [ ] Books are reasonably current (if financial visibility is in scope: current within 30 days)
 - [ ] There's a plausible champion (owner or team member)
 
-If qualification fails on employee count or decision-maker, the call is still valuable — it's a referral opportunity or a "not yet."
+If qualification fails on revenue range or decision-maker, the call is still valuable: it's a referral opportunity or a "not yet."
 
 ---
 
@@ -162,13 +172,14 @@ Let them confirm, correct, or add. Then close:
 
 Review before the call based on the prospect's business type.
 
-| Business Type                                | Lead with                                             |
-| -------------------------------------------- | ----------------------------------------------------- |
-| Home services (plumber, HVAC, electrical)    | Scheduling + lead follow-up + employee retention      |
-| Professional services (accountant, attorney) | Owner bottleneck + manual communication + pipeline    |
-| Retail / salon / spa                         | Scheduling + communication + financial visibility     |
-| Contractor / trades                          | Estimating/quoting + scheduling + employee retention  |
-| Restaurant / food service                    | Team communication + inventory + financial visibility |
+| Business Type                                | Lead with                                                      |
+| -------------------------------------------- | -------------------------------------------------------------- |
+| Home services (plumber, HVAC, electrical)    | Scheduling + customers falling through + talent gaps           |
+| Professional services (accountant, attorney) | Owner bottleneck + disconnected tools + process gaps           |
+| Retail / salon / spa                         | Scheduling + manual communication + financial visibility       |
+| Contractor / trades                          | Spreadsheet workflows + scheduling + talent gaps               |
+| Restaurant / food service                    | Team communication + vendor frustration + financial visibility |
+| Service businesses (general)                 | Owner bottleneck + scaling anxiety + disconnected tools        |
 
 ---
 
