@@ -557,6 +557,7 @@ const turnstileSiteKey = Astro.locals.runtime?.env?.PUBLIC_TURNSTILE_SITE_KEY ??
       let currentSlot = null
       let turnstileWidgetId = null
       let turnstileReady = false
+      let turnstileTimedOut = false
 
       // Render Turnstile widget when the script loads
       if (turnstileSiteKey) {
@@ -584,9 +585,13 @@ const turnstileSiteKey = Astro.locals.runtime?.env?.PUBLIC_TURNSTILE_SITE_KEY ??
             initTurnstile()
             if (turnstileReady) clearInterval(checkInterval)
           }, 200)
-          // Give up after 10 seconds
+          // Give up after 10 seconds — if widget never rendered, bypass client gating
           setTimeout(function () {
             clearInterval(checkInterval)
+            if (!turnstileReady) {
+              turnstileTimedOut = true
+              updateSubmitState()
+            }
           }, 10000)
         }
       }
@@ -594,8 +599,8 @@ const turnstileSiteKey = Astro.locals.runtime?.env?.PUBLIC_TURNSTILE_SITE_KEY ??
       function updateSubmitState() {
         const hasSlot = !!currentSlot
         const formValid = form.checkValidity()
-        let turnstileOk = !turnstileSiteKey
-        if (turnstileSiteKey && typeof turnstile !== 'undefined') {
+        let turnstileOk = !turnstileSiteKey || turnstileTimedOut
+        if (turnstileSiteKey && !turnstileTimedOut && typeof turnstile !== 'undefined') {
           turnstileOk = !!turnstile.getResponse(turnstileWidgetId)
         }
         submitBtn.disabled = !(hasSlot && formValid && turnstileOk)

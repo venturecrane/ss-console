@@ -24,7 +24,7 @@ pages_build_output_dir = "dist"
 [vars]
 APP_BASE_URL = "https://smd.services"
 PORTAL_BASE_URL = "https://portal.smd.services"
-PUBLIC_TURNSTILE_SITE_KEY = "REPLACE_ME_AFTER_TURNSTILE_SETUP"
+PUBLIC_TURNSTILE_SITE_KEY = ""
 
 # ---------- D1 (structured data) ----------
 [[d1_databases]]

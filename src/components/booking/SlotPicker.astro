@@ -2,7 +2,7 @@
 /**
  * SlotPicker — two-column date/time slot selector.
  *
- * Left column: 7 visible dates with forward/back navigation arrows.
+ * Left column: monthly calendar grid with month-by-month navigation.
  * Right column: time slots for the selected date (30-min in guest tz).
  *
  * All interactivity is handled in the <script> tag below. On mount it
@@ -156,7 +156,8 @@
     }
 
     let allDays = [] // Array of { date, slots: [{ start_utc, end_utc, label }] }
-    let dateOffset = 0 // Starting index in the visible 7-day window
+    let viewingYear = 0 // Year of the month grid currently displayed
+    let viewingMonth = 0 // 0-indexed month of the month grid currently displayed
     let selectedDate = null // Currently selected date string (YYYY-MM-DD)
     let selectedSlot = null // Currently selected slot object
     let fetchedAt = 0 // Timestamp of last successful fetch
@@ -216,7 +217,9 @@
           }
 
           tzLabel.textContent = 'Times shown in ' + guestTz.replace(/_/g, ' ')
-          dateOffset = 0
+          const firstAvailDate = parseLocalDate(allDays[0].date)
+          viewingYear = firstAvailDate.getFullYear()
+          viewingMonth = firstAvailDate.getMonth()
           selectedDate = allDays[0].date
           renderDates()
           renderSlots()
@@ -230,13 +233,18 @@
         })
     }
 
+    function makeDateClickHandler(dateStr) {
+      return function () {
+        selectedDate = dateStr
+        selectedSlot = null
+        renderDates()
+        renderSlots()
+      }
+    }
+
     function renderDates() {
       datesContainer.innerHTML = ''
       if (allDays.length === 0) return
-
-      // Build a list of all calendar dates from first available to last available
-      const firstDate = parseLocalDate(allDays[0].date)
-      const lastDate = parseLocalDate(allDays[allDays.length - 1].date)
 
       // Build set of dates that have slots
       const availableDates = {}
@@ -244,96 +252,111 @@
         availableDates[d.date] = true
       })
 
-      // Generate array of all dates from first to last
-      const allCalendarDates = []
-      const cursor = new Date(firstDate)
-      while (cursor <= lastDate) {
-        allCalendarDates.push(formatDate(cursor))
-        cursor.setDate(cursor.getDate() + 1)
-      }
+      // Today string for highlighting
+      const todayStr = formatDate(new Date())
 
-      // Clamp dateOffset
-      const maxOffset = Math.max(0, allCalendarDates.length - 7)
-      if (dateOffset > maxOffset) dateOffset = maxOffset
-      if (dateOffset < 0) dateOffset = 0
-
-      const visibleDates = allCalendarDates.slice(dateOffset, dateOffset + 7)
+      const monthNames = [
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December',
+      ]
 
       // Update month label
-      if (visibleDates.length > 0) {
-        const firstVisible = parseLocalDate(visibleDates[0])
-        const lastVisible = parseLocalDate(visibleDates[visibleDates.length - 1])
-        const monthNames = [
-          'January',
-          'February',
-          'March',
-          'April',
-          'May',
-          'June',
-          'July',
-          'August',
-          'September',
-          'October',
-          'November',
-          'December',
-        ]
-        if (firstVisible.getMonth() === lastVisible.getMonth()) {
-          monthLabel.textContent =
-            monthNames[firstVisible.getMonth()] + ' ' + firstVisible.getFullYear()
-        } else {
-          monthLabel.textContent =
-            monthNames[firstVisible.getMonth()].substring(0, 3) +
-            ' - ' +
-            monthNames[lastVisible.getMonth()].substring(0, 3) +
-            ' ' +
-            lastVisible.getFullYear()
-        }
+      monthLabel.textContent = monthNames[viewingMonth] + ' ' + viewingYear
+
+      // Arrow states: prev disabled at today's month or earlier
+      const today = new Date()
+      const todayYear = today.getFullYear()
+      const todayMonth = today.getMonth()
+      prevBtn.disabled =
+        viewingYear < todayYear || (viewingYear === todayYear && viewingMonth <= todayMonth)
+
+      // Next disabled at last available date's month or later
+      const lastAvail = parseLocalDate(allDays[allDays.length - 1].date)
+      const lastYear = lastAvail.getFullYear()
+      const lastMonth = lastAvail.getMonth()
+      nextBtn.disabled =
+        viewingYear > lastYear || (viewingYear === lastYear && viewingMonth >= lastMonth)
+
+      // Day-of-week header labels (first 7 children of the grid)
+      const dayAbbr = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+      dayAbbr.forEach(function (name) {
+        const span = document.createElement('span')
+        span.className = 'text-[10px] font-medium text-slate-400 py-1 text-center'
+        span.textContent = name
+        datesContainer.appendChild(span)
+      })
+
+      // First day of month and number of days
+      const firstOfMonth = new Date(viewingYear, viewingMonth, 1)
+      const startDay = firstOfMonth.getDay() // 0=Sun
+      const daysInMonth = new Date(viewingYear, viewingMonth + 1, 0).getDate()
+
+      // Leading empty cells
+      for (let i = 0; i < startDay; i++) {
+        datesContainer.appendChild(document.createElement('div'))
       }
 
-      // Update arrow states
-      prevBtn.disabled = dateOffset === 0
-      nextBtn.disabled = dateOffset >= maxOffset
-
-      const dayAbbr = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
-      visibleDates.forEach(function (dateStr) {
-        const d = parseLocalDate(dateStr)
+      // Date buttons
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr =
+          viewingYear +
+          '-' +
+          String(viewingMonth + 1).padStart(2, '0') +
+          '-' +
+          String(day).padStart(2, '0')
         const hasSlots = !!availableDates[dateStr]
         const isSelected = dateStr === selectedDate
+        const isToday = dateStr === todayStr
+        const isPast = dateStr < todayStr
 
         const btn = document.createElement('button')
         btn.type = 'button'
         btn.className =
-          'flex flex-col items-center rounded-lg px-1 py-2 text-center transition-colors '
+          'h-9 w-full flex items-center justify-center rounded-lg text-sm transition-colors '
+
         if (isSelected) {
-          btn.className += 'bg-primary text-white'
+          btn.className += 'bg-primary text-white font-semibold'
+        } else if (isToday && hasSlots) {
+          btn.className += 'ring-2 ring-primary text-slate-900 font-semibold hover:bg-slate-100'
+        } else if (isToday) {
+          btn.className += 'ring-2 ring-primary text-slate-300'
         } else if (hasSlots) {
-          btn.className += 'bg-white text-slate-900 hover:bg-slate-100 border border-slate-200'
+          btn.className += 'text-slate-900 font-semibold hover:bg-slate-100'
+        } else if (isPast) {
+          btn.className += 'text-slate-200 cursor-not-allowed'
         } else {
           btn.className += 'text-slate-300 cursor-not-allowed'
         }
 
-        btn.innerHTML =
-          '<span class="text-[10px] font-medium leading-none">' +
-          dayAbbr[d.getDay()] +
-          '</span>' +
-          '<span class="mt-0.5 text-lg font-semibold leading-none">' +
-          d.getDate() +
-          '</span>'
+        btn.textContent = day
 
         if (hasSlots) {
-          btn.addEventListener('click', function () {
-            selectedDate = dateStr
-            selectedSlot = null
-            renderDates()
-            renderSlots()
-          })
+          btn.addEventListener('click', makeDateClickHandler(dateStr))
         } else {
           btn.disabled = true
         }
 
         datesContainer.appendChild(btn)
-      })
+      }
+
+      // Trailing empty cells to fill last row
+      const totalCells = startDay + daysInMonth
+      const remainder = totalCells % 7
+      if (remainder > 0) {
+        for (let j = 0; j < 7 - remainder; j++) {
+          datesContainer.appendChild(document.createElement('div'))
+        }
+      }
     }
 
     function renderSlots() {
@@ -434,14 +457,22 @@
       return y + '-' + m + '-' + day
     }
 
-    // Navigation
+    // Navigation — month by month
     prevBtn.addEventListener('click', function () {
-      dateOffset = Math.max(0, dateOffset - 7)
+      viewingMonth--
+      if (viewingMonth < 0) {
+        viewingMonth = 11
+        viewingYear--
+      }
       renderDates()
     })
 
     nextBtn.addEventListener('click', function () {
-      dateOffset = dateOffset + 7
+      viewingMonth++
+      if (viewingMonth > 11) {
+        viewingMonth = 0
+        viewingYear++
+      }
       renderDates()
     })
 
