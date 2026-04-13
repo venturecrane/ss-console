@@ -435,6 +435,11 @@ function renderResults(scores: {
         Book an assessment call
       </a>
       <p class="mt-3 text-sm text-slate-400">Full report sent to your email</p>
+      <p class="mt-2 text-sm text-slate-500">
+        Not ready to schedule?
+        <a href="/get-started" class="font-medium text-primary underline hover:opacity-80">Tell us about your business</a>
+        and we'll follow up.
+      </p>
     </div>
   `
 }

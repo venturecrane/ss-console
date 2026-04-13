@@ -273,7 +273,7 @@ import { ENTITY_VERTICALS } from '../../lib/db/entities'
       }
       delete data.how_heard_other
 
-      fetch('/api/booking/intake', {
+      fetch('/api/intake', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
