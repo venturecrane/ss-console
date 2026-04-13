@@ -66,9 +66,17 @@ const dossierStages: string[] = [
 const showDossierButton = dossierStages.includes(entity.stage)
 
 // Stage transitions
-const TRANSITIONS: Record<string, { label: string; stage: EntityStage; style: string }[]> = {
+const TRANSITIONS: Record<
+  string,
+  { label: string; stage: EntityStage; style: string; action?: string }[]
+> = {
   signal: [
-    { label: 'Promote', stage: 'prospect', style: 'bg-primary text-white hover:bg-primary/90' },
+    {
+      label: 'Promote',
+      stage: 'prospect',
+      style: 'bg-primary text-white hover:bg-primary/90',
+      action: `/api/admin/entities/${entity.id}/promote`,
+    },
     { label: 'Dismiss', stage: 'lost', style: 'bg-slate-100 text-slate-600 hover:bg-slate-200' },
   ],
   prospect: [
@@ -464,7 +472,7 @@ function confidenceColor(confidence: string): string {
           <div class="flex items-center gap-2 shrink-0">
             {
               TRANSITIONS[entity.stage]?.map((t) => (
-                <form method="POST" action={`/api/admin/entities/${entity.id}/stage`}>
+                <form method="POST" action={t.action ?? `/api/admin/entities/${entity.id}/stage`}>
                   <input type="hidden" name="stage" value={t.stage} />
                   <input type="hidden" name="reason" value={`${t.label} by admin.`} />
                   <button
