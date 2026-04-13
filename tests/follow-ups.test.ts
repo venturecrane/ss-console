@@ -349,16 +349,16 @@ describe('follow-ups: API route', () => {
 })
 
 describe('follow-ups: integration with quotes', () => {
-  const source = () => readFileSync(resolve('src/pages/api/admin/quotes/[id].ts'), 'utf-8')
+  const source = () => readFileSync(resolve('src/pages/api/admin/quotes/[id]/sign.ts'), 'utf-8')
 
-  it('quote send action imports scheduleProposalCadence', () => {
+  it('signature send route imports scheduleProposalCadence', () => {
     expect(source()).toContain('scheduleProposalCadence')
   })
 
-  it('quote send action calls scheduleProposalCadence after status update', () => {
+  it('signature send route calls scheduleProposalCadence after provider send succeeds', () => {
     const code = source()
-    // Should call scheduleProposalCadence in the send action block
-    expect(code).toContain('scheduleProposalCadence(env.DB')
+    expect(code).toContain('await scheduleProposalCadence(')
+    expect(code).toContain('signatureRequest.sent_at')
   })
 })
 

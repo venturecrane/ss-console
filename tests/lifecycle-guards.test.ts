@@ -18,6 +18,7 @@ import { resolve } from 'path'
 import type { D1Database } from '@cloudflare/workers-types'
 
 import { createEntity, transitionStage, type EntityStage } from '../src/lib/db/entities'
+import { createContact } from '../src/lib/db/contacts'
 import { createQuote, updateQuoteStatus } from '../src/lib/db/quotes'
 import { readFileSync } from 'fs'
 
@@ -72,8 +73,14 @@ describe('lifecycle invariant guards', () => {
       // Seed an accepted quote for this entity
       await db
         .prepare(
-          `INSERT INTO quotes (id, org_id, entity_id, assessment_id, version, line_items, total_hours, rate, total_price, deposit_pct, deposit_amount, status, signwell_doc_id, signed_sow_path, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 1, '[]', 10, 150, 1500, 0.5, 750, 'accepted', 'sw-123', '/sow/signed.pdf', datetime('now'), datetime('now'))`
+          `INSERT INTO quotes (
+            id, org_id, entity_id, assessment_id, version, line_items, total_hours,
+            rate, total_price, deposit_pct, deposit_amount, status, accepted_at,
+            created_at, updated_at
+          ) VALUES (
+            ?, ?, ?, ?, 1, '[]', 10, 150, 1500, 0.5, 750, 'accepted',
+            datetime('now'), datetime('now'), datetime('now')
+          )`
         )
         .bind('quote-1', ORG_ID, entityId, 'assessment-1')
         .run()
@@ -163,6 +170,7 @@ describe('lifecycle invariant guards', () => {
 
   describe('quote acceptance guards', () => {
     let quoteId: string
+    let entityId: string
 
     beforeEach(async () => {
       // Create an entity and a quote in 'sent' status
@@ -170,17 +178,18 @@ describe('lifecycle invariant guards', () => {
         name: 'Quote Guard Biz',
         stage: 'proposing' as EntityStage,
       })
+      entityId = entity.id
 
       // Seed an assessment (assessments table: id, org_id, entity_id, status)
       await db
         .prepare(
           `INSERT INTO assessments (id, org_id, entity_id, status) VALUES (?, ?, ?, 'completed')`
         )
-        .bind('assess-1', ORG_ID, entity.id)
+        .bind('assess-1', ORG_ID, entityId)
         .run()
 
       const quote = await createQuote(db, ORG_ID, {
-        entityId: entity.id,
+        entityId,
         assessmentId: 'assess-1',
         lineItems: [{ problem: 'Test', description: 'Test item', estimated_hours: 10 }],
         rate: 150,
@@ -191,30 +200,90 @@ describe('lifecycle invariant guards', () => {
       await updateQuoteStatus(db, ORG_ID, quoteId, 'sent')
     })
 
-    it('throws when signwell_doc_id is null', async () => {
-      // Quote has been sent but never went through SignWell
+    it('throws when there is no completed signed signature request', async () => {
       await expect(updateQuoteStatus(db, ORG_ID, quoteId, 'accepted')).rejects.toThrow(
-        'signwell_doc_id is null'
+        'completed signed signature request with a persisted signed artifact is required'
       )
     })
 
-    it('throws when signed_sow_path is null even with signwell_doc_id', async () => {
-      // Set signwell_doc_id but leave signed_sow_path null
+    it('throws when the signature request is incomplete', async () => {
+      const contact = await createContact(db, ORG_ID, entityId, {
+        name: 'Signer',
+        email: 'signer@example.com',
+      })
+
       await db
-        .prepare(`UPDATE quotes SET signwell_doc_id = ? WHERE id = ?`)
-        .bind('sw-doc-123', quoteId)
+        .prepare(
+          `INSERT INTO sow_revisions (
+            id, org_id, quote_id, quote_version, sow_number, status,
+            unsigned_storage_key, checksum_sha256, rendered_by, rendered_at, created_at, updated_at
+          ) VALUES ('rev-1', ?, ?, 1, 'SOW-202604-001', 'sent', 'unsigned.pdf', 'checksum', 'user-1', datetime('now'), datetime('now'), datetime('now'))`
+        )
+        .bind(ORG_ID, quoteId)
+        .run()
+
+      await db
+        .prepare(
+          `INSERT INTO sow_send_authorizations (
+            id, org_id, quote_id, sow_revision_id, signer_contact_id, signer_snapshot_json,
+            checksum_sha256, authorized_by, authorized_at, created_at
+          ) VALUES ('auth-1', ?, ?, 'rev-1', ?, '{}', 'checksum', 'user-1', datetime('now'), datetime('now'))`
+        )
+        .bind(ORG_ID, quoteId, contact.id)
+        .run()
+
+      await db
+        .prepare(
+          `INSERT INTO signature_requests (
+            id, org_id, quote_id, sow_revision_id, send_authorization_id, provider,
+            provider_request_id, status, signer_snapshot_json, provider_payload_json,
+            created_at, updated_at
+          ) VALUES ('req-1', ?, ?, 'rev-1', 'auth-1', 'signwell', 'sw-doc-123', 'sent', '{}', '{}', datetime('now'), datetime('now'))`
+        )
+        .bind(ORG_ID, quoteId)
         .run()
 
       await expect(updateQuoteStatus(db, ORG_ID, quoteId, 'accepted')).rejects.toThrow(
-        'signed_sow_path is null'
+        'completed signed signature request with a persisted signed artifact is required'
       )
     })
 
-    it('succeeds when both signwell_doc_id and signed_sow_path are set', async () => {
-      // Set both fields as the SignWell webhook would
+    it('succeeds when a completed signature request has a persisted signed artifact', async () => {
+      const contact = await createContact(db, ORG_ID, entityId, {
+        name: 'Signer',
+        email: 'signer@example.com',
+      })
+
       await db
-        .prepare(`UPDATE quotes SET signwell_doc_id = ?, signed_sow_path = ? WHERE id = ?`)
-        .bind('sw-doc-123', '/orgs/test-org/quotes/sow-signed.pdf', quoteId)
+        .prepare(
+          `INSERT INTO sow_revisions (
+            id, org_id, quote_id, quote_version, sow_number, status,
+            unsigned_storage_key, signed_storage_key, checksum_sha256, rendered_by,
+            rendered_at, signed_at, created_at, updated_at
+          ) VALUES ('rev-2', ?, ?, 1, 'SOW-202604-002', 'signed', 'unsigned.pdf', 'signed.pdf', 'checksum', 'user-1', datetime('now'), datetime('now'), datetime('now'), datetime('now'))`
+        )
+        .bind(ORG_ID, quoteId)
+        .run()
+
+      await db
+        .prepare(
+          `INSERT INTO sow_send_authorizations (
+            id, org_id, quote_id, sow_revision_id, signer_contact_id, signer_snapshot_json,
+            checksum_sha256, authorized_by, authorized_at, created_at
+          ) VALUES ('auth-2', ?, ?, 'rev-2', ?, '{}', 'checksum', 'user-1', datetime('now'), datetime('now'))`
+        )
+        .bind(ORG_ID, quoteId, contact.id)
+        .run()
+
+      await db
+        .prepare(
+          `INSERT INTO signature_requests (
+            id, org_id, quote_id, sow_revision_id, send_authorization_id, provider,
+            provider_request_id, status, signer_snapshot_json, provider_payload_json,
+            signed_storage_key, completed_at, created_at, updated_at
+          ) VALUES ('req-2', ?, ?, 'rev-2', 'auth-2', 'signwell', 'sw-doc-123', 'completed', '{}', '{}', 'signed.pdf', datetime('now'), datetime('now'), datetime('now'))`
+        )
+        .bind(ORG_ID, quoteId)
         .run()
 
       const result = await updateQuoteStatus(db, ORG_ID, quoteId, 'accepted')

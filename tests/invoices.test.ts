@@ -616,18 +616,17 @@ describe('invoices: portal dashboard integration', () => {
 })
 
 describe('invoices: signwell handler creates deposit invoice', () => {
-  const source = () => readFileSync(resolve('src/lib/webhooks/signwell-handler.ts'), 'utf-8')
+  const source = () => readFileSync(resolve('src/lib/sow/service.ts'), 'utf-8')
 
-  it('signwell handler creates deposit invoice in batch', () => {
+  it('finalization creates the deposit invoice in the acceptance batch', () => {
     const code = source()
     expect(code).toContain('INSERT INTO invoices')
     expect(code).toContain("'deposit'")
     expect(code).toContain("'draft'")
   })
 
-  it('deposit invoice uses raw SQL in batch (atomicity requirement)', () => {
+  it('deposit invoice uses raw SQL in db.batch for atomicity', () => {
     const code = source()
-    // The batch must use raw SQL, not the data layer function, for atomicity
     expect(code).toContain('db.batch([')
     expect(code).toContain('INSERT INTO invoices')
   })

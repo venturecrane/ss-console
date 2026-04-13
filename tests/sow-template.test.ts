@@ -61,10 +61,10 @@ describe('sow-template: props interface', () => {
     expect(code).toContain('milestoneLabel?: string')
   })
 
-  it('includes smd props with signerName and signerTitle', () => {
+  it('does not require an smd signer prop block', () => {
     const code = source()
-    expect(code).toContain('signerName: string')
-    expect(code).toContain('signerTitle: string')
+    expect(code).not.toContain('signerName: string')
+    expect(code).not.toContain('signerTitle: string')
   })
 })
 
@@ -250,12 +250,12 @@ describe('sow-template: render wrapper', () => {
 describe('sow-template: signature block', () => {
   const source = () => readFileSync(resolve('src/lib/pdf/sow-template.tsx'), 'utf-8')
 
-  it('includes client signature section', () => {
-    expect(source()).toContain('CLIENT')
+  it('includes client acceptance section', () => {
+    expect(source()).toContain('CLIENT ACCEPTANCE')
   })
 
-  it('includes SMD Services signature section', () => {
-    expect(source()).toContain('SMD SERVICES')
+  it('does not include an SMD Services signature section', () => {
+    expect(source()).not.toContain('SMD SERVICES')
   })
 
   it('renders contact title conditionally', () => {
@@ -263,7 +263,8 @@ describe('sow-template: signature block', () => {
   })
 
   it('includes agreement text', () => {
-    expect(source()).toContain('By signing below, both parties agree')
+    expect(source()).toContain('By signing below, the client agrees')
+    expect(source()).toContain('SMD Services agrees by presenting this Statement of Work')
   })
 })
 
@@ -294,9 +295,9 @@ describe('sow-template: 3-page structure', () => {
     expect(code).toContain('SIGNING_PAGE.signingSpaceHeight')
   })
 
-  it('uses signing layout constant for column gap', () => {
+  it('uses signing layout constant for the single acceptance block width', () => {
     const code = source()
-    expect(code).toContain('SIGNING_PAGE.columnGap')
+    expect(code).toContain('SIGNING_PAGE.columnWidth')
   })
 
   it('includes Next Steps section on signing page', () => {

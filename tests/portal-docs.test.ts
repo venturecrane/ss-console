@@ -70,7 +70,8 @@ describe('portal: documents page', () => {
 
   it('includes SOW PDF from quote', () => {
     const code = source()
-    expect(code).toContain('sow_path')
+    expect(code).toContain('getSOWStateForQuote')
+    expect(code).toContain('downloadableRevision')
     expect(code).toContain('Statement of Work')
   })
 

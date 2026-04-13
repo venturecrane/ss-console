@@ -9,6 +9,7 @@ import type { D1Database } from '@cloudflare/workers-types'
 import { handleDocumentCompleted } from './signwell-handler'
 import type { SignWellWebhookPayload } from '../signwell/types'
 import type { LineItem } from '../db/quotes'
+import { createContact } from '../db/contacts'
 import path from 'node:path'
 
 // ---------------------------------------------------------------------------
@@ -51,6 +52,10 @@ const ORG_ID = 'org-test-001'
 const ENTITY_ID = 'entity-test-001'
 const ASSESSMENT_ID = 'assessment-test-001'
 const QUOTE_ID = 'quote-test-001'
+const CONTACT_ID = 'contact-test-001'
+const SOW_REVISION_ID = 'sow-revision-001'
+const SEND_AUTH_ID = 'send-auth-001'
+const SIGNATURE_REQUEST_ID = 'signature-request-001'
 const SIGNWELL_DOC_ID = 'sw-doc-001'
 
 const LINE_ITEMS: LineItem[] = [
@@ -143,8 +148,8 @@ describe('handleDocumentCompleted — milestone creation', () => {
 
     await db
       .prepare(
-        `INSERT INTO quotes (id, org_id, entity_id, assessment_id, version, line_items, total_hours, rate, total_price, deposit_pct, deposit_amount, status, signwell_doc_id, sent_at, expires_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, 0.5, ?, 'sent', ?, datetime('now'), datetime('now', '+5 days'), datetime('now'), datetime('now'))`
+        `INSERT INTO quotes (id, org_id, entity_id, assessment_id, version, line_items, total_hours, rate, total_price, deposit_pct, deposit_amount, status, sent_at, expires_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, 0.5, ?, 'sent', datetime('now'), datetime('now', '+5 days'), datetime('now'), datetime('now'))`
       )
       .bind(
         QUOTE_ID,
@@ -155,8 +160,85 @@ describe('handleDocumentCompleted — milestone creation', () => {
         totalHours,
         rate,
         totalPrice,
-        depositAmount,
-        SIGNWELL_DOC_ID
+        depositAmount
+      )
+      .run()
+
+    await createContact(db, ORG_ID, ENTITY_ID, {
+      name: 'Test Owner',
+      email: 'owner@test.com',
+      title: 'Owner',
+    })
+
+    await db
+      .prepare(
+        `UPDATE contacts
+         SET id = ?
+         WHERE org_id = ? AND entity_id = ? AND email = ?`
+      )
+      .bind(CONTACT_ID, ORG_ID, ENTITY_ID, 'owner@test.com')
+      .run()
+
+    await db
+      .prepare(
+        `INSERT INTO sow_revisions (
+          id, org_id, quote_id, quote_version, sow_number, status,
+          unsigned_storage_key, checksum_sha256, rendered_by, rendered_at, created_at, updated_at
+        ) VALUES (?, ?, ?, 1, 'SOW-202604-001', 'sent', ?, ?, 'user-1', datetime('now'), datetime('now'), datetime('now'))`
+      )
+      .bind(
+        SOW_REVISION_ID,
+        ORG_ID,
+        QUOTE_ID,
+        `orgs/${ORG_ID}/quotes/${QUOTE_ID}/sow/${SOW_REVISION_ID}/unsigned.pdf`,
+        'checksum-001'
+      )
+      .run()
+
+    await db
+      .prepare(
+        `INSERT INTO sow_send_authorizations (
+          id, org_id, quote_id, sow_revision_id, signer_contact_id, signer_snapshot_json,
+          checksum_sha256, authorized_by, authorized_at, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'user-1', datetime('now'), datetime('now'))`
+      )
+      .bind(
+        SEND_AUTH_ID,
+        ORG_ID,
+        QUOTE_ID,
+        SOW_REVISION_ID,
+        CONTACT_ID,
+        JSON.stringify({
+          contactId: CONTACT_ID,
+          name: 'Test Owner',
+          email: 'owner@test.com',
+          title: 'Owner',
+        }),
+        'checksum-001'
+      )
+      .run()
+
+    await db
+      .prepare(
+        `INSERT INTO signature_requests (
+          id, org_id, quote_id, sow_revision_id, send_authorization_id, provider,
+          provider_request_id, status, signer_snapshot_json, provider_payload_json,
+          sent_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, 'signwell', ?, 'sent', ?, '{}', datetime('now'), datetime('now'), datetime('now'))`
+      )
+      .bind(
+        SIGNATURE_REQUEST_ID,
+        ORG_ID,
+        QUOTE_ID,
+        SOW_REVISION_ID,
+        SEND_AUTH_ID,
+        SIGNWELL_DOC_ID,
+        JSON.stringify({
+          contactId: CONTACT_ID,
+          name: 'Test Owner',
+          email: 'owner@test.com',
+          title: 'Owner',
+        })
       )
       .run()
   })

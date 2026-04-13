@@ -208,12 +208,12 @@ describe('canonical app-url: invoices endpoint uses canonical helper', () => {
   })
 })
 
-describe('canonical app-url: signwell signature endpoint uses canonical helper', () => {
-  const path = resolve('src/pages/api/admin/quotes/[id]/sign.ts')
+describe('canonical app-url: signwell signature orchestration uses canonical helper', () => {
+  const path = resolve('src/lib/sow/service.ts')
 
   it('imports buildAppUrl from the config helper', () => {
     const source = readFileSync(path, 'utf-8')
-    expect(source).toMatch(/from ['"][^'"]*lib\/config\/app-url['"]/)
+    expect(source).toMatch(/from ['"][^'"]*config\/app-url['"]/)
     expect(source).toContain('buildAppUrl')
   })
 

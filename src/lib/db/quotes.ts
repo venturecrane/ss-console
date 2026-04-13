@@ -11,6 +11,8 @@
  * - Deposit is 50% by default, 3-milestone for 40+ hour engagements (Decision #14)
  */
 
+import { isQuoteAcceptanceReady } from '../sow/store'
+
 export interface Quote {
   id: string
   org_id: string
@@ -28,10 +30,6 @@ export interface Quote {
   sent_at: string | null
   expires_at: string | null
   accepted_at: string | null
-  sow_path: string | null
-  signed_sow_path: string | null
-  signwell_doc_id: string | null
-  sow_generated_at: string | null
   created_at: string
   updated_at: string
 }
@@ -84,8 +82,6 @@ export interface UpdateQuoteData {
   lineItems?: LineItem[]
   rate?: number
   depositPct?: number
-  sow_path?: string | null
-  sow_generated_at?: string | null
 }
 
 /**
@@ -218,16 +214,6 @@ export async function updateQuote(
     params.push(data.depositPct)
   }
 
-  if (data.sow_path !== undefined) {
-    fields.push('sow_path = ?')
-    params.push(data.sow_path)
-  }
-
-  if (data.sow_generated_at !== undefined) {
-    fields.push('sow_generated_at = ?')
-    params.push(data.sow_generated_at)
-  }
-
   // Recalculate totals if line items or rate changed
   if (lineItems !== undefined || rate !== undefined) {
     const effectiveItems = lineItems ?? (JSON.parse(existing.line_items) as LineItem[])
@@ -251,6 +237,10 @@ export async function updateQuote(
 
   if (fields.length === 0) {
     return existing
+  }
+
+  if (data.lineItems !== undefined || data.rate !== undefined || data.depositPct !== undefined) {
+    fields.push('version = version + 1')
   }
 
   fields.push("updated_at = datetime('now')")
@@ -353,16 +343,10 @@ export async function updateQuoteStatus(
 
   // Acceptance guard: require SignWell signing flow completion
   if (newStatus === 'accepted') {
-    if (!existing.signwell_doc_id) {
+    const acceptanceReady = await isQuoteAcceptanceReady(db, orgId, quoteId)
+    if (!acceptanceReady) {
       throw new Error(
-        'Cannot accept quote: signwell_doc_id is null. ' +
-          'The quote must be sent through SignWell before it can be accepted.'
-      )
-    }
-    if (!existing.signed_sow_path) {
-      throw new Error(
-        'Cannot accept quote: signed_sow_path is null. ' +
-          'The signed SOW must be recorded by the SignWell webhook before acceptance.'
+        'Cannot accept quote: a completed signed signature request with a persisted signed artifact is required.'
       )
     }
   }

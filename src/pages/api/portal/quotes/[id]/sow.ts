@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro'
 import { getPortalClient } from '../../../../../lib/portal/session'
 import { getQuoteForEntity } from '../../../../../lib/db/quotes'
 import { getPdf } from '../../../../../lib/storage/r2'
+import { getSOWStateForQuote } from '../../../../../lib/sow/service'
 
 /**
  * GET /api/portal/quotes/:id/sow
@@ -48,7 +49,10 @@ export const GET: APIRoute = async ({ locals, params }) => {
     })
   }
 
-  if (!quote.sow_path) {
+  const sowState = await getSOWStateForQuote(env.DB, session.orgId, quote.id)
+  const revision = sowState.downloadableRevision
+
+  if (!revision) {
     return new Response(JSON.stringify({ error: 'SOW not available' }), {
       status: 404,
       headers: { 'Content-Type': 'application/json' },
@@ -56,7 +60,8 @@ export const GET: APIRoute = async ({ locals, params }) => {
   }
 
   // Stream PDF from R2
-  const object = await getPdf(env.STORAGE, quote.sow_path)
+  const key = revision.signed_storage_key ?? revision.unsigned_storage_key
+  const object = await getPdf(env.STORAGE, key)
   if (!object) {
     return new Response(JSON.stringify({ error: 'SOW file not found in storage' }), {
       status: 404,

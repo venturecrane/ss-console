@@ -2,6 +2,8 @@
 import '../../../styles/global.css'
 import { listEngagements } from '../../../lib/db/engagements'
 import { listDocuments } from '../../../lib/storage/r2'
+import { getPortalClient } from '../../../lib/portal/session'
+import { getSOWStateForQuote } from '../../../lib/sow/service'
 
 /**
  * Client portal — document library page.
@@ -14,17 +16,8 @@ import { listDocuments } from '../../../lib/storage/r2'
 const session = Astro.locals.session!
 const env = Astro.locals.runtime.env
 
-// Look up client_id from the users table
-interface UserRow {
-  id: string
-  client_id: string | null
-}
-
-const user = await env.DB.prepare('SELECT id, client_id FROM users WHERE id = ?')
-  .bind(session.userId)
-  .first<UserRow>()
-
-const clientId = user?.client_id
+const portalData = await getPortalClient(env.DB, session.userId)
+const clientId = portalData?.client.id
 
 interface DocumentEntry {
   name: string
@@ -61,19 +54,14 @@ if (clientId) {
 
     // Include SOW PDF from the quote if available
     if (engagement.quote_id) {
-      interface QuoteRow {
-        sow_path: string | null
-      }
+      const sowState = await getSOWStateForQuote(env.DB, session.orgId, engagement.quote_id)
+      const revision = sowState.downloadableRevision
 
-      const quote = await env.DB.prepare('SELECT sow_path FROM quotes WHERE id = ? AND org_id = ?')
-        .bind(engagement.quote_id, session.orgId)
-        .first<QuoteRow>()
-
-      if (quote?.sow_path) {
+      if (revision) {
         documents.unshift({
           name: 'Statement of Work (SOW)',
-          key: quote.sow_path,
-          uploaded: engagement.created_at,
+          key: revision.signed_storage_key ?? revision.unsigned_storage_key,
+          uploaded: revision.signed_at ?? revision.rendered_at,
           isPdf: true,
         })
       }

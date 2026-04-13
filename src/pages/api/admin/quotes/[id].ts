@@ -3,10 +3,8 @@ import { getQuote, updateQuote, updateQuoteStatus } from '../../../../lib/db/quo
 import type { LineItem, QuoteStatus } from '../../../../lib/db/quotes'
 import { getEntity } from '../../../../lib/db/entities'
 import { listContacts } from '../../../../lib/db/contacts'
-import { uploadPdf } from '../../../../lib/storage/r2'
-import { renderSow } from '../../../../lib/pdf/render'
 import type { SOWTemplateProps } from '../../../../lib/pdf/sow-template'
-import { scheduleProposalCadence } from '../../../../lib/follow-ups/scheduler'
+import { createSOWRevisionForQuote } from '../../../../lib/sow/service'
 
 /**
  * POST /api/admin/quotes/:id
@@ -14,8 +12,7 @@ import { scheduleProposalCadence } from '../../../../lib/follow-ups/scheduler'
  * Updates an existing quote from form data.
  * Handles multiple actions:
  * - action=update: update fields and recalculate totals
- * - action=generate-pdf: render SOW PDF, upload to R2, save path
- * - action=send: transition status to sent, set sent_at/expires_at
+ * - action=generate-pdf: create an immutable SOW revision
  *
  * Protected by auth middleware (requires admin role).
  */
@@ -73,10 +70,6 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       const now = new Date()
       const expirationDate = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000)
 
-      // Generate SOW number: SOW-YYYYMM-NNN
-      const month = String(now.getMonth() + 1).padStart(2, '0')
-      const sowNumber = `SOW-${now.getFullYear()}${month}-001`
-
       // Determine payment schedule
       const isThreeMilestone = existing.total_hours >= 40
       const depositPct = existing.deposit_pct
@@ -111,7 +104,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
         document: {
           date: formatDate(now),
           expirationDate: formatDate(expirationDate),
-          sowNumber,
+          sowNumber: 'PENDING',
         },
         engagement: {
           overview: 'Operations cleanup engagement as discussed during assessment.',
@@ -123,42 +116,16 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
           description: item.description,
         })),
         payment: paymentProps,
-        smd: {
-          signerName: 'Scott Durgan',
-          signerTitle: 'Principal',
-        },
       }
 
-      const pdf = await renderSow(templateProps)
-      const sowPath = await uploadPdf(env.STORAGE, session.orgId, quoteId, pdf)
-      await updateQuote(env.DB, session.orgId, quoteId, {
-        sow_path: sowPath,
-        sow_generated_at: new Date().toISOString(),
+      await createSOWRevisionForQuote({
+        db: env.DB,
+        storage: env.STORAGE,
+        orgId: session.orgId,
+        quote: existing,
+        actorId: session.userId,
+        templateProps,
       })
-
-      return redirect(`/admin/entities/${existing.entity_id}/quotes/${quoteId}?saved=1`, 302)
-    }
-
-    // ----- ACTION: send -----
-    if (action === 'send') {
-      try {
-        await updateQuoteStatus(env.DB, session.orgId, quoteId, 'sent' as QuoteStatus)
-      } catch (err) {
-        console.error('[api/admin/quotes/[id]] Send error:', err)
-        return redirect(
-          `/admin/entities/${existing.entity_id}/quotes/${quoteId}?error=invalid_transition`,
-          302
-        )
-      }
-
-      // Schedule proposal follow-up cadence (Decision #19: Day 2, Day 5, Day 7)
-      try {
-        const sentAt = new Date().toISOString()
-        await scheduleProposalCadence(env.DB, session.orgId, quoteId, existing.entity_id, sentAt)
-      } catch (err) {
-        // Non-blocking — log but don't fail the send action
-        console.error('[api/admin/quotes/[id]] Follow-up scheduling error:', err)
-      }
 
       return redirect(`/admin/entities/${existing.entity_id}/quotes/${quoteId}?saved=1`, 302)
     }

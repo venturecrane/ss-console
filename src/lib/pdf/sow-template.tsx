@@ -49,10 +49,6 @@ export interface SOWTemplateProps {
     milestone?: string // only for three_milestone
     milestoneLabel?: string
   }
-  smd: {
-    signerName: string
-    signerTitle: string
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +126,7 @@ const pageMargins = {
 // ---------------------------------------------------------------------------
 
 export function SOWTemplate(props: SOWTemplateProps) {
-  const { client, document: doc, engagement, items, payment, smd } = props
+  const { client, document: doc, engagement, items, payment } = props
 
   if (items.length > 8) {
     throw new Error(
@@ -572,79 +568,40 @@ export function SOWTemplate(props: SOWTemplateProps) {
         {/* Next Steps */}
         <Text style={sectionHeadingStyle}>NEXT STEPS</Text>
         <Text style={{ ...bodyTextStyle, marginBottom: 24 }}>
-          Once both parties sign below, we will send a deposit invoice. Work begins after the
-          deposit is received. We will confirm the kickoff date within one business day.
+          Once you sign below, we will send a deposit invoice. Work begins after the deposit is
+          received. We will confirm the kickoff date within one business day.
         </Text>
 
         {/* Signature Block */}
         <Text style={sectionHeadingStyle}>AGREEMENT</Text>
         <Text style={{ ...bodyTextStyle, marginBottom: 16 }}>
-          By signing below, both parties agree to the scope, timeline, and terms described in this
-          document.
+          By signing below, the client agrees to the scope, timeline, pricing, and terms described
+          in this document. SMD Services agrees by presenting this Statement of Work for signature.
         </Text>
-        <View style={{ flexDirection: 'row', gap: SIGNING_PAGE.columnGap }}>
-          {/* Client side — signs via SignWell (fields placed by API coordinates) */}
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontFamily: fonts.body,
-                fontWeight: 600,
-                fontSize: 9,
-                color: colors.textPrimary,
-                marginBottom: SIGNING_PAGE.signingSpaceHeight,
-              }}
-            >
-              CLIENT
-            </Text>
-            <View style={{ height: 1, backgroundColor: colors.textBody, marginBottom: 4 }} />
-            <Text
-              style={{
-                fontFamily: fonts.body,
-                fontWeight: 400,
-                fontSize: 9,
-                color: colors.textBody,
-              }}
-            >
-              {client.contactName}
-            </Text>
-            {client.contactTitle && (
-              <Text
-                style={{
-                  fontFamily: fonts.body,
-                  fontWeight: 400,
-                  fontSize: 9,
-                  color: colors.textBody,
-                }}
-              >
-                {client.contactTitle}
-              </Text>
-            )}
-            <Text
-              style={{
-                fontFamily: fonts.body,
-                fontWeight: 400,
-                fontSize: 8,
-                color: colors.textMuted,
-                marginTop: 4,
-              }}
-            >
-              Date: _______________
-            </Text>
-          </View>
-          {/* SMD Services side */}
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontFamily: fonts.body,
-                fontWeight: 600,
-                fontSize: 9,
-                color: colors.textPrimary,
-                marginBottom: SIGNING_PAGE.signingSpaceHeight,
-              }}
-            >
-              SMD SERVICES
-            </Text>
-            <View style={{ height: 1, backgroundColor: colors.textBody, marginBottom: 4 }} />
+        <View style={{ width: SIGNING_PAGE.columnWidth }}>
+          <Text
+            style={{
+              fontFamily: fonts.body,
+              fontWeight: 600,
+              fontSize: 9,
+              color: colors.textPrimary,
+              marginBottom: SIGNING_PAGE.signingSpaceHeight,
+            }}
+          >
+            CLIENT ACCEPTANCE
+          </Text>
+          <View style={{ height: 1, backgroundColor: colors.textBody, marginBottom: 4 }} />
+          <Text
+            style={{
+              fontFamily: fonts.body,
+              fontWeight: 400,
+              fontSize: 9,
+              color: colors.textBody,
+            }}
+          >
+            {client.contactName}
+          </Text>
+          {client.contactTitle && (
             <Text
               style={{
                 fontFamily: fonts.body,
@@ -653,30 +610,30 @@ export function SOWTemplate(props: SOWTemplateProps) {
                 color: colors.textBody,
               }}
             >
-              {smd.signerName}
+              {client.contactTitle}
             </Text>
-            <Text
-              style={{
-                fontFamily: fonts.body,
-                fontWeight: 400,
-                fontSize: 9,
-                color: colors.textBody,
-              }}
-            >
-              {smd.signerTitle}
-            </Text>
-            <Text
-              style={{
-                fontFamily: fonts.body,
-                fontWeight: 400,
-                fontSize: 8,
-                color: colors.textMuted,
-                marginTop: 4,
-              }}
-            >
-              Date: _______________
-            </Text>
-          </View>
+          )}
+          <Text
+            style={{
+              fontFamily: fonts.body,
+              fontWeight: 400,
+              fontSize: 8,
+              color: colors.textMuted,
+              marginTop: 4,
+            }}
+          >
+            Date: _______________
+          </Text>
+          <Text
+            style={{
+              ...finePrintStyle,
+              marginTop: 16,
+              lineHeight: 1.4,
+            }}
+          >
+            SMD Services assents to this agreement by presenting this Statement of Work for
+            signature.
+          </Text>
         </View>
 
         {/* Footer */}

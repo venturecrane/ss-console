@@ -66,52 +66,8 @@ export async function getTranscript(r2: R2Bucket, key: string): Promise<R2Object
 }
 
 // ---------------------------------------------------------------------------
-// PDF storage helpers
+// SOW PDF helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Upload a generated PDF to R2.
- *
- * PDFs are stored with a structured key pattern:
- *   {orgId}/quotes/{quoteId}/sow.pdf
- *
- * @param r2 - The R2 bucket binding (STORAGE)
- * @param orgId - Organization ID for tenant scoping
- * @param quoteId - Quote this SOW belongs to
- * @param pdf - The PDF binary data
- * @returns The R2 key where the file was stored
- */
-export async function uploadPdf(
-  r2: R2Bucket,
-  orgId: string,
-  quoteId: string,
-  pdf: Uint8Array
-): Promise<string> {
-  const key = getPdfUrl(orgId, quoteId)
-
-  await r2.put(key, pdf, {
-    httpMetadata: {
-      contentType: 'application/pdf',
-    },
-    customMetadata: {
-      generatedAt: new Date().toISOString(),
-      quoteId,
-    },
-  })
-
-  return key
-}
-
-/**
- * Get the R2 key for a SOW PDF.
- *
- * @param orgId - Organization ID for tenant scoping
- * @param quoteId - Quote this SOW belongs to
- * @returns The R2 key
- */
-export function getPdfUrl(orgId: string, quoteId: string): string {
-  return `${orgId}/quotes/${quoteId}/sow.pdf`
-}
 
 /**
  * Retrieve a PDF object from R2.
@@ -122,6 +78,60 @@ export function getPdfUrl(orgId: string, quoteId: string): string {
  */
 export async function getPdf(r2: R2Bucket, key: string): Promise<R2ObjectBody | null> {
   return r2.get(key)
+}
+
+/**
+ * Structured key for an immutable unsigned SOW revision artifact.
+ */
+export function getSowRevisionUnsignedKey(
+  orgId: string,
+  quoteId: string,
+  revisionId: string
+): string {
+  return `orgs/${orgId}/quotes/${quoteId}/sow/${revisionId}/unsigned.pdf`
+}
+
+/**
+ * Structured key for the signed artifact produced from an immutable SOW revision.
+ */
+export function getSowRevisionSignedKey(
+  orgId: string,
+  quoteId: string,
+  revisionId: string
+): string {
+  return `orgs/${orgId}/quotes/${quoteId}/sow/${revisionId}/signed.pdf`
+}
+
+export async function uploadSowRevisionPdf(
+  r2: R2Bucket,
+  key: string,
+  pdf: Uint8Array,
+  metadata: Record<string, string>
+): Promise<string> {
+  await r2.put(key, pdf, {
+    httpMetadata: {
+      contentType: 'application/pdf',
+    },
+    customMetadata: metadata,
+  })
+
+  return key
+}
+
+export async function uploadSignedSowRevisionPdf(
+  r2: R2Bucket,
+  key: string,
+  pdf: Uint8Array,
+  metadata: Record<string, string>
+): Promise<string> {
+  await r2.put(key, pdf, {
+    httpMetadata: {
+      contentType: 'application/pdf',
+    },
+    customMetadata: metadata,
+  })
+
+  return key
 }
 
 // ---------------------------------------------------------------------------
