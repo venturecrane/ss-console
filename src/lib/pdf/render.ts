@@ -51,10 +51,14 @@ export async function renderSow(props: SOWTemplateProps): Promise<Uint8Array> {
   // so we use pdf-lib to add tags that SignWell's scanner can find.
   try {
     const tagged = await injectSigningTags(pdf)
-    console.log(`[renderSow] Text tag injection: ${pdf.length}b → ${tagged.length}b`)
     return tagged
   } catch (err) {
-    console.error('[renderSow] Text tag injection FAILED, returning untagged PDF:', err)
+    // Log error details for diagnosis. Can't rely on console.log visibility
+    // on Workers, so we also encode the error in the HTTP response header
+    // by writing it to a global that the API handler can access.
+    const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+    console.error('[renderSow] injectSigningTags FAILED:', msg)
+    ;(globalThis as Record<string, unknown>).__lastTagError = msg
     return pdf
   }
 }
