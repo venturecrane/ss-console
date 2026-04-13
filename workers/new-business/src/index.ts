@@ -14,7 +14,6 @@
 import { ORG_ID } from '../../../src/lib/constants.js'
 import { findOrCreateEntity } from '../../../src/lib/db/entities.js'
 import { appendContext } from '../../../src/lib/db/context.js'
-import { computeSlug } from '../../../src/lib/entities/slug.js'
 import { fetchAllPermits } from './soda.js'
 import { qualifyNewBusiness } from './qualify.js'
 import { sendFailureAlert, type RunSummary } from './alert.js'
@@ -44,12 +43,13 @@ async function run(env: Env): Promise<RunSummary> {
 
   for (const permit of permits) {
     try {
-      const slug = computeSlug(permit.business_name, permit.address)
-      const existing = await env.DB.prepare('SELECT 1 FROM entities WHERE org_id = ? AND slug = ?')
-        .bind(ORG_ID, slug)
+      const alreadyProcessed = await env.DB.prepare(
+        `SELECT 1 FROM context WHERE org_id = ? AND source = 'new_business' AND source_ref = ?`
+      )
+        .bind(ORG_ID, permit.permit_number)
         .first()
 
-      if (existing) continue
+      if (alreadyProcessed) continue
 
       summary.newPermits++
 
@@ -104,6 +104,7 @@ async function run(env: Env): Promise<RunSummary> {
         type: 'signal',
         content,
         source: 'new_business',
+        source_ref: permit.permit_number,
         metadata,
       })
 
