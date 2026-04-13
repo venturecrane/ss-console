@@ -1,0 +1,115 @@
+---
+import '../styles/global.css'
+
+interface BreadcrumbItem {
+  label: string
+  href?: string
+}
+
+interface Props {
+  title: string
+  breadcrumbs?: BreadcrumbItem[]
+  maxWidth?: 'max-w-5xl' | 'max-w-6xl'
+}
+
+const { title, breadcrumbs = [], maxWidth = 'max-w-5xl' } = Astro.props
+const session = Astro.locals.session!
+const pathname = Astro.url.pathname
+
+const navItems = [
+  { label: 'Dashboard', href: '/admin', match: (p: string) => p === '/admin' || p === '/admin/' },
+  {
+    label: 'Entities',
+    href: '/admin/entities',
+    match: (p: string) => p.startsWith('/admin/entities'),
+  },
+  {
+    label: 'Follow-ups',
+    href: '/admin/follow-ups',
+    match: (p: string) => p.startsWith('/admin/follow-ups'),
+  },
+  {
+    label: 'Analytics',
+    href: '/admin/analytics',
+    match: (p: string) => p.startsWith('/admin/analytics'),
+  },
+]
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>{title}</title>
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-900">
+    <header class="bg-white border-b border-slate-200">
+      <div class={`${maxWidth} mx-auto px-4 py-3 flex items-center justify-between`}>
+        <div class="flex items-center gap-3">
+          <a
+            href="/admin"
+            class="text-lg font-bold text-slate-900 hover:text-primary transition-colors"
+            >SMD Services</a
+          >
+          <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">Admin</span>
+        </div>
+        <div class="flex items-center gap-4">
+          {
+            navItems.map((item) => (
+              <a
+                href={item.href}
+                class:list={[
+                  'text-sm transition-colors',
+                  item.match(pathname)
+                    ? 'text-primary font-medium'
+                    : 'text-slate-600 hover:text-slate-900',
+                ]}
+              >
+                {item.label}
+              </a>
+            ))
+          }
+          <span class="text-sm text-slate-400">|</span>
+          <span class="text-sm text-slate-600">{session.email}</span>
+          <form method="POST" action="/api/auth/logout">
+            <button
+              type="submit"
+              class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
+    </header>
+
+    <main class={`${maxWidth} mx-auto px-4 py-8`}>
+      {
+        breadcrumbs.length > 0 && (
+          <nav class="text-sm text-slate-500 mb-4">
+            {breadcrumbs.map((crumb, i) => (
+              <>
+                {i > 0 && <span class="mx-1">/</span>}
+                {crumb.href ? (
+                  <a href={crumb.href} class="hover:text-primary transition-colors">
+                    {crumb.label}
+                  </a>
+                ) : (
+                  <span class="text-slate-900">{crumb.label}</span>
+                )}
+              </>
+            ))}
+          </nav>
+        )
+      }
+      <slot />
+    </main>
+  </body>
+</html>

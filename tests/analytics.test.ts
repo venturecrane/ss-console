@@ -253,7 +253,8 @@ describe('analytics: dashboard page', () => {
   })
 
   it('is not indexed by search engines', () => {
-    expect(source()).toContain('noindex')
+    const layout = readFileSync(resolve('src/layouts/AdminLayout.astro'), 'utf-8')
+    expect(layout).toContain('noindex')
   })
 
   it('uses responsive grid layout', () => {
@@ -287,10 +288,10 @@ describe('analytics: admin dashboard integration', () => {
     expect(source()).toContain('getPipelineConversion')
   })
 
-  it('admin dashboard shows Analytics card', () => {
-    const code = source()
-    expect(code).toContain('Analytics')
-    expect(code).toContain('/admin/analytics')
+  it('admin layout shows Analytics nav link', () => {
+    const layout = readFileSync(resolve('src/layouts/AdminLayout.astro'), 'utf-8')
+    expect(layout).toContain('Analytics')
+    expect(layout).toContain('/admin/analytics')
   })
 
   it('admin dashboard shows pipeline total metric', () => {

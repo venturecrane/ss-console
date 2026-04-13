@@ -1,5 +1,5 @@
 ---
-import '../../../styles/global.css'
+import AdminLayout from '../../../layouts/AdminLayout.astro'
 import { statusBadgeClass } from '../../../lib/ui/status-badge'
 import { getAssessment } from '../../../lib/db/assessments'
 import { getEntity, ENTITY_STAGES } from '../../../lib/db/entities'
@@ -119,431 +119,368 @@ function contextTypeBadge(type: string): string {
 }
 ---
 
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="robots" content="noindex, nofollow" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
-    <title>Assessment: {entity.name} — SMD Services</title>
-  </head>
-  <body class="min-h-screen bg-slate-50">
-    <header class="bg-white border-b border-slate-200">
-      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <a
-            href="/admin"
-            class="text-lg font-bold text-slate-900 hover:text-primary transition-colors"
-            >SMD Services</a
-          >
-          <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">Admin</span>
-        </div>
-        <div class="flex items-center gap-4">
-          <span class="text-sm text-slate-600">{session.email}</span>
-          <form method="POST" action="/api/auth/logout">
-            <button
-              type="submit"
-              class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
+<AdminLayout
+  title={`Assessment: ${entity?.name ?? 'Entity'} — SMD Services`}
+  breadcrumbs={[
+    { label: 'Dashboard', href: '/admin' },
+    { label: entity?.name ?? 'Entity', href: `/admin/entities/${entity?.id}` },
+    { label: 'Assessment' },
+  ]}
+>
+  {
+    error && (
+      <div class="bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded-lg mb-4">
+        {decodeURIComponent(error)}
       </div>
-    </header>
+    )
+  }
+  {
+    saved && (
+      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg mb-4">
+        Changes saved.
+      </div>
+    )
+  }
 
-    <main class="max-w-5xl mx-auto px-4 py-8">
-      <nav class="text-sm text-slate-500 mb-4">
-        <a href="/admin" class="hover:text-primary transition-colors">Dashboard</a>
-        <span class="mx-1">/</span>
-        <a href={`/admin/entities/${entity.id}`} class="hover:text-primary transition-colors"
-          >{entity.name}</a
-        >
-        <span class="mx-1">/</span>
-        <span class="text-slate-900">Assessment</span>
-      </nav>
-
-      {
-        error && (
-          <div class="bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded-lg mb-4">
-            {decodeURIComponent(error)}
-          </div>
-        )
-      }
-      {
-        saved && (
-          <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg mb-4">
-            Changes saved.
-          </div>
-        )
-      }
-
-      {/* Entity + Assessment Info */}
-      <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
-        <div class="flex items-start justify-between gap-4 mb-4">
-          <div>
-            <div class="flex items-center gap-3 mb-2">
-              <h2 class="text-xl font-semibold text-slate-900">{entity.name}</h2>
-              <span class={`text-xs px-2 py-0.5 rounded ${stageBadgeClass(entity.stage)}`}>
-                {ENTITY_STAGES.find((s) => s.value === entity.stage)?.label ?? entity.stage}
-              </span>
-              {
-                entity.tier && (
-                  <span class={`text-xs px-2 py-0.5 rounded ${tierBadgeClass(entity.tier)}`}>
-                    {entity.tier}
-                  </span>
-                )
-              }
-            </div>
-
-            <div class="flex items-center gap-4 text-sm text-slate-500 flex-wrap">
-              {
-                entity.pain_score != null && (
-                  <span>
-                    Pain: <strong class="text-slate-700">{entity.pain_score}/10</strong>
-                  </span>
-                )
-              }
-              {
-                entity.vertical && (
-                  <span class="capitalize">{entity.vertical.replace(/_/g, ' ')}</span>
-                )
-              }
-              {entity.area && <span>{entity.area}</span>}
-            </div>
-          </div>
-          <span class={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(assessment.status)}`}>
-            {assessment.status}
+  {/* Entity + Assessment Info */}
+  <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
+    <div class="flex items-start justify-between gap-4 mb-4">
+      <div>
+        <div class="flex items-center gap-3 mb-2">
+          <h2 class="text-xl font-semibold text-slate-900">{entity.name}</h2>
+          <span class={`text-xs px-2 py-0.5 rounded ${stageBadgeClass(entity.stage)}`}>
+            {ENTITY_STAGES.find((s) => s.value === entity.stage)?.label ?? entity.stage}
           </span>
-        </div>
-
-        {/* Schedule details */}
-        {
-          schedule && (
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div>
-                <span class="text-slate-500">Scheduled:</span>
-                <span class="ml-1 text-slate-900 font-medium">
-                  {formatDateTime(schedule.slot_start_utc)}
-                </span>
-                <span class="text-slate-400 ml-1">({schedule.timezone})</span>
-              </div>
-              <div>
-                <span class="text-slate-500">Contact:</span>
-                <span class="ml-1 text-slate-900">{schedule.guest_name}</span>
-                <a
-                  href={`mailto:${schedule.guest_email}`}
-                  class="ml-1 text-blue-600 hover:underline"
-                >
-                  {schedule.guest_email}
-                </a>
-              </div>
-              {schedule.google_meet_url && (
-                <div>
-                  <a
-                    href={schedule.google_meet_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="inline-flex items-center gap-1.5 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700 transition-colors"
-                  >
-                    Join Video Call
-                  </a>
-                </div>
-              )}
-              {schedule.google_event_link && (
-                <div>
-                  <a
-                    href={schedule.google_event_link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-blue-600 hover:underline"
-                  >
-                    View Calendar Event
-                  </a>
-                </div>
-              )}
-            </div>
-          )
-        }
-        {
-          !schedule && assessment.scheduled_at && (
-            <div class="text-sm text-slate-500">
-              Scheduled: {formatDateTime(assessment.scheduled_at)}
-            </div>
-          )
-        }
-      </div>
-
-      {/* Live Notes */}
-      <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-base font-semibold text-slate-900">Live Notes</h3>
-          <span id="save-status" class="text-xs text-slate-400">Saved</span>
-        </div>
-        <textarea
-          id="live-notes"
-          rows="10"
-          class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono"
-          placeholder="Take notes during the call...">{liveNotesValue}</textarea
-        >
-      </div>
-
-      {/* Complete Assessment Form (collapsible) */}
-      <div class="bg-white rounded-lg border border-slate-200 mb-6">
-        <button
-          type="button"
-          id="toggle-complete"
-          class="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-slate-50 transition-colors"
-        >
-          <h3 class="text-base font-semibold text-slate-900">Complete Assessment</h3>
-          <svg
-            id="toggle-icon"
-            class="w-5 h-5 text-slate-400 transition-transform"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"
-            ></path>
-          </svg>
-        </button>
-
-        <div id="complete-form" class="hidden px-6 pb-6 border-t border-slate-100">
-          <form
-            method="POST"
-            action={`/api/admin/assessments/${assessmentId}/complete`}
-            enctype="multipart/form-data"
-            class="space-y-6 pt-4"
-          >
-            {/* Problems identified */}
-            <div>
-              <label class="block text-sm font-medium text-slate-700 mb-2"
-                >Problems Identified</label
-              >
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <label class="flex items-center gap-2 text-sm text-slate-700">
-                  <input type="checkbox" name="process_design" class="rounded border-slate-300" />
-                  Process design
-                </label>
-                <label class="flex items-center gap-2 text-sm text-slate-700">
-                  <input type="checkbox" name="tool_systems" class="rounded border-slate-300" />
-                  Tools & systems
-                </label>
-                <label class="flex items-center gap-2 text-sm text-slate-700">
-                  <input type="checkbox" name="data_visibility" class="rounded border-slate-300" />
-                  Data & visibility
-                </label>
-                <label class="flex items-center gap-2 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    name="customer_pipeline"
-                    class="rounded border-slate-300"
-                  />
-                  Customer pipeline
-                </label>
-                <label class="flex items-center gap-2 text-sm text-slate-700">
-                  <input type="checkbox" name="team_operations" class="rounded border-slate-300" />
-                  Team operations
-                </label>
-              </div>
-              <div class="mt-2">
-                <input
-                  type="text"
-                  name="other_problem"
-                  placeholder="Other (describe)"
-                  class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                />
-              </div>
-            </div>
-
-            {/* Disqualifiers */}
-            <div class="border border-slate-200 rounded-lg p-4">
-              <label class="flex items-center gap-2 text-sm text-slate-700 mb-2">
-                <input
-                  type="checkbox"
-                  name="disqualified"
-                  id="disqualified-check"
-                  class="rounded border-slate-300"
-                />
-                <span class="font-medium">Disqualified</span>
-              </label>
-              <input
-                type="text"
-                name="disqualify_reason"
-                id="disqualify-reason"
-                placeholder="Reason for disqualification"
-                class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 disabled:bg-slate-50"
-                disabled
-              />
-            </div>
-
-            {/* Duration */}
-            <div>
-              <label for="duration_minutes" class="block text-sm font-medium text-slate-700 mb-1"
-                >Duration (minutes)</label
-              >
-              <input
-                type="number"
-                name="duration_minutes"
-                id="duration_minutes"
-                min="1"
-                max="300"
-                placeholder="30"
-                class="w-32 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              />
-            </div>
-
-            {/* Notes */}
-            <div>
-              <label for="complete-notes" class="block text-sm font-medium text-slate-700 mb-1"
-                >Notes</label
-              >
-              <textarea
-                name="notes"
-                id="complete-notes"
-                rows="4"
-                class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                placeholder="Assessment notes..."></textarea>
-            </div>
-
-            {/* Transcript upload */}
-            <div>
-              <label for="transcript" class="block text-sm font-medium text-slate-700 mb-1"
-                >Transcript (optional)</label
-              >
-              <input
-                type="file"
-                name="transcript"
-                id="transcript"
-                accept=".txt,.md,.pdf,.doc,.docx"
-                class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
-              />
-            </div>
-
-            {/* Submit */}
-            <div class="flex items-center gap-3 pt-2">
-              <button
-                type="submit"
-                class="text-sm bg-green-600 text-white px-6 py-2.5 rounded-lg hover:bg-green-700 transition-colors font-medium"
-              >
-                Complete & Draft Proposal
-              </button>
-              <span class="text-xs text-slate-400"
-                >Creates a draft quote and transitions to proposing stage</span
-              >
-            </div>
-          </form>
-        </div>
-      </div>
-
-      {/* Entity Context Timeline */}
-      <div class="bg-white rounded-lg border border-slate-200 p-6">
-        <h3 class="text-base font-semibold text-slate-900 mb-4">
-          Entity Context Timeline
-          <span class="text-sm font-normal text-slate-400 ml-1"
-            >({contextEntries.length} entries)</span
-          >
-        </h3>
-
-        {
-          timelineEntries.length === 0 && (
-            <p class="text-sm text-slate-400">No context entries yet.</p>
-          )
-        }
-
-        <div class="space-y-3">
           {
-            timelineEntries.map((entry) => (
-              <div class="border border-slate-100 rounded-lg p-3">
-                <div class="flex items-center gap-2 mb-1">
-                  <span class={`text-xs px-1.5 py-0.5 rounded ${contextTypeBadge(entry.type)}`}>
-                    {entry.type.replace(/_/g, ' ')}
-                  </span>
-                  <span class="text-xs text-slate-400">{entry.source}</span>
-                  <span class="text-xs text-slate-300 ml-auto">{formatDate(entry.created_at)}</span>
-                </div>
-                <div class="text-sm text-slate-700 whitespace-pre-wrap break-words">
-                  {entry.content.length > 500 ? entry.content.slice(0, 500) + '...' : entry.content}
-                </div>
-              </div>
-            ))
+            entity.tier && (
+              <span class={`text-xs px-2 py-0.5 rounded ${tierBadgeClass(entity.tier)}`}>
+                {entity.tier}
+              </span>
+            )
           }
         </div>
-      </div>
-    </main>
 
-    <script define:vars={{ assessmentId }}>
-      // Live notes auto-save
-      const textarea = document.getElementById('live-notes')
-      const saveStatus = document.getElementById('save-status')
-      let saveTimer = null
-      let lastSaved = textarea?.value ?? ''
-
-      async function saveLiveNotes() {
-        const value = textarea?.value ?? ''
-        if (value === lastSaved) return
-
-        saveStatus.textContent = 'Saving...'
-        try {
-          const res = await fetch(`/api/admin/assessments/${assessmentId}/live-notes`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ live_notes: value }),
-          })
-          if (res.ok) {
-            lastSaved = value
-            saveStatus.textContent = 'Saved'
-          } else {
-            saveStatus.textContent = 'Save failed'
+        <div class="flex items-center gap-4 text-sm text-slate-500 flex-wrap">
+          {
+            entity.pain_score != null && (
+              <span>
+                Pain: <strong class="text-slate-700">{entity.pain_score}/10</strong>
+              </span>
+            )
           }
-        } catch {
+          {entity.vertical && <span class="capitalize">{entity.vertical.replace(/_/g, ' ')}</span>}
+          {entity.area && <span>{entity.area}</span>}
+        </div>
+      </div>
+      <span class={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(assessment.status)}`}>
+        {assessment.status}
+      </span>
+    </div>
+
+    {/* Schedule details */}
+    {
+      schedule && (
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <div>
+            <span class="text-slate-500">Scheduled:</span>
+            <span class="ml-1 text-slate-900 font-medium">
+              {formatDateTime(schedule.slot_start_utc)}
+            </span>
+            <span class="text-slate-400 ml-1">({schedule.timezone})</span>
+          </div>
+          <div>
+            <span class="text-slate-500">Contact:</span>
+            <span class="ml-1 text-slate-900">{schedule.guest_name}</span>
+            <a href={`mailto:${schedule.guest_email}`} class="ml-1 text-blue-600 hover:underline">
+              {schedule.guest_email}
+            </a>
+          </div>
+          {schedule.google_meet_url && (
+            <div>
+              <a
+                href={schedule.google_meet_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center gap-1.5 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Join Video Call
+              </a>
+            </div>
+          )}
+          {schedule.google_event_link && (
+            <div>
+              <a
+                href={schedule.google_event_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-blue-600 hover:underline"
+              >
+                View Calendar Event
+              </a>
+            </div>
+          )}
+        </div>
+      )
+    }
+    {
+      !schedule && assessment.scheduled_at && (
+        <div class="text-sm text-slate-500">
+          Scheduled: {formatDateTime(assessment.scheduled_at)}
+        </div>
+      )
+    }
+  </div>
+
+  {/* Live Notes */}
+  <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-base font-semibold text-slate-900">Live Notes</h3>
+      <span id="save-status" class="text-xs text-slate-400">Saved</span>
+    </div>
+    <textarea
+      id="live-notes"
+      rows="10"
+      class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono"
+      placeholder="Take notes during the call...">{liveNotesValue}</textarea
+    >
+  </div>
+
+  {/* Complete Assessment Form (collapsible) */}
+  <div class="bg-white rounded-lg border border-slate-200 mb-6">
+    <button
+      type="button"
+      id="toggle-complete"
+      class="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-slate-50 transition-colors"
+    >
+      <h3 class="text-base font-semibold text-slate-900">Complete Assessment</h3>
+      <svg
+        id="toggle-icon"
+        class="w-5 h-5 text-slate-400 transition-transform"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"
+        ></path>
+      </svg>
+    </button>
+
+    <div id="complete-form" class="hidden px-6 pb-6 border-t border-slate-100">
+      <form
+        method="POST"
+        action={`/api/admin/assessments/${assessmentId}/complete`}
+        enctype="multipart/form-data"
+        class="space-y-6 pt-4"
+      >
+        {/* Problems identified */}
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">Problems Identified</label>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <label class="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" name="process_design" class="rounded border-slate-300" />
+              Process design
+            </label>
+            <label class="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" name="tool_systems" class="rounded border-slate-300" />
+              Tools & systems
+            </label>
+            <label class="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" name="data_visibility" class="rounded border-slate-300" />
+              Data & visibility
+            </label>
+            <label class="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" name="customer_pipeline" class="rounded border-slate-300" />
+              Customer pipeline
+            </label>
+            <label class="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" name="team_operations" class="rounded border-slate-300" />
+              Team operations
+            </label>
+          </div>
+          <div class="mt-2">
+            <input
+              type="text"
+              name="other_problem"
+              placeholder="Other (describe)"
+              class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            />
+          </div>
+        </div>
+
+        {/* Disqualifiers */}
+        <div class="border border-slate-200 rounded-lg p-4">
+          <label class="flex items-center gap-2 text-sm text-slate-700 mb-2">
+            <input
+              type="checkbox"
+              name="disqualified"
+              id="disqualified-check"
+              class="rounded border-slate-300"
+            />
+            <span class="font-medium">Disqualified</span>
+          </label>
+          <input
+            type="text"
+            name="disqualify_reason"
+            id="disqualify-reason"
+            placeholder="Reason for disqualification"
+            class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 disabled:bg-slate-50"
+            disabled
+          />
+        </div>
+
+        {/* Duration */}
+        <div>
+          <label for="duration_minutes" class="block text-sm font-medium text-slate-700 mb-1"
+            >Duration (minutes)</label
+          >
+          <input
+            type="number"
+            name="duration_minutes"
+            id="duration_minutes"
+            min="1"
+            max="300"
+            placeholder="30"
+            class="w-32 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+          />
+        </div>
+
+        {/* Notes */}
+        <div>
+          <label for="complete-notes" class="block text-sm font-medium text-slate-700 mb-1"
+            >Notes</label
+          >
+          <textarea
+            name="notes"
+            id="complete-notes"
+            rows="4"
+            class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            placeholder="Assessment notes..."></textarea>
+        </div>
+
+        {/* Transcript upload */}
+        <div>
+          <label for="transcript" class="block text-sm font-medium text-slate-700 mb-1"
+            >Transcript (optional)</label
+          >
+          <input
+            type="file"
+            name="transcript"
+            id="transcript"
+            accept=".txt,.md,.pdf,.doc,.docx"
+            class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+          />
+        </div>
+
+        {/* Submit */}
+        <div class="flex items-center gap-3 pt-2">
+          <button
+            type="submit"
+            class="text-sm bg-green-600 text-white px-6 py-2.5 rounded-lg hover:bg-green-700 transition-colors font-medium"
+          >
+            Complete & Draft Proposal
+          </button>
+          <span class="text-xs text-slate-400"
+            >Creates a draft quote and transitions to proposing stage</span
+          >
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {/* Entity Context Timeline */}
+  <div class="bg-white rounded-lg border border-slate-200 p-6">
+    <h3 class="text-base font-semibold text-slate-900 mb-4">
+      Entity Context Timeline
+      <span class="text-sm font-normal text-slate-400 ml-1">({contextEntries.length} entries)</span>
+    </h3>
+
+    {timelineEntries.length === 0 && <p class="text-sm text-slate-400">No context entries yet.</p>}
+
+    <div class="space-y-3">
+      {
+        timelineEntries.map((entry) => (
+          <div class="border border-slate-100 rounded-lg p-3">
+            <div class="flex items-center gap-2 mb-1">
+              <span class={`text-xs px-1.5 py-0.5 rounded ${contextTypeBadge(entry.type)}`}>
+                {entry.type.replace(/_/g, ' ')}
+              </span>
+              <span class="text-xs text-slate-400">{entry.source}</span>
+              <span class="text-xs text-slate-300 ml-auto">{formatDate(entry.created_at)}</span>
+            </div>
+            <div class="text-sm text-slate-700 whitespace-pre-wrap break-words">
+              {entry.content.length > 500 ? entry.content.slice(0, 500) + '...' : entry.content}
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+  <script define:vars={{ assessmentId }}>
+    // Live notes auto-save
+    const textarea = document.getElementById('live-notes')
+    const saveStatus = document.getElementById('save-status')
+    let saveTimer = null
+    let lastSaved = textarea?.value ?? ''
+
+    async function saveLiveNotes() {
+      const value = textarea?.value ?? ''
+      if (value === lastSaved) return
+
+      saveStatus.textContent = 'Saving...'
+      try {
+        const res = await fetch(`/api/admin/assessments/${assessmentId}/live-notes`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ live_notes: value }),
+        })
+        if (res.ok) {
+          lastSaved = value
+          saveStatus.textContent = 'Saved'
+        } else {
           saveStatus.textContent = 'Save failed'
         }
+      } catch {
+        saveStatus.textContent = 'Save failed'
       }
+    }
 
-      textarea?.addEventListener('input', () => {
-        saveStatus.textContent = 'Unsaved changes'
-        clearTimeout(saveTimer)
-        saveTimer = setTimeout(saveLiveNotes, 10000) // 10 second auto-save
-      })
+    textarea?.addEventListener('input', () => {
+      saveStatus.textContent = 'Unsaved changes'
+      clearTimeout(saveTimer)
+      saveTimer = setTimeout(saveLiveNotes, 10000) // 10 second auto-save
+    })
 
-      // Save on blur (tab away)
-      textarea?.addEventListener('blur', () => {
-        clearTimeout(saveTimer)
-        saveLiveNotes()
-      })
+    // Save on blur (tab away)
+    textarea?.addEventListener('blur', () => {
+      clearTimeout(saveTimer)
+      saveLiveNotes()
+    })
 
-      // Toggle complete form
-      const toggleBtn = document.getElementById('toggle-complete')
-      const completeForm = document.getElementById('complete-form')
-      const toggleIcon = document.getElementById('toggle-icon')
+    // Toggle complete form
+    const toggleBtn = document.getElementById('toggle-complete')
+    const completeForm = document.getElementById('complete-form')
+    const toggleIcon = document.getElementById('toggle-icon')
 
-      toggleBtn?.addEventListener('click', () => {
-        completeForm?.classList.toggle('hidden')
-        toggleIcon?.classList.toggle('rotate-180')
-      })
+    toggleBtn?.addEventListener('click', () => {
+      completeForm?.classList.toggle('hidden')
+      toggleIcon?.classList.toggle('rotate-180')
+    })
 
-      // Disqualifier checkbox controls reason input
-      const dqCheck = document.getElementById('disqualified-check')
-      const dqReason = document.getElementById('disqualify-reason')
+    // Disqualifier checkbox controls reason input
+    const dqCheck = document.getElementById('disqualified-check')
+    const dqReason = document.getElementById('disqualify-reason')
 
-      dqCheck?.addEventListener('change', () => {
-        dqReason.disabled = !dqCheck.checked
-        if (!dqCheck.checked) dqReason.value = ''
-      })
+    dqCheck?.addEventListener('change', () => {
+      dqReason.disabled = !dqCheck.checked
+      if (!dqCheck.checked) dqReason.value = ''
+    })
 
-      // Pre-fill completion notes from live notes
-      const completeNotes = document.getElementById('complete-notes')
-      toggleBtn?.addEventListener('click', () => {
-        if (completeNotes && !completeNotes.value && textarea?.value) {
-          completeNotes.value = textarea.value
-        }
-      })
-    </script>
-  </body>
-</html>
+    // Pre-fill completion notes from live notes
+    const completeNotes = document.getElementById('complete-notes')
+    toggleBtn?.addEventListener('click', () => {
+      if (completeNotes && !completeNotes.value && textarea?.value) {
+        completeNotes.value = textarea.value
+      }
+    })
+  </script>
+</AdminLayout>

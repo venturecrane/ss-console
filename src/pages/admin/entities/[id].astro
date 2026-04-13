@@ -1,5 +1,5 @@
 ---
-import '../../../styles/global.css'
+import AdminLayout from '../../../layouts/AdminLayout.astro'
 import { statusBadgeClass } from '../../../lib/ui/status-badge'
 import { getEntity, ENTITY_STAGES } from '../../../lib/db/entities'
 import type { EntityStage } from '../../../lib/db/entities'
@@ -278,587 +278,534 @@ function confidenceColor(confidence: string): string {
 }
 ---
 
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="robots" content="noindex, nofollow" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
-    <title>{entity.name} — SMD Services</title>
-  </head>
-  <body class="min-h-screen bg-slate-50">
-    <header class="bg-white border-b border-slate-200">
-      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <a
-            href="/admin"
-            class="text-lg font-bold text-slate-900 hover:text-primary transition-colors"
-            >SMD Services</a
-          >
-          <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">Admin</span>
-        </div>
-        <div class="flex items-center gap-4">
-          <span class="text-sm text-slate-600">{session.email}</span>
-          <form method="POST" action="/api/auth/logout">
-            <button
-              type="submit"
-              class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
+<AdminLayout
+  title={`${entity.name} — SMD Services`}
+  breadcrumbs={[
+    { label: 'Dashboard', href: '/admin' },
+    { label: 'Entities', href: `/admin/entities?stage=${entity.stage}` },
+    { label: entity.name },
+  ]}
+>
+  {
+    promoted && (
+      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg mb-4">
+        Entity promoted to prospect.
       </div>
-    </header>
-
-    <main class="max-w-5xl mx-auto px-4 py-8">
-      <nav class="text-sm text-slate-500 mb-4">
-        <a href="/admin" class="hover:text-primary transition-colors">Dashboard</a>
-        <span class="mx-1">/</span>
-        <a
-          href={`/admin/entities?stage=${entity.stage}`}
-          class="hover:text-primary transition-colors">Entities</a
-        >
-        <span class="mx-1">/</span>
-        <span class="text-slate-900">{entity.name}</span>
-      </nav>
-
-      {
-        promoted && (
-          <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg mb-4">
-            Entity promoted to prospect.
-          </div>
-        )
-      }
-      {
-        noteAdded && (
-          <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg mb-4">
-            Note added.
-          </div>
-        )
-      }
-      {
-        stageUpdated && (
-          <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg mb-4">
-            Stage updated.
-          </div>
-        )
-      }
-      {
-        dossierGenerated && (
-          <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg mb-4">
-            Intelligence dossier generated. See enrichment entries in the timeline below.
-          </div>
-        )
-      }
-      {
-        error && (
-          <div class="bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded-lg mb-4">
-            {decodeURIComponent(error)}
-          </div>
-        )
-      }
-
-      {/* Entity Summary */}
-      <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <div class="flex items-center gap-3 mb-2">
-              <h2 class="text-xl font-semibold text-slate-900">{entity.name}</h2>
-              <span class={`text-xs px-2 py-0.5 rounded ${stageBadgeClass(entity.stage)}`}>
-                {ENTITY_STAGES.find((s) => s.value === entity.stage)?.label ?? entity.stage}
-              </span>
-              {
-                entity.tier && (
-                  <span
-                    class={`text-xs px-2 py-0.5 rounded ${
-                      entity.tier === 'hot'
-                        ? 'bg-red-100 text-red-700'
-                        : entity.tier === 'warm'
-                          ? 'bg-amber-100 text-amber-700'
-                          : entity.tier === 'cool'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-slate-100 text-slate-500'
-                    }`}
-                  >
-                    {entity.tier}
-                  </span>
-                )
-              }
-            </div>
-
-            <div class="flex items-center gap-4 text-sm text-slate-500 mb-2 flex-wrap">
-              {
-                entity.pain_score && (
-                  <span>
-                    Pain: <strong class="text-slate-700">{entity.pain_score}/10</strong>
-                  </span>
-                )
-              }
-              {
-                entity.vertical && (
-                  <span class="capitalize">{entity.vertical.replace(/_/g, ' ')}</span>
-                )
-              }
-              {entity.area && <span>{entity.area}</span>}
-              {entity.employee_count && <span>~{entity.employee_count} employees</span>}
-            </div>
-
-            <div class="flex items-center gap-3 text-xs text-slate-400">
-              {
-                entity.source_pipeline && (
-                  <span>Source: {entity.source_pipeline.replace(/_/g, ' ')}</span>
-                )
-              }
-              <span>Created {formatDate(entity.created_at)}</span>
-              {entity.phone && <span>{entity.phone}</span>}
-              {
-                entity.website && (
-                  <a
-                    href={
-                      entity.website.startsWith('http')
-                        ? entity.website
-                        : `https://${entity.website}`
-                    }
-                    target="_blank"
-                    class="text-blue-500 hover:underline"
-                  >
-                    {entity.website}
-                  </a>
-                )
-              }
-            </div>
-
-            {
-              entity.next_action && (
-                <div class="mt-3 bg-amber-50 border border-amber-200 px-3 py-2 rounded text-sm">
-                  <span class="font-medium text-amber-800">Next:</span>
-                  <span class="text-amber-700">
-                    {entity.next_action}
-                    {entity.next_action_at && ` — ${formatDate(entity.next_action_at)}`}
-                  </span>
-                </div>
-              )
-            }
-          </div>
-
-          {/* Stage transition buttons */}
-          <div class="flex items-center gap-2 shrink-0">
-            {
-              TRANSITIONS[entity.stage]?.map((t) => (
-                <form method="POST" action={t.action ?? `/api/admin/entities/${entity.id}/stage`}>
-                  <input type="hidden" name="stage" value={t.stage} />
-                  <input type="hidden" name="reason" value={`${t.label} by admin.`} />
-                  <button
-                    type="submit"
-                    class={`text-xs px-3 py-1.5 rounded-md transition-colors ${t.style}`}
-                  >
-                    {t.label}
-                  </button>
-                </form>
-              ))
-            }
-            {
-              showDossierButton && (
-                <form
-                  method="POST"
-                  action={`/api/admin/entities/${entity.id}/dossier`}
-                  id="dossier-form"
-                >
-                  <button
-                    type="submit"
-                    id="dossier-btn"
-                    class="text-xs px-3 py-1.5 rounded-md transition-colors bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Generate Dossier
-                  </button>
-                </form>
-              )
-            }
-          </div>
-        </div>
+    )
+  }
+  {
+    noteAdded && (
+      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg mb-4">
+        Note added.
       </div>
-
-      {/* Add Note */}
-      <div class="bg-white rounded-lg border border-slate-200 p-4 mb-6">
-        <form method="POST" action={`/api/admin/entities/${entity.id}/context`} class="flex gap-3">
-          <input type="hidden" name="type" value="note" />
-          <textarea
-            name="content"
-            placeholder="Add a note..."
-            rows="2"
-            class="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-          ></textarea>
-          <button
-            type="submit"
-            class="self-end text-sm bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
-          >
-            Add Note
-          </button>
-        </form>
+    )
+  }
+  {
+    stageUpdated && (
+      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg mb-4">
+        Stage updated.
       </div>
+    )
+  }
+  {
+    dossierGenerated && (
+      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg mb-4">
+        Intelligence dossier generated. See enrichment entries in the timeline below.
+      </div>
+    )
+  }
+  {
+    error && (
+      <div class="bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded-lg mb-4">
+        {decodeURIComponent(error)}
+      </div>
+    )
+  }
 
-      {/* Dossier Summary */}
-      {
-        hasDossier && (
-          <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
-            <h3 class="text-base font-semibold text-slate-900 mb-4">Dossier Summary</h3>
-
-            {/* Zone 1: Quick Stats */}
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-              {reviewMeta?.unified_rating != null && (
-                <div class="bg-slate-50 rounded-lg p-3">
-                  <div class="text-2xl font-bold text-slate-900">
-                    {reviewMeta.unified_rating.toFixed(1)}
-                    <span class="text-sm font-normal text-slate-400"> / 5</span>
-                  </div>
-                  <div class="text-xs text-slate-500">
-                    {reviewMeta.total_reviews_across_platforms ?? 0} reviews
-                  </div>
-                </div>
-              )}
-              {reviewMeta?.sentiment_trend &&
-                reviewMeta.sentiment_trend !== 'insufficient_data' && (
-                  <div class="bg-slate-50 rounded-lg p-3">
-                    <div
-                      class={`text-sm font-semibold px-2 py-0.5 rounded inline-block ${sentimentColor(reviewMeta.sentiment_trend)}`}
-                    >
-                      {reviewMeta.sentiment_trend}
-                    </div>
-                    <div class="text-xs text-slate-500 mt-1">Sentiment trend</div>
-                  </div>
-                )}
-              {websiteMeta?.digital_maturity?.score != null && (
-                <div class="bg-slate-50 rounded-lg p-3">
-                  <div class="text-2xl font-bold text-slate-900">
-                    {websiteMeta.digital_maturity.score}
-                    <span class="text-sm font-normal text-slate-400"> / 10</span>
-                  </div>
-                  <div class="text-xs text-slate-500">Digital maturity</div>
-                </div>
-              )}
-              {competitorMeta?.entity_rank_by_rating != null &&
-                competitorMeta?.total_competitors != null && (
-                  <div class="bg-slate-50 rounded-lg p-3">
-                    <div class="text-2xl font-bold text-slate-900">
-                      #{competitorMeta.entity_rank_by_rating}
-                      <span class="text-sm font-normal text-slate-400">
-                        {' '}
-                        of {competitorMeta.total_competitors}
-                      </span>
-                    </div>
-                    <div class="text-xs text-slate-500">Local ranking</div>
-                  </div>
-                )}
-            </div>
-
-            {/* Zone 2: Identified Problems */}
-            {reviewMeta?.operational_problems && reviewMeta.operational_problems.length > 0 && (
-              <div class="mb-5">
-                <div class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
-                  Identified Problems
-                </div>
-                <div class="flex flex-wrap gap-2">
-                  {reviewMeta.operational_problems.map((p) => (
-                    <span
-                      class={`text-xs px-2.5 py-1 rounded-full font-medium ${confidenceColor(p.confidence)}`}
-                      title={p.evidence}
-                    >
-                      {p.problem.replace(/_/g, ' ')}
-                      <span class="opacity-60 ml-1">({p.confidence})</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Zone 3: Intelligence Brief */}
-            <div class="border-t border-slate-100 pt-4 mb-4">
-              <details>
-                <summary class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3 cursor-pointer">
-                  Intelligence Brief
-                </summary>
-                <div
-                  class="max-h-[50vh] overflow-y-auto"
-                  set:html={renderSimpleMarkdown(dossierBrief!.content)}
-                />
-              </details>
-            </div>
-
-            {/* Zone 4: Outreach Draft */}
-            {outreachEntry && (
-              <div class="border-t border-slate-100 pt-4">
-                <div class="flex items-center justify-between mb-2">
-                  <div class="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                    Outreach Draft
-                    {!outreachFromDossier && (
-                      <span class="normal-case font-normal text-slate-400 ml-2">
-                        Pre-dossier draft
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    id="copy-outreach-btn"
-                    class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
-                  >
-                    Copy
-                  </button>
-                </div>
-                <pre
-                  id="outreach-content"
-                  class="text-sm text-slate-700 whitespace-pre-wrap bg-slate-50 rounded-lg p-4 border border-slate-100"
-                >
-                  {outreachEntry.content}
-                </pre>
-              </div>
-            )}
-          </div>
-        )
-      }
-
-      {/* Context Timeline */}
-      <div class="mb-6">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-base font-semibold text-slate-900">
-            Context Timeline
-            <span class="text-sm font-normal text-slate-400">({contextEntries.length})</span>
-          </h3>
-        </div>
-
-        {/* Type filter pills */}
-        <div class="flex gap-1 mb-4 flex-wrap">
-          <a
-            href={`/admin/entities/${entity.id}`}
-            class={`text-xs px-2.5 py-1 rounded-full transition-colors ${!typeFilter ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-          >
-            All ({contextEntries.length})
-          </a>
+  {/* Entity Summary */}
+  <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-3 mb-2">
+          <h2 class="text-xl font-semibold text-slate-900">{entity.name}</h2>
+          <span class={`text-xs px-2 py-0.5 rounded ${stageBadgeClass(entity.stage)}`}>
+            {ENTITY_STAGES.find((s) => s.value === entity.stage)?.label ?? entity.stage}
+          </span>
           {
-            Object.entries(typeCounts).map(([type, count]) => (
-              <a
-                href={`/admin/entities/${entity.id}?type=${type}`}
-                class={`text-xs px-2.5 py-1 rounded-full transition-colors ${typeFilter === type ? 'bg-slate-900 text-white' : contextTypeBadge(type) + ' hover:opacity-80'}`}
+            entity.tier && (
+              <span
+                class={`text-xs px-2 py-0.5 rounded ${
+                  entity.tier === 'hot'
+                    ? 'bg-red-100 text-red-700'
+                    : entity.tier === 'warm'
+                      ? 'bg-amber-100 text-amber-700'
+                      : entity.tier === 'cool'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-slate-100 text-slate-500'
+                }`}
               >
-                {CONTEXT_TYPES.find((t) => t.value === type)?.label ?? type} ({count})
-              </a>
-            ))
+                {entity.tier}
+              </span>
+            )
           }
         </div>
 
-        {/* Timeline entries */}
+        <div class="flex items-center gap-4 text-sm text-slate-500 mb-2 flex-wrap">
+          {
+            entity.pain_score && (
+              <span>
+                Pain: <strong class="text-slate-700">{entity.pain_score}/10</strong>
+              </span>
+            )
+          }
+          {entity.vertical && <span class="capitalize">{entity.vertical.replace(/_/g, ' ')}</span>}
+          {entity.area && <span>{entity.area}</span>}
+          {entity.employee_count && <span>~{entity.employee_count} employees</span>}
+        </div>
+
+        <div class="flex items-center gap-3 text-xs text-slate-400">
+          {
+            entity.source_pipeline && (
+              <span>Source: {entity.source_pipeline.replace(/_/g, ' ')}</span>
+            )
+          }
+          <span>Created {formatDate(entity.created_at)}</span>
+          {entity.phone && <span>{entity.phone}</span>}
+          {
+            entity.website && (
+              <a
+                href={
+                  entity.website.startsWith('http') ? entity.website : `https://${entity.website}`
+                }
+                target="_blank"
+                class="text-blue-500 hover:underline"
+              >
+                {entity.website}
+              </a>
+            )
+          }
+        </div>
+
         {
-          filteredEntries.length === 0 ? (
-            <div class="bg-white rounded-lg border border-slate-200 p-4">
-              <p class="text-slate-500 text-sm">No context entries yet.</p>
-            </div>
-          ) : (
-            <div class="space-y-3">
-              {filteredEntries.map((entry: ContextEntry) => {
-                const meta = parseMetadata(entry.metadata)
-                const problems = meta?.top_problems as string[] | undefined
-                return (
-                  <div class="bg-white rounded-lg border border-slate-200 px-4 py-3">
-                    <div class="flex items-center gap-2 mb-1.5">
-                      <span class={`text-xs px-2 py-0.5 rounded ${contextTypeBadge(entry.type)}`}>
-                        {CONTEXT_TYPES.find((t) => t.value === entry.type)?.label ?? entry.type}
-                      </span>
-                      <span class="text-xs text-slate-400">{entry.source}</span>
-                      <span class="text-xs text-slate-400">{formatDateTime(entry.created_at)}</span>
-                      {entry.type === 'signal' && meta?.pain_score && (
-                        <span class="text-xs font-semibold text-red-600">
-                          Pain: {String(meta.pain_score)}/10
-                        </span>
-                      )}
-                    </div>
-
-                    {problems && problems.length > 0 && (
-                      <div class="flex gap-1 mb-1.5">
-                        {problems.map((p: string) => (
-                          <span class="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
-                            {p.replace(/_/g, ' ')}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    <details class="group">
-                      <summary class="text-sm text-slate-700 cursor-pointer line-clamp-3 group-open:line-clamp-none whitespace-pre-wrap">
-                        {entry.content}
-                      </summary>
-                    </details>
-                  </div>
-                )
-              })}
+          entity.next_action && (
+            <div class="mt-3 bg-amber-50 border border-amber-200 px-3 py-2 rounded text-sm">
+              <span class="font-medium text-amber-800">Next:</span>
+              <span class="text-amber-700">
+                {entity.next_action}
+                {entity.next_action_at && ` — ${formatDate(entity.next_action_at)}`}
+              </span>
             </div>
           )
         }
       </div>
 
-      {/* Related Data Panels */}
-      {
-        contacts.length > 0 && (
-          <details class="bg-white rounded-lg border border-slate-200 mb-4" open>
-            <summary class="px-6 py-4 cursor-pointer font-medium text-slate-900">
-              Contacts ({contacts.length})
+      {/* Stage transition buttons */}
+      <div class="flex items-center gap-2 shrink-0">
+        {
+          TRANSITIONS[entity.stage]?.map((t) => (
+            <form method="POST" action={t.action ?? `/api/admin/entities/${entity.id}/stage`}>
+              <input type="hidden" name="stage" value={t.stage} />
+              <input type="hidden" name="reason" value={`${t.label} by admin.`} />
+              <button
+                type="submit"
+                class={`text-xs px-3 py-1.5 rounded-md transition-colors ${t.style}`}
+              >
+                {t.label}
+              </button>
+            </form>
+          ))
+        }
+        {
+          showDossierButton && (
+            <form
+              method="POST"
+              action={`/api/admin/entities/${entity.id}/dossier`}
+              id="dossier-form"
+            >
+              <button
+                type="submit"
+                id="dossier-btn"
+                class="text-xs px-3 py-1.5 rounded-md transition-colors bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Generate Dossier
+              </button>
+            </form>
+          )
+        }
+      </div>
+    </div>
+  </div>
+
+  {/* Add Note */}
+  <div class="bg-white rounded-lg border border-slate-200 p-4 mb-6">
+    <form method="POST" action={`/api/admin/entities/${entity.id}/context`} class="flex gap-3">
+      <input type="hidden" name="type" value="note" />
+      <textarea
+        name="content"
+        placeholder="Add a note..."
+        rows="2"
+        class="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+      ></textarea>
+      <button
+        type="submit"
+        class="self-end text-sm bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+      >
+        Add Note
+      </button>
+    </form>
+  </div>
+
+  {/* Dossier Summary */}
+  {
+    hasDossier && (
+      <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
+        <h3 class="text-base font-semibold text-slate-900 mb-4">Dossier Summary</h3>
+
+        {/* Zone 1: Quick Stats */}
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+          {reviewMeta?.unified_rating != null && (
+            <div class="bg-slate-50 rounded-lg p-3">
+              <div class="text-2xl font-bold text-slate-900">
+                {reviewMeta.unified_rating.toFixed(1)}
+                <span class="text-sm font-normal text-slate-400"> / 5</span>
+              </div>
+              <div class="text-xs text-slate-500">
+                {reviewMeta.total_reviews_across_platforms ?? 0} reviews
+              </div>
+            </div>
+          )}
+          {reviewMeta?.sentiment_trend && reviewMeta.sentiment_trend !== 'insufficient_data' && (
+            <div class="bg-slate-50 rounded-lg p-3">
+              <div
+                class={`text-sm font-semibold px-2 py-0.5 rounded inline-block ${sentimentColor(reviewMeta.sentiment_trend)}`}
+              >
+                {reviewMeta.sentiment_trend}
+              </div>
+              <div class="text-xs text-slate-500 mt-1">Sentiment trend</div>
+            </div>
+          )}
+          {websiteMeta?.digital_maturity?.score != null && (
+            <div class="bg-slate-50 rounded-lg p-3">
+              <div class="text-2xl font-bold text-slate-900">
+                {websiteMeta.digital_maturity.score}
+                <span class="text-sm font-normal text-slate-400"> / 10</span>
+              </div>
+              <div class="text-xs text-slate-500">Digital maturity</div>
+            </div>
+          )}
+          {competitorMeta?.entity_rank_by_rating != null &&
+            competitorMeta?.total_competitors != null && (
+              <div class="bg-slate-50 rounded-lg p-3">
+                <div class="text-2xl font-bold text-slate-900">
+                  #{competitorMeta.entity_rank_by_rating}
+                  <span class="text-sm font-normal text-slate-400">
+                    {' '}
+                    of {competitorMeta.total_competitors}
+                  </span>
+                </div>
+                <div class="text-xs text-slate-500">Local ranking</div>
+              </div>
+            )}
+        </div>
+
+        {/* Zone 2: Identified Problems */}
+        {reviewMeta?.operational_problems && reviewMeta.operational_problems.length > 0 && (
+          <div class="mb-5">
+            <div class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
+              Identified Problems
+            </div>
+            <div class="flex flex-wrap gap-2">
+              {reviewMeta.operational_problems.map((p) => (
+                <span
+                  class={`text-xs px-2.5 py-1 rounded-full font-medium ${confidenceColor(p.confidence)}`}
+                  title={p.evidence}
+                >
+                  {p.problem.replace(/_/g, ' ')}
+                  <span class="opacity-60 ml-1">({p.confidence})</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Zone 3: Intelligence Brief */}
+        <div class="border-t border-slate-100 pt-4 mb-4">
+          <details>
+            <summary class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3 cursor-pointer">
+              Intelligence Brief
             </summary>
-            <div class="px-6 pb-4 divide-y divide-slate-100">
-              {contacts.map((c) => (
-                <div class="py-2 flex items-center justify-between">
-                  <div>
-                    <span class="text-sm font-medium text-slate-900">{c.name}</span>
-                    {c.role && (
-                      <span class="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded ml-2">
-                        {c.role}
+            <div
+              class="max-h-[50vh] overflow-y-auto"
+              set:html={renderSimpleMarkdown(dossierBrief!.content)}
+            />
+          </details>
+        </div>
+
+        {/* Zone 4: Outreach Draft */}
+        {outreachEntry && (
+          <div class="border-t border-slate-100 pt-4">
+            <div class="flex items-center justify-between mb-2">
+              <div class="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                Outreach Draft
+                {!outreachFromDossier && (
+                  <span class="normal-case font-normal text-slate-400 ml-2">Pre-dossier draft</span>
+                )}
+              </div>
+              <button
+                id="copy-outreach-btn"
+                class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+              >
+                Copy
+              </button>
+            </div>
+            <pre
+              id="outreach-content"
+              class="text-sm text-slate-700 whitespace-pre-wrap bg-slate-50 rounded-lg p-4 border border-slate-100"
+            >
+              {outreachEntry.content}
+            </pre>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  {/* Context Timeline */}
+  <div class="mb-6">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-base font-semibold text-slate-900">
+        Context Timeline
+        <span class="text-sm font-normal text-slate-400">({contextEntries.length})</span>
+      </h3>
+    </div>
+
+    {/* Type filter pills */}
+    <div class="flex gap-1 mb-4 flex-wrap">
+      <a
+        href={`/admin/entities/${entity.id}`}
+        class={`text-xs px-2.5 py-1 rounded-full transition-colors ${!typeFilter ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+      >
+        All ({contextEntries.length})
+      </a>
+      {
+        Object.entries(typeCounts).map(([type, count]) => (
+          <a
+            href={`/admin/entities/${entity.id}?type=${type}`}
+            class={`text-xs px-2.5 py-1 rounded-full transition-colors ${typeFilter === type ? 'bg-slate-900 text-white' : contextTypeBadge(type) + ' hover:opacity-80'}`}
+          >
+            {CONTEXT_TYPES.find((t) => t.value === type)?.label ?? type} ({count})
+          </a>
+        ))
+      }
+    </div>
+
+    {/* Timeline entries */}
+    {
+      filteredEntries.length === 0 ? (
+        <div class="bg-white rounded-lg border border-slate-200 p-4">
+          <p class="text-slate-500 text-sm">No context entries yet.</p>
+        </div>
+      ) : (
+        <div class="space-y-3">
+          {filteredEntries.map((entry: ContextEntry) => {
+            const meta = parseMetadata(entry.metadata)
+            const problems = meta?.top_problems as string[] | undefined
+            return (
+              <div class="bg-white rounded-lg border border-slate-200 px-4 py-3">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class={`text-xs px-2 py-0.5 rounded ${contextTypeBadge(entry.type)}`}>
+                    {CONTEXT_TYPES.find((t) => t.value === entry.type)?.label ?? entry.type}
+                  </span>
+                  <span class="text-xs text-slate-400">{entry.source}</span>
+                  <span class="text-xs text-slate-400">{formatDateTime(entry.created_at)}</span>
+                  {entry.type === 'signal' && meta?.pain_score && (
+                    <span class="text-xs font-semibold text-red-600">
+                      Pain: {String(meta.pain_score)}/10
+                    </span>
+                  )}
+                </div>
+
+                {problems && problems.length > 0 && (
+                  <div class="flex gap-1 mb-1.5">
+                    {problems.map((p: string) => (
+                      <span class="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                        {p.replace(/_/g, ' ')}
                       </span>
-                    )}
+                    ))}
                   </div>
-                  <div class="text-xs text-slate-400 flex gap-3">
-                    {c.email && <span>{c.email}</span>}
-                    {c.phone && <span>{c.phone}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </details>
-        )
-      }
+                )}
 
-      {
-        assessments.length > 0 && (
-          <details class="bg-white rounded-lg border border-slate-200 mb-4">
-            <summary class="px-6 py-4 cursor-pointer font-medium text-slate-900">
-              Assessments ({assessments.length})
-            </summary>
-            <div class="px-6 pb-4 divide-y divide-slate-100">
-              {assessments.map((a) => (
-                <div class="py-2 flex items-center gap-2">
-                  <span class={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(a.status)}`}>
-                    {a.status}
+                <details class="group">
+                  <summary class="text-sm text-slate-700 cursor-pointer line-clamp-3 group-open:line-clamp-none whitespace-pre-wrap">
+                    {entry.content}
+                  </summary>
+                </details>
+              </div>
+            )
+          })}
+        </div>
+      )
+    }
+  </div>
+
+  {/* Related Data Panels */}
+  {
+    contacts.length > 0 && (
+      <details class="bg-white rounded-lg border border-slate-200 mb-4" open>
+        <summary class="px-6 py-4 cursor-pointer font-medium text-slate-900">
+          Contacts ({contacts.length})
+        </summary>
+        <div class="px-6 pb-4 divide-y divide-slate-100">
+          {contacts.map((c) => (
+            <div class="py-2 flex items-center justify-between">
+              <div>
+                <span class="text-sm font-medium text-slate-900">{c.name}</span>
+                {c.role && (
+                  <span class="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded ml-2">
+                    {c.role}
                   </span>
-                  {a.scheduled_at && (
-                    <span class="text-sm text-slate-700">{formatDate(a.scheduled_at)}</span>
-                  )}
-                  {a.duration_minutes && (
-                    <span class="text-xs text-slate-400">{a.duration_minutes} min</span>
-                  )}
-                </div>
-              ))}
+                )}
+              </div>
+              <div class="text-xs text-slate-400 flex gap-3">
+                {c.email && <span>{c.email}</span>}
+                {c.phone && <span>{c.phone}</span>}
+              </div>
             </div>
-          </details>
-        )
-      }
+          ))}
+        </div>
+      </details>
+    )
+  }
 
-      {
-        engagements.length > 0 && (
-          <details class="bg-white rounded-lg border border-slate-200 mb-4">
-            <summary class="px-6 py-4 cursor-pointer font-medium text-slate-900">
-              Engagements ({engagements.length})
-            </summary>
-            <div class="px-6 pb-4 divide-y divide-slate-100">
-              {engagements.map((e) => (
-                <a
-                  href={`/admin/engagements/${e.id}`}
-                  class="py-2 flex items-center gap-2 hover:bg-slate-50 -mx-2 px-2 rounded transition-colors"
-                >
-                  <span class={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(e.status)}`}>
-                    {e.status}
-                  </span>
-                  {e.start_date && (
-                    <span class="text-sm text-slate-700">{formatDate(e.start_date)}</span>
-                  )}
-                  {e.estimated_hours && (
-                    <span class="text-xs text-slate-400">
-                      {e.actual_hours}/{e.estimated_hours} hrs
-                    </span>
-                  )}
-                </a>
-              ))}
+  {
+    assessments.length > 0 && (
+      <details class="bg-white rounded-lg border border-slate-200 mb-4">
+        <summary class="px-6 py-4 cursor-pointer font-medium text-slate-900">
+          Assessments ({assessments.length})
+        </summary>
+        <div class="px-6 pb-4 divide-y divide-slate-100">
+          {assessments.map((a) => (
+            <div class="py-2 flex items-center gap-2">
+              <span class={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(a.status)}`}>
+                {a.status}
+              </span>
+              {a.scheduled_at && (
+                <span class="text-sm text-slate-700">{formatDate(a.scheduled_at)}</span>
+              )}
+              {a.duration_minutes && (
+                <span class="text-xs text-slate-400">{a.duration_minutes} min</span>
+              )}
             </div>
-          </details>
-        )
-      }
+          ))}
+        </div>
+      </details>
+    )
+  }
 
-      {
-        quotes.length > 0 && (
-          <details class="bg-white rounded-lg border border-slate-200 mb-4">
-            <summary class="px-6 py-4 cursor-pointer font-medium text-slate-900">
-              Quotes ({quotes.length})
-            </summary>
-            <div class="px-6 pb-4 divide-y divide-slate-100">
-              {quotes.map((q) => (
-                <a
-                  href={`/admin/entities/${entity.id}/quotes/${q.id}`}
-                  class="py-2 flex items-center gap-2 hover:bg-slate-50 -mx-2 px-2 rounded transition-colors"
-                >
-                  <span class={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(q.status)}`}>
-                    {q.status}
-                  </span>
-                  <span class="text-sm font-medium text-slate-700">
-                    ${q.total_price.toLocaleString()}
-                  </span>
-                  <span class="text-xs text-slate-400">{q.total_hours} hrs</span>
-                  <span class="text-xs text-slate-400">v{q.version}</span>
-                </a>
-              ))}
+  {
+    engagements.length > 0 && (
+      <details class="bg-white rounded-lg border border-slate-200 mb-4">
+        <summary class="px-6 py-4 cursor-pointer font-medium text-slate-900">
+          Engagements ({engagements.length})
+        </summary>
+        <div class="px-6 pb-4 divide-y divide-slate-100">
+          {engagements.map((e) => (
+            <a
+              href={`/admin/engagements/${e.id}`}
+              class="py-2 flex items-center gap-2 hover:bg-slate-50 -mx-2 px-2 rounded transition-colors"
+            >
+              <span class={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(e.status)}`}>
+                {e.status}
+              </span>
+              {e.start_date && (
+                <span class="text-sm text-slate-700">{formatDate(e.start_date)}</span>
+              )}
+              {e.estimated_hours && (
+                <span class="text-xs text-slate-400">
+                  {e.actual_hours}/{e.estimated_hours} hrs
+                </span>
+              )}
+            </a>
+          ))}
+        </div>
+      </details>
+    )
+  }
+
+  {
+    quotes.length > 0 && (
+      <details class="bg-white rounded-lg border border-slate-200 mb-4">
+        <summary class="px-6 py-4 cursor-pointer font-medium text-slate-900">
+          Quotes ({quotes.length})
+        </summary>
+        <div class="px-6 pb-4 divide-y divide-slate-100">
+          {quotes.map((q) => (
+            <a
+              href={`/admin/entities/${entity.id}/quotes/${q.id}`}
+              class="py-2 flex items-center gap-2 hover:bg-slate-50 -mx-2 px-2 rounded transition-colors"
+            >
+              <span class={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(q.status)}`}>
+                {q.status}
+              </span>
+              <span class="text-sm font-medium text-slate-700">
+                ${q.total_price.toLocaleString()}
+              </span>
+              <span class="text-xs text-slate-400">{q.total_hours} hrs</span>
+              <span class="text-xs text-slate-400">v{q.version}</span>
+            </a>
+          ))}
+        </div>
+      </details>
+    )
+  }
+
+  {
+    invoices.length > 0 && (
+      <details class="bg-white rounded-lg border border-slate-200 mb-4">
+        <summary class="px-6 py-4 cursor-pointer font-medium text-slate-900">
+          Invoices ({invoices.length})
+        </summary>
+        <div class="px-6 pb-4 divide-y divide-slate-100">
+          {invoices.map((inv) => (
+            <div class="py-2 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(inv.status)}`}>
+                  {inv.status}
+                </span>
+                <span class="text-sm font-medium text-slate-700">
+                  ${inv.amount.toLocaleString()}
+                </span>
+                <span class="text-xs text-slate-400">{inv.type}</span>
+                {inv.due_date && (
+                  <span class="text-xs text-slate-400">Due {formatDate(inv.due_date)}</span>
+                )}
+              </div>
             </div>
-          </details>
-        )
-      }
+          ))}
+        </div>
+      </details>
+    )
+  }
+  <script>
+    const form = document.getElementById('dossier-form')
+    const btn = document.getElementById('dossier-btn') as HTMLButtonElement | null
+    if (form && btn) {
+      form.addEventListener('submit', () => {
+        btn.disabled = true
+        btn.textContent = 'Generating...'
+      })
+    }
 
-      {
-        invoices.length > 0 && (
-          <details class="bg-white rounded-lg border border-slate-200 mb-4">
-            <summary class="px-6 py-4 cursor-pointer font-medium text-slate-900">
-              Invoices ({invoices.length})
-            </summary>
-            <div class="px-6 pb-4 divide-y divide-slate-100">
-              {invoices.map((inv) => (
-                <div class="py-2 flex items-center justify-between">
-                  <div class="flex items-center gap-2">
-                    <span class={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(inv.status)}`}>
-                      {inv.status}
-                    </span>
-                    <span class="text-sm font-medium text-slate-700">
-                      ${inv.amount.toLocaleString()}
-                    </span>
-                    <span class="text-xs text-slate-400">{inv.type}</span>
-                    {inv.due_date && (
-                      <span class="text-xs text-slate-400">Due {formatDate(inv.due_date)}</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </details>
-        )
-      }
-    </main>
-    <script>
-      const form = document.getElementById('dossier-form')
-      const btn = document.getElementById('dossier-btn') as HTMLButtonElement | null
-      if (form && btn) {
-        form.addEventListener('submit', () => {
-          btn.disabled = true
-          btn.textContent = 'Generating...'
-        })
-      }
-
-      const copyBtn = document.getElementById('copy-outreach-btn')
-      const outreachEl = document.getElementById('outreach-content')
-      if (copyBtn && outreachEl) {
-        copyBtn.addEventListener('click', async () => {
-          await navigator.clipboard.writeText(outreachEl.textContent ?? '')
-          copyBtn.textContent = 'Copied!'
-          setTimeout(() => {
-            copyBtn.textContent = 'Copy'
-          }, 2000)
-        })
-      }
-    </script>
-  </body>
-</html>
+    const copyBtn = document.getElementById('copy-outreach-btn')
+    const outreachEl = document.getElementById('outreach-content')
+    if (copyBtn && outreachEl) {
+      copyBtn.addEventListener('click', async () => {
+        await navigator.clipboard.writeText(outreachEl.textContent ?? '')
+        copyBtn.textContent = 'Copied!'
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy'
+        }, 2000)
+      })
+    }
+  </script>
+</AdminLayout>

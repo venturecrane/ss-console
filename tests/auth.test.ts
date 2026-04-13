@@ -164,13 +164,13 @@ describe('auth: admin dashboard', () => {
     expect(source).toContain('Astro.locals.session')
   })
 
-  it('admin page includes logout form', () => {
-    const source = readFileSync(resolve('src/pages/admin/index.astro'), 'utf-8')
+  it('admin layout includes logout form', () => {
+    const source = readFileSync(resolve('src/layouts/AdminLayout.astro'), 'utf-8')
     expect(source).toContain('/api/auth/logout')
   })
 
-  it('admin page is not indexed by search engines', () => {
-    const source = readFileSync(resolve('src/pages/admin/index.astro'), 'utf-8')
+  it('admin layout is not indexed by search engines', () => {
+    const source = readFileSync(resolve('src/layouts/AdminLayout.astro'), 'utf-8')
     expect(source).toContain('noindex')
   })
 })

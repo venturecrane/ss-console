@@ -1,5 +1,5 @@
 ---
-import '../../../styles/global.css'
+import AdminLayout from '../../../layouts/AdminLayout.astro'
 import { listFollowUps, FOLLOW_UP_TYPES } from '../../../lib/db/follow-ups'
 import type { FollowUp, FollowUpType } from '../../../lib/db/follow-ups'
 
@@ -88,203 +88,160 @@ function daysLabel(iso: string): string {
 const success = Astro.url.searchParams.get('saved')
 ---
 
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="robots" content="noindex, nofollow" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
-    <title>Follow-ups — SMD Services</title>
-  </head>
-  <body class="min-h-screen bg-slate-50">
-    <header class="bg-white border-b border-slate-200">
-      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <a
-            href="/admin"
-            class="text-lg font-bold text-slate-900 hover:text-primary transition-colors"
-            >SMD Services</a
-          >
-          <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">Admin</span>
-        </div>
-        <div class="flex items-center gap-4">
-          <span class="text-sm text-slate-600">{session.email}</span>
-          <form method="POST" action="/api/auth/logout">
-            <button
-              type="submit"
-              class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
+<AdminLayout
+  title="Follow-ups — SMD Services"
+  breadcrumbs={[{ label: 'Dashboard', href: '/admin' }, { label: 'Follow-ups' }]}
+>
+  {
+    success && (
+      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg mb-4">
+        Follow-up updated successfully.
       </div>
-    </header>
+    )
+  }
 
-    <main class="max-w-5xl mx-auto px-4 py-8">
-      <nav class="text-sm text-slate-500 mb-4">
-        <a href="/admin" class="hover:text-primary transition-colors">Dashboard</a>
-        <span class="mx-1">/</span>
-        <span class="text-slate-900">Follow-ups</span>
-      </nav>
+  <div class="flex items-center justify-between mb-6">
+    <h2 class="text-xl font-semibold text-slate-900">Follow-ups</h2>
 
-      {
-        success && (
-          <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg mb-4">
-            Follow-up updated successfully.
+    {/* Type filter */}
+    <form method="GET" class="flex items-center gap-2">
+      <input type="hidden" name="tab" value={activeTab} />
+      <select
+        name="type"
+        class="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700"
+        onchange="this.form.submit()"
+      >
+        <option value="">All types</option>
+        {
+          FOLLOW_UP_TYPES.map((t) => (
+            <option value={t.value} selected={filterType === t.value}>
+              {t.label}
+            </option>
+          ))
+        }
+      </select>
+    </form>
+  </div>
+
+  {/* Tabs */}
+  <div class="flex gap-1 mb-6 border-b border-slate-200">
+    <a
+      href={`/admin/follow-ups?tab=upcoming${filterType ? `&type=${filterType}` : ''}`}
+      class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+        activeTab === 'upcoming'
+          ? 'border-primary text-primary'
+          : 'border-transparent text-slate-500 hover:text-slate-700'
+      }`}
+    >
+      Upcoming ({upcoming.length})
+    </a>
+    <a
+      href={`/admin/follow-ups?tab=overdue${filterType ? `&type=${filterType}` : ''}`}
+      class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+        activeTab === 'overdue'
+          ? 'border-red-500 text-red-600'
+          : 'border-transparent text-slate-500 hover:text-slate-700'
+      }`}
+    >
+      Overdue ({overdue.length})
+    </a>
+    <a
+      href={`/admin/follow-ups?tab=completed${filterType ? `&type=${filterType}` : ''}`}
+      class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+        activeTab === 'completed'
+          ? 'border-green-500 text-green-600'
+          : 'border-transparent text-slate-500 hover:text-slate-700'
+      }`}
+    >
+      Completed ({completed.length})
+    </a>
+  </div>
+
+  {/* Follow-up list */}
+  {
+    (() => {
+      const items =
+        activeTab === 'overdue' ? overdue : activeTab === 'completed' ? completed : upcoming
+      if (items.length === 0) {
+        return (
+          <div class="bg-white rounded-lg border border-slate-200 p-6">
+            <p class="text-slate-500 text-sm">
+              {activeTab === 'upcoming' && 'No upcoming follow-ups.'}
+              {activeTab === 'overdue' && 'No overdue follow-ups.'}
+              {activeTab === 'completed' && 'No completed follow-ups.'}
+            </p>
           </div>
         )
       }
-
-      <div class="flex items-center justify-between mb-6">
-        <h2 class="text-xl font-semibold text-slate-900">Follow-ups</h2>
-
-        {/* Type filter */}
-        <form method="GET" class="flex items-center gap-2">
-          <input type="hidden" name="tab" value={activeTab} />
-          <select
-            name="type"
-            class="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700"
-            onchange="this.form.submit()"
-          >
-            <option value="">All types</option>
-            {
-              FOLLOW_UP_TYPES.map((t) => (
-                <option value={t.value} selected={filterType === t.value}>
-                  {t.label}
-                </option>
-              ))
-            }
-          </select>
-        </form>
-      </div>
-
-      {/* Tabs */}
-      <div class="flex gap-1 mb-6 border-b border-slate-200">
-        <a
-          href={`/admin/follow-ups?tab=upcoming${filterType ? `&type=${filterType}` : ''}`}
-          class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'upcoming'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Upcoming ({upcoming.length})
-        </a>
-        <a
-          href={`/admin/follow-ups?tab=overdue${filterType ? `&type=${filterType}` : ''}`}
-          class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'overdue'
-              ? 'border-red-500 text-red-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Overdue ({overdue.length})
-        </a>
-        <a
-          href={`/admin/follow-ups?tab=completed${filterType ? `&type=${filterType}` : ''}`}
-          class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'completed'
-              ? 'border-green-500 text-green-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Completed ({completed.length})
-        </a>
-      </div>
-
-      {/* Follow-up list */}
-      {
-        (() => {
-          const items =
-            activeTab === 'overdue' ? overdue : activeTab === 'completed' ? completed : upcoming
-          if (items.length === 0) {
-            return (
-              <div class="bg-white rounded-lg border border-slate-200 p-6">
-                <p class="text-slate-500 text-sm">
-                  {activeTab === 'upcoming' && 'No upcoming follow-ups.'}
-                  {activeTab === 'overdue' && 'No overdue follow-ups.'}
-                  {activeTab === 'completed' && 'No completed follow-ups.'}
-                </p>
-              </div>
-            )
-          }
-          return (
-            <div class="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
-              {items.map((f: FollowUp) => (
-                <div class="px-6 py-4">
-                  <div class="flex items-start justify-between gap-4">
-                    <div class="min-w-0 flex-1">
-                      <div class="flex items-center gap-2 mb-1">
-                        <span
-                          class={`text-sm font-medium ${f.entity_id && clientMap[f.entity_id] ? 'text-slate-900' : 'italic text-slate-400'}`}
-                        >
-                          {f.entity_id ? (clientMap[f.entity_id] ?? 'Missing entity') : 'Unlinked'}
-                        </span>
-                        <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
-                          {getTypeLabel(f.type)}
-                        </span>
-                      </div>
-                      <div class="flex items-center gap-3 text-xs text-slate-400">
-                        <span>{formatDate(f.scheduled_for)}</span>
-                        {f.status === 'scheduled' && (
-                          <span
-                            class={
-                              daysUntil(f.scheduled_for) < 0
-                                ? 'text-red-500 font-medium'
-                                : 'text-slate-500'
-                            }
-                          >
-                            {daysLabel(f.scheduled_for)}
-                          </span>
-                        )}
-                        {f.completed_at && <span>Completed: {formatDate(f.completed_at)}</span>}
-                      </div>
-                    </div>
-
+      return (
+        <div class="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+          {items.map((f: FollowUp) => (
+            <div class="px-6 py-4">
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span
+                      class={`text-sm font-medium ${f.entity_id && clientMap[f.entity_id] ? 'text-slate-900' : 'italic text-slate-400'}`}
+                    >
+                      {f.entity_id ? (clientMap[f.entity_id] ?? 'Missing entity') : 'Unlinked'}
+                    </span>
+                    <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                      {getTypeLabel(f.type)}
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-3 text-xs text-slate-400">
+                    <span>{formatDate(f.scheduled_for)}</span>
                     {f.status === 'scheduled' && (
-                      <div class="flex items-center gap-2 shrink-0">
-                        <form method="POST" action={`/api/admin/follow-ups/${f.id}`}>
-                          <input type="hidden" name="action" value="send_email" />
-                          <button
-                            type="submit"
-                            class="text-xs bg-primary text-white px-3 py-1.5 rounded-md hover:bg-primary/90 transition-colors"
-                          >
-                            Send Email
-                          </button>
-                        </form>
-                        <form method="POST" action={`/api/admin/follow-ups/${f.id}`}>
-                          <input type="hidden" name="action" value="complete" />
-                          <button
-                            type="submit"
-                            class="text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded-md hover:bg-green-100 transition-colors"
-                          >
-                            Mark Complete
-                          </button>
-                        </form>
-                        <form method="POST" action={`/api/admin/follow-ups/${f.id}`}>
-                          <input type="hidden" name="action" value="skip" />
-                          <button
-                            type="submit"
-                            class="text-xs bg-slate-50 text-slate-600 px-3 py-1.5 rounded-md hover:bg-slate-100 transition-colors"
-                          >
-                            Skip
-                          </button>
-                        </form>
-                      </div>
+                      <span
+                        class={
+                          daysUntil(f.scheduled_for) < 0
+                            ? 'text-red-500 font-medium'
+                            : 'text-slate-500'
+                        }
+                      >
+                        {daysLabel(f.scheduled_for)}
+                      </span>
                     )}
+                    {f.completed_at && <span>Completed: {formatDate(f.completed_at)}</span>}
                   </div>
                 </div>
-              ))}
+
+                {f.status === 'scheduled' && (
+                  <div class="flex items-center gap-2 shrink-0">
+                    <form method="POST" action={`/api/admin/follow-ups/${f.id}`}>
+                      <input type="hidden" name="action" value="send_email" />
+                      <button
+                        type="submit"
+                        class="text-xs bg-primary text-white px-3 py-1.5 rounded-md hover:bg-primary/90 transition-colors"
+                      >
+                        Send Email
+                      </button>
+                    </form>
+                    <form method="POST" action={`/api/admin/follow-ups/${f.id}`}>
+                      <input type="hidden" name="action" value="complete" />
+                      <button
+                        type="submit"
+                        class="text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded-md hover:bg-green-100 transition-colors"
+                      >
+                        Mark Complete
+                      </button>
+                    </form>
+                    <form method="POST" action={`/api/admin/follow-ups/${f.id}`}>
+                      <input type="hidden" name="action" value="skip" />
+                      <button
+                        type="submit"
+                        class="text-xs bg-slate-50 text-slate-600 px-3 py-1.5 rounded-md hover:bg-slate-100 transition-colors"
+                      >
+                        Skip
+                      </button>
+                    </form>
+                  </div>
+                )}
+              </div>
             </div>
-          )
-        })()
-      }
-    </main>
-  </body>
-</html>
+          ))}
+        </div>
+      )
+    })()
+  }
+</AdminLayout>

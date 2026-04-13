@@ -300,7 +300,8 @@ describe('follow-ups: dashboard page', () => {
   })
 
   it('is not indexed by search engines', () => {
-    expect(source()).toContain('noindex')
+    const layout = readFileSync(resolve('src/layouts/AdminLayout.astro'), 'utf-8')
+    expect(layout).toContain('noindex')
   })
 })
 
@@ -369,10 +370,10 @@ describe('follow-ups: admin dashboard integration', () => {
     expect(source()).toContain('listFollowUps')
   })
 
-  it('admin dashboard shows follow-ups card', () => {
-    const code = source()
-    expect(code).toContain('Follow-ups')
-    expect(code).toContain('/admin/follow-ups')
+  it('admin layout shows follow-ups nav link', () => {
+    const layout = readFileSync(resolve('src/layouts/AdminLayout.astro'), 'utf-8')
+    expect(layout).toContain('Follow-ups')
+    expect(layout).toContain('/admin/follow-ups')
   })
 
   it('admin dashboard shows upcoming and overdue follow-ups', () => {
