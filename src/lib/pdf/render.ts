@@ -49,7 +49,14 @@ export async function renderSow(props: SOWTemplateProps): Promise<Uint8Array> {
   // Post-process: inject SignWell text tags for auto field detection.
   // Forme's WASM renderer doesn't write text to PDF content streams,
   // so we use pdf-lib to add tags that SignWell's scanner can find.
-  return injectSigningTags(pdf)
+  try {
+    const tagged = await injectSigningTags(pdf)
+    console.log(`[renderSow] Text tag injection: ${pdf.length}b → ${tagged.length}b`)
+    return tagged
+  } catch (err) {
+    console.error('[renderSow] Text tag injection FAILED, returning untagged PDF:', err)
+    return pdf
+  }
 }
 
 /**
