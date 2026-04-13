@@ -131,20 +131,16 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
 
       const pdf = await renderSow(templateProps)
       const sowPath = await uploadPdf(env.STORAGE, session.orgId, quoteId, pdf)
-
-      // Surface text tag injection errors in the redirect for diagnosis
-      const tagError = (globalThis as Record<string, unknown>).__lastTagError as string | undefined
-      if (tagError) {
-        ;(globalThis as Record<string, unknown>).__lastTagError = undefined
-      }
-
       await updateQuote(env.DB, session.orgId, quoteId, {
         sow_path: sowPath,
         sow_generated_at: new Date().toISOString(),
       })
 
-      const savedParam = tagError ? `saved=1&tag_error=${encodeURIComponent(tagError)}` : 'saved=1'
-      return redirect(`/admin/entities/${existing.entity_id}/quotes/${quoteId}?${savedParam}`, 302)
+      // Diagnostic: include PDF size in redirect so we can verify injection ran
+      return redirect(
+        `/admin/entities/${existing.entity_id}/quotes/${quoteId}?saved=1&pdf_size=${pdf.length}`,
+        302
+      )
     }
 
     // ----- ACTION: send -----
