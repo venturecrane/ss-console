@@ -5,21 +5,19 @@
  * and are consumed in two places:
  *
  *   1. The Forme template (sow-template.tsx) — positions the signing block
- *   2. The text tag injection (inject-signing-tags.ts) — places SignWell tags
+ *   2. The sign.ts API route — passes field coordinates to SignWell
  *
- * CRITICAL: If you change these values, the template and the text tags
+ * CRITICAL: If you change these values, the template and the SignWell fields
  * move together. That is the entire point of this module.
  *
- * ## How tag positions were measured
+ * ## SignWell coordinate system
  *
- * The y-values below were measured from the actual Forme-rendered PDF using
- * pdfplumber (not calculated from font metrics):
+ * SignWell field coordinates are PDF points (72 DPI) with top-left page origin,
+ * mapping 1:1 to the PDF's coordinate space. Verified empirically by creating
+ * a calibration document with fields at known positions.
  *
- *   python3: pdfplumber.open("sow.pdf").pages[2].extract_words()
- *   CLIENT label bottom: y=204.5pt from page top
- *   Date text top:       y=302.1pt from page top
- *
- * Re-measure whenever the signing page layout changes.
+ * The field positions below were determined by visual inspection of the
+ * SignWell signing view against the actual Forme-rendered 3-page SOW PDF.
  *
  * @see docs/templates/sow-template.md — Section 5.4 (signing page layout)
  */
@@ -64,62 +62,48 @@ export const SIGNING_PAGE = {
   columnWidth: COLUMN_WIDTH,
 
   // ---------------------------------------------------------------------------
-  // Text tag injection positions (top-left origin, PDF points)
+  // SignWell field coordinates (top-left origin, PDF points)
   //
-  // These are the positions where pdf-lib injects SignWell text tags.
-  // Measured from the actual Forme-rendered PDF via pdfplumber.
-  // ---------------------------------------------------------------------------
-
-  /** Where to inject text tags (top-left origin, converted to bottom-left by inject-signing-tags.ts) */
-  tagInjection: {
-    /** Signature tag position: below CLIENT label, in the 60pt signing space */
-    signature: { x: PAGE_MARGINS.left, y: 215 },
-    /** Date tag position: at the "Date: ___" text area */
-    date: { x: PAGE_MARGINS.left, y: 305 },
-  },
-
-  /** SignWell field dimensions (specified in text tag options) */
-  sigFieldWidth: 200,
-  sigFieldHeight: 50,
-  dateFieldWidth: 120,
-  dateFieldHeight: 20,
-
-  // ---------------------------------------------------------------------------
-  // Coordinate-based fallback (kept per critique recommendation)
+  // SignWell coordinates map 1:1 to PDF points with top-left page origin.
+  // Verified empirically: created a calibration document with fields at
+  // known y positions (50, 150, 250, 350, 450, 600) and confirmed fields
+  // land at exactly those PDF-point positions.
   //
-  // If text tags fail, sign.ts can fall back to explicit field coordinates.
-  // These are the same measured positions used for tag injection.
+  // Previous values (y=259, y=394) were measured from text-tag auto-detection
+  // in a PoC and landed at the CLIENT label instead of in the signing space.
+  // Corrected by visual inspection of the signing view: the CLIENT label is
+  // at ~y=259, so the signing space below it starts at ~y=275.
   // ---------------------------------------------------------------------------
 
-  /** CLIENT signature field (left column) */
+  /** CLIENT signature field (left column) — in the 60pt signing space below CLIENT label */
   clientSignature: {
     x: PAGE_MARGINS.left,
-    y: 259, // From PoC: SignWell auto-detected text tag at y=258.77 — correct position
+    y: 280,
     width: 200,
-    height: 40,
+    height: 50,
   },
 
-  /** CLIENT date field (left column) */
+  /** CLIENT date field (left column) — at the "Date: ___" line */
   clientDate: {
     x: PAGE_MARGINS.left,
-    y: 394, // From PoC: SignWell auto-detected text tag at y=393.74 — correct position
+    y: 400,
     width: 120,
-    height: 16,
+    height: 20,
   },
 
   /** SMD SERVICES signature field (right column) — reserved for future use */
   smdSignature: {
     x: PAGE_MARGINS.left + COLUMN_WIDTH + COLUMN_GAP,
-    y: 259,
+    y: 280,
     width: 200,
-    height: 40,
+    height: 50,
   },
 
   /** SMD SERVICES date field (right column) — reserved for future use */
   smdDate: {
     x: PAGE_MARGINS.left + COLUMN_WIDTH + COLUMN_GAP,
-    y: 394,
+    y: 400,
     width: 120,
-    height: 16,
+    height: 20,
   },
 } as const
