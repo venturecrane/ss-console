@@ -100,6 +100,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       apiKey,
       env.RESEND_API_KEY,
       env.STRIPE_API_KEY,
+      env.APP_BASE_URL,
       payload
     )
   }

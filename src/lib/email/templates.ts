@@ -279,6 +279,59 @@ export function portalInvitationEmailHtml(clientName: string, magicLinkUrl: stri
 }
 
 // ===========================================================================
+// Portal welcome email (SOW signed — user provisioned)
+// ===========================================================================
+
+/**
+ * Welcome email sent when a client's portal user is provisioned after SOW signing.
+ *
+ * Unlike portalInvitationEmailHtml (which embeds a 15-minute magic link),
+ * this links to the portal login page with the client's email pre-filled.
+ * The client clicks "Send sign-in link" to get a fresh token on demand.
+ * No expiry concern — the email stays valid indefinitely.
+ */
+export function portalWelcomeEmailHtml(clientName: string, loginUrl: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:'Inter',Arial,sans-serif;">
+  <div style="max-width:480px;margin:40px auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
+    <div style="padding:32px 24px;text-align:center;">
+      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">SMD Services</h1>
+      <p style="font-size:14px;color:#64748b;margin:0 0 24px;">Client Portal</p>
+
+      <p style="font-size:15px;color:#334155;margin:0 0 8px;">
+        Hi${clientName ? ` ${clientName}` : ''},
+      </p>
+      <p style="font-size:15px;color:#334155;margin:0 0 8px;">
+        Your client portal is ready. This is where you'll find your project details, milestones, invoices, and everything related to our work together.
+      </p>
+      <p style="font-size:15px;color:#334155;margin:0 0 24px;">
+        Click below to sign in. We'll send a secure link to your email.
+      </p>
+
+      <a href="${loginUrl}"
+         style="display:inline-block;background-color:#1e40af;color:#ffffff;
+                font-size:14px;font-weight:600;text-decoration:none;
+                padding:12px 32px;border-radius:6px;">
+        Sign In to Your Portal
+      </a>
+
+      <p style="font-size:12px;color:#94a3b8;margin:24px 0 0;">
+        You can access your portal anytime at portal.smd.services
+      </p>
+    </div>
+    <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
+      <p style="font-size:11px;color:#94a3b8;margin:0;">
+        &copy; ${new Date().getFullYear()} SMD Services &middot; Phoenix, AZ
+      </p>
+    </div>
+  </div>
+</body>
+</html>`
+}
+
+// ===========================================================================
 // Booking emails (Calendly replacement — added with migration 0011)
 // ===========================================================================
 

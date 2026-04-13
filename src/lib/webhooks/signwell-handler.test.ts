@@ -251,6 +251,7 @@ describe('handleDocumentCompleted — milestone creation', () => {
       'fake-api-key',
       undefined,
       undefined,
+      'https://test.smd.services',
       makePayload()
     )
 
@@ -273,7 +274,15 @@ describe('handleDocumentCompleted — milestone creation', () => {
 
   it('sets payment_trigger = true only on the last milestone', async () => {
     const r2 = createFakeR2()
-    await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, undefined, makePayload())
+    await handleDocumentCompleted(
+      db,
+      r2,
+      'fake-api-key',
+      undefined,
+      undefined,
+      'https://test.smd.services',
+      makePayload()
+    )
 
     const milestones = await db
       .prepare('SELECT * FROM milestones ORDER BY sort_order ASC')
@@ -290,7 +299,15 @@ describe('handleDocumentCompleted — milestone creation', () => {
 
   it('preserves sort_order matching line item index', async () => {
     const r2 = createFakeR2()
-    await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, undefined, makePayload())
+    await handleDocumentCompleted(
+      db,
+      r2,
+      'fake-api-key',
+      undefined,
+      undefined,
+      'https://test.smd.services',
+      makePayload()
+    )
 
     const milestones = await db
       .prepare('SELECT sort_order, name FROM milestones ORDER BY sort_order ASC')
@@ -302,7 +319,15 @@ describe('handleDocumentCompleted — milestone creation', () => {
 
   it('writes a stage_change context entry', async () => {
     const r2 = createFakeR2()
-    await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, undefined, makePayload())
+    await handleDocumentCompleted(
+      db,
+      r2,
+      'fake-api-key',
+      undefined,
+      undefined,
+      'https://test.smd.services',
+      makePayload()
+    )
 
     const contextEntries = await db
       .prepare("SELECT * FROM context WHERE entity_id = ? AND type = 'stage_change'")
@@ -324,7 +349,15 @@ describe('handleDocumentCompleted — milestone creation', () => {
 
   it('links milestones to the created engagement', async () => {
     const r2 = createFakeR2()
-    await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, undefined, makePayload())
+    await handleDocumentCompleted(
+      db,
+      r2,
+      'fake-api-key',
+      undefined,
+      undefined,
+      'https://test.smd.services',
+      makePayload()
+    )
 
     const engagement = await db
       .prepare('SELECT id FROM engagements WHERE quote_id = ?')
@@ -352,6 +385,7 @@ describe('handleDocumentCompleted — milestone creation', () => {
       'fake-api-key',
       undefined,
       undefined,
+      'https://test.smd.services',
       payload
     )
     expect(res1.status).toBe(200)
@@ -362,6 +396,7 @@ describe('handleDocumentCompleted — milestone creation', () => {
       'fake-api-key',
       undefined,
       undefined,
+      'https://test.smd.services',
       payload
     )
     expect(res2.status).toBe(200)
@@ -377,7 +412,15 @@ describe('handleDocumentCompleted — milestone creation', () => {
 
   it('creates all records atomically in a single batch', async () => {
     const r2 = createFakeR2()
-    await handleDocumentCompleted(db, r2, 'fake-api-key', undefined, undefined, makePayload())
+    await handleDocumentCompleted(
+      db,
+      r2,
+      'fake-api-key',
+      undefined,
+      undefined,
+      'https://test.smd.services',
+      makePayload()
+    )
 
     const quote = await db
       .prepare('SELECT status FROM quotes WHERE id = ?')
@@ -405,5 +448,86 @@ describe('handleDocumentCompleted — milestone creation', () => {
 
     const context = await db.prepare("SELECT * FROM context WHERE type = 'stage_change'").all()
     expect(context.results).toHaveLength(1)
+  })
+
+  it('provisions a client portal user from the signer snapshot', async () => {
+    const r2 = createFakeR2()
+    await handleDocumentCompleted(
+      db,
+      r2,
+      'fake-api-key',
+      undefined,
+      undefined,
+      'https://test.smd.services',
+      makePayload()
+    )
+
+    const user = await db
+      .prepare("SELECT * FROM users WHERE role = 'client'")
+      .first<Record<string, unknown>>()
+
+    expect(user).not.toBeNull()
+    expect(user!.email).toBe('owner@test.com')
+    expect(user!.name).toBe('Test Owner')
+    expect(user!.role).toBe('client')
+    expect(user!.entity_id).toBe(ENTITY_ID)
+    expect(user!.org_id).toBe(ORG_ID)
+  })
+
+  it('creates a portal invitation outbox job', async () => {
+    const r2 = createFakeR2()
+    await handleDocumentCompleted(
+      db,
+      r2,
+      'fake-api-key',
+      undefined,
+      undefined,
+      'https://test.smd.services',
+      makePayload()
+    )
+
+    const job = await db
+      .prepare("SELECT * FROM outbox_jobs WHERE type = 'send_portal_invitation'")
+      .first<Record<string, unknown>>()
+
+    expect(job).not.toBeNull()
+    expect(job!.dedupe_key).toBe(`portal-invitation:${SIGNATURE_REQUEST_ID}`)
+
+    const payload = JSON.parse(job!.payload_json as string)
+    expect(payload.user_email).toBe('owner@test.com')
+    expect(payload.user_name).toBe('Test Owner')
+    expect(payload.entity_id).toBe(ENTITY_ID)
+  })
+
+  it('handles idempotent user provisioning on webhook replay', async () => {
+    const r2 = createFakeR2()
+    const payload = makePayload()
+
+    await handleDocumentCompleted(
+      db,
+      r2,
+      'fake-api-key',
+      undefined,
+      undefined,
+      'https://test.smd.services',
+      payload
+    )
+    await handleDocumentCompleted(
+      db,
+      r2,
+      'fake-api-key',
+      undefined,
+      undefined,
+      'https://test.smd.services',
+      payload
+    )
+
+    const users = await db
+      .prepare("SELECT * FROM users WHERE role = 'client'")
+      .all<Record<string, unknown>>()
+
+    expect(users.results).toHaveLength(1)
+    expect(users.results[0].email).toBe('owner@test.com')
+    expect(users.results[0].entity_id).toBe(ENTITY_ID)
   })
 })

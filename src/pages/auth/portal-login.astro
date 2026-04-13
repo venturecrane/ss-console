@@ -12,6 +12,7 @@ import '../../styles/global.css'
 
 const status = Astro.url.searchParams.get('status')
 const error = Astro.url.searchParams.get('error')
+const prefillEmail = Astro.url.searchParams.get('email') ?? ''
 
 const statusMessages: Record<string, { text: string; type: 'success' | 'error' }> = {
   sent: { text: 'Check your email — we just sent you a sign-in link.', type: 'success' },
@@ -77,6 +78,7 @@ const message = status ? statusMessages[status] : error ? statusMessages[error] 
               type="email"
               required
               autocomplete="email"
+              value={prefillEmail}
               class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm
                      focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary
                      placeholder-slate-400"

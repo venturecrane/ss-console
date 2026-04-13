@@ -18,6 +18,7 @@ export async function handleDocumentCompleted(
   apiKey: string,
   resendApiKey: string | undefined,
   stripeApiKey: string | undefined,
+  appBaseUrl: string | undefined,
   payload: SignWellWebhookPayload
 ): Promise<Response> {
   return finalizeCompletedSOWSignature({
@@ -26,6 +27,7 @@ export async function handleDocumentCompleted(
     apiKey,
     resendApiKey,
     stripeApiKey,
+    appBaseUrl,
     payload,
   })
 }

@@ -10,7 +10,7 @@ interface UserRow {
   email: string
   name: string
   role: string
-  client_id: string | null
+  entity_id: string | null
 }
 
 /**
