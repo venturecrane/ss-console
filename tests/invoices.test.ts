@@ -444,9 +444,9 @@ describe('invoices: portal view', () => {
     expect(source()).toContain('listInvoicesForEntity')
   })
 
-  it('looks up client_id from user session', () => {
+  it('resolves entity via getPortalClient', () => {
     const code = source()
-    expect(code).toContain('client_id')
+    expect(code).toContain('getPortalClient')
     expect(code).toContain('session.userId')
   })
 

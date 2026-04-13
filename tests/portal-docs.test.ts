@@ -17,10 +17,9 @@ describe('portal: engagement progress page', () => {
     expect(source()).toContain('listMilestones')
   })
 
-  it('looks up client_id from users table', () => {
+  it('resolves entity via getPortalClient', () => {
     const code = source()
-    expect(code).toContain('client_id')
-    expect(code).toContain('users')
+    expect(code).toContain('getPortalClient')
     expect(code).toContain('session.userId')
   })
 

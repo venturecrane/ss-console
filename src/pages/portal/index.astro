@@ -47,7 +47,7 @@ interface MilestoneRow {
 }
 
 const activeEngagement = await env.DB.prepare(
-  `SELECT id, status, scope_summary, start_date, estimated_end FROM engagements WHERE client_id = ? AND status IN ('scheduled', 'active', 'handoff', 'safety_net') ORDER BY created_at DESC LIMIT 1`
+  `SELECT id, status, scope_summary, start_date, estimated_end FROM engagements WHERE entity_id = ? AND status IN ('scheduled', 'active', 'handoff', 'safety_net') ORDER BY created_at DESC LIMIT 1`
 )
   .bind(client.id)
   .first<EngagementRow>()

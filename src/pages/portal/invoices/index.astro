@@ -1,5 +1,6 @@
 ---
 import '../../../styles/global.css'
+import { getPortalClient } from '../../../lib/portal/session'
 import { listInvoicesForEntity, INVOICE_STATUSES } from '../../../lib/db/invoices'
 import type { Invoice } from '../../../lib/db/invoices'
 
@@ -9,28 +10,20 @@ import type { Invoice } from '../../../lib/db/invoices'
  * Shows the client's invoices with status, amount, and payment links.
  * Protected by auth middleware (role=client).
  *
- * Looks up the user's client_id via the users table to scope data.
+ * Resolves entity via getPortalClient() using users.entity_id.
  */
 
 const session = Astro.locals.session!
 const env = Astro.locals.runtime.env
 
-// Look up client_id from the users table
-interface UserRow {
-  id: string
-  client_id: string | null
-}
-
-const user = await env.DB.prepare('SELECT id, client_id FROM users WHERE id = ?')
-  .bind(session.userId)
-  .first<UserRow>()
-
-const clientId = user?.client_id
+// Resolve client entity from session
+const portalData = await getPortalClient(env.DB, session.userId)
+const entityId = portalData?.client.id ?? null
 
 let invoices: Awaited<ReturnType<typeof listInvoicesForEntity>> = []
 
-if (clientId) {
-  invoices = await listInvoicesForEntity(env.DB, clientId)
+if (entityId) {
+  invoices = await listInvoicesForEntity(env.DB, entityId)
 }
 
 // Status badge colors for portal-visible statuses
