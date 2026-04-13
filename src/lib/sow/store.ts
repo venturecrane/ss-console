@@ -112,7 +112,10 @@ export interface CreateSignatureRequestData {
   failure_reason?: string | null
 }
 
-export type OutboxJobType = 'send_sow_signed_email' | 'send_deposit_invoice'
+export type OutboxJobType =
+  | 'send_sow_signed_email'
+  | 'send_deposit_invoice'
+  | 'send_portal_invitation'
 export type OutboxJobStatus = 'pending' | 'processing' | 'completed' | 'failed'
 
 export interface OutboxJob {

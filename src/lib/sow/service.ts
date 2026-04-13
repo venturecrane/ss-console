@@ -37,6 +37,7 @@ import { createSignatureRequest as createSignWellRequest, getSignedPdf } from '.
 import { getSowSigningFields } from '../signwell/field-config'
 import type { SignWellCreateDocumentRequest, SignWellWebhookPayload } from '../signwell/types'
 import { sendEmail } from '../email/resend'
+import { portalWelcomeEmailHtml } from '../email/templates'
 import { createStripeInvoice, sendStripeInvoice } from '../stripe/client'
 
 export interface SOWState {
@@ -298,9 +299,10 @@ export async function finalizeCompletedSOWSignature(args: {
   apiKey: string
   resendApiKey: string | undefined
   stripeApiKey: string | undefined
+  appBaseUrl: string | undefined
   payload: SignWellWebhookPayload
 }): Promise<Response> {
-  const { db, storage, apiKey, resendApiKey, stripeApiKey, payload } = args
+  const { db, storage, apiKey, resendApiKey, stripeApiKey, appBaseUrl, payload } = args
   const providerRequestId = payload.data.object.id
   const request = await getSignatureRequestByProviderRequestId(db, 'signwell', providerRequestId)
 
@@ -309,7 +311,7 @@ export async function finalizeCompletedSOWSignature(args: {
   }
 
   if (request.status === 'completed') {
-    await processOutboxJobsForSignatureRequest(db, request, resendApiKey, stripeApiKey)
+    await processOutboxJobsForSignatureRequest(db, request, resendApiKey, stripeApiKey, appBaseUrl)
     return okResponse()
   }
 
@@ -345,7 +347,13 @@ export async function finalizeCompletedSOWSignature(args: {
         providerRequestId
       )
       if (latestRequest?.status === 'completed') {
-        await processOutboxJobsForSignatureRequest(db, latestRequest, resendApiKey, stripeApiKey)
+        await processOutboxJobsForSignatureRequest(
+          db,
+          latestRequest,
+          resendApiKey,
+          stripeApiKey,
+          appBaseUrl
+        )
       }
       return okResponse()
     }
@@ -385,6 +393,16 @@ export async function finalizeCompletedSOWSignature(args: {
     engagement_id: engagementId,
     signature_request_id: request.id,
   })
+
+  // Parse signer identity for portal user provisioning
+  const signerSnapshot = JSON.parse(request.signer_snapshot_json) as {
+    contactId: string
+    name: string
+    email: string
+    title: string | null
+  }
+  const clientUserId = crypto.randomUUID()
+  const normalizedSignerEmail = signerSnapshot.email.toLowerCase().trim()
 
   const milestoneStmts = lineItems.map((item, i) =>
     db
@@ -512,6 +530,44 @@ export async function finalizeCompletedSOWSignature(args: {
           now,
           now
         ),
+      // Provision portal client user (idempotent — UPSERT backfills entity_id if NULL)
+      db
+        .prepare(
+          `INSERT INTO users (id, org_id, email, name, role, entity_id, created_at)
+           VALUES (?, ?, ?, ?, 'client', ?, ?)
+           ON CONFLICT(org_id, email) DO UPDATE SET
+             entity_id = COALESCE(users.entity_id, excluded.entity_id)`
+        )
+        .bind(
+          clientUserId,
+          request.org_id,
+          normalizedSignerEmail,
+          signerSnapshot.name,
+          quote.entity_id,
+          now
+        ),
+      // Queue portal welcome email
+      db
+        .prepare(
+          `INSERT INTO outbox_jobs (
+            id, org_id, signature_request_id, type, status, dedupe_key, payload_json, available_at, created_at, updated_at
+          ) VALUES (?, ?, ?, 'send_portal_invitation', 'pending', ?, ?, ?, ?, ?)`
+        )
+        .bind(
+          crypto.randomUUID(),
+          request.org_id,
+          request.id,
+          `portal-invitation:${request.id}`,
+          JSON.stringify({
+            signature_request_id: request.id,
+            entity_id: quote.entity_id,
+            user_email: normalizedSignerEmail,
+            user_name: signerSnapshot.name,
+          }),
+          now,
+          now,
+          now
+        ),
     ])
   } catch (err) {
     console.error('[sow/finalize] Finalization batch failed:', err)
@@ -527,7 +583,13 @@ export async function finalizeCompletedSOWSignature(args: {
     providerRequestId
   )
   if (completedRequest) {
-    await processOutboxJobsForSignatureRequest(db, completedRequest, resendApiKey, stripeApiKey)
+    await processOutboxJobsForSignatureRequest(
+      db,
+      completedRequest,
+      resendApiKey,
+      stripeApiKey,
+      appBaseUrl
+    )
   }
   return okResponse()
 }
@@ -536,7 +598,8 @@ async function processOutboxJobsForSignatureRequest(
   db: D1Database,
   request: SignatureRequest,
   resendApiKey: string | undefined,
-  stripeApiKey: string | undefined
+  stripeApiKey: string | undefined,
+  appBaseUrl: string | undefined
 ): Promise<void> {
   const jobs = await listOutboxJobsForSignatureRequest(db, request.org_id, request.id)
   for (const job of jobs) {
@@ -556,6 +619,8 @@ async function processOutboxJobsForSignatureRequest(
         await handleSignedEmailJob(db, request.org_id, resendApiKey, job)
       } else if (job.type === 'send_deposit_invoice') {
         await handleDepositInvoiceJob(db, request.org_id, stripeApiKey, job)
+      } else if (job.type === 'send_portal_invitation') {
+        await handlePortalInvitationJob(db, request.org_id, resendApiKey, appBaseUrl, job)
       }
 
       await db
@@ -612,6 +677,37 @@ async function handleSignedEmailJob(
     to: contact.email,
     subject: 'SOW Signed - Next Steps',
     html: signatureConfirmationEmailHtml(entity?.name ?? 'there'),
+  })
+}
+
+async function handlePortalInvitationJob(
+  _db: D1Database,
+  _orgId: string,
+  resendApiKey: string | undefined,
+  appBaseUrl: string | undefined,
+  job: OutboxJob
+): Promise<void> {
+  const payload = JSON.parse(job.payload_json) as {
+    user_email: string
+    user_name: string
+  }
+
+  if (!resendApiKey) {
+    console.log('[sow/outbox] Portal invitation skipped (no RESEND_API_KEY)')
+    return
+  }
+
+  // Build portal login URL with email pre-filled.
+  // Uses PORTAL_BASE_URL convention: portal.<domain> or falls back to appBaseUrl + /auth/portal-login
+  const portalLoginUrl = appBaseUrl
+    ? `${appBaseUrl.replace('://', '://portal.')}`
+    : 'https://portal.smd.services'
+  const loginUrlWithEmail = `${portalLoginUrl}?email=${encodeURIComponent(payload.user_email)}`
+
+  await sendEmail(resendApiKey, {
+    to: payload.user_email,
+    subject: 'Your SMD Services portal is ready',
+    html: portalWelcomeEmailHtml(payload.user_name, loginUrlWithEmail),
   })
 }
 

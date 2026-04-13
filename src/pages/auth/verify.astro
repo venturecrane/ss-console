@@ -38,7 +38,7 @@ interface UserRow {
   email: string
   name: string
   role: string
-  client_id: string | null
+  entity_id: string | null
 }
 
 const user = await env.DB.prepare(`SELECT * FROM users WHERE email = ? AND role = 'client'`)
