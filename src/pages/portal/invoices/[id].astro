@@ -1,0 +1,438 @@
+---
+import '../../../styles/global.css'
+import { getPortalClient } from '../../../lib/portal/session'
+import {
+  getInvoiceForEntity,
+  listLineItemsForInvoice,
+  type InvoiceLineItem,
+} from '../../../lib/db/invoices'
+import PortalHeader from '../../../components/portal/PortalHeader.astro'
+import MoneyDisplay from '../../../components/portal/MoneyDisplay.astro'
+import ActionCard from '../../../components/portal/ActionCard.astro'
+import ConsultantBlock from '../../../components/portal/ConsultantBlock.astro'
+
+/**
+ * Invoice landing — deep-link surface per .stitch/portal-ux-brief.md.
+ *
+ * Route param `id` → invoices.id, scoped to the portal entity via
+ * getInvoiceForEntity (which also filters to portal-visible statuses).
+ * Invalid / no-access IDs redirect back to /portal.
+ *
+ * Money rule: all figures render as dollar amounts via MoneyDisplay. The
+ * invoices.amount column is REAL (dollars) so we convert to cents for the
+ * component. Line items are stored in cents directly.
+ *
+ * Paid state: hides the Pay CTA and replaces the pill/amount with a paid
+ * caption. Full error/edge design (voided, refunded, etc.) lives in #365.
+ */
+
+const session = Astro.locals.session!
+const env = Astro.locals.runtime.env
+const { id: invoiceId } = Astro.params
+
+if (!invoiceId) {
+  return Astro.redirect('/portal')
+}
+
+const portalData = await getPortalClient(env.DB, session.userId)
+if (!portalData) {
+  return Astro.redirect('/auth/portal-login?error=no_account')
+}
+
+const { client } = portalData
+
+const invoice = await getInvoiceForEntity(env.DB, client.id, invoiceId)
+if (!invoice) {
+  return Astro.redirect('/portal')
+}
+
+// Load line items; if none exist, we render a single fallback row below.
+const lineItems = await listLineItemsForInvoice(env.DB, invoice.id)
+
+// Load engagement for scope fallback + consultant attribution.
+interface EngagementRow {
+  id: string
+  scope_summary: string | null
+  consultant_name: string | null
+  consultant_photo_url: string | null
+  consultant_role: string | null
+  consultant_phone: string | null
+  next_touchpoint_at: string | null
+  next_touchpoint_label: string | null
+}
+
+const engagement = invoice.engagement_id
+  ? await env.DB.prepare(
+      `SELECT id, scope_summary, consultant_name, consultant_photo_url, consultant_role,
+              consultant_phone, next_touchpoint_at, next_touchpoint_label
+       FROM engagements WHERE id = ?`
+    )
+      .bind(invoice.engagement_id)
+      .first<EngagementRow>()
+  : null
+
+// Money — invoices.amount is dollars (REAL); convert to cents for display.
+const amountCents = Math.round(invoice.amount * 100)
+const lineItemsTotalCents = lineItems.reduce((sum, li) => sum + li.amount_cents, 0)
+// Show the invoice's own amount as Total so rounding always matches the CTA.
+const totalCents = amountCents
+
+// Fallback line item when none are stored for this invoice.
+const displayLineItems: InvoiceLineItem[] =
+  lineItems.length > 0
+    ? lineItems
+    : [
+        {
+          id: 'fallback',
+          invoice_id: invoice.id,
+          description: invoice.description ?? engagement?.scope_summary ?? 'Engagement work',
+          amount_cents: amountCents,
+          sort_order: 0,
+          created_at: invoice.created_at,
+        },
+      ]
+
+// CTA: prefer Stripe hosted URL when present and usable, otherwise a server
+// endpoint placeholder. The server endpoint is out of scope for this PR.
+const isPaid = !!invoice.paid_at
+const stripeUrl =
+  invoice.stripe_hosted_url && invoice.stripe_hosted_url !== '#dev-mode'
+    ? invoice.stripe_hosted_url
+    : null
+// TODO(#362): wire /api/invoices/[id]/pay to mint a Stripe checkout session.
+const payHref = stripeUrl ?? `/api/invoices/${invoice.id}/pay`
+
+// Formatting
+const formatDueCaption = (iso: string | null): string | null => {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+const formatShortDate = (iso: string | null): string | null => {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+const daysUntil = (iso: string | null): number | null => {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  const diff = d.getTime() - Date.now()
+  return Math.ceil(diff / (1000 * 60 * 60 * 24))
+}
+
+// Title + period
+const typeLabelMap: Record<string, string> = {
+  deposit: 'Deposit invoice',
+  completion: 'Completion invoice',
+  milestone: 'Milestone invoice',
+  assessment: 'Assessment invoice',
+  retainer: 'Retainer invoice',
+}
+const invoiceTitle = typeLabelMap[invoice.type] ?? 'Invoice'
+const periodSubtitle = invoice.description
+  ? `For ${invoice.description}`
+  : engagement?.scope_summary
+    ? `For ${engagement.scope_summary}`
+    : null
+
+const dueCaption = formatDueCaption(invoice.due_date)
+const daysRemaining = daysUntil(invoice.due_date)
+const paidShortDate = formatShortDate(invoice.paid_at)
+const dueShortDate = formatShortDate(invoice.due_date)
+
+// Pill label for the right-rail action card
+let pillLabel = 'Invoice'
+if (isPaid) {
+  pillLabel = 'Paid'
+} else if (daysRemaining !== null) {
+  if (daysRemaining < 0) pillLabel = 'Overdue'
+  else if (daysRemaining === 0) pillLabel = 'Due today'
+  else pillLabel = `Due in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`
+}
+
+// Deposit note: surface when this is a completion invoice with a dollar delta
+// from the line-items sum (common when a deposit has already been taken).
+const depositNote =
+  invoice.type === 'completion' && lineItemsTotalCents > amountCents
+    ? `Deposit of ${((lineItemsTotalCents - amountCents) / 100).toLocaleString('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0,
+      })} already received.`
+    : null
+
+// Consultant block props (ConsultantBlock never renders initials)
+const consultantName = engagement?.consultant_name ?? 'Scott Durgan'
+const consultantRole = engagement?.consultant_role ?? 'Consultant, SMD Services'
+const consultantPhotoUrl = engagement?.consultant_photo_url ?? null
+const consultantPhone = engagement?.consultant_phone ?? null
+const nextTouchpointAt = engagement?.next_touchpoint_at ?? null
+const nextTouchpointLabel = engagement?.next_touchpoint_label ?? null
+
+// PortalHeader SMS link (mobile thumb-zone affordance)
+const smsHref = consultantPhone ? `sms:${consultantPhone.replace(/[^+\d]/g, '')}` : null
+const smsFirstName = consultantName.trim().split(/\s+/)[0] || consultantName
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+    <title>Invoice — SMD Services</title>
+  </head>
+  <body class="min-h-screen bg-[color:var(--color-background)]">
+    <PortalHeader
+      clientName={client.name}
+      showSms={!!smsHref && !isPaid}
+      smsHref={smsHref ?? undefined}
+      smsLabel={smsHref ? `Text ${smsFirstName}` : undefined}
+    >
+      <form method="POST" action="/api/auth/logout">
+        <button
+          type="submit"
+          class="text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-secondary)] transition-colors"
+        >
+          Sign out
+        </button>
+      </form>
+    </PortalHeader>
+
+    <main class="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+      <div class="grid grid-cols-1 md:grid-cols-[720px_1fr] gap-8 md:gap-12 items-start">
+        <!-- Main column -->
+        <section class="flex flex-col gap-8 min-w-0">
+          <!-- Eyebrow + title + subtitle -->
+          <div>
+            <p
+              class="text-[13px] leading-[18px] font-semibold uppercase tracking-[0.08em] text-[color:var(--color-meta)]"
+            >
+              Invoice
+            </p>
+            <h1
+              class="mt-2 font-['Plus_Jakarta_Sans'] font-extrabold text-[28px] sm:text-[36px] leading-[1.15] tracking-[-0.02em] text-[color:var(--color-text-primary)]"
+            >
+              {invoiceTitle}
+            </h1>
+            {
+              periodSubtitle && (
+                <p class="mt-3 text-[16px] sm:text-[18px] leading-[28px] text-[color:var(--color-text-secondary)]">
+                  {periodSubtitle}
+                </p>
+              )
+            }
+            {
+              !isPaid && dueCaption && (
+                <p class="mt-3 text-[13px] leading-[18px] font-medium text-[color:var(--color-meta)]">
+                  Due {dueCaption}
+                </p>
+              )
+            }
+            {
+              isPaid && paidShortDate && (
+                <p class="mt-3 text-[13px] leading-[18px] font-medium text-[color:var(--color-complete)]">
+                  Paid {paidShortDate}. Receipt attached.
+                </p>
+              )
+            }
+          </div>
+
+          <!-- Mobile-only hero: MoneyDisplay + Pay CTA above the fold.
+               The right rail ActionCard covers this on desktop. -->
+          <div class="md:hidden">
+            <MoneyDisplay amountCents={amountCents} size="display" />
+            <p class="mt-2 text-[13px] leading-[18px] text-[color:var(--color-text-muted)]">
+              {isPaid ? 'Paid in full' : 'Remaining balance'}
+            </p>
+            {
+              !isPaid && (
+                <>
+                  <a
+                    href={payHref}
+                    class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white text-base font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                  >
+                    Pay invoice
+                    <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+                  </a>
+                  <div class="mt-3 flex items-center gap-2 text-[13px] text-[color:var(--color-text-muted)]">
+                    <span class="material-symbols-outlined text-[16px]">lock</span>
+                    <span>Secure payment via Stripe</span>
+                  </div>
+                </>
+              )
+            }
+          </div>
+
+          <!-- What's included -->
+          <div>
+            <h2
+              class="font-['Plus_Jakarta_Sans'] font-bold text-[20px] sm:text-[22px] leading-[28px] text-[color:var(--color-text-primary)]"
+            >
+              What's included
+            </h2>
+            <div class="mt-4 border-t border-[color:var(--color-border)]"></div>
+            <ul class="flex flex-col">
+              {
+                displayLineItems.map((li) => (
+                  <li class="flex justify-between items-baseline gap-6 py-5 border-b border-[color:var(--color-border)]/60">
+                    <span class="text-[15px] leading-[22px] text-[color:var(--color-text-primary)] max-w-[480px]">
+                      {li.description}
+                    </span>
+                    <MoneyDisplay amountCents={li.amount_cents} size="body" emphasize />
+                  </li>
+                ))
+              }
+            </ul>
+            <div
+              class="mt-4 border-t-2 border-[color:var(--color-text-primary)] pt-5 flex justify-between items-baseline"
+            >
+              <span class="text-base font-bold text-[color:var(--color-text-primary)]">Total</span>
+              <MoneyDisplay amountCents={totalCents} size="h2" />
+            </div>
+          </div>
+
+          <!-- Payment details -->
+          <div
+            class="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-6 sm:p-8"
+          >
+            <h2
+              class="font-['Plus_Jakarta_Sans'] font-bold text-[18px] leading-[24px] text-[color:var(--color-text-primary)]"
+            >
+              Payment details
+            </h2>
+            <ul class="mt-4 flex flex-col gap-3 text-[15px] text-[color:var(--color-text-secondary)]">
+              {
+                dueShortDate && !isPaid && (
+                  <li class="flex items-center gap-3">
+                    <span class="material-symbols-outlined text-[20px] text-[color:var(--color-text-muted)]">
+                      event
+                    </span>
+                    <span>Due {dueShortDate}</span>
+                  </li>
+                )
+              }
+              {
+                isPaid && paidShortDate && (
+                  <li class="flex items-center gap-3">
+                    <span class="material-symbols-outlined text-[20px] text-[color:var(--color-complete)]">
+                      check_circle
+                    </span>
+                    <span>Paid {paidShortDate}</span>
+                  </li>
+                )
+              }
+              <li class="flex items-center gap-3">
+                <span
+                  class="material-symbols-outlined text-[20px] text-[color:var(--color-text-muted)]"
+                >
+                  verified_user
+                </span>
+                <span>Payment processed securely via Stripe</span>
+              </li>
+              {
+                depositNote && (
+                  <li class="flex items-center gap-3">
+                    <span class="material-symbols-outlined text-[20px] text-[color:var(--color-text-muted)]">
+                      history
+                    </span>
+                    <span>{depositNote}</span>
+                  </li>
+                )
+              }
+            </ul>
+          </div>
+
+          <!-- Mobile-only consultant block (desktop renders it in the rail) -->
+          <div class="md:hidden">
+            <ConsultantBlock
+              name={consultantName}
+              photoUrl={consultantPhotoUrl}
+              role={consultantRole}
+              nextTouchpointAt={nextTouchpointAt}
+              nextTouchpointLabel={nextTouchpointLabel}
+              phone={consultantPhone}
+            />
+          </div>
+
+          <!-- Mobile-only back link -->
+          <a
+            href="/portal"
+            class="md:hidden inline-flex items-center gap-2 text-sm font-semibold text-[color:var(--color-meta)] hover:underline"
+          >
+            <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+            Engagement dashboard
+          </a>
+        </section>
+
+        <!-- Desktop right rail (sticky) -->
+        <aside class="hidden md:flex md:flex-col gap-6 md:sticky md:top-8">
+          {
+            isPaid ? (
+              <div class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-6 sm:p-8">
+                <span class="inline-flex items-center rounded-full bg-[color:var(--color-complete)]/10 px-3 py-1 text-[13px] leading-[18px] font-medium tracking-[0.01em] text-[color:var(--color-complete)]">
+                  Paid
+                </span>
+                <div class="mt-5">
+                  <MoneyDisplay amountCents={amountCents} size="display" />
+                  <p class="mt-2 text-[13px] leading-[18px] font-medium tracking-[0.01em] text-[color:var(--color-text-muted)]">
+                    Paid in full
+                  </p>
+                </div>
+                {paidShortDate && (
+                  <p class="mt-6 text-[13px] text-[color:var(--color-text-muted)]">
+                    Paid {paidShortDate}. Receipt attached.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <ActionCard
+                pillLabel={pillLabel}
+                amountCents={amountCents}
+                amountLabel="Remaining balance"
+                ctaLabel="Pay invoice"
+                ctaHref={payHref}
+                ctaSubtext="Secure payment via Stripe."
+              />
+            )
+          }
+
+          <ConsultantBlock
+            name={consultantName}
+            photoUrl={consultantPhotoUrl}
+            role={consultantRole}
+            nextTouchpointAt={nextTouchpointAt}
+            nextTouchpointLabel={nextTouchpointLabel}
+            phone={consultantPhone}
+          />
+
+          <a
+            href="/portal"
+            class="inline-flex items-center gap-2 text-sm font-semibold text-[color:var(--color-meta)] hover:underline px-2"
+          >
+            <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+            Engagement dashboard
+          </a>
+        </aside>
+      </div>
+    </main>
+  </body>
+</html>

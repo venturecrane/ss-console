@@ -311,3 +311,54 @@ export async function listInvoicesForEntity(db: D1Database, entityId: string): P
     .all<Invoice>()
   return result.results
 }
+
+/**
+ * Get a single invoice for a specific entity (portal access).
+ *
+ * Scoped by entity_id for portal auth; only returns invoices in portal-visible
+ * statuses (sent, paid, overdue). Draft and void invoices are never exposed.
+ */
+export async function getInvoiceForEntity(
+  db: D1Database,
+  entityId: string,
+  invoiceId: string
+): Promise<Invoice | null> {
+  const placeholders = PORTAL_VISIBLE_STATUSES.map(() => '?').join(', ')
+  const sql = `SELECT * FROM invoices WHERE id = ? AND entity_id = ? AND status IN (${placeholders})`
+
+  const result = await db
+    .prepare(sql)
+    .bind(invoiceId, entityId, ...PORTAL_VISIBLE_STATUSES)
+    .first<Invoice>()
+
+  return result ?? null
+}
+
+export interface InvoiceLineItem {
+  id: string
+  invoice_id: string
+  description: string
+  amount_cents: number
+  sort_order: number
+  created_at: string
+}
+
+/**
+ * List line items for an invoice, sorted by sort_order then created_at.
+ * Returns an empty array if the invoice has no line items — callers are
+ * responsible for rendering a fallback row.
+ */
+export async function listLineItemsForInvoice(
+  db: D1Database,
+  invoiceId: string
+): Promise<InvoiceLineItem[]> {
+  const result = await db
+    .prepare(
+      `SELECT * FROM invoice_line_items
+       WHERE invoice_id = ?
+       ORDER BY sort_order ASC, created_at ASC`
+    )
+    .bind(invoiceId)
+    .all<InvoiceLineItem>()
+  return result.results
+}
