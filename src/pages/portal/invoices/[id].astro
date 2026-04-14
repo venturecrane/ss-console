@@ -319,7 +319,9 @@ const smsFirstName = consultantName.trim().split(/\s+/)[0] || consultantName
             >
               Payment details
             </h2>
-            <ul class="mt-4 flex flex-col gap-3 text-[15px] text-[color:var(--color-text-secondary)]">
+            <ul
+              class="mt-4 flex flex-col gap-3 text-[15px] text-[color:var(--color-text-secondary)]"
+            >
               {
                 dueShortDate && !isPaid && (
                   <li class="flex items-center gap-3">
