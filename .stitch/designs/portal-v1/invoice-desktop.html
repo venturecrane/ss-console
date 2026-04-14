@@ -1,0 +1,300 @@
+<!doctype html>
+
+<html class="light" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Invoice | Delgado Plumbing &amp; SMD Services</title>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Plus+Jakarta+Sans:wght@700;800&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              'error-container': '#ffdad6',
+              primary: '#00288e',
+              'on-secondary-container': '#fefcff',
+              'surface-container-low': '#f2f3ff',
+              'primary-fixed': '#dde1ff',
+              'surface-bright': '#faf8ff',
+              'on-tertiary-container': '#b3b5ff',
+              'secondary-container': '#2170e4',
+              'surface-container-lowest': '#ffffff',
+              'outline-variant': '#c4c5d5',
+              'on-background': '#131b2e',
+              'on-secondary-fixed-variant': '#004395',
+              'on-surface-variant': '#444653',
+              surface: '#faf8ff',
+              'primary-fixed-dim': '#b8c4ff',
+              error: '#ba1a1a',
+              'surface-tint': '#3755c3',
+              tertiary: '#170cae',
+              'inverse-surface': '#283044',
+              'tertiary-container': '#3433c3',
+              outline: '#757684',
+              'secondary-fixed': '#d8e2ff',
+              'inverse-primary': '#b8c4ff',
+              'on-primary-fixed': '#001453',
+              'tertiary-fixed': '#e1e0ff',
+              'on-tertiary': '#ffffff',
+              'on-tertiary-fixed': '#07006c',
+              'on-surface': '#131b2e',
+              'surface-container': '#eaedff',
+              'on-secondary': '#ffffff',
+              'on-primary-container': '#a8b8ff',
+              'surface-variant': '#dae2fd',
+              'on-error': '#ffffff',
+              'secondary-fixed-dim': '#adc6ff',
+              'tertiary-fixed-dim': '#c0c1ff',
+              'surface-dim': '#d2d9f4',
+              'on-tertiary-fixed-variant': '#2f2ebe',
+              background: '#faf8ff',
+              'inverse-on-surface': '#eef0ff',
+              'on-error-container': '#93000a',
+              'surface-container-high': '#e2e7ff',
+              'primary-container': '#1e40af',
+              'on-secondary-fixed': '#001a42',
+              secondary: '#0058be',
+              'on-primary': '#ffffff',
+              'on-primary-fixed-variant': '#173bab',
+              'surface-container-highest': '#dae2fd',
+            },
+            borderRadius: {
+              DEFAULT: '0.25rem',
+              lg: '0.5rem',
+              xl: '0.75rem',
+              full: '9999px',
+            },
+            fontFamily: {
+              headline: ['Plus Jakarta Sans'],
+              body: ['Inter'],
+              label: ['Inter'],
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings:
+          'FILL' 0,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24;
+      }
+      .tabular-nums {
+        font-variant-numeric: tabular-nums;
+      }
+      .glass-card {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(12px);
+      }
+    </style>
+  </head>
+  <body class="bg-[#faf8ff] font-body text-on-surface antialiased">
+    <!-- TopNavBar -->
+    <header class="fixed top-0 w-full bg-[#faf8ff] z-50">
+      <nav class="flex justify-between items-center w-full px-8 py-4 max-w-[1280px] mx-auto">
+        <div
+          class="text-xl font-extrabold text-[#131b2e] dark:text-slate-100 tracking-tight font-headline"
+        >
+          Delgado Plumbing
+        </div>
+        <div class="flex items-center gap-4">
+          <button
+            class="flex items-center gap-2 px-4 py-2 rounded-full text-[#1E40AF] transition-colors hover:bg-[#f2f3ff] active:scale-95 duration-200"
+          >
+            <span class="material-symbols-outlined" data-icon="sms">sms</span>
+            <span class="text-sm font-semibold uppercase tracking-wider">Contact</span>
+          </button>
+        </div>
+      </nav>
+    </header>
+    <!-- Main Content Grid -->
+    <main class="pt-32 pb-24 px-8 max-w-[1280px] mx-auto">
+      <div class="grid grid-cols-1 md:grid-cols-[720px_1fr] gap-12 items-start">
+        <!-- Left Column: Invoice Details -->
+        <section class="flex flex-col gap-8">
+          <!-- Eyebrow and Heading -->
+          <div class="flex flex-col gap-2">
+            <span class="text-sm font-semibold text-[#6366F1] uppercase tracking-widest"
+              >Invoice</span
+            >
+            <h1 class="font-headline font-800 text-[36px] leading-[42px] text-on-surface">
+              April engagement invoice
+            </h1>
+            <p class="text-[18px] leading-[28px] text-on-surface-variant">
+              For work completed Apr 1 — Apr 13.
+            </p>
+          </div>
+          <!-- Line Items Section -->
+          <div class="mt-8">
+            <h2 class="font-headline font-700 text-[22px] leading-[28px] mb-4">What's included</h2>
+            <div class="border-b border-outline-variant/30 mb-6"></div>
+            <div class="flex flex-col">
+              <!-- Row 1 -->
+              <div
+                class="flex justify-between items-center py-6 hover:bg-surface-container-lowest transition-colors duration-200 rounded-lg px-2 -mx-2"
+              >
+                <span class="text-[15px] leading-[22px] text-on-surface max-w-[480px]"
+                  >Assessment, dispatch review, and intake redesign</span
+                >
+                <span class="tabular-nums font-500 text-on-surface">$2,750</span>
+              </div>
+              <div class="border-b border-outline-variant/20"></div>
+              <!-- Row 2 -->
+              <div
+                class="flex justify-between items-center py-6 hover:bg-surface-container-lowest transition-colors duration-200 rounded-lg px-2 -mx-2"
+              >
+                <span class="text-[15px] leading-[22px] text-on-surface max-w-[480px]"
+                  >Call script + warranty flow</span
+                >
+                <span class="tabular-nums font-500 text-on-surface">$900</span>
+              </div>
+              <div class="border-b border-outline-variant/20"></div>
+              <!-- Row 3 -->
+              <div
+                class="flex justify-between items-center py-6 hover:bg-surface-container-lowest transition-colors duration-200 rounded-lg px-2 -mx-2"
+              >
+                <span class="text-[15px] leading-[22px] text-on-surface max-w-[480px]"
+                  >Team training session</span
+                >
+                <span class="tabular-nums font-500 text-on-surface">$600</span>
+              </div>
+              <!-- Total Row -->
+              <div class="mt-4 border-t-2 border-on-surface pt-6 flex justify-between items-center">
+                <span class="text-lg font-bold text-on-surface">Total</span>
+                <span class="tabular-nums font-headline font-800 text-[24px] text-primary"
+                  >$4,250</span
+                >
+              </div>
+            </div>
+          </div>
+          <!-- Payment Details Section -->
+          <div class="mt-12 p-8 bg-surface-container-low rounded-xl flex flex-col gap-4">
+            <h2 class="font-headline font-700 text-[18px] text-on-surface">Payment details</h2>
+            <div class="flex flex-col gap-3 text-on-surface-variant text-[15px]">
+              <p class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-[20px]" data-icon="event">event</span>
+                Due Friday, April 18
+              </p>
+              <p class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-[20px]" data-icon="verified_user"
+                  >verified_user</span
+                >
+                Payment processed securely via Stripe
+              </p>
+              <p class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-[20px]" data-icon="history"
+                  >history</span
+                >
+                50% deposit already received on April 2
+              </p>
+            </div>
+          </div>
+          <!-- Consultant Note / Branding Callout -->
+          <div class="mt-12 p-6 bg-tertiary-container/10 border-l-4 border-tertiary rounded-r-lg">
+            <p class="text-tertiary font-medium italic">
+              "This engagement focused on streamlining the customer intake flow to reduce overhead
+              for the dispatch team. The training sessions saw high engagement from the service
+              managers."
+            </p>
+          </div>
+        </section>
+        <!-- Right Rail: Sticky Action Column -->
+        <aside class="md:sticky md:top-32 flex flex-col gap-6">
+          <!-- Main Action Card -->
+          <div
+            class="bg-surface-container-lowest p-8 rounded-xl shadow-[0px_24px_48px_-12px_rgba(30,64,175,0.06)] border border-outline-variant/20"
+          >
+            <div
+              class="inline-flex items-center px-3 py-1 rounded-full bg-[#f2f3ff] text-[#6366F1] text-xs font-bold uppercase tracking-wider mb-6"
+            >
+              Due in 4 days
+            </div>
+            <div class="mb-8">
+              <div
+                class="text-[36px] leading-[40px] font-headline font-800 tabular-nums text-on-surface"
+              >
+                $4,250
+              </div>
+              <div class="text-sm text-on-surface-variant font-medium mt-1">Remaining balance</div>
+            </div>
+            <button
+              class="w-full h-[48px] bg-[#1E40AF] text-white rounded-full font-label font-bold text-sm uppercase tracking-[0.05em] hover:bg-primary transition-all active:scale-[0.98] shadow-lg shadow-primary/20"
+            >
+              Pay invoice
+            </button>
+            <div
+              class="mt-4 flex items-center justify-center gap-2 text-xs text-on-surface-variant"
+            >
+              <span class="material-symbols-outlined text-[14px]" data-icon="lock">lock</span>
+              Secure payment via Stripe.
+            </div>
+          </div>
+          <!-- Consultant Profile Card -->
+          <div
+            class="bg-surface-container-low p-6 rounded-xl flex flex-col items-center text-center gap-4"
+          >
+            <img
+              alt="Scott Durgan"
+              class="w-16 h-16 rounded-full object-cover grayscale-0 border-2 border-surface-container-lowest"
+              data-alt="Professional headshot of a middle-aged man with short dark hair and a confident smile, wearing a navy blazer, soft studio lighting"
+              src="https://lh3.googleusercontent.com/aida-public/AB6AXuD9HIMVb24lG7gVFlY7jCiOs3A6Hb0tKGSyq397UFEwQOFx8Unxac5o6qoa_Q7zpUHf8UZoiFcy7yQ5xHH5sWFLX4ynT1ZXfAkhvSSJV2abmPncIRz66Jo2RVj1HSd9bpoIHRcSz0D6M89Rp9orHwOvIgScThyRrKWIbW-tQC6kqzUjyblqz0Z84RaQryhyC_i-GKblO9iHzrvn-IPb21iFS9fw_ejb-h8OHltpJFSZUHEeLADeLOCDf9UMxojptDSeNn9lFmeqc5rq"
+            />
+            <div>
+              <div class="font-bold text-on-surface">Scott Durgan</div>
+              <div class="text-sm text-on-surface-variant">Your consultant</div>
+            </div>
+            <button
+              class="w-full py-2 px-4 rounded-lg bg-surface-container-lowest border border-outline-variant/30 text-primary font-semibold text-sm hover:bg-surface-container-high transition-colors"
+            >
+              Text Scott
+            </button>
+            <p class="text-[11px] text-on-surface-variant/70 italic">
+              Replies within 1 business day.
+            </p>
+          </div>
+          <!-- Back Link -->
+          <a
+            class="flex items-center gap-2 text-sm font-semibold text-[#6366F1] hover:underline transition-all mt-2 px-2"
+            href="#"
+          >
+            <span class="material-symbols-outlined text-[18px]" data-icon="arrow_back"
+              >arrow_back</span
+            >
+            Engagement dashboard
+          </a>
+        </aside>
+      </div>
+    </main>
+    <!-- Footer -->
+    <footer class="w-full py-12 flex flex-col items-center gap-4 max-w-[1280px] mx-auto px-8">
+      <p class="font-body text-sm text-[#444653] dark:text-slate-400 text-center">
+        © 2024 Delgado Plumbing. Editorial Precision by SMD Services.
+      </p>
+      <div class="flex gap-6">
+        <a class="text-sm text-[#444653] hover:text-[#1E40AF] transition-all no-underline" href="#"
+          >Privacy Policy</a
+        >
+        <a class="text-sm text-[#444653] hover:text-[#1E40AF] transition-all no-underline" href="#"
+          >Terms of Service</a
+        >
+        <a class="text-sm text-[#444653] hover:text-[#1E40AF] transition-all no-underline" href="#"
+          >Contact Support</a
+        >
+      </div>
+    </footer>
+  </body>
+</html>

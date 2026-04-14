@@ -1,0 +1,265 @@
+<!doctype html>
+
+<html class="light" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Delgado Plumbing | Client Portal</title>
+    <!-- Fonts: Plus Jakarta Sans & Inter -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&amp;family=Inter:wght@400;500;600&amp;display=swap"
+      rel="stylesheet"
+    />
+    <!-- Material Symbols -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              'surface-variant': '#e0e3e5',
+              'on-secondary-container': '#fefcff',
+              'on-primary': '#ffffff',
+              'error-container': '#ffdad6',
+              background: '#f7f9fb',
+              'on-background': '#191c1e',
+              'on-tertiary-fixed-variant': '#005236',
+              'inverse-surface': '#2d3133',
+              'inverse-on-surface': '#eff1f3',
+              'primary-container': '#1e40af',
+              'on-surface-variant': '#444653',
+              'surface-tint': '#3755c3',
+              'on-error-container': '#93000a',
+              'on-tertiary-fixed': '#002113',
+              'outline-variant': '#c4c5d5',
+              'on-primary-container': '#a8b8ff',
+              'surface-container-highest': '#e0e3e5',
+              'surface-bright': '#f7f9fb',
+              'on-surface': '#191c1e',
+              'surface-container-low': '#f2f4f6',
+              'surface-container-lowest': '#ffffff',
+              error: '#ba1a1a',
+              'tertiary-fixed': '#6ffbbe',
+              'surface-container': '#eceef0',
+              'on-tertiary-container': '#3fd298',
+              'surface-container-high': '#e6e8ea',
+              'secondary-fixed': '#d8e2ff',
+              'primary-fixed': '#dde1ff',
+              'tertiary-fixed-dim': '#4edea3',
+              'secondary-fixed-dim': '#adc6ff',
+              'on-secondary-fixed': '#001a42',
+              'on-primary-fixed-variant': '#173bab',
+              surface: '#f7f9fb',
+              'on-primary-fixed': '#001453',
+              'inverse-primary': '#b8c4ff',
+              outline: '#757684',
+              'on-secondary-fixed-variant': '#004395',
+              'tertiary-container': '#00563a',
+              'primary-fixed-dim': '#b8c4ff',
+              primary: '#00288e',
+              tertiary: '#003d27',
+              'on-error': '#ffffff',
+              'on-tertiary': '#ffffff',
+              'surface-dim': '#d8dadc',
+              'on-secondary': '#ffffff',
+              'secondary-container': '#2170e4',
+              secondary: '#0058be',
+            },
+            borderRadius: {
+              DEFAULT: '0.25rem',
+              lg: '0.5rem',
+              xl: '0.75rem',
+              full: '9999px',
+            },
+            fontFamily: {
+              headline: ['Plus Jakarta Sans'],
+              body: ['Inter'],
+              label: ['Inter'],
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+      .font-headline {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+      }
+      .tabular-nums {
+        font-variant-numeric: tabular-nums;
+      }
+      .material-symbols-outlined {
+        font-variation-settings:
+          'FILL' 0,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24;
+      }
+    </style>
+    <style>
+      body {
+        min-height: max(884px, 100dvh);
+      }
+    </style>
+  </head>
+  <body class="bg-background text-on-background min-h-screen pb-32">
+    <!-- TopAppBar Execution -->
+    <header
+      class="w-full top-0 px-6 py-4 bg-[#f7f9fb] dark:bg-slate-950 flex justify-between items-center w-full max-w-xl mx-auto"
+    >
+      <div class="flex items-center gap-3">
+        <img
+          alt="Scott Durgan"
+          class="w-10 h-10 rounded-full object-cover"
+          data-alt="Professional headshot of a middle-aged male consultant with a warm smile, neutral office background, soft studio lighting"
+          src="https://lh3.googleusercontent.com/aida-public/AB6AXuBojlYv961Zf1SoP4mvizW-g0hdMN6LDBXsVqu4FUm3Nzn7cEzo82CUUKjypGUJjWoSBcDpPOIcOLpXlm3PjPvC4JARt_LsQDzMTm6cwlH0Xm-f5x2_zByfSSlaJbTcK2IepcO8JeHsyk-TXswt53dhbn--Rxplg7W22qjU6NuR0ADUOwnFdj8KiN_iEOEcpsYJeu7VUsxDgCIkyHpvZLzdCDm0piic_UQ1MPbY4tvNPvMSyNIytTxsP-1F38mmc7ow0rnfgN6YUqY0"
+        />
+        <span
+          class="text-lg font-extrabold tracking-tight text-[#00288e] dark:text-indigo-300 font-headline"
+          >Delgado Plumbing</span
+        >
+      </div>
+      <button class="text-slate-500 dark:text-slate-400 hover:opacity-80 transition-opacity">
+        <span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+      </button>
+    </header>
+    <main class="max-w-xl mx-auto px-6 pt-8 space-y-12">
+      <!-- Pinned Section: Editorial Letter-like style -->
+      <section class="space-y-6">
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] tracking-[0.2em] uppercase font-bold text-outline"
+            >Latest Entry</span
+          >
+          <div class="h-[1px] flex-grow bg-outline-variant/30"></div>
+        </div>
+        <article class="space-y-4">
+          <header class="flex justify-between items-baseline">
+            <span class="font-headline font-bold text-sm text-primary">Apr 14 — From Scott</span>
+          </header>
+          <div class="space-y-6">
+            <p class="text-lg leading-relaxed font-body text-on-surface">
+              Your April invoice is ready. I've attached it below. Please pay by Friday, Apr 18.
+            </p>
+            <!-- Invoice Card -->
+            <div
+              class="bg-surface-container-lowest p-6 rounded-xl space-y-4 shadow-[0px_12px_32px_rgba(15,23,42,0.06)] border border-outline-variant/10"
+            >
+              <div class="flex justify-between items-start">
+                <div class="space-y-1">
+                  <span class="text-xs font-semibold text-secondary tracking-wide uppercase"
+                    >Amount Due</span
+                  >
+                  <div
+                    class="text-3xl font-body font-medium text-on-surface tabular-nums tracking-tight"
+                  >
+                    $4,250
+                  </div>
+                </div>
+                <span
+                  class="material-symbols-outlined text-primary-container"
+                  data-icon="receipt_long"
+                  >receipt_long</span
+                >
+              </div>
+              <div class="flex items-center gap-2 text-sm text-on-surface-variant font-body">
+                <span class="material-symbols-outlined text-sm" data-icon="calendar_today"
+                  >calendar_today</span
+                >
+                Due Friday, Apr 18
+              </div>
+              <button
+                class="w-full bg-gradient-to-br from-primary to-primary-container text-white font-headline font-bold py-4 rounded-lg hover:opacity-90 transition-all active:scale-[0.98]"
+              >
+                Pay invoice
+              </button>
+            </div>
+          </div>
+        </article>
+      </section>
+      <!-- Archive Section -->
+      <section class="space-y-10">
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] tracking-[0.2em] uppercase font-bold text-outline"
+            >Previous Communications</span
+          >
+          <div class="h-[1px] flex-grow bg-outline-variant/30"></div>
+        </div>
+        <!-- Message 1 -->
+        <article class="space-y-3 pl-2 border-l-2 border-primary/10">
+          <span class="font-headline font-bold text-xs text-primary-fixed-variant"
+            >Apr 9 — From Scott</span
+          >
+          <p class="text-md leading-relaxed text-on-surface-variant">
+            I sat with your dispatcher Tuesday. Two issues surfaced — I'll walk through them at our
+            next check-in. — Scott
+          </p>
+        </article>
+        <!-- Message 2 -->
+        <article class="space-y-3 pl-2 border-l-2 border-primary/10">
+          <span class="font-headline font-bold text-xs text-primary-fixed-variant"
+            >Apr 7 — From Scott</span
+          >
+          <p class="text-md leading-relaxed text-on-surface-variant">
+            Drafted a new call script so Maria stops forgetting the warranty question. See attached.
+            — Scott
+          </p>
+          <div class="flex items-center gap-3 p-3 bg-surface-container-low rounded-lg w-fit">
+            <span class="material-symbols-outlined text-primary" data-icon="description"
+              >description</span
+            >
+            <span class="text-sm font-medium text-on-surface">call_script_v2.pdf</span>
+          </div>
+        </article>
+        <!-- Message 3 -->
+        <article class="space-y-3 pl-2 border-l-2 border-primary/10">
+          <span class="font-headline font-bold text-xs text-primary-fixed-variant"
+            >Apr 2 — From Scott</span
+          >
+          <p class="text-md leading-relaxed text-on-surface-variant">
+            Proposal signed and deposit received. Next check-in Wednesday. — Scott
+          </p>
+        </article>
+      </section>
+    </main>
+    <!-- Persistent Bottom Strip -->
+    <div
+      class="fixed bottom-0 left-0 w-full z-50 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md px-6 py-5 shadow-[0px_-12px_32px_rgba(15,23,42,0.06)]"
+    >
+      <div class="max-w-xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+        <div class="flex flex-col">
+          <span class="font-headline font-extrabold text-[#001453] text-sm"
+            >Scott Durgan, your consultant.</span
+          >
+          <span class="text-xs text-slate-500 font-body">Next check-in: Wednesday at 10am.</span>
+        </div>
+        <button
+          class="bg-[#dde1ff] text-[#001453] px-5 py-2.5 rounded-full text-xs font-bold font-headline flex items-center gap-2 hover:bg-[#f2f4f6] transition-colors active:scale-95 duration-150"
+        >
+          <span class="material-symbols-outlined text-sm" data-icon="edit_note">edit_note</span>
+          Text Scott — replies within 1 business day
+        </button>
+      </div>
+    </div>
+    <!-- BottomNavBar Execution for navigation icons -->
+    <nav class="fixed bottom-0 left-0 w-full z-40 bg-transparent pointer-events-none">
+      <div class="max-w-xl mx-auto flex justify-around items-end px-4 pb-1">
+        <!-- Reserved for contextually relevant nav if added later -->
+      </div>
+    </nav>
+    <!-- Navigation Overlay logic from JSON -->
+    <footer class="fixed bottom-0 w-full hidden md:flex items-center justify-center p-4">
+      <!-- Web context Top Navigation Cluster placeholder -->
+    </footer>
+  </body>
+</html>

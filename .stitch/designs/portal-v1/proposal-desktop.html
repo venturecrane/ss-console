@@ -1,0 +1,338 @@
+<!doctype html>
+
+<html class="light" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Proposal | Delgado Plumbing</title>
+    <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Plus+Jakarta+Sans:wght@700;800&amp;display=swap"
+      rel="stylesheet"
+    />
+    <!-- Material Symbols Outlined -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              outline: '#757684',
+              'on-secondary-container': '#fefcff',
+              'secondary-fixed': '#d8e2ff',
+              background: '#f7f9fb',
+              'on-secondary': '#ffffff',
+              'surface-container-low': '#f2f4f6',
+              'on-primary-fixed-variant': '#173bab',
+              'surface-container-high': '#e6e8ea',
+              'surface-variant': '#e0e3e5',
+              tertiary: '#170cae',
+              'on-secondary-fixed': '#001a42',
+              'on-tertiary-fixed': '#07006c',
+              'secondary-fixed-dim': '#adc6ff',
+              'surface-bright': '#f7f9fb',
+              'on-primary-container': '#a8b8ff',
+              'on-surface-variant': '#444653',
+              'inverse-surface': '#2d3133',
+              'outline-variant': '#c4c5d5',
+              'surface-container': '#eceef0',
+              'tertiary-container': '#3433c3',
+              'inverse-primary': '#b8c4ff',
+              'primary-fixed': '#dde1ff',
+              'error-container': '#ffdad6',
+              'on-error': '#ffffff',
+              primary: '#00288e',
+              'tertiary-fixed': '#e1e0ff',
+              'on-secondary-fixed-variant': '#004395',
+              'on-tertiary-fixed-variant': '#2f2ebe',
+              'on-background': '#191c1e',
+              'on-tertiary-container': '#b3b5ff',
+              'surface-dim': '#d8dadc',
+              'inverse-on-surface': '#eff1f3',
+              'secondary-container': '#2170e4',
+              'surface-container-highest': '#e0e3e5',
+              surface: '#f7f9fb',
+              'surface-container-lowest': '#ffffff',
+              'on-error-container': '#93000a',
+              'primary-fixed-dim': '#b8c4ff',
+              'surface-tint': '#3755c3',
+              'on-tertiary': '#ffffff',
+              'on-surface': '#191c1e',
+              'tertiary-fixed-dim': '#c0c1ff',
+              error: '#ba1a1a',
+              secondary: '#0058be',
+              'primary-container': '#1e40af',
+              'on-primary-fixed': '#001453',
+              'on-primary': '#ffffff',
+            },
+            borderRadius: {
+              DEFAULT: '1rem',
+              lg: '2rem',
+              xl: '3rem',
+              full: '9999px',
+            },
+            fontFamily: {
+              headline: ['Plus Jakarta Sans'],
+              body: ['Inter'],
+              label: ['Inter'],
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      h1,
+      h2,
+      h3,
+      .headline {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+      }
+      .material-symbols-outlined {
+        font-variation-settings:
+          'FILL' 0,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24;
+        display: inline-block;
+        vertical-align: middle;
+      }
+      .tabular-nums {
+        font-variant-numeric: tabular-nums;
+      }
+      .ghost-border {
+        border: 1px solid rgba(196, 197, 213, 0.2);
+      }
+    </style>
+  </head>
+  <body
+    class="bg-surface text-on-surface selection:bg-primary-fixed selection:text-on-primary-fixed"
+  >
+    <!-- TopNavBar -->
+    <header
+      class="bg-surface/80 dark:bg-slate-900/80 backdrop-blur-md docked full-width top-0 sticky z-50"
+    >
+      <nav class="flex justify-between items-center w-full px-8 py-4 max-w-7xl mx-auto">
+        <div
+          class="text-xl font-extrabold tracking-tight text-blue-900 dark:text-blue-100 headline"
+        >
+          Delgado Plumbing
+        </div>
+        <div class="flex items-center gap-6">
+          <span
+            class="bg-tertiary/10 text-tertiary-container px-3 py-1 rounded-full text-xs font-semibold tracking-wide"
+            >Proposal</span
+          >
+        </div>
+      </nav>
+    </header>
+    <main class="max-w-[1280px] mx-auto px-8 pt-16 pb-32">
+      <div class="grid grid-cols-1 md:grid-cols-[720px_1fr] gap-20">
+        <!-- MAIN COLUMN (Left) -->
+        <section class="space-y-20">
+          <!-- Hero Section -->
+          <div>
+            <p class="text-indigo-500 font-medium text-xs tracking-widest uppercase mb-4">
+              Your proposal
+            </p>
+            <h1
+              class="text-[42px] font-extrabold leading-tight tracking-tight text-on-surface mb-6"
+            >
+              Scheduling &amp; intake redesign
+            </h1>
+            <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl leading-relaxed">
+              Three weeks of focused work to unbreak your dispatch and stop qualified leads from
+              slipping.
+            </p>
+          </div>
+          <!-- What you'll get -->
+          <div class="pt-12">
+            <div class="h-[1px] bg-outline-variant/30 mb-8"></div>
+            <h2 class="text-2xl font-bold mb-8 text-on-surface">What you'll get</h2>
+            <ul class="space-y-6">
+              <li class="flex items-start gap-4 group">
+                <span class="material-symbols-outlined text-primary mt-1" data-icon="check_circle"
+                  >check_circle</span
+                >
+                <span class="text-on-surface-variant leading-relaxed text-[17px]"
+                  >A documented dispatch and intake workflow your team can follow without you.</span
+                >
+              </li>
+              <li class="flex items-start gap-4 group">
+                <span class="material-symbols-outlined text-primary mt-1" data-icon="check_circle"
+                  >check_circle</span
+                >
+                <span class="text-on-surface-variant leading-relaxed text-[17px]"
+                  >A new call-intake script tuned to surface warranty + scope questions on the first
+                  call.</span
+                >
+              </li>
+              <li class="flex items-start gap-4 group">
+                <span class="material-symbols-outlined text-primary mt-1" data-icon="check_circle"
+                  >check_circle</span
+                >
+                <span class="text-on-surface-variant leading-relaxed text-[17px]"
+                  >A training session with Maria and your dispatcher so the workflow sticks.</span
+                >
+              </li>
+            </ul>
+          </div>
+          <!-- How we'll work -->
+          <div class="pt-12">
+            <div class="h-[1px] bg-outline-variant/30 mb-8"></div>
+            <h2 class="text-2xl font-bold mb-10 text-on-surface">How we'll work</h2>
+            <div class="space-y-12">
+              <div class="relative pl-8 border-l-2 border-indigo-50">
+                <span class="absolute -left-[9px] top-0 w-4 h-4 bg-primary rounded-full"></span>
+                <p class="text-indigo-500 font-bold text-xs uppercase tracking-wider mb-2">
+                  Week 1
+                </p>
+                <p class="text-on-surface-variant text-[17px] leading-relaxed">
+                  I shadow a full day with your team. You keep running the business; I observe.
+                </p>
+              </div>
+              <div class="relative pl-8 border-l-2 border-indigo-50">
+                <span
+                  class="absolute -left-[9px] top-0 w-4 h-4 bg-outline-variant/40 rounded-full"
+                ></span>
+                <p class="text-indigo-500 font-bold text-xs uppercase tracking-wider mb-2">
+                  Week 2
+                </p>
+                <p class="text-on-surface-variant text-[17px] leading-relaxed">
+                  We redesign the workflow together. You approve every change.
+                </p>
+              </div>
+              <div class="relative pl-8 border-l-2 border-indigo-50">
+                <span
+                  class="absolute -left-[9px] top-0 w-4 h-4 bg-outline-variant/40 rounded-full"
+                ></span>
+                <p class="text-indigo-500 font-bold text-xs uppercase tracking-wider mb-2">
+                  Week 3
+                </p>
+                <p class="text-on-surface-variant text-[17px] leading-relaxed">
+                  Training and handoff. Your team runs it; I'm on standby.
+                </p>
+              </div>
+            </div>
+          </div>
+          <!-- Terms -->
+          <div class="pt-12">
+            <div class="h-[1px] bg-outline-variant/30 mb-8"></div>
+            <h2 class="text-2xl font-bold mb-8 text-on-surface">Terms</h2>
+            <div class="space-y-4 text-on-surface-variant text-[17px]">
+              <p class="font-medium text-on-surface">Total: $8,500</p>
+              <p>50% due at signing; 50% at completion.</p>
+              <p>Work begins within 2 weeks of signing.</p>
+            </div>
+          </div>
+        </section>
+        <!-- RIGHT RAIL (Right) -->
+        <aside class="relative">
+          <div class="sticky top-32 space-y-8">
+            <!-- ACTION CARD -->
+            <div
+              class="bg-surface-container-lowest border border-[#E2E8F0] p-8 rounded-sm shadow-sm"
+            >
+              <span
+                class="inline-block bg-indigo-50 text-indigo-600 text-[10px] font-bold tracking-widest uppercase px-3 py-1 mb-6"
+                >Ready to sign</span
+              >
+              <div class="mb-8">
+                <p class="text-slate-500 text-xs uppercase tracking-wider font-semibold mb-2">
+                  Engagement total
+                </p>
+                <div
+                  class="text-[36px] font-extrabold headline tabular-nums text-on-surface tracking-tight"
+                >
+                  $8,500
+                </div>
+                <p class="text-indigo-400 text-xs mt-1 font-medium italic">50% at signing</p>
+              </div>
+              <button
+                class="w-full h-12 bg-[#1E40AF] hover:bg-primary-container text-white rounded-full font-bold transition-all active:scale-[0.98] mb-4"
+              >
+                Review and sign
+              </button>
+              <div class="text-center space-y-4">
+                <p class="text-slate-400 text-[11px] leading-tight">
+                  Opens a secure DocuSign flow.
+                </p>
+                <a
+                  class="inline-block text-indigo-500 text-sm font-semibold hover:text-primary transition-colors underline-offset-4 decoration-1 decoration-indigo-200"
+                  href="#"
+                >
+                  View the full PDF →
+                </a>
+              </div>
+            </div>
+            <!-- CONSULTANT CARD -->
+            <div class="bg-surface-container-low p-8 rounded-sm">
+              <div class="flex items-center gap-4 mb-6">
+                <img
+                  alt="Scott Durgan"
+                  class="w-14 h-14 rounded-full object-cover grayscale contrast-125"
+                  data-alt="Close-up professional portrait of a mature man with a friendly expression, wearing a neutral-colored shirt, studio lighting, clean background"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBC2Wz5N-DQm4mk0jxAbxYhSaQWc7hybyO2SX6GBdy2FCCcUmnDqeJXcFkkeQVQPmB_yDT4PBQUf-wgVrJq2ep5PZS1HtdR6Kk33K3tKhGvbyfNV8N2m0aLu-JPLidzx3cgCYEEfzriGglhouAm4vXiEfmIR1z5QpqVq5eJyGVCOtG14RessRYkztPfdwKD9-80pyVw1V44w7PsAWlzXepe9UOkE-FypvVU3qpHh4DHHCnvReXnQA-NykQjUpb9fDxKi_95_s-TJ_ez"
+                />
+                <div>
+                  <h4 class="font-bold text-on-surface headline">Scott Durgan</h4>
+                  <p class="text-slate-500 text-[11px] font-medium uppercase tracking-wider">
+                    Your consultant
+                  </p>
+                </div>
+              </div>
+              <p class="text-slate-600 text-sm leading-relaxed mb-6">
+                20 years running ops for small businesses.
+              </p>
+              <button
+                class="w-full py-3 px-4 ghost-border hover:bg-surface-container transition-colors text-indigo-600 font-semibold text-xs uppercase tracking-widest rounded-full mb-3"
+              >
+                Text Scott with questions
+              </button>
+              <p class="text-slate-400 text-[10px] text-center italic">
+                Replies within 1 business day
+              </p>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </main>
+    <!-- Footer -->
+    <footer
+      class="bg-surface dark:bg-slate-950 full-width py-12 mt-20 border-t border-slate-200 dark:border-slate-800"
+    >
+      <div class="max-w-7xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center">
+        <p class="text-xs font-medium text-slate-500 dark:text-slate-400 tracking-wide">
+          © 2024 Delgado Plumbing. All rights reserved.
+        </p>
+        <div class="flex gap-8 mt-4 md:mt-0">
+          <a
+            class="text-xs font-medium text-slate-500 hover:text-blue-900 transition-opacity opacity-80 hover:opacity-100"
+            href="#"
+            >Privacy Policy</a
+          >
+          <a
+            class="text-xs font-medium text-slate-500 hover:text-blue-900 transition-opacity opacity-80 hover:opacity-100"
+            href="#"
+            >Terms of Service</a
+          >
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
