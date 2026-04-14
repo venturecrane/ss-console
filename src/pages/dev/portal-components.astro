@@ -1,0 +1,114 @@
+---
+import '../../styles/global.css'
+import PortalHeader from '../../components/portal/PortalHeader.astro'
+import ConsultantBlock from '../../components/portal/ConsultantBlock.astro'
+import TimelineEntry from '../../components/portal/TimelineEntry.astro'
+import ArtifactChip from '../../components/portal/ArtifactChip.astro'
+import MoneyDisplay from '../../components/portal/MoneyDisplay.astro'
+import ActionCard from '../../components/portal/ActionCard.astro'
+
+// Dev-only guard. The page 404s in any non-dev environment so it never ships
+// to production even if accidentally deployed.
+if (import.meta.env.PROD) {
+  return new Response('Not found', { status: 404 })
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>Portal component gallery — dev</title>
+  </head>
+  <body class="min-h-screen bg-[color:var(--color-background)]">
+    <PortalHeader
+      clientName="Delgado Plumbing"
+      showSms
+      smsHref="sms:+14805550100"
+      smsLabel="Text Scott"
+    >
+      <form method="POST" action="/api/auth/logout">
+        <button type="submit" class="text-sm text-[color:var(--color-text-muted)]">Sign out</button>
+      </form>
+    </PortalHeader>
+
+    <main class="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-10">
+      <section>
+        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+          ActionCard — invoice
+        </h2>
+        <ActionCard
+          pillLabel="Invoice due Apr 18"
+          amountCents={425000}
+          amountLabel="For April work. Invoice #1023"
+          ctaLabel="Pay invoice"
+          ctaHref="#"
+          ctaSubtext="Secure payment via Stripe."
+        />
+      </section>
+
+      <section>
+        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+          ConsultantBlock
+        </h2>
+        <ConsultantBlock
+          name="Scott Durgan"
+          photoUrl={null}
+          role="Your consultant"
+          nextTouchpointAt="2026-04-15T10:00:00-07:00"
+          phone="+14805550100"
+        />
+      </section>
+
+      <section>
+        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">Timeline</h2>
+        <div
+          class="space-y-6 bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-lg p-6"
+        >
+          <TimelineEntry
+            date="Apr 9"
+            body="Scott sat with your dispatcher. Two issues identified."
+          />
+          <TimelineEntry
+            date="Apr 7"
+            body="New call script so Maria stops forgetting the warranty question."
+            artifactLabel="call_script_v2.pdf"
+            artifactHref="#"
+            artifactIcon="description"
+          />
+          <TimelineEntry date="Apr 2" body="Proposal signed. Deposit received." />
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">ArtifactChip</h2>
+        <div class="flex gap-3">
+          <ArtifactChip icon="description" label="scope_of_work.pdf" href="#" />
+          <ArtifactChip icon="receipt_long" label="invoice_1023.pdf" href="#" />
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">MoneyDisplay</h2>
+        <div
+          class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-lg p-6 space-y-4"
+        >
+          <div><MoneyDisplay amountCents={425000} size="display" /></div>
+          <div><MoneyDisplay amountCents={425000} size="h2" /></div>
+          <div><MoneyDisplay amountCents={425000} size="body" emphasize /></div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

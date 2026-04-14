@@ -1,0 +1,24 @@
+---
+/**
+ * Small rounded chip pointing at a document, PDF, or external artifact.
+ * 8px radius, 1px border in --color-border, white surface.
+ *
+ * Icon is a Material Symbols Outlined name (e.g. "description", "receipt_long").
+ */
+
+interface Props {
+  icon: string
+  label: string
+  href: string
+}
+
+const { icon, label, href } = Astro.props
+---
+
+<a
+  href={href}
+  class="inline-flex items-center gap-2 rounded-lg bg-[color:var(--color-surface)] border border-[color:var(--color-border)] px-3 py-1.5 text-[12px] font-medium text-[color:var(--color-text-secondary)] hover:border-[color:var(--color-text-muted)] transition-colors"
+>
+  <span class="material-symbols-outlined text-[16px]">{icon}</span>
+  <span>{label}</span>
+</a>

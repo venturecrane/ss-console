@@ -3,6 +3,21 @@
 @theme {
   --color-primary: #1e40af;
   --color-primary-hover: #1e3a8a;
+
+  --color-surface: #ffffff;
+  --color-background: #f8fafc;
+  --color-border: #e2e8f0;
+
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+
+  --color-meta: #6366f1;
+
+  --color-action: #3b82f6;
+  --color-complete: #10b981;
+  --color-attention: #f59e0b;
+  --color-error: #ef4444;
 }
 
 @layer base {
@@ -30,4 +45,9 @@
   word-wrap: normal;
   direction: ltr;
   -webkit-font-smoothing: antialiased;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
 }

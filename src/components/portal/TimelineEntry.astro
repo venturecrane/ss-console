@@ -1,0 +1,43 @@
+---
+/**
+ * Dated narrative entry for the engagement timeline. Past tense, concrete;
+ * no status-updated system entries.
+ *
+ * Date format: short ("Apr 9"). Year only when crossing a year boundary —
+ * handled by the host page; this component renders whatever string is passed.
+ *
+ * COLOR RULE (brief §Appendix): dates and timeline metadata use
+ * --color-meta (muted indigo, #6366F1) to differentiate from text muted.
+ */
+
+import ArtifactChip from './ArtifactChip.astro'
+
+interface Props {
+  date: string
+  body: string
+  artifactLabel?: string
+  artifactHref?: string
+  artifactIcon?: string
+}
+
+const { date, body, artifactLabel, artifactHref, artifactIcon = 'description' } = Astro.props
+---
+
+<div class="flex gap-4">
+  <div class="w-[48px] shrink-0">
+    <span
+      class="text-[13px] leading-[18px] font-medium tracking-[0.01em] text-[color:var(--color-meta)] tabular-nums"
+      >{date}</span
+    >
+  </div>
+  <div class="flex-1">
+    <p class="text-sm leading-[20px] text-[color:var(--color-text-secondary)]">{body}</p>
+    {
+      artifactLabel && artifactHref && (
+        <div class="mt-2">
+          <ArtifactChip icon={artifactIcon} label={artifactLabel} href={artifactHref} />
+        </div>
+      )
+    }
+  </div>
+</div>

@@ -1,0 +1,41 @@
+---
+/**
+ * Dollar-figure renderer. Money rule (brief §Appendix): every monetary value
+ * appears as dollar figures. NEVER percentages, bars, or progress indicators.
+ *
+ * Size presets match the typography scale in the brief.
+ *   display → 32/36, PJS 800, tracking -0.02em
+ *   h2      → 22/28, PJS 700
+ *   body    → 16/24, Inter 500, tabular-nums
+ *
+ * Input is cents (integer) to avoid float rounding. No decimal places for
+ * whole-dollar amounts.
+ */
+
+interface Props {
+  amountCents: number
+  size?: 'display' | 'h2' | 'body'
+  emphasize?: boolean
+  class?: string
+}
+
+const { amountCents, size = 'body', emphasize = false, class: klass = '' } = Astro.props
+
+const dollars = Math.round(amountCents / 100)
+const formatted = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0,
+}).format(dollars)
+
+const sizeClass =
+  size === 'display'
+    ? "font-['Plus_Jakarta_Sans'] font-extrabold text-[32px] leading-[36px] tracking-[-0.02em] text-[color:var(--color-text-primary)]"
+    : size === 'h2'
+      ? "font-['Plus_Jakarta_Sans'] font-bold text-[22px] leading-[28px] text-[color:var(--color-text-primary)]"
+      : emphasize
+        ? 'text-base leading-6 font-semibold text-[color:var(--color-text-primary)]'
+        : 'text-base leading-6 font-medium text-[color:var(--color-text-primary)]'
+---
+
+<span class={`tabular-nums ${sizeClass} ${klass}`}>{formatted}</span>

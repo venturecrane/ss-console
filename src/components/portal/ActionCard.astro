@@ -1,0 +1,62 @@
+---
+/**
+ * Dominant-action surface used across portal pages (Concept C).
+ *
+ * Composition:
+ *   [pill label]       ← caption-sized status tag
+ *   [$amount + label]  ← optional money display; the dominant visual element
+ *   [CTA button]       ← primary action, 44px min height (thumb zone)
+ *   [cta subtext]      ← optional secondary line under the CTA
+ */
+
+import MoneyDisplay from './MoneyDisplay.astro'
+
+interface Props {
+  pillLabel: string
+  amountCents?: number | null
+  amountLabel?: string | null
+  ctaLabel: string
+  ctaHref: string
+  ctaSubtext?: string | null
+}
+
+const { pillLabel, amountCents, amountLabel, ctaLabel, ctaHref, ctaSubtext } = Astro.props
+---
+
+<section
+  class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-6 sm:p-8"
+  aria-label={pillLabel}
+>
+  <span
+    class="inline-flex items-center rounded-full bg-[color:var(--color-primary)]/10 px-3 py-1 text-[13px] leading-[18px] font-medium tracking-[0.01em] text-[color:var(--color-primary)]"
+  >
+    {pillLabel}
+  </span>
+  {
+    typeof amountCents === 'number' && (
+      <div class="mt-5">
+        <MoneyDisplay amountCents={amountCents} size="display" />
+        {amountLabel && (
+          <p class="mt-2 text-[13px] leading-[18px] font-medium tracking-[0.01em] text-[color:var(--color-text-muted)]">
+            {amountLabel}
+          </p>
+        )}
+      </div>
+    )
+  }
+  <div class="mt-6">
+    <a
+      href={ctaHref}
+      class="inline-flex w-full sm:w-auto items-center justify-center gap-2 min-h-[44px] px-6 py-3 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white text-base font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+    >
+      {ctaLabel}
+    </a>
+    {
+      ctaSubtext && (
+        <p class="mt-3 text-[13px] leading-[18px] text-[color:var(--color-text-muted)]">
+          {ctaSubtext}
+        </p>
+      )
+    }
+  </div>
+</section>

@@ -1,0 +1,44 @@
+---
+/**
+ * Minimal portal top band. Per .stitch/portal-ux-brief.md: no nav tabs, no
+ * sidebar. The account menu (sign out, etc.) is rendered via the default slot
+ * so the host page controls when it appears.
+ *
+ * The showSms prop toggles a "Text Scott" deep link in the header row for
+ * surfaces where SMS is the primary contact affordance. The full consultant
+ * block (with photo and next touchpoint) lives in ConsultantBlock.astro.
+ */
+
+interface Props {
+  clientName: string
+  showSms?: boolean
+  smsHref?: string
+  smsLabel?: string
+}
+
+const { clientName, showSms = false, smsHref, smsLabel } = Astro.props
+---
+
+<header class="w-full bg-[color:var(--color-surface)] border-b border-[color:var(--color-border)]">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
+    <p
+      class="text-[13px] leading-[18px] font-medium tracking-[0.01em] text-[color:var(--color-text-secondary)]"
+    >
+      {clientName}
+    </p>
+    <div class="flex items-center gap-4">
+      {
+        showSms && smsHref && smsLabel && (
+          <a
+            class="inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+            href={smsHref}
+          >
+            <span class="material-symbols-outlined text-[18px]">sms</span>
+            {smsLabel}
+          </a>
+        )
+      }
+      <slot />
+    </div>
+  </div>
+</header>

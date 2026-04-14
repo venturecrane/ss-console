@@ -1,0 +1,110 @@
+---
+/**
+ * Named-human block. Required on every portal surface per brief §Design
+ * principles: "A named human, visible."
+ *
+ * Photo fallback is a neutral SVG portrait silhouette. NEVER initials — brief
+ * §Anti-patterns and §Photo placeholder rule.
+ *
+ * SMS link uses the sms: URI scheme for mobile deep linking. When phone is
+ * missing we fall back to a plain mailto/noop so layout remains intact.
+ */
+
+interface Props {
+  name: string
+  photoUrl: string | null
+  role: string
+  nextTouchpointAt?: string | null
+  nextTouchpointLabel?: string | null
+  phone?: string | null
+}
+
+const { name, photoUrl, role, nextTouchpointAt, nextTouchpointLabel, phone } = Astro.props
+
+const firstName = (name ?? '').trim().split(/\s+/)[0] || name
+const smsHref = phone ? `sms:${phone.replace(/[^+\d]/g, '')}` : null
+
+function formatTouchpoint(): string | null {
+  if (nextTouchpointLabel) return nextTouchpointLabel
+  if (!nextTouchpointAt) return null
+  const d = new Date(nextTouchpointAt)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+const touchpointText = formatTouchpoint()
+---
+
+<section
+  class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-5 sm:p-6"
+  aria-label="Your consultant"
+>
+  <div class="flex items-start gap-4">
+    <div
+      class="w-14 h-14 shrink-0 rounded-full bg-[color:var(--color-background)] border border-[color:var(--color-border)] overflow-hidden"
+    >
+      {
+        photoUrl ? (
+          <img
+            alt={`${name}, consultant`}
+            class="w-full h-full object-cover"
+            src={photoUrl}
+            loading="lazy"
+          />
+        ) : (
+          <svg
+            viewBox="0 0 56 56"
+            role="img"
+            aria-label="consultant photo"
+            class="w-full h-full text-[color:var(--color-text-muted)]"
+          >
+            <rect width="56" height="56" fill="currentColor" fill-opacity="0.12" />
+            <circle cx="28" cy="22" r="9" fill="currentColor" fill-opacity="0.5" />
+            <path
+              d="M10 52c2.5-9 9.5-14 18-14s15.5 5 18 14"
+              fill="currentColor"
+              fill-opacity="0.5"
+            />
+          </svg>
+        )
+      }
+    </div>
+    <div class="flex-1 min-w-0">
+      <p class="text-base font-semibold text-[color:var(--color-text-primary)]">
+        {name}
+      </p>
+      <p class="text-[13px] leading-[18px] text-[color:var(--color-text-muted)]">
+        {role}
+      </p>
+      {
+        touchpointText && (
+          <p class="mt-2 text-sm text-[color:var(--color-text-secondary)]">
+            Next check-in {touchpointText}
+          </p>
+        )
+      }
+    </div>
+  </div>
+  {
+    smsHref && (
+      <div class="mt-4 pt-4 border-t border-[color:var(--color-border)]">
+        <a
+          href={smsHref}
+          class="inline-flex items-center gap-2 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+        >
+          <span class="material-symbols-outlined text-[18px]">sms</span>
+          Text {firstName}
+        </a>
+        <p class="mt-1 text-[13px] leading-[18px] text-[color:var(--color-text-muted)]">
+          Replies within 1 business day.
+        </p>
+      </div>
+    )
+  }
+</section>
