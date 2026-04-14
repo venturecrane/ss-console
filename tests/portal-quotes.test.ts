@@ -288,13 +288,13 @@ describe('portal quotes: quote detail page', () => {
   it('shows accepted confirmation state', () => {
     const code = source()
     expect(code).toContain('Signed')
-    expect(code).toContain("quote.status === 'accepted'")
+    expect(code).toContain('isSigned')
   })
 
   it('shows declined and expired states', () => {
     const code = source()
-    expect(code).toContain("quote.status === 'declined'")
-    expect(code).toContain("quote.status === 'expired'")
+    expect(code).toContain('isDeclined')
+    expect(code).toContain('isExpired')
   })
 
   it('has mobile viewport meta tag', () => {

@@ -1,0 +1,128 @@
+---
+import '../../styles/global.css'
+
+/**
+ * Dev-only harness for QA'ing all portal error/edge states in one place.
+ *
+ * Each surface lists every `?state=` query param the resolver recognizes.
+ * Production 404s this page so it never ships to clients.
+ *
+ * The three route params below are placeholders — replace `:id` with a real
+ * invoice / quote ID from the running D1 when testing locally.
+ */
+
+if (import.meta.env.PROD) {
+  return new Response('Not found', { status: 404 })
+}
+
+const invoiceStates = [
+  { label: 'Default (pay)', query: '' },
+  { label: 'Payment declined', query: '?state=declined' },
+  { label: 'Card expired', query: '?state=card_expired' },
+  { label: 'Link expired', query: '?state=expired' },
+  { label: 'Already paid (server state — seed invoice.paid_at)', query: '' },
+]
+
+const proposalStates = [
+  { label: 'Default (ready to sign)', query: '' },
+  { label: 'Signed (server state — seed quote.accepted_at)', query: '' },
+  { label: 'Declined (server state — set status=declined)', query: '' },
+  { label: 'Expired (hint)', query: '?state=expired' },
+  { label: 'Expired (server state — expires_at in past)', query: '' },
+  { label: 'Superseded (server state — set status=superseded)', query: '' },
+]
+
+const dashboardStates = [
+  { label: 'Default', path: '/portal' },
+  { label: 'Data fetch error', path: '/portal?state=error' },
+]
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Portal states — dev</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="min-h-screen bg-[color:var(--color-background)]">
+    <main class="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-10">
+      <header>
+        <p class="text-[12px] font-bold tracking-[0.1em] uppercase text-[color:var(--color-meta)]">
+          Dev harness
+        </p>
+        <h1
+          class="mt-3 font-['Plus_Jakarta_Sans'] font-extrabold text-[32px] leading-[36px] tracking-[-0.02em] text-[color:var(--color-text-primary)]"
+        >
+          Portal error and edge states
+        </h1>
+        <p class="mt-3 text-[15px] leading-[22px] text-[color:var(--color-text-secondary)]">
+          Replace <code>:id</code> with a real invoice or quote ID from your local D1.
+        </p>
+      </header>
+
+      <section>
+        <h2
+          class="font-['Plus_Jakarta_Sans'] font-bold text-[20px] leading-[26px] text-[color:var(--color-text-primary)] mb-4"
+        >
+          Dashboard
+        </h2>
+        <ul class="space-y-2">
+          {
+            dashboardStates.map((s) => (
+              <li>
+                <a
+                  href={s.path}
+                  class="text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)] text-sm"
+                >
+                  {s.label} — <code>{s.path}</code>
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </section>
+
+      <section>
+        <h2
+          class="font-['Plus_Jakarta_Sans'] font-bold text-[20px] leading-[26px] text-[color:var(--color-text-primary)] mb-4"
+        >
+          Invoice
+        </h2>
+        <ul class="space-y-2">
+          {
+            invoiceStates.map((s) => (
+              <li class="text-sm text-[color:var(--color-text-secondary)]">
+                <span class="font-semibold text-[color:var(--color-text-primary)]">{s.label}</span>
+                {s.query && <code class="ml-2">/portal/invoices/:id{s.query}</code>}
+              </li>
+            ))
+          }
+        </ul>
+      </section>
+
+      <section>
+        <h2
+          class="font-['Plus_Jakarta_Sans'] font-bold text-[20px] leading-[26px] text-[color:var(--color-text-primary)] mb-4"
+        >
+          Proposal
+        </h2>
+        <ul class="space-y-2">
+          {
+            proposalStates.map((s) => (
+              <li class="text-sm text-[color:var(--color-text-secondary)]">
+                <span class="font-semibold text-[color:var(--color-text-primary)]">{s.label}</span>
+                {s.query && <code class="ml-2">/portal/quotes/:id{s.query}</code>}
+              </li>
+            ))
+          }
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

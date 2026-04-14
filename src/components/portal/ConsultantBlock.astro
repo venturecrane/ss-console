@@ -6,8 +6,13 @@
  * Photo fallback is a neutral SVG portrait silhouette. NEVER initials — brief
  * §Anti-patterns and §Photo placeholder rule.
  *
- * SMS link uses the sms: URI scheme for mobile deep linking. When phone is
- * missing we fall back to a plain mailto/noop so layout remains intact.
+ * Contact affordance:
+ * - Mobile UAs render `sms:` deep link as the primary action (tap-to-text)
+ *   per brief §Mobile thumb zone.
+ * - Desktop UAs render an inline `tel:` number for click-to-call via
+ *   FaceTime / soft phones.
+ * - When phone is null but email is set: render a `mailto:` fallback instead.
+ * - When both are null: hide the contact block entirely.
  */
 
 interface Props {
@@ -17,12 +22,29 @@ interface Props {
   nextTouchpointAt?: string | null
   nextTouchpointLabel?: string | null
   phone?: string | null
+  email?: string | null
 }
 
-const { name, photoUrl, role, nextTouchpointAt, nextTouchpointLabel, phone } = Astro.props
+const { name, photoUrl, role, nextTouchpointAt, nextTouchpointLabel, phone, email } = Astro.props
 
 const firstName = (name ?? '').trim().split(/\s+/)[0] || name
-const smsHref = phone ? `sms:${phone.replace(/[^+\d]/g, '')}` : null
+
+const phoneDigits = phone ? phone.replace(/[^+\d]/g, '') : null
+const smsHref = phoneDigits ? `sms:${phoneDigits}` : null
+const telHref = phoneDigits ? `tel:${phoneDigits}` : null
+
+// Display a human-formatted phone for the desktop inline affordance. Falls
+// back to the digit string when the format isn't recognized.
+function formatUsPhone(digits: string): string {
+  const m = digits.match(/^\+?1?(\d{3})(\d{3})(\d{4})$/)
+  if (!m) return digits
+  return `(${m[1]}) ${m[2]}-${m[3]}`
+}
+const phoneDisplay = phoneDigits ? formatUsPhone(phoneDigits) : null
+
+// Mailto fallback used only when phone is absent. Email is never shown as an
+// inline button when phone is present — SMS is the primary affordance.
+const mailtoHref = !phoneDigits && email ? `mailto:${email}` : null
 
 function formatTouchpoint(): string | null {
   if (nextTouchpointLabel) return nextTouchpointLabel
@@ -92,14 +114,39 @@ const touchpointText = formatTouchpoint()
     </div>
   </div>
   {
-    smsHref && (
+    smsHref && telHref && (
       <div class="mt-4 pt-4 border-t border-[color:var(--color-border)]">
+        {/* Mobile: SMS deep link. Hidden on desktop (sm+). */}
         <a
           href={smsHref}
-          class="inline-flex items-center gap-2 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+          class="consultant-sms-mobile inline-flex sm:hidden items-center gap-2 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
         >
           <span class="material-symbols-outlined text-[18px]">sms</span>
           Text {firstName}
+        </a>
+        {/* Desktop: inline phone number with click-to-call. */}
+        <a
+          href={telHref}
+          class="consultant-tel-desktop hidden sm:inline-flex items-center gap-2 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+        >
+          <span class="material-symbols-outlined text-[18px]">call</span>
+          {phoneDisplay}
+        </a>
+        <p class="mt-1 text-[13px] leading-[18px] text-[color:var(--color-text-muted)]">
+          Replies within 1 business day.
+        </p>
+      </div>
+    )
+  }
+  {
+    !smsHref && mailtoHref && (
+      <div class="mt-4 pt-4 border-t border-[color:var(--color-border)]">
+        <a
+          href={mailtoHref}
+          class="inline-flex items-center gap-2 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+        >
+          <span class="material-symbols-outlined text-[18px]">mail</span>
+          Email {firstName}
         </a>
         <p class="mt-1 text-[13px] leading-[18px] text-[color:var(--color-text-muted)]">
           Replies within 1 business day.

@@ -10,6 +10,7 @@ import PortalHeader from '../../../components/portal/PortalHeader.astro'
 import MoneyDisplay from '../../../components/portal/MoneyDisplay.astro'
 import ActionCard from '../../../components/portal/ActionCard.astro'
 import ConsultantBlock from '../../../components/portal/ConsultantBlock.astro'
+import { resolveInvoiceState } from '../../../lib/portal/states'
 
 /**
  * Invoice landing — deep-link surface per .stitch/portal-ux-brief.md.
@@ -92,9 +93,20 @@ const displayLineItems: InvoiceLineItem[] =
         },
       ]
 
+// Consultant first name is needed early so we can thread it into the state
+// resolver's next-step copy.
+const consultantFirstEarly = (engagement?.consultant_name ?? 'Scott Durgan').trim().split(/\s+/)[0]
+
+// Resolve the surface state once, up front. Everything below branches on it.
+const surface = resolveInvoiceState(invoice, Astro.url.searchParams, consultantFirstEarly)
+const isPaid = surface.state === 'paid'
+const isDeclined = surface.state === 'declined'
+const isCardExpired = surface.state === 'card_expired'
+const isLinkExpired = surface.state === 'expired'
+const isErrorState = isDeclined || isCardExpired || isLinkExpired
+
 // CTA: prefer Stripe hosted URL when present and usable, otherwise a server
 // endpoint placeholder. The server endpoint is out of scope for this PR.
-const isPaid = !!invoice.paid_at
 const stripeUrl =
   invoice.stripe_hosted_url && invoice.stripe_hosted_url !== '#dev-mode'
     ? invoice.stripe_hosted_url
@@ -264,13 +276,43 @@ const smsFirstName = consultantName.trim().split(/\s+/)[0] || consultantName
               {isPaid ? 'Paid in full' : 'Remaining balance'}
             </p>
             {
-              !isPaid && (
+              isErrorState && (
+                <div
+                  class="mt-6 rounded-lg border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-4"
+                  role="status"
+                >
+                  <div class="flex items-start gap-3">
+                    <span class="material-symbols-outlined text-[20px] text-[color:var(--color-attention)] mt-0.5">
+                      error
+                    </span>
+                    <div class="min-w-0">
+                      <p class="text-sm font-semibold text-[color:var(--color-text-primary)]">
+                        {isDeclined
+                          ? 'Payment declined'
+                          : isCardExpired
+                            ? 'Card expired'
+                            : 'Link expired'}
+                      </p>
+                      <p class="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                        {surface.next}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )
+            }
+            {
+              !isPaid && !isLinkExpired && (
                 <>
                   <a
                     href={payHref}
                     class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white text-base font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
                   >
-                    Pay invoice
+                    {isDeclined
+                      ? 'Try again'
+                      : isCardExpired
+                        ? 'Update payment method'
+                        : 'Pay invoice'}
                     <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
                   </a>
                   <div class="mt-3 flex items-center gap-2 text-[13px] text-[color:var(--color-text-muted)]">
@@ -405,15 +447,58 @@ const smsFirstName = consultantName.trim().split(/\s+/)[0] || consultantName
                   </p>
                 )}
               </div>
+            ) : isLinkExpired ? (
+              <div class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-6 sm:p-8">
+                <span class="inline-flex items-center rounded-full bg-[color:var(--color-attention)]/10 px-3 py-1 text-[13px] leading-[18px] font-medium tracking-[0.01em] text-[color:var(--color-attention)]">
+                  Link expired
+                </span>
+                <div class="mt-5">
+                  <MoneyDisplay amountCents={amountCents} size="display" />
+                  <p class="mt-2 text-[13px] leading-[18px] font-medium tracking-[0.01em] text-[color:var(--color-text-muted)]">
+                    Remaining balance
+                  </p>
+                </div>
+                <p class="mt-6 text-sm text-[color:var(--color-text-secondary)]">{surface.next}</p>
+              </div>
             ) : (
-              <ActionCard
-                pillLabel={pillLabel}
-                amountCents={amountCents}
-                amountLabel="Remaining balance"
-                ctaLabel="Pay invoice"
-                ctaHref={payHref}
-                ctaSubtext="Secure payment via Stripe."
-              />
+              <>
+                {isErrorState && (
+                  <div
+                    class="rounded-lg border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-4"
+                    role="status"
+                  >
+                    <div class="flex items-start gap-3">
+                      <span class="material-symbols-outlined text-[20px] text-[color:var(--color-attention)] mt-0.5">
+                        error
+                      </span>
+                      <div class="min-w-0">
+                        <p class="text-sm font-semibold text-[color:var(--color-text-primary)]">
+                          {isDeclined ? 'Payment declined' : 'Card expired'}
+                        </p>
+                        <p class="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                          {surface.next}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <ActionCard
+                  pillLabel={
+                    isDeclined ? 'Try again' : isCardExpired ? 'Update payment method' : pillLabel
+                  }
+                  amountCents={amountCents}
+                  amountLabel="Remaining balance"
+                  ctaLabel={
+                    isDeclined
+                      ? 'Try again'
+                      : isCardExpired
+                        ? 'Update payment method'
+                        : 'Pay invoice'
+                  }
+                  ctaHref={payHref}
+                  ctaSubtext="Secure payment via Stripe."
+                />
+              </>
             )
           }
 

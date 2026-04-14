@@ -40,18 +40,6 @@ interface EngagementRow {
   next_touchpoint_label: string | null
 }
 
-const activeEngagement = await env.DB.prepare(
-  `SELECT id, status, scope_summary, start_date, estimated_end,
-          consultant_name, consultant_photo_url, consultant_role, consultant_phone,
-          next_touchpoint_at, next_touchpoint_label
-     FROM engagements
-    WHERE entity_id = ? AND status IN ('scheduled', 'active', 'handoff', 'safety_net')
-    ORDER BY created_at DESC
-    LIMIT 1`
-)
-  .bind(client.id)
-  .first<EngagementRow>()
-
 interface InvoiceRow {
   id: string
   amount: number
@@ -74,54 +62,81 @@ interface MilestoneRow {
   completed_at: string | null
 }
 
+let activeEngagement: EngagementRow | null = null
 let pendingInvoice: InvoiceRow | null = null
 let invoices: InvoiceRow[] = []
 let quotes: QuoteRow[] = []
 let completedMilestones: MilestoneRow[] = []
+// When a DB read fails we render a single error state rather than a partial
+// dashboard. ConsultantBlock still renders so the client has a concrete
+// next step (text Scott).
+let dashboardError = false
 
-if (activeEngagement) {
-  const invoiceResult = await env.DB.prepare(
-    `SELECT id, amount, status, due_date, sent_at, paid_at
-       FROM invoices
-      WHERE engagement_id = ? AND status != 'void'
-      ORDER BY created_at DESC`
+try {
+  activeEngagement = await env.DB.prepare(
+    `SELECT id, status, scope_summary, start_date, estimated_end,
+            consultant_name, consultant_photo_url, consultant_role, consultant_phone,
+            next_touchpoint_at, next_touchpoint_label
+       FROM engagements
+      WHERE entity_id = ? AND status IN ('scheduled', 'active', 'handoff', 'safety_net')
+      ORDER BY created_at DESC
+      LIMIT 1`
   )
-    .bind(activeEngagement.id)
-    .all<InvoiceRow>()
-  invoices = invoiceResult.results ?? []
+    .bind(client.id)
+    .first<EngagementRow>()
 
-  // Next pending invoice: earliest-due among sent/overdue (null due_date last).
-  const pending = invoices.filter((i) => i.status === 'sent' || i.status === 'overdue')
-  pending.sort((a, b) => {
-    if (a.due_date && b.due_date) return a.due_date < b.due_date ? -1 : 1
-    if (a.due_date) return -1
-    if (b.due_date) return 1
-    return 0
-  })
-  pendingInvoice = pending[0] ?? null
+  if (activeEngagement) {
+    const invoiceResult = await env.DB.prepare(
+      `SELECT id, amount, status, due_date, sent_at, paid_at
+         FROM invoices
+        WHERE engagement_id = ? AND status != 'void'
+        ORDER BY created_at DESC`
+    )
+      .bind(activeEngagement.id)
+      .all<InvoiceRow>()
+    invoices = invoiceResult.results ?? []
 
-  const milestoneResult = await env.DB.prepare(
-    `SELECT id, name, completed_at
-       FROM milestones
-      WHERE engagement_id = ? AND status = 'completed' AND completed_at IS NOT NULL
-      ORDER BY completed_at DESC
+    // Next pending invoice: earliest-due among sent/overdue (null due_date last).
+    const pending = invoices.filter((i) => i.status === 'sent' || i.status === 'overdue')
+    pending.sort((a, b) => {
+      if (a.due_date && b.due_date) return a.due_date < b.due_date ? -1 : 1
+      if (a.due_date) return -1
+      if (b.due_date) return 1
+      return 0
+    })
+    pendingInvoice = pending[0] ?? null
+
+    const milestoneResult = await env.DB.prepare(
+      `SELECT id, name, completed_at
+         FROM milestones
+        WHERE engagement_id = ? AND status = 'completed' AND completed_at IS NOT NULL
+        ORDER BY completed_at DESC
+        LIMIT 5`
+    )
+      .bind(activeEngagement.id)
+      .all<MilestoneRow>()
+    completedMilestones = milestoneResult.results ?? []
+  }
+
+  const quoteResult = await env.DB.prepare(
+    `SELECT id, status, sent_at, accepted_at
+       FROM quotes
+      WHERE entity_id = ?
+      ORDER BY updated_at DESC
       LIMIT 5`
   )
-    .bind(activeEngagement.id)
-    .all<MilestoneRow>()
-  completedMilestones = milestoneResult.results ?? []
+    .bind(client.id)
+    .all<QuoteRow>()
+  quotes = quoteResult.results ?? []
+} catch (err) {
+  console.error('portal/index: data fetch failure', err)
+  dashboardError = true
 }
 
-const quoteResult = await env.DB.prepare(
-  `SELECT id, status, sent_at, accepted_at
-     FROM quotes
-    WHERE entity_id = ?
-    ORDER BY updated_at DESC
-    LIMIT 5`
-)
-  .bind(client.id)
-  .all<QuoteRow>()
-quotes = quoteResult.results ?? []
+// Surface dev-only query override so the error state is reachable in QA.
+if (!dashboardError && Astro.url.searchParams.get('state') === 'error') {
+  dashboardError = true
+}
 
 // ---------------------------------------------------------------------------
 // Timeline — most recent first, up to 5 entries. Past-tense, concrete events.
@@ -294,8 +309,54 @@ const contextSubtext = touchpointText
     </PortalHeader>
 
     <main class="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+      {
+        dashboardError ? (
+          <div class="flex flex-col gap-6">
+            <section
+              class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-attention)]/30 p-6 sm:p-8"
+              aria-live="polite"
+            >
+              <div class="flex items-start gap-3">
+                <span class="material-symbols-outlined text-[24px] text-[color:var(--color-attention)] mt-0.5">
+                  error
+                </span>
+                <div class="min-w-0">
+                  <h1 class="font-['Plus_Jakarta_Sans'] font-bold text-[22px] leading-[28px] text-[color:var(--color-text-primary)]">
+                    Something went wrong loading your portal.
+                  </h1>
+                  <p class="mt-2 text-[15px] leading-[22px] text-[color:var(--color-text-secondary)]">
+                    Give it a moment and try again. If it keeps happening, {consultantFirst} can
+                    help.
+                  </p>
+                  <div class="mt-5 flex flex-wrap gap-3">
+                    <a
+                      href="/portal"
+                      class="inline-flex items-center justify-center min-h-[44px] px-5 py-2.5 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                    >
+                      Retry
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <ConsultantBlock
+              name={consultant.name}
+              photoUrl={consultant.photoUrl}
+              role={consultant.role}
+              nextTouchpointAt={consultant.nextTouchpointAt}
+              nextTouchpointLabel={consultant.nextTouchpointLabel}
+              phone={consultant.phone}
+            />
+          </div>
+        ) : null
+      }
       <!-- Desktop: two-column grid. Mobile: single column, action-first. -->
-      <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_340px] md:gap-12 md:items-start">
+      <div
+        class:list={[
+          'grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_340px] md:gap-12 md:items-start',
+          dashboardError ? 'hidden' : '',
+        ]}
+      >
         <!-- On mobile, dominant action (right-rail content) renders FIRST.
              On desktop it moves to the right column via md:order-2. -->
         <aside class="md:order-2 md:sticky md:top-10 space-y-6">

@@ -7,6 +7,7 @@ import { getPortalClient } from '../../../lib/portal/session'
 import { getQuoteForEntity } from '../../../lib/db/quotes'
 import type { LineItem } from '../../../lib/db/quotes'
 import { getSOWStateForQuote } from '../../../lib/sow/service'
+import { resolveProposalState } from '../../../lib/portal/states'
 import {
   PROBLEM_LABELS,
   LEGACY_PROBLEM_LABELS,
@@ -87,16 +88,76 @@ const engagementSubtitle =
     ? `A focused scope across ${deliverables.length} work areas tailored to your operation.`
     : 'A focused scope of work tailored to your operation.'
 
-const isSigned = quote.status === 'accepted'
-const isSent = quote.status === 'sent'
-const isDeclined = quote.status === 'declined'
-const isExpired = quote.status === 'expired'
+const consultantName = 'Scott Durgan'
+const consultantFirst = consultantName.split(/\s+/)[0]
+
+// Pull engagement for consultant metadata + scope_summary so the signed-state
+// "what happens next" copy is concrete. The engagement row joins by quote_id
+// when one exists. A draft or just-signed quote may not yet have one, in
+// which case we render the generic kickoff fallback.
+interface EngagementLookupRow {
+  id: string
+  scope_summary: string | null
+  consultant_name: string | null
+  consultant_photo_url: string | null
+  consultant_role: string | null
+  consultant_phone: string | null
+  next_touchpoint_at: string | null
+  next_touchpoint_label: string | null
+}
+
+const engagement = await env.DB.prepare(
+  `SELECT id, scope_summary, consultant_name, consultant_photo_url, consultant_role,
+          consultant_phone, next_touchpoint_at, next_touchpoint_label
+     FROM engagements
+    WHERE quote_id = ?
+    ORDER BY created_at DESC
+    LIMIT 1`
+)
+  .bind(quote.id)
+  .first<EngagementLookupRow>()
+
+// Superseded: a newer quote on the same engagement / parent chain. We look
+// up a child quote whose parent_quote_id points at this one OR (fallback) a
+// sibling version for the same assessment.
+interface SupersedingRow {
+  id: string
+}
+const superseding = await env.DB.prepare(
+  `SELECT id FROM quotes
+    WHERE (parent_quote_id = ? OR (assessment_id = ? AND version > ? AND status IN ('sent', 'accepted')))
+      AND entity_id = ?
+    ORDER BY version DESC
+    LIMIT 1`
+)
+  .bind(quote.id, quote.assessment_id, quote.version, client.id)
+  .first<SupersedingRow>()
+
+// Build the concrete "what happens next" string for signed quotes. If the
+// engagement has a next_touchpoint_label we lean on that; otherwise the
+// scope_summary seeds a short sentence. If neither is set the resolver's
+// generic kickoff fallback kicks in.
+const nextStepText: string | null = engagement?.next_touchpoint_label
+  ? `We'll ${engagement.next_touchpoint_label.toLowerCase()}.`
+  : engagement?.scope_summary
+    ? `Kickoff next: ${engagement.scope_summary}.`
+    : null
+
+const surface = resolveProposalState(quote, Astro.url.searchParams, consultantFirst, nextStepText)
+
+const isSigned = surface.state === 'signed'
+const isDeclined = surface.state === 'declined'
+const isExpired = surface.state === 'expired'
+const isSuperseded = surface.state === 'superseded'
+const isSent = quote.status === 'sent' && surface.state === 'default'
 const hasSow = !!downloadableRevision
 const hasActiveSignature = isSent && !!activeSignatureRequest
 const pdfHref = hasSow ? `/api/portal/quotes/${quote.id}/sow` : null
 
-const consultantName = 'Scott Durgan'
-const consultantFirst = consultantName.split(/\s+/)[0]
+const supersedingQuoteId = isSuperseded ? (superseding?.id ?? null) : null
+
+const consultantPhone = engagement?.consultant_phone ?? null
+const headerSmsHref = consultantPhone ? `sms:${consultantPhone.replace(/[^+\d]/g, '')}` : null
 ---
 
 <!doctype html>
@@ -117,7 +178,12 @@ const consultantFirst = consultantName.split(/\s+/)[0]
     <title>Proposal — Portal — SMD Services</title>
   </head>
   <body class="min-h-screen bg-[color:var(--color-background)]">
-    <PortalHeader clientName={client.name}>
+    <PortalHeader
+      clientName={client.name}
+      showSms={!!headerSmsHref && !isSigned}
+      smsHref={headerSmsHref ?? undefined}
+      smsLabel={headerSmsHref ? `Text ${consultantFirst}` : undefined}
+    >
       <span class="text-sm text-[color:var(--color-text-secondary)] hidden sm:inline"
         >{session.email}</span
       >
@@ -182,18 +248,35 @@ const consultantFirst = consultantName.split(/\s+/)[0]
                         Signed{quote.accepted_at ? ` ${formatDate(quote.accepted_at)}` : ''}.
                       </p>
                       <p class="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-                        Here's what happens next: we'll reach out to schedule kickoff.
+                        Here's what happens next: {surface.next}
                       </p>
                     </div>
                   </div>
+                ) : isSuperseded ? (
+                  <div class="mt-6 rounded-lg border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-4">
+                    <p class="text-sm font-semibold text-[color:var(--color-text-primary)]">
+                      A revised version is available.
+                    </p>
+                    <p class="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                      This proposal has been replaced by a newer version.
+                    </p>
+                    {supersedingQuoteId && (
+                      <a
+                        href={`/portal/quotes/${supersedingQuoteId}`}
+                        class="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+                      >
+                        Go to the latest proposal
+                        <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+                      </a>
+                    )}
+                  </div>
                 ) : isDeclined ? (
                   <p class="mt-6 text-sm text-[color:var(--color-text-secondary)]">
-                    This proposal was declined. Text {consultantFirst} if you'd like to talk through
-                    a revision.
+                    This proposal was declined. {surface.next}
                   </p>
                 ) : isExpired ? (
                   <p class="mt-6 text-sm text-[color:var(--color-text-secondary)]">
-                    This proposal has expired. Text {consultantFirst} to pick it back up.
+                    {surface.next}
                   </p>
                 ) : hasActiveSignature ? (
                   <a
@@ -332,10 +415,12 @@ const consultantFirst = consultantName.split(/\s+/)[0]
           <div class="lg:hidden pt-2">
             <div class="h-px bg-[color:var(--color-border)] mb-8"></div>
             <ConsultantBlock
-              name={consultantName}
-              photoUrl={null}
-              role="Your consultant"
-              phone={null}
+              name={engagement?.consultant_name ?? consultantName}
+              photoUrl={engagement?.consultant_photo_url ?? null}
+              role={engagement?.consultant_role ?? 'Your consultant'}
+              nextTouchpointAt={engagement?.next_touchpoint_at ?? null}
+              nextTouchpointLabel={engagement?.next_touchpoint_label ?? null}
+              phone={engagement?.consultant_phone ?? null}
             />
             <p class="mt-4 text-[13px] leading-[18px] text-[color:var(--color-text-muted)]">
               Text {consultantFirst} with questions.
@@ -366,13 +451,15 @@ const consultantFirst = consultantName.split(/\s+/)[0]
                 {
                   isSigned
                     ? 'Signed'
-                    : isDeclined
-                      ? 'Declined'
-                      : isExpired
-                        ? 'Expired'
-                        : hasActiveSignature
-                          ? 'Ready to sign'
-                          : 'Being prepared'
+                    : isSuperseded
+                      ? 'Superseded'
+                      : isDeclined
+                        ? 'Declined'
+                        : isExpired
+                          ? 'Expired'
+                          : hasActiveSignature
+                            ? 'Ready to sign'
+                            : 'Being prepared'
                 }
               </span>
               <div class="mt-5">
@@ -401,14 +488,29 @@ const consultantFirst = consultantName.split(/\s+/)[0]
                           Signed{quote.accepted_at ? ` ${formatDate(quote.accepted_at)}` : ''}.
                         </p>
                         <p class="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-                          We'll reach out to schedule kickoff.
+                          {surface.next}
                         </p>
                       </div>
                     </div>
                   </div>
+                ) : isSuperseded ? (
+                  <div class="mt-6 rounded-lg border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-4">
+                    <p class="text-sm font-semibold text-[color:var(--color-text-primary)]">
+                      A revised version is available.
+                    </p>
+                    {supersedingQuoteId && (
+                      <a
+                        href={`/portal/quotes/${supersedingQuoteId}`}
+                        class="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+                      >
+                        Go to the latest proposal
+                        <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+                      </a>
+                    )}
+                  </div>
                 ) : isDeclined || isExpired ? (
                   <p class="mt-6 text-sm text-[color:var(--color-text-secondary)]">
-                    Text {consultantFirst} to talk through next steps.
+                    {surface.next}
                   </p>
                 ) : hasActiveSignature ? (
                   <a
@@ -439,10 +541,12 @@ const consultantFirst = consultantName.split(/\s+/)[0]
 
             <!-- Consultant card -->
             <ConsultantBlock
-              name={consultantName}
-              photoUrl={null}
-              role="Your consultant"
-              phone={null}
+              name={engagement?.consultant_name ?? consultantName}
+              photoUrl={engagement?.consultant_photo_url ?? null}
+              role={engagement?.consultant_role ?? 'Your consultant'}
+              nextTouchpointAt={engagement?.next_touchpoint_at ?? null}
+              nextTouchpointLabel={engagement?.next_touchpoint_label ?? null}
+              phone={engagement?.consultant_phone ?? null}
             />
             <p class="text-[13px] leading-[18px] text-[color:var(--color-text-muted)] px-1">
               Text {consultantFirst} with questions.
