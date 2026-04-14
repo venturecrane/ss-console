@@ -608,10 +608,19 @@ describe('invoices: env.d.ts bindings', () => {
 describe('invoices: portal dashboard integration', () => {
   const source = () => readFileSync(resolve('src/pages/portal/index.astro'), 'utf-8')
 
-  it('portal dashboard has Invoices quick link', () => {
+  it('surfaces the pending invoice as the dominant action', () => {
     const code = source()
-    expect(code).toContain('/portal/invoices')
-    expect(code).toContain('Invoices')
+    // C-hybrid replaces the Invoices quick link with an ActionCard that deep-links
+    // to the specific invoice. Keep users one tap away from payment.
+    expect(code).toContain('pendingInvoice')
+    expect(code).toContain('/portal/invoices/')
+    expect(code).toContain('Pay invoice')
+  })
+
+  it('links paid and sent invoices from the activity timeline', () => {
+    const code = source()
+    expect(code).toContain('/portal/invoices/')
+    expect(code).toMatch(/Invoice #/)
   })
 })
 

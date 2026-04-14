@@ -73,37 +73,42 @@ describe('portal quotes: dashboard', () => {
     expect(source()).toContain('client.name')
   })
 
-  it('shows pending quotes section', () => {
+  it('surfaces proposal activity in the timeline', () => {
     const code = source()
-    expect(code).toContain('pendingQuotes')
-    expect(code).toContain('proposal')
+    // C-hybrid timeline merges quote, invoice, and milestone events.
+    expect(code).toContain('quotes')
+    expect(code).toMatch(/proposal/i)
   })
 
-  it('loads quotes via listQuotesForEntity', () => {
-    expect(source()).toContain('listQuotesForEntity')
+  it('loads quotes scoped to the signed-in entity', () => {
+    const code = source()
+    // New design inlines the query (needs richer columns than listQuotesForEntity exposes).
+    expect(code).toContain('FROM quotes')
+    expect(code).toContain('entity_id = ?')
   })
 
   it('resolves client via getPortalClient', () => {
     expect(source()).toContain('getPortalClient')
   })
 
-  it('shows active engagement status', () => {
+  it('shows active engagement context', () => {
     const code = source()
     expect(code).toContain('activeEngagement')
-    expect(code).toContain('Current Engagement')
+    // Guide voice: "Your engagement is in flight." replaces "Current Engagement".
+    expect(code).toMatch(/engagement is in flight/i)
   })
 
-  it('shows current milestone', () => {
-    expect(source()).toContain('currentMilestone')
+  it('surfaces completed milestones in the timeline', () => {
+    expect(source()).toContain('completedMilestones')
   })
 
   it('shows recent activity feed', () => {
-    expect(source()).toContain('recentActivity')
-    expect(source()).toContain('Recent Activity')
+    expect(source()).toContain('timeline')
+    expect(source()).toContain('Recent activity')
   })
 
-  it('has quick links to quotes section', () => {
-    expect(source()).toContain('/portal/quotes')
+  it('links proposal timeline entries to the quotes surface', () => {
+    expect(source()).toContain('/portal/quotes/')
   })
 
   it('has mobile viewport meta tag', () => {
