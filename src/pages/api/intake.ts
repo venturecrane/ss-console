@@ -4,6 +4,7 @@ import { verifyTurnstileToken } from '../../lib/booking/turnstile'
 import { rateLimitByIp } from '../../lib/booking/rate-limit'
 import { sendEmail } from '../../lib/email/resend'
 import { ORG_ID } from '../../lib/constants'
+import { buildAdminUrl } from '../../lib/config/app-url'
 
 const NOTIFY_EMAIL = 'team@smd.services'
 const RATE_LIMIT = 5
@@ -105,7 +106,7 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
         html:
           `<p><strong>${escapedName}</strong> &lt;${escapedEmail}&gt; from <strong>${escapedBusiness}</strong> shared info about their business (no call scheduled yet).</p>` +
           `<hr>${detailLines}` +
-          `<hr><p><a href="https://smd.services/admin/entities/${result.entityId}">View in admin →</a></p>`,
+          `<hr><p><a href="${buildAdminUrl(env, `/admin/entities/${result.entityId}`)}">View in admin →</a></p>`,
       })
     } catch (emailErr) {
       console.error('[api/intake] Notification email error:', emailErr)

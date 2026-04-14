@@ -21,6 +21,16 @@ interface UserRow {
  */
 export const POST: APIRoute = async ({ request, locals, redirect }) => {
   try {
+    // Host guard: admin login must happen on admin.smd.services so the
+    // session cookie lands on the correct origin. A POST to the apex
+    // bypasses the middleware redirect (which only catches GET /auth/login),
+    // so we enforce the invariant here too.
+    const requestHost = new URL(request.url).hostname
+    const isLocalDev = requestHost === 'localhost' || requestHost === '127.0.0.1'
+    if (!isLocalDev && !requestHost.startsWith('admin.')) {
+      return redirect('/auth/login?error=wrong_host', 302)
+    }
+
     const formData = await request.formData()
     const email = formData.get('email')
     const password = formData.get('password')

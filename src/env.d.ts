@@ -42,6 +42,14 @@ type CfEnv = {
    * deployment served under a subdomain rewrite).
    */
   PORTAL_BASE_URL?: string
+  /**
+   * Canonical absolute URL for the admin console, e.g.
+   * `https://admin.smd.services`. Required for OAuth redirect URIs
+   * and outbound admin links. Unlike PORTAL_BASE_URL, this does NOT
+   * fall back to APP_BASE_URL — silent fallback would emit the wrong
+   * OAuth redirect and cause redirect_uri_mismatch errors.
+   */
+  ADMIN_BASE_URL?: string
   /** Cloudflare Turnstile site key for the /book booking widget. Public. */
   PUBLIC_TURNSTILE_SITE_KEY?: string
   RESEND_API_KEY?: string

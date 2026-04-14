@@ -4,6 +4,7 @@
 #
 # Custom domains (configured in Cloudflare Pages dashboard):
 #   smd.services         — marketing site (public pages)
+#   admin.smd.services   — admin console
 #   portal.smd.services  — client portal
 #
 # All domains are served by this single Pages project.
@@ -15,14 +16,21 @@ compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "dist"
 
 # ---------- Public env vars ----------
-# Canonical origin for outbound auth, portal, and webhook callback URLs.
-# All email links and webhook callbacks are built from APP_BASE_URL — never
+# Canonical origins for outbound links and webhook callbacks.
+# All email links and webhook callbacks are built from these env vars — never
 # from the inbound request host (see src/lib/config/app-url.ts and issue #173).
-# PORTAL_BASE_URL is optional; when unset it falls back to APP_BASE_URL.
+#   APP_BASE_URL    — marketing origin (smd.services). Used by public-facing
+#                     links, SignWell webhooks, and as a PORTAL_BASE_URL fallback.
+#   ADMIN_BASE_URL  — admin console origin (admin.smd.services). Required for
+#                     the Google OAuth redirect URI and outbound admin links.
+#                     No fallback — missing value throws.
+#   PORTAL_BASE_URL — client portal origin (portal.smd.services). Falls back
+#                     to APP_BASE_URL when unset.
 # PUBLIC_TURNSTILE_SITE_KEY is the Cloudflare Turnstile site key embedded
 # in the /book Turnstile widget; the paired secret is in TURNSTILE_SECRET_KEY.
 [vars]
 APP_BASE_URL = "https://smd.services"
+ADMIN_BASE_URL = "https://admin.smd.services"
 PORTAL_BASE_URL = "https://portal.smd.services"
 PUBLIC_TURNSTILE_SITE_KEY = ""
 MEETING_URL = "https://zoom.us/j/4284801619"

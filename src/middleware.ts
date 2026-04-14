@@ -4,10 +4,17 @@ import {
   validateSession,
   renewSession,
   buildSessionCookie,
+  buildClearSessionCookie,
 } from './lib/auth/session'
 
 /**
  * Astro middleware — handles auth for protected routes.
+ *
+ * Host → path mapping (three custom domains on one Pages project):
+ *   admin.smd.services/*   → rewritten to /admin/* (admin console, role=admin)
+ *   portal.smd.services/*  → rewritten to /portal/* (client portal, role=client)
+ *   smd.services/*         → marketing (public); /admin/* and /auth/login 301
+ *                            to admin.smd.services for backwards compat
  *
  * Route protection:
  *   /admin/*       → requires role='admin', redirects to /auth/login
@@ -35,6 +42,38 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // Rewrite the URL to the /portal path prefix
     const portalPath = pathname === '/' ? '/portal' : `/portal${pathname}`
     return context.rewrite(new Request(new URL(portalPath, context.url), context.request))
+  }
+
+  // Subdomain routing: admin.smd.services rewrites to /admin/* paths
+  const isAdminSubdomain = hostname.startsWith('admin.')
+  if (
+    isAdminSubdomain &&
+    !pathname.startsWith('/admin') &&
+    !pathname.startsWith('/api/admin') &&
+    !pathname.startsWith('/auth') &&
+    !pathname.startsWith('/api/auth')
+  ) {
+    const adminPath = pathname === '/' ? '/admin' : `/admin${pathname}`
+    return context.rewrite(new Request(new URL(adminPath, context.url), context.request))
+  }
+
+  // Backwards-compat redirects: bare apex admin/login paths → admin subdomain.
+  // Strict equality guard — NOT startsWith/endsWith, which would match
+  // admin.smd.services and loop. Preserves pathname and query string.
+  if (hostname === 'smd.services' && (pathname === '/admin' || pathname.startsWith('/admin/'))) {
+    const newUrl = new URL(context.url)
+    newUrl.hostname = 'admin.smd.services'
+    return context.redirect(newUrl.toString(), 301)
+  }
+  if (
+    hostname === 'smd.services' &&
+    (pathname === '/auth/login' || pathname.startsWith('/auth/login'))
+  ) {
+    // Admin login must happen on admin host so cookies land on the correct origin.
+    // Client login at /auth/portal-login is NOT redirected — stays on portal host.
+    const newUrl = new URL(context.url)
+    newUrl.hostname = 'admin.smd.services'
+    return context.redirect(newUrl.toString(), 301)
   }
 
   // Legacy redirect: /book/thanks → /get-started?booked=1
@@ -101,14 +140,21 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   const response = await next()
 
-  // Refresh session cookie on authenticated responses (sliding window).
-  // Guard: only refresh when role matches the domain to prevent admin sessions
-  // from leaking cookies onto portal.smd.services (and vice versa).
+  // Session cookie handling on authenticated responses.
+  // Invariant: admin cookies only live on admin.*, client cookies only on portal.*.
+  // - Refresh (sliding window) when role matches host.
+  // - Clear proactively when an admin cookie arrives on the apex — a stale
+  //   leftover from pre-migration logins should not linger.
   if (context.locals.session && token) {
-    const isPortalHost = context.url.hostname.startsWith('portal.')
+    const isPortalHost = hostname.startsWith('portal.')
+    const isAdminHost = hostname.startsWith('admin.')
     const isClientSession = context.locals.session.role === 'client'
-    if (isClientSession === isPortalHost) {
+    const isAdminSession = context.locals.session.role === 'admin'
+    const hostMatches = (isClientSession && isPortalHost) || (isAdminSession && isAdminHost)
+    if (hostMatches) {
       response.headers.append('Set-Cookie', buildSessionCookie(token, context.locals.session.role))
+    } else if (hostname === 'smd.services' && isAdminSession) {
+      response.headers.append('Set-Cookie', buildClearSessionCookie())
     }
   }
 

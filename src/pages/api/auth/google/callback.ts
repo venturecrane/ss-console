@@ -3,7 +3,7 @@ import { consumeOAuthState } from '../../../../lib/db/oauth-states.js'
 import { upsertIntegration } from '../../../../lib/db/integrations.js'
 import { exchangeAuthCode } from '../../../../lib/booking/google-calendar.js'
 import { encrypt } from '../../../../lib/booking/encryption.js'
-import { requireAppBaseUrl } from '../../../../lib/config/app-url.js'
+import { requireAdminBaseUrl } from '../../../../lib/config/app-url.js'
 
 /**
  * GET /api/auth/google/callback
@@ -60,8 +60,9 @@ export const GET: APIRoute = async ({ request, locals, redirect }) => {
   }
 
   try {
-    const appBase = requireAppBaseUrl(env)
-    const redirectUri = `${appBase}/api/auth/google/callback`
+    // Must match the redirect_uri registered with Google AND used by /connect.
+    const adminBase = requireAdminBaseUrl(env)
+    const redirectUri = `${adminBase}/api/auth/google/callback`
 
     // 3. Exchange code for tokens
     const tokens = await exchangeAuthCode(clientId, clientSecret, code, redirectUri)

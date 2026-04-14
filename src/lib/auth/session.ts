@@ -196,8 +196,9 @@ export async function destroySession(
  * Build a Set-Cookie header for the session token.
  *
  * No Domain= attribute is set intentionally: admin cookies are scoped to
- * smd.services and portal cookies to portal.smd.services. This isolation
- * prevents cross-domain cookie leakage between admin and client sessions.
+ * admin.smd.services and portal cookies to portal.smd.services. This
+ * isolation prevents cross-domain cookie leakage between admin and client
+ * sessions.
  */
 export function buildSessionCookie(token: string, role?: string): string {
   const maxAge = Math.floor(getSessionDurationMs(role) / 1000)

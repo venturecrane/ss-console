@@ -4,10 +4,13 @@ import { resolve } from 'path'
 import {
   getAppBaseUrl,
   getPortalBaseUrl,
+  getAdminBaseUrl,
   requireAppBaseUrl,
   requirePortalBaseUrl,
+  requireAdminBaseUrl,
   buildAppUrl,
   buildPortalUrl,
+  buildAdminUrl,
 } from '../src/lib/config/app-url'
 
 /**
@@ -74,6 +77,31 @@ describe('canonical app-url helper: getPortalBaseUrl', () => {
   })
 })
 
+describe('canonical app-url helper: getAdminBaseUrl', () => {
+  it('returns ADMIN_BASE_URL when set', () => {
+    expect(
+      getAdminBaseUrl({
+        APP_BASE_URL: 'https://smd.services',
+        ADMIN_BASE_URL: 'https://admin.smd.services',
+      })
+    ).toBe('https://admin.smd.services')
+  })
+
+  it('does NOT fall back to APP_BASE_URL when ADMIN_BASE_URL is unset', () => {
+    expect(getAdminBaseUrl({ APP_BASE_URL: 'https://smd.services' })).toBeNull()
+  })
+
+  it('returns null when ADMIN_BASE_URL is blank', () => {
+    expect(getAdminBaseUrl({ ADMIN_BASE_URL: '   ' })).toBeNull()
+  })
+
+  it('strips trailing slashes and trims whitespace', () => {
+    expect(getAdminBaseUrl({ ADMIN_BASE_URL: '  https://admin.smd.services/  ' })).toBe(
+      'https://admin.smd.services'
+    )
+  })
+})
+
 describe('canonical app-url helper: strict guards', () => {
   it('requireAppBaseUrl throws a descriptive error when missing', () => {
     expect(() => requireAppBaseUrl({})).toThrow(/APP_BASE_URL is not configured/)
@@ -92,11 +120,28 @@ describe('canonical app-url helper: strict guards', () => {
       'https://smd.services'
     )
   })
+
+  it('requireAdminBaseUrl throws when ADMIN_BASE_URL is missing', () => {
+    expect(() => requireAdminBaseUrl({})).toThrow(/ADMIN_BASE_URL is not configured/)
+  })
+
+  it('requireAdminBaseUrl does NOT silently fall back to APP_BASE_URL', () => {
+    expect(() => requireAdminBaseUrl({ APP_BASE_URL: 'https://smd.services' })).toThrow(
+      /ADMIN_BASE_URL/
+    )
+  })
+
+  it('requireAdminBaseUrl returns the value when set', () => {
+    expect(requireAdminBaseUrl({ ADMIN_BASE_URL: 'https://admin.smd.services' })).toBe(
+      'https://admin.smd.services'
+    )
+  })
 })
 
 describe('canonical app-url helper: URL builders', () => {
   const env = {
     APP_BASE_URL: 'https://smd.services',
+    ADMIN_BASE_URL: 'https://admin.smd.services',
     PORTAL_BASE_URL: 'https://portal.smd.services',
   }
 
@@ -134,6 +179,24 @@ describe('canonical app-url helper: URL builders', () => {
 
   it('buildPortalUrl throws when neither base URL is set', () => {
     expect(() => buildPortalUrl({}, '/portal')).toThrow(/PORTAL_BASE_URL/)
+  })
+
+  it('buildAdminUrl prepends the admin origin', () => {
+    expect(buildAdminUrl(env, '/admin/entities/abc-123')).toBe(
+      'https://admin.smd.services/admin/entities/abc-123'
+    )
+  })
+
+  it('buildAdminUrl handles paths without a leading slash', () => {
+    expect(buildAdminUrl({ ADMIN_BASE_URL: 'https://admin.smd.services' }, 'admin/foo')).toBe(
+      'https://admin.smd.services/admin/foo'
+    )
+  })
+
+  it('buildAdminUrl throws when ADMIN_BASE_URL is missing', () => {
+    expect(() => buildAdminUrl({ APP_BASE_URL: 'https://smd.services' }, '/admin/foo')).toThrow(
+      /ADMIN_BASE_URL/
+    )
   })
 })
 
@@ -235,6 +298,11 @@ describe('canonical app-url: env declarations', () => {
     expect(source).toContain('PORTAL_BASE_URL')
   })
 
+  it('CfEnv declares ADMIN_BASE_URL', () => {
+    const source = readFileSync(resolve('src/env.d.ts'), 'utf-8')
+    expect(source).toContain('ADMIN_BASE_URL')
+  })
+
   it('wrangler.toml declares APP_BASE_URL under [vars]', () => {
     const source = readFileSync(resolve('wrangler.toml'), 'utf-8')
     expect(source).toContain('[vars]')
@@ -246,9 +314,43 @@ describe('canonical app-url: env declarations', () => {
     expect(source).toContain('PORTAL_BASE_URL')
   })
 
+  it('wrangler.toml declares ADMIN_BASE_URL', () => {
+    const source = readFileSync(resolve('wrangler.toml'), 'utf-8')
+    expect(source).toContain('ADMIN_BASE_URL = "https://admin.smd.services"')
+  })
+
   it('.dev.vars.example documents APP_BASE_URL for local dev', () => {
     const source = readFileSync(resolve('.dev.vars.example'), 'utf-8')
     expect(source).toContain('APP_BASE_URL')
     expect(source).toContain('PORTAL_BASE_URL')
+    expect(source).toContain('ADMIN_BASE_URL')
+  })
+})
+
+describe('canonical app-url: Google OAuth uses ADMIN_BASE_URL', () => {
+  it('connect endpoint uses requireAdminBaseUrl, not requireAppBaseUrl', () => {
+    const source = readFileSync(resolve('src/pages/api/auth/google/connect.ts'), 'utf-8')
+    expect(source).toContain('requireAdminBaseUrl')
+    expect(source).not.toContain('requireAppBaseUrl')
+  })
+
+  it('callback endpoint uses requireAdminBaseUrl, not requireAppBaseUrl', () => {
+    const source = readFileSync(resolve('src/pages/api/auth/google/callback.ts'), 'utf-8')
+    expect(source).toContain('requireAdminBaseUrl')
+    expect(source).not.toContain('requireAppBaseUrl')
+  })
+})
+
+describe('canonical app-url: outbound admin URLs use buildAdminUrl', () => {
+  it('intake notification email uses buildAdminUrl', () => {
+    const source = readFileSync(resolve('src/pages/api/intake.ts'), 'utf-8')
+    expect(source).toContain('buildAdminUrl')
+    expect(source).not.toContain('https://smd.services/admin/')
+  })
+
+  it('booking admin notification email uses buildAdminUrl', () => {
+    const source = readFileSync(resolve('src/pages/api/booking/reserve.ts'), 'utf-8')
+    expect(source).toContain('buildAdminUrl')
+    expect(source).not.toMatch(/\$\{appBaseUrl\}\/admin\//)
   })
 })

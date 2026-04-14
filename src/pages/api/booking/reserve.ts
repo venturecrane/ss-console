@@ -20,7 +20,7 @@ import {
   bookingConfirmationEmailHtml,
   bookingAdminNotificationEmailHtml,
 } from '../../../lib/email/templates'
-import { requireAppBaseUrl } from '../../../lib/config/app-url'
+import { requireAppBaseUrl, buildAdminUrl } from '../../../lib/config/app-url'
 
 const FALLBACK_EMAIL = 'scott@smd.services'
 const NOTIFY_EMAIL = 'team@smd.services'
@@ -369,7 +369,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       businessName,
       slotLabel: formatSlotLabelLong(slotStartUtc, BOOKING_CONFIG.consultant.timezone),
       intakeLines,
-      entityAdminUrl: `${appBaseUrl}/admin/entities/${entityId}`,
+      entityAdminUrl: buildAdminUrl(env, `/admin/entities/${entityId}`),
     })
 
     await sendEmail(env.RESEND_API_KEY, {

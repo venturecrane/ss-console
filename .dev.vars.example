@@ -7,10 +7,13 @@
 # and `astro dev` (via the platformProxy adapter config).
 
 # ---------- Canonical URLs ----------
-# Used to build outbound auth, portal, and webhook callback links. In dev
-# we point at localhost so magic links and email previews open the right
-# environment. See src/lib/config/app-url.ts and issue #173.
+# Used to build outbound auth, admin, portal, and webhook callback links.
+# In dev we point at localhost so magic links and email previews open the
+# right environment. See src/lib/config/app-url.ts and issue #173.
+#   ADMIN_BASE_URL is REQUIRED (no fallback). OAuth redirect URI uses it.
+#   PORTAL_BASE_URL falls back to APP_BASE_URL when unset.
 APP_BASE_URL="http://localhost:4321"
+ADMIN_BASE_URL="http://localhost:4321"
 PORTAL_BASE_URL="http://localhost:4321"
 
 # ---------- Secrets (set with: wrangler secret put <NAME>) ----------

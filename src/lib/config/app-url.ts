@@ -24,6 +24,7 @@
 export interface AppUrlEnv {
   APP_BASE_URL?: string
   PORTAL_BASE_URL?: string
+  ADMIN_BASE_URL?: string
 }
 
 /**
@@ -100,6 +101,45 @@ export function buildAppUrl(env: AppUrlEnv, path: string): string {
  */
 export function buildPortalUrl(env: AppUrlEnv, path: string = '/portal'): string {
   const base = requirePortalBaseUrl(env)
+  const normalized = path.startsWith('/') ? path : `/${path}`
+  return `${base}${normalized}`
+}
+
+/**
+ * Read and normalize `ADMIN_BASE_URL`. Unlike the portal helper, does NOT
+ * fall back to `APP_BASE_URL`. A silent fallback would emit OAuth redirect
+ * URIs on the marketing domain, producing `redirect_uri_mismatch` errors
+ * that are hard to diagnose. Callers should use `requireAdminBaseUrl` to
+ * get a strict failure when the value is missing.
+ */
+export function getAdminBaseUrl(env: AppUrlEnv): string | null {
+  const raw = env.ADMIN_BASE_URL
+  if (!raw || typeof raw !== 'string') return null
+  const trimmed = raw.trim().replace(/\/+$/, '')
+  return trimmed.length > 0 ? trimmed : null
+}
+
+/**
+ * Strict variant of `getAdminBaseUrl`. Throws when `ADMIN_BASE_URL` is not
+ * configured. Used for OAuth redirect URIs and outbound admin links — fail
+ * loudly rather than silently falling back to the marketing domain.
+ */
+export function requireAdminBaseUrl(env: AppUrlEnv): string {
+  const base = getAdminBaseUrl(env)
+  if (!base) {
+    throw new Error(
+      'ADMIN_BASE_URL is not configured. Set ADMIN_BASE_URL in Cloudflare Pages env (e.g. https://admin.smd.services).'
+    )
+  }
+  return base
+}
+
+/**
+ * Build an absolute URL on the canonical admin origin. Handles leading-slash
+ * normalization so callers can pass either `/foo` or `foo`.
+ */
+export function buildAdminUrl(env: AppUrlEnv, path: string): string {
+  const base = requireAdminBaseUrl(env)
   const normalized = path.startsWith('/') ? path : `/${path}`
   return `${base}${normalized}`
 }

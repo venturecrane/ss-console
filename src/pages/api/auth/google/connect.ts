@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro'
 import { createOAuthState } from '../../../../lib/db/oauth-states.js'
-import { requireAppBaseUrl } from '../../../../lib/config/app-url.js'
+import { requireAdminBaseUrl } from '../../../../lib/config/app-url.js'
 
 /**
  * GET /api/auth/google/connect
@@ -38,8 +38,10 @@ export const GET: APIRoute = async ({ locals, redirect }) => {
     return redirect('/admin/settings/google-connect?error=config', 302)
   }
 
-  const appBase = requireAppBaseUrl(env)
-  const redirectUri = `${appBase}/api/auth/google/callback`
+  // OAuth redirect URI must land on admin.smd.services so the callback
+  // arrives on the host that holds the admin session cookie.
+  const adminBase = requireAdminBaseUrl(env)
+  const redirectUri = `${adminBase}/api/auth/google/callback`
 
   const state = await createOAuthState(env.DB, session.orgId, 'google_calendar', session.userId)
 

@@ -201,6 +201,37 @@ We are in the **pre-launch phase**. Nothing has been sold yet. The immediate pri
 - **Language:** TypeScript
 - **No product/app planned** — this is a services business. Tech is for marketing and internal tools only.
 
+## Three-Subdomain Architecture
+
+One Astro app, one Cloudflare Pages project, three custom domains. Routing is handled by `src/middleware.ts` — not by separate deployments.
+
+| Host                  | Serves                                   | Auth role |
+| --------------------- | ---------------------------------------- | --------- |
+| `smd.services`        | Marketing pages                          | Public    |
+| `admin.smd.services`  | Admin console (rewritten to `/admin/*`)  | `admin`   |
+| `portal.smd.services` | Client portal (rewritten to `/portal/*`) | `client`  |
+
+**How the rewrite works.** The middleware inspects `hostname`. On `admin.smd.services`, paths get `/admin` prepended unless they already start with `/admin`, `/api/admin`, `/auth`, or `/api/auth`. Same pattern for `portal.smd.services`. The admin source files still live under `src/pages/admin/*` — the subdomain is a front door.
+
+**Cookie boundaries.** Session cookies are per-host (no `Domain` attribute). Admin cookies only live on `admin.smd.services`. Client cookies only live on `portal.smd.services`. An admin cookie that lands on the apex (from pre-migration logins) is proactively cleared on next visit.
+
+**Backwards compat.** `smd.services/admin/*` and `smd.services/auth/login` 301 to the admin subdomain — old bookmarks still work.
+
+**Env vars.** `APP_BASE_URL` (marketing, SignWell webhooks), `ADMIN_BASE_URL` (OAuth redirect URI, outbound admin links — strict, no fallback), `PORTAL_BASE_URL` (portal links, falls back to `APP_BASE_URL`). See `src/lib/config/app-url.ts`.
+
+## Local Dev
+
+Subdomain-based routing keys off `hostname.startsWith('admin.')` / `portal.`. At `localhost:4321` neither fires, which is usually fine — just hit `/admin/*` and `/portal/*` paths directly.
+
+**For full-fidelity subdomain testing**, add to `/etc/hosts`:
+
+```
+127.0.0.1 admin.localhost
+127.0.0.1 portal.localhost
+```
+
+Then `http://admin.localhost:4321/` and `http://portal.localhost:4321/` exercise the rewrite. Set matching values in `.dev.vars` (e.g. `ADMIN_BASE_URL=http://admin.localhost:4321`) so outbound-URL builders emit the right origin.
+
 ## Build Commands
 
 ```bash
