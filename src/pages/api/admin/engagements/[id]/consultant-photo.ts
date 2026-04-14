@@ -104,9 +104,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     })
 
     const publicBase = env.CONSULTANT_PHOTOS_PUBLIC_BASE?.replace(/\/$/, '')
-    const photoUrl = publicBase
-      ? `${publicBase}/${key}`
-      : `/api/portal/consultants/photo/${key}`
+    const photoUrl = publicBase ? `${publicBase}/${key}` : `/api/portal/consultants/photo/${key}`
 
     await updateEngagement(env.DB, session.orgId, engagementId, {
       consultant_photo_url: photoUrl,

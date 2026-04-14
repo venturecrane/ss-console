@@ -518,9 +518,8 @@ function fileSize(bytes: number): string {
       <div class="px-6 py-4 border-b border-slate-100">
         <h2 class="font-medium text-slate-900">Consultant Photo</h2>
         <p class="text-xs text-slate-500 mt-1">
-          Shown on every portal surface for this engagement. Square, 400×400
-          recommended. We'll crop to a circle and encode as WebP in your browser
-          before upload. JPEG/PNG/WebP up to 5 MB.
+          Shown on every portal surface for this engagement. Square, 400×400 recommended. We'll crop
+          to a circle and encode as WebP in your browser before upload. JPEG/PNG/WebP up to 5 MB.
         </p>
       </div>
       <div class="px-6 py-5">
@@ -559,8 +558,7 @@ function fileSize(bytes: number): string {
               id="photo-preview"
               width="160"
               height="160"
-              class="hidden rounded-full border border-slate-200 mb-3"
-            ></canvas>
+              class="hidden rounded-full border border-slate-200 mb-3"></canvas>
             <div id="photo-controls" class="flex flex-wrap items-center gap-2">
               <input
                 type="file"
@@ -788,9 +786,7 @@ function fileSize(bytes: number): string {
     function setStatus(msg, isError) {
       if (!photoStatus) return
       photoStatus.textContent = msg
-      photoStatus.className = isError
-        ? 'mt-2 text-xs text-red-600'
-        : 'mt-2 text-xs text-slate-500'
+      photoStatus.className = isError ? 'mt-2 text-xs text-red-600' : 'mt-2 text-xs text-slate-500'
     }
 
     async function cropToSquareWebp(file) {
@@ -840,10 +836,7 @@ function fileSize(bytes: number): string {
         try {
           setStatus('Processing image...', false)
           pendingBlob = await cropToSquareWebp(file)
-          setStatus(
-            `Ready to upload (${(pendingBlob.size / 1024).toFixed(1)} KB WebP)`,
-            false
-          )
+          setStatus(`Ready to upload (${(pendingBlob.size / 1024).toFixed(1)} KB WebP)`, false)
           photoUpload.classList.remove('hidden')
           photoCancel.classList.remove('hidden')
         } catch (err) {
@@ -873,10 +866,10 @@ function fileSize(bytes: number): string {
         const form = new FormData()
         form.append('photo', new File([pendingBlob], 'consultant.webp', { type: 'image/webp' }))
         try {
-          const res = await fetch(
-            `/api/admin/engagements/${engagementId}/consultant-photo`,
-            { method: 'POST', body: form }
-          )
+          const res = await fetch(`/api/admin/engagements/${engagementId}/consultant-photo`, {
+            method: 'POST',
+            body: form,
+          })
           if (!res.ok) {
             const data = await res.json().catch(() => ({}))
             throw new Error(data.error || res.statusText)
@@ -897,10 +890,9 @@ function fileSize(bytes: number): string {
         photoRemove.disabled = true
         setStatus('Removing...', false)
         try {
-          const res = await fetch(
-            `/api/admin/engagements/${engagementId}/consultant-photo`,
-            { method: 'DELETE' }
-          )
+          const res = await fetch(`/api/admin/engagements/${engagementId}/consultant-photo`, {
+            method: 'DELETE',
+          })
           if (!res.ok) {
             const data = await res.json().catch(() => ({}))
             throw new Error(data.error || res.statusText)
