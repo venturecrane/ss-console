@@ -22,6 +22,12 @@ export interface Engagement {
   status: string
   estimated_hours: number | null
   actual_hours: number
+  consultant_name: string | null
+  consultant_photo_url: string | null
+  consultant_role: string | null
+  consultant_phone: string | null
+  next_touchpoint_at: string | null
+  next_touchpoint_label: string | null
   created_at: string
   updated_at: string
 }
@@ -80,6 +86,12 @@ export interface UpdateEngagementData {
   safety_net_end?: string | null
   estimated_hours?: number | null
   actual_hours?: number | null
+  consultant_name?: string | null
+  consultant_photo_url?: string | null
+  consultant_role?: string | null
+  consultant_phone?: string | null
+  next_touchpoint_at?: string | null
+  next_touchpoint_label?: string | null
 }
 
 /**
@@ -216,6 +228,36 @@ export async function updateEngagement(
   if (data.actual_hours !== undefined) {
     fields.push('actual_hours = ?')
     params.push(data.actual_hours)
+  }
+
+  if (data.consultant_name !== undefined) {
+    fields.push('consultant_name = ?')
+    params.push(data.consultant_name)
+  }
+
+  if (data.consultant_photo_url !== undefined) {
+    fields.push('consultant_photo_url = ?')
+    params.push(data.consultant_photo_url)
+  }
+
+  if (data.consultant_role !== undefined) {
+    fields.push('consultant_role = ?')
+    params.push(data.consultant_role)
+  }
+
+  if (data.consultant_phone !== undefined) {
+    fields.push('consultant_phone = ?')
+    params.push(data.consultant_phone)
+  }
+
+  if (data.next_touchpoint_at !== undefined) {
+    fields.push('next_touchpoint_at = ?')
+    params.push(data.next_touchpoint_at)
+  }
+
+  if (data.next_touchpoint_label !== undefined) {
+    fields.push('next_touchpoint_label = ?')
+    params.push(data.next_touchpoint_label)
   }
 
   if (fields.length === 0) {

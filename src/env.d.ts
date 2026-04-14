@@ -20,6 +20,12 @@ declare module '*.wasm' {
 type CfEnv = {
   DB: D1Database
   STORAGE: R2Bucket
+  /**
+   * R2 bucket for consultant portrait photos. Separate from STORAGE because
+   * this bucket is intended to be public (objects served directly to the
+   * portal via a Cloudflare-managed public URL). See wrangler.toml.
+   */
+  CONSULTANT_PHOTOS: R2Bucket
   SESSIONS: KVNamespace
   BOOKING_CACHE: KVNamespace
   /**
@@ -64,6 +70,13 @@ type CfEnv = {
   TURNSTILE_SECRET_KEY?: string
   /** Static video call URL for booking events (e.g. Zoom personal meeting link). */
   MEETING_URL?: string
+  /**
+   * Public base URL for the CONSULTANT_PHOTOS bucket, e.g.
+   * `https://pub-<id>.r2.dev` (dev-time) or a custom domain like
+   * `https://photos.smd.services` in production. When unset, the upload
+   * endpoint falls back to streaming via `/api/portal/consultants/photo/[key]`.
+   */
+  CONSULTANT_PHOTOS_PUBLIC_BASE?: string
 }
 
 type Runtime = import('@astrojs/cloudflare').Runtime<CfEnv>

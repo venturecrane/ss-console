@@ -38,6 +38,15 @@ database_id = "65171b23-d615-42a7-84e7-a4fac20d063c"
 binding = "STORAGE"
 bucket_name = "ss-console-storage"
 
+# ---------- R2 (consultant photos, public) ----------
+# Intended to be a public bucket — object URLs are served directly to the
+# portal. Create with: npx wrangler r2 bucket create smd-consultant-photos
+# Then enable public access in the Cloudflare dashboard and set the resulting
+# public base URL via: npx wrangler secret put CONSULTANT_PHOTOS_PUBLIC_BASE
+[[r2_buckets]]
+binding = "CONSULTANT_PHOTOS"
+bucket_name = "smd-consultant-photos"
+
 # ---------- Workers KV (sessions) ----------
 [[kv_namespaces]]
 binding = "SESSIONS"

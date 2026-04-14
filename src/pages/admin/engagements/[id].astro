@@ -513,6 +513,98 @@ function fileSize(bytes: number): string {
       </details>
     </div>
 
+    <!-- Consultant photo -->
+    <div class="bg-white rounded-lg border border-slate-200">
+      <div class="px-6 py-4 border-b border-slate-100">
+        <h2 class="font-medium text-slate-900">Consultant Photo</h2>
+        <p class="text-xs text-slate-500 mt-1">
+          Shown on every portal surface for this engagement. Square, 400×400 recommended. We'll crop
+          to a circle and encode as WebP in your browser before upload. JPEG/PNG/WebP up to 5 MB.
+        </p>
+      </div>
+      <div class="px-6 py-5">
+        <div class="flex items-start gap-5">
+          <div
+            class="w-20 h-20 shrink-0 rounded-full bg-slate-50 border border-slate-200 overflow-hidden"
+          >
+            {
+              engagement.consultant_photo_url ? (
+                <img
+                  id="consultant-photo-current"
+                  src={engagement.consultant_photo_url}
+                  alt="Current consultant photo"
+                  class="w-full h-full object-cover"
+                />
+              ) : (
+                <svg
+                  id="consultant-photo-placeholder"
+                  viewBox="0 0 80 80"
+                  class="w-full h-full text-slate-400"
+                  aria-hidden="true"
+                >
+                  <rect width="80" height="80" fill="currentColor" fill-opacity="0.12" />
+                  <circle cx="40" cy="32" r="13" fill="currentColor" fill-opacity="0.5" />
+                  <path
+                    d="M14 74c4-13 14-20 26-20s22 7 26 20"
+                    fill="currentColor"
+                    fill-opacity="0.5"
+                  />
+                </svg>
+              )
+            }
+          </div>
+          <div class="flex-1 min-w-0">
+            <canvas
+              id="photo-preview"
+              width="160"
+              height="160"
+              class="hidden rounded-full border border-slate-200 mb-3"></canvas>
+            <div id="photo-controls" class="flex flex-wrap items-center gap-2">
+              <input
+                type="file"
+                id="photo-input"
+                accept="image/jpeg,image/png,image/webp"
+                class="hidden"
+              />
+              <button
+                type="button"
+                id="photo-choose"
+                class="text-xs px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Choose Photo
+              </button>
+              <button
+                type="button"
+                id="photo-upload"
+                class="hidden text-xs px-3 py-1.5 rounded bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+              >
+                Upload
+              </button>
+              <button
+                type="button"
+                id="photo-cancel"
+                class="hidden text-xs px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              {
+                engagement.consultant_photo_url && (
+                  <button
+                    type="button"
+                    id="photo-remove"
+                    class="text-xs px-3 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    Remove
+                  </button>
+                )
+              }
+            </div>
+            <p id="photo-status" class="mt-2 text-xs text-slate-500"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Deliverables -->
     <div class="bg-white rounded-lg border border-slate-200">
       <div class="px-6 py-4 border-b border-slate-100">
@@ -671,6 +763,147 @@ function fileSize(bytes: number): string {
         }
       }
       setTimeout(() => location.reload(), 800)
+    }
+  </script>
+
+  <script define:vars={{ engagementId }}>
+    // Consultant photo: client-side square-crop and WebP encode, then upload.
+    // We crop in the browser to avoid a WASM image pipeline on the Worker — the
+    // server accepts pre-processed WebP/JPEG/PNG under 5 MB and stores to R2.
+    const photoInput = document.getElementById('photo-input')
+    const photoChoose = document.getElementById('photo-choose')
+    const photoUpload = document.getElementById('photo-upload')
+    const photoCancel = document.getElementById('photo-cancel')
+    const photoRemove = document.getElementById('photo-remove')
+    const photoPreview = document.getElementById('photo-preview')
+    const photoStatus = document.getElementById('photo-status')
+
+    let pendingBlob = null
+    const TARGET_SIZE = 400
+    const PREVIEW_SIZE = 160
+    const MAX_BYTES = 5 * 1024 * 1024
+
+    function setStatus(msg, isError) {
+      if (!photoStatus) return
+      photoStatus.textContent = msg
+      photoStatus.className = isError ? 'mt-2 text-xs text-red-600' : 'mt-2 text-xs text-slate-500'
+    }
+
+    async function cropToSquareWebp(file) {
+      if (file.size > MAX_BYTES) {
+        throw new Error('Original file exceeds 5 MB. Please pick a smaller image.')
+      }
+      const bitmap = await createImageBitmap(file)
+      const side = Math.min(bitmap.width, bitmap.height)
+      const sx = Math.round((bitmap.width - side) / 2)
+      const sy = Math.round((bitmap.height - side) / 2)
+
+      const canvas = document.createElement('canvas')
+      canvas.width = TARGET_SIZE
+      canvas.height = TARGET_SIZE
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(bitmap, sx, sy, side, side, 0, 0, TARGET_SIZE, TARGET_SIZE)
+
+      if (photoPreview) {
+        photoPreview.width = PREVIEW_SIZE
+        photoPreview.height = PREVIEW_SIZE
+        const pctx = photoPreview.getContext('2d')
+        pctx.drawImage(canvas, 0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
+        photoPreview.classList.remove('hidden')
+      }
+
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error('Encoding failed'))),
+          'image/webp',
+          0.9
+        )
+      })
+      if (blob.size > MAX_BYTES) {
+        throw new Error('Encoded photo still exceeds 5 MB. Try a smaller source image.')
+      }
+      return blob
+    }
+
+    if (photoChoose && photoInput) {
+      photoChoose.addEventListener('click', () => photoInput.click())
+    }
+
+    if (photoInput) {
+      photoInput.addEventListener('change', async () => {
+        const file = photoInput.files && photoInput.files[0]
+        if (!file) return
+        try {
+          setStatus('Processing image...', false)
+          pendingBlob = await cropToSquareWebp(file)
+          setStatus(`Ready to upload (${(pendingBlob.size / 1024).toFixed(1)} KB WebP)`, false)
+          photoUpload.classList.remove('hidden')
+          photoCancel.classList.remove('hidden')
+        } catch (err) {
+          pendingBlob = null
+          setStatus(err.message || 'Could not process image', true)
+        }
+      })
+    }
+
+    if (photoCancel) {
+      photoCancel.addEventListener('click', () => {
+        pendingBlob = null
+        if (photoInput) photoInput.value = ''
+        if (photoPreview) photoPreview.classList.add('hidden')
+        photoUpload.classList.add('hidden')
+        photoCancel.classList.add('hidden')
+        setStatus('', false)
+      })
+    }
+
+    if (photoUpload) {
+      photoUpload.addEventListener('click', async () => {
+        if (!pendingBlob) return
+        photoUpload.disabled = true
+        photoCancel.disabled = true
+        setStatus('Uploading...', false)
+        const form = new FormData()
+        form.append('photo', new File([pendingBlob], 'consultant.webp', { type: 'image/webp' }))
+        try {
+          const res = await fetch(`/api/admin/engagements/${engagementId}/consultant-photo`, {
+            method: 'POST',
+            body: form,
+          })
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}))
+            throw new Error(data.error || res.statusText)
+          }
+          setStatus('Photo uploaded. Reloading...', false)
+          setTimeout(() => location.reload(), 500)
+        } catch (err) {
+          setStatus(err.message || 'Upload failed', true)
+          photoUpload.disabled = false
+          photoCancel.disabled = false
+        }
+      })
+    }
+
+    if (photoRemove) {
+      photoRemove.addEventListener('click', async () => {
+        if (!confirm('Remove the current consultant photo?')) return
+        photoRemove.disabled = true
+        setStatus('Removing...', false)
+        try {
+          const res = await fetch(`/api/admin/engagements/${engagementId}/consultant-photo`, {
+            method: 'DELETE',
+          })
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}))
+            throw new Error(data.error || res.statusText)
+          }
+          setStatus('Photo removed. Reloading...', false)
+          setTimeout(() => location.reload(), 500)
+        } catch (err) {
+          setStatus(err.message || 'Remove failed', true)
+          photoRemove.disabled = false
+        }
+      })
     }
   </script>
 </AdminLayout>
