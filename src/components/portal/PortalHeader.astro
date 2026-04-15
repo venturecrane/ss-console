@@ -1,40 +1,76 @@
 ---
 /**
- * Minimal portal top band. Per .stitch/portal-ux-brief.md: no nav tabs, no
- * sidebar. The account menu (sign out, etc.) is rendered via the default slot
- * so the host page controls when it appears.
+ * Minimal portal top band. Per .stitch/NAVIGATION.md §C.1:
  *
- * The showSms prop toggles a "Text Scott" deep link in the header row for
- * surfaces where SMS is the primary contact affordance. The full consultant
- * block (with photo and next touchpoint) lives in ConsultantBlock.astro.
+ * - sticky top-0, h-14 md:h-16 on <header> (not the inner div)
+ * - Client name on the left, stands alone (no logo, no decoration)
+ * - Three-icon contact control on the right: email / SMS / phone. Each
+ *   channel only renders when we have data for it. Clients pick the channel
+ *   that works for them — spec decision: "clients know what they want."
+ * - Default <slot /> for the Sign-out affordance (host page owns it)
+ *
+ * The full consultant block (avatar + role + next-touchpoint) lives in
+ * ConsultantBlock.astro.
  */
 
 interface Props {
   clientName: string
-  showSms?: boolean
-  smsHref?: string
-  smsLabel?: string
+  consultantPhone?: string | null
+  consultantEmail?: string | null
+  consultantFirstName?: string
 }
 
-const { clientName, showSms = false, smsHref, smsLabel } = Astro.props
+const {
+  clientName,
+  consultantPhone = null,
+  consultantEmail = null,
+  consultantFirstName = 'Scott',
+} = Astro.props
+
+const phoneDigits = consultantPhone ? consultantPhone.replace(/[^+\d]/g, '') : null
+const smsHref = phoneDigits ? `sms:${phoneDigits}` : null
+const telHref = phoneDigits ? `tel:${phoneDigits}` : null
+const mailtoHref = consultantEmail ? `mailto:${consultantEmail}` : null
+
+const iconClasses =
+  'inline-flex items-center justify-center w-11 h-11 rounded-lg text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-primary)] active:text-[color:var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2'
 ---
 
-<header class="w-full bg-[color:var(--color-surface)] border-b border-[color:var(--color-border)]">
-  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
+<header
+  role="banner"
+  class="sticky top-0 z-50 h-14 md:h-16 w-full bg-[color:var(--color-surface)] border-b border-[color:var(--color-border)]"
+>
+  <div class="max-w-5xl mx-auto h-full px-4 md:px-6 flex items-center justify-between gap-4">
     <p
-      class="text-[13px] leading-[18px] font-medium tracking-[0.01em] text-[color:var(--color-text-secondary)]"
+      class="text-[13px] leading-[18px] font-medium tracking-[0.01em] text-[color:var(--color-text-secondary)] truncate"
     >
       {clientName}
     </p>
-    <div class="flex items-center gap-4">
+    <div class="flex items-center gap-1">
       {
-        showSms && smsHref && smsLabel && (
-          <a
-            class="inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
-            href={smsHref}
-          >
-            <span class="material-symbols-outlined text-[18px]">sms</span>
-            {smsLabel}
+        mailtoHref && (
+          <a href={mailtoHref} aria-label={`Email ${consultantFirstName}`} class={iconClasses}>
+            <span class="material-symbols-outlined" aria-hidden="true">
+              mail
+            </span>
+          </a>
+        )
+      }
+      {
+        smsHref && (
+          <a href={smsHref} aria-label={`Text ${consultantFirstName}`} class={iconClasses}>
+            <span class="material-symbols-outlined" aria-hidden="true">
+              sms
+            </span>
+          </a>
+        )
+      }
+      {
+        telHref && (
+          <a href={telHref} aria-label={`Call ${consultantFirstName}`} class={iconClasses}>
+            <span class="material-symbols-outlined" aria-hidden="true">
+              call
+            </span>
           </a>
         )
       }

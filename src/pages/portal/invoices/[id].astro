@@ -8,6 +8,7 @@ import {
   type InvoiceLineItem,
 } from '../../../lib/db/invoices'
 import PortalHeader from '../../../components/portal/PortalHeader.astro'
+import SkipToMain from '../../../components/SkipToMain.astro'
 import MoneyDisplay from '../../../components/portal/MoneyDisplay.astro'
 import ActionCard from '../../../components/portal/ActionCard.astro'
 import ConsultantBlock from '../../../components/portal/ConsultantBlock.astro'
@@ -195,9 +196,9 @@ const consultantPhone = engagement?.consultant_phone ?? null
 const nextTouchpointAt = engagement?.next_touchpoint_at ?? null
 const nextTouchpointLabel = engagement?.next_touchpoint_label ?? null
 
-// PortalHeader SMS link (mobile thumb-zone affordance)
-const smsHref = consultantPhone ? `sms:${consultantPhone.replace(/[^+\d]/g, '')}` : null
-const smsFirstName = consultantName ? consultantName.trim().split(/\s+/)[0] || consultantName : null
+const consultantFirstName = consultantName
+  ? consultantName.trim().split(/\s+/)[0] || consultantName
+  : 'Scott'
 ---
 
 <!doctype html>
@@ -218,11 +219,11 @@ const smsFirstName = consultantName ? consultantName.trim().split(/\s+/)[0] || c
     <title>Invoice — {BRAND_NAME}</title>
   </head>
   <body class="min-h-screen bg-[color:var(--color-background)]">
+    <SkipToMain />
     <PortalHeader
       clientName={client.name}
-      showSms={!!smsHref && !isPaid && !!smsFirstName}
-      smsHref={smsHref ?? undefined}
-      smsLabel={smsHref && smsFirstName ? `Text ${smsFirstName}` : undefined}
+      consultantPhone={isPaid ? null : consultantPhone}
+      consultantFirstName={consultantFirstName}
     >
       <form method="POST" action="/api/auth/logout">
         <button
@@ -234,7 +235,15 @@ const smsFirstName = consultantName ? consultantName.trim().split(/\s+/)[0] || c
       </form>
     </PortalHeader>
 
-    <main class="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+    <main id="main" role="main" class="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+      <a
+        href="/portal/invoices"
+        aria-label="All invoices"
+        class="inline-flex items-center gap-1 min-h-11 px-2 -mx-2 mb-4 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-lg"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+        All invoices
+      </a>
       <div class="grid grid-cols-1 md:grid-cols-[720px_1fr] gap-8 md:gap-12 items-start">
         <!-- Main column -->
         <section class="flex flex-col gap-8 min-w-0">

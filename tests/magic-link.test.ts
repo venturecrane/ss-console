@@ -140,10 +140,10 @@ describe('magic-link: portal login page', () => {
     expect(source).not.toContain('type="password"')
   })
 
-  it('is branded with SMD Services Client Portal', () => {
+  it('is branded with SMD Services and identifies as the client portal sign-in', () => {
     const source = readFileSync(resolve('src/pages/auth/portal-login.astro'), 'utf-8')
     expect(source).toContain('SMD Services')
-    expect(source).toContain('Client Portal')
+    expect(source).toContain('Client portal sign-in')
   })
 
   it('is not indexed by search engines', () => {
