@@ -14,31 +14,31 @@ Author: recommender. Execution belongs to engineer(s) after Captain approval.
 
 ## Summary of recommendations
 
-| #   | Item                                               | Recommendation                                     | Notes                                                                                |
-| --- | -------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| 1   | Backfill strategy for existing quotes              | **Option A** (null backfill + follow-on)           | Pre-launch. No contractual clients yet. Line-items fallback removable in follow-on.  |
-| 2   | Brand "SMD Services" centralization                | **Centralize behind `BRAND_NAME` constant**        | Brand stays. One PR, ~18 occurrences, mechanical.                                    |
-| 3   | "Scott Durgan" hardcoded fallback                  | **Require `engagements.consultant_name`**          | Remove fallback. Matches §6 "we / our team" voice.                                   |
-| 4   | "Receipt attached" phrase                          | **REMOVE from all three portal surfaces**          | False claim. Portal doesn't attach receipts.                                         |
-| 5   | SOW PDF fixed timeframes                           | **CLAUDE.md §3 does NOT apply to signed SOW**      | SOWs are contracts. Keep timeframes. Audit only external marketing content.          |
-| 6   | "support window" phrase                            | **REMOVE the phrase, keep the sentiment**          | Same cadence email, rewrite without bounded-scope framing.                           |
-| 7   | #341 lifecycle stage count                         | CHECK-AND-RECLOSE                                  | Stage-count discrepancy is cosmetic. Walkthrough comment confirms completion.        |
-| 8   | #217 backup size 435KB vs 700KB                    | CHECK-AND-RECLOSE                                  | 435KB is complete for solo-operator volume. Threshold was an estimate, not a floor.  |
-| 9   | #68 headcount soft warning                         | FORCE-CLOSE-WITH-RATIONALE                         | ICP moved to revenue; headcount warning is obsolete.                                 |
-| 10  | #69 engagement-role assignment UI                  | REOPEN                                             | Real feature gap. Multi-contact engagements need it before #77 closes cleanly.       |
-| 11  | #70 financial-prerequisite soft warning            | FORCE-CLOSE-WITH-RATIONALE                         | Decision #6 is the gate; UI reminder is nice-to-have, not load-bearing.              |
-| 12  | #79 parking-lot admin UI                           | REOPEN                                             | Table exists, admin surface was never built. Needed before first real engagement.    |
-| 13  | #83 Claude-API extraction trigger                  | FORCE-CLOSE-WITH-RATIONALE                         | Manual paste works pre-launch; automated trigger is Phase 5 per issue spec.          |
-| 14  | #77 engagement contact roles                       | Same as #69 — blocked by REOPEN of #69             | Don't touch #77 until #69's UI lands.                                                |
-| 15  | #80 presigned URLs for documents                   | CHECK-AND-RECLOSE                                  | Stream-through is a functional equivalent; presigned is a post-launch optimization.  |
-| 16  | #78 time-entry admin UI                            | REOPEN                                             | API exists, UI doesn't. Needed to honor estimated-vs-actual ACs on first engagement. |
-| 17  | #364 SMS SLA + vacation fallback                   | **Captain must confirm SLA; write fallback doc**   | Editorial commitment. Not closeable without Captain answer.                          |
-| 18  | #368 Scott's photo deployed                        | **Captain must confirm**                           | Runtime check; trivial to verify in the admin UI.                                    |
-| 19  | #226 7-day monitoring + delete `intake.ts`         | CHECK-AND-RECLOSE; delete `intake.ts` in follow-on | 30-day thin-adapter window expires 2026-04-24; one-line PR.                          |
-| 20  | Branch protection on main (manual)                 | **Manual — confirmed**                             | GitHub Settings UI. Exact click path below.                                          |
-| 21  | Stitch API key rotation                            | **Manual — confirmed**                             | Stitch web console. Rotate, then ship .gitignore PR.                                 |
-| 22  | Global guardrails update (scribe's proposed text)  | **Automatable — confirmed**                        | Upload script exists in sibling repos. Two-step execution below.                     |
-| 23  | Anything else missed from #377 acceptance criteria | Five items                                         | Called out in Part 5.                                                                |
+| #   | Item                                               | Recommendation                                     | Notes                                                                                                   |
+| --- | -------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 1   | Backfill strategy for existing quotes              | **Option A** (null backfill + follow-on)           | Pre-launch. No contractual clients yet. Line-items fallback removable in follow-on.                     |
+| 2   | Brand "SMD Services" centralization                | **Centralize behind `BRAND_NAME` constant**        | Brand stays. One PR, ~18 occurrences, mechanical.                                                       |
+| 3   | "Scott Durgan" hardcoded fallback                  | **Require `engagements.consultant_name`**          | Remove fallback. Matches §6 "we / our team" voice.                                                      |
+| 4   | "Receipt attached" phrase                          | **REMOVE from all three portal surfaces**          | False claim. Portal doesn't attach receipts.                                                            |
+| 5   | SOW PDF fixed timeframes                           | **CLAUDE.md §3 does NOT apply to signed SOW**      | SOWs are contracts. Keep timeframes. Audit only external marketing content.                             |
+| 6   | "support window" phrase                            | **REMOVE the phrase, keep the sentiment**          | Same cadence email, rewrite without bounded-scope framing.                                              |
+| 7   | #341 lifecycle stage count                         | CHECK-AND-RECLOSE                                  | Stage-count discrepancy is cosmetic. Walkthrough comment confirms completion.                           |
+| 8   | #217 backup size 435KB vs 700KB                    | CHECK-AND-RECLOSE                                  | 435KB is complete for solo-operator volume. Threshold was an estimate, not a floor.                     |
+| 9   | #68 headcount soft warning                         | FORCE-CLOSE-WITH-RATIONALE                         | ICP moved to revenue; headcount warning is obsolete.                                                    |
+| 10  | #69 engagement-role assignment UI                  | REOPEN                                             | Real feature gap. Multi-contact engagements need it before #77 closes cleanly.                          |
+| 11  | #70 financial-prerequisite soft warning            | FORCE-CLOSE-WITH-RATIONALE                         | Decision #6 is the gate; UI reminder is nice-to-have, not load-bearing.                                 |
+| 12  | #79 parking-lot admin UI                           | REOPEN                                             | Table exists, admin surface was never built. Needed before first real engagement.                       |
+| 13  | #83 Claude-API extraction trigger                  | FORCE-CLOSE-WITH-RATIONALE                         | Manual paste works pre-launch; automated trigger is Phase 5 per issue spec.                             |
+| 14  | #77 engagement contact roles                       | Same as #69 — blocked by REOPEN of #69             | Don't touch #77 until #69's UI lands.                                                                   |
+| 15  | #80 presigned URLs for documents                   | CHECK-AND-RECLOSE                                  | Stream-through is a functional equivalent; presigned is a post-launch optimization.                     |
+| 16  | #78 time-entry admin UI                            | REOPEN                                             | API exists, UI doesn't. Needed to honor estimated-vs-actual ACs on first engagement.                    |
+| 17  | #364 SMS SLA + vacation fallback                   | **Captain must confirm SLA; write fallback doc**   | Editorial commitment. Not closeable without Captain answer.                                             |
+| 18  | #368 Scott's photo deployed                        | **Captain must confirm**                           | Runtime check; trivial to verify in the admin UI.                                                       |
+| 19  | #226 7-day monitoring + delete `intake.ts`         | CHECK-AND-RECLOSE; delete `intake.ts` in follow-on | 30-day thin-adapter window expires 2026-04-24; one-line PR.                                             |
+| 20  | Branch protection on main (manual)                 | **Manual — confirmed**                             | GitHub Settings UI. Exact click path below.                                                             |
+| 21  | Stitch API key rotation                            | **Manual — confirmed**                             | Key is in local working-tree only, NOT git history. Rotate via Stitch console, then ship .gitignore PR. |
+| 22  | Global guardrails update (scribe's proposed text)  | **Automatable — confirmed**                        | Upload script exists in sibling repos. Two-step execution below.                                        |
+| 23  | Anything else missed from #377 acceptance criteria | Five items                                         | Called out in Part 5.                                                                                   |
 
 ---
 
@@ -368,31 +368,35 @@ will be in the list.
 
 ### 4.2 Stitch API key rotation — **MANUAL, confirmed**
 
-The Stitch API key is currently committed in `.mcp.json` in plaintext
-(see `.mcp.json`). Rotation requires the Stitch web console —
-there is no CLI rotation flow.
+The Stitch API key is present in the user's local `.mcp.json` working-tree
+modification. It is **not** in git history — `git show HEAD:.mcp.json`
+shows only the `crane` server with empty env, and
+`git log --all -p -- .mcp.json` contains no `AIzaSy` or `STITCH_API_KEY`
+matches. No history scrub is needed. Rotation is still worth doing: the
+key has been visible in agent transcripts that ran from this working
+tree, and one accidental `git add .` would track it. Rotation requires
+the Stitch web console — there is no CLI rotation flow.
 
 **Sequence Captain should follow:**
 
 1. Open Stitch at https://stitch.withgoogle.com/ (or the console the key
    was issued from — check the key-issuance thread in Bitwarden for the
    exact URL if uncertain).
-2. Revoke key `AIzaSy[redacted]` and generate a new one.
+2. Revoke the current key and generate a new one.
 3. Put the new key on the clipboard (do not paste into chat).
 4. An agent then ships a follow-on PR that:
-   - Adds `.mcp.json` to `.gitignore`
-   - Runs `git rm --cached .mcp.json`
+   - Adds `.mcp.json` to `.gitignore` so future edits stay untracked
    - Adds `.mcp.json.example` with the schema but no key (stub value)
    - Updates the repo README / CLAUDE.md setup section to reference the
      example file
 5. Captain repopulates local `.mcp.json` with the new key.
 
-**Timing recommendation.** Rotate within the next session. The key has
-been public in the git history since commit `c04a468` (the initial
-"chore: initialize ss console structure" commit). A public Google API key
-with Stitch scope is lower risk than, say, a Resend or Stripe key — but
-it's still a leaked credential in a public repo, and every additional day
-is incremental exposure.
+Note: `git rm --cached .mcp.json` is not needed — the HEAD version is
+already key-free. The .gitignore change is purely forward-looking.
+
+**Timing recommendation.** Rotate within the next session. Low-severity
+exposure (working-tree + transcripts, not git history), but cheap to
+close.
 
 ### 4.3 Global guardrails update — **AUTOMATABLE, confirmed**
 
