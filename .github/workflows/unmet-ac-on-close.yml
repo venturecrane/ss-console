@@ -1,0 +1,121 @@
+name: Unmet AC on close
+
+# #377 Move 2 — block issue-close when ACs are unchecked.
+#
+# When an issue is closed, parse its body for the "Acceptance criteria"
+# section. If any `- [ ]` items remain, reopen the issue and comment with
+# the unchecked list. Override available via the `force-close` label
+# applied before close (visible decision, not silent omission).
+#
+# Rationale: the retroactive sweep on 2026-04-15 found that 95% of closed
+# issues with an Acceptance criteria section had unchecked items at close
+# time. The convention existed on paper, didn't exist in practice. This
+# workflow makes it exist in practice.
+
+on:
+  issues:
+    types: [closed]
+
+permissions:
+  issues: write
+
+jobs:
+  check:
+    name: Reopen if ACs unchecked
+    runs-on: ubuntu-latest
+    # Don't loop: skip if the close-event came from us reopening then the
+    # user re-closing without changes — the override-label exit handles that.
+    steps:
+      - name: Inspect issue for unchecked AC items
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const OVERRIDE_LABEL = 'force-close';
+            const REOPEN_LABEL = 'closed-with-unmet-ac';
+            const H2 = /^##\s+(.+?)\s*$/gm;
+            const UNCHECKED = /^\s*-\s+\[ \]\s+(.+?)\s*$/gm;
+
+            const issue = context.payload.issue;
+            const labelNames = (issue.labels || []).map(l => l.name);
+
+            if (labelNames.includes(OVERRIDE_LABEL)) {
+              core.info(
+                `Issue #${issue.number} has '${OVERRIDE_LABEL}' label — ` +
+                `closure approved without AC check.`
+              );
+              return;
+            }
+
+            const body = issue.body || '';
+            // Find an H2 whose text starts with "Acceptance" (case-insensitive).
+            const headings = [...body.matchAll(H2)];
+            let acStart = -1;
+            let acEnd = body.length;
+            for (let i = 0; i < headings.length; i++) {
+              const text = headings[i][1].trim().toLowerCase();
+              if (text.startsWith('acceptance')) {
+                acStart = headings[i].index + headings[i][0].length;
+                if (i + 1 < headings.length) acEnd = headings[i + 1].index;
+                break;
+              }
+            }
+
+            if (acStart === -1) {
+              core.info(
+                `Issue #${issue.number} has no 'Acceptance criteria' section — ` +
+                `nothing to enforce.`
+              );
+              return;
+            }
+
+            const section = body.slice(acStart, acEnd);
+            const unchecked = [...section.matchAll(UNCHECKED)].map(m => m[1].trim());
+
+            if (unchecked.length === 0) {
+              core.info(
+                `Issue #${issue.number}: AC section present, all items checked. ✓`
+              );
+              return;
+            }
+
+            const list = unchecked.map(item => `- [ ] ${item}`).join('\n');
+            const commentBody =
+              `### Closed with unmet acceptance criteria\n\n` +
+              `Per [#377 Move 2](https://github.com/${context.repo.owner}/${context.repo.repo}/issues/377), this issue was closed with **${unchecked.length}** unchecked AC item(s) and has been reopened. The convention exists for a reason — agents and reviewers route around it when nothing costs them at close time.\n\n` +
+              `Unchecked items:\n\n${list}\n\n` +
+              `**To proceed:**\n\n` +
+              `1. Verify and check each item, OR\n` +
+              `2. Edit the issue body to remove ACs that no longer apply (with a comment explaining why), OR\n` +
+              `3. Add the \`${OVERRIDE_LABEL}\` label and re-close — this is a visible scope decision, not a silent omission. Include a comment with the rationale.`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: commentBody,
+            });
+
+            // Best-effort label add (label may not exist yet — don't fail).
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: [REOPEN_LABEL],
+              });
+            } catch (e) {
+              core.warning(
+                `Could not add '${REOPEN_LABEL}' label (may not exist yet): ${e.message}`
+              );
+            }
+
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              state: 'open',
+            });
+
+            core.notice(
+              `Reopened issue #${issue.number}: ${unchecked.length} unchecked AC item(s).`
+            );
