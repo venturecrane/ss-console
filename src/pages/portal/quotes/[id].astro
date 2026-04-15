@@ -3,6 +3,7 @@ import '../../../styles/global.css'
 import PortalHeader from '../../../components/portal/PortalHeader.astro'
 import MoneyDisplay from '../../../components/portal/MoneyDisplay.astro'
 import ConsultantBlock from '../../../components/portal/ConsultantBlock.astro'
+import { BRAND_NAME } from '../../../lib/config/brand'
 import { getPortalClient } from '../../../lib/portal/session'
 import { getQuoteForEntity, parseSchedule, parseDeliverables } from '../../../lib/db/quotes'
 import type { LineItem, ScheduleRow, DeliverableRow } from '../../../lib/db/quotes'
@@ -97,8 +98,9 @@ const engagementSubtitle =
     ? `A focused scope across ${deliverables.length} work areas tailored to your operation.`
     : 'A focused scope of work tailored to your operation.'
 
-const consultantName = 'Scott Durgan'
-const consultantFirst = consultantName.split(/\s+/)[0]
+// Attribution comes from the engagement row (below). Quotes that aren't
+// yet attached to an engagement render a blank attribution block per #377
+// — no hardcoded fallback identity.
 
 // Pull engagement for consultant metadata + scope_summary so the signed-state
 // "what happens next" copy is concrete. The engagement row joins by quote_id
@@ -125,6 +127,9 @@ const engagement = await env.DB.prepare(
 )
   .bind(quote.id)
   .first<EngagementLookupRow>()
+
+const consultantName = engagement?.consultant_name ?? null
+const consultantFirst = consultantName ? consultantName.split(/\s+/)[0] || consultantName : null
 
 // Superseded: a newer quote on the same engagement / parent chain. We look
 // up a child quote whose parent_quote_id points at this one OR (fallback) a
@@ -184,14 +189,14 @@ const headerSmsHref = consultantPhone ? `sms:${consultantPhone.replace(/[^+\d]/g
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
       rel="stylesheet"
     />
-    <title>Proposal — Portal — SMD Services</title>
+    <title>Proposal — Portal — {BRAND_NAME}</title>
   </head>
   <body class="min-h-screen bg-[color:var(--color-background)]">
     <PortalHeader
       clientName={client.name}
-      showSms={!!headerSmsHref && !isSigned}
+      showSms={!!headerSmsHref && !isSigned && !!consultantFirst}
       smsHref={headerSmsHref ?? undefined}
-      smsLabel={headerSmsHref ? `Text ${consultantFirst}` : undefined}
+      smsLabel={headerSmsHref && consultantFirst ? `Text ${consultantFirst}` : undefined}
     >
       <span class="text-sm text-[color:var(--color-text-secondary)] hidden sm:inline"
         >{session.email}</span
@@ -421,20 +426,26 @@ const headerSmsHref = consultantPhone ? `sms:${consultantPhone.replace(/[^+\d]/g
           }
 
           <!-- Consultant block (mobile — above footer; desktop hides here, shown in rail) -->
-          <div class="lg:hidden pt-2">
-            <div class="h-px bg-[color:var(--color-border)] mb-8"></div>
-            <ConsultantBlock
-              name={engagement?.consultant_name ?? consultantName}
-              photoUrl={engagement?.consultant_photo_url ?? null}
-              role={engagement?.consultant_role ?? 'Your consultant'}
-              nextTouchpointAt={engagement?.next_touchpoint_at ?? null}
-              nextTouchpointLabel={engagement?.next_touchpoint_label ?? null}
-              phone={engagement?.consultant_phone ?? null}
-            />
-            <p class="mt-4 text-[13px] leading-[18px] text-[color:var(--color-text-muted)]">
-              Text {consultantFirst} with questions.
-            </p>
-          </div>
+          {
+            consultantName && (
+              <div class="lg:hidden pt-2">
+                <div class="h-px bg-[color:var(--color-border)] mb-8" />
+                <ConsultantBlock
+                  name={consultantName}
+                  photoUrl={engagement?.consultant_photo_url ?? null}
+                  role={engagement?.consultant_role ?? null}
+                  nextTouchpointAt={engagement?.next_touchpoint_at ?? null}
+                  nextTouchpointLabel={engagement?.next_touchpoint_label ?? null}
+                  phone={engagement?.consultant_phone ?? null}
+                />
+                {consultantFirst && (
+                  <p class="mt-4 text-[13px] leading-[18px] text-[color:var(--color-text-muted)]">
+                    Text {consultantFirst} with questions.
+                  </p>
+                )}
+              </div>
+            )
+          }
 
           <!-- Back link -->
           <div class="pt-4">
@@ -549,17 +560,25 @@ const headerSmsHref = consultantPhone ? `sms:${consultantPhone.replace(/[^+\d]/g
             </div>
 
             <!-- Consultant card -->
-            <ConsultantBlock
-              name={engagement?.consultant_name ?? consultantName}
-              photoUrl={engagement?.consultant_photo_url ?? null}
-              role={engagement?.consultant_role ?? 'Your consultant'}
-              nextTouchpointAt={engagement?.next_touchpoint_at ?? null}
-              nextTouchpointLabel={engagement?.next_touchpoint_label ?? null}
-              phone={engagement?.consultant_phone ?? null}
-            />
-            <p class="text-[13px] leading-[18px] text-[color:var(--color-text-muted)] px-1">
-              Text {consultantFirst} with questions.
-            </p>
+            {
+              consultantName && (
+                <>
+                  <ConsultantBlock
+                    name={consultantName}
+                    photoUrl={engagement?.consultant_photo_url ?? null}
+                    role={engagement?.consultant_role ?? null}
+                    nextTouchpointAt={engagement?.next_touchpoint_at ?? null}
+                    nextTouchpointLabel={engagement?.next_touchpoint_label ?? null}
+                    phone={engagement?.consultant_phone ?? null}
+                  />
+                  {consultantFirst && (
+                    <p class="text-[13px] leading-[18px] text-[color:var(--color-text-muted)] px-1">
+                      Text {consultantFirst} with questions.
+                    </p>
+                  )}
+                </>
+              )
+            }
           </div>
         </aside>
       </div>

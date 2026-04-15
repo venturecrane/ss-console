@@ -15,6 +15,7 @@
 
 import React from 'react'
 import { Document, Page, View, Text } from '@formepdf/react'
+import { BRAND_NAME } from '../config/brand'
 import { SIGNING_PAGE } from './signing-layout'
 
 // ---------------------------------------------------------------------------
@@ -161,7 +162,7 @@ export function SOWTemplate(props: SOWTemplateProps) {
                 color: colors.primary,
               }}
             >
-              SMD Services
+              {BRAND_NAME}
             </Text>
             <Text
               style={{
@@ -432,7 +433,7 @@ export function SOWTemplate(props: SOWTemplateProps) {
         >
           <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 8 }} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={finePrintStyle}>SMD Services | smd.services</Text>
+            <Text style={finePrintStyle}>{BRAND_NAME} | smd.services</Text>
             <Text style={finePrintStyle}>{doc.sowNumber} | Page 1 of 3</Text>
           </View>
         </View>
@@ -549,7 +550,7 @@ export function SOWTemplate(props: SOWTemplateProps) {
         >
           <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 8 }} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={finePrintStyle}>SMD Services | smd.services</Text>
+            <Text style={finePrintStyle}>{BRAND_NAME} | smd.services</Text>
             <Text style={finePrintStyle}>{doc.sowNumber} | Page 2 of 3</Text>
           </View>
         </View>
@@ -576,7 +577,7 @@ export function SOWTemplate(props: SOWTemplateProps) {
         <Text style={sectionHeadingStyle}>AGREEMENT</Text>
         <Text style={{ ...bodyTextStyle, marginBottom: 16 }}>
           By signing below, the client agrees to the scope, timeline, pricing, and terms described
-          in this document. SMD Services agrees by presenting this Statement of Work for signature.
+          in this document. {BRAND_NAME} agrees by presenting this Statement of Work for signature.
         </Text>
         <View style={{ width: SIGNING_PAGE.columnWidth }}>
           <Text
@@ -631,7 +632,7 @@ export function SOWTemplate(props: SOWTemplateProps) {
               lineHeight: 1.4,
             }}
           >
-            SMD Services assents to this agreement by presenting this Statement of Work for
+            {BRAND_NAME} assents to this agreement by presenting this Statement of Work for
             signature.
           </Text>
         </View>
@@ -647,7 +648,7 @@ export function SOWTemplate(props: SOWTemplateProps) {
         >
           <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 8 }} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={finePrintStyle}>SMD Services | smd.services</Text>
+            <Text style={finePrintStyle}>{BRAND_NAME} | smd.services</Text>
             <Text style={finePrintStyle}>{doc.sowNumber} | Page 3 of 3</Text>
           </View>
         </View>

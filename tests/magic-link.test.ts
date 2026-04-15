@@ -101,7 +101,7 @@ describe('magic-link: email module', () => {
 
   it('magic link email template is branded', () => {
     const source = readFileSync(resolve('src/lib/email/templates.ts'), 'utf-8')
-    expect(source).toContain('SMD Services')
+    expect(source).toContain('BRAND_NAME')
     expect(source).toContain('Client Portal')
   })
 
@@ -260,9 +260,9 @@ describe('magic-link: portal page', () => {
     expect(source).toContain('noindex')
   })
 
-  it('portal page is branded with SMD Services Portal', () => {
+  it('portal page is branded via BRAND_NAME', () => {
     const source = readFileSync(resolve('src/pages/portal/index.astro'), 'utf-8')
-    expect(source).toContain('SMD Services')
+    expect(source).toContain('BRAND_NAME')
     expect(source).toContain('Portal')
   })
 })

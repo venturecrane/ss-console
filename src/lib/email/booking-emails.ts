@@ -7,6 +7,7 @@
  * try/catch and log failures without blocking the booking flow.
  */
 
+import { BRAND_NAME } from '../config/brand'
 import { sendEmail } from './resend'
 import type { SendResult, EmailAttachment } from './resend'
 import {
@@ -46,7 +47,7 @@ export async function sendBookingConfirmation(
 
   return sendEmail(apiKey, {
     to: input.guestEmail,
-    subject: `Confirmed: ${input.meetingLabel} with SMD Services`,
+    subject: `Confirmed: ${input.meetingLabel} with ${BRAND_NAME}`,
     html,
     ...(attachments.length > 0 ? { attachments } : {}),
   })
@@ -74,7 +75,7 @@ export async function sendBookingReschedule(
 
   return sendEmail(apiKey, {
     to: input.guestEmail,
-    subject: `Rescheduled: ${input.meetingLabel} with SMD Services`,
+    subject: `Rescheduled: ${input.meetingLabel} with ${BRAND_NAME}`,
     html,
     ...(attachments.length > 0 ? { attachments } : {}),
   })
@@ -102,7 +103,7 @@ export async function sendBookingCancellation(
 
   return sendEmail(apiKey, {
     to: input.guestEmail,
-    subject: 'Cancelled: Assessment call with SMD Services',
+    subject: `Cancelled: Assessment call with ${BRAND_NAME}`,
     html,
     ...(attachments.length > 0 ? { attachments } : {}),
   })

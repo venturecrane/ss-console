@@ -48,6 +48,29 @@ describe('resolveInvoiceState', () => {
     expect(surface.state).toBe('default')
   })
 
+  it('omits the text-first-name CTA when firstName is null', () => {
+    const declined = resolveInvoiceState(
+      { paid_at: null },
+      new URLSearchParams('?state=declined'),
+      null
+    )
+    expect(declined.state).toBe('declined')
+    expect(declined.next.toLowerCase()).not.toContain('text ')
+
+    const expired = resolveInvoiceState(
+      { paid_at: null },
+      new URLSearchParams('?state=expired'),
+      null
+    )
+    expect(expired.state).toBe('expired')
+    expect(expired.next.toLowerCase()).not.toContain('text ')
+  })
+
+  it('paid next-step never claims a receipt is attached', () => {
+    const surface = resolveInvoiceState({ paid_at: '2026-04-10T00:00:00Z' }, null, 'Scott')
+    expect(surface.next.toLowerCase()).not.toContain('receipt attached')
+  })
+
   it('never surfaces raw provider text — copy is portal voice', () => {
     const surface = resolveInvoiceState(
       { paid_at: null },
@@ -126,6 +149,25 @@ describe('resolveProposalState', () => {
       'Scott'
     )
     expect(surface.state).toBe('default')
+  })
+
+  it('drops the text-first-name CTA when firstName is null', () => {
+    const declined = resolveProposalState(
+      { status: 'declined', accepted_at: null, expires_at: null },
+      null,
+      null
+    )
+    expect(declined.state).toBe('declined')
+    expect(declined.next.toLowerCase()).not.toContain('text ')
+
+    const past = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const expired = resolveProposalState(
+      { status: 'sent', accepted_at: null, expires_at: past },
+      null,
+      null
+    )
+    expect(expired.state).toBe('expired')
+    expect(expired.next.toLowerCase()).not.toContain('text ')
   })
 })
 

@@ -4,11 +4,13 @@
  * Sends emails via the Resend API (https://resend.com/docs/api-reference).
  * In dev/test environments (no RESEND_API_KEY), logs emails to console instead.
  *
- * Sender: SMD Services <team@smd.services>
+ * Sender name is sourced from BRAND_NAME (../config/brand.ts).
  */
 
+import { BRAND_NAME } from '../config/brand'
+
 const RESEND_API_URL = 'https://api.resend.com/emails'
-const SENDER = 'SMD Services <team@smd.services>'
+const SENDER = `${BRAND_NAME} <team@smd.services>`
 
 export interface EmailAttachment {
   filename: string

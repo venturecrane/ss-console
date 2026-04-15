@@ -5,6 +5,7 @@
  * Templates produce self-contained HTML emails with inline styles.
  * No external CSS or image dependencies.
  */
+import { BRAND_NAME } from '../config/brand'
 
 export interface FollowUpEmailData {
   clientName: string
@@ -27,12 +28,12 @@ function emailWrapper(body: string): string {
 <body style="margin:0;padding:0;background-color:#f8fafc;font-family:'Inter',Arial,sans-serif;">
   <div style="max-width:480px;margin:40px auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
     <div style="padding:32px 24px;">
-      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 24px;text-align:center;">SMD Services</h1>
+      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 24px;text-align:center;">${BRAND_NAME}</h1>
 ${body}
     </div>
     <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
       <p style="font-size:11px;color:#94a3b8;margin:0;">
-        &copy; ${new Date().getFullYear()} SMD Services &middot; Phoenix, AZ
+        &copy; ${new Date().getFullYear()} ${BRAND_NAME} &middot; Phoenix, AZ
       </p>
     </div>
   </div>
@@ -189,7 +190,7 @@ export function referralAskEmail(data: FollowUpEmailData): FollowUpEmail {
         Just reply to this email with their name and we'll take it from there.
       </p>
       <p style="font-size:12px;color:#94a3b8;margin:24px 0 0;text-align:center;">
-        Thank you for choosing SMD Services.
+        Thank you for choosing ${BRAND_NAME}.
       </p>`
 
   return {
@@ -210,7 +211,8 @@ export function safetyNetCheckinEmail(data: FollowUpEmailData): FollowUpEmail {
         We wanted to check in and see how things are going at ${data.businessName} since we wrapped up. Has the team settled into the new workflows?
       </p>
       <p style="font-size:15px;color:#334155;margin:0 0 24px;">
-        If anything needs adjusting or questions have come up, we're still here — that's what the support window is for. Reply to this email or reach out anytime.
+        If anything needs adjusting or questions have come up, we're still here.
+        Reply to this email or reach out anytime.
       </p>
       <div style="text-align:center;">
         <a href="${data.portalUrl}"
@@ -251,7 +253,7 @@ export function feedback30DayEmail(data: FollowUpEmailData): FollowUpEmail {
         Just reply to this email — a few sentences is all we need. Your feedback helps us get better, and we genuinely appreciate it.
       </p>
       <p style="font-size:12px;color:#94a3b8;margin:24px 0 0;text-align:center;">
-        Thank you for working with SMD Services.
+        Thank you for working with ${BRAND_NAME}.
       </p>`
 
   return {

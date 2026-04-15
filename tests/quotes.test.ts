@@ -251,7 +251,7 @@ describe('quotes: email template', () => {
 
   it('quote sent email includes proposal language', () => {
     const code = source()
-    expect(code).toContain('Your proposal from SMD Services is ready for review')
+    expect(code).toContain('Your proposal from ${BRAND_NAME} is ready for review')
   })
 
   it('quote sent email includes portal link', () => {

@@ -1,5 +1,6 @@
 ---
 import '../../../styles/global.css'
+import { BRAND_NAME } from '../../../lib/config/brand'
 import { getPortalClient } from '../../../lib/portal/session'
 import {
   getInvoiceForEntity,
@@ -94,8 +95,10 @@ const displayLineItems: InvoiceLineItem[] =
       ]
 
 // Consultant first name is needed early so we can thread it into the state
-// resolver's next-step copy.
-const consultantFirstEarly = (engagement?.consultant_name ?? 'Scott Durgan').trim().split(/\s+/)[0]
+// resolver's next-step copy. Null when the engagement has no consultant.
+const consultantFirstEarly = engagement?.consultant_name
+  ? engagement.consultant_name.trim().split(/\s+/)[0] || engagement.consultant_name
+  : null
 
 // Resolve the surface state once, up front. Everything below branches on it.
 const surface = resolveInvoiceState(invoice, Astro.url.searchParams, consultantFirstEarly)
@@ -182,9 +185,11 @@ const depositNote =
       })} already received.`
     : null
 
-// Consultant block props (ConsultantBlock never renders initials)
-const consultantName = engagement?.consultant_name ?? 'Scott Durgan'
-const consultantRole = engagement?.consultant_role ?? 'Consultant, SMD Services'
+// Consultant block props. When the engagement has no consultant_name, the
+// block is hidden entirely (empty-state pattern) rather than rendering a
+// hardcoded fallback identity.
+const consultantName = engagement?.consultant_name ?? null
+const consultantRole = engagement?.consultant_role ?? null
 const consultantPhotoUrl = engagement?.consultant_photo_url ?? null
 const consultantPhone = engagement?.consultant_phone ?? null
 const nextTouchpointAt = engagement?.next_touchpoint_at ?? null
@@ -192,7 +197,7 @@ const nextTouchpointLabel = engagement?.next_touchpoint_label ?? null
 
 // PortalHeader SMS link (mobile thumb-zone affordance)
 const smsHref = consultantPhone ? `sms:${consultantPhone.replace(/[^+\d]/g, '')}` : null
-const smsFirstName = consultantName.trim().split(/\s+/)[0] || consultantName
+const smsFirstName = consultantName ? consultantName.trim().split(/\s+/)[0] || consultantName : null
 ---
 
 <!doctype html>
@@ -210,14 +215,14 @@ const smsFirstName = consultantName.trim().split(/\s+/)[0] || consultantName
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
       rel="stylesheet"
     />
-    <title>Invoice — SMD Services</title>
+    <title>Invoice — {BRAND_NAME}</title>
   </head>
   <body class="min-h-screen bg-[color:var(--color-background)]">
     <PortalHeader
       clientName={client.name}
-      showSms={!!smsHref && !isPaid}
+      showSms={!!smsHref && !isPaid && !!smsFirstName}
       smsHref={smsHref ?? undefined}
-      smsLabel={smsHref ? `Text ${smsFirstName}` : undefined}
+      smsLabel={smsHref && smsFirstName ? `Text ${smsFirstName}` : undefined}
     >
       <form method="POST" action="/api/auth/logout">
         <button
@@ -262,7 +267,7 @@ const smsFirstName = consultantName.trim().split(/\s+/)[0] || consultantName
             {
               isPaid && paidShortDate && (
                 <p class="mt-3 text-[13px] leading-[18px] font-medium text-[color:var(--color-complete)]">
-                  Paid {paidShortDate}. Receipt attached.
+                  Paid {paidShortDate}.
                 </p>
               )
             }
@@ -406,16 +411,20 @@ const smsFirstName = consultantName.trim().split(/\s+/)[0] || consultantName
           </div>
 
           <!-- Mobile-only consultant block (desktop renders it in the rail) -->
-          <div class="md:hidden">
-            <ConsultantBlock
-              name={consultantName}
-              photoUrl={consultantPhotoUrl}
-              role={consultantRole}
-              nextTouchpointAt={nextTouchpointAt}
-              nextTouchpointLabel={nextTouchpointLabel}
-              phone={consultantPhone}
-            />
-          </div>
+          {
+            consultantName && (
+              <div class="md:hidden">
+                <ConsultantBlock
+                  name={consultantName}
+                  photoUrl={consultantPhotoUrl}
+                  role={consultantRole}
+                  nextTouchpointAt={nextTouchpointAt}
+                  nextTouchpointLabel={nextTouchpointLabel}
+                  phone={consultantPhone}
+                />
+              </div>
+            )
+          }
 
           <!-- Mobile-only back link -->
           <a
@@ -443,7 +452,7 @@ const smsFirstName = consultantName.trim().split(/\s+/)[0] || consultantName
                 </div>
                 {paidShortDate && (
                   <p class="mt-6 text-[13px] text-[color:var(--color-text-muted)]">
-                    Paid {paidShortDate}. Receipt attached.
+                    Paid {paidShortDate}.
                   </p>
                 )}
               </div>
@@ -502,14 +511,18 @@ const smsFirstName = consultantName.trim().split(/\s+/)[0] || consultantName
             )
           }
 
-          <ConsultantBlock
-            name={consultantName}
-            photoUrl={consultantPhotoUrl}
-            role={consultantRole}
-            nextTouchpointAt={nextTouchpointAt}
-            nextTouchpointLabel={nextTouchpointLabel}
-            phone={consultantPhone}
-          />
+          {
+            consultantName && (
+              <ConsultantBlock
+                name={consultantName}
+                photoUrl={consultantPhotoUrl}
+                role={consultantRole}
+                nextTouchpointAt={nextTouchpointAt}
+                nextTouchpointLabel={nextTouchpointLabel}
+                phone={consultantPhone}
+              />
+            )
+          }
 
           <a
             href="/portal"

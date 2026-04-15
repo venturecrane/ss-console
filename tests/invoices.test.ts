@@ -570,7 +570,7 @@ describe('invoices: email templates', () => {
   })
 
   it('invoiceSentEmailHtml mentions invoice is ready', () => {
-    expect(source()).toContain('invoice from SMD Services')
+    expect(source()).toContain('invoice from ${BRAND_NAME}')
   })
 
   it('exports paymentConfirmationEmailHtml function', () => {

@@ -1,5 +1,6 @@
 ---
 import '../../../styles/global.css'
+import { BRAND_NAME } from '../../../lib/config/brand'
 import { listEngagements } from '../../../lib/db/engagements'
 import { listDocuments } from '../../../lib/storage/r2'
 import { getPortalClient } from '../../../lib/portal/session'
@@ -89,7 +90,7 @@ function formatDate(iso: string): string {
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <title>Documents — SMD Services</title>
+    <title>Documents — {BRAND_NAME}</title>
   </head>
   <body class="min-h-screen bg-slate-50">
     <header class="bg-white border-b border-slate-200">
@@ -98,7 +99,7 @@ function formatDate(iso: string): string {
           <a
             href="/portal"
             class="text-lg font-bold text-slate-900 hover:text-primary transition-colors"
-            >SMD Services</a
+            >{BRAND_NAME}</a
           >
           <span class="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">Portal</span>
         </div>

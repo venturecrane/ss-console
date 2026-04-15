@@ -1,5 +1,6 @@
 ---
 import '../../../styles/global.css'
+import { BRAND_NAME } from '../../../lib/config/brand'
 import { getPortalClient } from '../../../lib/portal/session'
 import { listQuotesForEntity } from '../../../lib/db/quotes'
 import type { Quote } from '../../../lib/db/quotes'
@@ -56,14 +57,14 @@ const statusLabelMap: Record<string, string> = {
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <title>Proposals — Portal — SMD Services</title>
+    <title>Proposals — Portal — {BRAND_NAME}</title>
   </head>
   <body class="min-h-screen bg-slate-50">
     <header class="bg-white border-b border-slate-200">
       <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <a href="/portal" class="text-lg font-bold text-slate-900 hover:text-slate-700"
-            >SMD Services</a
+            >{BRAND_NAME}</a
           >
           <span class="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">Portal</span>
         </div>

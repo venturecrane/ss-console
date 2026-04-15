@@ -264,7 +264,7 @@ describe('sow-template: signature block', () => {
 
   it('includes agreement text', () => {
     expect(source()).toContain('By signing below, the client agrees')
-    expect(source()).toContain('SMD Services agrees by presenting this Statement of Work')
+    expect(source()).toContain('{BRAND_NAME} agrees by presenting this Statement of Work')
   })
 })
 

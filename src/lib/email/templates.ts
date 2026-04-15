@@ -4,6 +4,7 @@
  * All templates produce self-contained HTML emails with inline styles.
  * No external CSS or image dependencies.
  */
+import { BRAND_NAME } from '../config/brand'
 
 /**
  * Build the magic link URL for token verification.
@@ -24,7 +25,7 @@ export function magicLinkEmailHtml(clientName: string, magicLinkUrl: string): st
 <body style="margin:0;padding:0;background-color:#f8fafc;font-family:'Inter',Arial,sans-serif;">
   <div style="max-width:480px;margin:40px auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
     <div style="padding:32px 24px;text-align:center;">
-      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">SMD Services</h1>
+      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">${BRAND_NAME}</h1>
       <p style="font-size:14px;color:#64748b;margin:0 0 24px;">Client Portal</p>
 
       <p style="font-size:15px;color:#334155;margin:0 0 8px;">
@@ -50,7 +51,7 @@ export function magicLinkEmailHtml(clientName: string, magicLinkUrl: string): st
     </div>
     <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
       <p style="font-size:11px;color:#94a3b8;margin:0;">
-        &copy; ${new Date().getFullYear()} SMD Services &middot; Phoenix, AZ
+        &copy; ${new Date().getFullYear()} ${BRAND_NAME} &middot; Phoenix, AZ
       </p>
     </div>
   </div>
@@ -69,14 +70,14 @@ export function quoteSentEmailHtml(clientName: string, portalUrl: string): strin
 <body style="margin:0;padding:0;background-color:#f8fafc;font-family:'Inter',Arial,sans-serif;">
   <div style="max-width:480px;margin:40px auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
     <div style="padding:32px 24px;text-align:center;">
-      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">SMD Services</h1>
+      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">${BRAND_NAME}</h1>
       <p style="font-size:14px;color:#64748b;margin:0 0 24px;">Client Portal</p>
 
       <p style="font-size:15px;color:#334155;margin:0 0 8px;">
         Hi${clientName ? ` ${clientName}` : ''},
       </p>
       <p style="font-size:15px;color:#334155;margin:0 0 24px;">
-        Your proposal from SMD Services is ready for review. Sign in to your portal to view the details.
+        Your proposal from ${BRAND_NAME} is ready for review. Sign in to your portal to view the details.
       </p>
 
       <a href="${portalUrl}"
@@ -92,7 +93,7 @@ export function quoteSentEmailHtml(clientName: string, portalUrl: string): strin
     </div>
     <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
       <p style="font-size:11px;color:#94a3b8;margin:0;">
-        &copy; ${new Date().getFullYear()} SMD Services &middot; Phoenix, AZ
+        &copy; ${new Date().getFullYear()} ${BRAND_NAME} &middot; Phoenix, AZ
       </p>
     </div>
   </div>
@@ -118,14 +119,14 @@ export function invoiceSentEmailHtml(
 <body style="margin:0;padding:0;background-color:#f8fafc;font-family:'Inter',Arial,sans-serif;">
   <div style="max-width:480px;margin:40px auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
     <div style="padding:32px 24px;text-align:center;">
-      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">SMD Services</h1>
+      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">${BRAND_NAME}</h1>
       <p style="font-size:14px;color:#64748b;margin:0 0 24px;">Client Portal</p>
 
       <p style="font-size:15px;color:#334155;margin:0 0 8px;">
         Hi${clientName ? ` ${clientName}` : ''},
       </p>
       <p style="font-size:15px;color:#334155;margin:0 0 24px;">
-        Your invoice from SMD Services for ${amount} is ready. Sign in to your portal to view the details and make a payment.
+        Your invoice from ${BRAND_NAME} for ${amount} is ready. Sign in to your portal to view the details and make a payment.
       </p>
 
       <a href="${portalUrl}"
@@ -141,7 +142,7 @@ export function invoiceSentEmailHtml(
     </div>
     <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
       <p style="font-size:11px;color:#94a3b8;margin:0;">
-        &copy; ${new Date().getFullYear()} SMD Services &middot; Phoenix, AZ
+        &copy; ${new Date().getFullYear()} ${BRAND_NAME} &middot; Phoenix, AZ
       </p>
     </div>
   </div>
@@ -159,7 +160,7 @@ export function paymentConfirmationEmailHtml(clientName: string, amount: string)
 <body style="margin:0;padding:0;background-color:#f8fafc;font-family:'Inter',Arial,sans-serif;">
   <div style="max-width:480px;margin:40px auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
     <div style="padding:32px 24px;text-align:center;">
-      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">SMD Services</h1>
+      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">${BRAND_NAME}</h1>
       <p style="font-size:14px;color:#64748b;margin:0 0 24px;">Client Portal</p>
 
       <p style="font-size:15px;color:#334155;margin:0 0 8px;">
@@ -178,7 +179,7 @@ export function paymentConfirmationEmailHtml(clientName: string, amount: string)
     </div>
     <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
       <p style="font-size:11px;color:#94a3b8;margin:0;">
-        &copy; ${new Date().getFullYear()} SMD Services &middot; Phoenix, AZ
+        &copy; ${new Date().getFullYear()} ${BRAND_NAME} &middot; Phoenix, AZ
       </p>
     </div>
   </div>
@@ -203,7 +204,7 @@ export function scorecardReportEmailHtml(
 <body style="margin:0;padding:0;background-color:#f8fafc;font-family:'Inter',Arial,sans-serif;">
   <div style="max-width:480px;margin:40px auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
     <div style="padding:32px 24px;text-align:center;">
-      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">SMD Services</h1>
+      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">${BRAND_NAME}</h1>
       <p style="font-size:14px;color:#64748b;margin:0 0 24px;">Operations Health Scorecard</p>
 
       <p style="font-size:15px;color:#334155;margin:0 0 8px;">
@@ -229,7 +230,7 @@ export function scorecardReportEmailHtml(
     </div>
     <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
       <p style="font-size:11px;color:#94a3b8;margin:0;">
-        &copy; ${new Date().getFullYear()} SMD Services &middot; Phoenix, AZ
+        &copy; ${new Date().getFullYear()} ${BRAND_NAME} &middot; Phoenix, AZ
       </p>
     </div>
   </div>
@@ -244,7 +245,7 @@ export function portalInvitationEmailHtml(clientName: string, magicLinkUrl: stri
 <body style="margin:0;padding:0;background-color:#f8fafc;font-family:'Inter',Arial,sans-serif;">
   <div style="max-width:480px;margin:40px auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
     <div style="padding:32px 24px;text-align:center;">
-      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">SMD Services</h1>
+      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">${BRAND_NAME}</h1>
       <p style="font-size:14px;color:#64748b;margin:0 0 24px;">Client Portal</p>
 
       <p style="font-size:15px;color:#334155;margin:0 0 8px;">
@@ -270,7 +271,7 @@ export function portalInvitationEmailHtml(clientName: string, magicLinkUrl: stri
     </div>
     <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
       <p style="font-size:11px;color:#94a3b8;margin:0;">
-        &copy; ${new Date().getFullYear()} SMD Services &middot; Phoenix, AZ
+        &copy; ${new Date().getFullYear()} ${BRAND_NAME} &middot; Phoenix, AZ
       </p>
     </div>
   </div>
@@ -297,7 +298,7 @@ export function portalWelcomeEmailHtml(clientName: string, loginUrl: string): st
 <body style="margin:0;padding:0;background-color:#f8fafc;font-family:'Inter',Arial,sans-serif;">
   <div style="max-width:480px;margin:40px auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
     <div style="padding:32px 24px;text-align:center;">
-      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">SMD Services</h1>
+      <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">${BRAND_NAME}</h1>
       <p style="font-size:14px;color:#64748b;margin:0 0 24px;">Client Portal</p>
 
       <p style="font-size:15px;color:#334155;margin:0 0 8px;">
@@ -323,7 +324,7 @@ export function portalWelcomeEmailHtml(clientName: string, loginUrl: string): st
     </div>
     <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
       <p style="font-size:11px;color:#94a3b8;margin:0;">
-        &copy; ${new Date().getFullYear()} SMD Services &middot; Phoenix, AZ
+        &copy; ${new Date().getFullYear()} ${BRAND_NAME} &middot; Phoenix, AZ
       </p>
     </div>
   </div>
@@ -376,7 +377,7 @@ export function bookingConfirmationEmailHtml(input: BookingConfirmationEmailInpu
   <div style="max-width:520px;margin:40px auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
     <div style="padding:32px 24px;">
       <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">You're booked.</h1>
-      <p style="font-size:14px;color:#64748b;margin:0 0 24px;">SMD Services &middot; ${meetingLabel}</p>
+      <p style="font-size:14px;color:#64748b;margin:0 0 24px;">${BRAND_NAME} &middot; ${meetingLabel}</p>
 
       <p style="font-size:15px;color:#334155;margin:0 0 16px;">Hi ${guestName},</p>
       <p style="font-size:15px;color:#334155;margin:0 0 16px;">
@@ -406,12 +407,12 @@ export function bookingConfirmationEmailHtml(input: BookingConfirmationEmailInpu
 
       <p style="font-size:13px;color:#64748b;margin:0;">
         Looking forward to talking,<br>
-        Scott Durgan &middot; SMD Services
+        ${BRAND_NAME}
       </p>
     </div>
     <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
       <p style="font-size:11px;color:#94a3b8;margin:0;">
-        &copy; ${new Date().getFullYear()} SMD Services &middot; Phoenix, AZ
+        &copy; ${new Date().getFullYear()} ${BRAND_NAME} &middot; Phoenix, AZ
       </p>
     </div>
   </div>
@@ -476,7 +477,7 @@ export function bookingRescheduledEmailHtml(input: BookingRescheduledEmailInput)
   <div style="max-width:520px;margin:40px auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
     <div style="padding:32px 24px;">
       <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">Your call has been rescheduled.</h1>
-      <p style="font-size:14px;color:#64748b;margin:0 0 24px;">SMD Services &middot; ${meetingLabel}</p>
+      <p style="font-size:14px;color:#64748b;margin:0 0 24px;">${BRAND_NAME} &middot; ${meetingLabel}</p>
 
       <p style="font-size:15px;color:#334155;margin:0 0 16px;">Hi ${guestName},</p>
       <p style="font-size:15px;color:#334155;margin:0 0 16px;">
@@ -508,7 +509,7 @@ export function bookingRescheduledEmailHtml(input: BookingRescheduledEmailInput)
     </div>
     <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
       <p style="font-size:11px;color:#94a3b8;margin:0;">
-        &copy; ${new Date().getFullYear()} SMD Services &middot; Phoenix, AZ
+        &copy; ${new Date().getFullYear()} ${BRAND_NAME} &middot; Phoenix, AZ
       </p>
     </div>
   </div>
@@ -539,7 +540,7 @@ export function bookingCancelledEmailHtml(input: BookingCancelledEmailInput): st
   <div style="max-width:520px;margin:40px auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
     <div style="padding:32px 24px;">
       <h1 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px;">Your call has been cancelled.</h1>
-      <p style="font-size:14px;color:#64748b;margin:0 0 24px;">SMD Services</p>
+      <p style="font-size:14px;color:#64748b;margin:0 0 24px;">${BRAND_NAME}</p>
 
       <p style="font-size:15px;color:#334155;margin:0 0 16px;">Hi ${guestName},</p>
       <p style="font-size:15px;color:#334155;margin:0 0 16px;">
@@ -552,12 +553,12 @@ export function bookingCancelledEmailHtml(input: BookingCancelledEmailInput): st
       </p>
 
       <p style="font-size:13px;color:#64748b;margin:0;">
-        — Scott Durgan &middot; SMD Services
+        — ${BRAND_NAME}
       </p>
     </div>
     <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
       <p style="font-size:11px;color:#94a3b8;margin:0;">
-        &copy; ${new Date().getFullYear()} SMD Services &middot; Phoenix, AZ
+        &copy; ${new Date().getFullYear()} ${BRAND_NAME} &middot; Phoenix, AZ
       </p>
     </div>
   </div>

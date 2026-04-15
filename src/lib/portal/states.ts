@@ -67,17 +67,18 @@ function readStateParam(params: SearchParamSource | null | undefined): string | 
  *   4. `default` — render the pay CTA
  *
  * The `firstName` arg is the consultant first name used in the next-step
- * copy ("Text {FirstName} for a refreshed link").
+ * copy ("Text {FirstName} for a refreshed link"). When null, the "text
+ * consultant" escalation collapses to a generic message.
  */
 export function resolveInvoiceState(
   invoice: InvoiceLike,
   params: SearchParamSource | null,
-  firstName: string
+  firstName: string | null
 ): InvoiceSurface {
   if (invoice.paid_at) {
     return {
       state: 'paid',
-      next: `Receipt attached. Head back to the engagement dashboard.`,
+      next: `Head back to the engagement dashboard.`,
     }
   }
 
@@ -86,7 +87,9 @@ export function resolveInvoiceState(
   if (hint === 'declined') {
     return {
       state: 'declined',
-      next: `Your card was declined. Try again, or text ${firstName} if this keeps happening.`,
+      next: firstName
+        ? `Your card was declined. Try again, or text ${firstName} if this keeps happening.`
+        : `Your card was declined. Try again.`,
     }
   }
 
@@ -100,7 +103,9 @@ export function resolveInvoiceState(
   if (hint === 'expired') {
     return {
       state: 'expired',
-      next: `This payment link has expired. Text ${firstName} for a refreshed link.`,
+      next: firstName
+        ? `This payment link has expired. Text ${firstName} for a refreshed link.`
+        : `This payment link has expired.`,
     }
   }
 
@@ -129,7 +134,7 @@ export function resolveInvoiceState(
 export function resolveProposalState(
   quote: QuoteLike,
   params: SearchParamSource | null,
-  firstName: string,
+  firstName: string | null,
   nextStepText: string | null = null
 ): ProposalSurface {
   const status = (quote.status ?? '').toLowerCase()
@@ -142,7 +147,9 @@ export function resolveProposalState(
   if (status === 'declined') {
     return {
       state: 'declined',
-      next: `Text ${firstName} if you'd like to talk through a revision.`,
+      next: firstName
+        ? `Text ${firstName} if you'd like to talk through a revision.`
+        : `Reach out if you'd like to talk through a revision.`,
     }
   }
 
@@ -160,7 +167,9 @@ export function resolveProposalState(
   if (serverExpired) {
     return {
       state: 'expired',
-      next: `This proposal has expired. Text ${firstName} to pick it back up.`,
+      next: firstName
+        ? `This proposal has expired. Text ${firstName} to pick it back up.`
+        : `This proposal has expired.`,
     }
   }
 
@@ -168,7 +177,9 @@ export function resolveProposalState(
   if (hint === 'expired') {
     return {
       state: 'expired',
-      next: `This proposal has expired. Text ${firstName} to pick it back up.`,
+      next: firstName
+        ? `This proposal has expired. Text ${firstName} to pick it back up.`
+        : `This proposal has expired.`,
     }
   }
 
