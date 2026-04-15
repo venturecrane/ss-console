@@ -90,6 +90,8 @@ Timeframes are scoped per engagement, just like pricing. Do not publish specific
 - **Do:** "We start with a conversation," "Hands-on training with your team"
 - **Don't:** "1-hour call," "10-day sprint," "60-minute training," "2-week support window"
 
+**Applies to marketing content only.** This rule does not apply to signed contractual documents (SOW PDFs, invoices, countersigned agreements). A signed SOW is a contract where specific timeframes are the product of the conversation, not marketing copy. Timeframes in signed documents stay as authored.
+
 ### 4. No published dollar amounts
 
 No dollar amounts appear on the website or in marketing materials. The client sees a project price in their proposal — never on a public page.
@@ -241,6 +243,8 @@ One Astro app, one Cloudflare Pages project, three custom domains. Routing is ha
 **Env vars.** `APP_BASE_URL` (marketing, SignWell webhooks), `ADMIN_BASE_URL` (OAuth redirect URI, outbound admin links — strict, no fallback), `PORTAL_BASE_URL` (portal links, falls back to `APP_BASE_URL`). See `src/lib/config/app-url.ts`.
 
 ## Local Dev
+
+`.mcp.json` is user-local config (gitignored). Create it in the repo root with at minimum the `crane` MCP entry. It is not checked in.
 
 Subdomain-based routing keys off `hostname.startsWith('admin.')` / `portal.`. At `localhost:4321` neither fires, which is usually fine — just hit `/admin/*` and `/portal/*` paths directly.
 
