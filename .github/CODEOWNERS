@@ -1,0 +1,9 @@
+# CODEOWNERS — routing-only
+# Per #377: client-facing rendering paths route to Captain for content
+# review. This is documentation of intent. Actual enforcement lives in:
+#   .github/workflows/scope-deferred-todo.yml
+#   .github/workflows/unmet-ac-on-close.yml
+
+src/pages/portal/**         @smdurgan-llc
+src/lib/portal/**           @smdurgan-llc
+src/components/portal/**    @smdurgan-llc
