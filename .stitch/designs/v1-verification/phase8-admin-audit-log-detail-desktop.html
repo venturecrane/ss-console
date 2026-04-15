@@ -1,0 +1,342 @@
+<!doctype html>
+
+<html class="light" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Audit Event #4721 | SMD Services Admin</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              'outline-variant': '#87b5f0',
+              'on-secondary-fixed': '#3f3f43',
+              'secondary-fixed-dim': '#d6d3d8',
+              'surface-tint': '#3755c3',
+              'on-tertiary-fixed': '#433b55',
+              'on-primary-fixed-variant': '#3352c0',
+              'surface-variant': '#d3e4ff',
+              'error-dim': '#4f0116',
+              'on-tertiary': '#fdf7ff',
+              'on-error': '#fff7f7',
+              'surface-container': '#e6eeff',
+              'secondary-dim': '#535356',
+              'on-primary': '#f8f7ff',
+              'primary-container': '#dde1ff',
+              'on-surface-variant': '#306197',
+              secondary: '#5f5e62',
+              'primary-fixed': '#dde1ff',
+              surface: '#f8f9ff',
+              'surface-bright': '#f8f9ff',
+              outline: '#4f7db5',
+              'on-surface': '#00345e',
+              'on-secondary-fixed-variant': '#5c5b5f',
+              'on-error-container': '#782232',
+              'primary-fixed-dim': '#cad2ff',
+              'surface-container-highest': '#d3e4ff',
+              'secondary-container': '#e4e1e6',
+              tertiary: '#635b77',
+              'inverse-on-surface': '#8f9eb4',
+              'surface-container-high': '#dce9ff',
+              'on-tertiary-container': '#564d69',
+              'on-primary-container': '#2747b6',
+              'inverse-surface': '#010f20',
+              'secondary-fixed': '#e4e1e6',
+              'surface-dim': '#c4dcff',
+              'tertiary-fixed-dim': '#dbcff0',
+              'tertiary-dim': '#574f6a',
+              'on-primary-fixed': '#0732a3',
+              'tertiary-container': '#e9ddff',
+              'error-container': '#ff8b9a',
+              error: '#9e3f4e',
+              background: '#f8f9ff',
+              'on-background': '#00345e',
+              'primary-dim': '#2848b7',
+              'on-tertiary-fixed-variant': '#605773',
+              'on-secondary-container': '#525155',
+              primary: '#3755c3',
+              'tertiary-fixed': '#e9ddff',
+              'on-secondary': '#fbf8fc',
+              'surface-container-lowest': '#ffffff',
+              'inverse-primary': '#6d89fa',
+              'surface-container-low': '#eff4ff',
+            },
+            borderRadius: {
+              DEFAULT: '0.125rem',
+              lg: '0.5rem',
+              xl: '0.5rem',
+              full: '9999px',
+            },
+            fontFamily: {
+              headline: ['Inter', 'sans-serif'],
+              body: ['Inter', 'sans-serif'],
+              label: ['Inter', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings:
+          'FILL' 0,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24;
+        vertical-align: middle;
+        font-size: 1.25rem;
+      }
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+      .code-block {
+        font-family: 'JetBrains Mono', monospace;
+      }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+    </style>
+  </head>
+  <body
+    class="bg-surface text-on-surface min-h-screen selection:bg-primary-container selection:text-on-primary-container"
+  >
+    <a
+      class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary focus:text-white focus:rounded-lg"
+      href="#main-content"
+    >
+      Skip to main content
+    </a>
+    <!-- TopNavBar (Shared Component) -->
+    <header
+      class="sticky top-0 z-50 flex items-center justify-between px-6 w-full h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800"
+    >
+      <div class="flex items-center gap-8">
+        <div class="flex items-center gap-3">
+          <span class="text-xl font-bold text-slate-900 dark:text-slate-50 tracking-tight"
+            >SMD Services</span
+          >
+          <span
+            class="bg-surface-container-high text-on-surface-variant text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest border border-outline-variant/20"
+            >Admin</span
+          >
+        </div>
+        <nav class="hidden md:flex items-center gap-6 h-16">
+          <a
+            class="text-slate-600 dark:text-slate-400 font-medium hover:text-blue-600 dark:hover:text-blue-300 transition-colors duration-200 h-full flex items-center"
+            href="#"
+            >Dashboard</a
+          >
+          <a
+            class="text-blue-700 dark:text-blue-400 border-b-2 border-blue-700 dark:border-blue-400 pb-0.5 font-semibold h-full flex items-center"
+            href="#"
+            >Entities</a
+          >
+          <a
+            class="text-slate-600 dark:text-slate-400 font-medium hover:text-blue-600 dark:hover:text-blue-300 transition-colors duration-200 h-full flex items-center"
+            href="#"
+            >Follow-ups</a
+          >
+          <a
+            class="text-slate-600 dark:text-slate-400 font-medium hover:text-blue-600 dark:hover:text-blue-300 transition-colors duration-200 h-full flex items-center"
+            href="#"
+            >Analytics</a
+          >
+        </nav>
+      </div>
+      <div class="flex items-center gap-4">
+        <span class="text-sm text-on-surface-variant font-medium">operator@smd-services.com</span>
+        <button
+          class="text-sm font-semibold text-primary hover:text-primary-dim transition-all active:scale-95"
+        >
+          Sign out
+        </button>
+      </div>
+    </header>
+    <main class="max-w-[1280px] mx-auto px-8 py-8" id="main-content">
+      <!-- Breadcrumbs -->
+      <nav aria-label="Breadcrumb" class="mb-6">
+        <ol class="flex items-center gap-2 text-sm text-on-surface-variant font-medium">
+          <li><a class="hover:text-primary transition-colors" href="#">Entities</a></li>
+          <li aria-hidden="true" class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-[16px] text-outline">chevron_right</span>
+            <a class="hover:text-primary transition-colors" href="#">Delgado Plumbing</a>
+          </li>
+          <li aria-current="page" class="flex items-center gap-2 text-on-surface font-semibold">
+            <span class="material-symbols-outlined text-[16px] text-outline">chevron_right</span>
+            Audit log
+          </li>
+        </ol>
+      </nav>
+      <!-- Page Header -->
+      <div class="mb-10">
+        <h1 class="text-3xl font-bold tracking-tight text-[#0F172A] mb-2">Audit event #4721</h1>
+        <p class="text-on-surface-variant max-w-2xl">
+          Detailed breakdown of the system execution event including origin actor, subject entity,
+          and raw JSON data payload.
+        </p>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <!-- Left Column: Primary Data -->
+        <div class="lg:col-span-8 space-y-8">
+          <!-- METADATA CARD -->
+          <section
+            class="bg-surface-container-lowest border border-[#E2E8F0] rounded-lg overflow-hidden"
+          >
+            <div class="bg-surface-container-high px-6 py-3 border-b border-[#E2E8F0]/40">
+              <h2 class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                Event Specifications
+              </h2>
+            </div>
+            <div class="grid grid-cols-2 gap-px bg-[#E2E8F0]/40">
+              <div class="bg-white p-6">
+                <label
+                  class="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1"
+                  >Event Type</label
+                >
+                <span class="text-lg font-semibold text-on-surface">Invoice generated</span>
+              </div>
+              <div class="bg-white p-6">
+                <label
+                  class="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1"
+                  >Timestamp</label
+                >
+                <span class="text-lg font-semibold text-on-surface">Apr 14, 2026, 3:42 PM MST</span>
+              </div>
+              <div class="bg-white p-6">
+                <label
+                  class="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1"
+                  >Actor</label
+                >
+                <div class="flex items-center gap-2">
+                  <div class="w-2 h-2 rounded-full bg-primary"></div>
+                  <span class="text-lg font-semibold text-on-surface">Scott Durgan</span>
+                </div>
+              </div>
+              <div class="bg-white p-6">
+                <label
+                  class="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1"
+                  >Subject</label
+                >
+                <span class="text-lg font-semibold text-on-surface">Delgado Plumbing</span>
+              </div>
+            </div>
+          </section>
+          <!-- PAYLOAD CARD -->
+          <section class="bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg overflow-hidden">
+            <div
+              class="flex items-center justify-between px-6 py-4 border-b border-[#E2E8F0]/40 bg-white"
+            >
+              <h2 class="text-sm font-bold text-on-surface">Event payload</h2>
+              <button
+                class="text-xs font-semibold text-primary hover:bg-primary-container px-3 py-1 rounded transition-colors"
+              >
+                Copy JSON
+              </button>
+            </div>
+            <div class="p-6 overflow-x-auto">
+              <pre class="code-block text-sm text-slate-700 leading-relaxed"><code>{
+  <span class="text-blue-700">"invoice_id"</span>: <span class="text-emerald-700">"INV-2026-089"</span>,
+  <span class="text-blue-700">"amount"</span>: <span class="text-amber-700">4250</span>,
+  <span class="text-blue-700">"currency"</span>: <span class="text-emerald-700">"USD"</span>,
+  <span class="text-blue-700">"status"</span>: <span class="text-emerald-700">"generated"</span>,
+  <span class="text-blue-700">"previous_status"</span>: <span class="text-emerald-700">"draft"</span>
+}</code></pre>
+            </div>
+          </section>
+        </div>
+        <!-- Right Column: Sidebar -->
+        <aside class="lg:col-span-4 space-y-8">
+          <!-- RELATED EVENTS -->
+          <section class="bg-surface-container-low rounded-lg p-6">
+            <div class="flex items-center gap-2 mb-6">
+              <span class="material-symbols-outlined text-primary">history</span>
+              <h2 class="font-bold text-on-surface">Related Events</h2>
+            </div>
+            <div class="space-y-4">
+              <div
+                class="group bg-surface-container-lowest p-4 rounded-lg border border-transparent hover:border-outline-variant/40 transition-all"
+              >
+                <div class="flex justify-between items-start mb-1">
+                  <span class="text-[11px] font-mono text-on-surface-variant"
+                    >2026-04-14 15:40:12</span
+                  >
+                  <a class="text-xs font-bold text-[#1E40AF] hover:underline" href="#"
+                    >View detail</a
+                  >
+                </div>
+                <p class="text-sm font-semibold text-on-surface">Draft finalized</p>
+              </div>
+              <div
+                class="group bg-surface-container-lowest p-4 rounded-lg border border-transparent hover:border-outline-variant/40 transition-all"
+              >
+                <div class="flex justify-between items-start mb-1">
+                  <span class="text-[11px] font-mono text-on-surface-variant"
+                    >2026-04-14 15:35:00</span
+                  >
+                  <a class="text-xs font-bold text-[#1E40AF] hover:underline" href="#"
+                    >View detail</a
+                  >
+                </div>
+                <p class="text-sm font-semibold text-on-surface">Invoice initial creation</p>
+              </div>
+              <div
+                class="group bg-surface-container-lowest p-4 rounded-lg border border-transparent hover:border-outline-variant/40 transition-all"
+              >
+                <div class="flex justify-between items-start mb-1">
+                  <span class="text-[11px] font-mono text-on-surface-variant"
+                    >2026-04-14 14:12:44</span
+                  >
+                  <a class="text-xs font-bold text-[#1E40AF] hover:underline" href="#"
+                    >View detail</a
+                  >
+                </div>
+                <p class="text-sm font-semibold text-on-surface">New billable item added</p>
+              </div>
+            </div>
+            <button
+              class="w-full mt-6 py-2 px-4 bg-white border border-outline-variant/20 text-on-surface-variant text-xs font-bold rounded hover:bg-white/50 transition-colors uppercase tracking-widest"
+            >
+              Show all history
+            </button>
+          </section>
+          <!-- Context Card -->
+          <div class="relative h-48 rounded-lg overflow-hidden group">
+            <img
+              alt=""
+              class="absolute inset-0 w-full h-full object-cover grayscale brightness-50 group-hover:scale-105 transition-transform duration-700"
+              data-alt="Modern high-tech server room background with blue ambient lighting and blurred network rack infrastructure representing digital data security"
+              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDvUENLPqgiqEE4mSDHQ-4Fihk0DxnM5hTNgygmKKlwzYne-X6sLzCoYGtIIeHOaU0QTuF7pcNO2s_IuRggAnb8wNVKIEpzNPOjZXCfsMZkZyvPKfd2ai5BliYAF45t6WdgIImTkhX3vuWHOrOHP9TubT6VZazCtx3afz-gDoSuNdC_YN2AlbCb6SpCkblx9mUk85Hti2YSoOZJo-NiTFefrVJKyMgGu8jDFWTchrDqoiSw07zqeb0LIpHN-uEx63kQa35NPtzJRAqk"
+            />
+            <div
+              class="absolute inset-0 bg-gradient-to-t from-inverse-surface to-transparent p-6 flex flex-col justify-end"
+            >
+              <span
+                class="text-[10px] font-bold text-primary-container uppercase tracking-widest mb-1"
+                >Security Status</span
+              >
+              <p class="text-white text-sm font-medium leading-snug">
+                This event was verified via SHA-256 integrity check upon persistence.
+              </p>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </main>
+  </body>
+</html>

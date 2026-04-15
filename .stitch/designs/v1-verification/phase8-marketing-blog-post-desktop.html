@@ -1,0 +1,330 @@
+<!doctype html>
+
+<html class="light" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Why we walk alongside owners instead of auditing them | SMD Services</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Plus+Jakarta+Sans:wght@700;800&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              'primary-fixed-dim': '#b8c4ff',
+              'on-tertiary-container': '#b3b5ff',
+              'on-secondary-fixed-variant': '#3a485b',
+              'on-secondary-fixed': '#0d1c2e',
+              background: '#faf8ff',
+              'tertiary-fixed-dim': '#c0c1ff',
+              'surface-container': '#eaedff',
+              'inverse-on-surface': '#eef0ff',
+              'secondary-fixed-dim': '#b9c7df',
+              'on-background': '#131b2e',
+              'surface-container-highest': '#dae2fd',
+              'inverse-surface': '#283044',
+              'primary-container': '#1e40af',
+              'on-tertiary-fixed': '#07006c',
+              'on-secondary': '#ffffff',
+              'surface-container-lowest': '#ffffff',
+              'inverse-primary': '#b8c4ff',
+              secondary: '#515f74',
+              'on-error': '#ffffff',
+              'on-surface-variant': '#444653',
+              'surface-tint': '#3755c3',
+              'surface-variant': '#dae2fd',
+              'tertiary-fixed': '#e1e0ff',
+              'on-primary': '#ffffff',
+              outline: '#757684',
+              'on-error-container': '#93000a',
+              tertiary: '#170cae',
+              primary: '#00288e',
+              'on-surface': '#131b2e',
+              'tertiary-container': '#3433c3',
+              'on-secondary-container': '#57657a',
+              'on-tertiary-fixed-variant': '#2f2ebe',
+              surface: '#faf8ff',
+              'surface-dim': '#d2d9f4',
+              'surface-container-low': '#f2f3ff',
+              'error-container': '#ffdad6',
+              'surface-bright': '#faf8ff',
+              'primary-fixed': '#dde1ff',
+              'surface-container-high': '#e2e7ff',
+              'on-tertiary': '#ffffff',
+              'outline-variant': '#c4c5d5',
+              'secondary-container': '#d5e3fc',
+              'on-primary-fixed': '#001453',
+              'secondary-fixed': '#d5e3fc',
+              'on-primary-container': '#a8b8ff',
+              error: '#ba1a1a',
+              'on-primary-fixed-variant': '#173bab',
+            },
+            borderRadius: {
+              DEFAULT: '0.25rem',
+              lg: '0.5rem',
+              xl: '0.75rem',
+              full: '9999px',
+            },
+            fontFamily: {
+              headline: ['Plus Jakarta Sans'],
+              body: ['Inter'],
+              label: ['Inter'],
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings:
+          'FILL' 0,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24;
+        display: inline-block;
+        vertical-align: middle;
+        line-height: 1;
+      }
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+      h1,
+      h2,
+      h3,
+      .headline {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+      }
+      .back-to-blog:hover svg {
+        transform: translateX(-4px);
+      }
+    </style>
+  </head>
+  <body class="bg-surface-container-lowest text-on-surface antialiased">
+    <a
+      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:bg-primary focus:text-on-primary focus:px-6 focus:py-3 focus:rounded-lg focus:shadow-xl"
+      href="#main"
+      >Skip to main content</a
+    >
+    <!-- TopNavBar -->
+    <header
+      class="bg-white dark:bg-slate-900 h-16 sticky top-0 z-50 w-full border-b border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none"
+    >
+      <nav
+        aria-label="Global Navigation"
+        class="flex items-center justify-between max-w-5xl mx-auto px-6 w-full h-full"
+      >
+        <a class="text-xl font-bold tracking-tight text-slate-900 dark:text-white" href="/"
+          >SMD Services</a
+        >
+        <div class="flex items-center gap-8">
+          <ul class="hidden md:flex items-center gap-6">
+            <li>
+              <a
+                class="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors duration-200 font-medium"
+                href="/contact"
+                >Contact</a
+              >
+            </li>
+          </ul>
+          <a
+            class="bg-primary hover:bg-primary-container text-on-primary px-5 py-2.5 rounded-lg font-semibold transition-all active:scale-95 active:opacity-90"
+            href="/book"
+          >
+            Book a Call
+          </a>
+        </div>
+      </nav>
+    </header>
+    <main class="max-w-3xl mx-auto px-6 py-12 lg:py-24" id="main">
+      <!-- Back Link -->
+      <a
+        class="back-to-blog flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-all mb-12 group focus:outline-none focus:ring-2 focus:ring-primary focus:rounded px-1"
+        href="/blog"
+      >
+        <span class="material-symbols-outlined transition-transform">arrow_back</span>
+        <span class="font-medium text-sm tracking-wide">All posts</span>
+      </a>
+      <!-- Article Header -->
+      <header class="mb-12">
+        <span class="text-[#6366f1] font-bold text-xs uppercase tracking-widest mb-4 block"
+          >Methodology</span
+        >
+        <h1
+          class="text-4xl lg:text-5xl font-extrabold leading-tight text-on-surface tracking-tight mb-8"
+        >
+          Why we walk alongside owners instead of auditing them
+        </h1>
+        <div class="flex items-center gap-4 py-6 border-y border-outline-variant/10">
+          <div
+            class="w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center overflow-hidden"
+          >
+            <svg
+              fill="none"
+              height="48"
+              viewbox="0 0 48 48"
+              width="48"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle cx="24" cy="24" fill="#d5e3fc" r="24"></circle>
+              <circle cx="24" cy="18" fill="#515f74" r="8"></circle>
+              <path
+                d="M8 40C8 31.1634 15.1634 24 24 24V24C32.8366 24 40 31.1634 40 40V48H8V40Z"
+                fill="#515f74"
+              ></path>
+            </svg>
+          </div>
+          <div class="flex flex-col">
+            <span class="font-semibold text-on-surface">Scott Durgan</span>
+            <div class="flex items-center gap-2 text-[#6366f1] text-sm">
+              <span>Apr 10, 2026</span>
+              <span class="opacity-30">•</span>
+              <span>5 min read</span>
+            </div>
+          </div>
+        </div>
+      </header>
+      <!-- Article Body -->
+      <article class="font-body text-[17px] leading-[28px] text-on-surface-variant space-y-8">
+        <p>
+          In the modern consulting landscape, the traditional audit has become a performance of
+          distance. A consultant arrives, observes from a safe perimeter, compiles a spreadsheet of
+          failures, and departs, leaving behind a thick document that often sits unopened on a hard
+          drive. At SMD Services, we realized early on that this "observer effect" rarely yields
+          sustainable change.
+        </p>
+        <h2 class="text-2xl font-bold text-on-surface pt-4">Beyond the Spreadsheet</h2>
+        <p>
+          An audit is a snapshot of what is wrong; a walk-along is a deep dive into
+          <em>why</em> things are the way they are. When we join owners on the floor or in the
+          strategy room, we aren't looking for compliance checkboxes. We are looking for the
+          friction points that prevent great people from doing their best work.
+        </p>
+        <blockquote
+          class="py-6 my-4 border-l-4 border-primary-container pl-6 bg-surface-container-low rounded-r-xl"
+        >
+          <p class="italic text-primary font-medium text-xl leading-relaxed">
+            "True consulting isn't just about pointing out the leaks; it's about holding the wrench
+            together until the flow is steady."
+          </p>
+        </blockquote>
+        <p>
+          This collaborative approach breaks down the natural defensiveness that arises during
+          formal inspections. When the consultant is viewed as a peer rather than a judge, the flow
+          of information becomes transparent. We discover the "workarounds" that employees have
+          created to bypass broken systems—insights that never surface in a formal interview or a
+          sanitized audit report.
+        </p>
+        <h2 class="text-2xl font-bold text-on-surface pt-4">The Implementation Gap</h2>
+        <p>
+          The greatest tragedy in business optimization is the implementation gap: the space between
+          a good idea and its daily execution. By walking alongside owners, we bridge this gap in
+          real-time. We don't just recommend a new workflow; we test it together on Tuesday
+          afternoon. If it fails, we pivot immediately. If it works, it's already part of the
+          culture before we leave.
+        </p>
+        <p>
+          Our authority isn't derived from a title or a proprietary software suite. It is built
+          through the shared experience of solving complex problems in the trenches. We believe that
+          the only way to truly understand a business is to feel the weight of its daily operations
+          alongside those who carry it every day.
+        </p>
+      </article>
+      <!-- Related Articles Section -->
+      <section class="mt-24 pt-12 border-t border-outline-variant/10">
+        <h3 class="text-lg font-bold text-on-surface mb-8 tracking-tight">Related insights</h3>
+        <div class="grid md:grid-cols-2 gap-12">
+          <!-- Related 1 -->
+          <article class="group">
+            <div
+              class="aspect-video w-full mb-6 overflow-hidden rounded-lg bg-surface-container-high"
+            >
+              <img
+                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                data-alt="professional minimalist office space with large windows and clean lines reflecting a sense of order and clarity"
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDClN8q-Llm-6l5Owy9ArNTlTPBwANNk_0Rlwm-V6GEGBZxX5qcHn-fmfrwzxu04buXzwglvapoq7TFYQK_mkjfAb9PqDNKcHYHWWa9I_Fx1VtManx2miw6jMvTGatMNtZX8yQJxHv_XNh9v7qfBerJRjdG8s-ga292DJK320mzKXrrvJisOdiA0k0L4ohuMlg-IMjcWh8FS_l9wuO7RyGC64A0yEP1iAbKd-WC0QzrBdrlceyQS7RqUbtaXlSW3DOJkF4VF3rlQ5mp"
+              />
+            </div>
+            <span class="text-[#6366f1] text-xs font-bold uppercase tracking-widest block mb-3"
+              >Strategy</span
+            >
+            <h4
+              class="text-xl font-bold text-on-surface mb-3 group-hover:text-primary transition-colors"
+            >
+              The friction tax: Hidden costs of operational clutter
+            </h4>
+            <p class="text-on-surface-variant text-sm mb-4 line-clamp-2">
+              How minor inefficiencies compound over time to create a significant drag on your
+              bottom line performance.
+            </p>
+            <a
+              class="inline-flex items-center gap-1 text-primary font-semibold text-sm hover:underline underline-offset-4"
+              href="/blog/friction-tax"
+            >
+              Read more <span class="material-symbols-outlined text-sm">arrow_forward</span>
+            </a>
+          </article>
+          <!-- Related 2 -->
+          <article class="group">
+            <div
+              class="aspect-video w-full mb-6 overflow-hidden rounded-lg bg-surface-container-high"
+            >
+              <img
+                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                data-alt="close up of architectural blueprints and a professional fountain pen on a desk under soft warm morning light"
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQmF9Q2FoNgBpMoP2AFvBBy0gj93BPN6MvEt-kDy2c506d7QRwRv-YaV4KnLzIO4ifgzdeM806rW8SqA5iiOciRx11M4OLWaLljkK20BazkOty7YqOMDd98BHeYK9kckdBEDWoGa7zP-GPy66RNK1yrJOkdsrrE3xtxzAcW2GANlJY7MXaehDP4-R1QI1w5tGBxof-7-09jmMxbFkuwQQY7KR6DRrRDswtP5UIOVUL4RS0kXGzIQ5DCxshSY-ANQ76xekF1A7L3ThU"
+              />
+            </div>
+            <span class="text-[#6366f1] text-xs font-bold uppercase tracking-widest block mb-3"
+              >Culture</span
+            >
+            <h4
+              class="text-xl font-bold text-on-surface mb-3 group-hover:text-primary transition-colors"
+            >
+              Developing institutional memory in small teams
+            </h4>
+            <p class="text-on-surface-variant text-sm mb-4 line-clamp-2">
+              Ensuring that critical knowledge doesn't walk out the door when your key employees do.
+            </p>
+            <a
+              class="inline-flex items-center gap-1 text-primary font-semibold text-sm hover:underline underline-offset-4"
+              href="/blog/institutional-memory"
+            >
+              Read more <span class="material-symbols-outlined text-sm">arrow_forward</span>
+            </a>
+          </article>
+        </div>
+      </section>
+    </main>
+    <!-- Footer -->
+    <footer
+      class="w-full py-12 mt-12 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800"
+    >
+      <div
+        class="max-w-5xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6"
+      >
+        <p class="text-sm font-body text-slate-500">© 2026 SMD Services</p>
+        <div class="flex items-center gap-8">
+          <a
+            class="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            href="/contact"
+            >Contact</a
+          >
+          <a
+            class="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            href="/privacy"
+            >Privacy Policy</a
+          >
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

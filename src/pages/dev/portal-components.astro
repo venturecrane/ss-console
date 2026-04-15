@@ -34,9 +34,9 @@ if (import.meta.env.PROD) {
   <body class="min-h-screen bg-[color:var(--color-background)]">
     <PortalHeader
       clientName="Delgado Plumbing"
-      showSms
-      smsHref="sms:+14805550100"
-      smsLabel="Text Scott"
+      consultantPhone="+14805550100"
+      consultantEmail="scott@smd.services"
+      consultantFirstName="Scott"
     >
       <form method="POST" action="/api/auth/logout">
         <button type="submit" class="text-sm text-[color:var(--color-text-muted)]">Sign out</button>

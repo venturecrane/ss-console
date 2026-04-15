@@ -4,6 +4,8 @@ import { BRAND_NAME } from '../../../lib/config/brand'
 import { getPortalClient } from '../../../lib/portal/session'
 import { listInvoicesForEntity, INVOICE_STATUSES } from '../../../lib/db/invoices'
 import type { Invoice } from '../../../lib/db/invoices'
+import PortalHeader from '../../../components/portal/PortalHeader.astro'
+import SkipToMain from '../../../components/SkipToMain.astro'
 
 /**
  * Client portal — invoices page.
@@ -20,6 +22,7 @@ const env = Astro.locals.runtime.env
 // Resolve client entity from session
 const portalData = await getPortalClient(env.DB, session.userId)
 const entityId = portalData?.client.id ?? null
+const clientName = portalData?.client.name ?? ''
 
 let invoices: Awaited<ReturnType<typeof listInvoicesForEntity>> = []
 
@@ -71,36 +74,27 @@ function formatDate(iso: string | null): string {
     <title>Invoices — {BRAND_NAME}</title>
   </head>
   <body class="min-h-screen bg-slate-50">
-    <header class="bg-white border-b border-slate-200">
-      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <a
-            href="/portal"
-            class="text-lg font-bold text-slate-900 hover:text-primary transition-colors"
-            >{BRAND_NAME}</a
-          >
-          <span class="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">Portal</span>
-        </div>
-        <div class="flex items-center gap-4">
-          <span class="text-sm text-slate-600">{session.email}</span>
-          <form method="POST" action="/api/auth/logout">
-            <button
-              type="submit"
-              class="text-sm text-slate-500 hover:text-slate-700 transition-colors"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
-      </div>
-    </header>
+    <SkipToMain />
+    <PortalHeader clientName={clientName}>
+      <form method="POST" action="/api/auth/logout">
+        <button
+          type="submit"
+          class="inline-flex items-center min-h-11 px-2 -mx-2 text-sm text-slate-500 hover:text-slate-700 active:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
+        >
+          Sign out
+        </button>
+      </form>
+    </PortalHeader>
 
-    <main class="max-w-5xl mx-auto px-4 py-8">
-      <nav class="text-sm text-slate-500 mb-4">
-        <a href="/portal" class="hover:text-primary transition-colors">Portal</a>
-        <span class="mx-1">/</span>
-        <span class="text-slate-900">Invoices</span>
-      </nav>
+    <main id="main" role="main" class="max-w-5xl mx-auto px-4 py-8">
+      <a
+        href="/portal"
+        aria-label="Home"
+        class="inline-flex items-center gap-1 min-h-11 px-2 -mx-2 mb-4 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-lg"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+        Home
+      </a>
 
       <h2 class="text-xl font-semibold text-slate-900 mb-6">Invoices</h2>
 

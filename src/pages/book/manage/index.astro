@@ -8,6 +8,7 @@
  * to the canonical path-based URL.
  */
 export const prerender = false
+import SkipToMain from '../../../components/SkipToMain.astro'
 
 const token = Astro.url.searchParams.get('token')
 if (token) {
@@ -22,17 +23,18 @@ if (token) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Manage Your Booking — SMD Services</title>
   </head>
-  <body
-    style="font-family: 'Inter', sans-serif; background: #f8fafc; display: flex; justify-content: center; padding: 80px 16px;"
-  >
-    <div style="text-align: center;">
-      <h1 style="font-size: 20px; font-weight: 700; color: #0f172a;">Invalid booking link</h1>
-      <p style="margin-top: 12px; color: #64748b;">
-        No booking token found. Check the link in your confirmation email.
-      </p>
-      <a href="/book" style="display: inline-block; margin-top: 24px; color: #1e40af;"
-        >Book a new time</a
-      >
-    </div>
+  <body style="font-family: 'Inter', sans-serif; background: #f8fafc;">
+    <SkipToMain />
+    <main id="main" role="main" style="display: flex; justify-content: center; padding: 80px 16px;">
+      <div style="text-align: center;">
+        <h1 style="font-size: 20px; font-weight: 700; color: #0f172a;">Invalid booking link</h1>
+        <p style="margin-top: 12px; color: #64748b;">
+          No booking token found. Check the link in your confirmation email.
+        </p>
+        <a href="/book" style="display: inline-block; margin-top: 24px; color: #1e40af;"
+          >Book a new time</a
+        >
+      </div>
+    </main>
   </body>
 </html>

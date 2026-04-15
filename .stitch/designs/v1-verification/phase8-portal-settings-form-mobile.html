@@ -1,0 +1,306 @@
+<!doctype html>
+
+<html class="light" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=390, height=844, initial-scale=1.0" name="viewport" />
+    <title>The Precision Portal - Settings</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              'surface-variant': '#dae2fd',
+              'on-secondary-container': '#57657a',
+              'on-surface': '#131b2e',
+              'on-secondary-fixed-variant': '#3a485b',
+              'surface-dim': '#d2d9f4',
+              'secondary-fixed-dim': '#b9c7df',
+              'on-background': '#131b2e',
+              'tertiary-fixed': '#ffdbce',
+              background: '#faf8ff',
+              secondary: '#515f74',
+              'surface-container': '#eaedff',
+              'on-secondary-fixed': '#0d1c2e',
+              'on-error': '#ffffff',
+              'surface-container-low': '#f2f3ff',
+              surface: '#faf8ff',
+              'on-tertiary-fixed': '#380d00',
+              error: '#ba1a1a',
+              tertiary: '#611e00',
+              'on-error-container': '#93000a',
+              'on-secondary': '#ffffff',
+              'inverse-surface': '#283044',
+              'surface-tint': '#3755c3',
+              'primary-container': '#1e40af',
+              'surface-container-high': '#e2e7ff',
+              'on-tertiary': '#ffffff',
+              outline: '#757684',
+              'error-container': '#ffdad6',
+              'inverse-on-surface': '#eef0ff',
+              'on-primary-fixed': '#001453',
+              'secondary-container': '#d5e3fc',
+              'on-primary': '#ffffff',
+              'primary-fixed-dim': '#b8c4ff',
+              'outline-variant': '#c4c5d5',
+              'inverse-primary': '#b8c4ff',
+              'surface-container-lowest': '#ffffff',
+              'on-primary-container': '#a8b8ff',
+              'surface-container-highest': '#dae2fd',
+              'on-surface-variant': '#444653',
+              'primary-fixed': '#dde1ff',
+              'on-primary-fixed-variant': '#173bab',
+              'on-tertiary-fixed-variant': '#802a00',
+              primary: '#00288e',
+              'surface-bright': '#faf8ff',
+              'tertiary-container': '#872d00',
+              'tertiary-fixed-dim': '#ffb59a',
+              'on-tertiary-container': '#ffa583',
+              'secondary-fixed': '#d5e3fc',
+            },
+            borderRadius: {
+              DEFAULT: '0.25rem',
+              lg: '0.5rem',
+              xl: '0.75rem',
+              full: '9999px',
+            },
+            fontFamily: {
+              headline: ['Inter', 'sans-serif'],
+              body: ['Inter', 'sans-serif'],
+              label: ['Inter', 'sans-serif'],
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #faf8ff;
+      }
+      .material-symbols-outlined {
+        font-variation-settings:
+          'FILL' 0,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24;
+      }
+      input:focus,
+      button:focus {
+        outline: 2px solid #3b82f6;
+        outline-offset: 2px;
+      }
+      /* Custom Toggle Switch */
+      .toggle-checkbox:checked {
+        right: 0;
+        background-color: #1e40af;
+      }
+      .toggle-checkbox:checked + .toggle-label {
+        background-color: #1e40af;
+      }
+    </style>
+    <style>
+      body {
+        min-height: max(884px, 100dvh);
+      }
+    </style>
+  </head>
+  <body class="text-on-background antialiased">
+    <a
+      class="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:bg-white focus:p-4 focus:text-primary focus:font-bold"
+      href="#main"
+      >Skip to main content</a
+    >
+    <header
+      class="fixed top-0 w-full z-50 h-14 bg-white border-b border-[#e2e8f0] flex items-center justify-between px-4"
+    >
+      <span class="text-[13px] font-medium text-[#475569]">Mike Delgado</span>
+      <div class="flex items-center space-x-1">
+        <a
+          aria-label="Email Scott"
+          class="w-[44px] h-[44px] flex items-center justify-center text-slate-500 hover:text-primary transition-colors"
+          href="mailto:scott@example.com"
+        >
+          <span class="material-symbols-outlined">mail</span>
+        </a>
+        <a
+          aria-label="Text Scott"
+          class="w-[44px] h-[44px] flex items-center justify-center text-slate-500 hover:text-primary transition-colors"
+          href="sms:+1234567890"
+        >
+          <span class="material-symbols-outlined">chat_bubble</span>
+        </a>
+        <a
+          aria-label="Call Scott"
+          class="w-[44px] h-[44px] flex items-center justify-center text-slate-500 hover:text-primary transition-colors"
+          href="tel:+1234567890"
+        >
+          <span class="material-symbols-outlined">call</span>
+        </a>
+      </div>
+    </header>
+    <main class="pt-20 pb-24 px-6 max-w-[390px] mx-auto" id="main" role="main">
+      <h1 class="text-2xl font-bold text-[#0F172A] mb-8 tracking-tight">Portal Settings</h1>
+      <form class="space-y-10">
+        <!-- Profile Section -->
+        <section class="space-y-6">
+          <div class="flex items-center space-x-3 mb-2">
+            <div
+              class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary"
+            >
+              <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1"
+                >person</span
+              >
+            </div>
+            <h2 class="text-lg font-semibold text-[#0F172A]">Profile</h2>
+          </div>
+          <div class="space-y-5">
+            <div class="flex flex-col gap-2">
+              <label class="text-sm font-semibold text-on-surface-variant" for="name">Name</label>
+              <input
+                class="h-[48px] px-4 rounded-lg bg-surface-container-lowest border-0 ring-1 ring-outline-variant/20 focus:ring-2 focus:ring-primary text-on-surface"
+                id="name"
+                name="name"
+                type="text"
+                value="Mike Delgado"
+              />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm font-semibold text-on-surface-variant" for="company"
+                >Company</label
+              >
+              <input
+                class="h-[48px] px-4 rounded-lg bg-surface-container-lowest border-0 ring-1 ring-outline-variant/20 focus:ring-2 focus:ring-primary text-on-surface"
+                id="company"
+                name="company"
+                type="text"
+                value="Delgado Plumbing"
+              />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm font-semibold text-on-surface-variant" for="phone"
+                >Phone Number</label
+              >
+              <input
+                class="h-[48px] px-4 rounded-lg bg-surface-container-lowest border-0 ring-1 ring-outline-variant/20 focus:ring-2 focus:ring-primary text-on-surface"
+                id="phone"
+                name="phone"
+                placeholder="(555) 000-0000"
+                type="tel"
+              />
+            </div>
+          </div>
+        </section>
+        <!-- Contact Preferences -->
+        <section class="space-y-4">
+          <h2 class="text-lg font-semibold text-[#0F172A]">Contact preferences</h2>
+          <div class="bg-surface-container-low rounded-xl p-2 space-y-1">
+            <label
+              class="flex items-center justify-between p-3 hover:bg-surface-container-high rounded-lg cursor-pointer transition-colors"
+            >
+              <span class="text-sm font-medium text-on-surface">Email</span>
+              <input
+                checked=""
+                class="w-5 h-5 rounded text-primary focus:ring-primary border-outline-variant/30"
+                type="checkbox"
+              />
+            </label>
+            <label
+              class="flex items-center justify-between p-3 hover:bg-surface-container-high rounded-lg cursor-pointer transition-colors"
+            >
+              <span class="text-sm font-medium text-on-surface">SMS</span>
+              <input
+                checked=""
+                class="w-5 h-5 rounded text-primary focus:ring-primary border-outline-variant/30"
+                type="checkbox"
+              />
+            </label>
+            <label
+              class="flex items-center justify-between p-3 hover:bg-surface-container-high rounded-lg cursor-pointer transition-colors"
+            >
+              <span class="text-sm font-medium text-on-surface">Phone call</span>
+              <input
+                checked=""
+                class="w-5 h-5 rounded text-primary focus:ring-primary border-outline-variant/30"
+                type="checkbox"
+              />
+            </label>
+          </div>
+        </section>
+        <!-- Notification Preferences -->
+        <section class="space-y-4">
+          <h2 class="text-lg font-semibold text-[#0F172A]">Notification preferences</h2>
+          <div class="space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-semibold text-on-surface">Invoice reminders</p>
+                <p class="text-xs text-on-surface-variant">Get notified when a payment is due</p>
+              </div>
+              <div class="relative inline-block w-12 mr-2 align-middle select-none">
+                <input
+                  checked=""
+                  class="absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer right-6 checked:right-0 checked:border-primary-container transition-all duration-200 ease-in-out"
+                  id="invoice-toggle"
+                  name="toggle"
+                  type="checkbox"
+                />
+                <label
+                  class="block overflow-hidden h-6 rounded-full bg-slate-300 cursor-pointer"
+                  for="invoice-toggle"
+                ></label>
+              </div>
+            </div>
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-semibold text-on-surface">Engagement updates</p>
+                <p class="text-xs text-on-surface-variant">New activity on shared documents</p>
+              </div>
+              <div class="relative inline-block w-12 mr-2 align-middle select-none">
+                <input
+                  checked=""
+                  class="absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer right-6 checked:right-0 checked:border-primary-container transition-all duration-200 ease-in-out"
+                  id="engagement-toggle"
+                  name="toggle"
+                  type="checkbox"
+                />
+                <label
+                  class="block overflow-hidden h-6 rounded-full bg-slate-300 cursor-pointer"
+                  for="engagement-toggle"
+                ></label>
+              </div>
+            </div>
+          </div>
+        </section>
+        <!-- Actions -->
+        <div class="pt-8 flex flex-col space-y-3">
+          <button
+            class="w-full h-[48px] bg-[#1E40AF] text-white font-semibold rounded-lg shadow-lg shadow-blue-900/10 active:scale-[0.98] transition-transform"
+            type="submit"
+          >
+            Save Changes
+          </button>
+          <a
+            class="w-full h-[48px] flex items-center justify-center text-[#475569] font-medium rounded-lg hover:bg-slate-100 transition-colors"
+            href="/portal"
+          >
+            Cancel
+          </a>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>

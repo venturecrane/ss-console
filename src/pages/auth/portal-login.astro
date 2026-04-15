@@ -1,5 +1,6 @@
 ---
 import '../../styles/global.css'
+import SkipToMain from '../../components/SkipToMain.astro'
 
 /**
  * Client portal login page — magic link (passwordless) authentication.
@@ -41,65 +42,80 @@ const message = status ? statusMessages[status] : error ? statusMessages[error] 
     />
     <title>Sign In — SMD Services Portal</title>
   </head>
-  <body class="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-    <div class="w-full max-w-sm">
-      <div class="text-center mb-8">
-        <h1 class="text-2xl font-bold text-slate-900">SMD Services</h1>
-        <p class="text-sm text-slate-500 mt-1">Client Portal</p>
+  <body class="min-h-screen bg-slate-50">
+    <SkipToMain />
+    <header
+      role="banner"
+      class="sticky top-0 z-50 h-14 md:h-16 bg-white border-b border-[color:var(--color-border)]"
+    >
+      <div class="max-w-md mx-auto h-full flex items-center justify-center px-4">
+        <span class="text-lg font-bold tracking-tight text-[color:var(--color-text-primary)]"
+          >SMD Services</span
+        >
       </div>
+    </header>
+    <main
+      id="main"
+      role="main"
+      class="flex items-start md:items-center justify-center px-4 py-10"
+      style="min-height: calc(100vh - 3.5rem)"
+    >
+      <div class="w-full max-w-sm">
+        <div class="text-center mb-8">
+          <p class="text-sm text-slate-500">Client portal sign-in</p>
+        </div>
 
-      <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-        <h2 class="text-lg font-semibold text-slate-900 mb-2">Sign in</h2>
-        <p class="text-sm text-slate-500 mb-6">
-          Enter your email and we'll send you a link to sign in.
-        </p>
+        <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+          <h2 class="text-lg font-semibold text-slate-900 mb-2">Sign in</h2>
+          <p class="text-sm text-slate-500 mb-6">
+            Enter your email and we'll send you a link to sign in.
+          </p>
 
-        {
-          message && (
-            <div
-              class:list={[
-                'mb-4 px-3 py-2 border rounded text-sm',
-                message.type === 'success'
-                  ? 'bg-green-50 border-green-200 text-green-700'
-                  : 'bg-red-50 border-red-200 text-red-700',
-              ]}
-            >
-              {message.text}
-            </div>
-          )
-        }
+          {
+            message && (
+              <div
+                class:list={[
+                  'mb-4 px-3 py-2 border rounded text-sm',
+                  message.type === 'success'
+                    ? 'bg-green-50 border-green-200 text-green-700'
+                    : 'bg-red-50 border-red-200 text-red-700',
+                ]}
+              >
+                {message.text}
+              </div>
+            )
+          }
 
-        <form method="POST" action="/api/auth/magic-link" class="space-y-4">
-          <div>
-            <label for="email" class="block text-sm font-medium text-slate-700 mb-1"> Email </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              autocomplete="email"
-              value={prefillEmail}
-              class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm
+          <form method="POST" action="/api/auth/magic-link" class="space-y-4">
+            <div>
+              <label for="email" class="block text-sm font-medium text-slate-700 mb-1">
+                Email
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                autocomplete="email"
+                value={prefillEmail}
+                class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm
                      focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary
                      placeholder-slate-400"
-              placeholder="your@email.com"
-            />
-          </div>
+                placeholder="your@email.com"
+              />
+            </div>
 
-          <button
-            type="submit"
-            class="w-full bg-primary text-white py-2 px-4 rounded-md text-sm font-medium
+            <button
+              type="submit"
+              class="w-full bg-primary text-white py-2 px-4 rounded-md text-sm font-medium
                    hover:bg-primary-hover transition-colors focus:outline-none focus:ring-2
                    focus:ring-primary focus:ring-offset-2"
-          >
-            Send sign-in link
-          </button>
-        </form>
+            >
+              Send sign-in link
+            </button>
+          </form>
+        </div>
       </div>
-
-      <p class="text-center text-xs text-slate-400 mt-6">
-        &copy; {new Date().getFullYear()} SMD Services
-      </p>
-    </div>
+    </main>
   </body>
 </html>

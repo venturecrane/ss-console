@@ -1,6 +1,7 @@
 ---
 import '../../../styles/global.css'
 import PortalHeader from '../../../components/portal/PortalHeader.astro'
+import SkipToMain from '../../../components/SkipToMain.astro'
 import MoneyDisplay from '../../../components/portal/MoneyDisplay.astro'
 import ConsultantBlock from '../../../components/portal/ConsultantBlock.astro'
 import { BRAND_NAME } from '../../../lib/config/brand'
@@ -171,7 +172,6 @@ const pdfHref = hasSow ? `/api/portal/quotes/${quote.id}/sow` : null
 const supersedingQuoteId = isSuperseded ? (superseding?.id ?? null) : null
 
 const consultantPhone = engagement?.consultant_phone ?? null
-const headerSmsHref = consultantPhone ? `sms:${consultantPhone.replace(/[^+\d]/g, '')}` : null
 ---
 
 <!doctype html>
@@ -192,15 +192,12 @@ const headerSmsHref = consultantPhone ? `sms:${consultantPhone.replace(/[^+\d]/g
     <title>Proposal — Portal — {BRAND_NAME}</title>
   </head>
   <body class="min-h-screen bg-[color:var(--color-background)]">
+    <SkipToMain />
     <PortalHeader
       clientName={client.name}
-      showSms={!!headerSmsHref && !isSigned && !!consultantFirst}
-      smsHref={headerSmsHref ?? undefined}
-      smsLabel={headerSmsHref && consultantFirst ? `Text ${consultantFirst}` : undefined}
+      consultantPhone={isSigned ? null : consultantPhone}
+      consultantFirstName={consultantFirst ?? 'Scott'}
     >
-      <span class="text-sm text-[color:var(--color-text-secondary)] hidden sm:inline"
-        >{session.email}</span
-      >
       <form method="POST" action="/api/auth/logout">
         <button
           type="submit"
@@ -211,7 +208,15 @@ const headerSmsHref = consultantPhone ? `sms:${consultantPhone.replace(/[^+\d]/g
       </form>
     </PortalHeader>
 
-    <main class="max-w-[1120px] mx-auto px-4 sm:px-6 py-8 sm:py-12">
+    <main id="main" role="main" class="max-w-[1120px] mx-auto px-4 sm:px-6 py-8 sm:py-12">
+      <a
+        href="/portal/quotes"
+        aria-label="All quotes"
+        class="inline-flex items-center gap-1 min-h-11 px-2 -mx-2 mb-4 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-lg"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+        All quotes
+      </a>
       <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,720px)_340px] gap-8 lg:gap-16">
         <!-- Main column -->
         <section class="min-w-0 space-y-12">
