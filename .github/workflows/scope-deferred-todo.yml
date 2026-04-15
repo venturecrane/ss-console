@@ -1,0 +1,107 @@
+name: Scope-deferred TODO check
+
+# #377 Move 1 — block "TODO acknowledging an unmet AC" at the merge gate.
+#
+# Scans the PR diff for newly added `TODO(#NNN)` or `TODO #NNN` patterns in
+# source files. Fails the PR unless it carries the `scope-deferred` label AND
+# its description has a `## Deferred ACs` section.
+#
+# Rationale: the #363 → #370 → #377 incident shipped a hardcoded fabricated
+# schedule under a `TODO(#363)` comment that silently deferred an unmet
+# acceptance criterion. This check forces that pattern into the open: if you
+# really need to defer, do it as a labeled, documented decision — not a
+# comment in source nobody enforces.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check:
+    name: Block undeferred TODO(#NNN) patterns
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect PR diff for TODO(#NNN) introductions
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const SOURCE_EXTS = /\.(ts|tsx|js|jsx|astro|mjs|cjs|svelte|vue|py|go|rs|java|kt)$/i;
+            const TODO_RE = /TODO\s*\(?\s*#(\d+)\s*\)?/i;
+            const REQUIRED_SECTION = /^##\s+Deferred ACs/im;
+            const OVERRIDE_LABEL = 'scope-deferred';
+
+            const pr = context.payload.pull_request;
+            const labelNames = (pr.labels || []).map(l => l.name);
+            const hasOverride = labelNames.includes(OVERRIDE_LABEL);
+            const body = pr.body || '';
+            const hasDeferredSection = REQUIRED_SECTION.test(body);
+
+            // List files in the PR with their patches.
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                per_page: 100,
+              }
+            );
+
+            const violations = [];
+            for (const f of files) {
+              if (!SOURCE_EXTS.test(f.filename)) continue;
+              if (!f.patch) continue; // binary, renamed-only, etc.
+              const lines = f.patch.split('\n');
+              for (const line of lines) {
+                // Only scan ADDED lines (start with '+' but not '+++').
+                if (!line.startsWith('+') || line.startsWith('+++')) continue;
+                const m = line.match(TODO_RE);
+                if (m) {
+                  violations.push({
+                    file: f.filename,
+                    issue: m[1],
+                    line: line.slice(1).trim().slice(0, 200),
+                  });
+                }
+              }
+            }
+
+            if (violations.length === 0) {
+              core.info('No new TODO(#NNN) patterns introduced. ✓');
+              return;
+            }
+
+            const violationList = violations
+              .map(v => `  - \`${v.file}\`: TODO(#${v.issue})\n    \`${v.line}\``)
+              .join('\n');
+
+            if (hasOverride && hasDeferredSection) {
+              core.info(
+                `Found ${violations.length} TODO(#NNN) addition(s) but PR has ` +
+                `'${OVERRIDE_LABEL}' label AND a 'Deferred ACs' section. ✓`
+              );
+              core.info('Violations (informational):\n' + violationList);
+              return;
+            }
+
+            const reasons = [];
+            if (!hasOverride) reasons.push(`missing label \`${OVERRIDE_LABEL}\``);
+            if (!hasDeferredSection) {
+              reasons.push('missing `## Deferred ACs` section in PR description');
+            }
+
+            core.setFailed(
+              `This PR introduces ${violations.length} new \`TODO(#NNN)\` ` +
+              `pattern(s) but is ${reasons.join(' AND ')}.\n\n` +
+              `Per #377 Move 1: a TODO referencing an open issue is a ` +
+              `silent deferral of work tied to that issue. To proceed:\n\n` +
+              `  1. Remove the TODO and ship the work in this PR, OR\n` +
+              `  2. Add the \`${OVERRIDE_LABEL}\` label to this PR, AND\n` +
+              `     fill in the \`## Deferred ACs\` section of the PR ` +
+              `description with rationale + tracking issue.\n\n` +
+              `Violations:\n${violationList}`
+            );
