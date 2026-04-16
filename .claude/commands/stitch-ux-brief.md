@@ -58,15 +58,15 @@ Scan the repo for context:
 
 Display an **Intake Summary** table:
 
-| Field | Value |
-| --- | --- |
-| Target | _e.g., `client-portal`_ |
-| Authentication | _logged-in / prospect / public_ |
-| Persona | _e.g., Mike Delgado, 52, plumbing HVAC owner_ |
-| Prior brief | _path or "none"_ |
-| Tokens source | _path to globals.css or config_ |
-| Venture code | _resolved from `crane_ventures`_ |
-| Stitch project | _ID or "will create"_ |
+| Field          | Value                                         |
+| -------------- | --------------------------------------------- |
+| Target         | _e.g., `client-portal`_                       |
+| Authentication | _logged-in / prospect / public_               |
+| Persona        | _e.g., Mike Delgado, 52, plumbing HVAC owner_ |
+| Prior brief    | _path or "none"_                              |
+| Tokens source  | _path to globals.css or config_               |
+| Venture code   | _resolved from `crane_ventures`_              |
+| Stitch project | _ID or "will create"_                         |
 
 Present the table and ask: **"Does this capture the intake? Anything to correct before I draft?"**
 
@@ -82,93 +82,125 @@ Write a v1 brief to `.stitch/<target>-ux-brief.md` (create the directory if need
 # <Title> — UX Redesign Brief (v1)
 
 ## Context
+
 <2-4 paragraphs: venture positioning, what this surface is for, why we're redesigning>
 
 ## Scope of this Stitch pass
+
 <surfaces + viewports to be generated>
 
 ## Visit modes
+
 <5-ish modes: action responder, status checker, etc. Be specific to this surface>
 
 ## Objectives, ranked
+
 1. ... 2. ... 3. ... 4. ... 5. ...
 
 ## Entry points (with email context)
+
 <each entry point, with the subject line and CTA from the email that triggers it>
 
 ## Design principles
+
 <3-5 principles that constrain Stitch without dictating layout>
 
 ## Three concepts requested (structurally distinct, not visual variations)
+
 A — <axis>
 B — <axis>
 C — <axis>
 
 ## Worked example (fidelity reference)
+
 <one concept × one surface × one viewport, with inline type specs>
 
 ## Above-fold specs for B and C
+
 <matching A's format>
 
 ## What must be preserved
+
 <typography, palette, shape, voice>
 
 ## What is open
+
 <layout, hierarchy, flow — full creative freedom>
 
 ## Anti-patterns (do not produce)
+
 <bullet list of explicit no-gos>
 
 ## Mobile spec
+
 <390×844, thumb zone, tap target, no hover, no horizontal scroll>
 
 ## Desktop spec
+
 <1280px, right-rail placement, eye-level action>
 
 ## Contact affordance spec
+
 <primary channel, fallback, SLA — operational commitment, not copy>
 
 ## Copy samples (tone calibration)
+
 <5-6 lines showing the voice in concrete context>
 
 ## Error states (must design)
+
 <per-surface error list — each includes named human + next step>
 
 ## Activity timeline schema
+
 <if the surface has time-series data, define the event shape>
 
 ## Money rule
+
 <dollar figures only, never bars or percentages, if applicable>
 
 ## Photo placeholder rule
+
 <harder than "neutral placeholder" — use initials-in-circle or solid shape; never real faces>
 
 ## Accessibility floor
+
 <WCAG 2.2 AA, focus rings with hex, landmarks, tap targets>
 
 ## Success criteria
+
 **Primary acceptance test:** <one measurable design constraint — e.g., "on 390×844, [Pay invoice] button top edge at y ≤ 700px, no scroll">
 
 Secondary: <2-4 testable criteria>
 
 ## Follow-ups (scheduled, not gaps)
+
 <real priorities scheduled after this pass, each with a target window>
 
 ## Data available
+
 <data fields the design can use; ask for flag if design needs data we don't capture>
 
 ## Constraints
+
 <stack, viewports, scope limits>
 
 ## Approver
+
 <name — Stitch output reviewed before any iteration>
 
 ## Appendix: Hard design tokens
+
 ### Color
+
 <hex block — use exact values from globals.css or tailwind config>
+
 ### Typography
+
 <family, weights, sizes, line-heights, tracking>
+
 ### Spacing and shape
+
 <rounded, padding, rhythm, tap target, breakpoints>
 ```
 
@@ -187,6 +219,7 @@ Run `TOTAL_ROUNDS` iterations. Each iteration spawns three parallel agents via t
 > You are a senior product manager at a [venture type] firm. You review UX briefs for client-facing surfaces. You are direct, critical, and do not validate work you find weak.
 
 **Focus:**
+
 - Are user objectives correctly framed and ranked?
 - Are lifecycle states complete? What failure states are missing (declined, paused, expired, disputed, cancelled, overdue)?
 - Are success criteria measurable? Name the primary metric.
@@ -204,6 +237,7 @@ Run `TOTAL_ROUNDS` iterations. Each iteration spawns three parallel agents via t
 > You are a senior UX designer with deep experience using AI design tools — Stitch, v0, Magic Patterns, Figma Make. You know what makes them produce generic output vs considered work.
 
 **Focus:**
+
 - Are design tokens described precisely enough? Vague tokens ("muted violet") produce inconsistent runs across concepts. Require hex.
 - Is mobile-first a slogan or a constraint? Specific viewport, thumb zone, tap targets, no-hover rules.
 - Will three runs produce structurally distinct concepts, or three visual variations of the same layout? Commission structural divergence with explicit axis names.
@@ -218,12 +252,14 @@ Run `TOTAL_ROUNDS` iterations. Each iteration spawns three parallel agents via t
 > You are <NAME>, <AGE>. You own <BUSINESS>. <BACKGROUND: years, team, revenue>. You are not <disqualifying tech trait> but you run a real business with real software. <SPOUSE/PARTNER> handles <ROLE>. You just <TRIGGERING EVENT>. Someone handed you a document that describes people like you — how you use [target surface], what you need from it. Tell them if it sounds right. Call out patronizing language. Flag missing things they don't know about your actual life. Talk plainly. Swear if you want. Don't bullet-point at the top; talk first, then summarize.
 
 **Focus:**
+
 - Does this sound like real me, or like someone who's never talked to someone in my role?
 - What's patronizing? Soft? Over-explained?
 - What's missing about my actual life? (spouse access, SMS vs email, what I'd show my advisor)
 - What would I actually do on this surface vs what they think I'd do?
 
 **Persona discipline:**
+
 - Specific name, age, business details. "A business owner in the 30-55 age range" does not work. "Mike Delgado, 52, plumbing HVAC, 9 employees, $1.8M revenue, wife Elena does books" does.
 - Give the persona permission to push back on the brief's description of them. The most common persona finding: the brief describes the user in ways no user would recognize.
 
@@ -398,11 +434,13 @@ View the three PNGs. Compare.
 **Question to answer, rigorously:** Are the three concepts structurally distinct, or have they collapsed into visual variations of the same layout?
 
 Signal of structural divergence:
+
 - Height ratios differ noticeably (e.g., one concept is ~60% the height of the others)
 - Information hierarchy differs (what dominates the viewport is genuinely different)
 - The "what IS the page?" answer differs per concept
 
 Signal of collapse:
+
 - All three are the same layout with different colors or card treatments
 - The heights are within 10% of each other
 - The dominant element is the same across all three
@@ -469,6 +507,7 @@ Download the updated preview. Present to user. Confirm the iteration landed befo
 Generate the remaining surfaces × viewports for the winning concept.
 
 Typical matrix:
+
 - Remaining surfaces (2 at minimum — e.g., deep-link invoice landing, deep-link proposal landing) × 2 viewports (mobile, desktop) = 4 new screens
 - Plus the desktop variant of the primary surface = 1 more
 

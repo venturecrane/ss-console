@@ -60,6 +60,7 @@ Scan the repo for context:
 - `tailwind.config.*` for palette and type scale
 - Existing page at the target path (e.g., `src/pages/portal/*.astro`) for current data model and surface structure
 - `.stitch/DESIGN.md` if present (established design system for the venture)
+- `.stitch/NAVIGATION.md` if present (navigation specification — governs chrome in concept prompts and strip passes). If absent, warn: "Consider running `/nav-spec` first — briefs produce more consistent results when navigation is spec'd." Proceed without; briefs still have value.
 
 Display an **Intake Summary** table:
 
@@ -70,6 +71,7 @@ Display an **Intake Summary** table:
 | Persona        | _e.g., Mike Delgado, 52, plumbing HVAC owner_ |
 | Prior brief    | _path or "none"_                              |
 | Tokens source  | _path to globals.css or config_               |
+| Nav spec       | _spec-version N or "absent"_                  |
 | Venture code   | _resolved from `crane_ventures`_              |
 | Stitch project | _ID or "will create"_                         |
 
@@ -378,6 +380,15 @@ For each concept, write a prompt file to `/tmp/stitch-prompt-<concept>.txt`. The
 
 <Paragraph explaining the concept's structural philosophy. What does it prioritize? What IS the page?>
 
+NAV CONTRACT (REQUIRED):
+[Only if .stitch/NAVIGATION.md exists. Read the matching surface-class
+ appendix + archetype contract from NAVIGATION.md. Concatenate shared
+ sections (a11y, states, anti-patterns). Inject using the template at
+ ~/.agents/skills/nav-spec/references/injection-snippet-template.md.
+ Size budget: ≤600 tokens.
+ If NAVIGATION.md absent: OMIT this entire block. Describe header/footer
+ inline in PAGE STRUCTURE as before (legacy behavior).]
+
 DESIGN SYSTEM (REQUIRED):
 - Platform: Web, mobile-first, 390x844 viewport only (or desktop 1280px)
 - Palette: <hex values from the brief's Appendix>
@@ -388,14 +399,15 @@ DESIGN SYSTEM (REQUIRED):
 - COLOR RULE (intentional): <any harnessed drift — e.g., "muted indigo family for metadata, not neutral slate">
 
 PAGE STRUCTURE:
+[When NAV CONTRACT is present, do NOT describe header/footer/back-button
+ chrome here — the contract owns chrome. PAGE STRUCTURE describes content.]
 
-1. <Minimal header spec>
-2. <Dominant element — the concept's defining feature>
-3. <Supporting elements>
-4. <Consultant/contact block spec>
-5. <What is explicitly absent>
+1. <Dominant element — the concept's defining feature>
+2. <Supporting elements>
+3. <Consultant/contact block spec>
+4. <What is explicitly absent>
 
-Anti-patterns: <per-surface anti-patterns — not a generic list>
+Anti-patterns: <per-surface anti-patterns — from NAVIGATION.md §8 if present, otherwise from the brief>
 
 Mood: <one sentence that captures the intent>
 ```
@@ -539,6 +551,10 @@ Stitch reliably adds default-web chrome that doesn't belong on an authenticated 
 
 Run a **batch edit** across all generated screens with a hardened strip directive. `edit_screens` supports an array of `selectedScreenIds` — pass all of them in one call.
 
+**When `.stitch/NAVIGATION.md` exists:** generate the REMOVE IF PRESENT list from the spec's anti-patterns (§8) + the matching surface-class appendix's "Chrome forbidden" section, rather than hardcoding the list below. Generate the PRESERVE EXACTLY whitelist from the appendix's "Chrome allowed" section. This keeps strip-pass directives in sync with the spec — when the spec evolves, the strip pass follows automatically.
+
+**When `.stitch/NAVIGATION.md` does NOT exist:** use the hardcoded strip directive below (legacy behavior).
+
 **Strip directive template (customize per run):**
 
 ```
@@ -547,6 +563,10 @@ CONTEXT RESET: This is an authenticated <surface type> surface. The person viewi
 Your job: remove everything that was added as gold-plating or default web chrome, and touch nothing else. Do NOT redesign. Do NOT rebalance layouts. Do NOT reword preserved copy. Only remove.
 
 REMOVE IF PRESENT:
+[If NAVIGATION.md present: enumerate from §8 anti-patterns + surface-class
+ appendix "Chrome forbidden" list. Each item is a concrete selector or
+ description of what to remove.]
+[If absent, use the legacy list:]
 1. Global navigation tabs or menus
 2. Testimonial paragraphs, pull quotes, italicized client-voice sentences
 3. Copyright lines
@@ -557,6 +577,9 @@ REMOVE IF PRESENT:
 8. Stickied bottom bars duplicating a visible primary action
 
 PRESERVE EXACTLY:
+[If NAVIGATION.md present: enumerate from the surface-class appendix
+ "Chrome allowed" list. Each item is a concrete element description.]
+[If absent:]
 <Whitelist every element that should remain — the primary action, the amount display, every named section, the consultant block, all inline artifacts, the minimal header, every link that was explicit in the original prompt>
 
 REPLACEMENT RULE: Do not replace what you remove. If removing creates empty space, leave it empty. The page ends where content ends.
@@ -602,6 +625,7 @@ Write a short log to `.stitch/designs/<target>-v1/RUN-LOG.md` capturing:
 - Winning concept
 - Decisions made by the user
 - Known drifts / over-strips
+- **nav-spec-version**: record the `spec-version` from `.stitch/NAVIGATION.md` front matter (or "absent" if no spec present). This anchors the generation to a specific spec version for future compatibility checks.
 - Next follow-ups
 
 Update `crane-console/config/ventures.json` with the `stitchProjectId` if it was created during this run.
