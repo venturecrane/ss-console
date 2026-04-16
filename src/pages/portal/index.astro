@@ -456,6 +456,114 @@ const contextSubtext = consultantFirst
             }
           </div>
 
+          <!--
+            Section cards — hub-and-spoke primary affordance per
+            NAVIGATION.md Appendix C.1.1 (R16). Without these, the four
+            sibling list routes are orphaned and only reachable by
+            backtracking from a detail.
+          -->
+          <nav
+            aria-label="Portal sections"
+            class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8 md:mb-10"
+          >
+            <a
+              href="/portal/quotes"
+              aria-label="Proposals — review and sign"
+              class="block rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 min-h-[88px] hover:border-[#cbd5e1] hover:shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+            >
+              <div class="flex items-start gap-3">
+                <span
+                  class="material-symbols-outlined text-[color:var(--color-primary)] text-[24px] shrink-0"
+                  aria-hidden="true">description</span
+                >
+                <div class="min-w-0">
+                  <p
+                    class="font-['Plus_Jakarta_Sans'] font-bold text-[15px] leading-[20px] text-[color:var(--color-text-primary)]"
+                  >
+                    Proposals
+                  </p>
+                  <p
+                    class="text-[13px] leading-[18px] text-[color:var(--color-text-secondary)] mt-0.5"
+                  >
+                    Review and sign
+                  </p>
+                </div>
+              </div>
+            </a>
+            <a
+              href="/portal/invoices"
+              aria-label="Invoices — view and pay"
+              class="block rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 min-h-[88px] hover:border-[#cbd5e1] hover:shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+            >
+              <div class="flex items-start gap-3">
+                <span
+                  class="material-symbols-outlined text-[color:var(--color-primary)] text-[24px] shrink-0"
+                  aria-hidden="true">receipt_long</span
+                >
+                <div class="min-w-0">
+                  <p
+                    class="font-['Plus_Jakarta_Sans'] font-bold text-[15px] leading-[20px] text-[color:var(--color-text-primary)]"
+                  >
+                    Invoices
+                  </p>
+                  <p
+                    class="text-[13px] leading-[18px] text-[color:var(--color-text-secondary)] mt-0.5"
+                  >
+                    View and pay
+                  </p>
+                </div>
+              </div>
+            </a>
+            <a
+              href="/portal/documents"
+              aria-label="Documents — engagement files"
+              class="block rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 min-h-[88px] hover:border-[#cbd5e1] hover:shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+            >
+              <div class="flex items-start gap-3">
+                <span
+                  class="material-symbols-outlined text-[color:var(--color-primary)] text-[24px] shrink-0"
+                  aria-hidden="true">folder</span
+                >
+                <div class="min-w-0">
+                  <p
+                    class="font-['Plus_Jakarta_Sans'] font-bold text-[15px] leading-[20px] text-[color:var(--color-text-primary)]"
+                  >
+                    Documents
+                  </p>
+                  <p
+                    class="text-[13px] leading-[18px] text-[color:var(--color-text-secondary)] mt-0.5"
+                  >
+                    Engagement files
+                  </p>
+                </div>
+              </div>
+            </a>
+            <a
+              href="/portal/engagement"
+              aria-label="Progress — milestones and status"
+              class="block rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 min-h-[88px] hover:border-[#cbd5e1] hover:shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+            >
+              <div class="flex items-start gap-3">
+                <span
+                  class="material-symbols-outlined text-[color:var(--color-primary)] text-[24px] shrink-0"
+                  aria-hidden="true">flag</span
+                >
+                <div class="min-w-0">
+                  <p
+                    class="font-['Plus_Jakarta_Sans'] font-bold text-[15px] leading-[20px] text-[color:var(--color-text-primary)]"
+                  >
+                    Progress
+                  </p>
+                  <p
+                    class="text-[13px] leading-[18px] text-[color:var(--color-text-secondary)] mt-0.5"
+                  >
+                    Milestones and status
+                  </p>
+                </div>
+              </div>
+            </a>
+          </nav>
+
           <div
             class="mt-8 md:mt-0 pt-8 md:pt-0 border-t md:border-t-0 border-[color:var(--color-border)]"
           >
