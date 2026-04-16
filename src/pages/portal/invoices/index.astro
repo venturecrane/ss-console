@@ -71,6 +71,10 @@ function formatDate(iso: string | null): string {
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
     <title>Invoices — {BRAND_NAME}</title>
   </head>
   <body class="min-h-screen bg-slate-50">
@@ -150,12 +154,6 @@ function formatDate(iso: string | null): string {
                     {inv.status !== 'paid' && inv.stripe_hosted_url === '#dev-mode' && (
                       <span class="inline-block bg-slate-100 text-slate-500 px-3 py-2 rounded-lg text-xs font-medium">
                         Payment link pending
-                      </span>
-                    )}
-                    {/* Paid indicator */}
-                    {inv.status === 'paid' && (
-                      <span class="inline-block bg-green-50 text-green-700 px-3 py-2 rounded-lg text-xs font-medium">
-                        Paid
                       </span>
                     )}
                   </div>
