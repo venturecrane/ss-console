@@ -284,20 +284,41 @@ describe('sow-template: 3-page structure', () => {
     expect(code).toContain('Page 3 of 3')
   })
 
-  it('imports signing layout constants', () => {
+  it('does not depend on the deleted coordinate-based signing-layout module', () => {
     const code = source()
-    expect(code).toContain("from './signing-layout'")
-    expect(code).toContain('SIGNING_PAGE')
+    expect(code).not.toContain("from './signing-layout'")
+    expect(code).not.toContain('SIGNING_PAGE')
   })
 
-  it('uses signing layout constant for signature space height', () => {
+  it('uses a local constant for the single acceptance block width', () => {
     const code = source()
-    expect(code).toContain('SIGNING_PAGE.signingSpaceHeight')
+    expect(code).toContain('SIGNATURE_BLOCK_WIDTH')
   })
 
-  it('uses signing layout constant for the single acceptance block width', () => {
+  it('embeds SignWell text tags for client signature and date fields', () => {
     const code = source()
-    expect(code).toContain('SIGNING_PAGE.columnWidth')
+    // Template-embedded tags eliminate hardcoded coordinate math at the
+    // provider boundary. SignWell auto-places fields at the tag locations.
+    expect(code).toContain('{{s:${CLIENT_SIGNER_INDEX}}}')
+    expect(code).toContain('{{d:${CLIENT_SIGNER_INDEX}}}')
+  })
+
+  it('renders text tags invisibly (white on white) so they do not show on the PDF', () => {
+    const code = source()
+    // The signature tag and date tag both render with colors.white.
+    // SignWell does not strip text tags from the document body, so they
+    // must be hidden at render time.
+    const tagBlock = code.substring(code.indexOf('CLIENT ACCEPTANCE'), code.indexOf('assents to'))
+    expect(tagBlock).toContain('color: colors.white')
+  })
+
+  it('drops the legacy "Date: _______________" literal placeholder', () => {
+    const code = source()
+    // Pre-tag template had a printed underscore placeholder next to a
+    // coordinate-placed date field; SignWell would stamp the real date on
+    // top and the two would visibly collide. The tag-based layout removes
+    // the placeholder entirely.
+    expect(code).not.toContain('Date: _______________')
   })
 
   it('includes Next Steps section on signing page', () => {

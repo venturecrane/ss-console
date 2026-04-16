@@ -342,11 +342,11 @@ Page 3 includes a brief "Next Steps" section above the signature block so the pa
 │  ┌──────────────────────┐                                    │
 │  │  CLIENT ACCEPTANCE    │                                    │
 │  │                       │                                    │
-│  │  {{sig.client}}       │                                    │
+│  │  {{s:1}}              │  ← SignWell signature tag (hidden) │
 │  │  ___________________  │                                    │
 │  │  {{client.contact}}   │                                    │
 │  │  {{client.title}}     │                                    │
-│  │  {{sig.client_date}}  │                                    │
+│  │  Date: {{d:1}}        │  ← SignWell date tag (hidden)      │
 │  │                       │                                    │
 │  │  SMD Services assents │                                    │
 │  │  by presenting this   │                                    │
@@ -360,30 +360,32 @@ Page 3 includes a brief "Next Steps" section above the signature block so the pa
 
 - Section heading: same style
 - Intro sentence: Inter 400 10pt `#334155`
-- Single signature block aligned to the left signing column geometry
+- Single signature block, 216pt wide, left-aligned to the page margin
 - Column header ("CLIENT ACCEPTANCE"): Inter 600 9pt `#1e293b`
-- Signature area: 60pt tall empty space for SignWell signature field overlay
-- Signature line: 1pt `#334155` rule, full column width
+- Signature area: invisible `{{s:1}}` tag rendered in white at 36pt — SignWell places the signature field over the tag's bounding box
+- Signature line: 1pt `#334155` rule, full column width, directly below the tag
 - Name and title below line: Inter 400 9pt `#334155`
-- Date field: Inter 400 8pt `#64748b`
+- Date row: visible "Date:" label (Inter 400 8pt `#64748b`) followed by an invisible `{{d:1}}` tag rendered in white at 11pt
 - Assent note below date: Inter 400 8pt `#64748b`
 
 **SignWell field placement architecture:**
 
-- Field coordinates are defined in `src/lib/pdf/signing-layout.ts` (single source of truth)
-- Both the Forme template and SignWell field config import from this module
-- `signing-layout.ts` stores canonical PDF-point geometry for the signing page
-- The SignWell adapter converts those PDF points into SignWell's signer runtime coordinate space
-- To re-measure: generate a test PDF, inspect the PDF geometry, update `signing-layout.ts`, then verify the provider transform against a live SignWell request
-- See `src/lib/signwell/field-config.ts` for the SignWell API integration
+Field placement uses **SignWell text tags** embedded in the PDF — not hardcoded coordinates. This keeps field positions and template layout in lockstep by construction.
+
+- The template embeds `{{s:1}}` (client signature) and `{{d:1}}` (client date) inline in the signing block — rendered in white on white so they are invisible on the printed/unsigned PDF.
+- The signing request passes `text_tags: true` in the SignWell API body and omits the `fields[]` array.
+- SignWell scans the uploaded PDF at send time, finds the tags, and creates signature/date fields over their bounding boxes. The client's signature and date stamp are rendered on top of the tags at signing time, fully covering them.
+- Template edits can no longer drift from field placement: moving/resizing the signing block moves the tags with it, which moves the fields.
+- Tag syntax: `{{<type>:<signer>}}` short form — `s` = signature, `d` = date, signer `1` is the client. Ref: [SignWell text tag docs](https://developers.signwell.com/reference/adding-text-tags).
+- Source: `src/lib/pdf/sow-template.tsx` (tag embedding) and `src/lib/sow/service.ts` (the `text_tags: true` flag).
 
 **Placeholder fields:**
 | Field | Source |
-| ------------------------- | ------------------------------- |
-| `{{sig.client}}` | SignWell signature field |
+| ------------------------- | ------------------------------------------- |
+| `{{s:1}}` | SignWell signature field (text-tag placed) |
 | `{{client.contact_name}}` | Client contact record |
 | `{{client.contact_title}}`| Client contact record |
-| `{{sig.client_date}}` | SignWell auto-fill |
+| `{{d:1}}` | SignWell date field — auto-filled on sign |
 
 ### 5.5 Footer
 

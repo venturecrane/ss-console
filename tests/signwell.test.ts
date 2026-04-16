@@ -244,14 +244,19 @@ describe('signwell: sow lifecycle service', () => {
     expect(code).not.toMatch(/prepare\(`[^`]*\$\{/)
   })
 
-  it('builds SignWell requests with recipients, coordinates, and webhook callback', () => {
+  it('builds SignWell requests using text-tag field placement (no hardcoded coordinates)', () => {
     const code = source()
     expect(code).toContain('recipients')
-    expect(code).toContain('fields')
-    expect(code).toContain('getSowSigningFields')
-    expect(code).toContain('client_signature')
-    expect(code).toContain('client_date')
     expect(code).toContain('callback_url')
+    // Text tags drive field placement — the PDF template carries {{s:1}} / {{d:1}}
+    // markers and SignWell parses them when text_tags is true.
+    expect(code).toContain('text_tags: true')
+    // No coordinate-based field config should leak back in.
+    expect(code).not.toContain('getSowSigningFields')
+    expect(code).not.toContain('client_signature')
+    expect(code).not.toContain('client_date')
+    // The fields: [[...]] 2D array is the coordinate-based path; it must stay gone.
+    expect(code).not.toMatch(/fields:\s*\[\s*\[/)
   })
 
   it('records send authorization and signature request before updating quote send state', () => {

@@ -16,7 +16,27 @@
 import React from 'react'
 import { Document, Page, View, Text } from '@formepdf/react'
 import { BRAND_NAME } from '../config/brand'
-import { SIGNING_PAGE } from './signing-layout'
+
+// ---------------------------------------------------------------------------
+// SignWell text-tag field placement
+//
+// The client signature and client date fields are placed by SignWell via
+// text tags embedded in the PDF — not by hardcoded coordinates. SignWell
+// scans the document for these literal strings, places fields over their
+// bounding boxes, and auto-fills them at signing time. Tags are rendered
+// in white on white so they are invisible on the printed/unsigned PDF.
+//
+// Benefits over coordinate-based placement:
+//   - Template edits cannot drift from field position (they move together)
+//   - Zero coordinate math / DPI conversion at the provider boundary
+//   - Adding fields (initials, checkboxes) is a one-line template edit
+//
+// Tag format: {{<type>:<signer>}} — short form, signer 1 is the client.
+// Ref: https://developers.signwell.com/reference/adding-text-tags
+// ---------------------------------------------------------------------------
+
+const SIGNATURE_BLOCK_WIDTH = 216
+const CLIENT_SIGNER_INDEX = 1
 
 // ---------------------------------------------------------------------------
 // Props interface (matches Section 9.2 of sow-template.md)
@@ -579,19 +599,35 @@ export function SOWTemplate(props: SOWTemplateProps) {
           By signing below, the client agrees to the scope, timeline, pricing, and terms described
           in this document. {BRAND_NAME} agrees by presenting this Statement of Work for signature.
         </Text>
-        <View style={{ width: SIGNING_PAGE.columnWidth }}>
+        <View style={{ width: SIGNATURE_BLOCK_WIDTH }}>
           <Text
             style={{
               fontFamily: fonts.body,
               fontWeight: 600,
               fontSize: 9,
               color: colors.textPrimary,
-              marginBottom: SIGNING_PAGE.signingSpaceHeight,
+              marginBottom: 8,
             }}
           >
             CLIENT ACCEPTANCE
           </Text>
+
+          {/* Client signature — SignWell text tag rendered invisibly (white on white).
+              SignWell places the signature field over this tag's bounding box at signing
+              time, so template edits and field placement move together by construction. */}
+          <Text
+            style={{
+              fontFamily: fonts.body,
+              fontSize: 36,
+              color: colors.white,
+              letterSpacing: 1,
+            }}
+          >
+            {`{{s:${CLIENT_SIGNER_INDEX}}}`}
+          </Text>
+
           <View style={{ height: 1, backgroundColor: colors.textBody, marginBottom: 4 }} />
+
           <Text
             style={{
               fontFamily: fonts.body,
@@ -614,17 +650,39 @@ export function SOWTemplate(props: SOWTemplateProps) {
               {client.contactTitle}
             </Text>
           )}
-          <Text
+
+          {/* Date row — "Date:" label visible, SignWell date tag rendered invisibly.
+              SignWell auto-fills the signing date into the tag's bounding box. */}
+          <View
             style={{
-              fontFamily: fonts.body,
-              fontWeight: 400,
-              fontSize: 8,
-              color: colors.textMuted,
+              flexDirection: 'row',
+              alignItems: 'baseline',
               marginTop: 4,
             }}
           >
-            Date: _______________
-          </Text>
+            <Text
+              style={{
+                fontFamily: fonts.body,
+                fontWeight: 400,
+                fontSize: 8,
+                color: colors.textMuted,
+                marginRight: 4,
+              }}
+            >
+              Date:
+            </Text>
+            <Text
+              style={{
+                fontFamily: fonts.body,
+                fontSize: 11,
+                color: colors.white,
+                letterSpacing: 1,
+              }}
+            >
+              {`{{d:${CLIENT_SIGNER_INDEX}}}`}
+            </Text>
+          </View>
+
           <Text
             style={{
               ...finePrintStyle,

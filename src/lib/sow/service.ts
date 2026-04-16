@@ -35,7 +35,6 @@ import {
   uploadSowRevisionPdf,
 } from '../storage/r2'
 import { createSignatureRequest as createSignWellRequest, getSignedPdf } from '../signwell/client'
-import { getSowSigningFields } from '../signwell/field-config'
 import type { SignWellCreateDocumentRequest, SignWellWebhookPayload } from '../signwell/types'
 import { sendEmail } from '../email/resend'
 import { portalWelcomeEmailHtml } from '../email/templates'
@@ -218,8 +217,12 @@ export async function authorizeAndSendSOW(args: {
   })
 
   const signerId = crypto.randomUUID()
-  const signingFields = getSowSigningFields()
   const callbackUrl = buildAppUrl(callbackBaseEnv, '/api/webhooks/signwell')
+  // Field placement is handled by SignWell text tags embedded in the PDF
+  // template (see src/lib/pdf/sow-template.tsx — {{s:1}} / {{d:1}} markers).
+  // We do NOT send a fields[] array; SignWell parses the tags and places
+  // the fields when text_tags is true. This keeps field positions and
+  // template layout in lockstep by construction.
   const signRequest: SignWellCreateDocumentRequest = {
     name: `SOW — ${entityName}`,
     files: [{ file_base64: pdfBase64, name: 'sow.pdf' }],
@@ -231,22 +234,7 @@ export async function authorizeAndSendSOW(args: {
       },
     ],
     callback_url: callbackUrl,
-    fields: [
-      [
-        {
-          ...signingFields.signature,
-          required: true,
-          recipient_id: signerId,
-          api_id: 'client_signature',
-        },
-        {
-          ...signingFields.date,
-          required: true,
-          recipient_id: signerId,
-          api_id: 'client_date',
-        },
-      ],
-    ],
+    text_tags: true,
     draft: false,
     custom_requester_name: customRequesterName,
     subject: `SOW for Signature — ${entityName}`,
