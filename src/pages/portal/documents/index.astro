@@ -29,6 +29,14 @@ interface DocumentEntry {
   key: string
   uploaded: string
   isPdf: boolean
+  /**
+   * Authored category eyebrow. Only populated when the category is known
+   * from an authoritative source (e.g. the SOW entry we synthesize from
+   * the quote). R2 objects do not carry category metadata and must not
+   * fabricate one — see CLAUDE.md "No fabricated client-facing content"
+   * (Pattern B).
+   */
+  category: string | null
 }
 
 const documents: DocumentEntry[] = []
@@ -54,6 +62,7 @@ if (clientId) {
         key: obj.key,
         uploaded: obj.uploaded.toISOString(),
         isPdf: name.toLowerCase().endsWith('.pdf'),
+        category: null,
       })
     }
 
@@ -68,6 +77,7 @@ if (clientId) {
           key: revision.signed_storage_key ?? revision.unsigned_storage_key,
           uploaded: revision.signed_at ?? revision.rendered_at,
           isPdf: true,
+          category: 'SOW',
         })
       }
     }
@@ -80,6 +90,21 @@ function formatDate(iso: string): string {
     month: 'short',
     day: 'numeric',
   })
+}
+
+/**
+ * File-type icon mapping. Purely visual affordance derived from the
+ * filename extension — not client-facing authored content.
+ */
+function iconFor(name: string, isPdf: boolean): string {
+  if (isPdf) return 'picture_as_pdf'
+  const lower = name.toLowerCase()
+  if (/\.(jpe?g|png|gif|webp|heic|svg)$/.test(lower)) return 'image'
+  if (/\.(xlsx?|csv|numbers)$/.test(lower)) return 'table_chart'
+  if (/\.(docx?|rtf|txt|md|pages)$/.test(lower)) return 'description'
+  if (/\.(pptx?|keynote)$/.test(lower)) return 'slideshow'
+  if (/\.(zip|tar|gz|7z)$/.test(lower)) return 'folder_zip'
+  return 'description'
 }
 ---
 
@@ -139,24 +164,42 @@ function formatDate(iso: string): string {
                 href={`/api/portal/documents/${doc.key}`}
                 class="block bg-white rounded-lg border border-slate-200 p-stack hover:border-slate-300 hover:shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
               >
-                <div class="flex items-center justify-between">
+                <div class="flex items-center justify-between gap-row">
                   <div class="flex items-center gap-row min-w-0 flex-1">
-                    <span
-                      class={`material-symbols-outlined text-[20px] ${doc.isPdf ? 'text-red-500' : 'text-slate-400'}`}
+                    <div
+                      class="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-[color:var(--color-meta)]"
                       aria-hidden="true"
                     >
-                      {doc.isPdf ? 'picture_as_pdf' : 'description'}
-                    </span>
+                      <span class="material-symbols-outlined text-[20px]">
+                        {iconFor(doc.name, doc.isPdf)}
+                      </span>
+                    </div>
                     <div class="min-w-0">
-                      <p class="text-sm font-medium text-slate-900 truncate">{doc.name}</p>
-                      <p class="text-xs text-slate-400">{formatDate(doc.uploaded)}</p>
+                      <p class="text-sm font-semibold text-slate-900 truncate">{doc.name}</p>
+                      <p class="text-[12px] font-semibold uppercase tracking-[0.08em] text-[color:var(--color-meta)] mt-0.5">
+                        {doc.category ? (
+                          <>
+                            {doc.category}
+                            <span class="mx-1" aria-hidden="true">
+                              •
+                            </span>
+                          </>
+                        ) : null}
+                        Shared {formatDate(doc.uploaded)}
+                      </p>
                     </div>
                   </div>
-                  <div class="flex-shrink-0 ml-4">
-                    <span class="inline-flex items-center justify-center px-4 py-2.5 bg-slate-100 text-slate-600 text-sm font-medium rounded-lg min-h-[44px] whitespace-nowrap">
-                      {doc.isPdf ? 'View' : 'Download'}
+                  <span
+                    class="flex-shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-full text-[color:var(--color-meta)]"
+                    aria-hidden="true"
+                  >
+                    <span class="material-symbols-outlined text-[20px]">
+                      {doc.isPdf ? 'open_in_new' : 'download'}
                     </span>
-                  </div>
+                  </span>
+                  <span class="sr-only">
+                    {doc.isPdf ? 'View' : 'Download'} {doc.name}
+                  </span>
                 </div>
               </a>
             ))}

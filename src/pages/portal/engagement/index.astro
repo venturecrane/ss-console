@@ -8,6 +8,7 @@ import { listMilestones } from '../../../lib/db/milestones'
 import type { Milestone } from '../../../lib/db/milestones'
 import PortalHeader from '../../../components/portal/PortalHeader.astro'
 import PortalTabs from '../../../components/portal/PortalTabs.astro'
+import ConsultantBlock from '../../../components/portal/ConsultantBlock.astro'
 import SkipToMain from '../../../components/SkipToMain.astro'
 
 /**
@@ -17,6 +18,12 @@ import SkipToMain from '../../../components/SkipToMain.astro'
  * scope summary, and timeline. Protected by auth middleware (role=client).
  *
  * Resolves entity via getPortalClient() using users.entity_id.
+ *
+ * Visual layout follows .stitch/designs/portal-v2-spec-test/engagement-*:
+ * single-column stack on mobile; 8/4 main + right-rail grid on desktop.
+ * Right rail renders ConsultantBlock only when authored consultant data
+ * exists — no fabricated progress percentages or outreach copy
+ * (CLAUDE.md no-fabricated-content policy).
  */
 
 const session = Astro.locals.session!
@@ -40,7 +47,8 @@ if (entityId) {
   }
 }
 
-// Status indicator helpers
+// Status indicator helpers — kept intact so the state map remains the single
+// source of truth for milestone semantics (color/icon/label per state).
 const statusIcon: Record<string, { color: string; icon: string; label: string }> = {
   pending: { color: 'text-slate-400 bg-slate-100', icon: '&#9675;', label: 'Pending' },
   in_progress: { color: 'text-blue-600 bg-blue-50', icon: '&#8635;', label: 'In Progress' },
@@ -56,6 +64,14 @@ function formatDate(iso: string | null): string {
     day: 'numeric',
   })
 }
+
+const consultantFirstName = engagement?.consultant_name
+  ? engagement.consultant_name.trim().split(/\s+/)[0] || engagement.consultant_name
+  : undefined
+
+const currentMilestoneLabel = engagement
+  ? (CLIENT_STATUS_LABELS[engagement.status] ?? engagement.status)
+  : null
 ---
 
 <!doctype html>
@@ -75,109 +91,181 @@ function formatDate(iso: string | null): string {
     />
     <title>Progress — {BRAND_NAME}</title>
   </head>
-  <body class="min-h-screen bg-slate-50">
+  <body class="min-h-screen bg-[color:var(--color-background)]">
     <SkipToMain />
     <PortalHeader
       clientName={clientName}
       consultantPhone={engagement?.consultant_phone ?? null}
-      consultantFirstName={engagement?.consultant_name
-        ? engagement.consultant_name.trim().split(/\s+/)[0] || engagement.consultant_name
-        : undefined}
+      consultantFirstName={consultantFirstName}
     >
       <form method="POST" action="/api/auth/logout">
         <button
           type="submit"
-          class="inline-flex items-center min-h-11 px-2 -mx-2 text-sm text-slate-500 hover:text-slate-700 active:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
+          aria-label="Sign out"
+          title="Sign out"
+          class="inline-flex items-center justify-center w-9 h-9 rounded-full text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[color:var(--color-primary)]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 transition-colors"
         >
-          Sign out
+          <span class="material-symbols-outlined text-[20px]">logout</span>
         </button>
       </form>
     </PortalHeader>
 
     <PortalTabs pathname={Astro.url.pathname} />
 
-    <main id="main" role="main" class="max-w-5xl mx-auto px-4 py-8 pb-24 md:pb-8">
+    <main id="main" role="main" class="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 pb-24 md:pb-10">
       <a
         href="/portal"
-        aria-label="Home"
-        class="inline-flex items-center gap-1 min-h-11 px-2 -mx-2 mb-4 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-lg"
+        class="inline-flex items-center gap-1 min-h-11 -mx-2 px-2 mb-stack text-label uppercase text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
       >
-        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+        <span class="material-symbols-outlined text-[16px]" aria-hidden="true">arrow_back</span>
         Home
       </a>
 
-      <h1 class="text-xl font-semibold text-slate-900 mb-6">Progress</h1>
+      <h1
+        class="font-['Plus_Jakarta_Sans'] text-display text-[color:var(--color-text-primary)] mb-section"
+      >
+        Progress
+      </h1>
 
       {
         !engagement ? (
-          <div class="bg-white rounded-lg border border-slate-200 p-card">
-            <p class="text-slate-600">
+          <div class="bg-[color:var(--color-surface)] rounded-card border border-[color:var(--color-border)] p-card">
+            <p class="text-body text-[color:var(--color-text-secondary)]">
               No active engagement. When your engagement begins, progress will appear here.
             </p>
           </div>
         ) : (
-          <div class="space-y-card">
-            {/* Status and Timeline */}
-            <div class="bg-white rounded-lg border border-slate-200 p-card">
-              <h2 class="text-base font-semibold text-slate-900 mb-4">Overview</h2>
+          <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-section lg:items-start">
+            <div class="flex flex-col gap-section min-w-0">
+              {/* Overview card */}
+              <section class="bg-[color:var(--color-surface)] rounded-card border border-[color:var(--color-border)] p-card">
+                <h2 class="font-['Plus_Jakarta_Sans'] text-title text-[color:var(--color-text-primary)]">
+                  Overview
+                </h2>
 
-              {engagement.scope_summary && (
-                <p class="text-sm text-slate-600 mb-4">{engagement.scope_summary}</p>
-              )}
-
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-stack text-sm">
-                <div>
-                  <span class="text-slate-500">Started</span>
-                  <p class="font-medium text-slate-900">{formatDate(engagement.start_date)}</p>
-                </div>
-                <div>
-                  <span class="text-slate-500">Estimated Completion</span>
-                  <p class="font-medium text-slate-900">{formatDate(engagement.estimated_end)}</p>
-                </div>
-                <div>
-                  <span class="text-slate-500">Current Milestone</span>
-                  <p class="font-medium text-slate-900">
-                    {CLIENT_STATUS_LABELS[engagement.status] ?? engagement.status}
+                {engagement.scope_summary && (
+                  <p class="mt-stack text-body text-[color:var(--color-text-secondary)]">
+                    {engagement.scope_summary}
                   </p>
+                )}
+
+                <div class="mt-card pt-card border-t border-[color:var(--color-border)] grid grid-cols-1 sm:grid-cols-3 gap-stack">
+                  <div>
+                    <p class="text-label uppercase text-[color:var(--color-text-muted)]">Started</p>
+                    <p class="mt-1 text-body font-medium text-[color:var(--color-text-primary)]">
+                      {formatDate(engagement.start_date)}
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-label uppercase text-[color:var(--color-text-muted)]">
+                      Estimated completion
+                    </p>
+                    <p class="mt-1 text-body font-medium text-[color:var(--color-text-primary)]">
+                      {formatDate(engagement.estimated_end)}
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-label uppercase text-[color:var(--color-text-muted)]">
+                      Current milestone
+                    </p>
+                    <p class="mt-1 text-body font-semibold text-[color:var(--color-primary)]">
+                      {currentMilestoneLabel}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </section>
 
-            {/* Milestones */}
-            <div class="bg-white rounded-lg border border-slate-200 p-card">
-              <h2 class="text-base font-semibold text-slate-900 mb-4">Milestones</h2>
+              {/* Milestones card */}
+              <section class="bg-[color:var(--color-surface)] rounded-card border border-[color:var(--color-border)] p-card">
+                <h2 class="font-['Plus_Jakarta_Sans'] text-title text-[color:var(--color-text-primary)]">
+                  Milestones
+                </h2>
 
-              {milestones.length === 0 ? (
-                <p class="text-sm text-slate-500">
-                  Milestones will appear here as your engagement progresses.
-                </p>
-              ) : (
-                <div class="space-y-row">
-                  {milestones.map((m) => {
-                    const indicator = statusIcon[m.status] ?? statusIcon.pending
-                    return (
-                      <div class="flex items-start gap-row py-2">
-                        <span
-                          class={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-medium shrink-0 mt-0.5 ${indicator.color}`}
-                          set:html={indicator.icon}
-                        />
-                        <div class="flex-1 min-w-0">
-                          <p class="text-sm font-medium text-slate-900">{m.name}</p>
-                          {m.description && (
-                            <p class="text-sm text-slate-500 mt-0.5">{m.description}</p>
-                          )}
-                          <div class="flex items-center gap-row mt-1 text-xs text-slate-400">
-                            <span>{indicator.label}</span>
-                            {m.due_date && <span>Due: {formatDate(m.due_date)}</span>}
-                            {m.completed_at && <span>Completed: {formatDate(m.completed_at)}</span>}
+                {milestones.length === 0 ? (
+                  <p class="mt-stack text-body text-[color:var(--color-text-secondary)]">
+                    Milestones will appear here as your engagement progresses.
+                  </p>
+                ) : (
+                  <ol class="mt-card relative flex flex-col gap-row">
+                    {/* Vertical rail connecting milestone markers. */}
+                    <span
+                      aria-hidden="true"
+                      class="absolute left-[15px] top-4 bottom-4 w-px bg-[color:var(--color-border)]"
+                    />
+                    {milestones.map((m, idx) => {
+                      const indicator = statusIcon[m.status] ?? statusIcon.pending
+                      const isCompleted = m.status === 'completed'
+                      const isInProgress = m.status === 'in_progress'
+                      const isSkipped = m.status === 'skipped'
+                      const isPending = !isCompleted && !isInProgress && !isSkipped
+                      const markerClass = isCompleted
+                        ? 'bg-[color:var(--color-complete)] text-white'
+                        : isInProgress
+                          ? 'bg-[color:var(--color-primary)] text-white ring-4 ring-[color:var(--color-primary)]/10'
+                          : 'bg-[color:var(--color-surface)] text-[color:var(--color-text-muted)] border border-[color:var(--color-border)]'
+                      const nameClass =
+                        isPending || isSkipped
+                          ? 'text-body font-semibold text-[color:var(--color-text-muted)]'
+                          : 'text-body font-semibold text-[color:var(--color-text-primary)]'
+                      return (
+                        <li class="relative z-10 flex items-start gap-stack">
+                          <span
+                            class:list={[
+                              'shrink-0 w-8 h-8 rounded-full flex items-center justify-center',
+                              markerClass,
+                            ]}
+                            aria-hidden="true"
+                          >
+                            {isCompleted ? (
+                              <span class="material-symbols-outlined text-[18px]">check</span>
+                            ) : (
+                              <span class="text-caption font-semibold">{idx + 1}</span>
+                            )}
+                          </span>
+                          <div class="flex-1 min-w-0">
+                            <p class={nameClass}>{m.name}</p>
+                            {m.description && (
+                              <p class="mt-1 text-body text-[color:var(--color-text-secondary)]">
+                                {m.description}
+                              </p>
+                            )}
+                            <p class="mt-1 text-caption text-[color:var(--color-text-muted)]">
+                              <span class="sr-only">Status: </span>
+                              {isCompleted && m.completed_at
+                                ? `Completed ${formatDate(m.completed_at)}`
+                                : isInProgress && m.due_date
+                                  ? `Due ${formatDate(m.due_date)}`
+                                  : isInProgress
+                                    ? indicator.label
+                                    : m.due_date
+                                      ? `${indicator.label} · Due ${formatDate(m.due_date)}`
+                                      : indicator.label}
+                            </p>
                           </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+                        </li>
+                      )
+                    })}
+                  </ol>
+                )}
+              </section>
             </div>
+
+            {/* Right rail — consultant only. No fabricated progress stats or
+                uncontracted outreach CTAs. Rail is hidden on mobile where it
+                would push the milestones below the fold; on desktop it sticks
+                alongside the main column. */}
+            {engagement.consultant_name && (
+              <aside class="hidden lg:block lg:sticky lg:top-10 space-y-card">
+                <ConsultantBlock
+                  name={engagement.consultant_name}
+                  photoUrl={engagement.consultant_photo_url ?? null}
+                  role={engagement.consultant_role ?? null}
+                  nextTouchpointAt={engagement.next_touchpoint_at ?? null}
+                  nextTouchpointLabel={engagement.next_touchpoint_label ?? null}
+                  phone={engagement.consultant_phone ?? null}
+                />
+              </aside>
+            )}
           </div>
         )
       }

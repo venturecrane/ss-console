@@ -185,81 +185,78 @@ const consultantPhone = engagement?.consultant_phone ?? null
 
     <PortalTabs pathname={Astro.url.pathname} />
 
-    <main
-      id="main"
-      role="main"
-      class="max-w-[1120px] mx-auto px-4 sm:px-6 py-8 sm:py-12 pb-24 md:pb-12"
-    >
+    <main id="main" role="main" class="max-w-[1120px] mx-auto px-6 py-8 sm:py-12 pb-24 md:pb-12">
       <a
         href="/portal/quotes"
-        aria-label="All quotes"
-        class="inline-flex items-center gap-1 min-h-11 px-2 -mx-2 mb-4 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-lg"
+        aria-label="All proposals"
+        class="inline-flex items-center gap-2 min-h-11 -mx-2 px-2 mb-8 text-caption font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-lg transition-colors"
       >
-        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
-        All quotes
+        <span class="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_back</span>
+        All proposals
       </a>
-      <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,720px)_340px] gap-section lg:gap-16">
+      <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-section lg:gap-12">
         <!-- Main column -->
-        <section class="min-w-0 space-y-12">
+        <section class="min-w-0 max-w-3xl">
           <!-- Hero -->
-          <div>
+          <div class="mb-section">
             <p class="text-label uppercase text-[color:var(--color-meta)]">Proposal</p>
             <h1
-              class="mt-3 font-['Plus_Jakarta_Sans'] font-extrabold text-display sm:text-[42px] tracking-[-0.02em] text-[color:var(--color-text-primary)]"
+              class="mt-3 text-display font-extrabold tracking-[-0.02em] text-[color:var(--color-text-primary)]"
             >
               {engagementTitle}
             </h1>
-            <p class="mt-5 text-body-lg text-[color:var(--color-text-secondary)] max-w-2xl">
+            <p class="mt-stack text-body-lg text-[color:var(--color-text-secondary)] max-w-xl">
               {engagementSubtitle}
             </p>
           </div>
 
           <!-- Mobile action block (hidden on desktop — right rail handles it there) -->
-          <div class="lg:hidden">
+          <div class="lg:hidden mb-section">
             <div
-              class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-card"
+              class="bg-[color:var(--color-surface)] rounded-xl border border-[color:var(--color-border)] p-card flex flex-col gap-stack"
             >
-              <p
-                class="text-caption font-medium tracking-[0.01em] text-[color:var(--color-text-muted)] uppercase"
-              >
-                Total engagement
-              </p>
-              <div class="mt-2">
+              <div class="flex flex-col gap-row">
+                <p class="text-label uppercase text-[color:var(--color-text-secondary)]">
+                  Total engagement
+                </p>
                 <MoneyDisplay amountCents={totalCents} size="display" />
+                <p class="text-caption text-[color:var(--color-text-secondary)]">
+                  {paymentSplitText}
+                </p>
               </div>
-              <p class="mt-3 text-caption text-[color:var(--color-text-secondary)]">
-                {paymentSplitText}
-              </p>
 
               {
                 isSigned ? (
-                  <div class="mt-6 flex items-start gap-row rounded-lg bg-[color:var(--color-complete)]/10 p-stack">
-                    <span class="material-symbols-outlined text-[20px] text-[color:var(--color-complete)] mt-0.5">
+                  <div class="flex items-start gap-row rounded-lg border border-[color:var(--color-complete)]/30 bg-[color:var(--color-complete)]/10 p-stack">
+                    <span
+                      class="material-symbols-outlined text-[20px] text-[color:var(--color-complete)] mt-0.5"
+                      style="font-variation-settings: 'FILL' 1"
+                    >
                       check_circle
                     </span>
-                    <div>
-                      <p class="text-sm font-semibold text-[color:var(--color-text-primary)]">
+                    <div class="min-w-0">
+                      <p class="text-caption font-semibold text-[color:var(--color-text-primary)]">
                         Signed{quote.accepted_at ? ` ${formatDate(quote.accepted_at)}` : ''}.
                       </p>
                       {surface.next && (
-                        <p class="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                        <p class="mt-1 text-caption text-[color:var(--color-text-secondary)]">
                           {surface.next}
                         </p>
                       )}
                     </div>
                   </div>
                 ) : isSuperseded ? (
-                  <div class="mt-6 rounded-lg border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-stack">
-                    <p class="text-sm font-semibold text-[color:var(--color-text-primary)]">
+                  <div class="rounded-lg border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-stack">
+                    <p class="text-caption font-semibold text-[color:var(--color-text-primary)]">
                       A revised version is available.
                     </p>
-                    <p class="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                    <p class="mt-1 text-caption text-[color:var(--color-text-secondary)]">
                       This proposal has been replaced by a newer version.
                     </p>
                     {supersedingQuoteId && (
                       <a
                         href={`/portal/quotes/${supersedingQuoteId}`}
-                        class="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+                        class="mt-3 inline-flex items-center gap-1.5 text-caption font-semibold text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
                       >
                         Go to the latest proposal
                         <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
@@ -267,24 +264,24 @@ const consultantPhone = engagement?.consultant_phone ?? null
                     )}
                   </div>
                 ) : isDeclined ? (
-                  <p class="mt-6 text-sm text-[color:var(--color-text-secondary)]">
+                  <p class="text-caption text-[color:var(--color-text-secondary)]">
                     This proposal was declined.{surface.next ? ` ${surface.next}` : ''}
                   </p>
                 ) : isExpired ? (
                   surface.next ? (
-                    <p class="mt-6 text-sm text-[color:var(--color-text-secondary)]">
+                    <p class="text-caption text-[color:var(--color-text-secondary)]">
                       {surface.next}
                     </p>
                   ) : null
                 ) : hasActiveSignature ? (
                   <a
                     href="#sign-surface"
-                    class="mt-6 inline-flex w-full items-center justify-center min-h-[44px] px-6 py-3 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white text-base font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                    class="inline-flex w-full items-center justify-center min-h-[44px] px-6 py-3 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white text-body font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
                   >
                     Review and sign
                   </a>
                 ) : (
-                  <p class="mt-6 text-sm text-[color:var(--color-text-secondary)]">
+                  <p class="text-caption text-[color:var(--color-text-secondary)]">
                     Your proposal is being prepared. You'll get an email when it's ready to sign.
                   </p>
                 )
@@ -294,7 +291,7 @@ const consultantPhone = engagement?.consultant_phone ?? null
                 pdfHref && (
                   <a
                     href={pdfHref}
-                    class="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--color-meta)] hover:text-[color:var(--color-primary)] transition-colors"
+                    class="inline-flex items-center gap-1.5 text-caption font-semibold text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)] transition-colors"
                   >
                     View the full PDF
                     <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
@@ -304,140 +301,129 @@ const consultantPhone = engagement?.consultant_phone ?? null
             </div>
           </div>
 
-          <!-- What you'll get — rendered only when deliverables are authored. -->
-          {
-            deliverables.length > 0 && (
-              <div class="pt-2">
-                <div class="h-px bg-[color:var(--color-border)] mb-8" />
-                <h2 class="font-['Plus_Jakarta_Sans'] font-bold text-title text-[color:var(--color-text-primary)] mb-6">
-                  What you'll get
-                </h2>
-                <ul class="space-y-5">
-                  {deliverables.map((d) => (
-                    <li class="flex items-start gap-stack">
-                      <span
-                        class="material-symbols-outlined text-[color:var(--color-meta)] mt-0.5"
-                        style="font-variation-settings: 'FILL' 1"
-                      >
-                        check_circle
-                      </span>
-                      <div class="min-w-0">
-                        <p class="text-base font-semibold text-[color:var(--color-text-primary)]">
-                          {d.title}
-                        </p>
-                        {d.body && (
-                          <p class="mt-1 text-body text-[color:var(--color-text-secondary)]">
-                            {d.body}
-                          </p>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )
-          }
+          <!-- Section stack -->
+          <div class="space-y-section">
+            <!-- What you'll get — rendered only when deliverables are authored. -->
+            {
+              deliverables.length > 0 && (
+                <section class="border-t border-[color:var(--color-border)] pt-section">
+                  <h2 class="text-title text-[color:var(--color-text-primary)] mb-card">
+                    What you'll get
+                  </h2>
+                  <ul class="space-y-card">
+                    {deliverables.map((d) => (
+                      <li class="flex items-start gap-stack">
+                        <span
+                          class="material-symbols-outlined text-[color:var(--color-complete)] mt-0.5"
+                          style="font-variation-settings: 'FILL' 1"
+                        >
+                          check_circle
+                        </span>
+                        <div class="min-w-0">
+                          <h3 class="text-heading text-[color:var(--color-text-primary)]">
+                            {d.title}
+                          </h3>
+                          {d.body && (
+                            <p class="mt-1 text-body text-[color:var(--color-text-secondary)]">
+                              {d.body}
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )
+            }
 
-          <!-- How we'll work (only when authored — never synthesized; #377) -->
-          {
-            schedule.length > 0 && (
-              <div class="pt-2">
-                <div class="h-px bg-[color:var(--color-border)] mb-8" />
-                <h2 class="font-['Plus_Jakarta_Sans'] font-bold text-title text-[color:var(--color-text-primary)] mb-6">
-                  How we'll work
-                </h2>
-                <div class="space-y-section">
-                  {schedule.map((row) => (
-                    <div class="flex gap-stack">
-                      <div class="w-[72px] shrink-0">
-                        <span class="text-caption font-semibold tracking-[0.01em] text-[color:var(--color-meta)] uppercase">
+            <!-- How we'll work (only when authored — never synthesized; #377) -->
+            {
+              schedule.length > 0 && (
+                <section class="border-t border-[color:var(--color-border)] pt-section">
+                  <h2 class="text-title text-[color:var(--color-text-primary)] mb-card">
+                    How we'll work
+                  </h2>
+                  <div class="space-y-stack">
+                    {schedule.map((row) => (
+                      <div class="flex items-baseline gap-card">
+                        <span class="w-[96px] shrink-0 text-label uppercase text-[color:var(--color-text-secondary)]">
                           {row.label}
                         </span>
+                        <p class="flex-1 text-body text-[color:var(--color-text-secondary)]">
+                          {row.body}
+                        </p>
                       </div>
-                      <p class="flex-1 text-body text-[color:var(--color-text-secondary)]">
-                        {row.body}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          }
+                    ))}
+                  </div>
+                </section>
+              )
+            }
 
-          <!-- Terms -->
-          <div class="pt-2">
-            <div class="h-px bg-[color:var(--color-border)] mb-8"></div>
-            <h2
-              class="font-['Plus_Jakarta_Sans'] font-bold text-title text-[color:var(--color-text-primary)] mb-6"
-            >
-              Terms
-            </h2>
-            <div class="space-y-row text-body">
-              <p class="text-[color:var(--color-text-primary)]">
-                <span class="font-semibold">Total:</span>{' '}
-                <MoneyDisplay amountCents={totalCents} size="body" emphasize />
-              </p>
-              <p class="text-[color:var(--color-text-secondary)]">{paymentSplitText}</p>
-            </div>
-          </div>
-
-          <!-- Sign surface (anchor target; visible on all sizes when active) -->
-          {
-            hasActiveSignature && (
-              <div id="sign-surface" class="pt-2">
-                <div class="h-px bg-[color:var(--color-border)] mb-8" />
-                <h2 class="font-['Plus_Jakarta_Sans'] font-bold text-title text-[color:var(--color-text-primary)] mb-4">
-                  Review and sign
-                </h2>
-                <p class="text-body text-[color:var(--color-text-secondary)] mb-5">
-                  The full Statement of Work is below. Sign when you're ready.
+            <!-- Terms -->
+            <section class="border-t border-[color:var(--color-border)] pt-section">
+              <h2 class="text-title text-[color:var(--color-text-primary)] mb-card">Terms</h2>
+              <div
+                class="bg-[color:var(--color-surface)] rounded-xl border border-[color:var(--color-border)] p-card space-y-row"
+              >
+                <p class="text-body text-[color:var(--color-text-primary)]">
+                  <span class="font-semibold">Total:</span>{' '}
+                  <MoneyDisplay amountCents={totalCents} size="body" emphasize />
                 </p>
-                <div
-                  class="rounded-lg border border-[color:var(--color-border)] overflow-hidden bg-[color:var(--color-surface)]"
-                  style="min-height: 600px;"
+                <p class="text-body text-[color:var(--color-text-secondary)]">
+                  {paymentSplitText}
+                </p>
+              </div>
+            </section>
+
+            <!-- Sign surface (anchor target; visible on all sizes when active) -->
+            {
+              hasActiveSignature && (
+                <section
+                  id="sign-surface"
+                  class="border-t border-[color:var(--color-border)] pt-section"
                 >
-                  <iframe
-                    src={`https://app.signwell.com/sign/${activeSignatureRequest!.provider_request_id}`}
-                    class="w-full border-0"
-                    style="min-height: 600px;"
-                    title="Sign Statement of Work"
-                    allow="clipboard-write"
-                  />
-                </div>
-              </div>
-            )
-          }
-
-          <!-- Consultant block (mobile — above footer; desktop hides here, shown in rail) -->
-          {
-            consultantName && (
-              <div class="lg:hidden pt-2">
-                <div class="h-px bg-[color:var(--color-border)] mb-8" />
-                <ConsultantBlock
-                  name={consultantName}
-                  photoUrl={engagement?.consultant_photo_url ?? null}
-                  role={engagement?.consultant_role ?? null}
-                  nextTouchpointAt={engagement?.next_touchpoint_at ?? null}
-                  nextTouchpointLabel={engagement?.next_touchpoint_label ?? null}
-                  phone={engagement?.consultant_phone ?? null}
-                />
-                {consultantFirst && (
-                  <p class="mt-4 text-caption text-[color:var(--color-text-muted)]">
-                    Text {consultantFirst} with questions.
+                  <h2 class="text-title text-[color:var(--color-text-primary)] mb-stack">
+                    Review and sign
+                  </h2>
+                  <p class="text-body text-[color:var(--color-text-secondary)] mb-stack">
+                    The full Statement of Work is below. Sign when you're ready.
                   </p>
-                )}
-              </div>
-            )
-          }
+                  <div
+                    class="rounded-xl border border-[color:var(--color-border)] overflow-hidden bg-[color:var(--color-surface)]"
+                    style="min-height: 600px;"
+                  >
+                    <iframe
+                      src={`https://app.signwell.com/sign/${activeSignatureRequest!.provider_request_id}`}
+                      class="w-full border-0"
+                      style="min-height: 600px;"
+                      title="Sign Statement of Work"
+                      allow="clipboard-write"
+                    />
+                  </div>
+                </section>
+              )
+            }
 
-          <!-- Back link -->
-          <div class="pt-4">
-            <a
-              href="/portal/quotes"
-              class="text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] transition-colors"
-            >
-              Back to proposals
-            </a>
+            <!-- Consultant block (mobile — above footer; desktop hides here, shown in rail) -->
+            {
+              consultantName && (
+                <section class="lg:hidden border-t border-[color:var(--color-border)] pt-section">
+                  <ConsultantBlock
+                    name={consultantName}
+                    photoUrl={engagement?.consultant_photo_url ?? null}
+                    role={engagement?.consultant_role ?? null}
+                    nextTouchpointAt={engagement?.next_touchpoint_at ?? null}
+                    nextTouchpointLabel={engagement?.next_touchpoint_label ?? null}
+                    phone={engagement?.consultant_phone ?? null}
+                  />
+                  {consultantFirst && (
+                    <p class="mt-stack text-caption text-[color:var(--color-text-muted)]">
+                      Text {consultantFirst} with questions.
+                    </p>
+                  )}
+                </section>
+              )
+            }
           </div>
         </section>
 
@@ -446,35 +432,31 @@ const consultantPhone = engagement?.consultant_phone ?? null
           <div class="sticky top-8 space-y-card">
             <!-- Sign card -->
             <div
-              class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-card"
+              class="bg-[color:var(--color-surface)] rounded-xl border border-[color:var(--color-border)] p-card"
             >
               <div>
-                <p
-                  class="text-caption font-medium tracking-[0.01em] text-[color:var(--color-text-muted)] uppercase"
-                >
-                  Total engagement
-                </p>
-                <div class="mt-2">
-                  <MoneyDisplay amountCents={totalCents} size="display" />
-                </div>
-                <p class="mt-2 text-caption text-[color:var(--color-text-secondary)]">
+                <MoneyDisplay amountCents={totalCents} size="display" />
+                <p class="mt-2 text-body text-[color:var(--color-text-secondary)]">
                   {paymentSplitText}
                 </p>
               </div>
 
               {
                 isSigned ? (
-                  <div class="mt-6 rounded-lg bg-[color:var(--color-complete)]/10 p-stack">
+                  <div class="mt-card rounded-lg border border-[color:var(--color-complete)]/30 bg-[color:var(--color-complete)]/10 p-stack">
                     <div class="flex items-start gap-row">
-                      <span class="material-symbols-outlined text-[20px] text-[color:var(--color-complete)] mt-0.5">
+                      <span
+                        class="material-symbols-outlined text-[20px] text-[color:var(--color-complete)] mt-0.5"
+                        style="font-variation-settings: 'FILL' 1"
+                      >
                         check_circle
                       </span>
-                      <div>
-                        <p class="text-sm font-semibold text-[color:var(--color-text-primary)]">
+                      <div class="min-w-0">
+                        <p class="text-caption font-semibold text-[color:var(--color-text-primary)]">
                           Signed{quote.accepted_at ? ` ${formatDate(quote.accepted_at)}` : ''}.
                         </p>
                         {surface.next && (
-                          <p class="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                          <p class="mt-1 text-caption text-[color:var(--color-text-secondary)]">
                             {surface.next}
                           </p>
                         )}
@@ -482,14 +464,14 @@ const consultantPhone = engagement?.consultant_phone ?? null
                     </div>
                   </div>
                 ) : isSuperseded ? (
-                  <div class="mt-6 rounded-lg border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-stack">
-                    <p class="text-sm font-semibold text-[color:var(--color-text-primary)]">
+                  <div class="mt-card rounded-lg border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-stack">
+                    <p class="text-caption font-semibold text-[color:var(--color-text-primary)]">
                       A revised version is available.
                     </p>
                     {supersedingQuoteId && (
                       <a
                         href={`/portal/quotes/${supersedingQuoteId}`}
-                        class="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+                        class="mt-3 inline-flex items-center gap-1.5 text-caption font-semibold text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
                       >
                         Go to the latest proposal
                         <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
@@ -498,19 +480,19 @@ const consultantPhone = engagement?.consultant_phone ?? null
                   </div>
                 ) : isDeclined || isExpired ? (
                   surface.next ? (
-                    <p class="mt-6 text-sm text-[color:var(--color-text-secondary)]">
+                    <p class="mt-card text-caption text-[color:var(--color-text-secondary)]">
                       {surface.next}
                     </p>
                   ) : null
                 ) : hasActiveSignature ? (
                   <a
                     href="#sign-surface"
-                    class="mt-6 inline-flex w-full items-center justify-center min-h-[44px] px-6 py-3 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white text-base font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                    class="mt-card inline-flex w-full items-center justify-center min-h-[44px] px-6 py-3 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white text-body font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
                   >
                     Review and sign
                   </a>
                 ) : (
-                  <p class="mt-6 text-sm text-[color:var(--color-text-secondary)]">
+                  <p class="mt-card text-caption text-[color:var(--color-text-secondary)]">
                     Your proposal is being prepared. You'll get an email when it's ready.
                   </p>
                 )
@@ -520,7 +502,7 @@ const consultantPhone = engagement?.consultant_phone ?? null
                 pdfHref && (
                   <a
                     href={pdfHref}
-                    class="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--color-meta)] hover:text-[color:var(--color-primary)] transition-colors"
+                    class="mt-stack inline-flex items-center gap-1.5 text-caption font-semibold text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)] transition-colors"
                   >
                     View the full PDF
                     <span class="material-symbols-outlined text-[16px]">arrow_forward</span>

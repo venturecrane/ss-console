@@ -231,7 +231,7 @@ const consultantFirstName: string | null = consultantName
       <a
         href="/portal/invoices"
         aria-label="All invoices"
-        class="inline-flex items-center gap-1 min-h-11 px-2 -mx-2 mb-4 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-lg"
+        class="inline-flex items-center gap-1 min-h-11 px-2 -mx-2 mb-4 text-label uppercase font-semibold text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-lg"
       >
         <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
         All invoices
@@ -241,54 +241,48 @@ const consultantFirstName: string | null = consultantName
         <section class="flex flex-col gap-section min-w-0">
           <!-- Eyebrow + title + subtitle -->
           <div>
-            <p
-              class="text-caption font-semibold uppercase tracking-[0.08em] text-[color:var(--color-meta)]"
-            >
-              Invoice
-            </p>
+            <p class="text-label uppercase text-[color:var(--color-text-secondary)]">Invoice</p>
             <h1
-              class="mt-2 font-['Plus_Jakarta_Sans'] font-extrabold text-display sm:text-[36px] tracking-[-0.02em] text-[color:var(--color-text-primary)]"
+              class="mt-3 font-['Plus_Jakarta_Sans'] font-extrabold text-display tracking-[-0.02em] text-[color:var(--color-text-primary)]"
             >
               {invoiceTitle}
             </h1>
             {
               periodSubtitle && (
-                <p class="mt-3 text-[16px] sm:text-body-lg text-[color:var(--color-text-secondary)]">
+                <p class="mt-3 text-body-lg text-[color:var(--color-text-secondary)]">
                   {periodSubtitle}
                 </p>
               )
             }
             {
               !isPaid && dueCaption && (
-                <p class="mt-3 text-caption font-medium text-[color:var(--color-meta)]">
+                <p class="mt-4 inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--color-text-muted)]">
+                  <span class="material-symbols-outlined text-[18px]" aria-hidden="true">
+                    calendar_today
+                  </span>
                   Due {dueCaption}
                 </p>
               )
             }
             {
               isPaid && paidShortDate && (
-                <p class="mt-3 text-caption font-medium text-[color:var(--color-complete)]">
-                  Paid {paidShortDate}.
+                <p class="mt-4 inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--color-complete)]">
+                  <span class="material-symbols-outlined text-[18px]" aria-hidden="true">
+                    check_circle
+                  </span>
+                  Paid {paidShortDate}
                 </p>
               )
             }
           </div>
 
-          <!-- Mobile-only hero: MoneyDisplay + Pay CTA above the fold.
+          <!-- Mobile-only hero card: accent-barred surface with amount + CTA.
                The right rail ActionCard covers this on desktop. -->
           <div class="md:hidden">
-            <MoneyDisplay amountCents={amountCents} size="display" />
-            {
-              !isPaid && (
-                <p class="mt-2 text-caption text-[color:var(--color-text-muted)]">
-                  Remaining balance
-                </p>
-              )
-            }
             {
               isErrorState && (
                 <div
-                  class="mt-6 rounded-lg border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-stack"
+                  class="mb-card rounded-lg border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-stack"
                   role="status"
                 >
                   <div class="flex items-start gap-row">
@@ -296,14 +290,14 @@ const consultantFirstName: string | null = consultantName
                       error
                     </span>
                     <div class="min-w-0">
-                      <p class="text-sm font-semibold text-[color:var(--color-text-primary)]">
+                      <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
                         {isDeclined
                           ? 'Payment declined'
                           : isCardExpired
                             ? 'Card expired'
                             : 'Link expired'}
                       </p>
-                      <p class="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                      <p class="mt-1 text-body text-[color:var(--color-text-secondary)]">
                         {surface.next}
                       </p>
                     </div>
@@ -311,48 +305,65 @@ const consultantFirstName: string | null = consultantName
                 </div>
               )
             }
-            {
-              !isPaid &&
-                !isLinkExpired &&
-                (isPayable ? (
-                  <>
-                    <a
-                      href={stripeUrl!}
-                      class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white text-base font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
-                    >
-                      {isDeclined
-                        ? 'Try again'
-                        : isCardExpired
-                          ? 'Update payment method'
-                          : 'Pay invoice'}
-                      <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
-                    </a>
-                    <div class="mt-3 flex items-center gap-2 text-[13px] text-[color:var(--color-text-muted)]">
-                      <span class="material-symbols-outlined text-[16px]">lock</span>
-                      <span>Secure payment via Stripe</span>
+            <div
+              class="relative overflow-hidden rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-card"
+            >
+              <div
+                class="absolute left-0 top-0 h-full w-1 bg-[color:var(--color-primary)]"
+                aria-hidden="true"
+              >
+              </div>
+              <MoneyDisplay amountCents={amountCents} size="display" />
+              {
+                !isPaid && (
+                  <p class="mt-1 text-label uppercase text-[color:var(--color-text-muted)]">
+                    Remaining balance
+                  </p>
+                )
+              }
+              {
+                !isPaid &&
+                  !isLinkExpired &&
+                  (isPayable ? (
+                    <>
+                      <a
+                        href={stripeUrl!}
+                        class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                      >
+                        {isDeclined
+                          ? 'Try again'
+                          : isCardExpired
+                            ? 'Update payment method'
+                            : 'Pay invoice'}
+                      </a>
+                      <div class="mt-3 flex items-center justify-center gap-2 text-label uppercase font-semibold text-[color:var(--color-text-muted)]">
+                        <span class="material-symbols-outlined text-[16px]" aria-hidden="true">
+                          lock
+                        </span>
+                        <span>Secure payment via Stripe</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-secondary)] font-semibold">
+                      Payment link pending
                     </div>
-                  </>
-                ) : (
-                  <div class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-secondary)] text-base font-semibold">
-                    Payment link pending
-                  </div>
-                ))
-            }
+                  ))
+              }
+            </div>
           </div>
 
           <!-- What's included -->
           <div>
             <h2
-              class="font-['Plus_Jakarta_Sans'] font-bold text-[20px] sm:text-title text-[color:var(--color-text-primary)]"
+              class="font-['Plus_Jakarta_Sans'] font-bold text-title text-[color:var(--color-text-primary)]"
             >
               What's included
             </h2>
-            <div class="mt-4 border-t border-[color:var(--color-border)]"></div>
-            <ul class="flex flex-col">
+            <ul class="mt-stack flex flex-col">
               {
                 lineItems.map((li) => (
                   <li class="flex justify-between items-baseline gap-card py-5 border-b border-[color:var(--color-border)]/60">
-                    <span class="text-body text-[color:var(--color-text-primary)] max-w-[480px]">
+                    <span class="text-body text-[color:var(--color-text-secondary)] max-w-[480px]">
                       {li.description}
                     </span>
                     <MoneyDisplay amountCents={li.amount_cents} size="body" emphasize />
@@ -360,61 +371,107 @@ const consultantFirstName: string | null = consultantName
                 ))
               }
             </ul>
-            <div
-              class="mt-4 border-t-2 border-[color:var(--color-text-primary)] pt-5 flex justify-between items-baseline"
-            >
-              <span class="text-base font-bold text-[color:var(--color-text-primary)]">Total</span>
+            <div class="mt-card pt-5 flex justify-between items-baseline">
+              <span
+                class="font-['Plus_Jakarta_Sans'] font-bold text-title text-[color:var(--color-text-primary)]"
+                >Total</span
+              >
               <MoneyDisplay amountCents={totalCents} size="h2" />
             </div>
           </div>
 
           <!-- Payment details -->
-          <div
-            class="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-card sm:p-section"
-          >
+          <div>
             <h2
-              class="font-['Plus_Jakarta_Sans'] font-bold text-body-lg text-[color:var(--color-text-primary)]"
+              class="font-['Plus_Jakarta_Sans'] font-bold text-title text-[color:var(--color-text-primary)]"
             >
               Payment details
             </h2>
-            <ul
-              class="mt-4 flex flex-col gap-row text-[15px] text-[color:var(--color-text-secondary)]"
-            >
+            <ul class="mt-stack grid grid-cols-1 sm:grid-cols-2 gap-card">
               {
                 dueShortDate && !isPaid && (
-                  <li class="flex items-center gap-row">
-                    <span class="material-symbols-outlined text-[20px] text-[color:var(--color-text-muted)]">
+                  <li class="flex items-start gap-row rounded-lg bg-[color:var(--color-surface)] p-card">
+                    <span
+                      class="material-symbols-outlined text-[20px] text-[color:var(--color-primary)]"
+                      style="font-variation-settings: 'FILL' 1;"
+                    >
                       event
                     </span>
-                    <span>Due {dueShortDate}</span>
+                    <div class="min-w-0">
+                      <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                        Due {dueShortDate}
+                      </p>
+                    </div>
                   </li>
                 )
               }
               {
                 isPaid && paidShortDate && (
-                  <li class="flex items-center gap-row">
-                    <span class="material-symbols-outlined text-[20px] text-[color:var(--color-complete)]">
+                  <li class="flex items-start gap-row rounded-lg bg-[color:var(--color-surface)] p-card">
+                    <span
+                      class="material-symbols-outlined text-[20px] text-[color:var(--color-complete)]"
+                      style="font-variation-settings: 'FILL' 1;"
+                    >
                       check_circle
                     </span>
-                    <span>Paid {paidShortDate}</span>
+                    <div class="min-w-0">
+                      <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                        Paid {paidShortDate}
+                      </p>
+                    </div>
                   </li>
                 )
               }
-              <li class="flex items-center gap-row">
+              <li
+                class="flex items-start gap-row rounded-lg bg-[color:var(--color-surface)] p-card"
+              >
                 <span
-                  class="material-symbols-outlined text-[20px] text-[color:var(--color-text-muted)]"
+                  class="material-symbols-outlined text-[20px] text-[color:var(--color-primary)]"
+                  style="font-variation-settings: 'FILL' 1;"
                 >
-                  verified_user
+                  check_circle
                 </span>
-                <span>Payment processed securely via Stripe</span>
+                <div class="min-w-0">
+                  <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                    Secure payment via Stripe
+                  </p>
+                  <p class="mt-1 text-caption text-[color:var(--color-text-secondary)]">
+                    End-to-end encrypted processing.
+                  </p>
+                </div>
+              </li>
+              <li
+                class="flex items-start gap-row rounded-lg bg-[color:var(--color-surface)] p-card"
+              >
+                <span
+                  class="material-symbols-outlined text-[20px] text-[color:var(--color-primary)]"
+                  style="font-variation-settings: 'FILL' 1;"
+                >
+                  check_circle
+                </span>
+                <div class="min-w-0">
+                  <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                    Card or bank transfer
+                  </p>
+                  <p class="mt-1 text-caption text-[color:var(--color-text-secondary)]">
+                    Multiple payment methods accepted.
+                  </p>
+                </div>
               </li>
               {
                 depositNote && (
-                  <li class="flex items-center gap-row">
-                    <span class="material-symbols-outlined text-[20px] text-[color:var(--color-text-muted)]">
+                  <li class="flex items-start gap-row rounded-lg bg-[color:var(--color-surface)] p-card sm:col-span-2">
+                    <span
+                      class="material-symbols-outlined text-[20px] text-[color:var(--color-primary)]"
+                      style="font-variation-settings: 'FILL' 1;"
+                    >
                       history
                     </span>
-                    <span>{depositNote}</span>
+                    <div class="min-w-0">
+                      <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                        {depositNote}
+                      </p>
+                    </div>
                   </li>
                 )
               }
@@ -440,7 +497,7 @@ const consultantFirstName: string | null = consultantName
           <!-- Mobile-only back link -->
           <a
             href="/portal"
-            class="md:hidden inline-flex items-center gap-2 text-sm font-semibold text-[color:var(--color-meta)] hover:underline"
+            class="md:hidden inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
           >
             <span class="material-symbols-outlined text-[18px]">arrow_back</span>
             Engagement dashboard
@@ -451,8 +508,11 @@ const consultantFirstName: string | null = consultantName
         <aside class="hidden md:flex md:flex-col gap-card md:sticky md:top-8">
           {
             isPaid ? (
-              <div class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-card sm:p-section">
-                <MoneyDisplay amountCents={amountCents} size="display" />
+              <div class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-section">
+                <p class="text-label uppercase text-[color:var(--color-complete)]">Paid</p>
+                <div class="mt-3">
+                  <MoneyDisplay amountCents={amountCents} size="display" />
+                </div>
                 {paidShortDate && (
                   <p class="mt-4 text-caption font-medium text-[color:var(--color-complete)]">
                     Paid {paidShortDate}.
@@ -460,15 +520,17 @@ const consultantFirstName: string | null = consultantName
                 )}
               </div>
             ) : isLinkExpired ? (
-              <div class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-card sm:p-section">
+              <div class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-section">
                 <p class="text-label uppercase text-[color:var(--color-attention)]">Link expired</p>
                 <div class="mt-3">
                   <MoneyDisplay amountCents={amountCents} size="display" />
-                  <p class="mt-2 text-caption font-medium tracking-[0.01em] text-[color:var(--color-text-muted)]">
+                  <p class="mt-2 text-label uppercase text-[color:var(--color-text-muted)]">
                     Remaining balance
                   </p>
                 </div>
-                <p class="mt-6 text-sm text-[color:var(--color-text-secondary)]">{surface.next}</p>
+                <p class="mt-6 text-body text-[color:var(--color-text-secondary)]">
+                  {surface.next}
+                </p>
               </div>
             ) : (
               <>
@@ -482,10 +544,10 @@ const consultantFirstName: string | null = consultantName
                         error
                       </span>
                       <div class="min-w-0">
-                        <p class="text-sm font-semibold text-[color:var(--color-text-primary)]">
+                        <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
                           {isDeclined ? 'Payment declined' : 'Card expired'}
                         </p>
-                        <p class="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                        <p class="mt-1 text-body text-[color:var(--color-text-secondary)]">
                           {surface.next}
                         </p>
                       </div>
@@ -493,25 +555,38 @@ const consultantFirstName: string | null = consultantName
                   </div>
                 )}
                 {isPayable ? (
-                  <ActionCard
-                    pillLabel={
+                  <section
+                    class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-section"
+                    aria-label={
                       isDeclined ? 'Try again' : isCardExpired ? 'Update payment method' : pillLabel
                     }
-                    amountCents={amountCents}
-                    amountLabel="Remaining balance"
-                    ctaLabel={
-                      isDeclined
+                  >
+                    <p class="text-label uppercase text-[color:var(--color-text-muted)]">
+                      Remaining balance
+                    </p>
+                    <div class="mt-1">
+                      <MoneyDisplay amountCents={amountCents} size="display" />
+                    </div>
+                    <a
+                      href={stripeUrl!}
+                      class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                    >
+                      {isDeclined
                         ? 'Try again'
                         : isCardExpired
                           ? 'Update payment method'
-                          : 'Pay invoice'
-                    }
-                    ctaHref={stripeUrl!}
-                    ctaSubtext="Secure payment via Stripe."
-                  />
+                          : 'Pay invoice'}
+                    </a>
+                    <div class="mt-4 flex items-center justify-center gap-2 text-label uppercase font-semibold text-[color:var(--color-text-muted)]">
+                      <span class="material-symbols-outlined text-[16px]" aria-hidden="true">
+                        lock
+                      </span>
+                      <span>Secure payment via Stripe</span>
+                    </div>
+                  </section>
                 ) : (
                   <section
-                    class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-card sm:p-section"
+                    class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-section"
                     aria-label="Payment link pending"
                   >
                     <p class="text-label uppercase text-[color:var(--color-text-muted)]">
@@ -519,7 +594,7 @@ const consultantFirstName: string | null = consultantName
                     </p>
                     <div class="mt-3">
                       <MoneyDisplay amountCents={amountCents} size="display" />
-                      <p class="mt-2 text-caption font-medium tracking-[0.01em] text-[color:var(--color-text-muted)]">
+                      <p class="mt-2 text-label uppercase text-[color:var(--color-text-muted)]">
                         Remaining balance
                       </p>
                     </div>
@@ -544,7 +619,7 @@ const consultantFirstName: string | null = consultantName
 
           <a
             href="/portal"
-            class="inline-flex items-center gap-2 text-sm font-semibold text-[color:var(--color-meta)] hover:underline px-2"
+            class="inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] px-2"
           >
             <span class="material-symbols-outlined text-[18px]">arrow_back</span>
             Engagement dashboard

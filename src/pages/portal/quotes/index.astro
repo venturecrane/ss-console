@@ -116,59 +116,64 @@ const statusLabelMap: Record<string, string> = {
           </div>
         ) : (
           <div class="space-y-row">
-            {quotes.map((quote: Quote) => (
-              <a
-                href={`/portal/quotes/${quote.id}`}
-                class="block bg-white rounded-lg border border-slate-200 p-stack hover:border-slate-300 hover:shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
-              >
-                <div class="flex flex-col sm:flex-row sm:items-center gap-row">
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 mb-1">
-                      <span
-                        class={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColorMap[quote.status] ?? 'bg-slate-100 text-slate-600'}`}
-                      >
-                        {statusLabelMap[quote.status] ?? quote.status}
-                      </span>
-                      {quote.status === 'sent' && quote.expires_at && (
-                        <span class="text-xs text-amber-600">
-                          {(() => {
-                            const diffMs = new Date(quote.expires_at).getTime() - Date.now()
-                            const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
-                            return diffDays > 0
-                              ? `Expires in ${diffDays} day${diffDays !== 1 ? 's' : ''}`
-                              : 'Expired'
-                          })()}
+            {quotes.map((quote: Quote) => {
+              const dateLabel = quote.sent_at
+                ? formatDate(quote.sent_at)
+                : formatDate(quote.created_at)
+              const expiresLabel =
+                quote.status === 'sent' && quote.expires_at
+                  ? (() => {
+                      const diffMs = new Date(quote.expires_at).getTime() - Date.now()
+                      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+                      return diffDays > 0
+                        ? `Expires in ${diffDays} day${diffDays !== 1 ? 's' : ''}`
+                        : 'Expired'
+                    })()
+                  : null
+              return (
+                <a
+                  href={`/portal/quotes/${quote.id}`}
+                  class="block bg-white rounded-lg border border-slate-200 p-stack hover:border-slate-300 hover:shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                >
+                  <div class="flex items-center justify-between gap-stack">
+                    <div class="flex-1 min-w-0">
+                      <div class="flex flex-wrap items-center gap-2 mb-1">
+                        <span
+                          class={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColorMap[quote.status] ?? 'bg-slate-100 text-slate-600'}`}
+                        >
+                          {statusLabelMap[quote.status] ?? quote.status}
+                        </span>
+                        <h2 class="text-sm font-semibold text-slate-900 leading-tight truncate">
+                          Proposal #{quote.id.slice(0, 8)}
+                        </h2>
+                      </div>
+                      <div class="flex items-baseline gap-2 flex-wrap">
+                        <span class="text-lg font-bold text-[color:var(--color-primary)]">
+                          {formatCurrency(quote.total_price)}
+                        </span>
+                        <span class="text-xs text-slate-400">{dateLabel}</span>
+                        {expiresLabel && <span class="text-xs text-amber-600">{expiresLabel}</span>}
+                      </div>
+                    </div>
+
+                    <div class="flex items-center gap-stack flex-shrink-0">
+                      {quote.status === 'sent' ? (
+                        <span class="hidden sm:inline-flex items-center justify-center px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg min-h-[44px] whitespace-nowrap">
+                          Review &amp; Sign
+                        </span>
+                      ) : (
+                        <span class="hidden sm:inline-flex items-center justify-center px-4 py-2.5 bg-slate-100 text-slate-600 text-sm font-medium rounded-lg min-h-[44px] whitespace-nowrap">
+                          View Details
                         </span>
                       )}
-                    </div>
-                    <p class="text-sm text-slate-500">
-                      {quote.sent_at
-                        ? `Sent ${formatDate(quote.sent_at)}`
-                        : `Created ${formatDate(quote.created_at)}`}
-                    </p>
-                  </div>
-
-                  <div class="flex items-center gap-stack">
-                    <div class="text-right">
-                      <p class="text-lg font-semibold text-slate-900">
-                        {formatCurrency(quote.total_price)}
-                      </p>
-                      <p class="text-xs text-slate-400">Engagement price</p>
-                    </div>
-
-                    {quote.status === 'sent' ? (
-                      <span class="inline-flex items-center justify-center px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg min-h-[44px] whitespace-nowrap">
-                        Review &amp; Sign
+                      <span class="material-symbols-outlined text-slate-400" aria-hidden="true">
+                        chevron_right
                       </span>
-                    ) : (
-                      <span class="inline-flex items-center justify-center px-4 py-2.5 bg-slate-100 text-slate-600 text-sm font-medium rounded-lg min-h-[44px] whitespace-nowrap">
-                        View Details
-                      </span>
-                    )}
+                    </div>
                   </div>
-                </div>
-              </a>
-            ))}
+                </a>
+              )
+            })}
           </div>
         )
       }
