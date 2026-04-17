@@ -30,9 +30,9 @@ const formatted = new Intl.NumberFormat('en-US', {
 
 const sizeClass =
   size === 'display'
-    ? "font-['Plus_Jakarta_Sans'] font-extrabold text-[32px] leading-[36px] tracking-[-0.02em] text-[color:var(--color-text-primary)]"
+    ? "font-['Plus_Jakarta_Sans'] font-extrabold text-display tracking-[-0.02em] text-[color:var(--color-text-primary)]"
     : size === 'h2'
-      ? "font-['Plus_Jakarta_Sans'] font-bold text-[22px] leading-[28px] text-[color:var(--color-text-primary)]"
+      ? "font-['Plus_Jakarta_Sans'] font-bold text-title text-[color:var(--color-text-primary)]"
       : emphasize
         ? 'text-base leading-6 font-semibold text-[color:var(--color-text-primary)]'
         : 'text-base leading-6 font-medium text-[color:var(--color-text-primary)]'

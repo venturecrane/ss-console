@@ -101,11 +101,7 @@ const touchpointText = formatTouchpoint()
       <p class="text-base font-semibold text-[color:var(--color-text-primary)]">
         {name}
       </p>
-      {
-        role && (
-          <p class="text-[13px] leading-[18px] text-[color:var(--color-text-muted)]">{role}</p>
-        )
-      }
+      {role && <p class="text-caption text-[color:var(--color-text-muted)]">{role}</p>}
       {
         touchpointText && (
           <p class="mt-2 text-sm text-[color:var(--color-text-secondary)]">
