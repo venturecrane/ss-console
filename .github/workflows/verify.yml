@@ -59,5 +59,8 @@ jobs:
       - name: Build Review Mining Worker
         run: cd workers/review-mining && npm ci && npx wrangler deploy --dry-run --outdir=dist
 
-      - name: Build Social Listening Worker
-        run: cd workers/social-listening && npm ci && npx wrangler deploy --dry-run --outdir=dist
+      # NOTE: workers/social-listening is not built or deployed here. It has
+      # never been deployed to prod — CI-verifying undeployed code creates
+      # false confidence and masks drift. See venture-tracked issue for
+      # Pipeline 4 first-deploy (secrets provisioning, dry-run via /run,
+      # digest-routing review). Re-add the build step when that issue ships.
