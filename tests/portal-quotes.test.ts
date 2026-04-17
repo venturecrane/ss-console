@@ -176,28 +176,35 @@ describe('portal quotes: quote list page', () => {
     expect(source()).toContain('getPortalClient')
   })
 
-  it('displays status badges', () => {
+  it('resolves status via portal status helpers (R7 registry)', () => {
     const code = source()
-    expect(code).toContain('statusColorMap')
-    expect(code).toContain('bg-blue-100')
-    expect(code).toContain('bg-green-100')
-    expect(code).toContain('bg-red-100')
-    expect(code).toContain('bg-amber-100')
+    // After UI-PATTERNS R7: the list page delegates status rendering to
+    // PortalListItem + StatusPill via tone/label resolvers. It no longer
+    // carries its own statusColorMap / raw bg-*-100 classes.
+    expect(code).toContain('resolveQuoteTone')
+    expect(code).toContain('resolveQuoteLabel')
   })
 
   it('displays total price for each quote', () => {
+    // Amount is passed to PortalListItem as cents (total_price * 100).
     expect(source()).toContain('quote.total_price')
   })
 
-  it('displays date sent', () => {
-    expect(source()).toContain('quote.sent_at')
+  it('displays a date on every row', () => {
+    // sent_at (or created_at fallback for not-yet-sent) rendered via the
+    // shared formatShortDate through PortalListItem metaCaption.
+    const code = source()
+    expect(code).toContain('formatShortDate')
+    expect(code).toContain('metaCaption')
   })
 
-  it('shows Review & Sign CTA for sent quotes', () => {
+  it('signals the sent state via tone, not an inline CTA button', () => {
     const code = source()
-    expect(code).toContain('Review')
-    expect(code).toContain('Sign')
-    expect(code).toContain("quote.status === 'sent'")
+    // UI-PATTERNS R2 (redundancy): the card is the link. No standalone
+    // "Review & Sign" button alongside the card-is-link affordance. The
+    // pill's `info` tone on sent quotes does the work.
+    expect(code).toContain('resolveQuoteTone')
+    expect(code).not.toMatch(/"Review\s*&\s*Sign"/)
   })
 
   it('links to detail page', () => {

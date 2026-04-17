@@ -151,6 +151,10 @@ Mappings cover arbitrary typography (`text-[Npx]` → scale tokens), raw Tailwin
 
 Skip if `docs/style/UI-PATTERNS.md` absent.
 
+### 3c-bis. Portal list-row primitive check (UI-PATTERNS R7)
+
+When the target surface is a portal list index (`src/pages/portal/*/index.astro`), the generated output MUST render iterated rows through `src/components/portal/PortalListItem.astro` — not fresh `<a class="block bg-white ...">` markup. Helpers (`formatDate`, `formatCurrency`, `statusColorMap`, `statusLabelMap`, `typeLabels`) MUST come from `src/lib/portal/formatters.ts` and `src/lib/portal/status.ts`. The presence + no-local-redef assertions in `tests/forbidden-strings.test.ts` fail CI on any regeneration that re-rolls inline markup or local formatters. See `docs/style/UI-PATTERNS.md` R7 for the full contract.
+
 ### 3d. Hallucination strip pass
 
 After normalize, strip elements Stitch produced despite the UI CONTRACT forbidding them:

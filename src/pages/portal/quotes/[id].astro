@@ -11,6 +11,7 @@ import { getQuoteForEntity, parseSchedule, parseDeliverables } from '../../../li
 import type { ScheduleRow, DeliverableRow } from '../../../lib/db/quotes'
 import { getSOWStateForQuote } from '../../../lib/sow/service'
 import { resolveProposalState } from '../../../lib/portal/states'
+import { formatShortDate } from '../../../lib/portal/formatters'
 
 /**
  * Portal quote detail — C-hybrid proposal landing.
@@ -48,9 +49,6 @@ if (!quote) {
 const sowState = await getSOWStateForQuote(env.DB, session.orgId, quote.id)
 const activeSignatureRequest = sowState.openSignatureRequest
 const downloadableRevision = sowState.downloadableRevision
-
-const formatDate = (d: string) =>
-  new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
 const depositPctDisplay = Math.round(quote.deposit_pct * 100)
 const balancePctDisplay = 100 - depositPctDisplay
@@ -237,7 +235,7 @@ const consultantPhone = engagement?.consultant_phone ?? null
                     </span>
                     <div class="min-w-0">
                       <p class="text-caption font-semibold text-[color:var(--color-text-primary)]">
-                        Signed{quote.accepted_at ? ` ${formatDate(quote.accepted_at)}` : ''}.
+                        Signed{quote.accepted_at ? ` ${formatShortDate(quote.accepted_at)}` : ''}.
                       </p>
                       {surface.next && (
                         <p class="mt-1 text-caption text-[color:var(--color-text-secondary)]">
@@ -454,7 +452,7 @@ const consultantPhone = engagement?.consultant_phone ?? null
                       </span>
                       <div class="min-w-0">
                         <p class="text-caption font-semibold text-[color:var(--color-text-primary)]">
-                          Signed{quote.accepted_at ? ` ${formatDate(quote.accepted_at)}` : ''}.
+                          Signed{quote.accepted_at ? ` ${formatShortDate(quote.accepted_at)}` : ''}.
                         </p>
                         {surface.next && (
                           <p class="mt-1 text-caption text-[color:var(--color-text-secondary)]">

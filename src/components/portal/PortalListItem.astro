@@ -1,0 +1,125 @@
+---
+/**
+ * The portal list row. One component, two variants:
+ *
+ *   variant='status'   — proposals, invoices. Pill + title + money + meta.
+ *   variant='document' — documents. Icon + title + eyebrow. No money, no pill.
+ *
+ * This is the ONLY place list-row markup should exist on portal surfaces.
+ * Enforced by `tests/forbidden-strings.test.ts` — any `.map(` inside a
+ * portal index page must render through <PortalListItem>.
+ *
+ * Card shell is inlined (no separate _PortalListRow.astro) because splitting
+ * didn't earn its keep for two callers. If document and status layouts
+ * diverge materially in the future, split then.
+ *
+ * The whole card is a link. The chevron/trailing-icon indicates
+ * interactivity; no redundant "View details" button (UI-PATTERNS R2:
+ * one signal per fact).
+ */
+
+import MoneyDisplay from './MoneyDisplay.astro'
+import StatusPill from './StatusPill.astro'
+import type { Tone } from '../../lib/portal/status'
+
+type StatusProps = {
+  variant: 'status'
+  href: string
+  tone: Tone
+  toneLabel: string
+  title: string
+  amountCents: number
+  metaCaption?: string | null
+  trailingCaption?: string | null
+}
+
+type DocumentProps = {
+  variant: 'document'
+  href: string
+  icon: string
+  title: string
+  eyebrow?: string | null
+  trailingIcon: 'open_in_new' | 'download'
+  /** If true, link opens in a new tab. */
+  external?: boolean
+}
+
+type Props = StatusProps | DocumentProps
+
+const props = Astro.props as Props
+
+const shellClass = [
+  'block bg-[color:var(--color-surface)]',
+  'rounded-[var(--radius-card)] border border-[color:var(--color-border)]',
+  'p-card',
+  'transition-colors',
+  'hover:border-[color:var(--color-text-muted)]',
+  'focus-visible:outline-none',
+  'focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2',
+].join(' ')
+---
+
+{
+  props.variant === 'status' ? (
+    <a href={props.href} class={shellClass}>
+      <div class="flex items-center gap-stack min-h-[44px]">
+        <div class="flex-1 min-w-0 flex flex-col gap-row">
+          <div class="flex items-center gap-row flex-wrap">
+            <StatusPill tone={props.tone} label={props.toneLabel} />
+            <span class="text-heading text-[color:var(--color-text-primary)] truncate">
+              {props.title}
+            </span>
+          </div>
+          <div class="flex items-baseline gap-row flex-wrap">
+            <MoneyDisplay amountCents={props.amountCents} size="h2" />
+            {props.metaCaption && (
+              <span class="text-caption text-[color:var(--color-text-muted)]">
+                {props.metaCaption}
+              </span>
+            )}
+            {props.trailingCaption && (
+              <span class="text-caption text-[color:var(--color-attention)]">
+                {props.trailingCaption}
+              </span>
+            )}
+          </div>
+        </div>
+        <span
+          class="material-symbols-outlined text-[color:var(--color-text-muted)] flex-shrink-0"
+          aria-hidden="true"
+        >
+          chevron_right
+        </span>
+      </div>
+    </a>
+  ) : (
+    <a
+      href={props.href}
+      class={shellClass}
+      {...(props.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+    >
+      <div class="flex items-center gap-stack min-h-[44px]">
+        <span
+          class="flex-shrink-0 w-10 h-10 rounded-lg bg-[color:var(--color-primary)]/10 flex items-center justify-center text-[color:var(--color-primary)]"
+          aria-hidden="true"
+        >
+          <span class="material-symbols-outlined">{props.icon}</span>
+        </span>
+        <div class="flex-1 min-w-0 flex flex-col gap-row">
+          <span class="text-heading text-[color:var(--color-text-primary)] truncate">
+            {props.title}
+          </span>
+          {props.eyebrow && (
+            <span class="text-label uppercase text-[color:var(--color-meta)]">{props.eyebrow}</span>
+          )}
+        </div>
+        <span
+          class="material-symbols-outlined text-[color:var(--color-text-muted)] flex-shrink-0"
+          aria-hidden="true"
+        >
+          {props.trailingIcon}
+        </span>
+      </div>
+    </a>
+  )
+}

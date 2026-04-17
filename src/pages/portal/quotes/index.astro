@@ -6,19 +6,21 @@ import { listQuotesForEntity } from '../../../lib/db/quotes'
 import type { Quote } from '../../../lib/db/quotes'
 import PortalHeader from '../../../components/portal/PortalHeader.astro'
 import PortalTabs from '../../../components/portal/PortalTabs.astro'
+import PortalListItem from '../../../components/portal/PortalListItem.astro'
 import SkipToMain from '../../../components/SkipToMain.astro'
+import { formatShortDate } from '../../../lib/portal/formatters'
+import { resolveQuoteTone, resolveQuoteLabel } from '../../../lib/portal/status'
 
 /**
  * Portal quote list — shows all quotes visible to this client.
  *
- * Statuses shown: sent, accepted, declined, expired.
- * "Review & Sign" CTA for quotes with status = 'sent'.
+ * Statuses shown: sent, accepted, declined, expired (filtered by
+ * listQuotesForEntity).
  */
 
 const session = Astro.locals.session!
 const env = Astro.locals.runtime.env
 
-// Resolve client from session
 const portalData = await getPortalClient(env.DB, session.userId, session.orgId)
 if (!portalData) {
   return Astro.redirect('/auth/portal-login?error=no_account')
@@ -27,25 +29,16 @@ if (!portalData) {
 const { client } = portalData
 const quotes = await listQuotesForEntity(env.DB, session.orgId, client.id)
 
-// Helpers
-const formatCurrency = (amount: number) =>
-  `$${amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-
-const formatDate = (d: string) =>
-  new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-
-const statusColorMap: Record<string, string> = {
-  sent: 'bg-blue-100 text-blue-800',
-  accepted: 'bg-green-100 text-green-800',
-  declined: 'bg-red-100 text-red-800',
-  expired: 'bg-amber-100 text-amber-800',
+function resolveMetaCaption(q: Quote): string {
+  return formatShortDate(q.sent_at ?? q.created_at)
 }
 
-const statusLabelMap: Record<string, string> = {
-  sent: 'Pending Review',
-  accepted: 'Accepted',
-  declined: 'Declined',
-  expired: 'Expired',
+function resolveTrailingCaption(q: Quote): string | null {
+  if (q.status !== 'sent' || !q.expires_at) return null
+  const diffMs = new Date(q.expires_at).getTime() - Date.now()
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+  if (diffDays <= 0) return 'Expired'
+  return `Expires in ${diffDays} day${diffDays !== 1 ? 's' : ''}`
 }
 ---
 
@@ -66,13 +59,13 @@ const statusLabelMap: Record<string, string> = {
     />
     <title>Proposals — {BRAND_NAME}</title>
   </head>
-  <body class="min-h-screen bg-slate-50">
+  <body class="min-h-screen bg-[color:var(--color-background)]">
     <SkipToMain />
     <PortalHeader clientName={client.name}>
       <form method="POST" action="/api/auth/logout">
         <button
           type="submit"
-          class="inline-flex items-center min-h-11 px-2 -mx-2 text-sm text-slate-500 hover:text-slate-700 active:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
+          class="inline-flex items-center min-h-11 px-2 -mx-2 text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
         >
           Sign out
         </button>
@@ -85,19 +78,19 @@ const statusLabelMap: Record<string, string> = {
       <a
         href="/portal"
         aria-label="Home"
-        class="inline-flex items-center gap-1 min-h-11 px-2 -mx-2 mb-4 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-lg"
+        class="inline-flex items-center gap-1 min-h-11 px-2 -mx-2 mb-4 text-caption font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-lg"
       >
         <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
         Home
       </a>
 
-      <h1 class="text-xl font-semibold text-slate-900 mb-6">Proposals</h1>
+      <h1 class="text-title text-[color:var(--color-text-primary)] mb-section">Proposals</h1>
 
       {
         quotes.length === 0 ? (
-          <div class="bg-white rounded-lg border border-slate-200 p-section text-center">
+          <div class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-section text-center">
             <svg
-              class="w-12 h-12 text-slate-300 mx-auto mb-3"
+              class="w-12 h-12 text-[color:var(--color-text-muted)] mx-auto mb-stack"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -109,71 +102,27 @@ const statusLabelMap: Record<string, string> = {
                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
               />
             </svg>
-            <p class="text-slate-600 font-medium">No proposals yet</p>
-            <p class="text-sm text-slate-400 mt-1">
+            <p class="text-body font-medium text-[color:var(--color-text-primary)]">
+              No proposals yet
+            </p>
+            <p class="text-caption text-[color:var(--color-text-muted)] mt-1">
               Proposals will appear here once they are ready for review.
             </p>
           </div>
         ) : (
           <div class="space-y-row">
-            {quotes.map((quote: Quote) => {
-              const dateLabel = quote.sent_at
-                ? formatDate(quote.sent_at)
-                : formatDate(quote.created_at)
-              const expiresLabel =
-                quote.status === 'sent' && quote.expires_at
-                  ? (() => {
-                      const diffMs = new Date(quote.expires_at).getTime() - Date.now()
-                      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
-                      return diffDays > 0
-                        ? `Expires in ${diffDays} day${diffDays !== 1 ? 's' : ''}`
-                        : 'Expired'
-                    })()
-                  : null
-              return (
-                <a
-                  href={`/portal/quotes/${quote.id}`}
-                  class="block bg-white rounded-lg border border-slate-200 p-stack hover:border-slate-300 hover:shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
-                >
-                  <div class="flex items-center justify-between gap-stack">
-                    <div class="flex-1 min-w-0">
-                      <div class="flex flex-wrap items-center gap-2 mb-1">
-                        <span
-                          class={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColorMap[quote.status] ?? 'bg-slate-100 text-slate-600'}`}
-                        >
-                          {statusLabelMap[quote.status] ?? quote.status}
-                        </span>
-                        <h2 class="text-sm font-semibold text-slate-900 leading-tight truncate">
-                          Proposal #{quote.id.slice(0, 8)}
-                        </h2>
-                      </div>
-                      <div class="flex items-baseline gap-2 flex-wrap">
-                        <span class="text-lg font-bold text-[color:var(--color-primary)]">
-                          {formatCurrency(quote.total_price)}
-                        </span>
-                        <span class="text-xs text-slate-400">{dateLabel}</span>
-                        {expiresLabel && <span class="text-xs text-amber-600">{expiresLabel}</span>}
-                      </div>
-                    </div>
-
-                    <div class="flex items-center gap-stack flex-shrink-0">
-                      {quote.status === 'sent' ? (
-                        <span class="hidden sm:inline-flex items-center justify-center px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg min-h-[44px] whitespace-nowrap">
-                          Review &amp; Sign
-                        </span>
-                      ) : (
-                        <span class="hidden sm:inline-flex items-center justify-center px-4 py-2.5 bg-slate-100 text-slate-600 text-sm font-medium rounded-lg min-h-[44px] whitespace-nowrap">
-                          View Details
-                        </span>
-                      )}
-                      <span class="material-symbols-outlined text-slate-400" aria-hidden="true">
-                        chevron_right
-                      </span>
-                    </div>
-                  </div>
-                </a>
-              )
-            })}
+            {quotes.map((quote: Quote) => (
+              <PortalListItem
+                variant="status"
+                href={`/portal/quotes/${quote.id}`}
+                tone={resolveQuoteTone(quote.status)}
+                toneLabel={resolveQuoteLabel(quote.status)}
+                title={`Proposal #${quote.id.slice(0, 8)}`}
+                amountCents={Math.round(quote.total_price * 100)}
+                metaCaption={resolveMetaCaption(quote)}
+                trailingCaption={resolveTrailingCaption(quote)}
+              />
+            ))}
           </div>
         )
       }

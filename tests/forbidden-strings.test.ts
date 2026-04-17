@@ -119,3 +119,134 @@ describe('forbidden-strings: Pattern A/B violations must not appear in shipped s
     })
   }
 })
+
+// ============================================================================
+// Portal list-row registry — UI-PATTERNS R7 enforcement.
+//
+// List-row markup drifted across portal surfaces (proposals, invoices,
+// documents) when Stitch generated each screen in isolation. The registry
+// collapses the pattern to one component (`PortalListItem.astro`) + two
+// helper modules (`src/lib/portal/{formatters,status}.ts`). These tests
+// enforce the registry at CI time so drift fails the build, not review.
+//
+// Scope: every `src/pages/portal/*/index.astro` EXCEPT the home dashboard
+// (which iterates its timeline, not list rows). New portal list surfaces
+// auto-enroll — explicit exceptions go in LIST_INDEX_ALLOWLIST with a
+// comment explaining why.
+// ============================================================================
+
+const PORTAL_INDEX_ROOT = resolve('src/pages/portal')
+const PORTAL_HOME = resolve('src/pages/portal/index.astro')
+
+/**
+ * Allowlist for portal list-index files that legitimately cannot use
+ * `PortalListItem` (e.g., because they iterate something that isn't a
+ * list-row card — timeline, form fields, milestone rail). Each entry needs
+ * a comment explaining why.
+ */
+const LIST_INDEX_ALLOWLIST: string[] = [
+  // `engagement/index.astro` is the engagement DETAIL surface (one
+  // engagement per client), not a list of engagements. Its milestone
+  // rendering is a vertical-timeline with marker-ring state semantics, not
+  // a repeating card — a different primitive than `PortalListItem`. Track
+  // as a follow-up if milestone rail drifts or gains a second use.
+  resolve('src/pages/portal/engagement/index.astro'),
+]
+
+/** Collect every `index.astro` under `src/pages/portal/` EXCEPT the home. */
+function collectPortalListIndexFiles(): string[] {
+  const files: string[] = []
+  function walk(dir: string): void {
+    for (const entry of readdirSync(dir)) {
+      const fullPath = join(dir, entry)
+      const stat = statSync(fullPath)
+      if (stat.isDirectory()) {
+        walk(fullPath)
+      } else if (entry === 'index.astro' && fullPath !== PORTAL_HOME) {
+        files.push(fullPath)
+      }
+    }
+  }
+  walk(PORTAL_INDEX_ROOT)
+  return files.filter((f) => !LIST_INDEX_ALLOWLIST.includes(f))
+}
+
+const portalListIndexFiles = collectPortalListIndexFiles()
+
+describe('portal list-row registry: UI-PATTERNS R7 enforcement', () => {
+  it('finds at least one portal list-index file to check (sanity)', () => {
+    // If this fails, the file collection logic broke — not the registry.
+    expect(portalListIndexFiles.length).toBeGreaterThan(0)
+  })
+
+  // ----------------------------------------------------------------
+  // Presence assertion.
+  //
+  // If the file iterates (`.map(`), it must render through
+  // `<PortalListItem`. Class-reorder evasion (the Devil's Advocate's
+  // objection to "no forbidden markup string" assertions) is defeated
+  // because this asserts PRESENCE of the primitive, not absence of
+  // specific class strings.
+  // ----------------------------------------------------------------
+  for (const file of portalListIndexFiles) {
+    const rel = file.replace(resolve('.') + '/', '')
+    it(`${rel} — must render list rows through <PortalListItem>`, () => {
+      const content = readFileSync(file, 'utf-8')
+      const iteratesList = /\.map\(/.test(content)
+      if (!iteratesList) return // not a list surface, no assertion
+      const usesPrimitive = content.includes('<PortalListItem')
+      expect(
+        usesPrimitive,
+        `${rel} iterates with .map( but does not render through <PortalListItem>. ` +
+          `Portal list-row markup must go through src/components/portal/PortalListItem.astro.`
+      ).toBe(true)
+    })
+  }
+
+  // ----------------------------------------------------------------
+  // No local helper redefinition.
+  //
+  // Drift starts when a page defines its own formatDate / statusColorMap
+  // instead of importing from src/lib/portal/{formatters,status}.ts.
+  // Catch it at the declaration site.
+  // ----------------------------------------------------------------
+  const FORBIDDEN_LOCAL_DECLARATIONS: Array<{ name: string; pattern: RegExp }> = [
+    {
+      name: 'formatDate',
+      pattern: /^\s*(?:const|function)\s+formatDate\b/m,
+    },
+    {
+      name: 'formatCurrency',
+      pattern: /^\s*(?:const|function)\s+formatCurrency\b/m,
+    },
+    {
+      name: 'statusColorMap',
+      pattern: /^\s*const\s+statusColorMap\b/m,
+    },
+    {
+      name: 'statusLabelMap',
+      pattern: /^\s*const\s+statusLabelMap\b/m,
+    },
+    {
+      name: 'typeLabels',
+      // Matches `typeLabels` as a standalone const; does NOT match
+      // `typeLabel` or `typeLabelMap` (detail pages use those for
+      // one-off single-title mapping and are out of scope).
+      pattern: /^\s*const\s+typeLabels\s*(?::|=)/m,
+    },
+  ]
+
+  for (const file of portalListIndexFiles) {
+    const rel = file.replace(resolve('.') + '/', '')
+    for (const { name, pattern } of FORBIDDEN_LOCAL_DECLARATIONS) {
+      it(`${rel} — must not redefine local helper \`${name}\``, () => {
+        const content = readFileSync(file, 'utf-8')
+        expect(
+          pattern.test(content),
+          `${rel} declares a local \`${name}\`. Import from ` +
+            `src/lib/portal/formatters.ts or src/lib/portal/status.ts instead.`
+        ).toBe(false)
+      })
+    }
+  }
+})

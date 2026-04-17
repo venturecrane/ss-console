@@ -468,12 +468,17 @@ describe('invoices: portal view', () => {
     expect(code).toContain('session.userId')
   })
 
-  it('displays invoice amount', () => {
-    expect(source()).toContain('formatCurrency')
+  it('passes amount to PortalListItem as cents', () => {
+    // After R7 registry: the page defers rendering to PortalListItem +
+    // MoneyDisplay. `inv.amount` is dollars; the page converts to cents.
+    const code = source()
+    expect(code).toContain('amountCents={Math.round(inv.amount * 100)}')
   })
 
-  it('displays invoice status badges', () => {
-    expect(source()).toContain('statusColorMap')
+  it('resolves status tone + label via shared helpers (R7 registry)', () => {
+    const code = source()
+    expect(code).toContain('resolveInvoiceTone')
+    expect(code).toContain('resolveInvoiceLabel')
   })
 
   it('links each row to the invoice detail page', () => {
@@ -481,21 +486,21 @@ describe('invoices: portal view', () => {
     expect(code).toContain('/portal/invoices/${inv.id}')
   })
 
-  it('shows a Pay affordance for unpaid invoices with a usable Stripe URL', () => {
+  it('signals unpaid/overdue state via tone, not a separate Pay button', () => {
     const code = source()
-    // The Stripe URL is still considered when choosing what affordance to render.
-    expect(code).toContain('stripe_hosted_url')
-    expect(code).toMatch(/Pay\b/)
+    // UI-PATTERNS R2 (redundancy): the card is the link; no standalone
+    // Pay affordance that would duplicate the card-level navigation.
+    // The tone (`info` for sent, `danger` for overdue) surfaces action-
+    // required state; detail page owns the actual pay CTA.
+    expect(code).toContain('resolveInvoiceTone')
+    expect(code).not.toMatch(/\bPay\b/)
+    expect(code).not.toContain('Payment link pending')
   })
 
-  it('shows a pending-link indicator when Stripe is not yet configured', () => {
-    expect(source()).toContain('Payment link pending')
-  })
-
-  it('shows paid date for paid invoices', () => {
+  it('surfaces paid / due dates via shared formatter', () => {
     const code = source()
-    expect(code).toContain('paid_at')
-    expect(code).toMatch(/formatDate\(inv\.paid_at\)/)
+    expect(code).toContain('formatShortDate')
+    expect(code).toMatch(/resolveMetaCaption/)
   })
 
   it('handles empty state when no invoices exist', () => {

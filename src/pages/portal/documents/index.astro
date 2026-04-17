@@ -7,7 +7,9 @@ import { getPortalClient } from '../../../lib/portal/session'
 import { getSOWStateForQuote } from '../../../lib/sow/service'
 import PortalHeader from '../../../components/portal/PortalHeader.astro'
 import PortalTabs from '../../../components/portal/PortalTabs.astro'
+import PortalListItem from '../../../components/portal/PortalListItem.astro'
 import SkipToMain from '../../../components/SkipToMain.astro'
+import { formatShortDate } from '../../../lib/portal/formatters'
 
 /**
  * Client portal — document library page.
@@ -43,7 +45,6 @@ const documents: DocumentEntry[] = []
 let engagement = null
 
 if (clientId) {
-  // Get active engagement (or most recent one)
   const engagements = await listEngagements(env.DB, session.orgId, clientId)
   engagement =
     engagements.find((e) => e.status !== 'completed' && e.status !== 'cancelled') ??
@@ -51,7 +52,6 @@ if (clientId) {
     null
 
   if (engagement) {
-    // List engagement documents from R2
     const prefix = `${session.orgId}/engagements/${engagement.id}/docs/`
     const r2Objects = await listDocuments(env.STORAGE, prefix)
 
@@ -66,7 +66,6 @@ if (clientId) {
       })
     }
 
-    // Include SOW PDF from the quote if available
     if (engagement.quote_id) {
       const sowState = await getSOWStateForQuote(env.DB, session.orgId, engagement.quote_id)
       const revision = sowState.downloadableRevision
@@ -84,14 +83,6 @@ if (clientId) {
   }
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
-
 /**
  * File-type icon mapping. Purely visual affordance derived from the
  * filename extension — not client-facing authored content.
@@ -105,6 +96,11 @@ function iconFor(name: string, isPdf: boolean): string {
   if (/\.(pptx?|keynote)$/.test(lower)) return 'slideshow'
   if (/\.(zip|tar|gz|7z)$/.test(lower)) return 'folder_zip'
   return 'description'
+}
+
+function resolveEyebrow(doc: DocumentEntry): string {
+  const shared = `Shared ${formatShortDate(doc.uploaded)}`
+  return doc.category ? `${doc.category} · ${shared}` : shared
 }
 ---
 
@@ -125,13 +121,13 @@ function iconFor(name: string, isPdf: boolean): string {
     />
     <title>Documents — {BRAND_NAME}</title>
   </head>
-  <body class="min-h-screen bg-slate-50">
+  <body class="min-h-screen bg-[color:var(--color-background)]">
     <SkipToMain />
     <PortalHeader clientName={clientName}>
       <form method="POST" action="/api/auth/logout">
         <button
           type="submit"
-          class="inline-flex items-center min-h-11 px-2 -mx-2 text-sm text-slate-500 hover:text-slate-700 active:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
+          class="inline-flex items-center min-h-11 px-2 -mx-2 text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
         >
           Sign out
         </button>
@@ -144,64 +140,32 @@ function iconFor(name: string, isPdf: boolean): string {
       <a
         href="/portal"
         aria-label="Home"
-        class="inline-flex items-center gap-1 min-h-11 px-2 -mx-2 mb-4 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-lg"
+        class="inline-flex items-center gap-1 min-h-11 px-2 -mx-2 mb-4 text-caption font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-lg"
       >
         <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
         Home
       </a>
 
-      <h1 class="text-xl font-semibold text-slate-900 mb-6">Documents</h1>
+      <h1 class="text-title text-[color:var(--color-text-primary)] mb-section">Documents</h1>
 
       {
         documents.length === 0 ? (
-          <div class="bg-white rounded-lg border border-slate-200 p-card">
-            <p class="text-slate-600">Documents will appear here as your engagement progresses.</p>
+          <div class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card">
+            <p class="text-body text-[color:var(--color-text-secondary)]">
+              Documents will appear here as your engagement progresses.
+            </p>
           </div>
         ) : (
           <div class="space-y-row">
             {documents.map((doc) => (
-              <a
+              <PortalListItem
+                variant="document"
                 href={`/api/portal/documents/${doc.key}`}
-                class="block bg-white rounded-lg border border-slate-200 p-stack hover:border-slate-300 hover:shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
-              >
-                <div class="flex items-center justify-between gap-row">
-                  <div class="flex items-center gap-row min-w-0 flex-1">
-                    <div
-                      class="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-[color:var(--color-meta)]"
-                      aria-hidden="true"
-                    >
-                      <span class="material-symbols-outlined text-[20px]">
-                        {iconFor(doc.name, doc.isPdf)}
-                      </span>
-                    </div>
-                    <div class="min-w-0">
-                      <p class="text-sm font-semibold text-slate-900 truncate">{doc.name}</p>
-                      <p class="text-[12px] font-semibold uppercase tracking-[0.08em] text-[color:var(--color-meta)] mt-0.5">
-                        {doc.category ? (
-                          <>
-                            {doc.category}
-                            <span class="mx-1" aria-hidden="true">
-                              •
-                            </span>
-                          </>
-                        ) : null}
-                        Shared {formatDate(doc.uploaded)}
-                      </p>
-                    </div>
-                  </div>
-                  <span
-                    class="flex-shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-full text-[color:var(--color-meta)]"
-                    aria-hidden="true"
-                  >
-                    <span class="material-symbols-outlined text-[20px]">
-                      {doc.isPdf ? 'open_in_new' : 'download'}
-                    </span>
-                  </span>
-                  <span class="sr-only">
-                    {doc.isPdf ? 'View' : 'Download'} {doc.name}
-                  </span>
-                </div>
-              </a>
+                icon={iconFor(doc.name, doc.isPdf)}
+                title={doc.name}
+                eyebrow={resolveEyebrow(doc)}
+                trailingIcon={doc.isPdf ? 'open_in_new' : 'download'}
+              />
             ))}
           </div>
         )

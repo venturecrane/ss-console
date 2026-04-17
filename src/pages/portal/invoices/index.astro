@@ -2,11 +2,14 @@
 import '../../../styles/global.css'
 import { BRAND_NAME } from '../../../lib/config/brand'
 import { getPortalClient } from '../../../lib/portal/session'
-import { listInvoicesForEntity, INVOICE_STATUSES } from '../../../lib/db/invoices'
+import { listInvoicesForEntity } from '../../../lib/db/invoices'
 import type { Invoice } from '../../../lib/db/invoices'
 import PortalHeader from '../../../components/portal/PortalHeader.astro'
 import PortalTabs from '../../../components/portal/PortalTabs.astro'
+import PortalListItem from '../../../components/portal/PortalListItem.astro'
 import SkipToMain from '../../../components/SkipToMain.astro'
+import { formatShortDate } from '../../../lib/portal/formatters'
+import { resolveInvoiceTone, resolveInvoiceLabel } from '../../../lib/portal/status'
 
 /**
  * Client portal — invoices page.
@@ -20,7 +23,6 @@ import SkipToMain from '../../../components/SkipToMain.astro'
 const session = Astro.locals.session!
 const env = Astro.locals.runtime.env
 
-// Resolve client entity from session
 const portalData = await getPortalClient(env.DB, session.userId, session.orgId)
 const entityId = portalData?.client.id ?? null
 const clientName = portalData?.client.name ?? ''
@@ -31,15 +33,7 @@ if (entityId) {
   invoices = await listInvoicesForEntity(env.DB, session.orgId, entityId)
 }
 
-// Status badge colors for portal-visible statuses
-const statusColorMap: Record<string, string> = {
-  sent: 'bg-blue-100 text-blue-800',
-  paid: 'bg-green-100 text-green-800',
-  overdue: 'bg-red-100 text-red-800',
-}
-
-// Type label map
-const typeLabels: Record<string, string> = {
+const typeLabel: Record<string, string> = {
   deposit: 'Deposit',
   completion: 'Completion',
   milestone: 'Milestone',
@@ -47,17 +41,14 @@ const typeLabels: Record<string, string> = {
   retainer: 'Retainer',
 }
 
-function formatCurrency(amount: number): string {
-  return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+function resolveMetaCaption(inv: Invoice): string | null {
+  if (inv.paid_at) return `Paid ${formatShortDate(inv.paid_at)}`
+  if (inv.due_date) return `Due ${formatShortDate(inv.due_date)}`
+  return null
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) return '--'
-  return new Date(iso).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+function resolveTrailingCaption(inv: Invoice): string | null {
+  return inv.status === 'overdue' ? 'Overdue' : null
 }
 ---
 
@@ -78,13 +69,13 @@ function formatDate(iso: string | null): string {
     />
     <title>Invoices — {BRAND_NAME}</title>
   </head>
-  <body class="min-h-screen bg-slate-50">
+  <body class="min-h-screen bg-[color:var(--color-background)]">
     <SkipToMain />
     <PortalHeader clientName={clientName}>
       <form method="POST" action="/api/auth/logout">
         <button
           type="submit"
-          class="inline-flex items-center min-h-11 px-2 -mx-2 text-sm text-slate-500 hover:text-slate-700 active:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
+          class="inline-flex items-center min-h-11 px-2 -mx-2 text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
         >
           Sign out
         </button>
@@ -97,84 +88,35 @@ function formatDate(iso: string | null): string {
       <a
         href="/portal"
         aria-label="Home"
-        class="inline-flex items-center gap-1 min-h-11 px-2 -mx-2 mb-4 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-lg"
+        class="inline-flex items-center gap-1 min-h-11 px-2 -mx-2 mb-4 text-caption font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-lg"
       >
         <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
         Home
       </a>
 
-      <h1 class="text-xl font-semibold text-slate-900 mb-6">Invoices</h1>
+      <h1 class="text-title text-[color:var(--color-text-primary)] mb-section">Invoices</h1>
 
       {
         invoices.length === 0 ? (
-          <div class="bg-white rounded-lg border border-slate-200 p-card">
-            <p class="text-slate-600">
+          <div class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card">
+            <p class="text-body text-[color:var(--color-text-secondary)]">
               No invoices yet. When invoices are created for your engagement, they will appear here.
             </p>
           </div>
         ) : (
           <div class="space-y-row">
-            {invoices.map((inv: Invoice) => {
-              const isPayable =
-                inv.status !== 'paid' &&
-                inv.stripe_hosted_url &&
-                inv.stripe_hosted_url !== '#dev-mode'
-              const isPending = inv.status !== 'paid' && inv.stripe_hosted_url === '#dev-mode'
-              return (
-                <a
-                  href={`/portal/invoices/${inv.id}`}
-                  class="block bg-white rounded-lg border border-slate-200 p-stack hover:border-slate-300 hover:shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
-                >
-                  <div class="flex flex-col sm:flex-row sm:items-center gap-row">
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center gap-row mb-1">
-                        <span class="text-body font-semibold text-slate-900">
-                          {typeLabels[inv.type] ?? inv.type}
-                        </span>
-                        <span
-                          class={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusColorMap[inv.status] ?? 'bg-slate-100 text-slate-600'}`}
-                        >
-                          {INVOICE_STATUSES.find((s) => s.value === inv.status)?.label ??
-                            inv.status}
-                        </span>
-                      </div>
-                      <p class="text-body-lg font-semibold text-slate-900">
-                        {formatCurrency(inv.amount)}
-                      </p>
-                      <div class="mt-1 text-caption text-slate-500">
-                        {inv.paid_at ? (
-                          <span class="text-green-700">{formatDate(inv.paid_at)}</span>
-                        ) : inv.due_date ? (
-                          <span class={inv.status === 'overdue' ? 'text-red-600' : ''}>
-                            Due {formatDate(inv.due_date)}
-                          </span>
-                        ) : null}
-                      </div>
-                      {inv.description && (
-                        <p class="text-caption text-slate-500 mt-2">{inv.description}</p>
-                      )}
-                    </div>
-                    <div class="flex items-center sm:justify-end flex-shrink-0 sm:ml-stack">
-                      {isPayable && (
-                        <span class="inline-flex items-center justify-center px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg min-h-[44px] whitespace-nowrap">
-                          Pay
-                        </span>
-                      )}
-                      {isPending && (
-                        <span class="inline-flex items-center justify-center px-4 py-2.5 bg-slate-100 text-slate-500 text-sm font-medium rounded-lg min-h-[44px] whitespace-nowrap">
-                          Payment link pending
-                        </span>
-                      )}
-                      {!isPayable && !isPending && (
-                        <span class="inline-flex items-center justify-center px-4 py-2.5 bg-slate-100 text-slate-600 text-sm font-medium rounded-lg min-h-[44px] whitespace-nowrap">
-                          View details
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </a>
-              )
-            })}
+            {invoices.map((inv: Invoice) => (
+              <PortalListItem
+                variant="status"
+                href={`/portal/invoices/${inv.id}`}
+                tone={resolveInvoiceTone(inv.status)}
+                toneLabel={resolveInvoiceLabel(inv.status)}
+                title={typeLabel[inv.type] ?? inv.type}
+                amountCents={Math.round(inv.amount * 100)}
+                metaCaption={resolveMetaCaption(inv)}
+                trailingCaption={resolveTrailingCaption(inv)}
+              />
+            ))}
           </div>
         )
       }

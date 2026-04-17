@@ -351,6 +351,94 @@ Audit flagged 32 arbitrary sizes in this file and 27 in `portal/invoices/[id].as
 
 ---
 
+## Rule 7 — Shared primitives for repeated patterns
+
+**Rule.** When the same visual element appears on multiple surfaces, it
+renders through a shared component. The component is the enforcement; prose
+rules about "use tokens" and "match the design system" do not survive
+multiple generations of AI-authored screens without a code contract behind
+them.
+
+**Why.** AI generators (Stitch today, possibly others later) produce each
+screen in isolation. Tokens unify colors and spacing; nothing unifies
+element _shape_. Without a shared primitive, list-row markup diverges on
+every regeneration — different status pills, date formats, CTA positions —
+even when every surface "uses the design system." The 2026-04-17 portal
+screenshots (proposals vs. invoices vs. documents) are the canonical
+example.
+
+**Authority.** Shopify Polaris component system, IBM Carbon design system,
+Atlassian Design System — all treat named components as the source of
+truth, not token conformance. "Every surface should have a consistent
+look" is an aspiration; "every surface must import the same component" is
+a contract.
+
+**Anti-pattern.** Every portal list surface (before this rule) hand-rolled:
+
+```tsx
+<a href={...} class="block bg-white rounded-lg border border-slate-200 p-stack ...">
+  <div class="flex items-center justify-between gap-stack">
+    <span class={`inline-block px-2.5 py-0.5 rounded-full text-xs ${statusColorMap[status]}`}>
+      {statusLabelMap[status]}
+    </span>
+    {/* ... */}
+  </div>
+</a>
+```
+
+Each surface chose slightly different class orderings, different pill
+tints, different date formats, different CTAs (chevron / button /
+icon-circle). Class reorder evasion means a "no forbidden markup string"
+test cannot defend this.
+
+**Correct pattern.**
+
+```tsx
+import PortalListItem from '../../../components/portal/PortalListItem.astro'
+import { resolveInvoiceTone, resolveInvoiceLabel } from '../../../lib/portal/status'
+
+{
+  invoices.map((inv) => (
+    <PortalListItem
+      variant="status"
+      href={`/portal/invoices/${inv.id}`}
+      tone={resolveInvoiceTone(inv.status)}
+      toneLabel={resolveInvoiceLabel(inv.status)}
+      title={typeLabel[inv.type]}
+      amountCents={Math.round(inv.amount * 100)}
+      metaCaption={resolveMetaCaption(inv)}
+    />
+  ))
+}
+```
+
+**Registered primitives (portal).**
+
+- [`src/components/portal/PortalListItem.astro`](../../src/components/portal/PortalListItem.astro) — card-shell list row; `variant: 'status' | 'document'`.
+- [`src/components/portal/StatusPill.astro`](../../src/components/portal/StatusPill.astro) — tone-based pill; consumes `Tone` from `status.ts`.
+- [`src/components/portal/MoneyDisplay.astro`](../../src/components/portal/MoneyDisplay.astro) — dollar-figure renderer (pre-existing).
+- [`src/lib/portal/formatters.ts`](../../src/lib/portal/formatters.ts) — `formatShortDate`, `formatRelativeDueCaption`, `formatCentsToCurrency`.
+- [`src/lib/portal/status.ts`](../../src/lib/portal/status.ts) — `Tone` type, per-entity `resolveInvoiceTone/Label`, `resolveQuoteTone/Label`.
+
+**Source-of-truth contract.**
+
+- Portal surfaces: import from `src/lib/portal/status.ts` and `src/lib/portal/formatters.ts`.
+- Admin surfaces: import from `src/lib/ui/status-badge.ts` (raw Tailwind classes; pre-existing; stays un-migrated).
+- Shared / cross-surface code (e.g., email notifications, cross-context reports): add a new helper when the first such caller appears. Do not mix imports.
+
+**Detection.** Two assertion families in [`tests/forbidden-strings.test.ts`](../../tests/forbidden-strings.test.ts) under the heading "Portal list-row registry":
+
+1. **Presence.** Every `src/pages/portal/*/index.astro` (except `engagement/index.astro`, which is a detail surface) that iterates via `.map(` must render through `<PortalListItem>`. Defeats class-reorder evasion because presence is required, not absence.
+2. **No local helper redefinition.** No `const formatDate`, `const formatCurrency`, `const statusColorMap`, `const statusLabelMap`, `const typeLabels` in portal list-index files.
+
+The test auto-enrolls new portal list-index files. Exceptions are an explicit `LIST_INDEX_ALLOWLIST` array (commented rationale required).
+
+**Escape hatch.** Add the file path to `LIST_INDEX_ALLOWLIST` with an inline comment explaining why the surface genuinely cannot use the primitive (e.g., "milestone rail is a vertical-timeline, not a list row"). Cap: **≤3 allowlist entries globally**. Exceeding the cap means the primitive is wrong — extend its variants or split, don't allowlist around.
+
+**When to split.** `PortalListItem` is one component with two variants today. Split into `PortalStatusListItem` + `PortalDocumentListItem` only when more than ~5 conditionals key on `variant`, or when a third variant is needed. Don't pre-split.
+
+---
+
 ## Enforcement
 
 - **Grep / AST rules** in the `nav-spec/validate.py` extension or a sibling validator: redundancy detector (Rule 2), inline typography detector (Rule 5), inline spacing detector (Rule 6), multi-primary detector (Rule 3), heading-skip detector (Rule 4), pill-context detector (Rule 1).

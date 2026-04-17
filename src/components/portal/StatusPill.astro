@@ -1,0 +1,36 @@
+---
+/**
+ * Tone-based status pill. The only place pill markup should exist on portal
+ * surfaces. Consumes TONE_CLASS from src/lib/portal/status.ts so a tone
+ * change (e.g., 'warning' shifts color) propagates everywhere at once.
+ *
+ * Accessibility: a pill is a visual affordance for a fact that is already
+ * available in the DOM (the status field). It does not need aria-label
+ * when its text content matches the fact.
+ */
+
+import { TONE_CLASS, type Tone } from '../../lib/portal/status'
+
+interface Props {
+  tone: Tone
+  label: string
+  /**
+   * `compact` is the default (table/list rows). `base` is the larger pill
+   * used on detail pages where the pill is the primary status signal.
+   */
+  size?: 'compact' | 'base'
+  class?: string
+}
+
+const { tone, label, size = 'compact', class: klass = '' } = Astro.props
+
+const sizeClass = size === 'base' ? 'px-3 py-1 text-caption' : 'px-2.5 py-0.5 text-[11px] leading-4'
+
+const toneClass = TONE_CLASS[tone]
+---
+
+<span
+  class={`inline-flex items-center font-medium rounded-full whitespace-nowrap ${sizeClass} ${toneClass} ${klass}`}
+>
+  {label}
+</span>

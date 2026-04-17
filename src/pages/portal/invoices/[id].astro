@@ -10,6 +10,7 @@ import MoneyDisplay from '../../../components/portal/MoneyDisplay.astro'
 import ActionCard from '../../../components/portal/ActionCard.astro'
 import ConsultantBlock from '../../../components/portal/ConsultantBlock.astro'
 import { resolveInvoiceState } from '../../../lib/portal/states'
+import { formatShortDate } from '../../../lib/portal/formatters'
 
 /**
  * Invoice landing — deep-link surface per .stitch/portal-ux-brief.md.
@@ -109,6 +110,10 @@ const stripeUrl =
 const isPayable = stripeUrl !== null
 
 // Formatting
+// Long-form "Monday, April 20" — local because it's wrapped in "Due {X}" /
+// "Paid {X}" etc. below. The shared lib has a different composer
+// (`formatRelativeDueCaption`) that bakes the "Due/Overdue" into the string;
+// keeping the wrapping local here preserves the authored sentence shape.
 const formatDueCaption = (iso: string | null): string | null => {
   if (!iso) return null
   const d = new Date(iso)
@@ -118,13 +123,6 @@ const formatDueCaption = (iso: string | null): string | null => {
     month: 'long',
     day: 'numeric',
   })
-}
-
-const formatShortDate = (iso: string | null): string | null => {
-  if (!iso) return null
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return null
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 const daysUntil = (iso: string | null): number | null => {
