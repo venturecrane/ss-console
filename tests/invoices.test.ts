@@ -492,10 +492,31 @@ describe('invoices: portal detail view', () => {
     expect(existsSync(resolve('src/pages/portal/invoices/[id].astro'))).toBe(true)
   })
 
-  it('renders the Stripe hosted URL as the pay CTA when usable', () => {
+  it('gates the pay CTA on a real Stripe hosted URL', () => {
     const code = source()
+    // The detail page must only link to Stripe when stripe_hosted_url is
+    // present and not the dev-mode sentinel. A missing URL must render a
+    // non-link "Payment link pending" state, not a link to a server route.
     expect(code).toContain('stripe_hosted_url')
-    expect(code).toContain('payHref')
+    expect(code).toContain('isPayable')
+    expect(code).toContain('Payment link pending')
+  })
+
+  it('does not link to a nonexistent /api/invoices/[id]/pay route (#419)', () => {
+    const code = source()
+    // The previous fallback rendered a clickable link to /api/invoices/[id]/pay,
+    // which never existed. This regression guard ensures we never reintroduce it.
+    expect(code).not.toMatch(/\/api\/invoices\/\$\{[^}]*\}\/pay/)
+    expect(code).not.toContain('payHref')
+  })
+
+  it('renders invoice line items without any fabricated fallback (#398)', () => {
+    const code = source()
+    // The page must never invent invoice line-item copy. No "Engagement work",
+    // no borrow from scope_summary, no fallback row synthesized from invoice.description.
+    expect(code).not.toContain('Engagement work')
+    expect(code).not.toContain('displayLineItems')
+    expect(code).not.toMatch(/scope_summary\s*\?\?/)
   })
 })
 

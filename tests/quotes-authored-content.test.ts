@@ -436,10 +436,21 @@ describe('portal proposal page: render gating', () => {
     expect(code).not.toMatch(/Week 1.*Week 2.*Week 3/s)
   })
 
-  it('prefers authored deliverables and falls back to line items only when missing', () => {
+  it('never derives deliverables from line items (#398)', () => {
     const code = source()
-    expect(code).toContain('authoredDeliverables.length > 0')
-    expect(code).toContain('? authoredDeliverables')
+    // Deliverables come exclusively from parseDeliverables(quote). The page
+    // must not construct deliverable rows from line_items — line items are
+    // pricing/problem data, not authored client-facing content.
+    expect(code).not.toMatch(/lineItems\.map\(\s*\(?\s*item/)
+    expect(code).not.toContain('authoredDeliverables')
+    expect(code).not.toContain('getProblemLabel')
+  })
+
+  it('gates the deliverables section on deliverables.length > 0', () => {
+    const code = source()
+    // Parallel to the schedule section gate — empty = render nothing, not
+    // an empty section header.
+    expect(code).toContain('deliverables.length > 0')
   })
 
   it('iterates schedule rows by label and body, not hardcoded week numbers', () => {
@@ -447,6 +458,15 @@ describe('portal proposal page: render gating', () => {
     expect(code).toContain('schedule.map')
     expect(code).toContain('row.label')
     expect(code).toContain('row.body')
+  })
+
+  it('never synthesizes "Kickoff next: {scope_summary}" next-step copy (#398)', () => {
+    const code = source()
+    // scope_summary is an internal operations field, not authored next-step
+    // language. The previous synthesis turned it into a client-facing
+    // commitment. Only authored next_touchpoint_label feeds nextStepText.
+    expect(code).not.toContain('Kickoff next:')
+    expect(code).not.toMatch(/engagement\.scope_summary\s*\?/)
   })
 })
 

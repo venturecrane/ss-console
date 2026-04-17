@@ -8,14 +8,9 @@ import ConsultantBlock from '../../../components/portal/ConsultantBlock.astro'
 import { BRAND_NAME } from '../../../lib/config/brand'
 import { getPortalClient } from '../../../lib/portal/session'
 import { getQuoteForEntity, parseSchedule, parseDeliverables } from '../../../lib/db/quotes'
-import type { LineItem, ScheduleRow, DeliverableRow } from '../../../lib/db/quotes'
+import type { ScheduleRow, DeliverableRow } from '../../../lib/db/quotes'
 import { getSOWStateForQuote } from '../../../lib/sow/service'
 import { resolveProposalState } from '../../../lib/portal/states'
-import {
-  PROBLEM_LABELS,
-  LEGACY_PROBLEM_LABELS,
-} from '../../../portal/assessments/extraction-schema'
-import type { ProblemId, LegacyProblemId } from '../../../portal/assessments/extraction-schema'
 
 /**
  * Portal quote detail — C-hybrid proposal landing.
@@ -54,15 +49,8 @@ const sowState = await getSOWStateForQuote(env.DB, session.orgId, quote.id)
 const activeSignatureRequest = sowState.openSignatureRequest
 const downloadableRevision = sowState.downloadableRevision
 
-const lineItems: LineItem[] = JSON.parse(quote.line_items)
-
 const formatDate = (d: string) =>
   new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-
-const getProblemLabel = (problem: string) =>
-  PROBLEM_LABELS[problem as ProblemId] ??
-  LEGACY_PROBLEM_LABELS[problem as LegacyProblemId] ??
-  problem
 
 const depositPctDisplay = Math.round(quote.deposit_pct * 100)
 const balancePctDisplay = 100 - depositPctDisplay
@@ -74,23 +62,14 @@ const paymentSplitText = isThreeMilestone
   ? `${depositPctDisplay}% at signing, balance across milestones.`
   : `${depositPctDisplay}% at signing, ${balancePctDisplay}% at completion.`
 
-// Deliverables prefer the authored `quotes.deliverables` rows. If none have
-// been authored we fall back to deriving from line items so legacy quotes
-// (pre-#377) keep rendering a list. The send-gate added in this issue
-// prevents NEW quotes from going out without authored deliverables; the
-// fallback exists only for the migration window. TODO(#377-followon):
-// once existing quotes have been backfilled or marked, drop the fallback
-// and require authored deliverables on every visible quote.
-const authoredDeliverables: DeliverableRow[] = parseDeliverables(quote)
+// Deliverables come exclusively from the authored `quotes.deliverables`
+// rows. Line items are pricing/problem data — not authored client-facing
+// deliverables — so we never derive the visible list from them. The
+// send-gate (#377) prevents quotes from going out without authored
+// deliverables; legacy quotes missing them render without a deliverables
+// section rather than with fabricated content.
+const deliverables: DeliverableRow[] = parseDeliverables(quote)
 const schedule: ScheduleRow[] = parseSchedule(quote)
-
-const deliverables: DeliverableRow[] =
-  authoredDeliverables.length > 0
-    ? authoredDeliverables
-    : lineItems.map((item) => ({
-        title: getProblemLabel(item.problem),
-        body: item.description ?? '',
-      }))
 
 const engagementTitle = deliverables[0]?.title ?? 'Engagement'
 const engagementSubtitle =
@@ -148,13 +127,11 @@ const superseding = await env.DB.prepare(
   .first<SupersedingRow>()
 
 // Build the concrete "what happens next" string for signed quotes. Render
-// authored copy verbatim — do not prepend fixed phrases. If neither field is
-// set the resolver returns null and the caller renders nothing.
-const nextStepText: string | null = engagement?.next_touchpoint_label
-  ? engagement.next_touchpoint_label
-  : engagement?.scope_summary
-    ? `Kickoff next: ${engagement.scope_summary}.`
-    : null
+// authored copy verbatim — do not synthesize client-facing commitments from
+// non-authoritative fields. When `next_touchpoint_label` is absent the page
+// renders no next-step copy. `scope_summary` is an internal operations
+// field, not authored client-facing next-step language.
+const nextStepText: string | null = engagement?.next_touchpoint_label ?? null
 
 const surface = resolveProposalState(quote, Astro.url.searchParams, consultantFirst, nextStepText)
 
@@ -333,39 +310,39 @@ const consultantPhone = engagement?.consultant_phone ?? null
             </div>
           </div>
 
-          <!-- What you'll get -->
-          <div class="pt-2">
-            <div class="h-px bg-[color:var(--color-border)] mb-8"></div>
-            <h2
-              class="font-['Plus_Jakarta_Sans'] font-bold text-[22px] leading-[28px] text-[color:var(--color-text-primary)] mb-6"
-            >
-              What you'll get
-            </h2>
-            <ul class="space-y-5">
-              {
-                deliverables.map((d) => (
-                  <li class="flex items-start gap-4">
-                    <span
-                      class="material-symbols-outlined text-[color:var(--color-meta)] mt-0.5"
-                      style="font-variation-settings: 'FILL' 1"
-                    >
-                      check_circle
-                    </span>
-                    <div class="min-w-0">
-                      <p class="text-base font-semibold text-[color:var(--color-text-primary)]">
-                        {d.title}
-                      </p>
-                      {d.body && (
-                        <p class="mt-1 text-[15px] leading-[22px] text-[color:var(--color-text-secondary)]">
-                          {d.body}
+          <!-- What you'll get — rendered only when deliverables are authored. -->
+          {
+            deliverables.length > 0 && (
+              <div class="pt-2">
+                <div class="h-px bg-[color:var(--color-border)] mb-8" />
+                <h2 class="font-['Plus_Jakarta_Sans'] font-bold text-[22px] leading-[28px] text-[color:var(--color-text-primary)] mb-6">
+                  What you'll get
+                </h2>
+                <ul class="space-y-5">
+                  {deliverables.map((d) => (
+                    <li class="flex items-start gap-4">
+                      <span
+                        class="material-symbols-outlined text-[color:var(--color-meta)] mt-0.5"
+                        style="font-variation-settings: 'FILL' 1"
+                      >
+                        check_circle
+                      </span>
+                      <div class="min-w-0">
+                        <p class="text-base font-semibold text-[color:var(--color-text-primary)]">
+                          {d.title}
                         </p>
-                      )}
-                    </div>
-                  </li>
-                ))
-              }
-            </ul>
-          </div>
+                        {d.body && (
+                          <p class="mt-1 text-[15px] leading-[22px] text-[color:var(--color-text-secondary)]">
+                            {d.body}
+                          </p>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          }
 
           <!-- How we'll work (only when authored — never synthesized; #377) -->
           {
