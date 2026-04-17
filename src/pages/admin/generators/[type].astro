@@ -281,6 +281,19 @@ const runDisabledReason = !runWorkerUrl
   : !runHasKey
     ? 'LEAD_INGEST_API_KEY is not bound to this Pages deployment'
     : ''
+
+// TEMP diagnostic (REMOVE once Run-now works) — distinguishes undefined vs
+// empty string vs both-broken by comparing to a known-working secret.
+const envDiag = {
+  lead_type: typeof env.LEAD_INGEST_API_KEY,
+  lead_len: (env.LEAD_INGEST_API_KEY ?? '').length,
+  resend_type: typeof env.RESEND_API_KEY,
+  resend_len: (env.RESEND_API_KEY ?? '').length,
+  anthropic_type: typeof env.ANTHROPIC_API_KEY,
+  anthropic_len: (env.ANTHROPIC_API_KEY ?? '').length,
+  worker_url_type: typeof runWorkerUrl,
+  worker_url_len: (runWorkerUrl ?? '').length,
+}
 ---
 
 <AdminLayout
@@ -393,6 +406,10 @@ const runDisabledReason = !runWorkerUrl
           </p>
         )
       }
+      <pre
+        class="mt-2 text-xs font-mono bg-slate-50 text-slate-600 rounded p-2 overflow-x-auto">
+env diagnostic (TEMP): {JSON.stringify(envDiag, null, 2)}
+      </pre>
     </div>
   </section>
 
