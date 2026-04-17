@@ -6,6 +6,8 @@ import TimelineEntry from '../../components/portal/TimelineEntry.astro'
 import ArtifactChip from '../../components/portal/ArtifactChip.astro'
 import MoneyDisplay from '../../components/portal/MoneyDisplay.astro'
 import ActionCard from '../../components/portal/ActionCard.astro'
+import PortalListItem from '../../components/portal/PortalListItem.astro'
+import StatusPill from '../../components/portal/StatusPill.astro'
 
 // Dev-only guard. The page 404s in any non-dev environment so it never ships
 // to production even if accidentally deployed.
@@ -107,6 +109,126 @@ if (import.meta.env.PROD) {
           <div><MoneyDisplay amountCents={425000} size="display" /></div>
           <div><MoneyDisplay amountCents={425000} size="h2" /></div>
           <div><MoneyDisplay amountCents={425000} size="body" emphasize /></div>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+          StatusPill — all tones
+        </h2>
+        <div
+          class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-lg p-6 flex flex-wrap gap-3"
+        >
+          <StatusPill tone="info" label="Pending Review" />
+          <StatusPill tone="success" label="Paid" />
+          <StatusPill tone="danger" label="Overdue" />
+          <StatusPill tone="warning" label="Expired" />
+          <StatusPill tone="neutral" label="Draft" />
+          <StatusPill tone="info" label="Base" size="base" />
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+          PortalListItem — status variant (proposals)
+        </h2>
+        <div class="space-y-row">
+          <PortalListItem
+            variant="status"
+            href="#"
+            tone="info"
+            toneLabel="Pending Review"
+            title="Proposal #a1b2c3d4"
+            amountCents={525000}
+            metaCaption="Apr 13"
+            trailingCaption="Expires in 3 days"
+          />
+          <PortalListItem
+            variant="status"
+            href="#"
+            tone="success"
+            toneLabel="Accepted"
+            title="Proposal #e53d9c63"
+            amountCents={1200000}
+            metaCaption="Apr 10"
+          />
+          <PortalListItem
+            variant="status"
+            href="#"
+            tone="danger"
+            toneLabel="Declined"
+            title="Proposal #f7a2b1c4"
+            amountCents={450000}
+            metaCaption="Mar 28"
+          />
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+          PortalListItem — status variant (invoices)
+        </h2>
+        <div class="space-y-row">
+          <PortalListItem
+            variant="status"
+            href="#"
+            tone="info"
+            toneLabel="Sent"
+            title="Deposit"
+            amountCents={262500}
+            metaCaption="Due Apr 24"
+          />
+          <PortalListItem
+            variant="status"
+            href="#"
+            tone="success"
+            toneLabel="Paid"
+            title="Deposit"
+            amountCents={262500}
+            metaCaption="Paid Apr 13"
+          />
+          <PortalListItem
+            variant="status"
+            href="#"
+            tone="danger"
+            toneLabel="Overdue"
+            title="Milestone"
+            amountCents={175000}
+            metaCaption="Due Apr 5"
+            trailingCaption="Overdue"
+          />
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+          PortalListItem — document variant
+        </h2>
+        <div class="space-y-row">
+          <PortalListItem
+            variant="document"
+            href="#"
+            icon="picture_as_pdf"
+            title="Statement of Work (SOW)"
+            eyebrow="SOW · Shared Apr 13"
+            trailingIcon="open_in_new"
+          />
+          <PortalListItem
+            variant="document"
+            href="#"
+            icon="description"
+            title="kickoff_notes.md"
+            eyebrow="Shared Apr 9"
+            trailingIcon="download"
+          />
+          <PortalListItem
+            variant="document"
+            href="#"
+            icon="table_chart"
+            title="call_log_2026_q2.xlsx"
+            eyebrow="Shared Apr 4"
+            trailingIcon="download"
+          />
         </div>
       </section>
     </main>
