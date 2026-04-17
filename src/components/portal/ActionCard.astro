@@ -1,14 +1,4 @@
 ---
-/**
- * Dominant-action surface used across portal pages (Concept C).
- *
- * Composition:
- *   [pill label]       ← caption-sized status tag
- *   [$amount + label]  ← optional money display; the dominant visual element
- *   [CTA button]       ← primary action, 44px min height (thumb zone)
- *   [cta subtext]      ← optional secondary line under the CTA
- */
-
 import MoneyDisplay from './MoneyDisplay.astro'
 
 interface Props {
@@ -27,14 +17,12 @@ const { pillLabel, amountCents, amountLabel, ctaLabel, ctaHref, ctaSubtext } = A
   class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-card sm:p-section"
   aria-label={pillLabel}
 >
-  <span
-    class="inline-flex items-center rounded-full bg-[color:var(--color-primary)]/10 px-3 py-1 text-caption font-medium tracking-[0.01em] text-[color:var(--color-primary)]"
-  >
+  <p class="text-label uppercase text-[color:var(--color-primary)]">
     {pillLabel}
-  </span>
+  </p>
   {
     typeof amountCents === 'number' && (
-      <div class="mt-5">
+      <div class="mt-3">
         <MoneyDisplay amountCents={amountCents} size="display" />
         {amountLabel && (
           <p class="mt-2 text-caption font-medium tracking-[0.01em] text-[color:var(--color-text-muted)]">
