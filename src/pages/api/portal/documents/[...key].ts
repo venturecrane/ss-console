@@ -66,8 +66,13 @@ export const GET: APIRoute = async ({ locals, params }) => {
     })
   }
 
-  // Path traversal protection: key must start with org prefix
-  if (!key.startsWith(`${session.orgId}/`)) {
+  // Path traversal protection: key must be scoped to this org.
+  // Two conventions exist in R2:
+  //   - Engagement docs:   `{orgId}/engagements/{id}/...`
+  //   - SOW revisions:     `orgs/{orgId}/quotes/{qid}/sow/...` (see getSowRevisionSignedKey)
+  const orgPrefix = `${session.orgId}/`
+  const orgsScopedPrefix = `orgs/${session.orgId}/`
+  if (!key.startsWith(orgPrefix) && !key.startsWith(orgsScopedPrefix)) {
     return new Response(JSON.stringify({ error: 'Forbidden' }), {
       status: 403,
       headers: { 'Content-Type': 'application/json' },
@@ -91,7 +96,11 @@ export const GET: APIRoute = async ({ locals, params }) => {
   const isEngagementDoc = engagementIds.some((id) =>
     key.startsWith(`${session.orgId}/engagements/${id}/`)
   )
-  const isQuoteDoc = quoteIds.some((qid) => key.startsWith(`${session.orgId}/quotes/${qid}/`))
+  const isQuoteDoc = quoteIds.some(
+    (qid) =>
+      key.startsWith(`${session.orgId}/quotes/${qid}/`) ||
+      key.startsWith(`orgs/${session.orgId}/quotes/${qid}/`)
+  )
 
   if (!isEngagementDoc && !isQuoteDoc) {
     return new Response(JSON.stringify({ error: 'Forbidden' }), {

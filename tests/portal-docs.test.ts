@@ -127,6 +127,14 @@ describe('portal: document download route', () => {
     expect(code).toContain('listEngagements')
   })
 
+  it('accepts SOW revision keys under the orgs/{orgId}/quotes/ prefix', () => {
+    // SOW revisions are stored at `orgs/{orgId}/quotes/{qid}/sow/...` per
+    // getSowRevisionSignedKey(). The handler must not reject these as off-org.
+    const code = source()
+    expect(code).toContain('orgs/${session.orgId}/')
+    expect(code).toContain('orgs/${session.orgId}/quotes/${qid}/')
+  })
+
   it('streams document from R2', () => {
     expect(source()).toContain('streamDocument')
   })
