@@ -1,0 +1,80 @@
+---
+export const prerender = false
+
+import Base from '../layouts/Base.astro'
+import Nav from '../components/Nav.astro'
+import FinalCta from '../components/FinalCta.astro'
+import Footer from '../components/Footer.astro'
+import CtaButton from '../components/CtaButton.astro'
+---
+
+<Base
+  title="AI & Automation | SMD Services"
+  description="AI strategy, tool selection, custom automation, and team training for growing businesses. Sometimes the answer is AI. Sometimes it's something simpler. Let's figure out which."
+>
+  <Nav />
+  <main id="main" role="main">
+    <section class="relative overflow-hidden px-6 pb-32 pt-24">
+      <div class="mx-auto max-w-4xl text-center">
+        <h1
+          class="mb-8 text-5xl font-extrabold leading-[1.1] tracking-tight text-slate-900 md:text-7xl"
+        >
+          AI and Automation for Growing Businesses.
+        </h1>
+        <p class="mx-auto mb-12 max-w-2xl text-xl leading-relaxed text-slate-600">
+          Some of what you're hearing about AI is useful. A lot of it is noise. We help you sort it
+          out and build what fits how your business actually works.
+        </p>
+        <CtaButton href="/book">Book a Call</CtaButton>
+      </div>
+    </section>
+
+    <section class="bg-slate-50 px-6 py-24">
+      <div class="mx-auto max-w-4xl">
+        <h2 class="mb-12 text-center text-3xl font-bold text-slate-900 sm:text-4xl">
+          What Working With Us Looks Like
+        </h2>
+        <div class="space-y-10 text-lg leading-relaxed text-slate-700">
+          <p>
+            <span class="font-semibold text-slate-900">A conversation first.</span> We walk through
+            what you're trying to do, what's slowing you down, and whether AI is the right answer or
+            whether something simpler would serve you better.
+          </p>
+          <p>
+            <span class="font-semibold text-slate-900">The right tool, not the loudest one.</span> Dozens
+            of AI tools are marketed at businesses your size every month. We help you tell which
+            ones actually fit your work and which are solving someone else's problem.
+          </p>
+          <p>
+            <span class="font-semibold text-slate-900">Built for how your team already works.</span>
+            If we build something custom, whether it's an AI assistant, a script that cleans up a recurring
+            task, or an integration between tools, it fits into how your team already operates instead
+            of asking them to change.
+          </p>
+          <p>
+            <span class="font-semibold text-slate-900">Training your team to use it.</span> A tool nobody
+            uses is worse than no tool at all. We make sure your team can actually run what we build
+            after we're gone.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="px-6 py-24">
+      <div class="mx-auto max-w-3xl text-center">
+        <h2 class="mb-8 text-3xl font-bold text-slate-900 sm:text-4xl">
+          Is AI Actually the Right Answer?
+        </h2>
+        <p class="text-lg leading-relaxed text-slate-700">
+          Sometimes yes. Other times the answer is a simple script, a better process, or just
+          getting two of your tools to talk to each other. And sometimes the answer is not yet.
+          That's the conversation. If you walk out of it thinking AI isn't where you should spend
+          money this quarter, that's a win too. Clarity is the point.
+        </p>
+      </div>
+    </section>
+
+    <FinalCta />
+  </main>
+  <Footer />
+</Base>
