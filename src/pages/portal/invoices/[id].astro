@@ -41,7 +41,7 @@ if (!portalData) {
 
 const { client } = portalData
 
-const invoice = await getInvoiceForEntity(env.DB, client.id, invoiceId)
+const invoice = await getInvoiceForEntity(env.DB, session.orgId, client.id, invoiceId)
 if (!invoice) {
   return Astro.redirect('/portal')
 }

@@ -410,16 +410,21 @@ const PORTAL_VISIBLE_STATUSES = ['sent', 'accepted', 'declined', 'expired'] as c
 /**
  * List quotes for a specific entity (portal access).
  *
- * Scoped by entity_id (NOT org_id) — portal users access via their entity_id.
+ * Scoped by both `entity_id` and `org_id` — entity IDs are expected unique,
+ * but org_id enforces defense-in-depth tenant isolation for the portal (#399).
  * Only returns quotes visible to clients (sent, accepted, declined, expired).
  */
-export async function listQuotesForEntity(db: D1Database, entityId: string): Promise<Quote[]> {
+export async function listQuotesForEntity(
+  db: D1Database,
+  orgId: string,
+  entityId: string
+): Promise<Quote[]> {
   const placeholders = PORTAL_VISIBLE_STATUSES.map(() => '?').join(', ')
-  const sql = `SELECT * FROM quotes WHERE entity_id = ? AND status IN (${placeholders}) ORDER BY updated_at DESC`
+  const sql = `SELECT * FROM quotes WHERE entity_id = ? AND org_id = ? AND status IN (${placeholders}) ORDER BY updated_at DESC`
 
   const result = await db
     .prepare(sql)
-    .bind(entityId, ...PORTAL_VISIBLE_STATUSES)
+    .bind(entityId, orgId, ...PORTAL_VISIBLE_STATUSES)
     .all<Quote>()
   return result.results
 }
@@ -427,19 +432,21 @@ export async function listQuotesForEntity(db: D1Database, entityId: string): Pro
 /**
  * Get a single quote for an entity (portal access).
  *
- * Scoped by entity_id (NOT org_id) — same status filter as list.
+ * Scoped by `entity_id` AND `org_id` for defense-in-depth tenant isolation
+ * (#399). Same status filter as list.
  */
 export async function getQuoteForEntity(
   db: D1Database,
+  orgId: string,
   entityId: string,
   quoteId: string
 ): Promise<Quote | null> {
   const placeholders = PORTAL_VISIBLE_STATUSES.map(() => '?').join(', ')
-  const sql = `SELECT * FROM quotes WHERE id = ? AND entity_id = ? AND status IN (${placeholders})`
+  const sql = `SELECT * FROM quotes WHERE id = ? AND entity_id = ? AND org_id = ? AND status IN (${placeholders})`
 
   const result = await db
     .prepare(sql)
-    .bind(quoteId, entityId, ...PORTAL_VISIBLE_STATUSES)
+    .bind(quoteId, entityId, orgId, ...PORTAL_VISIBLE_STATUSES)
     .first<Quote>()
 
   return result ?? null

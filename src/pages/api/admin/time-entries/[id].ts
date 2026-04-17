@@ -40,12 +40,13 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
   const env = locals.runtime.env
 
   try {
-    const entry = await getTimeEntry(env.DB, entryId)
+    const entry = await getTimeEntry(env.DB, session.orgId, entryId)
     if (!entry) {
       return redirect('/admin/entities?error=not_found', 302)
     }
 
-    // Verify the engagement belongs to this org
+    // Engagement lookup still runs for the redirect path resolution; scoping
+    // is already enforced by getTimeEntry above.
     const engagement = await getEngagement(env.DB, session.orgId, entry.engagement_id)
     if (!engagement) {
       return redirect('/admin/entities?error=not_found', 302)
@@ -62,7 +63,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
 
     // Handle DELETE
     if (method === 'DELETE') {
-      await deleteTimeEntry(env.DB, entryId)
+      await deleteTimeEntry(env.DB, session.orgId, entryId)
       return redirect(`${timeUrl}?deleted=1`, 302)
     }
 
@@ -72,7 +73,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
     const description = formData.get('description')
     const category = formData.get('category')
 
-    await updateTimeEntry(env.DB, entryId, {
+    await updateTimeEntry(env.DB, session.orgId, entryId, {
       date: date && typeof date === 'string' && date.trim() ? date.trim() : undefined,
       hours:
         hours && typeof hours === 'string' && hours.trim()

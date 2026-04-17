@@ -40,7 +40,7 @@ if (!portalData) {
 
 const { client } = portalData
 
-const quote = await getQuoteForEntity(env.DB, client.id, quoteId)
+const quote = await getQuoteForEntity(env.DB, session.orgId, client.id, quoteId)
 if (!quote) {
   return Astro.redirect('/portal/quotes')
 }

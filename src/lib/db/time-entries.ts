@@ -48,23 +48,34 @@ export interface UpdateTimeEntryData {
 }
 
 /**
- * List time entries for an engagement, ordered by date DESC.
+ * List time entries for an engagement, scoped by org.
+ * All reads, writes, and the actual-hours recalc are scoped by org_id for
+ * defense-in-depth tenant isolation (#399). The DAL primitive cannot be
+ * used to read or mutate rows outside the caller's org.
  */
-export async function listTimeEntries(db: D1Database, engagementId: string): Promise<TimeEntry[]> {
+export async function listTimeEntries(
+  db: D1Database,
+  orgId: string,
+  engagementId: string
+): Promise<TimeEntry[]> {
   const result = await db
-    .prepare('SELECT * FROM time_entries WHERE engagement_id = ? ORDER BY date DESC')
-    .bind(engagementId)
+    .prepare('SELECT * FROM time_entries WHERE engagement_id = ? AND org_id = ? ORDER BY date DESC')
+    .bind(engagementId, orgId)
     .all<TimeEntry>()
   return result.results
 }
 
 /**
- * Get a single time entry by ID.
+ * Get a single time entry by ID, scoped by org.
  */
-export async function getTimeEntry(db: D1Database, id: string): Promise<TimeEntry | null> {
+export async function getTimeEntry(
+  db: D1Database,
+  orgId: string,
+  id: string
+): Promise<TimeEntry | null> {
   const result = await db
-    .prepare('SELECT * FROM time_entries WHERE id = ?')
-    .bind(id)
+    .prepare('SELECT * FROM time_entries WHERE id = ? AND org_id = ?')
+    .bind(id, orgId)
     .first<TimeEntry>()
 
   return result ?? null
@@ -72,28 +83,40 @@ export async function getTimeEntry(db: D1Database, id: string): Promise<TimeEntr
 
 /**
  * Recalculate engagement actual_hours from the SUM of time_entries.hours.
+ * Scoped by org_id on both sides (the SUM and the engagement UPDATE).
  * Called automatically after create/update/delete.
  */
-export async function recalculateActualHours(db: D1Database, engagementId: string): Promise<void> {
+export async function recalculateActualHours(
+  db: D1Database,
+  orgId: string,
+  engagementId: string
+): Promise<void> {
   const result = await db
-    .prepare('SELECT COALESCE(SUM(hours), 0) as total FROM time_entries WHERE engagement_id = ?')
-    .bind(engagementId)
+    .prepare(
+      'SELECT COALESCE(SUM(hours), 0) as total FROM time_entries WHERE engagement_id = ? AND org_id = ?'
+    )
+    .bind(engagementId, orgId)
     .first<{ total: number }>()
 
   const total = result?.total ?? 0
 
   await db
-    .prepare("UPDATE engagements SET actual_hours = ?, updated_at = datetime('now') WHERE id = ?")
-    .bind(total, engagementId)
+    .prepare(
+      "UPDATE engagements SET actual_hours = ?, updated_at = datetime('now') WHERE id = ? AND org_id = ?"
+    )
+    .bind(total, engagementId, orgId)
     .run()
 }
 
 /**
  * Create a new time entry linked to an engagement. Returns the created record.
- * Automatically recalculates engagement actual_hours after insert.
+ * The INSERT pulls org_id from the engagement row, but we also require the
+ * caller to pass orgId so a cross-org engagement ID fails cleanly on the
+ * subsequent read instead of inserting an orphaned row.
  */
 export async function createTimeEntry(
   db: D1Database,
+  orgId: string,
   engagementId: string,
   data: CreateTimeEntryData
 ): Promise<TimeEntry> {
@@ -102,11 +125,11 @@ export async function createTimeEntry(
   await db
     .prepare(
       `INSERT INTO time_entries (id, org_id, engagement_id, date, hours, description, category)
-     VALUES (?, (SELECT org_id FROM engagements WHERE id = ?), ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       id,
-      engagementId,
+      orgId,
       engagementId,
       data.date,
       data.hours,
@@ -115,9 +138,9 @@ export async function createTimeEntry(
     )
     .run()
 
-  await recalculateActualHours(db, engagementId)
+  await recalculateActualHours(db, orgId, engagementId)
 
-  const entry = await getTimeEntry(db, id)
+  const entry = await getTimeEntry(db, orgId, id)
   if (!entry) {
     throw new Error('Failed to retrieve created time entry')
   }
@@ -125,15 +148,17 @@ export async function createTimeEntry(
 }
 
 /**
- * Update an existing time entry. Returns the updated record.
+ * Update an existing time entry, scoped by org. Returns the updated record
+ * or null if no matching row exists in the caller's org.
  * Automatically recalculates engagement actual_hours after update.
  */
 export async function updateTimeEntry(
   db: D1Database,
+  orgId: string,
   id: string,
   data: UpdateTimeEntryData
 ): Promise<TimeEntry | null> {
-  const existing = await getTimeEntry(db, id)
+  const existing = await getTimeEntry(db, orgId, id)
   if (!existing) {
     return null
   }
@@ -165,34 +190,35 @@ export async function updateTimeEntry(
     return existing
   }
 
-  const sql = `UPDATE time_entries SET ${fields.join(', ')} WHERE id = ?`
-  params.push(id)
+  const sql = `UPDATE time_entries SET ${fields.join(', ')} WHERE id = ? AND org_id = ?`
+  params.push(id, orgId)
 
   await db
     .prepare(sql)
     .bind(...params)
     .run()
 
-  await recalculateActualHours(db, existing.engagement_id)
+  await recalculateActualHours(db, orgId, existing.engagement_id)
 
-  return getTimeEntry(db, id)
+  return getTimeEntry(db, orgId, id)
 }
 
 /**
- * Delete a time entry. Returns true if the entry was found and deleted.
+ * Delete a time entry, scoped by org. Returns true if a matching row
+ * existed in the caller's org and was deleted.
  * Automatically recalculates engagement actual_hours after delete.
  */
-export async function deleteTimeEntry(db: D1Database, id: string): Promise<boolean> {
-  const existing = await getTimeEntry(db, id)
+export async function deleteTimeEntry(db: D1Database, orgId: string, id: string): Promise<boolean> {
+  const existing = await getTimeEntry(db, orgId, id)
   if (!existing) {
     return false
   }
 
   const engagementId = existing.engagement_id
 
-  await db.prepare('DELETE FROM time_entries WHERE id = ?').bind(id).run()
+  await db.prepare('DELETE FROM time_entries WHERE id = ? AND org_id = ?').bind(id, orgId).run()
 
-  await recalculateActualHours(db, engagementId)
+  await recalculateActualHours(db, orgId, engagementId)
 
   return true
 }

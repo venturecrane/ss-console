@@ -13,15 +13,15 @@ describe('portal quotes: data access layer', () => {
     expect(source()).toContain('export async function getQuoteForEntity')
   })
 
-  it('listQuotesForEntity scopes by entity_id (not org_id)', () => {
+  it('listQuotesForEntity scopes by both entity_id and org_id (#399)', () => {
     const code = source()
-    // Should use entity_id = ? without org_id in the portal function
-    expect(code).toContain('SELECT * FROM quotes WHERE entity_id = ?')
+    // Defense-in-depth: entity_id + org_id together for portal tenant isolation.
+    expect(code).toContain('SELECT * FROM quotes WHERE entity_id = ? AND org_id = ?')
   })
 
-  it('getQuoteForEntity scopes by entity_id and quote_id (not org_id)', () => {
+  it('getQuoteForEntity scopes by id, entity_id, and org_id (#399)', () => {
     const code = source()
-    expect(code).toContain('SELECT * FROM quotes WHERE id = ? AND entity_id = ?')
+    expect(code).toContain('SELECT * FROM quotes WHERE id = ? AND entity_id = ? AND org_id = ?')
   })
 
   it('portal queries filter to visible statuses only (sent, accepted, declined, expired)', () => {
@@ -31,17 +31,17 @@ describe('portal quotes: data access layer', () => {
     expect(code).toContain('PORTAL_VISIBLE_STATUSES')
   })
 
-  it('portal functions do not use org_id parameter', () => {
+  it('portal functions accept orgId as a required parameter (#399)', () => {
     const code = source()
-    // Extract just the listQuotesForEntity function signature
-    const listMatch = code.match(/export async function listQuotesForEntity\([^)]+\)/)
+    // Portal DAL signatures must require orgId — the previous "entity_id-only"
+    // pattern was removed in the 2026-04-17 tenant-scoping hardening.
+    const listMatch = code.match(/export async function listQuotesForEntity\([^)]+\)/s)
     expect(listMatch).toBeTruthy()
-    expect(listMatch![0]).not.toContain('orgId')
+    expect(listMatch![0]).toContain('orgId: string')
 
-    // Extract just the getQuoteForEntity function signature
-    const getMatch = code.match(/export async function getQuoteForEntity\([^)]+\)/)
+    const getMatch = code.match(/export async function getQuoteForEntity\([^)]+\)/s)
     expect(getMatch).toBeTruthy()
-    expect(getMatch![0]).not.toContain('orgId')
+    expect(getMatch![0]).toContain('orgId: string')
   })
 })
 
@@ -69,6 +69,15 @@ describe('portal quotes: session helper', () => {
   it('getPortalClient accepts orgId parameter (#400)', () => {
     const code = readFileSync(resolve('src/lib/portal/session.ts'), 'utf-8')
     expect(code).toContain('orgId: string')
+  })
+
+  it('scopes the entity lookup by org_id for defense-in-depth (#399)', () => {
+    const code = readFileSync(resolve('src/lib/portal/session.ts'), 'utf-8')
+    // The entity row lookup must enforce org_id independently, not trust
+    // that users.entity_id was set correctly. If users.entity_id is ever
+    // stale or cross-org, the query returns null rather than resolving to
+    // an entity outside the session's org.
+    expect(code).toContain('SELECT * FROM entities WHERE id = ? AND org_id = ?')
   })
 })
 

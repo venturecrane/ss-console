@@ -41,7 +41,7 @@ export const GET: APIRoute = async ({ locals, params }) => {
   }
 
   // Get quote scoped to this client
-  const quote = await getQuoteForEntity(env.DB, portalData.client.id, quoteId)
+  const quote = await getQuoteForEntity(env.DB, session.orgId, portalData.client.id, quoteId)
   if (!quote) {
     return new Response(JSON.stringify({ error: 'Quote not found' }), {
       status: 404,

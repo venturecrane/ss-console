@@ -298,16 +298,21 @@ const PORTAL_VISIBLE_STATUSES = ['sent', 'paid', 'overdue'] as const
 /**
  * List invoices for a specific entity (portal access).
  *
- * Scoped by entity_id (NOT org_id) — portal users access via their entity_id.
- * Only returns invoices visible to clients (sent, paid, overdue).
+ * Scoped by both `entity_id` and `org_id` for defense-in-depth tenant
+ * isolation (#399). Only returns invoices visible to clients (sent, paid,
+ * overdue).
  */
-export async function listInvoicesForEntity(db: D1Database, entityId: string): Promise<Invoice[]> {
+export async function listInvoicesForEntity(
+  db: D1Database,
+  orgId: string,
+  entityId: string
+): Promise<Invoice[]> {
   const placeholders = PORTAL_VISIBLE_STATUSES.map(() => '?').join(', ')
-  const sql = `SELECT * FROM invoices WHERE entity_id = ? AND status IN (${placeholders}) ORDER BY created_at DESC`
+  const sql = `SELECT * FROM invoices WHERE entity_id = ? AND org_id = ? AND status IN (${placeholders}) ORDER BY created_at DESC`
 
   const result = await db
     .prepare(sql)
-    .bind(entityId, ...PORTAL_VISIBLE_STATUSES)
+    .bind(entityId, orgId, ...PORTAL_VISIBLE_STATUSES)
     .all<Invoice>()
   return result.results
 }
@@ -315,20 +320,22 @@ export async function listInvoicesForEntity(db: D1Database, entityId: string): P
 /**
  * Get a single invoice for a specific entity (portal access).
  *
- * Scoped by entity_id for portal auth; only returns invoices in portal-visible
- * statuses (sent, paid, overdue). Draft and void invoices are never exposed.
+ * Scoped by `entity_id` AND `org_id` for defense-in-depth tenant isolation
+ * (#399). Only returns invoices in portal-visible statuses (sent, paid,
+ * overdue). Draft and void invoices are never exposed.
  */
 export async function getInvoiceForEntity(
   db: D1Database,
+  orgId: string,
   entityId: string,
   invoiceId: string
 ): Promise<Invoice | null> {
   const placeholders = PORTAL_VISIBLE_STATUSES.map(() => '?').join(', ')
-  const sql = `SELECT * FROM invoices WHERE id = ? AND entity_id = ? AND status IN (${placeholders})`
+  const sql = `SELECT * FROM invoices WHERE id = ? AND entity_id = ? AND org_id = ? AND status IN (${placeholders})`
 
   const result = await db
     .prepare(sql)
-    .bind(invoiceId, entityId, ...PORTAL_VISIBLE_STATUSES)
+    .bind(invoiceId, entityId, orgId, ...PORTAL_VISIBLE_STATUSES)
     .first<Invoice>()
 
   return result ?? null

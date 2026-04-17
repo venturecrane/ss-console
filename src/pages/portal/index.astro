@@ -92,10 +92,10 @@ try {
     const invoiceResult = await env.DB.prepare(
       `SELECT id, amount, status, due_date, sent_at, paid_at
          FROM invoices
-        WHERE engagement_id = ? AND status != 'void'
+        WHERE engagement_id = ? AND org_id = ? AND status != 'void'
         ORDER BY created_at DESC`
     )
-      .bind(activeEngagement.id)
+      .bind(activeEngagement.id, session.orgId)
       .all<InvoiceRow>()
     invoices = invoiceResult.results ?? []
 
@@ -124,11 +124,11 @@ try {
   const quoteResult = await env.DB.prepare(
     `SELECT id, status, sent_at, accepted_at
        FROM quotes
-      WHERE entity_id = ?
+      WHERE entity_id = ? AND org_id = ?
       ORDER BY updated_at DESC
       LIMIT 5`
   )
-    .bind(client.id)
+    .bind(client.id, session.orgId)
     .all<QuoteRow>()
   quotes = quoteResult.results ?? []
 } catch (err) {

@@ -88,6 +88,46 @@ describe('time-entries: data access layer', () => {
     expect(code).toContain("'other'")
   })
 
+  it('every DAL function requires orgId as a parameter (#399)', () => {
+    const code = source()
+    // All public functions must accept orgId — no raw-ID primitives that
+    // could be used to read or mutate rows outside the caller's org.
+    const fnNames = [
+      'listTimeEntries',
+      'getTimeEntry',
+      'createTimeEntry',
+      'updateTimeEntry',
+      'deleteTimeEntry',
+      'recalculateActualHours',
+    ]
+    for (const name of fnNames) {
+      const match = code.match(new RegExp(`export async function ${name}\\([^)]+\\)`, 's'))
+      expect(match, `${name} signature`).toBeTruthy()
+      expect(match![0], `${name} should accept orgId`).toContain('orgId: string')
+    }
+  })
+
+  it('every SQL read/write against time_entries is scoped by org_id (#399)', () => {
+    const code = source()
+    // Enumerate the exact SQL statements and assert each is org-scoped.
+    expect(code).toContain(
+      'SELECT * FROM time_entries WHERE engagement_id = ? AND org_id = ? ORDER BY date DESC'
+    )
+    expect(code).toContain('SELECT * FROM time_entries WHERE id = ? AND org_id = ?')
+    expect(code).toContain(
+      'SELECT COALESCE(SUM(hours), 0) as total FROM time_entries WHERE engagement_id = ? AND org_id = ?'
+    )
+    expect(code).toContain('DELETE FROM time_entries WHERE id = ? AND org_id = ?')
+    // UPDATE uses a dynamic SET clause but always appends WHERE id = ? AND org_id = ?
+    expect(code).toContain(
+      "UPDATE time_entries SET ${fields.join(', ')} WHERE id = ? AND org_id = ?"
+    )
+    // engagements UPDATE in recalculateActualHours must also be org-scoped.
+    expect(code).toContain(
+      "UPDATE engagements SET actual_hours = ?, updated_at = datetime('now') WHERE id = ? AND org_id = ?"
+    )
+  })
+
   it('exports TIME_ENTRY_CATEGORIES constant', () => {
     expect(source()).toContain('export const TIME_ENTRY_CATEGORIES')
   })

@@ -25,7 +25,7 @@ if (!portalData) {
 }
 
 const { client } = portalData
-const quotes = await listQuotesForEntity(env.DB, client.id)
+const quotes = await listQuotesForEntity(env.DB, session.orgId, client.id)
 
 // Helpers
 const formatCurrency = (amount: number) =>

@@ -28,7 +28,7 @@ const clientName = portalData?.client.name ?? ''
 let invoices: Awaited<ReturnType<typeof listInvoicesForEntity>> = []
 
 if (entityId) {
-  invoices = await listInvoicesForEntity(env.DB, entityId)
+  invoices = await listInvoicesForEntity(env.DB, session.orgId, entityId)
 }
 
 // Status badge colors for portal-visible statuses

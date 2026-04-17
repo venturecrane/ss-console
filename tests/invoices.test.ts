@@ -114,10 +114,19 @@ describe('invoices: data layer', () => {
     expect(code).toContain('sent_at')
   })
 
-  it('exports listInvoicesForEntity for portal access', () => {
+  it('exports listInvoicesForEntity for portal access, scoped by entity and org (#399)', () => {
     const code = source()
     expect(code).toContain('export async function listInvoicesForEntity')
-    expect(code).toContain('entity_id = ?')
+    expect(code).toContain('entity_id = ? AND org_id = ?')
+    const listMatch = code.match(/export async function listInvoicesForEntity\([^)]+\)/s)
+    expect(listMatch![0]).toContain('orgId: string')
+  })
+
+  it('exports getInvoiceForEntity scoped by id, entity, and org (#399)', () => {
+    const code = source()
+    expect(code).toContain('WHERE id = ? AND entity_id = ? AND org_id = ?')
+    const getMatch = code.match(/export async function getInvoiceForEntity\([^)]+\)/s)
+    expect(getMatch![0]).toContain('orgId: string')
   })
 
   it('portal-visible statuses exclude draft and void', () => {

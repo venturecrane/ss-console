@@ -40,8 +40,8 @@ export async function getPortalClient(
   }
 
   const client = await db
-    .prepare('SELECT * FROM entities WHERE id = ?')
-    .bind(user.entity_id)
+    .prepare('SELECT * FROM entities WHERE id = ? AND org_id = ?')
+    .bind(user.entity_id, orgId)
     .first<Entity>()
 
   if (!client) {

@@ -71,7 +71,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     const description = formData.get('description')
     const category = formData.get('category')
 
-    await createTimeEntry(env.DB, engagementId.trim(), {
+    await createTimeEntry(env.DB, session.orgId, engagementId.trim(), {
       date: date.trim(),
       hours: parsedHours,
       description:
