@@ -35,6 +35,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Typecheck Workers
+        run: npm run typecheck:workers
+
       - name: Format check
         run: npm run format:check
 
@@ -55,3 +58,6 @@ jobs:
 
       - name: Build Review Mining Worker
         run: cd workers/review-mining && npm ci && npx wrangler deploy --dry-run --outdir=dist
+
+      - name: Build Social Listening Worker
+        run: cd workers/social-listening && npm ci && npx wrangler deploy --dry-run --outdir=dist

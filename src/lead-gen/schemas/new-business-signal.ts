@@ -21,6 +21,9 @@ export const NEW_BUSINESS_SOURCES = [
   'ador_tpt',
   'phoenix_permit',
   'scottsdale_permit',
+  'scottsdale_license',
+  'mesa_permit',
+  'tempe_permit',
   'chandler_permit',
   'sba_loan',
 ] as const

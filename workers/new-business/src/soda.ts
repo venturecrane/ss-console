@@ -71,13 +71,18 @@ async function fetchPhoenixPermits(since: Date): Promise<PermitRecord[]> {
   return (data.features ?? [])
     .filter((f) => f.attributes.PERMIT_NAME)
     .map((f) => ({
-      business_name: f.attributes.PERMIT_NAME,
+      business_name: String(f.attributes.PERMIT_NAME ?? ''),
       entity_type: 'Commercial Permit',
-      address: f.attributes.STREET_FULL_NAME ?? '',
+      address: String(f.attributes.STREET_FULL_NAME ?? ''),
       filing_date: epochToDate(f.attributes.PER_ISSUE_DATE),
       source: 'phoenix_permit' as const,
-      permit_type: f.attributes.SCOPE_DESC ?? f.attributes.PER_TYPE_DESC,
-      permit_number: f.attributes.PER_NUM,
+      permit_type:
+        f.attributes.SCOPE_DESC != null
+          ? String(f.attributes.SCOPE_DESC)
+          : f.attributes.PER_TYPE_DESC != null
+            ? String(f.attributes.PER_TYPE_DESC)
+            : undefined,
+      permit_number: f.attributes.PER_NUM != null ? String(f.attributes.PER_NUM) : undefined,
     }))
 }
 
@@ -99,14 +104,15 @@ async function fetchScottsdaleLicenses(since: Date): Promise<PermitRecord[]> {
   return (data.features ?? [])
     .filter((f) => f.attributes.Company)
     .map((f) => ({
-      business_name: f.attributes.Company,
+      business_name: String(f.attributes.Company ?? ''),
       entity_type: 'Business License',
       address: [f.attributes.ServAddrComp, f.attributes.ServCityStateZipComp]
         .filter(Boolean)
+        .map(String)
         .join(', '),
       filing_date: epochToDate(f.attributes.BusinessStartDate),
       source: 'scottsdale_license' as const,
-      permit_number: f.attributes.AcctNum,
+      permit_number: f.attributes.AcctNum != null ? String(f.attributes.AcctNum) : undefined,
     }))
 }
 
@@ -128,12 +134,13 @@ async function fetchScottsdalePermits(since: Date): Promise<PermitRecord[]> {
   return (data.features ?? [])
     .filter((f) => f.attributes.address)
     .map((f) => ({
-      business_name: f.attributes.address, // Scottsdale permits don't have business names
+      business_name: String(f.attributes.address ?? ''), // Scottsdale permits don't have business names
       entity_type: 'Commercial Permit',
-      address: f.attributes.address,
+      address: String(f.attributes.address ?? ''),
       filing_date: epochToDate(f.attributes.issuance_date),
       source: 'scottsdale_permit' as const,
-      permit_type: f.attributes.permit_type_desc,
+      permit_type:
+        f.attributes.permit_type_desc != null ? String(f.attributes.permit_type_desc) : undefined,
       permit_number: String(f.attributes.permit_number ?? ''),
     }))
 }
@@ -190,15 +197,16 @@ async function fetchTempePermits(since: Date): Promise<PermitRecord[]> {
   return (data.features ?? [])
     .filter((f) => f.attributes.ProjectName || f.attributes.Description)
     .map((f) => ({
-      business_name: f.attributes.ProjectName || f.attributes.Description,
+      business_name: String(f.attributes.ProjectName ?? f.attributes.Description ?? ''),
       entity_type: 'Commercial Permit',
       address: [f.attributes.OriginalAddress1, f.attributes.OriginalCity]
         .filter(Boolean)
+        .map(String)
         .join(', '),
       filing_date: epochToDate(f.attributes.IssuedDateDtm),
       source: 'tempe_permit' as const,
-      permit_type: f.attributes.Type,
-      permit_number: f.attributes.PermitNum,
+      permit_type: f.attributes.Type != null ? String(f.attributes.Type) : undefined,
+      permit_number: f.attributes.PermitNum != null ? String(f.attributes.PermitNum) : undefined,
     }))
 }
 
