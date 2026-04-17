@@ -13,7 +13,9 @@
 import { ORG_ID } from '../../../src/lib/constants.js'
 import { findOrCreateEntity } from '../../../src/lib/db/entities.js'
 import { appendContext } from '../../../src/lib/db/context.js'
-import { searchJobs, JOB_QUERIES } from './serpapi.js'
+import { getGeneratorConfig, recordGeneratorRun } from '../../../src/lib/db/generators.js'
+import type { JobMonitorConfig } from '../../../src/lib/generators/types.js'
+import { searchJobs } from './serpapi.js'
 import { qualifyJob, derivePainScore } from './qualify.js'
 import { sendFailureAlert, type RunSummary } from './alert.js'
 import type { SerpApiJob } from './serpapi.js'
@@ -39,9 +41,20 @@ async function run(env: Env): Promise<RunSummary> {
     existingAppended: 0,
   }
 
+  const configRow = await getGeneratorConfig(env.DB, ORG_ID, 'job_monitor')
+  if (!configRow.enabled) {
+    console.log('job_monitor: disabled by admin config — skipping run')
+    await recordGeneratorRun(env.DB, ORG_ID, 'job_monitor', {
+      signalsCount: 0,
+      error: null,
+    })
+    return summary
+  }
+  const cfg = configRow.config as JobMonitorConfig
+
   const allJobs: Array<{ job: SerpApiJob; query: string }> = []
 
-  for (const query of JOB_QUERIES) {
+  for (const query of cfg.search_queries) {
     summary.queries++
     try {
       const jobs = await searchJobs(query, env.SERPAPI_API_KEY)
@@ -158,6 +171,11 @@ async function run(env: Env): Promise<RunSummary> {
       `${summary.qualified} qualified, ${summary.disqualified} disqualified, ` +
       `${summary.written} written, ${summary.errors} errors`
   )
+
+  await recordGeneratorRun(env.DB, ORG_ID, 'job_monitor', {
+    signalsCount: summary.written,
+    error: summary.errors > 0 ? summary.errorDetails.slice(0, 3).join(' · ') : null,
+  })
 
   return summary
 }

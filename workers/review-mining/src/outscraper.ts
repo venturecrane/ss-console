@@ -37,31 +37,24 @@ export interface ReviewData {
   date: string
 }
 
-/** Discovery queries targeting operational-pain-prone verticals in Phoenix. */
-export const DISCOVERY_QUERIES = [
-  'plumber Phoenix AZ',
-  'HVAC contractor Phoenix AZ',
-  'electrician Phoenix AZ',
-  'landscaping company Scottsdale AZ',
-  'auto repair shop Phoenix AZ',
-  'dental office Phoenix AZ',
-  'accounting firm Scottsdale AZ',
-  'law firm Phoenix AZ',
-  'cleaning service Phoenix AZ',
-  'roofing contractor Phoenix AZ',
-  'pest control Phoenix AZ',
-  'moving company Phoenix AZ',
-  'veterinary clinic Phoenix AZ',
-  'physical therapy Phoenix AZ',
-]
+// Discovery queries moved to generator_config. Defaults live in
+// src/lib/generators/types.ts and are merged at worker invocation.
 
 /**
  * Discover businesses via Google Places Text Search API.
  */
+export interface GeoBias {
+  center: { lat: number; lon: number }
+  radiusKm: number
+}
+
 export async function discoverBusinesses(
   query: string,
-  apiKey: string
+  apiKey: string,
+  geo?: GeoBias
 ): Promise<DiscoveredBusiness[]> {
+  const center = geo?.center ?? { lat: 33.4484, lon: -112.074 }
+  const radiusMeters = (geo?.radiusKm ?? 50) * 1000
   const response = await fetch(`https://places.googleapis.com/v1/places:searchText`, {
     method: 'POST',
     headers: {
@@ -74,8 +67,8 @@ export async function discoverBusinesses(
       textQuery: query,
       locationBias: {
         circle: {
-          center: { latitude: 33.4484, longitude: -112.074 },
-          radius: 50000,
+          center: { latitude: center.lat, longitude: center.lon },
+          radius: radiusMeters,
         },
       },
       maxResultCount: 20,

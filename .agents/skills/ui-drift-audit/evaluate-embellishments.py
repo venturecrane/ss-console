@@ -1,29 +1,31 @@
 #!/usr/bin/env python3
 """
-Embellishment evaluator — compares a Stitch-generated HTML against an
-existing source file (or a manifest of known components) and flags
-elements Stitch added that are NOT in the source.
+Embellishment evaluator — finds Stitch-invented FEATURES (not styling, not
+decoration) that don't exist in source code. Output is a short, human-
+readable report with plain-English descriptions and a recommendation
+per item.
 
-Output categories:
-  - Likely-feature: components that look like real product features
-    Stitch invented (aggregate cards, filter/sort bars, summary widgets,
-    settings panels).
-  - Minor-polish: visual-only additions (decorative dividers, empty
-    state illustrations already stripped, etc.).
+What this reports:
+  - Aggregate stat cards ("Total Outstanding", "Total Value")
+  - Auto-action banners (Auto-pay, Auto-renew)
+  - Filter / sort toolbars
+  - Quick-action grids (Shortcuts, Quick links)
+  - Support / help widgets
+  - Notification / alert centers
 
-Writes a markdown report to `.stitch/designs/<dir>/EMBELLISHMENTS.md`
-listing each candidate with the exact HTML snippet and a suggested
-disposition (ship / defer / reject). Humans decide.
+What this does NOT report (handled by normalize/strip):
+  - Gradient CTAs (normalize rewrites to solid primary)
+  - Blur circles / decorative flourishes (strip removes)
+  - Hero imagery, testimonial blocks, marketing CTAs (strip removes)
+  - Font / typography / spacing variations (normalize covers)
 
-This is NOT the strip pass. Strip removes hallucinations the prompt
-explicitly forbade. Evaluator surfaces legitimate-looking suggestions
-the prompt didn't mention.
+One item per feature type. If Stitch added "Total Outstanding" to both
+mobile and desktop invoice lists, that's ONE decision, not two.
 
 Usage:
   python3 .agents/skills/ui-drift-audit/evaluate-embellishments.py \
     --stitch-dir .stitch/designs/portal-v2-spec-test \
-    --source-dir src/pages/portal \
-    --out .stitch/designs/portal-v2-spec-test/EMBELLISHMENTS.md
+    --source-dir src/pages/portal
 """
 
 from __future__ import annotations
@@ -32,198 +34,201 @@ import argparse
 import re
 import sys
 from pathlib import Path
+from collections import defaultdict
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-
-# Signatures — regex patterns that catch common "feature suggestion" shapes
-# Stitch tends to produce. Each pattern has (category, name, regex).
+# --- Feature-suggestion signatures -----------------------------------------
 #
-# The regex extracts a representative snippet (the h2/h3 heading + a few
-# lines of context) so the report can show the reviewer exactly what was
-# added.
+# Each entry is a real, reviewable product feature that Stitch may invent.
+# Style/decoration is out of scope here (see normalize.py / strip.py).
+#
+# Fields per signature:
+#   id           — short slug for the report
+#   title        — human-readable name
+#   what_it_is   — plain-English description of the feature
+#   why_it_might_ship — what user problem it would solve
+#   pattern      — regex that finds evidence in the HTML
+#   recommend    — default disposition, reviewer can override
 
-FEATURE_SIGNATURES = [
-    # Aggregate summary cards: "Total X / Y" stat rows
-    ("aggregate-stat",
-     "Aggregate stat card (Total / Count / Average / Outstanding)",
-     r"(Total\s+(?:Value|Outstanding|Revenue|Count|Invoices|Engagements|Amount)|Active\s+Count|Overdue\s+Amount)"),
-    # Progress bar / percentage widgets
-    ("progress-widget",
-     "Progress / percentage widget",
-     r"(\d+%\s+(?:complete|overdue|on[-\s]track)|progress\s+bar)"),
-    # Auto-pay / settings strips
-    ("auto-settings",
-     "Auto-action or settings banner (Auto-pay, Auto-renew, etc.)",
-     r"(Auto[-\s]pay|Auto[-\s]renew|Auto[-\s]bill|Automatic\s+payment)"),
-    # Filter / sort toolbars
-    ("filter-sort",
-     "Filter or sort control bar",
-     r"(Sort\s+by|Filter\s+by|Group\s+by|<select[^>]+sort)"),
-    # Quick-action grids
-    ("quick-actions",
-     "Quick-actions grid (usually 3-4 tiled shortcuts)",
-     r"(Quick\s+(?:actions|links|access)|Shortcuts)"),
-    # Support / help sidebars
-    ("support-widget",
-     "Support or help widget / sidebar",
-     r"(Need\s+help\?|Contact\s+support|Chat\s+with\s+us|Get\s+help)"),
-    # Recent activity aggregator
-    ("activity-widget",
-     "Recent activity aggregator (if not in source task model)",
-     r"(Last\s+\d+\s+days|This\s+week\s+at\s+a\s+glance|Activity\s+summary)"),
-    # Notifications / alerts row
-    ("notifications",
-     "Notification / alert row",
-     r"(<[^>]*role=\"alert\"[^>]*>|Notification\s+center|Alerts)"),
+SIGNATURES = [
+    {
+        "id": "aggregate-outstanding",
+        "title": "Aggregate outstanding-balance card",
+        "what_it_is": "A prominent card on the invoices list showing the total $ outstanding across all unpaid invoices, typically with a progress-bar showing overdue share.",
+        "why_it_might_ship": "Answers 'how much do I owe right now?' without scanning every invoice. Reduces the top-of-mind friction for an owner tracking cash.",
+        "pattern": r"Total\s+Outstanding",
+        "recommend": "defer — real value but not MVP. Build once we have ≥3 invoices per client in real data.",
+    },
+    {
+        "id": "aggregate-total-value",
+        "title": "Aggregate total-value / active-count stat pair",
+        "what_it_is": "Two side-by-side cards on the proposals list: total $ value of all proposals + a count of active proposals.",
+        "why_it_might_ship": "Gives the owner a pipeline snapshot. Useful if multi-quote is common, noise if single-quote is the norm.",
+        "pattern": r"(Total\s+Value|Active\s+Count)",
+        "recommend": "reject — most SMD engagements are single-proposal. The stat pair would be 'Total: $5,250 / Active: 1', which is noise. Revisit if we move to multi-engagement accounts.",
+    },
+    {
+        "id": "auto-pay-banner",
+        "title": "Auto-pay configuration banner",
+        "what_it_is": "A banner (usually on the invoices list) surfacing whether auto-pay is enabled with a 'Configure' CTA.",
+        "why_it_might_ship": "Would let owners set up recurring automatic payment for invoices instead of clicking Pay each time. Table-stakes for SaaS billing; unusual for project-based consulting.",
+        "pattern": r"Auto[-\s]pay\s+(?:is|off|enabled|disabled|configure)",
+        "recommend": "reject — SMD Services engagements are bounded projects paid per SOW, not recurring. Auto-pay doesn't match the business model.",
+    },
+    {
+        "id": "progress-widget",
+        "title": "Progress bar / percentage widget",
+        "what_it_is": "A horizontal progress bar with a percentage label, typically on the engagement page or overview.",
+        "why_it_might_ship": "Gives a glanceable 'how far along are we?' answer. Needs a reliable 'percent complete' signal that currently doesn't exist in the data model (milestones complete / total isn't a clean percent — milestones aren't equal-weighted).",
+        "pattern": r"\d+%\s+(?:complete|overdue|on[-\s]track)",
+        "recommend": "defer — interesting but requires a data-model decision on how to calculate progress. Not blocking.",
+    },
+    {
+        "id": "filter-sort",
+        "title": "Filter / sort toolbar on list pages",
+        "what_it_is": "A bar above the list with 'Sort by' / 'Filter by' controls (date, status, amount).",
+        "why_it_might_ship": "Useful when lists get long (>10 items). Noise when every client sees 1-3 invoices.",
+        "pattern": r"(Sort\s+by|Filter\s+by|Group\s+by)",
+        "recommend": "defer — implement when a client's list exceeds 10 items. Premature otherwise.",
+    },
+    {
+        "id": "quick-actions",
+        "title": "Quick-actions grid on dashboard",
+        "what_it_is": "3-4 tiled shortcut cards at the top of portal home ('Upload document', 'Request update', 'Download SOW').",
+        "why_it_might_ship": "Surfaces secondary actions without hiding them in menus. Could be over-engineering when the action-centric ActionCard already handles the primary action.",
+        "pattern": r"(Quick\s+(?:actions|links|access)|Shortcuts)",
+        "recommend": "reject — conflicts with Rule 3 (one primary per view) and the 'action-centric above the fold' principle. A quick-actions grid means 4 primary-weight tiles.",
+    },
+    {
+        "id": "support-widget",
+        "title": "Support / help sidebar widget",
+        "what_it_is": "A sidebar card with 'Need help?' or 'Contact support' + a chat or email CTA.",
+        "why_it_might_ship": "Makes support reachable without leaving the page. The ConsultantBlock already does this (name + phone); a separate 'Support' widget would be duplicative.",
+        "pattern": r"(Need\s+assistance|Need\s+help|Contact\s+support|Chat\s+with\s+us)",
+        "recommend": "reject — ConsultantBlock already covers this with the actual consultant's contact info, not generic support.",
+    },
+    {
+        "id": "notifications",
+        "title": "Notification / alert center",
+        "what_it_is": "A bell-icon header action or dedicated notification panel listing alerts.",
+        "why_it_might_ship": "Central inbox for product messages. Currently we use email as the notification channel; duplicating inside the portal creates two notification surfaces.",
+        "pattern": r"(<[^>]*role=\"alert\"[^>]*>|Notification\s+center|Alerts\s+panel)",
+        "recommend": "reject — email is the authoritative notification channel for SMD. A portal notification center would create two inboxes.",
+    },
 ]
 
-# Minor-polish signatures — visual decoration that's harmless but not
-# spec'd. Usually stripped by strip.py but we flag here in case strip
-# missed them.
-POLISH_SIGNATURES = [
-    ("decorative-flourish",
-     "Decorative flourish (blur, gradient circle, ornament)",
-     r"(blur-3xl|blur-2xl|bg-gradient-to|gradient-radial)"),
-    ("pictographic",
-     "Pictographic avatar / illustration (non-photo)",
-     r"(<svg[^>]+class=\"[^\"]*w-(?:16|20|24)[^\"]*\"|illustration)"),
-]
 
+# --- Scan logic ------------------------------------------------------------
 
-def extract_snippet(text: str, match_start: int, lines_before: int = 1,
-                    lines_after: int = 3) -> str:
-    """Grab a small window around a match position for the report."""
-    # Convert position to line number
-    line_no = text.count("\n", 0, match_start)
-    lines = text.splitlines()
-    lo = max(0, line_no - lines_before)
-    hi = min(len(lines), line_no + lines_after + 1)
-    return "\n".join(lines[lo:hi])[:500]
-
-
-def scan_for_embellishments(text: str,
-                             signatures: list[tuple[str, str, str]]
-                             ) -> list[dict]:
-    """Return a list of candidates: {category, name, snippet, line}."""
-    hits: list[dict] = []
-    for category, name, pattern in signatures:
-        rx = re.compile(pattern, re.IGNORECASE)
+def find_in_file(path: Path, patterns: list[dict]) -> dict[str, list[int]]:
+    """Return {signature_id: [line_numbers]} for matches in this file."""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    hits: dict[str, list[int]] = {}
+    for sig in patterns:
+        rx = re.compile(sig["pattern"], re.IGNORECASE)
+        lines = []
         for m in rx.finditer(text):
-            snippet = extract_snippet(text, m.start())
             line_no = text.count("\n", 0, m.start()) + 1
-            hits.append({
-                "category": category,
-                "name": name,
-                "snippet": snippet,
-                "line": line_no,
-                "matched_text": m.group(0)[:80],
-            })
+            lines.append(line_no)
+        if lines:
+            hits[sig["id"]] = lines
     return hits
 
 
-def load_source_inventory(source_dir: Path) -> str:
-    """Concatenate all .astro source files in source_dir + subdirs as a
-    single corpus. Used to check whether a Stitch feature already exists
-    in source (if the matched phrase appears in source, it's not new)."""
+def load_source_corpus(source_dir: Path) -> str:
     parts: list[str] = []
     for path in source_dir.rglob("*.astro"):
         try:
             parts.append(path.read_text(encoding="utf-8", errors="replace"))
         except Exception:
             pass
-    return "\n".join(parts)
+    return "\n".join(parts).lower()
 
 
-def filter_novel(hits: list[dict], source_corpus: str) -> list[dict]:
-    """Drop hits whose matched phrase already appears in source corpus.
-    These aren't novel Stitch additions — they exist in our code."""
-    novel: list[dict] = []
-    for h in hits:
-        # Check a shortened version of the matched text against source.
-        needle = h["matched_text"].lower().strip()
-        # Trim any HTML tag noise for the match check
-        needle = re.sub(r"[<>\"=]", " ", needle)
-        # Normalize whitespace for a fairer substring check
-        needle = re.sub(r"\s+", " ", needle).strip()
-        if needle and needle in source_corpus.lower():
-            continue
-        novel.append(h)
-    return novel
+def signature_in_source(sig: dict, source_corpus: str) -> bool:
+    """Check if a signature already exists in source — don't flag as novel."""
+    rx = re.compile(sig["pattern"], re.IGNORECASE)
+    return bool(rx.search(source_corpus))
 
 
-def format_report(stitch_dir: Path,
-                   surfaces: dict[str, list[dict]]) -> str:
-    out = [
-        "# Embellishment evaluation\n",
-        f"Generated from `{stitch_dir}`.\n",
-        "Stitch-generated elements NOT present in `src/pages/portal/**`.\n",
-        "Review each candidate and decide: **ship** (implement in source),",
-        "**defer** (real feature but not this pass), or **reject** (drop).\n",
+def format_report(findings: dict[str, dict]) -> str:
+    """findings: {sig_id: {sig: dict, locations: [(file, line), ...]}}"""
+    out: list[str] = [
+        "# Stitch-invented feature suggestions",
+        "",
+        "Features Stitch added that don't exist in source. One entry per feature — decide once, applies everywhere Stitch put it.",
+        "",
+        "Styling/decoration choices (gradient CTAs, blur circles, typography drift) are NOT here — those are handled automatically by `normalize.py` and `strip.py`. What's below is product-level: real UX additions Stitch invented.",
+        "",
+        "**Your decision per item:** ship (implement in source), defer (real feature, not this pass), reject (drop).",
+        "",
+        "---",
+        "",
     ]
 
-    if not any(surfaces.values()):
-        out.append("\nNo embellishments detected. Clean run.\n")
+    if not findings:
+        out.append("_No novel feature suggestions detected. Clean run._")
         return "\n".join(out)
 
-    for surface, hits in sorted(surfaces.items()):
-        if not hits:
-            continue
-        out.append(f"\n## {surface}\n")
-        by_cat: dict[str, list[dict]] = {}
-        for h in hits:
-            by_cat.setdefault(h["category"], []).append(h)
-        for cat, cat_hits in sorted(by_cat.items()):
-            name = cat_hits[0]["name"]
-            out.append(f"\n### {name}  `{cat}`\n")
-            for h in cat_hits[:5]:  # cap to avoid spam
-                out.append(f"- **Line {h['line']}**: `{h['matched_text']}`")
-                out.append("  ```html")
-                out.append(f"  {h['snippet']}")
-                out.append("  ```")
-            if len(cat_hits) > 5:
-                out.append(f"- ...and {len(cat_hits) - 5} more hits in this category.")
+    for i, (sig_id, data) in enumerate(findings.items(), start=1):
+        sig = data["sig"]
+        locations = data["locations"]
+        # Dedupe by surface (drop line numbers for human digest)
+        surfaces = sorted({path.stem for path, _ in locations})
+        out.append(f"## {i}. {sig['title']}")
+        out.append("")
+        out.append(f"**What it is.** {sig['what_it_is']}")
+        out.append("")
+        out.append(f"**Why it might ship.** {sig['why_it_might_ship']}")
+        out.append("")
+        out.append(f"**Where Stitch put it.** {', '.join(surfaces)}  ({len(locations)} occurrence(s))")
+        out.append("")
+        out.append(f"**Recommendation.** {sig['recommend']}")
+        out.append("")
+        out.append(f"**Your decision:** [ ] ship   [ ] defer   [ ] reject")
+        out.append("")
+        out.append("---")
+        out.append("")
 
-    out.append("\n## Next step")
-    out.append("\nFor each candidate above, add a note to the PR describing")
-    out.append("your disposition. Future runs of this evaluator will flag the")
-    out.append("same patterns; add matched phrases to the source corpus")
-    out.append("(as code or tests) once accepted.")
     return "\n".join(out)
 
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stitch-dir", type=Path, required=True,
-                        help="Directory containing Stitch-generated HTML")
-    parser.add_argument("--source-dir", type=Path, required=True,
-                        help="Source directory to compare against (e.g., src/pages/portal)")
-    parser.add_argument("--out", type=Path, default=None,
-                        help="Output report path; default <stitch-dir>/EMBELLISHMENTS.md")
+    parser.add_argument("--stitch-dir", type=Path, required=True)
+    parser.add_argument("--source-dir", type=Path, required=True)
+    parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args(argv)
 
-    if not args.stitch_dir.exists():
-        print(f"error: {args.stitch_dir} does not exist", file=sys.stderr)
-        return 1
-    if not args.source_dir.exists():
-        print(f"error: {args.source_dir} does not exist", file=sys.stderr)
+    if not args.stitch_dir.exists() or not args.source_dir.exists():
+        print("error: stitch-dir or source-dir does not exist", file=sys.stderr)
         return 1
 
-    source_corpus = load_source_inventory(args.source_dir)
-    signatures = FEATURE_SIGNATURES + POLISH_SIGNATURES
+    source_corpus = load_source_corpus(args.source_dir)
 
-    surfaces: dict[str, list[dict]] = {}
-    for path in sorted(args.stitch_dir.glob("*.html")):
-        text = path.read_text(encoding="utf-8", errors="replace")
-        hits = scan_for_embellishments(text, signatures)
-        novel = filter_novel(hits, source_corpus)
-        surfaces[path.name] = novel
+    # For each signature, aggregate hits across all HTML files — ignoring
+    # signatures that already exist in source.
+    findings: dict[str, dict] = {}
+    for sig in SIGNATURES:
+        if signature_in_source(sig, source_corpus):
+            continue
+        locations: list[tuple[Path, int]] = []
+        for path in sorted(args.stitch_dir.glob("*.html")):
+            hits = find_in_file(path, [sig])
+            for line in hits.get(sig["id"], []):
+                locations.append((path, line))
+        if locations:
+            findings[sig["id"]] = {"sig": sig, "locations": locations}
 
     out_path = args.out or args.stitch_dir / "EMBELLISHMENTS.md"
-    report = format_report(args.stitch_dir, surfaces)
+    report = format_report(findings)
     out_path.write_text(report, encoding="utf-8")
-    total = sum(len(h) for h in surfaces.values())
+
     print(f"Wrote {out_path}")
-    print(f"  {total} embellishment candidates across {len(surfaces)} surfaces")
+    print(f"  {len(findings)} novel feature suggestion(s) across {len(SIGNATURES)} signature types")
+    for sig_id, data in findings.items():
+        n = len(data["locations"])
+        surfaces = sorted({p.stem for p, _ in data["locations"]})
+        print(f"  - {data['sig']['title']}: {n} hit(s) in {', '.join(surfaces)}")
     return 0
 
 

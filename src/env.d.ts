@@ -85,6 +85,16 @@ type CfEnv = {
    * endpoint falls back to streaming via `/api/portal/consultants/photo/[key]`.
    */
   CONSULTANT_PHOTOS_PUBLIC_BASE?: string
+  /**
+   * Lead-gen worker origins. Used by the admin "Run now" button to
+   * invoke each worker's fetch handler on demand (bearer-authed via
+   * LEAD_INGEST_API_KEY). Unset in dev — the admin UI degrades to a
+   * disabled Run-now button when the URL or key is missing.
+   */
+  NEW_BUSINESS_WORKER_URL?: string
+  JOB_MONITOR_WORKER_URL?: string
+  REVIEW_MINING_WORKER_URL?: string
+  SOCIAL_LISTENING_WORKER_URL?: string
 }
 
 type Runtime = import('@astrojs/cloudflare').Runtime<CfEnv>

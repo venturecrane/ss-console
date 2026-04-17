@@ -76,6 +76,17 @@ SPACING_NUMS = {
 }
 SPACING_PROPS = ["p", "gap", "gap-x", "gap-y", "space-y", "space-x"]
 
+# Gradient CTA stylings — Stitch prefers gradient-to-* buttons.
+# UI-PATTERNS Rule 3: primary CTA is SOLID bg-primary with text-white, not gradient.
+# These patterns collapse gradient stacks to solid primary.
+GRADIENT_CTAS = [
+    # bg-gradient-to-{r,l,t,b,br,bl,tr,tl} from-primary to-primary-container
+    (r"bg-gradient-to-[a-z]{1,2}\s+from-primary\s+to-primary-container",
+     "bg-[color:var(--color-primary)]"),
+    (r"bg-gradient-to-[a-z]{1,2}\s+from-[\w\-\[\]/:.]+\s+to-[\w\-\[\]/:.]+",
+     "bg-[color:var(--color-primary)]"),
+]
+
 # Material 3 color tokens Stitch tends to reach for. Map to our semantic roles.
 MATERIAL_COLORS = [
     (r"\bbg-surface-container-lowest\b", "bg-[color:var(--color-surface)]"),
@@ -132,7 +143,8 @@ def normalize(text: str) -> tuple[str, dict[str, int]]:
     """
     spacing_subs = _build_spacing_subs()
     all_subs = (
-        [(p, r, "typo-arbitrary") for p, r in TYPO_ARBITRARY]
+        [(p, r, "gradient-cta") for p, r in GRADIENT_CTAS]
+        + [(p, r, "typo-arbitrary") for p, r in TYPO_ARBITRARY]
         + [(p, r, "typo-tailwind") for p, r in TYPO_TAILWIND]
         + [(p, r, "spacing-rhythm") for p, r in spacing_subs]
         + [(p, r, "material-color") for p, r in MATERIAL_COLORS]

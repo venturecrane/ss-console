@@ -80,12 +80,26 @@ ANNOUNCEMENT_PATTERNS = [
     r'<div[^>]*class="[^"]*(?:announce|promo|banner-promo)[^"]*"[^>]*>.*?</div>',
 ]
 
+# Decorative ornaments — blur circles, gradient-radial ornaments, empty
+# illustration placeholders. These are pure visual polish Stitch adds to
+# fill space; they carry no information.
+DECORATIVE_PATTERNS = [
+    # Absolute-positioned blur decorations (the classic "bg-primary/5 rounded-full blur-3xl" corner ornament)
+    r'<div[^>]*class="[^"]*\babsolute\b[^"]*\bblur-(?:2xl|3xl)\b[^"]*"[^>]*></div>',
+    r'<div[^>]*class="[^"]*\bblur-(?:2xl|3xl)\b[^"]*\babsolute\b[^"]*"[^>]*></div>',
+    # "Optional Illustration/Graphic Area" — Stitch's empty-slot pattern.
+    r'<!--\s*Optional Illustration/Graphic Area\s*-->\s*<div[^>]*>.*?</div>\s*(?=<!--|<section|</section|</div)',
+    # Isolated illustration wrappers with gradient-radial backgrounds
+    r'<div[^>]*class="[^"]*\bgradient-radial\b[^"]*"[^>]*>.*?</div>',
+]
+
 CATEGORIES: list[tuple[str, list[str]]] = [
     ("hero-img", HERO_IMG_PATTERNS),
     ("marketing-cta", MARKETING_CTA_PATTERNS),
     ("testimonial", TESTIMONIAL_PATTERNS),
     ("footer", FOOTER_PATTERNS),
     ("announcement", ANNOUNCEMENT_PATTERNS),
+    ("decorative", DECORATIVE_PATTERNS),
 ]
 
 

@@ -14,7 +14,9 @@
 import { ORG_ID } from '../../../src/lib/constants.js'
 import { findOrCreateEntity } from '../../../src/lib/db/entities.js'
 import { appendContext } from '../../../src/lib/db/context.js'
-import { discoverBusinesses, fetchReviews, DISCOVERY_QUERIES } from './outscraper.js'
+import { getGeneratorConfig, recordGeneratorRun } from '../../../src/lib/db/generators.js'
+import type { ReviewMiningConfig } from '../../../src/lib/generators/types.js'
+import { discoverBusinesses, fetchReviews } from './outscraper.js'
 import { scoreReviews } from './qualify.js'
 import { sendFailureAlert, type RunSummary } from './alert.js'
 import type { DiscoveredBusiness } from './outscraper.js'
@@ -43,14 +45,29 @@ async function run(env: Env): Promise<RunSummary> {
     errorDetails: [],
   }
 
+  const configRow = await getGeneratorConfig(env.DB, ORG_ID, 'review_mining')
+  if (!configRow.enabled) {
+    console.log('review_mining: disabled by admin config — skipping run')
+    await recordGeneratorRun(env.DB, ORG_ID, 'review_mining', {
+      signalsCount: 0,
+      error: null,
+    })
+    return summary
+  }
+  const cfg = configRow.config as ReviewMiningConfig
+  const geoBias = {
+    center: cfg.geo_center,
+    radiusKm: cfg.geo_radius_km,
+  }
+
   // Phase 1: Discover businesses via Google Places
   const allBusinesses: DiscoveredBusiness[] = []
   const seenPlaceIds = new Set<string>()
 
-  for (const query of DISCOVERY_QUERIES) {
+  for (const query of cfg.discovery_queries) {
     summary.queries++
     try {
-      const businesses = await discoverBusinesses(query, env.GOOGLE_PLACES_API_KEY)
+      const businesses = await discoverBusinesses(query, env.GOOGLE_PLACES_API_KEY, geoBias)
       for (const b of businesses) {
         if (!seenPlaceIds.has(b.place_id)) {
           seenPlaceIds.add(b.place_id)
@@ -178,6 +195,11 @@ async function run(env: Env): Promise<RunSummary> {
     `Run complete: ${summary.newBusinesses} new, ${summary.qualified} qualified (pain>=${PAIN_THRESHOLD}), ` +
       `${summary.belowThreshold} below threshold, ${summary.written} written, ${summary.errors} errors`
   )
+
+  await recordGeneratorRun(env.DB, ORG_ID, 'review_mining', {
+    signalsCount: summary.written,
+    error: summary.errors > 0 ? summary.errorDetails.slice(0, 3).join(' · ') : null,
+  })
 
   return summary
 }

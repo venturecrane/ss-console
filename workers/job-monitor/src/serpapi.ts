@@ -60,18 +60,5 @@ export async function searchJobs(query: string, apiKey: string): Promise<SerpApi
   return data.jobs_results ?? []
 }
 
-/** Job search queries targeting operational roles. */
-export const JOB_QUERIES = [
-  'office manager',
-  'operations manager',
-  'dispatcher',
-  'scheduling coordinator',
-  'customer service coordinator',
-  'office administrator',
-  'front desk manager',
-  'service coordinator',
-  'Director of Operations',
-  'IT Manager',
-  'Systems Administrator',
-  'Technology Coordinator',
-]
+// Query list moved to generator_config. Defaults live in
+// src/lib/generators/types.ts and are merged at worker invocation.

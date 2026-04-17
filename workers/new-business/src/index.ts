@@ -14,7 +14,9 @@
 import { ORG_ID } from '../../../src/lib/constants.js'
 import { findOrCreateEntity } from '../../../src/lib/db/entities.js'
 import { appendContext } from '../../../src/lib/db/context.js'
-import { fetchAllPermits } from './soda.js'
+import { getGeneratorConfig, recordGeneratorRun } from '../../../src/lib/db/generators.js'
+import type { NewBusinessConfig } from '../../../src/lib/generators/types.js'
+import { fetchAllPermits, type SodaCity } from './soda.js'
 import { qualifyNewBusiness } from './qualify.js'
 import { sendFailureAlert, type RunSummary } from './alert.js'
 
@@ -37,9 +39,23 @@ async function run(env: Env): Promise<RunSummary> {
     errorDetails: [],
   }
 
-  const permits = await fetchAllPermits()
+  const configRow = await getGeneratorConfig(env.DB, ORG_ID, 'new_business')
+  if (!configRow.enabled) {
+    console.log('new_business: disabled by admin config — skipping run')
+    await recordGeneratorRun(env.DB, ORG_ID, 'new_business', {
+      signalsCount: 0,
+      error: null,
+    })
+    return summary
+  }
+  const cfg = configRow.config as NewBusinessConfig
+  const enabledCities = cfg.soda_sources.filter((s) => s.enabled).map((s) => s.city as SodaCity)
+
+  const permits = await fetchAllPermits(enabledCities)
   summary.totalPermits = permits.length
-  console.log(`SODA: ${summary.totalPermits} total permits from 5 sources`)
+  console.log(
+    `SODA: ${summary.totalPermits} total permits from ${enabledCities.length} enabled sources`
+  )
 
   for (const permit of permits) {
     try {
@@ -120,6 +136,11 @@ async function run(env: Env): Promise<RunSummary> {
     `Run complete: ${summary.newPermits} new, ${summary.qualified} qualified, ` +
       `${summary.disqualified} disqualified, ${summary.written} written, ${summary.errors} errors`
   )
+
+  await recordGeneratorRun(env.DB, ORG_ID, 'new_business', {
+    signalsCount: summary.written,
+    error: summary.errors > 0 ? summary.errorDetails.slice(0, 3).join(' · ') : null,
+  })
 
   return summary
 }

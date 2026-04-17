@@ -15,6 +15,8 @@
 
 import { ORG_ID, SYSTEM_ENTITY_ID } from '../../../src/lib/constants.js'
 import { appendContext } from '../../../src/lib/db/context.js'
+import { getGeneratorConfig, recordGeneratorRun } from '../../../src/lib/db/generators.js'
+import type { SocialListeningConfig } from '../../../src/lib/generators/types.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -71,14 +73,6 @@ interface RunSummary {
 // ---------------------------------------------------------------------------
 
 const USER_AGENT = 'smd-services-social-listener/1.0'
-
-const QUERIES = [
-  'small business Phoenix operations',
-  'business owner overwhelmed scheduling',
-  'CRM recommendation small business',
-  'hiring office manager Phoenix',
-  'small business spreadsheet chaos',
-]
 
 async function getRedditToken(env: Env): Promise<string> {
   const auth = btoa(`${env.REDDIT_CLIENT_ID}:${env.REDDIT_CLIENT_SECRET}`)
@@ -217,6 +211,17 @@ async function run(env: Env): Promise<RunSummary> {
     errorDetails: [],
   }
 
+  const configRow = await getGeneratorConfig(env.DB, ORG_ID, 'social_listening')
+  if (!configRow.enabled) {
+    console.log('social_listening: disabled by admin config — skipping run')
+    await recordGeneratorRun(env.DB, ORG_ID, 'social_listening', {
+      signalsCount: 0,
+      error: null,
+    })
+    return summary
+  }
+  const cfg = configRow.config as SocialListeningConfig
+
   // Authenticate with Reddit
   let token: string
   try {
@@ -226,6 +231,10 @@ async function run(env: Env): Promise<RunSummary> {
     summary.errors++
     summary.errorDetails.push(`Reddit auth: ${msg}`)
     console.error(`Fatal: Reddit auth failed — aborting run`)
+    await recordGeneratorRun(env.DB, ORG_ID, 'social_listening', {
+      signalsCount: 0,
+      error: msg,
+    })
     return summary
   }
 
@@ -233,7 +242,7 @@ async function run(env: Env): Promise<RunSummary> {
   const seen = new Set<string>()
   const allPosts: RedditPost[] = []
 
-  for (const query of QUERIES) {
+  for (const query of cfg.search_queries) {
     summary.queries++
     try {
       const posts = await searchReddit(token, query)
@@ -316,6 +325,11 @@ async function run(env: Env): Promise<RunSummary> {
       console.error(`Digest send failed: ${msg}`)
     }
   }
+
+  await recordGeneratorRun(env.DB, ORG_ID, 'social_listening', {
+    signalsCount: summary.stored,
+    error: summary.errors > 0 ? summary.errorDetails.slice(0, 3).join(' · ') : null,
+  })
 
   return summary
 }
