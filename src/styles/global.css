@@ -1,6 +1,9 @@
 @import 'tailwindcss';
 
 @theme {
+  /* ------------------------------------------------------------------
+   * Color roles (pre-existing; semantic, not per-screen)
+   * ------------------------------------------------------------------ */
   --color-primary: #1e40af;
   --color-primary-hover: #1e3a8a;
 
@@ -18,6 +21,58 @@
   --color-complete: #10b981;
   --color-attention: #f59e0b;
   --color-error: #ef4444;
+
+  /* ------------------------------------------------------------------
+   * Typography scale — docs/style/UI-PATTERNS.md Rule 5
+   * Seven named tokens. Inline `text-[Npx]` banned in governed contexts.
+   * ------------------------------------------------------------------ */
+  --text-display: 2rem; /* 32px */
+  --text-display--line-height: 2.5rem; /* 40px */
+  --text-display--font-weight: 700;
+  --text-display--letter-spacing: -0.02em;
+
+  --text-title: 1.25rem; /* 20px */
+  --text-title--line-height: 1.75rem; /* 28px */
+  --text-title--font-weight: 700;
+  --text-title--letter-spacing: -0.005em;
+
+  --text-heading: 1rem; /* 16px */
+  --text-heading--line-height: 1.375rem; /* 22px */
+  --text-heading--font-weight: 600;
+
+  --text-body-lg: 1.125rem; /* 18px */
+  --text-body-lg--line-height: 1.75rem; /* 28px */
+  --text-body-lg--font-weight: 400;
+
+  --text-body: 0.9375rem; /* 15px */
+  --text-body--line-height: 1.5rem; /* 24px */
+  --text-body--font-weight: 400;
+
+  --text-caption: 0.8125rem; /* 13px */
+  --text-caption--line-height: 1.125rem; /* 18px */
+  --text-caption--font-weight: 500;
+  --text-caption--letter-spacing: 0.01em;
+
+  --text-label: 0.75rem; /* 12px */
+  --text-label--line-height: 1rem; /* 16px */
+  --text-label--font-weight: 600;
+  --text-label--letter-spacing: 0.08em;
+
+  /* ------------------------------------------------------------------
+   * Spacing rhythm — docs/style/UI-PATTERNS.md Rule 6
+   * Generates utilities: p-card, gap-section, space-y-stack, etc.
+   * ------------------------------------------------------------------ */
+  --spacing-section: 2rem; /* 32px — gap between major page sections */
+  --spacing-card: 1.5rem; /* 24px — card internal padding */
+  --spacing-stack: 1rem; /* 16px — vertical stack of sibling content */
+  --spacing-row: 0.75rem; /* 12px — gap between list rows */
+
+  /* ------------------------------------------------------------------
+   * Shape — shared radius tokens.
+   * ------------------------------------------------------------------ */
+  --radius-badge: 9999px; /* pill */
+  --radius-card: 0.75rem; /* 12px */
+  --radius-button: 0.5rem; /* 8px */
 }
 
 @layer base {
