@@ -130,6 +130,28 @@ describe('middleware: portal rewrite preserved (regression)', () => {
   })
 })
 
+describe('middleware: session resolution gating (#20)', () => {
+  const source = () => readFileSync(resolve('src/middleware.ts'), 'utf-8')
+
+  it('only reads the cookie header on routes that can use a session', () => {
+    const code = source()
+    // Marketing pages are prerendered; reading request headers during
+    // prerender triggers a build warning. The cookie read must be gated
+    // behind a `needsSession` check so static pages stay clean.
+    expect(code).toContain('const needsSession =')
+    expect(code).toMatch(/if\s*\(\s*needsSession\s*\)/)
+  })
+
+  it('needsSession includes protected, auth, and API routes', () => {
+    const code = source()
+    // All three classes can legitimately consume locals.session:
+    // - protected (admin/portal) require it
+    // - auth routes read it (e.g. renewal flows)
+    // - API routes include /api/auth/google/connect etc.
+    expect(code).toContain('isProtectedRoute || isAuthRoute || isApiRoute')
+  })
+})
+
 describe('middleware: admin login host guard', () => {
   const source = () => readFileSync(resolve('src/pages/api/auth/login.ts'), 'utf-8')
 
