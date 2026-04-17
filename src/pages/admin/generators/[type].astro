@@ -411,8 +411,8 @@ const runConfigured = !!(WORKER_URLS[type] && env.LEAD_INGEST_API_KEY)
           name="target_verticals"
           rows="6"
           class="w-full border border-slate-300 rounded px-3 py-2 text-sm font-mono"
-          >{(configRow.config as NewBusinessConfig).target_verticals.join('\n')}</textarea
-        >
+          set:html={(configRow.config as NewBusinessConfig).target_verticals.join('\n')}
+        />
         <p class="text-xs text-slate-500 mt-1">
           Free-text. Suggestions: {VERTICALS.map((v) => v.replace(/_/g, ' ')).join(', ')}.
         </p>
@@ -458,8 +458,8 @@ const runConfigured = !!(WORKER_URLS[type] && env.LEAD_INGEST_API_KEY)
           name="geos"
           rows="2"
           class="w-full border border-slate-300 rounded px-3 py-2 text-sm font-mono"
-          >{(configRow.config as NewBusinessConfig).geos.join('\n')}</textarea
-        >
+          set:html={(configRow.config as NewBusinessConfig).geos.join('\n')}
+        />
       </div>
 
       {
@@ -497,9 +497,8 @@ const runConfigured = !!(WORKER_URLS[type] && env.LEAD_INGEST_API_KEY)
               name="search_queries"
               rows="8"
               class="w-full border border-slate-300 rounded px-3 py-2 text-sm font-mono"
-            >
-              {jm.search_queries.join('\n')}
-            </textarea>
+              set:html={jm.search_queries.join('\n')}
+            />
           </div>
         )
       }
@@ -516,9 +515,8 @@ const runConfigured = !!(WORKER_URLS[type] && env.LEAD_INGEST_API_KEY)
                 name="discovery_queries"
                 rows="10"
                 class="w-full border border-slate-300 rounded px-3 py-2 text-sm font-mono"
-              >
-                {rm.discovery_queries.join('\n')}
-              </textarea>
+                set:html={rm.discovery_queries.join('\n')}
+              />
             </div>
             <div>
               <label class="text-sm font-medium text-slate-900 block mb-1">Search area</label>
@@ -592,9 +590,8 @@ const runConfigured = !!(WORKER_URLS[type] && env.LEAD_INGEST_API_KEY)
               name="search_queries"
               rows="5"
               class="w-full border border-slate-300 rounded px-3 py-2 text-sm font-mono"
-            >
-              {sl.search_queries.join('\n')}
-            </textarea>
+              set:html={sl.search_queries.join('\n')}
+            />
           </div>
         )
       }
