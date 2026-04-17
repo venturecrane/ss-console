@@ -1,0 +1,388 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro'
+
+/**
+ * Generator detail — per-pipeline inspector.
+ *
+ * Read-only in Phase 1. Shows:
+ *   - Current parameters (hardcoded in worker source today)
+ *   - 30-day signal volume by day
+ *   - Last 50 signals with raw metadata JSON expandable
+ *
+ * Phase 2 will add an edit form above the parameters panel and a Run-now button.
+ *
+ * Protected by auth middleware (requires admin role).
+ */
+
+const session = Astro.locals.session!
+const env = Astro.locals.runtime.env
+const type = Astro.params.type!
+
+const PIPELINE_DEFS: Record<
+  string,
+  {
+    label: string
+    description: string
+    params: Array<{ label: string; value: string | string[]; note?: string }>
+  }
+> = {
+  new_business: {
+    label: 'New Business Detection',
+    description:
+      'Daily pull from Phoenix-metro permit + license feeds. Claude-Haiku qualifies each record.',
+    params: [
+      {
+        label: 'Data sources',
+        value: [
+          'Phoenix ArcGIS (planning permits) — SCOPE_DESC LIKE "%COMM%"',
+          'Scottsdale ArcGIS (business licenses) — AcctStatus=Active',
+          'Scottsdale ArcGIS (building permits) — permit_type_desc LIKE "%TENANT%"',
+          'Mesa Socrata SODA — permit_type=COM',
+          'Tempe ArcGIS (building permits) — Type LIKE "%Commercial%"',
+        ],
+      },
+      { label: 'Lookback', value: '7 days', note: 'from workers/new-business/src/soda.ts' },
+      { label: 'Target revenue', value: '$750k–$5M', note: 'inlined in LLM prompt' },
+      {
+        label: 'Target verticals',
+        value: [
+          'home_services',
+          'professional_services',
+          'contractor_trades',
+          'healthcare',
+          'technology',
+          'manufacturing',
+          'retail_salon (secondary)',
+          'restaurant_food (secondary)',
+        ],
+      },
+      { label: 'Cron', value: 'Daily 07:00 MST' },
+    ],
+  },
+  job_monitor: {
+    label: 'Job Posting Monitor',
+    description: 'SerpAPI Google Jobs search for operational roles. Claude-Sonnet qualifies.',
+    params: [
+      {
+        label: 'Search queries',
+        value: [
+          'office manager',
+          'operations manager',
+          'dispatcher',
+          'scheduling coordinator',
+          'customer service coordinator',
+          'office administrator',
+          'front desk manager',
+          'service coordinator',
+          'Director of Operations',
+          'IT Manager',
+          'Systems Administrator',
+          'Technology Coordinator',
+        ],
+      },
+      { label: 'Location', value: 'Phoenix, Arizona, United States' },
+      { label: 'Time filter', value: 'date_posted:week' },
+      { label: 'Target revenue', value: '$750k–$5M' },
+      { label: 'Cron', value: 'Daily 06:00 MST' },
+    ],
+  },
+  review_mining: {
+    label: 'Review Mining',
+    description:
+      'Google Places discovery → Outscraper review fetch. Claude scores operational pain.',
+    params: [
+      {
+        label: 'Discovery queries',
+        value: [
+          'plumber Phoenix AZ',
+          'HVAC contractor Phoenix AZ',
+          'electrician Phoenix AZ',
+          'landscaping company Scottsdale AZ',
+          'auto repair shop Phoenix AZ',
+          'dental office Phoenix AZ',
+          'accounting firm Scottsdale AZ',
+          'law firm Phoenix AZ',
+          'cleaning service Phoenix AZ',
+          'roofing contractor Phoenix AZ',
+          'pest control Phoenix AZ',
+          'moving company Phoenix AZ',
+          'veterinary clinic Phoenix AZ',
+          'physical therapy Phoenix AZ',
+        ],
+      },
+      { label: 'Geo center', value: '33.4484, -112.074 (Phoenix)' },
+      { label: 'Geo radius', value: '50 km' },
+      { label: 'Review lookback', value: '7 days' },
+      { label: 'Max review checks per run', value: '50' },
+      { label: 'Pain threshold', value: '>= 7 / 10' },
+      { label: 'Cron', value: 'Weekly Mon 08:00 MST' },
+    ],
+  },
+  social_listening: {
+    label: 'Social Listening',
+    description: 'Reddit search on pain-keyword phrases. Context-only — no entity creation.',
+    params: [
+      {
+        label: 'Search queries',
+        value: [
+          'small business Phoenix operations',
+          'business owner overwhelmed scheduling',
+          'CRM recommendation small business',
+          'hiring office manager Phoenix',
+          'small business spreadsheet chaos',
+        ],
+      },
+      { label: 'Subreddit scope', value: 'all subreddits' },
+      { label: 'Time filter', value: 'past 24h' },
+      { label: 'Post limit', value: '10 per query' },
+      { label: 'Deployment', value: 'Not deployed to production' },
+    ],
+  },
+}
+
+const def = PIPELINE_DEFS[type]
+if (!def) {
+  return Astro.redirect('/admin/generators?error=not_found')
+}
+
+// ---------------------------------------------------------------------------
+// Data: last-50 signals with their most recent signal-type context row
+// ---------------------------------------------------------------------------
+
+interface SignalRow {
+  id: string
+  name: string
+  pain_score: number | null
+  tier: string | null
+  vertical: string | null
+  area: string | null
+  summary: string | null
+  created_at: string
+  context_id: string | null
+  context_metadata: string | null
+  context_content: string | null
+  context_source_ref: string | null
+}
+
+const signals = await env.DB.prepare(
+  `SELECT e.id, e.name, e.pain_score, e.tier, e.vertical, e.area, e.summary, e.created_at,
+          c.id as context_id, c.metadata as context_metadata, c.content as context_content,
+          c.source_ref as context_source_ref
+   FROM entities e
+   LEFT JOIN context c ON c.entity_id = e.id AND c.type = 'signal'
+   WHERE e.org_id = ? AND e.source_pipeline = ? AND e.stage = 'signal'
+   ORDER BY e.created_at DESC, c.created_at DESC
+   LIMIT 50`
+)
+  .bind(session.orgId, type)
+  .all<SignalRow>()
+
+// Because LEFT JOIN can produce multiple rows per entity if multiple signal
+// contexts exist, dedupe by entity id keeping the first (latest) context.
+const seen = new Set<string>()
+const signalRows: SignalRow[] = []
+for (const row of signals.results ?? []) {
+  if (seen.has(row.id)) continue
+  seen.add(row.id)
+  signalRows.push(row)
+}
+
+// ---------------------------------------------------------------------------
+// Data: 30-day volume by day
+// ---------------------------------------------------------------------------
+
+interface DayRow {
+  day: string
+  count: number
+}
+
+const byDay = await env.DB.prepare(
+  `SELECT date(created_at) as day, COUNT(*) as count
+   FROM entities
+   WHERE org_id = ? AND source_pipeline = ? AND stage = 'signal'
+     AND created_at >= datetime('now', '-30 days')
+   GROUP BY day
+   ORDER BY day DESC`
+)
+  .bind(session.orgId, type)
+  .all<DayRow>()
+
+const daysWithData = byDay.results ?? []
+const maxDayCount = Math.max(1, ...daysWithData.map((d) => d.count))
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+function prettyJson(raw: string | null): string {
+  if (!raw) return ''
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2)
+  } catch {
+    return raw
+  }
+}
+
+function tierClass(tier: string | null): string {
+  switch (tier) {
+    case 'hot':
+      return 'bg-red-100 text-red-700'
+    case 'warm':
+      return 'bg-amber-100 text-amber-700'
+    case 'cool':
+      return 'bg-blue-100 text-blue-700'
+    case 'cold':
+      return 'bg-slate-100 text-slate-500'
+    default:
+      return 'bg-slate-100 text-slate-500'
+  }
+}
+---
+
+<AdminLayout
+  title={`${def.label} — Generators — SMD Services`}
+  breadcrumbs={[
+    { label: 'Dashboard', href: '/admin' },
+    { label: 'Generators', href: '/admin/generators' },
+    { label: def.label },
+  ]}
+>
+  <div class="mb-6">
+    <h2 class="text-xl font-semibold text-slate-900">{def.label}</h2>
+    <p class="text-sm text-slate-600 mt-1">{def.description}</p>
+  </div>
+
+  <section aria-labelledby="current-params" class="mb-8">
+    <h3 id="current-params" class="text-base font-semibold text-slate-900 mb-3">
+      Current parameters
+    </h3>
+    <div class="bg-white rounded-lg border border-slate-200 p-card">
+      <p class="text-xs text-slate-500 mb-4">
+        Hardcoded in worker source. Editable configuration lands in Phase 2.
+      </p>
+      <dl class="grid grid-cols-1 gap-stack text-sm">
+        {
+          def.params.map((p) => (
+            <div class="grid grid-cols-[9rem_1fr] gap-4">
+              <dt class="text-slate-500 text-xs pt-1">{p.label}</dt>
+              <dd class="text-slate-900">
+                {Array.isArray(p.value) ? (
+                  <ul class="space-y-0.5">
+                    {p.value.map((v) => (
+                      <li class="text-xs font-mono">{v}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span>{p.value}</span>
+                )}
+                {p.note && <span class="block text-xs text-slate-400 mt-0.5">{p.note}</span>}
+              </dd>
+            </div>
+          ))
+        }
+      </dl>
+    </div>
+  </section>
+
+  <section aria-labelledby="volume" class="mb-8">
+    <h3 id="volume" class="text-base font-semibold text-slate-900 mb-3">Signal volume (30 days)</h3>
+    <div class="bg-white rounded-lg border border-slate-200 p-card">
+      {
+        daysWithData.length === 0 ? (
+          <p class="text-sm text-slate-500">No signals in the last 30 days.</p>
+        ) : (
+          <ul class="space-y-1">
+            {daysWithData.map((d) => (
+              <li class="flex items-center gap-3 text-sm">
+                <span class="text-xs text-slate-500 font-mono w-20">{d.day}</span>
+                <span
+                  class="h-3 bg-primary/20 rounded-sm"
+                  style={`width: ${(d.count / maxDayCount) * 100}%; min-width: 2px;`}
+                />
+                <span class="text-xs text-slate-700 font-medium">{d.count}</span>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </div>
+  </section>
+
+  <section aria-labelledby="signals">
+    <h3 id="signals" class="text-base font-semibold text-slate-900 mb-3">
+      Last {signalRows.length} signals
+    </h3>
+    {
+      signalRows.length === 0 ? (
+        <div class="bg-white rounded-lg border border-slate-200 p-card">
+          <p class="text-sm text-slate-500">No signals yet for this pipeline.</p>
+        </div>
+      ) : (
+        <div class="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+          {signalRows.map((s) => (
+            <details class="group">
+              <summary class="px-6 py-3 flex items-start justify-between gap-3 cursor-pointer hover:bg-slate-50 list-none">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <a
+                      href={`/admin/entities/${s.id}`}
+                      class="text-sm font-medium text-slate-900 hover:text-primary truncate"
+                    >
+                      {s.name}
+                    </a>
+                    {s.pain_score !== null && (
+                      <span class="text-xs text-slate-500">Pain: {s.pain_score}/10</span>
+                    )}
+                    {s.tier && (
+                      <span class={`text-xs px-1.5 py-0.5 rounded ${tierClass(s.tier)}`}>
+                        {s.tier}
+                      </span>
+                    )}
+                    {s.vertical && s.vertical !== 'unknown' && (
+                      <span class="text-xs text-slate-500 capitalize">
+                        {s.vertical.replace(/_/g, ' ')}
+                      </span>
+                    )}
+                    {s.area && <span class="text-xs text-slate-400">{s.area}</span>}
+                  </div>
+                  {s.context_content && (
+                    <p class="text-xs text-slate-600 mt-1 line-clamp-2">{s.context_content}</p>
+                  )}
+                </div>
+                <div class="flex items-center gap-2 shrink-0 text-xs text-slate-400">
+                  <span>{formatDate(s.created_at)}</span>
+                  <span class="material-symbols-outlined text-sm group-open:rotate-90 transition-transform">
+                    chevron_right
+                  </span>
+                </div>
+              </summary>
+              <div class="px-6 pb-4 pt-1 bg-slate-50/50">
+                {s.context_source_ref && (
+                  <p class="text-xs text-slate-500 mb-2">
+                    Source ref: <code class="font-mono">{s.context_source_ref}</code>
+                  </p>
+                )}
+                {s.context_metadata ? (
+                  <pre class="text-xs font-mono bg-slate-900 text-slate-100 rounded p-3 overflow-x-auto whitespace-pre-wrap break-all">
+                    {prettyJson(s.context_metadata)}
+                  </pre>
+                ) : (
+                  <p class="text-xs text-slate-500 italic">No metadata recorded.</p>
+                )}
+              </div>
+            </details>
+          ))}
+        </div>
+      )
+    }
+  </section>
+</AdminLayout>

@@ -1,0 +1,237 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro'
+
+/**
+ * Generators index — per-pipeline summary cards.
+ * Read-only in Phase 1. Metric rows that are <50% populated are hidden,
+ * since most current signals have null pain_score / vertical / etc. and
+ * shipping a card dominated by "unknown" undercuts the point of the view.
+ *
+ * Protected by auth middleware (requires admin role).
+ */
+
+const session = Astro.locals.session!
+const env = Astro.locals.runtime.env
+
+interface PipelineDef {
+  id: string
+  label: string
+  description: string
+}
+
+const PIPELINES: PipelineDef[] = [
+  {
+    id: 'new_business',
+    label: 'New Business Detection',
+    description: 'Phoenix-metro permit + license feeds (Phoenix, Scottsdale, Mesa, Tempe).',
+  },
+  {
+    id: 'job_monitor',
+    label: 'Job Posting Monitor',
+    description: 'SerpAPI Google Jobs search for operational roles (ops manager, dispatcher).',
+  },
+  {
+    id: 'review_mining',
+    label: 'Review Mining',
+    description: 'Google Places discovery + Outscraper review fetch, scored for operational pain.',
+  },
+  {
+    id: 'social_listening',
+    label: 'Social Listening',
+    description: 'Reddit search across pain-keyword phrases. Currently not deployed.',
+  },
+]
+
+interface PipelineMetrics {
+  total_signals: number
+  last_7d: number
+  has_pain: number
+  has_vertical: number
+  has_area: number
+  has_employee_count: number
+  has_tier: number
+  latest_signal_at: string | null
+  top_vertical: string | null
+  top_vertical_count: number
+}
+
+async function getPipelineMetrics(pipeline: string): Promise<PipelineMetrics> {
+  const row = await env.DB.prepare(
+    `SELECT
+       COUNT(*) as total_signals,
+       SUM(CASE WHEN created_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) as last_7d,
+       SUM(CASE WHEN pain_score IS NOT NULL THEN 1 ELSE 0 END) as has_pain,
+       SUM(CASE WHEN vertical IS NOT NULL AND vertical != 'unknown' THEN 1 ELSE 0 END) as has_vertical,
+       SUM(CASE WHEN area IS NOT NULL THEN 1 ELSE 0 END) as has_area,
+       SUM(CASE WHEN employee_count IS NOT NULL THEN 1 ELSE 0 END) as has_employee_count,
+       SUM(CASE WHEN tier IS NOT NULL THEN 1 ELSE 0 END) as has_tier,
+       MAX(created_at) as latest_signal_at
+     FROM entities
+     WHERE stage = 'signal' AND org_id = ? AND source_pipeline = ?`
+  )
+    .bind(session.orgId, pipeline)
+    .first<PipelineMetrics>()
+
+  const verticalRow = await env.DB.prepare(
+    `SELECT vertical, COUNT(*) as count
+     FROM entities
+     WHERE stage = 'signal' AND org_id = ? AND source_pipeline = ?
+       AND vertical IS NOT NULL AND vertical != 'unknown'
+     GROUP BY vertical
+     ORDER BY count DESC
+     LIMIT 1`
+  )
+    .bind(session.orgId, pipeline)
+    .first<{ vertical: string; count: number }>()
+
+  return {
+    total_signals: row?.total_signals ?? 0,
+    last_7d: row?.last_7d ?? 0,
+    has_pain: row?.has_pain ?? 0,
+    has_vertical: row?.has_vertical ?? 0,
+    has_area: row?.has_area ?? 0,
+    has_employee_count: row?.has_employee_count ?? 0,
+    has_tier: row?.has_tier ?? 0,
+    latest_signal_at: row?.latest_signal_at ?? null,
+    top_vertical: verticalRow?.vertical ?? null,
+    top_vertical_count: verticalRow?.count ?? 0,
+  }
+}
+
+const metrics = await Promise.all(
+  PIPELINES.map(async (p) => ({ pipeline: p, metrics: await getPipelineMetrics(p.id) }))
+)
+
+function avgPainScore(pipeline: string): Promise<number | null> {
+  return env.DB.prepare(
+    `SELECT AVG(pain_score) as avg
+     FROM entities
+     WHERE stage = 'signal' AND org_id = ? AND source_pipeline = ? AND pain_score IS NOT NULL`
+  )
+    .bind(session.orgId, pipeline)
+    .first<{ avg: number | null }>()
+    .then((r) => r?.avg ?? null)
+}
+
+const painAvgs = await Promise.all(
+  PIPELINES.map(async (p) => ({ pipeline: p.id, avg: await avgPainScore(p.id) }))
+)
+const painByPipeline = Object.fromEntries(painAvgs.map((a) => [a.pipeline, a.avg]))
+
+function coveragePct(populated: number, total: number): number {
+  if (total === 0) return 0
+  return Math.round((populated / total) * 100)
+}
+
+function formatRelative(iso: string | null): string {
+  if (!iso) return 'Never'
+  const then = new Date(iso).getTime()
+  const now = Date.now()
+  const diffMs = now - then
+  const hours = Math.round(diffMs / (1000 * 60 * 60))
+  if (hours < 1) return 'Just now'
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.round(hours / 24)
+  return `${days}d ago`
+}
+
+function vlabel(v: string): string {
+  return v.replace(/_/g, ' ')
+}
+---
+
+<AdminLayout
+  title="Generators — SMD Services"
+  breadcrumbs={[{ label: 'Dashboard', href: '/admin' }, { label: 'Generators' }]}
+>
+  <div class="flex items-start justify-between mb-6 gap-4 flex-wrap">
+    <div>
+      <h2 class="text-xl font-semibold text-slate-900">Generators</h2>
+      <p class="text-sm text-slate-600 mt-1">
+        Lead generation pipelines. Each pipeline writes entities at stage <code
+          class="text-xs bg-slate-100 px-1 rounded">signal</code
+        >.
+      </p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-card">
+    {
+      metrics.map(({ pipeline, metrics: m }) => {
+        const painPct = coveragePct(m.has_pain, m.total_signals)
+        const verticalPct = coveragePct(m.has_vertical, m.total_signals)
+        const empPct = coveragePct(m.has_employee_count, m.total_signals)
+        const areaPct = coveragePct(m.has_area, m.total_signals)
+        const avgPain = painByPipeline[pipeline.id]
+
+        return (
+          <a
+            href={`/admin/generators/${pipeline.id}`}
+            class="block bg-white rounded-lg border border-slate-200 p-card hover:border-slate-300 hover:shadow-sm transition-all"
+          >
+            <div class="flex items-start justify-between mb-3 gap-2">
+              <div>
+                <h3 class="text-base font-semibold text-slate-900">{pipeline.label}</h3>
+                <p class="text-xs text-slate-500 mt-0.5">{pipeline.description}</p>
+              </div>
+              <span class="text-xs text-slate-400 whitespace-nowrap">
+                {formatRelative(m.latest_signal_at)}
+              </span>
+            </div>
+
+            <dl class="grid grid-cols-2 gap-row text-sm">
+              <div>
+                <dt class="text-xs text-slate-500">Total signals</dt>
+                <dd class="text-slate-900 font-medium">{m.total_signals}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-slate-500">Last 7 days</dt>
+                <dd class="text-slate-900 font-medium">{m.last_7d}</dd>
+              </div>
+
+              {painPct >= 50 && avgPain !== null && (
+                <div>
+                  <dt class="text-xs text-slate-500">
+                    Avg pain <span class="text-slate-400">({painPct}% coverage)</span>
+                  </dt>
+                  <dd class="text-slate-900 font-medium">{avgPain.toFixed(1)}/10</dd>
+                </div>
+              )}
+
+              {verticalPct >= 50 && m.top_vertical && (
+                <div>
+                  <dt class="text-xs text-slate-500">
+                    Top vertical <span class="text-slate-400">({verticalPct}% coverage)</span>
+                  </dt>
+                  <dd class="text-slate-900 font-medium capitalize">{vlabel(m.top_vertical)}</dd>
+                </div>
+              )}
+
+              {empPct >= 50 && (
+                <div>
+                  <dt class="text-xs text-slate-500">
+                    Employee count <span class="text-slate-400">({empPct}% coverage)</span>
+                  </dt>
+                  <dd class="text-slate-900 font-medium">{m.has_employee_count} enriched</dd>
+                </div>
+              )}
+
+              {areaPct >= 50 && (
+                <div>
+                  <dt class="text-xs text-slate-500">
+                    Area <span class="text-slate-400">({areaPct}% coverage)</span>
+                  </dt>
+                  <dd class="text-slate-900 font-medium">{m.has_area} tagged</dd>
+                </div>
+              )}
+            </dl>
+
+            {m.total_signals === 0 && (
+              <p class="text-xs text-slate-500 mt-3 italic">No signals yet.</p>
+            )}
+          </a>
+        )
+      })
+    }
+  </div>
+</AdminLayout>
