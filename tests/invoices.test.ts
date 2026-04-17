@@ -458,11 +458,20 @@ describe('invoices: portal view', () => {
     expect(source()).toContain('statusColorMap')
   })
 
-  it('provides Pay Now link opening Stripe hosted URL in new tab', () => {
+  it('links each row to the invoice detail page', () => {
     const code = source()
-    expect(code).toContain('Pay Now')
+    expect(code).toContain('/portal/invoices/${inv.id}')
+  })
+
+  it('shows a Pay affordance for unpaid invoices with a usable Stripe URL', () => {
+    const code = source()
+    // The Stripe URL is still considered when choosing what affordance to render.
     expect(code).toContain('stripe_hosted_url')
-    expect(code).toContain('target="_blank"')
+    expect(code).toMatch(/Pay\b/)
+  })
+
+  it('shows a pending-link indicator when Stripe is not yet configured', () => {
+    expect(source()).toContain('Payment link pending')
   })
 
   it('shows paid date for paid invoices', () => {
@@ -473,6 +482,20 @@ describe('invoices: portal view', () => {
 
   it('handles empty state when no invoices exist', () => {
     expect(source()).toContain('No invoices yet')
+  })
+})
+
+describe('invoices: portal detail view', () => {
+  const source = () => readFileSync(resolve('src/pages/portal/invoices/[id].astro'), 'utf-8')
+
+  it('portal invoice detail page exists', () => {
+    expect(existsSync(resolve('src/pages/portal/invoices/[id].astro'))).toBe(true)
+  })
+
+  it('renders the Stripe hosted URL as the pay CTA when usable', () => {
+    const code = source()
+    expect(code).toContain('stripe_hosted_url')
+    expect(code).toContain('payHref')
   })
 })
 
