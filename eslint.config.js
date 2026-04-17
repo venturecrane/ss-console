@@ -42,6 +42,15 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/.wrangler/**', '**/.astro/**'],
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      '**/.wrangler/**',
+      '**/.astro/**',
+      // Generated / ephemeral artifacts — ignored so real source warnings
+      // surface instead of drowning in noise (#14a from 2026-04-17 audit).
+      'coverage/**',
+      '.claude/worktrees/**',
+    ],
   }
 )

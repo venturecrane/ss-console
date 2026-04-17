@@ -93,18 +93,29 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const isPortalApiRoute = pathname.startsWith('/api/portal')
   const isProtectedRoute = isAdminRoute || isAdminApiRoute || isPortalRoute || isPortalApiRoute
 
-  // Always try to resolve session from cookie (even on unprotected routes)
-  // so endpoints like /api/auth/google/connect can read locals.session
-  const cookieHeader = context.request.headers.get('cookie')
-  const token = parseSessionToken(cookieHeader)
+  // Resolve session from cookie only on routes that can actually use it.
+  // Marketing pages are prerendered and reading request headers during
+  // prerender triggers a build-time warning (#20). Restricting the cookie
+  // read to routes that have a session use case (admin/portal surfaces,
+  // auth flows, API endpoints including /api/auth/google/connect) eliminates
+  // the warning and avoids pointless work on public static paths.
+  const isAuthRoute = pathname.startsWith('/auth')
+  const isApiRoute = pathname.startsWith('/api/')
+  const needsSession = isProtectedRoute || isAuthRoute || isApiRoute
 
-  if (token) {
-    const env = context.locals.runtime.env
-    const sessionData = await validateSession(env.DB, env.SESSIONS, token)
-    if (sessionData) {
-      context.locals.session = sessionData
-      // Renew session (sliding window) — fire and forget
-      renewSession(env.DB, env.SESSIONS, token, sessionData).catch(() => {})
+  let token: string | null = null
+  if (needsSession) {
+    const cookieHeader = context.request.headers.get('cookie')
+    token = parseSessionToken(cookieHeader)
+
+    if (token) {
+      const env = context.locals.runtime.env
+      const sessionData = await validateSession(env.DB, env.SESSIONS, token)
+      if (sessionData) {
+        context.locals.session = sessionData
+        // Renew session (sliding window) — fire and forget
+        renewSession(env.DB, env.SESSIONS, token, sessionData).catch(() => {})
+      }
     }
   }
 
