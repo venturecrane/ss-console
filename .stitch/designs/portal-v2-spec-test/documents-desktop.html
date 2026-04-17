@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Documents - SMD Services</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Plus+Jakarta+Sans:wght@700;800&amp;display=swap" rel="stylesheet"/>
+<!-- Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-fixed-variant": "#173bab",
+                    "surface-container-high": "#dce9ff",
+                    "on-secondary-container": "#fffbff",
+                    "on-primary": "#ffffff",
+                    "inverse-on-surface": "#eaf1ff",
+                    "surface-dim": "#cbdbf5",
+                    "background": "#f8f9ff",
+                    "on-primary-fixed": "#001453",
+                    "on-secondary": "#ffffff",
+                    "on-tertiary-container": "#3fd298",
+                    "secondary": "#4648d4",
+                    "on-surface": "#0b1c30",
+                    "secondary-container": "#6063ee",
+                    "on-tertiary": "#ffffff",
+                    "on-error": "#ffffff",
+                    "primary-fixed": "#dde1ff",
+                    "on-tertiary-fixed-variant": "#005236",
+                    "surface": "#f8f9ff",
+                    "secondary-fixed": "#e1e0ff",
+                    "tertiary": "#003d27",
+                    "primary-fixed-dim": "#b8c4ff",
+                    "surface-container-low": "#eff4ff",
+                    "surface-tint": "#3755c3",
+                    "surface-container-highest": "#d3e4fe",
+                    "error": "#ba1a1a",
+                    "error-container": "#ffdad6",
+                    "on-tertiary-fixed": "#002113",
+                    "surface-variant": "#d3e4fe",
+                    "surface-bright": "#f8f9ff",
+                    "on-secondary-fixed": "#07006c",
+                    "on-error-container": "#93000a",
+                    "outline-variant": "#c4c5d5",
+                    "primary": "#00288e",
+                    "outline": "#757684",
+                    "surface-container": "#e5eeff",
+                    "inverse-primary": "#b8c4ff",
+                    "surface-container-lowest": "#ffffff",
+                    "on-background": "#0b1c30",
+                    "on-primary-container": "#a8b8ff",
+                    "secondary-fixed-dim": "#c0c1ff",
+                    "primary-container": "#1e40af",
+                    "tertiary-container": "#00563a",
+                    "tertiary-fixed": "#6ffbbe",
+                    "on-surface-variant": "#444653",
+                    "inverse-surface": "#213145",
+                    "on-secondary-fixed-variant": "#2f2ebe",
+                    "tertiary-fixed-dim": "#4edea3"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                'card': '24px',
+                'section': '48px',
+                'stack': '16px'
+            },
+            "fontFamily": {
+                    "headline": ["Plus Jakarta Sans"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8f9ff; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .filename-text { font-family: 'Inter', sans-serif; }
+        .display-md { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; tracking: -0.02em; }
+    </style>
+</head>
+<body class="bg-[color:var(--color-background)] text-[color:var(--color-text-primary)]">
+<!-- Top Navigation Bar -->
+<nav class="fixed top-0 w-full z-50 bg-[#eff4ff] dark:bg-slate-900 flex justify-between items-center px-6 py-4 max-w-full">
+<div class="text-body-lg font-bold tracking-tight text-slate-900 dark:text-slate-50">
+            Precision Plumbing AZ
+        </div>
+<div class="hidden md:flex gap-section items-center">
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors px-3 py-2 rounded-lg" href="#">Proposals</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors px-3 py-2 rounded-lg" href="#">Invoices</a>
+<a class="text-blue-800 dark:text-blue-400 font-semibold border-b-2 border-blue-800 px-3 py-2" href="#">Documents</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors px-3 py-2 rounded-lg" href="#">Progress</a>
+</div>
+<button class="text-slate-500 dark:text-slate-400 font-medium text-body hover:bg-slate-100 px-4 py-2 rounded-lg transition-all scale-98 active:opacity-80">Sign Out</button>
+</nav>
+<!-- Main Content Canvas -->
+<main class="min-h-screen pt-24 pb-32 px-6 md:px-12 max-w-[1440px] mx-auto flex flex-col md:flex-row gap-12">
+<!-- Left Content Area (The Ledger) -->
+<div class="flex-grow max-w-4xl">
+<!-- Back Affordance -->
+<div class="mb-6">
+<a class="inline-flex items-center gap-1 text-body font-medium text-secondary hover:underline transition-all" href="#">
+<span class="material-symbols-outlined text-body">arrow_back_ios</span>
+                    Home
+                </a>
+</div>
+<!-- Page Heading -->
+<div class="mb-section">
+<h1 class="text-display font-extrabold text-[color:var(--color-text-primary)] tracking-tight font-headline">Documents</h1>
+<p class="text-[color:var(--color-text-secondary)] mt-2 font-body">Manage and review your project documentation.</p>
+</div>
+<!-- List of Document Cards -->
+<div class="flex flex-col gap-stack">
+<!-- Document Card 1 -->
+<div class="group bg-[color:var(--color-surface)] flex items-center justify-between p-stack rounded-xl border border-[color:var(--color-border)]-variant/20 hover:border-[color:var(--color-border)]-variant hover:shadow-[0_12px_40px_rgba(11,28,48,0.05)] transition-all cursor-pointer">
+<div class="flex items-center gap-stack">
+<div class="w-10 h-10 rounded-lg bg-[color:var(--color-surface)]-high flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+</div>
+<div>
+<h3 class="filename-text font-semibold text-[color:var(--color-text-primary)] group-hover:text-primary transition-colors">Service Agreement.pdf</h3>
+<p class="text-caption text-[color:var(--color-text-secondary)] uppercase tracking-wider font-medium">SOW • Shared Apr 13</p>
+</div>
+</div>
+<div class="text-secondary opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+</div>
+</div>
+<!-- Document Card 2 -->
+<div class="group bg-[color:var(--color-surface)] flex items-center justify-between p-stack rounded-xl border border-[color:var(--color-border)]-variant/20 hover:border-[color:var(--color-border)]-variant hover:shadow-[0_12px_40px_rgba(11,28,48,0.05)] transition-all cursor-pointer">
+<div class="flex items-center gap-stack">
+<div class="w-10 h-10 rounded-lg bg-[color:var(--color-surface)]-high flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="table">table</span>
+</div>
+<div>
+<h3 class="filename-text font-semibold text-[color:var(--color-text-primary)] group-hover:text-primary transition-colors">Pricing Breakdown.xlsx</h3>
+<p class="text-caption text-[color:var(--color-text-secondary)] uppercase tracking-wider font-medium">Proposal • Shared Apr 11</p>
+</div>
+</div>
+<div class="text-secondary opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+</div>
+</div>
+<!-- Document Card 3 -->
+<div class="group bg-[color:var(--color-surface)] flex items-center justify-between p-stack rounded-xl border border-[color:var(--color-border)]-variant/20 hover:border-[color:var(--color-border)]-variant hover:shadow-[0_12px_40px_rgba(11,28,48,0.05)] transition-all cursor-pointer">
+<div class="flex items-center gap-stack">
+<div class="w-10 h-10 rounded-lg bg-[color:var(--color-surface)]-high flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+</div>
+<div>
+<h3 class="filename-text font-semibold text-[color:var(--color-text-primary)] group-hover:text-primary transition-colors">Project Scope v2.pdf</h3>
+<p class="text-caption text-[color:var(--color-text-secondary)] uppercase tracking-wider font-medium">SOW • Shared Apr 9</p>
+</div>
+</div>
+<div class="text-secondary opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+</div>
+</div>
+<!-- Document Card 4 -->
+<div class="group bg-[color:var(--color-surface)] flex items-center justify-between p-stack rounded-xl border border-[color:var(--color-border)]-variant/20 hover:border-[color:var(--color-border)]-variant hover:shadow-[0_12px_40px_rgba(11,28,48,0.05)] transition-all cursor-pointer">
+<div class="flex items-center gap-stack">
+<div class="w-10 h-10 rounded-lg bg-[color:var(--color-surface)]-high flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="image">image</span>
+</div>
+<div>
+<h3 class="filename-text font-semibold text-[color:var(--color-text-primary)] group-hover:text-primary transition-colors">Site Assessment Photo.jpg</h3>
+<p class="text-caption text-[color:var(--color-text-secondary)] uppercase tracking-wider font-medium">Assessment • Shared Apr 7</p>
+</div>
+</div>
+<div class="text-secondary opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+</div>
+</div>
+<!-- Document Card 5 -->
+<div class="group bg-[color:var(--color-surface)] flex items-center justify-between p-stack rounded-xl border border-[color:var(--color-border)]-variant/20 hover:border-[color:var(--color-border)]-variant hover:shadow-[0_12px_40px_rgba(11,28,48,0.05)] transition-all cursor-pointer">
+<div class="flex items-center gap-stack">
+<div class="w-10 h-10 rounded-lg bg-[color:var(--color-surface)]-high flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="draft">draft</span>
+</div>
+<div>
+<h3 class="filename-text font-semibold text-[color:var(--color-text-primary)] group-hover:text-primary transition-colors">Final Deliverable.pdf</h3>
+<p class="text-caption text-[color:var(--color-text-secondary)] uppercase tracking-wider font-medium">Deliverable • Shared Apr 2</p>
+</div>
+</div>
+<div class="text-secondary opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Sticky Right Rail (Contextual Information) -->
+<aside class="hidden lg:block w-[340px] sticky top-24 self-start">
+<div class="bg-[color:var(--color-surface)] p-card rounded-2xl shadow-[0_12px_40px_rgba(11,28,48,0.03)] border border-[color:var(--color-border)]-variant/10">
+<h4 class="text-caption font-bold uppercase tracking-widest text-[color:var(--color-text-secondary)] mb-4">Storage Overview</h4>
+<div class="space-y-card">
+<div class="relative w-full h-2 bg-[color:var(--color-surface)] rounded-full overflow-hidden">
+<div class="absolute left-0 top-0 h-full bg-primary rounded-full" style="width: 45%;"></div>
+</div>
+<div class="flex justify-between items-center text-body font-medium">
+<span class="text-[color:var(--color-text-secondary)]">450 MB of 1 GB used</span>
+<span class="text-primary">45%</span>
+</div>
+<div class="bg-[color:var(--color-surface)] p-stack rounded-xl">
+<p class="text-caption text-[color:var(--color-text-secondary)] leading-relaxed">
+                            Need older archives? Contact your project manager to request documents from previous fiscal years.
+                        </p>
+</div>
+</div>
+</div>
+<div class="mt-8 px-card">
+<h4 class="text-caption font-bold uppercase tracking-widest text-[color:var(--color-text-secondary)] mb-4">Recent Activity</h4>
+<div class="flex flex-col gap-card">
+<div class="flex gap-row">
+<div class="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0"></div>
+<p class="text-body text-[color:var(--color-text-primary)] leading-snug">
+<span class="font-semibold">SOW</span> was updated for Site Assessment.
+                            <br/><span class="text-caption text-[color:var(--color-text-secondary)]">2 hours ago</span>
+</p>
+</div>
+<div class="flex gap-row">
+<div class="w-2 h-2 rounded-full bg-[color:var(--color-border)]-variant mt-1.5 shrink-0"></div>
+<p class="text-body text-[color:var(--color-text-primary)] leading-snug">
+<span class="font-semibold">Pricing Breakdown</span> was viewed by Sarah J.
+                            <br/><span class="text-caption text-[color:var(--color-text-secondary)]">Yesterday</span>
+</p>
+</div>
+</div>
+</div>
+</aside>
+</main>
+<!-- Bottom Navigation Bar (Mobile only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-safe pt-2 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 z-50 shadow-[0_-4px_20px_rgba(11,28,48,0.03)]">
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-3 py-1" href="#">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+<span class="text-label font-semibold uppercase tracking-wider mt-1">Proposals</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-3 py-1" href="#">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+<span class="text-label font-semibold uppercase tracking-wider mt-1">Invoices</span>
+</a>
+<a class="flex flex-col items-center justify-center text-blue-800 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 rounded-xl px-3 py-1" href="#">
+<span class="material-symbols-outlined" data-icon="folder_open">folder_open</span>
+<span class="text-label font-semibold uppercase tracking-wider mt-1">Documents</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-3 py-1" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="text-label font-semibold uppercase tracking-wider mt-1">Progress</span>
+</a>
+</nav>
+</body></html>

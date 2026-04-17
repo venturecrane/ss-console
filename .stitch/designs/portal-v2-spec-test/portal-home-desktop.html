@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Client Portal | Precision Plumbing AZ</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Plus+Jakarta+Sans:wght@700;800&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-fixed-variant": "#2f2ebe",
+                        "inverse-on-surface": "#eff1f3",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "on-primary-fixed-variant": "#173bab",
+                        "outline-variant": "#c4c5d5",
+                        "surface-container": "#eceef0",
+                        "primary-container": "#1e40af",
+                        "secondary-container": "#6063ee",
+                        "on-surface-variant": "#444653",
+                        "error-container": "#ffdad6",
+                        "surface-tint": "#3755c3",
+                        "on-background": "#191c1e",
+                        "on-tertiary": "#ffffff",
+                        "inverse-primary": "#b8c4ff",
+                        "secondary": "#4648d4",
+                        "on-secondary-container": "#fffbff",
+                        "error": "#ba1a1a",
+                        "tertiary": "#003d27",
+                        "on-primary": "#ffffff",
+                        "on-primary-container": "#a8b8ff",
+                        "primary-fixed": "#dde1ff",
+                        "surface-dim": "#d8dadc",
+                        "on-tertiary-fixed": "#002113",
+                        "on-error": "#ffffff",
+                        "tertiary-container": "#00563a",
+                        "secondary-fixed": "#e1e0ff",
+                        "surface-variant": "#e0e3e5",
+                        "on-tertiary-container": "#3fd298",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed-dim": "#c0c1ff",
+                        "primary-fixed-dim": "#b8c4ff",
+                        "on-secondary": "#ffffff",
+                        "outline": "#757684",
+                        "on-surface": "#191c1e",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "surface-container-high": "#e6e8ea",
+                        "surface-container-low": "#f2f4f6",
+                        "inverse-surface": "#2d3133",
+                        "on-primary-fixed": "#001453",
+                        "surface": "#f7f9fb",
+                        "surface-bright": "#f7f9fb",
+                        "tertiary-fixed": "#6ffbbe",
+                        "background": "#f7f9fb",
+                        "primary": "#00288e",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-highest": "#e0e3e5",
+                        "on-secondary-fixed": "#07006c"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Plus Jakarta Sans", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Inter", "sans-serif"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-[color:var(--color-background)] text-[color:var(--color-text-primary)] selection:bg-primary-fixed selection:text-white-fixed">
+<a class="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:bg-primary focus:text-white focus:p-stack focus:rounded-b-xl" href="#main-content">
+        Skip to main content
+    </a>
+<!-- Top Navigation Shell -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-8 h-16 bg-white dark:bg-slate-900">
+<div class="text-title font-bold text-slate-900 dark:text-white font-headline tracking-tight">
+            Precision Plumbing AZ
+        </div>
+<button class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 transition-colors text-label font-semibold tracking-wider uppercase">
+            Sign Out
+        </button>
+</header>
+<div class="flex min-h-screen pt-16">
+<!-- Sidebar Shell (Anchored from JSON) -->
+<aside class="hidden md:flex flex-col h-screen w-64 py-6 px-4 space-y-section bg-slate-50 dark:bg-slate-950 fixed top-16 left-0">
+<div class="px-2">
+<p class="text-label font-semibold tracking-wider uppercase text-slate-500 mb-4">SMD Services</p>
+<div class="flex flex-col space-y-1">
+<a class="flex items-center space-x-row px-3 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="description">description</span>
+<span class="text-label font-semibold tracking-wider uppercase">Proposals</span>
+</a>
+<a class="flex items-center space-x-row px-3 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="receipt_long">receipt_long</span>
+<span class="text-label font-semibold tracking-wider uppercase">Invoices</span>
+</a>
+<a class="flex items-center space-x-row px-3 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="folder_open">folder_open</span>
+<span class="text-label font-semibold tracking-wider uppercase">Documents</span>
+</a>
+<a class="flex items-center space-x-row px-3 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="trending_up">trending_up</span>
+<span class="text-label font-semibold tracking-wider uppercase">Progress</span>
+</a>
+</div>
+</div>
+<div class="mt-auto px-2 pb-20">
+<div class="flex flex-col space-y-1">
+<a class="flex items-center space-x-row px-3 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="help_outline">help_outline</span>
+<span class="text-label font-semibold tracking-wider uppercase">Support</span>
+</a>
+<a class="flex items-center space-x-row px-3 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="settings">settings</span>
+<span class="text-label font-semibold tracking-wider uppercase">Settings</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 md:ml-64 p-12 max-w-7xl mx-auto flex flex-col md:flex-row gap-12" id="main-content">
+<!-- Left Column: Recent Activity -->
+<section class="flex-1">
+<h2 class="text-title font-medium text-[color:var(--color-text-primary)] mb-10 font-body">Recent activity</h2>
+<div class="relative">
+<!-- Activity Items -->
+<div class="space-y-12 relative">
+<!-- Timeline Line (Decorative Vertical Tonal Shift) -->
+<div class="absolute left-[28px] top-4 bottom-4 w-px bg-[color:var(--color-surface)]-highest"></div>
+<!-- Entry 1 -->
+<div class="flex items-start gap-section group">
+<div class="w-14 shrink-0 text-label font-semibold tracking-wider uppercase text-[color:var(--color-text-muted)] mt-1.5">Apr 18</div>
+<div class="flex-1 flex items-start gap-stack">
+<div class="w-2.5 h-2.5 rounded-full bg-primary mt-1.5 ring-4 ring-background z-10 transition-transform group-hover:scale-125"></div>
+<div class="text-[color:var(--color-text-primary)] font-body text-body">Invoice sent</div>
+</div>
+</div>
+<!-- Entry 2 -->
+<div class="flex items-start gap-section group">
+<div class="w-14 shrink-0 text-label font-semibold tracking-wider uppercase text-[color:var(--color-text-muted)] mt-1.5">Apr 16</div>
+<div class="flex-1 flex items-start gap-stack">
+<div class="w-2.5 h-2.5 rounded-full bg-[color:var(--color-border)]-variant mt-1.5 ring-4 ring-background z-10 transition-transform group-hover:scale-125"></div>
+<div class="text-[color:var(--color-text-primary)] font-body text-body">Assessment call completed</div>
+</div>
+</div>
+<!-- Entry 3 -->
+<div class="flex items-start gap-section group">
+<div class="w-14 shrink-0 text-label font-semibold tracking-wider uppercase text-[color:var(--color-text-muted)] mt-1.5">Apr 9</div>
+<div class="flex-1 flex items-start gap-stack">
+<div class="w-2.5 h-2.5 rounded-full bg-[color:var(--color-border)]-variant mt-1.5 ring-4 ring-background z-10 transition-transform group-hover:scale-125"></div>
+<div class="text-[color:var(--color-text-primary)] font-body text-body">Two issues identified with dispatcher</div>
+</div>
+</div>
+<!-- Entry 4 -->
+<div class="flex items-start gap-section group">
+<div class="w-14 shrink-0 text-label font-semibold tracking-wider uppercase text-[color:var(--color-text-muted)] mt-1.5">Apr 2</div>
+<div class="flex-1 flex items-start gap-stack">
+<div class="w-2.5 h-2.5 rounded-full bg-[color:var(--color-border)]-variant mt-1.5 ring-4 ring-background z-10 transition-transform group-hover:scale-125"></div>
+<div class="text-[color:var(--color-text-primary)] font-body text-body">Proposal signed. Deposit received.</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Right Rail (Sticky) -->
+<aside class="w-full md:w-[340px] shrink-0 space-y-card">
+<div class="sticky top-24 space-y-card">
+<!-- Action Card (Invoice) -->
+<div class="bg-[color:var(--color-surface)] border border-slate-200 rounded-xl p-card transition-all hover:shadow-lg hover:shadow-on-surface/5">
+<div class="mb-6">
+<div class="text-display font-bold text-[#0f172a] mb-1">$4,250.00</div>
+<div class="text-label font-semibold tracking-wider uppercase text-[#94a3b8]">
+                                April engagement invoice · Due Friday
+                            </div>
+</div>
+<button class="w-full bg-gradient-to-b from-primary to-primary-container text-white py-3.5 rounded-xl font-semibold text-body hover:opacity-90 active:scale-[0.98] transition-all">
+                            Pay invoice
+                        </button>
+</div>
+<!-- Consultant Block -->
+<div class="bg-[color:var(--color-surface)] rounded-xl p-card">
+<div class="flex items-center gap-stack mb-6">
+<div class="w-12 h-12 rounded-full bg-primary-fixed text-white-fixed flex items-center justify-center font-bold text-body-lg select-none">
+                                SD
+                            </div>
+<div>
+<h3 class="text-[color:var(--color-text-primary)] font-medium text-body leading-tight">Scott Durgan</h3>
+<p class="text-label font-semibold tracking-wider uppercase text-[color:var(--color-text-muted)]">Lead Consultant</p>
+</div>
+</div>
+<div class="flex items-center gap-row">
+<button aria-label="Call consultant" class="w-10 h-10 rounded-full bg-[color:var(--color-surface)] flex items-center justify-center text-primary border border-[color:var(--color-border)]-variant/20 hover:bg-primary-fixed transition-colors">
+<span class="material-symbols-outlined text-[20px]" data-icon="phone">phone</span>
+</button>
+<button aria-label="Send text message" class="w-10 h-10 rounded-full bg-[color:var(--color-surface)] flex items-center justify-center text-primary border border-[color:var(--color-border)]-variant/20 hover:bg-primary-fixed transition-colors">
+<span class="material-symbols-outlined text-[20px]" data-icon="sms">sms</span>
+</button>
+<button aria-label="Email consultant" class="w-10 h-10 rounded-full bg-[color:var(--color-surface)] flex items-center justify-center text-primary border border-[color:var(--color-border)]-variant/20 hover:bg-primary-fixed transition-colors">
+<span class="material-symbols-outlined text-[20px]" data-icon="mail">mail</span>
+</button>
+</div>
+</div>
+</div>
+</aside>
+</main>
+</div>
+<!-- Mobile Bottom Navigation (Anchored from JSON) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-3 md:hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-[0_-4px_12px_rgba(0,0,0,0.05)] rounded-t-2xl">
+<div class="flex flex-col items-center bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-xl px-3 py-1">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+<span class="text-label font-semibold tracking-wider uppercase">Proposals</span>
+</div>
+<div class="flex flex-col items-center text-slate-400">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+<span class="text-label font-semibold tracking-wider uppercase">Invoices</span>
+</div>
+<div class="flex flex-col items-center text-slate-400">
+<span class="material-symbols-outlined" data-icon="folder_open">folder_open</span>
+<span class="text-label font-semibold tracking-wider uppercase">Documents</span>
+</div>
+<div class="flex flex-col items-center text-slate-400">
+<span class="material-symbols-outlined" data-icon="trending_up">trending_up</span>
+<span class="text-label font-semibold tracking-wider uppercase">Progress</span>
+</div>
+</nav>
+</body></html>
