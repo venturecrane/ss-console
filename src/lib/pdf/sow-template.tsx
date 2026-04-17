@@ -536,7 +536,7 @@ export function SOWTemplate(props: SOWTemplateProps) {
             }}
           >
             2. The engagement start date is tentative until the deposit is received. We will confirm
-            the start date within 1 business day of receiving the deposit.
+            the start date after the deposit clears.
           </Text>
           <Text
             style={{
@@ -547,9 +547,9 @@ export function SOWTemplate(props: SOWTemplateProps) {
               marginBottom: 8,
             }}
           >
-            3. A 2-week stabilization period follows the final handoff. During this period, we will
-            address questions and minor adjustments related to the work delivered. New scope
-            requires a separate engagement.
+            3. A stabilization period follows the final handoff. During this period, we will address
+            questions and minor adjustments related to the work delivered. New scope requires a
+            separate engagement.
           </Text>
           <Text
             style={{ fontFamily: fonts.body, fontWeight: 400, fontSize: 9, color: colors.textBody }}
@@ -590,7 +590,7 @@ export function SOWTemplate(props: SOWTemplateProps) {
         <Text style={sectionHeadingStyle}>NEXT STEPS</Text>
         <Text style={{ ...bodyTextStyle, marginBottom: 24 }}>
           Once you sign below, we will send a deposit invoice. Work begins after the deposit is
-          received. We will confirm the kickoff date within one business day.
+          received. We will confirm the kickoff date after the deposit clears.
         </Text>
 
         {/* Signature Block */}

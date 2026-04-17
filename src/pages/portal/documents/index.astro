@@ -20,7 +20,7 @@ import SkipToMain from '../../../components/SkipToMain.astro'
 const session = Astro.locals.session!
 const env = Astro.locals.runtime.env
 
-const portalData = await getPortalClient(env.DB, session.userId)
+const portalData = await getPortalClient(env.DB, session.userId, session.orgId)
 const clientId = portalData?.client.id
 const clientName = portalData?.client.name ?? ''
 

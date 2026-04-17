@@ -60,6 +60,16 @@ describe('portal quotes: session helper', () => {
     expect(code).toContain('entity_id')
     expect(code).toContain("role = 'client'")
   })
+
+  it('scopes user lookup by org_id to prevent cross-org access (#400)', () => {
+    const code = readFileSync(resolve('src/lib/portal/session.ts'), 'utf-8')
+    expect(code).toContain('org_id = ?')
+  })
+
+  it('getPortalClient accepts orgId parameter (#400)', () => {
+    const code = readFileSync(resolve('src/lib/portal/session.ts'), 'utf-8')
+    expect(code).toContain('orgId: string')
+  })
 })
 
 describe('portal quotes: dashboard', () => {

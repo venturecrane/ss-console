@@ -9,7 +9,7 @@
  *   that works for them — spec decision: "clients know what they want."
  * - Default <slot /> for the Sign-out affordance (host page owns it)
  *
- * The full consultant block (avatar + role + next-touchpoint) lives in
+ * The full team member block (avatar + role + next-touchpoint) lives in
  * ConsultantBlock.astro.
  */
 
@@ -17,15 +17,19 @@ interface Props {
   clientName: string
   consultantPhone?: string | null
   consultantEmail?: string | null
-  consultantFirstName?: string
+  /** First name of the assigned team member. When null/undefined, contact icon aria-labels
+   *  omit the name (e.g. "Text team" instead of "Text Scott"). */
+  consultantFirstName?: string | null
 }
 
 const {
   clientName,
   consultantPhone = null,
   consultantEmail = null,
-  consultantFirstName = 'Scott',
+  consultantFirstName = null,
 } = Astro.props
+
+const contactLabel = consultantFirstName ?? 'consultant'
 
 const phoneDigits = consultantPhone ? consultantPhone.replace(/[^+\d]/g, '') : null
 const smsHref = phoneDigits ? `sms:${phoneDigits}` : null
@@ -49,7 +53,7 @@ const iconClasses =
     <div class="flex items-center gap-1">
       {
         mailtoHref && (
-          <a href={mailtoHref} aria-label={`Email ${consultantFirstName}`} class={iconClasses}>
+          <a href={mailtoHref} aria-label={`Email ${contactLabel}`} class={iconClasses}>
             <span class="material-symbols-outlined" aria-hidden="true">
               mail
             </span>
@@ -58,7 +62,7 @@ const iconClasses =
       }
       {
         smsHref && (
-          <a href={smsHref} aria-label={`Text ${consultantFirstName}`} class={iconClasses}>
+          <a href={smsHref} aria-label={`Text ${contactLabel}`} class={iconClasses}>
             <span class="material-symbols-outlined" aria-hidden="true">
               sms
             </span>
@@ -67,7 +71,7 @@ const iconClasses =
       }
       {
         telHref && (
-          <a href={telHref} aria-label={`Call ${consultantFirstName}`} class={iconClasses}>
+          <a href={telHref} aria-label={`Call ${contactLabel}`} class={iconClasses}>
             <span class="material-symbols-outlined" aria-hidden="true">
               call
             </span>

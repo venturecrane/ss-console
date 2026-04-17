@@ -22,7 +22,7 @@ import ActionCard from '../../components/portal/ActionCard.astro'
 const session = Astro.locals.session!
 const env = Astro.locals.runtime.env
 
-const portalData = await getPortalClient(env.DB, session.userId)
+const portalData = await getPortalClient(env.DB, session.userId, session.orgId)
 if (!portalData) {
   return Astro.redirect('/auth/portal-login?error=no_account')
 }
@@ -72,7 +72,7 @@ let quotes: QuoteRow[] = []
 let completedMilestones: MilestoneRow[] = []
 // When a DB read fails we render a single error state rather than a partial
 // dashboard. ConsultantBlock still renders so the client has a concrete
-// next step (text Scott).
+// next step (contact the team).
 let dashboardError = false
 
 try {
@@ -81,11 +81,11 @@ try {
             consultant_name, consultant_photo_url, consultant_role, consultant_phone,
             next_touchpoint_at, next_touchpoint_label
        FROM engagements
-      WHERE entity_id = ? AND status IN ('scheduled', 'active', 'handoff', 'safety_net')
+      WHERE entity_id = ? AND org_id = ? AND status IN ('scheduled', 'active', 'handoff', 'safety_net')
       ORDER BY created_at DESC
       LIMIT 1`
   )
-    .bind(client.id)
+    .bind(client.id, session.orgId)
     .first<EngagementRow>()
 
   if (activeEngagement) {
@@ -303,7 +303,7 @@ const contextSubtext = consultantFirst
     <PortalHeader
       clientName={client.name}
       consultantPhone={consultant?.phone ?? null}
-      consultantFirstName={consultantFirst ?? 'Scott'}
+      consultantFirstName={consultantFirst}
     >
       <form method="POST" action="/api/auth/logout">
         <button

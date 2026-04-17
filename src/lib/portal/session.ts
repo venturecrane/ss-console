@@ -19,18 +19,20 @@ interface UserRow {
 /**
  * Resolve the entity record for the current portal session.
  *
- * Looks up the user by session.userId to get entity_id,
- * then fetches the entity record.
+ * Looks up the user by session.userId AND org_id to get entity_id,
+ * then fetches the entity record. The org_id scope prevents a valid client
+ * user ID from one org from resolving against a different org's session.
  *
  * Returns null if the user or entity is not found.
  */
 export async function getPortalClient(
   db: D1Database,
-  userId: string
+  userId: string,
+  orgId: string
 ): Promise<{ user: UserRow; client: Entity } | null> {
   const user = await db
-    .prepare(`SELECT * FROM users WHERE id = ? AND role = 'client'`)
-    .bind(userId)
+    .prepare(`SELECT * FROM users WHERE id = ? AND role = 'client' AND org_id = ?`)
+    .bind(userId, orgId)
     .first<UserRow>()
 
   if (!user || !user.entity_id) {

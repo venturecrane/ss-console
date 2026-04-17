@@ -154,9 +154,10 @@ describe('sow-template: voice compliance (Decision #20)', () => {
   it('uses "we" voice in terms section', () => {
     const code = source()
     expect(code).toContain('We will confirm')
-    // "we will" and "address" may be split across lines by Prettier
     expect(code).toContain('we will')
-    expect(code).toContain('address questions')
+    // Prettier may split "address questions" across lines; check "we will address" instead
+    expect(code).toContain('we will address')
+    expect(code).toContain('questions and minor adjustments')
   })
 
   it('does not use "I" or "the consultant" anywhere', () => {
@@ -215,8 +216,10 @@ describe('sow-template: terms compliance', () => {
     expect(source()).toContain('5 business days')
   })
 
-  it('includes stabilization period term (Decision #27)', () => {
-    expect(source()).toContain('2-week stabilization period')
+  it('does not contain a fixed-duration stabilization period commitment (#398)', () => {
+    expect(source()).not.toContain('2-week stabilization period')
+    // The stabilization concept is preserved — just without a hardcoded duration.
+    expect(source()).toContain('stabilization period')
   })
 
   it('includes termination clause', () => {

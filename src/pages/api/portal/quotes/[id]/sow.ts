@@ -32,7 +32,7 @@ export const GET: APIRoute = async ({ locals, params }) => {
   const env = locals.runtime.env
 
   // Resolve client from session
-  const portalData = await getPortalClient(env.DB, session.userId)
+  const portalData = await getPortalClient(env.DB, session.userId, session.orgId)
   if (!portalData) {
     return new Response(JSON.stringify({ error: 'Client not found' }), {
       status: 403,

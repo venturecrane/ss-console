@@ -21,7 +21,7 @@ const session = Astro.locals.session!
 const env = Astro.locals.runtime.env
 
 // Resolve client entity from session
-const portalData = await getPortalClient(env.DB, session.userId)
+const portalData = await getPortalClient(env.DB, session.userId, session.orgId)
 const entityId = portalData?.client.id ?? null
 const clientName = portalData?.client.name ?? ''
 

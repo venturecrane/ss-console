@@ -38,7 +38,7 @@ if (!quoteId) {
   return Astro.redirect('/portal/quotes')
 }
 
-const portalData = await getPortalClient(env.DB, session.userId)
+const portalData = await getPortalClient(env.DB, session.userId, session.orgId)
 if (!portalData) {
   return Astro.redirect('/auth/portal-login?error=no_account')
 }
@@ -73,8 +73,6 @@ const totalCents = Math.round(quote.total_price * 100)
 const paymentSplitText = isThreeMilestone
   ? `${depositPctDisplay}% at signing, balance across milestones.`
   : `${depositPctDisplay}% at signing, ${balancePctDisplay}% at completion.`
-
-const startWindowText = 'Work begins within two weeks of signing.'
 
 // Deliverables prefer the authored `quotes.deliverables` rows. If none have
 // been authored we fall back to deriving from line items so legacy quotes
@@ -123,11 +121,11 @@ const engagement = await env.DB.prepare(
   `SELECT id, scope_summary, consultant_name, consultant_photo_url, consultant_role,
           consultant_phone, next_touchpoint_at, next_touchpoint_label
      FROM engagements
-    WHERE quote_id = ?
+    WHERE quote_id = ? AND org_id = ?
     ORDER BY created_at DESC
     LIMIT 1`
 )
-  .bind(quote.id)
+  .bind(quote.id, session.orgId)
   .first<EngagementLookupRow>()
 
 const consultantName = engagement?.consultant_name ?? null
@@ -149,12 +147,11 @@ const superseding = await env.DB.prepare(
   .bind(quote.id, quote.assessment_id, quote.version, client.id)
   .first<SupersedingRow>()
 
-// Build the concrete "what happens next" string for signed quotes. If the
-// engagement has a next_touchpoint_label we lean on that; otherwise the
-// scope_summary seeds a short sentence. If neither is set the resolver's
-// generic kickoff fallback kicks in.
+// Build the concrete "what happens next" string for signed quotes. Render
+// authored copy verbatim — do not prepend fixed phrases. If neither field is
+// set the resolver returns null and the caller renders nothing.
 const nextStepText: string | null = engagement?.next_touchpoint_label
-  ? `We'll ${engagement.next_touchpoint_label.toLowerCase()}.`
+  ? engagement.next_touchpoint_label
   : engagement?.scope_summary
     ? `Kickoff next: ${engagement.scope_summary}.`
     : null
@@ -197,7 +194,7 @@ const consultantPhone = engagement?.consultant_phone ?? null
     <PortalHeader
       clientName={client.name}
       consultantPhone={isSigned ? null : consultantPhone}
-      consultantFirstName={consultantFirst ?? 'Scott'}
+      consultantFirstName={consultantFirst}
     >
       <form method="POST" action="/api/auth/logout">
         <button
@@ -273,9 +270,11 @@ const consultantPhone = engagement?.consultant_phone ?? null
                       <p class="text-sm font-semibold text-[color:var(--color-text-primary)]">
                         Signed{quote.accepted_at ? ` ${formatDate(quote.accepted_at)}` : ''}.
                       </p>
-                      <p class="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-                        Here's what happens next: {surface.next}
-                      </p>
+                      {surface.next && (
+                        <p class="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                          {surface.next}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ) : isSuperseded ? (
@@ -298,12 +297,14 @@ const consultantPhone = engagement?.consultant_phone ?? null
                   </div>
                 ) : isDeclined ? (
                   <p class="mt-6 text-sm text-[color:var(--color-text-secondary)]">
-                    This proposal was declined. {surface.next}
+                    This proposal was declined.{surface.next ? ` ${surface.next}` : ''}
                   </p>
                 ) : isExpired ? (
-                  <p class="mt-6 text-sm text-[color:var(--color-text-secondary)]">
-                    {surface.next}
-                  </p>
+                  surface.next ? (
+                    <p class="mt-6 text-sm text-[color:var(--color-text-secondary)]">
+                      {surface.next}
+                    </p>
+                  ) : null
                 ) : hasActiveSignature ? (
                   <a
                     href="#sign-surface"
@@ -406,7 +407,6 @@ const consultantPhone = engagement?.consultant_phone ?? null
                 <MoneyDisplay amountCents={totalCents} size="body" emphasize />
               </p>
               <p class="text-[color:var(--color-text-secondary)]">{paymentSplitText}</p>
-              <p class="text-[color:var(--color-text-secondary)]">{startWindowText}</p>
             </div>
           </div>
 
@@ -519,9 +519,11 @@ const consultantPhone = engagement?.consultant_phone ?? null
                         <p class="text-sm font-semibold text-[color:var(--color-text-primary)]">
                           Signed{quote.accepted_at ? ` ${formatDate(quote.accepted_at)}` : ''}.
                         </p>
-                        <p class="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-                          {surface.next}
-                        </p>
+                        {surface.next && (
+                          <p class="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                            {surface.next}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -541,9 +543,11 @@ const consultantPhone = engagement?.consultant_phone ?? null
                     )}
                   </div>
                 ) : isDeclined || isExpired ? (
-                  <p class="mt-6 text-sm text-[color:var(--color-text-secondary)]">
-                    {surface.next}
-                  </p>
+                  surface.next ? (
+                    <p class="mt-6 text-sm text-[color:var(--color-text-secondary)]">
+                      {surface.next}
+                    </p>
+                  ) : null
                 ) : hasActiveSignature ? (
                   <a
                     href="#sign-surface"

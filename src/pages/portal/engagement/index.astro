@@ -23,7 +23,7 @@ const session = Astro.locals.session!
 const env = Astro.locals.runtime.env
 
 // Resolve client entity from session
-const portalData = await getPortalClient(env.DB, session.userId)
+const portalData = await getPortalClient(env.DB, session.userId, session.orgId)
 const entityId = portalData?.client.id ?? null
 const clientName = portalData?.client.name ?? ''
 
@@ -79,13 +79,10 @@ function formatDate(iso: string | null): string {
     <SkipToMain />
     <PortalHeader
       clientName={clientName}
-      consultantPhone={(engagement as { consultant_phone?: string | null } | null)
-        ?.consultant_phone ?? null}
-      consultantFirstName={(
-        (engagement as { consultant_name?: string | null } | null)?.consultant_name ?? 'Scott'
-      )
-        .trim()
-        .split(/\s+/)[0] || 'Scott'}
+      consultantPhone={engagement?.consultant_phone ?? null}
+      consultantFirstName={engagement?.consultant_name
+        ? engagement.consultant_name.trim().split(/\s+/)[0] || engagement.consultant_name
+        : undefined}
     >
       <form method="POST" action="/api/auth/logout">
         <button

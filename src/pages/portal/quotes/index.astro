@@ -19,7 +19,7 @@ const session = Astro.locals.session!
 const env = Astro.locals.runtime.env
 
 // Resolve client from session
-const portalData = await getPortalClient(env.DB, session.userId)
+const portalData = await getPortalClient(env.DB, session.userId, session.orgId)
 if (!portalData) {
   return Astro.redirect('/auth/portal-login?error=no_account')
 }

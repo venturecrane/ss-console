@@ -38,7 +38,7 @@ if (!invoiceId) {
   return Astro.redirect('/portal')
 }
 
-const portalData = await getPortalClient(env.DB, session.userId)
+const portalData = await getPortalClient(env.DB, session.userId, session.orgId)
 if (!portalData) {
   return Astro.redirect('/auth/portal-login?error=no_account')
 }
@@ -69,9 +69,9 @@ const engagement = invoice.engagement_id
   ? await env.DB.prepare(
       `SELECT id, scope_summary, consultant_name, consultant_photo_url, consultant_role,
               consultant_phone, next_touchpoint_at, next_touchpoint_label
-       FROM engagements WHERE id = ?`
+       FROM engagements WHERE id = ? AND org_id = ?`
     )
-      .bind(invoice.engagement_id)
+      .bind(invoice.engagement_id, session.orgId)
       .first<EngagementRow>()
   : null
 
@@ -197,9 +197,9 @@ const consultantPhone = engagement?.consultant_phone ?? null
 const nextTouchpointAt = engagement?.next_touchpoint_at ?? null
 const nextTouchpointLabel = engagement?.next_touchpoint_label ?? null
 
-const consultantFirstName = consultantName
+const consultantFirstName: string | null = consultantName
   ? consultantName.trim().split(/\s+/)[0] || consultantName
-  : 'Scott'
+  : null
 ---
 
 <!doctype html>

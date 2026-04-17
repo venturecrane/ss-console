@@ -102,13 +102,23 @@ describe('resolveProposalState', () => {
     expect(surface.next).toBe('Kickoff next: Migrate the intake workflow.')
   })
 
-  it('falls back to generic kickoff when nextStepText is missing', () => {
+  it('returns null for next when nextStepText is missing (no fabricated fallback, #398)', () => {
     const surface = resolveProposalState(
       { status: 'accepted', accepted_at: '2026-04-10T00:00:00Z', expires_at: null },
       null,
       'Scott'
     )
-    expect(surface.next.toLowerCase()).toContain('kickoff')
+    expect(surface.next).toBeNull()
+  })
+
+  it('renders authored nextStepText verbatim when provided', () => {
+    const surface = resolveProposalState(
+      { status: 'accepted', accepted_at: '2026-04-10T00:00:00Z', expires_at: null },
+      null,
+      'Scott',
+      'Schedule the kickoff meeting.'
+    )
+    expect(surface.next).toBe('Schedule the kickoff meeting.')
   })
 
   it('returns declined with revision call-out', () => {
@@ -118,7 +128,8 @@ describe('resolveProposalState', () => {
       'Scott'
     )
     expect(surface.state).toBe('declined')
-    expect(surface.next.toLowerCase()).toContain('revision')
+    expect(surface.next).not.toBeNull()
+    expect(surface.next!.toLowerCase()).toContain('revision')
   })
 
   it('returns superseded when status=superseded', () => {
@@ -128,7 +139,8 @@ describe('resolveProposalState', () => {
       'Scott'
     )
     expect(surface.state).toBe('superseded')
-    expect(surface.next.toLowerCase()).toContain('revised version')
+    expect(surface.next).not.toBeNull()
+    expect(surface.next!.toLowerCase()).toContain('revised version')
   })
 
   it('returns expired when server-side expires_at is past', () => {
@@ -158,7 +170,8 @@ describe('resolveProposalState', () => {
       null
     )
     expect(declined.state).toBe('declined')
-    expect(declined.next.toLowerCase()).not.toContain('text ')
+    expect(declined.next).not.toBeNull()
+    expect(declined.next!.toLowerCase()).not.toContain('text ')
 
     const past = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     const expired = resolveProposalState(
@@ -167,7 +180,8 @@ describe('resolveProposalState', () => {
       null
     )
     expect(expired.state).toBe('expired')
-    expect(expired.next.toLowerCase()).not.toContain('text ')
+    expect(expired.next).not.toBeNull()
+    expect(expired.next!.toLowerCase()).not.toContain('text ')
   })
 })
 

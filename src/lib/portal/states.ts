@@ -24,7 +24,9 @@ export interface InvoiceSurface {
 
 export interface ProposalSurface {
   state: ProposalSurfaceState
-  next: string
+  /** Authored "what happens next" copy. Null when no authored copy is available.
+   *  Callers must render nothing (not a fallback) when null. */
+  next: string | null
 }
 
 /**
@@ -140,7 +142,7 @@ export function resolveProposalState(
   const status = (quote.status ?? '').toLowerCase()
 
   if (status === 'accepted' || quote.accepted_at) {
-    const next = nextStepText?.trim() || `We'll reach out to schedule kickoff.`
+    const next = nextStepText?.trim() || null
     return { state: 'signed', next }
   }
 
