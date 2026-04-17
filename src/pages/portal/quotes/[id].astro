@@ -120,10 +120,11 @@ const superseding = await env.DB.prepare(
   `SELECT id FROM quotes
     WHERE (parent_quote_id = ? OR (assessment_id = ? AND version > ? AND status IN ('sent', 'accepted')))
       AND entity_id = ?
+      AND org_id = ?
     ORDER BY version DESC
     LIMIT 1`
 )
-  .bind(quote.id, quote.assessment_id, quote.version, client.id)
+  .bind(quote.id, quote.assessment_id, quote.version, client.id, session.orgId)
   .first<SupersedingRow>()
 
 // Build the concrete "what happens next" string for signed quotes. Render

@@ -145,16 +145,16 @@ Don't ask for revenue directly. Look for: 3+ years in business, consistent payro
 
 **Decision: Synthesis of all Layer 1 decisions**
 
-|                        |                                                                                                                                                                       |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Revenue**            | $750k-$5M (expansion to $10M after 5+ engagements)                                                                                                                    |
-| **Geography**          | Phoenix metro (Phase 1), in-person default for assessments                                                                                                            |
-| **Years in business**  | 3+                                                                                                                                                                    |
-| **Verticals**          | Home services, professional services, contractor/trades (problem-qualified, not vertical-gated)                                                                       |
-| **Pain profile**       | 2-3 problems surfaced during assessment mapping to the six solution categories in CLAUDE.md (process design, custom internal tools, systems integration, operational visibility, vendor/platform selection, AI & automation)  |
-| **Psychographics**     | Owner knows something isn't working, will invest to change it, makes decisions without committee                                                                      |
-| **Disqualifiers**      | Not owner, scope exceeds single phase, no champion, no tech baseline, in crisis                                                                                       |
-| **Where to find them** | BNI, Phoenix Chamber, PHCC, ACCA, ASCPA, accountant referrals, Vistage, EO                                                                                            |
+|                        |                                                                                                                                                                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Revenue**            | $750k-$5M (expansion to $10M after 5+ engagements)                                                                                                                                                                           |
+| **Geography**          | Phoenix metro (Phase 1), in-person default for assessments                                                                                                                                                                   |
+| **Years in business**  | 3+                                                                                                                                                                                                                           |
+| **Verticals**          | Home services, professional services, contractor/trades (problem-qualified, not vertical-gated)                                                                                                                              |
+| **Pain profile**       | 2-3 problems surfaced during assessment mapping to the six solution categories in CLAUDE.md (process design, custom internal tools, systems integration, operational visibility, vendor/platform selection, AI & automation) |
+| **Psychographics**     | Owner knows something isn't working, will invest to change it, makes decisions without committee                                                                                                                             |
+| **Disqualifiers**      | Not owner, scope exceeds single phase, no champion, no tech baseline, in crisis                                                                                                                                              |
+| **Where to find them** | BNI, Phoenix Chamber, PHCC, ACCA, ASCPA, accountant referrals, Vistage, EO                                                                                                                                                   |
 
 ---
 
