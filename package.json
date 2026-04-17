@@ -8,6 +8,7 @@
     "build": "astro build",
     "preview": "wrangler pages dev dist",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

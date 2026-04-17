@@ -19,5 +19,42 @@ export default defineConfig({
         external: ['@venturecrane/crane-test-harness', /node:/],
       },
     },
+    coverage: {
+      provider: 'v8',
+      // Thresholds are set at the 2026-04-16 baseline (rounded down 1-2 pts)
+      // to act as a regression guardrail, not an aspirational target.
+      // Branches/functions are the meaningful signals; lines/statements are
+      // dragged down by .astro templates which v8 instruments but cannot
+      // exercise in a unit-test environment.
+      //
+      // To raise thresholds: run `npm run test:coverage`, note new numbers,
+      // bump here, and open a PR. Never set a threshold you can't currently
+      // meet.
+      thresholds: {
+        lines: 22,
+        branches: 67,
+        functions: 52,
+        statements: 22,
+      },
+      exclude: [
+        // Test files themselves
+        'tests/**',
+        '**/*.test.ts',
+        '**/*.spec.ts',
+        // Astro page templates — v8 instruments them but unit tests cannot
+        // exercise their request/response lifecycle, leading to misleading
+        // zero-coverage numbers.
+        'src/pages/**/*.astro',
+        'src/components/**/*.astro',
+        // Generated and build artifacts
+        '.astro/**',
+        'dist/**',
+        // DB migrations — SQL-only, nothing to instrument
+        'migrations/**',
+        // Config files
+        '*.config.*',
+        '.claude/worktrees/**',
+      ],
+    },
   },
 })
