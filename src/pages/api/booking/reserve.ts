@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro'
 import { ORG_ID } from '../../../lib/constants'
 import { BOOKING_CONFIG } from '../../../lib/booking/config'
-import { verifyTurnstileToken } from '../../../lib/booking/turnstile'
+import { resolveTurnstileConfig, verifyTurnstileToken } from '../../../lib/booking/turnstile'
 import { rateLimitByIp } from '../../../lib/booking/rate-limit'
 import { acquireHold, releaseHold } from '../../../lib/booking/holds'
 import {
@@ -54,13 +54,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // -----------------------------------------------------------------------
 
   // 1a. Turnstile verification
+  // resolveTurnstileConfig throws on misconfiguration (one key set but not
+  // the other, or neither set outside localhost) — the endpoint 500s rather
+  // than silently skipping bot verification (#12).
+  const turnstileConfig = resolveTurnstileConfig(env)
   const turnstileToken = typeof body.turnstile_token === 'string' ? body.turnstile_token : null
   const clientIp = request.headers.get('cf-connecting-ip') ?? undefined
-  const turnstileResult = await verifyTurnstileToken(
-    env.TURNSTILE_SECRET_KEY,
-    turnstileToken,
-    clientIp
-  )
+  const turnstileResult = await verifyTurnstileToken(turnstileConfig, turnstileToken, clientIp)
   if (!turnstileResult.success) {
     return jsonResponse(403, { error: 'turnstile_failed', message: turnstileResult.error })
   }

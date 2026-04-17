@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro'
 import { processIntakeSubmission } from '../../lib/booking/intake-core'
-import { verifyTurnstileToken } from '../../lib/booking/turnstile'
+import { resolveTurnstileConfig, verifyTurnstileToken } from '../../lib/booking/turnstile'
 import { rateLimitByIp } from '../../lib/booking/rate-limit'
 import { sendEmail } from '../../lib/email/resend'
 import { ORG_ID } from '../../lib/constants'
@@ -36,9 +36,10 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
     return jsonResponse(200, { ok: true })
   }
 
-  // Turnstile verification
+  // Turnstile verification — resolveTurnstileConfig throws on misconfiguration (#12).
+  const turnstileConfig = resolveTurnstileConfig(env)
   const turnstileResult = await verifyTurnstileToken(
-    env.TURNSTILE_SECRET_KEY,
+    turnstileConfig,
     typeof body.turnstile_token === 'string' ? body.turnstile_token : null,
     clientAddress
   )

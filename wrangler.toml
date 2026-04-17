@@ -28,11 +28,15 @@ pages_build_output_dir = "dist"
 #                     to APP_BASE_URL when unset.
 # PUBLIC_TURNSTILE_SITE_KEY is the Cloudflare Turnstile site key embedded
 # in the /book Turnstile widget; the paired secret is in TURNSTILE_SECRET_KEY.
+# Both are set via the Cloudflare Pages dashboard (not pinned here) — an
+# empty-string default would put prod in silent-bypass state (#12). If
+# either is missing in a non-localhost environment, resolveTurnstileConfig
+# throws and the booking/intake endpoints 500 rather than accepting
+# unverified submissions.
 [vars]
 APP_BASE_URL = "https://smd.services"
 ADMIN_BASE_URL = "https://admin.smd.services"
 PORTAL_BASE_URL = "https://portal.smd.services"
-PUBLIC_TURNSTILE_SITE_KEY = ""
 MEETING_URL = "https://zoom.us/j/4284801619"
 
 # ---------- D1 (structured data) ----------
