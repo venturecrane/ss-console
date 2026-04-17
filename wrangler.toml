@@ -15,19 +15,6 @@ compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "dist"
 
-# Preserve env vars and secrets set outside wrangler.toml (via
-# `wrangler pages secret put`, the Cloudflare dashboard, or direct API
-# writes) across subsequent `wrangler pages deploy` runs.
-#
-# Without this, every CI deploy treats wrangler.toml as authoritative and
-# silently erodes anything not declared here — which is how every
-# dashboard-set secret (RESEND_API_KEY, ANTHROPIC_API_KEY,
-# LEAD_INGEST_API_KEY, etc.) ended up reaching the Astro SSR runtime as
-# empty strings after #178 introduced the first `[vars]` block.
-#
-# See: https://developers.cloudflare.com/workers/wrangler/configuration/
-keep_vars = true
-
 # ---------- Public env vars ----------
 # Canonical origins for outbound links and webhook callbacks.
 # All email links and webhook callbacks are built from these env vars — never
