@@ -137,8 +137,11 @@ function formatDate(iso: string): string {
             {documents.map((doc) => (
               <div class="flex items-center justify-between px-6 py-4">
                 <div class="flex items-center gap-3 min-w-0">
-                  <span class={`text-lg ${doc.isPdf ? 'text-red-500' : 'text-slate-400'}`}>
-                    {doc.isPdf ? '&#128196;' : '&#128462;'}
+                  <span
+                    class={`material-symbols-outlined text-[20px] ${doc.isPdf ? 'text-red-500' : 'text-slate-400'}`}
+                    aria-hidden="true"
+                  >
+                    {doc.isPdf ? 'picture_as_pdf' : 'description'}
                   </span>
                   <div class="min-w-0">
                     <p class="text-sm font-medium text-slate-900 truncate">{doc.name}</p>
