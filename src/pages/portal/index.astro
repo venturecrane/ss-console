@@ -270,11 +270,13 @@ const touchpointText: string | null = (() => {
 })()
 
 const contextHeadline = activeEngagement ? 'Engagement in flight.' : 'Welcome.'
-const contextSubtext = consultantFirst
-  ? touchpointText
+// Only render a check-in sentence when an authored touchpoint exists. We
+// never synthesize consultant outreach copy — that is uncontracted future
+// behavior per CLAUDE.md's no-fabricated-content policy (#398).
+const contextSubtext =
+  consultantFirst && touchpointText
     ? `Next check-in ${touchpointText} with ${consultantFirst}.`
-    : `${consultantFirst} will reach out to schedule the next check-in.`
-  : null
+    : null
 ---
 
 <!doctype html>
@@ -410,11 +412,6 @@ const contextSubtext = consultantFirst
                 <p class="mt-5 text-base leading-6 text-[color:var(--color-text-secondary)]">
                   Nothing needs your attention right now.
                 </p>
-                {consultantFirst && (
-                  <p class="mt-2 text-[13px] leading-[18px] text-[color:var(--color-text-muted)]">
-                    {consultantFirst} will reach out to schedule the next touchpoint.
-                  </p>
-                )}
               </section>
             )
           }

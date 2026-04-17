@@ -2,11 +2,7 @@
 import '../../../styles/global.css'
 import { BRAND_NAME } from '../../../lib/config/brand'
 import { getPortalClient } from '../../../lib/portal/session'
-import {
-  getInvoiceForEntity,
-  listLineItemsForInvoice,
-  type InvoiceLineItem,
-} from '../../../lib/db/invoices'
+import { getInvoiceForEntity, listLineItemsForInvoice } from '../../../lib/db/invoices'
 import PortalHeader from '../../../components/portal/PortalHeader.astro'
 import PortalTabs from '../../../components/portal/PortalTabs.astro'
 import SkipToMain from '../../../components/SkipToMain.astro'
@@ -50,7 +46,13 @@ if (!invoice) {
   return Astro.redirect('/portal')
 }
 
-// Load line items; if none exist, we render a single fallback row below.
+// Line items drive the "What's included" section. We never fabricate
+// invoice content — no generic placeholder rows, no borrow from
+// scope_summary or invoice.description. See CLAUDE.md "No fabricated
+// client-facing content" (#398). A sent invoice without line items
+// renders no breakdown; the Total line still renders. Admin send-gate
+// should prevent this state reaching a client, but the page degrades
+// cleanly if it does.
 const lineItems = await listLineItemsForInvoice(env.DB, invoice.id)
 
 // Load engagement for scope fallback + consultant attribution.
@@ -81,21 +83,6 @@ const lineItemsTotalCents = lineItems.reduce((sum, li) => sum + li.amount_cents,
 // Show the invoice's own amount as Total so rounding always matches the CTA.
 const totalCents = amountCents
 
-// Fallback line item when none are stored for this invoice.
-const displayLineItems: InvoiceLineItem[] =
-  lineItems.length > 0
-    ? lineItems
-    : [
-        {
-          id: 'fallback',
-          invoice_id: invoice.id,
-          description: invoice.description ?? engagement?.scope_summary ?? 'Engagement work',
-          amount_cents: amountCents,
-          sort_order: 0,
-          created_at: invoice.created_at,
-        },
-      ]
-
 // Consultant first name is needed early so we can thread it into the state
 // resolver's next-step copy. Null when the engagement has no consultant.
 const consultantFirstEarly = engagement?.consultant_name
@@ -110,14 +97,16 @@ const isCardExpired = surface.state === 'card_expired'
 const isLinkExpired = surface.state === 'expired'
 const isErrorState = isDeclined || isCardExpired || isLinkExpired
 
-// CTA: prefer Stripe hosted URL when present and usable, otherwise a server
-// endpoint placeholder. The server endpoint is out of scope for this PR.
+// CTA is gated on a real Stripe hosted URL. When it is missing or the
+// dev-mode sentinel, we render a non-link "Payment link pending" state
+// instead of a link to a nonexistent server route (#419 removed the
+// previous `/api/invoices/[id]/pay` fallback, which 404'd). Minting the
+// checkout session on demand is a separate server feature.
 const stripeUrl =
   invoice.stripe_hosted_url && invoice.stripe_hosted_url !== '#dev-mode'
     ? invoice.stripe_hosted_url
     : null
-// TODO(#362): wire /api/invoices/[id]/pay to mint a Stripe checkout session.
-const payHref = stripeUrl ?? `/api/invoices/${invoice.id}/pay`
+const isPayable = stripeUrl !== null
 
 // Formatting
 const formatDueCaption = (iso: string | null): string | null => {
@@ -319,25 +308,31 @@ const consultantFirstName: string | null = consultantName
               )
             }
             {
-              !isPaid && !isLinkExpired && (
-                <>
-                  <a
-                    href={payHref}
-                    class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white text-base font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
-                  >
-                    {isDeclined
-                      ? 'Try again'
-                      : isCardExpired
-                        ? 'Update payment method'
-                        : 'Pay invoice'}
-                    <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
-                  </a>
-                  <div class="mt-3 flex items-center gap-2 text-[13px] text-[color:var(--color-text-muted)]">
-                    <span class="material-symbols-outlined text-[16px]">lock</span>
-                    <span>Secure payment via Stripe</span>
+              !isPaid &&
+                !isLinkExpired &&
+                (isPayable ? (
+                  <>
+                    <a
+                      href={stripeUrl!}
+                      class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white text-base font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                    >
+                      {isDeclined
+                        ? 'Try again'
+                        : isCardExpired
+                          ? 'Update payment method'
+                          : 'Pay invoice'}
+                      <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+                    </a>
+                    <div class="mt-3 flex items-center gap-2 text-[13px] text-[color:var(--color-text-muted)]">
+                      <span class="material-symbols-outlined text-[16px]">lock</span>
+                      <span>Secure payment via Stripe</span>
+                    </div>
+                  </>
+                ) : (
+                  <div class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-secondary)] text-base font-semibold">
+                    Payment link pending
                   </div>
-                </>
-              )
+                ))
             }
           </div>
 
@@ -351,7 +346,7 @@ const consultantFirstName: string | null = consultantName
             <div class="mt-4 border-t border-[color:var(--color-border)]"></div>
             <ul class="flex flex-col">
               {
-                displayLineItems.map((li) => (
+                lineItems.map((li) => (
                   <li class="flex justify-between items-baseline gap-6 py-5 border-b border-[color:var(--color-border)]/60">
                     <span class="text-[15px] leading-[22px] text-[color:var(--color-text-primary)] max-w-[480px]">
                       {li.description}
@@ -503,22 +498,39 @@ const consultantFirstName: string | null = consultantName
                     </div>
                   </div>
                 )}
-                <ActionCard
-                  pillLabel={
-                    isDeclined ? 'Try again' : isCardExpired ? 'Update payment method' : pillLabel
-                  }
-                  amountCents={amountCents}
-                  amountLabel="Remaining balance"
-                  ctaLabel={
-                    isDeclined
-                      ? 'Try again'
-                      : isCardExpired
-                        ? 'Update payment method'
-                        : 'Pay invoice'
-                  }
-                  ctaHref={payHref}
-                  ctaSubtext="Secure payment via Stripe."
-                />
+                {isPayable ? (
+                  <ActionCard
+                    pillLabel={
+                      isDeclined ? 'Try again' : isCardExpired ? 'Update payment method' : pillLabel
+                    }
+                    amountCents={amountCents}
+                    amountLabel="Remaining balance"
+                    ctaLabel={
+                      isDeclined
+                        ? 'Try again'
+                        : isCardExpired
+                          ? 'Update payment method'
+                          : 'Pay invoice'
+                    }
+                    ctaHref={stripeUrl!}
+                    ctaSubtext="Secure payment via Stripe."
+                  />
+                ) : (
+                  <section
+                    class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-6 sm:p-8"
+                    aria-label="Payment link pending"
+                  >
+                    <span class="inline-flex items-center rounded-full bg-[color:var(--color-surface-muted)] px-3 py-1 text-[13px] leading-[18px] font-medium tracking-[0.01em] text-[color:var(--color-text-muted)]">
+                      Payment link pending
+                    </span>
+                    <div class="mt-5">
+                      <MoneyDisplay amountCents={amountCents} size="display" />
+                      <p class="mt-2 text-[13px] leading-[18px] font-medium tracking-[0.01em] text-[color:var(--color-text-muted)]">
+                        Remaining balance
+                      </p>
+                    </div>
+                  </section>
+                )}
               </>
             )
           }

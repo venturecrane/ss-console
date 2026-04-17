@@ -130,8 +130,9 @@ export function resolveInvoiceState(
  *   6. `default` — render the sign surface
  *
  * nextStepText is the engagement-specific "what happens next" copy, pulled
- * from engagement.scope_summary / next_touchpoint_label by the caller. When
- * missing we fall back to a generic kickoff sentence.
+ * from engagement.next_touchpoint_label by the caller. When missing we
+ * render no next-step copy — we never synthesize client-facing
+ * commitments from non-authoritative fields (CLAUDE.md #398).
  */
 export function resolveProposalState(
   quote: QuoteLike,

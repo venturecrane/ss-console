@@ -135,6 +135,21 @@ describe('portal quotes: dashboard', () => {
     expect(code).not.toContain('/hr')
     expect(code).not.toContain('hourly')
   })
+
+  it('never fabricates consultant "will reach out" promises (#398)', () => {
+    const code = source()
+    // Two prior instances rendered "will reach out to schedule the next
+    // check-in / touchpoint" when no authored touchpoint existed. Those
+    // are uncontracted future-behavior promises and must not reappear.
+    expect(code).not.toMatch(/will reach out/i)
+  })
+
+  it('gates next-check-in subtext on an authored touchpoint', () => {
+    const code = source()
+    // The subtext renders only when both consultantFirst and touchpointText
+    // exist. No fallback phrasing when either is missing.
+    expect(code).toContain('consultantFirst && touchpointText')
+  })
 })
 
 describe('portal quotes: quote list page', () => {
@@ -219,11 +234,15 @@ describe('portal quotes: quote detail page', () => {
     expect(source()).toContain('getPortalClient')
   })
 
-  it('displays scope with problem descriptions only', () => {
+  it('displays scope via authored deliverables only (not line items) (#398)', () => {
     const code = source()
-    expect(code).toContain('lineItems')
-    expect(code).toContain('getProblemLabel')
-    expect(code).toContain('item.description')
+    // Deliverables now come exclusively from parseDeliverables(quote). The
+    // page does not read or iterate line_items for client-facing scope
+    // rendering. Problem labels are no longer used as deliverable titles.
+    expect(code).toContain('parseDeliverables')
+    expect(code).toContain('deliverables.map')
+    expect(code).not.toContain('getProblemLabel')
+    expect(code).not.toMatch(/lineItems\.map/)
   })
 
   it('does NOT show hours column in scope table', () => {
