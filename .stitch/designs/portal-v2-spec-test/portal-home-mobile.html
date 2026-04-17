@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Client Portal - Precision Plumbing AZ</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-surface-variant": "#444653",
+                    "primary-container": "#1e40af",
+                    "tertiary-fixed": "#ffdbce",
+                    "tertiary-container": "#872d00",
+                    "surface-dim": "#d8dadc",
+                    "secondary": "#525c87",
+                    "on-secondary-container": "#4c5680",
+                    "surface-container": "#eceef0",
+                    "surface-tint": "#3755c3",
+                    "surface-container-highest": "#e0e3e5",
+                    "on-surface": "#191c1e",
+                    "on-error": "#ffffff",
+                    "on-secondary-fixed-variant": "#3b446e",
+                    "surface-variant": "#e0e3e5",
+                    "on-tertiary": "#ffffff",
+                    "surface-bright": "#f7f9fb",
+                    "inverse-surface": "#2d3133",
+                    "on-primary-fixed": "#001453",
+                    "on-tertiary-container": "#ffa583",
+                    "tertiary": "#611e00",
+                    "primary": "#00288e",
+                    "inverse-on-surface": "#eff1f3",
+                    "surface-container-high": "#e6e8ea",
+                    "on-primary-container": "#a8b8ff",
+                    "error-container": "#ffdad6",
+                    "on-error-container": "#93000a",
+                    "outline-variant": "#c4c5d5",
+                    "on-primary": "#ffffff",
+                    "on-primary-fixed-variant": "#173bab",
+                    "secondary-fixed": "#dde1ff",
+                    "on-tertiary-fixed": "#380d00",
+                    "on-background": "#191c1e",
+                    "on-tertiary-fixed-variant": "#802a00",
+                    "secondary-container": "#c3ccfe",
+                    "primary-fixed": "#dde1ff",
+                    "tertiary-fixed-dim": "#ffb59a",
+                    "on-secondary": "#ffffff",
+                    "primary-fixed-dim": "#b8c4ff",
+                    "surface": "#f7f9fb",
+                    "secondary-fixed-dim": "#bbc4f6",
+                    "outline": "#757684",
+                    "on-secondary-fixed": "#0e1840",
+                    "inverse-primary": "#b8c4ff",
+                    "error": "#ba1a1a",
+                    "surface-container-lowest": "#ffffff",
+                    "background": "#f7f9fb",
+                    "surface-container-low": "#f2f4f6"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Plus Jakarta Sans"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .text-display { font-family: 'Plus Jakarta Sans'; font-weight: 800; font-size: 2.5rem; letter-spacing: -0.04em; line-height: 1.1; }
+        .text-title { font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 1.25rem; letter-spacing: -0.02em; }
+        .text-body { font-family: 'Inter'; font-weight: 400; font-size: 0.9375rem; line-height: 1.5; }
+        .text-caption { font-family: 'Inter'; font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .tap-target { min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-[color:var(--color-background)] text-[color:var(--color-text-primary)] font-body min-h-screen selection:bg-[color:var(--color-primary)]/10 selection:text-[color:var(--color-primary)]">
+<a class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:bg-primary focus:text-white focus:px-6 focus:py-3 focus:rounded-lg focus:font-bold focus:shadow-xl" href="#main">
+        Skip to main content
+    </a>
+<!-- TopAppBar -->
+<header class="bg-[#f7f9fb] dark:bg-[#191c1e] docked full-width top-0 sticky z-50">
+<div class="flex justify-between items-center px-6 py-4 w-full">
+<div class="flex items-center gap-row">
+<span class="material-symbols-outlined text-[#1e40af] dark:text-[#3b82f6]" data-icon="plumbing">plumbing</span>
+<h1 class="text-body-lg font-bold text-[#191c1e] dark:text-[#f7f9fb] font-['Plus_Jakarta_Sans'] tracking-tight">Precision Plumbing AZ</h1>
+</div>
+<div class="flex items-center gap-stack">
+<div class="hidden md:flex items-center gap-2 mr-4 border-r border-[color:var(--color-border)]-variant/30 pr-4">
+<button aria-label="Call consultant" class="tap-target text-[color:var(--color-text-secondary)] hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" data-icon="call">call</span>
+</button>
+<button aria-label="Email consultant" class="tap-target text-[color:var(--color-text-secondary)] hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" data-icon="mail">mail</span>
+</button>
+<button aria-label="Chat with consultant" class="tap-target text-[color:var(--color-text-secondary)] hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+</button>
+</div>
+<button class="text-[color:var(--color-text-secondary)] font-['Plus_Jakarta_Sans'] font-bold tracking-tight text-body hover:opacity-80 transition-opacity active:opacity-70">
+                    Sign out
+                </button>
+</div>
+</div>
+</header>
+<main class="max-w-3xl mx-auto px-6 pt-12 pb-32" id="main" role="main">
+<!-- Action-centric Hero -->
+<section class="bg-[color:var(--color-surface)] p-section rounded-lg mb-12 flex flex-col items-start shadow-[0_32px_64px_-4px_rgba(25,28,30,0.06)] relative overflow-hidden">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+<p class="text-caption text-[color:var(--color-text-secondary)] mb-2">Deposit invoice · Due Friday</p>
+<h2 class="text-display text-[color:var(--color-text-primary)] mb-8">$2,625.00</h2>
+<button class="w-full bg-[#1e40af] text-white py-4 px-8 rounded-lg font-bold text-body-lg hover:opacity-90 transition-all active:scale-[0.98] shadow-lg">
+                Pay invoice
+            </button>
+</section>
+<div class="border-t border-[#e2e8f0] mb-12"></div>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-12">
+<!-- Recent Activity Section -->
+<section class="md:col-span-7">
+<h2 class="text-title text-[color:var(--color-text-primary)] mb-8">Recent activity</h2>
+<div class="space-y-section">
+<div class="flex gap-card group">
+<span class="text-caption text-[color:var(--color-text-secondary)] w-16 pt-1">Apr 18</span>
+<div class="flex-1 pb-4">
+<p class="text-body text-[color:var(--color-text-primary)] font-medium">Invoice sent</p>
+</div>
+</div>
+<div class="flex gap-card group">
+<span class="text-caption text-[color:var(--color-text-secondary)] w-16 pt-1">Apr 16</span>
+<div class="flex-1 pb-4">
+<p class="text-body text-[color:var(--color-text-primary)] font-medium">Assessment call completed</p>
+</div>
+</div>
+<div class="flex gap-card group">
+<span class="text-caption text-[color:var(--color-text-secondary)] w-16 pt-1">Apr 9</span>
+<div class="flex-1 pb-4">
+<p class="text-body text-[color:var(--color-text-primary)] font-medium">Two issues identified with dispatcher</p>
+</div>
+</div>
+<div class="flex gap-card group">
+<span class="text-caption text-[color:var(--color-text-secondary)] w-16 pt-1">Apr 2</span>
+<div class="flex-1 pb-4">
+<p class="text-body text-[color:var(--color-text-primary)] font-medium">Proposal signed. Deposit received</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Consultant Block -->
+<aside class="md:col-span-5 bg-[color:var(--color-surface)] p-section rounded-lg h-fit border border-[color:var(--color-border)]-variant/15">
+<div class="flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-lg bg-[color:var(--color-primary)]/10 flex items-center justify-center text-white mb-4 font-headline font-bold text-title">
+                        SD
+                    </div>
+<h3 class="text-title text-[color:var(--color-text-primary)] mb-1">Scott Durgan</h3>
+<p class="text-body text-[color:var(--color-text-secondary)] mb-6 italic">Lead Consultant</p>
+<div class="flex justify-center gap-2 w-full border-t border-[color:var(--color-border)]-variant/20 pt-6">
+<button aria-label="Call Scott" class="tap-target w-12 h-12 rounded-lg bg-[color:var(--color-surface)] text-primary hover:bg-primary hover:text-white transition-all shadow-sm">
+<span class="material-symbols-outlined" data-icon="call">call</span>
+</button>
+<button aria-label="Email Scott" class="tap-target w-12 h-12 rounded-lg bg-[color:var(--color-surface)] text-primary hover:bg-primary hover:text-white transition-all shadow-sm">
+<span class="material-symbols-outlined" data-icon="mail">mail</span>
+</button>
+<button aria-label="Chat with Scott" class="tap-target w-12 h-12 rounded-lg bg-[color:var(--color-surface)] text-primary hover:bg-primary hover:text-white transition-all shadow-sm">
+<span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+</button>
+</div>
+</div>
+</aside>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-safe h-20 bg-white/80 dark:bg-[#191c1e]/80 backdrop-blur-xl z-50 border-t border-[#c4c5d5]/15 shadow-[0_-4px_32px_rgba(25,28,30,0.06)]">
+<a class="flex flex-col items-center justify-center text-[#444653] dark:text-[#c4c5d5] hover:text-[#1e40af] transition-colors scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="description">description</span>
+<span class="font-['Inter'] text-label font-semibold uppercase tracking-wider">Proposals</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#444653] dark:text-[#c4c5d5] hover:text-[#1e40af] transition-colors scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="receipt_long">receipt_long</span>
+<span class="font-['Inter'] text-label font-semibold uppercase tracking-wider">Invoices</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#444653] dark:text-[#c4c5d5] hover:text-[#1e40af] transition-colors scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="folder_open">folder_open</span>
+<span class="font-['Inter'] text-label font-semibold uppercase tracking-wider">Documents</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#1e40af] dark:text-[#3b82f6] font-bold scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="trending_up" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+<span class="font-['Inter'] text-label font-semibold uppercase tracking-wider">Progress</span>
+</a>
+</nav>
+</body></html>

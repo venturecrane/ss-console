@@ -179,6 +179,27 @@ If the validator reports structural violations: retry once with the violation re
 
 If `.stitch/NAVIGATION.md` does NOT exist, skip validation.
 
+### 3c. Post-generation token normalization (when UI-PATTERNS.md present)
+
+After `generate_screen_from_text` or `edit_screens` and AFTER nav validation (step 3b), if `docs/style/UI-PATTERNS.md` exists, run the token-normalize pass:
+
+```bash
+python3 .agents/skills/ui-drift-audit/normalize.py <path-to-generated-html>
+```
+
+This is a deterministic codemod that rewrites class attributes to use the project's named typography and spacing tokens instead of Stitch's raw-Tailwind + Material-3 vocabulary. It covers the token-adoption gap the UI CONTRACT cannot fully close (Stitch's trained priors favor Material 3 + raw Tailwind).
+
+Mappings:
+
+- Arbitrary typography: `text-[11px]` → `text-label`, `text-[13px]` → `text-caption`, … (icons on `material-symbols-outlined` preserved)
+- Raw Tailwind typography: `text-sm` → `text-body`, `text-lg` → `text-body-lg`, `text-xl` → `text-title`, …
+- Spacing rhythm: `p-4` → `p-stack`, `p-6` → `p-card`, `p-8` → `p-section`, `gap-3` → `gap-row`, etc.
+- Material 3 color idioms: `bg-surface-container-lowest` → `bg-[color:var(--color-surface)]`, `text-on-primary` → `text-white`, `bg-primary-container` → `bg-[color:var(--color-primary)]/10`, etc.
+
+Output is a per-category substitution count. File is rewritten in place.
+
+If `docs/style/UI-PATTERNS.md` does NOT exist, skip normalization.
+
 ### 4. Present AI Insights
 
 After any tool call, always surface the `outputComponents` (Text Description and Suggestions) to the user.
