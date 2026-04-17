@@ -56,7 +56,6 @@ Before any Stitch tool call, resolve the venture's persistent project:
 
 - **Design System**: Check for `.stitch/DESIGN.md`. If it exists, incorporate its tokens (colors, typography). If not, suggest the `generate-design-md` workflow.
 - **Navigation Spec**: Check for `.stitch/NAVIGATION.md`. If it exists, nav-contract injection is available (see step 1b and step 3). If not, proceed without — the skill gracefully degrades. Consider suggesting `/nav-spec` if the user is generating portal or admin surfaces.
-- **UI Patterns Spec**: Check for `docs/style/UI-PATTERNS.md`. If it exists, UI-contract injection is available (see step 3). If not, proceed without — skill gracefully degrades.
 - **Freshness check**: Before generating, compare `design-spec.md` freshness (via `crane_doc` metadata) against `.stitch/DESIGN.md`. If the spec is newer, warn and suggest running the sync-design-spec workflow first.
 
 ### 1b. Classification tags (when NAVIGATION.md present)
@@ -111,45 +110,6 @@ Built from the classification tags: read the matching surface-class appendix
 - Palette: [Primary Name] (#hex for role), [Secondary Name] (#hex for role)
 - Styles: [Roundness description], [Shadow/Elevation style]
 
-**UI CONTRACT (REQUIRED):**
-
-[Only if docs/style/UI-PATTERNS.md exists — inject the six-rule contract
-below. Six rules cited to NN/g / Material 3 / WCAG 2.2 / Polaris / Carbon.
-If UI-PATTERNS.md absent, omit this block entirely.]
-
-Apply the six rules in `docs/style/UI-PATTERNS.md`. Summary:
-
-1. **Status by context.** Pill = scan-time, dense list row ONLY. Eyebrow (small-caps muted label) = category above a title. Dot or prose = single-item state. NEVER use a pill as a category label on a detail page.
-
-2. **One signal per fact.** No pill adjacent to prose stating the same thing. If a confirmation block ("Signed Apr 13, 2026") renders the state, drop the pill. No triple-stacked confirmations.
-
-3. **One primary per view.** Primary = solid `bg-[color:var(--color-primary)]` with `text-white` + button padding. Secondary = border + primary text. Tertiary = ghost/link. Exactly one primary per rendered state.
-
-4. **Heading hierarchy.** h1 → h2 → h3, no skips. Eyebrows are NOT headings.
-
-5. **Typography — use named scale tokens, never inline pixel sizes:**
-   - `text-display` (32/40 bold, -0.02em) — page hero
-   - `text-title` (20/28 bold, -0.005em) — section/card title
-   - `text-heading` (16/22 semibold) — sub-section heading
-   - `text-body-lg` (18/28 regular) — lead paragraph
-   - `text-body` (15/24 regular) — default body
-   - `text-caption` (13/18 medium, 0.01em) — metadata, dates, status prose
-   - `text-label` (12/16 semibold, 0.08em uppercase) — eyebrow
-
-   Icons (on `material-symbols-outlined`) may use `text-[Npx]` for icon sizing; that is the only exemption.
-
-6. **Spacing — use named rhythm tokens on cards/sections/lists:**
-   - `p-section` / `gap-section` / `space-y-section` (32px) — between major sections
-   - `p-card` / `gap-card` (24px) — card internal padding
-   - `p-stack` / `space-y-stack` (16px) — sibling vertical stack
-   - `p-row` / `gap-row` / `space-y-row` (12px) — list row gaps
-
-   `px-*` / `py-*` axis-specific padding for buttons and inputs is exempt from the rename (it's not rhythm).
-
-**Pills only when earned.** `rounded-full` + tinted bg (e.g., `bg-[color:var(--color-primary)]/10`) is reserved for scan-time status in list rows. Not for categories, not for decoration, not for every slightly-important thing.
-
-**Restraint is the feature.** Linear, Stripe, Shopify admin — they remove components rather than add them. Negative space, type-scale contrast, and consistent rhythm do more work than pills and bordered badges. When in doubt, subtract.
-
 **PAGE STRUCTURE:**
 
 1. **[Content area 1]:** [Description]
@@ -179,26 +139,45 @@ If the validator reports structural violations: retry once with the violation re
 
 If `.stitch/NAVIGATION.md` does NOT exist, skip validation.
 
-### 3c. Post-generation token normalization (when UI-PATTERNS.md present)
+### 3c. Token normalization (when UI-PATTERNS.md present)
 
-After `generate_screen_from_text` or `edit_screens` and AFTER nav validation (step 3b), if `docs/style/UI-PATTERNS.md` exists, run the token-normalize pass:
+After nav validation, run the token-normalize pass. Deterministic codemod that rewrites class attributes to use the project's named typography and spacing tokens instead of Stitch's raw-Tailwind + Material-3 vocabulary. Covers the adoption gap the UI CONTRACT cannot fully close.
 
 ```bash
 python3 .agents/skills/ui-drift-audit/normalize.py <path-to-generated-html>
 ```
 
-This is a deterministic codemod that rewrites class attributes to use the project's named typography and spacing tokens instead of Stitch's raw-Tailwind + Material-3 vocabulary. It covers the token-adoption gap the UI CONTRACT cannot fully close (Stitch's trained priors favor Material 3 + raw Tailwind).
+Mappings cover arbitrary typography (`text-[Npx]` → scale tokens), raw Tailwind sizes (`text-sm/lg/xl` → scale), spacing (`p-4/6/8`, `gap-3/4/6/8` → rhythm tokens), and Material 3 color idioms (`bg-surface-container-lowest`, `text-on-primary`, `bg-primary-container`, …) → our semantic color roles. Icons on `material-symbols-outlined` preserved.
 
-Mappings:
+Skip if `docs/style/UI-PATTERNS.md` absent.
 
-- Arbitrary typography: `text-[11px]` → `text-label`, `text-[13px]` → `text-caption`, … (icons on `material-symbols-outlined` preserved)
-- Raw Tailwind typography: `text-sm` → `text-body`, `text-lg` → `text-body-lg`, `text-xl` → `text-title`, …
-- Spacing rhythm: `p-4` → `p-stack`, `p-6` → `p-card`, `p-8` → `p-section`, `gap-3` → `gap-row`, etc.
-- Material 3 color idioms: `bg-surface-container-lowest` → `bg-[color:var(--color-surface)]`, `text-on-primary` → `text-white`, `bg-primary-container` → `bg-[color:var(--color-primary)]/10`, etc.
+### 3d. Hallucination strip pass
 
-Output is a per-category substitution count. File is rewritten in place.
+After normalize, strip elements Stitch produced despite the UI CONTRACT forbidding them:
 
-If `docs/style/UI-PATTERNS.md` does NOT exist, skip normalization.
+```bash
+python3 .agents/skills/ui-drift-audit/strip.py <path-to-generated-html>
+```
+
+Removes hero imagery, decorative `<figure>` blocks, `<footer>` copyright rows, testimonial blockquotes, marketing CTAs ("Schedule a call", "Book a demo"), announcement banners. Mechanical.
+
+### 3e. Embellishment evaluation (when source exists)
+
+After strip, flag Stitch-generated elements that look like genuine product features Stitch invented (aggregate stat cards, progress widgets, auto-pay banners, filter bars, support widgets). These are NOT hallucinations — they're product suggestions. Humans decide ship / defer / reject.
+
+```bash
+python3 .agents/skills/ui-drift-audit/evaluate-embellishments.py \
+  --stitch-dir .stitch/designs/<run-dir> \
+  --source-dir <source path, e.g. src/pages/portal>
+```
+
+Writes `EMBELLISHMENTS.md` next to the generated HTML. Each candidate has its category, matched phrase, and a code snippet. Review before implementing.
+
+### 3f. Viewport default — BOTH viewports
+
+Generate BOTH mobile AND desktop for every surface by default. Mobile (`deviceType: "MOBILE"`, 390×844) establishes primary design. Desktop (`deviceType: "DESKTOP"`, ~1440×900) is an expansion with explicit right-rail or two-column guidance in the prompt. "Desktop later" is not an option — single-viewport designs drift when the other viewport lands.
+
+Fire both generations in parallel.
 
 ### 4. Present AI Insights
 

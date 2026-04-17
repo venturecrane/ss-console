@@ -397,15 +397,6 @@ NAV CONTRACT (REQUIRED):
  If NAVIGATION.md absent: OMIT this entire block. Describe header/footer
  inline in PAGE STRUCTURE as before (legacy behavior).]
 
-UI CONTRACT (REQUIRED):
-[Only if docs/style/UI-PATTERNS.md exists. Inject the six-rule summary
- block (same as stitch-design skill step 3) here. Six rules cited to
- NN/g, Material 3, WCAG 2.2, Polaris, Carbon. Governs status display,
- redundancy ban, button hierarchy, heading skip, typography scale
- (named tokens: text-display/title/heading/body-lg/body/caption/label),
- spacing rhythm (named tokens: p-section/card/stack/row), and pill
- restraint. If UI-PATTERNS.md absent: OMIT this entire block.]
-
 DESIGN SYSTEM (REQUIRED):
 - Platform: Web, mobile-first, 390x844 viewport only (or desktop 1280px)
 - Palette: <hex values from the brief's Appendix>
@@ -459,13 +450,21 @@ Save each response to `/tmp/stitch-screen-<concept>.json`. Extract:
 
 Download HTML and PNG for each to `.stitch/designs/<target>-v1/concept-<letter>.{html,png}`.
 
-**Token normalize pass (when UI-PATTERNS.md present).** After downloading each HTML, run:
+**Run the full post-generation pipeline on every downloaded HTML.** All three passes are mechanical:
 
 ```bash
-python3 .agents/skills/ui-drift-audit/normalize.py .stitch/designs/<target>-v1/concept-<letter>.html
+for f in .stitch/designs/<target>-v1/*.html; do
+  python3 .agents/skills/ui-drift-audit/normalize.py "$f"  # token vocabulary
+  python3 .agents/skills/ui-drift-audit/strip.py "$f"       # forbidden chrome
+done
+python3 .agents/skills/ui-drift-audit/evaluate-embellishments.py \
+  --stitch-dir .stitch/designs/<target>-v1 \
+  --source-dir <source path the generation is for>
 ```
 
-Deterministic codemod that rewrites Stitch's raw-Tailwind + Material-3 class vocabulary to the project's named tokens (text-display/title/heading/body-lg/body/caption/label, p-section/card/stack/row, and semantic color roles). Closes the gap the UI CONTRACT cannot reach via prompt alone. Skip if UI-PATTERNS.md is absent.
+Skip individual steps if the corresponding spec is absent (UI-PATTERNS.md for normalize; NAVIGATION.md governs strip's FORBIDDEN list).
+
+**Viewport default: both mobile AND desktop.** Fire both generations in parallel. Mobile establishes the primary design; desktop is an explicit right-rail / two-column expansion specified in the prompt.
 
 ---
 
@@ -560,16 +559,6 @@ For each, write a prompt file following the template from Phase 7. **Key move**:
 Fire all generations in parallel (5 Bash calls in one message, each timeout 330000ms).
 
 Extract, download, save to `.stitch/designs/<target>-v1/<surface>-<viewport>.{html,png}`.
-
-**Run the token normalize pass on each downloaded HTML** (see Phase 7 for details). One invocation per file, or loop:
-
-```bash
-for f in .stitch/designs/<target>-v1/*.html; do
-  python3 .agents/skills/ui-drift-audit/normalize.py "$f"
-done
-```
-
-Skip if UI-PATTERNS.md is absent.
 
 ---
 
