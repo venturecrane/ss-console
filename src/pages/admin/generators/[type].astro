@@ -14,7 +14,6 @@ import {
   type PipelineId,
   type ReviewMiningConfig,
   type SocialListeningConfig,
-  type Vertical,
 } from '../../../lib/generators/types'
 
 /**
@@ -106,7 +105,10 @@ if (Astro.request.method === 'POST') {
 }
 
 function buildConfigFromForm(pipeline: PipelineId, form: FormData): unknown {
-  const target_verticals = form.getAll('target_verticals').map(String) as Vertical[]
+  const target_verticals = String(form.get('target_verticals') ?? '')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
   const revenue_range = {
     min_usd: Number(form.get('revenue_min_usd')),
     max_usd: Number(form.get('revenue_max_usd')),
@@ -401,23 +403,19 @@ const runConfigured = !!(WORKER_URLS[type] && env.LEAD_INGEST_API_KEY)
       </div>
 
       <div>
-        <label class="text-sm font-medium text-slate-900 block mb-2">Target verticals</label>
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
-          {
-            VERTICALS.map((v) => (
-              <label class="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  name="target_verticals"
-                  value={v}
-                  checked={(configRow.config as NewBusinessConfig).target_verticals.includes(v)}
-                  class="w-4 h-4 rounded border-slate-300"
-                />
-                <span class="capitalize">{v.replace(/_/g, ' ')}</span>
-              </label>
-            ))
-          }
-        </div>
+        <label for="target_verticals" class="text-sm font-medium text-slate-900 block mb-1">
+          Target verticals <span class="text-xs text-slate-500">(one per line)</span>
+        </label>
+        <textarea
+          id="target_verticals"
+          name="target_verticals"
+          rows="6"
+          class="w-full border border-slate-300 rounded px-3 py-2 text-sm font-mono"
+          >{(configRow.config as NewBusinessConfig).target_verticals.join('\n')}</textarea
+        >
+        <p class="text-xs text-slate-500 mt-1">
+          Free-text. Suggestions: {VERTICALS.map((v) => v.replace(/_/g, ' ')).join(', ')}.
+        </p>
       </div>
 
       <div class="grid grid-cols-2 gap-4">
@@ -522,47 +520,62 @@ const runConfigured = !!(WORKER_URLS[type] && env.LEAD_INGEST_API_KEY)
                 {rm.discovery_queries.join('\n')}
               </textarea>
             </div>
-            <div class="grid grid-cols-3 gap-4">
-              <div>
-                <label for="geo_lat" class="text-sm font-medium text-slate-900 block mb-1">
-                  Geo center lat
-                </label>
-                <input
-                  type="number"
-                  id="geo_lat"
-                  name="geo_lat"
-                  value={rm.geo_center.lat}
-                  step="0.0001"
-                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm"
-                />
+            <div>
+              <label class="text-sm font-medium text-slate-900 block mb-1">Search area</label>
+              <p class="text-xs text-slate-500 mb-2">
+                Google Places biases results near this point. Defaults are Phoenix downtown
+                (33.4484, -112.074) with a 50km radius — covers Scottsdale, Tempe, Mesa, Chandler,
+                Glendale.
+              </p>
+              <div class="grid grid-cols-3 gap-4">
+                <div>
+                  <label for="geo_lat" class="text-xs text-slate-600 block mb-1">
+                    Latitude
+                  </label>
+                  <input
+                    type="number"
+                    id="geo_lat"
+                    name="geo_lat"
+                    value={rm.geo_center.lat}
+                    step="0.0001"
+                    class="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label for="geo_lon" class="text-xs text-slate-600 block mb-1">
+                    Longitude
+                  </label>
+                  <input
+                    type="number"
+                    id="geo_lon"
+                    name="geo_lon"
+                    value={rm.geo_center.lon}
+                    step="0.0001"
+                    class="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label for="geo_radius_km" class="text-xs text-slate-600 block mb-1">
+                    Radius (km, 1–500)
+                  </label>
+                  <input
+                    type="number"
+                    id="geo_radius_km"
+                    name="geo_radius_km"
+                    value={rm.geo_radius_km}
+                    min="1"
+                    max="500"
+                    class="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                  />
+                </div>
               </div>
-              <div>
-                <label for="geo_lon" class="text-sm font-medium text-slate-900 block mb-1">
-                  Geo center lon
-                </label>
-                <input
-                  type="number"
-                  id="geo_lon"
-                  name="geo_lon"
-                  value={rm.geo_center.lon}
-                  step="0.0001"
-                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label for="geo_radius_km" class="text-sm font-medium text-slate-900 block mb-1">
-                  Radius (km)
-                </label>
-                <input
-                  type="number"
-                  id="geo_radius_km"
-                  name="geo_radius_km"
-                  value={rm.geo_radius_km}
-                  min="1"
-                  max="500"
-                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm"
-                />
-              </div>
+              <button
+                type="button"
+                data-phoenix-defaults
+                class="mt-2 text-xs text-primary hover:underline"
+              >
+                Reset to Phoenix metro defaults
+              </button>
             </div>
           </>
         )
@@ -690,3 +703,17 @@ const runConfigured = !!(WORKER_URLS[type] && env.LEAD_INGEST_API_KEY)
     }
   </section>
 </AdminLayout>
+
+<script>
+  const resetBtn = document.querySelector<HTMLButtonElement>('[data-phoenix-defaults]')
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      const lat = document.getElementById('geo_lat') as HTMLInputElement | null
+      const lon = document.getElementById('geo_lon') as HTMLInputElement | null
+      const r = document.getElementById('geo_radius_km') as HTMLInputElement | null
+      if (lat) lat.value = '33.4484'
+      if (lon) lon.value = '-112.074'
+      if (r) r.value = '50'
+    })
+  }
+</script>

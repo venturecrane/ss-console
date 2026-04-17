@@ -36,12 +36,13 @@ describe('generator config validators', () => {
       ])
     })
 
-    it('rejects invalid verticals but keeps valid ones', () => {
+    it('accepts free-text verticals, rejects non-string entries', () => {
       const { value, errors } = validateNewBusiness({
-        target_verticals: ['home_services', 'not_a_vertical', 'healthcare'],
+        target_verticals: ['home services', 'custom vertical', 42, '   '],
       })
-      expect(errors).toContain('target_verticals contains invalid value: "not_a_vertical"')
-      expect(value.target_verticals).toEqual(['home_services', 'healthcare'])
+      expect(errors).toContain('target_verticals contains invalid entry: 42')
+      expect(errors).toContain('target_verticals contains invalid entry: "   "')
+      expect(value.target_verticals).toEqual(['home services', 'custom vertical'])
     })
 
     it('rejects invalid soda cities', () => {

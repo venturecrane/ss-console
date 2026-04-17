@@ -15,7 +15,6 @@
 
 import {
   DEFAULTS,
-  VERTICALS,
   type JobMonitorConfig,
   type NewBusinessConfig,
   type PipelineId,
@@ -24,7 +23,6 @@ import {
   type SocialListeningConfig,
   type SodaCity,
   type SodaSource,
-  type Vertical,
 } from './types.js'
 
 export type ValidationResult<T> = { value: T; errors: string[] }
@@ -41,17 +39,17 @@ function isObject(x: unknown): x is Record<string, unknown> {
   return typeof x === 'object' && x !== null && !Array.isArray(x)
 }
 
-function validateVerticals(raw: unknown, errors: string[]): Vertical[] {
+function validateVerticals(raw: unknown, errors: string[]): string[] {
   if (!Array.isArray(raw)) {
     if (raw !== undefined) errors.push('target_verticals must be an array')
     return [...DEFAULTS.new_business.target_verticals]
   }
-  const out: Vertical[] = []
+  const out: string[] = []
   for (const v of raw) {
-    if (typeof v === 'string' && (VERTICALS as readonly string[]).includes(v)) {
-      out.push(v as Vertical)
+    if (typeof v === 'string' && v.trim().length > 0) {
+      out.push(v.trim())
     } else {
-      errors.push(`target_verticals contains invalid value: ${JSON.stringify(v)}`)
+      errors.push(`target_verticals contains invalid entry: ${JSON.stringify(v)}`)
     }
   }
   return out.length > 0 ? out : [...DEFAULTS.new_business.target_verticals]

@@ -55,21 +55,21 @@ export interface SodaSource {
 }
 
 export interface NewBusinessConfig {
-  target_verticals: Vertical[]
+  target_verticals: string[]
   revenue_range: RevenueRange
   geos: string[]
   soda_sources: SodaSource[]
 }
 
 export interface JobMonitorConfig {
-  target_verticals: Vertical[]
+  target_verticals: string[]
   revenue_range: RevenueRange
   geos: string[]
   search_queries: string[]
 }
 
 export interface ReviewMiningConfig {
-  target_verticals: Vertical[]
+  target_verticals: string[]
   revenue_range: RevenueRange
   geos: string[]
   discovery_queries: string[]
@@ -78,7 +78,7 @@ export interface ReviewMiningConfig {
 }
 
 export interface SocialListeningConfig {
-  target_verticals: Vertical[]
+  target_verticals: string[]
   revenue_range: RevenueRange
   geos: string[]
   search_queries: string[]
@@ -99,7 +99,7 @@ export const DEFAULT_REVENUE_RANGE: RevenueRange = {
   max_usd: 10_000_000,
 }
 
-export const DEFAULT_VERTICALS: Vertical[] = [
+export const DEFAULT_VERTICALS: string[] = [
   'home_services',
   'professional_services',
   'contractor_trades',
