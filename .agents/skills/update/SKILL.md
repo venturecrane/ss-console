@@ -1,6 +1,11 @@
 ---
 name: update
 description: Update Session Context
+version: 1.0.0
+scope: enterprise
+owner: captain
+status: stable
+backend_only: true
 ---
 
 # /update - Update Session Context

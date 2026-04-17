@@ -1,9 +1,15 @@
 ---
 name: sprint
 description: Sequential sprint execution of GitHub issues on separate branches
+version: 1.0.0
+scope: enterprise
+owner: captain
+status: stable
 ---
 
-# Sprint
+# /sprint - Sequential sprint execution
+
+> **Invocation:** As your first action, call `crane_skill_invoked(skill_name: "sprint")`. This is non-blocking — if the call fails, log the warning and continue. Usage data drives `/skill-audit`.
 
 Takes a set of pre-selected GitHub issue numbers, builds an optimal wave-based execution plan, and implements them sequentially on separate branches. The prior step (human or planning agent) selects which issues go into the sprint. This skill handles execution.
 

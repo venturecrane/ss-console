@@ -30,3 +30,6 @@ coverage/
 
 # Performance
 .lighthouseci/
+
+# Ephemeral agent worktrees (created by EnterWorktree tool)
+.claude/worktrees/

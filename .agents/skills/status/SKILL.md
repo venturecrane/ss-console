@@ -1,6 +1,11 @@
 ---
 name: status
 description: Show Session Status
+version: 1.0.0
+scope: enterprise
+owner: captain
+status: stable
+backend_only: true
 ---
 
 # /status - Show Session Status

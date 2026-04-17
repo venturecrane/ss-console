@@ -1,9 +1,15 @@
 ---
 name: critique
 description: Plan Critique & Auto-Revision
+version: 1.0.0
+scope: enterprise
+owner: captain
+status: stable
 ---
 
 # /critique - Plan Critique & Auto-Revision
+
+> **Invocation:** As your first action, call `crane_skill_invoked(skill_name: "critique")`. This is non-blocking — if the call fails, log the warning and continue. Usage data drives `/skill-audit`.
 
 This command spawns critic subagents to challenge the current plan or approach in conversation, then auto-revises based on the critique.
 

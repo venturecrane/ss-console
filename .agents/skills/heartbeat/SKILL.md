@@ -1,6 +1,11 @@
 ---
 name: heartbeat
 description: Keep Session Alive
+version: 1.0.0
+scope: enterprise
+owner: captain
+status: stable
+backend_only: true
 ---
 
 # /heartbeat - Keep Session Alive

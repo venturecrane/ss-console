@@ -1,9 +1,15 @@
 ---
 name: context-refresh
 description: Enterprise Context Refresh
+version: 1.0.0
+scope: enterprise
+owner: captain
+status: stable
 ---
 
 # /context-refresh - Enterprise Context Refresh
+
+> **Invocation:** As your first action, call `crane_skill_invoked(skill_name: "context-refresh")`. This is non-blocking — if the call fails, log the warning and continue. Usage data drives `/skill-audit`.
 
 Audit and update all enterprise context: D1 docs, VCMS executive summaries, and venture metadata. Produces a refresh report and records cadence completion.
 

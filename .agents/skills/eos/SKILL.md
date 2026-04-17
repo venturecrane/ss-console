@@ -1,9 +1,15 @@
 ---
 name: eos
 description: End of Session Handoff
+version: 1.0.0
+scope: enterprise
+owner: captain
+status: stable
 ---
 
 # /eos - End of Session Handoff
+
+> **Invocation:** As your first action, call `crane_skill_invoked(skill_name: "eos")`. This is non-blocking — if the call fails, log the warning and continue. Usage data drives `/skill-audit`.
 
 Auto-generate handoff from session context. The agent summarizes - never ask the user.
 

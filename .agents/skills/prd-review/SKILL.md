@@ -1,9 +1,15 @@
 ---
 name: prd-review
 description: Multi-Agent PRD Review
+version: 1.0.0
+scope: enterprise
+owner: captain
+status: stable
 ---
 
 # /prd-review - Multi-Agent PRD Review
+
+> **Invocation:** As your first action, call `crane_skill_invoked(skill_name: "prd-review")`. This is non-blocking — if the call fails, log the warning and continue. Usage data drives `/skill-audit`.
 
 This command orchestrates a 6-agent PRD review process with configurable rounds. It reads existing source documents, runs structured critique rounds with parallel agents, and synthesizes the output into a production-ready PRD.
 

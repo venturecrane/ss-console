@@ -1,9 +1,15 @@
 ---
 name: design-brief
 description: Multi-Agent Design Brief Generator
+version: 1.0.0
+scope: enterprise
+owner: agent-team
+status: stable
 ---
 
 # /design-brief - Multi-Agent Design Brief Generator
+
+> **Invocation:** As your first action, call `crane_skill_invoked(skill_name: "design-brief")`. This is non-blocking — if the call fails, log the warning and continue. Usage data drives `/skill-audit`.
 
 This command orchestrates a 4-agent design brief process with configurable rounds. It reads the PRD and existing design artifacts, runs structured design rounds with parallel agents, and synthesizes the output into a production-ready design brief.
 
@@ -375,10 +381,10 @@ After synthesis, extract the core design reference from the brief into a standar
 1. Read the synthesized `docs/design/brief.md`
 2. Extract: color tokens (with hex values), typography (font stacks, scale), spacing system, surface hierarchy, component inventory, and accessibility notes
 3. Write to `docs/design/design-spec.md` in the **current repo** (wherever the skill runs)
-4. If the current repo is `crane-console`, also write to `docs/design/ventures/{venture_code}/design-spec.md`
+4. If the current repo is `crane-console`, also write to `docs/ventures/{venture_code}/design-spec.md`
 5. The design spec format follows the template at `templates/venture/docs/design/design-spec.md` - structured for agent consumption with token tables, not prose
 
-Tell the user: **"Design spec generated at `docs/design/design-spec.md`. Upload to crane-context with: `infisical run --path /vc -- bash scripts/upload-design-specs.sh`"**
+Tell the user: **"Design spec generated at `docs/design/design-spec.md`. Design specs sync to D1 automatically via GitHub Action when merged to main."**
 
 Do not attempt the API upload from within the skill (no credentials available in skill context).
 
