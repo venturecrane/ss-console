@@ -10,13 +10,12 @@ import type { MilestoneStatus } from '../../../lib/db/milestones'
 import { listInvoices } from '../../../lib/db/invoices'
 import { listContext } from '../../../lib/db/context'
 import { listDocuments } from '../../../lib/storage/r2'
+import { env } from 'cloudflare:workers'
 
 const session = Astro.locals.session!
 if (session.role !== 'admin') return Astro.redirect('/login')
 
 const engagementId = Astro.params.id!
-const env = Astro.locals.runtime.env
-
 const engagement = await getEngagement(env.DB, session.orgId, engagementId)
 if (!engagement) return Astro.redirect('/admin/entities?error=not_found')
 

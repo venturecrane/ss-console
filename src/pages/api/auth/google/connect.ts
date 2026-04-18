@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro'
 import { createOAuthState } from '../../../../lib/db/oauth-states.js'
 import { requireAdminBaseUrl } from '../../../../lib/config/app-url.js'
+import { env } from 'cloudflare:workers'
 
 /**
  * GET /api/auth/google/connect
@@ -29,8 +30,6 @@ export const GET: APIRoute = async ({ locals, redirect }) => {
   if (!session) {
     return redirect('/auth/login?error=unauthorized', 302)
   }
-
-  const env = locals.runtime.env
 
   const clientId = env.GOOGLE_CLIENT_ID
   if (!clientId) {

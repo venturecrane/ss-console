@@ -1,38 +1,40 @@
-# SMD Services — Cloudflare Pages project configuration
-# Single Astro app serving marketing site, admin, and client portal.
-# See PRD Section 10: Architecture & Technical Design.
+# SMD Services — Cloudflare Workers + Static Assets
+# Single Worker serving marketing (smd.services), admin (admin.smd.services),
+# and portal (portal.smd.services) via Astro SSR middleware.
 #
-# Custom domains (configured in Cloudflare Pages dashboard):
+# Custom domains (added in the Cloudflare dashboard → Workers & Pages → ss-web
+# → Domains → Custom Domain):
 #   smd.services         — marketing site (public pages)
 #   admin.smd.services   — admin console
 #   portal.smd.services  — client portal
 #
-# All domains are served by this single Pages project.
-# Routing is handled by Astro middleware, not separate deployments.
+# All three hostnames hit this single Worker. Subdomain routing happens in
+# src/middleware.ts via hostname inspection.
 
 name = "ss-web"
+main = "@astrojs/cloudflare/entrypoints/server"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = "dist"
+
+# ---------- Static assets ----------
+# The @astrojs/cloudflare v13 adapter emits the Astro client build to dist/
+# and a Worker entry resolved from the `main` module specifier above. The
+# Worker must run first on every request for subdomain rewriting + session
+# middleware to execute — otherwise the asset binding would short-circuit
+# `/` before the Astro SSR handler sees it.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+run_worker_first = true
 
 # ---------- Public env vars ----------
-# Canonical origins for outbound links and webhook callbacks.
-# All email links and webhook callbacks are built from these env vars — never
-# from the inbound request host (see src/lib/config/app-url.ts and issue #173).
-#   APP_BASE_URL    — marketing origin (smd.services). Used by public-facing
-#                     links, SignWell webhooks, and as a PORTAL_BASE_URL fallback.
-#   ADMIN_BASE_URL  — admin console origin (admin.smd.services). Required for
-#                     the Google OAuth redirect URI and outbound admin links.
-#                     No fallback — missing value throws.
-#   PORTAL_BASE_URL — client portal origin (portal.smd.services). Falls back
-#                     to APP_BASE_URL when unset.
-# PUBLIC_TURNSTILE_SITE_KEY is the Cloudflare Turnstile site key embedded
-# in the /book Turnstile widget; the paired secret is in TURNSTILE_SECRET_KEY.
-# Both are set via the Cloudflare Pages dashboard (not pinned here) — an
-# empty-string default would put prod in silent-bypass state (#12). If
-# either is missing in a non-localhost environment, resolveTurnstileConfig
-# throws and the booking/intake endpoints 500 rather than accepting
-# unverified submissions.
+# Canonical origins for outbound links and webhook callbacks. Built from
+# these env vars — never from the inbound request host (see
+# src/lib/config/app-url.ts and issue #173).
+#
+# Unlike Pages, Workers treats [vars] and secrets as independent namespaces.
+# `wrangler deploy` does NOT touch secrets set via `wrangler secret put`, so
+# the Pages-era sync-pages-secrets.sh workaround is no longer needed.
 [vars]
 APP_BASE_URL = "https://smd.services"
 ADMIN_BASE_URL = "https://admin.smd.services"
@@ -40,8 +42,7 @@ PORTAL_BASE_URL = "https://portal.smd.services"
 MEETING_URL = "https://zoom.us/j/4284801619"
 
 # Generator worker endpoints — invoked by /admin/generators "Run now" button.
-# Bearer-authed via LEAD_INGEST_API_KEY (secret). Must be pinned here (not
-# the API) because `wrangler pages deploy` overwrites env_vars on each run.
+# Bearer-authed via LEAD_INGEST_API_KEY (secret). Set via `wrangler secret put`.
 # social_listening worker is not deployed yet — Run-now stays disabled.
 NEW_BUSINESS_WORKER_URL = "https://ss-new-business.automation-ab6.workers.dev"
 JOB_MONITOR_WORKER_URL = "https://ss-job-monitor.automation-ab6.workers.dev"
@@ -75,19 +76,31 @@ id = "4570dcc1e154476f889bc9fcfc28b2b9"
 # ---------- Workers KV (booking rate-limit buckets) ----------
 # Used by /api/booking/reserve for IP-based rate limiting only.
 # No slot cache in v1 (see plan §No availability cache in v1).
-# Create with: npx wrangler kv:namespace create BOOKING_CACHE
 [[kv_namespaces]]
 binding = "BOOKING_CACHE"
 id = "daf6a3220f8f42f28f3da7e82f663088"
 
-# ---------- Secrets (set via wrangler secret put) ----------
-# All secrets are set per-project. Workers have their own copies.
+# ---------- Observability ----------
+[observability]
+enabled = true
+
+# ---------- Staging environment ----------
+# Used for pre-cutover validation on a workers.dev hostname. Deploy with:
+#   wrangler deploy --env staging
+# Reuses prod bindings (same D1/R2/KV) — flip to separate resources when we
+# need data isolation for staging.
+[env.staging]
+name = "ss-web-staging"
+
+# ---------- Secrets (set via `wrangler secret put` or `wrangler secret bulk`) ----------
+# All secrets are set per-Worker. Persist across `wrangler deploy` natively —
+# no sync script needed.
 #
 # RESEND_API_KEY          — Resend transactional email
 # ANTHROPIC_API_KEY       — Claude API (outreach gen, website analysis, dossier)
 # GOOGLE_PLACES_API_KEY   — Google Places Text Search (enrichment)
 # OUTSCRAPER_API_KEY      — Outscraper business profile + email enrichment
-# SERPAPI_API_KEY          — SerpAPI Google Search (news/press enrichment)
+# SERPAPI_API_KEY         — SerpAPI Google Search (news/press enrichment)
 # LEAD_INGEST_API_KEY     — Bearer token for pipeline Worker ingestion
 # SIGNWELL_API_KEY        — SignWell e-signature
 # SIGNWELL_WEBHOOK_SECRET — SignWell webhook verification
@@ -101,5 +114,7 @@ id = "daf6a3220f8f42f28f3da7e82f663088"
 # BOOKING_ENCRYPTION_KEY   — 32-byte base64 random; AES-GCM encryption of refresh tokens
 # TURNSTILE_SECRET_KEY     — Cloudflare Turnstile secret (paired with PUBLIC_TURNSTILE_SITE_KEY)
 #
-# Set with: npx wrangler secret put SECRET_NAME
-# In dev: add to .dev.vars (gitignored)
+# Bulk-load from Infisical:
+#   infisical export --env=prod --path=/ss --format=dotenv \
+#     | grep -vE '^(APP_|ADMIN_|PORTAL_|MEETING_|NEW_BUSINESS_|JOB_MONITOR_|REVIEW_MINING_|PUBLIC_)' \
+#     | npx wrangler secret bulk

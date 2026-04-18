@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro'
 import { getTimeEntry, updateTimeEntry, deleteTimeEntry } from '../../../../lib/db/time-entries'
 import { getEngagement } from '../../../../lib/db/engagements'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/time-entries/:id
@@ -36,8 +37,6 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   try {
     const entry = await getTimeEntry(env.DB, session.orgId, entryId)

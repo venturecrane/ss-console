@@ -9,6 +9,7 @@ import {
 } from '../../../../lib/stripe/client'
 import { sendEmail } from '../../../../lib/email/resend'
 import { invoiceSentEmailHtml } from '../../../../lib/email/templates'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/invoices/:id
@@ -36,8 +37,6 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   try {
     const existing = await getInvoice(env.DB, session.orgId, invoiceId)

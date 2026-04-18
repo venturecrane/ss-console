@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro'
 import { getAssessment, updateAssessment } from '../../../../../lib/db/assessments'
+import { env } from 'cloudflare:workers'
 
 /**
  * PUT /api/admin/assessments/:id/live-notes
@@ -19,8 +20,6 @@ export const PUT: APIRoute = async ({ request, locals, params }) => {
   if (!assessmentId) {
     return jsonResponse(400, { error: 'Assessment ID required' })
   }
-
-  const env = locals.runtime.env
 
   try {
     const body = (await request.json()) as Record<string, unknown>

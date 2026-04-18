@@ -25,7 +25,7 @@
  * framework-agnostic.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
   createTestD1,
   runMigrations,
@@ -34,6 +34,10 @@ import {
 import { POST } from '../../src/pages/api/admin/resend-invitation'
 import { resolve } from 'path'
 import type { D1Database } from '@cloudflare/workers-types'
+// Route handlers import `env` from `cloudflare:workers` (adapter v13 pattern).
+// The vitest alias in vitest.config.ts resolves that specifier to a mutable
+// stub object — tests populate it per-case via Object.assign(testEnv, {...}).
+import { env as testEnv } from 'cloudflare:workers'
 
 const migrationsDir = resolve(process.cwd(), 'migrations')
 
@@ -44,7 +48,6 @@ interface TestEnv {
 }
 
 function buildContext(opts: {
-  env: TestEnv
   session: { userId: string; orgId: string; role: string; email: string; expiresAt: string } | null
   body: unknown
 }) {
@@ -57,12 +60,6 @@ function buildContext(opts: {
     request,
     locals: {
       session: opts.session,
-      runtime: {
-        env: opts.env,
-        // The handler does not use ctx or cf — leaving as no-op stubs.
-        ctx: {} as never,
-        cf: {} as never,
-      },
     },
   }
 }
@@ -107,6 +104,11 @@ describe('POST /api/admin/resend-invitation — cross-org regression', () => {
       // RESEND_API_KEY left undefined → sendEmail returns dev-mode success
       // without making any network calls. See src/lib/email/resend.ts:46-52.
     }
+    Object.assign(testEnv, env)
+  })
+
+  afterEach(() => {
+    for (const k of Object.keys(testEnv)) delete (testEnv as unknown as Record<string, unknown>)[k]
   })
 
   /**
@@ -114,7 +116,6 @@ describe('POST /api/admin/resend-invitation — cross-org regression', () => {
    */
   async function callAsAdminFromOrg(orgId: string, body: unknown): Promise<Response> {
     const context = buildContext({
-      env,
       session: {
         userId: 'admin-in-a',
         orgId,
@@ -198,7 +199,6 @@ describe('POST /api/admin/resend-invitation — cross-org regression', () => {
 
   it('returns 401 when no session is attached', async () => {
     const context = buildContext({
-      env,
       session: null,
       body: { userId: 'user-in-a' },
     })
@@ -208,7 +208,6 @@ describe('POST /api/admin/resend-invitation — cross-org regression', () => {
 
   it('returns 401 when session role is not admin', async () => {
     const context = buildContext({
-      env,
       session: {
         userId: 'user-in-a',
         orgId: 'org-a',

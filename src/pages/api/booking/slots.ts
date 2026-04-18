@@ -8,6 +8,7 @@ import {
 } from '../../../lib/booking/availability'
 import type { SlotRange } from '../../../lib/booking/availability'
 import { getIntegration, getGoogleAccessToken } from '../../../lib/db/integrations'
+import { env } from 'cloudflare:workers'
 
 const FALLBACK_EMAIL = 'scott@smd.services'
 
@@ -27,9 +28,7 @@ const FALLBACK_EMAIL = 'scott@smd.services'
  * If the Google Calendar integration is not connected, returns 503 with a
  * fallback payload directing users to email directly.
  */
-export const GET: APIRoute = async ({ url, locals }) => {
-  const env = locals.runtime.env
-
+export const GET: APIRoute = async ({ url }) => {
   const viewerTz = url.searchParams.get('tz') || BOOKING_CONFIG.consultant.timezone
 
   try {

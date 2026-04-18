@@ -21,6 +21,7 @@ import {
   bookingAdminNotificationEmailHtml,
 } from '../../../lib/email/templates'
 import { requireAppBaseUrl, buildAdminUrl } from '../../../lib/config/app-url'
+import { env } from 'cloudflare:workers'
 
 const FALLBACK_EMAIL = 'scott@smd.services'
 const NOTIFY_EMAIL = 'team@smd.services'
@@ -36,9 +37,7 @@ const NOTIFY_EMAIL = 'team@smd.services'
  *
  * Google event creation failure = booking failure. No silent fallback.
  */
-export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env
-
+export const POST: APIRoute = async ({ request }) => {
   // -----------------------------------------------------------------------
   // Parse body
   // -----------------------------------------------------------------------

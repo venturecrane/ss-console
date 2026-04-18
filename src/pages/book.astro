@@ -7,11 +7,12 @@ import Footer from '../components/Footer.astro'
 import SlotPicker from '../components/booking/SlotPicker.astro'
 import { ENTITY_VERTICALS } from '../lib/db/entities'
 import { resolveTurnstileConfig } from '../lib/booking/turnstile'
+import { env } from 'cloudflare:workers'
 
 // Fail-fast on Turnstile misconfiguration. In non-localhost environments,
 // both keys must be set; otherwise this throws and the page 500s cleanly
 // rather than silently rendering a form that bypasses bot verification (#12).
-const turnstileSiteKey = resolveTurnstileConfig(Astro.locals.runtime?.env ?? {}).siteKey
+const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
 ---
 
 <Base

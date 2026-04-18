@@ -8,6 +8,7 @@ import SkipToMain from '../../components/SkipToMain.astro'
 import ConsultantBlock from '../../components/portal/ConsultantBlock.astro'
 import TimelineEntry from '../../components/portal/TimelineEntry.astro'
 import ActionCard from '../../components/portal/ActionCard.astro'
+import { env } from 'cloudflare:workers'
 
 /**
  * Client portal home — C-hybrid: action-centric above the fold with an inline
@@ -20,8 +21,6 @@ import ActionCard from '../../components/portal/ActionCard.astro'
  */
 
 const session = Astro.locals.session!
-const env = Astro.locals.runtime.env
-
 const portalData = await getPortalClient(env.DB, session.userId, session.orgId)
 if (!portalData) {
   return Astro.redirect('/auth/portal-login?error=no_account')

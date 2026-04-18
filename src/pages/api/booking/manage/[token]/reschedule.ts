@@ -17,6 +17,7 @@ import { sendBookingReschedule } from '../../../../../lib/email/booking-emails'
 import { sendEmail } from '../../../../../lib/email/resend'
 import { requireAppBaseUrl } from '../../../../../lib/config/app-url'
 import { formatInTimeZone } from 'date-fns-tz'
+import { env } from 'cloudflare:workers'
 
 const NOTIFY_EMAIL = 'team@smd.services'
 
@@ -33,8 +34,7 @@ const NOTIFY_EMAIL = 'team@smd.services'
  *   4. Update schedule + assessment in DB
  *   5. Release hold, send emails
  */
-export const POST: APIRoute = async ({ params, request, locals }) => {
-  const env = locals.runtime.env
+export const POST: APIRoute = async ({ params, request }) => {
   const rawToken = params.token
 
   if (!rawToken || typeof rawToken !== 'string') {

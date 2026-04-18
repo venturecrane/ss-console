@@ -10,6 +10,7 @@ import PortalTabs from '../../../components/portal/PortalTabs.astro'
 import PortalListItem from '../../../components/portal/PortalListItem.astro'
 import SkipToMain from '../../../components/SkipToMain.astro'
 import { formatShortDate } from '../../../lib/portal/formatters'
+import { env } from 'cloudflare:workers'
 
 /**
  * Client portal — document library page.
@@ -20,8 +21,6 @@ import { formatShortDate } from '../../../lib/portal/formatters'
  */
 
 const session = Astro.locals.session!
-const env = Astro.locals.runtime.env
-
 const portalData = await getPortalClient(env.DB, session.userId, session.orgId)
 const clientId = portalData?.client.id
 const clientName = portalData?.client.name ?? ''

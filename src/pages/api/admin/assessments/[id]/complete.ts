@@ -8,6 +8,7 @@ import { getEntity, transitionStage } from '../../../../../lib/db/entities'
 import { appendContext } from '../../../../../lib/db/context'
 import { createQuote, type LineItem } from '../../../../../lib/db/quotes'
 import { uploadTranscript } from '../../../../../lib/storage/r2'
+import { env } from 'cloudflare:workers'
 
 /** Default hourly rate at launch (per Decision Stack #16, evolved). */
 const DEFAULT_RATE = 175
@@ -36,8 +37,6 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   try {
     const assessment = await getAssessment(env.DB, session.orgId, assessmentId)

@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro'
 import { getIntegration, deleteIntegration } from '../../../lib/db/integrations'
+import { env } from 'cloudflare:workers'
 
 /**
  * Admin settings page: Google Calendar connection.
@@ -10,8 +11,6 @@ import { getIntegration, deleteIntegration } from '../../../lib/db/integrations'
  */
 
 const session = Astro.locals.session!
-const env = Astro.locals.runtime.env
-
 // Handle disconnect (POST)
 if (Astro.request.method === 'POST') {
   const formData = await Astro.request.formData()

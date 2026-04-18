@@ -12,6 +12,7 @@ import type { ScheduleRow, DeliverableRow } from '../../../lib/db/quotes'
 import { getSOWStateForQuote } from '../../../lib/sow/service'
 import { resolveProposalState } from '../../../lib/portal/states'
 import { formatShortDate } from '../../../lib/portal/formatters'
+import { env } from 'cloudflare:workers'
 
 /**
  * Portal quote detail — C-hybrid proposal landing.
@@ -27,7 +28,6 @@ import { formatShortDate } from '../../../lib/portal/formatters'
  */
 
 const session = Astro.locals.session!
-const env = Astro.locals.runtime.env
 const { id: quoteId } = Astro.params
 
 if (!quoteId) {

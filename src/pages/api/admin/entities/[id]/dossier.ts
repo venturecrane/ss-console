@@ -7,6 +7,7 @@ import { synthesizeReviews } from '../../../../../lib/enrichment/review-synthesi
 import { lookupLinkedIn } from '../../../../../lib/enrichment/linkedin'
 import { generateDossier } from '../../../../../lib/enrichment/dossier'
 import { generateOutreachDraft } from '../../../../../lib/claude/outreach'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/entities/[id]/dossier
@@ -27,7 +28,6 @@ export const POST: APIRoute = async ({ params, locals, redirect }) => {
   if (!entityId) return redirect('/admin/entities?error=missing', 302)
 
   try {
-    const env = locals.runtime.env
     const entity = await getEntity(env.DB, session.orgId, entityId)
     if (!entity) return redirect('/admin/entities?error=not_found', 302)
 

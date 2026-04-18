@@ -12,6 +12,7 @@ import { listAssessments } from '../../lib/db/assessments'
 import { listEntities } from '../../lib/db/entities'
 import { listInvoices } from '../../lib/db/invoices'
 import { getIntegration } from '../../lib/db/integrations'
+import { env } from 'cloudflare:workers'
 
 /**
  * Operator dashboard — single pane of glass.
@@ -20,7 +21,6 @@ import { getIntegration } from '../../lib/db/integrations'
  */
 
 const session = Astro.locals.session!
-const env = Astro.locals.runtime.env
 const now = new Date()
 const todayStr = now.toISOString().split('T')[0]
 

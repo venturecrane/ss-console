@@ -4,6 +4,7 @@ import { getFollowUp, completeFollowUp, skipFollowUp } from '../../../../lib/db/
 import { getFollowUpTemplate } from '../../../../lib/email/follow-up-templates'
 import type { FollowUpEmailData } from '../../../../lib/email/follow-up-templates'
 import { sendEmail } from '../../../../lib/email/resend'
+import { env } from 'cloudflare:workers'
 
 interface EntityRow {
   id: string
@@ -43,8 +44,6 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   try {
     const followUp = await getFollowUp(env.DB, session.orgId, followUpId)

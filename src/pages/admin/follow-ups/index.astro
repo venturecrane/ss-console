@@ -2,6 +2,7 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro'
 import { listFollowUps, FOLLOW_UP_TYPES } from '../../../lib/db/follow-ups'
 import type { FollowUp, FollowUpType } from '../../../lib/db/follow-ups'
+import { env } from 'cloudflare:workers'
 
 /**
  * Admin follow-up dashboard — view and manage follow-up cadences.
@@ -11,8 +12,6 @@ import type { FollowUp, FollowUpType } from '../../../lib/db/follow-ups'
  */
 
 const session = Astro.locals.session!
-const env = Astro.locals.runtime.env
-
 // Get filter from URL params
 const filterType = Astro.url.searchParams.get('type') ?? ''
 const activeTab = Astro.url.searchParams.get('tab') ?? 'upcoming'

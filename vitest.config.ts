@@ -1,6 +1,16 @@
 import { defineConfig } from 'vitest/config'
+import { resolve } from 'node:path'
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      // `cloudflare:workers` is a runtime-only module; Node can't resolve it.
+      // Tests that import route handlers (which now pull `env` from it via
+      // the adapter v13 pattern) get a mutable stub they can populate with
+      // mock bindings. See tests/_stubs/cloudflare-workers.ts.
+      'cloudflare:workers': resolve(__dirname, 'tests/_stubs/cloudflare-workers.ts'),
+    },
+  },
   test: {
     // Exclude git worktrees from test discovery. `.claude/worktrees/*` are
     // checkouts of other feature branches — their test expectations drift

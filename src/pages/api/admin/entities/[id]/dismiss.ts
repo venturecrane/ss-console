@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro'
 import { transitionStage } from '../../../../../lib/db/entities'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/entities/[id]/dismiss
@@ -28,7 +29,6 @@ export const POST: APIRoute = async ({ params, request, locals, redirect }) => {
         ? reason.trim()
         : 'Dismissed from inbox.'
 
-    const env = locals.runtime.env
     await transitionStage(env.DB, session.orgId, entityId, 'lost', reasonStr)
 
     return redirect('/admin/entities?dismissed=1', 302)

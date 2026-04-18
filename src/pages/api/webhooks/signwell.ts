@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro'
 import type { SignWellWebhookPayload } from '../../../lib/signwell/types'
 import { handleDocumentCompleted } from '../../../lib/webhooks/signwell-handler'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/webhooks/signwell
@@ -27,9 +28,7 @@ import { handleDocumentCompleted } from '../../../lib/webhooks/signwell-handler'
 /** Maximum age (in seconds) for a webhook timestamp to be considered fresh. */
 const MAX_WEBHOOK_AGE_SECONDS = 300
 
-export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env
-
+export const POST: APIRoute = async ({ request }) => {
   const webhookSecret = env.SIGNWELL_WEBHOOK_SECRET
   if (!webhookSecret) {
     console.error('[webhook/signwell] SIGNWELL_WEBHOOK_SECRET not configured')

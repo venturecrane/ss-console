@@ -7,6 +7,7 @@ import {
 import type { AssessmentStatus } from '../../../../lib/db/assessments'
 import { uploadTranscript, getTranscript } from '../../../../lib/storage/r2'
 import { extractAssessment } from '../../../../lib/claude/extract'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/assessments/:id
@@ -33,8 +34,6 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   try {
     const existing = await getAssessment(env.DB, session.orgId, assessmentId)

@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro'
 import { getEngagement } from '../../../../../../lib/db/engagements'
 import { streamDocument } from '../../../../../../lib/storage/r2'
+import { env } from 'cloudflare:workers'
 
 export const GET: APIRoute = async ({ locals, params }) => {
   const session = locals.session
@@ -18,7 +19,6 @@ export const GET: APIRoute = async ({ locals, params }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-  const env = locals.runtime.env
   try {
     const engagement = await getEngagement(env.DB, session.orgId, engagementId)
     if (!engagement) {

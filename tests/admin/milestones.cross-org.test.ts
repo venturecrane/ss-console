@@ -34,7 +34,7 @@
  *     and stub out the FK targets (entities, quotes) as bare ID inserts.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
   createTestD1,
   runMigrations,
@@ -43,6 +43,10 @@ import {
 import { POST } from '../../src/pages/api/admin/engagements/[id]/milestones'
 import { resolve } from 'path'
 import type { D1Database } from '@cloudflare/workers-types'
+// Route handlers import `env` from `cloudflare:workers` (adapter v13 pattern).
+// The vitest alias in vitest.config.ts resolves that specifier to a mutable
+// stub object — tests populate it per-case via Object.assign(testEnv, {...}).
+import { env as testEnv } from 'cloudflare:workers'
 
 const migrationsDir = resolve(process.cwd(), 'migrations')
 
@@ -52,7 +56,6 @@ interface TestEnv {
 }
 
 function buildContext(opts: {
-  env: TestEnv
   session: { userId: string; orgId: string; role: string; email: string; expiresAt: string } | null
   engagementId: string
   body: Record<string, string>
@@ -75,11 +78,6 @@ function buildContext(opts: {
     params: { id: opts.engagementId },
     locals: {
       session: opts.session,
-      runtime: {
-        env: opts.env,
-        ctx: {} as never,
-        cf: {} as never,
-      },
     },
     redirect: (url: string, status: number) =>
       new Response(null, { status, headers: { Location: url } }),
@@ -188,6 +186,11 @@ describe('POST /api/admin/engagements/[id]/milestones — cross-org regression (
       .run()
 
     env = { DB: db }
+    Object.assign(testEnv, env)
+  })
+
+  afterEach(() => {
+    for (const k of Object.keys(testEnv)) delete (testEnv as unknown as Record<string, unknown>)[k]
   })
 
   /**
@@ -198,7 +201,6 @@ describe('POST /api/admin/engagements/[id]/milestones — cross-org regression (
     body: Record<string, string>
   ): Promise<Response> {
     const ctx = buildContext({
-      env,
       session: {
         userId: ADMIN_A,
         orgId: ORG_A,
@@ -314,7 +316,6 @@ describe('POST /api/admin/engagements/[id]/milestones — cross-org regression (
 
   it('returns 401 when no session is attached', async () => {
     const ctx = buildContext({
-      env,
       session: null,
       engagementId: ENGAGEMENT_A,
       body: { _method: 'DELETE', milestone_id: MILESTONE_A },

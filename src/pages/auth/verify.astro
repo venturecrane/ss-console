@@ -3,6 +3,7 @@ import '../../styles/global.css'
 import { verifyMagicLink } from '../../lib/auth/magic-link'
 import { createSession, buildSessionCookie } from '../../lib/auth/session'
 import { getPortalBaseUrl } from '../../lib/config/app-url'
+import { env } from 'cloudflare:workers'
 
 /**
  * Magic link verification page — GET /auth/verify?token=...
@@ -21,8 +22,6 @@ const token = Astro.url.searchParams.get('token')
 if (!token) {
   return Astro.redirect('/auth/portal-login?error=invalid')
 }
-
-const env = Astro.locals.runtime.env
 
 // Verify the magic link token
 const email = await verifyMagicLink(env.DB, token)

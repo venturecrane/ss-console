@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro'
 import { createInvoice } from '../../../../lib/db/invoices'
 import type { InvoiceType } from '../../../../lib/db/invoices'
+import { env } from 'cloudflare:workers'
 
 const VALID_TYPES: InvoiceType[] = ['deposit', 'completion', 'milestone', 'assessment', 'retainer']
 
@@ -19,8 +20,6 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   try {
     const formData = await request.formData()

@@ -9,6 +9,7 @@ import {
   deleteMilestone,
 } from '../../../../../lib/db/milestones'
 import type { MilestoneStatus } from '../../../../../lib/db/milestones'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/engagements/:id/milestones
@@ -50,8 +51,6 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   try {
     const engagement = await getEngagement(env.DB, session.orgId, engagementId)

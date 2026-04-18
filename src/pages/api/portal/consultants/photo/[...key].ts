@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro'
+import { env } from 'cloudflare:workers'
 
 /**
  * GET /api/portal/consultants/photo/:key
@@ -55,7 +56,6 @@ export const GET: APIRoute = async ({ locals, params }) => {
     })
   }
 
-  const env = locals.runtime.env
   const object = await env.CONSULTANT_PHOTOS.get(key)
   if (!object) {
     return new Response(JSON.stringify({ error: 'Not found' }), {

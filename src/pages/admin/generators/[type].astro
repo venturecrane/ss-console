@@ -15,6 +15,7 @@ import {
   type ReviewMiningConfig,
   type SocialListeningConfig,
 } from '../../../lib/generators/types'
+import { env } from 'cloudflare:workers'
 
 /**
  * Generator detail — per-pipeline inspector + editor + Run-now.
@@ -33,7 +34,6 @@ import {
  */
 
 const session = Astro.locals.session!
-const env = Astro.locals.runtime.env
 const type = Astro.params.type as PipelineId
 
 if (!PIPELINE_IDS.includes(type)) {

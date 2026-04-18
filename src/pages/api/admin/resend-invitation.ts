@@ -3,6 +3,7 @@ import { createMagicLink } from '../../../lib/auth/magic-link'
 import { requirePortalBaseUrl } from '../../../lib/config/app-url'
 import { sendEmail } from '../../../lib/email/resend'
 import { buildMagicLinkUrl, portalInvitationEmailHtml } from '../../../lib/email/templates'
+import { env } from 'cloudflare:workers'
 
 interface UserRow {
   id: string
@@ -49,8 +50,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
         headers: { 'Content-Type': 'application/json' },
       })
     }
-
-    const env = locals.runtime.env
 
     // Look up the client user — scoped to the admin's org to prevent
     // cross-tenant access (issue #172).

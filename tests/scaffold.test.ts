@@ -26,14 +26,22 @@ describe('cloudflare SSR scaffolding', () => {
     expect(config).toContain('adapter: cloudflare')
   })
 
-  it('astro config enables platformProxy for local dev', () => {
+  it('astro config targets cloudflare workers (adapter v13)', () => {
     const config = readFileSync(resolve('astro.config.mjs'), 'utf-8')
-    expect(config).toContain('platformProxy')
-    expect(config).toContain('enabled: true')
+    // v13 dropped platformProxy/routes.extend; the adapter is Workers-only
+    // and the build output is driven by wrangler.toml + [assets] + main.
+    expect(config).not.toContain('platformProxy')
+    expect(config).not.toContain('routes.extend')
   })
 
-  it('wrangler.toml exists with D1, R2, and KV bindings', () => {
+  it('wrangler.toml exists with D1, R2, KV, and assets bindings (Workers mode)', () => {
     const wrangler = readFileSync(resolve('wrangler.toml'), 'utf-8')
+    // Workers mode: `main` entry + `[assets]` block. Pages-specific
+    // `pages_build_output_dir` must not be present.
+    expect(wrangler).toContain('main = "@astrojs/cloudflare/entrypoints/server"')
+    expect(wrangler).toContain('[assets]')
+    expect(wrangler).toContain('run_worker_first = true')
+    expect(wrangler).not.toContain('pages_build_output_dir')
     expect(wrangler).toContain('d1_databases')
     expect(wrangler).toContain('binding = "DB"')
     expect(wrangler).toContain('r2_buckets')
@@ -77,9 +85,13 @@ describe('cloudflare SSR scaffolding', () => {
     expect(index).toContain('export const prerender = false')
   })
 
-  it('deploy workflow targets ss-web project', () => {
+  it('deploy workflow uses wrangler deploy (Workers, not Pages)', () => {
     const deploy = readFileSync(resolve('.github/workflows/deploy.yml'), 'utf-8')
-    expect(deploy).toContain('--project-name=ss-web')
+    // Pages-era `pages deploy` / `--project-name=ss-web` should be gone.
+    expect(deploy).not.toContain('pages deploy')
+    expect(deploy).not.toContain('--project-name=ss-web')
+    // Workers deploy + dry-run gate should be present.
+    expect(deploy).toMatch(/command:\s*deploy\b/)
   })
 
   it('deploy workflow includes D1 migration step', () => {

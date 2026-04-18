@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro'
 import { appendContext, listContext, type ContextType } from '../../../../../lib/db/context'
 import { getEntity } from '../../../../../lib/db/entities'
+import { env } from 'cloudflare:workers'
 
 /**
  * GET /api/admin/entities/[id]/context
@@ -22,7 +23,6 @@ export const GET: APIRoute = async ({ params, locals }) => {
   }
 
   try {
-    const env = locals.runtime.env
     const entity = await getEntity(env.DB, session.orgId, entityId)
     if (!entity) {
       return jsonResponse(404, { error: 'Entity not found' })
@@ -59,7 +59,6 @@ export const POST: APIRoute = async ({ params, request, locals, redirect }) => {
       return redirect(`/admin/entities/${entityId}?error=empty_content`, 302)
     }
 
-    const env = locals.runtime.env
     await appendContext(env.DB, session.orgId, {
       entity_id: entityId,
       type,

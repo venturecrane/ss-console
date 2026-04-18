@@ -14,6 +14,7 @@ import { BOOKING_CONFIG } from '../../../../../lib/booking/config'
 import { sendBookingCancellation } from '../../../../../lib/email/booking-emails'
 import { sendEmail } from '../../../../../lib/email/resend'
 import { formatInTimeZone } from 'date-fns-tz'
+import { env } from 'cloudflare:workers'
 
 const NOTIFY_EMAIL = 'team@smd.services'
 
@@ -29,8 +30,7 @@ const NOTIFY_EMAIL = 'team@smd.services'
  *   3. Delete Google Calendar event (best effort)
  *   4. Send cancellation email to guest + admin notification
  */
-export const POST: APIRoute = async ({ params, request, locals }) => {
-  const env = locals.runtime.env
+export const POST: APIRoute = async ({ params, request }) => {
   const rawToken = params.token
 
   if (!rawToken || typeof rawToken !== 'string') {

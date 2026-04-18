@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro'
 import { getAssessment } from '../../../../../lib/db/assessments'
 import { getTranscript } from '../../../../../lib/storage/r2'
+import { env } from 'cloudflare:workers'
 
 /**
  * GET /api/admin/assessments/:id/transcript
@@ -25,8 +26,6 @@ export const GET: APIRoute = async ({ locals, params }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   const assessment = await getAssessment(env.DB, session.orgId, assessmentId)
   if (!assessment || !assessment.transcript_path) {

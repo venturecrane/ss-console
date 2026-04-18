@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro'
 import { createEngagement } from '../../../../lib/db/engagements'
 import { createMilestone } from '../../../../lib/db/milestones'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/engagements
@@ -47,7 +48,6 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
       return redirect(`/admin/entities?error=missing`, 302)
     }
 
-    const env = locals.runtime.env
     const startDate = formData.get('start_date')
     const estimatedEnd = formData.get('estimated_end')
     const scopeSummary = formData.get('scope_summary')

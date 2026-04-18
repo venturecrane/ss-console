@@ -5,6 +5,7 @@ import { rateLimitByIp } from '../../lib/booking/rate-limit'
 import { sendEmail } from '../../lib/email/resend'
 import { ORG_ID } from '../../lib/constants'
 import { buildAdminUrl } from '../../lib/config/app-url'
+import { env } from 'cloudflare:workers'
 
 const NOTIFY_EMAIL = 'team@smd.services'
 const RATE_LIMIT = 5
@@ -20,9 +21,7 @@ const RATE_LIMIT = 5
  *
  * Security: Turnstile + honeypot + IP rate limiting (5/hour).
  */
-export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
-  const env = locals.runtime.env
-
+export const POST: APIRoute = async ({ request, clientAddress }) => {
   // Parse JSON body
   let body: Record<string, unknown>
   try {

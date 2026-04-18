@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro'
 import { sendEmail } from '../../lib/email/resend'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/contact
@@ -16,9 +17,7 @@ import { sendEmail } from '../../lib/email/resend'
 const CONTROL_CHAR_RE = /[\r\n\0]/
 const NOTIFY_EMAIL = 'team@smd.services'
 
-export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env
-
+export const POST: APIRoute = async ({ request }) => {
   let body: Record<string, unknown>
   try {
     body = (await request.json()) as Record<string, unknown>

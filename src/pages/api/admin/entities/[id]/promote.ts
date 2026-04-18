@@ -11,6 +11,7 @@ import { lookupRoc } from '../../../../../lib/enrichment/roc'
 import { analyzeReviewPatterns } from '../../../../../lib/enrichment/review-analysis'
 import { benchmarkCompetitors } from '../../../../../lib/enrichment/competitors'
 import { searchNews } from '../../../../../lib/enrichment/news'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/entities/[id]/promote
@@ -45,8 +46,6 @@ export const POST: APIRoute = async ({ params, locals, redirect }) => {
   }
 
   try {
-    const env = locals.runtime.env
-
     // 1. Transition stage
     await transitionStage(env.DB, session.orgId, entityId, 'prospect', 'Promoted from signal.')
 

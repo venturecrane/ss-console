@@ -10,6 +10,7 @@ import PortalListItem from '../../../components/portal/PortalListItem.astro'
 import SkipToMain from '../../../components/SkipToMain.astro'
 import { formatShortDate } from '../../../lib/portal/formatters'
 import { resolveQuoteTone, resolveQuoteLabel } from '../../../lib/portal/status'
+import { env } from 'cloudflare:workers'
 
 /**
  * Portal quote list — shows all quotes visible to this client.
@@ -19,8 +20,6 @@ import { resolveQuoteTone, resolveQuoteLabel } from '../../../lib/portal/status'
  */
 
 const session = Astro.locals.session!
-const env = Astro.locals.runtime.env
-
 const portalData = await getPortalClient(env.DB, session.userId, session.orgId)
 if (!portalData) {
   return Astro.redirect('/auth/portal-login?error=no_account')

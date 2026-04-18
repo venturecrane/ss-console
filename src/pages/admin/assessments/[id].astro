@@ -4,6 +4,7 @@ import { statusBadgeClass } from '../../../lib/ui/status-badge'
 import { getAssessment } from '../../../lib/db/assessments'
 import { getEntity, ENTITY_STAGES } from '../../../lib/db/entities'
 import { listContext } from '../../../lib/db/context'
+import { env } from 'cloudflare:workers'
 
 /**
  * Assessment detail page — used during the live assessment call.
@@ -15,7 +16,6 @@ import { listContext } from '../../../lib/db/context'
  */
 
 const session = Astro.locals.session!
-const env = Astro.locals.runtime.env
 const assessmentId = Astro.params.id!
 
 const assessment = await getAssessment(env.DB, session.orgId, assessmentId)

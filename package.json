@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "preview": "wrangler pages dev dist",
+    "preview": "wrangler dev",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
@@ -18,15 +18,14 @@
     "typecheck:workers": "for dir in workers/*/; do echo \"Typechecking $dir\" && npm run typecheck --prefix \"$dir\" || exit 1; done",
     "verify": "npm run typecheck && npm run typecheck:workers && npm run format:check && npm run lint && npm run build && npm run test",
     "db:migrate:local": "wrangler d1 migrations apply ss-console-db --local",
-    "sync:pages-secrets": "bash scripts/sync-pages-secrets.sh",
     "prepare": "node -e \"if(process.env.CI)process.exit(0)\" && husky"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "^12.6.13",
+    "@astrojs/cloudflare": "^13.1.10",
     "@astrojs/sitemap": "^3.7.2",
     "@formepdf/core": "^0.8.2",
     "@formepdf/react": "^0.8.2",
-    "astro": "^5.18.1",
+    "astro": "^6.1.7",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "ics": "^3.11.0",
@@ -55,7 +54,6 @@
   },
   "overrides": {
     "defu": "^6.1.7",
-    "undici": "^7.24.4",
-    "vite": "^6.4.2"
+    "undici": "^7.24.4"
   }
 }

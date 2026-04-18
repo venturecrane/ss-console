@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro'
 import type { StripeWebhookEvent } from '../../../lib/stripe/types'
 import { handleInvoicePaid, handleInvoicePaymentFailed } from '../../../lib/webhooks/stripe-handler'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/webhooks/stripe
@@ -14,9 +15,7 @@ import { handleInvoicePaid, handleInvoicePaymentFailed } from '../../../lib/webh
  * Only processes `invoice.paid` and `invoice.payment_failed` events.
  * All other events are acknowledged with 200 but not acted upon.
  */
-export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env
-
+export const POST: APIRoute = async ({ request }) => {
   const webhookSecret = env.STRIPE_WEBHOOK_SECRET
   if (!webhookSecret) {
     console.error('[webhook/stripe] STRIPE_WEBHOOK_SECRET not configured')

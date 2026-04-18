@@ -6,7 +6,7 @@ on:
 
 jobs:
   deploy:
-    name: Build & Deploy to Cloudflare Pages
+    name: Build & Deploy to Cloudflare Workers
     runs-on: ubuntu-latest
     # Only deploy when Cloudflare secrets are configured
     if: ${{ vars.DEPLOY_ENABLED == 'true' }}
@@ -36,37 +36,26 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Deploy to Cloudflare Pages
+      # Dry-run catches wrangler config / binding errors before they hit prod.
+      - name: Wrangler deploy (dry-run)
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=ss-web
+          command: deploy --dry-run
 
-      # `wrangler pages deploy` silently wipes Pages secrets that aren't
-      # declared in wrangler.toml. Re-bind them from Infisical immediately
-      # after deploy. Skipped (with warning) if INFISICAL_TOKEN isn't set —
-      # the next operator will have to re-run `scripts/sync-pages-secrets.sh`
-      # manually until the token is added as a repo secret.
-      - name: Install Infisical CLI
-        if: ${{ vars.INFISICAL_SYNC_ENABLED == 'true' }}
-        run: curl -1sLf 'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.deb.sh' | sudo -E bash && sudo apt-get update && sudo apt-get install -y infisical
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
 
-      - name: Sync Pages secrets from Infisical
-        if: ${{ vars.INFISICAL_SYNC_ENABLED == 'true' }}
-        env:
-          INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bash scripts/sync-pages-secrets.sh
-
-      - name: Warn if Infisical sync skipped
-        if: ${{ vars.INFISICAL_SYNC_ENABLED != 'true' }}
-        run: |
-          echo "::warning::INFISICAL_SYNC_ENABLED is not 'true' — Pages secrets were NOT re-synced after deploy."
-          echo "::warning::Every dashboard-set/wrangler-pages-put secret just got wiped to empty string."
-          echo "::warning::Run: bash scripts/sync-pages-secrets.sh  (with a live Infisical session)"
-          echo "::warning::Or set repo var INFISICAL_SYNC_ENABLED=true + repo secret INFISICAL_TOKEN (machine identity)."
+      # Secrets persist across `wrangler deploy` on Workers — no post-deploy
+      # sync step needed. Rotate out-of-band with:
+      #   infisical export --env=prod --path=/ss --format=dotenv \
+      #     | grep -vE '^(APP_|ADMIN_|PORTAL_|MEETING_|NEW_BUSINESS_|JOB_MONITOR_|REVIEW_MINING_|PUBLIC_)' \
+      #     | npx wrangler secret bulk
 
       - name: Run D1 migrations
         if: ${{ vars.D1_MIGRATIONS_ENABLED == 'true' }}
@@ -75,6 +64,14 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 migrations apply ss-console-db --remote
+
+      # The root `wrangler deploy` writes `.wrangler/deploy/config.json`
+      # pointing at the adapter-generated `dist/server/wrangler.json`.
+      # Sub-worker deploys discover it when searching upward and fail with
+      # "Found both a user configuration file and a deploy configuration
+      # file." Remove before sub-worker steps.
+      - name: Clean root wrangler state
+        run: rm -rf .wrangler
 
       - name: Install Job Monitor Worker deps
         run: cd workers/job-monitor && npm ci

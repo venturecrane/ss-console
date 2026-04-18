@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro'
 import { createQuote } from '../../../../lib/db/quotes'
 import type { LineItem } from '../../../../lib/db/quotes'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/quotes
@@ -18,8 +19,6 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   try {
     const formData = await request.formData()

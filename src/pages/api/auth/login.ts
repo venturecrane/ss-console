@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro'
 import { verifyPassword } from '../../../lib/auth/password'
 import { createSession, buildSessionCookie } from '../../../lib/auth/session'
+import { env } from 'cloudflare:workers'
 
 interface UserRow {
   id: string
@@ -19,7 +20,7 @@ interface UserRow {
  *
  * On failure, redirects to /auth/login with an error query param.
  */
-export const POST: APIRoute = async ({ request, locals, redirect }) => {
+export const POST: APIRoute = async ({ request, redirect }) => {
   try {
     // Host guard: admin login must happen on admin.smd.services so the
     // session cookie lands on the correct origin. A POST to the apex
@@ -38,8 +39,6 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
       return redirect('/auth/login?error=missing', 302)
     }
-
-    const env = locals.runtime.env
 
     // Look up user by email
     const user = await env.DB.prepare(`SELECT * FROM users WHERE email = ? AND role = 'admin'`)

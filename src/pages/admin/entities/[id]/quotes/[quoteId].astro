@@ -18,6 +18,7 @@ import type {
 } from '../../../../../lib/db/quotes'
 import { listContacts } from '../../../../../lib/db/contacts'
 import { getSOWStateForQuote } from '../../../../../lib/sow/service'
+import { env } from 'cloudflare:workers'
 
 /**
  * Quote builder — admin page for editing line items, generating SOW PDFs,
@@ -34,7 +35,6 @@ import { getSOWStateForQuote } from '../../../../../lib/sow/service'
  */
 
 const session = Astro.locals.session!
-const env = Astro.locals.runtime.env
 const entityId = Astro.params.id!
 const quoteId = Astro.params.quoteId!
 
@@ -90,7 +90,7 @@ function formatDate(iso: string): string {
 }
 
 function formatCurrency(amount: number): string {
-  return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+  return `${amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 ---
 

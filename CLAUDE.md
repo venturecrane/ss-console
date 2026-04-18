@@ -234,14 +234,14 @@ We are in the **pre-launch phase**. Nothing has been sold yet. The immediate pri
 
 ## Tech Stack
 
-- **Website:** Astro on Cloudflare Pages (when built)
+- **Website:** Astro SSR on Cloudflare Workers + Static Assets
 - **Domain:** smd.services
 - **Language:** TypeScript
 - **No product/app planned** — this is a services business. Tech is for marketing and internal tools only.
 
 ## Three-Subdomain Architecture
 
-One Astro app, one Cloudflare Pages project, three custom domains. Routing is handled by `src/middleware.ts` — not by separate deployments.
+One Astro app, one Cloudflare Worker, three custom domains. Routing is handled by `src/middleware.ts` — not by separate deployments.
 
 | Host                  | Serves                                   | Auth role |
 | --------------------- | ---------------------------------------- | --------- |
@@ -276,41 +276,43 @@ Then `http://admin.localhost:4321/` and `http://portal.localhost:4321/` exercise
 
 ```bash
 npm install             # Install dependencies
-npm run dev             # Local dev server
+npm run dev             # Local dev server (astro dev)
 npm run build           # Production build
+npm run preview         # Local Worker preview (wrangler dev)
 npm run test            # Run tests
 npm run lint            # Run linter
-npm run typecheck       # TypeScript validation
+npm run typecheck       # TypeScript validation (astro check)
 npm run verify          # Full verification
 npm run format          # Format with Prettier
-npm run sync:pages-secrets  # Push Infisical /ss secrets to Cloudflare Pages
 ```
 
-## Pages secrets are not persistent by default
+## Deployment: Workers + Static Assets
 
-**Read before debugging "this secret is empty at runtime".**
+SS deploys as a single Cloudflare Worker (`ss-web`) via `wrangler deploy`. The build produces two directories:
 
-Cloudflare Pages treats `wrangler.toml`'s `[vars]` block as the authoritative source of deployment bindings. Every `wrangler pages deploy` run (including every CI deploy from this repo's `.github/workflows/deploy.yml`) silently overrides the deployment's bindings so any secret set via `wrangler pages secret put` or the dashboard reaches the runtime as an **empty string**.
+- `dist/client/` — static assets, bound to the Worker via `[assets]` in `wrangler.toml`
+- `dist/server/` — the Astro SSR entrypoint (resolved from `@astrojs/cloudflare/entrypoints/server`)
 
-The effect is invisible:
+`run_worker_first = true` in the `[assets]` block ensures every request flows through Astro middleware first — subdomain routing and session middleware always run, even for requests that would otherwise resolve to a prerendered asset.
 
-- `RESEND_API_KEY` empty → `src/lib/email/resend.ts` falls back to `console.log`, so magic links and portal invitations stop arriving but the app logs success
-- `ANTHROPIC_API_KEY` empty → Claude calls 401 and look like upstream flakes
-- `LEAD_INGEST_API_KEY` empty → admin "Run now" on `/admin/generators/*` silently disables
-- `BOOKING_ENCRYPTION_KEY` empty → Google Calendar OAuth callback errors out at encryption time
-- `STRIPE_*`, `SIGNWELL_*`, `TURNSTILE_SECRET_KEY`, `GOOGLE_CLIENT_*` all suffer the same fate
+**Env access in code.** Adapter v13 removed `Astro.locals.runtime`. Import env directly:
 
-**Source of truth is Infisical `/ss` at `env=prod`.** After any Pages deploy, run:
-
-```
-npm run sync:pages-secrets
+```ts
+import { env } from 'cloudflare:workers'
+const db = env.DB
 ```
 
-The script reads every secret at that path and re-binds each to the Pages production deployment via `wrangler pages secret put`. CI does this automatically **only when** the repo var `INFISICAL_SYNC_ENABLED=true` AND the repo secret `INFISICAL_TOKEN` (Infisical machine identity) are set — otherwise the deploy job emits a `::warning::` and the next operator has to run the sync manually.
+Typed via augmenting `Cloudflare.Env` in `src/env.d.ts`.
 
-If you add a new env-backed secret to `src/env.d.ts`, add it to Infisical `/ss` at the same time — otherwise the sync step won't know about it.
+**Secrets.** Workers store secrets independently of `wrangler deploy` runs — unlike the Pages-era `wrangler pages deploy` trap, secrets persist across deploys natively. Rotate from Infisical:
 
-Enterprise note: this same gotcha is latent in every Pages project across ventures. See `docs/infra/secrets-management.md` in `crane-console` for the enterprise-level write-up.
+```bash
+infisical export --env=prod --path=/ss --format=dotenv \
+  | grep -vE '^(APP_|ADMIN_|PORTAL_|MEETING_|NEW_BUSINESS_|JOB_MONITOR_|REVIEW_MINING_|PUBLIC_)' \
+  | npx wrangler secret bulk
+```
+
+**Historical note.** SS ran on Cloudflare Pages through April 2026. The Pages `[vars]` trap — every `wrangler pages deploy` silently wiping dashboard-set secrets — is documented enterprise-wide in `crane-console/docs/infra/secrets-management.md`. It no longer applies to SS on Workers, but the guidance stands for any future venture that adopts Pages.
 
 ## Instruction Modules
 

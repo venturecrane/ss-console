@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro'
 import { createAssessment } from '../../../../lib/db/assessments'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/assessments
@@ -29,7 +30,6 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
       return redirect('/admin/entities?error=missing', 302)
     }
 
-    const env = locals.runtime.env
     const scheduledAt = formData.get('scheduled_at')
 
     const assessment = await createAssessment(env.DB, session.orgId, clientId.trim(), {

@@ -6,6 +6,7 @@ import {
   buildSessionCookie,
   buildClearSessionCookie,
 } from './lib/auth/session'
+import { env } from 'cloudflare:workers'
 
 /**
  * Astro middleware — handles auth for protected routes.
@@ -109,7 +110,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
     token = parseSessionToken(cookieHeader)
 
     if (token) {
-      const env = context.locals.runtime.env
       const sessionData = await validateSession(env.DB, env.SESSIONS, token)
       if (sessionData) {
         context.locals.session = sessionData

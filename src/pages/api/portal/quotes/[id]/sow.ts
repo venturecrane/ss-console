@@ -3,6 +3,7 @@ import { getPortalClient } from '../../../../../lib/portal/session'
 import { getQuoteForEntity } from '../../../../../lib/db/quotes'
 import { getPdf } from '../../../../../lib/storage/r2'
 import { getSOWStateForQuote } from '../../../../../lib/sow/service'
+import { env } from 'cloudflare:workers'
 
 /**
  * GET /api/portal/quotes/:id/sow
@@ -28,8 +29,6 @@ export const GET: APIRoute = async ({ locals, params }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   // Resolve client from session
   const portalData = await getPortalClient(env.DB, session.userId, session.orgId)

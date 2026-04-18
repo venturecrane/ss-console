@@ -6,9 +6,10 @@ import Nav from '../components/Nav.astro'
 import Footer from '../components/Footer.astro'
 import { ENTITY_VERTICALS } from '../lib/db/entities'
 import { resolveTurnstileConfig } from '../lib/booking/turnstile'
+import { env } from 'cloudflare:workers'
 
 // Fail-fast on Turnstile misconfiguration (#12). See book.astro for rationale.
-const turnstileSiteKey = resolveTurnstileConfig(Astro.locals.runtime?.env ?? {}).siteKey
+const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
 const isPostBooking = Astro.url.searchParams.has('booked')
 ---
 

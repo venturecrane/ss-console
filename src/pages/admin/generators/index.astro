@@ -2,6 +2,7 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro'
 import { listGeneratorConfigs } from '../../../lib/db/generators'
 import { PIPELINE_LABELS, type PipelineId } from '../../../lib/generators/types'
+import { env } from 'cloudflare:workers'
 
 /**
  * Generators index — per-pipeline summary cards.
@@ -17,8 +18,6 @@ import { PIPELINE_LABELS, type PipelineId } from '../../../lib/generators/types'
  */
 
 const session = Astro.locals.session!
-const env = Astro.locals.runtime.env
-
 interface PipelineDef {
   id: PipelineId
   description: string

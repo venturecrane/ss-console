@@ -10,6 +10,7 @@ import { listAssessments } from '../../../lib/db/assessments'
 import { listEngagements } from '../../../lib/db/engagements'
 import { listQuotes } from '../../../lib/db/quotes'
 import { listInvoices } from '../../../lib/db/invoices'
+import { env } from 'cloudflare:workers'
 
 /**
  * Entity detail — unified view of a single business across its lifecycle.
@@ -19,7 +20,6 @@ import { listInvoices } from '../../../lib/db/invoices'
  */
 
 const session = Astro.locals.session!
-const env = Astro.locals.runtime.env
 const entityId = Astro.params.id!
 
 const entity = await getEntity(env.DB, session.orgId, entityId)

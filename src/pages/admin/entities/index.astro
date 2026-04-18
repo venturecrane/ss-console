@@ -4,6 +4,7 @@ import { listEntities, countEntitiesByStage, ENTITY_STAGES } from '../../../lib/
 import type { Entity, EntityStage } from '../../../lib/db/entities'
 import { PIPELINE_LABELS } from '../../../lead-gen/schemas/lead-scoring-schema'
 import type { PipelineId } from '../../../lead-gen/schemas/lead-scoring-schema'
+import { env } from 'cloudflare:workers'
 
 /**
  * Entity list — unified view of all businesses across their lifecycle.
@@ -13,8 +14,6 @@ import type { PipelineId } from '../../../lead-gen/schemas/lead-scoring-schema'
  */
 
 const session = Astro.locals.session!
-const env = Astro.locals.runtime.env
-
 const filterStage = (Astro.url.searchParams.get('stage') ?? 'signal') as EntityStage
 const filterPipeline = Astro.url.searchParams.get('pipeline') ?? ''
 

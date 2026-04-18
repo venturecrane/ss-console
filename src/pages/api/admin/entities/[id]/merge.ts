@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro'
 import { mergeEntities } from '../../../../../lib/db/entities'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/entities/[id]/merge
@@ -32,7 +33,6 @@ export const POST: APIRoute = async ({ params, request, locals, redirect }) => {
       return redirect(`/admin/entities/${targetId}?error=missing_source`, 302)
     }
 
-    const env = locals.runtime.env
     await mergeEntities(env.DB, session.orgId, targetId, sourceId)
 
     return redirect(`/admin/entities/${targetId}?merged=1`, 302)

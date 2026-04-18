@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro'
 import { getEngagement, updateEngagement } from '../../../../../lib/db/engagements'
+import { env } from 'cloudflare:workers'
 
 /**
  * Consultant photo upload endpoint.
@@ -42,8 +43,6 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   try {
     const engagement = await getEngagement(env.DB, session.orgId, engagementId)
@@ -139,8 +138,6 @@ export const DELETE: APIRoute = async ({ locals, params }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   try {
     const engagement = await getEngagement(env.DB, session.orgId, engagementId)

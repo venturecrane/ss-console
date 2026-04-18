@@ -5,6 +5,7 @@ import {
   updateEngagementStatus,
 } from '../../../../lib/db/engagements'
 import type { EngagementStatus } from '../../../../lib/db/engagements'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/engagements/:id
@@ -30,8 +31,6 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   try {
     const existing = await getEngagement(env.DB, session.orgId, engagementId)

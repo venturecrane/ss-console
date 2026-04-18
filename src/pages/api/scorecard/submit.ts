@@ -15,6 +15,7 @@ import { renderScorecardReport } from '../../../lib/pdf/render'
 import { sendEmail } from '../../../lib/email/resend'
 import { scorecardReportEmailHtml } from '../../../lib/email/templates'
 import type { DimensionId } from '../../../lib/scorecard/questions'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/scorecard/submit
@@ -27,9 +28,7 @@ import type { DimensionId } from '../../../lib/scorecard/questions'
  * - Minimum completion time check (< 15s = bot)
  * - No auth required (public-facing)
  */
-export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env
-
+export const POST: APIRoute = async ({ request }) => {
   let body: Record<string, unknown>
   try {
     body = (await request.json()) as Record<string, unknown>

@@ -3,6 +3,7 @@ import { validateApiKey } from '../../../lib/auth/api-key'
 import { findOrCreateEntity } from '../../../lib/db/entities'
 import { appendContext, type ContextType } from '../../../lib/db/context'
 import { ORG_ID } from '../../../lib/constants'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/ingest/signals
@@ -19,7 +20,7 @@ const MAX_BODY_SIZE = 10 * 1024 // 10KB
 
 const ALLOWED_PIPELINES = ['review_mining', 'job_monitor', 'new_business', 'social_listening']
 
-export const POST: APIRoute = async ({ request, locals }) => {
+export const POST: APIRoute = async ({ request }) => {
   // Reject oversized payloads
   const contentLength = request.headers.get('content-length')
   if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
@@ -27,7 +28,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   // Validate API key
-  const env = locals.runtime.env
   if (!validateApiKey(request, env.LEAD_INGEST_API_KEY)) {
     return jsonResponse(401, { error: 'Unauthorized' })
   }

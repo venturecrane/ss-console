@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro'
 import { streamDocument } from '../../../../lib/storage/r2'
 import { listEngagements } from '../../../../lib/db/engagements'
 import { getPortalClient } from '../../../../lib/portal/session'
+import { env } from 'cloudflare:workers'
 
 /**
  * GET /api/portal/documents/:key
@@ -54,8 +55,6 @@ export const GET: APIRoute = async ({ locals, params }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   // Resolve client entity from session
   const portalData = await getPortalClient(env.DB, session.userId, session.orgId)

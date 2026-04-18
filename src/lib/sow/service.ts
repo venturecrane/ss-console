@@ -148,7 +148,7 @@ export async function authorizeAndSendSOW(args: {
   entityName: string
   signer: SendSignerSnapshot
   customRequesterName?: string
-  callbackBaseEnv: CfEnv
+  callbackBaseEnv: Cloudflare.Env
 }): Promise<SignatureRequest> {
   const {
     db,

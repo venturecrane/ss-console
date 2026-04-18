@@ -10,6 +10,7 @@ import { getEntity } from '../../../../lib/db/entities'
 import { listContacts } from '../../../../lib/db/contacts'
 import type { SOWTemplateProps } from '../../../../lib/pdf/sow-template'
 import { createSOWRevisionForQuote } from '../../../../lib/sow/service'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/quotes/:id
@@ -37,8 +38,6 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   try {
     const existing = await getQuote(env.DB, session.orgId, quoteId)

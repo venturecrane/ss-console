@@ -8,6 +8,7 @@ import {
   getFollowUpCompliance,
 } from '../../../lib/db/analytics'
 import { ENTITY_VERTICALS } from '../../../lib/db/entities'
+import { env } from 'cloudflare:workers'
 
 /**
  * Admin analytics dashboard — business intelligence views.
@@ -18,8 +19,6 @@ import { ENTITY_VERTICALS } from '../../../lib/db/entities'
  */
 
 const session = Astro.locals.session!
-const env = Astro.locals.runtime.env
-
 // Fetch all analytics data in parallel
 const [pipeline, quoteAccuracy, revenue, health, compliance] = await Promise.all([
   getPipelineConversion(env.DB, session.orgId),

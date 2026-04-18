@@ -5,6 +5,7 @@ import {
   destroySession,
   buildClearSessionCookie,
 } from '../../../lib/auth/session'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/auth/logout
@@ -15,15 +16,13 @@ import {
  * - Admin users → /auth/login
  * - Client users → /auth/portal-login
  */
-export const POST: APIRoute = async ({ request, locals }) => {
+export const POST: APIRoute = async ({ request }) => {
   const cookieHeader = request.headers.get('cookie')
   const token = parseSessionToken(cookieHeader)
 
   let redirectTo = '/auth/login'
 
   if (token) {
-    const env = locals.runtime.env
-
     // Check role before destroying session to determine redirect
     const session = await validateSession(env.DB, env.SESSIONS, token)
     if (session?.role === 'client') {

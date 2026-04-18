@@ -3,6 +3,7 @@ import { createMagicLink } from '../../../lib/auth/magic-link'
 import { requirePortalBaseUrl } from '../../../lib/config/app-url'
 import { sendEmail } from '../../../lib/email/resend'
 import { buildMagicLinkUrl, magicLinkEmailHtml } from '../../../lib/email/templates'
+import { env } from 'cloudflare:workers'
 
 interface UserRow {
   id: string
@@ -25,7 +26,7 @@ interface UserRow {
  * Security: Always returns the same response whether or not the email
  * exists, to prevent email enumeration.
  */
-export const POST: APIRoute = async ({ request, locals, redirect }) => {
+export const POST: APIRoute = async ({ request, redirect }) => {
   try {
     const formData = await request.formData()
     const email = formData.get('email')
@@ -35,8 +36,6 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim()
-    const env = locals.runtime.env
-
     // Look up client user by email
     const user = await env.DB.prepare(`SELECT * FROM users WHERE email = ? AND role = 'client'`)
       .bind(normalizedEmail)

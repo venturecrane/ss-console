@@ -3,6 +3,7 @@ import { hashManageToken } from '../../../../lib/booking/tokens'
 import { getScheduleByManageToken, isManageTokenExpired } from '../../../../lib/booking/schedule'
 import { BOOKING_CONFIG } from '../../../../lib/booking/config'
 import { formatInTimeZone } from 'date-fns-tz'
+import { env } from 'cloudflare:workers'
 
 /**
  * GET /api/booking/manage/[token]
@@ -13,8 +14,7 @@ import { formatInTimeZone } from 'date-fns-tz'
  *
  * Returns booking details as JSON, or 404/410 for invalid/expired tokens.
  */
-export const GET: APIRoute = async ({ params, locals }) => {
-  const env = locals.runtime.env
+export const GET: APIRoute = async ({ params }) => {
   const rawToken = params.token
 
   if (!rawToken || typeof rawToken !== 'string') {

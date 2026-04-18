@@ -10,6 +10,7 @@ import PortalHeader from '../../../components/portal/PortalHeader.astro'
 import PortalTabs from '../../../components/portal/PortalTabs.astro'
 import ConsultantBlock from '../../../components/portal/ConsultantBlock.astro'
 import SkipToMain from '../../../components/SkipToMain.astro'
+import { env } from 'cloudflare:workers'
 
 /**
  * Client portal — engagement progress page.
@@ -27,8 +28,6 @@ import SkipToMain from '../../../components/SkipToMain.astro'
  */
 
 const session = Astro.locals.session!
-const env = Astro.locals.runtime.env
-
 // Resolve client entity from session
 const portalData = await getPortalClient(env.DB, session.userId, session.orgId)
 const entityId = portalData?.client.id ?? null

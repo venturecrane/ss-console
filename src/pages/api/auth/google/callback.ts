@@ -4,6 +4,7 @@ import { upsertIntegration } from '../../../../lib/db/integrations.js'
 import { exchangeAuthCode } from '../../../../lib/booking/google-calendar.js'
 import { encrypt } from '../../../../lib/booking/encryption.js'
 import { requireAdminBaseUrl } from '../../../../lib/config/app-url.js'
+import { env } from 'cloudflare:workers'
 
 /**
  * GET /api/auth/google/callback
@@ -26,8 +27,7 @@ import { requireAdminBaseUrl } from '../../../../lib/config/app-url.js'
 
 const USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo'
 
-export const GET: APIRoute = async ({ request, locals, redirect }) => {
-  const env = locals.runtime.env
+export const GET: APIRoute = async ({ request, redirect }) => {
   const url = new URL(request.url)
 
   const error = url.searchParams.get('error')

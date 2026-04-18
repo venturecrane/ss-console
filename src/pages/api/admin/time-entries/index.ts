@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro'
 import { getEngagement } from '../../../../lib/db/engagements'
 import { createTimeEntry } from '../../../../lib/db/time-entries'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/time-entries
@@ -25,8 +26,6 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   try {
     const formData = await request.formData()

@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro'
 import { transitionStage, type EntityStage } from '../../../../../lib/db/entities'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/entities/[id]/stage
@@ -34,7 +35,6 @@ export const POST: APIRoute = async ({ params, request, locals, redirect }) => {
       return redirect(`/admin/entities/${entityId}?error=missing_stage`, 302)
     }
 
-    const env = locals.runtime.env
     await transitionStage(env.DB, session.orgId, entityId, stage, reasonStr)
 
     return redirect(`/admin/entities/${entityId}?stage_updated=1`, 302)

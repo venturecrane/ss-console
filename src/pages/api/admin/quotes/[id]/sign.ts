@@ -4,6 +4,7 @@ import { getEntity } from '../../../../../lib/db/entities'
 import { getContact } from '../../../../../lib/db/contacts'
 import { scheduleProposalCadence } from '../../../../../lib/follow-ups/scheduler'
 import { authorizeAndSendSOW } from '../../../../../lib/sow/service'
+import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/quotes/:id/sign
@@ -42,8 +43,6 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
-  const env = locals.runtime.env
 
   // Verify SignWell API key is configured
   const apiKey = env.SIGNWELL_API_KEY

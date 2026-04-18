@@ -11,6 +11,7 @@ import ActionCard from '../../../components/portal/ActionCard.astro'
 import ConsultantBlock from '../../../components/portal/ConsultantBlock.astro'
 import { resolveInvoiceState } from '../../../lib/portal/states'
 import { formatShortDate } from '../../../lib/portal/formatters'
+import { env } from 'cloudflare:workers'
 
 /**
  * Invoice landing — deep-link surface per .stitch/portal-ux-brief.md.
@@ -28,7 +29,6 @@ import { formatShortDate } from '../../../lib/portal/formatters'
  */
 
 const session = Astro.locals.session!
-const env = Astro.locals.runtime.env
 const { id: invoiceId } = Astro.params
 
 if (!invoiceId) {
