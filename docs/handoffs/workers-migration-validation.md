@@ -94,4 +94,4 @@ Run against real hostnames:
 - [ ] Stripe dashboard → resend a recent test event → verify 200 + D1 side-effect
 - [ ] SignWell → resend a recent event → verify 200
 
-Keep the Pages project alive for 7 days as rollback insurance. Delete after a clean interval.
+Delete the Pages project once the cutover smoke passes. SS is not yet in production use — there's no rollback-retention requirement.
