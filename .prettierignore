@@ -1,5 +1,5 @@
 .claude/
 wrangler.toml
 coverage/
-# Generated Stitch output — preserve as-is for reference
-.stitch/designs/
+# Generated design baselines — preserve as-is for reference
+.design/designs/
