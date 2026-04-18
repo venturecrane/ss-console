@@ -65,6 +65,14 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 migrations apply ss-console-db --remote
 
+      # The root `wrangler deploy` writes `.wrangler/deploy/config.json`
+      # pointing at the adapter-generated `dist/server/wrangler.json`.
+      # Sub-worker deploys discover it when searching upward and fail with
+      # "Found both a user configuration file and a deploy configuration
+      # file." Remove before sub-worker steps.
+      - name: Clean root wrangler state
+        run: rm -rf .wrangler
+
       - name: Install Job Monitor Worker deps
         run: cd workers/job-monitor && npm ci
 

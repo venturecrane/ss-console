@@ -50,6 +50,14 @@ jobs:
       - name: Test
         run: npm test
 
+      # The root build writes `.wrangler/deploy/config.json` pointing at the
+      # adapter-generated `dist/server/wrangler.json`. Leaving it in the tree
+      # makes sub-worker `wrangler deploy` invocations ambiguous because
+      # wrangler discovers both the sub-worker's own `wrangler.toml` and the
+      # root's deploy config. Remove it before the sub-worker steps.
+      - name: Clean root wrangler state
+        run: rm -rf .wrangler
+
       - name: Build Job Monitor Worker
         run: cd workers/job-monitor && npm ci && npx wrangler deploy --dry-run --outdir=dist
 
