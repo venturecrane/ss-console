@@ -1,0 +1,39 @@
+{
+  "client": {
+    "name": "Acme Manufacturing"
+  },
+  "quotes": [
+    {
+      "id": "q_001",
+      "status": "sent",
+      "title": "Q2 Operations Audit",
+      "metaCaption": "Apr 10",
+      "trailingCaption": "Expires in 5 days",
+      "href": "/portal/quotes/q_001"
+    },
+    {
+      "id": "q_002",
+      "status": "accepted",
+      "title": "Production Line Optimization",
+      "metaCaption": "Apr 1",
+      "trailingCaption": null,
+      "href": "/portal/quotes/q_002"
+    },
+    {
+      "id": "q_003",
+      "status": "declined",
+      "title": "Software Upgrade Advisory",
+      "metaCaption": "Mar 20",
+      "trailingCaption": null,
+      "href": "/portal/quotes/q_003"
+    },
+    {
+      "id": "q_004",
+      "status": "expired",
+      "title": "Annual Compliance Review (an older proposal with a longer title to test row wrapping behavior on narrow viewports)",
+      "metaCaption": "Feb 15",
+      "trailingCaption": "Expired",
+      "href": "/portal/quotes/q_004"
+    }
+  ]
+}

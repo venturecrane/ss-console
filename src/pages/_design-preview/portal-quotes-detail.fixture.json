@@ -1,0 +1,61 @@
+{
+  "quote": {
+    "id": "q_002",
+    "status": "accepted",
+    "totalCents": 4850000,
+    "depositPct": 25,
+    "balancePct": 75,
+    "isThreeMilestone": true,
+    "paymentSplitText": "25% at signing, balance across milestones.",
+    "engagementTitle": "Production Line Optimization",
+    "engagementSubtitle": "A focused scope across 3 work areas tailored to your operation.",
+    "deliverables": [
+      {
+        "title": "Production Line Optimization",
+        "body": "Process mapping, bottleneck analysis, and a 90-day remediation plan with measurable throughput targets."
+      },
+      {
+        "title": "Quality Control Framework",
+        "body": "A documented QC protocol covering inspection cadence, defect classification, and escalation rules — handed off to your floor lead."
+      },
+      {
+        "title": "Operator Training",
+        "body": "Two on-site sessions covering the new protocol plus a reference guide each operator keeps at their station."
+      }
+    ],
+    "schedule": [
+      {
+        "label": "Week 1–2",
+        "body": "Discovery and current-state mapping. Two days on site."
+      },
+      {
+        "label": "Week 3–8",
+        "body": "Remediation playbook authored and reviewed with leadership."
+      },
+      {
+        "label": "Week 9–12",
+        "body": "Training delivery, handoff, and a 30-day check-in."
+      }
+    ]
+  },
+  "client": {
+    "name": "Acme Manufacturing"
+  },
+  "consultant": {
+    "name": "Jamie Chen",
+    "firstName": "Jamie",
+    "photoUrl": null,
+    "role": "Principal consultant",
+    "phone": "+16025551234"
+  },
+  "state": {
+    "isSigned": true,
+    "isDeclined": false,
+    "isExpired": false,
+    "isSuperseded": false,
+    "isSent": false
+  },
+  "pdfHref": "/api/portal/quotes/q_002/sow",
+  "supersedingQuoteId": null,
+  "nextStepText": "Kickoff scheduled for Monday, April 28 at 9:00 AM."
+}

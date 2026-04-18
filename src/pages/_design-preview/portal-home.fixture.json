@@ -1,0 +1,56 @@
+{
+  "client": {
+    "name": "Acme Manufacturing"
+  },
+  "consultant": {
+    "name": "Jamie Chen",
+    "firstName": "Jamie",
+    "photoUrl": null,
+    "role": "Principal consultant",
+    "phone": "+16025551234",
+    "nextTouchpointAt": "2026-04-24T17:00:00Z",
+    "nextTouchpointLabel": "Thursday, April 24 at 10:00 AM"
+  },
+  "pendingInvoice": {
+    "id": "inv_abc123",
+    "amountCents": 485000,
+    "pillLabel": "Invoice due",
+    "caption": "Invoice #abc123 • Due Apr 22"
+  },
+  "touchpointText": "Thursday, April 24 at 10:00 AM",
+  "timelineEntries": [
+    {
+      "date": "Apr 15",
+      "body": "Invoice paid.",
+      "artifactLabel": "Invoice #def456",
+      "artifactHref": "/portal/invoices/inv_def456",
+      "artifactIcon": "receipt_long"
+    },
+    {
+      "date": "Apr 12",
+      "body": "Milestone completed: Discovery phase."
+    },
+    {
+      "date": "Apr 8",
+      "body": "Proposal signed. Deposit due.",
+      "artifactLabel": "Proposal",
+      "artifactHref": "/portal/quotes/q_xyz789",
+      "artifactIcon": "description"
+    },
+    {
+      "date": "Apr 3",
+      "body": "Invoice sent.",
+      "artifactLabel": "Invoice #abc123",
+      "artifactHref": "/portal/invoices/inv_abc123",
+      "artifactIcon": "receipt_long"
+    },
+    {
+      "date": "Mar 28",
+      "body": "Proposal sent for review.",
+      "artifactLabel": "Proposal",
+      "artifactHref": "/portal/quotes/q_xyz789",
+      "artifactIcon": "description"
+    }
+  ],
+  "dashboardError": false
+}
