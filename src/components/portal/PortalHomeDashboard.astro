@@ -1,0 +1,216 @@
+---
+/**
+ * PortalHomeDashboard — body component for /portal/ home surface.
+ *
+ * Classification:
+ *   surface:   session-auth-client
+ *   archetype: dashboard
+ *   viewport:  mobile (mobile-first; desktop upgrades to two-column)
+ *   task:      see-whats-happening
+ *   pattern:   persistent-tabs
+ *
+ * All data arrives as props. No data fetching, no Astro.locals, no D1.
+ * Layout and state-rendering logic mirrors src/pages/portal/index.astro.
+ */
+
+import SkipToMain from '../SkipToMain.astro'
+import PortalHeader from './PortalHeader.astro'
+import PortalTabs from './PortalTabs.astro'
+import ActionCard from './ActionCard.astro'
+import ConsultantBlock from './ConsultantBlock.astro'
+import TimelineEntry from './TimelineEntry.astro'
+
+export interface Props {
+  client: { name: string }
+  consultant: {
+    name: string
+    firstName: string
+    photoUrl: string | null
+    role: string | null
+    phone: string | null
+    nextTouchpointAt: string | null
+    nextTouchpointLabel: string | null
+  } | null
+  pendingInvoice: {
+    id: string
+    amountCents: number
+    pillLabel: string
+    caption: string
+  } | null
+  touchpointText: string | null
+  timelineEntries: Array<{
+    date: string
+    body: string
+    artifactLabel?: string
+    artifactHref?: string
+    artifactIcon?: string
+  }>
+  dashboardError: boolean
+}
+
+const { client, consultant, pendingInvoice, touchpointText, timelineEntries, dashboardError } =
+  Astro.props
+
+const consultantFirst = consultant?.firstName ?? null
+
+// H1 greeting: consultant presence signals an active engagement.
+const contextHeadline = consultant ? 'Engagement in flight.' : 'Welcome.'
+---
+
+<SkipToMain />
+<PortalHeader
+  clientName={client.name}
+  consultantPhone={consultant?.phone ?? null}
+  consultantFirstName={consultantFirst}
+/>
+<PortalTabs pathname="/portal/" />
+
+<main id="main" role="main" class="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 pb-24 md:pb-10">
+  {
+    dashboardError ? (
+      /* ------------------------------------------------------------------ */
+      /* Error state: single error card + consultant block (if available).   */
+      /* ------------------------------------------------------------------ */
+      <div class="flex flex-col gap-card">
+        <section
+          class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-attention)]/30 p-card sm:p-section"
+          aria-live="polite"
+        >
+          <div class="flex items-start gap-row">
+            <span
+              class="material-symbols-outlined text-[24px] text-[color:var(--color-attention)] mt-0.5"
+              aria-hidden="true"
+            >
+              error
+            </span>
+            <div class="min-w-0">
+              <h1 class="text-title text-[color:var(--color-text-primary)]">
+                Something went wrong loading your portal.
+              </h1>
+              <p class="mt-2 text-body text-[color:var(--color-text-secondary)]">
+                {consultantFirst
+                  ? `Give it a moment and try again. If it keeps happening, ${consultantFirst} can help.`
+                  : 'Give it a moment and try again.'}
+              </p>
+              <div class="mt-5 flex flex-wrap gap-row">
+                <a
+                  href="/portal"
+                  class="inline-flex items-center justify-center min-h-[44px] px-5 py-2.5 rounded-[var(--radius-button)] bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white text-body font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                >
+                  Retry
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+        {consultant && (
+          <ConsultantBlock
+            name={consultant.name}
+            photoUrl={consultant.photoUrl}
+            role={consultant.role}
+            nextTouchpointAt={consultant.nextTouchpointAt}
+            nextTouchpointLabel={consultant.nextTouchpointLabel}
+            phone={consultant.phone}
+          />
+        )}
+      </div>
+    ) : (
+      /* ------------------------------------------------------------------ */
+      /* Happy path                                                           */
+      /* ------------------------------------------------------------------ */
+      <>
+        {/* Visually hidden H1 gives screen readers a page landmark.
+            Sighted users see "Engagement in flight." / "Welcome." as the
+            page-level context before the action content. */}
+        <h1 class="text-title text-[color:var(--color-text-primary)] mb-section">
+          {contextHeadline}
+        </h1>
+
+        {/* Desktop: two-column split (timeline main + sticky 340px right rail).
+            Mobile: single column, action-first above the fold, divider,
+            timeline below. */}
+        <div class="flex flex-col md:flex-row md:items-start md:gap-section">
+          {/* Right rail (mobile: renders first; desktop: order-2 right column). */}
+          <aside
+            class="w-full md:order-2 md:w-[340px] md:shrink-0 space-y-card md:sticky md:top-10"
+            aria-label="Action and consultant"
+          >
+            {pendingInvoice ? (
+              <ActionCard
+                pillLabel={pendingInvoice.pillLabel}
+                amountCents={pendingInvoice.amountCents}
+                amountLabel={pendingInvoice.caption}
+                ctaLabel="Pay invoice"
+                ctaHref={`/portal/invoices/${pendingInvoice.id}`}
+                ctaSubtext="Secure payment via Stripe."
+              />
+            ) : touchpointText ? (
+              <section
+                class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card sm:p-section"
+                aria-label="Next check-in"
+              >
+                <p class="text-label uppercase text-[color:var(--color-primary)]">Next check-in</p>
+                <p class="mt-3 text-display text-[color:var(--color-text-primary)]">
+                  {touchpointText}
+                </p>
+                {consultantFirst && (
+                  <p class="mt-2 text-caption text-[color:var(--color-text-muted)]">
+                    with {consultantFirst}
+                  </p>
+                )}
+              </section>
+            ) : (
+              <section
+                class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card sm:p-section"
+                aria-label="Engagement status"
+              >
+                <p class="text-label uppercase text-[color:var(--color-primary)]">In flight</p>
+                <p class="mt-3 text-body text-[color:var(--color-text-secondary)]">
+                  Nothing needs your attention right now.
+                </p>
+              </section>
+            )}
+
+            {consultant && (
+              <ConsultantBlock
+                name={consultant.name}
+                photoUrl={consultant.photoUrl}
+                role={consultant.role}
+                nextTouchpointAt={consultant.nextTouchpointAt}
+                nextTouchpointLabel={consultant.nextTouchpointLabel}
+                phone={consultant.phone}
+              />
+            )}
+          </aside>
+
+          {/* Main column: Recent activity timeline. */}
+          <section
+            class="flex-1 min-w-0 md:order-1 mt-section md:mt-0 pt-section md:pt-0 border-t md:border-t-0 border-[color:var(--color-border)]"
+            aria-labelledby="timeline-heading"
+          >
+            <h2 id="timeline-heading" class="text-title text-[color:var(--color-text-primary)]">
+              Recent activity
+            </h2>
+            {timelineEntries.length > 0 ? (
+              <div class="mt-stack flex flex-col gap-card">
+                {timelineEntries.map((entry) => (
+                  <TimelineEntry
+                    date={entry.date}
+                    body={entry.body}
+                    artifactLabel={entry.artifactLabel}
+                    artifactHref={entry.artifactHref}
+                    artifactIcon={entry.artifactIcon}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p class="mt-stack text-body text-[color:var(--color-text-secondary)]">
+                Nothing here yet. First entry lands after your next touchpoint.
+              </p>
+            )}
+          </section>
+        </div>
+      </>
+    )
+  }
+</main>
