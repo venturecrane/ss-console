@@ -1,0 +1,468 @@
+---
+/**
+ * QuoteDetail — portal proposal detail body component.
+ *
+ * Accepts all data as props; no data fetching. Used by the
+ * /portal/quotes/[id]/ surface and the _design-preview gate 0 route.
+ *
+ * State rendering:
+ *   isSigned      — signed confirmation + nextStepText; no pricing action; PDF link
+ *   isDeclined    — declined pill; contact-consultant link; no action
+ *   isExpired     — expired pill; contact-consultant link; no action
+ *   isSuperseded  — superseded banner + link to newer; pricing/action hidden
+ *   isSent        — full pricing (MoneyDisplay); dominant "Review and sign" CTA
+ *
+ * All states render: back link, hero, deliverables (if any), schedule (if any),
+ * consultant block.
+ */
+
+import SkipToMain from '../SkipToMain.astro'
+import PortalHeader from './PortalHeader.astro'
+import PortalTabs from './PortalTabs.astro'
+import MoneyDisplay from './MoneyDisplay.astro'
+import ConsultantBlock from './ConsultantBlock.astro'
+import StatusPill from './StatusPill.astro'
+import { resolveQuoteTone, resolveQuoteLabel } from '../../lib/portal/status'
+
+export interface Props {
+  quote: {
+    id: string
+    status: string
+    totalCents: number
+    depositPct: number
+    balancePct: number
+    isThreeMilestone: boolean
+    paymentSplitText: string
+    engagementTitle: string
+    engagementSubtitle: string
+    deliverables: Array<{ title: string; body: string }>
+    schedule: Array<{ label: string; body: string }>
+  }
+  client: { name: string }
+  consultant: {
+    name: string
+    firstName: string
+    photoUrl: string | null
+    role: string | null
+    phone: string | null
+  }
+  state: {
+    isSigned: boolean
+    isDeclined: boolean
+    isExpired: boolean
+    isSuperseded: boolean
+    isSent: boolean
+  }
+  pdfHref: string | null
+  supersedingQuoteId: string | null
+  nextStepText: string | null
+}
+
+const { quote, client, consultant, state, pdfHref, supersedingQuoteId, nextStepText } = Astro.props
+
+const { isSigned, isDeclined, isExpired, isSuperseded, isSent } = state
+
+const statusTone = resolveQuoteTone(quote.status)
+const statusLabel = resolveQuoteLabel(quote.status)
+
+// Consultant contact data forwarded to PortalHeader and ConsultantBlock
+const consultantPhone = consultant.phone ?? null
+const consultantFirstName = consultant.firstName ?? null
+
+// Sign CTA href — points at the sign API endpoint (SignWell integration upstream)
+const signHref = `/api/portal/quotes/${quote.id}/sign`
+
+// Whether the action card / pricing section is visible
+const showPricingAction = isSent
+const showSignButton = isSent
+---
+
+<SkipToMain />
+<PortalHeader
+  clientName={client.name}
+  consultantPhone={isSigned ? null : consultantPhone}
+  consultantFirstName={consultantFirstName}
+>
+  <form method="POST" action="/api/auth/logout">
+    <button
+      type="submit"
+      class="text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] transition-colors"
+    >
+      Sign out
+    </button>
+  </form>
+</PortalHeader>
+
+<PortalTabs pathname={`/portal/quotes/${quote.id}`} />
+
+<main id="main" role="main" class="max-w-[1120px] mx-auto px-6 py-8 sm:py-12 pb-24 md:pb-12">
+  <!-- Back link -->
+  <a
+    href="/portal/quotes"
+    aria-label="All proposals"
+    class="inline-flex items-center gap-2 min-h-11 -mx-2 px-2 mb-8 text-caption font-medium text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-lg transition-colors"
+  >
+    <span class="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_back</span>
+    All proposals
+  </a>
+
+  <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-section lg:gap-12">
+    <!-- Main column -->
+    <section class="min-w-0 max-w-3xl">
+      <!-- Hero -->
+      <div class="mb-section">
+        <div class="flex items-center gap-row flex-wrap">
+          <p class="text-label uppercase text-[color:var(--color-meta)]">Proposal</p>
+          <StatusPill tone={statusTone} label={statusLabel} size="base" />
+        </div>
+        <h1
+          class="mt-3 text-display font-extrabold tracking-[-0.02em] text-[color:var(--color-text-primary)]"
+        >
+          {quote.engagementTitle}
+        </h1>
+        <p class="mt-stack text-body-lg text-[color:var(--color-text-secondary)] max-w-xl">
+          {quote.engagementSubtitle}
+        </p>
+      </div>
+
+      <!-- Superseded banner (above action card on mobile, always visible) -->
+      {
+        isSuperseded && supersedingQuoteId && (
+          <div class="mb-section rounded-lg border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-stack">
+            <p class="text-caption font-semibold text-[color:var(--color-text-primary)]">
+              A newer version is available.
+            </p>
+            <p class="mt-1 text-caption text-[color:var(--color-text-secondary)]">
+              This proposal has been replaced by a newer version.
+            </p>
+            <a
+              href={`/portal/quotes/${supersedingQuoteId}`}
+              class="mt-3 inline-flex items-center gap-1.5 text-caption font-semibold text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+            >
+              Go to the latest proposal
+              <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </a>
+          </div>
+        )
+      }
+
+      <!-- Mobile action card (hidden on desktop — right rail handles it) -->
+      <div class="lg:hidden mb-section">
+        <div
+          class="bg-[color:var(--color-surface)] rounded-xl border border-[color:var(--color-border)] p-card flex flex-col gap-stack"
+        >
+          {
+            showPricingAction && (
+              <div class="flex flex-col gap-row">
+                <p class="text-label uppercase text-[color:var(--color-text-secondary)]">
+                  Total engagement
+                </p>
+                <MoneyDisplay amountCents={quote.totalCents} size="display" />
+                <p class="text-caption text-[color:var(--color-text-secondary)]">
+                  {quote.paymentSplitText}
+                </p>
+              </div>
+            )
+          }
+
+          {
+            isSigned ? (
+              <div class="flex items-start gap-row rounded-lg border border-[color:var(--color-complete)]/30 bg-[color:var(--color-complete)]/10 p-stack">
+                <span
+                  class="material-symbols-outlined text-[20px] text-[color:var(--color-complete)] mt-0.5"
+                  style="font-variation-settings: 'FILL' 1"
+                >
+                  check_circle
+                </span>
+                <div class="min-w-0">
+                  <p class="text-caption font-semibold text-[color:var(--color-text-primary)]">
+                    Signed.
+                  </p>
+                  {nextStepText && (
+                    <p class="mt-1 text-caption text-[color:var(--color-text-secondary)]">
+                      {nextStepText}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : isSuperseded ? (
+              !supersedingQuoteId ? (
+                <p class="text-caption text-[color:var(--color-text-secondary)]">
+                  This proposal has been replaced by a newer version.
+                </p>
+              ) : null
+            ) : isDeclined ? (
+              <p class="text-caption text-[color:var(--color-text-secondary)]">
+                This proposal was declined. Reach out to {consultant.firstName} if you'd like to
+                discuss next steps.
+              </p>
+            ) : isExpired ? (
+              <p class="text-caption text-[color:var(--color-text-secondary)]">
+                This proposal has expired. Contact {consultant.firstName} to request a revised
+                proposal.
+              </p>
+            ) : showSignButton ? (
+              <a
+                href={signHref}
+                class="inline-flex w-full items-center justify-center min-h-[44px] px-6 py-3 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white text-body font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+              >
+                Review and sign
+              </a>
+            ) : null
+          }
+
+          {
+            pdfHref && (
+              <a
+                href={pdfHref}
+                class="inline-flex items-center gap-1.5 text-caption font-semibold text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)] transition-colors"
+              >
+                View the full PDF
+                <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+              </a>
+            )
+          }
+        </div>
+      </div>
+
+      <!-- Section stack -->
+      <div class="space-y-section">
+        <!-- What you'll get -->
+        {
+          quote.deliverables.length > 0 && (
+            <section class="border-t border-[color:var(--color-border)] pt-section">
+              <h2 class="text-title text-[color:var(--color-text-primary)] mb-card">
+                What you'll get
+              </h2>
+              <ul class="space-y-card">
+                {quote.deliverables.map((d) => (
+                  <li class="flex items-start gap-stack">
+                    <span
+                      class="material-symbols-outlined text-[color:var(--color-complete)] mt-0.5"
+                      style="font-variation-settings: 'FILL' 1"
+                    >
+                      check_circle
+                    </span>
+                    <div class="min-w-0">
+                      <h3 class="text-heading text-[color:var(--color-text-primary)]">{d.title}</h3>
+                      {d.body && (
+                        <p class="mt-1 text-body text-[color:var(--color-text-secondary)]">
+                          {d.body}
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )
+        }
+
+        <!-- How we'll work -->
+        {
+          quote.schedule.length > 0 && (
+            <section class="border-t border-[color:var(--color-border)] pt-section">
+              <h2 class="text-title text-[color:var(--color-text-primary)] mb-card">
+                How we'll work
+              </h2>
+              <div class="space-y-stack">
+                {quote.schedule.map((row) => (
+                  <div class="flex items-baseline gap-card">
+                    <span class="w-[96px] shrink-0 text-label uppercase text-[color:var(--color-text-secondary)]">
+                      {row.label}
+                    </span>
+                    <p class="flex-1 text-body text-[color:var(--color-text-secondary)]">
+                      {row.body}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )
+        }
+
+        <!-- Terms (isSent only — active proposal where pricing is still a decision) -->
+        {
+          isSent && (
+            <section class="border-t border-[color:var(--color-border)] pt-section">
+              <h2 class="text-title text-[color:var(--color-text-primary)] mb-card">Terms</h2>
+              <div class="bg-[color:var(--color-surface)] rounded-xl border border-[color:var(--color-border)] p-card space-y-row">
+                <p class="text-body text-[color:var(--color-text-primary)]">
+                  <span class="font-semibold">Total:</span>{' '}
+                  <MoneyDisplay amountCents={quote.totalCents} size="body" emphasize />
+                </p>
+                <p class="text-body text-[color:var(--color-text-secondary)]">
+                  {quote.paymentSplitText}
+                </p>
+              </div>
+            </section>
+          )
+        }
+
+        <!-- Consultant block (mobile — desktop handled in right rail) -->
+        <section class="lg:hidden border-t border-[color:var(--color-border)] pt-section">
+          <ConsultantBlock
+            name={consultant.name}
+            photoUrl={consultant.photoUrl}
+            role={consultant.role}
+            phone={consultant.phone}
+          />
+          {
+            consultantFirstName && (
+              <p class="mt-stack text-caption text-[color:var(--color-text-muted)]">
+                Text {consultantFirstName} with questions.
+              </p>
+            )
+          }
+        </section>
+
+        <!-- Contact link for terminal states (declined / expired) — mobile -->
+        {
+          (isDeclined || isExpired) && consultantPhone && (
+            <div class="lg:hidden border-t border-[color:var(--color-border)] pt-section">
+              <a
+                href={`sms:${consultant.phone!.replace(/[^+\d]/g, '')}`}
+                class="inline-flex sm:hidden items-center gap-2 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+              >
+                <span class="material-symbols-outlined text-[18px]">sms</span>
+                Text {consultantFirstName} with questions
+              </a>
+              <a
+                href={`tel:${consultant.phone!.replace(/[^+\d]/g, '')}`}
+                class="hidden sm:inline-flex items-center gap-2 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+              >
+                <span class="material-symbols-outlined text-[18px]">call</span>
+                Contact {consultantFirstName}
+              </a>
+            </div>
+          )
+        }
+      </div>
+    </section>
+
+    <!-- Right rail (desktop only) -->
+    <aside class="hidden lg:block">
+      <div class="sticky top-8 space-y-card">
+        <!-- Action / status card -->
+        <div
+          class="bg-[color:var(--color-surface)] rounded-xl border border-[color:var(--color-border)] p-card"
+        >
+          {
+            showPricingAction ? (
+              <div>
+                <MoneyDisplay amountCents={quote.totalCents} size="display" />
+                <p class="mt-2 text-body text-[color:var(--color-text-secondary)]">
+                  {quote.paymentSplitText}
+                </p>
+              </div>
+            ) : null
+          }
+
+          {
+            isSigned ? (
+              <div class={showPricingAction ? 'mt-card' : ''}>
+                <div class="flex items-start gap-row rounded-lg border border-[color:var(--color-complete)]/30 bg-[color:var(--color-complete)]/10 p-stack">
+                  <span
+                    class="material-symbols-outlined text-[20px] text-[color:var(--color-complete)] mt-0.5"
+                    style="font-variation-settings: 'FILL' 1"
+                  >
+                    check_circle
+                  </span>
+                  <div class="min-w-0">
+                    <p class="text-caption font-semibold text-[color:var(--color-text-primary)]">
+                      Signed.
+                    </p>
+                    {nextStepText && (
+                      <p class="mt-1 text-caption text-[color:var(--color-text-secondary)]">
+                        {nextStepText}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : isSuperseded ? (
+              <div class="rounded-lg border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-stack">
+                <p class="text-caption font-semibold text-[color:var(--color-text-primary)]">
+                  A revised version is available.
+                </p>
+                {supersedingQuoteId && (
+                  <a
+                    href={`/portal/quotes/${supersedingQuoteId}`}
+                    class="mt-3 inline-flex items-center gap-1.5 text-caption font-semibold text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+                  >
+                    Go to the latest proposal
+                    <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+                  </a>
+                )}
+              </div>
+            ) : isDeclined ? (
+              <div>
+                <p class="text-caption text-[color:var(--color-text-secondary)]">
+                  This proposal was declined.
+                </p>
+                {consultant.phone && (
+                  <a
+                    href={`tel:${consultant.phone.replace(/[^+\d]/g, '')}`}
+                    class="mt-stack inline-flex items-center gap-2 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+                  >
+                    <span class="material-symbols-outlined text-[18px]">call</span>
+                    Contact {consultantFirstName}
+                  </a>
+                )}
+              </div>
+            ) : isExpired ? (
+              <div>
+                <p class="text-caption text-[color:var(--color-text-secondary)]">
+                  This proposal has expired.
+                </p>
+                {consultant.phone && (
+                  <a
+                    href={`tel:${consultant.phone.replace(/[^+\d]/g, '')}`}
+                    class="mt-stack inline-flex items-center gap-2 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+                  >
+                    <span class="material-symbols-outlined text-[18px]">call</span>
+                    Contact {consultantFirstName}
+                  </a>
+                )}
+              </div>
+            ) : showSignButton ? (
+              <a
+                href={signHref}
+                class="mt-card inline-flex w-full items-center justify-center min-h-[44px] px-6 py-3 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white text-body font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+              >
+                Review and sign
+              </a>
+            ) : null
+          }
+
+          {
+            pdfHref && (
+              <a
+                href={pdfHref}
+                class="mt-stack inline-flex items-center gap-1.5 text-caption font-semibold text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)] transition-colors"
+              >
+                View the full PDF
+                <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+              </a>
+            )
+          }
+        </div>
+
+        <!-- Consultant card -->
+        <ConsultantBlock
+          name={consultant.name}
+          photoUrl={consultant.photoUrl}
+          role={consultant.role}
+          phone={consultant.phone}
+        />
+        {
+          consultantFirstName && (
+            <p class="text-caption text-[color:var(--color-text-muted)] px-1">
+              Text {consultantFirstName} with questions.
+            </p>
+          )
+        }
+      </div>
+    </aside>
+  </div>
+</main>
