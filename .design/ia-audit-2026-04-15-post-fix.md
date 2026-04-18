@@ -1,9 +1,9 @@
 # IA Audit Report — ss-console — 2026-04-15 (post-fix)
 
-**Spec audited against:** `.stitch/NAVIGATION.md` spec-version=2, skill-version=2.0.0.
+**Spec audited against:** `.design/NAVIGATION.md` spec-version=2, skill-version=2.0.0.
 **Code commit:** `371f0ec` (main) — "feat(nav-spec): migrate NAVIGATION.md to v2 + fix R16 orphan destinations (#396)".
 **Scope:** all `session-auth-client` routes (`src/pages/portal/**`).
-**Invocation:** `/nav-spec --ia-audit` (second run; first audit was pre-fix at `.stitch/ia-audit-2026-04-15.md`).
+**Invocation:** `/nav-spec --ia-audit` (second run; first audit was pre-fix at `.design/ia-audit-2026-04-15.md`).
 **Purpose:** verify the 4 R16 violations flagged in the pre-fix audit are resolved post-PR #396.
 
 ---
@@ -33,7 +33,7 @@ The R16 fix in PR #396 is confirmed correct. All four previously-orphaned portal
 
 ## What the validator ran
 
-Per-route invocation of `python3 ~/.agents/skills/nav-spec/validate.py --spec .stitch/NAVIGATION.md --route <route>` across all 7 portal surfaces:
+Per-route invocation of `python3 ~/.agents/skills/nav-spec/validate.py --spec .design/NAVIGATION.md --route <route>` across all 7 portal surfaces:
 
 | Route                   | Archetype | Pattern       | Result          | Structural | Semantic |
 | ----------------------- | --------- | ------------- | --------------- | ---------- | -------- |

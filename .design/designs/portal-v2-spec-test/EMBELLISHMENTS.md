@@ -14,11 +14,11 @@ Styling/decoration choices (gradient CTAs, blur circles, typography drift) are N
 
 **Why it might ship.** Answers 'how much do I owe right now?' without scanning every invoice. Reduces the top-of-mind friction for an owner tracking cash.
 
-**Where Stitch put it.** invoice-list-desktop, invoice-list-mobile  (2 occurrence(s))
+**Where Stitch put it.** invoice-list-desktop, invoice-list-mobile (2 occurrence(s))
 
 **Recommendation.** defer — real value but not MVP. Build once we have ≥3 invoices per client in real data.
 
-**Your decision:** [ ] ship   [ ] defer   [ ] reject
+**Your decision:** [ ] ship [ ] defer [ ] reject
 
 ---
 
@@ -28,11 +28,11 @@ Styling/decoration choices (gradient CTAs, blur circles, typography drift) are N
 
 **Why it might ship.** Gives the owner a pipeline snapshot. Useful if multi-quote is common, noise if single-quote is the norm.
 
-**Where Stitch put it.** quote-list-mobile  (2 occurrence(s))
+**Where Stitch put it.** quote-list-mobile (2 occurrence(s))
 
 **Recommendation.** reject — most SMD engagements are single-proposal. The stat pair would be 'Total: $5,250 / Active: 1', which is noise. Revisit if we move to multi-engagement accounts.
 
-**Your decision:** [ ] ship   [ ] defer   [ ] reject
+**Your decision:** [ ] ship [ ] defer [ ] reject
 
 ---
 
@@ -42,11 +42,11 @@ Styling/decoration choices (gradient CTAs, blur circles, typography drift) are N
 
 **Why it might ship.** Would let owners set up recurring automatic payment for invoices instead of clicking Pay each time. Table-stakes for SaaS billing; unusual for project-based consulting.
 
-**Where Stitch put it.** invoice-list-desktop, invoice-list-mobile  (2 occurrence(s))
+**Where Stitch put it.** invoice-list-desktop, invoice-list-mobile (2 occurrence(s))
 
 **Recommendation.** reject — SMD Services engagements are bounded projects paid per SOW, not recurring. Auto-pay doesn't match the business model.
 
-**Your decision:** [ ] ship   [ ] defer   [ ] reject
+**Your decision:** [ ] ship [ ] defer [ ] reject
 
 ---
 
@@ -56,10 +56,10 @@ Styling/decoration choices (gradient CTAs, blur circles, typography drift) are N
 
 **Why it might ship.** Makes support reachable without leaving the page. The ConsultantBlock already does this (name + phone); a separate 'Support' widget would be duplicative.
 
-**Where Stitch put it.** engagement-desktop  (1 occurrence(s))
+**Where Stitch put it.** engagement-desktop (1 occurrence(s))
 
 **Recommendation.** reject — ConsultantBlock already covers this with the actual consultant's contact info, not generic support.
 
-**Your decision:** [ ] ship   [ ] defer   [ ] reject
+**Your decision:** [ ] ship [ ] defer [ ] reject
 
 ---

@@ -5,7 +5,7 @@ to use the project's named typography and spacing tokens instead of
 Stitch's raw-Tailwind + Material-3 vocabulary.
 
 Runs after `generate_screen_from_text` or `edit_screens`, before the
-HTML is written to `.stitch/designs/`. Deterministic codemod: same input
+HTML is written to `.design/designs/`. Deterministic codemod: same input
 always yields same output; no LLM involvement.
 
 Covers the token-adoption gap that the UI CONTRACT in the Stitch prompt

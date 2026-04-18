@@ -100,7 +100,7 @@ revisions:
 
 Single source of truth for navigation across `smd.services`, `admin.smd.services`, and `portal.smd.services`. Three-layer spec: **Information Architecture**, **Patterns** (anchored to NN/g / Material Design 3 / Apple HIG), and **Chrome**. Every Stitch-generated screen and every new shipped component conforms. Deviations require spec revision, not one-off exceptions.
 
-Companion skill: `~/.agents/skills/nav-spec/` (version 2.0.0). Spec is consumed by `stitch-design` (via NAV CONTRACT injection) and `stitch-ux-brief` (Phase 7 concept template, Phase 11 strip directive). Post-generation enforcement via `nav-spec/validate.py` (R1–R24).
+Companion skill: `~/.agents/skills/nav-spec/` (version 2.0.0). Spec is consumed by `product-design` (via NAV CONTRACT injection) and `ux-brief`. Post-generation enforcement via `nav-spec/validate.py` (R1–R24).
 
 **v2 rationale:** v1 defined chrome only. Result: pages shipped with consistent sticky headers but portal home had no way to reach list views (`/portal/quotes`, `/portal/invoices`, `/portal/documents`, `/portal/engagement`) except by backtracking from a detail — a gaping IA hole that the skill, its reviewers, and its validator all missed. v2 adds Information Architecture and Patterns as explicit layers above chrome, anchored to established frameworks.
 
@@ -764,7 +764,7 @@ For long forms where the primary CTA would fall below 390×844 fold:
 
 ### 10.4 Consultant block photo placeholder
 
-Defers to `.stitch/portal-ux-brief.md § Photo placeholder rule`. Current rule: **neutral SVG silhouette**; never initials, never real photos.
+Defers to `.design/portal-ux-brief.md § Photo placeholder rule`. Current rule: **neutral SVG silhouette**; never initials, never real photos.
 
 ---
 
@@ -1054,7 +1054,7 @@ Default contract from Section 6. Inside `<main>` above content.
 
 ### ConsultantBlock
 
-Shipped: `src/components/portal/ConsultantBlock.astro`. Photo placeholder: SVG silhouette per `.stitch/portal-ux-brief.md`.
+Shipped: `src/components/portal/ConsultantBlock.astro`. Photo placeholder: SVG silhouette per `.design/portal-ux-brief.md`.
 
 ### C.1.1 Persistent tabs (v3)
 
@@ -1245,4 +1245,4 @@ Tracked for future revisions:
 - `/privacy` and `/terms` marketing pages — currently absent; Appendix A footer references were removed in v1 and stay removed
 - Scorecard wizard sticky-bottom nav refactor (Phase 0 semantic compliance improvement)
 - Right-rail `md:top-20` offset QA across admin detail pages (if admin gets a right rail)
-- `.stitch/designs/portal-v1/` artifact regeneration under v2 (optional; artifacts are historical)
+- `.design/designs/portal-v1/` artifact regeneration under v2 (optional; artifacts are historical)

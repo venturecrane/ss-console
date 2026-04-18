@@ -2,7 +2,7 @@
  * Engagement ledger — derives paid / remaining / next-charge figures for the
  * client portal from the invoices table.
  *
- * Money rule (.stitch/portal-ux-brief.md): all monetary values surface as
+ * Money rule (.design/portal-ux-brief.md): all monetary values surface as
  * dollar figures, never percentages or bars. These figures are returned in
  * cents to keep presentation components in charge of formatting.
  *

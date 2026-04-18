@@ -12,7 +12,7 @@ enforcing them — this audit informs Phase 2, it doesn't gate.
 Usage:
   python3 .agents/skills/ui-drift-audit/audit.py [--out PATH]
 
-Default output: .stitch/audits/ui-drift-{YYYY-MM-DD}.md
+Default output: .design/audits/ui-drift-{YYYY-MM-DD}.md
 """
 
 from __future__ import annotations

@@ -25,7 +25,7 @@ This is a heuristic, not a verifier. Counts approximate drift scale; inspect the
 
 ```bash
 python3 .agents/skills/ui-drift-audit/audit.py
-# writes .stitch/audits/ui-drift-{YYYY-MM-DD}.md
+# writes .design/audits/ui-drift-{YYYY-MM-DD}.md
 ```
 
 Optional `--out PATH` overrides the output path.
@@ -52,7 +52,7 @@ No external dependencies — pure Python stdlib. Walks `src/pages/**` and `src/c
 
 ## Output format
 
-Markdown document at `.stitch/audits/ui-drift-{YYYY-MM-DD}.md`:
+Markdown document at `.design/audits/ui-drift-{YYYY-MM-DD}.md`:
 
 1. **Tier totals** — aggregated counts per tier (client-portal, admin, booking, public-marketing, auth, dev-preview).
 2. **Per-file matrix** — every file's column counts, sorted within tier by total violations.
@@ -71,4 +71,4 @@ Markdown document at `.stitch/audits/ui-drift-{YYYY-MM-DD}.md`:
 
 - **Upstream of `docs/style/UI-PATTERNS.md`** authoring. The audit produces the anti-pattern roster; the spec codifies the rules.
 - **Not overlapping `nav-spec`.** Nav spec governs IA + chrome + navigation patterns. This audit governs visual/component semantics.
-- **Not overlapping `design-brief` or `stitch-ux-brief`.** Those are upstream authoring pipelines (PRD → brief → Stitch). This is a post-hoc audit of what shipped.
+- **Not overlapping `design-brief` or `ux-brief`.** Those are upstream authoring pipelines (PRD → brief → `product-design`). This is a post-hoc audit of what shipped.

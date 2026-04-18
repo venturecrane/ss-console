@@ -24,7 +24,7 @@ mobile and desktop invoice lists, that's ONE decision, not two.
 
 Usage:
   python3 .agents/skills/ui-drift-audit/evaluate-embellishments.py \
-    --stitch-dir .stitch/designs/portal-v2-spec-test \
+    --stitch-dir .design/designs/portal-v2-spec-test \
     --source-dir src/pages/portal
 """
 
