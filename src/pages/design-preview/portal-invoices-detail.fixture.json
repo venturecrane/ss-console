@@ -1,0 +1,45 @@
+{
+  "client": {
+    "name": "Acme Manufacturing"
+  },
+  "invoice": {
+    "id": "inv_abc123",
+    "type": "deposit",
+    "title": "Deposit invoice",
+    "periodSubtitle": "For Production Line Optimization — deposit on engagement start",
+    "amountCents": 1212500,
+    "totalCents": 1212500,
+    "status": "sent",
+    "dueCaption": "Friday, April 24",
+    "dueShortDate": "Apr 24",
+    "daysRemaining": 5,
+    "paidShortDate": null,
+    "pillLabel": "Due in 5 days",
+    "stripeUrl": "https://checkout.stripe.com/c/pay/cs_test_example",
+    "isPayable": true
+  },
+  "lineItems": [
+    {
+      "id": "li_1",
+      "label": "Engagement deposit (25%)",
+      "caption": "Per accepted proposal dated Apr 1",
+      "amountCents": 1212500
+    }
+  ],
+  "consultant": {
+    "name": "Jamie Chen",
+    "firstName": "Jamie",
+    "photoUrl": null,
+    "role": "Principal consultant",
+    "phone": "+16025551234",
+    "nextTouchpointAt": "2026-04-24T17:00:00Z",
+    "nextTouchpointLabel": "Thursday, April 24 at 10:00 AM"
+  },
+  "state": {
+    "isPaid": false,
+    "isDeclined": false,
+    "isCardExpired": false,
+    "isLinkExpired": false,
+    "isErrorState": false
+  }
+}

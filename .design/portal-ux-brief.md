@@ -6,15 +6,39 @@ SMD Services sells scope-based consulting engagements to businesses doing $750k-
 
 The current portal is undifferentiated. Every element has equal weight; nothing adapts to why a client arrived or what state their engagement is in.
 
-## Scope of this Stitch pass
+## Scope
 
-Three surfaces, two viewports each:
+Seven client-portal surfaces, two viewports each (390px mobile, 1280px desktop). All are `surface=session-auth-client`:
 
-1. Home dashboard, "engagement in flight" state
-2. Deep-link landing for a pending invoice
-3. Deep-link landing for a pending proposal
+| #   | Surface                                                | Archetype | Task (NAVIGATION.md §1) |
+| --- | ------------------------------------------------------ | --------- | ----------------------- |
+| 1   | `portal-home` (home dashboard, "engagement in flight") | dashboard | see-whats-happening     |
+| 2   | `portal-quotes-list` (proposal list)                   | list      | review-past-proposals   |
+| 3   | `portal-quotes-detail` (proposal deep-link / detail)   | detail    | review-sign-proposal    |
+| 4   | `portal-invoices-list` (invoice list)                  | list      | review-past-invoices    |
+| 5   | `portal-invoices-detail` (invoice deep-link / detail)  | detail    | pay-pending-invoice     |
+| 6   | `portal-documents` (document library)                  | list      | find-document           |
+| 7   | `portal-engagement` (engagement progress)              | detail    | check-progress          |
 
-Desktop (1280px) and mobile (390px). Other lifecycle states and surfaces are out of scope for this pass.
+Principles, anti-patterns, money rule, photo rule, accessibility floor, copy tone, and data schema below apply to all seven surfaces. Per-surface intent is called out in the "Per-surface intent" section.
+
+## Per-surface intent
+
+Each surface has one primary visit-mode fit and a single above-the-fold question it must answer:
+
+- **`portal-home`** — action responder / status checker. "What needs my attention, and what's happening with my engagement?" Dashboard archetype. Dominant action card (pending invoice if any) or "next check-in" card; timeline of past work below. Detailed in the worked example above.
+
+- **`portal-quotes-list`** — document retriever / status checker. "Show me every proposal sent to me." List of proposal rows: title, status pill (Pending Review / Accepted / Declined / Expired), sent date, total amount (per the money rule — no per-item breakdown), expiry caption if applicable. Each row links to the detail view. Chrome: sticky header + persistent tabs.
+
+- **`portal-quotes-detail`** — action responder. "Show me this proposal; let me sign it or download the PDF." Five states (isSigned / isDeclined / isExpired / isSuperseded / isSent) — see state-rendering rules. Above fold on mobile: engagement title + status pill + dominant action (Review and sign / Signed confirmation / Superseded banner). Consultant block required.
+
+- **`portal-invoices-list`** — document retriever. "Show me every invoice sent to me." Same structural pattern as quotes list: title ("Invoice #abc123"), status pill (Due / Paid / Overdue), issue date, amount in dollars, due date caption. Each row links to detail.
+
+- **`portal-invoices-detail`** — action responder. "Show me this invoice, let me pay it via Stripe, and let me download the PDF." States: isUnpaid (dominant [Pay invoice] CTA) / isPaid (receipt + amount paid + date) / isOverdue (same as unpaid but with attention-color status). Consultant block required. Stripe URL comes from props.
+
+- **`portal-documents`** — document retriever. "Show me everything the engagement has produced." List of documents by category (SOW, deliverable, reference, etc.): title, type icon, date, [Download] or [Open] button. No money fields on this surface. Each row is a direct download / external-link action — no intermediate detail page.
+
+- **`portal-engagement`** — status checker. "Where are we in the work, what's been done, what's next?" Chronological timeline of completed milestones (past tense, concrete — per the timeline schema), next scheduled touchpoint card, consultant block. No progress bars of any kind (see anti-patterns). Evidence over reassurance.
 
 ## Visit modes
 
