@@ -69,7 +69,7 @@ for (const [i, q] of QUESTIONS.entries()) {
 
   <!-- Progress bar (hidden on landing and results) -->
   <div id="progress-wrapper" class="fixed left-0 top-14 md:top-16 z-50 hidden w-full">
-    <div id="progress-bar" class="h-1.5 w-full bg-slate-200">
+    <div id="progress-bar" class="h-1.5 w-full bg-[color:var(--color-border)]">
       <div
         id="progress-fill"
         class="h-1.5 bg-primary transition-all duration-300"
@@ -78,8 +78,9 @@ for (const [i, q] of QUESTIONS.entries()) {
       </div>
     </div>
     <div class="mx-auto flex max-w-2xl items-center justify-between px-6 pt-2">
-      <p id="progress-text" class="text-sm font-medium text-slate-500"></p>
-      <p id="progress-pct" class="text-sm text-slate-400"></p>
+      <p id="progress-text" class="text-sm font-medium text-[color:var(--color-text-secondary)]">
+      </p>
+      <p id="progress-pct" class="text-sm text-[color:var(--color-text-muted)]"></p>
     </div>
   </div>
 
@@ -90,46 +91,53 @@ for (const [i, q] of QUESTIONS.entries()) {
     <section id="landing">
       <!-- Hero -->
       <div class="px-6 py-20 text-center sm:py-28">
-        <h1 class="mx-auto max-w-3xl text-4xl font-extrabold text-slate-900 sm:text-5xl">
+        <h1
+          class="mx-auto max-w-3xl text-4xl font-extrabold text-[color:var(--color-text-primary)] sm:text-5xl"
+        >
           See where your operations stand
         </h1>
-        <p class="mx-auto mt-4 max-w-2xl text-lg text-slate-600">
+        <p class="mx-auto mt-4 max-w-2xl text-lg text-[color:var(--color-text-secondary)]">
           Answer a few questions about how your business runs. Get an instant, personalized report
           showing where you're strong and where there's room to grow.
         </p>
         <button
           data-action="start"
-          class="mt-8 inline-block rounded-lg bg-primary px-8 py-3 text-lg font-semibold text-white transition-opacity hover:opacity-80"
+          class="mt-8 inline-block rounded-[var(--radius-card)] bg-primary px-8 py-3 text-lg font-semibold text-white transition-opacity hover:opacity-80"
         >
           Start your scorecard
         </button>
 
         <!-- Trust signals -->
         <div class="mt-8 flex flex-wrap items-center justify-center gap-8">
-          <div class="flex items-center gap-2 text-sm text-slate-500">
-            <span class="material-symbols-outlined text-slate-400">schedule</span>
+          <div class="flex items-center gap-2 text-sm text-[color:var(--color-text-secondary)]">
+            <span class="material-symbols-outlined text-[color:var(--color-text-muted)]"
+              >schedule</span
+            >
             Takes about 3 minutes
           </div>
-          <div class="flex items-center gap-2 text-sm text-slate-500">
-            <span class="material-symbols-outlined text-slate-400">block</span>
+          <div class="flex items-center gap-2 text-sm text-[color:var(--color-text-secondary)]">
+            <span class="material-symbols-outlined text-[color:var(--color-text-muted)]">block</span
+            >
             No sales pitch
           </div>
-          <div class="flex items-center gap-2 text-sm text-slate-500">
-            <span class="material-symbols-outlined text-slate-400">bolt</span>
+          <div class="flex items-center gap-2 text-sm text-[color:var(--color-text-secondary)]">
+            <span class="material-symbols-outlined text-[color:var(--color-text-muted)]">bolt</span>
             Instant results
           </div>
         </div>
       </div>
 
       <!-- Dimensions preview -->
-      <div class="bg-slate-50 px-6 py-16">
-        <h2 class="text-center text-2xl font-bold text-slate-900">What we look at</h2>
+      <div class="bg-[color:var(--color-background)] px-6 py-16">
+        <h2 class="text-center text-2xl font-bold text-[color:var(--color-text-primary)]">
+          What we look at
+        </h2>
         <div class="mx-auto mt-10 grid max-w-4xl grid-cols-2 gap-6 sm:grid-cols-3">
           {
             DIMENSIONS.map((dim) => (
-              <div class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+              <div class="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white p-6">
                 <span class="material-symbols-outlined text-3xl text-primary">{dim.icon}</span>
-                <p class="mt-3 font-semibold text-slate-900">{dim.label}</p>
+                <p class="mt-3 font-semibold text-[color:var(--color-text-primary)]">{dim.label}</p>
               </div>
             ))
           }
@@ -138,10 +146,10 @@ for (const [i, q] of QUESTIONS.entries()) {
 
       <!-- Secondary CTA -->
       <div class="px-6 py-16 text-center">
-        <p class="text-xl text-slate-700">Ready to see where you stand?</p>
+        <p class="text-xl text-[color:var(--color-text-primary)]">Ready to see where you stand?</p>
         <button
           data-action="start"
-          class="mt-6 inline-block rounded-lg bg-primary px-8 py-3 text-base font-semibold text-white transition-opacity hover:opacity-80"
+          class="mt-6 inline-block rounded-[var(--radius-card)] bg-primary px-8 py-3 text-base font-semibold text-white transition-opacity hover:opacity-80"
         >
           Start your scorecard
         </button>
@@ -157,18 +165,18 @@ for (const [i, q] of QUESTIONS.entries()) {
           steps.map((step) => (
             <div data-step={step.num} class="hidden">
               {step.sectionHeader && (
-                <p class="text-sm font-medium uppercase tracking-wide text-slate-500">
+                <p class="text-sm font-medium uppercase tracking-wide text-[color:var(--color-text-secondary)]">
                   {step.sectionHeader}
                 </p>
               )}
-              <p class="mt-4 text-xl font-semibold leading-relaxed text-slate-900 sm:text-2xl">
+              <p class="mt-4 text-xl font-semibold leading-relaxed text-[color:var(--color-text-primary)] sm:text-2xl">
                 {step.text}
               </p>
               <div class="mt-8 space-y-3">
                 {step.options.map((opt) => (
                   <button
                     data-answer={opt.value}
-                    class="block w-full cursor-pointer rounded-lg border border-slate-200 px-5 py-4 text-left text-base leading-relaxed text-slate-700 transition-colors hover:bg-slate-50"
+                    class="block w-full cursor-pointer rounded-[var(--radius-card)] border border-[color:var(--color-border)] px-5 py-4 text-left text-base leading-relaxed text-[color:var(--color-text-primary)] transition-colors hover:bg-[color:var(--color-background)]"
                   >
                     {opt.text}
                   </button>
@@ -176,7 +184,7 @@ for (const [i, q] of QUESTIONS.entries()) {
                 {step.type === 'scored' && (
                   <button
                     data-answer="-1"
-                    class="block w-full cursor-pointer rounded-lg border border-dashed border-slate-200 px-5 py-3 text-left text-sm text-slate-400 transition-colors hover:bg-slate-50"
+                    class="block w-full cursor-pointer rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border)] px-5 py-3 text-left text-sm text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-background)]"
                   >
                     Doesn't apply to my business
                   </button>
@@ -191,15 +199,17 @@ for (const [i, q] of QUESTIONS.entries()) {
     <!-- Quiz navigation (back/next) -->
     <div
       id="quiz-nav"
-      class="fixed bottom-0 left-0 hidden w-full border-t border-slate-100 bg-white px-6 py-4"
+      class="fixed bottom-0 left-0 hidden w-full border-t border-[color:var(--color-border-subtle)] bg-white px-6 py-4"
     >
       <div class="mx-auto flex max-w-2xl items-center justify-between">
-        <button id="btn-back" class="text-slate-500 transition-colors hover:text-slate-700"
+        <button
+          id="btn-back"
+          class="text-[color:var(--color-text-secondary)] transition-colors hover:text-[color:var(--color-text-primary)]"
           >Back</button
         >
         <button
           id="btn-next"
-          class="rounded-lg bg-primary px-6 py-2.5 font-medium text-white opacity-50 pointer-events-none transition-opacity"
+          class="rounded-[var(--radius-card)] bg-primary px-6 py-2.5 font-medium text-white opacity-50 pointer-events-none transition-opacity"
         >
           Next
         </button>
@@ -212,16 +222,23 @@ for (const [i, q] of QUESTIONS.entries()) {
     <section id="email-gate" class="hidden">
       <div class="flex min-h-[80vh] flex-col items-center justify-center px-6 py-16">
         <span class="material-symbols-outlined text-5xl text-green-500">check_circle</span>
-        <h2 class="mt-4 text-2xl font-bold text-slate-900 sm:text-3xl">Your report is ready</h2>
-        <p class="mt-2 text-base text-slate-600">Where should we send the full breakdown?</p>
+        <h2 class="mt-4 text-2xl font-bold text-[color:var(--color-text-primary)] sm:text-3xl">
+          Your report is ready
+        </h2>
+        <p class="mt-2 text-base text-[color:var(--color-text-secondary)]">
+          Where should we send the full breakdown?
+        </p>
 
         <form
           id="gate-form"
-          class="mx-auto mt-8 w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
+          class="mx-auto mt-8 w-full max-w-md rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white p-6 sm:p-8"
         >
           <div class="space-y-4">
             <div>
-              <label for="first_name" class="block text-sm font-medium text-slate-700">
+              <label
+                for="first_name"
+                class="block text-sm font-medium text-[color:var(--color-text-primary)]"
+              >
                 First name <span class="text-red-500">*</span>
               </label>
               <input
@@ -229,11 +246,14 @@ for (const [i, q] of QUESTIONS.entries()) {
                 name="first_name"
                 id="first_name"
                 required
-                class="mt-1 block w-full rounded-lg border border-slate-200 px-4 py-2.5 text-slate-900 focus:border-primary focus:ring-primary"
+                class="mt-1 block w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] px-4 py-2.5 text-[color:var(--color-text-primary)] focus:border-primary focus:ring-primary"
               />
             </div>
             <div>
-              <label for="email" class="block text-sm font-medium text-slate-700">
+              <label
+                for="email"
+                class="block text-sm font-medium text-[color:var(--color-text-primary)]"
+              >
                 Email <span class="text-red-500">*</span>
               </label>
               <input
@@ -241,11 +261,14 @@ for (const [i, q] of QUESTIONS.entries()) {
                 name="email"
                 id="email"
                 required
-                class="mt-1 block w-full rounded-lg border border-slate-200 px-4 py-2.5 text-slate-900 focus:border-primary focus:ring-primary"
+                class="mt-1 block w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] px-4 py-2.5 text-[color:var(--color-text-primary)] focus:border-primary focus:ring-primary"
               />
             </div>
             <div>
-              <label for="business_name" class="block text-sm font-medium text-slate-700">
+              <label
+                for="business_name"
+                class="block text-sm font-medium text-[color:var(--color-text-primary)]"
+              >
                 Business name <span class="text-red-500">*</span>
               </label>
               <input
@@ -253,18 +276,22 @@ for (const [i, q] of QUESTIONS.entries()) {
                 name="business_name"
                 id="business_name"
                 required
-                class="mt-1 block w-full rounded-lg border border-slate-200 px-4 py-2.5 text-slate-900 focus:border-primary focus:ring-primary"
+                class="mt-1 block w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] px-4 py-2.5 text-[color:var(--color-text-primary)] focus:border-primary focus:ring-primary"
               />
             </div>
             <div>
-              <label for="phone" class="block text-sm font-medium text-slate-700">Phone</label>
+              <label
+                for="phone"
+                class="block text-sm font-medium text-[color:var(--color-text-primary)]"
+                >Phone</label
+              >
               <input
                 type="tel"
                 name="phone"
                 id="phone"
-                class="mt-1 block w-full rounded-lg border border-slate-200 px-4 py-2.5 text-slate-900 focus:border-primary focus:ring-primary"
+                class="mt-1 block w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] px-4 py-2.5 text-[color:var(--color-text-primary)] focus:border-primary focus:ring-primary"
               />
-              <p class="mt-1 text-sm text-slate-400">
+              <p class="mt-1 text-sm text-[color:var(--color-text-muted)]">
                 In case you'd rather talk through your results
               </p>
             </div>
@@ -273,15 +300,15 @@ for (const [i, q] of QUESTIONS.entries()) {
               <input type="text" name="website_url" tabindex="-1" autocomplete="off" />
             </div>
           </div>
-          <p id="gate-error" class="mt-4 hidden text-sm text-red-600"></p>
+          <p id="gate-error" class="mt-4 hidden text-sm text-[color:var(--color-error)]"></p>
           <button
             type="submit"
-            class="mt-6 w-full rounded-lg bg-primary py-3 text-base font-semibold text-white transition-opacity hover:opacity-80"
+            class="mt-6 w-full rounded-[var(--radius-card)] bg-primary py-3 text-base font-semibold text-white transition-opacity hover:opacity-80"
           >
             See my results
           </button>
         </form>
-        <p class="mt-4 text-sm text-slate-400">
+        <p class="mt-4 text-sm text-[color:var(--color-text-muted)]">
           We'll send your detailed PDF report to this email. No spam, ever.
         </p>
       </div>

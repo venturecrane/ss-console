@@ -21,16 +21,16 @@ const isPostBooking = Astro.url.searchParams.has('booked')
 >
   <Nav />
   <main id="main" role="main">
-    <section class="bg-slate-50 px-6 py-16 sm:py-24">
+    <section class="bg-[color:var(--color-background)] px-6 py-16 sm:py-24">
       <div class="mx-auto max-w-2xl">
         <!-- Hero -->
         <div class="text-center">
           {
             isPostBooking ? (
               <Fragment>
-                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-[var(--radius-card)] bg-[color:var(--color-complete)]/10">
                   <svg
-                    class="h-8 w-8 text-green-600"
+                    class="h-8 w-8 text-[color:var(--color-complete)]"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke-width="2"
@@ -43,20 +43,20 @@ const isPostBooking = Astro.url.searchParams.has('booked')
                     />
                   </svg>
                 </div>
-                <h1 class="mt-6 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                <h1 class="mt-6 text-3xl font-bold tracking-tight text-[color:var(--color-text-primary)] sm:text-4xl">
                   You're All Set
                 </h1>
-                <p class="mx-auto mt-4 max-w-xl text-lg text-slate-600">
+                <p class="mx-auto mt-4 max-w-xl text-lg text-[color:var(--color-text-secondary)]">
                   We'll see you on the call. In the meantime, a few quick questions to help us
                   prepare so we can make the most of our time together.
                 </p>
               </Fragment>
             ) : (
               <Fragment>
-                <h1 class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                <h1 class="text-3xl font-bold tracking-tight text-[color:var(--color-text-primary)] sm:text-4xl">
                   Tell Us About Your Business
                 </h1>
-                <p class="mx-auto mt-4 max-w-xl text-lg text-slate-600">
+                <p class="mx-auto mt-4 max-w-xl text-lg text-[color:var(--color-text-secondary)]">
                   Not ready to schedule a call? No problem. Share a few details about your business
                   and what you're working on. We'll review it and reach out to start the
                   conversation on your terms.
@@ -67,7 +67,10 @@ const isPostBooking = Astro.url.searchParams.has('booked')
         </div>
 
         <!-- Intake form -->
-        <div id="intake-form-container" class="mt-10 rounded-xl bg-white p-6 shadow-sm sm:p-8">
+        <div
+          id="intake-form-container"
+          class="mt-10 rounded-[var(--radius-card)] bg-white p-6 sm:p-8"
+        >
           <form id="intake-form" class="space-y-5" novalidate>
             <!-- Honeypot -->
             <div class="absolute -left-[9999px]" aria-hidden="true">
@@ -77,7 +80,10 @@ const isPostBooking = Astro.url.searchParams.has('booked')
             <!-- Name + Email -->
             <div class="grid gap-5 sm:grid-cols-2">
               <div>
-                <label for="gs-name" class="block text-sm font-medium text-slate-700">
+                <label
+                  for="gs-name"
+                  class="block text-sm font-medium text-[color:var(--color-text-primary)]"
+                >
                   Full name <span class="text-red-500">*</span>
                 </label>
                 <input
@@ -87,12 +93,15 @@ const isPostBooking = Astro.url.searchParams.has('booked')
                   required
                   maxlength="200"
                   autocomplete="name"
-                  class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  class="mt-1 w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                   placeholder="e.g. Maria Garcia"
                 />
               </div>
               <div>
-                <label for="gs-email" class="block text-sm font-medium text-slate-700">
+                <label
+                  for="gs-email"
+                  class="block text-sm font-medium text-[color:var(--color-text-primary)]"
+                >
                   Work email <span class="text-red-500">*</span>
                 </label>
                 <input
@@ -102,7 +111,7 @@ const isPostBooking = Astro.url.searchParams.has('booked')
                   required
                   maxlength="254"
                   autocomplete="email"
-                  class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  class="mt-1 w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                   placeholder="maria@example.com"
                 />
               </div>
@@ -110,7 +119,10 @@ const isPostBooking = Astro.url.searchParams.has('booked')
 
             <!-- Business name -->
             <div>
-              <label for="gs-business" class="block text-sm font-medium text-slate-700">
+              <label
+                for="gs-business"
+                class="block text-sm font-medium text-[color:var(--color-text-primary)]"
+              >
                 Business name <span class="text-red-500">*</span>
               </label>
               <input
@@ -119,7 +131,7 @@ const isPostBooking = Astro.url.searchParams.has('booked')
                 name="business_name"
                 required
                 maxlength="200"
-                class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                class="mt-1 w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder="e.g. Phoenix Plumbing Co."
               />
             </div>
@@ -127,13 +139,16 @@ const isPostBooking = Astro.url.searchParams.has('booked')
             <!-- Vertical + Employee count -->
             <div class="grid gap-5 sm:grid-cols-2">
               <div>
-                <label for="gs-vertical" class="block text-sm font-medium text-slate-700">
+                <label
+                  for="gs-vertical"
+                  class="block text-sm font-medium text-[color:var(--color-text-primary)]"
+                >
                   What kind of business?
                 </label>
                 <select
                   id="gs-vertical"
                   name="vertical"
-                  class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  class="mt-1 w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                   <option value="">Select one</option>
                   {ENTITY_VERTICALS.map((v) => <option value={v.value}>{v.label}</option>)}
@@ -142,18 +157,21 @@ const isPostBooking = Astro.url.searchParams.has('booked')
                   type="text"
                   id="gs-vertical-other"
                   name="vertical_other"
-                  class="mt-2 hidden w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  class="mt-2 hidden w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                   placeholder="Describe your business type"
                 />
               </div>
               <div>
-                <label for="gs-employees" class="block text-sm font-medium text-slate-700">
+                <label
+                  for="gs-employees"
+                  class="block text-sm font-medium text-[color:var(--color-text-primary)]"
+                >
                   Employee count
                 </label>
                 <select
                   id="gs-employees"
                   name="employee_count"
-                  class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  class="mt-1 w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                   <option value="">Select one</option>
                   <option value="1-5">1 - 5</option>
@@ -167,13 +185,16 @@ const isPostBooking = Astro.url.searchParams.has('booked')
 
             <!-- Years in business -->
             <div class="sm:w-1/2">
-              <label for="gs-years" class="block text-sm font-medium text-slate-700">
+              <label
+                for="gs-years"
+                class="block text-sm font-medium text-[color:var(--color-text-primary)]"
+              >
                 Years in business
               </label>
               <select
                 id="gs-years"
                 name="years_in_business"
-                class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                class="mt-1 w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="">Select one</option>
                 <option value="<1">Less than 1 year</option>
@@ -186,11 +207,14 @@ const isPostBooking = Astro.url.searchParams.has('booked')
 
             <!-- Biggest challenge -->
             <div>
-              <label for="gs-challenge" class="block text-sm font-medium text-slate-700">
+              <label
+                for="gs-challenge"
+                class="block text-sm font-medium text-[color:var(--color-text-primary)]"
+              >
                 What's the single biggest operational challenge right now?
                 <span class="text-red-500">*</span>
               </label>
-              <p class="mt-0.5 text-xs text-slate-400">
+              <p class="mt-0.5 text-xs text-[color:var(--color-text-muted)]">
                 What would make the biggest difference in how your business runs day to day?
               </p>
               <textarea
@@ -199,20 +223,23 @@ const isPostBooking = Astro.url.searchParams.has('booked')
                 required
                 rows="3"
                 maxlength="2000"
-                class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                class="mt-1 w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder="e.g. I want to stop being the bottleneck for every decision..."
               ></textarea>
             </div>
 
             <!-- How heard -->
             <div>
-              <label for="gs-how-heard" class="block text-sm font-medium text-slate-700">
+              <label
+                for="gs-how-heard"
+                class="block text-sm font-medium text-[color:var(--color-text-primary)]"
+              >
                 How did you hear about us?
               </label>
               <select
                 id="gs-how-heard"
                 name="how_heard"
-                class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                class="mt-1 w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="">Select one</option>
                 <option value="Google Search">Google Search</option>
@@ -227,7 +254,7 @@ const isPostBooking = Astro.url.searchParams.has('booked')
                 type="text"
                 id="gs-how-heard-other"
                 name="how_heard_other"
-                class="mt-2 hidden w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                class="mt-2 hidden w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder="Tell us more"
               />
             </div>
@@ -236,14 +263,17 @@ const isPostBooking = Astro.url.searchParams.has('booked')
             <div id="turnstile-container"></div>
 
             <!-- Error banner -->
-            <div id="gs-error" class="hidden rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div
+              id="gs-error"
+              class="hidden rounded-[var(--radius-card)] bg-[color:var(--color-error)]/5 px-4 py-3 text-sm text-[color:var(--color-error)]"
+            >
             </div>
 
             <!-- Submit -->
             <button
               id="gs-submit"
               type="submit"
-              class="w-full rounded-lg bg-primary px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+              class="w-full rounded-[var(--radius-card)] bg-primary px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               Send
             </button>
@@ -252,9 +282,11 @@ const isPostBooking = Astro.url.searchParams.has('booked')
 
         <!-- Success state (replaces form on submit) -->
         <div id="success-panel" class="mt-10 hidden text-center">
-          <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
+          <div
+            class="mx-auto flex h-14 w-14 items-center justify-center rounded-[var(--radius-card)] bg-[color:var(--color-complete)]/10"
+          >
             <svg
-              class="h-7 w-7 text-green-600"
+              class="h-7 w-7 text-[color:var(--color-complete)]"
               fill="none"
               viewBox="0 0 24 24"
               stroke-width="2"
@@ -263,18 +295,20 @@ const isPostBooking = Astro.url.searchParams.has('booked')
               <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"></path>
             </svg>
           </div>
-          <h2 class="mt-4 text-xl font-bold text-slate-900">Thanks for sharing</h2>
+          <h2 class="mt-4 text-xl font-bold text-[color:var(--color-text-primary)]">
+            Thanks for sharing
+          </h2>
           {
             isPostBooking ? (
-              <p class="mt-2 text-base text-slate-600">
+              <p class="mt-2 text-base text-[color:var(--color-text-secondary)]">
                 We'll review this before your call so we can make the most of our time together.
               </p>
             ) : (
               <Fragment>
-                <p class="mt-2 text-base text-slate-600">
+                <p class="mt-2 text-base text-[color:var(--color-text-secondary)]">
                   We'll review this and be in touch to start the conversation.
                 </p>
-                <p class="mt-6 text-sm text-slate-500">
+                <p class="mt-6 text-sm text-[color:var(--color-text-secondary)]">
                   Ready to schedule a call?
                   <a href="/book" class="font-medium text-primary hover:text-primary/80 underline">
                     Book a time here

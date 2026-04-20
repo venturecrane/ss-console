@@ -18,20 +18,26 @@
 
 <div id="slot-picker" class="slot-picker" data-component="slot-picker">
   <!-- Loading skeleton -->
-  <div id="sp-loading" class="flex flex-col items-center justify-center py-12 text-slate-500">
-    <div class="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-primary"></div>
+  <div
+    id="sp-loading"
+    class="flex flex-col items-center justify-center py-12 text-[color:var(--color-text-secondary)]"
+  >
+    <div
+      class="h-8 w-8 animate-spin rounded-[var(--radius-card)] border-2 border-[color:var(--color-border)] border-t-primary"
+    >
+    </div>
     <p class="mt-3 text-sm">Loading available times...</p>
   </div>
 
   <!-- Error state -->
   <div id="sp-error" class="hidden py-12 text-center">
-    <p class="text-sm text-red-600" id="sp-error-msg">
+    <p class="text-sm text-[color:var(--color-error)]" id="sp-error-msg">
       Something went wrong loading available times.
     </p>
     <button
       id="sp-retry-btn"
       type="button"
-      class="mt-3 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+      class="mt-3 rounded-[var(--radius-card)] bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
     >
       Try again
     </button>
@@ -39,8 +45,10 @@
 
   <!-- No slots state -->
   <div id="sp-empty" class="hidden py-12 text-center">
-    <p class="text-sm text-slate-600">No available times in the next two weeks.</p>
-    <p class="mt-1 text-sm text-slate-500">
+    <p class="text-sm text-[color:var(--color-text-secondary)]">
+      No available times in the next two weeks.
+    </p>
+    <p class="mt-1 text-sm text-[color:var(--color-text-secondary)]">
       Please email
       <a href="mailto:scott@smd.services" class="font-medium text-primary hover:text-primary-hover">
         scott@smd.services
@@ -50,7 +58,10 @@
   </div>
 
   <!-- Stale banner (data older than 5 min) -->
-  <div id="sp-stale" class="mb-4 hidden rounded-md bg-amber-50 px-4 py-2 text-sm text-amber-700">
+  <div
+    id="sp-stale"
+    class="mb-4 hidden rounded-[var(--radius-card)] bg-amber-50 px-4 py-2 text-sm text-[color:var(--color-attention)]"
+  >
     These times may be out of date.
     <button type="button" id="sp-refresh-btn" class="ml-1 font-medium underline">Refresh</button>
   </div>
@@ -58,7 +69,7 @@
   <!-- Main picker UI -->
   <div id="sp-main" class="hidden">
     <!-- Timezone label -->
-    <p class="mb-4 text-xs text-slate-500" id="sp-tz-label"></p>
+    <p class="mb-4 text-xs text-[color:var(--color-text-secondary)]" id="sp-tz-label"></p>
 
     <div class="flex flex-col gap-card sm:flex-row">
       <!-- Left: Date selector -->
@@ -67,7 +78,7 @@
           <button
             type="button"
             id="sp-prev"
-            class="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed"
+            class="rounded p-1 text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-border-subtle)] hover:text-[color:var(--color-text-primary)] disabled:opacity-30 disabled:cursor-not-allowed"
             aria-label="Previous dates"
           >
             <svg
@@ -81,11 +92,13 @@
               ></path>
             </svg>
           </button>
-          <span id="sp-month-label" class="text-sm font-semibold text-slate-900"></span>
+          <span
+            id="sp-month-label"
+            class="text-sm font-semibold text-[color:var(--color-text-primary)]"></span>
           <button
             type="button"
             id="sp-next"
-            class="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed"
+            class="rounded p-1 text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-border-subtle)] hover:text-[color:var(--color-text-primary)] disabled:opacity-30 disabled:cursor-not-allowed"
             aria-label="Next dates"
           >
             <svg
@@ -105,9 +118,16 @@
 
       <!-- Right: Time slots for selected date -->
       <div class="sm:w-1/2">
-        <p id="sp-date-label" class="mb-3 text-sm font-semibold text-slate-900"></p>
+        <p
+          id="sp-date-label"
+          class="mb-3 text-sm font-semibold text-[color:var(--color-text-primary)]"
+        >
+        </p>
         <div id="sp-slots" class="grid grid-cols-2 gap-2"></div>
-        <p id="sp-no-slots-day" class="hidden py-8 text-center text-sm text-slate-500">
+        <p
+          id="sp-no-slots-day"
+          class="hidden py-8 text-center text-sm text-[color:var(--color-text-secondary)]"
+        >
           No available times on this date.
         </p>
       </div>
@@ -116,11 +136,15 @@
 
   <!-- 503 fallback panel -->
   <div id="sp-unavailable" class="hidden py-12 text-center">
-    <p class="text-sm text-slate-600">Online booking is temporarily unavailable.</p>
-    <p class="mt-2 text-sm text-slate-500">Please email us directly to schedule your call:</p>
+    <p class="text-sm text-[color:var(--color-text-secondary)]">
+      Online booking is temporarily unavailable.
+    </p>
+    <p class="mt-2 text-sm text-[color:var(--color-text-secondary)]">
+      Please email us directly to schedule your call:
+    </p>
     <a
       href="mailto:scott@smd.services?subject=Assessment%20Call%20Request"
-      class="mt-3 inline-block rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+      class="mt-3 inline-block rounded-[var(--radius-card)] bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
     >
       Email scott@smd.services
     </a>
@@ -291,7 +315,8 @@
       const dayAbbr = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
       dayAbbr.forEach(function (name) {
         const span = document.createElement('span')
-        span.className = 'text-[10px] font-medium text-slate-400 py-1 text-center'
+        span.className =
+          'text-[10px] font-medium text-[color:var(--color-text-muted)] py-1 text-center'
         span.textContent = name
         datesContainer.appendChild(span)
       })
@@ -322,20 +347,22 @@
         const btn = document.createElement('button')
         btn.type = 'button'
         btn.className =
-          'h-9 w-full flex items-center justify-center rounded-lg text-sm transition-colors '
+          'h-9 w-full flex items-center justify-center rounded-[var(--radius-card)] text-sm transition-colors '
 
         if (isSelected) {
           btn.className += 'bg-primary text-white font-semibold'
         } else if (isToday && hasSlots) {
-          btn.className += 'ring-2 ring-primary text-slate-900 font-semibold hover:bg-slate-100'
+          btn.className +=
+            'ring-2 ring-primary text-[color:var(--color-text-primary)] font-semibold hover:bg-[color:var(--color-border-subtle)]'
         } else if (isToday) {
-          btn.className += 'ring-2 ring-primary text-slate-300'
+          btn.className += 'ring-2 ring-primary text-[color:var(--color-text-muted)]'
         } else if (hasSlots) {
-          btn.className += 'text-slate-900 font-semibold hover:bg-slate-100'
+          btn.className +=
+            'text-[color:var(--color-text-primary)] font-semibold hover:bg-[color:var(--color-border-subtle)]'
         } else if (isPast) {
           btn.className += 'text-slate-200 cursor-not-allowed'
         } else {
-          btn.className += 'text-slate-300 cursor-not-allowed'
+          btn.className += 'text-[color:var(--color-text-muted)] cursor-not-allowed'
         }
 
         btn.textContent = day
@@ -412,12 +439,13 @@
         btn.type = 'button'
         const isSelected = selectedSlot && selectedSlot.start_utc === slot.start_utc
 
-        btn.className = 'rounded-md border px-3 py-2 text-sm font-medium transition-colors '
+        btn.className =
+          'rounded-[var(--radius-card)] border px-3 py-2 text-sm font-medium transition-colors '
         if (isSelected) {
           btn.className += 'border-primary bg-primary text-white'
         } else {
           btn.className +=
-            'border-slate-200 bg-white text-slate-700 hover:border-primary hover:text-primary'
+            'border-[color:var(--color-border)] bg-white text-[color:var(--color-text-primary)] hover:border-primary hover:text-primary'
         }
 
         btn.textContent = slot.label

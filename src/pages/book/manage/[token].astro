@@ -12,22 +12,26 @@ import Footer from '../../../components/Footer.astro'
 >
   <Nav />
   <main id="main" role="main">
-    <section class="bg-slate-50 px-6 py-16 sm:py-24">
+    <section class="bg-[color:var(--color-background)] px-6 py-16 sm:py-24">
       <div class="mx-auto max-w-2xl">
         <!-- Loading state -->
         <div id="loading" class="text-center">
           <div
-            class="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-primary"
+            class="mx-auto h-8 w-8 animate-spin rounded-[var(--radius-card)] border-4 border-[color:var(--color-border)] border-t-primary"
           >
           </div>
-          <p class="mt-4 text-sm text-slate-500">Loading your booking...</p>
+          <p class="mt-4 text-sm text-[color:var(--color-text-secondary)]">
+            Loading your booking...
+          </p>
         </div>
 
         <!-- Error state -->
         <div id="error-state" class="hidden text-center">
-          <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
+          <div
+            class="mx-auto flex h-16 w-16 items-center justify-center rounded-[var(--radius-card)] bg-[color:var(--color-error)]/10"
+          >
             <svg
-              class="h-8 w-8 text-red-600"
+              class="h-8 w-8 text-[color:var(--color-error)]"
               fill="none"
               viewBox="0 0 24 24"
               stroke-width="2"
@@ -39,15 +43,18 @@ import Footer from '../../../components/Footer.astro'
                 d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"></path>
             </svg>
           </div>
-          <h1 class="mt-6 text-2xl font-bold text-slate-900" id="error-title">
+          <h1
+            class="mt-6 text-2xl font-bold text-[color:var(--color-text-primary)]"
+            id="error-title"
+          >
             Something went wrong
           </h1>
-          <p class="mt-3 text-slate-600" id="error-message">
+          <p class="mt-3 text-[color:var(--color-text-secondary)]" id="error-message">
             Please try again or contact us directly.
           </p>
           <a
             href="/book"
-            class="mt-6 inline-block rounded-lg bg-primary px-6 py-3 text-sm font-medium text-white hover:bg-primary/90"
+            class="mt-6 inline-block rounded-[var(--radius-card)] bg-primary px-6 py-3 text-sm font-medium text-white hover:bg-primary/90"
           >
             Book a new time
           </a>
@@ -55,9 +62,11 @@ import Footer from '../../../components/Footer.astro'
 
         <!-- Cancelled state -->
         <div id="cancelled-state" class="hidden text-center">
-          <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
+          <div
+            class="mx-auto flex h-16 w-16 items-center justify-center rounded-[var(--radius-card)] bg-[color:var(--color-border-subtle)]"
+          >
             <svg
-              class="h-8 w-8 text-slate-400"
+              class="h-8 w-8 text-[color:var(--color-text-muted)]"
               fill="none"
               viewBox="0 0 24 24"
               stroke-width="2"
@@ -66,11 +75,15 @@ import Footer from '../../../components/Footer.astro'
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
             </svg>
           </div>
-          <h1 class="mt-6 text-2xl font-bold text-slate-900">This booking was cancelled</h1>
-          <p class="mt-3 text-slate-600">Whenever you're ready, you can book a new time.</p>
+          <h1 class="mt-6 text-2xl font-bold text-[color:var(--color-text-primary)]">
+            This booking was cancelled
+          </h1>
+          <p class="mt-3 text-[color:var(--color-text-secondary)]">
+            Whenever you're ready, you can book a new time.
+          </p>
           <a
             href="/book"
-            class="mt-6 inline-block rounded-lg bg-primary px-6 py-3 text-sm font-medium text-white hover:bg-primary/90"
+            class="mt-6 inline-block rounded-[var(--radius-card)] bg-primary px-6 py-3 text-sm font-medium text-white hover:bg-primary/90"
           >
             Book a new time
           </a>
@@ -80,10 +93,10 @@ import Footer from '../../../components/Footer.astro'
         <div id="booking-details" class="hidden">
           <div class="text-center">
             <div
-              class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-100"
+              class="mx-auto flex h-16 w-16 items-center justify-center rounded-[var(--radius-card)] bg-[color:var(--color-primary)]/10"
             >
               <svg
-                class="h-8 w-8 text-blue-600"
+                class="h-8 w-8 text-[color:var(--color-primary)]"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke-width="2"
@@ -96,26 +109,44 @@ import Footer from '../../../components/Footer.astro'
                 ></path>
               </svg>
             </div>
-            <h1 class="mt-6 text-2xl font-bold text-slate-900">Your Booking</h1>
-            <p class="mt-1 text-sm text-slate-500" id="meeting-label"></p>
+            <h1 class="mt-6 text-2xl font-bold text-[color:var(--color-text-primary)]">
+              Your Booking
+            </h1>
+            <p class="mt-1 text-sm text-[color:var(--color-text-secondary)]" id="meeting-label"></p>
           </div>
 
-          <div class="mt-8 rounded-xl bg-white p-card shadow-sm">
+          <div class="mt-8 rounded-[var(--radius-card)] bg-white p-card">
             <div class="space-y-stack">
               <div>
-                <p class="text-xs font-medium uppercase tracking-wide text-slate-400">When</p>
-                <p class="mt-1 text-lg font-semibold text-slate-900" id="slot-label"></p>
+                <p
+                  class="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]"
+                >
+                  When
+                </p>
+                <p
+                  class="mt-1 text-lg font-semibold text-[color:var(--color-text-primary)]"
+                  id="slot-label"
+                >
+                </p>
               </div>
               <div>
-                <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Guest</p>
-                <p class="mt-1 text-slate-700" id="guest-name"></p>
+                <p
+                  class="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]"
+                >
+                  Guest
+                </p>
+                <p class="mt-1 text-[color:var(--color-text-primary)]" id="guest-name"></p>
               </div>
               <div id="meet-link-container" class="hidden">
-                <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Video call</p>
+                <p
+                  class="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]"
+                >
+                  Video call
+                </p>
                 <a
                   id="meet-link"
                   href=""
-                  class="mt-1 inline-block text-sm text-blue-600 hover:text-blue-800"
+                  class="mt-1 inline-block text-sm text-[color:var(--color-primary)] hover:text-blue-800"
                   target="_blank"
                   rel="noopener"></a>
               </div>
@@ -124,13 +155,13 @@ import Footer from '../../../components/Footer.astro'
             <div class="mt-8 flex flex-col gap-row sm:flex-row">
               <button
                 id="reschedule-btn"
-                class="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                class="flex-1 rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white px-4 py-2.5 text-sm font-medium text-[color:var(--color-text-primary)] transition-colors hover:bg-[color:var(--color-background)]"
               >
                 Reschedule
               </button>
               <button
                 id="cancel-btn"
-                class="flex-1 rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+                class="flex-1 rounded-[var(--radius-card)] border border-[color:var(--color-error)]/30 bg-white px-4 py-2.5 text-sm font-medium text-[color:var(--color-error)] transition-colors hover:bg-[color:var(--color-error)]/5"
               >
                 Cancel Booking
               </button>
@@ -141,28 +172,37 @@ import Footer from '../../../components/Footer.astro'
         <!-- Reschedule panel -->
         <div id="reschedule-panel" class="hidden">
           <div class="text-center">
-            <h2 class="text-2xl font-bold text-slate-900">Pick a new time</h2>
-            <p class="mt-2 text-sm text-slate-500">Choose an available slot below.</p>
+            <h2 class="text-2xl font-bold text-[color:var(--color-text-primary)]">
+              Pick a new time
+            </h2>
+            <p class="mt-2 text-sm text-[color:var(--color-text-secondary)]">
+              Choose an available slot below.
+            </p>
           </div>
 
           <div id="slots-loading" class="mt-8 text-center">
             <div
-              class="mx-auto h-6 w-6 animate-spin rounded-full border-4 border-slate-200 border-t-primary"
+              class="mx-auto h-6 w-6 animate-spin rounded-[var(--radius-card)] border-4 border-[color:var(--color-border)] border-t-primary"
             >
             </div>
-            <p class="mt-3 text-sm text-slate-500">Loading available times...</p>
+            <p class="mt-3 text-sm text-[color:var(--color-text-secondary)]">
+              Loading available times...
+            </p>
           </div>
 
           <div id="slots-container" class="mt-8 hidden space-y-card"></div>
 
           <div id="slots-empty" class="mt-8 hidden text-center">
-            <p class="text-slate-600">
+            <p class="text-[color:var(--color-text-secondary)]">
               No available times found. Please check back later or contact us.
             </p>
           </div>
 
           <div class="mt-6 text-center">
-            <button id="back-to-details-btn" class="text-sm text-slate-500 hover:text-slate-700">
+            <button
+              id="back-to-details-btn"
+              class="text-sm text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
+            >
               Back to booking details
             </button>
           </div>
@@ -173,30 +213,34 @@ import Footer from '../../../components/Footer.astro'
           id="cancel-dialog"
           class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-stack"
         >
-          <div class="w-full max-w-md rounded-xl bg-white p-card shadow-xl">
-            <h3 class="text-lg font-bold text-slate-900">Cancel your booking?</h3>
-            <p class="mt-2 text-sm text-slate-600">
+          <div class="w-full max-w-md rounded-[var(--radius-card)] bg-white p-card">
+            <h3 class="text-lg font-bold text-[color:var(--color-text-primary)]">
+              Cancel your booking?
+            </h3>
+            <p class="mt-2 text-sm text-[color:var(--color-text-secondary)]">
               This will cancel your assessment call. You can always book a new time later.
             </p>
             <div class="mt-4">
-              <label for="cancel-reason" class="block text-sm font-medium text-slate-700"
+              <label
+                for="cancel-reason"
+                class="block text-sm font-medium text-[color:var(--color-text-primary)]"
                 >Reason (optional)</label
               >
               <textarea
                 id="cancel-reason"
                 rows="2"
-                class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                class="mt-1 w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:border-primary focus:ring-1 focus:ring-primary"
                 placeholder="Let us know why you're cancelling..."></textarea>
             </div>
             <div class="mt-6 flex gap-row">
               <button
                 id="cancel-dialog-dismiss"
-                class="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                class="flex-1 rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white px-4 py-2.5 text-sm font-medium text-[color:var(--color-text-primary)] hover:bg-[color:var(--color-background)]"
                 >Keep Booking</button
               >
               <button
                 id="cancel-dialog-confirm"
-                class="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700"
+                class="flex-1 rounded-[var(--radius-card)] bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700"
                 >Yes, Cancel</button
               >
             </div>
@@ -205,9 +249,11 @@ import Footer from '../../../components/Footer.astro'
 
         <!-- Success state -->
         <div id="success-state" class="hidden text-center">
-          <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+          <div
+            class="mx-auto flex h-16 w-16 items-center justify-center rounded-[var(--radius-card)] bg-[color:var(--color-complete)]/10"
+          >
             <svg
-              class="h-8 w-8 text-green-600"
+              class="h-8 w-8 text-[color:var(--color-complete)]"
               fill="none"
               viewBox="0 0 24 24"
               stroke-width="2"
@@ -216,8 +262,12 @@ import Footer from '../../../components/Footer.astro'
               <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"></path>
             </svg>
           </div>
-          <h1 class="mt-6 text-2xl font-bold text-slate-900" id="success-title"></h1>
-          <p class="mt-3 text-slate-600" id="success-message"></p>
+          <h1
+            class="mt-6 text-2xl font-bold text-[color:var(--color-text-primary)]"
+            id="success-title"
+          >
+          </h1>
+          <p class="mt-3 text-[color:var(--color-text-secondary)]" id="success-message"></p>
         </div>
       </div>
     </section>
@@ -361,7 +411,7 @@ import Footer from '../../../components/Footer.astro'
               day: 'numeric',
             })
             const h = document.createElement('h3')
-            h.className = 'text-sm font-semibold text-slate-700'
+            h.className = 'text-sm font-semibold text-[color:var(--color-text-primary)]'
             h.textContent = lbl
             div.appendChild(h)
             const g = document.createElement('div')
@@ -369,7 +419,7 @@ import Footer from '../../../components/Footer.astro'
             day.slots.forEach(function (slot) {
               const b = document.createElement('button')
               b.className =
-                'rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary'
+                'rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary'
               b.textContent = slot.label
               b.dataset.startUtc = slot.start_utc
               b.addEventListener('click', function () {

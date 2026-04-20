@@ -12,9 +12,11 @@ const items = [
 ]
 ---
 
-<section class="bg-slate-50 px-6 py-24">
+<section class="bg-[color:var(--color-background)] px-6 py-24">
   <div class="mx-auto max-w-5xl">
-    <h2 class="mb-12 text-center text-3xl font-bold text-slate-900">What You Get</h2>
+    <h2 class="mb-12 text-center text-3xl font-bold text-[color:var(--color-text-primary)]">
+      What You Get
+    </h2>
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
       {
         items.map((item) => (
@@ -28,7 +30,7 @@ const items = [
             >
               <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
             </svg>
-            <span class="text-lg text-slate-700">{item}</span>
+            <span class="text-lg text-[color:var(--color-text-primary)]">{item}</span>
           </div>
         ))
       }

@@ -21,8 +21,12 @@ const steps = [
 <section class="bg-white px-6 py-24">
   <div class="mx-auto max-w-3xl">
     <div class="mb-16 text-center">
-      <h2 class="text-3xl font-bold text-slate-900">How We Work Together</h2>
-      <p class="mt-4 text-slate-500">A clear process from first conversation to full handoff.</p>
+      <h2 class="text-3xl font-bold text-[color:var(--color-text-primary)]">
+        How We Work Together
+      </h2>
+      <p class="mt-4 text-[color:var(--color-text-secondary)]">
+        A clear process from first conversation to full handoff.
+      </p>
     </div>
     <div class="space-y-12">
       {
@@ -30,15 +34,19 @@ const steps = [
           <div class="flex gap-8">
             <div
               class:list={[
-                'flex h-12 w-12 flex-none items-center justify-center rounded-full text-xl font-bold',
-                i === 0 ? 'bg-primary text-white' : 'bg-slate-100 text-slate-900',
+                'flex h-12 w-12 flex-none items-center justify-center rounded-[var(--radius-card)] text-xl font-bold',
+                i === 0
+                  ? 'bg-primary text-white'
+                  : 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-primary)]',
               ]}
             >
               {i + 1}
             </div>
             <div>
-              <h3 class="mb-2 text-xl font-bold text-slate-900">{step.title}</h3>
-              <p class="text-slate-600">{step.description}</p>
+              <h3 class="mb-2 text-xl font-bold text-[color:var(--color-text-primary)]">
+                {step.title}
+              </h3>
+              <p class="text-[color:var(--color-text-secondary)]">{step.description}</p>
             </div>
           </div>
         ))

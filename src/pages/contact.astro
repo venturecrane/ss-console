@@ -8,8 +8,8 @@ import Footer from '../components/Footer.astro'
   <Nav />
   <main id="main" role="main" class="px-6 py-20">
     <div class="mx-auto max-w-xl">
-      <h1 class="text-3xl font-bold text-slate-900">Get in Touch</h1>
-      <p class="mt-2 text-lg text-slate-600">
+      <h1 class="text-3xl font-bold text-[color:var(--color-text-primary)]">Get in Touch</h1>
+      <p class="mt-2 text-lg text-[color:var(--color-text-secondary)]">
         Have a question or want to talk about your business? Send us a message.
       </p>
 
@@ -17,7 +17,11 @@ import Footer from '../components/Footer.astro'
 
       <form id="contact-form" class="mt-8 space-y-5">
         <div>
-          <label for="name" class="mb-1 block text-sm font-medium text-slate-700">Name</label>
+          <label
+            for="name"
+            class="mb-1 block text-sm font-medium text-[color:var(--color-text-primary)]"
+            >Name</label
+          >
           <input
             type="text"
             id="name"
@@ -25,13 +29,17 @@ import Footer from '../components/Footer.astro'
             required
             maxlength="200"
             autocomplete="name"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            class="w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] px-3 py-2 text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             placeholder="Your name"
           />
         </div>
 
         <div>
-          <label for="email" class="mb-1 block text-sm font-medium text-slate-700">Email</label>
+          <label
+            for="email"
+            class="mb-1 block text-sm font-medium text-[color:var(--color-text-primary)]"
+            >Email</label
+          >
           <input
             type="email"
             id="email"
@@ -39,20 +47,24 @@ import Footer from '../components/Footer.astro'
             required
             maxlength="254"
             autocomplete="email"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            class="w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] px-3 py-2 text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             placeholder="you@example.com"
           />
         </div>
 
         <div>
-          <label for="message" class="mb-1 block text-sm font-medium text-slate-700">Message</label>
+          <label
+            for="message"
+            class="mb-1 block text-sm font-medium text-[color:var(--color-text-primary)]"
+            >Message</label
+          >
           <textarea
             id="message"
             name="message"
             required
             maxlength="5000"
             rows="6"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            class="w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] px-3 py-2 text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             placeholder="What's on your mind?"></textarea>
         </div>
 
@@ -64,7 +76,7 @@ import Footer from '../components/Footer.astro'
 
         <button
           type="submit"
-          class="rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-80"
+          class="rounded-[var(--radius-card)] bg-primary px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-80"
         >
           Send Message
         </button>
@@ -101,21 +113,21 @@ import Footer from '../components/Footer.astro'
 
           if (res.ok) {
             status.innerHTML =
-              '<div class="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">Message sent. We\'ll get back to you soon.</div>'
+              '<div class="rounded-[var(--radius-card)] border border-[color:var(--color-complete)]/30 bg-[color:var(--color-complete)]/5 px-4 py-3 text-sm text-[color:var(--color-complete)]">Message sent. We\'ll get back to you soon.</div>'
             form.reset()
             form.style.display = 'none'
           } else {
             const body = await res.json()
             if (res.status === 400 && body.fields) {
               const msgs = Object.values(body.fields).join('. ')
-              status.innerHTML = `<div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">${msgs}</div>`
+              status.innerHTML = `<div class="rounded-[var(--radius-card)] border border-[color:var(--color-error)]/30 bg-[color:var(--color-error)]/5 px-4 py-3 text-sm text-[color:var(--color-error)]">${msgs}</div>`
             } else {
               throw new Error(body.error || 'Request failed')
             }
           }
         } catch {
           status.innerHTML =
-            '<div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">Something went wrong. Please email <a href="mailto:team@smd.services" class="underline">team@smd.services</a> directly.</div>'
+            '<div class="rounded-[var(--radius-card)] border border-[color:var(--color-error)]/30 bg-[color:var(--color-error)]/5 px-4 py-3 text-sm text-[color:var(--color-error)]">Something went wrong. Please email <a href="mailto:team@smd.services" class="underline">team@smd.services</a> directly.</div>'
         } finally {
           button.disabled = false
           button.textContent = 'Send Message'

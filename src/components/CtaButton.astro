@@ -9,9 +9,9 @@ const { variant = 'primary', href = '/book', class: className = '' } = Astro.pro
 
 const base = 'inline-flex items-center justify-center font-semibold transition-all'
 const variants = {
-  primary: 'px-8 py-4 bg-primary text-white rounded-lg hover:bg-primary-hover shadow-sm',
+  primary: 'px-8 py-4 bg-primary text-white rounded-[var(--radius-card)] hover:bg-primary-hover',
   'outline-white':
-    'px-8 py-4 border-2 border-white text-white rounded-lg hover:bg-white hover:text-slate-900',
+    'px-8 py-4 border-2 border-white text-white rounded-[var(--radius-card)] hover:bg-white hover:text-[color:var(--color-text-primary)]',
 }
 ---
 
