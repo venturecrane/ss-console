@@ -1,0 +1,542 @@
+---
+/**
+ * InvoiceDetail — body component for /portal/invoices/[id]/
+ *
+ * surface: session-auth-client
+ * archetype: detail
+ * viewport: mobile-first
+ * task: pay-pending-invoice
+ * pattern: master-detail (persistent-tabs chrome)
+ *
+ * No data fetching. All derived state must be resolved by the caller and
+ * passed as props. See Props contract below.
+ *
+ * State branches:
+ *   isPaid           → receipt view; no Pay CTA
+ *   isLinkExpired    → attention card; contact consultant
+ *   isDeclined       → attention card + Try again CTA
+ *   isCardExpired    → attention card + Update payment method CTA
+ *   default/overdue  → dominant Pay invoice CTA
+ *   !isPayable       → "Payment link pending" caption in place of CTA
+ */
+
+import SkipToMain from '../SkipToMain.astro'
+import PortalHeader from './PortalHeader.astro'
+import PortalTabs from './PortalTabs.astro'
+import MoneyDisplay from './MoneyDisplay.astro'
+import ConsultantBlock from './ConsultantBlock.astro'
+import StatusPill from './StatusPill.astro'
+import { resolveInvoiceTone } from '../../lib/portal/status'
+import type { Tone } from '../../lib/portal/status'
+
+export interface Props {
+  client: { name: string }
+  invoice: {
+    id: string
+    type: string
+    title: string
+    periodSubtitle: string | null
+    amountCents: number
+    totalCents: number
+    status: string
+    dueCaption: string | null
+    dueShortDate: string | null
+    daysRemaining: number | null
+    paidShortDate: string | null
+    pillLabel: string
+    stripeUrl: string | null
+    isPayable: boolean
+  }
+  lineItems: Array<{
+    id: string
+    label: string
+    caption: string | null
+    amountCents: number
+  }>
+  consultant: {
+    name: string
+    firstName: string
+    photoUrl: string | null
+    role: string | null
+    phone: string | null
+    nextTouchpointAt: string | null
+    nextTouchpointLabel: string | null
+  } | null
+  state: {
+    isPaid: boolean
+    isDeclined: boolean
+    isCardExpired: boolean
+    isLinkExpired: boolean
+    isErrorState: boolean
+  }
+}
+
+const { client, invoice, lineItems, consultant, state } = Astro.props
+const { isPaid, isDeclined, isCardExpired, isLinkExpired, isErrorState } = state
+
+// Pill tone: paid → success, overdue → danger, link-expired/error → warning, default → info
+const pillTone: Tone = isPaid
+  ? 'success'
+  : isLinkExpired
+    ? 'warning'
+    : isDeclined || isCardExpired
+      ? 'warning'
+      : invoice.daysRemaining !== null && invoice.daysRemaining < 0
+        ? 'danger'
+        : resolveInvoiceTone(invoice.status)
+
+// Primary CTA label — branches on error state
+const ctaLabel = isDeclined ? 'Try again' : isCardExpired ? 'Update payment method' : 'Pay invoice'
+
+// Error card copy
+const errorTitle = isDeclined ? 'Payment declined' : isCardExpired ? 'Card expired' : 'Link expired'
+const errorBody = isDeclined
+  ? 'Your payment was not processed. Please try again or use a different card.'
+  : isCardExpired
+    ? 'The card on file has expired. Update your payment method to complete this invoice.'
+    : 'This payment link is no longer active. Your consultant will send a new one.'
+
+// Contact-consultant fallback href for link-expired state
+const consultantContactHref = consultant?.phone
+  ? `sms:${consultant.phone.replace(/[^+\d]/g, '')}`
+  : null
+
+const pathname = `/portal/invoices/${invoice.id}`
+---
+
+<SkipToMain />
+<PortalHeader
+  clientName={client.name}
+  consultantPhone={isPaid ? null : (consultant?.phone ?? null)}
+  consultantFirstName={isPaid ? null : (consultant?.firstName ?? null)}
+/>
+<PortalTabs pathname={pathname} />
+
+<main id="main" role="main" class="max-w-[1120px] mx-auto px-6 py-8 sm:py-12 pb-24 md:pb-12">
+  <!-- Back link -->
+  <a
+    href="/portal/invoices"
+    aria-label="All invoices"
+    class="inline-flex items-center gap-1 min-h-11 px-2 -mx-2 mb-4 text-label uppercase font-semibold text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-lg"
+  >
+    <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+    All invoices
+  </a>
+
+  <div
+    class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_320px] gap-section md:gap-12 items-start"
+  >
+    <!-- ── Main column ── -->
+    <section class="flex flex-col gap-section min-w-0">
+      <!-- Hero: eyebrow + title + subtitle + status line -->
+      <div>
+        <div class="flex items-center gap-row">
+          <p class="text-label uppercase text-[color:var(--color-text-secondary)]">
+            {invoice.type.charAt(0).toUpperCase() + invoice.type.slice(1)} invoice
+          </p>
+          <StatusPill tone={pillTone} label={invoice.pillLabel} size="base" />
+        </div>
+
+        <h1
+          class="mt-3 font-['Plus_Jakarta_Sans'] font-extrabold text-display tracking-[-0.02em] text-[color:var(--color-text-primary)]"
+        >
+          {invoice.title}
+        </h1>
+
+        {
+          invoice.periodSubtitle && (
+            <p class="mt-3 text-body-lg text-[color:var(--color-text-secondary)]">
+              {invoice.periodSubtitle}
+            </p>
+          )
+        }
+
+        {
+          !isPaid && invoice.dueCaption && (
+            <p class="mt-4 inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--color-text-muted)]">
+              <span class="material-symbols-outlined text-[18px]" aria-hidden="true">
+                calendar_today
+              </span>
+              Due {invoice.dueCaption}
+            </p>
+          )
+        }
+
+        {
+          isPaid && invoice.paidShortDate && (
+            <p class="mt-4 inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--color-complete)]">
+              <span class="material-symbols-outlined text-[18px]" aria-hidden="true">
+                check_circle
+              </span>
+              Paid {invoice.paidShortDate}
+            </p>
+          )
+        }
+      </div>
+
+      <!-- ── Mobile-only: error card + hero action block ── -->
+      <div class="md:hidden">
+        {
+          isErrorState && (
+            <div
+              class="mb-card rounded-lg border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-stack"
+              role="status"
+            >
+              <div class="flex items-start gap-row">
+                <span
+                  class="material-symbols-outlined text-[20px] text-[color:var(--color-attention)] mt-0.5"
+                  aria-hidden="true"
+                >
+                  error
+                </span>
+                <div class="min-w-0">
+                  <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                    {errorTitle}
+                  </p>
+                  <p class="mt-1 text-body text-[color:var(--color-text-secondary)]">{errorBody}</p>
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        <div
+          class="relative overflow-hidden rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-card"
+        >
+          <!-- Accent bar -->
+          <div
+            class={`absolute left-0 top-0 h-full w-1 ${isPaid ? 'bg-[color:var(--color-complete)]' : 'bg-[color:var(--color-primary)]'}`}
+            aria-hidden="true"
+          >
+          </div>
+
+          <MoneyDisplay amountCents={invoice.amountCents} size="display" />
+
+          {
+            isPaid ? (
+              invoice.paidShortDate && (
+                <p class="mt-2 text-caption font-medium text-[color:var(--color-complete)]">
+                  Paid {invoice.paidShortDate}. Receipt attached.
+                </p>
+              )
+            ) : (
+              <p class="mt-1 text-label uppercase text-[color:var(--color-text-muted)]">
+                Remaining balance
+              </p>
+            )
+          }
+
+          {
+            !isPaid && !isLinkExpired && (
+              <div class="mt-6">
+                {invoice.isPayable && invoice.stripeUrl ? (
+                  <>
+                    <a
+                      href={invoice.stripeUrl}
+                      class="inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-[var(--radius-button)] bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                    >
+                      {ctaLabel}
+                    </a>
+                    <div class="mt-3 flex items-center justify-center gap-2 text-label uppercase font-semibold text-[color:var(--color-text-muted)]">
+                      <span class="material-symbols-outlined text-[16px]" aria-hidden="true">
+                        lock
+                      </span>
+                      <span>Secure payment via Stripe</span>
+                    </div>
+                  </>
+                ) : (
+                  <p class="text-body text-[color:var(--color-text-secondary)]">
+                    Payment link pending — your consultant will send it shortly.
+                  </p>
+                )}
+              </div>
+            )
+          }
+
+          {
+            isLinkExpired && (
+              <div class="mt-6">
+                {consultantContactHref ? (
+                  <a
+                    href={consultantContactHref}
+                    class="inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-[var(--radius-button)] bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                  >
+                    Contact consultant
+                  </a>
+                ) : (
+                  <p class="text-body text-[color:var(--color-text-secondary)]">
+                    Contact your consultant for a new payment link.
+                  </p>
+                )}
+              </div>
+            )
+          }
+        </div>
+      </div>
+
+      <!-- ── Line items ── -->
+      {
+        lineItems.length > 0 && (
+          <div>
+            <h2 class="font-['Plus_Jakarta_Sans'] font-bold text-title text-[color:var(--color-text-primary)]">
+              What's included
+            </h2>
+            <ul class="mt-stack flex flex-col" aria-label="Invoice line items">
+              {lineItems.map((li) => (
+                <li class="flex justify-between items-baseline gap-card py-5 border-b border-[color:var(--color-border)]/60">
+                  <div class="min-w-0">
+                    <span class="text-body text-[color:var(--color-text-secondary)]">
+                      {li.label}
+                    </span>
+                    {li.caption && (
+                      <p class="mt-0.5 text-caption text-[color:var(--color-text-muted)]">
+                        {li.caption}
+                      </p>
+                    )}
+                  </div>
+                  <MoneyDisplay amountCents={li.amountCents} size="body" emphasize />
+                </li>
+              ))}
+            </ul>
+            <div class="mt-card pt-5 flex justify-between items-baseline">
+              <span class="font-['Plus_Jakarta_Sans'] font-bold text-title text-[color:var(--color-text-primary)]">
+                Total
+              </span>
+              <MoneyDisplay amountCents={invoice.totalCents} size="h2" />
+            </div>
+          </div>
+        )
+      }
+
+      <!-- ── Payment details ── -->
+      <div>
+        <h2
+          class="font-['Plus_Jakarta_Sans'] font-bold text-title text-[color:var(--color-text-primary)]"
+        >
+          Payment details
+        </h2>
+        <ul class="mt-stack grid grid-cols-1 sm:grid-cols-2 gap-card">
+          {
+            invoice.dueShortDate && !isPaid && (
+              <li class="flex items-start gap-row rounded-lg bg-[color:var(--color-surface)] p-card">
+                <span
+                  class="material-symbols-outlined text-[20px] text-[color:var(--color-primary)]"
+                  style="font-variation-settings: 'FILL' 1;"
+                  aria-hidden="true"
+                >
+                  event
+                </span>
+                <div class="min-w-0">
+                  <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                    Due {invoice.dueShortDate}
+                  </p>
+                </div>
+              </li>
+            )
+          }
+          {
+            isPaid && invoice.paidShortDate && (
+              <li class="flex items-start gap-row rounded-lg bg-[color:var(--color-surface)] p-card">
+                <span
+                  class="material-symbols-outlined text-[20px] text-[color:var(--color-complete)]"
+                  style="font-variation-settings: 'FILL' 1;"
+                  aria-hidden="true"
+                >
+                  check_circle
+                </span>
+                <div class="min-w-0">
+                  <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                    Paid {invoice.paidShortDate}
+                  </p>
+                </div>
+              </li>
+            )
+          }
+          <li class="flex items-start gap-row rounded-lg bg-[color:var(--color-surface)] p-card">
+            <span
+              class="material-symbols-outlined text-[20px] text-[color:var(--color-primary)]"
+              style="font-variation-settings: 'FILL' 1;"
+              aria-hidden="true"
+            >
+              lock
+            </span>
+            <div class="min-w-0">
+              <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                Secure payment via Stripe
+              </p>
+              <p class="mt-1 text-caption text-[color:var(--color-text-secondary)]">
+                End-to-end encrypted processing.
+              </p>
+            </div>
+          </li>
+          <li class="flex items-start gap-row rounded-lg bg-[color:var(--color-surface)] p-card">
+            <span
+              class="material-symbols-outlined text-[20px] text-[color:var(--color-primary)]"
+              style="font-variation-settings: 'FILL' 1;"
+              aria-hidden="true"
+            >
+              credit_card
+            </span>
+            <div class="min-w-0">
+              <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                Card or bank transfer
+              </p>
+              <p class="mt-1 text-caption text-[color:var(--color-text-secondary)]">
+                Multiple payment methods accepted.
+              </p>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <!-- ── Mobile-only consultant block ── -->
+      {
+        consultant && (
+          <div class="md:hidden">
+            <ConsultantBlock
+              name={consultant.name}
+              photoUrl={consultant.photoUrl}
+              role={consultant.role}
+              nextTouchpointAt={consultant.nextTouchpointAt}
+              nextTouchpointLabel={consultant.nextTouchpointLabel}
+              phone={consultant.phone}
+            />
+          </div>
+        )
+      }
+    </section>
+
+    <!-- ── Desktop right rail (sticky) ── -->
+    <aside class="hidden md:flex md:flex-col gap-card md:sticky md:top-28">
+      <!-- Error card -->
+      {
+        isErrorState && (
+          <div
+            class="rounded-lg border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-stack"
+            role="status"
+          >
+            <div class="flex items-start gap-row">
+              <span
+                class="material-symbols-outlined text-[20px] text-[color:var(--color-attention)] mt-0.5"
+                aria-hidden="true"
+              >
+                error
+              </span>
+              <div class="min-w-0">
+                <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                  {errorTitle}
+                </p>
+                <p class="mt-1 text-body text-[color:var(--color-text-secondary)]">{errorBody}</p>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      <!-- Action card: paid / link-expired / payable / pending -->
+      {
+        isPaid ? (
+          <section
+            class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-section"
+            aria-label="Invoice paid"
+          >
+            <p class="text-label uppercase text-[color:var(--color-complete)]">Paid</p>
+            <div class="mt-3">
+              <MoneyDisplay amountCents={invoice.amountCents} size="display" />
+            </div>
+            {invoice.paidShortDate && (
+              <p class="mt-4 text-caption font-medium text-[color:var(--color-complete)]">
+                Paid {invoice.paidShortDate}. Receipt attached.
+              </p>
+            )}
+          </section>
+        ) : isLinkExpired ? (
+          <section
+            class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-section"
+            aria-label="Link expired"
+          >
+            <p class="text-label uppercase text-[color:var(--color-attention)]">Link expired</p>
+            <div class="mt-3">
+              <MoneyDisplay amountCents={invoice.amountCents} size="display" />
+              <p class="mt-2 text-label uppercase text-[color:var(--color-text-muted)]">
+                Remaining balance
+              </p>
+            </div>
+            <div class="mt-6">
+              {consultantContactHref ? (
+                <a
+                  href={consultantContactHref}
+                  class="inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-[var(--radius-button)] bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                >
+                  Contact consultant
+                </a>
+              ) : (
+                <p class="text-body text-[color:var(--color-text-secondary)]">
+                  Contact your consultant for a new payment link.
+                </p>
+              )}
+            </div>
+          </section>
+        ) : invoice.isPayable && invoice.stripeUrl ? (
+          <section
+            class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-section"
+            aria-label={ctaLabel}
+          >
+            <p class="text-label uppercase text-[color:var(--color-text-muted)]">
+              Remaining balance
+            </p>
+            <div class="mt-1">
+              <MoneyDisplay amountCents={invoice.amountCents} size="display" />
+            </div>
+            {invoice.dueCaption && (
+              <p class="mt-2 text-caption font-medium text-[color:var(--color-text-muted)]">
+                Due {invoice.dueCaption}.
+              </p>
+            )}
+            <a
+              href={invoice.stripeUrl}
+              class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-[var(--radius-button)] bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+            >
+              {ctaLabel}
+            </a>
+            <div class="mt-4 flex items-center justify-center gap-2 text-label uppercase font-semibold text-[color:var(--color-text-muted)]">
+              <span class="material-symbols-outlined text-[16px]" aria-hidden="true">
+                lock
+              </span>
+              <span>Secure payment via Stripe</span>
+            </div>
+          </section>
+        ) : (
+          <section
+            class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-section"
+            aria-label="Payment link pending"
+          >
+            <p class="text-label uppercase text-[color:var(--color-text-muted)]">
+              Remaining balance
+            </p>
+            <div class="mt-3">
+              <MoneyDisplay amountCents={invoice.amountCents} size="display" />
+            </div>
+            <p class="mt-4 text-body text-[color:var(--color-text-secondary)]">
+              Payment link pending — your consultant will send it shortly.
+            </p>
+          </section>
+        )
+      }
+
+      <!-- Desktop consultant block -->
+      {
+        consultant && (
+          <ConsultantBlock
+            name={consultant.name}
+            photoUrl={consultant.photoUrl}
+            role={consultant.role}
+            nextTouchpointAt={consultant.nextTouchpointAt}
+            nextTouchpointLabel={consultant.nextTouchpointLabel}
+            phone={consultant.phone}
+          />
+        )
+      }
+    </aside>
+  </div>
+</main>
