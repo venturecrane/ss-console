@@ -1,0 +1,38 @@
+---
+// src/pages/design-preview/portal-invoices-list.astro
+// Dev-only preview. Production exclusion via import.meta.env.DEV guard.
+
+import '../../styles/global.css'
+import fixtureData from './portal-invoices-list.fixture.json'
+import InvoicesList from '../../components/portal/InvoicesList.astro'
+
+if (!import.meta.env.DEV) {
+  return Astro.redirect('/404')
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,600,700,800&f[]=satoshi@400,500,600,700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+    <title>[preview] InvoicesList</title>
+  </head>
+  <body class="min-h-screen bg-[color:var(--color-background)]">
+    <InvoicesList {...fixtureData} />
+  </body>
+</html>

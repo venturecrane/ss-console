@@ -1,0 +1,179 @@
+---
+/**
+ * Portal engagement progress surface.
+ *
+ * surface: session-auth-client / archetype: detail / viewport: mobile-first
+ * task: check-progress / pattern: persistent-tabs
+ *
+ * Status checker's view: "where are we in the work, what's been done,
+ * what's next." No progress bars, ever. Evidence over reassurance
+ * (brief §Design principles).
+ *
+ * Structure:
+ *   1. Heading "Engagement"
+ *   2. Engagement summary panel — reference line + scope + opened / due
+ *      dates + status tag
+ *   3. Activity log section — timeline entries (past tense, concrete)
+ *   4. Consultant block with next-touchpoint
+ *
+ * No data fetching. All values via props.
+ */
+
+import SkipToMain from '../SkipToMain.astro'
+import PortalHeader from './PortalHeader.astro'
+import PortalTabs from './PortalTabs.astro'
+import ConsultantBlock from './ConsultantBlock.astro'
+import StatusPill from './StatusPill.astro'
+import TimelineEntry from './TimelineEntry.astro'
+import type { Tone } from '../../lib/portal/status'
+
+const VALID_TONES: Tone[] = ['info', 'success', 'danger', 'warning', 'neutral']
+function coerceTone(value: string): Tone {
+  return (VALID_TONES as string[]).includes(value) ? (value as Tone) : 'neutral'
+}
+
+export interface Props {
+  client: { name: string }
+  engagement: {
+    /** Short reference id — e.g., "DEL-2026-001" */
+    reference: string
+    /** Short scope summary — one sentence. */
+    scope: string
+    /** ISO date (`YYYY-MM-DD`). Rendered as-is. */
+    openedOn: string
+    /** ISO date of estimated completion. */
+    estimatedCompletion: string
+    /** One of the Tone values (info/success/danger/warning/neutral). Plain
+     *  string in the interface for JSON fixture compatibility; coerced
+     *  before passing to StatusPill. */
+    statusTone: string
+    statusLabel: string
+  }
+  /**
+   * Chronological activity log. Most recent first. Each entry renders
+   * through <TimelineEntry /> in log-line format (mono-caps meta row
+   * above Satoshi prose body).
+   */
+  timeline: Array<{
+    id: string
+    date: string
+    actor: string
+    body: string
+    artifactLabel?: string | null
+    artifactHref?: string | null
+    artifactIcon?: string
+  }>
+  consultant: {
+    name: string
+    firstName: string
+    photoUrl: string | null
+    role: string | null
+    phone: string | null
+    email?: string | null
+    nextTouchpointAt: string | null
+    nextTouchpointLabel: string | null
+  }
+}
+
+const { client, engagement, timeline, consultant } = Astro.props
+---
+
+<SkipToMain />
+<PortalHeader
+  clientName={client.name}
+  consultantPhone={consultant.phone}
+  consultantEmail={consultant.email ?? null}
+  consultantFirstName={consultant.firstName}
+/>
+<PortalTabs pathname="/portal/engagement" />
+
+<main id="main" role="main" class="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 pb-24 md:pb-10">
+  <h1 class="text-display text-[color:var(--color-text-primary)] mb-section">Engagement</h1>
+
+  <!-- Summary panel -->
+  <section
+    class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card mb-section"
+    aria-labelledby="summary-heading"
+  >
+    <div
+      class="flex items-center justify-between gap-stack pb-stack border-b border-[color:var(--color-border-subtle)] font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-muted)] tabular-nums"
+    >
+      <span>REF {engagement.reference}</span>
+      <StatusPill tone={coerceTone(engagement.statusTone)} label={engagement.statusLabel} />
+    </div>
+    <h2 id="summary-heading" class="sr-only">Engagement summary</h2>
+    <div class="pt-card grid grid-cols-1 md:grid-cols-3 gap-stack md:gap-section">
+      <div>
+        <p
+          class="font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-muted)]"
+        >
+          Scope
+        </p>
+        <p class="mt-row text-body text-[color:var(--color-text-primary)]">{engagement.scope}</p>
+      </div>
+      <div>
+        <p
+          class="font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-muted)]"
+        >
+          Opened
+        </p>
+        <p class="mt-row font-mono text-body tabular-nums text-[color:var(--color-text-primary)]">
+          {engagement.openedOn}
+        </p>
+      </div>
+      <div>
+        <p
+          class="font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-muted)]"
+        >
+          Estimated completion
+        </p>
+        <p class="mt-row font-mono text-body tabular-nums text-[color:var(--color-text-primary)]">
+          {engagement.estimatedCompletion}
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Activity log -->
+  <section class="mb-section" aria-labelledby="log-heading">
+    <h2
+      id="log-heading"
+      class="mb-stack pb-row border-b border-[color:var(--color-border)] font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-primary)]"
+    >
+      Activity log
+    </h2>
+    {
+      timeline.length === 0 ? (
+        <p class="text-caption text-[color:var(--color-text-muted)]">
+          The work begins at the first scheduled check-in.
+        </p>
+      ) : (
+        <ol class="flex flex-col gap-stack" role="list">
+          {timeline.map((entry) => (
+            <li class="pt-stack border-t border-[color:var(--color-border-subtle)] first:border-t-0 first:pt-0">
+              <TimelineEntry
+                date={entry.date}
+                actor={entry.actor}
+                body={entry.body}
+                artifactLabel={entry.artifactLabel ?? undefined}
+                artifactHref={entry.artifactHref ?? undefined}
+                artifactIcon={entry.artifactIcon}
+              />
+            </li>
+          ))}
+        </ol>
+      )
+    }
+  </section>
+
+  <!-- Consultant block -->
+  <ConsultantBlock
+    name={consultant.name}
+    photoUrl={consultant.photoUrl}
+    role={consultant.role}
+    nextTouchpointAt={consultant.nextTouchpointAt}
+    nextTouchpointLabel={consultant.nextTouchpointLabel}
+    phone={consultant.phone}
+    email={consultant.email ?? null}
+  />
+</main>

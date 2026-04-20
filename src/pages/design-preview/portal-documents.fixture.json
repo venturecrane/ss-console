@@ -1,0 +1,70 @@
+{
+  "client": {
+    "name": "Delgado Plumbing"
+  },
+  "groups": [
+    {
+      "label": "Agreement",
+      "items": [
+        {
+          "id": "doc_sow_001",
+          "title": "Statement of Work — operations assessment",
+          "icon": "receipt_long",
+          "eyebrow": "SIGNED 22 MARCH 2026",
+          "href": "/portal/documents/sow_001/download",
+          "trailingIcon": "download"
+        }
+      ]
+    },
+    {
+      "label": "Deliverables",
+      "items": [
+        {
+          "id": "doc_intake_script",
+          "title": "Call-intake script — revised",
+          "icon": "description",
+          "eyebrow": "DELIVERED 9 APRIL 2026",
+          "href": "/portal/documents/intake_script/download",
+          "trailingIcon": "download"
+        },
+        {
+          "id": "doc_afterhours",
+          "title": "After-hours routing audit and fix plan",
+          "icon": "description",
+          "eyebrow": "DELIVERED 14 APRIL 2026",
+          "href": "/portal/documents/afterhours/download",
+          "trailingIcon": "download"
+        },
+        {
+          "id": "doc_warranty_checklist",
+          "title": "Warranty-question intake checklist",
+          "icon": "checklist",
+          "eyebrow": "DELIVERED 14 APRIL 2026",
+          "href": "/portal/documents/warranty_checklist/download",
+          "trailingIcon": "download"
+        }
+      ]
+    },
+    {
+      "label": "Notes on file",
+      "items": [
+        {
+          "id": "doc_notes_0414",
+          "title": "Dispatcher shadow — session notes",
+          "icon": "edit_note",
+          "eyebrow": "FILED 14 APRIL 2026",
+          "href": "/portal/documents/notes_0414/download",
+          "trailingIcon": "download"
+        },
+        {
+          "id": "doc_assessment",
+          "title": "Initial assessment summary",
+          "icon": "edit_note",
+          "eyebrow": "FILED 2 APRIL 2026",
+          "href": "/portal/documents/assessment/download",
+          "trailingIcon": "download"
+        }
+      ]
+    }
+  ]
+}
