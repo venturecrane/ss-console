@@ -108,10 +108,10 @@ Concept A, invoice-pending state, 390px above the fold (post-identity tokens):
 - Client label: "Client · Delgado Plumbing" (IBM Plex Mono caps, label token 12/16)
 - Headline: "Your April invoice is due Friday." (Switzer 700, 40/44, tracking -0.02em; mobile drops to 30/34)
 - Invoice card:
-  - Reference line: "REF INV-1023 / ISSUED 2026-04-15" left + "STATUS · DUE" right, with oxblood attention dot (IBM Plex Mono caps, 12/16)
+  - Reference line: "REF INV-1023 / ISSUED 2026-04-15" left + "STATUS · DUE" right, with petrol blue attention dot (IBM Plex Mono caps, 12/16)
   - Amount: "$4,250.00" (IBM Plex Mono 500, 32/40 mobile, 48/52 desktop, tabular-nums)
   - Meta rows, 4 entries (IBM Plex Mono 500, 13/18, tabular-nums): Issued, Due, Method, Terms
-  - [Pay invoice] primary button (44px min height, oxblood `--color-primary`, 0 radius, thumb zone)
+  - [Pay invoice] primary button (44px min height, petrol blue `--color-primary`, 0 radius, thumb zone)
   - Secondary: [Download PDF] ghost button with `--color-border` outline
 - Consultant block (separate card): photo placeholder 80px square, name "Scott Durgan" (Switzer 600, 18/24), role "Consultant" (IBM Plex Mono caps, label), next check-in line (IBM Plex Mono 500, 13/18)
 - Below fold: timeline entries with mono date + actor prefix (`2026-04-14 · SCOTT`), body prose in Switzer (16/24, `text-text-primary`), optional artifact link (mono caps, underlined)
@@ -240,7 +240,7 @@ Where consultant photo is called for and the real photo is not yet available, us
 ## Accessibility floor
 
 - WCAG 2.2 AA: 4.5:1 text contrast minimum (token pairings verified — see `.design/DESIGN.md` contrast table)
-- Visible focus rings on all interactive elements (2px ring, 2px offset, color `--color-action` / `#7A2323` oxblood)
+- Visible focus rings on all interactive elements (2px ring, 2px offset, color `--color-action` / `#1E4F5C` petrol blue)
 - Semantic landmarks (header, main, nav)
 - Screen-reader labels on icon-only buttons
 - Tap targets ≥44px (see mobile spec)
@@ -309,10 +309,10 @@ Border subtle:    #E5E4E1   (interior rules)
 Text primary:     #0A0A0A   (warm graphite)
 Text secondary:   #4A4A47
 Text muted:       #8E8E8A
-Primary:          #7A2323   (deep oxblood, oxblood)
-Primary hover:    #5D1A1A
-Action:           #7A2323   (focus ring, 2px ring + 2px offset)
-Attention:        #7A2323   (same as primary by design)
+Primary:          #1E4F5C   (deep petrol blue, petrol blue)
+Primary hover:    #163E48
+Action:           #1E4F5C   (focus ring, 2px ring + 2px offset)
+Attention:        #1E4F5C   (same as primary by design)
 Complete:         #2C6E3F
 Error:            #8B1A1A
 Meta:             #4A4A47   (same as text-secondary, semantic name)

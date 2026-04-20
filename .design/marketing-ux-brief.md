@@ -36,7 +36,7 @@ SMD Services sells scope-based consulting engagements to businesses doing $750k�
 All identity rules from `.design/DESIGN.md` apply. Summary of what marketing gets automatically from the token cutover in #455:
 
 - Switzer display, Switzer body, IBM Plex Mono for any data readouts
-- Warm near-white `#F8F8F6` background, graphite ink, oxblood primary
+- Warm near-white `#F8F8F6` background, graphite ink, petrol blue primary
 - 0 radii (sharp) on cards, buttons, pills
 - Flat — no elevation, no shadows
 - Motion minimal (120ms color transitions)
@@ -48,7 +48,7 @@ All identity rules from `.design/DESIGN.md` apply. Summary of what marketing get
 - **Section labels.** Same as portal: mono-caps eyebrow above each major section (`WHAT WE DO`, `WHO WE HELP`, `HOW IT WORKS`, `PRICING`). Hairline-underlined.
 - **Cards.** 0 radius, hairline border, flat. Used sparingly — marketing prefers typographic hierarchy over boxed content.
 - **Booking / form flow.** Steps numbered visually (`1`, `2`, `3`), 2px rounded squares filled with the current step's primary or neutral tone. No progress bars.
-- **Buttons.** Primary CTA is oxblood filled. Secondary CTAs are ghost buttons with `--color-border` outline. No gradient, no drop-shadow, no elevation-on-hover.
+- **Buttons.** Primary CTA is petrol blue filled. Secondary CTAs are ghost buttons with `--color-border` outline. No gradient, no drop-shadow, no elevation-on-hover.
 - **Footer.** Minimal — copyright, privacy, terms, contact email, portal sign-in link. Typographic, hairline-separated, no decoration.
 
 ## Anti-patterns (marketing-specific, additional to identity list)
@@ -88,7 +88,7 @@ Landing-page samples (already in production, kept as tone reference):
 
 - Every marketing page renders in Switzer + Switzer + IBM Plex Mono with no Inter / Plus Jakarta fallback (except via system fallback chain).
 - Palette reads warm — no cool slate or indigo anywhere.
-- All buttons render as 2px rectangles (oxblood primary, neutral ghost, error red).
+- All buttons render as 2px rectangles (petrol blue primary, neutral ghost, error red).
 - Booking wizard step indicators render as filled 2px squares with numbered labels, not circles.
 - No shadows, gradients, glow effects, or motion beyond 120ms color transitions.
 - Homepage above-the-fold answers "what does this firm do" without scrolling.

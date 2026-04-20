@@ -42,7 +42,7 @@ Everything in `.design/DESIGN.md` applies to admin. Summary of what admin gets f
 
 - Switzer display + Switzer body + IBM Plex Mono data
 - Warm near-white `#F8F8F6` background, `#0A0A0A` graphite ink
-- Ochre `#7A2323` primary / attention / focus-ring accent
+- Ochre `#1E4F5C` primary / attention / focus-ring accent
 - 0 radii (sharp) across cards, buttons, and status tags
 - Flat — no shadows, no gradient washes, no elevation
 - Motion minimal (120ms color transitions only)
@@ -57,7 +57,7 @@ Where portal and admin share a convention, the rule is stated once in the portal
 - **Reference lines.** Not required on every card in admin (lower-stakes than client-facing portal). Use when an object has a meaningful external ID — quotes (`REF QUOTE-2026-042`), invoices (`REF INV-1023`), engagements (`REF ENG-2026-017`), assessments (`REF ASSESS-2026-009`). Mono caps, top of card, hairline underline.
 - **Status tags.** Single shared renderer: `statusBadgeClass(status)` in `src/lib/ui/status-badge.ts`. Returns a full class string — filled rectangular 2px tag with white text on tone-color background, mono caps with tracked letter-spacing. Admin maps ~20 status values across engagements, quotes, invoices, and leads to the five shared tones (info/success/danger/warning/neutral). Never wrap with extra padding or radius; the function covers it.
 - **Tables.** Permitted in admin (not in portal). Used for line items, invoice lists, milestone rosters, entity rolls. Header row is `text-label` mono-caps, hairline-separated from body. Row dividers are `--color-border-subtle`. Column alignment: prose left-aligned, numbers right-aligned with `tabular-nums`.
-- **Buttons.** Primary action oxblood filled, secondary ghost with `--color-border` outline, destructive `--color-error` filled. **Stage-transition buttons are not rainbow-coded.** Difference communicated by label, not color: Promote / Book Assessment / Send Proposal / Mark Engaged / etc. all render as primary oxblood. Lost / Dismiss / Cancel render neutral or destructive.
+- **Buttons.** Primary action petrol blue filled, secondary ghost with `--color-border` outline, destructive `--color-error` filled. **Stage-transition buttons are not rainbow-coded.** Difference communicated by label, not color: Promote / Book Assessment / Send Proposal / Mark Engaged / etc. all render as primary petrol blue. Lost / Dismiss / Cancel render neutral or destructive.
 - **Stage / tier / context-type badges.** Local helpers in individual admin pages currently return soft Tailwind family tints (`bg-amber-100 text-amber-700`, etc.) for fine-grained admin metadata. Tinted, pill-shaped, caption-sized. **Not identity-correct** but deferred — the signal density (8 stages × 4 tiers × 13 context types) doesn't collapse cleanly into five tones, and these tags are contextual operator metadata rather than primary status. Flagged as follow-up; see §Open follow-ups.
 - **Money.** Always IBM Plex Mono with `tabular-nums`, same as portal. Already rendered through `formatCurrency(...)` helpers per page.
 - **Dates.** Two registers, same as portal: natural-language in prose (`April 14, 2026`), ISO in data rows (`2026-04-14`). Timestamps in activity logs use ISO with optional time suffix.
@@ -81,7 +81,7 @@ What admin does NOT tolerate (same as portal identity):
 
 ## Anti-patterns (admin-specific, additional to the identity list in `.design/DESIGN.md`)
 
-- Color-coded stage-transition buttons. Label-first, oxblood-uniform.
+- Color-coded stage-transition buttons. Label-first, petrol blue-uniform.
 - Pastel tinted cards as the main container (tinted cards are fine for inline error / success banners only).
 - Deep modal stacks. Admin prefers full-page navigation with breadcrumbs over nested modals.
 - Mobile-first layouts. Desktop is the primary target.
@@ -114,7 +114,7 @@ Every failing admin action must surface a concrete reason and an immediate next 
 - Every status tag renders rectangular 2px (no pills anywhere).
 - Every monetary value renders mono tabular.
 - Palette reads warm: no cool slate or indigo anywhere in chrome or page body.
-- All buttons are oxblood primary, neutral ghost, or error red. No rainbow.
+- All buttons are petrol blue primary, neutral ghost, or error red. No rainbow.
 - Admin operator moves through a full lead-to-engagement lifecycle (prospect → assessing → proposing → engaged) and the visual continuity is uninterrupted.
 
 ## Open follow-ups

@@ -3,7 +3,7 @@
 Aesthetic direction chosen by Captain on 2026-04-19: **Swiss Functional**.
 
 Thesis: modernist craft. Disciplined grid, neutral grotesque type + tabular
-mono, restrained palette, single deep accent (oxblood). Authority through
+mono, restrained palette, single deep accent (petrol blue). Authority through
 design rigor, not decoration. Müller-Brockmann / Vignelli tradition.
 
 An earlier Architect's Studio direction (ochre + Cabinet Grotesk + Satoshi +
@@ -37,8 +37,8 @@ custom properties. `/design-brief --extract-identity` can re-parse them.
 - Text primary `#0A0A0A`
 - Text secondary `#4A4A47`
 - Text muted `#8E8E8A`
-- Primary / action / attention `#7A2323` (oxblood — single accent)
-- Primary hover `#5D1A1A`
+- Primary / action / attention `#1E4F5C` (petrol blue — single accent)
+- Primary hover `#163E48`
 - Complete `#2C6E3F` (deep forest, success-state only)
 - Error `#8B1A1A`
 

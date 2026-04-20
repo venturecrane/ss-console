@@ -25,14 +25,14 @@ Semantic roles. Downstream components reference tokens by role, not by hex.
 | `text-secondary` | `#4A4A47` | Captions, meta values, reference text                             |
 | `text-muted`     | `#8E8E8A` | Meta labels, placeholders, timestamps                             |
 | `meta`           | `#4A4A47` | Eyebrow labels, non-primary accent text (alias of text-secondary) |
-| `primary`        | `#7A2323` | Primary buttons, focus rings, single accent (oxblood)             |
-| `primary-hover`  | `#5D1A1A` | Primary button hover state                                        |
-| `action`         | `#7A2323` | Focus ring outline color                                          |
-| `attention`      | `#7A2323` | Status indicators needing action — same as primary by design      |
+| `primary`        | `#1E4F5C` | Primary buttons, focus rings, single accent (petrol blue)         |
+| `primary-hover`  | `#163E48` | Primary button hover state                                        |
+| `action`         | `#1E4F5C` | Focus ring outline color                                          |
+| `attention`      | `#1E4F5C` | Status indicators needing action — same as primary by design      |
 | `complete`       | `#2C6E3F` | Completed / paid status — deep forest green                       |
 | `error`          | `#8B1A1A` | Destructive states, validation failures                           |
 
-**Single-accent discipline.** Swiss modernism uses one primary color, not two or three. `primary` / `action` / `attention` all resolve to the same oxblood. `complete` is the deliberate complement (deep forest), reserved for success states. `error` reads as a distinct red, one step warmer than primary.
+**Single-accent discipline.** Swiss modernism uses one primary color, not two or three. `primary` / `action` / `attention` all resolve to the same petrol blue. `complete` is the deliberate complement (deep forest), reserved for success states. `error` reads as a distinct red, one step warmer than primary.
 
 **Contrast ratios (WCAG 2.2 AA, 4.5:1 floor for body text):**
 
