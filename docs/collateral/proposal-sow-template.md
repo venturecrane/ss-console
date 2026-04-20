@@ -75,7 +75,7 @@ Items that come up during the engagement but fall outside this scope will be cap
 
 **[$ amount]**
 
-[Internal note: quote = estimated hours x current rate. Client sees a project price only — no hourly breakdown.]
+[Internal note: derive via the [Pricing Framework](./pricing-framework.md). Quote = estimated hours × current rate, rounded per framework rules. Client sees a project price only — no hourly breakdown.]
 
 ---
 

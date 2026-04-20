@@ -163,7 +163,7 @@ Let them confirm, correct, or add. Then close:
 3. Run through Claude extraction prompt (Deliverable #34) to produce:
    - Structured capture doc (problems identified, complexity signals, scope drivers)
    - Draft SOW for review
-4. Begin solution design (tool selection, hours estimation, dependencies)
+4. Begin solution design (tool selection, hours estimation, dependencies). Use the [Pricing Framework](./pricing-framework.md) to turn findings into a project price.
 5. Proposal out within 48 hours
 
 ---
