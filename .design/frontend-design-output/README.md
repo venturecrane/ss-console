@@ -1,61 +1,55 @@
-# frontend-design output — SMD Services portal
+# frontend-design output — SMD Services
 
-Aesthetic direction chosen by Captain on 2026-04-19: **Architect's Studio**.
+Aesthetic direction chosen by Captain on 2026-04-19 (third iteration): **Modern Institutional**, navy accent `#2C5282`.
 
-Thesis: the portal reads like the project file from a small design studio.
-Monospace for data, geometric sans for prose, hairline structure, a reference
-number on everything. Authority through precision, not decoration.
+Thesis: classical serif display paired with a humanist sans, hairline structure, restrained palette, single deep-navy accent. Reads like a well-designed university publication, a think tank, or a quiet foundation. Thoughtful, credentialed, measured.
+
+## Exploration history
+
+Three directions taken before Modern Institutional landed:
+
+1. **Architect's Studio** (ochre + Cabinet Grotesk + Satoshi + JetBrains Mono + 2px radii) — taken through three PRs (#455 portal, #456 admin, #457 marketing) before Captain clarified direction hadn't been confirmed.
+2. **Swiss Functional** (petrol / oxblood + Switzer + IBM Plex Mono + 0 radii) — rendered and partially applied via PR #458; color disliked.
+3. **Modern Institutional** (navy + Crimson Pro + Public Sans + IBM Plex Mono + 0 radii) — current, applied via PR #458.
+
+Earlier exploration HTMLs have been removed; the chosen direction's reference lives at `exploration-v2/b-modern-institutional.html`.
 
 ## Files
 
-- `portal-home.html` — hero surface 1. Dashboard in invoice-pending state.
-  Shows: masthead, dominant action card, consultant block with photo placeholder,
-  activity log, engagement summary, ledger. Responsive 390px / 1280px.
-- `portal-invoices-detail.html` — hero surface 2. Invoice deep-link, unpaid.
-  Shows: breadcrumb, status badge, invoice body with line items, pay CTA,
-  consultant block, download affordance. Responsive 390px / 1280px.
+- `exploration-v2/a-workshop-utility.html` — Archivo Black industrial direction (not chosen, kept as reference)
+- `exploration-v2/b-modern-institutional.html` — **chosen direction** reference render
+- `exploration-v2/c-soft-contemporary.html` — Cormorant Garamond hospitality direction (not chosen, kept as reference)
 
-Both files are self-contained HTML with `<style>` blocks declaring CSS custom
-properties. `/design-brief --extract-identity` reads them directly.
-
-## Token stack (summary; authoritative values live in each file's `:root`)
+## Token stack (authoritative values live in `.design/DESIGN.md` and `.design/theme.css`)
 
 ### Color
 
-- Background `#FAFAF9` (warm near-white)
+- Background `#F9F7F1` (warm paper, slight cream)
 - Surface `#FFFFFF`
-- Border hairline `#E5E5E4`
-- Border subtle `#F0EFED`
-- Text primary `#0A0A0A` (graphite)
-- Text secondary `#52525B`
-- Text muted `#A1A1AA`
-- Primary / attention `#B45309` (deep ochre, amber 700)
-- Primary hover `#92400E`
-- Complete `#15803D`
-- Error `#991B1B`
+- Border hairline `#D8D4C8`
+- Border subtle `#ECE8DD`
+- Text primary `#1A1A1A` (graphite)
+- Text secondary `#52514C`
+- Text muted `#8E8C85`
+- Primary / action / attention `#2C5282` (deep navy — single accent)
+- Primary hover `#1F3A62`
+- Complete `#2F6E42` (deep forest, success-state only)
+- Error `#A02A2A` (warm red)
 
 ### Typography
 
-- Display — **Cabinet Grotesk** (Fontshare, free) 700, tracking -0.02em
-- Body — **Satoshi** (Fontshare, free) 400/500
-- Data / labels — **JetBrains Mono** (Google, OFL) 500, tabular-nums
-- No Inter anywhere. No PJS anywhere.
+- Display — **Crimson Pro** (Google, free) — classical serif
+- Body — **Public Sans** (Google, free, USWDS) — humanist sans
+- Data / tabular — **IBM Plex Mono** (Google OFL) for reference IDs and ISO timestamps
 
 ### Spacing rhythm
 
-- section 40px, card 28px, stack 16px, row 12px
+- section 48px, card 32px, stack 16px, row 12px
 
 ### Shape
 
-- Card radius 2px, button radius 2px, badge radius 2px. Sharp by intent.
+- Card radius 0, button radius 0, badge radius 0. Flat institutional chrome.
 
 ### Motion
 
-- Hover color transitions: 120ms ease
-- No scroll-driven animations, no page-transition flourishes. Print logic.
-
-## Next
-
-Step 2 of the pipeline: `/design-brief --extract-identity /Users/scottdurgan/dev/ss-console/.design/frontend-design-output/`
-
-That emits `.design/DESIGN.md` + `.design/theme.css` from these files.
+- Hover color transitions: 120ms ease. No scroll-driven animations.

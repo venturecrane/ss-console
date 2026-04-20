@@ -1,93 +1,82 @@
 /* ---------------------------------------------------------------------
- * SMD Services — Architect's Studio identity
- * Paste this @theme block into src/styles/global.css, replacing the
- * existing @theme block. Font @import lines go in the Astro layout head.
+ * SMD Services — Modern Institutional identity
+ * Paste this @theme block into src/styles/global.css.
  *
- * Source: Extracted from .design/frontend-design-output/*.html on 2026-04-19.
+ * Source: Extracted from .design/frontend-design-output/exploration-v2/
+ *   b-modern-institutional.html on 2026-04-19.
  * Full token documentation: .design/DESIGN.md
  * --------------------------------------------------------------------- */
 
 @theme {
-  /* ------------------------------------------------------------------
-   * Color roles (semantic, not per-screen)
-   * ------------------------------------------------------------------ */
-  --color-background: #fafaf9;
+  /* Color */
+  --color-background: #f9f7f1;
   --color-surface: #ffffff;
-  --color-border: #e5e5e4;
-  --color-border-subtle: #f0efed;
+  --color-surface-inverse: #2a2520; /* warm umber for dark-section backgrounds */
+  --color-border: #d8d4c8;
+  --color-border-subtle: #ece8dd;
 
-  --color-text-primary: #0a0a0a;
-  --color-text-secondary: #52525b;
-  --color-text-muted: #a1a1aa;
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #52514c;
+  --color-text-muted: #8e8c85;
 
-  --color-meta: #52525b;
+  --color-meta: #52514c;
 
-  --color-primary: #b45309;
-  --color-primary-hover: #92400e;
-  --color-action: #b45309;
-  --color-attention: #b45309;
-  --color-complete: #15803d;
-  --color-error: #991b1b;
+  --color-primary: #2c5282;
+  --color-primary-hover: #1f3a62;
+  --color-action: #2c5282;
+  --color-attention: #2c5282;
+  --color-complete: #2f6e42;
+  --color-error: #a02a2a;
 
-  /* ------------------------------------------------------------------
-   * Typography families
-   * ------------------------------------------------------------------ */
-  --font-display: 'Cabinet Grotesk', system-ui, sans-serif;
-  --font-body: 'Satoshi', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  /* Typography families */
+  --font-display: 'Crimson Pro', Georgia, 'Times New Roman', serif;
+  --font-body: 'Public Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
 
-  /* ------------------------------------------------------------------
-   * Typography scale
-   * ------------------------------------------------------------------ */
-  --text-display: 2.5rem; /* 40px */
-  --text-display--line-height: 2.75rem; /* 44px */
-  --text-display--font-weight: 700;
-  --text-display--letter-spacing: -0.02em;
+  /* Typography scale */
+  --text-display: 3rem; /* 48px */
+  --text-display--line-height: 3.375rem; /* 54px */
+  --text-display--font-weight: 500;
+  --text-display--letter-spacing: -0.01em;
 
-  --text-title: 1.5rem; /* 24px */
-  --text-title--line-height: 2rem; /* 32px */
-  --text-title--font-weight: 600;
-  --text-title--letter-spacing: -0.01em;
+  --text-title: 1.75rem; /* 28px */
+  --text-title--line-height: 2.125rem; /* 34px */
+  --text-title--font-weight: 500;
+  --text-title--letter-spacing: -0.005em;
 
   --text-heading: 1.125rem; /* 18px */
   --text-heading--line-height: 1.5rem; /* 24px */
   --text-heading--font-weight: 600;
 
-  --text-body-lg: 1.125rem; /* 18px */
-  --text-body-lg--line-height: 1.75rem; /* 28px */
+  --text-body-lg: 1.0625rem; /* 17px */
+  --text-body-lg--line-height: 1.625rem; /* 26px */
   --text-body-lg--font-weight: 400;
 
   --text-body: 1rem; /* 16px */
-  --text-body--line-height: 1.5rem; /* 24px */
+  --text-body--line-height: 1.55rem; /* ~25px */
   --text-body--font-weight: 400;
 
-  --text-caption: 0.8125rem; /* 13px */
-  --text-caption--line-height: 1.125rem; /* 18px */
+  --text-caption: 0.875rem; /* 14px */
+  --text-caption--line-height: 1.25rem; /* 20px */
   --text-caption--font-weight: 500;
-  --text-caption--letter-spacing: 0.01em;
 
   --text-label: 0.75rem; /* 12px */
-  --text-label--line-height: 1rem; /* 16px */
-  --text-label--font-weight: 600;
+  --text-label--line-height: 1rem;
+  --text-label--font-weight: 500;
   --text-label--letter-spacing: 0.08em;
 
-  --text-money: 2rem; /* 32px */
-  --text-money--line-height: 2.5rem; /* 40px */
+  --text-money: 2.75rem; /* 44px */
+  --text-money--line-height: 3rem;
   --text-money--font-weight: 500;
 
-  /* ------------------------------------------------------------------
-   * Spacing rhythm
-   * Generates utilities: p-card, gap-section, space-y-stack, etc.
-   * ------------------------------------------------------------------ */
-  --spacing-section: 2.5rem; /* 40px */
-  --spacing-card: 1.75rem; /* 28px */
+  /* Spacing rhythm */
+  --spacing-section: 3rem; /* 48px */
+  --spacing-card: 2rem; /* 32px */
   --spacing-stack: 1rem; /* 16px */
   --spacing-row: 0.75rem; /* 12px */
 
-  /* ------------------------------------------------------------------
-   * Shape — sharp by intent. No pills.
-   * ------------------------------------------------------------------ */
-  --radius-card: 2px;
-  --radius-button: 2px;
-  --radius-badge: 2px;
+  /* Shape — flat institutional */
+  --radius-card: 0;
+  --radius-button: 0;
+  --radius-badge: 0;
 }

@@ -1,15 +1,13 @@
 ---
 /**
- * Dollar-figure renderer. Money rule (brief §Appendix): every monetary
- * value appears as dollar figures. NEVER percentages, bars, or progress
- * indicators.
+ * Dollar-figure renderer. Money rule: every monetary value appears as
+ * dollar figures. NEVER percentages, bars, or progress indicators.
  *
- * Architect's Studio identity: all money in JetBrains Mono with
- * tabular-nums. Size presets map to the typography scale:
- *
- *   display → 32/40 (text-money token), JetBrains Mono 500, tabular-nums
- *   h2      → 24/32 (text-title size), JetBrains Mono 500, tabular-nums
- *   body    → 16/24 (text-body size), JetBrains Mono 500, tabular-nums
+ * Modern Institutional identity:
+ *   - Prominent money (display, h2) renders in Crimson Pro serif with
+ *     tabular-nums + lining-nums — editorial feel, classical weight.
+ *   - Inline money (body, list rows) renders in Public Sans with
+ *     tabular-nums — pairs cleanly with body prose.
  *
  * Input is cents (integer) to avoid float rounding. No decimal places
  * for whole-dollar amounts.
@@ -33,12 +31,12 @@ const formatted = new Intl.NumberFormat('en-US', {
 
 const sizeClass =
   size === 'display'
-    ? 'font-mono text-money font-medium text-[color:var(--color-text-primary)]'
+    ? 'font-display text-money font-medium text-[color:var(--color-text-primary)]'
     : size === 'h2'
-      ? 'font-mono text-title font-medium text-[color:var(--color-text-primary)]'
+      ? 'font-display text-title font-medium text-[color:var(--color-text-primary)]'
       : emphasize
-        ? 'font-mono text-body font-semibold text-[color:var(--color-text-primary)]'
-        : 'font-mono text-body font-medium text-[color:var(--color-text-primary)]'
+        ? 'font-body text-body font-semibold text-[color:var(--color-text-primary)]'
+        : 'font-body text-body font-medium text-[color:var(--color-text-primary)]'
 ---
 
 <span class={`tabular-nums ${sizeClass} ${klass}`}>{formatted}</span>

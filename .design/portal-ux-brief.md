@@ -1,6 +1,6 @@
 # Client Portal — UX Redesign Brief (final, post-identity-reset)
 
-_Revised 2026-04-19 against the Architect's Studio identity (see `.design/DESIGN.md`). Earlier revision was written against the generic SaaS placeholder identity — palette, typography, chrome conventions, and anti-patterns all updated to match the new direction. Structural decisions (surfaces, visit modes, three concepts, accessibility floor) unchanged._
+_Revised 2026-04-19 against the Modern Institutional identity (see `.design/DESIGN.md`). Earlier revision was written against the generic SaaS placeholder identity — palette, typography, chrome conventions, and anti-patterns all updated to match the new direction. Structural decisions (surfaces, visit modes, three concepts, accessibility floor) unchanged._
 
 ## Context
 
@@ -76,16 +76,16 @@ Deep links land on the thing, not on a dashboard that contains the thing.
 - **Precision over decoration.** Every reference number, every date, every dollar figure is typeset deliberately. Nothing is decorative.
 - If the client forwarded a screenshot to their spouse, one glance confirms real work is happening.
 
-## Identity chrome conventions (Architect's Studio)
+## Identity chrome conventions (Modern Institutional)
 
 These are the recurring structural/visual moves that define the aesthetic. Components in Step 5 must honor them:
 
-- **Reference lines** cap every card at the top. Format: `REF {ID} / {ATTRIBUTE · VALUE} / {SECONDARY · VALUE}`. JetBrains Mono, 12px (label token), uppercase, tracking 0.08em, `text-text-muted`. Separated from card body by a `border-border-subtle` hairline.
+- **Reference lines** cap every card at the top. Format: `REF {ID} / {ATTRIBUTE · VALUE} / {SECONDARY · VALUE}`. IBM Plex Mono, 12px (label token), uppercase, tracking 0.08em, `text-text-muted`. Separated from card body by a `border-border-subtle` hairline.
 - **Section labels** introduce each major page section. Short, uppercase, mono-caps: `Activity log`, `Engagement`, `Ledger`, `Prior payments`. Rendered at the label token, underlined by a `border-border` hairline.
-- **Status tags** are rectangular (2px radius), not pills. JetBrains Mono caps, `text-label` size, background in the semantic color (`--color-attention` for Due, `--color-complete` for Paid, `--color-error` for failure), `text-white`. A small dot can precede the label for redundancy (`● STATUS · DUE`).
+- **Status tags** are rectangular (0 radius), not pills. IBM Plex Mono caps, `text-label` size, background in the semantic color (`--color-attention` for Due, `--color-complete` for Paid, `--color-error` for failure), `text-white`. A small dot can precede the label for redundancy (`● STATUS · DUE`).
 - **Dates render two ways.** In headlines: natural language ("due Friday", "April 2026 engagement"). In data rows, timeline entries, and reference lines: ISO (`2026-04-14`). Never mix registers within one element.
-- **All money renders in JetBrains Mono with `tabular-nums`.** No exceptions. The dollar sign is part of the value, not decoration.
-- **Timeline entries read as log lines.** Format: `{ISO-date} · {ACTOR-CAPS}` as meta row (mono, label token), then narrative body in Satoshi below. Optional artifact link in mono caps.
+- **All money renders in IBM Plex Mono with `tabular-nums`.** No exceptions. The dollar sign is part of the value, not decoration.
+- **Timeline entries read as log lines.** Format: `{ISO-date} · {ACTOR-CAPS}` as meta row (mono, label token), then narrative body in Crimson Pro below. Optional artifact link in mono caps.
 - **Hairlines, not shadows.** Cards separate from surface via 1px `--color-border`, interior rules via `--color-border-subtle`. The identity is flat.
 - **Masthead at top of every surface.** Firm name or client label left, ISO date right, both in mono caps. Separated from page body by a 1px `--color-border` rule.
 
@@ -104,27 +104,27 @@ These are the recurring structural/visual moves that define the aesthetic. Compo
 
 Concept A, invoice-pending state, 390px above the fold (post-identity tokens):
 
-- Masthead: `SMD SERVICES` left + `2026.04.19` right (JetBrains Mono, 12/16, caps, tracking 0.08em)
-- Client label: "Client · Delgado Plumbing" (JetBrains Mono caps, label token 12/16)
-- Headline: "Your April invoice is due Friday." (Cabinet Grotesk 700, 40/44, tracking -0.02em; mobile drops to 30/34)
+- Masthead: `SMD SERVICES` left + `2026.04.19` right (IBM Plex Mono, 12/16, caps, tracking 0.08em)
+- Client label: "Client · Delgado Plumbing" (IBM Plex Mono caps, label token 12/16)
+- Headline: "Your April invoice is due Friday." (Crimson Pro 700, 40/44, tracking -0.02em; mobile drops to 30/34)
 - Invoice card:
-  - Reference line: "REF INV-1023 / ISSUED 2026-04-15" left + "STATUS · DUE" right, with ochre attention dot (JetBrains Mono caps, 12/16)
-  - Amount: "$4,250.00" (JetBrains Mono 500, 32/40 mobile, 48/52 desktop, tabular-nums)
-  - Meta rows, 4 entries (JetBrains Mono 500, 13/18, tabular-nums): Issued, Due, Method, Terms
-  - [Pay invoice] primary button (44px min height, ochre `--color-primary`, 2px radius, thumb zone)
+  - Reference line: "REF INV-1023 / ISSUED 2026-04-15" left + "STATUS · DUE" right, with navy attention dot (IBM Plex Mono caps, 12/16)
+  - Amount: "$4,250.00" (IBM Plex Mono 500, 32/40 mobile, 48/52 desktop, tabular-nums)
+  - Meta rows, 4 entries (IBM Plex Mono 500, 13/18, tabular-nums): Issued, Due, Method, Terms
+  - [Pay invoice] primary button (44px min height, navy `--color-primary`, 0 radius, thumb zone)
   - Secondary: [Download PDF] ghost button with `--color-border` outline
-- Consultant block (separate card): photo placeholder 80px square, name "Scott Durgan" (Cabinet Grotesk 600, 18/24), role "Consultant" (JetBrains Mono caps, label), next check-in line (JetBrains Mono 500, 13/18)
-- Below fold: timeline entries with mono date + actor prefix (`2026-04-14 · SCOTT`), body prose in Satoshi (16/24, `text-text-primary`), optional artifact link (mono caps, underlined)
+- Consultant block (separate card): photo placeholder 80px square, name "Scott Durgan" (Crimson Pro 600, 18/24), role "Consultant" (IBM Plex Mono caps, label), next check-in line (IBM Plex Mono 500, 13/18)
+- Below fold: timeline entries with mono date + actor prefix (`2026-04-14 · SCOTT`), body prose in Crimson Pro (16/24, `text-text-primary`), optional artifact link (mono caps, underlined)
 
 ## Above-fold specs for B and C (matching A's format)
 
-**B, invoice-pending, 390px above fold:** Pending-action entry inverts to top — dated header (`2026-04-14 · FROM SCOTT`, JetBrains Mono caps), invoice card with amount + due date + [Pay invoice], consultant photo and next touchpoint underneath. Scroll reveals older dated entries below, each a log-line header + prose body.
+**B, invoice-pending, 390px above fold:** Pending-action entry inverts to top — dated header (`2026-04-14 · FROM SCOTT`, IBM Plex Mono caps), invoice card with amount + due date + [Pay invoice], consultant photo and next touchpoint underneath. Scroll reveals older dated entries below, each a log-line header + prose body.
 
-**C, invoice-pending, 390px above fold:** Full-bleed invoice treatment dominates viewport — amount in large display type (JetBrains Mono 500, 48/52 desktop / 32/40 mobile, tabular-nums), due date caption (mono 13/18), [Pay invoice] button in thumb zone, consultant block below the action, one-line recent-activity link at the bottom (`Last update · 2026-04-14`).
+**C, invoice-pending, 390px above fold:** Full-bleed invoice treatment dominates viewport — amount in large display type (IBM Plex Mono 500, 48/52 desktop / 32/40 mobile, tabular-nums), due date caption (mono 13/18), [Pay invoice] button in thumb zone, consultant block below the action, one-line recent-activity link at the bottom (`Last update · 2026-04-14`).
 
 ## What must be preserved
 
-Typography (Cabinet Grotesk display, Satoshi body, JetBrains Mono data — see Appendix), palette (hex in Appendix), 2px radii across surfaces and buttons (rectangular mono-cap tags, not pills), generous vertical rhythm on chrome (40px sections, 28px card padding), voice (guide persona, human and direct, no hype, no em dashes, no AI-flavored copy), minimal iconography (Material Symbols Outlined used sparingly — the data speaks louder than icons in this identity).
+Typography (Crimson Pro display, Crimson Pro body, IBM Plex Mono data — see Appendix), palette (hex in Appendix), 0 radii across surfaces and buttons (rectangular mono-cap tags, not pills), generous vertical rhythm on chrome (40px sections, 28px card padding), voice (guide persona, human and direct, no hype, no em dashes, no AI-flavored copy), minimal iconography (Material Symbols Outlined used sparingly — the data speaks louder than icons in this identity).
 
 ## What is open
 
@@ -148,13 +148,13 @@ Existing (pre-identity) anti-patterns, still banned:
 - Softening or patronizing copy ("Don't worry", "We've got you covered")
 - Jira-speak milestone names ("Process documented for new client intake")
 
-New (identity-level) anti-patterns introduced by the Architect's Studio direction:
+New (identity-level) anti-patterns introduced by the Modern Institutional direction:
 
 - **Pill-shaped status badges** (fully rounded). Status renders as a rectangular mono-cap tag.
 - **Elevation / shadows of any kind.** The identity is flat. Hairlines and typographic hierarchy do the work.
-- **Non-mono dates, money, or reference IDs.** These always render in JetBrains Mono with `tabular-nums`.
+- **Non-mono dates, money, or reference IDs.** These always render in IBM Plex Mono with `tabular-nums`.
 - **Mixing ISO and natural-language dates in the same element.** Headlines are natural-language; data rows are ISO. One register per element.
-- **Gradient backgrounds, glow effects, color washes.** The canvas is warm near-white (`#FAFAF9`), flat.
+- **Gradient backgrounds, glow effects, color washes.** The canvas is warm near-white (`#F9F7F1`), flat.
 - **Heavy icon usage.** Icons as decoration, icons substituting for text labels, duotone icons, colorized icons. Material Symbols Outlined, monotone in `--color-text-muted`, used only when text alone is ambiguous.
 - **Rounded-corner cards (above 4px).** 2px is the hard ceiling.
 - **Caps-lock shouting in body copy.** Uppercase is reserved for labels, reference lines, and section eyebrows — never for body prose.
@@ -184,7 +184,7 @@ New (identity-level) anti-patterns introduced by the Architect's Studio directio
 
 ## Copy samples (tone calibration)
 
-Prose samples (Satoshi body):
+Prose samples (Crimson Pro body):
 
 - Invoice pending: "Your April invoice is due Friday."
 - Mid-engagement status: "We're in week 2. Scott sat with your dispatcher Tuesday."
@@ -193,7 +193,7 @@ Prose samples (Satoshi body):
 - Empty state: "Nothing needs your attention. Next touchpoint is Wednesday."
 - Paid invoice: "Paid April 12. Receipt attached."
 
-Chrome samples (JetBrains Mono caps):
+Chrome samples (IBM Plex Mono caps):
 
 - Reference line: `REF INV-1023 / ISSUED 2026-04-15`
 - Status tag: `STATUS · DUE` (with leading dot in attention color)
@@ -215,7 +215,7 @@ Every error surface includes the named human and a next step. No generic error p
 
 `Event = { date, actor, verb, object, optional artifact link }`. Past tense. No system-generated "status updated" entries.
 
-**Rendering format:** meta row is mono caps `{ISO-date} · {ACTOR}`, followed by narrative body in Satoshi. Artifact link (when present) renders in mono caps, underlined.
+**Rendering format:** meta row is mono caps `{ISO-date} · {ACTOR}`, followed by narrative body in Crimson Pro. Artifact link (when present) renders in mono caps, underlined.
 
 Example:
 
@@ -231,7 +231,7 @@ ISO date format (`YYYY-MM-DD`) in the meta row is required for the mono alignmen
 
 ## Money rule
 
-All monetary values render as dollar figures (e.g., "$4,250.00"). Never as percentages, bars, or progress indicators. Typeset in JetBrains Mono 500 with `font-variant-numeric: tabular-nums`. Two decimal places required on invoice detail surfaces for alignment; headline treatments may round (e.g., `$4,250`).
+All monetary values render as dollar figures (e.g., "$4,250.00"). Never as percentages, bars, or progress indicators. Typeset in IBM Plex Mono 500 with `font-variant-numeric: tabular-nums`. Two decimal places required on invoice detail surfaces for alignment; headline treatments may round (e.g., `$4,250`).
 
 ## Photo placeholder rule
 
@@ -240,7 +240,7 @@ Where consultant photo is called for and the real photo is not yet available, us
 ## Accessibility floor
 
 - WCAG 2.2 AA: 4.5:1 text contrast minimum (token pairings verified — see `.design/DESIGN.md` contrast table)
-- Visible focus rings on all interactive elements (2px ring, 2px offset, color `--color-action` / `#B45309` ochre)
+- Visible focus rings on all interactive elements (2px ring, 2px offset, color `--color-action` / `#2C5282` navy)
 - Semantic landmarks (header, main, nav)
 - Screen-reader labels on icon-only buttons
 - Tap targets ≥44px (see mobile spec)
@@ -255,7 +255,7 @@ Where consultant photo is called for and the real photo is not yet available, us
 - A status-checker can name the next milestone and when they'll next hear from us within 10 seconds of landing, testable with 3 users
 - Each concept independently passes the 10-second next-milestone test
 - Three concepts are structurally distinct, not visual variations
-- Every reference line, timeline entry, and money value renders in JetBrains Mono (identity integrity check)
+- Every reference line, timeline entry, and money value renders in IBM Plex Mono (identity integrity check)
 - No pill-shaped status badges anywhere (identity integrity check)
 
 ## Follow-ups (scheduled, not gaps)
@@ -295,42 +295,42 @@ Scott Durgan. Generated components reviewed visually at `/design-preview/portal-
 
 ---
 
-## Appendix: Hard design tokens (Architect's Studio — authoritative)
+## Appendix: Hard design tokens (Modern Institutional — authoritative)
 
 Full token spec and rationale: `.design/DESIGN.md`. Paste-ready `@theme` block: `.design/theme.css` (already merged into `src/styles/global.css` in PR #455).
 
 ### Color
 
 ```
-Background:       #FAFAF9   (warm near-white)
+Background:       #F9F7F1   (warm near-white)
 Surface:          #FFFFFF
-Border:           #E5E5E4   (hairline, 1px)
-Border subtle:    #F0EFED   (interior rules)
-Text primary:     #0A0A0A   (warm graphite)
-Text secondary:   #52525B
-Text muted:       #A1A1AA
-Primary:          #B45309   (deep ochre, amber 700)
-Primary hover:    #92400E
-Action:           #B45309   (focus ring, 2px ring + 2px offset)
-Attention:        #B45309   (same as primary by design)
-Complete:         #15803D
-Error:            #991B1B
-Meta:             #52525B   (same as text-secondary, semantic name)
+Border:           #D8D4C8   (hairline, 1px)
+Border subtle:    #ECE8DD   (interior rules)
+Text primary:     #1A1A1A   (warm graphite)
+Text secondary:   #52514C
+Text muted:       #8E8C85
+Primary:          #2C5282   (deep navy, navy)
+Primary hover:    #1F3A62
+Action:           #2C5282   (focus ring, 2px ring + 2px offset)
+Attention:        #2C5282   (same as primary by design)
+Complete:         #2F6E42
+Error:            #A02A2A
+Meta:             #52514C   (same as text-secondary, semantic name)
 ```
 
 ### Typography
 
 ```
-Display:      Cabinet Grotesk 700,  40/44, tracking -0.02em
-Title:        Cabinet Grotesk 600,  24/32, tracking -0.01em
-Heading:      Cabinet Grotesk 600,  18/24
-Body-lg:      Satoshi 400,           18/28
-Body:         Satoshi 400,           16/24
-Body emph:    Satoshi 500,           16/24
-Caption:      Satoshi 500,           13/18, tracking 0.01em
-Label:        JetBrains Mono 600,    12/16, tracking 0.08em, uppercase
-Money:        JetBrains Mono 500,    32/40, tabular-nums
-Data meta:    JetBrains Mono 500,    13/18, tabular-nums (in-flow mono)
+Display:      Crimson Pro 700,  40/44, tracking -0.02em
+Title:        Crimson Pro 600,  24/32, tracking -0.01em
+Heading:      Crimson Pro 600,  18/24
+Body-lg:      Crimson Pro 400,           18/28
+Body:         Crimson Pro 400,           16/24
+Body emph:    Crimson Pro 500,           16/24
+Caption:      Crimson Pro 500,           13/18, tracking 0.01em
+Label:        IBM Plex Mono 600,    12/16, tracking 0.08em, uppercase
+Money:        IBM Plex Mono 500,    32/40, tabular-nums
+Data meta:    IBM Plex Mono 500,    13/18, tabular-nums (in-flow mono)
 ```
 
 ### Spacing and shape
@@ -352,13 +352,13 @@ Served via two CDNs. The Astro layouts (`Base.astro`, `AdminLayout.astro`) and t
 
 ```html
 <link
-  href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,600,700,800&f[]=satoshi@400,500,600,700&display=swap"
+  href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700,800&display=swap"
   rel="stylesheet"
 />
 <link
-  href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap"
+  href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap"
   rel="stylesheet"
 />
 ```
 
-Cabinet Grotesk + Satoshi: Fontshare (free for personal + commercial). JetBrains Mono: Google Fonts (SIL OFL 1.1). No licensing to purchase.
+Crimson Pro + Crimson Pro: Fontshare (free for personal + commercial). IBM Plex Mono: Google Fonts (SIL OFL 1.1). No licensing to purchase.
