@@ -64,12 +64,12 @@ const touchpointText = formatTouchpoint()
 ---
 
 <section
-  class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-5 sm:p-card"
+  class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-5 sm:p-card"
   aria-label="Your consultant"
 >
   <div class="flex items-start gap-stack">
     <div
-      class="w-14 h-14 shrink-0 rounded-full bg-[color:var(--color-background)] border border-[color:var(--color-border)] overflow-hidden"
+      class="w-16 h-20 shrink-0 rounded-[var(--radius-card)] bg-[color:var(--color-background)] border border-[color:var(--color-border)] overflow-hidden"
     >
       {
         photoUrl ? (
@@ -81,31 +81,33 @@ const touchpointText = formatTouchpoint()
           />
         ) : (
           <svg
-            viewBox="0 0 56 56"
+            viewBox="0 0 64 80"
             role="img"
             aria-label="consultant photo"
             class="w-full h-full text-[color:var(--color-text-muted)]"
           >
-            <rect width="56" height="56" fill="currentColor" fill-opacity="0.12" />
-            <circle cx="28" cy="22" r="9" fill="currentColor" fill-opacity="0.5" />
-            <path
-              d="M10 52c2.5-9 9.5-14 18-14s15.5 5 18 14"
-              fill="currentColor"
-              fill-opacity="0.5"
-            />
+            <rect width="64" height="80" fill="currentColor" fill-opacity="0.12" />
+            <circle cx="32" cy="30" r="12" fill="currentColor" fill-opacity="0.5" />
+            <path d="M8 78c3-14 12-20 24-20s21 6 24 20" fill="currentColor" fill-opacity="0.5" />
           </svg>
         )
       }
     </div>
     <div class="flex-1 min-w-0">
-      <p class="text-base font-semibold text-[color:var(--color-text-primary)]">
+      <p class="text-heading text-[color:var(--color-text-primary)]">
         {name}
       </p>
-      {role && <p class="text-caption text-[color:var(--color-text-muted)]">{role}</p>}
+      {
+        role && (
+          <p class="mt-0.5 font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-muted)]">
+            {role}
+          </p>
+        )
+      }
       {
         touchpointText && (
-          <p class="mt-2 text-sm text-[color:var(--color-text-secondary)]">
-            Next check-in {touchpointText}
+          <p class="mt-row font-mono text-caption tabular-nums text-[color:var(--color-text-primary)]">
+            Next check-in · {touchpointText}
           </p>
         )
       }

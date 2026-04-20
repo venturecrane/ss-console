@@ -1,0 +1,52 @@
+{
+  "client": {
+    "name": "Delgado Plumbing"
+  },
+  "engagement": {
+    "reference": "DEL-2026-001",
+    "scope": "Operations assessment — intake, dispatch, and follow-up.",
+    "openedOn": "2026-03-22",
+    "estimatedCompletion": "2026-05-15",
+    "statusTone": "info",
+    "statusLabel": "Active"
+  },
+  "timeline": [
+    {
+      "id": "ev_2026_04_14",
+      "date": "2026-04-14",
+      "actor": "SCOTT",
+      "body": "Sat with the dispatcher. Two issues surfaced: warranty questions are not being asked on intake, and after-hours calls route to voicemail for twelve minutes before forwarding.",
+      "artifactLabel": "NOTES FILED 2026-04-14",
+      "artifactHref": "/portal/documents/notes_0414/download",
+      "artifactIcon": "description"
+    },
+    {
+      "id": "ev_2026_04_09",
+      "date": "2026-04-09",
+      "actor": "SCOTT",
+      "body": "Delivered the revised call script. Maria now prompts for warranty status before dispatching.",
+      "artifactLabel": "CALL SCRIPT ON FILE",
+      "artifactHref": "/portal/documents/intake_script/download",
+      "artifactIcon": "description"
+    },
+    {
+      "id": "ev_2026_04_02",
+      "date": "2026-04-02",
+      "actor": "SCOTT",
+      "body": "Initial on-site assessment. Toured intake, dispatch, and invoicing. Identified fourteen candidate improvements; priced and prioritized the top three.",
+      "artifactLabel": "ASSESSMENT SUMMARY ON FILE",
+      "artifactHref": "/portal/documents/assessment/download",
+      "artifactIcon": "edit_note"
+    }
+  ],
+  "consultant": {
+    "name": "Scott Durgan",
+    "firstName": "Scott",
+    "photoUrl": null,
+    "role": "Consultant",
+    "phone": "+16025550100",
+    "email": "scott@smd.services",
+    "nextTouchpointAt": "2026-04-22T17:00:00.000Z",
+    "nextTouchpointLabel": "Wed, Apr 22 at 10:00 AM"
+  }
+}

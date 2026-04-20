@@ -1,43 +1,58 @@
 ---
 /**
- * Dated narrative entry for the engagement timeline. Past tense, concrete;
- * no status-updated system entries.
+ * Dated narrative entry for the engagement timeline. Past tense, concrete.
+ * No status-updated system entries.
  *
- * Date format: short ("Apr 9"). Year only when crossing a year boundary —
- * handled by the host page; this component renders whatever string is passed.
+ * Architect's Studio identity: log-line format — mono-caps meta row
+ * above prose body. Date in ISO format for alignment, actor in uppercase
+ * caps. Optional mono-caps artifact link below the body.
  *
- * COLOR RULE (brief §Appendix): dates and timeline metadata use
- * --color-meta (muted indigo, #6366F1) to differentiate from text muted.
+ * Format:
+ *   2026-04-14 · SCOTT
+ *   Sat with your dispatcher. Two issues surfaced…
+ *   Notes filed 2026-04-14
  */
 
 import ArtifactChip from './ArtifactChip.astro'
 
 interface Props {
+  /** ISO date string recommended (e.g., `2026-04-14`). Host may format narrative date in body if desired. */
   date: string
+  /** Uppercase rendering recommended. Default `Scott`. */
+  actor?: string
   body: string
   artifactLabel?: string
   artifactHref?: string
   artifactIcon?: string
 }
 
-const { date, body, artifactLabel, artifactHref, artifactIcon = 'description' } = Astro.props
+const {
+  date,
+  actor = 'Scott',
+  body,
+  artifactLabel,
+  artifactHref,
+  artifactIcon = 'description',
+} = Astro.props
 ---
 
-<div class="flex gap-stack">
-  <div class="w-[48px] shrink-0">
+<div class="flex flex-col gap-row">
+  <div class="flex items-baseline gap-stack">
     <span
-      class="text-caption font-medium tracking-[0.01em] text-[color:var(--color-meta)] tabular-nums"
+      class="font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold tabular-nums text-[color:var(--color-text-secondary)]"
       >{date}</span
     >
+    <span
+      class="font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-primary)]"
+      >{actor}</span
+    >
   </div>
-  <div class="flex-1">
-    <p class="text-sm leading-[20px] text-[color:var(--color-text-secondary)]">{body}</p>
-    {
-      artifactLabel && artifactHref && (
-        <div class="mt-2">
-          <ArtifactChip icon={artifactIcon} label={artifactLabel} href={artifactHref} />
-        </div>
-      )
-    }
-  </div>
+  <p class="text-body text-[color:var(--color-text-primary)]">{body}</p>
+  {
+    artifactLabel && artifactHref && (
+      <div class="mt-row">
+        <ArtifactChip icon={artifactIcon} label={artifactLabel} href={artifactHref} />
+      </div>
+    )
+  }
 </div>

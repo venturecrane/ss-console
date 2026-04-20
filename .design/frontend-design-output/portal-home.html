@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Portal / Home — SMD Services</title>
+    <link
+      href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,600,700,800&f[]=satoshi@400,500,600,700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ===================================================================
+       * SMD Services — Architect's Studio identity
+       * Hero surface 1: portal-home / invoice-pending state
+       * =================================================================== */
+
+      :root {
+        /* ---------- Color ---------- */
+        --color-bg: #fafaf9;
+        --color-surface: #ffffff;
+        --color-border: #e5e5e4;
+        --color-border-subtle: #f0efed;
+        --color-text-primary: #0a0a0a;
+        --color-text-secondary: #52525b;
+        --color-text-muted: #a1a1aa;
+        --color-primary: #b45309;
+        --color-primary-hover: #92400e;
+        --color-action: #b45309;
+        --color-complete: #15803d;
+        --color-attention: #b45309;
+        --color-error: #991b1b;
+        --color-meta: #52525b;
+
+        /* ---------- Typography ---------- */
+        --font-display: 'Cabinet Grotesk', system-ui, sans-serif;
+        --font-body: 'Satoshi', system-ui, sans-serif;
+        --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+        --text-display-size: 2.5rem; /* 40px */
+        --text-display-lh: 2.75rem; /* 44px */
+        --text-display-weight: 700;
+        --text-display-tracking: -0.02em;
+
+        --text-title-size: 1.5rem; /* 24px */
+        --text-title-lh: 2rem; /* 32px */
+        --text-title-weight: 600;
+        --text-title-tracking: -0.01em;
+
+        --text-heading-size: 1.125rem; /* 18px */
+        --text-heading-lh: 1.5rem; /* 24px */
+        --text-heading-weight: 600;
+
+        --text-body-lg-size: 1.125rem; /* 18px */
+        --text-body-lg-lh: 1.75rem; /* 28px */
+
+        --text-body-size: 1rem; /* 16px */
+        --text-body-lh: 1.5rem; /* 24px */
+        --text-body-weight: 400;
+
+        --text-caption-size: 0.8125rem; /* 13px */
+        --text-caption-lh: 1.125rem; /* 18px */
+        --text-caption-weight: 500;
+        --text-caption-tracking: 0.01em;
+
+        --text-label-size: 0.75rem; /* 12px */
+        --text-label-lh: 1rem; /* 16px */
+        --text-label-weight: 600;
+        --text-label-tracking: 0.08em;
+
+        --text-money-size: 2rem; /* 32px */
+        --text-money-lh: 2.5rem; /* 40px */
+        --text-money-weight: 500;
+
+        /* ---------- Spacing rhythm ---------- */
+        --space-section: 2.5rem; /* 40px gap between major sections */
+        --space-card: 1.75rem; /* 28px card internal padding */
+        --space-stack: 1rem; /* 16px default vertical rhythm */
+        --space-row: 0.75rem; /* 12px list-row gap */
+
+        /* ---------- Shape ---------- */
+        --radius-card: 2px;
+        --radius-button: 2px;
+        --radius-badge: 2px;
+
+        /* ---------- Motion ---------- */
+        --motion-default: 120ms ease;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        background: var(--color-bg);
+      }
+
+      body {
+        color: var(--color-text-primary);
+        font-family: var(--font-body);
+        font-size: var(--text-body-size);
+        line-height: var(--text-body-lh);
+        font-weight: 400;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      /* ---------- Shell ---------- */
+
+      .shell {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 2rem 1.25rem 4rem;
+      }
+
+      @media (min-width: 768px) {
+        .shell {
+          padding: 3.5rem 2.5rem 6rem;
+        }
+      }
+
+      /* ---------- Masthead ---------- */
+
+      .masthead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--color-border);
+      }
+
+      .masthead__brand {
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+        color: var(--color-text-primary);
+      }
+
+      .masthead__meta {
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        color: var(--color-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ---------- Hero block ---------- */
+
+      .hero {
+        margin-top: var(--space-section);
+      }
+
+      .hero__client-label {
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        line-height: var(--text-label-lh);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        color: var(--color-text-secondary);
+        font-weight: var(--text-label-weight);
+      }
+
+      .hero__headline {
+        margin-top: 0.75rem;
+        font-family: var(--font-display);
+        font-size: var(--text-display-size);
+        line-height: var(--text-display-lh);
+        font-weight: var(--text-display-weight);
+        letter-spacing: var(--text-display-tracking);
+        color: var(--color-text-primary);
+        max-width: 36ch;
+      }
+
+      @media (max-width: 640px) {
+        .hero__headline {
+          font-size: 1.875rem; /* 30px on mobile */
+          line-height: 2.125rem;
+        }
+      }
+
+      /* ---------- Invoice card (dominant action) ---------- */
+
+      .invoice-card {
+        margin-top: var(--space-section);
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-card);
+        padding: var(--space-card);
+      }
+
+      .invoice-card__ref {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--color-border-subtle);
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        color: var(--color-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .invoice-card__status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        color: var(--color-attention);
+      }
+
+      .invoice-card__status::before {
+        content: '';
+        display: inline-block;
+        width: 0.375rem;
+        height: 0.375rem;
+        background: var(--color-attention);
+        border-radius: var(--radius-badge);
+      }
+
+      .invoice-card__body {
+        padding-top: 1.5rem;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+      }
+
+      @media (min-width: 768px) {
+        .invoice-card__body {
+          grid-template-columns: 1.2fr 1fr;
+          align-items: end;
+          gap: 2.5rem;
+        }
+      }
+
+      .invoice-card__amount {
+        font-family: var(--font-mono);
+        font-size: var(--text-money-size);
+        line-height: var(--text-money-lh);
+        font-weight: var(--text-money-weight);
+        font-variant-numeric: tabular-nums;
+        color: var(--color-text-primary);
+        letter-spacing: -0.01em;
+      }
+
+      @media (min-width: 768px) {
+        .invoice-card__amount {
+          font-size: 3rem; /* 48px desktop */
+          line-height: 3.25rem;
+        }
+      }
+
+      .invoice-card__meta-rows {
+        margin-top: 0.75rem;
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      .invoice-card__meta-row {
+        display: grid;
+        grid-template-columns: 7rem 1fr;
+        align-items: baseline;
+        font-family: var(--font-mono);
+        font-size: var(--text-caption-size);
+        line-height: var(--text-caption-lh);
+        color: var(--color-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .invoice-card__meta-label {
+        text-transform: uppercase;
+        letter-spacing: var(--text-label-tracking);
+        font-weight: var(--text-label-weight);
+        color: var(--color-text-muted);
+        font-size: var(--text-label-size);
+      }
+
+      .invoice-card__meta-value {
+        color: var(--color-text-secondary);
+      }
+
+      /* ---------- Button ---------- */
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 1.25rem;
+        font-family: var(--font-body);
+        font-size: var(--text-body-size);
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: 0.005em;
+        border: 1px solid transparent;
+        border-radius: var(--radius-button);
+        background: var(--color-primary);
+        color: #ffffff;
+        cursor: pointer;
+        transition:
+          background-color var(--motion-default),
+          border-color var(--motion-default);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .btn:hover {
+        background: var(--color-primary-hover);
+      }
+
+      .btn:focus-visible {
+        outline: 2px solid var(--color-action);
+        outline-offset: 2px;
+      }
+
+      .btn--ghost {
+        background: transparent;
+        color: var(--color-text-primary);
+        border-color: var(--color-border);
+      }
+
+      .btn--ghost:hover {
+        background: var(--color-surface);
+        border-color: var(--color-text-primary);
+      }
+
+      .btn-row {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: stretch;
+      }
+
+      @media (min-width: 640px) {
+        .btn-row {
+          flex-direction: row;
+          align-items: center;
+        }
+      }
+
+      /* ---------- Consultant block ---------- */
+
+      .consultant {
+        margin-top: var(--space-section);
+        padding: var(--space-card);
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-card);
+        display: grid;
+        grid-template-columns: 80px 1fr;
+        gap: 1.25rem;
+        align-items: start;
+      }
+
+      @media (min-width: 768px) {
+        .consultant {
+          grid-template-columns: 112px 1fr auto;
+          gap: 2rem;
+          align-items: center;
+        }
+      }
+
+      .consultant__photo {
+        width: 80px;
+        height: 80px;
+        background: #ece9e4;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-card);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 0.5rem;
+        font-family: var(--font-mono);
+        font-size: 9px;
+        line-height: 1.2;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+      }
+
+      @media (min-width: 768px) {
+        .consultant__photo {
+          width: 112px;
+          height: 112px;
+        }
+      }
+
+      .consultant__name {
+        font-family: var(--font-display);
+        font-size: var(--text-heading-size);
+        line-height: var(--text-heading-lh);
+        font-weight: var(--text-heading-weight);
+        color: var(--color-text-primary);
+      }
+
+      .consultant__role {
+        margin-top: 0.125rem;
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+      }
+
+      .consultant__next {
+        margin-top: 0.75rem;
+        font-family: var(--font-mono);
+        font-size: var(--text-caption-size);
+        line-height: var(--text-caption-lh);
+        color: var(--color-text-primary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .consultant__channel {
+        margin-top: 0.25rem;
+        font-family: var(--font-body);
+        font-size: var(--text-caption-size);
+        line-height: var(--text-caption-lh);
+        color: var(--color-text-secondary);
+      }
+
+      .consultant__channel a {
+        color: var(--color-text-primary);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        text-decoration-thickness: 1px;
+      }
+
+      /* ---------- Section label pattern ---------- */
+
+      .section {
+        margin-top: var(--space-section);
+      }
+
+      .section__label {
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--color-border);
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        line-height: var(--text-label-lh);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+        color: var(--color-text-primary);
+      }
+
+      /* ---------- Activity log ---------- */
+
+      .log {
+        list-style: none;
+      }
+
+      .log__entry {
+        padding: 1.25rem 0;
+        border-bottom: 1px solid var(--color-border-subtle);
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.375rem;
+      }
+
+      @media (min-width: 768px) {
+        .log__entry {
+          grid-template-columns: 12rem 1fr;
+          gap: 1.5rem;
+          align-items: baseline;
+        }
+      }
+
+      .log__meta {
+        font-family: var(--font-mono);
+        font-size: var(--text-caption-size);
+        line-height: var(--text-caption-lh);
+        color: var(--color-text-secondary);
+        font-variant-numeric: tabular-nums;
+        display: flex;
+        gap: 1rem;
+        align-items: baseline;
+      }
+
+      .log__date {
+        color: var(--color-text-secondary);
+      }
+
+      .log__actor {
+        text-transform: uppercase;
+        letter-spacing: var(--text-label-tracking);
+        font-size: var(--text-label-size);
+        color: var(--color-text-primary);
+        font-weight: var(--text-label-weight);
+      }
+
+      .log__body {
+        font-family: var(--font-body);
+        font-size: var(--text-body-size);
+        line-height: var(--text-body-lh);
+        color: var(--color-text-primary);
+      }
+
+      .log__artifact {
+        margin-top: 0.375rem;
+        display: inline-block;
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        color: var(--color-text-secondary);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        text-decoration-thickness: 1px;
+      }
+
+      /* ---------- Facts grid (engagement summary) ---------- */
+
+      .facts {
+        margin-top: 1.25rem;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+      }
+
+      @media (min-width: 768px) {
+        .facts {
+          grid-template-columns: repeat(3, 1fr);
+          gap: 2.5rem;
+        }
+      }
+
+      .fact__label {
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        font-weight: var(--text-label-weight);
+      }
+
+      .fact__value {
+        margin-top: 0.375rem;
+        font-family: var(--font-body);
+        font-size: var(--text-body-size);
+        line-height: var(--text-body-lh);
+        color: var(--color-text-primary);
+      }
+
+      .fact__value--mono {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ---------- Ledger rows ---------- */
+
+      .ledger {
+        margin-top: 1.25rem;
+      }
+
+      .ledger__row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: baseline;
+        padding: 0.875rem 0;
+        border-bottom: 1px solid var(--color-border-subtle);
+      }
+
+      .ledger__row:last-child {
+        border-bottom: none;
+      }
+
+      .ledger__label {
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+      }
+
+      .ledger__value {
+        font-family: var(--font-mono);
+        font-size: var(--text-body-size);
+        line-height: var(--text-body-lh);
+        color: var(--color-text-primary);
+        font-weight: 500;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .ledger__value--attention {
+        color: var(--color-attention);
+      }
+
+      .ledger__context {
+        display: block;
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        margin-top: 0.125rem;
+      }
+
+      /* ---------- Footer ---------- */
+
+      .footer {
+        margin-top: 5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--color-border);
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <!-- Masthead -->
+      <header class="masthead">
+        <div class="masthead__brand">SMD Services</div>
+        <div class="masthead__meta">2026.04.19</div>
+      </header>
+
+      <!-- Hero -->
+      <section class="hero" aria-labelledby="hero-headline">
+        <div class="hero__client-label">Client · Delgado Plumbing</div>
+        <h1 id="hero-headline" class="hero__headline">Your April invoice is due Friday.</h1>
+      </section>
+
+      <!-- Dominant action card: invoice -->
+      <section class="invoice-card" aria-labelledby="invoice-heading">
+        <div class="invoice-card__ref">
+          <span>REF INV-1023 / ISSUED 2026-04-15</span>
+          <span class="invoice-card__status">STATUS · DUE</span>
+        </div>
+        <div class="invoice-card__body">
+          <div>
+            <h2
+              id="invoice-heading"
+              class="invoice-card__amount"
+              aria-label="Amount due: four thousand two hundred fifty dollars"
+            >
+              $4,250.00
+            </h2>
+            <div class="invoice-card__meta-rows">
+              <div class="invoice-card__meta-row">
+                <span class="invoice-card__meta-label">Issued</span>
+                <span class="invoice-card__meta-value">2026-04-15</span>
+              </div>
+              <div class="invoice-card__meta-row">
+                <span class="invoice-card__meta-label">Due</span>
+                <span class="invoice-card__meta-value">2026-04-24 · Friday</span>
+              </div>
+              <div class="invoice-card__meta-row">
+                <span class="invoice-card__meta-label">Method</span>
+                <span class="invoice-card__meta-value">Stripe</span>
+              </div>
+            </div>
+          </div>
+          <div class="btn-row">
+            <a class="btn" href="#pay">Pay invoice</a>
+            <a class="btn btn--ghost" href="#download">Download PDF</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Consultant block -->
+      <aside class="consultant" aria-label="Your consultant">
+        <div class="consultant__photo" aria-hidden="true">Consultant<br />photo</div>
+        <div>
+          <div class="consultant__name">Scott Durgan</div>
+          <div class="consultant__role">Consultant</div>
+          <div class="consultant__next">Next check-in · Wed 2026-04-22 · 10:00 MST</div>
+          <div class="consultant__channel">
+            Reach by SMS: <a href="sms:+16025550100">(602) 555-0100</a>. Replies within 1 business
+            day.
+          </div>
+        </div>
+      </aside>
+
+      <!-- Activity log -->
+      <section class="section" aria-labelledby="log-heading">
+        <h2 id="log-heading" class="section__label">Activity log</h2>
+        <ul class="log">
+          <li class="log__entry">
+            <div class="log__meta">
+              <span class="log__date">2026-04-14</span>
+              <span class="log__actor">Scott</span>
+            </div>
+            <div class="log__body">
+              Sat with your dispatcher. Two issues surfaced: warranty questions aren't being asked
+              on intake, and after-hours calls route to voicemail for 12 minutes before forwarding.
+              <a class="log__artifact" href="#notes-0414">View notes · 2026-04-14</a>
+            </div>
+          </li>
+          <li class="log__entry">
+            <div class="log__meta">
+              <span class="log__date">2026-04-09</span>
+              <span class="log__actor">Scott</span>
+            </div>
+            <div class="log__body">
+              Delivered new call script. Maria now prompts for warranty status before dispatching.
+              <a class="log__artifact" href="#doc-call-script">Open call script</a>
+            </div>
+          </li>
+          <li class="log__entry">
+            <div class="log__meta">
+              <span class="log__date">2026-04-02</span>
+              <span class="log__actor">Scott</span>
+            </div>
+            <div class="log__body">
+              Initial on-site assessment. Toured intake, dispatch, and invoicing. Identified 14
+              candidate improvements; priced and prioritized top three.
+              <a class="log__artifact" href="#doc-assessment">Open assessment summary</a>
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <!-- Engagement summary -->
+      <section class="section" aria-labelledby="engagement-heading">
+        <h2 id="engagement-heading" class="section__label">Engagement</h2>
+        <div class="facts">
+          <div>
+            <div class="fact__label">Scope</div>
+            <div class="fact__value">Operations assessment: intake, dispatch, follow-up</div>
+          </div>
+          <div>
+            <div class="fact__label">Started</div>
+            <div class="fact__value fact__value--mono">2026-03-22</div>
+          </div>
+          <div>
+            <div class="fact__label">Estimated completion</div>
+            <div class="fact__value fact__value--mono">2026-05-15</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Ledger -->
+      <section class="section" aria-labelledby="ledger-heading">
+        <h2 id="ledger-heading" class="section__label">Ledger</h2>
+        <div class="ledger">
+          <div class="ledger__row">
+            <span class="ledger__label">Paid to date</span>
+            <span class="ledger__value">$2,000.00</span>
+          </div>
+          <div class="ledger__row">
+            <span class="ledger__label">Remaining</span>
+            <span class="ledger__value">$6,250.00</span>
+          </div>
+          <div class="ledger__row">
+            <span class="ledger__label">
+              Next charge
+              <span class="ledger__context">due 2026-04-24</span>
+            </span>
+            <span class="ledger__value ledger__value--attention">$4,250.00</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <footer class="footer">
+        <span>SMD Services · Client portal</span>
+        <span>v1 · 2026.04.19</span>
+      </footer>
+    </main>
+  </body>
+</html>

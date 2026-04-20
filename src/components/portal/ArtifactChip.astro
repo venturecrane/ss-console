@@ -1,13 +1,16 @@
 ---
 /**
- * Small rounded chip pointing at a document, PDF, or external artifact.
- * 8px radius, 1px border in --color-border, white surface.
+ * Mono-caps artifact link pointing at a document, PDF, or external artifact.
+ * Rendered as a plain underlined link, not a bordered chip, matching the
+ * Architect's Studio identity (hairlines + typography carry the structure;
+ * no decorative containers for inline affordances).
  *
- * Icon is a Material Symbols Outlined name (e.g. "description", "receipt_long").
+ * Icon is an optional Material Symbols Outlined name (e.g. "description",
+ * "receipt_long") rendered at the label's baseline for redundancy.
  */
 
 interface Props {
-  icon: string
+  icon?: string
   label: string
   href: string
 }
@@ -17,8 +20,8 @@ const { icon, label, href } = Astro.props
 
 <a
   href={href}
-  class="inline-flex items-center gap-2 rounded-lg bg-[color:var(--color-surface)] border border-[color:var(--color-border)] px-3 py-1.5 text-[12px] font-medium text-[color:var(--color-text-secondary)] hover:border-[color:var(--color-text-muted)] transition-colors"
+  class="inline-flex items-center gap-1.5 font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] underline decoration-[color:var(--color-border)] hover:decoration-[color:var(--color-text-primary)] underline-offset-4 decoration-1 transition-colors"
 >
-  <span class="material-symbols-outlined text-[16px]">{icon}</span>
+  {icon && <span class="material-symbols-outlined text-[14px]">{icon}</span>}
   <span>{label}</span>
 </a>

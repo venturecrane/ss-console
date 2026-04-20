@@ -1,12 +1,17 @@
 ---
 /**
- * Tone-based status pill. The only place pill markup should exist on portal
- * surfaces. Consumes TONE_CLASS from src/lib/portal/status.ts so a tone
- * change (e.g., 'warning' shifts color) propagates everywhere at once.
+ * Tone-based status tag. The only place status-tag markup should exist on
+ * portal surfaces. Consumes TONE_CLASS from src/lib/portal/status.ts so a
+ * tone change propagates everywhere at once.
  *
- * Accessibility: a pill is a visual affordance for a fact that is already
- * available in the DOM (the status field). It does not need aria-label
- * when its text content matches the fact.
+ * Architect's Studio identity: rectangular mono-caps tag with a filled
+ * tone background and white text. 2px radius via --radius-badge. The
+ * component name is retained as StatusPill for import stability, but the
+ * shape is a tag, not a pill.
+ *
+ * Accessibility: a status tag is a visual affordance for a fact that is
+ * already available in the DOM (the status field). It does not need
+ * aria-label when its text content matches the fact.
  */
 
 import { TONE_CLASS, type Tone } from '../../lib/portal/status'
@@ -15,8 +20,8 @@ interface Props {
   tone: Tone
   label: string
   /**
-   * `compact` is the default (table/list rows). `base` is the larger pill
-   * used on detail pages where the pill is the primary status signal.
+   * `compact` is the default (table/list rows). `base` is the larger tag
+   * used on detail pages where status is the primary signal.
    */
   size?: 'compact' | 'base'
   class?: string
@@ -24,13 +29,13 @@ interface Props {
 
 const { tone, label, size = 'compact', class: klass = '' } = Astro.props
 
-const sizeClass = size === 'base' ? 'px-3 py-1 text-caption' : 'px-2.5 py-0.5 text-[11px] leading-4'
+const sizeClass = size === 'base' ? 'px-3 py-1.5 text-label' : 'px-2 py-1 text-label'
 
 const toneClass = TONE_CLASS[tone]
 ---
 
 <span
-  class={`inline-flex items-center font-medium rounded-full whitespace-nowrap ${sizeClass} ${toneClass} ${klass}`}
+  class={`inline-flex items-center font-mono uppercase tracking-[var(--text-label--letter-spacing)] font-semibold rounded-[var(--radius-badge)] whitespace-nowrap ${sizeClass} ${toneClass} ${klass}`}
 >
   {label}
 </span>

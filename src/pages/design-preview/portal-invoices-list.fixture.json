@@ -1,0 +1,43 @@
+{
+  "client": {
+    "name": "Delgado Plumbing"
+  },
+  "invoices": [
+    {
+      "id": "inv_1023",
+      "status": "sent",
+      "title": "Invoice 1023",
+      "amountCents": 425000,
+      "metaCaption": "Issued Apr 15",
+      "trailingCaption": "Due Friday",
+      "href": "/portal/invoices/inv_1023"
+    },
+    {
+      "id": "inv_1019",
+      "status": "overdue",
+      "title": "Invoice 1019",
+      "amountCents": 180000,
+      "metaCaption": "Issued Apr 2",
+      "trailingCaption": "5 days overdue",
+      "href": "/portal/invoices/inv_1019"
+    },
+    {
+      "id": "inv_1012",
+      "status": "paid",
+      "title": "Invoice 1012",
+      "amountCents": 200000,
+      "metaCaption": "Paid Apr 12",
+      "trailingCaption": null,
+      "href": "/portal/invoices/inv_1012"
+    },
+    {
+      "id": "inv_1004",
+      "status": "paid",
+      "title": "Invoice 1004",
+      "amountCents": 350000,
+      "metaCaption": "Paid Mar 28",
+      "trailingCaption": null,
+      "href": "/portal/invoices/inv_1004"
+    }
+  ]
+}

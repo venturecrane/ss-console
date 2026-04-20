@@ -98,15 +98,16 @@ export function resolveQuoteLabel(status: string): string {
  * Not exported as part of the public API — consumers pass a Tone; only
  * StatusPill renders the pill.
  *
- * The alpha-channel backgrounds (e.g., `bg-[color:var(--color-primary)]/10`)
- * give the pill a tinted surface without hard-coding a separate color
- * variable per tone. Text color uses the same semantic role at full
- * saturation for AA contrast against the tinted background.
+ * Architect's Studio identity: filled rectangular tag with white text, not
+ * a tinted pill. The high-contrast solid block reads as a status indicator
+ * in a technical document, not a marketing badge. `neutral` is the one
+ * subtle variant — it pairs border gray with secondary text for muted
+ * internal states (draft, superseded) that rarely surface to the client.
  */
 export const TONE_CLASS: Record<Tone, string> = {
-  info: 'bg-[color:var(--color-primary)]/10 text-[color:var(--color-primary)]',
-  success: 'bg-[color:var(--color-complete)]/10 text-[color:var(--color-complete)]',
-  danger: 'bg-[color:var(--color-error)]/10 text-[color:var(--color-error)]',
-  warning: 'bg-[color:var(--color-attention)]/10 text-[color:var(--color-attention)]',
-  neutral: 'bg-[color:var(--color-surface-muted,#f1f5f9)] text-[color:var(--color-text-secondary)]',
+  info: 'bg-[color:var(--color-primary)] text-white',
+  success: 'bg-[color:var(--color-complete)] text-white',
+  danger: 'bg-[color:var(--color-error)] text-white',
+  warning: 'bg-[color:var(--color-attention)] text-white',
+  neutral: 'bg-[color:var(--color-border)] text-[color:var(--color-text-secondary)]',
 }

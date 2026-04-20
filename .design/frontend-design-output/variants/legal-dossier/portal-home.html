@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Portal / Home — SMD Services (Legal Dossier)</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Public+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ===================================================================
+       * SMD Services — Legal Dossier identity (variant for comparison)
+       * Hero surface 1: portal-home / invoice-pending state
+       * =================================================================== */
+
+      :root {
+        /* ---------- Color ---------- */
+        --color-bg: #f8f5ef; /* document cream */
+        --color-surface: #ffffff; /* paper sheets on the desk */
+        --color-border: #d6cdb9; /* warm aged hairline */
+        --color-border-subtle: #e8e0cc; /* interior rules */
+        --color-text-primary: #111827; /* near-black ink */
+        --color-text-secondary: #4b4b4b;
+        --color-text-muted: #5e5648; /* warm muted */
+        --color-primary: #7c1d1d; /* claret — wax seal */
+        --color-primary-hover: #5d1515;
+        --color-action: #7c1d1d;
+        --color-complete: #1f5132;
+        --color-attention: #7c1d1d;
+        --color-error: #991b1b;
+        --color-meta: #5e5648;
+
+        /* ---------- Typography ---------- */
+        --font-display: 'EB Garamond', 'Garamond', 'Times New Roman', serif;
+        --font-body: 'EB Garamond', 'Garamond', 'Times New Roman', serif;
+        --font-meta: 'Public Sans', system-ui, -apple-system, sans-serif;
+
+        --text-display-size: 2.75rem; /* 44px */
+        --text-display-lh: 3.125rem; /* 50px */
+        --text-display-weight: 600;
+        --text-display-tracking: -0.01em;
+
+        --text-title-size: 1.875rem; /* 30px */
+        --text-title-lh: 2.375rem; /* 38px */
+        --text-title-weight: 600;
+        --text-title-tracking: -0.005em;
+
+        --text-heading-size: 1.375rem; /* 22px */
+        --text-heading-lh: 1.875rem; /* 30px */
+        --text-heading-weight: 600;
+
+        --text-body-lg-size: 1.25rem; /* 20px */
+        --text-body-lg-lh: 2rem; /* 32px */
+
+        --text-body-size: 1.125rem; /* 18px — serif needs more air */
+        --text-body-lh: 1.875rem; /* 30px */
+        --text-body-weight: 400;
+
+        --text-caption-size: 0.8125rem; /* 13px */
+        --text-caption-lh: 1.125rem; /* 18px */
+        --text-caption-weight: 500;
+
+        --text-label-size: 0.6875rem; /* 11px */
+        --text-label-lh: 1rem;
+        --text-label-weight: 600;
+        --text-label-tracking: 0.12em;
+
+        --text-money-size: 2.25rem; /* 36px */
+        --text-money-lh: 2.625rem;
+        --text-money-weight: 500;
+
+        /* ---------- Spacing rhythm — more generous than Studio ---------- */
+        --space-section: 3rem; /* 48px between major sections */
+        --space-card: 2rem; /* 32px card internal padding */
+        --space-stack: 1.125rem; /* 18px default vertical rhythm */
+        --space-row: 0.875rem; /* 14px row gap */
+
+        /* ---------- Shape — sharp, no rounding ---------- */
+        --radius-card: 0;
+        --radius-button: 0;
+        --radius-badge: 0;
+
+        /* ---------- Motion ---------- */
+        --motion-default: 120ms ease;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        background: var(--color-bg);
+      }
+
+      body {
+        color: var(--color-text-primary);
+        font-family: var(--font-body);
+        font-size: var(--text-body-size);
+        line-height: var(--text-body-lh);
+        font-weight: 400;
+        font-feature-settings:
+          'onum' 1,
+          'kern' 1,
+          'liga' 1;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      /* Lining tabular figures for any money / columnar data */
+      .fig-tab {
+        font-variant-numeric: tabular-nums lining-nums;
+        font-feature-settings:
+          'lnum' 1,
+          'tnum' 1;
+      }
+
+      /* Real small caps via EB Garamond feature */
+      .sc {
+        font-feature-settings:
+          'smcp' 1,
+          'onum' 1;
+        letter-spacing: 0.08em;
+      }
+
+      /* Meta label (sans tracked caps) */
+      .meta-label {
+        font-family: var(--font-meta);
+        font-size: var(--text-label-size);
+        line-height: var(--text-label-lh);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+        color: var(--color-text-muted);
+        font-feature-settings:
+          'tnum' 1,
+          'lnum' 1;
+      }
+
+      /* ---------- Shell (narrower than Studio) ---------- */
+
+      .shell {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 2.5rem 1.5rem 4rem;
+      }
+
+      @media (min-width: 768px) {
+        .shell {
+          padding: 4rem 3rem 6rem;
+        }
+      }
+
+      /* ---------- Letterhead ---------- */
+
+      .letterhead {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: end;
+        gap: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid var(--color-text-primary);
+      }
+
+      .letterhead__firm {
+        font-family: var(--font-display);
+        font-size: 1.625rem;
+        line-height: 1.75rem;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        font-feature-settings:
+          'smcp' 1,
+          'onum' 1;
+        letter-spacing: 0.06em;
+        text-transform: lowercase;
+      }
+
+      .letterhead__tagline {
+        font-family: var(--font-meta);
+        font-size: var(--text-label-size);
+        line-height: var(--text-label-lh);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+        color: var(--color-text-muted);
+        margin-top: 0.25rem;
+      }
+
+      .letterhead__meta {
+        font-family: var(--font-meta);
+        font-size: var(--text-label-size);
+        line-height: 1.5;
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+        color: var(--color-text-muted);
+        text-align: right;
+      }
+
+      .letterhead__meta div + div {
+        margin-top: 0.125rem;
+      }
+
+      /* ---------- Section pattern ---------- */
+
+      .section {
+        margin-top: var(--space-section);
+      }
+
+      .section__label {
+        font-family: var(--font-body);
+        font-size: 1rem;
+        line-height: 1.375rem;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        font-feature-settings:
+          'smcp' 1,
+          'onum' 1;
+        letter-spacing: 0.12em;
+        text-transform: lowercase;
+        padding-bottom: 0.625rem;
+        border-bottom: 1px solid var(--color-border);
+        margin-bottom: 1.5rem;
+      }
+
+      /* ---------- Hero ---------- */
+
+      .hero__headline {
+        font-family: var(--font-display);
+        font-size: var(--text-display-size);
+        line-height: var(--text-display-lh);
+        font-weight: var(--text-display-weight);
+        letter-spacing: var(--text-display-tracking);
+        color: var(--color-text-primary);
+        max-width: 22ch;
+      }
+
+      @media (max-width: 640px) {
+        .hero__headline {
+          font-size: 2rem;
+          line-height: 2.375rem;
+        }
+      }
+
+      /* ---------- Statement (invoice card) ---------- */
+
+      .statement {
+        margin-top: var(--space-section);
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        padding: var(--space-card);
+      }
+
+      .statement__header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--color-border-subtle);
+      }
+
+      .statement__ref,
+      .statement__status {
+        font-family: var(--font-meta);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+      }
+
+      .statement__ref {
+        color: var(--color-text-muted);
+        font-feature-settings:
+          'tnum' 1,
+          'lnum' 1;
+      }
+
+      .statement__status {
+        color: var(--color-attention);
+      }
+
+      .statement__body {
+        padding-top: 1.5rem;
+      }
+
+      .statement__amount {
+        font-family: var(--font-display);
+        font-size: 3rem;
+        line-height: 3.25rem;
+        font-weight: var(--text-money-weight);
+        color: var(--color-text-primary);
+        letter-spacing: -0.01em;
+        font-variant-numeric: tabular-nums lining-nums;
+      }
+
+      @media (max-width: 640px) {
+        .statement__amount {
+          font-size: var(--text-money-size);
+          line-height: var(--text-money-lh);
+        }
+      }
+
+      .statement__amount-caption {
+        display: inline-block;
+        margin-left: 0.625rem;
+        font-family: var(--font-meta);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        font-weight: var(--text-label-weight);
+        vertical-align: 0.9rem;
+      }
+
+      .statement__meta {
+        margin-top: 1.75rem;
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .meta-row {
+        display: grid;
+        grid-template-columns: 9rem 1fr;
+        align-items: baseline;
+        gap: 1rem;
+      }
+
+      .meta-row dt {
+        font-family: var(--font-meta);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+        color: var(--color-text-muted);
+      }
+
+      .meta-row dd {
+        font-family: var(--font-body);
+        font-size: var(--text-body-size);
+        line-height: 1.75rem;
+        color: var(--color-text-primary);
+      }
+
+      .meta-row dd.fig-tab {
+        font-feature-settings:
+          'lnum' 1,
+          'tnum' 1;
+      }
+
+      .meta-row dd.attention {
+        color: var(--color-attention);
+      }
+
+      /* ---------- Buttons ---------- */
+
+      .btn-row {
+        margin-top: 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      @media (min-width: 640px) {
+        .btn-row {
+          flex-direction: row;
+          align-items: center;
+        }
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        padding: 0 1.5rem;
+        font-family: var(--font-body);
+        font-size: 1.0625rem;
+        line-height: 1;
+        font-weight: 500;
+        letter-spacing: 0.005em;
+        border: 1px solid transparent;
+        border-radius: var(--radius-button);
+        background: var(--color-primary);
+        color: #ffffff;
+        cursor: pointer;
+        transition:
+          background-color var(--motion-default),
+          border-color var(--motion-default);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .btn:hover {
+        background: var(--color-primary-hover);
+      }
+
+      .btn:focus-visible {
+        outline: 2px solid var(--color-action);
+        outline-offset: 2px;
+      }
+
+      .btn--ghost {
+        background: transparent;
+        color: var(--color-text-primary);
+        border-color: var(--color-text-primary);
+      }
+
+      .btn--ghost:hover {
+        background: var(--color-text-primary);
+        color: var(--color-surface);
+      }
+
+      /* ---------- Consultant block ---------- */
+
+      .consultant {
+        margin-top: var(--space-section);
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        padding: var(--space-card);
+        display: grid;
+        grid-template-columns: 96px 1fr;
+        gap: 1.5rem;
+        align-items: start;
+      }
+
+      @media (min-width: 768px) {
+        .consultant {
+          grid-template-columns: 128px 1fr;
+          gap: 2rem;
+        }
+      }
+
+      .consultant__photo {
+        width: 96px;
+        height: 120px;
+        background: #efe9db;
+        border: 1px solid var(--color-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 0.5rem;
+        font-family: var(--font-meta);
+        font-size: 9px;
+        line-height: 1.3;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        font-weight: 500;
+      }
+
+      @media (min-width: 768px) {
+        .consultant__photo {
+          width: 128px;
+          height: 160px;
+        }
+      }
+
+      .consultant__name {
+        font-family: var(--font-display);
+        font-size: var(--text-heading-size);
+        line-height: var(--text-heading-lh);
+        font-weight: var(--text-heading-weight);
+        color: var(--color-text-primary);
+      }
+
+      .consultant__name-role {
+        font-style: italic;
+        font-weight: 400;
+        color: var(--color-text-secondary);
+      }
+
+      .consultant__next {
+        margin-top: 0.75rem;
+        font-family: var(--font-body);
+        font-size: var(--text-body-size);
+        line-height: 1.75rem;
+        color: var(--color-text-primary);
+      }
+
+      .consultant__channel {
+        margin-top: 0.625rem;
+        font-family: var(--font-body);
+        font-size: 1rem;
+        line-height: 1.625rem;
+        color: var(--color-text-secondary);
+      }
+
+      .consultant__channel a {
+        color: var(--color-primary);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        text-decoration-thickness: 1px;
+      }
+
+      /* ---------- Engagement record (entries) ---------- */
+
+      .entries {
+        list-style: none;
+        counter-reset: none;
+      }
+
+      .entry {
+        padding: 1.5rem 0;
+        border-bottom: 1px solid var(--color-border-subtle);
+      }
+
+      .entry:first-child {
+        padding-top: 0;
+      }
+
+      .entry:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+
+      .entry__header {
+        display: flex;
+        align-items: baseline;
+        gap: 1.25rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.625rem;
+      }
+
+      .entry__number,
+      .entry__date,
+      .entry__actor {
+        font-family: var(--font-meta);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+      }
+
+      .entry__number {
+        color: var(--color-text-primary);
+      }
+
+      .entry__date {
+        color: var(--color-text-muted);
+        font-feature-settings:
+          'tnum' 1,
+          'lnum' 1;
+      }
+
+      .entry__actor {
+        color: var(--color-text-muted);
+      }
+
+      .entry__body {
+        font-family: var(--font-body);
+        font-size: var(--text-body-size);
+        line-height: var(--text-body-lh);
+        color: var(--color-text-primary);
+        max-width: 60ch;
+      }
+
+      .entry__artifact {
+        display: inline-block;
+        margin-top: 0.625rem;
+        font-family: var(--font-body);
+        font-style: italic;
+        font-size: 1rem;
+        color: var(--color-primary);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        text-decoration-thickness: 1px;
+      }
+
+      /* ---------- Summary ---------- */
+
+      .summary {
+        display: grid;
+        gap: 0.875rem;
+      }
+
+      .summary-row {
+        display: grid;
+        grid-template-columns: 11rem 1fr;
+        align-items: baseline;
+        gap: 1rem;
+        padding-bottom: 0.875rem;
+        border-bottom: 1px solid var(--color-border-subtle);
+      }
+
+      .summary-row:last-child {
+        border-bottom: none;
+      }
+
+      .summary-row dt {
+        font-family: var(--font-meta);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+        color: var(--color-text-muted);
+      }
+
+      .summary-row dd {
+        font-family: var(--font-body);
+        font-size: var(--text-body-size);
+        line-height: var(--text-body-lh);
+        color: var(--color-text-primary);
+      }
+
+      .summary-row dd.fig-tab {
+        font-feature-settings:
+          'lnum' 1,
+          'tnum' 1;
+      }
+
+      /* ---------- Ledger ---------- */
+
+      .ledger {
+        display: grid;
+      }
+
+      .ledger-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: baseline;
+        gap: 1rem;
+        padding: 0.875rem 0;
+        border-bottom: 1px solid var(--color-border-subtle);
+      }
+
+      .ledger-row:last-child {
+        border-bottom: none;
+        padding-top: 1.25rem;
+        border-top: 2px solid var(--color-text-primary);
+      }
+
+      .ledger-row dt {
+        font-family: var(--font-meta);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+        color: var(--color-text-muted);
+      }
+
+      .ledger-row__context {
+        display: block;
+        font-family: var(--font-meta);
+        font-size: var(--text-label-size);
+        color: var(--color-text-muted);
+        margin-top: 0.125rem;
+      }
+
+      .ledger-row dd {
+        font-family: var(--font-display);
+        font-size: 1.25rem;
+        line-height: 1.75rem;
+        font-weight: 500;
+        color: var(--color-text-primary);
+        font-variant-numeric: tabular-nums lining-nums;
+      }
+
+      .ledger-row--attention dd {
+        color: var(--color-attention);
+        font-size: 1.5rem;
+      }
+
+      /* ---------- Colophon ---------- */
+
+      .colophon {
+        margin-top: 5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--color-border);
+        font-family: var(--font-meta);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+        color: var(--color-text-muted);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <!-- Letterhead -->
+      <header class="letterhead">
+        <div>
+          <div class="letterhead__firm">SMD Services</div>
+          <div class="letterhead__tagline">Consultants · Phoenix, Arizona</div>
+        </div>
+        <div class="letterhead__meta">
+          <div>File DEL-2026-001</div>
+          <div>April 19, 2026</div>
+        </div>
+      </header>
+
+      <!-- Section I -->
+      <section class="section" aria-labelledby="section-1-label">
+        <div id="section-1-label" class="section__label">Section I · Current status</div>
+        <h1 class="hero__headline">Your April invoice is due Friday.</h1>
+      </section>
+
+      <!-- Statement -->
+      <section class="statement" aria-labelledby="statement-heading">
+        <header class="statement__header">
+          <span class="statement__ref">Entry · Invoice 1023</span>
+          <span class="statement__status">Status · Due</span>
+        </header>
+        <div class="statement__body">
+          <p id="statement-heading" class="statement__amount">
+            $4,250.00<span class="statement__amount-caption">USD</span>
+          </p>
+          <dl class="statement__meta">
+            <div class="meta-row">
+              <dt>Issued</dt>
+              <dd class="fig-tab">April 15, 2026</dd>
+            </div>
+            <div class="meta-row">
+              <dt>Due</dt>
+              <dd class="fig-tab attention">Friday, April 24, 2026</dd>
+            </div>
+            <div class="meta-row">
+              <dt>Method</dt>
+              <dd>Stripe — card or ACH</dd>
+            </div>
+            <div class="meta-row">
+              <dt>Terms</dt>
+              <dd>Net 9</dd>
+            </div>
+          </dl>
+          <div class="btn-row">
+            <a class="btn" href="#pay">Review and pay</a>
+            <a class="btn btn--ghost" href="#download">Download PDF</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Consultant -->
+      <aside class="consultant" aria-label="Your consultant">
+        <div class="consultant__photo" aria-hidden="true">Consultant<br />photo on file</div>
+        <div>
+          <div class="consultant__name">
+            Scott Durgan<span class="consultant__name-role">, Consultant</span>
+          </div>
+          <p class="consultant__next">Next check-in Wednesday, April 22, at 10:00 a.m. MST.</p>
+          <p class="consultant__channel">
+            Questions may be directed by short message to
+            <a href="sms:+16025550100">(602) 555-0100</a>. Replies within one business day.
+          </p>
+        </div>
+      </aside>
+
+      <!-- Section II — Engagement record -->
+      <section class="section" aria-labelledby="section-2-label">
+        <div id="section-2-label" class="section__label">Section II · Engagement record</div>
+        <ol class="entries">
+          <li class="entry">
+            <header class="entry__header">
+              <span class="entry__number">Entry 03</span>
+              <span class="entry__date">April 14, 2026</span>
+              <span class="entry__actor">Scott</span>
+            </header>
+            <p class="entry__body">
+              Sat with the dispatcher. Two issues surfaced: warranty questions are not being asked
+              on intake, and after-hours calls route to voicemail for twelve minutes before
+              forwarding.
+            </p>
+            <a class="entry__artifact" href="#notes-0414">Notes filed April 14.</a>
+          </li>
+          <li class="entry">
+            <header class="entry__header">
+              <span class="entry__number">Entry 02</span>
+              <span class="entry__date">April 9, 2026</span>
+              <span class="entry__actor">Scott</span>
+            </header>
+            <p class="entry__body">
+              Delivered the revised call script. Maria now prompts for warranty status before
+              dispatching.
+            </p>
+            <a class="entry__artifact" href="#doc-call-script">Call script on file.</a>
+          </li>
+          <li class="entry">
+            <header class="entry__header">
+              <span class="entry__number">Entry 01</span>
+              <span class="entry__date">April 2, 2026</span>
+              <span class="entry__actor">Scott</span>
+            </header>
+            <p class="entry__body">
+              Initial on-site assessment. Toured intake, dispatch, and invoicing. Identified
+              fourteen candidate improvements; priced and prioritized the top three.
+            </p>
+            <a class="entry__artifact" href="#doc-assessment">Assessment summary on file.</a>
+          </li>
+        </ol>
+      </section>
+
+      <!-- Section III — Engagement summary -->
+      <section class="section" aria-labelledby="section-3-label">
+        <div id="section-3-label" class="section__label">Section III · Engagement summary</div>
+        <dl class="summary">
+          <div class="summary-row">
+            <dt>Scope</dt>
+            <dd>Operations assessment: intake, dispatch, and follow-up</dd>
+          </div>
+          <div class="summary-row">
+            <dt>Opened</dt>
+            <dd class="fig-tab">March 22, 2026</dd>
+          </div>
+          <div class="summary-row">
+            <dt>Estimated completion</dt>
+            <dd class="fig-tab">May 15, 2026</dd>
+          </div>
+        </dl>
+      </section>
+
+      <!-- Section IV — Ledger -->
+      <section class="section" aria-labelledby="section-4-label">
+        <div id="section-4-label" class="section__label">Section IV · Ledger</div>
+        <dl class="ledger">
+          <div class="ledger-row">
+            <dt>Paid to date</dt>
+            <dd>$2,000.00</dd>
+          </div>
+          <div class="ledger-row">
+            <dt>Remaining</dt>
+            <dd>$6,250.00</dd>
+          </div>
+          <div class="ledger-row ledger-row--attention">
+            <dt>
+              Next charge
+              <span class="ledger-row__context">Due April 24, 2026</span>
+            </dt>
+            <dd>$4,250.00</dd>
+          </div>
+        </dl>
+      </section>
+
+      <footer class="colophon">
+        <span>SMD Services · Client portal</span>
+        <span>v.1 · April 19, 2026</span>
+      </footer>
+    </main>
+  </body>
+</html>

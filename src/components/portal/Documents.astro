@@ -1,0 +1,100 @@
+---
+/**
+ * Portal documents library — every document the engagement has produced,
+ * grouped by category.
+ *
+ * surface: session-auth-client / archetype: list / viewport: mobile-first
+ * task: find-document / pattern: persistent-tabs
+ *
+ * No data fetching. All values via props. Rows render through
+ * PortalListItem (document variant) — the ONLY place list-row markup
+ * should exist on portal surfaces.
+ *
+ * Categories render with a mono-caps section label per Architect's Studio
+ * identity chrome convention. Each group is hairline-separated from the
+ * next.
+ *
+ * No money fields on this surface per brief §Per-surface intent.
+ */
+
+import SkipToMain from '../SkipToMain.astro'
+import PortalHeader from './PortalHeader.astro'
+import PortalTabs from './PortalTabs.astro'
+import PortalListItem from './PortalListItem.astro'
+
+export interface DocumentItem {
+  id: string
+  title: string
+  /** Material Symbols Outlined name (e.g., "description", "receipt_long"). */
+  icon: string
+  /** Short eyebrow — e.g., "SIGNED APR 2, 2026" or "DELIVERED MAR 29". */
+  eyebrow: string | null
+  href: string
+  /** Either "open_in_new" or "download". Plain string in the interface for
+   *  JSON fixture compatibility; PortalListItem enforces the union. */
+  trailingIcon: string
+  /** If true, link opens in a new tab (typical for external-hosted PDFs). */
+  external?: boolean
+}
+
+export interface DocumentGroup {
+  /** Short uppercase label. Renders as mono-caps section label. */
+  label: string
+  items: DocumentItem[]
+}
+
+export interface Props {
+  client: { name: string }
+  groups: DocumentGroup[]
+}
+
+const { client, groups } = Astro.props
+
+const totalCount = groups.reduce((sum, g) => sum + g.items.length, 0)
+---
+
+<SkipToMain />
+<PortalHeader clientName={client.name} />
+<PortalTabs pathname="/portal/documents" />
+
+<main id="main" role="main" class="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 pb-24 md:pb-10">
+  <h1 class="text-display text-[color:var(--color-text-primary)] mb-section">Documents</h1>
+
+  {
+    totalCount === 0 ? (
+      <p class="text-caption text-[color:var(--color-text-muted)]">
+        Nothing on file yet. Documents will appear here as the engagement produces them.
+      </p>
+    ) : (
+      <div class="flex flex-col gap-section">
+        {groups.map((group) =>
+          group.items.length === 0 ? null : (
+            <section aria-labelledby={`group-${group.label.toLowerCase().replace(/\s+/g, '-')}`}>
+              <h2
+                id={`group-${group.label.toLowerCase().replace(/\s+/g, '-')}`}
+                class="mb-stack pb-row border-b border-[color:var(--color-border)] font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-primary)]"
+              >
+                {group.label}
+              </h2>
+              <ul class="space-y-row" role="list">
+                {group.items.map((doc) => (
+                  <li>
+                    <PortalListItem
+                      variant="document"
+                      href={doc.href}
+                      icon={doc.icon}
+                      title={doc.title}
+                      eyebrow={doc.eyebrow}
+                      trailingIcon={doc.trailingIcon === 'download' ? 'download' : 'open_in_new'}
+                      external={doc.external}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )
+        )}
+      </div>
+    )
+  }
+</main>

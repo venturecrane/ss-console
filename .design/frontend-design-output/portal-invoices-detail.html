@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Portal / Invoice 1023 — SMD Services</title>
+    <link
+      href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,600,700,800&f[]=satoshi@400,500,600,700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ===================================================================
+       * SMD Services — Architect's Studio identity
+       * Hero surface 2: portal-invoices-detail / unpaid state
+       * Tokens match portal-home.html. Any divergence is intentional.
+       * =================================================================== */
+
+      :root {
+        /* Color */
+        --color-bg: #fafaf9;
+        --color-surface: #ffffff;
+        --color-border: #e5e5e4;
+        --color-border-subtle: #f0efed;
+        --color-text-primary: #0a0a0a;
+        --color-text-secondary: #52525b;
+        --color-text-muted: #a1a1aa;
+        --color-primary: #b45309;
+        --color-primary-hover: #92400e;
+        --color-action: #b45309;
+        --color-complete: #15803d;
+        --color-attention: #b45309;
+        --color-error: #991b1b;
+        --color-meta: #52525b;
+
+        /* Typography */
+        --font-display: 'Cabinet Grotesk', system-ui, sans-serif;
+        --font-body: 'Satoshi', system-ui, sans-serif;
+        --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+        --text-display-size: 2.5rem;
+        --text-display-lh: 2.75rem;
+        --text-display-weight: 700;
+        --text-display-tracking: -0.02em;
+
+        --text-title-size: 1.5rem;
+        --text-title-lh: 2rem;
+        --text-title-weight: 600;
+        --text-title-tracking: -0.01em;
+
+        --text-heading-size: 1.125rem;
+        --text-heading-lh: 1.5rem;
+        --text-heading-weight: 600;
+
+        --text-body-lg-size: 1.125rem;
+        --text-body-lg-lh: 1.75rem;
+
+        --text-body-size: 1rem;
+        --text-body-lh: 1.5rem;
+        --text-body-weight: 400;
+
+        --text-caption-size: 0.8125rem;
+        --text-caption-lh: 1.125rem;
+        --text-caption-weight: 500;
+        --text-caption-tracking: 0.01em;
+
+        --text-label-size: 0.75rem;
+        --text-label-lh: 1rem;
+        --text-label-weight: 600;
+        --text-label-tracking: 0.08em;
+
+        --text-money-size: 2rem;
+        --text-money-lh: 2.5rem;
+        --text-money-weight: 500;
+
+        /* Spacing rhythm */
+        --space-section: 2.5rem;
+        --space-card: 1.75rem;
+        --space-stack: 1rem;
+        --space-row: 0.75rem;
+
+        /* Shape */
+        --radius-card: 2px;
+        --radius-button: 2px;
+        --radius-badge: 2px;
+
+        /* Motion */
+        --motion-default: 120ms ease;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        background: var(--color-bg);
+      }
+
+      body {
+        color: var(--color-text-primary);
+        font-family: var(--font-body);
+        font-size: var(--text-body-size);
+        line-height: var(--text-body-lh);
+        font-weight: 400;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      /* ---------- Shell ---------- */
+
+      .shell {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 2rem 1.25rem 4rem;
+      }
+
+      @media (min-width: 768px) {
+        .shell {
+          padding: 3.5rem 2.5rem 6rem;
+        }
+      }
+
+      /* ---------- Masthead ---------- */
+
+      .masthead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--color-border);
+      }
+
+      .masthead__brand {
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+        color: var(--color-text-primary);
+      }
+
+      .masthead__meta {
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        color: var(--color-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ---------- Breadcrumb ---------- */
+
+      .breadcrumb {
+        margin-top: 2rem;
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        color: var(--color-text-secondary);
+        font-weight: var(--text-label-weight);
+      }
+
+      .breadcrumb a {
+        color: var(--color-text-secondary);
+        text-decoration: none;
+        transition: color var(--motion-default);
+      }
+
+      .breadcrumb a:hover {
+        color: var(--color-text-primary);
+      }
+
+      .breadcrumb__sep {
+        display: inline-block;
+        margin: 0 0.5rem;
+        color: var(--color-text-muted);
+      }
+
+      /* ---------- Hero ---------- */
+
+      .hero {
+        margin-top: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding-bottom: var(--space-section);
+        border-bottom: 1px solid var(--color-border);
+      }
+
+      @media (min-width: 768px) {
+        .hero {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 2rem;
+          align-items: end;
+        }
+      }
+
+      .hero__title {
+        font-family: var(--font-display);
+        font-size: var(--text-display-size);
+        line-height: var(--text-display-lh);
+        font-weight: var(--text-display-weight);
+        letter-spacing: var(--text-display-tracking);
+        color: var(--color-text-primary);
+        max-width: 28ch;
+      }
+
+      @media (max-width: 640px) {
+        .hero__title {
+          font-size: 1.875rem;
+          line-height: 2.125rem;
+        }
+      }
+
+      .hero__subtitle {
+        margin-top: 0.25rem;
+        font-family: var(--font-body);
+        font-size: var(--text-body-lg-size);
+        line-height: var(--text-body-lg-lh);
+        color: var(--color-text-secondary);
+      }
+
+      .status-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.875rem;
+        border-radius: var(--radius-badge);
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        line-height: var(--text-label-lh);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+        background: var(--color-attention);
+        color: #ffffff;
+        align-self: flex-start;
+      }
+
+      .status-tag--complete {
+        background: var(--color-complete);
+        color: #ffffff;
+      }
+
+      .status-tag--error {
+        background: var(--color-error);
+        color: #ffffff;
+      }
+
+      /* ---------- Layout grid ---------- */
+
+      .content {
+        margin-top: var(--space-section);
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--space-section);
+      }
+
+      @media (min-width: 960px) {
+        .content {
+          grid-template-columns: minmax(0, 1fr) 320px;
+          gap: 3rem;
+          align-items: start;
+        }
+      }
+
+      /* ---------- Panel ---------- */
+
+      .panel {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-card);
+        padding: var(--space-card);
+      }
+
+      .panel + .panel {
+        margin-top: var(--space-stack);
+      }
+
+      .panel__ref {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--color-border-subtle);
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        color: var(--color-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .panel__body {
+        padding-top: 1.5rem;
+      }
+
+      .panel__section-label {
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        line-height: var(--text-label-lh);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+        color: var(--color-text-muted);
+      }
+
+      /* ---------- Amount block ---------- */
+
+      .amount {
+        display: flex;
+        align-items: baseline;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+
+      .amount__value {
+        font-family: var(--font-mono);
+        font-size: 3rem;
+        line-height: 3.25rem;
+        font-weight: var(--text-money-weight);
+        font-variant-numeric: tabular-nums;
+        color: var(--color-text-primary);
+        letter-spacing: -0.01em;
+      }
+
+      @media (max-width: 640px) {
+        .amount__value {
+          font-size: var(--text-money-size);
+          line-height: var(--text-money-lh);
+        }
+      }
+
+      .amount__currency {
+        font-family: var(--font-mono);
+        font-size: var(--text-caption-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+      }
+
+      /* ---------- Meta rows ---------- */
+
+      .meta-rows {
+        margin-top: 1.5rem;
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .meta-row {
+        display: grid;
+        grid-template-columns: 8rem 1fr;
+        align-items: baseline;
+        font-family: var(--font-mono);
+        font-size: var(--text-caption-size);
+        line-height: var(--text-caption-lh);
+        color: var(--color-text-primary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .meta-row__label {
+        text-transform: uppercase;
+        letter-spacing: var(--text-label-tracking);
+        font-size: var(--text-label-size);
+        font-weight: var(--text-label-weight);
+        color: var(--color-text-muted);
+      }
+
+      .meta-row__value--attention {
+        color: var(--color-attention);
+      }
+
+      /* ---------- Button ---------- */
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 1.25rem;
+        font-family: var(--font-body);
+        font-size: var(--text-body-size);
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: 0.005em;
+        border: 1px solid transparent;
+        border-radius: var(--radius-button);
+        background: var(--color-primary);
+        color: #ffffff;
+        cursor: pointer;
+        transition:
+          background-color var(--motion-default),
+          border-color var(--motion-default);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .btn:hover {
+        background: var(--color-primary-hover);
+      }
+
+      .btn:focus-visible {
+        outline: 2px solid var(--color-action);
+        outline-offset: 2px;
+      }
+
+      .btn--ghost {
+        background: transparent;
+        color: var(--color-text-primary);
+        border-color: var(--color-border);
+      }
+
+      .btn--ghost:hover {
+        background: var(--color-bg);
+        border-color: var(--color-text-primary);
+      }
+
+      .btn-row {
+        margin-top: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      @media (min-width: 640px) {
+        .btn-row {
+          flex-direction: row;
+          align-items: center;
+        }
+      }
+
+      /* ---------- Line items ---------- */
+
+      .line-items {
+        margin-top: 1.5rem;
+      }
+
+      .line-items__head {
+        display: grid;
+        grid-template-columns: 1fr 4rem 6rem;
+        gap: 1rem;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid var(--color-border);
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+        color: var(--color-text-muted);
+      }
+
+      .line-items__head-hours,
+      .line-items__head-amount {
+        text-align: right;
+      }
+
+      .line-items__row {
+        display: grid;
+        grid-template-columns: 1fr 4rem 6rem;
+        gap: 1rem;
+        padding: 1rem 0;
+        border-bottom: 1px solid var(--color-border-subtle);
+        align-items: baseline;
+      }
+
+      .line-items__description {
+        font-family: var(--font-body);
+        font-size: var(--text-body-size);
+        line-height: var(--text-body-lh);
+        color: var(--color-text-primary);
+      }
+
+      .line-items__hours,
+      .line-items__amount {
+        font-family: var(--font-mono);
+        font-size: var(--text-body-size);
+        line-height: var(--text-body-lh);
+        color: var(--color-text-primary);
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+
+      .line-items__total {
+        display: grid;
+        grid-template-columns: 1fr 4rem 6rem;
+        gap: 1rem;
+        padding-top: 1rem;
+        margin-top: 0.5rem;
+        border-top: 2px solid var(--color-text-primary);
+        align-items: baseline;
+      }
+
+      .line-items__total-label {
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+        color: var(--color-text-primary);
+      }
+
+      .line-items__total-amount {
+        grid-column: 3;
+        font-family: var(--font-mono);
+        font-size: var(--text-heading-size);
+        line-height: var(--text-heading-lh);
+        font-weight: 600;
+        color: var(--color-text-primary);
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+
+      /* ---------- Side rail ---------- */
+
+      .rail {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-stack);
+      }
+
+      /* ---------- Consultant (side-rail variant) ---------- */
+
+      .consultant-rail {
+        padding: var(--space-card);
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-card);
+      }
+
+      .consultant-rail__photo {
+        width: 88px;
+        height: 88px;
+        background: #ece9e4;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-card);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 0.5rem;
+        font-family: var(--font-mono);
+        font-size: 9px;
+        line-height: 1.2;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+      }
+
+      .consultant-rail__name {
+        margin-top: 1rem;
+        font-family: var(--font-display);
+        font-size: var(--text-heading-size);
+        line-height: var(--text-heading-lh);
+        font-weight: var(--text-heading-weight);
+        color: var(--color-text-primary);
+      }
+
+      .consultant-rail__role {
+        margin-top: 0.125rem;
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+      }
+
+      .consultant-rail__next {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--color-border-subtle);
+        font-family: var(--font-mono);
+        font-size: var(--text-caption-size);
+        line-height: var(--text-caption-lh);
+        color: var(--color-text-primary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .consultant-rail__channel {
+        margin-top: 0.5rem;
+        font-family: var(--font-body);
+        font-size: var(--text-caption-size);
+        line-height: var(--text-caption-lh);
+        color: var(--color-text-secondary);
+      }
+
+      .consultant-rail__channel a {
+        color: var(--color-text-primary);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        text-decoration-thickness: 1px;
+      }
+
+      /* ---------- Payment note card ---------- */
+
+      .payment-note {
+        padding: var(--space-card);
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-card);
+      }
+
+      .payment-note__label {
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        font-weight: var(--text-label-weight);
+        color: var(--color-text-muted);
+      }
+
+      .payment-note__body {
+        margin-top: 0.5rem;
+        font-family: var(--font-body);
+        font-size: var(--text-caption-size);
+        line-height: var(--text-caption-lh);
+        color: var(--color-text-secondary);
+      }
+
+      /* ---------- Footer ---------- */
+
+      .footer {
+        margin-top: 5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--color-border);
+        font-family: var(--font-mono);
+        font-size: var(--text-label-size);
+        letter-spacing: var(--text-label-tracking);
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <!-- Masthead -->
+      <header class="masthead">
+        <div class="masthead__brand">SMD Services</div>
+        <div class="masthead__meta">2026.04.19</div>
+      </header>
+
+      <!-- Breadcrumb -->
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="#home">Portal</a>
+        <span class="breadcrumb__sep">/</span>
+        <a href="#invoices">Invoices</a>
+        <span class="breadcrumb__sep">/</span>
+        <span>1023</span>
+      </nav>
+
+      <!-- Hero -->
+      <section class="hero" aria-labelledby="invoice-title">
+        <div>
+          <h1 id="invoice-title" class="hero__title">Invoice 1023</h1>
+          <p class="hero__subtitle">April 2026 · operations assessment</p>
+        </div>
+        <div class="status-tag" role="status">Status · Due</div>
+      </section>
+
+      <!-- Content grid: main + rail -->
+      <div class="content">
+        <!-- Main column -->
+        <article>
+          <!-- Invoice panel -->
+          <section class="panel" aria-labelledby="invoice-panel-heading">
+            <div class="panel__ref">
+              <span>REF INV-1023 / ISSUED 2026-04-15</span>
+              <span>CLIENT · DELGADO PLUMBING</span>
+            </div>
+            <div class="panel__body">
+              <div class="panel__section-label">Amount due</div>
+              <div class="amount" aria-labelledby="invoice-panel-heading">
+                <span id="invoice-panel-heading" class="amount__value">$4,250.00</span>
+                <span class="amount__currency">USD</span>
+              </div>
+              <div class="meta-rows">
+                <div class="meta-row">
+                  <span class="meta-row__label">Issued</span>
+                  <span>2026-04-15</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-row__label">Due date</span>
+                  <span class="meta-row__value--attention">2026-04-24 · Friday</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-row__label">Method</span>
+                  <span>Stripe (card or ACH)</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-row__label">Terms</span>
+                  <span>Net 9</span>
+                </div>
+              </div>
+              <div class="btn-row">
+                <a class="btn" href="#pay">Pay invoice</a>
+                <a class="btn btn--ghost" href="#download">Download PDF</a>
+              </div>
+            </div>
+          </section>
+
+          <!-- Line items panel -->
+          <section class="panel" aria-labelledby="line-items-heading">
+            <div class="panel__ref">
+              <span id="line-items-heading">Line items</span>
+              <span>4 ENTRIES</span>
+            </div>
+            <div class="panel__body">
+              <div class="line-items">
+                <div class="line-items__head" role="row">
+                  <span>Item</span>
+                  <span class="line-items__head-hours">Hours</span>
+                  <span class="line-items__head-amount">Amount</span>
+                </div>
+                <div class="line-items__row" role="row">
+                  <span class="line-items__description"
+                    >On-site assessment: intake, dispatch, invoicing tour</span
+                  >
+                  <span class="line-items__hours">8.0</span>
+                  <span class="line-items__amount">$1,400.00</span>
+                </div>
+                <div class="line-items__row" role="row">
+                  <span class="line-items__description"
+                    >Call-intake script rewrite and dispatcher training</span
+                  >
+                  <span class="line-items__hours">6.5</span>
+                  <span class="line-items__amount">$1,137.50</span>
+                </div>
+                <div class="line-items__row" role="row">
+                  <span class="line-items__description"
+                    >After-hours routing audit and forwarding fix</span
+                  >
+                  <span class="line-items__hours">4.0</span>
+                  <span class="line-items__amount">$700.00</span>
+                </div>
+                <div class="line-items__row" role="row">
+                  <span class="line-items__description"
+                    >Warranty-question intake checklist, documented for Maria</span
+                  >
+                  <span class="line-items__hours">5.75</span>
+                  <span class="line-items__amount">$1,012.50</span>
+                </div>
+                <div class="line-items__total" role="row">
+                  <span class="line-items__total-label">Total due</span>
+                  <span class="line-items__total-amount">$4,250.00</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Previous payments panel -->
+          <section class="panel" aria-labelledby="prior-heading">
+            <div class="panel__ref">
+              <span id="prior-heading">Prior payments</span>
+              <span>ENGAGEMENT TOTAL · $8,250.00</span>
+            </div>
+            <div class="panel__body">
+              <div class="meta-rows">
+                <div class="meta-row">
+                  <span class="meta-row__label">2026-03-22</span>
+                  <span>Deposit · $2,000.00 · Paid</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-row__label">After this</span>
+                  <span>Remaining $2,000.00 at final handoff</span>
+                </div>
+              </div>
+            </div>
+          </section>
+        </article>
+
+        <!-- Side rail -->
+        <aside class="rail" aria-label="Consultant and payment">
+          <div class="consultant-rail">
+            <div class="consultant-rail__photo" aria-hidden="true">Consultant<br />photo</div>
+            <div class="consultant-rail__name">Scott Durgan</div>
+            <div class="consultant-rail__role">Consultant</div>
+            <div class="consultant-rail__next">Next check-in · Wed 2026-04-22 · 10:00 MST</div>
+            <div class="consultant-rail__channel">
+              Questions about this invoice? SMS
+              <a href="sms:+16025550100">(602) 555-0100</a>. Replies within 1 business day.
+            </div>
+          </div>
+
+          <div class="payment-note">
+            <div class="payment-note__label">Payment</div>
+            <p class="payment-note__body">
+              Card and ACH accepted through Stripe. Receipt emailed to the address on file within 2
+              minutes of payment.
+            </p>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Footer -->
+      <footer class="footer">
+        <span>SMD Services · Client portal</span>
+        <span>v1 · 2026.04.19</span>
+      </footer>
+    </main>
+  </body>
+</html>

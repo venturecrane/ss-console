@@ -1,13 +1,16 @@
-@import 'tailwindcss';
+/* ---------------------------------------------------------------------
+ * SMD Services — Architect's Studio identity
+ * Paste this @theme block into src/styles/global.css, replacing the
+ * existing @theme block. Font @import lines go in the Astro layout head.
+ *
+ * Source: Extracted from .design/frontend-design-output/*.html on 2026-04-19.
+ * Full token documentation: .design/DESIGN.md
+ * --------------------------------------------------------------------- */
 
 @theme {
   /* ------------------------------------------------------------------
-   * SMD Services — Architect's Studio identity
-   * Cut over from .design/theme.css on 2026-04-19.
-   * Full token documentation: .design/DESIGN.md
+   * Color roles (semantic, not per-screen)
    * ------------------------------------------------------------------ */
-
-  /* ---------- Color roles (semantic, not per-screen) ---------- */
   --color-background: #fafaf9;
   --color-surface: #ffffff;
   --color-border: #e5e5e4;
@@ -26,12 +29,16 @@
   --color-complete: #15803d;
   --color-error: #991b1b;
 
-  /* ---------- Typography families ---------- */
+  /* ------------------------------------------------------------------
+   * Typography families
+   * ------------------------------------------------------------------ */
   --font-display: 'Cabinet Grotesk', system-ui, sans-serif;
   --font-body: 'Satoshi', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
 
-  /* ---------- Typography scale — docs/style/UI-PATTERNS.md Rule 5 ---------- */
+  /* ------------------------------------------------------------------
+   * Typography scale
+   * ------------------------------------------------------------------ */
   --text-display: 2.5rem; /* 40px */
   --text-display--line-height: 2.75rem; /* 44px */
   --text-display--font-weight: 700;
@@ -68,48 +75,19 @@
   --text-money--line-height: 2.5rem; /* 40px */
   --text-money--font-weight: 500;
 
-  /* ---------- Spacing rhythm — docs/style/UI-PATTERNS.md Rule 6 ---------- */
-  --spacing-section: 2.5rem; /* 40px — gap between major page sections */
-  --spacing-card: 1.75rem; /* 28px — card internal padding */
-  --spacing-stack: 1rem; /* 16px — vertical stack of sibling content */
-  --spacing-row: 0.75rem; /* 12px — gap between list rows */
+  /* ------------------------------------------------------------------
+   * Spacing rhythm
+   * Generates utilities: p-card, gap-section, space-y-stack, etc.
+   * ------------------------------------------------------------------ */
+  --spacing-section: 2.5rem; /* 40px */
+  --spacing-card: 1.75rem; /* 28px */
+  --spacing-stack: 1rem; /* 16px */
+  --spacing-row: 0.75rem; /* 12px */
 
-  /* ---------- Shape — sharp by intent. No pills. ---------- */
+  /* ------------------------------------------------------------------
+   * Shape — sharp by intent. No pills.
+   * ------------------------------------------------------------------ */
   --radius-card: 2px;
   --radius-button: 2px;
   --radius-badge: 2px;
-}
-
-@layer base {
-  body {
-    background-color: var(--color-background);
-    color: var(--color-text-primary);
-    font-family: var(--font-body);
-    -webkit-font-smoothing: antialiased;
-  }
-  h1,
-  h2,
-  h3 {
-    font-family: var(--font-display);
-  }
-}
-
-.material-symbols-outlined {
-  font-family: 'Material Symbols Outlined';
-  font-weight: normal;
-  font-style: normal;
-  font-size: 24px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  -webkit-font-smoothing: antialiased;
-  font-variation-settings:
-    'FILL' 0,
-    'wght' 400,
-    'GRAD' 0,
-    'opsz' 24;
 }
