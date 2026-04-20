@@ -84,9 +84,11 @@ function stageBadgeClass(stage: string): string {
     engaged: 'bg-green-100 text-green-700',
     delivered: 'bg-emerald-100 text-emerald-700',
     ongoing: 'bg-teal-100 text-teal-700',
-    lost: 'bg-slate-100 text-slate-500',
+    lost: 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]',
   }
-  return map[stage] ?? 'bg-slate-100 text-slate-500'
+  return (
+    map[stage] ?? 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
+  )
 }
 
 function tierBadgeClass(tier: string): string {
@@ -94,16 +96,18 @@ function tierBadgeClass(tier: string): string {
     hot: 'bg-red-100 text-red-700',
     warm: 'bg-amber-100 text-amber-700',
     cool: 'bg-blue-100 text-blue-700',
-    cold: 'bg-slate-100 text-slate-500',
+    cold: 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]',
   }
-  return map[tier] ?? 'bg-slate-100 text-slate-500'
+  return (
+    map[tier] ?? 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
+  )
 }
 
 function contextTypeBadge(type: string): string {
   const map: Record<string, string> = {
     signal: 'bg-amber-100 text-amber-700',
     enrichment: 'bg-cyan-100 text-cyan-700',
-    note: 'bg-slate-100 text-slate-600',
+    note: 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]',
     transcript: 'bg-purple-100 text-purple-700',
     extraction: 'bg-indigo-100 text-indigo-700',
     outreach_draft: 'bg-blue-100 text-blue-700',
@@ -111,11 +115,13 @@ function contextTypeBadge(type: string): string {
     follow_up_result: 'bg-teal-100 text-teal-700',
     feedback: 'bg-emerald-100 text-emerald-700',
     parking_lot: 'bg-orange-100 text-orange-700',
-    stage_change: 'bg-slate-50 text-slate-500',
+    stage_change: 'bg-[color:var(--color-background)] text-[color:var(--color-text-secondary)]',
     intake: 'bg-pink-100 text-pink-700',
     scorecard: 'bg-violet-100 text-violet-700',
   }
-  return map[type] ?? 'bg-slate-100 text-slate-600'
+  return (
+    map[type] ?? 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
+  )
 }
 ---
 
@@ -129,25 +135,29 @@ function contextTypeBadge(type: string): string {
 >
   {
     error && (
-      <div class="bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded-lg mb-4">
+      <div class="bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
         {decodeURIComponent(error)}
       </div>
     )
   }
   {
     saved && (
-      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg mb-4">
+      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
         Changes saved.
       </div>
     )
   }
 
   {/* Entity + Assessment Info */}
-  <div class="bg-white rounded-lg border border-slate-200 p-card mb-6">
+  <div
+    class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card mb-6"
+  >
     <div class="flex items-start justify-between gap-stack mb-4">
       <div>
         <div class="flex items-center gap-row mb-2">
-          <h2 class="text-xl font-semibold text-slate-900">{entity.name}</h2>
+          <h2 class="text-xl font-semibold text-[color:var(--color-text-primary)]">
+            {entity.name}
+          </h2>
           <span class={`text-xs px-2 py-0.5 rounded ${stageBadgeClass(entity.stage)}`}>
             {ENTITY_STAGES.find((s) => s.value === entity.stage)?.label ?? entity.stage}
           </span>
@@ -160,11 +170,16 @@ function contextTypeBadge(type: string): string {
           }
         </div>
 
-        <div class="flex items-center gap-stack text-sm text-slate-500 flex-wrap">
+        <div
+          class="flex items-center gap-stack text-sm text-[color:var(--color-text-secondary)] flex-wrap"
+        >
           {
             entity.pain_score != null && (
               <span>
-                Pain: <strong class="text-slate-700">{entity.pain_score}/10</strong>
+                Pain:{' '}
+                <strong class="text-[color:var(--color-text-primary)]">
+                  {entity.pain_score}/10
+                </strong>
               </span>
             )
           }
@@ -172,7 +187,7 @@ function contextTypeBadge(type: string): string {
           {entity.area && <span>{entity.area}</span>}
         </div>
       </div>
-      <span class={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(assessment.status)}`}>
+      <span class={statusBadgeClass(assessment.status)}>
         {assessment.status}
       </span>
     </div>
@@ -182,15 +197,15 @@ function contextTypeBadge(type: string): string {
       schedule && (
         <div class="grid grid-cols-1 md:grid-cols-2 gap-stack text-sm">
           <div>
-            <span class="text-slate-500">Scheduled:</span>
-            <span class="ml-1 text-slate-900 font-medium">
+            <span class="text-[color:var(--color-text-secondary)]">Scheduled:</span>
+            <span class="ml-1 text-[color:var(--color-text-primary)] font-medium">
               {formatDateTime(schedule.slot_start_utc)}
             </span>
-            <span class="text-slate-400 ml-1">({schedule.timezone})</span>
+            <span class="text-[color:var(--color-text-muted)] ml-1">({schedule.timezone})</span>
           </div>
           <div>
-            <span class="text-slate-500">Contact:</span>
-            <span class="ml-1 text-slate-900">{schedule.guest_name}</span>
+            <span class="text-[color:var(--color-text-secondary)]">Contact:</span>
+            <span class="ml-1 text-[color:var(--color-text-primary)]">{schedule.guest_name}</span>
             <a href={`mailto:${schedule.guest_email}`} class="ml-1 text-blue-600 hover:underline">
               {schedule.guest_email}
             </a>
@@ -201,7 +216,7 @@ function contextTypeBadge(type: string): string {
                 href={schedule.google_meet_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex items-center gap-1.5 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700 transition-colors"
+                class="inline-flex items-center gap-1.5 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-blue-700 transition-colors"
               >
                 Join Video Call
               </a>
@@ -224,7 +239,7 @@ function contextTypeBadge(type: string): string {
     }
     {
       !schedule && assessment.scheduled_at && (
-        <div class="text-sm text-slate-500">
+        <div class="text-sm text-[color:var(--color-text-secondary)]">
           Scheduled: {formatDateTime(assessment.scheduled_at)}
         </div>
       )
@@ -232,30 +247,34 @@ function contextTypeBadge(type: string): string {
   </div>
 
   {/* Live Notes */}
-  <div class="bg-white rounded-lg border border-slate-200 p-card mb-6">
+  <div
+    class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card mb-6"
+  >
     <div class="flex items-center justify-between mb-3">
-      <h3 class="text-base font-semibold text-slate-900">Live Notes</h3>
-      <span id="save-status" class="text-xs text-slate-400">Saved</span>
+      <h3 class="text-base font-semibold text-[color:var(--color-text-primary)]">Live Notes</h3>
+      <span id="save-status" class="text-xs text-[color:var(--color-text-muted)]">Saved</span>
     </div>
     <textarea
       id="live-notes"
       rows="10"
-      class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono"
+      class="w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono"
       placeholder="Take notes during the call...">{liveNotesValue}</textarea
     >
   </div>
 
   {/* Complete Assessment Form (collapsible) */}
-  <div class="bg-white rounded-lg border border-slate-200 mb-6">
+  <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] mb-6">
     <button
       type="button"
       id="toggle-complete"
-      class="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-slate-50 transition-colors"
+      class="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-[color:var(--color-background)] transition-colors"
     >
-      <h3 class="text-base font-semibold text-slate-900">Complete Assessment</h3>
+      <h3 class="text-base font-semibold text-[color:var(--color-text-primary)]">
+        Complete Assessment
+      </h3>
       <svg
         id="toggle-icon"
-        class="w-5 h-5 text-slate-400 transition-transform"
+        class="w-5 h-5 text-[color:var(--color-text-muted)] transition-transform"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -265,7 +284,10 @@ function contextTypeBadge(type: string): string {
       </svg>
     </button>
 
-    <div id="complete-form" class="hidden px-6 pb-6 border-t border-slate-100">
+    <div
+      id="complete-form"
+      class="hidden px-6 pb-6 border-t border-[color:var(--color-border-subtle)]"
+    >
       <form
         method="POST"
         action={`/api/admin/assessments/${assessmentId}/complete`}
@@ -274,26 +296,48 @@ function contextTypeBadge(type: string): string {
       >
         {/* Problems identified */}
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-2">Problems Identified</label>
+          <label class="block text-sm font-medium text-[color:var(--color-text-primary)] mb-2"
+            >Problems Identified</label
+          >
           <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <label class="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" name="process_design" class="rounded border-slate-300" />
+            <label class="flex items-center gap-2 text-sm text-[color:var(--color-text-primary)]">
+              <input
+                type="checkbox"
+                name="process_design"
+                class="rounded border-[color:var(--color-border)]"
+              />
               Process design
             </label>
-            <label class="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" name="tool_systems" class="rounded border-slate-300" />
+            <label class="flex items-center gap-2 text-sm text-[color:var(--color-text-primary)]">
+              <input
+                type="checkbox"
+                name="tool_systems"
+                class="rounded border-[color:var(--color-border)]"
+              />
               Tools & systems
             </label>
-            <label class="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" name="data_visibility" class="rounded border-slate-300" />
+            <label class="flex items-center gap-2 text-sm text-[color:var(--color-text-primary)]">
+              <input
+                type="checkbox"
+                name="data_visibility"
+                class="rounded border-[color:var(--color-border)]"
+              />
               Data & visibility
             </label>
-            <label class="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" name="customer_pipeline" class="rounded border-slate-300" />
+            <label class="flex items-center gap-2 text-sm text-[color:var(--color-text-primary)]">
+              <input
+                type="checkbox"
+                name="customer_pipeline"
+                class="rounded border-[color:var(--color-border)]"
+              />
               Customer pipeline
             </label>
-            <label class="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" name="team_operations" class="rounded border-slate-300" />
+            <label class="flex items-center gap-2 text-sm text-[color:var(--color-text-primary)]">
+              <input
+                type="checkbox"
+                name="team_operations"
+                class="rounded border-[color:var(--color-border)]"
+              />
               Team operations
             </label>
           </div>
@@ -302,19 +346,21 @@ function contextTypeBadge(type: string): string {
               type="text"
               name="other_problem"
               placeholder="Other (describe)"
-              class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              class="w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             />
           </div>
         </div>
 
         {/* Disqualifiers */}
-        <div class="border border-slate-200 rounded-lg p-stack">
-          <label class="flex items-center gap-2 text-sm text-slate-700 mb-2">
+        <div class="border border-[color:var(--color-border)] rounded-[var(--radius-card)] p-stack">
+          <label
+            class="flex items-center gap-2 text-sm text-[color:var(--color-text-primary)] mb-2"
+          >
             <input
               type="checkbox"
               name="disqualified"
               id="disqualified-check"
-              class="rounded border-slate-300"
+              class="rounded border-[color:var(--color-border)]"
             />
             <span class="font-medium">Disqualified</span>
           </label>
@@ -323,14 +369,16 @@ function contextTypeBadge(type: string): string {
             name="disqualify_reason"
             id="disqualify-reason"
             placeholder="Reason for disqualification"
-            class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 disabled:bg-slate-50"
+            class="w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 disabled:bg-[color:var(--color-background)]"
             disabled
           />
         </div>
 
         {/* Duration */}
         <div>
-          <label for="duration_minutes" class="block text-sm font-medium text-slate-700 mb-1"
+          <label
+            for="duration_minutes"
+            class="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1"
             >Duration (minutes)</label
           >
           <input
@@ -340,26 +388,30 @@ function contextTypeBadge(type: string): string {
             min="1"
             max="300"
             placeholder="30"
-            class="w-32 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            class="w-32 text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
           />
         </div>
 
         {/* Notes */}
         <div>
-          <label for="complete-notes" class="block text-sm font-medium text-slate-700 mb-1"
+          <label
+            for="complete-notes"
+            class="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1"
             >Notes</label
           >
           <textarea
             name="notes"
             id="complete-notes"
             rows="4"
-            class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            class="w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             placeholder="Assessment notes..."></textarea>
         </div>
 
         {/* Transcript upload */}
         <div>
-          <label for="transcript" class="block text-sm font-medium text-slate-700 mb-1"
+          <label
+            for="transcript"
+            class="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1"
             >Transcript (optional)</label
           >
           <input
@@ -367,7 +419,7 @@ function contextTypeBadge(type: string): string {
             name="transcript"
             id="transcript"
             accept=".txt,.md,.pdf,.doc,.docx"
-            class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+            class="text-sm text-[color:var(--color-text-secondary)] file:mr-4 file:py-2 file:px-4 file:rounded-[var(--radius-card)] file:border-0 file:text-sm file:font-medium file:bg-[color:var(--color-border-subtle)] file:text-[color:var(--color-text-primary)] hover:file:bg-[color:var(--color-border)]"
           />
         </div>
 
@@ -375,11 +427,11 @@ function contextTypeBadge(type: string): string {
         <div class="flex items-center gap-row pt-2">
           <button
             type="submit"
-            class="text-sm bg-green-600 text-white px-6 py-2.5 rounded-lg hover:bg-green-700 transition-colors font-medium"
+            class="text-sm bg-green-600 text-white px-6 py-2.5 rounded-[var(--radius-card)] hover:bg-green-700 transition-colors font-medium"
           >
             Complete & Draft Proposal
           </button>
-          <span class="text-xs text-slate-400"
+          <span class="text-xs text-[color:var(--color-text-muted)]"
             >Creates a draft quote and transitions to proposing stage</span
           >
         </div>
@@ -388,26 +440,36 @@ function contextTypeBadge(type: string): string {
   </div>
 
   {/* Entity Context Timeline */}
-  <div class="bg-white rounded-lg border border-slate-200 p-card">
-    <h3 class="text-base font-semibold text-slate-900 mb-4">
+  <div
+    class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+  >
+    <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-4">
       Entity Context Timeline
-      <span class="text-sm font-normal text-slate-400 ml-1">({contextEntries.length} entries)</span>
+      <span class="text-sm font-normal text-[color:var(--color-text-muted)] ml-1"
+        >({contextEntries.length} entries)</span
+      >
     </h3>
 
-    {timelineEntries.length === 0 && <p class="text-sm text-slate-400">No context entries yet.</p>}
+    {
+      timelineEntries.length === 0 && (
+        <p class="text-sm text-[color:var(--color-text-muted)]">No context entries yet.</p>
+      )
+    }
 
     <div class="space-y-row">
       {
         timelineEntries.map((entry) => (
-          <div class="border border-slate-100 rounded-lg p-row">
+          <div class="border border-[color:var(--color-border-subtle)] rounded-[var(--radius-card)] p-row">
             <div class="flex items-center gap-2 mb-1">
               <span class={`text-xs px-1.5 py-0.5 rounded ${contextTypeBadge(entry.type)}`}>
                 {entry.type.replace(/_/g, ' ')}
               </span>
-              <span class="text-xs text-slate-400">{entry.source}</span>
-              <span class="text-xs text-slate-300 ml-auto">{formatDate(entry.created_at)}</span>
+              <span class="text-xs text-[color:var(--color-text-muted)]">{entry.source}</span>
+              <span class="text-xs text-[color:var(--color-text-muted)] ml-auto">
+                {formatDate(entry.created_at)}
+              </span>
             </div>
-            <div class="text-sm text-slate-700 whitespace-pre-wrap break-words">
+            <div class="text-sm text-[color:var(--color-text-primary)] whitespace-pre-wrap break-words">
               {entry.content.length > 500 ? entry.content.slice(0, 500) + '...' : entry.content}
             </div>
           </div>

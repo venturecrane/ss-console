@@ -1,26 +1,50 @@
 /**
- * Returns Tailwind badge classes for a given status string.
- * Canonical source of truth for all status badge colors across admin UI.
+ * Returns the full Tailwind class list for an admin status tag.
+ *
+ * Architect's Studio identity: rectangular filled tag with white text,
+ * mono caps, tracked letter-spacing, 2px radius. Matches the portal
+ * StatusPill shape (src/components/portal/StatusPill.astro + TONE_CLASS
+ * in src/lib/portal/status.ts) so admin and portal read as one product.
+ *
+ * Callers use the output directly — do not add padding, radius, or font
+ * classes on top:
+ *
+ *   <span class={statusBadgeClass(status)}>{label}</span>
  */
+
+const STRUCTURE =
+  'inline-flex items-center px-2 py-1 rounded-[var(--radius-badge)] ' +
+  'font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold whitespace-nowrap'
+
+const TONE: Record<string, string> = {
+  // Engagement lifecycle
+  scheduled: 'bg-[color:var(--color-primary)] text-white',
+  active: 'bg-[color:var(--color-complete)] text-white',
+  completed: 'bg-[color:var(--color-complete)] text-white',
+  handoff: 'bg-[color:var(--color-primary)] text-white',
+  safety_net: 'bg-[color:var(--color-attention)] text-white',
+  cancelled: 'bg-[color:var(--color-border)] text-[color:var(--color-text-secondary)]',
+
+  // Lead lifecycle
+  disqualified: 'bg-[color:var(--color-error)] text-white',
+  converted: 'bg-[color:var(--color-complete)] text-white',
+
+  // Quote lifecycle
+  draft: 'bg-[color:var(--color-border)] text-[color:var(--color-text-secondary)]',
+  sent: 'bg-[color:var(--color-primary)] text-white',
+  accepted: 'bg-[color:var(--color-complete)] text-white',
+  declined: 'bg-[color:var(--color-error)] text-white',
+  expired: 'bg-[color:var(--color-attention)] text-white',
+  superseded: 'bg-[color:var(--color-border)] text-[color:var(--color-text-secondary)]',
+
+  // Invoice lifecycle
+  paid: 'bg-[color:var(--color-complete)] text-white',
+  overdue: 'bg-[color:var(--color-error)] text-white',
+  void: 'bg-[color:var(--color-border)] text-[color:var(--color-text-secondary)]',
+}
+
+const FALLBACK = 'bg-[color:var(--color-border)] text-[color:var(--color-text-secondary)]'
+
 export function statusBadgeClass(status: string): string {
-  const map: Record<string, string> = {
-    scheduled: 'bg-blue-100 text-blue-700',
-    active: 'bg-green-100 text-green-700',
-    completed: 'bg-emerald-100 text-emerald-700',
-    handoff: 'bg-teal-100 text-teal-700',
-    safety_net: 'bg-amber-100 text-amber-700',
-    cancelled: 'bg-slate-100 text-slate-500',
-    disqualified: 'bg-red-100 text-red-600',
-    converted: 'bg-green-100 text-green-700',
-    draft: 'bg-slate-100 text-slate-600',
-    sent: 'bg-blue-100 text-blue-700',
-    accepted: 'bg-green-100 text-green-700',
-    declined: 'bg-red-100 text-red-700',
-    expired: 'bg-slate-100 text-slate-500',
-    paid: 'bg-green-100 text-green-700',
-    overdue: 'bg-red-100 text-red-700',
-    void: 'bg-slate-100 text-slate-400',
-    superseded: 'bg-slate-100 text-slate-400',
-  }
-  return map[status] ?? 'bg-slate-100 text-slate-600'
+  return `${STRUCTURE} ${TONE[status] ?? FALLBACK}`
 }

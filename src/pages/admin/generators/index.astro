@@ -159,10 +159,10 @@ function vlabel(v: string): string {
 >
   <div class="flex items-start justify-between mb-6 gap-4 flex-wrap">
     <div>
-      <h2 class="text-xl font-semibold text-slate-900">Generators</h2>
-      <p class="text-sm text-slate-600 mt-1">
+      <h2 class="text-xl font-semibold text-[color:var(--color-text-primary)]">Generators</h2>
+      <p class="text-sm text-[color:var(--color-text-secondary)] mt-1">
         Lead generation pipelines. Each pipeline writes entities at stage <code
-          class="text-xs bg-slate-100 px-1 rounded">signal</code
+          class="text-xs bg-[color:var(--color-border-subtle)] px-1 rounded">signal</code
         >.
       </p>
     </div>
@@ -181,7 +181,7 @@ function vlabel(v: string): string {
         return (
           <a
             href={`/admin/generators/${pipeline.id}`}
-            class="block bg-white rounded-lg border border-slate-200 p-card hover:border-slate-300 hover:shadow-sm transition-all"
+            class="block bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card hover:border-[color:var(--color-border)] hover:shadow-sm transition-all"
           >
             <div class="flex items-start justify-between mb-3 gap-2">
               <div class="min-w-0">
@@ -190,64 +190,86 @@ function vlabel(v: string): string {
                     class={`w-2 h-2 rounded-full shrink-0 ${enabled ? 'bg-green-500' : 'bg-slate-300'}`}
                     title={enabled ? 'Enabled' : 'Disabled'}
                   />
-                  <h3 class="text-base font-semibold text-slate-900 truncate">
+                  <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] truncate">
                     {PIPELINE_LABELS[pipeline.id]}
                   </h3>
                 </div>
-                <p class="text-xs text-slate-500 mt-0.5">{pipeline.description}</p>
+                <p class="text-xs text-[color:var(--color-text-secondary)] mt-0.5">
+                  {pipeline.description}
+                </p>
               </div>
-              <span class="text-xs text-slate-400 whitespace-nowrap">{lastRun(pipeline.id)}</span>
+              <span class="text-xs text-[color:var(--color-text-muted)] whitespace-nowrap">
+                {lastRun(pipeline.id)}
+              </span>
             </div>
 
             <dl class="grid grid-cols-2 gap-row text-sm">
               <div>
-                <dt class="text-xs text-slate-500">Total signals</dt>
-                <dd class="text-slate-900 font-medium">{m.total_signals}</dd>
+                <dt class="text-xs text-[color:var(--color-text-secondary)]">Total signals</dt>
+                <dd class="text-[color:var(--color-text-primary)] font-medium">
+                  {m.total_signals}
+                </dd>
               </div>
               <div>
-                <dt class="text-xs text-slate-500">Last 7 days</dt>
-                <dd class="text-slate-900 font-medium">{m.last_7d}</dd>
+                <dt class="text-xs text-[color:var(--color-text-secondary)]">Last 7 days</dt>
+                <dd class="text-[color:var(--color-text-primary)] font-medium">{m.last_7d}</dd>
               </div>
 
               {painPct >= 50 && avgPain !== null && (
                 <div>
-                  <dt class="text-xs text-slate-500">
-                    Avg pain <span class="text-slate-400">({painPct}% coverage)</span>
+                  <dt class="text-xs text-[color:var(--color-text-secondary)]">
+                    Avg pain{' '}
+                    <span class="text-[color:var(--color-text-muted)]">({painPct}% coverage)</span>
                   </dt>
-                  <dd class="text-slate-900 font-medium">{avgPain.toFixed(1)}/10</dd>
+                  <dd class="text-[color:var(--color-text-primary)] font-medium">
+                    {avgPain.toFixed(1)}/10
+                  </dd>
                 </div>
               )}
 
               {verticalPct >= 50 && m.top_vertical && (
                 <div>
-                  <dt class="text-xs text-slate-500">
-                    Top vertical <span class="text-slate-400">({verticalPct}% coverage)</span>
+                  <dt class="text-xs text-[color:var(--color-text-secondary)]">
+                    Top vertical{' '}
+                    <span class="text-[color:var(--color-text-muted)]">
+                      ({verticalPct}% coverage)
+                    </span>
                   </dt>
-                  <dd class="text-slate-900 font-medium capitalize">{vlabel(m.top_vertical)}</dd>
+                  <dd class="text-[color:var(--color-text-primary)] font-medium capitalize">
+                    {vlabel(m.top_vertical)}
+                  </dd>
                 </div>
               )}
 
               {empPct >= 50 && (
                 <div>
-                  <dt class="text-xs text-slate-500">
-                    Employee count <span class="text-slate-400">({empPct}% coverage)</span>
+                  <dt class="text-xs text-[color:var(--color-text-secondary)]">
+                    Employee count{' '}
+                    <span class="text-[color:var(--color-text-muted)]">({empPct}% coverage)</span>
                   </dt>
-                  <dd class="text-slate-900 font-medium">{m.has_employee_count} enriched</dd>
+                  <dd class="text-[color:var(--color-text-primary)] font-medium">
+                    {m.has_employee_count} enriched
+                  </dd>
                 </div>
               )}
 
               {areaPct >= 50 && (
                 <div>
-                  <dt class="text-xs text-slate-500">
-                    Area <span class="text-slate-400">({areaPct}% coverage)</span>
+                  <dt class="text-xs text-[color:var(--color-text-secondary)]">
+                    Area{' '}
+                    <span class="text-[color:var(--color-text-muted)]">({areaPct}% coverage)</span>
                   </dt>
-                  <dd class="text-slate-900 font-medium">{m.has_area} tagged</dd>
+                  <dd class="text-[color:var(--color-text-primary)] font-medium">
+                    {m.has_area} tagged
+                  </dd>
                 </div>
               )}
             </dl>
 
             {m.total_signals === 0 && (
-              <p class="text-xs text-slate-500 mt-3 italic">No signals yet.</p>
+              <p class="text-xs text-[color:var(--color-text-secondary)] mt-3 italic">
+                No signals yet.
+              </p>
             )}
           </a>
         )

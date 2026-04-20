@@ -54,7 +54,7 @@ function formatDate(d: string | null): string {
 function msBadgeClass(s: string): string {
   switch (s) {
     case 'pending':
-      return 'bg-slate-100 text-slate-600'
+      return 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
     case 'in_progress':
       return 'bg-blue-100 text-blue-700'
     case 'completed':
@@ -62,14 +62,14 @@ function msBadgeClass(s: string): string {
     case 'skipped':
       return 'bg-red-100 text-red-600'
     default:
-      return 'bg-slate-100 text-slate-600'
+      return 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
   }
 }
 
 function invoiceBadgeClass(s: string): string {
   switch (s) {
     case 'draft':
-      return 'bg-slate-100 text-slate-600'
+      return 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
     case 'sent':
       return 'bg-blue-100 text-blue-700'
     case 'paid':
@@ -77,9 +77,9 @@ function invoiceBadgeClass(s: string): string {
     case 'overdue':
       return 'bg-red-100 text-red-600'
     case 'void':
-      return 'bg-slate-200 text-slate-500'
+      return 'bg-[color:var(--color-border)] text-[color:var(--color-text-secondary)]'
     default:
-      return 'bg-slate-100 text-slate-600'
+      return 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
   }
 }
 
@@ -94,7 +94,7 @@ function contextTypeBadgeClass(t: string): string {
     case 'feedback':
       return 'bg-purple-100 text-purple-700'
     default:
-      return 'bg-slate-100 text-slate-600'
+      return 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
   }
 }
 
@@ -150,20 +150,22 @@ function fileSize(bytes: number): string {
     }
 
     <!-- Header -->
-    <div class="bg-white rounded-lg border border-slate-200 p-card">
+    <div
+      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+    >
       <div class="flex items-start justify-between">
         <div>
           <div class="flex items-center gap-row mb-2">
-            <h1 class="text-2xl font-semibold text-slate-900">
+            <h1 class="text-2xl font-semibold text-[color:var(--color-text-primary)]">
               {entity?.name ?? 'Unknown Entity'}
             </h1>
-            <span
-              class={`text-xs px-2.5 py-1 rounded font-medium ${statusBadgeClass(engagement.status)}`}
-            >
+            <span class={statusBadgeClass(engagement.status)}>
               {engagement.status}
             </span>
           </div>
-          <div class="flex flex-wrap gap-x-card gap-y-1 text-sm text-slate-500">
+          <div
+            class="flex flex-wrap gap-x-card gap-y-1 text-sm text-[color:var(--color-text-secondary)]"
+          >
             <span>Start: {formatDate(engagement.start_date)}</span>
             <span>Est. End: {formatDate(engagement.estimated_end)}</span>
             {engagement.handoff_date && <span>Handoff: {formatDate(engagement.handoff_date)}</span>}
@@ -182,7 +184,7 @@ function fileSize(bytes: number): string {
                     class={`text-xs px-3 py-1.5 rounded font-medium border transition-colors ${
                       ns === 'cancelled'
                         ? 'border-red-300 text-red-700 hover:bg-red-50'
-                        : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                        : 'border-[color:var(--color-border)] text-[color:var(--color-text-primary)] hover:bg-[color:var(--color-background)]'
                     }`}
                   >
                     {ns === 'active'
@@ -207,24 +209,27 @@ function fileSize(bytes: number): string {
       {/* Quote summary */}
       {
         quote && (
-          <div class="mt-4 pt-4 border-t border-slate-100">
+          <div class="mt-4 pt-4 border-t border-[color:var(--color-border-subtle)]">
             <div class="flex flex-wrap gap-x-card gap-y-1 text-sm">
-              <span class="text-slate-500">
+              <span class="text-[color:var(--color-text-secondary)]">
                 Quote:{' '}
-                <span class="font-medium text-slate-700">
+                <span class="font-medium text-[color:var(--color-text-primary)]">
                   ${quote.total_price.toLocaleString()}
                 </span>
               </span>
-              <span class="text-slate-500">
-                Hours: <span class="font-medium text-slate-700">{quote.total_hours}h est</span>
+              <span class="text-[color:var(--color-text-secondary)]">
+                Hours:{' '}
+                <span class="font-medium text-[color:var(--color-text-primary)]">
+                  {quote.total_hours}h est
+                </span>
                 {engagement.actual_hours > 0 && (
                   <span class="ml-1">/ {engagement.actual_hours}h actual</span>
                 )}
               </span>
               {quote.deposit_pct != null && (
-                <span class="text-slate-500">
+                <span class="text-[color:var(--color-text-secondary)]">
                   Deposit:{' '}
-                  <span class="font-medium text-slate-700">
+                  <span class="font-medium text-[color:var(--color-text-primary)]">
                     {(quote.deposit_pct * 100).toFixed(0)}%
                   </span>
                 </span>
@@ -232,13 +237,15 @@ function fileSize(bytes: number): string {
             </div>
             {depositInvoice && (
               <div class="mt-2 text-sm">
-                <span class="text-slate-500">Deposit Invoice:</span>{' '}
+                <span class="text-[color:var(--color-text-secondary)]">Deposit Invoice:</span>{' '}
                 <span
                   class={`text-xs px-2 py-0.5 rounded ${invoiceBadgeClass(depositInvoice.status)}`}
                 >
                   {depositInvoice.status}
                 </span>
-                <span class="ml-2 text-slate-500">${depositInvoice.amount.toLocaleString()}</span>
+                <span class="ml-2 text-[color:var(--color-text-secondary)]">
+                  ${depositInvoice.amount.toLocaleString()}
+                </span>
               </div>
             )}
           </div>
@@ -247,33 +254,45 @@ function fileSize(bytes: number): string {
 
       {
         engagement.scope_summary && (
-          <div class="mt-4 pt-4 border-t border-slate-100">
-            <p class="text-sm text-slate-600 whitespace-pre-wrap">{engagement.scope_summary}</p>
+          <div class="mt-4 pt-4 border-t border-[color:var(--color-border-subtle)]">
+            <p class="text-sm text-[color:var(--color-text-secondary)] whitespace-pre-wrap">
+              {engagement.scope_summary}
+            </p>
           </div>
         )
       }
     </div>
 
     <!-- Edit Details -->
-    <details class="bg-white rounded-lg border border-slate-200">
-      <summary class="px-6 py-4 cursor-pointer font-medium text-slate-900"> Edit Details </summary>
+    <details
+      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)]"
+    >
+      <summary class="px-6 py-4 cursor-pointer font-medium text-[color:var(--color-text-primary)]">
+        Edit Details
+      </summary>
       <div class="px-6 pb-6">
         <form method="POST" action={`/api/admin/engagements/${engagementId}`} class="space-y-stack">
           <div>
-            <label for="scope_summary" class="block text-sm font-medium text-slate-700 mb-1">
+            <label
+              for="scope_summary"
+              class="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1"
+            >
               Scope Summary
             </label>
             <textarea
               id="scope_summary"
               name="scope_summary"
               rows="3"
-              class="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+              class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm"
               >{engagement.scope_summary ?? ''}</textarea
             >
           </div>
           <div class="grid grid-cols-2 gap-stack">
             <div>
-              <label for="start_date" class="block text-sm font-medium text-slate-700 mb-1">
+              <label
+                for="start_date"
+                class="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1"
+              >
                 Start Date
               </label>
               <input
@@ -281,11 +300,14 @@ function fileSize(bytes: number): string {
                 id="start_date"
                 name="start_date"
                 value={engagement.start_date?.split('T')[0] ?? ''}
-                class="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm"
               />
             </div>
             <div>
-              <label for="estimated_end" class="block text-sm font-medium text-slate-700 mb-1">
+              <label
+                for="estimated_end"
+                class="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1"
+              >
                 Estimated End
               </label>
               <input
@@ -293,13 +315,16 @@ function fileSize(bytes: number): string {
                 id="estimated_end"
                 name="estimated_end"
                 value={engagement.estimated_end?.split('T')[0] ?? ''}
-                class="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm"
               />
             </div>
           </div>
           <div class="grid grid-cols-2 gap-stack">
             <div>
-              <label for="estimated_hours" class="block text-sm font-medium text-slate-700 mb-1">
+              <label
+                for="estimated_hours"
+                class="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1"
+              >
                 Estimated Hours
               </label>
               <input
@@ -308,11 +333,14 @@ function fileSize(bytes: number): string {
                 name="estimated_hours"
                 step="0.5"
                 value={engagement.estimated_hours ?? ''}
-                class="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm"
               />
             </div>
             <div>
-              <label for="actual_hours" class="block text-sm font-medium text-slate-700 mb-1">
+              <label
+                for="actual_hours"
+                class="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1"
+              >
                 Actual Hours
               </label>
               <input
@@ -321,7 +349,7 @@ function fileSize(bytes: number): string {
                 name="actual_hours"
                 step="0.5"
                 value={engagement.actual_hours ?? ''}
-                class="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm"
               />
             </div>
           </div>
@@ -338,14 +366,16 @@ function fileSize(bytes: number): string {
     </details>
 
     <!-- Milestones -->
-    <div class="bg-white rounded-lg border border-slate-200">
-      <div class="px-6 py-4 border-b border-slate-100">
-        <h2 class="font-medium text-slate-900">Milestones</h2>
+    <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)]">
+      <div class="px-6 py-4 border-b border-[color:var(--color-border-subtle)]">
+        <h2 class="font-medium text-[color:var(--color-text-primary)]">Milestones</h2>
       </div>
-      <div class="divide-y divide-slate-100">
+      <div class="divide-y divide-[color:var(--color-border-subtle)]">
         {
           milestones.length === 0 && (
-            <div class="px-6 py-8 text-center text-sm text-slate-400">No milestones yet.</div>
+            <div class="px-6 py-8 text-center text-sm text-[color:var(--color-text-muted)]">
+              No milestones yet.
+            </div>
           )
         }
         {
@@ -359,7 +389,9 @@ function fileSize(bytes: number): string {
                     <span class={`text-xs px-2 py-0.5 rounded ${msBadgeClass(ms.status)}`}>
                       {ms.status}
                     </span>
-                    <span class="text-sm font-medium text-slate-900 truncate">{ms.name}</span>
+                    <span class="text-sm font-medium text-[color:var(--color-text-primary)] truncate">
+                      {ms.name}
+                    </span>
                     {ms.payment_trigger ? (
                       <span class="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
                         $
@@ -367,10 +399,12 @@ function fileSize(bytes: number): string {
                     ) : null}
                   </div>
                   {ms.description && (
-                    <p class="text-xs text-slate-500 mt-1 truncate">{ms.description}</p>
+                    <p class="text-xs text-[color:var(--color-text-secondary)] mt-1 truncate">
+                      {ms.description}
+                    </p>
                   )}
                   {ms.due_date && (
-                    <span class="text-xs text-slate-400 mt-1 block">
+                    <span class="text-xs text-[color:var(--color-text-muted)] mt-1 block">
                       Due: {formatDate(ms.due_date)}
                     </span>
                   )}
@@ -388,7 +422,7 @@ function fileSize(bytes: number): string {
                       class={`text-xs px-2 py-1 rounded border transition-colors ${
                         ms.payment_trigger
                           ? 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100'
-                          : 'border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-300'
+                          : 'border-[color:var(--color-border)] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-secondary)] hover:border-[color:var(--color-border)]'
                       }`}
                     >
                       $
@@ -410,7 +444,7 @@ function fileSize(bytes: number): string {
                             ? 'border-green-300 text-green-700 hover:bg-green-50'
                             : ns === 'in_progress'
                               ? 'border-blue-300 text-blue-700 hover:bg-blue-50'
-                              : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                              : 'border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-background)]'
                         }`}
                       >
                         {ns === 'in_progress'
@@ -448,8 +482,10 @@ function fileSize(bytes: number): string {
       </div>
 
       {/* Add milestone form */}
-      <details class="border-t border-slate-100">
-        <summary class="px-6 py-3 cursor-pointer text-sm text-slate-500 hover:text-slate-700">
+      <details class="border-t border-[color:var(--color-border-subtle)]">
+        <summary
+          class="px-6 py-3 cursor-pointer text-sm text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
+        >
           + Add Milestone
         </summary>
         <div class="px-6 pb-4">
@@ -460,7 +496,10 @@ function fileSize(bytes: number): string {
           >
             <div class="grid grid-cols-2 gap-row">
               <div>
-                <label for="ms_name" class="block text-xs font-medium text-slate-600 mb-1">
+                <label
+                  for="ms_name"
+                  class="block text-xs font-medium text-[color:var(--color-text-secondary)] mb-1"
+                >
                   Name *
                 </label>
                 <input
@@ -468,34 +507,42 @@ function fileSize(bytes: number): string {
                   id="ms_name"
                   name="name"
                   required
-                  class="w-full border border-slate-300 rounded px-3 py-1.5 text-sm"
+                  class="w-full border border-[color:var(--color-border)] rounded px-3 py-1.5 text-sm"
                 />
               </div>
               <div>
-                <label for="ms_due" class="block text-xs font-medium text-slate-600 mb-1">
+                <label
+                  for="ms_due"
+                  class="block text-xs font-medium text-[color:var(--color-text-secondary)] mb-1"
+                >
                   Due Date
                 </label>
                 <input
                   type="date"
                   id="ms_due"
                   name="due_date"
-                  class="w-full border border-slate-300 rounded px-3 py-1.5 text-sm"
+                  class="w-full border border-[color:var(--color-border)] rounded px-3 py-1.5 text-sm"
                 />
               </div>
             </div>
             <div>
-              <label for="ms_desc" class="block text-xs font-medium text-slate-600 mb-1">
+              <label
+                for="ms_desc"
+                class="block text-xs font-medium text-[color:var(--color-text-secondary)] mb-1"
+              >
                 Description
               </label>
               <input
                 type="text"
                 id="ms_desc"
                 name="description"
-                class="w-full border border-slate-300 rounded px-3 py-1.5 text-sm"
+                class="w-full border border-[color:var(--color-border)] rounded px-3 py-1.5 text-sm"
               />
             </div>
             <div class="flex items-center gap-stack">
-              <label class="flex items-center gap-2 text-sm text-slate-600">
+              <label
+                class="flex items-center gap-2 text-sm text-[color:var(--color-text-secondary)]"
+              >
                 <input type="checkbox" name="payment_trigger" value="1" />
                 Payment trigger
               </label>
@@ -513,10 +560,10 @@ function fileSize(bytes: number): string {
     </div>
 
     <!-- Consultant photo -->
-    <div class="bg-white rounded-lg border border-slate-200">
-      <div class="px-6 py-4 border-b border-slate-100">
-        <h2 class="font-medium text-slate-900">Consultant Photo</h2>
-        <p class="text-xs text-slate-500 mt-1">
+    <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)]">
+      <div class="px-6 py-4 border-b border-[color:var(--color-border-subtle)]">
+        <h2 class="font-medium text-[color:var(--color-text-primary)]">Consultant Photo</h2>
+        <p class="text-xs text-[color:var(--color-text-secondary)] mt-1">
           Shown on every portal surface for this engagement. Square, 400×400 recommended. We'll crop
           to a circle and encode as WebP in your browser before upload. JPEG/PNG/WebP up to 5 MB.
         </p>
@@ -524,7 +571,7 @@ function fileSize(bytes: number): string {
       <div class="px-6 py-5">
         <div class="flex items-start gap-5">
           <div
-            class="w-20 h-20 shrink-0 rounded-full bg-slate-50 border border-slate-200 overflow-hidden"
+            class="w-20 h-20 shrink-0 rounded-full bg-[color:var(--color-background)] border border-[color:var(--color-border)] overflow-hidden"
           >
             {
               engagement.consultant_photo_url ? (
@@ -538,7 +585,7 @@ function fileSize(bytes: number): string {
                 <svg
                   id="consultant-photo-placeholder"
                   viewBox="0 0 80 80"
-                  class="w-full h-full text-slate-400"
+                  class="w-full h-full text-[color:var(--color-text-muted)]"
                   aria-hidden="true"
                 >
                   <rect width="80" height="80" fill="currentColor" fill-opacity="0.12" />
@@ -557,7 +604,7 @@ function fileSize(bytes: number): string {
               id="photo-preview"
               width="160"
               height="160"
-              class="hidden rounded-full border border-slate-200 mb-3"></canvas>
+              class="hidden rounded-full border border-[color:var(--color-border)] mb-3"></canvas>
             <div id="photo-controls" class="flex flex-wrap items-center gap-2">
               <input
                 type="file"
@@ -568,7 +615,7 @@ function fileSize(bytes: number): string {
               <button
                 type="button"
                 id="photo-choose"
-                class="text-xs px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors"
+                class="text-xs px-3 py-1.5 rounded border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] hover:bg-[color:var(--color-background)] transition-colors"
               >
                 Choose Photo
               </button>
@@ -582,7 +629,7 @@ function fileSize(bytes: number): string {
               <button
                 type="button"
                 id="photo-cancel"
-                class="hidden text-xs px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors"
+                class="hidden text-xs px-3 py-1.5 rounded border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-background)] transition-colors"
               >
                 Cancel
               </button>
@@ -598,21 +645,21 @@ function fileSize(bytes: number): string {
                 )
               }
             </div>
-            <p id="photo-status" class="mt-2 text-xs text-slate-500"></p>
+            <p id="photo-status" class="mt-2 text-xs text-[color:var(--color-text-secondary)]"></p>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Deliverables -->
-    <div class="bg-white rounded-lg border border-slate-200">
-      <div class="px-6 py-4 border-b border-slate-100">
-        <h2 class="font-medium text-slate-900">Deliverables</h2>
+    <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)]">
+      <div class="px-6 py-4 border-b border-[color:var(--color-border-subtle)]">
+        <h2 class="font-medium text-[color:var(--color-text-primary)]">Deliverables</h2>
       </div>
       <div class="px-6 py-4">
         {
           documents.length === 0 && (
-            <p class="text-sm text-slate-400 mb-4">No files uploaded yet.</p>
+            <p class="text-sm text-[color:var(--color-text-muted)] mb-4">No files uploaded yet.</p>
           )
         }
         {
@@ -628,7 +675,7 @@ function fileSize(bytes: number): string {
                     >
                       {name}
                     </a>
-                    <span class="text-xs text-slate-400 flex-shrink-0 ml-4">
+                    <span class="text-xs text-[color:var(--color-text-muted)] flex-shrink-0 ml-4">
                       {fileSize(doc.size)} &middot; {formatDate(doc.uploaded.toISOString())}
                     </span>
                   </li>
@@ -639,18 +686,21 @@ function fileSize(bytes: number): string {
         }
         <div
           id="upload-area"
-          class="border-2 border-dashed border-slate-200 rounded-lg p-card text-center"
+          class="border-2 border-dashed border-[color:var(--color-border)] rounded-[var(--radius-card)] p-card text-center"
         >
-          <p class="text-sm text-slate-500 mb-2">Drag files here or click to upload</p>
+          <p class="text-sm text-[color:var(--color-text-secondary)] mb-2">
+            Drag files here or click to upload
+          </p>
           <input type="file" id="file-input" class="hidden" multiple />
           <button
             type="button"
             id="upload-btn"
-            class="text-xs px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors"
+            class="text-xs px-3 py-1.5 rounded border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-background)] transition-colors"
           >
             Choose Files
           </button>
-          <div id="upload-status" class="text-xs text-slate-400 mt-2 hidden"></div>
+          <div id="upload-status" class="text-xs text-[color:var(--color-text-muted)] mt-2 hidden">
+          </div>
         </div>
       </div>
     </div>
@@ -658,21 +708,23 @@ function fileSize(bytes: number): string {
     <!-- Invoices -->
     {
       invoices.length > 0 && (
-        <div class="bg-white rounded-lg border border-slate-200">
-          <div class="px-6 py-4 border-b border-slate-100">
-            <h2 class="font-medium text-slate-900">Invoices</h2>
+        <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)]">
+          <div class="px-6 py-4 border-b border-[color:var(--color-border-subtle)]">
+            <h2 class="font-medium text-[color:var(--color-text-primary)]">Invoices</h2>
           </div>
-          <div class="divide-y divide-slate-100">
+          <div class="divide-y divide-[color:var(--color-border-subtle)]">
             {invoices.map((inv) => (
               <div class="px-6 py-3 flex items-center justify-between text-sm">
                 <div class="flex items-center gap-row">
                   <span class={`text-xs px-2 py-0.5 rounded ${invoiceBadgeClass(inv.status)}`}>
                     {inv.status}
                   </span>
-                  <span class="text-slate-700 capitalize">{inv.type}</span>
+                  <span class="text-[color:var(--color-text-primary)] capitalize">{inv.type}</span>
                 </div>
-                <div class="flex items-center gap-stack text-slate-500">
-                  <span class="font-medium text-slate-700">${inv.amount.toLocaleString()}</span>
+                <div class="flex items-center gap-stack text-[color:var(--color-text-secondary)]">
+                  <span class="font-medium text-[color:var(--color-text-primary)]">
+                    ${inv.amount.toLocaleString()}
+                  </span>
                   {inv.due_date && <span>Due: {formatDate(inv.due_date)}</span>}
                   {inv.paid_at && <span>Paid: {formatDate(inv.paid_at)}</span>}
                 </div>
@@ -684,30 +736,36 @@ function fileSize(bytes: number): string {
     }
 
     <!-- Context Timeline -->
-    <div class="bg-white rounded-lg border border-slate-200">
-      <div class="px-6 py-4 border-b border-slate-100">
-        <h2 class="font-medium text-slate-900">Timeline</h2>
+    <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)]">
+      <div class="px-6 py-4 border-b border-[color:var(--color-border-subtle)]">
+        <h2 class="font-medium text-[color:var(--color-text-primary)]">Timeline</h2>
       </div>
       {
         contextEntries.length === 0 && (
-          <div class="px-6 py-8 text-center text-sm text-slate-400">
+          <div class="px-6 py-8 text-center text-sm text-[color:var(--color-text-muted)]">
             No context entries for this engagement.
           </div>
         )
       }
       {
         contextEntries.length > 0 && (
-          <div class="divide-y divide-slate-100">
+          <div class="divide-y divide-[color:var(--color-border-subtle)]">
             {contextEntries.map((entry) => (
               <div class="px-6 py-3">
                 <div class="flex items-center gap-2 mb-1">
                   <span class={`text-xs px-2 py-0.5 rounded ${contextTypeBadgeClass(entry.type)}`}>
                     {entry.type.replace(/_/g, ' ')}
                   </span>
-                  <span class="text-xs text-slate-400">{formatDate(entry.created_at)}</span>
-                  <span class="text-xs text-slate-400">via {entry.source}</span>
+                  <span class="text-xs text-[color:var(--color-text-muted)]">
+                    {formatDate(entry.created_at)}
+                  </span>
+                  <span class="text-xs text-[color:var(--color-text-muted)]">
+                    via {entry.source}
+                  </span>
                 </div>
-                <p class="text-sm text-slate-700 whitespace-pre-wrap">{entry.content}</p>
+                <p class="text-sm text-[color:var(--color-text-primary)] whitespace-pre-wrap">
+                  {entry.content}
+                </p>
               </div>
             ))}
           </div>
@@ -785,7 +843,9 @@ function fileSize(bytes: number): string {
     function setStatus(msg, isError) {
       if (!photoStatus) return
       photoStatus.textContent = msg
-      photoStatus.className = isError ? 'mt-2 text-xs text-red-600' : 'mt-2 text-xs text-slate-500'
+      photoStatus.className = isError
+        ? 'mt-2 text-xs text-red-600'
+        : 'mt-2 text-xs text-[color:var(--color-text-secondary)]'
     }
 
     async function cropToSquareWebp(file) {

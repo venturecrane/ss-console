@@ -144,41 +144,51 @@ const pipelineRows = (pipelineFreshness?.results ?? []).map((r) => {
 <AdminLayout title="Dashboard — SMD Services" maxWidth="max-w-6xl">
   <div class="space-y-card">
     <!-- Card 1: Today's Work -->
-    <section class="bg-white rounded-lg border border-slate-200 p-card">
-      <h2 class="text-base font-semibold text-slate-900 mb-4">Today's Work</h2>
+    <section
+      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+    >
+      <h2 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-4">
+        Today's Work
+      </h2>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-stack">
         <a
           href="/admin/entities?stage=signal"
-          class="flex items-center gap-row p-row rounded-lg hover:bg-slate-50 transition-colors"
+          class="flex items-center gap-row p-row rounded-[var(--radius-card)] hover:bg-[color:var(--color-background)] transition-colors"
         >
           <div
             class:list={[
               'w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold',
-              signalCount > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400',
+              signalCount > 0
+                ? 'bg-amber-100 text-amber-700'
+                : 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-muted)]',
             ]}
           >
             {signalCount}
           </div>
           <div>
-            <div class="text-sm font-medium text-slate-900">Signals to triage</div>
-            <div class="text-xs text-slate-500">Promote or dismiss</div>
+            <div class="text-sm font-medium text-[color:var(--color-text-primary)]">
+              Signals to triage
+            </div>
+            <div class="text-xs text-[color:var(--color-text-secondary)]">Promote or dismiss</div>
           </div>
         </a>
 
-        <div class="flex items-center gap-row p-row rounded-lg">
+        <div class="flex items-center gap-row p-row rounded-[var(--radius-card)]">
           <div
             class:list={[
               'w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold',
               todayAssessments.length > 0
                 ? 'bg-indigo-100 text-indigo-700'
-                : 'bg-slate-100 text-slate-400',
+                : 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-muted)]',
             ]}
           >
             {todayAssessments.length}
           </div>
           <div>
-            <div class="text-sm font-medium text-slate-900">Assessments today</div>
-            <div class="text-xs text-slate-500">
+            <div class="text-sm font-medium text-[color:var(--color-text-primary)]">
+              Assessments today
+            </div>
+            <div class="text-xs text-[color:var(--color-text-secondary)]">
               {
                 todayAssessments.length > 0
                   ? todayAssessments
@@ -200,19 +210,23 @@ const pipelineRows = (pipelineFreshness?.results ?? []).map((r) => {
 
         <a
           href="/admin/follow-ups?filter=overdue"
-          class="flex items-center gap-row p-row rounded-lg hover:bg-slate-50 transition-colors"
+          class="flex items-center gap-row p-row rounded-[var(--radius-card)] hover:bg-[color:var(--color-background)] transition-colors"
         >
           <div
             class:list={[
               'w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold',
-              overdueCount > 0 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400',
+              overdueCount > 0
+                ? 'bg-red-100 text-red-700'
+                : 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-muted)]',
             ]}
           >
             {overdueCount}
           </div>
           <div>
-            <div class="text-sm font-medium text-slate-900">Overdue follow-ups</div>
-            <div class="text-xs text-slate-500">
+            <div class="text-sm font-medium text-[color:var(--color-text-primary)]">
+              Overdue follow-ups
+            </div>
+            <div class="text-xs text-[color:var(--color-text-secondary)]">
               {overdueCount > 0 ? 'Needs attention' : 'All clear'}
             </div>
           </div>
@@ -221,10 +235,14 @@ const pipelineRows = (pipelineFreshness?.results ?? []).map((r) => {
     </section>
 
     <!-- Card 2: Pipeline State -->
-    <section class="bg-white rounded-lg border border-slate-200 p-card">
+    <section
+      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+    >
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-base font-semibold text-slate-900">Pipeline</h2>
-        <a href="/admin/entities" class="text-xs text-slate-500 hover:text-slate-700"
+        <h2 class="text-base font-semibold text-[color:var(--color-text-primary)]">Pipeline</h2>
+        <a
+          href="/admin/entities"
+          class="text-xs text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
           >{totalPipeline} total</a
         >
       </div>
@@ -232,7 +250,7 @@ const pipelineRows = (pipelineFreshness?.results ?? []).map((r) => {
       <!-- Funnel bar -->
       {
         totalPipeline > 0 && (
-          <div class="flex h-3 rounded-full overflow-hidden mb-4 bg-slate-100">
+          <div class="flex h-3 rounded-full overflow-hidden mb-4 bg-[color:var(--color-border-subtle)]">
             {pipelineStages.map((s) =>
               s.count > 0 ? (
                 <div
@@ -258,17 +276,19 @@ const pipelineRows = (pipelineFreshness?.results ?? []).map((r) => {
           pipelineStages.map((s) => (
             <a
               href={`/admin/entities?stage=${s.stage}`}
-              class="text-center p-2 rounded-lg hover:bg-slate-50 transition-colors"
+              class="text-center p-2 rounded-[var(--radius-card)] hover:bg-[color:var(--color-background)] transition-colors"
             >
               <div
                 class:list={[
                   'text-2xl font-bold',
-                  s.count > 0 ? 'text-slate-900' : 'text-slate-300',
+                  s.count > 0
+                    ? 'text-[color:var(--color-text-primary)]'
+                    : 'text-[color:var(--color-text-muted)]',
                 ]}
               >
                 {s.count}
               </div>
-              <div class="text-xs text-slate-500">{s.label}</div>
+              <div class="text-xs text-[color:var(--color-text-secondary)]">{s.label}</div>
             </a>
           ))
         }
@@ -276,10 +296,10 @@ const pipelineRows = (pipelineFreshness?.results ?? []).map((r) => {
 
       {
         pipeline.lost > 0 && (
-          <div class="mt-3 pt-3 border-t border-slate-100 text-center">
+          <div class="mt-3 pt-3 border-t border-[color:var(--color-border-subtle)] text-center">
             <a
               href="/admin/entities?stage=lost"
-              class="text-xs text-slate-400 hover:text-slate-600"
+              class="text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-secondary)]"
             >
               {pipeline.lost} lost
             </a>
@@ -290,43 +310,51 @@ const pipelineRows = (pipelineFreshness?.results ?? []).map((r) => {
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-card">
       <!-- Card 3: Revenue -->
-      <section class="bg-white rounded-lg border border-slate-200 p-card">
-        <h2 class="text-base font-semibold text-slate-900 mb-4">Revenue</h2>
+      <section
+        class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+      >
+        <h2 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-4">Revenue</h2>
         <div class="space-y-row">
           <div class="flex justify-between items-baseline">
-            <span class="text-sm text-slate-500">Invoiced</span>
-            <span class="text-lg font-semibold text-slate-900">
+            <span class="text-sm text-[color:var(--color-text-secondary)]">Invoiced</span>
+            <span class="text-lg font-semibold text-[color:var(--color-text-primary)]">
               ${revenue.total_invoiced.toLocaleString('en-US', { minimumFractionDigits: 0 })}
             </span>
           </div>
           <div class="flex justify-between items-baseline">
-            <span class="text-sm text-slate-500">Paid</span>
+            <span class="text-sm text-[color:var(--color-text-secondary)]">Paid</span>
             <span class="text-lg font-semibold text-green-600">
               ${revenue.total_paid.toLocaleString('en-US', { minimumFractionDigits: 0 })}
             </span>
           </div>
           <div class="flex justify-between items-baseline">
-            <span class="text-sm text-slate-500">Outstanding</span>
+            <span class="text-sm text-[color:var(--color-text-secondary)]">Outstanding</span>
             <span
               class:list={[
                 'text-lg font-semibold',
-                outstandingTotal > 0 ? 'text-amber-600' : 'text-slate-400',
+                outstandingTotal > 0 ? 'text-amber-600' : 'text-[color:var(--color-text-muted)]',
               ]}
             >
               ${outstandingTotal.toLocaleString('en-US', { minimumFractionDigits: 0 })}
             </span>
           </div>
 
-          <div class="pt-3 border-t border-slate-100">
+          <div class="pt-3 border-t border-[color:var(--color-border-subtle)]">
             <div class="flex justify-between items-baseline">
-              <span class="text-sm text-slate-500">Active engagements</span>
-              <span class="text-sm font-medium text-slate-900">{activeEngagements.length}</span>
+              <span class="text-sm text-[color:var(--color-text-secondary)]"
+                >Active engagements</span
+              >
+              <span class="text-sm font-medium text-[color:var(--color-text-primary)]"
+                >{activeEngagements.length}</span
+              >
             </div>
             {
               health.avg_days_to_completion > 0 && (
                 <div class="flex justify-between items-baseline mt-1">
-                  <span class="text-sm text-slate-500">Avg completion</span>
-                  <span class="text-sm font-medium text-slate-900">
+                  <span class="text-sm text-[color:var(--color-text-secondary)]">
+                    Avg completion
+                  </span>
+                  <span class="text-sm font-medium text-[color:var(--color-text-primary)]">
                     {health.avg_days_to_completion} days
                   </span>
                 </div>
@@ -337,16 +365,22 @@ const pipelineRows = (pipelineFreshness?.results ?? []).map((r) => {
       </section>
 
       <!-- Card 4: Follow-up Health -->
-      <section class="bg-white rounded-lg border border-slate-200 p-card">
+      <section
+        class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+      >
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-base font-semibold text-slate-900">Follow-up Health</h2>
-          <a href="/admin/follow-ups" class="text-xs text-slate-500 hover:text-slate-700"
+          <h2 class="text-base font-semibold text-[color:var(--color-text-primary)]">
+            Follow-up Health
+          </h2>
+          <a
+            href="/admin/follow-ups"
+            class="text-xs text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
             >View all</a
           >
         </div>
         <div class="space-y-row">
           <div class="flex justify-between items-baseline">
-            <span class="text-sm text-slate-500">On-time rate</span>
+            <span class="text-sm text-[color:var(--color-text-secondary)]">On-time rate</span>
             <span
               class:list={[
                 'text-lg font-semibold',
@@ -361,36 +395,40 @@ const pipelineRows = (pipelineFreshness?.results ?? []).map((r) => {
             </span>
           </div>
           <div class="flex justify-between items-baseline">
-            <span class="text-sm text-slate-500">Sent on time</span>
-            <span class="text-sm font-medium text-slate-900">{compliance.completed_on_time}</span>
+            <span class="text-sm text-[color:var(--color-text-secondary)]">Sent on time</span>
+            <span class="text-sm font-medium text-[color:var(--color-text-primary)]"
+              >{compliance.completed_on_time}</span
+            >
           </div>
           <div class="flex justify-between items-baseline">
-            <span class="text-sm text-slate-500">Sent late</span>
+            <span class="text-sm text-[color:var(--color-text-secondary)]">Sent late</span>
             <span
               class:list={[
                 'text-sm font-medium',
-                compliance.completed_late > 0 ? 'text-amber-600' : 'text-slate-900',
+                compliance.completed_late > 0
+                  ? 'text-amber-600'
+                  : 'text-[color:var(--color-text-primary)]',
               ]}
             >
               {compliance.completed_late}
             </span>
           </div>
           <div class="flex justify-between items-baseline">
-            <span class="text-sm text-slate-500">Missed</span>
+            <span class="text-sm text-[color:var(--color-text-secondary)]">Missed</span>
             <span
               class:list={[
                 'text-sm font-medium',
-                compliance.missed > 0 ? 'text-red-600' : 'text-slate-900',
+                compliance.missed > 0 ? 'text-red-600' : 'text-[color:var(--color-text-primary)]',
               ]}
             >
               {compliance.missed}
             </span>
           </div>
 
-          <div class="pt-3 border-t border-slate-100">
+          <div class="pt-3 border-t border-[color:var(--color-border-subtle)]">
             <div class="flex justify-between items-baseline">
-              <span class="text-sm text-slate-500">Upcoming</span>
-              <span class="text-sm font-medium text-slate-900"
+              <span class="text-sm text-[color:var(--color-text-secondary)]">Upcoming</span>
+              <span class="text-sm font-medium text-[color:var(--color-text-primary)]"
                 >{upcomingFollowUps.length} scheduled</span
               >
             </div>
@@ -400,9 +438,13 @@ const pipelineRows = (pipelineFreshness?.results ?? []).map((r) => {
     </div>
 
     <!-- Card 5: Automations -->
-    <section class="bg-white rounded-lg border border-slate-200 p-card">
-      <h2 class="text-base font-semibold text-slate-900 mb-4">Automations</h2>
-      <div class="divide-y divide-slate-100">
+    <section
+      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+    >
+      <h2 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-4">
+        Automations
+      </h2>
+      <div class="divide-y divide-[color:var(--color-border-subtle)]">
         <!-- Google Calendar -->
         <div class="flex items-center justify-between py-2">
           <div class="flex items-center gap-2">
@@ -417,12 +459,14 @@ const pipelineRows = (pipelineFreshness?.results ?? []).map((r) => {
               ]}
             >
             </div>
-            <span class="text-sm text-slate-600">Google Calendar</span>
+            <span class="text-sm text-[color:var(--color-text-secondary)]">Google Calendar</span>
           </div>
           <span
             class:list={[
               'text-xs',
-              calStatus === 'error' || calStatus === 'revoked' ? 'text-red-600' : 'text-slate-400',
+              calStatus === 'error' || calStatus === 'revoked'
+                ? 'text-red-600'
+                : 'text-[color:var(--color-text-muted)]',
             ]}
           >
             {
@@ -462,13 +506,15 @@ const pipelineRows = (pipelineFreshness?.results ?? []).map((r) => {
               <div class="flex items-center justify-between py-2">
                 <div class="flex items-center gap-2">
                   <div class:list={['w-2 h-2 rounded-full', p.color]} />
-                  <span class="text-sm text-slate-600">{p.label}</span>
+                  <span class="text-sm text-[color:var(--color-text-secondary)]">{p.label}</span>
                 </div>
-                <span class="text-xs text-slate-400">{p.ago}</span>
+                <span class="text-xs text-[color:var(--color-text-muted)]">{p.ago}</span>
               </div>
             ))
           ) : (
-            <div class="py-2 text-xs text-slate-400">No pipeline data yet</div>
+            <div class="py-2 text-xs text-[color:var(--color-text-muted)]">
+              No pipeline data yet
+            </div>
           )
         }
       </div>

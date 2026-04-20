@@ -63,7 +63,9 @@ const navItems = [
     />
     <title>{title}</title>
   </head>
-  <body class="min-h-screen bg-slate-50 text-slate-900">
+  <body
+    class="min-h-screen bg-[color:var(--color-background)] text-[color:var(--color-text-primary)]"
+  >
     <SkipToMain />
     <header
       role="banner"
@@ -76,7 +78,10 @@ const navItems = [
             class="text-lg font-bold text-[color:var(--color-text-primary)] hover:text-[color:var(--color-primary)] active:text-[color:var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
             >SMD Services</a
           >
-          <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">Admin</span>
+          <span
+            class="text-xs bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)] px-2 py-0.5 rounded"
+            >Admin</span
+          >
         </div>
 
         <!-- Desktop: inline nav tabs + email + sign out -->
@@ -93,7 +98,7 @@ const navItems = [
                       'inline-flex items-center min-h-11 px-2 -mx-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded',
                       active
                         ? 'text-[color:var(--color-primary)] font-medium'
-                        : 'text-slate-600 hover:text-slate-900 active:text-slate-900',
+                        : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)]',
                     ]}
                   >
                     {item.label}
@@ -102,12 +107,12 @@ const navItems = [
               })
             }
           </nav>
-          <span class="text-sm text-slate-300" aria-hidden="true">|</span>
-          <span class="text-sm text-slate-600">{session.email}</span>
+          <span class="text-sm text-[color:var(--color-text-muted)]" aria-hidden="true">|</span>
+          <span class="text-sm text-[color:var(--color-text-secondary)]">{session.email}</span>
           <form method="POST" action="/api/auth/logout">
             <button
               type="submit"
-              class="inline-flex items-center min-h-11 px-2 -mx-2 text-sm text-slate-500 hover:text-slate-700 active:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
+              class="inline-flex items-center min-h-11 px-2 -mx-2 text-sm text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
             >
               Sign out
             </button>
@@ -118,12 +123,12 @@ const navItems = [
         <details class="relative md:hidden">
           <summary
             aria-label="Open menu"
-            class="list-none w-11 h-11 flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 active:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 cursor-pointer"
+            class="list-none w-11 h-11 flex items-center justify-center rounded-[var(--radius-card)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-border-subtle)] active:bg-[color:var(--color-border-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 cursor-pointer"
           >
             <span class="material-symbols-outlined" aria-hidden="true">menu</span>
           </summary>
           <div
-            class="absolute right-0 top-12 w-64 bg-white border border-[color:var(--color-border)] rounded-lg shadow-lg p-2 z-50"
+            class="absolute right-0 top-12 w-64 bg-white border border-[color:var(--color-border)] rounded-[var(--radius-card)] p-2 z-50"
           >
             <nav aria-label="Primary" class="flex flex-col">
               {
@@ -134,8 +139,10 @@ const navItems = [
                       href={item.href}
                       aria-current={active ? 'page' : undefined}
                       class:list={[
-                        'block px-3 py-2.5 text-sm rounded hover:bg-slate-100 active:bg-slate-100',
-                        active ? 'text-[color:var(--color-primary)] font-medium' : 'text-slate-700',
+                        'block px-3 py-2.5 text-sm rounded hover:bg-[color:var(--color-border-subtle)] active:bg-[color:var(--color-border-subtle)]',
+                        active
+                          ? 'text-[color:var(--color-primary)] font-medium'
+                          : 'text-[color:var(--color-text-primary)]',
                       ]}
                     >
                       {item.label}
@@ -145,11 +152,13 @@ const navItems = [
               }
             </nav>
             <hr class="my-2 border-[color:var(--color-border)]" />
-            <p class="px-3 py-1.5 text-xs text-slate-500 break-all">{session.email}</p>
+            <p class="px-3 py-1.5 text-xs text-[color:var(--color-text-secondary)] break-all">
+              {session.email}
+            </p>
             <form method="POST" action="/api/auth/logout">
               <button
                 type="submit"
-                class="w-full text-left px-3 py-2.5 text-sm text-slate-700 rounded hover:bg-slate-100 active:bg-slate-100"
+                class="w-full text-left px-3 py-2.5 text-sm text-[color:var(--color-text-primary)] rounded hover:bg-[color:var(--color-border-subtle)] active:bg-[color:var(--color-border-subtle)]"
               >
                 Sign out
               </button>
@@ -163,12 +172,12 @@ const navItems = [
       {
         breadcrumbs.length > 0 && (
           <nav aria-label="Breadcrumb" class="mb-4">
-            <ol class="flex flex-wrap items-center gap-1 text-sm text-slate-500">
+            <ol class="flex flex-wrap items-center gap-1 text-sm text-[color:var(--color-text-secondary)]">
               {breadcrumbs.map((crumb, i) => (
                 <>
                   {i > 0 && (
                     <li aria-hidden="true" class="flex items-center">
-                      <span class="material-symbols-outlined text-base text-slate-300">
+                      <span class="material-symbols-outlined text-base text-[color:var(--color-text-muted)]">
                         chevron_right
                       </span>
                     </li>
@@ -182,7 +191,10 @@ const navItems = [
                         {crumb.label}
                       </a>
                     ) : (
-                      <span aria-current="page" class="text-slate-900 font-medium">
+                      <span
+                        aria-current="page"
+                        class="text-[color:var(--color-text-primary)] font-medium"
+                      >
                         {crumb.label}
                       </span>
                     )}
