@@ -8,30 +8,23 @@
 --
 -- `entities.stage` has a CHECK constraint listing every allowed stage value
 -- (from migration 0008), so swapping the value requires rebuilding the CHECK.
--- SQLite cannot ALTER a CHECK constraint in place — the standard workaround
--- is table-rewrite via PRAGMA legacy_alter_table, which D1 supports.
+-- SQLite cannot ALTER a CHECK constraint in place and there is no PRAGMA to
+-- disable CHECK on a live table, so we do the standard table-rewrite dance:
 --
--- Strategy (no data rewrite, no FK drama):
---   1. Temporarily disable strict legacy CHECK enforcement.
---   2. Update the 'assessing' rows to 'meetings'.
---   3. Rebuild the CHECK by copying into a shadow table with the new clause
---      and swapping names — preserves every column, default, and index.
+--   1. Build a shadow table with the NEW CHECK allow-list.
+--   2. Copy every row, translating 'assessing' → 'meetings' in the SELECT.
+--   3. Drop the old table and rename the shadow.
+--   4. Recreate indexes (they are dropped along with the old table).
 --
--- Rollback: reverse the UPDATE and rebuild the CHECK with 'assessing' back
--- in the allow-list. Data is preserved.
-
--- ---- Phase 1: backfill the data ----
+-- Order matters: the translate-in-SELECT must happen when inserting into the
+-- shadow table, because the ORIGINAL table's CHECK still forbids 'meetings'.
+-- An earlier version of this migration attempted `UPDATE ... SET stage =
+-- 'meetings'` against the old table first; that fails with the pre-rewrite
+-- CHECK constraint. See CI run 24861522944 for the postmortem.
 --
--- Run this BEFORE the CHECK rewrite so we aren't trying to insert 'meetings'
--- into a table whose CHECK still forbids it.
-
--- Turn OFF the check temporarily. D1 honors this just like upstream SQLite.
-PRAGMA defer_foreign_keys = ON;
-
-UPDATE entities SET stage = 'meetings' WHERE stage = 'assessing';
-
-
--- ---- Phase 2: rebuild CHECK with the new allow-list ----
+-- Rollback: same shape — build a shadow with the legacy 'assessing' value,
+-- translate 'meetings' → 'assessing' in the SELECT, swap tables, recreate
+-- indexes. Data is preserved.
 
 CREATE TABLE entities_new (
   id                TEXT PRIMARY KEY,
@@ -77,7 +70,8 @@ INSERT INTO entities_new (
 )
 SELECT
   id, org_id, name, slug, phone, website,
-  stage, stage_changed_at,
+  CASE WHEN stage = 'assessing' THEN 'meetings' ELSE stage END AS stage,
+  stage_changed_at,
   pain_score, vertical, area, employee_count,
   tier, summary,
   next_action, next_action_at,

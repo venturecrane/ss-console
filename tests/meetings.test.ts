@@ -187,6 +187,41 @@ describe('migration 0026: rename stage assessing → meetings', () => {
         .run()
     ).rejects.toThrow()
   })
+
+  // Regression for prod deploy 2026-04-23: the original 0026 ran an UPDATE
+  // against the old CHECK before the shadow-table swap, which failed the
+  // constraint. The fix translates 'assessing' → 'meetings' inside the
+  // INSERT SELECT that populates the shadow table. Simulate the pre-rename
+  // state by bypassing the migration runner, then run 0026 directly and
+  // verify the data survives.
+  it('translates existing assessing rows to meetings without violating CHECK', async () => {
+    const isolated = createTestD1()
+    const files = discoverNumericMigrations(migrationsDir)
+    const basename = (f: { name?: string } | string) =>
+      typeof f === 'string' ? (f.split('/').pop() ?? f) : (f.name ?? '')
+    // Run every migration EXCEPT 0026.
+    const pre = files.filter((f) => !basename(f).startsWith('0026_'))
+    await runMigrations(isolated, { files: pre })
+    await seedOrg(isolated)
+
+    // Insert a row with the legacy stage, which was valid pre-0026.
+    await isolated
+      .prepare(
+        `INSERT INTO entities (id, org_id, name, slug, stage, stage_changed_at, created_at, updated_at)
+         VALUES ('e-preexisting', ?, 'PreExisting', 'pre', 'assessing', datetime('now'), datetime('now'), datetime('now'))`
+      )
+      .bind(ORG_ID)
+      .run()
+
+    // Now run 0026 on a DB that already contains 'assessing' data.
+    const only0026 = files.filter((f) => basename(f).startsWith('0026_'))
+    await runMigrations(isolated, { files: only0026 })
+
+    const row = await isolated
+      .prepare(`SELECT stage FROM entities WHERE id = 'e-preexisting'`)
+      .first<{ stage: string }>()
+    expect(row?.stage).toBe('meetings')
+  })
 })
 
 describe('meetings DAL', () => {
