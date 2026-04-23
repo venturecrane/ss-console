@@ -1,0 +1,65 @@
+---
+/**
+ * /patterns — public aggregate-patterns page.
+ *
+ * Scaffolded for parent epic #483 / child #488. The page stays 404 until
+ * the `ENABLE_PUBLIC_PATTERNS` env var is set truthy.
+ *
+ * UNLOCK CONDITION (per CLAUDE.md "No fabricated client-facing content"):
+ *   Do not enable until >=20 real assessments exist with cross-vertical
+ *   diversity. Publishing aggregate patterns before that point would
+ *   either (a) leak individual clients' signals as if they were trends,
+ *   or (b) require invented filler data to reach a credible sample
+ *   size. Both are prohibited by CLAUDE.md. The public dataset must be
+ *   large enough and diverse enough that no single engagement is
+ *   identifiable from the aggregate output.
+ *
+ * Rendering of the actual aggregates is deferred — see the TODO below.
+ */
+
+export const prerender = false
+
+import { env } from 'cloudflare:workers'
+import Base from '../layouts/Base.astro'
+import Nav from '../components/Nav.astro'
+import Footer from '../components/Footer.astro'
+
+const flagValue = (env as { ENABLE_PUBLIC_PATTERNS?: string }).ENABLE_PUBLIC_PATTERNS
+const enabled = flagValue === '1' || flagValue === 'true'
+
+if (!enabled) {
+  return new Response(null, { status: 404 })
+}
+---
+
+<Base
+  title="Patterns | SMD Services"
+  description="Aggregate patterns from operations assessments with growing businesses."
+>
+  <Nav />
+  <main id="main" role="main" class="px-6 py-20">
+    <div class="mx-auto max-w-3xl">
+      <h1 class="text-3xl font-bold text-[color:var(--color-text-primary)]">Patterns</h1>
+      <p class="mt-2 text-lg text-[color:var(--color-text-secondary)]">
+        What we're seeing across the businesses we've worked with.
+      </p>
+
+      {
+        /* TODO when flag enables — render aggregate-only views from the
+          events table and engagement data. Never surface individual
+          engagements. Minimum bucket size per facet (e.g. 5) to avoid
+          reidentification. */
+      }
+
+      <div
+        class="mt-10 rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white p-8 text-center"
+      >
+        <p class="text-base text-[color:var(--color-text-secondary)]">
+          Patterns will appear here once we've worked with enough businesses to share them without
+          identifying any one of them.
+        </p>
+      </div>
+    </div>
+  </main>
+  <Footer />
+</Base>

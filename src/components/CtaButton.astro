@@ -3,9 +3,15 @@ interface Props {
   variant?: 'primary' | 'outline-white'
   href?: string
   class?: string
+  'data-ev'?: string
 }
 
-const { variant = 'primary', href = '/book', class: className = '' } = Astro.props
+const {
+  variant = 'primary',
+  href = '/book',
+  class: className = '',
+  'data-ev': dataEv,
+} = Astro.props
 
 const base = 'inline-flex items-center justify-center font-semibold transition-all'
 const variants = {
@@ -15,6 +21,6 @@ const variants = {
 }
 ---
 
-<a href={href} class:list={[base, variants[variant], className]}>
+<a href={href} class:list={[base, variants[variant], className]} data-ev={dataEv}>
   <slot />
 </a>

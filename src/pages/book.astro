@@ -328,6 +328,7 @@ const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
                 id="bf-submit"
                 type="submit"
                 disabled
+                data-ev="book-submit"
                 class="w-full rounded-[var(--radius-card)] bg-primary px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Book Your Call
@@ -366,7 +367,7 @@ const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
                 <a
                   href="/get-started?booked=1"
                   class="font-medium text-primary underline hover:text-primary/80"
-                  >Help us prepare for your call</a
+                  data-ev="book-post-confirm-intake">Help us prepare for your call</a
                 > — a few quick questions so we can make the most of our time together.
               </p>
             </div>

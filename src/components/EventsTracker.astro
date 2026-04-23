@@ -1,0 +1,206 @@
+---
+/**
+ * EventsTracker — client-side page view + CTA click instrumentation for
+ * the marketing surface (apex smd.services).
+ *
+ * Do NOT render on admin or portal pages. The admin/portal layouts
+ * intentionally omit this component (only `Base.astro` includes it), and
+ * middleware subdomain rules isolate admin/portal under their own hosts.
+ * As defense-in-depth the client script also bails out on admin./portal.
+ * hostnames at runtime.
+ *
+ * Design notes:
+ *   - Vanilla JS, no third-party libraries.
+ *   - Batches events and flushes on a 2s debounce. Unload uses
+ *     navigator.sendBeacon to avoid losing the tail of a session.
+ *   - Session id lives in a first-party cookie (`ss_sid`). Cookie is
+ *     readable by JS (HttpOnly:false) so SSR + client cooperate — either
+ *     side can set it, the other can read it.
+ *   - Metadata payloads are whitelisted on the client AND re-validated
+ *     on the server (see src/pages/api/events.ts). Never pass form
+ *     values or URL query strings into metadata.
+ */
+---
+
+<script is:inline>
+  ;(function () {
+    if (typeof window === 'undefined') return
+
+    // Defense-in-depth: if this component is ever included on an admin
+    // or portal subdomain by mistake, bail out. The marketing tracker
+    // must not fire from authenticated surfaces.
+    const host = location.hostname || ''
+    if (host.indexOf('admin.') === 0 || host.indexOf('portal.') === 0) return
+
+    const COOKIE_NAME = 'ss_sid'
+    const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
+    const ENDPOINT = '/api/events'
+    const FLUSH_DEBOUNCE_MS = 2000
+    const MAX_QUEUE_SIZE = 40
+
+    function readCookie(name) {
+      const pairs = document.cookie ? document.cookie.split(';') : []
+      for (let i = 0; i < pairs.length; i++) {
+        const p = pairs[i].trim()
+        const eq = p.indexOf('=')
+        if (eq === -1) continue
+        if (p.slice(0, eq) === name) return p.slice(eq + 1)
+      }
+      return null
+    }
+
+    function writeCookie(name, value) {
+      const secure = location.protocol === 'https:' ? '; Secure' : ''
+      document.cookie =
+        name +
+        '=' +
+        value +
+        '; Path=/; Max-Age=' +
+        COOKIE_MAX_AGE_SECONDS +
+        '; SameSite=Lax' +
+        secure
+    }
+
+    function generateUuid() {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID()
+      }
+      // Fallback for older browsers — RFC4122 v4-ish.
+      const template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+      return template.replace(/[xy]/g, function (c) {
+        const r = (Math.random() * 16) | 0
+        const v = c === 'x' ? r : (r & 0x3) | 0x8
+        return v.toString(16)
+      })
+    }
+
+    function getSessionId() {
+      const existing = readCookie(COOKIE_NAME)
+      if (existing) return existing
+      const fresh = generateUuid()
+      writeCookie(COOKIE_NAME, fresh)
+      return fresh
+    }
+
+    function scrubPath(p) {
+      if (!p) return '/'
+      const q = p.indexOf('?')
+      const h = p.indexOf('#')
+      let end = p.length
+      if (q !== -1) end = Math.min(end, q)
+      if (h !== -1) end = Math.min(end, h)
+      return p.slice(0, end) || '/'
+    }
+
+    const sessionId = getSessionId()
+    let queue = []
+    let flushTimer = null
+
+    function enqueue(ev) {
+      queue.push(ev)
+      if (queue.length >= MAX_QUEUE_SIZE) {
+        flush()
+        return
+      }
+      if (flushTimer) clearTimeout(flushTimer)
+      flushTimer = setTimeout(flush, FLUSH_DEBOUNCE_MS)
+    }
+
+    function flush(useBeacon) {
+      if (queue.length === 0) return
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+        flushTimer = null
+      }
+      const batch = queue
+      queue = []
+      const body = JSON.stringify({ session_id: sessionId, events: batch })
+
+      if (useBeacon && navigator.sendBeacon) {
+        try {
+          const blob = new Blob([body], { type: 'application/json' })
+          navigator.sendBeacon(ENDPOINT, blob)
+          return
+        } catch (e) {
+          // Fall through to fetch.
+        }
+      }
+
+      try {
+        fetch(ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: body,
+          credentials: 'same-origin',
+          keepalive: true,
+        }).catch(function () {
+          // Drop on floor. Analytics is best-effort.
+        })
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    function trackPageView() {
+      enqueue({ event_name: 'page_view', path: scrubPath(location.pathname) })
+    }
+
+    function trackCtaClick(el) {
+      const label = el.getAttribute('data-ev')
+      if (!label) return
+      const meta = { cta: label }
+      const href = el.getAttribute('href')
+      if (href && typeof href === 'string' && href.length < 256) {
+        // Only capture the path portion if it's same-origin or relative.
+        if (href.indexOf('://') === -1) {
+          meta.href = href
+        } else {
+          try {
+            const u = new URL(href)
+            if (u.origin === location.origin) meta.href = u.pathname
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+      enqueue({
+        event_name: 'cta_click',
+        path: scrubPath(location.pathname),
+        metadata: meta,
+      })
+    }
+
+    // Delegate click handling. Walk up the tree to find the nearest
+    // [data-ev] ancestor so wrapping elements still trigger.
+    document.addEventListener(
+      'click',
+      function (e) {
+        let node = e.target
+        while (node && node !== document.body) {
+          if (node.nodeType === 1 && node.hasAttribute && node.hasAttribute('data-ev')) {
+            trackCtaClick(node)
+            return
+          }
+          node = node.parentNode
+        }
+      },
+      true
+    )
+
+    // Flush on page hide / unload so we don't lose the tail.
+    window.addEventListener('pagehide', function () {
+      flush(true)
+    })
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') flush(true)
+    })
+
+    // Initial page view — fire after DOM is interactive so the session
+    // cookie is definitely set before the first request.
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', trackPageView)
+    } else {
+      trackPageView()
+    }
+  })()
+</script>

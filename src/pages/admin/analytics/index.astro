@@ -7,6 +7,12 @@ import {
   getEngagementHealth,
   getFollowUpCompliance,
 } from '../../../lib/db/analytics'
+import {
+  getTopPaths,
+  getTopCtas,
+  getDailyUniques,
+  getFunnelCounts,
+} from '../../../lib/db/events-analytics'
 import { ENTITY_VERTICALS } from '../../../lib/db/entities'
 import { env } from 'cloudflare:workers'
 
@@ -16,17 +22,98 @@ import { env } from 'cloudflare:workers'
  * All data is rendered server-side. No JavaScript charting libraries.
  * Charts use Tailwind width classes for horizontal bar rendering.
  * Protected by auth middleware (requires admin role).
+ *
+ * Site-traffic aggregates (top paths/CTAs, funnel, daily uniques) read
+ * from the `events` table populated by src/pages/api/events.ts. Those
+ * queries are NOT org-scoped — events are anonymous marketing signals.
  */
 
 const session = Astro.locals.session!
 // Fetch all analytics data in parallel
-const [pipeline, quoteAccuracy, revenue, health, compliance] = await Promise.all([
+const [
+  pipeline,
+  quoteAccuracy,
+  revenue,
+  health,
+  compliance,
+  topPaths,
+  topCtas,
+  funnel,
+  dailyUniques,
+] = await Promise.all([
   getPipelineConversion(env.DB, session.orgId),
   getQuoteAccuracy(env.DB, session.orgId),
   getRevenueReport(env.DB, session.orgId),
   getEngagementHealth(env.DB, session.orgId),
   getFollowUpCompliance(env.DB, session.orgId),
+  getTopPaths(env.DB, 7, 10),
+  getTopCtas(env.DB, 7, 10),
+  getFunnelCounts(env.DB, 7),
+  getDailyUniques(env.DB, 30),
 ])
+
+// ── Site traffic helpers ─────────────────────────────────────────
+const maxPathViews = topPaths.length > 0 ? Math.max(...topPaths.map((r) => r.views)) : 0
+const maxCtaClicks = topCtas.length > 0 ? Math.max(...topCtas.map((r) => r.clicks)) : 0
+const maxDailyUniques =
+  dailyUniques.length > 0 ? Math.max(...dailyUniques.map((r) => r.uniques)) : 0
+
+function pathBarWidth(views: number): string {
+  if (maxPathViews === 0 || views === 0) return '0%'
+  return `${Math.max((views / maxPathViews) * 100, 4)}%`
+}
+
+function ctaBarWidth(clicks: number): string {
+  if (maxCtaClicks === 0 || clicks === 0) return '0%'
+  return `${Math.max((clicks / maxCtaClicks) * 100, 4)}%`
+}
+
+interface FunnelStep {
+  key: keyof typeof funnel
+  label: string
+}
+
+const funnelSteps: FunnelStep[] = [
+  { key: 'landing', label: 'Landed on site' },
+  { key: 'scorecard_start', label: 'Started scorecard' },
+  { key: 'book_start', label: 'Reached /book' },
+  { key: 'book_complete', label: 'Submitted booking' },
+]
+
+const funnelTop = funnel.landing
+
+function funnelBarWidth(n: number): string {
+  if (funnelTop === 0 || n === 0) return '0%'
+  return `${Math.max((n / funnelTop) * 100, 4)}%`
+}
+
+function dropOff(current: number, previous: number): string {
+  if (previous === 0) return '—'
+  if (current >= previous) return '0%'
+  const pct = ((previous - current) / previous) * 100
+  return `-${Math.round(pct)}%`
+}
+
+// ── Daily-uniques SVG chart dims ─────────────────────────────────
+const dailyChartWidth = 560
+const dailyChartHeight = 120
+const dailyBarGap = 2
+const dailyBarWidth =
+  dailyUniques.length > 0
+    ? Math.max((dailyChartWidth - (dailyUniques.length - 1) * dailyBarGap) / dailyUniques.length, 2)
+    : 0
+
+function dailyBarHeight(n: number): number {
+  if (maxDailyUniques === 0) return 0
+  return Math.max((n / maxDailyUniques) * dailyChartHeight, n > 0 ? 2 : 0)
+}
+
+function formatShortDate(iso: string): string {
+  // iso is YYYY-MM-DD
+  const parts = iso.split('-')
+  if (parts.length !== 3) return iso
+  return `${parts[1]}/${parts[2]}`
+}
 
 // ── Pipeline helpers ─────────────────────────────────────────────
 const pipelineStages = [
@@ -428,6 +515,170 @@ function complianceBarWidth(pct: number): string {
                 </tr>
               </tfoot>
             </table>
+          </div>
+        )
+      }
+    </div>
+  </div>
+
+  {/* ── Site Traffic ─────────────────────────────────────── */}
+  <h3 class="text-lg font-semibold text-[color:var(--color-text-primary)] mt-10 mb-4">
+    Site Traffic
+  </h3>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-card">
+    {/* ── Top pages (7d) ────────────────────────────────── */}
+    <div
+      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+    >
+      <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-1">Top Pages</h3>
+      <p class="text-xs text-[color:var(--color-text-muted)] mb-4">Last 7 days, by page views</p>
+      {
+        topPaths.length === 0 ? (
+          <p class="text-sm text-[color:var(--color-text-secondary)]">No page views yet.</p>
+        ) : (
+          <div class="space-y-2">
+            {topPaths.map((row) => (
+              <div class="flex items-center gap-row">
+                <span class="text-sm text-[color:var(--color-text-secondary)] w-36 shrink-0 truncate font-mono">
+                  {row.path}
+                </span>
+                <div class="flex-1 bg-[color:var(--color-border-subtle)] rounded-full h-5 overflow-hidden">
+                  <div
+                    class="h-full rounded-full bg-blue-500 flex items-center justify-end pr-2"
+                    style={`width: ${pathBarWidth(row.views)}`}
+                  >
+                    {row.views > 0 && (
+                      <span class="text-xs font-medium text-white">
+                        {row.views.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      }
+    </div>
+
+    {/* ── Top CTAs (7d) ─────────────────────────────────── */}
+    <div
+      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+    >
+      <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-1">Top CTAs</h3>
+      <p class="text-xs text-[color:var(--color-text-muted)] mb-4">Last 7 days, by click count</p>
+      {
+        topCtas.length === 0 ? (
+          <p class="text-sm text-[color:var(--color-text-secondary)]">No CTA clicks yet.</p>
+        ) : (
+          <div class="space-y-2">
+            {topCtas.map((row) => (
+              <div class="flex items-center gap-row">
+                <span class="text-sm text-[color:var(--color-text-secondary)] w-36 shrink-0 truncate font-mono">
+                  {row.cta}
+                </span>
+                <div class="flex-1 bg-[color:var(--color-border-subtle)] rounded-full h-5 overflow-hidden">
+                  <div
+                    class="h-full rounded-full bg-amber-500 flex items-center justify-end pr-2"
+                    style={`width: ${ctaBarWidth(row.clicks)}`}
+                  >
+                    {row.clicks > 0 && (
+                      <span class="text-xs font-medium text-white">
+                        {row.clicks.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      }
+    </div>
+
+    {/* ── Conversion funnel (7d) ────────────────────────── */}
+    <div
+      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card md:col-span-2"
+    >
+      <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-1">
+        Conversion Funnel
+      </h3>
+      <p class="text-xs text-[color:var(--color-text-muted)] mb-4">
+        Distinct sessions per step, last 7 days
+      </p>
+      {
+        funnelTop === 0 ? (
+          <p class="text-sm text-[color:var(--color-text-secondary)]">No funnel data yet.</p>
+        ) : (
+          <div class="space-y-row">
+            {funnelSteps.map((step, idx) => {
+              const count = funnel[step.key]
+              const drop = idx === 0 ? '—' : dropOff(count, funnel[funnelSteps[idx - 1].key])
+              return (
+                <div class="flex items-center gap-row">
+                  <span class="text-sm text-[color:var(--color-text-secondary)] w-44 shrink-0">
+                    {step.label}
+                  </span>
+                  <div class="flex-1 bg-[color:var(--color-border-subtle)] rounded-full h-6 overflow-hidden">
+                    <div
+                      class="h-full rounded-full bg-emerald-500 flex items-center justify-end pr-2"
+                      style={`width: ${funnelBarWidth(count)}`}
+                    >
+                      {count > 0 && (
+                        <span class="text-xs font-medium text-white">{count.toLocaleString()}</span>
+                      )}
+                    </div>
+                  </div>
+                  <span class="text-xs text-[color:var(--color-text-muted)] w-14 text-right">
+                    {drop}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )
+      }
+    </div>
+
+    {/* ── Daily uniques (30d) ───────────────────────────── */}
+    <div
+      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card md:col-span-2"
+    >
+      <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-1">
+        Daily Uniques
+      </h3>
+      <p class="text-xs text-[color:var(--color-text-muted)] mb-4">
+        Distinct sessions per day, last 30 days
+      </p>
+      {
+        maxDailyUniques === 0 ? (
+          <p class="text-sm text-[color:var(--color-text-secondary)]">No session data yet.</p>
+        ) : (
+          <div>
+            <svg
+              viewBox={`0 0 ${dailyChartWidth} ${dailyChartHeight + 24}`}
+              class="w-full h-auto"
+              role="img"
+              aria-label="Daily unique sessions over the last 30 days"
+            >
+              {dailyUniques.map((row, i) => {
+                const h = dailyBarHeight(row.uniques)
+                const x = i * (dailyBarWidth + dailyBarGap)
+                const y = dailyChartHeight - h
+                return (
+                  <g>
+                    <rect x={x} y={y} width={dailyBarWidth} height={h} fill="#6366f1" rx={1}>
+                      <title>{`${row.day}: ${row.uniques} unique sessions`}</title>
+                    </rect>
+                  </g>
+                )
+              })}
+            </svg>
+            <div class="mt-2 flex justify-between text-xs text-[color:var(--color-text-muted)]">
+              <span>{formatShortDate(dailyUniques[0].day)}</span>
+              <span>{formatShortDate(dailyUniques[dailyUniques.length - 1].day)}</span>
+            </div>
           </div>
         )
       }
