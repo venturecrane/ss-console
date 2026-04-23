@@ -13,6 +13,7 @@
 import { computeSlug } from '../entities/slug.js'
 import { recomputeDeterministicCache } from '../entities/recompute.js'
 import { appendContext } from './context.js'
+import { isLostReasonCode, type LostReasonCode } from './lost-reasons.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -136,6 +137,21 @@ export type FindOrCreateResult =
 export interface TransitionStageOptions {
   /** Override reason — bypasses pre-condition checks where documented. */
   force?: string
+  /**
+   * Structured metadata for `lost` transitions. Captured on the
+   * `stage_change` context entry's JSON metadata so the Lost tab can
+   * filter and future reporting can roll up "why we lost" without
+   * parsing free text.
+   *
+   * Required when `newStage === 'lost'`. Enforced at the DAL layer
+   * rather than the API so every caller (admin UI, scripts, future
+   * background jobs) is held to the same contract.
+   */
+  lostReason?: {
+    code: LostReasonCode
+    /** Optional operator note. Trimmed. Empty → stored as null. */
+    detail?: string | null
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -429,6 +445,28 @@ export async function transitionStage(
     )
   }
 
+  // Lost reason is required when transitioning to lost. Captured as
+  // structured metadata on the stage_change context entry so the Lost
+  // tab can filter and "why we lost" rollups are queryable.
+  let lostReasonCode: LostReasonCode | null = null
+  let lostReasonDetail: string | null = null
+  if (newStage === 'lost') {
+    if (!options?.lostReason?.code) {
+      throw new Error(
+        'Lost reason is required: provide options.lostReason.code when transitioning to lost.'
+      )
+    }
+    if (!isLostReasonCode(options.lostReason.code)) {
+      throw new Error(
+        `Invalid lost reason code: ${options.lostReason.code}. See src/lib/db/lost-reasons.ts.`
+      )
+    }
+    lostReasonCode = options.lostReason.code
+    const rawDetail = options.lostReason.detail
+    lostReasonDetail =
+      typeof rawDetail === 'string' && rawDetail.trim().length > 0 ? rawDetail.trim() : null
+  }
+
   // ---------------------------------------------------------------------------
   // Lifecycle invariant pre-conditions
   // ---------------------------------------------------------------------------
@@ -490,26 +528,80 @@ export async function transitionStage(
   // Record stage change as context entry
   const contextId = crypto.randomUUID()
   const content = `Stage: ${entity.stage} → ${newStage}. ${reason}`
+  const metadata: Record<string, unknown> = {
+    from: entity.stage,
+    to: newStage,
+    reason,
+  }
+  if (lostReasonCode) {
+    metadata.lost_reason = lostReasonCode
+    if (lostReasonDetail) metadata.lost_detail = lostReasonDetail
+  }
   await db
     .prepare(
       `INSERT INTO context (id, entity_id, org_id, type, content, source, content_size, metadata, created_at)
       VALUES (?, ?, ?, 'stage_change', ?, 'system', ?, ?, ?)`
     )
-    .bind(
-      contextId,
-      entityId,
-      orgId,
-      content,
-      content.length,
-      JSON.stringify({ from: entity.stage, to: newStage, reason }),
-      now
-    )
+    .bind(contextId, entityId, orgId, content, content.length, JSON.stringify(metadata), now)
     .run()
 
   // Recompute cache after stage change
   await recomputeDeterministicCache(db, orgId, entityId)
 
   return getEntity(db, orgId, entityId)
+}
+
+/**
+ * Returns the latest captured Lost reason code per entity, keyed by
+ * entity_id. Reads from `stage_change` context entries where
+ * `metadata.to = 'lost'`. Entities with no structured reason (e.g.
+ * legacy Lost rows captured before #477) are absent from the map.
+ *
+ * This is the one place that rolls up structured Lost metadata for
+ * list-rendering. Keep the query tight — it runs on every Lost-tab
+ * page render.
+ */
+export async function getLatestLostReasonsByEntity(
+  db: D1Database,
+  orgId: string,
+  entityIds: string[]
+): Promise<Map<string, { code: LostReasonCode; detail: string | null }>> {
+  const result = new Map<string, { code: LostReasonCode; detail: string | null }>()
+  if (entityIds.length === 0) return result
+
+  const placeholders = entityIds.map(() => '?').join(', ')
+  // For each entity, pick the newest stage_change row whose metadata
+  // marks a transition INTO lost. D1/SQLite supports json_extract.
+  const rows = await db
+    .prepare(
+      `SELECT c.entity_id,
+              json_extract(c.metadata, '$.lost_reason') AS lost_reason,
+              json_extract(c.metadata, '$.lost_detail') AS lost_detail
+         FROM context c
+        WHERE c.org_id = ?
+          AND c.type = 'stage_change'
+          AND c.entity_id IN (${placeholders})
+          AND json_extract(c.metadata, '$.to') = 'lost'
+          AND c.created_at = (
+            SELECT MAX(c2.created_at) FROM context c2
+             WHERE c2.org_id = c.org_id
+               AND c2.entity_id = c.entity_id
+               AND c2.type = 'stage_change'
+               AND json_extract(c2.metadata, '$.to') = 'lost'
+          )`
+    )
+    .bind(orgId, ...entityIds)
+    .all<{ entity_id: string; lost_reason: string | null; lost_detail: string | null }>()
+
+  for (const row of rows.results) {
+    if (row.lost_reason && isLostReasonCode(row.lost_reason)) {
+      result.set(row.entity_id, {
+        code: row.lost_reason,
+        detail: row.lost_detail ?? null,
+      })
+    }
+  }
+  return result
 }
 
 // ---------------------------------------------------------------------------

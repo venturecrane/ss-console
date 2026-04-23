@@ -121,7 +121,11 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       source_ref: assessmentId,
     })
 
-    // If disqualified, transition to lost and redirect back
+    // If disqualified, transition to lost and redirect back.
+    // Disqualification during assessment maps to the `not-a-fit` lost
+    // reason code — see src/lib/db/lost-reasons.ts. The extraction's
+    // free-text explanation is carried in `lost_detail` so the admin
+    // can still read the LLM's reasoning when reviewing the Lost tab.
     if (disqualified) {
       try {
         await updateAssessmentStatus(env.DB, session.orgId, assessmentId, 'disqualified')
@@ -130,7 +134,13 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
           session.orgId,
           entity.id,
           'lost',
-          `Disqualified during assessment: ${extraction.disqualify_reason ?? 'No reason provided'}`
+          `Disqualified during assessment: ${extraction.disqualify_reason ?? 'No reason provided'}`,
+          {
+            lostReason: {
+              code: 'not-a-fit',
+              detail: extraction.disqualify_reason ?? null,
+            },
+          }
         )
       } catch {
         // Stage transition may fail if already in lost state

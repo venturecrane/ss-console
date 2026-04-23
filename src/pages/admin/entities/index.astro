@@ -1,7 +1,19 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro'
-import { listEntities, countEntitiesByStage, ENTITY_STAGES } from '../../../lib/db/entities'
+import {
+  listEntities,
+  countEntitiesByStage,
+  getLatestLostReasonsByEntity,
+  ENTITY_STAGES,
+} from '../../../lib/db/entities'
 import type { Entity, EntityStage } from '../../../lib/db/entities'
+import {
+  LOST_REASONS,
+  isLostReasonCode,
+  lostReasonLabel,
+  lostReasonChipClass,
+  type LostReasonCode,
+} from '../../../lib/db/lost-reasons'
 import { PIPELINE_LABELS } from '../../../lead-gen/schemas/lead-scoring-schema'
 import type { PipelineId } from '../../../lead-gen/schemas/lead-scoring-schema'
 import { env } from 'cloudflare:workers'
@@ -16,17 +28,37 @@ import { env } from 'cloudflare:workers'
 const session = Astro.locals.session!
 const filterStage = (Astro.url.searchParams.get('stage') ?? 'signal') as EntityStage
 const filterPipeline = Astro.url.searchParams.get('pipeline') ?? ''
+const rawLostReason = Astro.url.searchParams.get('lost_reason') ?? ''
+const filterLostReason: LostReasonCode | '' = isLostReasonCode(rawLostReason) ? rawLostReason : ''
 
-const entities = await listEntities(env.DB, session.orgId, {
+const rawEntities = await listEntities(env.DB, session.orgId, {
   stage: filterStage,
   ...(filterPipeline ? { source_pipeline: filterPipeline } : {}),
 })
+
+// For the Lost tab, roll up the latest structured reason per entity so
+// we can render a chip inline and filter by reason code.
+const lostReasonMap =
+  filterStage === 'lost'
+    ? await getLatestLostReasonsByEntity(
+        env.DB,
+        session.orgId,
+        rawEntities.map((e) => e.id)
+      )
+    : new Map<string, { code: LostReasonCode; detail: string | null }>()
+
+const entities =
+  filterStage === 'lost' && filterLostReason
+    ? rawEntities.filter((e) => lostReasonMap.get(e.id)?.code === filterLostReason)
+    : rawEntities
 
 const signalCount = await countEntitiesByStage(env.DB, session.orgId, 'signal')
 
 const promoted = Astro.url.searchParams.get('promoted')
 const dismissed = Astro.url.searchParams.get('dismissed')
-const error = Astro.url.searchParams.get('error')
+const rawError = Astro.url.searchParams.get('error')
+const error =
+  rawError === 'lost_reason_required' ? 'Pick a lost reason before dismissing.' : rawError
 
 const LEAD_PIPELINES = [
   { value: 'review_mining', label: 'Review Mining' },
@@ -136,25 +168,53 @@ function formatDate(iso: string): string {
     )
   }
 
-  <div class="flex items-center justify-between mb-6">
+  <div class="flex items-center justify-between mb-6 flex-wrap gap-2">
     <h2 class="text-xl font-semibold text-[color:var(--color-text-primary)]">Entities</h2>
-    <form method="GET" class="flex items-center gap-2">
-      <input type="hidden" name="stage" value={filterStage} />
-      <select
-        name="pipeline"
-        class="text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-1.5 bg-white text-[color:var(--color-text-primary)]"
-        onchange="this.form.submit()"
-      >
-        <option value="">All pipelines</option>
+    <div class="flex items-center gap-2 flex-wrap">
+      <form method="GET" class="flex items-center gap-2">
+        <input type="hidden" name="stage" value={filterStage} />
         {
-          LEAD_PIPELINES.map((p) => (
-            <option value={p.value} selected={filterPipeline === p.value}>
-              {p.label}
-            </option>
-          ))
+          filterStage === 'lost' && filterLostReason && (
+            <input type="hidden" name="lost_reason" value={filterLostReason} />
+          )
         }
-      </select>
-    </form>
+        <select
+          name="pipeline"
+          class="text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-1.5 bg-white text-[color:var(--color-text-primary)]"
+          onchange="this.form.submit()"
+        >
+          <option value="">All pipelines</option>
+          {
+            LEAD_PIPELINES.map((p) => (
+              <option value={p.value} selected={filterPipeline === p.value}>
+                {p.label}
+              </option>
+            ))
+          }
+        </select>
+      </form>
+      {
+        filterStage === 'lost' && (
+          <form method="GET" class="flex items-center gap-2">
+            <input type="hidden" name="stage" value="lost" />
+            {filterPipeline && <input type="hidden" name="pipeline" value={filterPipeline} />}
+            <select
+              name="lost_reason"
+              aria-label="Filter by lost reason"
+              class="text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-1.5 bg-white text-[color:var(--color-text-primary)]"
+              onchange="this.form.submit()"
+            >
+              <option value="">All lost reasons</option>
+              {LOST_REASONS.map((r) => (
+                <option value={r.value} selected={filterLostReason === r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </form>
+        )
+      }
+    </div>
   </div>
 
   {/* Stage tabs */}
@@ -190,89 +250,134 @@ function formatDate(iso: string): string {
       </div>
     ) : (
       <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] divide-y divide-[color:var(--color-border-subtle)]">
-        {entities.map((e: Entity) => (
-          <div class="px-6 py-4">
-            <div class="flex items-start justify-between gap-stack">
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2 mb-1 flex-wrap">
-                  <a
-                    href={`/admin/entities/${e.id}`}
-                    class="text-sm font-medium text-[color:var(--color-text-primary)] hover:text-primary transition-colors"
-                  >
-                    {e.name}
-                  </a>
-                  {e.source_pipeline && (
-                    <span
-                      class={`text-xs px-2 py-0.5 rounded ${pipelineBadgeClass(e.source_pipeline)}`}
+        {entities.map((e: Entity) => {
+          const lostInfo = lostReasonMap.get(e.id)
+          return (
+            <div class="px-6 py-4">
+              <div class="flex items-start justify-between gap-stack">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 mb-1 flex-wrap">
+                    <a
+                      href={`/admin/entities/${e.id}`}
+                      class="text-sm font-medium text-[color:var(--color-text-primary)] hover:text-primary transition-colors"
                     >
-                      {PIPELINE_LABELS[e.source_pipeline as PipelineId] ?? e.source_pipeline}
-                    </span>
+                      {e.name}
+                    </a>
+                    {e.source_pipeline && (
+                      <span
+                        class={`text-xs px-2 py-0.5 rounded ${pipelineBadgeClass(e.source_pipeline)}`}
+                      >
+                        {PIPELINE_LABELS[e.source_pipeline as PipelineId] ?? e.source_pipeline}
+                      </span>
+                    )}
+                    {filterStage === 'lost' && lostInfo && (
+                      <span
+                        class={`text-xs px-2 py-0.5 rounded ${lostReasonChipClass(lostInfo.code)}`}
+                        title={lostInfo.detail ?? undefined}
+                      >
+                        {lostReasonLabel(lostInfo.code)}
+                      </span>
+                    )}
+                    {e.pain_score && (
+                      <span class={`text-xs ${painScoreClass(e.pain_score)}`}>
+                        Pain: {e.pain_score}/10
+                      </span>
+                    )}
+                    {e.tier && (
+                      <span class={`text-xs px-1.5 py-0.5 rounded ${tierBadgeClass(e.tier)}`}>
+                        {e.tier}
+                      </span>
+                    )}
+                  </div>
+
+                  {e.summary && (
+                    <p class="text-xs text-[color:var(--color-text-secondary)] mb-1 line-clamp-2">
+                      {e.summary}
+                    </p>
                   )}
-                  {e.pain_score && (
-                    <span class={`text-xs ${painScoreClass(e.pain_score)}`}>
-                      Pain: {e.pain_score}/10
-                    </span>
+
+                  {e.next_action && (
+                    <p class="text-xs text-amber-600 mb-1">
+                      <span class="font-medium">Next:</span> {e.next_action}
+                      {e.next_action_at && ` — ${formatDate(e.next_action_at)}`}
+                    </p>
                   )}
-                  {e.tier && (
-                    <span class={`text-xs px-1.5 py-0.5 rounded ${tierBadgeClass(e.tier)}`}>
-                      {e.tier}
-                    </span>
-                  )}
+
+                  <div class="flex items-center gap-row text-xs text-[color:var(--color-text-muted)] mt-1">
+                    <span>{formatDate(e.created_at)}</span>
+                    {e.area && <span>{e.area}</span>}
+                    {e.vertical && <span class="capitalize">{e.vertical.replace(/_/g, ' ')}</span>}
+                    {e.employee_count && <span>~{e.employee_count} employees</span>}
+                  </div>
                 </div>
 
-                {e.summary && (
-                  <p class="text-xs text-[color:var(--color-text-secondary)] mb-1 line-clamp-2">
-                    {e.summary}
-                  </p>
-                )}
-
-                {e.next_action && (
-                  <p class="text-xs text-amber-600 mb-1">
-                    <span class="font-medium">Next:</span> {e.next_action}
-                    {e.next_action_at && ` — ${formatDate(e.next_action_at)}`}
-                  </p>
-                )}
-
-                <div class="flex items-center gap-row text-xs text-[color:var(--color-text-muted)] mt-1">
-                  <span>{formatDate(e.created_at)}</span>
-                  {e.area && <span>{e.area}</span>}
-                  {e.vertical && <span class="capitalize">{e.vertical.replace(/_/g, ' ')}</span>}
-                  {e.employee_count && <span>~{e.employee_count} employees</span>}
+                <div class="flex items-center gap-2 shrink-0">
+                  {e.stage === 'signal' ? (
+                    <>
+                      <form method="POST" action={`/api/admin/entities/${e.id}/promote`}>
+                        <button
+                          type="submit"
+                          class="text-xs bg-primary text-white px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-primary/90 transition-colors"
+                        >
+                          Promote
+                        </button>
+                      </form>
+                      <details class="relative dismiss-picker">
+                        <summary class="list-none text-xs bg-[color:var(--color-background)] text-[color:var(--color-text-secondary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-border-subtle)] transition-colors cursor-pointer select-none">
+                          Dismiss
+                        </summary>
+                        <form
+                          method="POST"
+                          action={`/api/admin/entities/${e.id}/dismiss`}
+                          class="absolute right-0 mt-1 z-10 w-72 bg-white border border-[color:var(--color-border)] rounded-[var(--radius-card)] shadow-lg p-3 space-y-2"
+                        >
+                          <label class="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+                            Lost reason
+                            <select
+                              name="lost_reason"
+                              required
+                              class="mt-1 block w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-2 py-1.5 bg-white text-[color:var(--color-text-primary)]"
+                            >
+                              <option value="" disabled selected>
+                                Select a reason…
+                              </option>
+                              {LOST_REASONS.map((r) => (
+                                <option value={r.value}>{r.label}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label class="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+                            Detail (optional)
+                            <textarea
+                              name="lost_detail"
+                              rows="2"
+                              class="mt-1 block w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-2 py-1.5 resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                            />
+                          </label>
+                          <div class="flex justify-end gap-2">
+                            <button
+                              type="submit"
+                              class="text-xs bg-[color:var(--color-text-primary)] text-white px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-black transition-colors"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        </form>
+                      </details>
+                    </>
+                  ) : (
+                    <a
+                      href={`/admin/entities/${e.id}`}
+                      class="text-xs bg-[color:var(--color-background)] text-[color:var(--color-text-primary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-border-subtle)] transition-colors"
+                    >
+                      View
+                    </a>
+                  )}
                 </div>
-              </div>
-
-              <div class="flex items-center gap-2 shrink-0">
-                {e.stage === 'signal' ? (
-                  <>
-                    <form method="POST" action={`/api/admin/entities/${e.id}/promote`}>
-                      <button
-                        type="submit"
-                        class="text-xs bg-primary text-white px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-primary/90 transition-colors"
-                      >
-                        Promote
-                      </button>
-                    </form>
-                    <form method="POST" action={`/api/admin/entities/${e.id}/dismiss`}>
-                      <button
-                        type="submit"
-                        class="text-xs bg-[color:var(--color-background)] text-[color:var(--color-text-secondary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-border-subtle)] transition-colors"
-                      >
-                        Dismiss
-                      </button>
-                    </form>
-                  </>
-                ) : (
-                  <a
-                    href={`/admin/entities/${e.id}`}
-                    class="text-xs bg-[color:var(--color-background)] text-[color:var(--color-text-primary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-border-subtle)] transition-colors"
-                  >
-                    View
-                  </a>
-                )}
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     )
   }

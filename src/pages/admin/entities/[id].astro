@@ -3,6 +3,7 @@ import AdminLayout from '../../../layouts/AdminLayout.astro'
 import { statusBadgeClass } from '../../../lib/ui/status-badge'
 import { getEntity, ENTITY_STAGES } from '../../../lib/db/entities'
 import type { EntityStage } from '../../../lib/db/entities'
+import { LOST_REASONS, lostReasonLabel, lostReasonChipClass } from '../../../lib/db/lost-reasons'
 import { listContext, CONTEXT_TYPES } from '../../../lib/db/context'
 import type { ContextEntry } from '../../../lib/db/context'
 import { listContacts } from '../../../lib/db/contacts'
@@ -47,6 +48,29 @@ const filteredEntries = typeFilter
 const typeCounts: Record<string, number> = {}
 for (const e of contextEntries) {
   typeCounts[e.type] = (typeCounts[e.type] ?? 0) + 1
+}
+
+// Surface the most recent structured lost reason when this entity is
+// currently at the lost stage. Parsed from the latest stage_change
+// context entry's metadata — same source the Lost tab rolls up.
+let currentLostReason: { code: string; detail: string | null } | null = null
+if (entity.stage === 'lost') {
+  const lostEntries = [...contextEntries].reverse().filter((c) => c.type === 'stage_change')
+  for (const entry of lostEntries) {
+    if (!entry.metadata) continue
+    try {
+      const meta = JSON.parse(entry.metadata) as Record<string, unknown>
+      if (meta.to === 'lost' && typeof meta.lost_reason === 'string') {
+        currentLostReason = {
+          code: meta.lost_reason,
+          detail: typeof meta.lost_detail === 'string' ? meta.lost_detail : null,
+        }
+        break
+      }
+    } catch {
+      // ignore malformed metadata
+    }
+  }
 }
 
 const promoted = Astro.url.searchParams.get('promoted')
@@ -387,6 +411,16 @@ function confidenceColor(confidence: string): string {
             {ENTITY_STAGES.find((s) => s.value === entity.stage)?.label ?? entity.stage}
           </span>
           {
+            currentLostReason && (
+              <span
+                class={`text-xs px-2 py-0.5 rounded ${lostReasonChipClass(currentLostReason.code)}`}
+                title={currentLostReason.detail ?? undefined}
+              >
+                {lostReasonLabel(currentLostReason.code) ?? currentLostReason.code}
+              </span>
+            )
+          }
+          {
             entity.tier && (
               <span
                 class={`text-xs px-2 py-0.5 rounded ${
@@ -462,18 +496,67 @@ function confidenceColor(confidence: string): string {
       {/* Stage transition buttons */}
       <div class="flex items-center gap-2 shrink-0">
         {
-          TRANSITIONS[entity.stage]?.map((t) => (
-            <form method="POST" action={t.action ?? `/api/admin/entities/${entity.id}/stage`}>
-              <input type="hidden" name="stage" value={t.stage} />
-              <input type="hidden" name="reason" value={`${t.label} by admin.`} />
-              <button
-                type="submit"
-                class={`text-xs px-3 py-1.5 rounded-[var(--radius-card)] transition-colors ${t.style}`}
-              >
-                {t.label}
-              </button>
-            </form>
-          ))
+          TRANSITIONS[entity.stage]?.map((t) =>
+            t.stage === 'lost' ? (
+              <details class="relative lost-picker">
+                <summary
+                  class={`list-none text-xs px-3 py-1.5 rounded-[var(--radius-card)] transition-colors cursor-pointer select-none ${t.style}`}
+                >
+                  {t.label}
+                </summary>
+                <form
+                  method="POST"
+                  action={t.action ?? `/api/admin/entities/${entity.id}/stage`}
+                  class="absolute right-0 mt-1 z-10 w-72 bg-white border border-[color:var(--color-border)] rounded-[var(--radius-card)] shadow-lg p-3 space-y-2"
+                >
+                  <input type="hidden" name="stage" value="lost" />
+                  <input type="hidden" name="reason" value={`${t.label} by admin.`} />
+                  <label class="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+                    Lost reason
+                    <select
+                      name="lost_reason"
+                      required
+                      class="mt-1 block w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-2 py-1.5 bg-white text-[color:var(--color-text-primary)]"
+                    >
+                      <option value="" disabled selected>
+                        Select a reason…
+                      </option>
+                      {LOST_REASONS.map((r) => (
+                        <option value={r.value}>{r.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label class="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+                    Detail (optional)
+                    <textarea
+                      name="lost_detail"
+                      rows="2"
+                      class="mt-1 block w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-2 py-1.5 resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    />
+                  </label>
+                  <div class="flex justify-end gap-2">
+                    <button
+                      type="submit"
+                      class="text-xs bg-[color:var(--color-text-primary)] text-white px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-black transition-colors"
+                    >
+                      {t.label}
+                    </button>
+                  </div>
+                </form>
+              </details>
+            ) : (
+              <form method="POST" action={t.action ?? `/api/admin/entities/${entity.id}/stage`}>
+                <input type="hidden" name="stage" value={t.stage} />
+                <input type="hidden" name="reason" value={`${t.label} by admin.`} />
+                <button
+                  type="submit"
+                  class={`text-xs px-3 py-1.5 rounded-[var(--radius-card)] transition-colors ${t.style}`}
+                >
+                  {t.label}
+                </button>
+              </form>
+            )
+          )
         }
         {
           showDossierButton && (
