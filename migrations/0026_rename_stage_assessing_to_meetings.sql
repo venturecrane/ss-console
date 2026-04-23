@@ -26,18 +26,24 @@
 -- translate 'meetings' → 'assessing' in the SELECT, swap tables, recreate
 -- indexes. Data is preserved.
 --
--- Foreign-key deferral:
+-- Foreign-key handling:
 -- Other tables (contacts, meetings, assessments, engagements, quotes, invoices,
 -- context entries, stage_changes, ...) hold foreign keys to entities(id).
 -- DROP TABLE entities would trip SQLITE_CONSTRAINT_FOREIGNKEY mid-transaction
--- even though every referenced id is preserved by the shadow-copy. PRAGMA
--- defer_foreign_keys = ON defers those checks to commit time; by commit, the
--- shadow has been renamed to `entities` with identical ids, so every FK
--- resolves. Unlike PRAGMA foreign_keys = OFF (which cannot toggle inside a
--- transaction), defer_foreign_keys is transaction-scoped and valid inside
--- D1's migrate-apply transaction. See deploy run 24861817054 postmortem.
+-- even though every referenced id is preserved by the shadow-copy.
+--
+-- D1 supports `PRAGMA foreign_keys=off` inside a migration transaction — see
+-- Cloudflare's D1 docs "Disable Foreign Keys and Drop Tables" example which
+-- uses exactly this pattern for table drops. Stock upstream SQLite forbids
+-- toggling foreign_keys inside a transaction, but D1 allows it for the
+-- duration of a single migration-apply run. We previously tried
+-- `PRAGMA defer_foreign_keys = ON` here; it returned a D1 engine-side
+-- internal error on remote (deploy run 24862074143), while foreign_keys=off
+-- is the docs-sanctioned path for this exact scenario. See that run's
+-- postmortem. FK enforcement restores automatically when the transaction
+-- commits — no need to toggle back on.
 
-PRAGMA defer_foreign_keys = ON;
+PRAGMA foreign_keys=off;
 
 CREATE TABLE entities_new (
   id                TEXT PRIMARY KEY,
