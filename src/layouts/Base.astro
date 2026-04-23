@@ -2,6 +2,7 @@
 import '../styles/global.css'
 import JsonLd from '../components/JsonLd.astro'
 import SkipToMain from '../components/SkipToMain.astro'
+import EventsTracker from '../components/EventsTracker.astro'
 
 interface Props {
   title: string
@@ -53,5 +54,6 @@ const ogImageUrl = new URL('/og-image.png', 'https://smd.services')
   <body>
     <SkipToMain />
     <slot />
+    <EventsTracker />
   </body>
 </html>

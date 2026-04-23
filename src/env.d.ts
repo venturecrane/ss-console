@@ -101,6 +101,14 @@ declare namespace Cloudflare {
     JOB_MONITOR_WORKER_URL?: string
     REVIEW_MINING_WORKER_URL?: string
     SOCIAL_LISTENING_WORKER_URL?: string
+    /**
+     * Feature flag for the public /patterns aggregate page. Off by default.
+     * Set to "1" or "true" in wrangler.toml once the unlock condition
+     * documented in src/pages/patterns.astro is met (>=20 real assessments
+     * with cross-vertical diversity, per CLAUDE.md no-fabrication rule).
+     * Any other value keeps the page returning 404.
+     */
+    ENABLE_PUBLIC_PATTERNS?: string
   }
 }
 

@@ -48,6 +48,13 @@ NEW_BUSINESS_WORKER_URL = "https://ss-new-business.automation-ab6.workers.dev"
 JOB_MONITOR_WORKER_URL = "https://ss-job-monitor.automation-ab6.workers.dev"
 REVIEW_MINING_WORKER_URL = "https://ss-review-mining.automation-ab6.workers.dev"
 
+# Feature flag for the public /patterns aggregate page. Off by default.
+# Flip to "1" or "true" only after the unlock condition documented in
+# src/pages/patterns.astro is met (>=20 real assessments with cross-vertical
+# diversity, per CLAUDE.md no-fabrication rule). Any other value keeps the
+# page returning 404.
+ENABLE_PUBLIC_PATTERNS = "0"
+
 # ---------- D1 (structured data) ----------
 [[d1_databases]]
 binding = "DB"

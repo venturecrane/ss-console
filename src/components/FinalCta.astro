@@ -10,10 +10,14 @@ import CtaButton from './CtaButton.astro'
       picture of how to get there, whether we work together or not.
     </p>
     <div class="mt-10">
-      <CtaButton variant="outline-white" href="/book">Book a Call</CtaButton>
+      <CtaButton variant="outline-white" href="/book" data-ev="final-cta-book">
+        Book a Call
+      </CtaButton>
       <p class="mt-4 text-sm text-[color:var(--color-text-muted)]">
         Not ready to schedule?
-        <a href="/get-started" class="underline hover:text-white"> Tell us about your business </a>
+        <a href="/get-started" class="underline hover:text-white" data-ev="final-cta-get-started">
+          Tell us about your business
+        </a>
       </p>
     </div>
   </div>
