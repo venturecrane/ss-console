@@ -49,6 +49,7 @@ function makeQuote(overrides: Partial<Quote> = {}): Quote {
     org_id: ORG_ID,
     entity_id: 'e1',
     assessment_id: 'a1',
+    meeting_id: 'a1',
     version: 1,
     parent_quote_id: null,
     line_items: '[]',

@@ -17,7 +17,20 @@ export interface Quote {
   id: string
   org_id: string
   entity_id: string
+  /**
+   * Legacy FK into assessments.id. NOT NULL at the schema level. During the
+   * monitoring window this value equals meeting_id (#469 preserves IDs across
+   * the meetings backfill) and assessments rows are dual-written on intake.
+   * A follow-up drop migration removes both the column and the assessments
+   * table together.
+   */
   assessment_id: string
+  /**
+   * New reference to meetings.id (#469). Nullable for pre-migration rows
+   * until the backfill in migration 0025 populates it from assessment_id.
+   * New code should prefer this column.
+   */
+  meeting_id: string | null
   version: number
   parent_quote_id: string | null
   line_items: string // JSON array of LineItem
@@ -97,7 +110,19 @@ export const VALID_TRANSITIONS: Record<QuoteStatus, QuoteStatus[]> = {
 
 export interface CreateQuoteData {
   entityId: string
+  /**
+   * Legacy assessment id. Still written to the NOT NULL `assessment_id`
+   * column until the follow-up drop migration removes it. Callers should
+   * pass `meetingId` for new work; when both are present they must match
+   * (and currently do by construction — see migration 0025).
+   */
   assessmentId: string
+  /**
+   * New canonical reference to meetings.id (#469). When omitted the caller
+   * is asserting this quote pre-dates the meetings migration; in that case
+   * createQuote copies assessmentId into meeting_id for forward compatibility.
+   */
+  meetingId?: string
   lineItems: LineItem[]
   rate: number
   depositPct?: number
@@ -245,16 +270,21 @@ export async function createQuote(
   const engagementOverview = data.engagementOverview ?? null
   const milestoneLabel = data.milestoneLabel ?? null
 
+  // meeting_id mirrors assessment_id by construction (meetings preserve the
+  // assessment primary key) unless the caller passes an explicit meetingId.
+  const meetingIdValue = data.meetingId ?? data.assessmentId
+
   await db
     .prepare(
-      `INSERT INTO quotes (id, org_id, entity_id, assessment_id, version, line_items, total_hours, rate, total_price, deposit_pct, deposit_amount, status, schedule, deliverables, engagement_overview, milestone_label, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO quotes (id, org_id, entity_id, assessment_id, meeting_id, version, line_items, total_hours, rate, total_price, deposit_pct, deposit_amount, status, schedule, deliverables, engagement_overview, milestone_label, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       id,
       orgId,
       data.entityId,
       data.assessmentId,
+      meetingIdValue,
       JSON.stringify(data.lineItems),
       totalHours,
       data.rate,

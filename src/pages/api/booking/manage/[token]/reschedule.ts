@@ -7,11 +7,17 @@ import {
   updateScheduleForReschedule,
   updateScheduleGoogleSync,
 } from '../../../../../lib/booking/schedule'
+import {
+  getMeetingScheduleByManageToken,
+  updateMeetingScheduleForReschedule,
+  updateMeetingScheduleGoogleSync,
+} from '../../../../../lib/booking/meeting-schedule'
 import { BOOKING_CONFIG } from '../../../../../lib/booking/config'
 import { acquireHold, releaseHold } from '../../../../../lib/booking/holds'
 import { getIntegration, getGoogleAccessToken } from '../../../../../lib/db/integrations'
 import { updateCalendarEvent } from '../../../../../lib/booking/google-calendar'
 import { updateAssessment } from '../../../../../lib/db/assessments'
+import { updateMeeting } from '../../../../../lib/db/meetings'
 import { buildIcs, icsToBase64 } from '../../../../../lib/booking/ics'
 import { sendBookingReschedule } from '../../../../../lib/email/booking-emails'
 import { sendEmail } from '../../../../../lib/email/resend'
@@ -135,6 +141,27 @@ export const POST: APIRoute = async ({ params, request }) => {
           googleEventLink: updatedEvent.htmlLink ?? null,
           googleMeetUrl: BOOKING_CONFIG.meeting_url,
         })
+        // Mirror the sync update to meeting_schedule during the monitoring
+        // window. Failure is logged, not surfaced — the authoritative write
+        // to assessment_schedule already succeeded.
+        try {
+          const meetingSchedule = await getMeetingScheduleByManageToken(
+            env.DB,
+            schedule.manage_token_hash
+          )
+          if (meetingSchedule) {
+            await updateMeetingScheduleGoogleSync(env.DB, meetingSchedule.id, {
+              googleEventId: updatedEvent.id,
+              googleEventLink: updatedEvent.htmlLink ?? null,
+              googleMeetUrl: BOOKING_CONFIG.meeting_url,
+            })
+          }
+        } catch (mirrorErr) {
+          console.error(
+            '[api/booking/manage/reschedule] Meeting-schedule google sync mirror failed:',
+            mirrorErr
+          )
+        }
       } catch (err) {
         console.error('[api/booking/manage/reschedule] Google Calendar update failed:', err)
         await releaseHold(env.DB, holdResult.id!)
@@ -159,12 +186,40 @@ export const POST: APIRoute = async ({ params, request }) => {
       newManageTokenExpiresAt
     )
 
+    // Mirror the reschedule to meeting_schedule / meetings during the
+    // monitoring window.
+    try {
+      const meetingSchedule = await getMeetingScheduleByManageToken(
+        env.DB,
+        schedule.manage_token_hash
+      )
+      if (meetingSchedule) {
+        await updateMeetingScheduleForReschedule(
+          env.DB,
+          meetingSchedule.id,
+          newSlotStartUtc,
+          newSlotEndUtc,
+          newManageTokenExpiresAt
+        )
+      }
+    } catch (err) {
+      console.error('[api/booking/manage/reschedule] Meeting schedule reschedule failed:', err)
+    }
+
     try {
       await updateAssessment(env.DB, ORG_ID, schedule.assessment_id, {
         scheduled_at: newSlotStartUtc,
       })
     } catch (err) {
       console.error('[api/booking/manage/reschedule] Assessment update failed:', err)
+    }
+    try {
+      // meeting.id == assessment.id by construction.
+      await updateMeeting(env.DB, ORG_ID, schedule.assessment_id, {
+        scheduled_at: newSlotStartUtc,
+      })
+    } catch (err) {
+      console.error('[api/booking/manage/reschedule] Meeting update failed:', err)
     }
 
     // 5. Release hold

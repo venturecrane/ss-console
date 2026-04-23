@@ -2,13 +2,14 @@
  * Core intake processing — shared between POST /api/intake (standalone) and
  * POST /api/booking/reserve (booking flow).
  *
- * Handles entity dedup, contact creation, optional assessment creation,
+ * Handles entity dedup, contact creation, optional meeting creation,
  * and context append. Callers decide what notifications to send.
  */
 
 import { findOrCreateEntity, getEntity } from '../db/entities'
 import { createContact } from '../db/contacts'
 import { createAssessment, updateAssessment, getAssessment } from '../db/assessments'
+import { createMeeting } from '../db/meetings'
 import { appendContext } from '../db/context'
 
 export interface IntakeInput {
@@ -41,8 +42,18 @@ export interface PreSeededIntake {
 export interface IntakeResult {
   entityId: string
   contactId: string
-  /** Non-null only when scheduledAt was provided (booking flow). */
+  /**
+   * Non-null only when scheduledAt was provided (booking flow).
+   *
+   * By construction meetings.id == assessments.id for the same booking —
+   * the booking flow creates the meeting first and seeds the legacy
+   * assessments row with the same primary key so live FKs
+   * (quotes.assessment_id, assessment_schedule.assessment_id) continue to
+   * resolve throughout the monitoring window.
+   */
   assessmentId: string | null
+  /** Same value as `assessmentId` — meetings are the new canonical entity. */
+  meetingId: string | null
   /** Whether the entity was freshly created (vs. found by slug dedup). */
   entityCreated: boolean
   /** Formatted intake lines for use in admin notification emails. */
@@ -51,14 +62,14 @@ export interface IntakeResult {
 
 /**
  * Process an intake submission: find-or-create entity, create contact (if
- * new email), create assessment, and append intake context.
+ * new email), create meeting, and append intake context.
  *
  * Does NOT send any emails — the caller decides what notifications to fire.
  *
- * @param scheduledAt - Optional ISO 8601 UTC string. When provided the
- *   assessment is created with `scheduled_at` set (used by /reserve).
- *   When null/undefined (standalone intake), no assessment is created —
- *   the context entry records interest without a phantom "scheduled" row.
+ * @param scheduledAt - Optional ISO 8601 UTC string. When provided a meeting
+ *   is created with `scheduled_at` set (used by /reserve). When null/undefined
+ *   (standalone intake), no meeting is created — the context entry records
+ *   interest without a phantom "scheduled" row.
  * @param source - Pipeline identifier for entity creation and context.
  *   Defaults to `'website_booking'` for backward compatibility.
  */
@@ -127,10 +138,18 @@ export async function processIntakeSubmission(
     contactId = contact.id
   }
 
-  // 3. Assessment row.
-  //    - Pre-seeded flow: reuse the admin-created `scheduled` row and set
-  //      `scheduled_at` to the chosen slot.
-  //    - Standalone flow: create a new row only when a slot is provided.
+  // 3. Meeting + legacy assessment row.
+  //    Post-integration of #502 (send-booking-link pre-seeds an assessment) and
+  //    #504 (meetings table generalizes assessments). Two paths:
+  //      (a) Pre-seeded: admin clicked "Send booking link", which created an
+  //          assessment row in `scheduled` status. Reuse and set scheduled_at.
+  //          TODO: extend send-booking-link to dual-write a meeting row so the
+  //          pre-seeded path also populates the canonical `meetings` table.
+  //      (b) Standalone: no pre-seed. Write the meeting as canonical and seed
+  //          the legacy assessments row with the same id for FK compatibility.
+  //    Monitoring window: keep dual-write until the assessments drop migration
+  //    lands (follow-up issue #503).
+  let meetingId: string | null = null
   let assessmentId: string | null = null
   if (preSeeded?.assessmentId && scheduledAt) {
     const existing = await getAssessment(db, orgId, preSeeded.assessmentId)
@@ -141,11 +160,23 @@ export async function processIntakeSubmission(
     }
     await updateAssessment(db, orgId, preSeeded.assessmentId, { scheduled_at: scheduledAt })
     assessmentId = preSeeded.assessmentId
+    // meetingId stays null for the pre-seeded path — legacy FK resolves via assessmentId.
   } else if (scheduledAt) {
-    const assessment = await createAssessment(db, orgId, entityId, {
+    const meeting = await createMeeting(db, orgId, entity.id, {
       scheduled_at: scheduledAt,
+      meeting_type: 'assessment',
     })
-    assessmentId = assessment.id
+    meetingId = meeting.id
+    assessmentId = meeting.id
+
+    // Seed legacy row with the same primary key for FK compatibility.
+    await db
+      .prepare(
+        `INSERT INTO assessments (id, org_id, entity_id, scheduled_at, status, created_at)
+         VALUES (?, ?, ?, ?, 'scheduled', datetime('now'))`
+      )
+      .bind(meeting.id, orgId, entity.id, scheduledAt)
+      .run()
   }
 
   // 4. Append intake context
@@ -179,6 +210,7 @@ export async function processIntakeSubmission(
     entityId,
     contactId,
     assessmentId,
+    meetingId,
     entityCreated,
     intakeLines,
   }

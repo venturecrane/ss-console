@@ -9,7 +9,7 @@
 // ── Pipeline Conversion ─────────────────────────────────────────────
 export interface PipelineConversion {
   prospect: number
-  assessing: number
+  meetings: number
   proposing: number
   engaged: number
   delivered: number
@@ -35,7 +35,7 @@ export async function getPipelineConversion(
 
   const counts: PipelineConversion = {
     prospect: 0,
-    assessing: 0,
+    meetings: 0,
     proposing: 0,
     engaged: 0,
     delivered: 0,
