@@ -146,7 +146,7 @@ describe('admin/entities/index.astro: bulk UI wiring', () => {
     const inside = match![1]
     expect(inside).toContain("'signal'")
     expect(inside).toContain("'prospect'")
-    expect(inside).toContain("'assessing'")
+    expect(inside).toContain("'meetings'")
     // Negative: bulk must NOT be enabled on these tabs.
     expect(inside).not.toContain("'proposing'")
     expect(inside).not.toContain("'engaged'")
@@ -163,8 +163,9 @@ describe('admin/entities/index.astro: bulk UI wiring', () => {
 
   it('row checkbox lives inside a `relative z-10` layer (safe with #462 stretched-link)', () => {
     const code = source()
-    // Checkbox wrapper must elevate above row-level anchor.
-    expect(code).toMatch(/relative z-10[^<]*<[^>]*>\s*<input[^>]+bulk-select-row/s)
+    // Checkbox wrapper must elevate above row-level anchor. The checkbox sits
+    // directly inside a z-10 wrapper (no intermediate tag).
+    expect(code).toMatch(/relative z-10[^<]*<input[^>]+bulk-select-row/s)
   })
 
   it('renders header "Select all on page" checkbox', () => {

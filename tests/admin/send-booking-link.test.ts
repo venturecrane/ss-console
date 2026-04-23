@@ -154,7 +154,7 @@ describe('POST /api/admin/entities/[id]/send-booking-link (#467)', () => {
       .prepare('SELECT stage FROM entities WHERE id = ?')
       .bind(ENTITY_ID)
       .first<{ stage: string }>()
-    expect(entity!.stage).toBe('assessing')
+    expect(entity!.stage).toBe('meetings')
 
     // --- AC: signed URL is verifiable and carries the right payload ---------
     const token = new URL(body.booking_url).searchParams.get('t')
@@ -202,7 +202,7 @@ describe('POST /api/admin/entities/[id]/send-booking-link (#467)', () => {
   })
 
   it('returns 409 when entity is not in prospect stage', async () => {
-    await db.prepare(`UPDATE entities SET stage = 'assessing' WHERE id = ?`).bind(ENTITY_ID).run()
+    await db.prepare(`UPDATE entities SET stage = 'meetings' WHERE id = ?`).bind(ENTITY_ID).run()
 
     const ctx = buildContext({ session: adminSession, entityId: ENTITY_ID })
     const response = await POST(ctx as unknown as Parameters<typeof POST>[0])

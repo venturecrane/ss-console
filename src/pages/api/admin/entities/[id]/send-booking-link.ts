@@ -105,7 +105,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
         env.DB,
         session.orgId,
         entityId,
-        'assessing',
+        'meetings',
         'Booking link sent to prospect.'
       )
     } catch (err) {

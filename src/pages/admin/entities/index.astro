@@ -1,5 +1,6 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro'
+import LogReplyDialog from '../../../components/admin/LogReplyDialog.astro'
 import {
   listEntities,
   countEntitiesByStage,
@@ -494,12 +495,23 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                         </form>
                       </>
                     ) : (
-                      <a
-                        href={`/admin/entities/${e.id}`}
-                        class="text-xs bg-[color:var(--color-background)] text-[color:var(--color-text-primary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-border-subtle)] transition-colors"
-                      >
-                        View
-                      </a>
+                      <>
+                        {e.stage === 'prospect' && (
+                          <button
+                            type="button"
+                            data-open-reply-dialog={e.id}
+                            class="text-xs border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-background)] transition-colors"
+                          >
+                            Log reply
+                          </button>
+                        )}
+                        <a
+                          href={`/admin/entities/${e.id}`}
+                          class="text-xs bg-[color:var(--color-background)] text-[color:var(--color-text-primary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-border-subtle)] transition-colors"
+                        >
+                          View
+                        </a>
+                      </>
                     )}
                   </div>
                 </div>
@@ -509,6 +521,13 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
         </div>
       </div>
     )
+  }
+
+  {
+    /* One dialog per prospect row — triggered by data-open-reply-dialog */
+    displayEntities
+      .filter((e: Entity) => e.stage === 'prospect')
+      .map((e: Entity) => <LogReplyDialog entityId={e.id} entityName={e.name} />)
   }
 
   {

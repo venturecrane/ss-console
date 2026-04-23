@@ -23,6 +23,7 @@
  */
 
 export type LostReasonCode =
+  | 'not-a-fit'
   | 'no-budget'
   | 'no-response'
   | 'declined-quote'

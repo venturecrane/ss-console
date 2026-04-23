@@ -42,7 +42,7 @@ describe('processIntakeSubmission — pre-seeded admin booking link flow (#467)'
     await db
       .prepare(
         `INSERT INTO entities (id, org_id, name, slug, stage, stage_changed_at)
-         VALUES (?, ?, ?, ?, 'assessing', datetime('now'))`
+         VALUES (?, ?, ?, ?, 'meetings', datetime('now'))`
       )
       .bind(ENTITY_ID, ORG_ID, 'Scott Carpentry', 'scott-carpentry')
       .run()

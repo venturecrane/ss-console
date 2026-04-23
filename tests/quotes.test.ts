@@ -316,7 +316,7 @@ describe('quotes: repeat-quote flow (#472)', () => {
     const code = apiSource()
     expect(code).toContain("'signal'")
     expect(code).toContain("'prospect'")
-    expect(code).toContain("'assessing'")
+    expect(code).toContain("'meetings'")
     expect(code).toContain("'proposing'")
   })
 

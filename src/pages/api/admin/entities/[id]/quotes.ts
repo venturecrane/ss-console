@@ -12,7 +12,7 @@ import { env } from 'cloudflare:workers'
  *
  * Preconditions enforced here:
  * - Entity exists and is in stage `proposing` or earlier (signal, prospect,
- *   assessing, proposing). Further-along stages already have an accepted quote
+ *   meetings, proposing). Further-along stages already have an accepted quote
  *   or are out of the sales motion.
  * - No open (draft or sent) quote exists for the entity.
  * - Entity has at least one prior assessment — `quotes.assessment_id` is
@@ -33,7 +33,7 @@ import { env } from 'cloudflare:workers'
  * Protected by auth middleware (requires admin role).
  */
 
-const ELIGIBLE_STAGES = ['signal', 'prospect', 'assessing', 'proposing']
+const ELIGIBLE_STAGES = ['signal', 'prospect', 'meetings', 'proposing']
 
 /** Default hourly rate at launch (per Decision Stack #16, evolved). */
 const DEFAULT_RATE = 175

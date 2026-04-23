@@ -162,7 +162,7 @@ export async function processIntakeSubmission(
     assessmentId = preSeeded.assessmentId
     // meetingId stays null for the pre-seeded path — legacy FK resolves via assessmentId.
   } else if (scheduledAt) {
-    const meeting = await createMeeting(db, orgId, entity.id, {
+    const meeting = await createMeeting(db, orgId, entityId, {
       scheduled_at: scheduledAt,
       meeting_type: 'assessment',
     })
@@ -175,7 +175,7 @@ export async function processIntakeSubmission(
         `INSERT INTO assessments (id, org_id, entity_id, scheduled_at, status, created_at)
          VALUES (?, ?, ?, ?, 'scheduled', datetime('now'))`
       )
-      .bind(meeting.id, orgId, entity.id, scheduledAt)
+      .bind(meeting.id, orgId, entityId, scheduledAt)
       .run()
   }
 
