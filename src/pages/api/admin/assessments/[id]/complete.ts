@@ -14,10 +14,23 @@ import { env } from 'cloudflare:workers'
 const DEFAULT_RATE = 175
 
 /**
- * POST /api/admin/assessments/:id/complete
+ * POST /api/admin/assessments/:id/complete — legacy, kept for backward compat
  *
- * Completes an assessment: builds extraction JSON, transitions status,
- * appends context, creates a draft quote, and redirects to the new quote.
+ * The Meetings generalization (#468, #470) split this endpoint into two new
+ * routes scoped under the entity:
+ *   - `/api/admin/entities/:id/meetings/:meetingId/complete` — captures
+ *     outcome + explicit next-stage picker, no quote side-effects
+ *   - `/api/admin/entities/:id/meetings/:meetingId/draft-quote` — explicit
+ *     opt-in proposal drafting
+ *
+ * This legacy handler is unreachable from the admin UI (the
+ * `/admin/assessments/[id]` page now 301-redirects to the meeting URL) but
+ * stays in place for direct callers / external scripts during the monitoring
+ * window. A follow-up issue tracks removing it alongside the assessments
+ * table drop.
+ *
+ * Behavior below is unchanged: builds extraction JSON, marks completed,
+ * drafts a quote, and transitions to proposing.
  *
  * Protected by auth middleware (requires admin role).
  */
@@ -121,7 +134,11 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       source_ref: assessmentId,
     })
 
-    // If disqualified, transition to lost and redirect back
+    // If disqualified, transition to lost and redirect back.
+    // Disqualification during assessment maps to the `not-a-fit` lost
+    // reason code — see src/lib/db/lost-reasons.ts. The extraction's
+    // free-text explanation is carried in `lost_detail` so the admin
+    // can still read the LLM's reasoning when reviewing the Lost tab.
     if (disqualified) {
       try {
         await updateAssessmentStatus(env.DB, session.orgId, assessmentId, 'disqualified')
@@ -130,7 +147,13 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
           session.orgId,
           entity.id,
           'lost',
-          `Disqualified during assessment: ${extraction.disqualify_reason ?? 'No reason provided'}`
+          `Disqualified during assessment: ${extraction.disqualify_reason ?? 'No reason provided'}`,
+          {
+            lostReason: {
+              code: 'not-a-fit',
+              detail: extraction.disqualify_reason ?? null,
+            },
+          }
         )
       } catch {
         // Stage transition may fail if already in lost state
@@ -157,10 +180,12 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       lineItems = []
     }
 
-    // 7. Create draft quote with pre-filled line items
+    // 7. Create draft quote with pre-filled line items. meetingId is equal
+    //    to assessmentId by construction (#469 preserved IDs during backfill).
     const quote = await createQuote(env.DB, session.orgId, {
       entityId: entity.id,
       assessmentId,
+      meetingId: assessmentId,
       lineItems,
       rate: DEFAULT_RATE,
     })

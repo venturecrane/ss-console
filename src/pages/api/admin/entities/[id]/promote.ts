@@ -1,35 +1,20 @@
 import type { APIRoute } from 'astro'
-import { getEntity, transitionStage, updateEntity } from '../../../../../lib/db/entities'
-import { appendContext, assembleEntityContext } from '../../../../../lib/db/context'
-import { generateOutreachDraft } from '../../../../../lib/claude/outreach'
+import { getEntity, transitionStage } from '../../../../../lib/db/entities'
+import { enrichEntity } from '../../../../../lib/enrichment'
 import { scheduleProspectCadence } from '../../../../../lib/follow-ups/scheduler'
-import { lookupGooglePlaces } from '../../../../../lib/enrichment/google-places'
-import { analyzeWebsite } from '../../../../../lib/enrichment/website-analyzer'
-import { lookupOutscraper } from '../../../../../lib/enrichment/outscraper'
-import { lookupAcc } from '../../../../../lib/enrichment/acc'
-import { lookupRoc } from '../../../../../lib/enrichment/roc'
-import { analyzeReviewPatterns } from '../../../../../lib/enrichment/review-analysis'
-import { benchmarkCompetitors } from '../../../../../lib/enrichment/competitors'
-import { searchNews } from '../../../../../lib/enrichment/news'
 import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/entities/[id]/promote
  *
- * One-click promote: signal → prospect.
- *
- * 1. Transition stage to prospect
- * 2. Run enrichment modules (all best-effort, independent)
- *    - Google Places lookup (if missing phone/website)
- *    - Website analysis + tech stack detection
- *    - Yelp Fusion cross-reference
- *    - ACC filing lookup
- *    - ROC license check (trades only)
- * 3. Generate outreach draft from enriched context
- * 4. Schedule prospect follow-up cadence
- * 5. Set next_action
- *
- * Each enrichment module is independent — failures don't block others or the promote.
+ * Thin wrapper retained as the transport for the "Promote" button on the
+ * admin signal row — it still handles the signal → prospect stage transition
+ * and schedules the prospect follow-up cadence. Enrichment itself now runs
+ * automatically at signal ingest (see src/lib/enrichment/index.ts and the
+ * lead-gen workers), so on the typical signal this endpoint finds the entity
+ * already fully enriched and `enrichEntity` returns `alreadyEnriched: true`
+ * without re-billing Claude. For entities that arrived before the at-ingest
+ * refactor shipped, the call does an on-demand backfill.
  */
 export const POST: APIRoute = async ({ params, locals, redirect }) => {
   const session = locals.session
@@ -46,7 +31,8 @@ export const POST: APIRoute = async ({ params, locals, redirect }) => {
   }
 
   try {
-    // 1. Transition stage
+    // Stage transition first so the rest of the UI reads "prospect" while
+    // enrichment fills in (enrichment is idempotent and safe to re-run).
     await transitionStage(env.DB, session.orgId, entityId, 'prospect', 'Promoted from signal.')
 
     const entity = await getEntity(env.DB, session.orgId, entityId)
@@ -54,306 +40,15 @@ export const POST: APIRoute = async ({ params, locals, redirect }) => {
       return redirect('/admin/entities?error=not_found', 302)
     }
 
-    // 2. Run enrichment modules (all best-effort, parallel where possible)
-    const enrichmentResults: string[] = []
+    // Backfill enrichment if this signal predates the at-ingest refactor.
+    // No-op when an intelligence_brief already exists.
+    await enrichEntity(env, session.orgId, entityId, { mode: 'full' })
 
-    // 2a. Google Places lookup (if missing phone or website)
-    if ((!entity.phone || !entity.website) && env.GOOGLE_PLACES_API_KEY) {
-      try {
-        const places = await lookupGooglePlaces(
-          entity.name,
-          entity.area,
-          env.GOOGLE_PLACES_API_KEY as string
-        )
-        if (places) {
-          // Update entity phone/website if discovered
-          await updateEntity(env.DB, session.orgId, entityId, {
-            phone: places.phone ?? entity.phone ?? undefined,
-            website: places.website ?? entity.website ?? undefined,
-          })
-          await appendContext(env.DB, session.orgId, {
-            entity_id: entityId,
-            type: 'enrichment',
-            content: `Google Places: ${places.phone ? `Phone: ${places.phone}` : 'No phone found'}. ${places.website ? `Website: ${places.website}` : 'No website found'}. Rating: ${places.rating ?? 'N/A'} (${places.reviewCount ?? 0} reviews). Status: ${places.businessStatus ?? 'unknown'}.`,
-            source: 'google_places',
-            metadata: places as unknown as Record<string, unknown>,
-          })
-          enrichmentResults.push('google_places')
-          // Re-fetch entity to get updated phone/website for subsequent modules
-          const refreshed = await getEntity(env.DB, session.orgId, entityId)
-          if (refreshed) Object.assign(entity, refreshed)
-        }
-      } catch (err) {
-        console.error('[promote] Google Places enrichment failed:', err)
-      }
-    }
-
-    // 2b. Website analysis + tech stack (if website available)
-    const websiteUrl = entity.website
-    if (websiteUrl && env.ANTHROPIC_API_KEY) {
-      try {
-        const analysis = await analyzeWebsite(websiteUrl, env.ANTHROPIC_API_KEY)
-        if (analysis) {
-          const techTools = [
-            ...analysis.tech_stack.scheduling,
-            ...analysis.tech_stack.crm,
-            ...analysis.tech_stack.reviews,
-            ...analysis.tech_stack.payments,
-            ...analysis.tech_stack.communication,
-          ]
-          const missingTools: string[] = []
-          if (analysis.tech_stack.scheduling.length === 0) missingTools.push('No scheduling tool')
-          if (analysis.tech_stack.crm.length === 0) missingTools.push('No CRM')
-          if (analysis.tech_stack.reviews.length === 0) missingTools.push('No review management')
-
-          const contentParts = [
-            `Website analysis (${analysis.pages_analyzed.length} pages):`,
-            analysis.owner_name ? `Owner/Founder: ${analysis.owner_name}` : null,
-            analysis.team_size ? `Team size: ~${analysis.team_size} people` : null,
-            analysis.founding_year ? `Founded: ${analysis.founding_year}` : null,
-            analysis.contact_email ? `Email: ${analysis.contact_email}` : null,
-            analysis.services.length > 0 ? `Services: ${analysis.services.join(', ')}` : null,
-            `Site quality: ${analysis.quality}`,
-            techTools.length > 0
-              ? `Tools detected: ${techTools.join(', ')}`
-              : 'No business tools detected on website',
-            missingTools.length > 0 ? `Gaps: ${missingTools.join(', ')}` : null,
-            `Platform: ${analysis.tech_stack.platform.join(', ') || 'Custom/unknown'}`,
-          ].filter(Boolean)
-
-          await appendContext(env.DB, session.orgId, {
-            entity_id: entityId,
-            type: 'enrichment',
-            content: contentParts.join('\n'),
-            source: 'website_analysis',
-            metadata: {
-              owner_name: analysis.owner_name,
-              team_size: analysis.team_size,
-              employee_count: analysis.team_size,
-              founding_year: analysis.founding_year,
-              contact_email: analysis.contact_email,
-              services: analysis.services,
-              quality: analysis.quality,
-              tech_stack: analysis.tech_stack,
-              pages_analyzed: analysis.pages_analyzed,
-            },
-          })
-          enrichmentResults.push('website_analysis')
-        }
-      } catch (err) {
-        console.error('[promote] Website analysis failed:', err)
-      }
-    }
-
-    // 2c. Outscraper full business profile (owner, social, emails, hours, tech signals)
-    if (env.OUTSCRAPER_API_KEY) {
-      try {
-        const osc = await lookupOutscraper(
-          entity.name,
-          entity.area,
-          env.OUTSCRAPER_API_KEY as string
-        )
-        if (osc) {
-          // Update entity with discovered contact info
-          await updateEntity(env.DB, session.orgId, entityId, {
-            phone: osc.phone ?? entity.phone ?? undefined,
-            website: osc.website ?? entity.website ?? undefined,
-          })
-          if (osc.website && !entity.website) {
-            const refreshed = await getEntity(env.DB, session.orgId, entityId)
-            if (refreshed) Object.assign(entity, refreshed)
-          }
-
-          const contentParts = [
-            'Outscraper business profile:',
-            osc.owner_name ? `Owner: ${osc.owner_name}` : null,
-            osc.emails.length > 0 ? `Email: ${osc.emails.join(', ')}` : null,
-            osc.phone ? `Phone: ${osc.phone}` : null,
-            osc.working_hours ? `Hours: ${osc.working_hours}` : null,
-            osc.verified ? 'Google listing: Verified' : 'Google listing: Unverified',
-            osc.rating != null ? `Rating: ${osc.rating} (${osc.review_count ?? 0} reviews)` : null,
-            osc.booking_link ? `Online booking: Yes` : 'Online booking: Not detected',
-            osc.facebook ? `Facebook: ${osc.facebook}` : null,
-            osc.instagram ? `Instagram: ${osc.instagram}` : null,
-            osc.linkedin ? `LinkedIn: ${osc.linkedin}` : null,
-            osc.website_generator ? `Platform: ${osc.website_generator}` : null,
-            osc.has_facebook_pixel ? 'Has Facebook Pixel' : null,
-            osc.has_google_tag_manager ? 'Has Google Tag Manager' : null,
-            osc.about ? `About: ${osc.about}` : null,
-          ].filter(Boolean)
-
-          await appendContext(env.DB, session.orgId, {
-            entity_id: entityId,
-            type: 'enrichment',
-            content: contentParts.join('\n'),
-            source: 'outscraper',
-            metadata: osc as unknown as Record<string, unknown>,
-          })
-          enrichmentResults.push('outscraper')
-        }
-      } catch (err) {
-        console.error('[promote] Outscraper enrichment failed:', err)
-      }
-    }
-
-    // 2d. ACC filing lookup
-    try {
-      const acc = await lookupAcc(entity.name)
-      if (acc) {
-        await appendContext(env.DB, session.orgId, {
-          entity_id: entityId,
-          type: 'enrichment',
-          content: `ACC Filing: ${acc.entity_name} (${acc.entity_type ?? 'unknown type'}). Filed: ${acc.filing_date ?? 'unknown'}. Status: ${acc.status ?? 'unknown'}. Registered agent: ${acc.registered_agent ?? 'not found'}.`,
-          source: 'acc_filing',
-          metadata: acc as unknown as Record<string, unknown>,
-        })
-        enrichmentResults.push('acc_filing')
-      }
-    } catch (err) {
-      console.error('[promote] ACC lookup failed:', err)
-    }
-
-    // 2e. ROC license check (trades only)
-    if (entity.vertical === 'home_services' || entity.vertical === 'contractor_trades') {
-      try {
-        const roc = await lookupRoc(entity.name)
-        if (roc) {
-          await appendContext(env.DB, session.orgId, {
-            entity_id: entityId,
-            type: 'enrichment',
-            content: `ROC License: ${roc.license_number ?? 'N/A'} (${roc.classification ?? 'unknown classification'}). Status: ${roc.status ?? 'unknown'}. Complaints: ${roc.complaint_count ?? 'N/A'}.`,
-            source: 'roc_license',
-            metadata: roc as unknown as Record<string, unknown>,
-          })
-          enrichmentResults.push('roc_license')
-        }
-      } catch (err) {
-        console.error('[promote] ROC lookup failed:', err)
-      }
-    }
-
-    // --- Tier 3: Deeper intelligence ---
-
-    // 3a. Review response analysis
-    if (env.ANTHROPIC_API_KEY) {
-      try {
-        const signalContext = await assembleEntityContext(env.DB, entityId, {
-          maxBytes: 8_000,
-          typeFilter: ['signal'],
-        })
-        if (signalContext) {
-          const reviewAnalysis = await analyzeReviewPatterns(
-            signalContext,
-            env.ANTHROPIC_API_KEY as string
-          )
-          if (reviewAnalysis) {
-            await appendContext(env.DB, session.orgId, {
-              entity_id: entityId,
-              type: 'enrichment',
-              content: `Review patterns: ${reviewAnalysis.response_pattern} responses, ${reviewAnalysis.engagement_level} engagement. ${reviewAnalysis.owner_accessible ? 'Owner appears accessible.' : ''} ${reviewAnalysis.insights}`,
-              source: 'review_analysis',
-              metadata: reviewAnalysis as unknown as Record<string, unknown>,
-            })
-            enrichmentResults.push('review_analysis')
-          }
-        }
-      } catch (err) {
-        console.error('[promote] Review analysis failed:', err)
-      }
-    }
-
-    // 3b. Competitor benchmarking
-    if (env.GOOGLE_PLACES_API_KEY) {
-      try {
-        const benchmark = await benchmarkCompetitors(
-          entity.name,
-          entity.vertical,
-          entity.area,
-          entity.pain_score,
-          null,
-          env.GOOGLE_PLACES_API_KEY as string
-        )
-        if (benchmark) {
-          await appendContext(env.DB, session.orgId, {
-            entity_id: entityId,
-            type: 'enrichment',
-            content: `Competitor benchmarking: ${benchmark.summary} Top competitors: ${benchmark.competitors.map((c) => `${c.name} (${c.rating}★, ${c.review_count} reviews)`).join(', ')}.`,
-            source: 'competitors',
-            metadata: benchmark as unknown as Record<string, unknown>,
-          })
-          enrichmentResults.push('competitors')
-        }
-      } catch (err) {
-        console.error('[promote] Competitor benchmarking failed:', err)
-      }
-    }
-
-    // 3c. News/press search
-    if (env.SERPAPI_API_KEY && env.ANTHROPIC_API_KEY) {
-      try {
-        const news = await searchNews(
-          entity.name,
-          entity.area,
-          env.SERPAPI_API_KEY as string,
-          env.ANTHROPIC_API_KEY as string
-        )
-        if (news) {
-          await appendContext(env.DB, session.orgId, {
-            entity_id: entityId,
-            type: 'enrichment',
-            content: `News/press: ${news.summary} (${news.mentions.length} mentions found)`,
-            source: 'news_search',
-            metadata: {
-              mentions: news.mentions,
-              summary: news.summary,
-            },
-          })
-          enrichmentResults.push('news_search')
-        }
-      } catch (err) {
-        console.error('[promote] News search failed:', err)
-      }
-    }
-
-    console.log(
-      `[promote] Enrichment complete for ${entity.name}: ${enrichmentResults.join(', ') || 'none'}`
-    )
-
-    // 4. Generate outreach draft (best-effort, uses enriched context)
-    try {
-      if (env.ANTHROPIC_API_KEY) {
-        const context = await assembleEntityContext(env.DB, entityId, { maxBytes: 16_000 })
-        if (context) {
-          const draft = await generateOutreachDraft(env.ANTHROPIC_API_KEY, entity.name, context)
-          await appendContext(env.DB, session.orgId, {
-            entity_id: entityId,
-            type: 'outreach_draft',
-            content: draft,
-            source: 'claude',
-            metadata: {
-              model: 'claude-sonnet-4-20250514',
-              trigger: 'promote',
-              enrichment_sources: enrichmentResults,
-            },
-          })
-        }
-      }
-    } catch (err) {
-      console.error('[promote] Outreach generation failed (non-blocking):', err)
-    }
-
-    // 4. Schedule prospect follow-up cadence
     try {
       await scheduleProspectCadence(env.DB, session.orgId, entityId, new Date().toISOString())
     } catch (err) {
       console.error('[promote] Follow-up cadence scheduling failed (non-blocking):', err)
     }
-
-    // 5. Set next action
-    await updateEntity(env.DB, session.orgId, entityId, {
-      next_action: 'Review and send outreach email',
-      next_action_at: new Date().toISOString(),
-    })
 
     return redirect(`/admin/entities/${entityId}?promoted=1`, 302)
   } catch (err) {

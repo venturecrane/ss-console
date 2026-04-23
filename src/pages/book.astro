@@ -5,14 +5,55 @@ import Base from '../layouts/Base.astro'
 import Nav from '../components/Nav.astro'
 import Footer from '../components/Footer.astro'
 import SlotPicker from '../components/booking/SlotPicker.astro'
-import { ENTITY_VERTICALS } from '../lib/db/entities'
+import { ENTITY_VERTICALS, getEntity } from '../lib/db/entities'
+import { getContact } from '../lib/db/contacts'
 import { resolveTurnstileConfig } from '../lib/booking/turnstile'
+import { verifyBookingLink } from '../lib/booking/signed-link'
+import { ORG_ID } from '../lib/constants'
 import { env } from 'cloudflare:workers'
 
 // Fail-fast on Turnstile misconfiguration. In non-localhost environments,
 // both keys must be set; otherwise this throws and the page 500s cleanly
 // rather than silently rendering a form that bypasses bot verification (#12).
 const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
+
+// Prefill support for admin-issued links (#467). When `?t=<token>` is present
+// and verifies, we prefill the business name (and email if we have the
+// contact). The token itself is re-submitted with the reserve request so the
+// server can anchor the booking to the admin-chosen entity/assessment rather
+// than running slug dedup.
+const prefillToken = Astro.url.searchParams.get('t')
+let prefillBusinessName: string | null = null
+let prefillEmail: string | null = null
+let prefillContactName: string | null = null
+let prefillTokenValid = false
+let prefillTokenError: 'expired' | 'invalid' | null = null
+
+if (prefillToken) {
+  const verify = await verifyBookingLink(prefillToken)
+  if (verify.ok) {
+    prefillTokenValid = true
+    try {
+      const entity = await getEntity(env.DB, ORG_ID, verify.payload.entity_id)
+      if (entity) prefillBusinessName = entity.name
+    } catch (err) {
+      console.error('[book.astro] entity prefill lookup failed:', err)
+    }
+    if (verify.payload.contact_id) {
+      try {
+        const contact = await getContact(env.DB, ORG_ID, verify.payload.contact_id)
+        if (contact) {
+          prefillEmail = contact.email
+          prefillContactName = contact.name
+        }
+      } catch (err) {
+        console.error('[book.astro] contact prefill lookup failed:', err)
+      }
+    }
+  } else {
+    prefillTokenError = verify.error === 'expired' ? 'expired' : 'invalid'
+  }
+}
 ---
 
 <Base
@@ -38,6 +79,15 @@ const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
 
         <!-- Booking flow container -->
         <div class="mx-auto mt-10 max-w-3xl">
+          {
+            prefillTokenError && (
+              <div class="mb-6 rounded-[var(--radius-card)] bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                {prefillTokenError === 'expired'
+                  ? 'This booking link has expired. You can still pick a time below — we will just take a few extra details.'
+                  : 'This booking link is not valid. You can still pick a time below — we will just take a few extra details.'}
+              </div>
+            )
+          }
           <!-- Step 1: Pick a time -->
           <div class="rounded-[var(--radius-card)] bg-white p-card sm:p-section">
             <h2 class="mb-1 text-lg font-bold text-[color:var(--color-text-primary)]">
@@ -99,6 +149,19 @@ const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
             </div>
 
             <form id="booking-form" class="mt-6 space-y-5" novalidate>
+              {
+                /* Prefill token from admin "Send booking link" action (#467).
+                   When present, the reserve endpoint anchors this booking to
+                   the admin-chosen entity/assessment instead of running slug
+                   dedup. Expired/invalid tokens are dropped (the user can
+                   still book through the standard flow). */
+              }
+              {
+                prefillTokenValid && prefillToken && (
+                  <input type="hidden" name="prefill_token" value={prefillToken} />
+                )
+              }
+
               <!-- Honeypot -->
               <div class="absolute -left-[9999px]" aria-hidden="true">
                 <input type="text" name="website_url" tabindex="-1" autocomplete="off" />
@@ -120,6 +183,7 @@ const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
                     required
                     maxlength="200"
                     autocomplete="name"
+                    value={prefillContactName ?? ''}
                     class="mt-1 w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                     placeholder="e.g. Maria Garcia"
                   />
@@ -138,6 +202,7 @@ const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
                     required
                     maxlength="254"
                     autocomplete="email"
+                    value={prefillEmail ?? ''}
                     class="mt-1 w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                     placeholder="maria@example.com"
                   />
@@ -159,6 +224,7 @@ const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
                     name="business_name"
                     required
                     maxlength="200"
+                    value={prefillBusinessName ?? ''}
                     class="mt-1 w-full rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                     placeholder="e.g. Phoenix Plumbing Co."
                   />
