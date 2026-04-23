@@ -43,7 +43,7 @@ export interface Entity {
 export type EntityStage =
   | 'signal'
   | 'prospect'
-  | 'assessing'
+  | 'meetings'
   | 'proposing'
   | 'engaged'
   | 'delivered'
@@ -63,7 +63,7 @@ export type EntityVertical =
 export const ENTITY_STAGES: { value: EntityStage; label: string }[] = [
   { value: 'signal', label: 'Signal' },
   { value: 'prospect', label: 'Prospect' },
-  { value: 'assessing', label: 'Assessing' },
+  { value: 'meetings', label: 'Meetings' },
   { value: 'proposing', label: 'Proposing' },
   { value: 'engaged', label: 'Engaged' },
   { value: 'delivered', label: 'Delivered' },
@@ -93,8 +93,14 @@ export const ENTITY_VERTICALS: { value: EntityVertical; label: string }[] = [
  */
 const VALID_TRANSITIONS: Record<EntityStage, EntityStage[]> = {
   signal: ['prospect', 'lost'],
-  prospect: ['assessing', 'lost'],
-  assessing: ['proposing', 'lost'],
+  prospect: ['meetings', 'lost'],
+  // From `meetings` the admin picks the next step explicitly (#470). Direct
+  // transitions to `engaged`/`delivered`/`ongoing` still require going
+  // through `proposing` first — the `proposing→engaged` accepted-quote
+  // invariant protects the engagement model. Backing out to `prospect` is
+  // allowed so a discovery/follow-up meeting that didn't qualify doesn't
+  // force an entity into `lost`.
+  meetings: ['proposing', 'prospect', 'lost'],
   proposing: ['engaged', 'lost'],
   engaged: ['delivered', 'lost'],
   delivered: ['ongoing', 'prospect', 'lost'],
@@ -406,8 +412,8 @@ export async function updateEntity(
  * - proposing → engaged: requires at least one accepted quote
  * - delivered → ongoing: requires paid completion invoice OR force override
  *
- * Note: signal → assessing is blocked by VALID_TRANSITIONS. Booking flows
- * must walk through `prospect` as an intermediate state (signal → prospect → assessing).
+ * Note: signal → meetings is blocked by VALID_TRANSITIONS. Booking flows
+ * must walk through `prospect` as an intermediate state (signal → prospect → meetings).
  *
  * Records a stage_change context entry automatically.
  */
