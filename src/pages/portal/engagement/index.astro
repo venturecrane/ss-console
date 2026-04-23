@@ -1,7 +1,7 @@
 ---
 import '../../../styles/global.css'
 import { BRAND_NAME } from '../../../lib/config/brand'
-import { CLIENT_STATUS_LABELS } from '../../../lib/portal/constants'
+import { resolveEngagementLabel } from '../../../lib/portal/status'
 import { getPortalClient } from '../../../lib/portal/session'
 import { listEngagements } from '../../../lib/db/engagements'
 import { listMilestones } from '../../../lib/db/milestones'
@@ -68,9 +68,7 @@ const consultantFirstName = engagement?.consultant_name
   ? engagement.consultant_name.trim().split(/\s+/)[0] || engagement.consultant_name
   : undefined
 
-const currentMilestoneLabel = engagement
-  ? (CLIENT_STATUS_LABELS[engagement.status] ?? engagement.status)
-  : null
+const currentMilestoneLabel = engagement ? resolveEngagementLabel(engagement.status) : null
 ---
 
 <!doctype html>

@@ -1,16 +1,22 @@
 /**
  * Shared constants for the client portal.
  *
- * Single source of truth for client-facing engagement status labels and colors.
- * Used by both the portal dashboard and the engagement progress page.
+ * Historic label/color maps for client-facing engagement status. The
+ * canonical client-friendly label + tone resolver now lives in
+ * `./status.ts` (`resolveEngagementLabel` / `resolveEngagementTone`).
+ * These maps are kept for any legacy callers and should not be added
+ * to — new portal surfaces route through `status.ts`.
  */
 
-/** Client-friendly engagement status labels. */
+/** Client-friendly engagement status labels.
+ *  `safety_net` → "Stabilization" per Decision #27 — the raw DB enum
+ *  read as jargon on portal surfaces. Other entries preserve the
+ *  original client-facing copy. */
 export const CLIENT_STATUS_LABELS: Record<string, string> = {
   scheduled: 'Starting Soon',
   active: 'Underway',
   handoff: 'Wrapping Up',
-  safety_net: 'Support',
+  safety_net: 'Stabilization',
   completed: 'Complete',
   cancelled: 'Cancelled',
 }

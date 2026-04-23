@@ -29,19 +29,30 @@
  *   expired    → warning → "Expired"
  *   superseded → neutral → "Superseded"      (internal only)
  *
- * Engagement (portal progress surface — future use):
- *   scheduled  → info    → "Scheduled"
- *   active     → success → "Active"
- *   handoff    → info    → "Handoff"
+ * Engagement (portal progress surface):
+ *   scheduled  → info    → "Starting Soon"
+ *   active     → success → "Underway"
+ *   handoff    → info    → "Wrapping Up"
  *   safety_net → warning → "Stabilization"
- *   completed  → success → "Completed"
+ *   completed  → success → "Complete"
  *   cancelled  → neutral → "Cancelled"
+ *
+ * "Stabilization" aligns with Decision #27 ("2-week async stabilization
+ * period starting at handoff"). The DB enum stays `safety_net` — only
+ * the client-visible label changes.
  */
 
 export type Tone = 'info' | 'success' | 'danger' | 'warning' | 'neutral'
 
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'void'
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'declined' | 'expired' | 'superseded'
+export type EngagementStatus =
+  | 'scheduled'
+  | 'active'
+  | 'handoff'
+  | 'safety_net'
+  | 'completed'
+  | 'cancelled'
 
 const INVOICE_TONE: Record<InvoiceStatus, Tone> = {
   draft: 'neutral',
@@ -91,6 +102,48 @@ export function resolveQuoteTone(status: string): Tone {
 
 export function resolveQuoteLabel(status: string): string {
   return QUOTE_LABEL[status as QuoteStatus] ?? status
+}
+
+/**
+ * Engagement status tone + label — client-facing.
+ *
+ * The database column `engagements.status` uses internal enum values
+ * (`safety_net`, etc.) that read as jargon on portal surfaces. This
+ * resolver is the single source of truth for the client-friendly
+ * labels and matching pill tones. Admin UI keeps the raw enum via
+ * ENGAGEMENT_STATUSES in src/lib/db/engagements.ts — don't swap admin
+ * labels through this module.
+ *
+ * Label choices:
+ *   - "Stabilization" for `safety_net` — aligns with Decision #27
+ *     ("2-week async stabilization period starting at handoff").
+ *   - Other labels mirror the internal enum in title case; they are
+ *     already plain English and don't read as jargon.
+ */
+const ENGAGEMENT_TONE: Record<EngagementStatus, Tone> = {
+  scheduled: 'info',
+  active: 'success',
+  handoff: 'info',
+  safety_net: 'warning',
+  completed: 'success',
+  cancelled: 'neutral',
+}
+
+const ENGAGEMENT_LABEL: Record<EngagementStatus, string> = {
+  scheduled: 'Starting Soon',
+  active: 'Underway',
+  handoff: 'Wrapping Up',
+  safety_net: 'Stabilization',
+  completed: 'Complete',
+  cancelled: 'Cancelled',
+}
+
+export function resolveEngagementTone(status: string): Tone {
+  return ENGAGEMENT_TONE[status as EngagementStatus] ?? 'neutral'
+}
+
+export function resolveEngagementLabel(status: string): string {
+  return ENGAGEMENT_LABEL[status as EngagementStatus] ?? status
 }
 
 /**
