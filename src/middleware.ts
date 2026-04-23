@@ -31,7 +31,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const { pathname } = context.url
   const hostname = context.url.hostname
 
-  // Subdomain routing: portal.smd.services rewrites to /portal/* paths
+  // Subdomain routing: portal.smd.services rewrites to /portal/* paths.
+  // String-path form of context.rewrite is the idiomatic Astro v5 API — it
+  // re-invokes middleware against the rewritten pathname so the auth block
+  // below runs with isPortalRoute = true. The earlier Request-wrapper form
+  // silently failed for nested paths under Workers + Static Assets,
+  // returning the 404 static asset instead of the intended portal route.
   const isPortalSubdomain = hostname.startsWith('portal.')
   if (
     isPortalSubdomain &&
@@ -40,12 +45,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
     !pathname.startsWith('/auth') &&
     !pathname.startsWith('/api/auth')
   ) {
-    // Rewrite the URL to the /portal path prefix
     const portalPath = pathname === '/' ? '/portal' : `/portal${pathname}`
-    return context.rewrite(new Request(new URL(portalPath, context.url), context.request))
+    return context.rewrite(portalPath + context.url.search)
   }
 
-  // Subdomain routing: admin.smd.services rewrites to /admin/* paths
+  // Subdomain routing: admin.smd.services rewrites to /admin/* paths.
+  // See note on the portal rewrite above — same reasoning.
   const isAdminSubdomain = hostname.startsWith('admin.')
   if (
     isAdminSubdomain &&
@@ -55,7 +60,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     !pathname.startsWith('/api/auth')
   ) {
     const adminPath = pathname === '/' ? '/admin' : `/admin${pathname}`
-    return context.rewrite(new Request(new URL(adminPath, context.url), context.request))
+    return context.rewrite(adminPath + context.url.search)
   }
 
   // Backwards-compat redirects: bare apex admin/login paths → admin subdomain.
