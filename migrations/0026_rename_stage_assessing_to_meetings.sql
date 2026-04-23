@@ -25,6 +25,19 @@
 -- Rollback: same shape — build a shadow with the legacy 'assessing' value,
 -- translate 'meetings' → 'assessing' in the SELECT, swap tables, recreate
 -- indexes. Data is preserved.
+--
+-- Foreign-key deferral:
+-- Other tables (contacts, meetings, assessments, engagements, quotes, invoices,
+-- context entries, stage_changes, ...) hold foreign keys to entities(id).
+-- DROP TABLE entities would trip SQLITE_CONSTRAINT_FOREIGNKEY mid-transaction
+-- even though every referenced id is preserved by the shadow-copy. PRAGMA
+-- defer_foreign_keys = ON defers those checks to commit time; by commit, the
+-- shadow has been renamed to `entities` with identical ids, so every FK
+-- resolves. Unlike PRAGMA foreign_keys = OFF (which cannot toggle inside a
+-- transaction), defer_foreign_keys is transaction-scoped and valid inside
+-- D1's migrate-apply transaction. See deploy run 24861817054 postmortem.
+
+PRAGMA defer_foreign_keys = ON;
 
 CREATE TABLE entities_new (
   id                TEXT PRIMARY KEY,

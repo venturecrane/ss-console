@@ -194,7 +194,7 @@ describe('migration 0026: rename stage assessing → meetings', () => {
   // INSERT SELECT that populates the shadow table. Simulate the pre-rename
   // state by bypassing the migration runner, then run 0026 directly and
   // verify the data survives.
-  it('translates existing assessing rows to meetings without violating CHECK', async () => {
+  it('translates existing assessing rows to meetings and preserves FKs', async () => {
     const isolated = createTestD1()
     const files = discoverNumericMigrations(migrationsDir)
     const basename = (f: { name?: string } | string) =>
@@ -213,7 +213,21 @@ describe('migration 0026: rename stage assessing → meetings', () => {
       .bind(ORG_ID)
       .run()
 
-    // Now run 0026 on a DB that already contains 'assessing' data.
+    // Insert an FK-dependent row so the DROP TABLE path exercises the FK
+    // deferral pragma. Regression for deploy run 24861817054: without
+    // PRAGMA defer_foreign_keys = ON the DROP tripped SQLITE_CONSTRAINT_FOREIGNKEY.
+    // meetings.entity_id is an ordinary column (no explicit FK constraint) so
+    // for a stronger test we use assessments.entity_id which was the populated
+    // shape in prod at the time of the failure.
+    await isolated
+      .prepare(
+        `INSERT INTO assessments (id, org_id, entity_id, status, created_at)
+         VALUES ('a-dep', ?, 'e-preexisting', 'scheduled', datetime('now'))`
+      )
+      .bind(ORG_ID)
+      .run()
+
+    // Now run 0026 on a DB that already contains 'assessing' data AND FK-dependent rows.
     const only0026 = files.filter((f) => basename(f).startsWith('0026_'))
     await runMigrations(isolated, { files: only0026 })
 
@@ -221,6 +235,12 @@ describe('migration 0026: rename stage assessing → meetings', () => {
       .prepare(`SELECT stage FROM entities WHERE id = 'e-preexisting'`)
       .first<{ stage: string }>()
     expect(row?.stage).toBe('meetings')
+
+    // The FK-dependent row still resolves — the entity id survived the shadow swap.
+    const assessment = await isolated
+      .prepare(`SELECT entity_id FROM assessments WHERE id = 'a-dep'`)
+      .first<{ entity_id: string }>()
+    expect(assessment?.entity_id).toBe('e-preexisting')
   })
 })
 
