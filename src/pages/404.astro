@@ -1,5 +1,14 @@
 ---
-export const prerender = true
+// Must NOT be prerendered. When `prerender = true`, the 404 route is built
+// to dist/client/404.html as a static asset and Astro's error-page fallback
+// (`renderError` with `errorRouteData.prerender === true`) serves that static
+// HTML via `prerenderedErrorPageFetch` — bypassing middleware entirely. That
+// breaks subdomain rewrite middleware for every path that does not match a
+// concrete Astro route (admin.smd.services/analytics, portal.smd.services/
+// quotes/abc, etc.). Keeping 404 server-rendered guarantees middleware runs
+// on fallback so the subdomain rewrite still applies.
+// Regression lock-in: tests/middleware.test.ts.
+export const prerender = false
 
 import Base from '../layouts/Base.astro'
 import Nav from '../components/Nav.astro'
