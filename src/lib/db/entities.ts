@@ -251,6 +251,125 @@ export async function countEntitiesByStage(
 }
 
 // ---------------------------------------------------------------------------
+// Signal metadata (for Signal list evidence density)
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-entity rollup of pipeline-generated signal metadata + last activity,
+ * used to render evidence-dense signal rows without loading full context.
+ *
+ * Values come from the context table: `top_problems` and `outreach_angle`
+ * are read from the metadata JSON of the most recent `signal` / `scorecard`
+ * context entry; `last_activity_at` is the `created_at` of the most recent
+ * context entry of ANY type.
+ *
+ * Missing fields stay `null` — callers must render nothing (not placeholders)
+ * per CLAUDE.md Pattern B.
+ */
+export interface EntitySignalMetadata {
+  entity_id: string
+  top_problems: string[] | null
+  outreach_angle: string | null
+  last_activity_at: string | null
+}
+
+/**
+ * Fetch latest signal metadata and last-activity timestamp for a batch of
+ * entities in two parameterized queries (no N+1).
+ *
+ * Returns a Map keyed by entity_id. Entities with no context entries at all
+ * are omitted from the map — caller should treat missing as "no metadata".
+ */
+export async function getSignalMetadataForEntities(
+  db: D1Database,
+  orgId: string,
+  entityIds: string[]
+): Promise<Map<string, EntitySignalMetadata>> {
+  const out = new Map<string, EntitySignalMetadata>()
+  if (entityIds.length === 0) return out
+
+  const placeholders = entityIds.map(() => '?').join(', ')
+
+  // Latest signal/scorecard metadata per entity.
+  // Picks the most recent row via the correlated subquery on created_at.
+  const signalSql = `
+    SELECT c.entity_id, c.metadata
+    FROM context c
+    WHERE c.org_id = ?
+      AND c.entity_id IN (${placeholders})
+      AND c.type IN ('signal', 'scorecard')
+      AND c.created_at = (
+        SELECT MAX(c2.created_at)
+        FROM context c2
+        WHERE c2.entity_id = c.entity_id
+          AND c2.type IN ('signal', 'scorecard')
+      )
+  `
+  const signalRows = await db
+    .prepare(signalSql)
+    .bind(orgId, ...entityIds)
+    .all<{ entity_id: string; metadata: string | null }>()
+
+  for (const row of signalRows.results) {
+    let topProblems: string[] | null = null
+    let outreachAngle: string | null = null
+    if (row.metadata) {
+      try {
+        const meta = JSON.parse(row.metadata) as Record<string, unknown>
+        if (
+          Array.isArray(meta.top_problems) &&
+          meta.top_problems.every((p) => typeof p === 'string')
+        ) {
+          topProblems = (meta.top_problems as string[]).length
+            ? (meta.top_problems as string[])
+            : null
+        }
+        if (typeof meta.outreach_angle === 'string' && meta.outreach_angle.trim()) {
+          outreachAngle = meta.outreach_angle.trim()
+        }
+      } catch {
+        // Malformed JSON — treat as missing metadata.
+      }
+    }
+    out.set(row.entity_id, {
+      entity_id: row.entity_id,
+      top_problems: topProblems,
+      outreach_angle: outreachAngle,
+      last_activity_at: null,
+    })
+  }
+
+  // Last-activity across all context types.
+  const activitySql = `
+    SELECT entity_id, MAX(created_at) AS last_activity_at
+    FROM context
+    WHERE org_id = ?
+      AND entity_id IN (${placeholders})
+    GROUP BY entity_id
+  `
+  const activityRows = await db
+    .prepare(activitySql)
+    .bind(orgId, ...entityIds)
+    .all<{ entity_id: string; last_activity_at: string | null }>()
+
+  for (const row of activityRows.results) {
+    const existing = out.get(row.entity_id)
+    if (existing) {
+      existing.last_activity_at = row.last_activity_at
+    } else {
+      out.set(row.entity_id, {
+        entity_id: row.entity_id,
+        top_problems: null,
+        outreach_angle: null,
+        last_activity_at: row.last_activity_at,
+      })
+    }
+  }
+
+  return out
+}
+
+// ---------------------------------------------------------------------------
 // Find or Create (for pipeline ingestion)
 // ---------------------------------------------------------------------------
 
