@@ -70,9 +70,16 @@ describe('cloudflare SSR scaffolding', () => {
     expect(existsSync(resolve('src/pages/api/health.ts'))).toBe(true)
   })
 
-  it('static pages are marked for prerendering', () => {
+  it('404 page must be SSR (never prerendered — middleware dependency)', () => {
+    // If 404.astro is prerendered, Astro's error-page fallback serves the
+    // static dist/client/404.html via the ASSETS binding and BYPASSES
+    // middleware entirely. That breaks every subdomain rewrite that depends
+    // on the fallback path (admin.smd.services/analytics, portal.smd.services/
+    // quotes/abc, etc.). Keep 404 server-rendered so middleware always runs.
+    // Same guard duplicated in tests/middleware.test.ts for discoverability.
     const notFound = readFileSync(resolve('src/pages/404.astro'), 'utf-8')
-    expect(notFound).toContain('export const prerender = true')
+    expect(notFound).toContain('export const prerender = false')
+    expect(notFound).not.toMatch(/export\s+const\s+prerender\s*=\s*true/)
   })
 
   it('book page is SSR (needs runtime env for Turnstile key)', () => {

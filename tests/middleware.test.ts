@@ -130,6 +130,22 @@ describe('middleware: portal rewrite preserved (regression)', () => {
   })
 })
 
+describe('middleware: 404 route must be SSR (regression lock-in)', () => {
+  // If 404.astro is prerendered, Astro's renderError fallback serves the
+  // static dist/client/404.html via the ASSETS binding and BYPASSES
+  // middleware. That breaks subdomain rewrite for every path that doesn't
+  // match a concrete Astro route (admin.smd.services/analytics etc.) and
+  // users see the marketing-layout 404 instead of the intended admin
+  // redirect. Keep 404 server-rendered — middleware must always run.
+  const source = () => readFileSync(resolve('src/pages/404.astro'), 'utf-8')
+
+  it('404.astro must have prerender = false', () => {
+    const code = source()
+    expect(code).toMatch(/export\s+const\s+prerender\s*=\s*false/)
+    expect(code).not.toMatch(/export\s+const\s+prerender\s*=\s*true/)
+  })
+})
+
 describe('middleware: session resolution gating (#20)', () => {
   const source = () => readFileSync(resolve('src/middleware.ts'), 'utf-8')
 
