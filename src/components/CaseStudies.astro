@@ -2,42 +2,38 @@
 const studies = [
   {
     vertical: 'Home Services',
-    business: 'HVAC Company, 18 employees',
+    pattern: 'Owner as dispatcher',
     challenge:
-      "The owner was dispatching every job personally. The schedule lived in three places: a whiteboard, a shared Google Calendar, and text messages. Leads from the website sat in a Gmail inbox until someone got around to checking it. The owner hadn't taken a full day off in two years because every question came back to them.",
+      'The owner dispatches every job. The schedule lives in three places: a whiteboard, a shared calendar, and text threads. Website leads sit in a Gmail inbox until someone gets to them. The owner rarely takes a full day off because every question routes back to them.',
     solution:
-      "One dispatching workflow the whole crew can see, in the office or out in the field. Lead capture that puts new inquiries into a tracked pipeline with same-day follow-up. A daily check-in so the owner knows what's happening without picking up the phone.",
-    result: '12 hours/week freed for the owner',
+      'One dispatching workflow the whole crew can see, in the office or in the field. Lead capture with tracked follow-up so nothing sits unread. A daily check-in so the owner stays informed without being the hub for every question.',
     problems: ['Owner bottleneck', 'Disconnected tools', 'Process design'],
   },
   {
     vertical: 'Professional Services',
-    business: 'Accounting Firm, 12 employees',
+    pattern: 'Partner in every decision',
     challenge:
-      'Every client question went straight to the founding partner, even routine ones the team could handle. The sales pipeline was a mental list. Client onboarding took weeks because every step was manual and different every time. The partner wanted to focus on advisory work but spent most of the day fielding questions and approving things.',
+      "Every client question routes to the founding partner, even the routine ones. The sales pipeline lives in someone's head. Client onboarding takes weeks because every step is manual and different every time. The partner wants to focus on advisory work but spends most of the day as the bottleneck for routine decisions.",
     solution:
-      "A documented intake and onboarding process the team can follow without asking the partner. A visible pipeline so everyone knows where prospects stand. Templated communication for routine client questions, so the partner's time goes to work that actually needs them.",
-    result: 'Partner reclaimed 15+ hours/week for advisory work',
+      "A documented intake and onboarding process the team can run without the partner. A visible pipeline everyone can see. Templated communication for routine client questions so the partner's time goes to work that actually needs them.",
     problems: ['Owner bottleneck', 'Process design', 'Systems integration'],
   },
   {
     vertical: 'Home Services',
-    business: 'Plumbing Company, 14 employees',
+    pattern: 'Lead capture and lost jobs',
     challenge:
-      'Website leads came in through a contact form and sat unread for days. Double-bookings happened weekly because the office and field crews were on different calendars. The owner had no idea which jobs were profitable. The books were months behind and pricing was based on gut feel.',
+      'Website leads come in through a contact form and sit unread for days. Double-bookings happen because the office and the field crew are on different calendars. Nobody knows which jobs are profitable. The books are behind and pricing is gut feel.',
     solution:
-      'Lead capture tied to automatic assignment and follow-up, so nothing sits unread. One scheduling tool the whole crew can get to from the field. Clean books with job-level profitability, so pricing decisions come from real numbers instead of gut feel.',
-    result: 'Zero missed leads in first month after go-live',
+      'Lead capture tied to automatic assignment and follow-up so nothing sits unread. One scheduling tool the whole crew can get to from the field. Clean books with job-level profitability so pricing decisions come from numbers, not feel.',
     problems: ['Customers falling through', 'Disconnected tools', 'Operational visibility'],
   },
   {
     vertical: 'Professional Services',
-    business: 'Insurance Agency, 15 employees',
+    pattern: 'Turnover under pressure',
     challenge:
-      'The agency lost four staff members in a year. The owner chalked it up to pay and the job market. But the pattern was clear: new hires had no structured onboarding and were left to figure things out on their own. Every account manager handled policies differently. There was no way to know if you were doing a good job until a client complained. Good people moved on to places where they felt more supported.',
+      'New hires have no structured onboarding and are left to figure things out on their own. Every team member handles policies differently. Nobody knows if someone is doing a good job until a client complains. Good people move on to places where they feel more supported.',
     solution:
-      "A structured onboarding process so new hires know exactly what to expect and aren't guessing from day one. Documented workflows for common policy types so the team handles things the same way. Simple tracking so managers can see workload and the owner can spot problems before they turn into resignations.",
-    result: 'Zero turnover in the 6 months following delivery',
+      "A structured onboarding process so new hires know what to expect and aren't guessing from day one. Documented workflows for common policy types so the team handles things consistently. Simple tracking so managers can see workload and spot problems before they turn into resignations.",
     problems: ['Talent gaps', 'Process design', 'Operational visibility'],
   },
 ]
@@ -46,9 +42,12 @@ const studies = [
 <section class="bg-white px-6 py-24">
   <div class="mx-auto max-w-5xl">
     <div class="mb-4 text-center">
-      <h2 class="text-3xl font-bold text-[color:var(--color-text-primary)]">What We Do</h2>
+      <h2 class="text-3xl font-bold text-[color:var(--color-text-primary)]">
+        The Kind of Work We Take On
+      </h2>
       <p class="mx-auto mt-4 max-w-2xl text-[color:var(--color-text-secondary)]">
-        Different businesses, similar patterns. Here's the kind of work we take on.
+        Different businesses, similar patterns. These are the shapes we see, not specific
+        engagements.
       </p>
     </div>
 
@@ -62,7 +61,7 @@ const studies = [
                   {study.vertical}
                 </span>
                 <h3 class="text-lg font-bold text-[color:var(--color-text-primary)]">
-                  {study.business}
+                  {study.pattern}
                 </h3>
               </div>
               <div class="mt-3 flex flex-wrap gap-2">
@@ -89,9 +88,6 @@ const studies = [
                 <p class="mt-3 leading-relaxed text-[color:var(--color-text-secondary)]">
                   {study.solution}
                 </p>
-                {study.result && (
-                  <p class="mt-4 text-sm font-semibold text-primary">{study.result}</p>
-                )}
               </div>
             </div>
           </div>

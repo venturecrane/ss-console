@@ -97,6 +97,41 @@ const FORBIDDEN_PATTERNS: Array<{ label: string; pattern: RegExp | string }> = [
     label: "Pattern B: hardcoded default consultantFirstName = 'Scott'",
     pattern: /consultantFirstName\s*=\s*['"]Scott['"]/,
   },
+  // --- Specific phrases removed from CaseStudies.astro (2026-04-22) ---
+  // CaseStudies shipped four fabricated case studies with specific
+  // quantified results. Real case studies belong in an authored data
+  // source per engagement, not committed to source. These patterns
+  // guard against reintroduction of the exact phrases removed.
+  {
+    label: 'Pattern A: fabricated "X hours/week freed" result',
+    pattern: /hours\/week freed/,
+  },
+  {
+    label: 'Pattern A: fabricated "Zero missed leads in [period]" result',
+    pattern: /Zero missed leads in /,
+  },
+  {
+    label: 'Pattern A: fabricated "Zero turnover in [period]" result',
+    // Matches both "Zero turnover in 6 months" and "Zero turnover in the 6 months"
+    // (the original fabrication used the latter phrasing). Still shape-bound —
+    // honest general copy like "Zero turnover in isolation" would not match.
+    pattern: /Zero turnover in (?:the |\d)/,
+  },
+  {
+    label: 'Pattern A: fabricated "Partner reclaimed N+ hours" result',
+    pattern: /Partner reclaimed \d+\+? hours/,
+  },
+  // --- Structural pattern: quantified time-savings results at large ---
+  // Catches "12 hours/week freed", "15 hrs per month saved",
+  // "10+ hours/day reclaimed", etc. Drift resistance to the pattern-class,
+  // not just today's exact wording. Narrowly scoped to the
+  // freed/saved/reclaimed/back verbs to avoid false positives on honest
+  // general copy about "hours per week".
+  {
+    label: 'Pattern A: fabricated quantified time-savings result (structural)',
+    pattern:
+      /\d+\+?\s*(?:hours?|hrs?)\s*(?:per|\/)\s*(?:week|wk|month|mo|day)\s+(?:freed|saved|reclaimed|back)/i,
+  },
 ]
 
 const sourceFiles = collectSourceFiles(SRC_ROOT)
