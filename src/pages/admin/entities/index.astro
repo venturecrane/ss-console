@@ -1,5 +1,6 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro'
+import LogReplyDialog from '../../../components/admin/LogReplyDialog.astro'
 import { listEntities, countEntitiesByStage, ENTITY_STAGES } from '../../../lib/db/entities'
 import type { Entity, EntityStage } from '../../../lib/db/entities'
 import { PIPELINE_LABELS } from '../../../lead-gen/schemas/lead-scoring-schema'
@@ -26,6 +27,7 @@ const signalCount = await countEntitiesByStage(env.DB, session.orgId, 'signal')
 
 const promoted = Astro.url.searchParams.get('promoted')
 const dismissed = Astro.url.searchParams.get('dismissed')
+const replyLogged = Astro.url.searchParams.get('reply_logged')
 const error = Astro.url.searchParams.get('error')
 
 const LEAD_PIPELINES = [
@@ -125,6 +127,13 @@ function formatDate(iso: string): string {
     dismissed && (
       <div class="bg-[color:var(--color-background)] border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
         Entity dismissed.
+      </div>
+    )
+  }
+  {
+    replyLogged && (
+      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
+        Reply logged.
       </div>
     )
   }
@@ -262,12 +271,23 @@ function formatDate(iso: string): string {
                     </form>
                   </>
                 ) : (
-                  <a
-                    href={`/admin/entities/${e.id}`}
-                    class="text-xs bg-[color:var(--color-background)] text-[color:var(--color-text-primary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-border-subtle)] transition-colors"
-                  >
-                    View
-                  </a>
+                  <>
+                    {e.stage === 'prospect' && (
+                      <button
+                        type="button"
+                        data-open-reply-dialog={e.id}
+                        class="text-xs border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-background)] transition-colors"
+                      >
+                        Log reply
+                      </button>
+                    )}
+                    <a
+                      href={`/admin/entities/${e.id}`}
+                      class="text-xs bg-[color:var(--color-background)] text-[color:var(--color-text-primary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-border-subtle)] transition-colors"
+                    >
+                      View
+                    </a>
+                  </>
                 )}
               </div>
             </div>
@@ -275,5 +295,12 @@ function formatDate(iso: string): string {
         ))}
       </div>
     )
+  }
+
+  {
+    /* One dialog per prospect row — triggered by data-open-reply-dialog */
+    entities
+      .filter((e: Entity) => e.stage === 'prospect')
+      .map((e: Entity) => <LogReplyDialog entityId={e.id} entityName={e.name} />)
   }
 </AdminLayout>
