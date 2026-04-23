@@ -2,38 +2,37 @@
 
 @theme {
   /* ------------------------------------------------------------------
-   * SMD Services — Desert Functional identity
-   * Migrated from Modern Institutional on 2026-04-23 (issue #516 PR 1).
+   * SMD Services — Plainspoken Sign Shop identity
+   * Migrated from Desert Functional on 2026-04-23.
+   * Paint-job, not brochure. 1950s commercial signage register.
    * Full token documentation: .design/DESIGN.md
    * ------------------------------------------------------------------ */
 
   /* ---------- Color roles ---------- */
-  --color-background: #ede6d6; /* warm sand */
-  --color-surface: #f6f1e4; /* soft cream card */
-  --color-surface-inverse: #22201c; /* umber, slightly warmer than MI graphite */
-  --color-border: rgba(34, 32, 28, 0.14);
-  --color-border-subtle: rgba(34, 32, 28, 0.08);
+  --color-background: #f5f0e3; /* cream paper */
+  --color-surface: #f5f0e3; /* flat paper — cards defined by rules, not fill */
+  --color-surface-inverse: #1a1512; /* ink */
+  --color-border: rgba(26, 21, 18, 0.16);
+  --color-border-subtle: rgba(26, 21, 18, 0.08);
 
-  --color-text-primary: #22201c;
-  --color-text-secondary: #5c564d;
-  --color-text-muted: #928a7c;
+  --color-text-primary: #1a1512;
+  --color-text-secondary: #4a423c;
+  --color-text-muted: #8a7f73;
 
-  --color-meta: #5c564d;
+  --color-meta: #4a423c;
 
-  --color-primary: #b8852a; /* ochre */
-  --color-primary-hover: #96701f;
-  --color-action: #b8852a;
-  --color-attention: #b8852a;
-  --color-complete: #6a7a68; /* sage */
+  --color-primary: #c5501e; /* burnt orange */
+  --color-primary-hover: #a84318;
+  --color-action: #c5501e;
+  --color-attention: #c5501e;
+  --color-complete: #4a6b3e; /* olive — complement to burnt, not in prototype palette */
   --color-error: #a02a2a;
 
-  --color-status-sage: #6a7a68;
-
   /* ---------- Typography families ---------- */
-  --font-display: 'Inter', system-ui, sans-serif;
-  --font-body: 'Inter', system-ui, sans-serif;
-  --font-accent-serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: 'Archivo', system-ui, sans-serif;
+  --font-body: 'Archivo', system-ui, sans-serif;
+  --font-accent-label: 'Archivo Narrow', 'Archivo', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* ---------- Typography scale ---------- */
   --text-display: 3rem; /* 48px */
