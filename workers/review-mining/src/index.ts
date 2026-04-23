@@ -16,7 +16,6 @@ import { findOrCreateEntity } from '../../../src/lib/db/entities.js'
 import { appendContext } from '../../../src/lib/db/context.js'
 import { getGeneratorConfig, recordGeneratorRun } from '../../../src/lib/db/generators.js'
 import type { ReviewMiningConfig } from '../../../src/lib/generators/types.js'
-import { enrichEntity } from '../../../src/lib/enrichment/index.js'
 import { discoverBusinesses, fetchReviews } from './outscraper.js'
 import { scoreReviews } from './qualify.js'
 import { sendFailureAlert, type RunSummary } from './alert.js'
@@ -31,12 +30,9 @@ export interface Env {
   ANTHROPIC_API_KEY: string
   RESEND_API_KEY: string
   LEAD_INGEST_API_KEY: string
-  // Optional keys used by the at-ingest enrichment pipeline.
-  SERPAPI_API_KEY?: string
-  PROXYCURL_API_KEY?: string
 }
 
-async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
+async function run(env: Env): Promise<RunSummary> {
   const summary: RunSummary = {
     queries: 0,
     discovered: 0,
@@ -188,17 +184,6 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
       })
 
       summary.written++
-
-      // At-ingest enrichment (issue #471). Detached — the review-mining run
-      // already pays for Outscraper per business, and enrichment adds the
-      // Claude-powered dossier so the admin has something to act on without
-      // a second button click. Idempotent on re-runs.
-      const enrichPromise = enrichEntity(env, ORG_ID, entity.id, { mode: 'full' }).catch((err) => {
-        console.error('[review_mining] enrichment failed for', entity.id, err)
-      })
-      if (ctx) {
-        ctx.waitUntil(enrichPromise)
-      }
     } catch (err) {
       summary.errors++
       const msg = err instanceof Error ? err.message : String(err)
@@ -221,7 +206,7 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
 
 export default {
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    const summary = await run(env, ctx)
+    const summary = await run(env)
     if (summary.written === 0 && summary.errors > 0 && env.RESEND_API_KEY) {
       ctx.waitUntil(sendFailureAlert(summary, env.RESEND_API_KEY))
     }
@@ -232,7 +217,7 @@ export default {
     if (auth !== `Bearer ${env.LEAD_INGEST_API_KEY}`) {
       return new Response('Unauthorized', { status: 401 })
     }
-    const summary = await run(env, ctx)
+    const summary = await run(env)
     return new Response(JSON.stringify(summary, null, 2), {
       headers: { 'Content-Type': 'application/json' },
     })

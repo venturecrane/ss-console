@@ -165,35 +165,6 @@ describe('quotes: data access layer', () => {
     expect(code).toContain('effectiveItems')
     expect(code).toContain('effectiveRate')
   })
-
-  it('exports getActiveQuotesForEntities batch helper', () => {
-    expect(source()).toContain('export async function getActiveQuotesForEntities')
-  })
-
-  it('getActiveQuotesForEntities returns empty for empty id list', () => {
-    const code = source()
-    // Short-circuit guard: D1 rejects `IN ()`, so we must bail early.
-    expect(code).toMatch(/entityIds\.length === 0[\s\S]+?return result/)
-  })
-
-  it('getActiveQuotesForEntities prioritizes sent > accepted > draft', () => {
-    const code = source()
-    expect(code).toContain("WHEN 'sent'     THEN 0")
-    expect(code).toContain("WHEN 'accepted' THEN 1")
-    expect(code).toContain("WHEN 'draft'    THEN 2")
-  })
-
-  it('getActiveQuotesForEntities ignores terminal statuses (declined/expired/superseded)', () => {
-    const code = source()
-    // Only the three "active" statuses should appear in the SQL filter.
-    expect(code).toContain("q.status IN ('sent', 'accepted', 'draft')")
-  })
-
-  it('getActiveQuotesForEntities is scoped to org_id', () => {
-    const code = source()
-    // The new query must bind org_id — prevent cross-tenant leakage (#399 class).
-    expect(code).toMatch(/getActiveQuotesForEntities[\s\S]+?q\.org_id = \?/)
-  })
 })
 
 describe('quotes: R2 storage helpers', () => {
@@ -268,96 +239,6 @@ describe('quotes: API routes', () => {
     const updateCode = readFileSync(resolve('src/pages/api/admin/quotes/[id].ts'), 'utf-8')
     expect(createCode).toContain("session.role !== 'admin'")
     expect(updateCode).toContain("session.role !== 'admin'")
-  })
-})
-
-describe('quotes: repeat-quote flow (#472)', () => {
-  const dalSource = () => readFileSync(resolve('src/lib/db/quotes.ts'), 'utf-8')
-  const apiSource = () =>
-    readFileSync(resolve('src/pages/api/admin/entities/[id]/quotes.ts'), 'utf-8')
-  const entityPageSource = () =>
-    readFileSync(resolve('src/pages/admin/entities/[id].astro'), 'utf-8')
-
-  it('exports hasOpenQuoteForEntity helper', () => {
-    expect(dalSource()).toContain('export async function hasOpenQuoteForEntity')
-  })
-
-  it('OPEN_QUOTE_STATUSES covers draft and sent', () => {
-    const code = dalSource()
-    expect(code).toContain('OPEN_QUOTE_STATUSES')
-    expect(code).toMatch(/OPEN_QUOTE_STATUSES[^=]*=\s*\[[^\]]*'draft'[^\]]*'sent'/)
-  })
-
-  it('createQuote accepts optional parentQuoteId', () => {
-    const code = dalSource()
-    expect(code).toContain('parentQuoteId?: string | null')
-    expect(code).toContain('parent_quote_id')
-  })
-
-  it('createQuote does not mutate the parent quote status', () => {
-    // Supersede is an explicit admin action, not a side effect of create.
-    const code = dalSource()
-    // No UPDATE ... SET status = 'superseded' inside createQuote body.
-    const createFn = code.slice(code.indexOf('export async function createQuote'))
-    const endIdx = createFn.indexOf('export async function updateQuote')
-    const body = createFn.slice(0, endIdx)
-    expect(body).not.toMatch(/UPDATE\s+quotes[\s\S]*superseded/i)
-  })
-
-  it('new-quote API endpoint exists', () => {
-    expect(existsSync(resolve('src/pages/api/admin/entities/[id]/quotes.ts'))).toBe(true)
-  })
-
-  it('new-quote endpoint requires admin session', () => {
-    expect(apiSource()).toContain("session.role !== 'admin'")
-  })
-
-  it('new-quote endpoint gates on stage (signal through proposing)', () => {
-    const code = apiSource()
-    expect(code).toContain("'signal'")
-    expect(code).toContain("'prospect'")
-    expect(code).toContain("'meetings'")
-    expect(code).toContain("'proposing'")
-  })
-
-  it('new-quote endpoint rejects when an open quote exists', () => {
-    expect(apiSource()).toContain('hasOpenQuoteForEntity')
-  })
-
-  it('new-quote endpoint reuses the most recent assessment', () => {
-    const code = apiSource()
-    expect(code).toContain('listAssessments')
-    // Most-recent comes from listAssessments order; first element.
-    expect(code).toContain('assessments[0]')
-  })
-
-  it('new-quote endpoint creates an empty draft shell', () => {
-    const code = apiSource()
-    expect(code).toContain('createQuote')
-    expect(code).toContain('lineItems: []')
-  })
-
-  it('new-quote endpoint accepts optional parent_quote_id without auto-superseding', () => {
-    const code = apiSource()
-    expect(code).toContain('parent_quote_id')
-    expect(code).toContain('parentQuoteId')
-    // Parent status mutation is NOT part of this endpoint.
-    expect(code).not.toContain("'superseded'")
-  })
-
-  it('entity detail page computes showNewQuoteButton with correct preconditions', () => {
-    const code = entityPageSource()
-    expect(code).toContain('showNewQuoteButton')
-    expect(code).toContain('hasOpenQuoteForEntity')
-    expect(code).toContain('newQuoteStages')
-    expect(code).toContain("'proposing'")
-  })
-
-  it('entity detail page renders button behind showNewQuoteButton guard', () => {
-    const code = entityPageSource()
-    // Button is inside a conditional block driven by the computed guard.
-    expect(code).toMatch(/showNewQuoteButton\s*&&/)
-    expect(code).toContain('New quote')
   })
 })
 

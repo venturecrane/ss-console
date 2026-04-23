@@ -39,7 +39,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
           : null,
     })
 
-    return redirect(`/admin/entities/${clientId.trim()}/meetings/${assessment.id}`, 302)
+    return redirect(`/admin/entities/${clientId.trim()}/assessments/${assessment.id}`, 302)
   } catch (err) {
     console.error('[api/admin/assessments] Create error:', err)
     const formData = await request
@@ -48,7 +48,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
       .catch(() => null)
     const clientId = formData?.get('client_id')
     if (clientId && typeof clientId === 'string') {
-      return redirect(`/admin/entities/${clientId}/meetings/new?error=server`, 302)
+      return redirect(`/admin/entities/${clientId}/assessments/new?error=server`, 302)
     }
     return redirect('/admin/entities?error=server', 302)
   }

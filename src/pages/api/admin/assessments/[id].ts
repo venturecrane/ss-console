@@ -49,7 +49,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       const newStatus = formData.get('new_status')
       if (!newStatus || typeof newStatus !== 'string') {
         return redirect(
-          `/admin/entities/${existing.entity_id}/meetings/${assessmentId}?error=invalid_status`,
+          `/admin/entities/${existing.entity_id}/assessments/${assessmentId}?error=invalid_status`,
           302
         )
       }
@@ -64,12 +64,15 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       } catch (err) {
         console.error('[api/admin/assessments/[id]] Status transition error:', err)
         return redirect(
-          `/admin/entities/${existing.entity_id}/meetings/${assessmentId}?error=invalid_transition`,
+          `/admin/entities/${existing.entity_id}/assessments/${assessmentId}?error=invalid_transition`,
           302
         )
       }
 
-      return redirect(`/admin/entities/${existing.entity_id}/meetings/${assessmentId}?saved=1`, 302)
+      return redirect(
+        `/admin/entities/${existing.entity_id}/assessments/${assessmentId}?saved=1`,
+        302
+      )
     }
 
     // Handle Claude API extraction
@@ -77,7 +80,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       // Verify transcript exists
       if (!existing.transcript_path) {
         return redirect(
-          `/admin/entities/${existing.entity_id}/meetings/${assessmentId}?error=no_transcript`,
+          `/admin/entities/${existing.entity_id}/assessments/${assessmentId}?error=no_transcript`,
           302
         )
       }
@@ -86,7 +89,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       const apiKey = env.ANTHROPIC_API_KEY
       if (!apiKey) {
         return redirect(
-          `/admin/entities/${existing.entity_id}/meetings/${assessmentId}?error=no_api_key`,
+          `/admin/entities/${existing.entity_id}/assessments/${assessmentId}?error=no_api_key`,
           302
         )
       }
@@ -95,7 +98,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
       const transcriptObject = await getTranscript(env.STORAGE, existing.transcript_path)
       if (!transcriptObject) {
         return redirect(
-          `/admin/entities/${existing.entity_id}/meetings/${assessmentId}?error=transcript_missing`,
+          `/admin/entities/${existing.entity_id}/assessments/${assessmentId}?error=transcript_missing`,
           302
         )
       }
@@ -111,13 +114,13 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
         })
 
         return redirect(
-          `/admin/entities/${existing.entity_id}/meetings/${assessmentId}?extracted=1`,
+          `/admin/entities/${existing.entity_id}/assessments/${assessmentId}?extracted=1`,
           302
         )
       } catch (err) {
         console.error('[api/admin/assessments/[id]] Extraction error:', err)
         return redirect(
-          `/admin/entities/${existing.entity_id}/meetings/${assessmentId}?error=extraction_failed`,
+          `/admin/entities/${existing.entity_id}/assessments/${assessmentId}?error=extraction_failed`,
           302
         )
       }
@@ -161,7 +164,10 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
 
     await updateAssessment(env.DB, session.orgId, assessmentId, updateData)
 
-    return redirect(`/admin/entities/${existing.entity_id}/meetings/${assessmentId}?saved=1`, 302)
+    return redirect(
+      `/admin/entities/${existing.entity_id}/assessments/${assessmentId}?saved=1`,
+      302
+    )
   } catch (err) {
     console.error('[api/admin/assessments/[id]] Update error:', err)
     return redirect(`/admin/entities?error=server`, 302)

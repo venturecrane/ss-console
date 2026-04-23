@@ -6,14 +6,9 @@ import {
   isManageTokenExpired,
   cancelSchedule,
 } from '../../../../../lib/booking/schedule'
-import {
-  getMeetingScheduleByManageToken,
-  cancelMeetingSchedule,
-} from '../../../../../lib/booking/meeting-schedule'
 import { getIntegration, getGoogleAccessToken } from '../../../../../lib/db/integrations'
 import { deleteCalendarEvent } from '../../../../../lib/booking/google-calendar'
 import { updateAssessmentStatus } from '../../../../../lib/db/assessments'
-import { updateMeetingStatus } from '../../../../../lib/db/meetings'
 import { buildIcs, icsToBase64 } from '../../../../../lib/booking/ics'
 import { BOOKING_CONFIG } from '../../../../../lib/booking/config'
 import { sendBookingCancellation } from '../../../../../lib/email/booking-emails'
@@ -79,34 +74,13 @@ export const POST: APIRoute = async ({ params, request }) => {
       })
     }
 
-    // 2. Cancel in DB — mirror the write to both tables (assessments + meetings,
-    //    assessment_schedule + meeting_schedule) during the monitoring window.
-    //    Meeting lookup uses the same manage_token_hash (seeded identically
-    //    by /reserve) and is best-effort; if the row was created before the
-    //    meetings backfill ran there may be no mirror row yet.
+    // 2. Cancel in DB
     await cancelSchedule(env.DB, schedule.id, 'guest', reason)
-    try {
-      const meetingSchedule = await getMeetingScheduleByManageToken(
-        env.DB,
-        schedule.manage_token_hash
-      )
-      if (meetingSchedule && !meetingSchedule.cancelled_at) {
-        await cancelMeetingSchedule(env.DB, meetingSchedule.id, 'guest', reason)
-      }
-    } catch (err) {
-      console.error('[api/booking/manage/cancel] Meeting schedule cancel failed:', err)
-    }
 
     try {
       await updateAssessmentStatus(env.DB, ORG_ID, schedule.assessment_id, 'cancelled')
     } catch (err) {
       console.error('[api/booking/manage/cancel] Assessment status transition failed:', err)
-    }
-    try {
-      // meeting.id == assessment.id by construction (see intake-core).
-      await updateMeetingStatus(env.DB, ORG_ID, schedule.assessment_id, 'cancelled')
-    } catch (err) {
-      console.error('[api/booking/manage/cancel] Meeting status transition failed:', err)
     }
 
     // 3. Delete Google Calendar event (best effort)

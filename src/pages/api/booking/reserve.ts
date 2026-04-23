@@ -10,13 +10,8 @@ import {
   computeManageTokenExpiry,
 } from '../../../lib/booking/tokens'
 import { buildIcs, icsToBase64 } from '../../../lib/booking/ics'
-import { processIntakeSubmission, type PreSeededIntake } from '../../../lib/booking/intake-core'
+import { processIntakeSubmission } from '../../../lib/booking/intake-core'
 import { createScheduleStatement, updateScheduleGoogleSync } from '../../../lib/booking/schedule'
-import { verifyBookingLink } from '../../../lib/booking/signed-link'
-import {
-  createMeetingScheduleStatement,
-  updateMeetingScheduleGoogleSync,
-} from '../../../lib/booking/meeting-schedule'
 import { getIntegration, getGoogleAccessToken } from '../../../lib/db/integrations'
 import { transitionStage } from '../../../lib/db/entities'
 import { formatInTimeZone } from 'date-fns-tz'
@@ -124,28 +119,6 @@ export const POST: APIRoute = async ({ request }) => {
   const howHeard = trimString(body.how_heard) || null
   const guestTimezone = trimString(body.timezone) || null
 
-  // Optional prefill token (admin "Send booking link" flow — #467).
-  // When present and valid, we anchor this booking to the admin-chosen
-  // entity/assessment rather than running slug dedup. Invalid/expired tokens
-  // are ignored (the booking falls back to the standard flow) — we prefer
-  // silent degradation to failure when a guest's link is stale.
-  const prefillTokenRaw = trimString(body.prefill_token)
-  let preSeeded: PreSeededIntake | null = null
-  if (prefillTokenRaw) {
-    const verify = await verifyBookingLink(prefillTokenRaw)
-    if (verify.ok) {
-      preSeeded = {
-        entityId: verify.payload.entity_id,
-        assessmentId: verify.payload.assessment_id,
-        contactId: verify.payload.contact_id,
-      }
-    } else {
-      console.warn(
-        `[api/booking/reserve] prefill token rejected: ${verify.error}; falling back to standard flow`
-      )
-    }
-  }
-
   // -----------------------------------------------------------------------
   // Phase 1d: Verify Google integration before doing any DB work
   // -----------------------------------------------------------------------
@@ -189,10 +162,8 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   let assessmentId: string
-  let meetingId: string
   let entityId: string
   let scheduleId: string
-  let meetingScheduleId: string
   let manageToken: string
   let intakeLines: string[]
 
@@ -211,17 +182,11 @@ export const POST: APIRoute = async ({ request }) => {
         biggestChallenge,
         howHeard,
       },
-      slotStartUtc,
-      preSeeded ? 'admin_booking_link' : undefined,
-      preSeeded
+      slotStartUtc
     )
 
-    // assessmentId is guaranteed non-null when scheduledAt is provided.
-    // By intake-core construction, assessmentId == meetingId — the booking
-    // flow seeds both tables with the same primary key during the
-    // monitoring window (see src/lib/booking/intake-core.ts).
+    // assessmentId is guaranteed non-null when scheduledAt is provided
     assessmentId = intakeResult.assessmentId!
-    meetingId = intakeResult.meetingId!
     entityId = intakeResult.entityId
     intakeLines = intakeResult.intakeLines
 
@@ -233,11 +198,7 @@ export const POST: APIRoute = async ({ request }) => {
       BOOKING_CONFIG.manage_token_ttl_hours_after_slot
     )
 
-    // 2d. Create assessment_schedule (legacy) and meeting_schedule (canonical)
-    //     sidecars. Both are seeded during the monitoring window so existing
-    //     manage-token consumers (cancel/reschedule endpoints) continue to
-    //     resolve whichever table they query. When the drop migration lands
-    //     the legacy assessment_schedule write goes away.
+    // 2d. Create assessment_schedule sidecar
     const { statement: scheduleStmt, id: newScheduleId } = createScheduleStatement(env.DB, {
       assessmentId,
       orgId: ORG_ID,
@@ -252,33 +213,17 @@ export const POST: APIRoute = async ({ request }) => {
       manageTokenExpiresAt,
     })
     scheduleId = newScheduleId
+
     await scheduleStmt.run()
 
-    const { statement: meetingScheduleStmt, id: newMeetingScheduleId } =
-      createMeetingScheduleStatement(env.DB, {
-        meetingId,
-        orgId: ORG_ID,
-        slotStartUtc,
-        slotEndUtc,
-        durationMinutes: BOOKING_CONFIG.slot_minutes,
-        timezone: BOOKING_CONFIG.consultant.timezone,
-        guestTimezone: guestTimezone,
-        guestName: name,
-        guestEmail: email,
-        manageTokenHash,
-        manageTokenExpiresAt,
-      })
-    meetingScheduleId = newMeetingScheduleId
-    await meetingScheduleStmt.run()
-
-    // 2e. Promote entity stage to 'meetings' (only if currently 'prospect')
+    // 2e. Promote entity stage to 'assessing' (only if currently 'prospect')
     try {
       await transitionStage(
         env.DB,
         ORG_ID,
         entityId,
-        'meetings',
-        'Booking reserve: meeting scheduled'
+        'assessing',
+        'Booking reserve: assessment scheduled'
       )
     } catch {
       // Stage transition may fail if entity is already past prospect — that's fine
@@ -315,14 +260,8 @@ export const POST: APIRoute = async ({ request }) => {
     googleEventLink = eventResult.htmlLink
     googleMeetUrl = meetUrl
 
-    // Update both schedules with Google sync data. See the dual-write rationale
-    // at the sidecar insert above.
+    // Update schedule with Google sync data
     await updateScheduleGoogleSync(env.DB, scheduleId, {
-      googleEventId: eventResult.eventId,
-      googleEventLink: eventResult.htmlLink,
-      googleMeetUrl: meetUrl,
-    })
-    await updateMeetingScheduleGoogleSync(env.DB, meetingScheduleId, {
       googleEventId: eventResult.eventId,
       googleEventLink: eventResult.htmlLink,
       googleMeetUrl: meetUrl,
@@ -332,12 +271,9 @@ export const POST: APIRoute = async ({ request }) => {
     console.error('[api/booking/reserve] Google Calendar event creation failed:', err)
 
     try {
-      // Delete both schedule sidecars, meeting + assessment, and the hold.
-      // Order matters — sidecars first so FK constraints don't block the drop.
+      // Delete assessment_schedule, assessment, and hold
       await env.DB.batch([
-        env.DB.prepare('DELETE FROM meeting_schedule WHERE id = ?').bind(meetingScheduleId),
         env.DB.prepare('DELETE FROM assessment_schedule WHERE id = ?').bind(scheduleId),
-        env.DB.prepare('DELETE FROM meetings WHERE id = ? AND org_id = ?').bind(meetingId, ORG_ID),
         env.DB.prepare('DELETE FROM assessments WHERE id = ? AND org_id = ?').bind(
           assessmentId,
           ORG_ID
@@ -450,13 +386,8 @@ export const POST: APIRoute = async ({ request }) => {
   // -----------------------------------------------------------------------
   return jsonResponse(201, {
     ok: true,
-    // assessment_id and meeting_id are equal by construction during the
-    // monitoring window — callers can use either. New code should prefer
-    // meeting_id.
     assessment_id: assessmentId,
-    meeting_id: meetingId,
     schedule_id: scheduleId,
-    meeting_schedule_id: meetingScheduleId,
     slot_start_utc: slotStartUtc,
     slot_end_utc: slotEndUtc,
     slot_label: slotLabel,

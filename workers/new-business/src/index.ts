@@ -16,7 +16,6 @@ import { findOrCreateEntity } from '../../../src/lib/db/entities.js'
 import { appendContext } from '../../../src/lib/db/context.js'
 import { getGeneratorConfig, recordGeneratorRun } from '../../../src/lib/db/generators.js'
 import type { NewBusinessConfig } from '../../../src/lib/generators/types.js'
-import { enrichEntity } from '../../../src/lib/enrichment/index.js'
 import { fetchAllPermits, type SodaCity } from './soda.js'
 import { qualifyNewBusiness } from './qualify.js'
 import { sendFailureAlert, type RunSummary } from './alert.js'
@@ -26,16 +25,9 @@ export interface Env {
   ANTHROPIC_API_KEY: string
   RESEND_API_KEY: string
   LEAD_INGEST_API_KEY: string
-  // Optional API keys consumed by the at-ingest enrichment pipeline. When any
-  // are missing the corresponding module is skipped — enrichment is
-  // best-effort, never a hard dependency.
-  GOOGLE_PLACES_API_KEY?: string
-  OUTSCRAPER_API_KEY?: string
-  SERPAPI_API_KEY?: string
-  PROXYCURL_API_KEY?: string
 }
 
-async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
+async function run(env: Env): Promise<RunSummary> {
   const summary: RunSummary = {
     sources: 5,
     totalPermits: 0,
@@ -133,19 +125,6 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
       })
 
       summary.written++
-
-      // At-ingest enrichment (issue #471). Fire-and-forget via waitUntil when
-      // we have an ExecutionContext so the 50-state cron loop is not blocked
-      // by N Claude round-trips. On the /run fetch path we also detach;
-      // enrichment errors are self-contained and should not turn a successful
-      // ingest into a failed run. Idempotent: the pipeline no-ops once a
-      // prior intelligence_brief exists.
-      const enrichPromise = enrichEntity(env, ORG_ID, entity.id, { mode: 'full' }).catch((err) => {
-        console.error('[new_business] enrichment failed for', entity.id, err)
-      })
-      if (ctx) {
-        ctx.waitUntil(enrichPromise)
-      }
     } catch (err) {
       summary.errors++
       const msg = err instanceof Error ? err.message : String(err)
@@ -168,7 +147,7 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
 
 export default {
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    const summary = await run(env, ctx)
+    const summary = await run(env)
     if (summary.written === 0 && summary.errors > 0 && env.RESEND_API_KEY) {
       ctx.waitUntil(sendFailureAlert(summary, env.RESEND_API_KEY))
     }
@@ -179,7 +158,7 @@ export default {
     if (auth !== `Bearer ${env.LEAD_INGEST_API_KEY}`) {
       return new Response('Unauthorized', { status: 401 })
     }
-    const summary = await run(env, ctx)
+    const summary = await run(env)
     return new Response(JSON.stringify(summary, null, 2), {
       headers: { 'Content-Type': 'application/json' },
     })

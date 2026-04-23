@@ -148,18 +148,18 @@ describe('lifecycle invariant guards', () => {
   })
 
   // =========================================================================
-  // transitionStage: signal -> meetings (blocked by VALID_TRANSITIONS)
+  // transitionStage: signal -> assessing (blocked by VALID_TRANSITIONS)
   // =========================================================================
 
-  describe('signal -> meetings', () => {
-    it('throws because VALID_TRANSITIONS does not allow direct signal -> meetings', async () => {
+  describe('signal -> assessing', () => {
+    it('throws because VALID_TRANSITIONS does not allow direct signal -> assessing', async () => {
       const entity = await createEntity(db, ORG_ID, {
         name: 'Signal Biz',
         stage: 'signal' as EntityStage,
       })
 
       await expect(
-        transitionStage(db, ORG_ID, entity.id, 'meetings', 'Skip prospect')
+        transitionStage(db, ORG_ID, entity.id, 'assessing', 'Skip prospect')
       ).rejects.toThrow('Invalid stage transition')
     })
   })

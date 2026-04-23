@@ -1,10 +1,5 @@
 import type { APIRoute } from 'astro'
-import {
-  transitionStage,
-  type EntityStage,
-  type TransitionStageOptions,
-} from '../../../../../lib/db/entities'
-import { isLostReasonCode } from '../../../../../lib/db/lost-reasons'
+import { transitionStage, type EntityStage } from '../../../../../lib/db/entities'
 import { env } from 'cloudflare:workers'
 
 /**
@@ -12,9 +7,6 @@ import { env } from 'cloudflare:workers'
  *
  * Generic stage transition endpoint.
  * Validates against allowed transitions defined in entities.ts.
- *
- * When `stage === 'lost'`, a structured `lost_reason` form field is
- * required. The `lost_detail` field is optional free-text context.
  */
 export const POST: APIRoute = async ({ params, request, locals, redirect }) => {
   const session = locals.session
@@ -43,25 +35,7 @@ export const POST: APIRoute = async ({ params, request, locals, redirect }) => {
       return redirect(`/admin/entities/${entityId}?error=missing_stage`, 302)
     }
 
-    const options: TransitionStageOptions = {}
-    if (stage === 'lost') {
-      const rawCode = formData.get('lost_reason')
-      const lostReasonCode = typeof rawCode === 'string' ? rawCode : null
-      if (!lostReasonCode || !isLostReasonCode(lostReasonCode)) {
-        return redirect(
-          `/admin/entities/${entityId}?error=${encodeURIComponent('lost_reason_required')}`,
-          302
-        )
-      }
-      const rawDetail = formData.get('lost_detail')
-      const lostDetail =
-        rawDetail && typeof rawDetail === 'string' && rawDetail.trim().length > 0
-          ? rawDetail.trim()
-          : null
-      options.lostReason = { code: lostReasonCode, detail: lostDetail }
-    }
-
-    await transitionStage(env.DB, session.orgId, entityId, stage, reasonStr, options)
+    await transitionStage(env.DB, session.orgId, entityId, stage, reasonStr)
 
     return redirect(`/admin/entities/${entityId}?stage_updated=1`, 302)
   } catch (err) {
