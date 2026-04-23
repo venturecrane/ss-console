@@ -10,8 +10,9 @@ import {
   computeManageTokenExpiry,
 } from '../../../lib/booking/tokens'
 import { buildIcs, icsToBase64 } from '../../../lib/booking/ics'
-import { processIntakeSubmission } from '../../../lib/booking/intake-core'
+import { processIntakeSubmission, type PreSeededIntake } from '../../../lib/booking/intake-core'
 import { createScheduleStatement, updateScheduleGoogleSync } from '../../../lib/booking/schedule'
+import { verifyBookingLink } from '../../../lib/booking/signed-link'
 import { getIntegration, getGoogleAccessToken } from '../../../lib/db/integrations'
 import { transitionStage } from '../../../lib/db/entities'
 import { formatInTimeZone } from 'date-fns-tz'
@@ -119,6 +120,28 @@ export const POST: APIRoute = async ({ request }) => {
   const howHeard = trimString(body.how_heard) || null
   const guestTimezone = trimString(body.timezone) || null
 
+  // Optional prefill token (admin "Send booking link" flow — #467).
+  // When present and valid, we anchor this booking to the admin-chosen
+  // entity/assessment rather than running slug dedup. Invalid/expired tokens
+  // are ignored (the booking falls back to the standard flow) — we prefer
+  // silent degradation to failure when a guest's link is stale.
+  const prefillTokenRaw = trimString(body.prefill_token)
+  let preSeeded: PreSeededIntake | null = null
+  if (prefillTokenRaw) {
+    const verify = await verifyBookingLink(prefillTokenRaw)
+    if (verify.ok) {
+      preSeeded = {
+        entityId: verify.payload.entity_id,
+        assessmentId: verify.payload.assessment_id,
+        contactId: verify.payload.contact_id,
+      }
+    } else {
+      console.warn(
+        `[api/booking/reserve] prefill token rejected: ${verify.error}; falling back to standard flow`
+      )
+    }
+  }
+
   // -----------------------------------------------------------------------
   // Phase 1d: Verify Google integration before doing any DB work
   // -----------------------------------------------------------------------
@@ -182,7 +205,9 @@ export const POST: APIRoute = async ({ request }) => {
         biggestChallenge,
         howHeard,
       },
-      slotStartUtc
+      slotStartUtc,
+      preSeeded ? 'admin_booking_link' : undefined,
+      preSeeded
     )
 
     // assessmentId is guaranteed non-null when scheduledAt is provided

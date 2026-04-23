@@ -6,9 +6,9 @@
  * and context append. Callers decide what notifications to send.
  */
 
-import { findOrCreateEntity } from '../db/entities'
+import { findOrCreateEntity, getEntity } from '../db/entities'
 import { createContact } from '../db/contacts'
-import { createAssessment } from '../db/assessments'
+import { createAssessment, updateAssessment, getAssessment } from '../db/assessments'
 import { appendContext } from '../db/context'
 
 export interface IntakeInput {
@@ -20,6 +20,22 @@ export interface IntakeInput {
   yearsInBusiness?: number | null
   biggestChallenge?: string | null
   howHeard?: string | null
+}
+
+/**
+ * Optional pre-seeded identifiers produced by the admin "Send booking link"
+ * flow (#467). When present, the intake bypasses entity dedup and reuses the
+ * pre-created `scheduled` assessment row instead of creating a new one.
+ */
+export interface PreSeededIntake {
+  entityId: string
+  assessmentId: string
+  /**
+   * When the admin identified a primary contact at send-link time, pass the
+   * id here so we can reuse it rather than creating a duplicate contact when
+   * the guest books with the same email.
+   */
+  contactId?: string | null
 }
 
 export interface IntakeResult {
@@ -51,39 +67,82 @@ export async function processIntakeSubmission(
   orgId: string,
   input: IntakeInput,
   scheduledAt?: string | null,
-  source?: string
+  source?: string,
+  preSeeded?: PreSeededIntake | null
 ): Promise<IntakeResult> {
   const pipeline = source ?? 'website_booking'
 
-  // 1. Find or create entity (dedup by business name slug)
-  const { status, entity } = await findOrCreateEntity(db, orgId, {
-    name: input.businessName,
-    stage: 'prospect',
-    source_pipeline: pipeline,
-  })
+  // 1. Entity resolution.
+  //
+  // When the booking came from a signed admin link (`preSeeded.entityId`),
+  // we anchor to that pre-existing entity rather than running slug dedup —
+  // the admin explicitly chose the target and we must not fan out to a
+  // different row based on the guest's typed business name.
+  let entityId: string
+  let entityCreated = false
+  if (preSeeded?.entityId) {
+    const entity = await getEntity(db, orgId, preSeeded.entityId)
+    if (!entity) {
+      throw new Error(
+        `Pre-seeded entity not found: ${preSeeded.entityId}. The booking link may reference a deleted entity.`
+      )
+    }
+    entityId = entity.id
+  } else {
+    const { status, entity } = await findOrCreateEntity(db, orgId, {
+      name: input.businessName,
+      stage: 'prospect',
+      source_pipeline: pipeline,
+    })
+    entityId = entity.id
+    entityCreated = status === 'created'
+  }
 
-  // 2. Create contact if one with this email doesn't already exist for this org
+  // 2. Contact resolution. If the admin linked a specific contact and the
+  //    guest's email matches that contact (or no new email info), reuse it;
+  //    otherwise fall back to email-based dedup and creation so we never
+  //    drop the guest's real contact details on the floor.
+  let contactId: string
   const existingContact = await db
     .prepare('SELECT id FROM contacts WHERE org_id = ? AND email = ? LIMIT 1')
     .bind(orgId, input.email)
     .first<{ id: string }>()
 
-  let contactId: string
   if (existingContact) {
     contactId = existingContact.id
+  } else if (preSeeded?.contactId) {
+    // The admin seeded a contact but the guest used a different email. Still
+    // create a new contact row so we capture the guest's identity — don't
+    // overwrite or silently drop it.
+    const contact = await createContact(db, orgId, entityId, {
+      name: input.name,
+      email: input.email,
+    })
+    contactId = contact.id
   } else {
-    const contact = await createContact(db, orgId, entity.id, {
+    const contact = await createContact(db, orgId, entityId, {
       name: input.name,
       email: input.email,
     })
     contactId = contact.id
   }
 
-  // 3. Create assessment only when a call is being booked (scheduledAt provided).
-  //    Standalone intakes record interest via the context entry below.
+  // 3. Assessment row.
+  //    - Pre-seeded flow: reuse the admin-created `scheduled` row and set
+  //      `scheduled_at` to the chosen slot.
+  //    - Standalone flow: create a new row only when a slot is provided.
   let assessmentId: string | null = null
-  if (scheduledAt) {
-    const assessment = await createAssessment(db, orgId, entity.id, {
+  if (preSeeded?.assessmentId && scheduledAt) {
+    const existing = await getAssessment(db, orgId, preSeeded.assessmentId)
+    if (!existing) {
+      throw new Error(
+        `Pre-seeded assessment not found: ${preSeeded.assessmentId}. The booking link may be stale.`
+      )
+    }
+    await updateAssessment(db, orgId, preSeeded.assessmentId, { scheduled_at: scheduledAt })
+    assessmentId = preSeeded.assessmentId
+  } else if (scheduledAt) {
+    const assessment = await createAssessment(db, orgId, entityId, {
       scheduled_at: scheduledAt,
     })
     assessmentId = assessment.id
@@ -100,7 +159,7 @@ export async function processIntakeSubmission(
 
   if (intakeLines.length > 0) {
     await appendContext(db, orgId, {
-      entity_id: entity.id,
+      entity_id: entityId,
       type: 'intake',
       content: intakeLines.join('\n'),
       source: pipeline,
@@ -117,10 +176,10 @@ export async function processIntakeSubmission(
   }
 
   return {
-    entityId: entity.id,
+    entityId,
     contactId,
     assessmentId,
-    entityCreated: status === 'created',
+    entityCreated,
     intakeLines,
   }
 }

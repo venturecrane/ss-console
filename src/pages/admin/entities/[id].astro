@@ -87,12 +87,9 @@ const TRANSITIONS: Record<
     },
   ],
   prospect: [
-    {
-      label: 'Book Assessment',
-      stage: 'assessing',
-      style:
-        'bg-[color:var(--color-primary)] text-white hover:bg-[color:var(--color-primary-hover)]',
-    },
+    // "Send booking link" is handled by the modal below — NOT a plain stage
+    // transition. It creates an assessment row and signs a booking URL before
+    // transitioning the stage. See #467.
     {
       label: 'Lost',
       stage: 'lost',
@@ -462,6 +459,17 @@ function confidenceColor(confidence: string): string {
       {/* Stage transition buttons */}
       <div class="flex items-center gap-2 shrink-0">
         {
+          entity.stage === 'prospect' && (
+            <button
+              type="button"
+              id="send-booking-link-btn"
+              class="text-xs px-3 py-1.5 rounded-[var(--radius-card)] transition-colors bg-[color:var(--color-primary)] text-white hover:bg-[color:var(--color-primary-hover)]"
+            >
+              Send booking link
+            </button>
+          )
+        }
+        {
           TRANSITIONS[entity.stage]?.map((t) => (
             <form method="POST" action={t.action ?? `/api/admin/entities/${entity.id}/stage`}>
               <input type="hidden" name="stage" value={t.stage} />
@@ -495,6 +503,90 @@ function confidenceColor(confidence: string): string {
       </div>
     </div>
   </div>
+
+  {
+    /* Send-booking-link modal (#467). Rendered only on prospect-stage
+       entities. Uses a native <dialog> for keyboard + accessibility
+       defaults. The modal calls the send-booking-link endpoint, copies
+       the outreach template to the clipboard, and opens a mailto:. */
+  }
+  {
+    entity.stage === 'prospect' && (
+      <dialog
+        id="send-booking-link-dialog"
+        class="rounded-[var(--radius-card)] p-0 max-w-md w-full backdrop:bg-black/30"
+      >
+        <form method="dialog" id="send-booking-link-form" class="p-card">
+          <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-1">
+            Send booking link
+          </h3>
+          <p class="text-xs text-[color:var(--color-text-secondary)] mb-4">
+            Creates a meeting row and signs a booking URL for this prospect. Link expires in 14
+            days.
+          </p>
+
+          <div class="mb-3">
+            <label
+              for="sbl-meeting-type"
+              class="block text-xs font-medium text-[color:var(--color-text-secondary)] mb-1"
+            >
+              Meeting type (optional)
+            </label>
+            <input
+              type="text"
+              id="sbl-meeting-type"
+              name="meeting_type"
+              maxlength="100"
+              placeholder="e.g. discovery, assessment"
+              class="w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            />
+          </div>
+
+          <div class="mb-4">
+            <label
+              for="sbl-duration"
+              class="block text-xs font-medium text-[color:var(--color-text-secondary)] mb-1"
+            >
+              Duration
+            </label>
+            <select
+              id="sbl-duration"
+              name="duration_minutes"
+              class="w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            >
+              <option value="30" selected>
+                30 minutes
+              </option>
+              <option value="45">45 minutes</option>
+              <option value="60">60 minutes</option>
+            </select>
+          </div>
+
+          <div
+            id="sbl-error"
+            class="hidden mb-3 rounded-[var(--radius-card)] bg-red-50 border border-red-200 text-red-800 text-xs px-3 py-2"
+          />
+
+          <div class="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              id="sbl-cancel"
+              class="text-xs px-3 py-1.5 rounded-[var(--radius-card)] bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-border)] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              id="sbl-submit"
+              class="text-xs px-3 py-1.5 rounded-[var(--radius-card)] bg-[color:var(--color-primary)] text-white hover:bg-[color:var(--color-primary-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Send link
+            </button>
+          </div>
+        </form>
+      </dialog>
+    )
+  }
 
   {/* Add Note */}
   <div
@@ -882,6 +974,100 @@ function confidenceColor(confidence: string): string {
         setTimeout(() => {
           copyBtn.textContent = 'Copy'
         }, 2000)
+      })
+    }
+
+    // --- Send booking link modal (#467) -----------------------------------
+    const sblBtn = document.getElementById('send-booking-link-btn')
+    const sblDialog = document.getElementById(
+      'send-booking-link-dialog'
+    ) as HTMLDialogElement | null
+    const sblForm = document.getElementById('send-booking-link-form') as HTMLFormElement | null
+    const sblCancel = document.getElementById('sbl-cancel')
+    const sblSubmit = document.getElementById('sbl-submit') as HTMLButtonElement | null
+    const sblError = document.getElementById('sbl-error')
+
+    if (sblBtn && sblDialog) {
+      sblBtn.addEventListener('click', () => {
+        if (sblError) {
+          sblError.classList.add('hidden')
+          sblError.textContent = ''
+        }
+        sblDialog.showModal()
+      })
+    }
+
+    if (sblCancel && sblDialog) {
+      sblCancel.addEventListener('click', () => sblDialog.close())
+    }
+
+    if (sblForm && sblDialog && sblSubmit) {
+      sblForm.addEventListener('submit', async (e) => {
+        e.preventDefault()
+        const formData = new FormData(sblForm)
+        const meetingType = (formData.get('meeting_type') ?? '').toString().trim()
+        const durationMinutes = (formData.get('duration_minutes') ?? '30').toString()
+
+        sblSubmit.disabled = true
+        sblSubmit.textContent = 'Sending...'
+        if (sblError) {
+          sblError.classList.add('hidden')
+          sblError.textContent = ''
+        }
+
+        try {
+          const entityId = window.location.pathname.split('/').filter(Boolean).pop()
+          const res = await fetch(`/api/admin/entities/${entityId}/send-booking-link`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              meeting_type: meetingType || null,
+              duration_minutes: durationMinutes,
+            }),
+          })
+          const body = (await res.json().catch(() => ({}))) as {
+            ok?: boolean
+            booking_url?: string
+            outreach_template?: string
+            mailto_url?: string
+            error?: string
+            message?: string
+          }
+          if (!res.ok || !body.ok) {
+            throw new Error(body.message ?? body.error ?? `HTTP ${res.status}`)
+          }
+
+          // Copy outreach template to clipboard (best-effort)
+          if (body.outreach_template) {
+            try {
+              await navigator.clipboard.writeText(body.outreach_template)
+            } catch (copyErr) {
+              console.warn('[send-booking-link] clipboard write failed:', copyErr)
+            }
+          }
+
+          // Open mailto in a new window so it doesn't navigate away from the
+          // admin page. If mailto isn't handled by the browser, this is a
+          // no-op — the clipboard already holds the template text.
+          if (body.mailto_url) {
+            window.open(body.mailto_url, '_blank')
+          }
+
+          sblDialog.close()
+
+          // Reload so the context timeline shows the new outreach_draft entry
+          // and the stage badge reflects the transition.
+          window.location.href = `${window.location.pathname}?stage_updated=1`
+        } catch (err) {
+          console.error('[send-booking-link] error:', err)
+          if (sblError) {
+            sblError.textContent =
+              err instanceof Error ? err.message : 'Could not send booking link.'
+            sblError.classList.remove('hidden')
+          }
+          sblSubmit.disabled = false
+          sblSubmit.textContent = 'Send link'
+        }
       })
     }
   </script>
