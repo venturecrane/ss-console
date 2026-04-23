@@ -13,16 +13,16 @@
  *       lost_detail?: string, // optional operator note
  *     }
  *
- * These codes are admin jargon — they power filtering on the Lost tab and
- * a future "why we lost" review. They are NEVER rendered to clients. Do
- * not reuse these strings in any portal / marketing surface.
+ * Shared between the per-entity dismiss / stage-change flow, the bulk
+ * entity action endpoint (#463), and the Lost tab filter (#477). These
+ * codes are admin jargon — never rendered to clients. Do not reuse these
+ * strings in any portal / marketing surface.
  *
  * Flow B is in learning mode. Adding / renaming codes is fine — just
  * keep this file as the single source of truth and update the type.
  */
 
 export type LostReasonCode =
-  | 'not-a-fit'
   | 'no-budget'
   | 'no-response'
   | 'declined-quote'
@@ -113,4 +113,15 @@ export function lostReasonChipClass(code: string | null | undefined): string {
     default:
       return 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
   }
+}
+
+/** @deprecated Use LostReasonCode. Back-compat alias for #508 bulk endpoint. */
+export type LostReason = LostReasonCode
+
+/** @deprecated Use isLostReasonCode. Back-compat alias for #508 bulk endpoint. */
+export const isLostReason = isLostReasonCode
+
+/** @deprecated Use lostReasonLabel. Back-compat alias for #508 bulk endpoint. */
+export function labelForLostReason(value: LostReason): string {
+  return lostReasonLabel(value) ?? value
 }
