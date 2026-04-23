@@ -1,15 +1,15 @@
-# nav-spec (v2)
+# nav-spec (v3)
 
-Companion to `stitch-design` and `stitch-ux-brief`. Authors and enforces a per-venture three-layer navigation specification: **Information Architecture + Patterns + Chrome**. Anchored to Nielsen Norman Group, Material Design 3, Apple HIG, and Dan Brown's 8 IA principles.
+Authors and enforces a per-venture three-layer navigation specification: **Information Architecture + Patterns + Chrome**. Anchored to Nielsen Norman Group, Material Design 3, Apple HIG, and Dan Brown's 8 IA principles.
 
 ## What it does
 
-- Authors `.stitch/NAVIGATION.md` covering three layers:
+- Authors `.design/NAVIGATION.md` covering three layers:
   1. **IA** — task model, sitemap, reachability matrix, state machine, content taxonomy, URL contract, cross-surface context
   2. **Patterns** — named patterns from established frameworks, per `{surface × archetype}`, with rationale
   3. **Chrome** — header, back, breadcrumbs, footer, skip-link, states, tap targets, mobile↔desktop transforms, per-surface a11y
 - Runs two distinct audits: **IA audit** (reachability, patterns, taxonomy) and **drift audit** (chrome consistency)
-- Feeds a NAV CONTRACT block (essential + extended) into every Stitch generation via `stitch-design`'s patched pipeline
+- Feeds a NAV CONTRACT block (essential + extended) into the generator's prompt via `product-design`'s pipeline
 - Validates generated HTML and shipped surfaces against 24 deterministic rules (R1–R15 chrome, R16–R24 IA + pattern + a11y)
 
 ## v2 change
@@ -20,7 +20,7 @@ v2 adds the two layers above chrome (IA and Patterns) and 9 new validator rules 
 
 ## Who this is for
 
-Ventures using Stitch MCP to generate design artifacts that ship to production (Astro + Tailwind). One spec per venture; shared skill across the portfolio.
+Ventures generating design artifacts (via `product-design` or hand-authored code) that ship to production (Astro + Tailwind). One spec per venture; shared skill across the portfolio.
 
 ## When to run
 
@@ -30,20 +30,18 @@ Ventures using Stitch MCP to generate design artifacts that ship to production (
 | After route changes / new surface class       | `/nav-spec --ia-audit`                                                              |
 | Chrome drift check                            | `/nav-spec --drift-audit`                                                           |
 | Updating existing spec                        | `/nav-spec --revise`                                                                |
-| After Stitch model version change             | `/nav-spec --phase-0`                                                               |
+| After generator model version change          | `/nav-spec --phase-0`                                                               |
 | Validate a single HTML file                   | `python3 validate.py --file X --surface Y --archetype Z --viewport W [--spec path]` |
 
 ## Dependencies
 
-- Stitch MCP connected (curl fallback via `STITCH_API_KEY` when MCP is OAuth-broken)
-- Venture has `stitchProjectId` set in `crane-console/config/ventures.json`
-- `.stitch/DESIGN.md` recommended but not required
+- `.design/DESIGN.md` recommended but not required
 - Python 3.8+ for `validate.py`
 
 ## Relationship to other skills
 
-- **stitch-design** reads `.stitch/NAVIGATION.md`, requires 5 classification tags (`surface`, `archetype`, `viewport`, `task`, `pattern`), injects essential + extended NAV CONTRACT block, runs `validate.py` post-generation. Graceful-degradation when spec absent.
-- **stitch-ux-brief** reads spec in Phase 1; injects NAV CONTRACT in Phase 7 concept prompts; generates REMOVE/PRESERVE lists from anti-patterns in Phase 11.
+- **product-design** reads `.design/NAVIGATION.md`, requires 5 classification tags (`surface`, `archetype`, `viewport`, `task`, `pattern`), injects essential + extended NAV CONTRACT block, runs `validate.py` post-generation. Graceful-degradation when spec absent.
+- **ux-brief** reads spec in Phase 1; injects NAV CONTRACT in Phase 7 concept prompts; generates REMOVE/PRESERVE lists from anti-patterns in Phase 11.
 - **react-components** (future) reads the chrome contracts to produce aligned Astro components.
 
 ## Key files
@@ -90,6 +88,6 @@ Per-venture command wiring: add `/nav-spec` slash command at `<venture>/.claude/
 
 ## Versioning
 
-- `nav-spec-skill-version: 2.0.0` (current)
+- `nav-spec-skill-version: 3.0.0` (current)
 - Spec-level versioning: each venture's `NAVIGATION.md` tracks its own `spec-version`
 - Compatibility: v1 specs still work with the v2 validator (chrome-only rules apply); migrate with `/nav-spec --revise --migrate-to-v2`

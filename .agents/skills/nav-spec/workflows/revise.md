@@ -1,5 +1,5 @@
 ---
-description: Update an existing `.stitch/NAVIGATION.md`. Versioning-aware. Runs a focused reviewer pass on the delta. Supports v1→v2 migration.
+description: Update an existing `.design/NAVIGATION.md`. Versioning-aware. Runs a focused reviewer pass on the delta. Supports v1→v2 migration.
 ---
 
 # Revise NAVIGATION.md
@@ -39,7 +39,7 @@ Use when:
 
 ## Steps
 
-1. **Load current spec.** Read `.stitch/NAVIGATION.md`. Note `spec-version` and `nav-spec-skill-version` in front matter.
+1. **Load current spec.** Read `.design/NAVIGATION.md`. Note `spec-version` and `nav-spec-skill-version` in front matter.
 
 2. **Detect v1→v2 migration case.** If spec-version is 1 and skill is 2.0+, the spec must be migrated. Run the full v2 authoring workflow (Phases 2–5) to add:
    - Section 1: Task model
@@ -81,7 +81,7 @@ Use when:
 
 8. **Apply edits.** Bump `spec-version`. Update front matter with new `design-md-sha` if DESIGN.md changed; update `nav-spec-skill-version` if rev'd.
 
-9. **Version-impact check.** For each existing generation under `.stitch/designs/**/*.html`, run `validate.py` against the new spec. Count non-compliant files. Do not auto-regenerate; surface for user decision.
+9. **Version-impact check.** For each existing generation under `.design/designs/**/*.html`, run `validate.py` against the new spec. Count non-compliant files. Do not auto-regenerate; surface for user decision.
 
 10. **Integration-check regeneration** on one affected surface (if the change is structural, corrective, pattern change, or migration). Same as `author.md` Phase 10.
 
@@ -109,7 +109,7 @@ When migrating a v2 spec to v3, order of operations matters:
    - `**Runner-up pattern:** <name>`
    - `**Defense:** <prose; if overriding R25, cite specific task-model values>`
    - (If override) Reviewer-approval lines from Phase 7 citing the specific disqualifier IDs.
-4. **Run `validate.py --check-pattern-fitness --spec .stitch/NAVIGATION.md`** to fire R25 against the updated spec. Any R25 violations surface latent design debt from v2 (patterns that contradict the task model's declared return_locus distribution). Resolve per author.md Phase 4c: defense + reviewer approvals, switch to a surviving pattern, or file a provisional-override artifact.
+4. **Run `validate.py --check-pattern-fitness --spec .design/NAVIGATION.md`** to fire R25 against the updated spec. Any R25 violations surface latent design debt from v2 (patterns that contradict the task model's declared return_locus distribution). Resolve per author.md Phase 4c: defense + reviewer approvals, switch to a surviving pattern, or file a provisional-override artifact.
 5. **Run R26 lint** (runs automatically alongside R25). If §1–4 cite `src/components/**` or `*.astro`, remove or move those citations to §6+ (chrome contracts).
 6. **Bump spec-version to 3.0** and `nav-spec-skill-version: 3.0.0`.
 7. **Preserve v2's spec-version history** in `revisions:` front matter. Add a new entry summarizing what changed.
@@ -179,11 +179,11 @@ After migration:
 
 ## When NOT to revise
 
-Don't run `revise` to silence a Stitch drift. First ask: "Is this drift a Stitch failure, or a spec gap?"
+Don't run `revise` to silence drift from a single generation. First ask: "Is this drift a generator failure, or a spec gap?"
 
-- If Stitch drifted against a clear spec rule, the validator should have caught it — fix the validator (add rule or refine existing one).
+- If the generator drifted against a clear spec rule, the validator should have caught it — fix the validator (add rule or refine existing one).
 - If the spec rule was ambiguous, revise the spec with the clarification.
 - If the code is right and the spec is wrong, revise the spec (corrective).
 - If both are wrong, fix both.
 
-Never revise _away_ the spec's contract because one Stitch generation disagreed. The spec is the source of truth; drift is the input, not the output.
+Never revise _away_ the spec's contract because one generation disagreed. The spec is the source of truth; drift is the input, not the output.

@@ -24,14 +24,14 @@ done
 
 # Track 2 — held-out integration (after ss-console migrates to v3)
 python3 validate.py --check-pattern-fitness \
-  --spec /path/to/ss-console/.stitch/NAVIGATION.md
+  --spec /path/to/ss-console/.design/NAVIGATION.md
 
 # Track 3 — R26 lint (uses /tmp fixture)
 python3 validate.py --check-pattern-fitness --spec examples/r26-lint-test.md
 
 # Track 4 — v2 backwards compat (uses existing ss-console v2 spec)
 python3 validate.py --check-pattern-fitness \
-  --spec /path/to/v2-spec/.stitch/NAVIGATION.md
+  --spec /path/to/v2-spec/.design/NAVIGATION.md
 ```
 
 ---
@@ -92,7 +92,7 @@ D2 threshold: `destination_count > 7` → D2 fires.
 
 ## Track 2 — Held-out integration test (ss-console portal)
 
-**Pre-condition.** ss-console `.stitch/NAVIGATION.md` migrated to spec-version 3 via `/nav-spec --revise --migrate-to-v3`.
+**Pre-condition.** ss-console `.design/NAVIGATION.md` migrated to spec-version 3 via `/nav-spec --revise --migrate-to-v3`.
 
 **Expected task-model shape** (after migration, per SOW and vendor URL evidence):
 
@@ -121,7 +121,7 @@ Two of top-3 have non-hub return_locus → D1 fires on the declared hub-and-spok
   - `selector: "pattern=hub-and-spoke on session-auth-client/dashboard"`
   - message names pay-invoice and review-sign-proposal as the contradicting tasks
   - `persistent-tabs` appears in surviving patterns
-- The author filed `.stitch/provisional-override-<date>.md` with a concrete validation event (for evidence-mode=provisional) OR switched the declared pattern to persistent-tabs. The test passes in either branch — what matters is that the override path is exercised with cited evidence, not silently ratified.
+- The author filed `.design/provisional-override-<date>.md` with a concrete validation event (for evidence-mode=provisional) OR switched the declared pattern to persistent-tabs. The test passes in either branch — what matters is that the override path is exercised with cited evidence, not silently ratified.
 - If the author writes a defense citing `return_locus=hub` for pay-invoice with prose evidence ("SOW says client returns to portal"), R25 still fires because the cited structural evidence type is missing.
 
 **What makes this a held-out test.** The disqualifier thresholds in `references/pattern-disqualifiers.md` are authored against NN/g / Material Design 3 / Apple HIG sources only. They are not tuned so that the ss-console portal "comes out right." If future calibration changes are needed, they go into the synthetic tests first, never into ss-console fixtures.
@@ -158,7 +158,7 @@ R26 is a regex lint. Paraphrase laundering ("the portal currently has a sidebar 
 
 ### 4a. v2 spec — R25 skipped with stderr warning
 
-**Fixture.** Any existing `.stitch/NAVIGATION.md` with `spec-version: 2`.
+**Fixture.** Any existing `.design/NAVIGATION.md` with `spec-version: 2`.
 
 **Expected output.**
 
@@ -168,7 +168,7 @@ R26 is a regex lint. Paraphrase laundering ("the portal currently has a sidebar 
 
 ### 4b. v1 spec — all IA + pattern-fitness rules skipped
 
-**Fixture.** Any `.stitch/NAVIGATION.md` lacking `spec-version:` front matter (defaults to v1).
+**Fixture.** Any `.design/NAVIGATION.md` lacking `spec-version:` front matter (defaults to v1).
 
 **Expected output.**
 

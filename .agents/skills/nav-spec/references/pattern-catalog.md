@@ -447,7 +447,7 @@ Workflow:
 
 1. Draft the task model per [task-model-template.md](task-model-template.md) — including the required `evidence_source` and `return_locus` columns.
 2. For the target `{surface × archetype}`, propose a pattern from this catalog.
-3. Run `python3 ~/.agents/skills/nav-spec/validate.py --check-pattern-fitness --spec .stitch/NAVIGATION.md` against the draft.
+3. Run `python3 ~/.agents/skills/nav-spec/validate.py --check-pattern-fitness --spec .design/NAVIGATION.md` against the draft.
 4. If R25 fires, either switch to a surviving pattern or mount an override (cited input values + ≥2-of-3 reviewer consensus; see [workflows/author.md](../workflows/author.md) Phase 4).
 
 The decision guide below remains as a hint for the initial proposal only. **It is not authoritative** — pattern-disqualifiers.md is. Patterns flagged here as "start with" may still be disqualified by R25 given specific task-model inputs.

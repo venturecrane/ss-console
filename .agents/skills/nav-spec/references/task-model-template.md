@@ -14,7 +14,7 @@ Common failure mode: skipping straight to sitemaps and wireframes. The resulting
 
 ## Template structure
 
-In `.stitch/NAVIGATION.md`, the Task Model section goes at the top of the spec, immediately after the front matter and before the sitemap.
+In `.design/NAVIGATION.md`, the Task Model section goes at the top of the spec, immediately after the front matter and before the sitemap.
 
 ```markdown
 ## 1. Task model

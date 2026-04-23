@@ -187,7 +187,7 @@ Composite pattern: a global scoping control (entity selector) combined with a pa
 
 ## Worked example — ss-console portal `session-auth-client/dashboard`
 
-Declared pattern in `.stitch/NAVIGATION.md` §4.4 (v2): `hub-and-spoke with dominant-action + recent-activity variants`.
+Declared pattern in `.design/NAVIGATION.md` §4.4 (v2): `hub-and-spoke with dominant-action + recent-activity variants`.
 
 Task-model inputs from §1.4.1 (task model, v3-migrated):
 
@@ -231,7 +231,7 @@ Override paths (per R25 spec):
 
 - (a) Defense + ≥2/3 reviewer consensus — defense must cite specific return_locus values that a disqualifier miscounted. In this case the miscounting claim is hard: Stripe and SignWell URLs are unambiguous external terminals.
 - (b) Switch declared pattern to `persistent-tabs`.
-- (c) In provisional mode only: file `.stitch/provisional-override-<date>.md` with deferred validation event + date ≤90 days.
+- (c) In provisional mode only: file `.design/provisional-override-<date>.md` with deferred validation event + date ≤90 days.
 
 ---
 

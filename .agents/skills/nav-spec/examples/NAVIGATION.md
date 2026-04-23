@@ -3,7 +3,6 @@ spec-version: 3
 nav-spec-skill-version: 3.0.0
 evidence-mode: validated
 design-md-sha: <sha-placeholder>
-stitch-project-id: <id-placeholder>
 phase-0-compliance: { categorical: '93%', strict: '87%', date: '2026-04-15' }
 injection-budgets:
   session-auth-client/dashboard/mobile/persistent-tabs:

@@ -1,5 +1,5 @@
 ---
-description: Empirical measurement of whether prompt injection is honored by Stitch. Must run before authoring the first NAVIGATION.md for a venture, or when Stitch's underlying model version changes.
+description: Empirical measurement of whether prompt injection is honored by the generator. Must run before authoring the first NAVIGATION.md for a venture, or when the generator's underlying model version changes.
 ---
 
 # Phase 0 — Injection compliance test
@@ -24,17 +24,17 @@ Pick one prompt per major surface/archetype combination the venture actually use
 - `invoice-mobile` (portal invoice detail, 390×844)
 - `proposal-desktop` (portal proposal detail, 1280)
 
-Each prompt should include DESIGN SYSTEM and PAGE STRUCTURE sections, but NOT a nav spec — leave nav "open" the way Stitch has historically seen it.
+Each prompt should include DESIGN SYSTEM and PAGE STRUCTURE sections, but NOT a nav spec — leave nav "open" to establish the baseline.
 
 ### Step 3 — Fire 6 generations in parallel
 
-Three base prompts × two variants (baseline vs injected) = 6 runs. Use the Stitch MCP if connected; curl fallback if not (see `stitch-ux-brief/SKILL.md` for the curl pattern — `https://stitch.googleapis.com/mcp`, `X-Goog-Api-Key` header, `STITCH_API_KEY` from Infisical `/vc` path).
+Three base prompts × two variants (baseline vs injected) = 6 runs. Use the `product-design` skill to drive the generator.
 
-Python runner template at `/tmp/phase0-runner.py` (from the ss-console Phase 0 run). Adapt prompts and project ID.
+Python runner template at `/tmp/phase0-runner.py` (from the ss-console Phase 0 run). Adapt prompts as needed.
 
-### Step 4 — Download HTML for all six
+### Step 4 — Collect HTML for all six
 
-Extract `htmlCode.downloadUrl` from each response, curl each to `/tmp/phase0/<label>.html`.
+Extract the generated HTML from each run and write to `/tmp/phase0/<label>.html`.
 
 ### Step 5 — Compliance scoring
 
@@ -75,13 +75,13 @@ Save to `examples/phase-0-compliance-report.md` (copy from `/tmp/phase0/COMPLIAN
 - Test matrix and scores
 - Specific violations from strict pass → become validator rules
 - Recommended architecture decision
-- Date (for re-runs when Stitch updates)
+- Date (for re-runs when the generator or spec updates)
 
 ### Step 8 — Re-run cadence
 
 Re-run Phase 0 when:
 
-- Stitch's model version changes (Gemini 3 Pro → Gemini 3.1 Pro has happened)
+- The generator's underlying model version changes
 - The injection snippet structure is substantively revised
 - Validator rules are under-catching violations that feel like they should be catchable via injection
 

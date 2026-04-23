@@ -1,6 +1,6 @@
 ---
 name: nav-spec
-description: "Authors and enforces `.stitch/NAVIGATION.md` — the per-venture three-layer navigation specification (IA + patterns + chrome). Anchors to NN/g, Material Design 3, Apple HIG, and Dan Brown's 8 IA principles. v3 ships as a **challenger, not a chooser**: citation-anchored disqualifier conditions (R25) refuse patterns that contradict the task model, and an authoring-direction lint (R26) prevents Sections 1–4 from ratifying shipped chrome."
+description: "Authors and enforces `.design/NAVIGATION.md` — the per-venture three-layer navigation specification (IA + patterns + chrome). Anchors to NN/g, Material Design 3, Apple HIG, and Dan Brown's 8 IA principles. v3 ships as a **challenger, not a chooser**: citation-anchored disqualifier conditions (R25) refuse patterns that contradict the task model, and an authoring-direction lint (R26) prevents Sections 1–4 from ratifying shipped chrome."
 version: 3.0.0
 scope: global
 owner: agent-team
@@ -16,8 +16,8 @@ allowed-tools:
 depends_on:
   mcp_tools: [crane_ventures]
   files:
-    - venture:.stitch/NAVIGATION.md
-    - venture:.stitch/DESIGN.md
+    - venture:.design/NAVIGATION.md
+    - venture:.design/DESIGN.md
     - global:~/.agents/skills/nav-spec/validate.py
   commands: [python3]
 ---
@@ -26,7 +26,7 @@ depends_on:
 
 # /nav-spec - Nav Spec Authority (v3)
 
-You are an Information Architecture lead. Your job is to produce a single-source-of-truth navigation specification for a venture — covering **information architecture, named patterns, and chrome** — then enforce it across every Stitch generation and shipped surface.
+You are an Information Architecture lead. Your job is to produce a single-source-of-truth navigation specification for a venture — covering **information architecture, named patterns, and chrome** — then enforce it across every generated screen and shipped surface.
 
 You have seen what happens when navigation is left "open" per surface: chrome that looks consistent but list views that can't be reached except by backtracking from a detail; spec-defined sections orphaned in code; patterns that ratify whatever the designer already shipped. Your output is the thing that stops both the chrome failures (v1), the IA failures (v2), and the pattern-selection laundering failures (v3).
 
@@ -45,16 +45,16 @@ Additional v3 tightenings:
 - `return_locus = hub` requires _structural_ evidence (URL literal / interview quote / analytics event), not prose.
 - "Primary" tasks are derived from frequency + criticality, not author-toggled.
 - Evidence-mode front matter: `provisional` (pre-launch, relaxes evidence sourcing) vs. `validated` (production, requires real artifacts). R25 is structural in both modes.
-- Time-bounded provisional-override artifacts: `.stitch/provisional-override-<date>.md` requires named `deferred_validation.event` and `date ≤90 days`. Expired overrides re-fire R25.
+- Time-bounded provisional-override artifacts: `.design/provisional-override-<date>.md` requires named `deferred_validation.event` and `date ≤90 days`. Expired overrides re-fire R25.
 
 ## Core responsibilities
 
-1. **Spec authoring** (`/nav-spec`) — produce `.stitch/NAVIGATION.md` with 11 sections + 5 surface-class appendices, covering all three layers.
+1. **Spec authoring** (`/nav-spec`) — produce `.design/NAVIGATION.md` with 11 sections + 5 surface-class appendices, covering all three layers.
 2. **IA audit** (`/nav-spec --ia-audit`) — walk the sitemap; flag orphan destinations, dead-ends, label inconsistency, pattern violations, matrix mismatches.
 3. **Drift audit** (`/nav-spec --drift-audit`) — chrome-level audit of shipped code and generated artifacts.
 4. **Spec revision** (`/nav-spec --revise`) — update existing spec; bump spec-version; preserve back-compat.
 5. **Phase 0 compliance test** — empirical injection-effectiveness measurement.
-6. **Validation** (`validate.py`) — post-generation enforcement of all 24 rules (R1–R15 chrome, R16–R24 IA + pattern + a11y) on Stitch output and shipped HTML.
+6. **Validation** (`validate.py`) — post-generation enforcement of all 24 rules (R1–R15 chrome, R16–R24 IA + pattern + a11y) on generated output and shipped HTML.
 
 ## The three layers
 
@@ -93,10 +93,10 @@ Reviewing the spec against [references/ia-principles.md](references/ia-principle
 
 | User intent                                     | Workflow                                                           | Primary output                                |
 | ----------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------- |
-| "Create NAVIGATION.md for this venture"         | [author.md](workflows/author.md)                                   | `.stitch/NAVIGATION.md`                       |
+| "Create NAVIGATION.md for this venture"         | [author.md](workflows/author.md)                                   | `.design/NAVIGATION.md`                       |
 | "Audit IA holes (orphans, dead-ends, taxonomy)" | [ia-audit.md](workflows/ia-audit.md)                               | `examples/ia-audit-report.md`                 |
 | "Audit chrome drift"                            | [drift-audit.md](workflows/drift-audit.md)                         | In-memory drift report                        |
-| "Update existing NAVIGATION.md"                 | [revise.md](workflows/revise.md)                                   | `.stitch/NAVIGATION.md` (bumped spec-version) |
+| "Update existing NAVIGATION.md"                 | [revise.md](workflows/revise.md)                                   | `.design/NAVIGATION.md` (bumped spec-version) |
 | "Re-run Phase 0 compliance"                     | [phase-0-compliance-test.md](workflows/phase-0-compliance-test.md) | `examples/phase-0-compliance-report.md`       |
 | "Validate a generated screen"                   | [validate.md](workflows/validate.md)                               | Violation report                              |
 
@@ -104,9 +104,9 @@ Reviewing the spec against [references/ia-principles.md](references/ia-principle
 
 Before any workflow except the audits:
 
-1. Resolve the venture's Stitch project ID via `crane_ventures` MCP. Match the current repo to a venture code; read `stitchProjectId`. If null: stop. Tell the user: "No Stitch project configured. Add `stitchProjectId` for this venture in `crane-console/config/ventures.json` first." No fallback discovery.
-2. Check for `.stitch/DESIGN.md`. If absent, warn and pull token inventory from `src/styles/*` or Tailwind config.
-3. Check for `.stitch/NAVIGATION.md`. If present, route to `revise.md`. If absent, route to `author.md`.
+1. Resolve the venture code for the current repo via `crane_ventures`. If no matching venture is found, stop and ask the user to confirm the venture code.
+2. Check for `.design/DESIGN.md`. If absent, warn and pull token inventory from `src/styles/*` or Tailwind config.
+3. Check for `.design/NAVIGATION.md`. If present, route to `revise.md`. If absent, route to `author.md`.
 
 ## Surface-class taxonomy (authoritative)
 
@@ -130,7 +130,7 @@ Each archetype maps to a default pattern from the catalog and inherits the commo
 
 ## Classification (deterministic, required, 5 tags)
 
-Every `stitch-design` or `stitch-ux-brief` invocation targeting a specific screen must carry **five** explicit classification tags:
+Every generation (via `product-design`) targeting a specific screen must carry **five** explicit classification tags:
 
 ```
 surface=<public|auth-gate|token-auth|session-auth-client|session-auth-admin>
@@ -142,13 +142,13 @@ pattern=<name from pattern-catalog.md>
 
 The pipeline fails fast if any tag is missing or unrecognized. Natural-language inference is explicitly disabled.
 
-The two new tags (`task=`, `pattern=`) are required because chrome alone never determined a pattern — the same chrome can implement different patterns. Tagging makes the choice deterministic and binds every generation to the spec's task model and pattern catalog.
+The two new tags (`task=`, `pattern=`) are required because chrome alone never determines a pattern — the same chrome can implement different patterns. Tagging makes the choice deterministic and binds every generation to the spec's task model and pattern catalog.
 
 Manual lookup aid: [references/classification-rubric.md](references/classification-rubric.md).
 
 ## Injection mechanism
 
-At prompt-enhancement time, `stitch-design` reads `.stitch/NAVIGATION.md`, looks up the matching `{surface, archetype, viewport, task, pattern}` block, assembles an **essential** NAV CONTRACT block (always injected) and an **extended** block (loaded conditionally based on archetype/pattern), and injects them between DESIGN SYSTEM and PAGE STRUCTURE.
+At prompt-enhancement time, the generator reads `.design/NAVIGATION.md`, looks up the matching `{surface, archetype, viewport, task, pattern}` block, assembles an **essential** NAV CONTRACT block (always injected) and an **extended** block (loaded conditionally based on archetype/pattern), and injects them into the generator's prompt between DESIGN SYSTEM and PAGE STRUCTURE.
 
 Token budget: ≤500 essential, ≤800 essential+extended combined. Canonical format: [references/injection-snippet-template.md](references/injection-snippet-template.md).
 
@@ -185,7 +185,7 @@ Post-generation, `validate.py` parses the returned HTML and runs all 24 rules. V
 
 Severity tiers: **structural** always fails; **semantic** retries once; **cosmetic** warns but passes (configurable per venture).
 
-R25 runs in a spec-only mode via `python3 validate.py --check-pattern-fitness --spec .stitch/NAVIGATION.md` (no HTML file required). R26 runs alongside R25 and whenever `--file` validation is invoked with a v3 spec.
+R25 runs in a spec-only mode via `python3 validate.py --check-pattern-fitness --spec .design/NAVIGATION.md` (no HTML file required). R26 runs alongside R25 and whenever `--file` validation is invoked with a v3 spec.
 
 ## References
 
@@ -218,7 +218,7 @@ R25 runs in a spec-only mode via `python3 validate.py --check-pattern-fitness --
 - **Skill is a challenger, not a chooser.** R25 does not pick the pattern; it refuses patterns whose declared-pattern-vs-task-model disagreement contradicts a cited source. Override requires both (a) a defense citing specific task-model values and (b) ≥2/3 reviewer consensus naming the disqualifier ID.
 - **"Primary" is structural, not declarative.** A task is primary iff `frequency ∈ {high, medium}` OR `criticality = blocking`. The author cannot dodge R25 disqualifiers by relabeling tasks.
 - **`return_locus = hub` requires structural evidence.** Literal URL in a file or SOW, interview quote, or analytics event. Prose intent is insufficient.
-- **Provisional mode relaxes evidence, not R25.** Pre-launch ventures use `evidence-mode: provisional` to cite SOW hypotheses. R25 remains structural. Dismissal requires a time-bounded `.stitch/provisional-override-<date>.md` with a named validation event and date ≤90 days.
+- **Provisional mode relaxes evidence, not R25.** Pre-launch ventures use `evidence-mode: provisional` to cite SOW hypotheses. R25 remains structural. Dismissal requires a time-bounded `.design/provisional-override-<date>.md` with a named validation event and date ≤90 days.
 - **Five surface classes, not three or four.** v1 forgot `auth-gate`; v2+ include it explicitly.
 - **The reachability matrix is validator-checkable.** R16 reads the matrix and verifies generated HTML emits the required `<a href>` elements. The matrix is not decorative — it is the contract.
 - **The validator is the enforcement layer.** The injection snippet is instructional; the validator is deterministic. When in conflict, trust the validator.

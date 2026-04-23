@@ -3,7 +3,7 @@
 
 Enforces the 24 rules documented in workflows/validate.md against HTML files.
 Chrome rules (R1–R15) are self-contained. IA + pattern + a11y rules (R16–R24)
-read `.stitch/NAVIGATION.md` for context.
+read `.design/NAVIGATION.md` for context.
 
 Usage:
   python3 validate.py --file generated.html \
@@ -12,7 +12,7 @@ Usage:
       --viewport mobile \
       --task see-whats-happening \
       --pattern hub-and-spoke \
-      --spec .stitch/NAVIGATION.md
+      --spec .design/NAVIGATION.md
 
 Output: JSON violation report. Exit 0 = pass, 1 = violations found.
 
@@ -129,7 +129,7 @@ class SpecContext:
     #   {(surface_class, archetype): {chosen, runner_up, defense,
     #                                 reviewer_approvals: [...], override_cited_values: [...]}}
     pattern_decisions: dict = None
-    # provisional_overrides from .stitch/provisional-override-*.md artifacts:
+    # provisional_overrides from .design/provisional-override-*.md artifacts:
     #   [{disqualifier_overridden, declared_pattern, surviving_patterns,
     #     override_rationale, deferred_validation: {event, date, artifact}}]
     provisional_overrides: list = None
@@ -535,7 +535,7 @@ def _extract_field(block: str, field_pattern: str, multiline: bool = False) -> s
 
 
 def _parse_provisional_override(path: Path) -> dict | None:
-    """Parse a .stitch/provisional-override-<date>.md artifact's front matter."""
+    """Parse a .design/provisional-override-<date>.md artifact's front matter."""
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
@@ -1522,7 +1522,7 @@ def check_pattern_disqualifiers(ctx: SpecContext, surface: str | None = None,
                     f"approvals citing {fired_d['id']}, (b) switch declared "
                     f"pattern to a surviving pattern ({survivors_str}), or "
                     f"(c) in evidence-mode: provisional, file "
-                    f".stitch/provisional-override-<date>.md per the schema in "
+                    f".design/provisional-override-<date>.md per the schema in "
                     f"references/task-model-template.md."
                 ),
             ))

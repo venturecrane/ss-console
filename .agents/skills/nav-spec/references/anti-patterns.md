@@ -12,7 +12,7 @@ The navigation smells every NAVIGATION.md should explicitly forbid. Each has a r
 
 **Why forbidden on admin (usually):** depends on the venture's admin complexity. For ss-console's single-operator admin, a tab bar is overkill. For multi-team admins, a tab bar is allowed but must be specified in the surface-class appendix.
 
-**Exception path:** if the admin truly needs tab-level navigation, define it in Appendix D with explicit tabs, never a free invention by Stitch.
+**Exception path:** if the admin truly needs tab-level navigation, define it in Appendix D with explicit tabs — never left as a free invention by the generator.
 
 ### 2. Sidebar / hamburger / drawer as primary navigation
 
@@ -76,7 +76,7 @@ The navigation smells every NAVIGATION.md should explicitly forbid. Each has a r
 
 **Example:** `<img src="https://lh3.googleusercontent.com/aida/..." alt="professional headshot of a mature businessman">` as a consultant avatar placeholder.
 
-**Why forbidden universally:** Stitch's training prior is heavy with these. They look real but they're synthetic/stock. They signal "stock photo" aesthetic, which is corrosive to the guide positioning.
+**Why forbidden universally:** design generators commonly produce these from training priors. They look real but they're synthetic/stock. They signal "stock photo" aesthetic, which is corrosive to the guide positioning.
 
 **Fix:** a solid-color circle with initials. Always. Never relax this, even "just for this one screen."
 
@@ -102,7 +102,7 @@ The navigation smells every NAVIGATION.md should explicitly forbid. Each has a r
 
 ### 13. `backdrop-blur-*` / translucent header background
 
-**Why forbidden:** glassmorphism is a 2021–2023 visual fad. It reads as "trying to look modern" and it's a common Stitch over-render. Solid white headers are cleaner, faster to render, and don't fight the user's reading of the content below.
+**Why forbidden:** glassmorphism is a 2021–2023 visual fad. It reads as "trying to look modern" and is a common generator over-render. Solid white headers are cleaner, faster to render, and don't fight the user's reading of the content below.
 
 ### 14. Icon decoration before the client name in the header
 

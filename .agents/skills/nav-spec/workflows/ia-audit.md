@@ -4,7 +4,7 @@ description: Standalone IA audit. Walks the sitemap and reachability matrix; fla
 
 # IA Audit
 
-Produces `examples/ia-audit-report.md` in the venture's skill output directory. Reads `.stitch/NAVIGATION.md` + `src/pages/**` and measures whether the code matches the spec's IA contract.
+Produces `examples/ia-audit-report.md` in the venture's skill output directory. Reads `.design/NAVIGATION.md` + `src/pages/**` and measures whether the code matches the spec's IA contract.
 
 This is distinct from the drift audit (chrome consistency across generated and shipped artifacts). IA audit measures: _are destinations reachable?_ _do patterns hold?_ _are labels consistent?_
 
@@ -12,7 +12,7 @@ This is distinct from the drift audit (chrome consistency across generated and s
 
 ## Prerequisites
 
-- `.stitch/NAVIGATION.md` exists with spec-version ≥ 2 (has reachability matrix).
+- `.design/NAVIGATION.md` exists with spec-version ≥ 2 (has reachability matrix).
 - Venture codebase available at current working directory.
 - Route inventory in `src/pages/**`.
 
@@ -24,7 +24,7 @@ If spec-version = 1: stop. Tell user to run `/nav-spec --revise` first to add IA
 
 ### 1. Parse the spec
 
-Extract from `.stitch/NAVIGATION.md`:
+Extract from `.design/NAVIGATION.md`:
 
 - Reachability matrix rows (Section 3.2)
 - Entry-only surfaces (Section 3.3)
@@ -125,7 +125,7 @@ For every route with surface class `token-auth`:
 
 ### 4. Produce report
 
-Save to `examples/ia-audit-report.md` (or `.stitch/ia-audit-<YYYY-MM-DD>.md` within the venture). Format in [examples/ia-audit-report.md](../examples/ia-audit-report.md).
+Save to `examples/ia-audit-report.md` (or `.design/ia-audit-<YYYY-MM-DD>.md` within the venture). Format in [examples/ia-audit-report.md](../examples/ia-audit-report.md).
 
 Summary table at top:
 

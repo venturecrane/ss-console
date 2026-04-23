@@ -1,6 +1,6 @@
 ---
 name: skill-audit
-description: Monthly skill health report. Walks every SKILL.md, parses frontmatter, computes staleness via git log, detects schema gaps, and surfaces the deprecation queue. Run this once a month to keep the skill library healthy.
+description: Monthly skill health report. Walks every SKILL.md, parses frontmatter, computes staleness via git log, detects schema gaps, and surfaces zero-usage candidates. Run this once a month to keep the skill library healthy.
 version: 1.0.0
 scope: enterprise
 owner: captain
@@ -15,7 +15,7 @@ depends_on:
 
 > **Invocation:** As your first action, call `crane_skill_invoked(skill_name: "skill-audit")`. This is non-blocking — if the call fails, log the warning and continue. Usage data drives `/skill-audit`.
 
-Run a repo-wide audit of every SKILL.md in the enterprise and global skill libraries. The report surfaces schema gaps, stale skills, and skills that have passed their sunset date.
+Run a repo-wide audit of every SKILL.md in the enterprise and global skill libraries. The report surfaces schema gaps, stale skills, and zero-usage candidates.
 
 ## Usage
 
@@ -27,12 +27,12 @@ No arguments required. The audit runs across all scopes by default.
 
 ## What it checks
 
-| Section               | What it surfaces                                                                                                      |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **Inventory**         | Total skill count, broken down by scope, status, and owner                                                            |
-| **Schema gaps**       | Skills missing one or more required frontmatter fields (`name`, `description`, `version`, `scope`, `owner`, `status`) |
-| **Staleness**         | Skills whose `SKILL.md` has not been touched in git for more than 180 days                                            |
-| **Deprecation queue** | Skills with `status: deprecated` that have a `sunset_date` set - sorted soonest-first                                 |
+| Section         | What it surfaces                                                                                                      |
+| --------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Inventory**   | Total skill count, broken down by scope, status, and owner                                                            |
+| **Schema gaps** | Skills missing one or more required frontmatter fields (`name`, `description`, `version`, `scope`, `owner`, `status`) |
+| **Staleness**   | Skills whose `SKILL.md` has not been touched in git for more than 180 days                                            |
+| **Zero-usage**  | Skills with zero invocations in the last 90 days — retirement candidates                                              |
 
 Reference drift (broken `depends_on.mcp_tools`, `depends_on.files`, `depends_on.commands`) is NOT included in this tool - it requires invoking the `skill-review` CLI which cross-checks against live manifests. Run `/skill-review --all` for reference-drift details.
 
@@ -50,7 +50,6 @@ Default parameters:
 
 - `scope`: `all` (enterprise + global)
 - `stale_threshold_days`: 180
-- `include_deprecated`: true
 
 You can narrow the scope:
 
@@ -67,9 +66,9 @@ crane_skill_audit(scope: "enterprise", stale_threshold_days: 90)
 **Staleness** - Skills not touched in 180+ days may be outdated. Review each:
 
 - If the skill is still accurate: touch the file (whitespace-only commit) to reset the clock.
-- If the skill is obsolete: run `/skill-deprecate <name>` to begin the retirement process.
+- If the skill is obsolete: get Captain directive, then open a PR that deletes the SKILL.md, dispatcher, `config/skill-owners.json` entry, and any code references.
 
-**Deprecation queue** - Skills sorted by days until sunset. Skills with `days_until_sunset <= 0` are past their sunset date. Bring these to the Captain for a removal directive. Removal is always a separate PR.
+**Zero-usage candidates** - Skills with zero invocations in 90 days. Either the skill isn't calling `crane_skill_invoked` (fix the SKILL.md), or it's genuinely unused. For genuine orphans, get Captain directive and retire in a single PR.
 
 ### Step 3: Record completion
 

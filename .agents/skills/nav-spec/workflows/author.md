@@ -1,5 +1,5 @@
 ---
-description: Produce `.stitch/NAVIGATION.md` from scratch for a venture. Twelve phases. Authors tasks → IA → patterns → chrome top-down; compares to shipped code only AFTER the spec is drafted. v3 adds the evidence-mode gate, structural return_locus columns, and the R25 Pattern Fitness + R26 authoring-direction checks.
+description: Produce `.design/NAVIGATION.md` from scratch for a venture. Twelve phases. Authors tasks → IA → patterns → chrome top-down; compares to shipped code only AFTER the spec is drafted. v3 adds the evidence-mode gate, structural return_locus columns, and the R25 Pattern Fitness + R26 authoring-direction checks.
 ---
 
 # Author NAVIGATION.md (v3)
@@ -29,9 +29,9 @@ R26 is the lint that enforces this; it runs on every save and fires if §1–4 c
 
 Gather context before drafting any layer. Read-rules per the authoring-direction table above.
 
-1. Resolve venture code from the current repo via `crane_ventures`. Read `stitchProjectId`. If null, stop — see SKILL.md fail-fast.
+1. Resolve venture code from the current repo via `crane_ventures`. If no match is found, stop — see SKILL.md fail-fast.
 2. **Enumerate route paths from `src/pages/` FILENAMES only** (no `.astro` body reads). Group by surface class (use the 5-class taxonomy — don't fold `auth-gate` into `public`).
-3. Check `.stitch/DESIGN.md`. If absent, warn; pull token inventory from `src/styles/*` or Tailwind config.
+3. Check `.design/DESIGN.md`. If absent, warn; pull token inventory from `src/styles/*` or Tailwind config.
 4. Load the venture's `CLAUDE.md` for voice, business-model context, forbidden patterns.
 5. Reference Phase 0 compliance report if present at `examples/phase-0-compliance-report.md`. If not, run `phase-0-compliance-test.md` before proceeding.
 6. **Detect evidence mode.** Read the venture's `CLAUDE.md` and any status documents. If the venture is pre-launch (no shipped product, no real users), default `evidence-mode: provisional`. If the venture has live users and collects analytics / support tickets, default `evidence-mode: validated`. The author may override.
@@ -41,7 +41,6 @@ Display an **Intake Summary** table:
 | Field                     | Value                                                                  |
 | ------------------------- | ---------------------------------------------------------------------- |
 | Venture                   | code + name                                                            |
-| Stitch project            | ID                                                                     |
 | Surface classes present   | list (all 5 classes, check each)                                       |
 | Routes per surface class  | path inventory (FILENAMES only, no body reads)                         |
 | Tokens source             | path                                                                   |
@@ -124,7 +123,7 @@ Run:
 
 ```
 python3 ~/.agents/skills/nav-spec/validate.py --check-pattern-fitness \
-    --spec .stitch/NAVIGATION.md
+    --spec .design/NAVIGATION.md
 ```
 
 This invokes R25 (disqualifier check) and R26 (authoring-direction lint). Expected outcomes:
@@ -144,7 +143,7 @@ If R25 fires but the author believes the chosen pattern is correct, the defense 
 If either defense or reviewer consensus is missing, R25 continues to fire and the decision cannot ship. The author's other options:
 
 - **Switch to a surviving pattern** per the validator's output.
-- **In `evidence-mode: provisional` only:** file `.stitch/provisional-override-<YYYY-MM-DD>.md` per the schema in [references/task-model-template.md](../references/task-model-template.md). Requires a named `deferred_validation.event` and `date ≤ 90 days` from filing.
+- **In `evidence-mode: provisional` only:** file `.design/provisional-override-<YYYY-MM-DD>.md` per the schema in [references/task-model-template.md](../references/task-model-template.md). Requires a named `deferred_validation.event` and `date ≤ 90 days` from filing.
 
 ### 4d. Compose patterns
 
@@ -176,16 +175,15 @@ Now, and only now, author chrome:
 
 ## Phase 6 — Save draft v1
 
-Save `.stitch/NAVIGATION.md`. Bump `spec-version` to the next value (1 for first author, 2 if migrating a v1 spec, etc.). Show the user a diff-summary of what was generated.
+Save `.design/NAVIGATION.md`. Bump `spec-version` to the next value (1 for first author, 2 if migrating a v1 spec, etc.). Show the user a diff-summary of what was generated.
 
 Front matter must include:
 
 ```yaml
 ---
 spec-version: <N>
-nav-spec-skill-version: 2.0.0
+nav-spec-skill-version: 3.0.0
 design-md-sha: <SHA of DESIGN.md, or "absent">
-stitch-project-id: <ID>
 phase-0-compliance: { categorical: '%', strict: '%', date: 'YYYY-MM-DD' }
 injection-budgets:
   <surface/archetype/viewport/pattern>: { essential: N, extended: N, total: N }
@@ -279,7 +277,7 @@ Typical v2 decisions:
 
 ## Phase 9 — Final spec saved
 
-Apply reviewer fixes and user decisions. Save `.stitch/NAVIGATION.md`. Ensure `spec-version` correct. Show summary of shifts from draft.
+Apply reviewer fixes and user decisions. Save `.design/NAVIGATION.md`. Ensure `spec-version` correct. Show summary of shifts from draft.
 
 ---
 
@@ -287,8 +285,7 @@ Apply reviewer fixes and user decisions. Save `.stitch/NAVIGATION.md`. Ensure `s
 
 Pick one existing surface (recommended: the venture's primary dashboard, mobile). Regenerate with the new injection snippet live.
 
-- Extract HTML download URL from Stitch response
-- Download HTML
+- Extract HTML from the generated output
 - Run `validate.py` with the surface's full classification (5 tags)
 - Pass = zero violations against the predicted spec
 - Fail = do not proceed; tune the spec and repeat
@@ -301,7 +298,7 @@ This proves the spec is **self-consistent**. Phase 11 proves it **prevents drift
 
 ### 11a — Chrome adversarial (as in v1)
 
-Generate three prompts the spec author has NOT seen with full 5-tag classification. Run validator on each. Pass = validator reports zero chrome-rule violations.
+Generate three screens the spec author has NOT seen, using full 5-tag classification. Run validator on each. Pass = validator reports zero chrome-rule violations.
 
 ### 11b — IA reachability traversal (NEW in v2)
 
@@ -323,18 +320,18 @@ For each declared pattern in Section 4, verify its required-elements list is sat
 
 ## Phase 12 — Write-back to consuming skills
 
-Only run if the venture is the first v2-adopter globally. Otherwise skip (consuming skills already updated for v2).
+Only run if the venture is the first adopter globally at this spec version. Otherwise skip (consuming skills already updated).
 
 Edits required:
 
-- `~/.agents/skills/stitch-design/SKILL.md` — classification now requires 5 tags (task, pattern added); pipeline step 1b fail-fast text updated; step 3 NAV CONTRACT block uses essential + extended format per [injection-snippet-template.md](../references/injection-snippet-template.md); step 3b validator now runs R1–R24.
-- `~/.agents/skills/stitch-design/workflows/text-to-design.md` and `edit-design.md` — 5-tag reference.
-- `~/.agents/skills/stitch-design/examples/enhanced-prompt.md` — add v2 example showing 5-tag classification and essential+extended NAV CONTRACT.
-- `.agents/skills/stitch-ux-brief/SKILL.md` (per-venture) — Phase 1 check for NAVIGATION.md updated to detect spec-version; Phase 7 concept-prompt template uses 5 tags; Phase 11 strip directive driven by chrome-forbidden list; Phase 12 RUN-LOG records `nav-spec-skill-version` and `spec-version`.
+- `~/.agents/skills/product-design/SKILL.md` — classification now requires 5 tags (task, pattern added); pipeline step 1b fail-fast text updated; step 3 NAV CONTRACT block uses essential + extended format per [injection-snippet-template.md](../references/injection-snippet-template.md); step 3b validator now runs R1–R24.
+- `~/.agents/skills/product-design/workflows/text-to-design.md` and `edit-design.md` — 5-tag reference.
+- `~/.agents/skills/product-design/examples/enhanced-prompt.md` — add example showing 5-tag classification and essential+extended NAV CONTRACT.
+- `.agents/skills/ux-brief/SKILL.md` (per-venture) — Phase 1 check for NAVIGATION.md updated to detect spec-version; Phase 7 concept-prompt template uses 5 tags; Phase 11 strip directive driven by chrome-forbidden list; Phase 12 RUN-LOG records `nav-spec-skill-version` and `spec-version`.
 
 All edits are guarded by `hasNavigationMd && specVersion >= 2` — v1 specs still work with v1-compatible injection (chrome-only).
 
-Produce a PR with these edits on a separate branch. Title: `feat(stitch): nav-spec v2 — IA + patterns + chrome three-layer injection`.
+Produce a PR with these edits on a separate branch. Title: `feat(nav-spec): three-layer injection write-back to product-design and ux-brief`.
 
 ---
 
@@ -342,9 +339,9 @@ Produce a PR with these edits on a separate branch. Title: `feat(stitch): nav-sp
 
 Tell the user:
 
-- Where `.stitch/NAVIGATION.md` lives and its spec-version
+- Where `.design/NAVIGATION.md` lives and its spec-version
 - Phase 10 integration-check result
 - Phase 11 adversarial + reachability traversal results
 - Phase 11b — any IA violations found (orphans, dead-ends)
 - Whether the write-back PR was produced or skipped
-- Next step: run `/stitch-design` or `/stitch-ux-brief` — NAV CONTRACT (v2) is now injected automatically for any 5-tag prompt
+- Next step: run `/product-design` or `/ux-brief` — NAV CONTRACT is now injected automatically for any 5-tag prompt

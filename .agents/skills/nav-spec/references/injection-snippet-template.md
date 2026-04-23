@@ -1,6 +1,6 @@
 # Injection snippet template
 
-Canonical NAV CONTRACT block injected between DESIGN SYSTEM and PAGE STRUCTURE in every `stitch-design` prompt. v2 splits the block into **essential** (always injected) and **extended** (loaded only when archetype/pattern requires).
+Canonical NAV CONTRACT block injected between DESIGN SYSTEM and PAGE STRUCTURE in every `product-design` prompt. v2 splits the block into **essential** (always injected) and **extended** (loaded only when archetype/pattern requires).
 
 Total token budget: ≤800 tokens combined when both essential and extended are loaded; ≤500 when essential only.
 
@@ -8,7 +8,7 @@ Total token budget: ≤800 tokens combined when both essential and extended are 
 
 ## Essential block (always injected)
 
-This block is required for every Stitch generation. Replaces the v1 single-block format.
+This block is required for every generation. Replaces the v1 single-block format.
 
 ```
 NAV CONTRACT — ESSENTIAL (REQUIRED — do not invent beyond this block):
@@ -94,10 +94,10 @@ NAV CONTRACT — EXTENDED (REQUIRED for this archetype/pattern):
 
 ## Substitution at prompt-enhancement time
 
-`stitch-design`'s pipeline does these lookups:
+The `product-design` pipeline does these lookups:
 
 1. Read classification tags from prompt: `surface=`, `archetype=`, `viewport=`, `task=`, `pattern=`.
-2. Open `.stitch/NAVIGATION.md`.
+2. Open `.design/NAVIGATION.md`.
 3. Build essential block:
    - Surface description: from Section 3 (surface-class taxonomy).
    - IA contract: filter Section 3 (reachability matrix) by `From = current surface`; render rows where `Required = Yes` or `Conditional`.
@@ -136,7 +136,7 @@ If essential alone exceeds 500 tokens, that's a sign the surface class has too m
 
 ## Versioning and compatibility
 
-- Semantic-precision section is the most volatile (drifts as Stitch evolves). Bump spec-version when it materially changes.
+- Semantic-precision section is the most volatile (drifts as the generator evolves). Bump spec-version when it materially changes.
 - IA contract section is stable per spec-version (changes only when reachability matrix changes).
 - Chrome allowed/forbidden are stable per spec-version.
 
@@ -220,4 +220,4 @@ If PAGE STRUCTURE conflicts with this block, THIS BLOCK WINS.
 
 ## Reference implementation
 
-The 2026-04-15 ss-console run used a ~450-token v1 template for Phase 0. v2 essential is ~480 tokens; extended adds 200–300 tokens depending on surface complexity. Total stays within 800-token budget for all measured combos.
+The 2026-04-15 ss-console Phase 0 run used a ~450-token v1 template. v2 essential is ~480 tokens; extended adds 200–300 tokens depending on surface complexity. Total stays within the 800-token budget for all measured combos.

@@ -1,7 +1,7 @@
-# Phase 0 — Stitch injection-compliance report
+# Phase 0 — Injection-compliance report
 
 **Date:** 2026-04-15
-**Stitch project:** `17873719980790683333` (ss — SMD Services)
+**Venture:** ss (SMD Services)
 **Test scope:** 3 prompts × 2 variants (baseline / injected) = 6 generations
 **Injection snippet:** 453 tokens (well under 600-token budget)
 
@@ -13,7 +13,7 @@
 | Portal invoice detail  | 390×844  | detail    | `invoice-mobile-baseline.html`   | `invoice-mobile-injected.html`   |
 | Portal proposal detail | 1280     | detail    | `proposal-desktop-baseline.html` | `proposal-desktop-injected.html` |
 
-## Results — major-category compliance (what the plan actually cares about)
+## Results — major-category compliance
 
 Forbidden chrome that injection prevented:
 
@@ -104,31 +104,31 @@ Injected runs are ~10% smaller than baselines — consistent with less chrome be
 
 ## Next step
 
-Proceed to skill scaffolding (Task #2). Architecture: injection-first + lightweight validator. Validator ships as a required post-generation step in `stitch-design`'s pipeline, not as a conditional. Workflows/references in the new skill reflect this.
+Proceed to skill scaffolding (Task #2). Architecture: injection-first + lightweight validator. Validator ships as a required post-generation step in the `product-design` pipeline, not as a conditional. Workflows/references in the new skill reflect this.
 
 ---
 
 ## Correction — revised categorical number (2026-04-15, later in same session)
 
-The initial categorical-compliance figure of 97% was based on hand-inspection that missed real-face photo placeholders in injected runs. When the validator's R9 regex was extended from `aida/` → `aida[-/]` to match Stitch's actual `aida-public/...` URL pattern, it caught placeholder photos in `invoice-mobile-injected` and `proposal-desktop-injected` that were previously uncounted.
+The initial categorical-compliance figure of 97% was based on hand-inspection that missed real-face photo placeholders in injected runs. When the validator's R9 regex was extended from `aida/` → `aida[-/]` to match the generator's actual `aida-public/...` URL pattern, it caught placeholder photos in `invoice-mobile-injected` and `proposal-desktop-injected` that were previously uncounted.
 
 Revised: **categorical compliance ≈ 93% on injected runs** (still well within the "injection-first + required validator" architecture band). The headline conclusion is unchanged — injection prevents the big categorical failures, but a deterministic validator is required for cosmetic and semantic cleanup.
 
 ## Follow-up runs — Phase 7 and Phase 8 verification
 
-On the same day, the full spec was exercised end-to-end against live Stitch generations. See `/Users/scottdurgan/dev/ss-console/.stitch/designs/v1-verification/RUN-LOG.md` for per-run detail.
+On the same day, the full spec was exercised end-to-end against live generations. See `/Users/scottdurgan/dev/ss-console/.design/designs/v1-verification/RUN-LOG.md` for per-run detail.
 
 ### Phase 7 — integration check
 
-**Regeneration:** `portal-v1/home-mobile` with the full updated NAV CONTRACT (including three-icon contact control, SVG silhouette rule, strict semantic-precision block).
+**Generation:** `portal-v1/home-mobile` with the full updated NAV CONTRACT (including three-icon contact control, SVG silhouette rule, strict semantic-precision block).
 
-**Validator result after false-positive fixes:** 1 violation — R1 (fixed-vs-sticky), which is a known Stitch blindspot.
+**Validator result after false-positive fixes:** 1 violation — R1 (fixed-vs-sticky), which is a known generator blindspot.
 
-**Specifically preserved in the generation (all adversarial failures in prior runs):**
+**Specifically preserved in the generation (all adversarial failures in prior baseline runs):**
 
 - Three-icon contact control (mail / sms / tel) implemented correctly
 - Skip-to-main link with matching `<main id="main-content">`
-- SVG silhouette for the consultant avatar — **no real-face placeholder this time**, a direct improvement over Phase 0
+- SVG silhouette for the consultant avatar — **no real-face placeholder this time**, a direct improvement over the Phase 0 baseline
 
 ### Phase 8 — adversarial verification
 
@@ -142,13 +142,13 @@ Three prompts on unseen `{surface × archetype × viewport}` combos, each genera
 
 **Structural violations from taxonomy gaps across all three adversarial runs: 0.**
 
-**Conclusion:** the spec handles unseen combinations correctly. The only residual violations are the two known Stitch blindspots (R1, R9), which the validator catches deterministically every time. This is the drift-prevention thesis being validated.
+**Conclusion:** the spec handles unseen combinations correctly. The only residual violations are the two known generator blindspots (R1, R9), which the validator catches deterministically every time. This is the drift-prevention thesis being validated.
 
 ## Validator improvements from this run
 
 Two validator false-positives were discovered and fixed:
 
 1. **R3** (icon before client name) was truncating the header to 500 chars and flagging ANY material-symbols — including the three-icon contact control on the right side. Fixed to only flag material-symbols/svg/img that appear BEFORE the first visible text element.
-2. **R15** (skip-to-main link) required `href="#main"` or `href="#content"` with specific attribute order. Stitch emits `href="#main-content"` with `class=` before `href=`. Regex broadened to accept any id that has a matching `<main id="...">` element.
+2. **R15** (skip-to-main link) required `href="#main"` or `href="#content"` with specific attribute order. The generator emits `href="#main-content"` with `class=` before `href=`. Regex broadened to accept any id that has a matching `<main id="...">` element.
 
 Both fixes re-ran against the original Phase 0 HTMLs without regressions.

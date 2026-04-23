@@ -21,7 +21,10 @@ Works in any venture console that has `docs/pm/prd.md`.
 
 ```
 /design-brief [rounds]
+/design-brief --extract-identity <path-to-frontend-design-output>
 ```
+
+**Default mode (with optional `rounds` argument):**
 
 - `rounds` - number of design rounds (default: **1**). Each additional round adds cross-pollination where agents read and respond to each other's work.
   - **1 round**: Independent analysis + synthesis. Fast. Good for greenfield projects or early design exploration.
@@ -31,6 +34,12 @@ Works in any venture console that has `docs/pm/prd.md`.
 Parse the argument: if `$ARGUMENTS` is empty or not a number, default to 1. If it's a number, use that value. There is no upper bound - if someone wants 5 rounds, run 5 rounds.
 
 Store as `TOTAL_ROUNDS`.
+
+**Identity-extraction mode (`--extract-identity`):**
+
+Ingests output from Anthropic's `frontend-design` plugin (HTML/CSS/component code produced by an identity exploration run) and extracts concrete tokens into the venture's `.design/DESIGN.md`. See [workflows/extract-identity.md](workflows/extract-identity.md).
+
+This mode skips the 4-agent brief process entirely. It parses visual output → token spec → file. Use when you've just run `/frontend-design` and need to codify the chosen aesthetic direction before running `/nav-spec`, `/ux-brief`, and `/product-design` downstream.
 
 ## Execution
 

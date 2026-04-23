@@ -6,17 +6,17 @@ description: Standalone chrome-level drift audit. Scans shipped code and generat
 
 Chrome-level consistency audit. Scans shipped code and generated artifacts; flags inconsistencies across headers, back affordances, breadcrumbs, footers, skip-links, state colors, and mobile↔desktop transforms.
 
-Output: an in-memory drift report or saved to `.stitch/drift-audit-<YYYY-MM-DD>.md`. Format in [examples/drift-audit-report.md](../examples/drift-audit-report.md).
+Output: an in-memory drift report or saved to `.design/drift-audit-<YYYY-MM-DD>.md`. Format in [examples/drift-audit-report.md](../examples/drift-audit-report.md).
 
 ---
 
 ## When to run this (vs ia-audit)
 
-| Audit                         | Measures                                       | When to run                                                        |
-| ----------------------------- | ---------------------------------------------- | ------------------------------------------------------------------ |
-| `/nav-spec --drift-audit`     | Chrome consistency across pages and artifacts  | After multiple Stitch generations, before pattern roundtrip review |
-| `/nav-spec --ia-audit`        | IA reachability, pattern conformance, taxonomy | After route changes, before shipping IA-affecting work             |
-| `/nav-spec --validate <file>` | Single-file rule check (R1–R24)                | Post-generation, CI                                                |
+| Audit                         | Measures                                       | When to run                                                 |
+| ----------------------------- | ---------------------------------------------- | ----------------------------------------------------------- |
+| `/nav-spec --drift-audit`     | Chrome consistency across pages and artifacts  | After multiple generations, before pattern roundtrip review |
+| `/nav-spec --ia-audit`        | IA reachability, pattern conformance, taxonomy | After route changes, before shipping IA-affecting work      |
+| `/nav-spec --validate <file>` | Single-file rule check (R1–R24)                | Post-generation, CI                                         |
 
 Drift audit is retrospective — it measures what has shipped. ia-audit is structural — it measures whether what shipped matches the spec.
 
@@ -29,7 +29,7 @@ Drift audit is retrospective — it measures what has shipped. ia-audit is struc
 - `src/layouts/*.astro` — every layout
 - `src/components/**/*{Nav,Header,Footer,Sidebar,Layout}*.astro` — shared chrome components
 - `src/pages/**/*.astro` — note pages that bypass the layout and render own chrome
-- `.stitch/designs/**/*.html` — prior Stitch output (categorize by generation date if possible)
+- `.design/designs/**/*.html` — prior generated output (categorize by generation date if possible)
 
 ### 2. Extract chrome features per artifact
 
@@ -61,7 +61,7 @@ For each file, record:
 | File | Surface | Archetype | Header | Back | Breadcrumbs | Mobile | Layout? |
 ```
 
-**Generated artifact matrix** (rows = .stitch/designs/\* files):
+**Generated artifact matrix** (rows = `.design/designs/*` files):
 
 ```
 | File | Surface (inferred) | Archetype | Header | Back | Breadcrumbs | Mobile |
@@ -84,12 +84,12 @@ Example outputs:
 
 - **Header client-name decoration:** 3 distinct values
   - none (correct per spec): 5 files
-  - leading water-drop icon: 1 file (portal/demo-v2.html, Stitch drift)
+  - leading water-drop icon: 1 file (portal/demo-v2.html, generated artifact drift)
   - leading logo: 1 file (portal/legacy/invoice.astro — pre-PR #375)
 
 - **Back affordance (detail archetypes):** 2 distinct values
   - `<a href="/portal/invoices">`: 2 files (canonical, correct)
-  - `<a href="#">` and `onclick="history.back()"`: 1 file (Stitch artifact not yet reconciled)
+  - `<a href="#">` and `onclick="history.back()"`: 1 file (generated artifact not yet reconciled)
 ```
 
 ### 5. Score drift severity
@@ -106,8 +106,8 @@ Example bullets:
 
 - Portal headers split: 4 sticky (post-retrofit), 3 fixed (pre-retrofit)
 - 2 of 7 portal detail pages lack a back affordance; remaining 5 use canonical URLs (correct)
-- 3 Stitch artifacts in `.stitch/designs/portal-v1/` use `backdrop-blur-sm` — confirms Phase 0 strict-compliance leakage
-- 1 portal list page uses history.back() — this is the Stitch-artifact version, shipped version was fixed in PR #391
+- 3 generated artifacts in `.design/designs/portal-v1/` use `backdrop-blur-sm` — confirms Phase 0 strict-compliance leakage
+- 1 portal list page uses history.back() — this is the generated-artifact version; shipped version was fixed in PR #391
 - No drift on mobile breakpoint (consistent 768px)
 - Admin nav tabs consistent across all admin routes (ratified exception in spec Appendix D)
 
@@ -121,7 +121,7 @@ Drift audit is run as a phase within `author.md` Phase 8 (was Phase 2 in v1). Ou
 
 ### Option 2 — Standalone run
 
-When invoked directly (`/nav-spec --drift-audit`), save output to `.stitch/drift-audit-<YYYY-MM-DD>.md`. Keep historical audits for measuring drift change over time.
+When invoked directly (`/nav-spec --drift-audit`), save output to `.design/drift-audit-<YYYY-MM-DD>.md`. Keep historical audits for measuring drift change over time.
 
 ---
 

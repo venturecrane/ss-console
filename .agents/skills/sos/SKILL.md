@@ -14,9 +14,8 @@ status: stable
 1. Call `crane_sos` MCP tool (returns formatted briefing).
 2. Call `crane_schedule(action: "planned-events", from: "{today}", to: "{today}", type: "planned")`.
 3. Display briefing. Highlight any Resume block or P0 issues.
-4. If weekly plan stale/missing, suggest `/work-plan`.
-5. If cadence items overdue, ask: "Execute any now, or skip?"
-6. **STOP.** If Resume block: "Previous session was working on [summary]. Resume or focus elsewhere?" Otherwise: "What would you like to focus on?"
+4. If cadence items overdue, ask: "Execute any now, or skip?"
+5. **STOP.** If Resume block: "Previous session was working on [summary]. Resume or focus elsewhere?" Otherwise: "What would you like to focus on?"
 
 ## Rules
 

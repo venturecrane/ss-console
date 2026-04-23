@@ -49,7 +49,7 @@ Each surface has task-specific states that change what nav does:
 
 ## Template structure
 
-In `.stitch/NAVIGATION.md`:
+In `.design/NAVIGATION.md`:
 
 ```markdown
 ## 5. Navigation state machine

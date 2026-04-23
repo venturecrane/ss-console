@@ -12,7 +12,7 @@ This matrix is validator-checkable (R16–R18). If the matrix says a dashboard l
 
 ## Template structure
 
-In `.stitch/NAVIGATION.md`, the matrix follows the Task Model and Sitemap sections.
+In `.design/NAVIGATION.md`, the matrix follows the Task Model and Sitemap sections.
 
 ```markdown
 ## 3. Reachability matrix

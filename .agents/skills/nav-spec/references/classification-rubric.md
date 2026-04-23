@@ -1,8 +1,8 @@
 # Classification rubric
 
-Every Stitch generation must carry **five** tags: `surface=`, `archetype=`, `viewport=`, `task=`, `pattern=`. The pipeline fails fast if any is missing. This rubric is the manual lookup for users constructing prompts; it is not a runtime classifier.
+Every generation must carry **five** tags: `surface=`, `archetype=`, `viewport=`, `task=`, `pattern=`. The pipeline fails fast if any is missing. This rubric is the manual lookup for users constructing prompts; it is not a runtime classifier.
 
-The two new tags (`task=` and `pattern=`) bind the generation to the venture's task model and selected pattern from `pattern-catalog.md`. They are required because chrome alone never determined a navigation pattern — the same chrome can implement different patterns. Tagging makes the choice deterministic.
+The two new tags (`task=` and `pattern=`) bind the generation to the venture's task model and selected pattern from `pattern-catalog.md`. They are required because chrome alone never determines a navigation pattern — the same chrome can implement different patterns. Tagging makes the choice deterministic.
 
 ---
 
@@ -21,7 +21,7 @@ pattern=<pattern-name-from-catalog>
 Example prompt prefix:
 
 ```
-/stitch-design target=portal-home surface=session-auth-client archetype=dashboard \
+/product-design target=portal-home surface=session-auth-client archetype=dashboard \
   viewport=mobile task=see-whats-happening pattern=hub-and-spoke
 ```
 
@@ -94,11 +94,11 @@ Two values: `mobile` (390×844 reference) and `desktop` (1280 reference).
 
 Look up the venture's task model (Section 1 of NAVIGATION.md). Each surface has 1–3 primary tasks. Pick the one this generation is designed to support.
 
-If the surface supports multiple tasks (a dashboard supports several), pick the one that anchors this particular Stitch generation — the user's stated focus.
+If the surface supports multiple tasks (a dashboard supports several), pick the one that anchors this particular generation — the user's stated focus.
 
 If you can't name the task without consulting the spec, the spec is incomplete OR the surface lacks a clear task. Stop and reconcile.
 
-Examples (ss-console portal):
+Examples (ss-console portal — for illustration; not exhaustive):
 
 | Surface                               | Likely task tag                                                                      |
 | ------------------------------------- | ------------------------------------------------------------------------------------ |
@@ -188,7 +188,7 @@ Cannot classify target. Add these tags to your prompt:
 Run /nav-spec --classify-help to see the decision rubric.
 ```
 
-Never guess. Never infer from natural language. Probabilistic classification is the drift the system is designed to prevent.
+Never guess. Never infer from natural language. Probabilistic classification produces exactly the drift this system is designed to prevent.
 
 ---
 

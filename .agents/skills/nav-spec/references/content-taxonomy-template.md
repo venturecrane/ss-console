@@ -96,7 +96,7 @@ Canonical phrasing for empty states.
 
 ## Template structure
 
-In `.stitch/NAVIGATION.md`:
+In `.design/NAVIGATION.md`:
 
 ```markdown
 ## 10. Content taxonomy

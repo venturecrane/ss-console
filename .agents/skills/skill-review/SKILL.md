@@ -114,7 +114,7 @@ ERROR [references.file-missing-scope-prefix] .agents/skills/foo/SKILL.md: File p
 ERROR [references.broken-crane-console-file] .agents/skills/foo/SKILL.md: crane-console file not found: "docs/missing.md"
   Fix: Create the file at docs/missing.md relative to the repo root, or remove the reference.
 
-WARNING [references.venture-file-unverified] .agents/skills/foo/SKILL.md: venture file reference ".stitch/DESIGN.md" not verified — CRANE_VENTURE_SAMPLE_REPO is not set
+WARNING [references.venture-file-unverified] .agents/skills/foo/SKILL.md: venture file reference ".design/DESIGN.md" not verified — CRANE_VENTURE_SAMPLE_REPO is not set
   Fix: Set CRANE_VENTURE_SAMPLE_REPO to a local venture repo path to enable validation, or verify the path manually.
 
 WARNING [references.missing-command] .agents/skills/foo/SKILL.md: Command "missing-cli" not found on PATH

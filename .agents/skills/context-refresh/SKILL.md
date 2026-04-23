@@ -13,6 +13,8 @@ status: stable
 
 Audit and update all enterprise context: D1 docs, VCMS executive summaries, and venture metadata. Produces a refresh report and records cadence completion.
 
+> **Note:** Steps 1 and 2 (doc audit + auto-regen) also run automatically as a side effect of `/sos` when invoked from crane-console and the cadence item is due/overdue. Invoke `/context-refresh` explicitly when you want to review executive summaries (Step 3) or ventures.json drift (Step 4), both of which require Captain approval and can't safely auto-run.
+
 ## Arguments
 
 ```
