@@ -438,6 +438,71 @@ export async function updateQuote(
 const PORTAL_VISIBLE_STATUSES = ['sent', 'accepted', 'declined', 'expired'] as const
 
 /**
+ * For a set of entity ids, return the "top active" quote per entity — the one
+ * an admin scanning a list would care about. Priority:
+ *
+ *   1. Most recently sent `sent` quote (the one in the client's hands)
+ *   2. Otherwise most recently updated `accepted` quote
+ *   3. Otherwise most recently updated `draft` quote
+ *
+ * Terminal non-useful statuses (declined, expired, superseded) are ignored.
+ * Returns a Map keyed by entity_id so the caller can render badges inline on
+ * a list without an N+1 per-row query.
+ *
+ * Scoped by org_id for tenant isolation. Empty id list short-circuits to an
+ * empty map (D1 rejects `IN ()`).
+ */
+export async function getActiveQuotesForEntities(
+  db: D1Database,
+  orgId: string,
+  entityIds: string[]
+): Promise<Map<string, Quote>> {
+  const result = new Map<string, Quote>()
+  if (entityIds.length === 0) return result
+
+  const placeholders = entityIds.map(() => '?').join(', ')
+  // Priority: sent (0) > accepted (1) > draft (2). We order by priority then by
+  // `sent_at` DESC (for sent), else `updated_at` DESC. One row per entity via
+  // the ROW_NUMBER() window function. D1 supports SQLite window functions.
+  const sql = `
+    SELECT id, org_id, entity_id, assessment_id, version, parent_quote_id,
+           line_items, total_hours, rate, total_price, deposit_pct,
+           deposit_amount, status, sent_at, expires_at, accepted_at,
+           schedule, deliverables, engagement_overview, milestone_label,
+           created_at, updated_at
+    FROM (
+      SELECT q.*,
+        ROW_NUMBER() OVER (
+          PARTITION BY q.entity_id
+          ORDER BY
+            CASE q.status
+              WHEN 'sent'     THEN 0
+              WHEN 'accepted' THEN 1
+              WHEN 'draft'    THEN 2
+              ELSE 9
+            END,
+            COALESCE(q.sent_at, q.updated_at) DESC
+        ) AS rn
+      FROM quotes q
+      WHERE q.org_id = ?
+        AND q.entity_id IN (${placeholders})
+        AND q.status IN ('sent', 'accepted', 'draft')
+    )
+    WHERE rn = 1
+  `
+
+  const rows = await db
+    .prepare(sql)
+    .bind(orgId, ...entityIds)
+    .all<Quote>()
+
+  for (const row of rows.results) {
+    result.set(row.entity_id, row)
+  }
+  return result
+}
+
+/**
  * List quotes for a specific entity (portal access).
  *
  * Scoped by both `entity_id` and `org_id` — entity IDs are expected unique,

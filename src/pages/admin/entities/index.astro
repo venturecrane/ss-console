@@ -7,12 +7,16 @@ import {
   ENTITY_STAGES,
 } from '../../../lib/db/entities'
 import type { Entity, EntityStage, EntitySignalMetadata } from '../../../lib/db/entities'
+import { getActiveQuotesForEntities } from '../../../lib/db/quotes'
+import type { Quote } from '../../../lib/db/quotes'
 import { PIPELINE_LABELS } from '../../../lead-gen/schemas/lead-scoring-schema'
 import type { PipelineId } from '../../../lead-gen/schemas/lead-scoring-schema'
 import {
   PROBLEM_LABELS,
   LEGACY_PROBLEM_LABELS,
 } from '../../../portal/assessments/extraction-schema'
+import { statusBadgeClass } from '../../../lib/ui/status-badge'
+import { relativeTime } from '../../../lib/admin/relative-time'
 import { env } from 'cloudflare:workers'
 
 /**
@@ -45,6 +49,32 @@ const signalMetadata: Map<string, EntitySignalMetadata> =
     : new Map()
 
 const signalCount = await countEntitiesByStage(env.DB, session.orgId, 'signal')
+
+// Proposing tab: pull the top active quote per entity for inline status + age,
+// and reorder rows by "oldest sent first" so quotes about to expire surface
+// at the top. Drafts (no sent_at) go after sent rows, preserving the DAL's
+// tier/updated_at order among themselves as a tiebreaker.
+let activeQuoteByEntityId = new Map<string, Quote>()
+let proposingRows: Entity[] = entities
+if (filterStage === 'proposing' && entities.length > 0) {
+  activeQuoteByEntityId = await getActiveQuotesForEntities(
+    env.DB,
+    session.orgId,
+    entities.map((e) => e.id)
+  )
+  proposingRows = [...entities].sort((a, b) => {
+    const qa = activeQuoteByEntityId.get(a.id)
+    const qb = activeQuoteByEntityId.get(b.id)
+    const sa = qa?.sent_at ?? null
+    const sb = qb?.sent_at ?? null
+    // Sent rows come before non-sent, oldest sent first within.
+    if (sa && sb) return sa.localeCompare(sb)
+    if (sa) return -1
+    if (sb) return 1
+    return 0 // preserve DAL order (tier, pain_score, updated_at DESC)
+  })
+}
+const displayEntities = filterStage === 'proposing' ? proposingRows : entities
 
 const promoted = Astro.url.searchParams.get('promoted')
 const dismissed = Astro.url.searchParams.get('dismissed')
@@ -234,7 +264,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
 
   {/* Entity list */}
   {
-    entities.length === 0 ? (
+    displayEntities.length === 0 ? (
       <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card">
         <p class="text-[color:var(--color-text-secondary)] text-sm">
           No entities at the <strong>{filterStage}</strong> stage.
@@ -242,7 +272,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
       </div>
     ) : (
       <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] divide-y divide-[color:var(--color-border-subtle)]">
-        {entities.map((e: Entity) => {
+        {displayEntities.map((e: Entity) => {
           const meta = signalMetadata.get(e.id)
           const problems = (meta?.top_problems ?? [])
             .map((id) => ({ id, label: problemLabel(id) }))
@@ -251,9 +281,20 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
           const lastActivity = meta?.last_activity_at ?? null
           const website = displayWebsite(e.website)
           const isSignal = e.stage === 'signal'
+          const activeQuote =
+            filterStage === 'proposing' ? (activeQuoteByEntityId.get(e.id) ?? null) : null
+          // Draft quotes have no sent_at; show the draft's updated_at. Sent /
+          // accepted quotes show their sent_at (falling back to updated_at if
+          // somehow null). Render nothing if no active quote — per CLAUDE.md
+          // we render nothing rather than invent a placeholder.
+          const quoteTimestamp =
+            activeQuote?.status === 'draft'
+              ? activeQuote.updated_at
+              : (activeQuote?.sent_at ?? activeQuote?.updated_at ?? null)
+          const quoteAge = relativeTime(quoteTimestamp)
           return (
             <div class="group relative px-6 py-4 hover:bg-[color:var(--color-background)] transition-colors">
-              {/* Stretched link — makes the whole row clickable. Interactive
+              {/* Stretched link — makes the whole row clickable for signal. Interactive
                   elements below (website/phone/action buttons) sit at z-10
                   so they stay independently clickable per HTML convention. */}
               {isSignal && (
@@ -278,6 +319,19 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                       >
                         {e.name}
                       </a>
+                    )}
+                    {activeQuote && (
+                      <>
+                        <span class={statusBadgeClass(activeQuote.status)}>
+                          {activeQuote.status}
+                          {activeQuote.version > 1 ? ` v${activeQuote.version}` : ''}
+                        </span>
+                        {quoteAge && (
+                          <span class="text-xs text-[color:var(--color-text-muted)]">
+                            {quoteAge}
+                          </span>
+                        )}
+                      </>
                     )}
                     {e.source_pipeline && (
                       <span

@@ -165,6 +165,35 @@ describe('quotes: data access layer', () => {
     expect(code).toContain('effectiveItems')
     expect(code).toContain('effectiveRate')
   })
+
+  it('exports getActiveQuotesForEntities batch helper', () => {
+    expect(source()).toContain('export async function getActiveQuotesForEntities')
+  })
+
+  it('getActiveQuotesForEntities returns empty for empty id list', () => {
+    const code = source()
+    // Short-circuit guard: D1 rejects `IN ()`, so we must bail early.
+    expect(code).toMatch(/entityIds\.length === 0[\s\S]+?return result/)
+  })
+
+  it('getActiveQuotesForEntities prioritizes sent > accepted > draft', () => {
+    const code = source()
+    expect(code).toContain("WHEN 'sent'     THEN 0")
+    expect(code).toContain("WHEN 'accepted' THEN 1")
+    expect(code).toContain("WHEN 'draft'    THEN 2")
+  })
+
+  it('getActiveQuotesForEntities ignores terminal statuses (declined/expired/superseded)', () => {
+    const code = source()
+    // Only the three "active" statuses should appear in the SQL filter.
+    expect(code).toContain("q.status IN ('sent', 'accepted', 'draft')")
+  })
+
+  it('getActiveQuotesForEntities is scoped to org_id', () => {
+    const code = source()
+    // The new query must bind org_id — prevent cross-tenant leakage (#399 class).
+    expect(code).toMatch(/getActiveQuotesForEntities[\s\S]+?q\.org_id = \?/)
+  })
 })
 
 describe('quotes: R2 storage helpers', () => {

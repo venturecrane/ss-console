@@ -1,0 +1,20 @@
+- generic [active] [ref=e1]:
+    - link "Skip to main content" [ref=e2] [cursor=pointer]:
+        - /url: '#main'
+    - banner [ref=e3]:
+        - generic [ref=e5]: SMD Services
+    - main [ref=e6]:
+        - generic [ref=e7]:
+            - paragraph [ref=e9]: Admin sign-in
+            - generic [ref=e10]:
+                - heading "Sign in" [level=2] [ref=e11]
+                - generic [ref=e12]:
+                    - generic [ref=e13]:
+                        - generic [ref=e14]: Email
+                        - textbox "Email" [ref=e15]:
+                            - /placeholder: you@smd.services
+                    - generic [ref=e16]:
+                        - generic [ref=e17]: Password
+                        - textbox "Password" [ref=e18]:
+                            - /placeholder: Enter your password
+                    - button "Sign in" [ref=e19]
