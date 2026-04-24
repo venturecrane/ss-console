@@ -12,7 +12,12 @@ describe('admin/entities/index: Proposing tab quote status', () => {
 
   it('imports the batch active-quote loader', () => {
     const code = source()
-    expect(code).toContain("import { getActiveQuotesForEntities } from '../../../lib/db/quotes'")
+    // The same import statement may also pull sibling batch helpers
+    // (getQuotesForEntities for the meetings stage) — match the symbol
+    // and module path rather than the literal one-symbol form.
+    expect(code).toMatch(
+      /import\s*\{[^}]*\bgetActiveQuotesForEntities\b[^}]*\}\s*from\s*['"]\.\.\/\.\.\/\.\.\/lib\/db\/quotes['"]/
+    )
   })
 
   it('imports the shared admin status badge class', () => {

@@ -73,6 +73,46 @@ export interface UpdateMeetingData {
 }
 
 /**
+ * For a batch of entity ids, return a Map keyed by entity_id whose value
+ * is the list of all meetings (any status) for that entity, ordered with
+ * the most recent meeting first within each entity.
+ *
+ * Recency uses scheduled_at when set, falling back to created_at — same
+ * order the meetings panel renders. The list page uses this to compute
+ * (a) the next scheduled meeting date and (b) the meeting sub-state
+ * (awaiting-booking / upcoming / completed-awaiting-proposal) on
+ * meetings-stage rows, without an N+1.
+ *
+ * Empty input returns an empty Map without touching the DB.
+ */
+export async function getMeetingsForEntities(
+  db: D1Database,
+  orgId: string,
+  entityIds: string[]
+): Promise<Map<string, Meeting[]>> {
+  const result = new Map<string, Meeting[]>()
+  if (entityIds.length === 0) return result
+
+  const entityIdsJson = JSON.stringify(entityIds)
+  const rows = await db
+    .prepare(
+      `SELECT * FROM meetings
+       WHERE org_id = ?
+         AND entity_id IN (SELECT value FROM json_each(?))
+       ORDER BY entity_id ASC, COALESCE(scheduled_at, created_at) DESC`
+    )
+    .bind(orgId, entityIdsJson)
+    .all<Meeting>()
+
+  for (const row of rows.results ?? []) {
+    const list = result.get(row.entity_id)
+    if (list) list.push(row)
+    else result.set(row.entity_id, [row])
+  }
+  return result
+}
+
+/**
  * List meetings for an organization, optionally filtered by entity.
  */
 export async function listMeetings(

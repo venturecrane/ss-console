@@ -8,13 +8,22 @@ import {
   ENTITY_STAGES,
 } from '../../../lib/db/entities'
 import type { Entity, EntityStage, EntitySignalMetadata } from '../../../lib/db/entities'
-import { getActiveQuotesForEntities } from '../../../lib/db/quotes'
+import { getActiveQuotesForEntities, getQuotesForEntities } from '../../../lib/db/quotes'
 import type { Quote } from '../../../lib/db/quotes'
+import { getMeetingsForEntities } from '../../../lib/db/meetings'
+import type { Meeting } from '../../../lib/db/meetings'
 import { LOST_REASONS } from '../../../lib/db/lost-reasons'
 import { getLatestOutreachDraftForEntities } from '../../../lib/db/context'
 import type { ContextEntry } from '../../../lib/db/context'
 import { getFirstContactWithEmailForEntities } from '../../../lib/db/contacts'
 import type { Contact } from '../../../lib/db/contacts'
+import { findDraftableMeeting } from '../../../lib/entities/draftable-meeting'
+import {
+  findNextScheduledMeeting,
+  getMeetingSubstate,
+  MEETING_SUBSTATE_LABEL,
+  type MeetingSubstate,
+} from '../../../lib/entities/meeting-substate'
 import { PIPELINE_LABELS } from '../../../lead-gen/schemas/lead-scoring-schema'
 import type { PipelineId } from '../../../lead-gen/schemas/lead-scoring-schema'
 import {
@@ -98,6 +107,21 @@ if (filterStage === 'prospect' && entities.length > 0) {
   ])
 }
 
+// Meetings-stage row hydration. Pull every meeting + every quote for
+// the page's rows in two batch queries; the row template then derives
+// per-row sub-state, next-meeting date, and "is there a draftable
+// meeting?" via pure helpers. Reusing the same data for three things
+// avoids both the N+1 trap and a SQL specialised per render concern.
+let meetingsByEntityId = new Map<string, Meeting[]>()
+let quotesByEntityId = new Map<string, Quote[]>()
+if (filterStage === 'meetings' && entities.length > 0) {
+  const ids = entities.map((e) => e.id)
+  ;[meetingsByEntityId, quotesByEntityId] = await Promise.all([
+    getMeetingsForEntities(env.DB, session.orgId, ids),
+    getQuotesForEntities(env.DB, session.orgId, ids),
+  ])
+}
+
 /**
  * Build a `mailto:` URL that pre-fills recipient, subject, and body for
  * the operator's mail client. Returns null when either the contact email
@@ -175,6 +199,27 @@ const EMPTY_STATE_COPY: Record<EntityStage, { headline: string; hint: string }> 
     headline: 'No lost prospects.',
     hint: 'Prospects marked Lost (with a reason) appear here.',
   },
+}
+
+/**
+ * Tone for the per-row meetings sub-state badge. The "completed-awaiting-
+ * proposal" state is the hottest at this stage (operator should draft the
+ * proposal next) — green to read as forward-action available. "Past
+ * scheduled time" reads red so operator can spot meetings that should
+ * already have happened. Other sub-states are neutral.
+ */
+function meetingSubstateBadgeClass(s: MeetingSubstate): string {
+  switch (s) {
+    case 'completed-awaiting-proposal':
+      return 'bg-green-100 text-green-700'
+    case 'past-due':
+      return 'bg-red-100 text-red-700'
+    case 'upcoming':
+      return 'bg-blue-100 text-blue-700'
+    case 'awaiting-booking':
+    default:
+      return 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
+  }
 }
 
 function tierBadgeClass(tier: string | null): string {
@@ -396,6 +441,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
             const website = displayWebsite(e.website)
             const isSignal = e.stage === 'signal'
             const isProspect = e.stage === 'prospect'
+            const isMeetings = e.stage === 'meetings'
             const rowOutreachDraft = isProspect ? (outreachDraftByEntityId.get(e.id) ?? null) : null
             const rowContactEmail = isProspect
               ? (contactEmailByEntityId.get(e.id)?.email ?? null)
@@ -405,6 +451,15 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
               rowContactEmail,
               rowOutreachDraft?.content
             )
+            const rowMeetings = isMeetings ? (meetingsByEntityId.get(e.id) ?? []) : []
+            const rowQuotes = isMeetings ? (quotesByEntityId.get(e.id) ?? []) : []
+            const rowSubstate: MeetingSubstate | null = isMeetings
+              ? getMeetingSubstate(rowMeetings, rowQuotes)
+              : null
+            const rowNextMeeting = isMeetings ? findNextScheduledMeeting(rowMeetings) : null
+            const rowDraftableMeeting = isMeetings
+              ? findDraftableMeeting(rowMeetings, rowQuotes)
+              : null
             const activeQuote =
               filterStage === 'proposing' ? (activeQuoteByEntityId.get(e.id) ?? null) : null
             const quoteTimestamp =
@@ -467,6 +522,13 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                           {e.tier}
                         </span>
                       )}
+                      {rowSubstate && rowSubstate !== 'other' && (
+                        <span
+                          class={`text-xs px-1.5 py-0.5 rounded ${meetingSubstateBadgeClass(rowSubstate)}`}
+                        >
+                          {MEETING_SUBSTATE_LABEL[rowSubstate]}
+                        </span>
+                      )}
                     </div>
 
                     {isSignal && problems.length > 0 && (
@@ -518,6 +580,9 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                           {formatDate(e.stage_changed_at)}
                         </span>
                       )}
+                      {rowNextMeeting && rowNextMeeting.scheduled_at && (
+                        <span>Next meeting {formatDate(rowNextMeeting.scheduled_at)}</span>
+                      )}
                       {e.area && <span>{e.area}</span>}
                       {e.vertical && (
                         <span class="capitalize">{e.vertical.replace(/_/g, ' ')}</span>
@@ -562,7 +627,8 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                   {(() => {
                     const showProspectActions =
                       isProspect && (rowOutreachMailto || rowOutreachDraft)
-                    if (!isSignal && !showProspectActions) return null
+                    const showMeetingsActions = isMeetings && rowDraftableMeeting
+                    if (!isSignal && !showProspectActions && !showMeetingsActions) return null
                     return (
                       <div class="relative z-10 flex items-center gap-2 shrink-0">
                         {isSignal ? (
@@ -584,6 +650,19 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                               </button>
                             </form>
                           </>
+                        ) : isMeetings && rowDraftableMeeting ? (
+                          <form
+                            method="POST"
+                            action={`/api/admin/entities/${e.id}/meetings/${rowDraftableMeeting.id}/draft-quote`}
+                          >
+                            <button
+                              type="submit"
+                              class="text-xs bg-primary text-white px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-primary/90 transition-colors"
+                              title="Create a draft quote from the most recent completed meeting's notes"
+                            >
+                              Draft proposal
+                            </button>
+                          </form>
                         ) : (
                           <>
                             {rowOutreachMailto && (

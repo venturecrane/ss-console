@@ -554,6 +554,48 @@ export async function getActiveQuotesForEntities(
 }
 
 /**
+ * For a batch of entity ids, return a Map keyed by entity_id whose value
+ * is the list of all quotes (any status) for that entity. Used by the
+ * meetings-stage list to ask, per row, "is there any quote already
+ * linked to a completed meeting?" — which is what makes that meeting
+ * NOT draftable.
+ *
+ * Distinct from `getActiveQuotesForEntities` (top-1 active quote per
+ * entity for the proposing tab badge): this returns all quotes,
+ * including terminal statuses (declined, expired, superseded). A
+ * declined quote means the operator already drafted once — the
+ * meeting isn't draftable a second time.
+ *
+ * Empty input returns an empty Map without touching the DB.
+ */
+export async function getQuotesForEntities(
+  db: D1Database,
+  orgId: string,
+  entityIds: string[]
+): Promise<Map<string, Quote[]>> {
+  const result = new Map<string, Quote[]>()
+  if (entityIds.length === 0) return result
+
+  const entityIdsJson = JSON.stringify(entityIds)
+  const rows = await db
+    .prepare(
+      `SELECT * FROM quotes
+       WHERE org_id = ?
+         AND entity_id IN (SELECT value FROM json_each(?))
+       ORDER BY entity_id ASC, created_at ASC`
+    )
+    .bind(orgId, entityIdsJson)
+    .all<Quote>()
+
+  for (const row of rows.results ?? []) {
+    const list = result.get(row.entity_id)
+    if (list) list.push(row)
+    else result.set(row.entity_id, [row])
+  }
+  return result
+}
+
+/**
  * List quotes for a specific entity (portal access).
  *
  * Scoped by both `entity_id` and `org_id` — entity IDs are expected unique,
