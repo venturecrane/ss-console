@@ -24,6 +24,7 @@ import {
   MEETING_SUBSTATE_LABEL,
   type MeetingSubstate,
 } from '../../../lib/entities/meeting-substate'
+import { sortProspectRows, sortMeetingsRows, sortLostRows } from '../../../lib/entities/list-sort'
 import { PIPELINE_LABELS } from '../../../lead-gen/schemas/lead-scoring-schema'
 import type { PipelineId } from '../../../lead-gen/schemas/lead-scoring-schema'
 import {
@@ -90,8 +91,6 @@ if (filterStage === 'proposing' && entities.length > 0) {
     return 0 // preserve DAL order (tier, pain_score, updated_at DESC)
   })
 }
-const displayEntities = filterStage === 'proposing' ? proposingRows : entities
-
 // Prospect-stage row hydration. Two batch queries — latest outreach draft
 // per entity (existence gates Log reply, content powers Send outreach
 // mailto), and the first contact with an email per entity (gates Send
@@ -120,6 +119,22 @@ if (filterStage === 'meetings' && entities.length > 0) {
     getMeetingsForEntities(env.DB, session.orgId, ids),
     getQuotesForEntities(env.DB, session.orgId, ids),
   ])
+}
+
+// Per-stage display order. Hydrators above feed the in-memory re-sorts
+// for prospect / meetings / lost; proposing already uses its own sort
+// (oldest sent_at first). Other stages keep DAL order.
+let displayEntities: Entity[]
+if (filterStage === 'proposing') {
+  displayEntities = proposingRows
+} else if (filterStage === 'prospect') {
+  displayEntities = sortProspectRows(entities, outreachDraftByEntityId)
+} else if (filterStage === 'meetings') {
+  displayEntities = sortMeetingsRows(entities, meetingsByEntityId, quotesByEntityId)
+} else if (filterStage === 'lost') {
+  displayEntities = sortLostRows(entities)
+} else {
+  displayEntities = entities
 }
 
 /**
