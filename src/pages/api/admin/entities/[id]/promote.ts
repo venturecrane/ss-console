@@ -14,7 +14,9 @@ import { env } from 'cloudflare:workers'
  * lead-gen workers), so on the typical signal this endpoint finds the entity
  * already fully enriched and `enrichEntity` returns `alreadyEnriched: true`
  * without re-billing Claude. For entities that arrived before the at-ingest
- * refactor shipped, the call does an on-demand backfill.
+ * refactor shipped, the call does an on-demand backfill — but it runs under
+ * ctx.waitUntil so a 12-module pipeline doesn't blow past Worker CPU /
+ * subrequest limits and crash the redirect (Error 1101 on admin click).
  */
 export const POST: APIRoute = async ({ params, locals, redirect }) => {
   const session = locals.session
@@ -40,9 +42,19 @@ export const POST: APIRoute = async ({ params, locals, redirect }) => {
       return redirect('/admin/entities?error=not_found', 302)
     }
 
-    // Backfill enrichment if this signal predates the at-ingest refactor.
-    // No-op when an intelligence_brief already exists.
-    await enrichEntity(env, session.orgId, entityId, { mode: 'full' })
+    // Enrichment backfill runs in the background. On the typical path the
+    // entity was already enriched at ingest so this resolves immediately via
+    // the alreadyEnriched short-circuit. On backfill it can hit 10+ external
+    // APIs and multiple Claude calls — awaiting that from the request path
+    // blew past Worker limits (Error 1101) on ~50% of promotes.
+    const enrichPromise = enrichEntity(env, session.orgId, entityId, { mode: 'full' }).catch(
+      (err) => {
+        console.error('[promote] Background enrichment failed:', err)
+      }
+    )
+    if (locals.cfContext?.waitUntil) {
+      locals.cfContext.waitUntil(enrichPromise)
+    }
 
     try {
       await scheduleProspectCadence(env.DB, session.orgId, entityId, new Date().toISOString())
