@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro'
 import { verifyPassword } from '../../../lib/auth/password'
 import { createSession, buildSessionCookie } from '../../../lib/auth/session'
+import { rateLimitByIp } from '../../../lib/booking/rate-limit'
 import { env } from 'cloudflare:workers'
 
 interface UserRow {
@@ -30,6 +31,13 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     const isLocalDev = requestHost === 'localhost' || requestHost === '127.0.0.1'
     if (!isLocalDev && !requestHost.startsWith('admin.')) {
       return redirect('/auth/login?error=wrong_host', 302)
+    }
+
+    // Rate limit: 10 attempts/hour per IP — checked before any DB lookup
+    const clientIp = request.headers.get('cf-connecting-ip') ?? undefined
+    const rateLimitResult = await rateLimitByIp(env.BOOKING_CACHE, 'auth-login', clientIp, 10)
+    if (!rateLimitResult.allowed) {
+      return redirect('/auth/login?error=rate_limited', 302)
     }
 
     const formData = await request.formData()

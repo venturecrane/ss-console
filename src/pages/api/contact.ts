@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro'
 import { sendEmail } from '../../lib/email/resend'
+import { rateLimitByIp } from '../../lib/booking/rate-limit'
 import { env } from 'cloudflare:workers'
 
 /**
@@ -18,6 +19,13 @@ const CONTROL_CHAR_RE = /[\r\n\0]/
 const NOTIFY_EMAIL = 'team@smd.services'
 
 export const POST: APIRoute = async ({ request }) => {
+  // Rate limit: 3 requests/hour per IP
+  const clientIp = request.headers.get('cf-connecting-ip') ?? undefined
+  const rateLimitResult = await rateLimitByIp(env.BOOKING_CACHE, 'contact', clientIp, 3)
+  if (!rateLimitResult.allowed) {
+    return jsonResponse(429, { error: 'Too many requests, please try again later.' })
+  }
+
   let body: Record<string, unknown>
   try {
     body = (await request.json()) as Record<string, unknown>

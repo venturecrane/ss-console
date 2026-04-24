@@ -256,3 +256,36 @@ describe('auth: env.d.ts types', () => {
     expect(source).toContain('session: AuthSession | null')
   })
 })
+
+describe('auth: login endpoint rate limiting', () => {
+  it('login endpoint imports rateLimitByIp', () => {
+    const source = readFileSync(resolve('src/pages/api/auth/login.ts'), 'utf-8')
+    expect(source).toContain('rateLimitByIp')
+    expect(source).toContain('rate-limit')
+  })
+
+  it('login endpoint rate limit uses auth-login bucket', () => {
+    const source = readFileSync(resolve('src/pages/api/auth/login.ts'), 'utf-8')
+    expect(source).toContain('auth-login')
+  })
+
+  it('login endpoint redirects to rate_limited error on block', () => {
+    const source = readFileSync(resolve('src/pages/api/auth/login.ts'), 'utf-8')
+    expect(source).toContain('rate_limited')
+  })
+
+  it('login page has rate_limited error message', () => {
+    const source = readFileSync(resolve('src/pages/auth/login.astro'), 'utf-8')
+    expect(source).toContain('rate_limited')
+    expect(source).toContain('Too many sign-in attempts')
+  })
+
+  it('rate limit check occurs before DB lookup', () => {
+    const source = readFileSync(resolve('src/pages/api/auth/login.ts'), 'utf-8')
+    const rateLimitIdx = source.indexOf('rateLimitByIp')
+    const dbLookupIdx = source.indexOf('SELECT * FROM users')
+    expect(rateLimitIdx).toBeGreaterThan(-1)
+    expect(dbLookupIdx).toBeGreaterThan(-1)
+    expect(rateLimitIdx).toBeLessThan(dbLookupIdx)
+  })
+})

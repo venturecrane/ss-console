@@ -16,6 +16,7 @@ const errorMessages: Record<string, string> = {
   missing: 'Please enter both email and password.',
   server: 'Something went wrong. Please try again.',
   wrong_host: 'Admin sign-in must be done at admin.smd.services. Please use that URL.',
+  rate_limited: 'Too many sign-in attempts. Please wait a few minutes and try again.',
 }
 
 const errorMessage = error ? (errorMessages[error] ?? errorMessages.server) : null
