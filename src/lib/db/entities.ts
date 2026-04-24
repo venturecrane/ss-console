@@ -252,9 +252,10 @@ export async function countEntitiesPerStage(
     .prepare('SELECT stage, COUNT(*) as count FROM entities WHERE org_id = ? GROUP BY stage')
     .bind(orgId)
     .all<{ stage: EntityStage; count: number }>()
-  const counts = Object.fromEntries(
-    ENTITY_STAGES.map((s) => [s.value, 0])
-  ) as Record<EntityStage, number>
+  const counts = Object.fromEntries(ENTITY_STAGES.map((s) => [s.value, 0])) as Record<
+    EntityStage,
+    number
+  >
   for (const row of rows.results ?? []) {
     counts[row.stage] = row.count
   }
