@@ -1,9 +1,15 @@
+---
+const navLinks = [
+  { href: '/ai', label: 'AI' },
+  { href: '/contact', label: 'Contact' },
+]
+---
+
 <footer
-  class="border-t-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-surface-inverse)] py-14 text-white"
+  class="border-t-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-surface-inverse)] py-12 sm:py-14 text-white"
 >
-  <div
-    class="mx-auto flex w-full max-w-5xl flex-col items-start justify-between gap-8 px-6 md:flex-row md:items-center"
-  >
+  <div class="mx-auto w-full max-w-5xl px-6 md:flex md:items-center md:justify-between md:gap-8">
+    <!-- Brand block -->
     <div>
       <a
         href="/"
@@ -21,17 +27,28 @@
         &copy; 2026 SMDurgan, LLC. Phoenix, Arizona.
       </p>
     </div>
-    <nav class="flex flex-wrap items-center gap-x-6 gap-y-4 sm:gap-x-8">
-      <a
-        class="font-['Archivo_Narrow'] text-sm font-semibold uppercase tracking-[0.12em] text-[color:var(--color-text-muted)] hover:text-white"
-        href="/ai">AI</a
+
+    <!-- Mobile: stacked nav with hairline dividers, then full-width CTA.
+         Desktop (md+): inline links + CTA right-aligned. -->
+    <nav aria-label="Footer primary" class="mt-10 md:mt-0 md:flex md:items-center md:gap-8">
+      <ul
+        class="flex flex-col divide-y divide-[color:rgba(245,240,227,0.14)] border-y border-[color:rgba(245,240,227,0.14)] md:flex-row md:divide-y-0 md:border-0 md:gap-8"
       >
+        {
+          navLinks.map((item) => (
+            <li>
+              <a
+                class="flex items-center min-h-12 py-3 md:py-0 font-['Archivo_Narrow'] text-sm font-semibold uppercase tracking-[0.12em] text-[color:var(--color-text-muted)] hover:text-white"
+                href={item.href}
+              >
+                {item.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
       <a
-        class="font-['Archivo_Narrow'] text-sm font-semibold uppercase tracking-[0.12em] text-[color:var(--color-text-muted)] hover:text-white"
-        href="/contact">Contact</a
-      >
-      <a
-        class="inline-flex items-center whitespace-nowrap border-[3px] border-white bg-[color:var(--color-primary)] px-4 sm:px-5 py-2 font-['Archivo'] text-xs sm:text-sm font-bold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[color:var(--color-primary-hover)]"
+        class="mt-6 md:mt-0 inline-flex items-center justify-center w-full md:w-auto whitespace-nowrap border-[3px] border-white bg-[color:var(--color-primary)] px-5 py-3 md:py-2 font-['Archivo'] text-sm font-bold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[color:var(--color-primary-hover)]"
         href="/book">Book a Call</a
       >
     </nav>
