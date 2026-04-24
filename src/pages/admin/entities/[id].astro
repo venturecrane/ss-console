@@ -2,6 +2,9 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro'
 import LogReplyDialog from '../../../components/admin/LogReplyDialog.astro'
 import { statusBadgeClass } from '../../../lib/ui/status-badge'
+import { pipelineBadgeClass } from '../../../lib/ui/pipeline-badge'
+import { PIPELINE_LABELS } from '../../../lead-gen/schemas/lead-scoring-schema'
+import type { PipelineId } from '../../../lead-gen/schemas/lead-scoring-schema'
 import { getEntity, ENTITY_STAGES } from '../../../lib/db/entities'
 import type { EntityStage } from '../../../lib/db/entities'
 import { LOST_REASONS, lostReasonLabel, lostReasonChipClass } from '../../../lib/db/lost-reasons'
@@ -477,16 +480,6 @@ function confidenceColor(confidence: string): string {
         <div
           class="flex items-center gap-stack text-sm text-[color:var(--color-text-secondary)] mb-2 flex-wrap"
         >
-          {
-            entity.pain_score && (
-              <span>
-                Pain:{' '}
-                <strong class="text-[color:var(--color-text-primary)]">
-                  {entity.pain_score}/10
-                </strong>
-              </span>
-            )
-          }
           {entity.vertical && <span class="capitalize">{entity.vertical.replace(/_/g, ' ')}</span>}
           {entity.area && <span>{entity.area}</span>}
           {entity.employee_count && <span>~{entity.employee_count} employees</span>}
@@ -495,7 +488,9 @@ function confidenceColor(confidence: string): string {
         <div class="flex items-center gap-row text-xs text-[color:var(--color-text-muted)]">
           {
             entity.source_pipeline && (
-              <span>Source: {entity.source_pipeline.replace(/_/g, ' ')}</span>
+              <span class={pipelineBadgeClass(entity.source_pipeline)}>
+                {PIPELINE_LABELS[entity.source_pipeline as PipelineId] ?? entity.source_pipeline}
+              </span>
             )
           }
           <span>Created {formatDate(entity.created_at)}</span>
@@ -848,11 +843,6 @@ function confidenceColor(confidence: string): string {
                   <span class="text-xs text-[color:var(--color-text-muted)]">
                     {formatDateTime(entry.created_at)}
                   </span>
-                  {entry.type === 'signal' && meta?.pain_score && (
-                    <span class="text-xs font-semibold text-red-600">
-                      Pain: {String(meta.pain_score)}/10
-                    </span>
-                  )}
                   {replySentiment && (
                     <span class="text-xs px-1.5 py-0.5 rounded bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)] capitalize">
                       {replySentiment.replace(/_/g, ' ')}

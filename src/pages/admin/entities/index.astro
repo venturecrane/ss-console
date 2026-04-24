@@ -18,6 +18,7 @@ import {
   LEGACY_PROBLEM_LABELS,
 } from '../../../portal/assessments/extraction-schema'
 import { statusBadgeClass } from '../../../lib/ui/status-badge'
+import { pipelineBadgeClass } from '../../../lib/ui/pipeline-badge'
 import { relativeTime } from '../../../lib/admin/relative-time'
 import { env } from 'cloudflare:workers'
 
@@ -96,27 +97,6 @@ const LEAD_PIPELINES = [
   { value: 'social_listening', label: 'Social Listening' },
 ]
 
-function pipelineBadgeClass(pipeline: string): string {
-  switch (pipeline) {
-    case 'review_mining':
-      return 'bg-amber-100 text-amber-700'
-    case 'job_monitor':
-      return 'bg-blue-100 text-blue-700'
-    case 'new_business':
-      return 'bg-green-100 text-green-700'
-    case 'social_listening':
-      return 'bg-purple-100 text-purple-700'
-    case 'website_booking':
-      return 'bg-indigo-100 text-indigo-700'
-    case 'website_scorecard':
-      return 'bg-violet-100 text-violet-700'
-    case 'website_intake':
-      return 'bg-teal-100 text-teal-700'
-    default:
-      return 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
-  }
-}
-
 function tierBadgeClass(tier: string | null): string {
   switch (tier) {
     case 'hot':
@@ -130,13 +110,6 @@ function tierBadgeClass(tier: string | null): string {
     default:
       return ''
   }
-}
-
-function painScoreClass(score: number | null): string {
-  if (!score) return 'text-[color:var(--color-text-muted)]'
-  if (score >= 8) return 'text-red-600 font-bold'
-  if (score >= 6) return 'text-amber-600 font-semibold'
-  return 'text-[color:var(--color-text-secondary)]'
 }
 
 function stageBadgeClass(stage: string): string {
@@ -379,15 +352,8 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                         </>
                       )}
                       {e.source_pipeline && (
-                        <span
-                          class={`text-xs px-2 py-0.5 rounded ${pipelineBadgeClass(e.source_pipeline)}`}
-                        >
+                        <span class={pipelineBadgeClass(e.source_pipeline)}>
                           {PIPELINE_LABELS[e.source_pipeline as PipelineId] ?? e.source_pipeline}
-                        </span>
-                      )}
-                      {e.pain_score && (
-                        <span class={`text-xs ${painScoreClass(e.pain_score)}`}>
-                          Pain: {e.pain_score}/10
                         </span>
                       )}
                       {e.tier && (
