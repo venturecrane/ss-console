@@ -50,7 +50,7 @@ const navItems = [
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link
-      href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;900&family=Archivo+Narrow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <link
@@ -65,17 +65,17 @@ const navItems = [
     <SkipToMain />
     <header
       role="banner"
-      class="sticky top-0 z-50 h-14 md:h-16 bg-white border-b border-[color:var(--color-border)]"
+      class="sticky top-0 z-50 h-14 md:h-16 bg-[color:var(--color-background)] border-b-[3px] border-[color:var(--color-text-primary)]"
     >
       <div class={`${maxWidth} mx-auto h-full px-4 md:px-6 flex items-center justify-between`}>
         <div class="flex items-center gap-3">
           <a
             href="/admin"
-            class="text-lg font-bold text-[color:var(--color-text-primary)] hover:text-[color:var(--color-primary)] active:text-[color:var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
+            class="font-['Archivo'] text-lg font-black uppercase tracking-[-0.01em] text-[color:var(--color-text-primary)] hover:text-[color:var(--color-primary)] active:text-[color:var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 transition-colors"
             >SMD Services</a
           >
           <span
-            class="text-xs bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)] px-2 py-0.5 rounded"
+            class="font-['Archivo_Narrow'] text-[11px] font-bold uppercase tracking-[0.14em] border border-[color:var(--color-text-primary)] px-2 py-0.5 text-[color:var(--color-text-primary)]"
             >Admin</span
           >
         </div>
@@ -91,9 +91,9 @@ const navItems = [
                     href={item.href}
                     aria-current={active ? 'page' : undefined}
                     class:list={[
-                      'inline-flex items-center min-h-11 px-2 -mx-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded',
+                      "inline-flex items-center min-h-11 px-2 -mx-2 font-['Archivo_Narrow'] text-sm font-semibold uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2",
                       active
-                        ? 'text-[color:var(--color-primary)] font-medium'
+                        ? 'text-[color:var(--color-primary)] border-b-2 border-[color:var(--color-primary)]'
                         : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)]',
                     ]}
                   >
@@ -124,7 +124,7 @@ const navItems = [
             <span class="material-symbols-outlined" aria-hidden="true">menu</span>
           </summary>
           <div
-            class="absolute right-0 top-12 w-64 bg-white border border-[color:var(--color-border)] rounded-[var(--radius-card)] p-2 z-50"
+            class="absolute right-0 top-12 w-64 bg-[color:var(--color-background)] border-[3px] border-[color:var(--color-text-primary)] p-2 z-50"
           >
             <nav aria-label="Primary" class="flex flex-col">
               {

@@ -7,7 +7,9 @@ import CtaButton from './CtaButton.astro'
     <h1
       class="mb-10 font-['Archivo'] text-5xl font-black uppercase leading-[0.92] tracking-[-0.025em] text-[color:var(--color-text-primary)] md:text-[7rem]"
     >
-      Your Business Has Outgrown How You Run It.
+      Your Business Has Outgrown How You <span class="text-[color:var(--color-primary)]"
+        >Run It.</span
+      >
     </h1>
     <p
       class="mx-auto mb-12 max-w-2xl font-['Archivo'] text-xl leading-relaxed text-[color:var(--color-text-secondary)]"
@@ -15,6 +17,16 @@ import CtaButton from './CtaButton.astro'
       You know where you want to go. We help you figure out what needs to change and build it with
       you.
     </p>
-    <CtaButton href="/book" data-ev="home-primary-cta">Book a Call</CtaButton>
+    <div class="flex flex-col sm:flex-row items-center justify-center gap-0">
+      <CtaButton href="/book" data-ev="home-primary-cta">Book a Call</CtaButton>
+      <CtaButton
+        variant="secondary"
+        href="/get-started"
+        data-ev="home-secondary-cta"
+        class="sm:border-l-0"
+      >
+        Tell us about your business
+      </CtaButton>
+    </div>
   </div>
 </section>
