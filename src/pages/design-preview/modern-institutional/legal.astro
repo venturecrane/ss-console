@@ -1,0 +1,186 @@
+---
+import Base from '../../../layouts/Base.astro'
+---
+
+<Base title="Privacy — SMD Services (Modern Institutional preview)">
+  <header class="site-header">
+    <a href="/design-preview/modern-institutional/" class="brand" aria-label="SMD Services">
+      <span class="wordmark"><span>SMD</span> <em>Services</em></span>
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <ul>
+        <li><a href="/design-preview/modern-institutional/">Home</a></li>
+        <li><a href="/design-preview/modern-institutional/contact">Contact</a></li>
+        <li><a href="/design-preview/modern-institutional/contact" class="cta">Book a call</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main" class="legal">
+    <div class="meta-line">Last updated · April 18, 2026</div>
+    <h2>Privacy Policy</h2>
+
+    <h3>§ 01 What we collect</h3>
+    <p>
+      SMDurgan, LLC ("we") collects only what is needed to respond to inquiries and operate client
+      engagements: the name, email, company, and message you submit through this site, plus any
+      operating data you share during an active engagement.
+    </p>
+
+    <h3>§ 02 How we use it</h3>
+    <p>
+      We use your information to reply to your inquiry, deliver services you've engaged us for, and
+      maintain records required by law. We do not sell your data. We do not share it with third
+      parties except as needed to operate our business (accounting software, email provider) or as
+      required by law.
+    </p>
+
+    <h3>§ 03 Retention</h3>
+    <p>
+      Inquiry messages are retained for twelve months. Client engagement records are retained for
+      seven years to comply with professional and tax record-keeping requirements, then deleted.
+    </p>
+
+    <h3>§ 04 Your rights</h3>
+    <p>
+      You may request a copy of the information we hold about you, or request that we delete it, by
+      emailing <a href="mailto:privacy@smdurgan.com">privacy@smdurgan.com</a>. We will respond
+      within thirty days.
+    </p>
+
+    <h3>§ 05 Contact</h3>
+    <p>
+      SMDurgan, LLC · Phoenix, Arizona ·
+      <a href="mailto:privacy@smdurgan.com">privacy@smdurgan.com</a>
+    </p>
+  </main>
+
+  <footer class="site-footer">
+    <div class="copyright">© 2026 SMDurgan, LLC · Phoenix, Arizona</div>
+    <nav class="site-nav" aria-label="Footer">
+      <ul>
+        <li><a href="/design-preview/modern-institutional/">Home</a></li>
+        <li><a href="/design-preview/modern-institutional/contact">Contact</a></li>
+      </ul>
+    </nav>
+  </footer>
+</Base>
+
+<style>
+  .site-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 40px;
+    max-width: 1180px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+  }
+  .brand .wordmark {
+    font-family: var(--font-display);
+    font-size: 22px;
+    line-height: 1;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--color-text-primary);
+  }
+  .brand .wordmark em {
+    color: var(--color-primary);
+    font-style: italic;
+    font-weight: 500;
+  }
+  .site-nav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    gap: 24px;
+    align-items: center;
+  }
+  .site-nav a {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    text-decoration: none;
+    transition: color var(--motion-default);
+  }
+  .site-nav a:hover,
+  .site-nav a.active {
+    color: var(--color-text-primary);
+  }
+  .site-nav a.cta {
+    background: var(--color-primary);
+    color: white;
+    padding: 8px 20px;
+  }
+  .site-nav a.cta:hover {
+    background: var(--color-primary-hover);
+    color: white;
+  }
+
+  .legal {
+    padding: 64px 40px;
+    max-width: 760px;
+    margin: 0 auto;
+    background: var(--color-background);
+  }
+  .legal .meta-line {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--color-meta);
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+  .legal h2 {
+    margin-bottom: 10px;
+  }
+  .legal h3 {
+    margin-top: 32px;
+    margin-bottom: 10px;
+  }
+  .legal p {
+    color: var(--color-text-secondary);
+    font-size: 16px;
+    line-height: 1.7;
+    margin-bottom: 14px;
+  }
+
+  .site-footer {
+    padding: 32px 40px;
+    max-width: 1180px;
+    margin: 0 auto;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-background);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    font-size: 14px;
+    color: var(--color-text-secondary);
+  }
+  .site-footer .copyright {
+    font-size: 13px;
+    color: var(--color-text-muted);
+  }
+
+  @media (max-width: 768px) {
+    .site-header,
+    .legal,
+    .site-footer {
+      padding-left: 24px;
+      padding-right: 24px;
+    }
+    .legal {
+      padding-top: 48px;
+      padding-bottom: 48px;
+    }
+  }
+</style>
