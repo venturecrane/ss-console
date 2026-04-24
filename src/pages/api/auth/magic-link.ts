@@ -3,6 +3,7 @@ import { createMagicLink } from '../../../lib/auth/magic-link'
 import { requirePortalBaseUrl } from '../../../lib/config/app-url'
 import { sendEmail } from '../../../lib/email/resend'
 import { buildMagicLinkUrl, magicLinkEmailHtml } from '../../../lib/email/templates'
+import { rateLimitByIp } from '../../../lib/booking/rate-limit'
 import { env } from 'cloudflare:workers'
 
 interface UserRow {
@@ -28,6 +29,13 @@ interface UserRow {
  */
 export const POST: APIRoute = async ({ request, redirect }) => {
   try {
+    // Rate limit: 5 requests/hour per IP — checked first, before any DB lookup
+    const clientIp = request.headers.get('cf-connecting-ip') ?? undefined
+    const rateLimitResult = await rateLimitByIp(env.BOOKING_CACHE, 'auth-magic', clientIp, 5)
+    if (!rateLimitResult.allowed) {
+      return redirect('/auth/portal-login?error=rate_limited', 302)
+    }
+
     const formData = await request.formData()
     const email = formData.get('email')
 
