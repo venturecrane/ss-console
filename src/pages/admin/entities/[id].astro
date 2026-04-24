@@ -17,6 +17,7 @@ import { listMeetings } from '../../../lib/db/meetings'
 import { listEngagements } from '../../../lib/db/engagements'
 import { listQuotes, hasOpenQuoteForEntity } from '../../../lib/db/quotes'
 import { listInvoices } from '../../../lib/db/invoices'
+import { findDraftableMeeting } from '../../../lib/entities/draftable-meeting'
 import { env } from 'cloudflare:workers'
 
 /**
@@ -41,13 +42,18 @@ const [contextEntries, contacts, meetings, engagements, quotes, invoices] = awai
   listInvoices(env.DB, session.orgId, { entityId }),
 ])
 
-// A meeting is "draft-able" if it was completed (has extraction or completion
-// notes) and no quote has been derived from it yet. See issue #470 — proposal
-// drafting is an explicit admin action, never a side effect of completion.
-const completedMeetings = meetings.filter((m) => m.status === 'completed')
-const meetingIdsWithQuotes = new Set(quotes.map((q) => q.meeting_id ?? q.assessment_id))
-const draftableMeetings = completedMeetings.filter((m) => !meetingIdsWithQuotes.has(m.id))
-const mostRecentDraftableMeeting = draftableMeetings[0] ?? null
+// A meeting is "draft-able" if it was completed and no quote has been
+// derived from it yet. See issue #470 — proposal drafting is an explicit
+// admin action, never a side effect of completion. Logic lives in
+// `src/lib/entities/draftable-meeting.ts` so the entity list and detail
+// share one source of truth.
+const mostRecentDraftableMeeting = findDraftableMeeting(meetings, quotes)
+
+// "Has outreach" = at least one outreach_draft context entry exists. Used
+// to gate the "Log reply" toolbar action: if the operator hasn't drafted
+// outreach yet, there's nothing for the prospect to be replying to. See
+// `getEntityIdsWithOutreach` for the batch version used on the list.
+const hasOutreach = contextEntries.some((e) => e.type === 'outreach_draft')
 
 // Reverse for newest-first display
 const timelineEntries = [...contextEntries].reverse()
@@ -708,7 +714,10 @@ function confidenceColor(confidence: string): string {
           )
         }
         {
-          entity.stage === 'prospect' && (
+          /* H3 — Log reply is hidden until outreach has been drafted. The
+             button only makes sense once there's something the prospect
+             could reply *to*. `hasOutreach` is the practical proxy. */
+          entity.stage === 'prospect' && hasOutreach && (
             <button
               type="button"
               data-open-reply-dialog={entity.id}

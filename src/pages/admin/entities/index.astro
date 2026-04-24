@@ -11,6 +11,10 @@ import type { Entity, EntityStage, EntitySignalMetadata } from '../../../lib/db/
 import { getActiveQuotesForEntities } from '../../../lib/db/quotes'
 import type { Quote } from '../../../lib/db/quotes'
 import { LOST_REASONS } from '../../../lib/db/lost-reasons'
+import { getLatestOutreachDraftForEntities } from '../../../lib/db/context'
+import type { ContextEntry } from '../../../lib/db/context'
+import { getFirstContactWithEmailForEntities } from '../../../lib/db/contacts'
+import type { Contact } from '../../../lib/db/contacts'
 import { PIPELINE_LABELS } from '../../../lead-gen/schemas/lead-scoring-schema'
 import type { PipelineId } from '../../../lead-gen/schemas/lead-scoring-schema'
 import {
@@ -78,6 +82,39 @@ if (filterStage === 'proposing' && entities.length > 0) {
   })
 }
 const displayEntities = filterStage === 'proposing' ? proposingRows : entities
+
+// Prospect-stage row hydration. Two batch queries — latest outreach draft
+// per entity (existence gates Log reply, content powers Send outreach
+// mailto), and the first contact with an email per entity (gates Send
+// outreach and provides the recipient). Both bounded by the page's
+// prospect rows; skipped entirely on other stages or when empty.
+let outreachDraftByEntityId = new Map<string, ContextEntry>()
+let contactEmailByEntityId = new Map<string, Contact>()
+if (filterStage === 'prospect' && entities.length > 0) {
+  const ids = entities.map((e) => e.id)
+  ;[outreachDraftByEntityId, contactEmailByEntityId] = await Promise.all([
+    getLatestOutreachDraftForEntities(env.DB, session.orgId, ids),
+    getFirstContactWithEmailForEntities(env.DB, session.orgId, ids),
+  ])
+}
+
+/**
+ * Build a `mailto:` URL that pre-fills recipient, subject, and body for
+ * the operator's mail client. Returns null when either the contact email
+ * or the outreach draft is missing — caller hides the button.
+ */
+function buildOutreachMailto(
+  entityName: string,
+  contactEmail: string | null | undefined,
+  draftContent: string | null | undefined
+): string | null {
+  if (!contactEmail || !draftContent) return null
+  return (
+    `mailto:${encodeURIComponent(contactEmail)}` +
+    `?subject=${encodeURIComponent(`Reaching out — ${entityName}`)}` +
+    `&body=${encodeURIComponent(draftContent)}`
+  )
+}
 
 // `dismissed=1&name=...` lands here from /api/admin/entities/[id]/dismiss.
 // Promote redirects to the detail page (/admin/entities/[id]?promoted=1)
@@ -358,6 +395,16 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
             const lastActivity = meta?.last_activity_at ?? null
             const website = displayWebsite(e.website)
             const isSignal = e.stage === 'signal'
+            const isProspect = e.stage === 'prospect'
+            const rowOutreachDraft = isProspect ? (outreachDraftByEntityId.get(e.id) ?? null) : null
+            const rowContactEmail = isProspect
+              ? (contactEmailByEntityId.get(e.id)?.email ?? null)
+              : null
+            const rowOutreachMailto = buildOutreachMailto(
+              e.name,
+              rowContactEmail,
+              rowOutreachDraft?.content
+            )
             const activeQuote =
               filterStage === 'proposing' ? (activeQuoteByEntityId.get(e.id) ?? null) : null
             const quoteTimestamp =
@@ -512,38 +559,56 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                     </div>
                   </div>
 
-                  {(isSignal || e.stage === 'prospect') && (
-                    <div class="relative z-10 flex items-center gap-2 shrink-0">
-                      {isSignal ? (
-                        <>
-                          <form method="POST" action={`/api/admin/entities/${e.id}/promote`}>
-                            <button
-                              type="submit"
-                              class="text-xs bg-primary text-white px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-primary/90 transition-colors"
-                            >
-                              Promote
-                            </button>
-                          </form>
-                          <form method="POST" action={`/api/admin/entities/${e.id}/dismiss`}>
-                            <button
-                              type="submit"
-                              class="text-xs bg-[color:var(--color-background)] text-[color:var(--color-text-secondary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-border-subtle)] transition-colors"
-                            >
-                              Dismiss
-                            </button>
-                          </form>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          data-open-reply-dialog={e.id}
-                          class="text-xs border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-background)] transition-colors"
-                        >
-                          Log reply
-                        </button>
-                      )}
-                    </div>
-                  )}
+                  {(() => {
+                    const showProspectActions =
+                      isProspect && (rowOutreachMailto || rowOutreachDraft)
+                    if (!isSignal && !showProspectActions) return null
+                    return (
+                      <div class="relative z-10 flex items-center gap-2 shrink-0">
+                        {isSignal ? (
+                          <>
+                            <form method="POST" action={`/api/admin/entities/${e.id}/promote`}>
+                              <button
+                                type="submit"
+                                class="text-xs bg-primary text-white px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-primary/90 transition-colors"
+                              >
+                                Promote
+                              </button>
+                            </form>
+                            <form method="POST" action={`/api/admin/entities/${e.id}/dismiss`}>
+                              <button
+                                type="submit"
+                                class="text-xs bg-[color:var(--color-background)] text-[color:var(--color-text-secondary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-border-subtle)] transition-colors"
+                              >
+                                Dismiss
+                              </button>
+                            </form>
+                          </>
+                        ) : (
+                          <>
+                            {rowOutreachMailto && (
+                              <a
+                                href={rowOutreachMailto}
+                                class="text-xs border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-background)] transition-colors"
+                                title={`Open mail to ${rowContactEmail} with the draft pre-filled`}
+                              >
+                                Send outreach
+                              </a>
+                            )}
+                            {rowOutreachDraft && (
+                              <button
+                                type="button"
+                                data-open-reply-dialog={e.id}
+                                class="text-xs border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-background)] transition-colors"
+                              >
+                                Log reply
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
             )
@@ -554,9 +619,11 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
   }
 
   {
-    /* One dialog per prospect row — triggered by data-open-reply-dialog */
+    /* One dialog per prospect row that actually exposes a Log reply
+       button — H3 hides the button when no outreach has been drafted,
+       so we don't need the dialog markup for those rows either. */
     displayEntities
-      .filter((e: Entity) => e.stage === 'prospect')
+      .filter((e: Entity) => e.stage === 'prospect' && outreachDraftByEntityId.has(e.id))
       .map((e: Entity) => <LogReplyDialog entityId={e.id} entityName={e.name} />)
   }
 

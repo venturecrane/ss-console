@@ -228,6 +228,53 @@ export async function listContext(
 }
 
 /**
+ * For a batch of entity ids, return a Map keyed by entity_id whose value
+ * is the latest `outreach_draft` context entry for that entity. Used by
+ * the entity list to gate "Log reply" (existence check via Map.has) and
+ * to build a "Send outreach" mailto (content from Map.get) without an
+ * N+1.
+ *
+ * Outreach-drafted is the practical proxy for "outreach exists" because
+ * we don't yet record send events explicitly (the mailto: button kicks
+ * the user into their mail client and we can't observe what happens
+ * next). A drafted but never-sent outreach overcounts slightly; that's
+ * the conservative direction — we'd rather show a Log reply button on
+ * a row that's *almost* ready than hide it on a row where outreach
+ * actually happened.
+ *
+ * Empty input returns an empty Map without touching the DB.
+ */
+export async function getLatestOutreachDraftForEntities(
+  db: D1Database,
+  orgId: string,
+  entityIds: string[]
+): Promise<Map<string, ContextEntry>> {
+  const result = new Map<string, ContextEntry>()
+  if (entityIds.length === 0) return result
+
+  const placeholders = entityIds.map(() => '?').join(', ')
+  // Order entity_id, created_at DESC so the first row per entity is the
+  // most recent draft; later rows we ignore. Cheaper than a window
+  // function on D1 for this volume.
+  const rows = await db
+    .prepare(
+      `SELECT * FROM context
+       WHERE org_id = ? AND type = 'outreach_draft'
+         AND entity_id IN (${placeholders})
+       ORDER BY entity_id ASC, created_at DESC`
+    )
+    .bind(orgId, ...entityIds)
+    .all<ContextEntry>()
+
+  for (const row of rows.results ?? []) {
+    if (!result.has(row.entity_id)) {
+      result.set(row.entity_id, row)
+    }
+  }
+  return result
+}
+
+/**
  * Count context entries for an entity.
  */
 export async function countContext(db: D1Database, entityId: string): Promise<number> {

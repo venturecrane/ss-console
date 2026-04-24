@@ -34,6 +34,44 @@ export interface UpdateContactData {
 }
 
 /**
+ * For a batch of entity ids, return a Map keyed by entity_id whose value
+ * is the first (alphabetical-by-name) contact that has a non-empty email.
+ * Used by the entity list to know — without an N+1 — whether a row should
+ * surface a "Send outreach" mailto and which address it targets.
+ *
+ * Entities with no email-bearing contact are simply absent from the Map.
+ * Empty input returns an empty Map without touching the DB.
+ */
+export async function getFirstContactWithEmailForEntities(
+  db: D1Database,
+  orgId: string,
+  entityIds: string[]
+): Promise<Map<string, Contact>> {
+  const result = new Map<string, Contact>()
+  if (entityIds.length === 0) return result
+
+  const placeholders = entityIds.map(() => '?').join(', ')
+  const rows = await db
+    .prepare(
+      `SELECT * FROM contacts
+       WHERE org_id = ? AND entity_id IN (${placeholders})
+         AND email IS NOT NULL AND email <> ''
+       ORDER BY entity_id ASC, name ASC`
+    )
+    .bind(orgId, ...entityIds)
+    .all<Contact>()
+
+  // ORDER BY entity_id, name means the first row per entity is the
+  // alphabetical-name pick; subsequent rows we ignore.
+  for (const row of rows.results ?? []) {
+    if (!result.has(row.entity_id)) {
+      result.set(row.entity_id, row)
+    }
+  }
+  return result
+}
+
+/**
  * List contacts for an entity, scoped to an organization.
  */
 export async function listContacts(
