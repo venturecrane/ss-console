@@ -811,7 +811,7 @@ function confidenceColor(confidence: string): string {
         </div>
       ) : (
         <div class="space-y-row">
-          {filteredEntries.map((entry: ContextEntry) => {
+          {filteredEntries.map((entry: ContextEntry, idx: number) => {
             const meta = parseMetadata(entry.metadata)
             const problems = meta?.top_problems as string[] | undefined
             const isLong = entry.content.length > 500
@@ -820,9 +820,14 @@ function confidenceColor(confidence: string): string {
             const replyNextAction = isReplyLog
               ? (meta?.next_action as string | undefined)
               : undefined
+            // Open by default for the most recent N entries; older entries
+            // collapse so the timeline summary stays scannable. Toggle handles
+            // the rest. N=3 keeps the dense top-of-page view useful without
+            // a wall of expanded content.
+            const openByDefault = idx < 3
             return (
               <details
-                open
+                open={openByDefault}
                 class={`group bg-white rounded-[var(--radius-card)] border px-4 py-3 ${
                   isReplyLog
                     ? 'border-l-4 border-l-teal-500 border-[color:var(--color-border)]'
@@ -979,9 +984,11 @@ function confidenceColor(confidence: string): string {
           </div>
         )}
 
-        {/* Zone 3: Intelligence Brief */}
+        {/* Zone 3: Intelligence Brief — open by default. The brief is the core
+            of the dossier; collapsing it hid the highest-value research and
+            forced the operator to click before reading anything substantive. */}
         <div class="border-t border-[color:var(--color-border-subtle)] pt-4 mb-4">
-          <details>
+          <details open>
             <summary class="text-xs font-medium text-[color:var(--color-text-secondary)] uppercase tracking-wide mb-3 cursor-pointer">
               Intelligence Brief
             </summary>
