@@ -494,7 +494,6 @@ function confidenceColor(confidence: string): string {
         >
           {entity.vertical && <span class="capitalize">{entity.vertical.replace(/_/g, ' ')}</span>}
           {entity.area && <span>{entity.area}</span>}
-          {entity.employee_count && <span>~{entity.employee_count} employees</span>}
         </div>
 
         <div class="flex items-center gap-row text-xs text-[color:var(--color-text-muted)]">
@@ -839,7 +838,13 @@ function confidenceColor(confidence: string): string {
     )
   }
 
-  {/* Add Note */}
+  {
+    /* Add Note — `rows="4"` and a non-resize textarea give the operator
+      enough room to draft a real note (the prior `rows="2"` was a single-
+      line nudge that fought against any actual writing). The Clear button
+      resets the textarea without submitting; the form's native reset
+      handles the clearing logic. */
+  }
   <div
     class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-stack mb-6"
   >
@@ -848,12 +853,13 @@ function confidenceColor(confidence: string): string {
       <textarea
         name="content"
         placeholder="Add a note..."
-        rows="2"
-        class="flex-1 text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+        rows="4"
+        class="flex-1 text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
       ></textarea>
-      <button type="submit" class={`self-end ${adminActionButtonClass('ghost')}`}>
-        Add Note
-      </button>
+      <div class="flex flex-col gap-2 self-end">
+        <button type="submit" class={adminActionButtonClass('ghost')}>Add Note</button>
+        <button type="reset" class={adminActionButtonClass('ghost')}> Clear </button>
+      </div>
     </form>
   </div>
 

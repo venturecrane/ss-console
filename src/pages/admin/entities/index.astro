@@ -475,7 +475,6 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                       {e.vertical && (
                         <span class="capitalize">{e.vertical.replace(/_/g, ' ')}</span>
                       )}
-                      {e.employee_count && <span>~{e.employee_count} employees</span>}
                       {isSignal && website && (
                         <a
                           href={website.href}
