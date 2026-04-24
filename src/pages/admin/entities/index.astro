@@ -79,8 +79,11 @@ if (filterStage === 'proposing' && entities.length > 0) {
 }
 const displayEntities = filterStage === 'proposing' ? proposingRows : entities
 
-const promoted = Astro.url.searchParams.get('promoted')
+// `dismissed=1&name=...` lands here from /api/admin/entities/[id]/dismiss.
+// Promote redirects to the detail page (/admin/entities/[id]?promoted=1)
+// and never lands here, so there's no `promoted` param to read on the list.
 const dismissed = Astro.url.searchParams.get('dismissed')
+const dismissedName = Astro.url.searchParams.get('name')
 const error = Astro.url.searchParams.get('error')
 
 // Tabs where multi-select + bulk actions are enabled. Later stages
@@ -219,16 +222,9 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
   breadcrumbs={[{ label: 'Dashboard', href: '/admin' }, { label: 'Entities' }]}
 >
   {
-    promoted && (
-      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
-        Entity promoted to prospect.
-      </div>
-    )
-  }
-  {
     dismissed && (
       <div class="bg-[color:var(--color-background)] border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
-        Entity dismissed.
+        {dismissedName ? `${dismissedName} dismissed.` : 'Entity dismissed.'}
       </div>
     )
   }

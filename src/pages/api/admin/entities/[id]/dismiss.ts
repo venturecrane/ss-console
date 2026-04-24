@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro'
-import { transitionStage } from '../../../../../lib/db/entities'
+import { getEntity, transitionStage } from '../../../../../lib/db/entities'
 import { isLostReasonCode } from '../../../../../lib/db/lost-reasons'
 import { env } from 'cloudflare:workers'
 
@@ -49,11 +49,18 @@ export const POST: APIRoute = async ({ params, request, locals, redirect }) => {
         ? rawSummary.trim()
         : `Dismissed: ${lostReasonCode}${lostDetail ? ` — ${lostDetail}` : ''}`
 
+    // Read the entity's name BEFORE the transition so the post-redirect
+    // banner can identify which row was just dismissed (H4 — banner
+    // context). The signal-stage list strip-away after dismiss makes
+    // this the last chance the operator has to see the name.
+    const entity = await getEntity(env.DB, session.orgId, entityId)
+
     await transitionStage(env.DB, session.orgId, entityId, 'lost', reasonSummary, {
       lostReason: { code: lostReasonCode, detail: lostDetail },
     })
 
-    return redirect('/admin/entities?dismissed=1', 302)
+    const nameParam = entity ? `&name=${encodeURIComponent(entity.name)}` : ''
+    return redirect(`/admin/entities?dismissed=1${nameParam}`, 302)
   } catch (err) {
     console.error('[api/admin/entities/dismiss] Error:', err)
     const message = err instanceof Error ? err.message : 'server'

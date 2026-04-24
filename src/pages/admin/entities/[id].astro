@@ -3,6 +3,7 @@ import AdminLayout from '../../../layouts/AdminLayout.astro'
 import LogReplyDialog from '../../../components/admin/LogReplyDialog.astro'
 import { statusBadgeClass } from '../../../lib/ui/status-badge'
 import { pipelineBadgeClass } from '../../../lib/ui/pipeline-badge'
+import { adminActionButtonClass } from '../../../lib/ui/admin-action-button'
 import { PIPELINE_LABELS } from '../../../lead-gen/schemas/lead-scoring-schema'
 import type { PipelineId } from '../../../lead-gen/schemas/lead-scoring-schema'
 import { getEntity, ENTITY_STAGES } from '../../../lib/db/entities'
@@ -121,24 +122,33 @@ const supersedeCandidates = showNewQuoteButton
   ? quotes.filter((q) => q.status === 'declined' || q.status === 'expired')
   : []
 
-// Stage transitions
-const TRANSITIONS: Record<
-  string,
-  { label: string; stage: EntityStage; style: string; action?: string }[]
-> = {
+// Stage transitions. `variant` keys into the admin action-button system
+// (Rule 3 — one primary per view): the forward stage action is `primary`,
+// Lost/Dismiss is `destructive`. Forward labels were renamed from "Send
+// Proposal" / "Engaged" / "Delivered" to "Mark as ..." — the prior labels
+// promised actions (sending the proposal, recording an engagement) but
+// only transitioned the stage. "Mark as ..." is honest about what the
+// click does. The actual proposal-send / engagement-start / delivery-handoff
+// flows live in their own buttons elsewhere on the page.
+type Transition = {
+  label: string
+  stage: EntityStage
+  variant: 'primary' | 'destructive'
+  action?: string
+}
+
+const TRANSITIONS: Record<string, Transition[]> = {
   signal: [
     {
       label: 'Promote',
       stage: 'prospect',
-      style:
-        'bg-[color:var(--color-primary)] text-white hover:bg-[color:var(--color-primary-hover)]',
+      variant: 'primary',
       action: `/api/admin/entities/${entity.id}/promote`,
     },
     {
       label: 'Dismiss',
       stage: 'lost',
-      style:
-        'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-border)]',
+      variant: 'destructive',
     },
   ],
   prospect: [
@@ -147,85 +157,29 @@ const TRANSITIONS: Record<
     // row in `scheduled` status and signs a booking URL, then transitions the
     // stage. #504's "Start Meeting" button is not needed; the booking flow
     // already produces a meeting row and moves the entity to `meetings`.
-    {
-      label: 'Lost',
-      stage: 'lost',
-      style:
-        'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-border)]',
-    },
+    { label: 'Lost', stage: 'lost', variant: 'destructive' },
   ],
   meetings: [
-    {
-      label: 'Send Proposal',
-      stage: 'proposing',
-      style:
-        'bg-[color:var(--color-primary)] text-white hover:bg-[color:var(--color-primary-hover)]',
-    },
-    {
-      label: 'Lost',
-      stage: 'lost',
-      style:
-        'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-border)]',
-    },
+    { label: 'Mark as Proposing', stage: 'proposing', variant: 'primary' },
+    { label: 'Lost', stage: 'lost', variant: 'destructive' },
   ],
   proposing: [
-    {
-      label: 'Engaged',
-      stage: 'engaged',
-      style:
-        'bg-[color:var(--color-primary)] text-white hover:bg-[color:var(--color-primary-hover)]',
-    },
-    {
-      label: 'Lost',
-      stage: 'lost',
-      style:
-        'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-border)]',
-    },
+    { label: 'Mark as Engaged', stage: 'engaged', variant: 'primary' },
+    { label: 'Lost', stage: 'lost', variant: 'destructive' },
   ],
-  engaged: [
-    {
-      label: 'Delivered',
-      stage: 'delivered',
-      style:
-        'bg-[color:var(--color-primary)] text-white hover:bg-[color:var(--color-primary-hover)]',
-    },
-  ],
+  engaged: [{ label: 'Mark as Delivered', stage: 'delivered', variant: 'primary' }],
   delivered: [
-    {
-      label: 'Ongoing',
-      stage: 'ongoing',
-      style:
-        'bg-[color:var(--color-primary)] text-white hover:bg-[color:var(--color-primary-hover)]',
-    },
-    {
-      label: 'Re-engage',
-      stage: 'prospect',
-      style:
-        'bg-[color:var(--color-primary)] text-white hover:bg-[color:var(--color-primary-hover)]',
-    },
+    { label: 'Mark as Ongoing', stage: 'ongoing', variant: 'primary' },
+    // Re-engage from delivered is a deliberate move backward — keep it
+    // available but as a secondary affordance so it doesn't compete with
+    // the natural forward path into Ongoing.
+    { label: 'Re-engage', stage: 'prospect', variant: 'destructive' },
   ],
   ongoing: [
-    {
-      label: 'Re-engage',
-      stage: 'prospect',
-      style:
-        'bg-[color:var(--color-primary)] text-white hover:bg-[color:var(--color-primary-hover)]',
-    },
-    {
-      label: 'Lost',
-      stage: 'lost',
-      style:
-        'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-border)]',
-    },
+    { label: 'Re-engage', stage: 'prospect', variant: 'primary' },
+    { label: 'Lost', stage: 'lost', variant: 'destructive' },
   ],
-  lost: [
-    {
-      label: 'Re-engage',
-      stage: 'prospect',
-      style:
-        'bg-[color:var(--color-primary)] text-white hover:bg-[color:var(--color-primary-hover)]',
-    },
-  ],
+  lost: [{ label: 'Re-engage', stage: 'prospect', variant: 'primary' }],
 }
 
 function contextTypeBadge(type: string): string {
@@ -392,37 +346,53 @@ function confidenceColor(confidence: string): string {
   ]}
 >
   {
+    /* H19 — back-link to the stage list. Breadcrumbs cover this in
+      principle but reduce to a small text trail; an inline back link
+      gives the operator a one-click escape hatch from a deep detail
+      page back to the work queue they came from. */
+  }
+  <a
+    href={`/admin/entities?stage=${entity.stage}`}
+    class="inline-flex items-center gap-1 text-xs text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-primary)] mb-3"
+  >
+    <span aria-hidden="true">←</span>
+    <span>
+      Back to {ENTITY_STAGES.find((s) => s.value === entity.stage)?.label ?? entity.stage} list
+    </span>
+  </a>
+  {
     promoted && (
       <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
-        Entity promoted to prospect.
+        {entity.name} promoted to prospect.
       </div>
     )
   }
   {
     noteAdded && (
       <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
-        Note added.
+        Note added to {entity.name}.
       </div>
     )
   }
   {
     replyLogged && (
       <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
-        Reply logged.
+        Reply logged on {entity.name}.
       </div>
     )
   }
   {
     stageUpdated && (
       <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
-        Stage updated.
+        {entity.name} moved to{' '}
+        {ENTITY_STAGES.find((s) => s.value === entity.stage)?.label ?? entity.stage}.
       </div>
     )
   }
   {
     dossierGenerated && (
       <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
-        Re-enrichment complete. Refreshed reviews, synthesis, news, and outreach draft — see
+        Re-enriched {entity.name}. Refreshed reviews, synthesis, news, and outreach draft — see
         timeline below.
       </div>
     )
@@ -530,7 +500,7 @@ function confidenceColor(confidence: string): string {
             <button
               type="button"
               id="send-booking-link-btn"
-              class="text-xs px-3 py-1.5 rounded-[var(--radius-card)] transition-colors bg-[color:var(--color-primary)] text-white hover:bg-[color:var(--color-primary-hover)]"
+              class={adminActionButtonClass('primary')}
             >
               Send booking link
             </button>
@@ -540,9 +510,7 @@ function confidenceColor(confidence: string): string {
           TRANSITIONS[entity.stage]?.map((t) =>
             t.stage === 'lost' ? (
               <details class="relative lost-picker">
-                <summary
-                  class={`list-none text-xs px-3 py-1.5 rounded-[var(--radius-card)] transition-colors cursor-pointer select-none ${t.style}`}
-                >
+                <summary class={`list-none ${adminActionButtonClass(t.variant)}`}>
                   {t.label}
                 </summary>
                 <form
@@ -576,10 +544,7 @@ function confidenceColor(confidence: string): string {
                     />
                   </label>
                   <div class="flex justify-end gap-2">
-                    <button
-                      type="submit"
-                      class="text-xs bg-[color:var(--color-text-primary)] text-white px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-black transition-colors"
-                    >
+                    <button type="submit" class={adminActionButtonClass('destructive')}>
                       {t.label}
                     </button>
                   </div>
@@ -589,10 +554,7 @@ function confidenceColor(confidence: string): string {
               <form method="POST" action={t.action ?? `/api/admin/entities/${entity.id}/stage`}>
                 <input type="hidden" name="stage" value={t.stage} />
                 <input type="hidden" name="reason" value={`${t.label} by admin.`} />
-                <button
-                  type="submit"
-                  class={`text-xs px-3 py-1.5 rounded-[var(--radius-card)] transition-colors ${t.style}`}
-                >
+                <button type="submit" class={adminActionButtonClass(t.variant)}>
                   {t.label}
                 </button>
               </form>
@@ -609,7 +571,7 @@ function confidenceColor(confidence: string): string {
               <button
                 type="submit"
                 id="re-enrich-btn"
-                class="text-xs px-3 py-1.5 rounded-[var(--radius-card)] transition-colors bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                class={`${adminActionButtonClass('ghost')} disabled:opacity-50 disabled:cursor-not-allowed`}
                 title="Refresh reviews and news — cheap, safe to re-run"
               >
                 Re-enrich (reviews + news)
@@ -622,7 +584,7 @@ function confidenceColor(confidence: string): string {
             <button
               type="button"
               data-open-reply-dialog={entity.id}
-              class="text-xs px-3 py-1.5 rounded-[var(--radius-card)] transition-colors border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] hover:bg-[color:var(--color-background)]"
+              class={adminActionButtonClass('ghost')}
             >
               Log reply
             </button>
@@ -652,10 +614,7 @@ function confidenceColor(confidence: string): string {
                   </select>
                 </label>
               )}
-              <button
-                type="submit"
-                class="text-xs px-3 py-1.5 rounded-[var(--radius-card)] transition-colors bg-[color:var(--color-primary)] text-white hover:bg-[color:var(--color-primary-hover)]"
-              >
+              <button type="submit" class={adminActionButtonClass('ghost')}>
                 New quote
               </button>
             </form>
@@ -763,10 +722,7 @@ function confidenceColor(confidence: string): string {
         rows="2"
         class="flex-1 text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
       ></textarea>
-      <button
-        type="submit"
-        class="self-end text-sm bg-primary text-white px-4 py-2 rounded-[var(--radius-card)] hover:bg-primary/90 transition-colors"
-      >
+      <button type="submit" class={`self-end ${adminActionButtonClass('ghost')}`}>
         Add Note
       </button>
     </form>
