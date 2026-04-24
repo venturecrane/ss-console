@@ -1,0 +1,14 @@
+name = "ss-follow-up-processor"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Same D1 database as the Pages project (see root wrangler.toml)
+[[d1_databases]]
+binding = "DB"
+database_name = "ss-console-db"
+database_id = "65171b23-d615-42a7-84e7-a4fac20d063c"
+
+# Hourly cron — all lifecycle background automation runs here
+[triggers]
+crons = ["0 * * * *"]
