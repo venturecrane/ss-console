@@ -1,0 +1,75 @@
+---
+/**
+ * Portal page head — the one-stop top-of-page component for every portal
+ * surface. Replaces the ad-hoc `back link + H1` pattern previously
+ * repeated at the top of each page.
+ *
+ * Plainspoken Sign Shop chrome:
+ *   - Crumb link renders as Archivo Narrow uppercase with a burnt-orange
+ *     arrow. Tap target min-h-11 for WCAG 2.2.
+ *   - Optional `tag` is a flat stamp (ink bg, cream text) in Archivo Narrow
+ *     uppercase — the small "Ledger" / "Engagement №03" eyebrow from the
+ *     mocks.
+ *   - H1 uses the Plainspoken display scale: `text-hero-mobile` at <md,
+ *     `text-hero` at ≥md. Archivo Black 900 uppercase. Weight and tracking
+ *     come from the token's sibling quartet in global.css, so no ad-hoc
+ *     `leading-[N] tracking-[N]` classes are needed.
+ *   - Optional `meta` is a right-aligned mono caps column. Multi-line is
+ *     supported via `whitespace-pre` — pass a string with "\n" line breaks
+ *     (e.g. "Issued Apr 13, 2026\nSigned Apr 13, 2026").
+ *   - Bottom rule is 3px ink (matches the page-section rule register).
+ *
+ * Layout:
+ *   - Desktop (≥md): two-column with H1 left, meta right.
+ *   - Mobile: stacked — meta flows below H1.
+ */
+
+interface Props {
+  crumbHref: string
+  crumbLabel: string
+  tag?: string | null
+  h1: string
+  meta?: string | null
+  class?: string
+}
+
+const { crumbHref, crumbLabel, tag = null, h1, meta = null, class: klass = '' } = Astro.props
+---
+
+<header class={`border-b-[3px] border-[color:var(--color-text-primary)] py-6 md:py-10 ${klass}`}>
+  <a
+    href={crumbHref}
+    class="inline-flex items-center gap-2 min-h-11 -mx-1 px-1 font-['Archivo_Narrow'] text-xs md:text-sm font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+  >
+    <span aria-hidden="true" class="font-['Archivo'] font-black text-[color:var(--color-primary)]"
+      >←</span
+    >
+    {crumbLabel}
+  </a>
+
+  <div
+    class="mt-5 md:mt-8 flex flex-col md:flex-row md:items-end md:justify-between gap-4 md:gap-10"
+  >
+    <div class="min-w-0 flex-1">
+      {
+        tag && (
+          <span class="inline-block mb-3 bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] px-3 py-1 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold whitespace-nowrap">
+            {tag}
+          </span>
+        )
+      }
+      <h1
+        class="font-['Archivo'] text-hero-mobile md:text-hero uppercase text-[color:var(--color-text-primary)] m-0"
+      >
+        {h1}
+      </h1>
+    </div>
+    {
+      meta && (
+        <div class="font-mono text-xs uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)] whitespace-pre md:text-right leading-[1.9]">
+          {meta}
+        </div>
+      )
+    }
+  </div>
+</header>

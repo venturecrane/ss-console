@@ -4,7 +4,7 @@
  * principles: "A named human, visible."
  *
  * Photo fallback is a neutral SVG portrait silhouette. NEVER initials — brief
- * §Anti-patterns and §Photo placeholder rule.
+ * §Anti-patterns and §Photo placeholder rule. Both variants honor this.
  *
  * Contact affordance:
  * - Mobile UAs render `sms:` deep link as the primary action (tap-to-text)
@@ -13,6 +13,32 @@
  *   FaceTime / soft phones.
  * - When phone is null but email is set: render a `mailto:` fallback instead.
  * - When both are null: hide the contact block entirely.
+ *
+ * Variants:
+ *
+ *   variant='default'    — legacy card chrome (soft border, stacked layout).
+ *                          Unchanged from the previous Modern Institutional
+ *                          treatment for back-compat.
+ *
+ *   variant='trade-card' — Plainspoken Sign Shop chrome. 3px ink border
+ *                          with an ink header bar ("Your team" + next-
+ *                          touchpoint ref), a flush square grayscale
+ *                          headshot, Archivo Black name, and a 2px-ruled
+ *                          footer with a channel verb eyebrow ("Text" /
+ *                          "Call" / "Email") and an Archivo Black phone /
+ *                          email value.
+ *
+ * Voice (both variants): "Your team" — never "Your Operator" /
+ * "Fractional Ops" / named-human solo framing (Decision Stack #20).
+ *
+ * Data-state matrix (both variants):
+ *   A. phone + photo        — full layout, SMS/tel affordance, headshot.
+ *   B. phone + no-photo     — full layout, SMS/tel affordance, silhouette SVG.
+ *   C. no-phone + email     — mailto affordance, no phone line.
+ *   D. neither               — consumer decides whether to render; when
+ *                             both phone and email are null AND name is
+ *                             absent, the component renders an empty
+ *                             fragment (no chrome).
  */
 
 interface Props {
@@ -23,9 +49,21 @@ interface Props {
   nextTouchpointLabel?: string | null
   phone?: string | null
   email?: string | null
+  variant?: 'default' | 'trade-card'
+  class?: string
 }
 
-const { name, photoUrl, role, nextTouchpointAt, nextTouchpointLabel, phone, email } = Astro.props
+const {
+  name,
+  photoUrl,
+  role,
+  nextTouchpointAt,
+  nextTouchpointLabel,
+  phone,
+  email,
+  variant = 'default',
+  class: klass = '',
+} = Astro.props
 
 const firstName = (name ?? '').trim().split(/\s+/)[0] || name
 
@@ -61,91 +99,167 @@ function formatTouchpoint(): string | null {
 }
 
 const touchpointText = formatTouchpoint()
+
+// Neutral silhouette SVG — identical for both variants so the
+// no-initials rule is applied uniformly.
+const silhouetteSvg = (classes: string) => `
+  <svg
+    viewBox="0 0 64 80"
+    role="img"
+    aria-label="consultant photo"
+    class="${classes}"
+  >
+    <rect width="64" height="80" fill="currentColor" fill-opacity="0.12"/>
+    <circle cx="32" cy="30" r="12" fill="currentColor" fill-opacity="0.5"/>
+    <path d="M8 78c3-14 12-20 24-20s21 6 24 20" fill="currentColor" fill-opacity="0.5"/>
+  </svg>
+`
 ---
 
-<section
-  class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-5 sm:p-card"
-  aria-label="Your consultant"
->
-  <div class="flex items-start gap-stack">
-    <div
-      class="w-16 h-20 shrink-0 rounded-[var(--radius-card)] bg-[color:var(--color-background)] border border-[color:var(--color-border)] overflow-hidden"
+{
+  variant === 'default' && (
+    <section
+      class={`bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-5 sm:p-card ${klass}`}
+      aria-label="Your consultant"
     >
-      {
-        photoUrl ? (
-          <img
-            alt={`${name}, consultant`}
-            class="w-full h-full object-cover"
-            src={photoUrl}
-            loading="lazy"
-          />
-        ) : (
-          <svg
-            viewBox="0 0 64 80"
-            role="img"
-            aria-label="consultant photo"
-            class="w-full h-full text-[color:var(--color-text-muted)]"
+      <div class="flex items-start gap-stack">
+        <div class="w-16 h-20 shrink-0 rounded-[var(--radius-card)] bg-[color:var(--color-background)] border border-[color:var(--color-border)] overflow-hidden">
+          {photoUrl ? (
+            <img
+              alt={`${name}, consultant`}
+              class="w-full h-full object-cover"
+              src={photoUrl}
+              loading="lazy"
+            />
+          ) : (
+            <Fragment
+              set:html={silhouetteSvg('w-full h-full text-[color:var(--color-text-muted)]')}
+            />
+          )}
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-heading text-[color:var(--color-text-primary)]">{name}</p>
+          {role && (
+            <p class="mt-0.5 font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-muted)]">
+              {role}
+            </p>
+          )}
+          {touchpointText && (
+            <p class="mt-row font-mono text-caption tabular-nums text-[color:var(--color-text-primary)]">
+              Next check-in · {touchpointText}
+            </p>
+          )}
+        </div>
+      </div>
+      {smsHref && telHref && (
+        <div class="mt-4 pt-4 border-t border-[color:var(--color-border)]">
+          <a
+            href={smsHref}
+            class="consultant-sms-mobile inline-flex sm:hidden items-center gap-2 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
           >
-            <rect width="64" height="80" fill="currentColor" fill-opacity="0.12" />
-            <circle cx="32" cy="30" r="12" fill="currentColor" fill-opacity="0.5" />
-            <path d="M8 78c3-14 12-20 24-20s21 6 24 20" fill="currentColor" fill-opacity="0.5" />
-          </svg>
-        )
-      }
-    </div>
-    <div class="flex-1 min-w-0">
-      <p class="text-heading text-[color:var(--color-text-primary)]">
-        {name}
-      </p>
-      {
-        role && (
-          <p class="mt-0.5 font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-muted)]">
-            {role}
-          </p>
-        )
-      }
-      {
-        touchpointText && (
-          <p class="mt-row font-mono text-caption tabular-nums text-[color:var(--color-text-primary)]">
-            Next check-in · {touchpointText}
-          </p>
-        )
-      }
-    </div>
-  </div>
-  {
-    smsHref && telHref && (
-      <div class="mt-4 pt-4 border-t border-[color:var(--color-border)]">
-        {/* Mobile: SMS deep link. Hidden on desktop (sm+). */}
-        <a
-          href={smsHref}
-          class="consultant-sms-mobile inline-flex sm:hidden items-center gap-2 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
-        >
-          <span class="material-symbols-outlined text-[18px]">sms</span>
-          Text {firstName}
-        </a>
-        {/* Desktop: inline phone number with click-to-call. */}
-        <a
-          href={telHref}
-          class="consultant-tel-desktop hidden sm:inline-flex items-center gap-2 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
-        >
-          <span class="material-symbols-outlined text-[18px]">call</span>
-          {phoneDisplay}
-        </a>
+            <span class="material-symbols-outlined text-[18px]">sms</span>
+            Text {firstName}
+          </a>
+          <a
+            href={telHref}
+            class="consultant-tel-desktop hidden sm:inline-flex items-center gap-2 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+          >
+            <span class="material-symbols-outlined text-[18px]">call</span>
+            {phoneDisplay}
+          </a>
+        </div>
+      )}
+      {!smsHref && mailtoHref && (
+        <div class="mt-4 pt-4 border-t border-[color:var(--color-border)]">
+          <a
+            href={mailtoHref}
+            class="inline-flex items-center gap-2 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+          >
+            <span class="material-symbols-outlined text-[18px]">mail</span>
+            Email {firstName}
+          </a>
+        </div>
+      )}
+    </section>
+  )
+}
+
+{
+  variant === 'trade-card' && (
+    <section
+      class={`border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-surface)] ${klass}`}
+      aria-label="Your team"
+    >
+      {/* Header bar — ink bg / cream text. "Your team" left, touchpoint ref right (burnt-orange when set). */}
+      <div class="flex items-center justify-between gap-3 bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] px-4 md:px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold">
+        <span>Your team</span>
+        <span class={touchpointText ? 'text-[color:var(--color-primary)]' : 'opacity-80'}>
+          {touchpointText ? `Next · ${touchpointText}` : 'On call'}
+        </span>
       </div>
-    )
-  }
-  {
-    !smsHref && mailtoHref && (
-      <div class="mt-4 pt-4 border-t border-[color:var(--color-border)]">
-        <a
-          href={mailtoHref}
-          class="inline-flex items-center gap-2 text-sm font-medium text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
-        >
-          <span class="material-symbols-outlined text-[18px]">mail</span>
-          Email {firstName}
-        </a>
+
+      {/* Body — square photo flush + name/role/note. */}
+      <div class="flex items-stretch">
+        <div class="w-[100px] md:w-[110px] aspect-square shrink-0 border-r-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-text-primary)] overflow-hidden">
+          {photoUrl ? (
+            <img
+              alt={`${name}, your team contact`}
+              class="w-full h-full object-cover grayscale contrast-[1.05]"
+              src={photoUrl}
+              loading="lazy"
+            />
+          ) : (
+            <Fragment
+              set:html={silhouetteSvg('w-full h-full text-[color:var(--color-background)]')}
+            />
+          )}
+        </div>
+        <div class="flex-1 min-w-0 px-4 md:px-5 py-3 md:py-4 flex flex-col gap-1">
+          <h3 class="font-['Archivo'] text-xl md:text-2xl font-black uppercase tracking-[-0.02em] text-[color:var(--color-text-primary)] m-0 leading-none">
+            {name}
+          </h3>
+          {role && (
+            <p class="font-['Archivo_Narrow'] text-label font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-secondary)] m-0">
+              {role}
+            </p>
+          )}
+        </div>
       </div>
-    )
-  }
-</section>
+
+      {/* Footer — channel-verb eyebrow + affordance value. */}
+      {smsHref && telHref && (
+        <div class="flex items-center justify-between gap-3 border-t-[2px] border-[color:var(--color-text-primary)] px-4 md:px-5 py-3 md:py-4">
+          <span class="font-['Archivo_Narrow'] text-label font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+            <span class="sm:hidden">Text</span>
+            <span class="hidden sm:inline">Call</span>
+          </span>
+          <a
+            href={smsHref}
+            class="sm:hidden inline-flex items-center gap-2 font-['Archivo'] text-lg font-black text-[color:var(--color-text-primary)] tabular-nums tracking-[-0.01em] hover:text-[color:var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+          >
+            {phoneDisplay}
+          </a>
+          <a
+            href={telHref}
+            class="hidden sm:inline-flex items-center gap-2 font-['Archivo'] text-lg md:text-xl font-black text-[color:var(--color-text-primary)] tabular-nums tracking-[-0.01em] hover:text-[color:var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+          >
+            {phoneDisplay}
+          </a>
+        </div>
+      )}
+      {!smsHref && mailtoHref && (
+        <div class="flex items-center justify-between gap-3 border-t-[2px] border-[color:var(--color-text-primary)] px-4 md:px-5 py-3 md:py-4">
+          <span class="font-['Archivo_Narrow'] text-label font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+            Email
+          </span>
+          <a
+            href={mailtoHref}
+            class="inline-flex items-center gap-2 font-['Archivo'] text-base md:text-lg font-black text-[color:var(--color-text-primary)] tracking-[-0.01em] truncate hover:text-[color:var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+          >
+            {email}
+          </a>
+        </div>
+      )}
+    </section>
+  )
+}

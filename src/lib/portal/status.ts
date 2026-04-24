@@ -42,7 +42,7 @@
  * the client-visible label changes.
  */
 
-export type Tone = 'info' | 'success' | 'danger' | 'warning' | 'neutral'
+export type Tone = 'info' | 'success' | 'danger' | 'warning' | 'neutral' | 'outline'
 
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'void'
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'declined' | 'expired' | 'superseded'
@@ -147,6 +147,116 @@ export function resolveEngagementLabel(status: string): string {
 }
 
 /**
+ * Plainspoken stamp-label resolvers.
+ *
+ * The Plainspoken Sign Shop identity renders status as a flat rectangular
+ * stamp (bill-of-lading register). Stamps are terse, ALL CAPS, and drawn
+ * from a closed 12-word vocabulary so the visual rhythm across list rows
+ * and detail headers stays calm:
+ *
+ *   PAID · ACCEPTED · SIGNED · DUE · UNDERWAY · PENDING · COMPLETED ·
+ *   ARCHIVED · IN PROG · DECLINED · EXPIRED · OVERDUE
+ *
+ * These are emitted in addition to (not replacing) the descriptive
+ * `resolve*Label` functions above. Detail prose and subheaders still use
+ * the descriptive labels ("Stabilization period", "Pending Review");
+ * StatusPill stamps use the vocabulary via the resolvers below. Pill and
+ * detail text can diverge safely — a round-trip test locks every enum
+ * member to a vocabulary word so the pill never drifts.
+ *
+ * Stamp mapping rationale:
+ *   - quote.sent → PENDING (client action required; "Pending Review"
+ *     compresses to PENDING in stamp form).
+ *   - quote.superseded / invoice.void / quote.draft / invoice.draft →
+ *     ARCHIVED (internal states; if a stamp ever surfaces, ARCHIVED is
+ *     the least-alarming catch-all).
+ *   - engagement.safety_net → IN PROG (Decision #27 "stabilization" stays
+ *     the detail-text label; the stamp reads IN PROG to keep the closed
+ *     vocabulary).
+ *   - milestone.skipped → ARCHIVED (rare; the skip is internal bookkeeping).
+ */
+
+export type StampLabel =
+  | 'PAID'
+  | 'ACCEPTED'
+  | 'SIGNED'
+  | 'DUE'
+  | 'UNDERWAY'
+  | 'PENDING'
+  | 'COMPLETED'
+  | 'ARCHIVED'
+  | 'IN PROG'
+  | 'DECLINED'
+  | 'EXPIRED'
+  | 'OVERDUE'
+
+export const STAMP_VOCABULARY: readonly StampLabel[] = [
+  'PAID',
+  'ACCEPTED',
+  'SIGNED',
+  'DUE',
+  'UNDERWAY',
+  'PENDING',
+  'COMPLETED',
+  'ARCHIVED',
+  'IN PROG',
+  'DECLINED',
+  'EXPIRED',
+  'OVERDUE',
+] as const
+
+const QUOTE_STAMP: Record<QuoteStatus, StampLabel> = {
+  draft: 'ARCHIVED',
+  sent: 'PENDING',
+  accepted: 'ACCEPTED',
+  declined: 'DECLINED',
+  expired: 'EXPIRED',
+  superseded: 'ARCHIVED',
+}
+
+const INVOICE_STAMP: Record<InvoiceStatus, StampLabel> = {
+  draft: 'ARCHIVED',
+  sent: 'DUE',
+  paid: 'PAID',
+  overdue: 'OVERDUE',
+  void: 'ARCHIVED',
+}
+
+const ENGAGEMENT_STAMP: Record<EngagementStatus, StampLabel> = {
+  scheduled: 'PENDING',
+  active: 'UNDERWAY',
+  handoff: 'IN PROG',
+  safety_net: 'IN PROG',
+  completed: 'COMPLETED',
+  cancelled: 'ARCHIVED',
+}
+
+export type MilestoneStatus = 'pending' | 'in_progress' | 'completed' | 'skipped'
+
+const MILESTONE_STAMP: Record<MilestoneStatus, StampLabel> = {
+  pending: 'PENDING',
+  in_progress: 'IN PROG',
+  completed: 'COMPLETED',
+  skipped: 'ARCHIVED',
+}
+
+export function resolveQuoteStampLabel(status: string): StampLabel {
+  return QUOTE_STAMP[status as QuoteStatus] ?? 'ARCHIVED'
+}
+
+export function resolveInvoiceStampLabel(status: string): StampLabel {
+  return INVOICE_STAMP[status as InvoiceStatus] ?? 'ARCHIVED'
+}
+
+export function resolveEngagementStampLabel(status: string): StampLabel {
+  return ENGAGEMENT_STAMP[status as EngagementStatus] ?? 'ARCHIVED'
+}
+
+export function resolveMilestoneStampLabel(status: string): StampLabel {
+  return MILESTONE_STAMP[status as MilestoneStatus] ?? 'ARCHIVED'
+}
+
+/**
  * Tone → class map, consumed by StatusPill. Uses semantic tokens only.
  * Not exported as part of the public API — consumers pass a Tone; only
  * StatusPill renders the pill.
@@ -163,4 +273,9 @@ export const TONE_CLASS: Record<Tone, string> = {
   danger: 'bg-[color:var(--color-error)] text-white',
   warning: 'bg-[color:var(--color-attention)] text-white',
   neutral: 'bg-[color:var(--color-border)] text-[color:var(--color-text-secondary)]',
+  // Plainspoken bill-of-lading register: box-outlined stamp with ink text,
+  // transparent background. Visually distinguishes archived/expired states
+  // from the filled "attention-needed" tones above.
+  outline:
+    'bg-transparent text-[color:var(--color-text-primary)] border-2 border-[color:var(--color-text-primary)]',
 }

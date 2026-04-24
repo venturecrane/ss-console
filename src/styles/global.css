@@ -70,6 +70,58 @@
   --text-money--line-height: 3rem;
   --text-money--font-weight: 500;
 
+  /* ---------- Plainspoken display scale ----------
+   * Named tokens for the Plainspoken Sign Shop visual register. Each token
+   * ships with the Tailwind v4 sibling quartet (line-height, font-weight,
+   * letter-spacing) so utilities bake the full type style and consumers
+   * never reach for `text-[Npx] leading-[N] tracking-[N]` ad-hoc. Respects
+   * UI-PATTERNS R5 (typography scale only via named tokens).
+   *
+   * Line-heights target 0.92 × font-size on H1 sizes (Plainspoken mocks).
+   */
+
+  /* Portal H1 — desktop */
+  --text-hero: 4.5rem; /* 72px */
+  --text-hero--line-height: 4.14rem; /* 0.92 × 72 */
+  --text-hero--font-weight: 900;
+  --text-hero--letter-spacing: -0.03em;
+
+  /* Portal H1 — mobile (used with md:text-hero) */
+  --text-hero-mobile: 2.75rem; /* 44px */
+  --text-hero-mobile--line-height: 2.53rem; /* 0.92 × 44 */
+  --text-hero-mobile--font-weight: 900;
+  --text-hero-mobile--letter-spacing: -0.03em;
+
+  /* Summary-card total price */
+  --text-hero-price: 4rem; /* 64px */
+  --text-hero-price--line-height: 3.68rem; /* 0.92 × 64 */
+  --text-hero-price--font-weight: 900;
+  --text-hero-price--letter-spacing: -0.04em;
+
+  /* KPI row big numbers */
+  --text-kpi: 2.75rem; /* 44px */
+  --text-kpi--line-height: 2.75rem;
+  --text-kpi--font-weight: 900;
+  --text-kpi--letter-spacing: -0.03em;
+
+  /* § block headings on detail pages */
+  --text-section-h: 2.25rem; /* 36px */
+  --text-section-h--line-height: 2.25rem;
+  --text-section-h--font-weight: 900;
+  --text-section-h--letter-spacing: -0.02em;
+
+  /* Row-level money (list rows, ledger amounts) */
+  --text-price-row: 1.75rem; /* 28px */
+  --text-price-row--line-height: 1.75rem;
+  --text-price-row--font-weight: 900;
+  --text-price-row--letter-spacing: -0.02em;
+
+  /* № / § cell glyph in ticket rows */
+  --text-num-cell: 1.375rem; /* 22px */
+  --text-num-cell--line-height: 1.375rem;
+  --text-num-cell--font-weight: 900;
+  --text-num-cell--letter-spacing: -0.01em;
+
   /* ---------- Spacing rhythm ---------- */
   --spacing-section: 3rem;
   --spacing-card: 2rem;

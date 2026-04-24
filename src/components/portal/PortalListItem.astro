@@ -1,17 +1,24 @@
 ---
 /**
- * The portal list row. One component, two variants:
+ * The portal list row. One component, two variants × two chromes:
  *
- *   variant='status'   — proposals, invoices. Pill + title + money + meta.
- *   variant='document' — documents. Icon + title + eyebrow. No money, no pill.
+ *   variant='status'   — proposals, invoices. Title + money + meta.
+ *   variant='document' — documents. Icon/thumb + title + eyebrow.
+ *
+ *   chrome='card'      — legacy soft-card shell (one bordered rectangle
+ *                        per row). Default for back-compat.
+ *   chrome='ticket'    — Plainspoken bill-of-lading row. Flat, borderless
+ *                        at the row level — consumer wraps rows in an
+ *                        outer `border-[3px] border-[color:var(--color-text-primary)]`
+ *                        container (the rows' `border-b-[2px]` dividers
+ *                        do the stitching). Plainspoken vocabulary: №
+ *                        cell (status) or file-ext thumb (document), Archivo
+ *                        Black title, flat stamp StatusPill, burnt-orange
+ *                        arrow glyph.
  *
  * This is the ONLY place list-row markup should exist on portal surfaces.
  * Enforced by `tests/forbidden-strings.test.ts` — any `.map(` inside a
  * portal index page must render through <PortalListItem>.
- *
- * Card shell is inlined (no separate _PortalListRow.astro) because splitting
- * didn't earn its keep for two callers. If document and status layouts
- * diverge materially in the future, split then.
  *
  * The whole card is a link. The chevron/trailing-icon indicates
  * interactivity; no redundant "View details" button (UI-PATTERNS R2:
@@ -22,8 +29,11 @@ import MoneyDisplay from './MoneyDisplay.astro'
 import StatusPill from './StatusPill.astro'
 import type { Tone } from '../../lib/portal/status'
 
+type Chrome = 'card' | 'ticket'
+
 type StatusProps = {
   variant: 'status'
+  chrome?: Chrome
   href: string
   tone: Tone
   toneLabel: string
@@ -31,10 +41,20 @@ type StatusProps = {
   amountCents: number
   metaCaption?: string | null
   trailingCaption?: string | null
+  /** Short serial glyph shown in the № cell (ticket chrome only). Card
+   *  chrome ignores this. Typical values: "01", "A3", or the first two
+   *  chars of an id slice. */
+  serial?: string | null
+  /** Shown below the title in ticket chrome (e.g. short engagement
+   *  descriptor). Ignored by card chrome. */
+  subCaption?: string | null
+  /** Optional explicit label on the date/meta cell ("Signed", "Due"). */
+  metaLabel?: string | null
 }
 
 type DocumentProps = {
   variant: 'document'
+  chrome?: Chrome
   href: string
   icon: string
   title: string
@@ -42,13 +62,22 @@ type DocumentProps = {
   trailingIcon: 'open_in_new' | 'download'
   /** If true, link opens in a new tab. */
   external?: boolean
+  /** File extension shown in the thumb cell (ticket chrome only). */
+  fileExt?: string | null
+  /** Kind label (ticket chrome only; e.g. "Contract", "SOP", "Data"). */
+  kind?: string | null
+  /** Optional stamp status (ticket chrome only). */
+  tone?: Tone | null
+  toneLabel?: string | null
 }
 
 type Props = StatusProps | DocumentProps
 
 const props = Astro.props as Props
+const chrome: Chrome = props.chrome ?? 'card'
 
-const shellClass = [
+// Card-chrome wrapper (existing rendering, unchanged).
+const cardShell = [
   'block bg-[color:var(--color-surface)]',
   'rounded-[var(--radius-card)] border border-[color:var(--color-border)]',
   'p-card',
@@ -57,11 +86,22 @@ const shellClass = [
   'focus-visible:outline-none',
   'focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2',
 ].join(' ')
+
+// Ticket-chrome wrapper — borderless row with bottom stitch. Consumer
+// provides outer 3px ink border.
+const ticketShell = [
+  'group block bg-[color:var(--color-surface)]',
+  'border-b-[2px] border-[color:var(--color-text-primary)] last:border-b-0',
+  'transition-colors',
+  'hover:bg-[color:var(--color-border-subtle)]',
+  'focus-visible:outline-none',
+  'focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-inset',
+].join(' ')
 ---
 
 {
-  props.variant === 'status' ? (
-    <a href={props.href} class={shellClass}>
+  chrome === 'card' && props.variant === 'status' && (
+    <a href={props.href} class={cardShell}>
       <div class="flex items-center gap-stack min-h-[44px]">
         <div class="flex-1 min-w-0 flex flex-col gap-row">
           <div class="flex items-center gap-row flex-wrap">
@@ -92,10 +132,14 @@ const shellClass = [
         </span>
       </div>
     </a>
-  ) : (
+  )
+}
+
+{
+  chrome === 'card' && props.variant === 'document' && (
     <a
       href={props.href}
-      class={shellClass}
+      class={cardShell}
       {...(props.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
     >
       <div class="flex items-center gap-stack min-h-[44px]">
@@ -119,6 +163,130 @@ const shellClass = [
         >
           {props.trailingIcon}
         </span>
+      </div>
+    </a>
+  )
+}
+
+{
+  /* TICKET-CHROME status variant. Mobile: 2-row collapse (serial+title+arrow / sub+price/date). Desktop: 5-col grid. */
+  chrome === 'ticket' && props.variant === 'status' && (
+    <a href={props.href} class={ticketShell}>
+      <div class="md:grid md:grid-cols-[56px_1fr_auto_auto_48px] md:items-stretch">
+        {/* № cell */}
+        <div class="flex md:border-r-[2px] md:border-[color:var(--color-text-primary)] bg-[color:var(--color-text-primary)] text-[color:var(--color-primary)] items-center justify-center md:min-h-[88px] py-3 md:py-0 font-['Archivo'] font-black text-num-cell">
+          {props.serial ? `№${props.serial}` : '№ —'}
+        </div>
+
+        {/* Main */}
+        <div class="md:border-r-[2px] md:border-[color:var(--color-text-primary)] px-5 py-4 md:py-5 flex flex-col justify-center gap-2">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h3 class="font-['Archivo'] text-lg md:text-xl font-black uppercase tracking-[-0.01em] text-[color:var(--color-text-primary)] m-0 truncate">
+              {props.title}
+            </h3>
+            <StatusPill tone={props.tone} label={props.toneLabel} />
+          </div>
+          {props.subCaption && (
+            <p class="text-sm text-[color:var(--color-text-secondary)] m-0 line-clamp-2">
+              {props.subCaption}
+            </p>
+          )}
+        </div>
+
+        {/* Price */}
+        <div class="md:border-r-[2px] md:border-[color:var(--color-text-primary)] px-5 py-3 md:py-5 flex flex-col items-start md:items-end justify-center gap-1">
+          <MoneyDisplay amountCents={props.amountCents} size="row" />
+          <span class="font-['Archivo_Narrow'] text-label font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+            {props.metaCaption ?? 'Amount'}
+          </span>
+        </div>
+
+        {/* Date */}
+        <div class="md:border-r-[2px] md:border-[color:var(--color-text-primary)] px-5 py-3 md:py-5 flex flex-col justify-center gap-1">
+          {props.metaLabel && (
+            <span class="font-['Archivo_Narrow'] text-label font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+              {props.metaLabel}
+            </span>
+          )}
+          {props.trailingCaption && (
+            <span class="font-mono text-sm text-[color:var(--color-text-primary)]">
+              {props.trailingCaption}
+            </span>
+          )}
+        </div>
+
+        {/* Arrow */}
+        <div
+          aria-hidden="true"
+          class="hidden md:flex items-center justify-center font-['Archivo'] font-black text-2xl text-[color:var(--color-primary)] transition-transform group-hover:translate-x-0.5"
+        >
+          →
+        </div>
+      </div>
+    </a>
+  )
+}
+
+{
+  /* TICKET-CHROME document variant. File-ext thumb + kind + date/size + stamp + up-right arrow. */
+  chrome === 'ticket' && props.variant === 'document' && (
+    <a
+      href={props.href}
+      class={ticketShell}
+      {...(props.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+    >
+      <div class="md:grid md:grid-cols-[88px_1fr_140px_180px_auto_48px] md:items-stretch">
+        {/* Thumb */}
+        <div class="flex items-center justify-center md:border-r-[2px] md:border-[color:var(--color-text-primary)] bg-[color:var(--color-border-subtle)] md:min-h-[88px] py-3 md:py-0 font-['Archivo'] font-black text-num-cell text-[color:var(--color-text-primary)]">
+          {props.fileExt ?? props.icon.slice(0, 3).toUpperCase()}
+        </div>
+
+        {/* Main */}
+        <div class="md:border-r-[2px] md:border-[color:var(--color-text-primary)] px-5 py-4 md:py-5 flex flex-col justify-center gap-2">
+          <h4 class="font-['Archivo'] text-lg font-black uppercase tracking-[-0.01em] text-[color:var(--color-text-primary)] m-0 truncate">
+            {props.title}
+          </h4>
+          {props.eyebrow && (
+            <p class="text-sm text-[color:var(--color-text-secondary)] m-0 line-clamp-2">
+              {props.eyebrow}
+            </p>
+          )}
+        </div>
+
+        {/* Kind */}
+        <div class="md:border-r-[2px] md:border-[color:var(--color-text-primary)] px-5 py-3 md:py-5 flex flex-col justify-center gap-1">
+          <span class="font-['Archivo_Narrow'] text-label font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+            Kind
+          </span>
+          <span class="font-mono text-sm text-[color:var(--color-text-primary)]">
+            {props.kind ?? '—'}
+          </span>
+        </div>
+
+        {/* Meta */}
+        <div class="md:border-r-[2px] md:border-[color:var(--color-text-primary)] px-5 py-3 md:py-5 flex flex-col justify-center gap-1">
+          <span class="font-['Archivo_Narrow'] text-label font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+            Shared
+          </span>
+          <span class="font-mono text-sm text-[color:var(--color-text-primary)]">
+            {props.eyebrow ?? '—'}
+          </span>
+        </div>
+
+        {/* Stamp */}
+        <div class="md:border-r-[2px] md:border-[color:var(--color-text-primary)] px-5 py-3 md:py-5 flex items-center justify-start md:justify-center">
+          {props.tone && props.toneLabel ? (
+            <StatusPill tone={props.tone} label={props.toneLabel} />
+          ) : null}
+        </div>
+
+        {/* Arrow */}
+        <div
+          aria-hidden="true"
+          class="hidden md:flex items-center justify-center font-['Archivo'] font-black text-xl text-[color:var(--color-primary)] transition-transform group-hover:translate-x-0.5"
+        >
+          ↗
+        </div>
       </div>
     </a>
   )

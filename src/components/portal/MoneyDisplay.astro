@@ -3,19 +3,25 @@
  * Dollar-figure renderer. Money rule: every monetary value appears as
  * dollar figures. NEVER percentages, bars, or progress indicators.
  *
- * Modern Institutional identity:
- *   - Prominent money (display, h2) renders in Crimson Pro serif with
- *     tabular-nums + lining-nums — editorial feel, classical weight.
- *   - Inline money (body, list rows) renders in Public Sans with
- *     tabular-nums — pairs cleanly with body prose.
+ * Size register:
+ *   - Plainspoken stamp scale (hero/total/kpi/row) renders in Archivo Black
+ *     900 tabular-nums — the same register the Plainspoken Sign Shop mocks
+ *     use for engagement totals, summary cards, and ledger rows.
+ *   - Legacy scale (display/h2/body) renders in the default display/body
+ *     fonts. Kept in place for back-compat while pages migrate to the new
+ *     sizes. `display` maps to `total` weight and `h2` maps to `row` once
+ *     a consumer opts into the Plainspoken chrome — see PortalListItem's
+ *     `chrome="ticket"` variant.
  *
  * Input is cents (integer) to avoid float rounding. No decimal places
  * for whole-dollar amounts.
  */
 
+type Size = 'hero' | 'total' | 'kpi' | 'row' | 'display' | 'h2' | 'body'
+
 interface Props {
   amountCents: number
-  size?: 'display' | 'h2' | 'body'
+  size?: Size
   emphasize?: boolean
   class?: string
 }
@@ -29,8 +35,21 @@ const formatted = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 }).format(dollars)
 
-const sizeClass =
-  size === 'display'
+// Plainspoken sizes pin to Archivo Black 900 via their sibling tokens
+// (see --text-*--font-weight in global.css). Legacy sizes keep their
+// original Modern Institutional treatment.
+const PLAINSPOKEN_SIZE_CLASS: Record<'hero' | 'total' | 'kpi' | 'row', string> = {
+  hero: 'text-hero-price text-[color:var(--color-text-primary)]',
+  total: 'text-section-h text-[color:var(--color-text-primary)]',
+  kpi: 'text-kpi text-[color:var(--color-text-primary)]',
+  row: 'text-price-row text-[color:var(--color-text-primary)]',
+}
+
+const isPlainspoken = size === 'hero' || size === 'total' || size === 'kpi' || size === 'row'
+
+const sizeClass = isPlainspoken
+  ? PLAINSPOKEN_SIZE_CLASS[size as 'hero' | 'total' | 'kpi' | 'row']
+  : size === 'display'
     ? 'font-display text-money font-medium text-[color:var(--color-text-primary)]'
     : size === 'h2'
       ? 'font-display text-title font-medium text-[color:var(--color-text-primary)]'
