@@ -3,7 +3,7 @@ import AdminLayout from '../../../layouts/AdminLayout.astro'
 import LogReplyDialog from '../../../components/admin/LogReplyDialog.astro'
 import {
   listEntities,
-  countEntitiesByStage,
+  countEntitiesPerStage,
   getSignalMetadataForEntities,
   ENTITY_STAGES,
 } from '../../../lib/db/entities'
@@ -51,7 +51,7 @@ const signalMetadata: Map<string, EntitySignalMetadata> =
       )
     : new Map()
 
-const signalCount = await countEntitiesByStage(env.DB, session.orgId, 'signal')
+const stageCounts = await countEntitiesPerStage(env.DB, session.orgId)
 
 // Proposing tab: pull the top active quote per entity for inline status + age,
 // and reorder rows by "oldest sent first" so quotes about to expire surface
@@ -96,6 +96,46 @@ const LEAD_PIPELINES = [
   { value: 'new_business', label: 'New Business' },
   { value: 'social_listening', label: 'Social Listening' },
 ]
+
+// Stage-specific empty-state copy. Admin-facing surface, so the goal is
+// actionable guidance — what next, where this list gets filled from —
+// rather than the no-fabrication rule applied to client-facing surfaces
+// (docs/style/empty-state-pattern.md). Filtered states ("no rows after
+// pipeline filter applied") still fall through to a generic message.
+const EMPTY_STATE_COPY: Record<EntityStage, { headline: string; hint: string }> = {
+  signal: {
+    headline: 'No new signals.',
+    hint: 'Lead-gen pipelines feed this stage automatically. Check the Generators page if you expected new rows.',
+  },
+  prospect: {
+    headline: 'No active prospects.',
+    hint: 'Promote a signal to begin outreach.',
+  },
+  meetings: {
+    headline: 'No prospects in meetings.',
+    hint: 'Send a booking link from a prospect to surface them here once they accept.',
+  },
+  proposing: {
+    headline: 'No proposals out.',
+    hint: 'Generate a quote from a completed meeting to move it here.',
+  },
+  engaged: {
+    headline: 'No active engagements.',
+    hint: 'Mark a quote accepted to begin delivery.',
+  },
+  delivered: {
+    headline: 'Nothing in stabilization.',
+    hint: 'Engagements move here automatically at handoff.',
+  },
+  ongoing: {
+    headline: 'No ongoing retainers.',
+    hint: 'Flag a delivered engagement for ongoing support to surface it here.',
+  },
+  lost: {
+    headline: 'No lost prospects.',
+    hint: 'Prospects marked Lost (with a reason) appear here.',
+  },
+}
 
 function tierBadgeClass(tier: string | null): string {
   switch (tier) {
@@ -234,9 +274,15 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
           }`}
         >
           {s.label}
-          {s.value === 'signal' && signalCount > 0 && (
-            <span class="ml-1 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
-              {signalCount}
+          {stageCounts[s.value] > 0 && (
+            <span
+              class={`ml-1 text-xs px-1.5 py-0.5 rounded-full ${
+                filterStage === s.value
+                  ? 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-primary)]'
+                  : 'bg-[color:var(--color-background)] text-[color:var(--color-text-secondary)]'
+              }`}
+            >
+              {stageCounts[s.value]}
             </span>
           )}
         </a>
@@ -248,9 +294,27 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
   {
     displayEntities.length === 0 ? (
       <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card">
-        <p class="text-[color:var(--color-text-secondary)] text-sm">
-          No entities at the <strong>{filterStage}</strong> stage.
-        </p>
+        {filterPipeline ? (
+          <p class="text-[color:var(--color-text-secondary)] text-sm">
+            No <strong>{filterStage}</strong> entities match the selected pipeline.{' '}
+            <a
+              href={`/admin/entities?stage=${filterStage}`}
+              class="text-[color:var(--color-primary)] hover:underline"
+            >
+              Clear filter
+            </a>
+            .
+          </p>
+        ) : (
+          <>
+            <p class="text-[color:var(--color-text-primary)] text-sm font-medium mb-1">
+              {EMPTY_STATE_COPY[filterStage].headline}
+            </p>
+            <p class="text-[color:var(--color-text-secondary)] text-sm">
+              {EMPTY_STATE_COPY[filterStage].hint}
+            </p>
+          </>
+        )}
       </div>
     ) : (
       <div
@@ -312,32 +376,21 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                     />
                   </div>
                 )}
-                {/* Stretched link — whole-row clickable for signal. Interactive
+                {/* Stretched link — whole row is clickable. Interactive
                     elements (checkbox, website/phone, action buttons) sit at
                     relative z-10 so they remain independently clickable. */}
-                {isSignal && (
-                  <a
-                    href={`/admin/entities/${e.id}`}
-                    class="absolute inset-0 z-0 rounded-[var(--radius-card)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)]"
-                    aria-label={`Open ${e.name}`}
-                    tabindex="0"
-                  />
-                )}
+                <a
+                  href={`/admin/entities/${e.id}`}
+                  class="absolute inset-0 z-0 rounded-[var(--radius-card)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)]"
+                  aria-label={`Open ${e.name}`}
+                  tabindex="0"
+                />
                 <div class="flex items-start justify-between gap-stack flex-1 min-w-0">
                   <div class="min-w-0 flex-1">
                     <div class="flex items-center gap-2 mb-1 flex-wrap">
-                      {isSignal ? (
-                        <span class="text-sm font-medium text-[color:var(--color-text-primary)] group-hover:text-primary transition-colors">
-                          {e.name}
-                        </span>
-                      ) : (
-                        <a
-                          href={`/admin/entities/${e.id}`}
-                          class="relative z-10 text-sm font-medium text-[color:var(--color-text-primary)] hover:text-primary transition-colors"
-                        >
-                          {e.name}
-                        </a>
-                      )}
+                      <span class="text-sm font-medium text-[color:var(--color-text-primary)] group-hover:text-primary transition-colors">
+                        {e.name}
+                      </span>
                       {activeQuote && (
                         <>
                           <span class={statusBadgeClass(activeQuote.status)}>
@@ -440,46 +493,38 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                     </div>
                   </div>
 
-                  <div class="relative z-10 flex items-center gap-2 shrink-0">
-                    {isSignal ? (
-                      <>
-                        <form method="POST" action={`/api/admin/entities/${e.id}/promote`}>
-                          <button
-                            type="submit"
-                            class="text-xs bg-primary text-white px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-primary/90 transition-colors"
-                          >
-                            Promote
-                          </button>
-                        </form>
-                        <form method="POST" action={`/api/admin/entities/${e.id}/dismiss`}>
-                          <button
-                            type="submit"
-                            class="text-xs bg-[color:var(--color-background)] text-[color:var(--color-text-secondary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-border-subtle)] transition-colors"
-                          >
-                            Dismiss
-                          </button>
-                        </form>
-                      </>
-                    ) : (
-                      <>
-                        {e.stage === 'prospect' && (
-                          <button
-                            type="button"
-                            data-open-reply-dialog={e.id}
-                            class="text-xs border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-background)] transition-colors"
-                          >
-                            Log reply
-                          </button>
-                        )}
-                        <a
-                          href={`/admin/entities/${e.id}`}
-                          class="text-xs bg-[color:var(--color-background)] text-[color:var(--color-text-primary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-border-subtle)] transition-colors"
+                  {(isSignal || e.stage === 'prospect') && (
+                    <div class="relative z-10 flex items-center gap-2 shrink-0">
+                      {isSignal ? (
+                        <>
+                          <form method="POST" action={`/api/admin/entities/${e.id}/promote`}>
+                            <button
+                              type="submit"
+                              class="text-xs bg-primary text-white px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-primary/90 transition-colors"
+                            >
+                              Promote
+                            </button>
+                          </form>
+                          <form method="POST" action={`/api/admin/entities/${e.id}/dismiss`}>
+                            <button
+                              type="submit"
+                              class="text-xs bg-[color:var(--color-background)] text-[color:var(--color-text-secondary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-border-subtle)] transition-colors"
+                            >
+                              Dismiss
+                            </button>
+                          </form>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          data-open-reply-dialog={e.id}
+                          class="text-xs border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-background)] transition-colors"
                         >
-                          View
-                        </a>
-                      </>
-                    )}
-                  </div>
+                          Log reply
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )

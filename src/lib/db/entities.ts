@@ -238,16 +238,28 @@ export async function getEntityBySlug(
   )
 }
 
-export async function countEntitiesByStage(
+/**
+ * Counts per stage for the entity list tab badges. One GROUP BY keeps the
+ * query from scaling with the number of stages. Stages with zero rows are
+ * omitted from the DB result; callers that need a populated record for
+ * every stage should initialise defaults before merging.
+ */
+export async function countEntitiesPerStage(
   db: D1Database,
-  orgId: string,
-  stage: EntityStage
-): Promise<number> {
-  const result = await db
-    .prepare('SELECT COUNT(*) as count FROM entities WHERE org_id = ? AND stage = ?')
-    .bind(orgId, stage)
-    .first<{ count: number }>()
-  return result?.count ?? 0
+  orgId: string
+): Promise<Record<EntityStage, number>> {
+  const rows = await db
+    .prepare('SELECT stage, COUNT(*) as count FROM entities WHERE org_id = ? GROUP BY stage')
+    .bind(orgId)
+    .all<{ stage: EntityStage; count: number }>()
+  const counts = Object.fromEntries(ENTITY_STAGES.map((s) => [s.value, 0])) as Record<
+    EntityStage,
+    number
+  >
+  for (const row of rows.results ?? []) {
+    counts[row.stage] = row.count
+  }
+  return counts
 }
 
 // ---------------------------------------------------------------------------
