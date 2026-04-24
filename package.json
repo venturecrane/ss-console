@@ -16,7 +16,8 @@
     "lint:fix": "eslint --fix .",
     "typecheck": "astro check",
     "typecheck:workers": "for dir in workers/*/; do echo \"Typechecking $dir\" && npm run typecheck --prefix \"$dir\" || exit 1; done",
-    "verify": "npm run typecheck && npm run typecheck:workers && npm run format:check && npm run lint && npm run build && npm run test",
+    "test:workers": "for dir in workers/*/; do echo \"Testing $dir\" && npm run test --prefix \"$dir\" || exit 1; done",
+    "verify": "npm run typecheck && npm run typecheck:workers && npm run format:check && npm run lint && npm run build && npm run test && npm run test:workers",
     "db:migrate:local": "wrangler d1 migrations apply ss-console-db --local",
     "prepare": "node -e \"if(process.env.CI)process.exit(0)\" && husky"
   },
