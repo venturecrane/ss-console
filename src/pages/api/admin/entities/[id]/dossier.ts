@@ -30,7 +30,10 @@ export const POST: APIRoute = async ({ params, locals, redirect }) => {
   if (!entityId) return redirect('/admin/entities?error=missing', 302)
 
   try {
-    await enrichEntity(env, session.orgId, entityId, { mode: 'reviews-and-news' })
+    await enrichEntity(env, session.orgId, entityId, {
+      mode: 'reviews-and-news',
+      triggered_by: 'admin:re-enrich',
+    })
     return redirect(`/admin/entities/${entityId}?dossier=1`, 302)
   } catch (err) {
     console.error('[api/admin/entities/dossier] Error:', err)

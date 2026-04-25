@@ -47,11 +47,12 @@ export const POST: APIRoute = async ({ params, locals, redirect }) => {
     // the alreadyEnriched short-circuit. On backfill it can hit 10+ external
     // APIs and multiple Claude calls — awaiting that from the request path
     // blew past Worker limits (Error 1101) on ~50% of promotes.
-    const enrichPromise = enrichEntity(env, session.orgId, entityId, { mode: 'full' }).catch(
-      (err) => {
-        console.error('[promote] Background enrichment failed:', err)
-      }
-    )
+    const enrichPromise = enrichEntity(env, session.orgId, entityId, {
+      mode: 'full',
+      triggered_by: 'admin:promote',
+    }).catch((err) => {
+      console.error('[promote] Background enrichment failed', { error: err })
+    })
     if (locals.cfContext?.waitUntil) {
       locals.cfContext.waitUntil(enrichPromise)
     }
