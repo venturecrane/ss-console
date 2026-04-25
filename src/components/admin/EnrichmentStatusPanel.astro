@@ -23,7 +23,16 @@ const { entityId } = Astro.props
 
 const latest = await latestRunByModule(env.DB, entityId)
 
-type DisplayStatus = RunStatus | 'not_yet_run'
+type DisplayStatus = RunStatus | 'not_yet_run' | 'timed_out'
+
+// Mirrors the lock window in src/lib/db/enrichment-runs.ts. A `running` row
+// older than this is almost certainly a worker that died mid-execution
+// (Cloudflare's waitUntil cap is 30s; full Sonnet briefs occasionally
+// exceed that). Display as `timed_out` so the operator can tell stuck
+// rows apart from genuinely-in-flight ones, and click Retry — the DAL's
+// startRun lock has already released past this window, so the next
+// attempt proceeds.
+const STALE_RUNNING_THRESHOLD_MS = 5 * 60 * 1000
 
 function tone(status: DisplayStatus): string {
   switch (status) {
@@ -32,6 +41,7 @@ function tone(status: DisplayStatus): string {
     case 'no_data':
       return 'bg-[color:var(--color-attention)] text-white'
     case 'failed':
+    case 'timed_out':
       return 'bg-[color:var(--color-error)] text-white'
     case 'running':
       return 'bg-[color:var(--color-primary)] text-white'
@@ -61,9 +71,23 @@ interface Row {
   whenLabel: string
 }
 
+const now = Date.now()
 const rows: Row[] = MODULES.map((m) => {
   const run = latest.get(m.id)
-  const status: DisplayStatus = run?.status ?? 'not_yet_run'
+  let status: DisplayStatus = run?.status ?? 'not_yet_run'
+  let reason: string | null = run?.reason ?? null
+
+  // A `running` row whose started_at is older than the lock window is a
+  // dead worker, not an in-flight run. Surface it as timed_out so the
+  // operator knows clicking Retry will actually start fresh.
+  if (run?.status === 'running' && run.started_at) {
+    const startedMs = new Date(run.started_at).getTime()
+    if (Number.isFinite(startedMs) && now - startedMs > STALE_RUNNING_THRESHOLD_MS) {
+      status = 'timed_out'
+      reason = 'worker_terminated_mid_run'
+    }
+  }
+
   const ts = run?.completed_at ?? run?.started_at
   return {
     id: m.id,
@@ -71,7 +95,7 @@ const rows: Row[] = MODULES.map((m) => {
     tier: m.tier,
     run,
     status,
-    reason: run?.reason ?? null,
+    reason,
     errorMessage: run?.error_message ?? null,
     whenLabel: (ts ? relativeTime(ts) : '') ?? '',
   }
@@ -122,7 +146,11 @@ const rows: Row[] = MODULES.map((m) => {
                 <td class="px-3 py-2 align-top">
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class={statusPillClass(row.status)}>
-                      {row.status === 'not_yet_run' ? 'not yet run' : row.status.replace('_', ' ')}
+                      {row.status === 'not_yet_run'
+                        ? 'not yet run'
+                        : row.status === 'timed_out'
+                          ? 'timed out'
+                          : row.status.replace('_', ' ')}
                     </span>
                     {row.reason && (
                       <span class="text-xs text-[color:var(--color-text-muted)]">{row.reason}</span>
