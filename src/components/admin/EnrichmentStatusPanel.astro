@@ -1,0 +1,194 @@
+---
+/**
+ * Enrichment Status Panel — admin debug surface that shows the durable
+ * per-module run state for a single entity. Replaces "guess from the
+ * timeline" with "read the runs table."
+ *
+ * Designed as an internal operator tool: simple table, status pills, per-row
+ * Retry, page-level "Run full enrichment". No design rigor beyond the
+ * existing badge / button helpers — this is not a client-facing surface.
+ */
+import { MODULES } from '../../lib/enrichment/modules'
+import type { ModuleId } from '../../lib/enrichment/modules'
+import { latestRunByModule } from '../../lib/db/enrichment-runs'
+import type { EnrichmentRun, RunStatus } from '../../lib/db/enrichment-runs'
+import { adminActionButtonClass } from '../../lib/ui/admin-action-button'
+import { relativeTime } from '../../lib/admin/relative-time'
+import { env } from 'cloudflare:workers'
+
+interface Props {
+  entityId: string
+}
+const { entityId } = Astro.props
+
+const latest = await latestRunByModule(env.DB, entityId)
+
+type DisplayStatus = RunStatus | 'not_yet_run'
+
+function tone(status: DisplayStatus): string {
+  switch (status) {
+    case 'succeeded':
+      return 'bg-[color:var(--color-complete)] text-white'
+    case 'no_data':
+      return 'bg-[color:var(--color-attention)] text-white'
+    case 'failed':
+      return 'bg-[color:var(--color-error)] text-white'
+    case 'running':
+      return 'bg-[color:var(--color-primary)] text-white'
+    case 'skipped':
+    case 'not_yet_run':
+    default:
+      return 'bg-[color:var(--color-border)] text-[color:var(--color-text-secondary)]'
+  }
+}
+
+function statusPillClass(status: DisplayStatus): string {
+  return (
+    'inline-flex items-center px-2 py-0.5 rounded-[var(--radius-badge)] ' +
+    'font-mono text-[0.6875rem] uppercase tracking-wider font-semibold whitespace-nowrap ' +
+    tone(status)
+  )
+}
+
+interface Row {
+  id: ModuleId
+  displayName: string
+  tier: number
+  run: EnrichmentRun | undefined
+  status: DisplayStatus
+  reason: string | null
+  errorMessage: string | null
+  whenLabel: string
+}
+
+const rows: Row[] = MODULES.map((m) => {
+  const run = latest.get(m.id)
+  const status: DisplayStatus = run?.status ?? 'not_yet_run'
+  const ts = run?.completed_at ?? run?.started_at
+  return {
+    id: m.id,
+    displayName: m.displayName,
+    tier: m.tier,
+    run,
+    status,
+    reason: run?.reason ?? null,
+    errorMessage: run?.error_message ?? null,
+    whenLabel: (ts ? relativeTime(ts) : '') ?? '',
+  }
+})
+---
+
+<div
+  class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card mb-6"
+>
+  <div class="flex items-baseline justify-between gap-2 mb-3 flex-wrap">
+    <h3 class="text-base font-semibold text-[color:var(--color-text-primary)]">
+      Enrichment status
+    </h3>
+    <form method="POST" action={`/api/admin/entities/${entityId}/enrichment/run-full`} class="m-0">
+      <button type="submit" class={adminActionButtonClass('ghost')} data-enrichment-run-full>
+        Run full enrichment
+      </button>
+    </form>
+  </div>
+
+  <div
+    class="overflow-hidden border border-[color:var(--color-border-subtle)] rounded-[var(--radius-card)]"
+  >
+    <table class="w-full text-sm">
+      <thead
+        class="bg-[color:var(--color-background)] text-left text-xs text-[color:var(--color-text-muted)]"
+      >
+        <tr>
+          <th class="px-3 py-2 font-medium">Module</th>
+          <th class="px-3 py-2 font-medium">Status</th>
+          <th class="px-3 py-2 font-medium">When</th>
+          <th class="px-3 py-2 font-medium text-right">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          rows.map((row) => (
+            <>
+              <tr class="border-t border-[color:var(--color-border-subtle)]">
+                <td class="px-3 py-2 align-top">
+                  <div class="font-medium text-[color:var(--color-text-primary)]">
+                    {row.displayName}
+                  </div>
+                  <div class="text-[0.6875rem] text-[color:var(--color-text-muted)]">
+                    Tier {row.tier} · {row.id}
+                  </div>
+                </td>
+                <td class="px-3 py-2 align-top">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class={statusPillClass(row.status)}>
+                      {row.status === 'not_yet_run' ? 'not yet run' : row.status.replace('_', ' ')}
+                    </span>
+                    {row.reason && (
+                      <span class="text-xs text-[color:var(--color-text-muted)]">{row.reason}</span>
+                    )}
+                  </div>
+                  {row.errorMessage && (
+                    <details class="mt-1">
+                      <summary class="text-xs text-[color:var(--color-text-muted)] cursor-pointer hover:text-[color:var(--color-text-secondary)]">
+                        Error detail
+                      </summary>
+                      <pre class="mt-1 p-2 text-xs bg-[color:var(--color-background)] rounded overflow-x-auto whitespace-pre-wrap break-words">
+                        {row.errorMessage}
+                      </pre>
+                    </details>
+                  )}
+                </td>
+                <td class="px-3 py-2 align-top text-xs text-[color:var(--color-text-secondary)]">
+                  {row.whenLabel ? (
+                    <>
+                      <div>{row.whenLabel}</div>
+                      {row.run?.triggered_by && (
+                        <div class="text-[0.6875rem] text-[color:var(--color-text-muted)] mt-0.5">
+                          {row.run.triggered_by}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <span class="text-[color:var(--color-text-muted)]">—</span>
+                  )}
+                </td>
+                <td class="px-3 py-2 align-top text-right">
+                  <form
+                    method="POST"
+                    action={`/api/admin/entities/${entityId}/enrichment/${row.id}/retry`}
+                    class="m-0 inline"
+                  >
+                    <button
+                      type="submit"
+                      class={adminActionButtonClass('ghost')}
+                      data-enrichment-retry={row.id}
+                    >
+                      {row.status === 'not_yet_run' ? 'Run' : 'Retry'}
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            </>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script is:inline>
+  // Disable the button + show pending state while the redirect resolves so a
+  // double-click doesn't double-bill Claude. The startRun lock in the DAL is
+  // the durable backstop; this is the UX touch.
+  document
+    .querySelectorAll('[data-enrichment-retry], [data-enrichment-run-full]')
+    .forEach((btn) => {
+      const form = btn.closest('form')
+      if (!form) return
+      form.addEventListener('submit', () => {
+        btn.setAttribute('disabled', 'true')
+        btn.textContent = 'Running…'
+      })
+    })
+</script>

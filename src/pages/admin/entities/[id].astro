@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro'
 import LogReplyDialog from '../../../components/admin/LogReplyDialog.astro'
+import EnrichmentStatusPanel from '../../../components/admin/EnrichmentStatusPanel.astro'
 import { statusBadgeClass } from '../../../lib/ui/status-badge'
 import { pipelineBadgeClass } from '../../../lib/ui/pipeline-badge'
 import { adminActionButtonClass } from '../../../lib/ui/admin-action-button'
@@ -1006,6 +1007,9 @@ function confidenceColor(confidence: string): string {
       )
     }
   </div>
+
+  {/* Enrichment status — debug surface for the runs table */}
+  <EnrichmentStatusPanel entityId={entityId} />
 
   {/* Dossier Summary */}
   {

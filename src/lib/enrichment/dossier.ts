@@ -51,34 +51,30 @@ export async function generateDossier(
   entityName: string,
   anthropicKey: string
 ): Promise<string | null> {
-  try {
-    const response = await fetch(ANTHROPIC_API_URL, {
-      method: 'POST',
-      headers: {
-        'x-api-key': anthropicKey,
-        'anthropic-version': ANTHROPIC_VERSION,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        system: DOSSIER_PROMPT,
-        messages: [
-          {
-            role: 'user',
-            content: `Generate an intelligence brief for: ${entityName}\n\nAll available intelligence:\n\n${assembledContext}`,
-          },
-        ],
-      }),
-    })
+  const response = await fetch(ANTHROPIC_API_URL, {
+    method: 'POST',
+    headers: {
+      'x-api-key': anthropicKey,
+      'anthropic-version': ANTHROPIC_VERSION,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      system: DOSSIER_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: `Generate an intelligence brief for: ${entityName}\n\nAll available intelligence:\n\n${assembledContext}`,
+        },
+      ],
+    }),
+  })
 
-    if (!response.ok) return null
+  if (!response.ok) return null
 
-    const result = (await response.json()) as {
-      content?: Array<{ type: string; text?: string }>
-    }
-    return result?.content?.find((b) => b.type === 'text')?.text?.trim() ?? null
-  } catch {
-    return null
+  const result = (await response.json()) as {
+    content?: Array<{ type: string; text?: string }>
   }
+  return result?.content?.find((b) => b.type === 'text')?.text?.trim() ?? null
 }

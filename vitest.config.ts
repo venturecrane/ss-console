@@ -12,12 +12,13 @@ export default defineConfig({
     },
   },
   test: {
-    // Exclude git worktrees from test discovery. `.claude/worktrees/*` are
-    // checkouts of other feature branches — their test expectations drift
-    // relative to main and cause spurious failures during `npm run verify`.
-    // Tests that belong to this branch live in `tests/`; anything else under
-    // `.claude/` is not ours to validate.
-    exclude: ['**/node_modules/**', '**/dist/**', '.claude/worktrees/**'],
+    // Exclude git worktrees from test discovery. Worktrees under
+    // `.claude/worktrees/*` and `.worktrees/*` are checkouts of other
+    // feature branches — their test expectations drift relative to main
+    // and cause spurious failures during `npm run verify`. Tests that
+    // belong to this branch live in `tests/`; anything inside a worktree
+    // dir belongs to whatever branch is checked out there.
+    exclude: ['**/node_modules/**', '**/dist/**', '.claude/worktrees/**', '.worktrees/**'],
     // The crane-test-harness package imports from `node:sqlite`. The
     // vitest 1.x + vite 6 combo trips on bare `node:` imports inside
     // transformed-then-loaded modules, so we externalize the harness
@@ -64,6 +65,7 @@ export default defineConfig({
         // Config files
         '*.config.*',
         '.claude/worktrees/**',
+        '.worktrees/**',
       ],
     },
   },

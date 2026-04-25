@@ -51,6 +51,13 @@ import { deepWebsiteAnalysis, type DeepWebsiteAnalysis } from './deep-website'
 import { synthesizeReviews } from './review-synthesis'
 import { lookupLinkedIn } from './linkedin'
 import { generateDossier } from './dossier'
+import {
+  instrumentModule,
+  fingerprint,
+  type ModuleOutcome,
+  type InstrumentResult,
+} from './instrument'
+import type { ModuleId } from './modules'
 
 export type EnrichMode = 'full' | 'reviews-and-news'
 
@@ -62,11 +69,20 @@ export interface EnrichOptions {
    * available for a future "force full re-enrich" action if we add one.
    */
   force?: boolean
+  /**
+   * Provenance string written to every enrichment_runs row produced during
+   * this call. Examples: 'cron:new-business', 'admin:promote',
+   * 'admin:re-enrich', 'admin:retry:deep_website', 'ingest:signals'.
+   * Defaults to 'unknown' if not provided — callers should set it.
+   */
+  triggered_by?: string
 }
 
 export interface EnrichResult {
   entityId: string
   mode: EnrichMode
+  /** Provenance — same value passed in EnrichOptions.triggered_by. */
+  triggered_by: string
   /** Module source names that completed successfully in this run. */
   completed: string[]
   /** Module source names that were skipped (missing API key, wrong vertical, already enriched). */
@@ -75,6 +91,30 @@ export interface EnrichResult {
   errors: string[]
   /** True if the run did nothing because a prior full enrichment exists. */
   alreadyEnriched: boolean
+}
+
+/**
+ * Map a wrapper outcome into the legacy in-memory EnrichResult arrays so
+ * existing callers (workers, promote endpoint) that read result.completed
+ * continue to work. The persisted enrichment_runs row is the durable
+ * record; this is best-effort accounting for the in-memory return value.
+ */
+function applyOutcome(result: EnrichResult, module: ModuleId, outcome: InstrumentResult): void {
+  switch (outcome.status) {
+    case 'succeeded':
+      result.completed.push(module)
+      return
+    case 'no_data':
+    case 'skipped':
+      result.skipped.push(module)
+      return
+    case 'failed':
+      result.errors.push(module)
+      return
+    case 'running':
+      // Unreachable under instrumentModule (always settles to terminal).
+      return
+  }
 }
 
 type EnrichEnv = {
@@ -103,6 +143,7 @@ export async function enrichEntity(
   const result: EnrichResult = {
     entityId,
     mode,
+    triggered_by: options.triggered_by ?? 'unknown',
     completed: [],
     skipped: [],
     errors: [],
@@ -218,36 +259,41 @@ async function tryPlaces(
   entity: Entity,
   result: EnrichResult
 ): Promise<Entity> {
-  if (entity.phone && entity.website) {
-    result.skipped.push('google_places')
-    return entity
-  }
-  if (!env.GOOGLE_PLACES_API_KEY) {
-    result.skipped.push('google_places')
-    return entity
-  }
-  try {
-    const places = await lookupGooglePlaces(entity.name, entity.area, env.GOOGLE_PLACES_API_KEY)
-    if (!places) return entity
-    await updateEntity(env.DB, orgId, entity.id, {
-      phone: places.phone ?? entity.phone ?? undefined,
-      website: places.website ?? entity.website ?? undefined,
-    })
-    await appendContext(env.DB, orgId, {
+  let refreshedEntity: Entity = entity
+  const outcome = await instrumentModule(
+    {
+      db: env.DB,
+      org_id: orgId,
       entity_id: entity.id,
-      type: 'enrichment',
-      content: `Google Places: ${places.phone ? `Phone: ${places.phone}` : 'No phone found'}. ${places.website ? `Website: ${places.website}` : 'No website found'}. Rating: ${places.rating ?? 'N/A'} (${places.reviewCount ?? 0} reviews). Status: ${places.businessStatus ?? 'unknown'}.`,
-      source: 'google_places',
-      metadata: places as unknown as Record<string, unknown>,
-    })
-    result.completed.push('google_places')
-    const refreshed = await getEntity(env.DB, orgId, entity.id)
-    return refreshed ?? entity
-  } catch (err) {
-    console.error('[enrichEntity] google_places failed:', err)
-    result.errors.push('google_places')
-    return entity
-  }
+      module: 'google_places',
+      mode: result.mode,
+      triggered_by: result.triggered_by,
+    },
+    async (): Promise<ModuleOutcome> => {
+      if (entity.phone && entity.website)
+        return { kind: 'skipped', reason: 'already_have_phone_and_website' }
+      if (!env.GOOGLE_PLACES_API_KEY)
+        return { kind: 'skipped', reason: 'missing_api_key:google_places' }
+      const places = await lookupGooglePlaces(entity.name, entity.area, env.GOOGLE_PLACES_API_KEY)
+      if (!places) return { kind: 'no_data', reason: 'no_match' }
+      await updateEntity(env.DB, orgId, entity.id, {
+        phone: places.phone ?? entity.phone ?? undefined,
+        website: places.website ?? entity.website ?? undefined,
+      })
+      const ce = await appendContext(env.DB, orgId, {
+        entity_id: entity.id,
+        type: 'enrichment',
+        content: `Google Places: ${places.phone ? `Phone: ${places.phone}` : 'No phone found'}. ${places.website ? `Website: ${places.website}` : 'No website found'}. Rating: ${places.rating ?? 'N/A'} (${places.reviewCount ?? 0} reviews). Status: ${places.businessStatus ?? 'unknown'}.`,
+        source: 'google_places',
+        metadata: places as unknown as Record<string, unknown>,
+      })
+      const refreshed = await getEntity(env.DB, orgId, entity.id)
+      if (refreshed) refreshedEntity = refreshed
+      return { kind: 'succeeded', context_entry_id: ce.id }
+    }
+  )
+  applyOutcome(result, 'google_places', outcome)
+  return refreshedEntity
 }
 
 async function tryWebsite(
@@ -256,64 +302,69 @@ async function tryWebsite(
   entity: Entity,
   result: EnrichResult
 ): Promise<Entity> {
-  if (!entity.website || !env.ANTHROPIC_API_KEY) {
-    result.skipped.push('website_analysis')
-    return entity
-  }
-  try {
-    const analysis = await analyzeWebsite(entity.website, env.ANTHROPIC_API_KEY)
-    if (!analysis) return entity
-    const techTools = [
-      ...analysis.tech_stack.scheduling,
-      ...analysis.tech_stack.crm,
-      ...analysis.tech_stack.reviews,
-      ...analysis.tech_stack.payments,
-      ...analysis.tech_stack.communication,
-    ]
-    const missingTools: string[] = []
-    if (analysis.tech_stack.scheduling.length === 0) missingTools.push('No scheduling tool')
-    if (analysis.tech_stack.crm.length === 0) missingTools.push('No CRM')
-    if (analysis.tech_stack.reviews.length === 0) missingTools.push('No review management')
-
-    const contentParts = [
-      `Website analysis (${analysis.pages_analyzed.length} pages):`,
-      analysis.owner_name ? `Owner/Founder: ${analysis.owner_name}` : null,
-      analysis.team_size ? `Team size: ~${analysis.team_size} people` : null,
-      analysis.founding_year ? `Founded: ${analysis.founding_year}` : null,
-      analysis.contact_email ? `Email: ${analysis.contact_email}` : null,
-      analysis.services.length > 0 ? `Services: ${analysis.services.join(', ')}` : null,
-      `Site quality: ${analysis.quality}`,
-      techTools.length > 0
-        ? `Tools detected: ${techTools.join(', ')}`
-        : 'No business tools detected on website',
-      missingTools.length > 0 ? `Gaps: ${missingTools.join(', ')}` : null,
-      `Platform: ${analysis.tech_stack.platform.join(', ') || 'Custom/unknown'}`,
-    ].filter(Boolean)
-
-    await appendContext(env.DB, orgId, {
+  const outcome = await instrumentModule(
+    {
+      db: env.DB,
+      org_id: orgId,
       entity_id: entity.id,
-      type: 'enrichment',
-      content: contentParts.join('\n'),
-      source: 'website_analysis',
-      metadata: {
-        owner_name: analysis.owner_name,
-        team_size: analysis.team_size,
-        employee_count: analysis.team_size,
-        founding_year: analysis.founding_year,
-        contact_email: analysis.contact_email,
-        services: analysis.services,
-        quality: analysis.quality,
-        tech_stack: analysis.tech_stack,
-        pages_analyzed: analysis.pages_analyzed,
-      },
-    })
-    result.completed.push('website_analysis')
-    return entity
-  } catch (err) {
-    console.error('[enrichEntity] website_analysis failed:', err)
-    result.errors.push('website_analysis')
-    return entity
-  }
+      module: 'website_analysis',
+      mode: result.mode,
+      triggered_by: result.triggered_by,
+    },
+    async (): Promise<ModuleOutcome> => {
+      if (!entity.website) return { kind: 'skipped', reason: 'missing_input:website' }
+      if (!env.ANTHROPIC_API_KEY) return { kind: 'skipped', reason: 'missing_api_key:anthropic' }
+      const analysis = await analyzeWebsite(entity.website, env.ANTHROPIC_API_KEY)
+      if (!analysis) return { kind: 'no_data', reason: 'no_analysis' }
+      const techTools = [
+        ...analysis.tech_stack.scheduling,
+        ...analysis.tech_stack.crm,
+        ...analysis.tech_stack.reviews,
+        ...analysis.tech_stack.payments,
+        ...analysis.tech_stack.communication,
+      ]
+      const missingTools: string[] = []
+      if (analysis.tech_stack.scheduling.length === 0) missingTools.push('No scheduling tool')
+      if (analysis.tech_stack.crm.length === 0) missingTools.push('No CRM')
+      if (analysis.tech_stack.reviews.length === 0) missingTools.push('No review management')
+
+      const contentParts = [
+        `Website analysis (${analysis.pages_analyzed.length} pages):`,
+        analysis.owner_name ? `Owner/Founder: ${analysis.owner_name}` : null,
+        analysis.team_size ? `Team size: ~${analysis.team_size} people` : null,
+        analysis.founding_year ? `Founded: ${analysis.founding_year}` : null,
+        analysis.contact_email ? `Email: ${analysis.contact_email}` : null,
+        analysis.services.length > 0 ? `Services: ${analysis.services.join(', ')}` : null,
+        `Site quality: ${analysis.quality}`,
+        techTools.length > 0
+          ? `Tools detected: ${techTools.join(', ')}`
+          : 'No business tools detected on website',
+        missingTools.length > 0 ? `Gaps: ${missingTools.join(', ')}` : null,
+        `Platform: ${analysis.tech_stack.platform.join(', ') || 'Custom/unknown'}`,
+      ].filter(Boolean)
+
+      const ce = await appendContext(env.DB, orgId, {
+        entity_id: entity.id,
+        type: 'enrichment',
+        content: contentParts.join('\n'),
+        source: 'website_analysis',
+        metadata: {
+          owner_name: analysis.owner_name,
+          team_size: analysis.team_size,
+          employee_count: analysis.team_size,
+          founding_year: analysis.founding_year,
+          contact_email: analysis.contact_email,
+          services: analysis.services,
+          quality: analysis.quality,
+          tech_stack: analysis.tech_stack,
+          pages_analyzed: analysis.pages_analyzed,
+        },
+      })
+      return { kind: 'succeeded', context_entry_id: ce.id }
+    }
+  )
+  applyOutcome(result, 'website_analysis', outcome)
+  return entity
 }
 
 async function tryOutscraper(
@@ -322,50 +373,56 @@ async function tryOutscraper(
   entity: Entity,
   result: EnrichResult
 ): Promise<Entity> {
-  if (!env.OUTSCRAPER_API_KEY) {
-    result.skipped.push('outscraper')
-    return entity
-  }
-  try {
-    const osc = await lookupOutscraper(entity.name, entity.area, env.OUTSCRAPER_API_KEY)
-    if (!osc) return entity
-    await updateEntity(env.DB, orgId, entity.id, {
-      phone: osc.phone ?? entity.phone ?? undefined,
-      website: osc.website ?? entity.website ?? undefined,
-    })
-    const contentParts = [
-      'Outscraper business profile:',
-      osc.owner_name ? `Owner: ${osc.owner_name}` : null,
-      osc.emails.length > 0 ? `Email: ${osc.emails.join(', ')}` : null,
-      osc.phone ? `Phone: ${osc.phone}` : null,
-      osc.working_hours ? `Hours: ${osc.working_hours}` : null,
-      osc.verified ? 'Google listing: Verified' : 'Google listing: Unverified',
-      osc.rating != null ? `Rating: ${osc.rating} (${osc.review_count ?? 0} reviews)` : null,
-      osc.booking_link ? `Online booking: Yes` : 'Online booking: Not detected',
-      osc.facebook ? `Facebook: ${osc.facebook}` : null,
-      osc.instagram ? `Instagram: ${osc.instagram}` : null,
-      osc.linkedin ? `LinkedIn: ${osc.linkedin}` : null,
-      osc.website_generator ? `Platform: ${osc.website_generator}` : null,
-      osc.has_facebook_pixel ? 'Has Facebook Pixel' : null,
-      osc.has_google_tag_manager ? 'Has Google Tag Manager' : null,
-      osc.about ? `About: ${osc.about}` : null,
-    ].filter(Boolean)
-
-    await appendContext(env.DB, orgId, {
+  let refreshedEntity: Entity = entity
+  const outcome = await instrumentModule(
+    {
+      db: env.DB,
+      org_id: orgId,
       entity_id: entity.id,
-      type: 'enrichment',
-      content: contentParts.join('\n'),
-      source: 'outscraper',
-      metadata: osc as unknown as Record<string, unknown>,
-    })
-    result.completed.push('outscraper')
-    const refreshed = await getEntity(env.DB, orgId, entity.id)
-    return refreshed ?? entity
-  } catch (err) {
-    console.error('[enrichEntity] outscraper failed:', err)
-    result.errors.push('outscraper')
-    return entity
-  }
+      module: 'outscraper',
+      mode: result.mode,
+      triggered_by: result.triggered_by,
+    },
+    async (): Promise<ModuleOutcome> => {
+      if (!env.OUTSCRAPER_API_KEY) return { kind: 'skipped', reason: 'missing_api_key:outscraper' }
+      const osc = await lookupOutscraper(entity.name, entity.area, env.OUTSCRAPER_API_KEY)
+      if (!osc) return { kind: 'no_data', reason: 'no_match' }
+      await updateEntity(env.DB, orgId, entity.id, {
+        phone: osc.phone ?? entity.phone ?? undefined,
+        website: osc.website ?? entity.website ?? undefined,
+      })
+      const contentParts = [
+        'Outscraper business profile:',
+        osc.owner_name ? `Owner: ${osc.owner_name}` : null,
+        osc.emails.length > 0 ? `Email: ${osc.emails.join(', ')}` : null,
+        osc.phone ? `Phone: ${osc.phone}` : null,
+        osc.working_hours ? `Hours: ${osc.working_hours}` : null,
+        osc.verified ? 'Google listing: Verified' : 'Google listing: Unverified',
+        osc.rating != null ? `Rating: ${osc.rating} (${osc.review_count ?? 0} reviews)` : null,
+        osc.booking_link ? `Online booking: Yes` : 'Online booking: Not detected',
+        osc.facebook ? `Facebook: ${osc.facebook}` : null,
+        osc.instagram ? `Instagram: ${osc.instagram}` : null,
+        osc.linkedin ? `LinkedIn: ${osc.linkedin}` : null,
+        osc.website_generator ? `Platform: ${osc.website_generator}` : null,
+        osc.has_facebook_pixel ? 'Has Facebook Pixel' : null,
+        osc.has_google_tag_manager ? 'Has Google Tag Manager' : null,
+        osc.about ? `About: ${osc.about}` : null,
+      ].filter(Boolean)
+
+      const ce = await appendContext(env.DB, orgId, {
+        entity_id: entity.id,
+        type: 'enrichment',
+        content: contentParts.join('\n'),
+        source: 'outscraper',
+        metadata: osc as unknown as Record<string, unknown>,
+      })
+      const refreshed = await getEntity(env.DB, orgId, entity.id)
+      if (refreshed) refreshedEntity = refreshed
+      return { kind: 'succeeded', context_entry_id: ce.id }
+    }
+  )
+  applyOutcome(result, 'outscraper', outcome)
+  return refreshedEntity
 }
 
 async function tryAcc(
@@ -374,21 +431,29 @@ async function tryAcc(
   entity: Entity,
   result: EnrichResult
 ): Promise<void> {
-  try {
-    const acc = await lookupAcc(entity.name)
-    if (!acc) return
-    await appendContext(env.DB, orgId, {
+  const outcome = await instrumentModule(
+    {
+      db: env.DB,
+      org_id: orgId,
       entity_id: entity.id,
-      type: 'enrichment',
-      content: `ACC Filing: ${acc.entity_name} (${acc.entity_type ?? 'unknown type'}). Filed: ${acc.filing_date ?? 'unknown'}. Status: ${acc.status ?? 'unknown'}. Registered agent: ${acc.registered_agent ?? 'not found'}.`,
-      source: 'acc_filing',
-      metadata: acc as unknown as Record<string, unknown>,
-    })
-    result.completed.push('acc_filing')
-  } catch (err) {
-    console.error('[enrichEntity] acc failed:', err)
-    result.errors.push('acc_filing')
-  }
+      module: 'acc_filing',
+      mode: result.mode,
+      triggered_by: result.triggered_by,
+    },
+    async (): Promise<ModuleOutcome> => {
+      const acc = await lookupAcc(entity.name)
+      if (!acc) return { kind: 'no_data', reason: 'no_filing_match' }
+      const ce = await appendContext(env.DB, orgId, {
+        entity_id: entity.id,
+        type: 'enrichment',
+        content: `ACC Filing: ${acc.entity_name} (${acc.entity_type ?? 'unknown type'}). Filed: ${acc.filing_date ?? 'unknown'}. Status: ${acc.status ?? 'unknown'}. Registered agent: ${acc.registered_agent ?? 'not found'}.`,
+        source: 'acc_filing',
+        metadata: acc as unknown as Record<string, unknown>,
+      })
+      return { kind: 'succeeded', context_entry_id: ce.id }
+    }
+  )
+  applyOutcome(result, 'acc_filing', outcome)
 }
 
 async function tryRoc(
@@ -397,25 +462,32 @@ async function tryRoc(
   entity: Entity,
   result: EnrichResult
 ): Promise<void> {
-  if (entity.vertical !== 'home_services' && entity.vertical !== 'contractor_trades') {
-    result.skipped.push('roc_license')
-    return
-  }
-  try {
-    const roc = await lookupRoc(entity.name)
-    if (!roc) return
-    await appendContext(env.DB, orgId, {
+  const outcome = await instrumentModule(
+    {
+      db: env.DB,
+      org_id: orgId,
       entity_id: entity.id,
-      type: 'enrichment',
-      content: `ROC License: ${roc.license_number ?? 'N/A'} (${roc.classification ?? 'unknown classification'}). Status: ${roc.status ?? 'unknown'}. Complaints: ${roc.complaint_count ?? 'N/A'}.`,
-      source: 'roc_license',
-      metadata: roc as unknown as Record<string, unknown>,
-    })
-    result.completed.push('roc_license')
-  } catch (err) {
-    console.error('[enrichEntity] roc failed:', err)
-    result.errors.push('roc_license')
-  }
+      module: 'roc_license',
+      mode: result.mode,
+      triggered_by: result.triggered_by,
+    },
+    async (): Promise<ModuleOutcome> => {
+      if (entity.vertical !== 'home_services' && entity.vertical !== 'contractor_trades') {
+        return { kind: 'skipped', reason: 'wrong_vertical' }
+      }
+      const roc = await lookupRoc(entity.name)
+      if (!roc) return { kind: 'no_data', reason: 'no_license_match' }
+      const ce = await appendContext(env.DB, orgId, {
+        entity_id: entity.id,
+        type: 'enrichment',
+        content: `ROC License: ${roc.license_number ?? 'N/A'} (${roc.classification ?? 'unknown classification'}). Status: ${roc.status ?? 'unknown'}. Complaints: ${roc.complaint_count ?? 'N/A'}.`,
+        source: 'roc_license',
+        metadata: roc as unknown as Record<string, unknown>,
+      })
+      return { kind: 'succeeded', context_entry_id: ce.id }
+    }
+  )
+  applyOutcome(result, 'roc_license', outcome)
 }
 
 async function tryReviewAnalysis(
@@ -424,33 +496,35 @@ async function tryReviewAnalysis(
   entity: Entity,
   result: EnrichResult
 ): Promise<void> {
-  if (!env.ANTHROPIC_API_KEY) {
-    result.skipped.push('review_analysis')
-    return
-  }
-  try {
-    const signalContext = await assembleEntityContext(env.DB, entity.id, {
-      maxBytes: 8_000,
-      typeFilter: ['signal'],
-    })
-    if (!signalContext) {
-      result.skipped.push('review_analysis')
-      return
-    }
-    const reviewAnalysis = await analyzeReviewPatterns(signalContext, env.ANTHROPIC_API_KEY)
-    if (!reviewAnalysis) return
-    await appendContext(env.DB, orgId, {
+  const outcome = await instrumentModule(
+    {
+      db: env.DB,
+      org_id: orgId,
       entity_id: entity.id,
-      type: 'enrichment',
-      content: `Review patterns: ${reviewAnalysis.response_pattern} responses, ${reviewAnalysis.engagement_level} engagement. ${reviewAnalysis.owner_accessible ? 'Owner appears accessible.' : ''} ${reviewAnalysis.insights}`,
-      source: 'review_analysis',
-      metadata: reviewAnalysis as unknown as Record<string, unknown>,
-    })
-    result.completed.push('review_analysis')
-  } catch (err) {
-    console.error('[enrichEntity] review_analysis failed:', err)
-    result.errors.push('review_analysis')
-  }
+      module: 'review_analysis',
+      mode: result.mode,
+      triggered_by: result.triggered_by,
+    },
+    async (): Promise<ModuleOutcome> => {
+      if (!env.ANTHROPIC_API_KEY) return { kind: 'skipped', reason: 'missing_api_key:anthropic' }
+      const signalContext = await assembleEntityContext(env.DB, entity.id, {
+        maxBytes: 8_000,
+        typeFilter: ['signal'],
+      })
+      if (!signalContext) return { kind: 'skipped', reason: 'no_signal_context' }
+      const reviewAnalysis = await analyzeReviewPatterns(signalContext, env.ANTHROPIC_API_KEY)
+      if (!reviewAnalysis) return { kind: 'no_data', reason: 'no_analysis' }
+      const ce = await appendContext(env.DB, orgId, {
+        entity_id: entity.id,
+        type: 'enrichment',
+        content: `Review patterns: ${reviewAnalysis.response_pattern} responses, ${reviewAnalysis.engagement_level} engagement. ${reviewAnalysis.owner_accessible ? 'Owner appears accessible.' : ''} ${reviewAnalysis.insights}`,
+        source: 'review_analysis',
+        metadata: reviewAnalysis as unknown as Record<string, unknown>,
+      })
+      return { kind: 'succeeded', context_entry_id: ce.id }
+    }
+  )
+  applyOutcome(result, 'review_analysis', outcome)
 }
 
 async function tryCompetitors(
@@ -459,32 +533,38 @@ async function tryCompetitors(
   entity: Entity,
   result: EnrichResult
 ): Promise<void> {
-  if (!env.GOOGLE_PLACES_API_KEY) {
-    result.skipped.push('competitors')
-    return
-  }
-  try {
-    const benchmark = await benchmarkCompetitors(
-      entity.name,
-      entity.vertical,
-      entity.area,
-      entity.pain_score,
-      null,
-      env.GOOGLE_PLACES_API_KEY
-    )
-    if (!benchmark) return
-    await appendContext(env.DB, orgId, {
+  const outcome = await instrumentModule(
+    {
+      db: env.DB,
+      org_id: orgId,
       entity_id: entity.id,
-      type: 'enrichment',
-      content: `Competitor benchmarking: ${benchmark.summary} Top competitors: ${benchmark.competitors.map((c) => `${c.name} (${c.rating}★, ${c.review_count} reviews)`).join(', ')}.`,
-      source: 'competitors',
-      metadata: benchmark as unknown as Record<string, unknown>,
-    })
-    result.completed.push('competitors')
-  } catch (err) {
-    console.error('[enrichEntity] competitors failed:', err)
-    result.errors.push('competitors')
-  }
+      module: 'competitors',
+      mode: result.mode,
+      triggered_by: result.triggered_by,
+    },
+    async (): Promise<ModuleOutcome> => {
+      if (!env.GOOGLE_PLACES_API_KEY)
+        return { kind: 'skipped', reason: 'missing_api_key:google_places' }
+      const benchmark = await benchmarkCompetitors(
+        entity.name,
+        entity.vertical,
+        entity.area,
+        entity.pain_score,
+        null,
+        env.GOOGLE_PLACES_API_KEY
+      )
+      if (!benchmark) return { kind: 'no_data', reason: 'no_benchmark' }
+      const ce = await appendContext(env.DB, orgId, {
+        entity_id: entity.id,
+        type: 'enrichment',
+        content: `Competitor benchmarking: ${benchmark.summary} Top competitors: ${benchmark.competitors.map((c) => `${c.name} (${c.rating}★, ${c.review_count} reviews)`).join(', ')}.`,
+        source: 'competitors',
+        metadata: benchmark as unknown as Record<string, unknown>,
+      })
+      return { kind: 'succeeded', context_entry_id: ce.id }
+    }
+  )
+  applyOutcome(result, 'competitors', outcome)
 }
 
 async function tryNews(
@@ -493,33 +573,36 @@ async function tryNews(
   entity: Entity,
   result: EnrichResult
 ): Promise<void> {
-  if (!env.SERPAPI_API_KEY || !env.ANTHROPIC_API_KEY) {
-    result.skipped.push('news_search')
-    return
-  }
-  try {
-    const news = await searchNews(
-      entity.name,
-      entity.area,
-      env.SERPAPI_API_KEY,
-      env.ANTHROPIC_API_KEY
-    )
-    if (!news) return
-    await appendContext(env.DB, orgId, {
+  const outcome = await instrumentModule(
+    {
+      db: env.DB,
+      org_id: orgId,
       entity_id: entity.id,
-      type: 'enrichment',
-      content: `News/press: ${news.summary} (${news.mentions.length} mentions found)`,
-      source: 'news_search',
-      metadata: {
-        mentions: news.mentions,
-        summary: news.summary,
-      },
-    })
-    result.completed.push('news_search')
-  } catch (err) {
-    console.error('[enrichEntity] news_search failed:', err)
-    result.errors.push('news_search')
-  }
+      module: 'news_search',
+      mode: result.mode,
+      triggered_by: result.triggered_by,
+    },
+    async (): Promise<ModuleOutcome> => {
+      if (!env.SERPAPI_API_KEY) return { kind: 'skipped', reason: 'missing_api_key:serpapi' }
+      if (!env.ANTHROPIC_API_KEY) return { kind: 'skipped', reason: 'missing_api_key:anthropic' }
+      const news = await searchNews(
+        entity.name,
+        entity.area,
+        env.SERPAPI_API_KEY,
+        env.ANTHROPIC_API_KEY
+      )
+      if (!news) return { kind: 'no_data', reason: 'no_results' }
+      const ce = await appendContext(env.DB, orgId, {
+        entity_id: entity.id,
+        type: 'enrichment',
+        content: `News/press: ${news.summary} (${news.mentions.length} mentions found)`,
+        source: 'news_search',
+        metadata: { mentions: news.mentions, summary: news.summary },
+      })
+      return { kind: 'succeeded', context_entry_id: ce.id }
+    }
+  )
+  applyOutcome(result, 'news_search', outcome)
 }
 
 async function tryDeepWebsite(
@@ -528,25 +611,31 @@ async function tryDeepWebsite(
   entity: Entity,
   result: EnrichResult
 ): Promise<void> {
-  if (!entity.website || !env.ANTHROPIC_API_KEY) {
-    result.skipped.push('deep_website')
-    return
-  }
-  try {
-    const analysis = await deepWebsiteAnalysis(entity.website, env.ANTHROPIC_API_KEY)
-    if (!analysis) return
-    await appendContext(env.DB, orgId, {
+  const outcome = await instrumentModule(
+    {
+      db: env.DB,
+      org_id: orgId,
       entity_id: entity.id,
-      type: 'enrichment',
-      content: formatDeepWebsite(analysis),
-      source: 'deep_website',
-      metadata: analysis as unknown as Record<string, unknown>,
-    })
-    result.completed.push('deep_website')
-  } catch (err) {
-    console.error('[enrichEntity] deep_website failed:', err)
-    result.errors.push('deep_website')
-  }
+      module: 'deep_website',
+      mode: result.mode,
+      triggered_by: result.triggered_by,
+    },
+    async (): Promise<ModuleOutcome> => {
+      if (!entity.website) return { kind: 'skipped', reason: 'missing_input:website' }
+      if (!env.ANTHROPIC_API_KEY) return { kind: 'skipped', reason: 'missing_api_key:anthropic' }
+      const analysis = await deepWebsiteAnalysis(entity.website, env.ANTHROPIC_API_KEY)
+      if (!analysis) return { kind: 'no_data', reason: 'no_analysis' }
+      const ce = await appendContext(env.DB, orgId, {
+        entity_id: entity.id,
+        type: 'enrichment',
+        content: formatDeepWebsite(analysis),
+        source: 'deep_website',
+        metadata: analysis as unknown as Record<string, unknown>,
+      })
+      return { kind: 'succeeded', context_entry_id: ce.id }
+    }
+  )
+  applyOutcome(result, 'deep_website', outcome)
 }
 
 async function tryReviewSynthesis(
@@ -555,33 +644,47 @@ async function tryReviewSynthesis(
   entity: Entity,
   result: EnrichResult
 ): Promise<void> {
-  if (!env.ANTHROPIC_API_KEY) {
-    result.skipped.push('review_synthesis')
-    return
-  }
+  let inputFingerprint: string | null = null
   try {
-    const allContext = await assembleEntityContext(env.DB, entity.id, {
+    const ctx = await assembleEntityContext(env.DB, entity.id, {
       maxBytes: 20_000,
       typeFilter: ['signal', 'enrichment'],
     })
-    if (!allContext) {
-      result.skipped.push('review_synthesis')
-      return
-    }
-    const synthesis = await synthesizeReviews(allContext, env.ANTHROPIC_API_KEY)
-    if (!synthesis) return
-    await appendContext(env.DB, orgId, {
-      entity_id: entity.id,
-      type: 'enrichment',
-      content: `Review synthesis: ${synthesis.customer_sentiment} Trend: ${synthesis.sentiment_trend}. Themes: ${synthesis.top_themes.join(', ')}. Problems: ${synthesis.operational_problems.map((p) => `${p.problem} (${p.confidence})`).join(', ')}.`,
-      source: 'review_synthesis',
-      metadata: synthesis as unknown as Record<string, unknown>,
-    })
-    result.completed.push('review_synthesis')
-  } catch (err) {
-    console.error('[enrichEntity] review_synthesis failed:', err)
-    result.errors.push('review_synthesis')
+    if (ctx) inputFingerprint = await fingerprint(ctx)
+  } catch {
+    // Fingerprint is informational; do not block the run on failure.
   }
+
+  const outcome = await instrumentModule(
+    {
+      db: env.DB,
+      org_id: orgId,
+      entity_id: entity.id,
+      module: 'review_synthesis',
+      mode: result.mode,
+      triggered_by: result.triggered_by,
+      input_fingerprint: inputFingerprint,
+    },
+    async (): Promise<ModuleOutcome> => {
+      if (!env.ANTHROPIC_API_KEY) return { kind: 'skipped', reason: 'missing_api_key:anthropic' }
+      const allContext = await assembleEntityContext(env.DB, entity.id, {
+        maxBytes: 20_000,
+        typeFilter: ['signal', 'enrichment'],
+      })
+      if (!allContext) return { kind: 'skipped', reason: 'no_context' }
+      const synthesis = await synthesizeReviews(allContext, env.ANTHROPIC_API_KEY)
+      if (!synthesis) return { kind: 'no_data', reason: 'no_synthesis' }
+      const ce = await appendContext(env.DB, orgId, {
+        entity_id: entity.id,
+        type: 'enrichment',
+        content: `Review synthesis: ${synthesis.customer_sentiment} Trend: ${synthesis.sentiment_trend}. Themes: ${synthesis.top_themes.join(', ')}. Problems: ${synthesis.operational_problems.map((p) => `${p.problem} (${p.confidence})`).join(', ')}.`,
+        source: 'review_synthesis',
+        metadata: synthesis as unknown as Record<string, unknown>,
+      })
+      return { kind: 'succeeded', context_entry_id: ce.id }
+    }
+  )
+  applyOutcome(result, 'review_synthesis', outcome)
 }
 
 async function tryLinkedIn(
@@ -590,25 +693,30 @@ async function tryLinkedIn(
   entity: Entity,
   result: EnrichResult
 ): Promise<void> {
-  if (!env.PROXYCURL_API_KEY) {
-    result.skipped.push('linkedin')
-    return
-  }
-  try {
-    const linkedin = await lookupLinkedIn(entity.name, entity.area, env.PROXYCURL_API_KEY)
-    if (!linkedin) return
-    await appendContext(env.DB, orgId, {
+  const outcome = await instrumentModule(
+    {
+      db: env.DB,
+      org_id: orgId,
       entity_id: entity.id,
-      type: 'enrichment',
-      content: `LinkedIn: ${linkedin.company_name}. ${linkedin.employee_count ? `~${linkedin.employee_count} employees.` : ''} ${linkedin.industry ? `Industry: ${linkedin.industry}.` : ''} ${linkedin.description ? linkedin.description.slice(0, 200) : ''}`,
-      source: 'linkedin',
-      metadata: linkedin as unknown as Record<string, unknown>,
-    })
-    result.completed.push('linkedin')
-  } catch (err) {
-    console.error('[enrichEntity] linkedin failed:', err)
-    result.errors.push('linkedin')
-  }
+      module: 'linkedin',
+      mode: result.mode,
+      triggered_by: result.triggered_by,
+    },
+    async (): Promise<ModuleOutcome> => {
+      if (!env.PROXYCURL_API_KEY) return { kind: 'skipped', reason: 'missing_api_key:proxycurl' }
+      const linkedin = await lookupLinkedIn(entity.name, entity.area, env.PROXYCURL_API_KEY)
+      if (!linkedin) return { kind: 'no_data', reason: 'no_match' }
+      const ce = await appendContext(env.DB, orgId, {
+        entity_id: entity.id,
+        type: 'enrichment',
+        content: `LinkedIn: ${linkedin.company_name}. ${linkedin.employee_count ? `~${linkedin.employee_count} employees.` : ''} ${linkedin.industry ? `Industry: ${linkedin.industry}.` : ''} ${linkedin.description ? linkedin.description.slice(0, 200) : ''}`,
+        source: 'linkedin',
+        metadata: linkedin as unknown as Record<string, unknown>,
+      })
+      return { kind: 'succeeded', context_entry_id: ce.id }
+    }
+  )
+  applyOutcome(result, 'linkedin', outcome)
 }
 
 async function tryIntelligenceBrief(
@@ -617,30 +725,41 @@ async function tryIntelligenceBrief(
   entity: Entity,
   result: EnrichResult
 ): Promise<void> {
-  if (!env.ANTHROPIC_API_KEY) {
-    result.skipped.push('intelligence_brief')
-    return
-  }
+  let inputFingerprint: string | null = null
   try {
-    const fullContext = await assembleEntityContext(env.DB, entity.id, { maxBytes: 32_000 })
-    if (!fullContext) {
-      result.skipped.push('intelligence_brief')
-      return
-    }
-    const brief = await generateDossier(fullContext, entity.name, env.ANTHROPIC_API_KEY)
-    if (!brief) return
-    await appendContext(env.DB, orgId, {
-      entity_id: entity.id,
-      type: 'enrichment',
-      content: brief,
-      source: 'intelligence_brief',
-      metadata: { model: 'claude-sonnet-4-20250514', trigger: 'at_ingest' },
-    })
-    result.completed.push('intelligence_brief')
-  } catch (err) {
-    console.error('[enrichEntity] intelligence_brief failed:', err)
-    result.errors.push('intelligence_brief')
+    const ctx = await assembleEntityContext(env.DB, entity.id, { maxBytes: 32_000 })
+    if (ctx) inputFingerprint = await fingerprint(ctx)
+  } catch {
+    // Informational only.
   }
+
+  const outcome = await instrumentModule(
+    {
+      db: env.DB,
+      org_id: orgId,
+      entity_id: entity.id,
+      module: 'intelligence_brief',
+      mode: result.mode,
+      triggered_by: result.triggered_by,
+      input_fingerprint: inputFingerprint,
+    },
+    async (): Promise<ModuleOutcome> => {
+      if (!env.ANTHROPIC_API_KEY) return { kind: 'skipped', reason: 'missing_api_key:anthropic' }
+      const fullContext = await assembleEntityContext(env.DB, entity.id, { maxBytes: 32_000 })
+      if (!fullContext) return { kind: 'skipped', reason: 'no_context' }
+      const brief = await generateDossier(fullContext, entity.name, env.ANTHROPIC_API_KEY)
+      if (!brief) return { kind: 'no_data', reason: 'no_brief' }
+      const ce = await appendContext(env.DB, orgId, {
+        entity_id: entity.id,
+        type: 'enrichment',
+        content: brief,
+        source: 'intelligence_brief',
+        metadata: { model: 'claude-sonnet-4-20250514', trigger: 'at_ingest' },
+      })
+      return { kind: 'succeeded', context_entry_id: ce.id }
+    }
+  )
+  applyOutcome(result, 'intelligence_brief', outcome)
 }
 
 async function regenerateOutreach(
@@ -675,6 +794,67 @@ async function regenerateOutreach(
     console.error('[enrichEntity] outreach_draft failed:', err)
     result.errors.push('outreach_draft')
   }
+}
+
+// ---------------------------------------------------------------------------
+// Single-module runner — used by the admin "Retry" button per module.
+// ---------------------------------------------------------------------------
+
+const SINGLE_RUNNERS: Record<
+  ModuleId,
+  (env: EnrichEnv, orgId: string, entity: Entity, result: EnrichResult) => Promise<unknown>
+> = {
+  google_places: tryPlaces,
+  website_analysis: tryWebsite,
+  outscraper: tryOutscraper,
+  acc_filing: tryAcc,
+  roc_license: tryRoc,
+  review_analysis: tryReviewAnalysis,
+  competitors: tryCompetitors,
+  news_search: tryNews,
+  deep_website: tryDeepWebsite,
+  review_synthesis: tryReviewSynthesis,
+  linkedin: tryLinkedIn,
+  intelligence_brief: tryIntelligenceBrief,
+}
+
+/**
+ * Execute a single named module against an entity. Used by the admin
+ * per-module Retry button. Records a row in enrichment_runs with the
+ * provided triggered_by. Bypasses the full-mode brief idempotency check
+ * (the caller explicitly asked to re-run this one module).
+ */
+export async function runSingleModule(
+  env: EnrichEnv,
+  orgId: string,
+  entityId: string,
+  module: ModuleId,
+  options: { triggered_by: string } = { triggered_by: 'admin:retry' }
+): Promise<EnrichResult> {
+  const result: EnrichResult = {
+    entityId,
+    mode: 'reviews-and-news',
+    triggered_by: options.triggered_by,
+    completed: [],
+    skipped: [],
+    errors: [],
+    alreadyEnriched: false,
+  }
+
+  const entity = await getEntity(env.DB, orgId, entityId)
+  if (!entity) {
+    result.errors.push('entity_not_found')
+    return result
+  }
+
+  const runner = SINGLE_RUNNERS[module]
+  if (!runner) {
+    result.errors.push('unknown_module')
+    return result
+  }
+
+  await runner(env, orgId, entity, result)
+  return result
 }
 
 // ---------------------------------------------------------------------------

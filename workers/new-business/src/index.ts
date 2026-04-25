@@ -140,8 +140,11 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
       // enrichment errors are self-contained and should not turn a successful
       // ingest into a failed run. Idempotent: the pipeline no-ops once a
       // prior intelligence_brief exists.
-      const enrichPromise = enrichEntity(env, ORG_ID, entity.id, { mode: 'full' }).catch((err) => {
-        console.error('[new_business] enrichment failed for', entity.id, err)
+      const enrichPromise = enrichEntity(env, ORG_ID, entity.id, {
+        mode: 'full',
+        triggered_by: 'cron:new-business',
+      }).catch((err) => {
+        console.error('[new_business] enrichment failed', { entityId: entity.id, error: err })
       })
       if (ctx) {
         ctx.waitUntil(enrichPromise)

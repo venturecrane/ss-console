@@ -27,41 +27,37 @@ export async function analyzeReviewPatterns(
   signalContent: string,
   anthropicKey: string
 ): Promise<ReviewAnalysis | null> {
-  try {
-    const response = await fetch(ANTHROPIC_API_URL, {
-      method: 'POST',
-      headers: {
-        'x-api-key': anthropicKey,
-        'anthropic-version': ANTHROPIC_VERSION,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        system: ANALYSIS_PROMPT,
-        messages: [{ role: 'user', content: `Review signals:\n\n${signalContent}` }],
-      }),
-    })
+  const response = await fetch(ANTHROPIC_API_URL, {
+    method: 'POST',
+    headers: {
+      'x-api-key': anthropicKey,
+      'anthropic-version': ANTHROPIC_VERSION,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      system: ANALYSIS_PROMPT,
+      messages: [{ role: 'user', content: `Review signals:\n\n${signalContent}` }],
+    }),
+  })
 
-    if (!response.ok) return null
+  if (!response.ok) return null
 
-    const result = (await response.json()) as { content?: Array<{ type: string; text?: string }> }
-    const text = result?.content?.find((b) => b.type === 'text')?.text?.trim()
-    if (!text) return null
+  const result = (await response.json()) as { content?: Array<{ type: string; text?: string }> }
+  const text = result?.content?.find((b) => b.type === 'text')?.text?.trim()
+  if (!text) return null
 
-    let jsonText = text
-    if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
-    }
+  let jsonText = text
+  if (jsonText.startsWith('```')) {
+    jsonText = jsonText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+  }
 
-    const parsed = JSON.parse(jsonText)
-    return {
-      response_pattern: parsed.response_pattern ?? 'unknown',
-      engagement_level: parsed.engagement_level ?? 'unknown',
-      owner_accessible: parsed.owner_accessible ?? false,
-      insights: parsed.insights ?? '',
-    }
-  } catch {
-    return null
+  const parsed = JSON.parse(jsonText)
+  return {
+    response_pattern: parsed.response_pattern ?? 'unknown',
+    engagement_level: parsed.engagement_level ?? 'unknown',
+    owner_accessible: parsed.owner_accessible ?? false,
+    insights: parsed.insights ?? '',
   }
 }

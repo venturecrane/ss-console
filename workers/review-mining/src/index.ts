@@ -193,8 +193,11 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
       // already pays for Outscraper per business, and enrichment adds the
       // Claude-powered dossier so the admin has something to act on without
       // a second button click. Idempotent on re-runs.
-      const enrichPromise = enrichEntity(env, ORG_ID, entity.id, { mode: 'full' }).catch((err) => {
-        console.error('[review_mining] enrichment failed for', entity.id, err)
+      const enrichPromise = enrichEntity(env, ORG_ID, entity.id, {
+        mode: 'full',
+        triggered_by: 'cron:review-mining',
+      }).catch((err) => {
+        console.error('[review_mining] enrichment failed', { entityId: entity.id, error: err })
       })
       if (ctx) {
         ctx.waitUntil(enrichPromise)

@@ -7,6 +7,10 @@ wrangler.toml
 coverage/
 # Generated design baselines — preserve as-is for reference
 .design/designs/
+# Generated audit reports (UI drift snapshots, etc.) — JSON output from
+# tooling, not hand-authored, and the format may diverge from prettier
+# defaults. Same rationale as .design/designs/.
+.design/audits/
 # Documentation / spec files with embedded JSX, SQL, or pseudo-code
 # blocks that prettier-plugin-astro tries to parse as syntactically-valid
 # source and errors on. Format these files by hand.
@@ -16,3 +20,7 @@ docs/spikes/
 docs/style/UI-PATTERNS.md
 # Playwright MCP output (screenshots, console dumps, snapshots)
 .playwright-mcp/
+# Git worktrees — checked-out copies of other branches owned by parallel
+# work. The branch that owns the source is responsible for formatting it,
+# not whichever branch happens to have a worktree on disk right now.
+.worktrees/

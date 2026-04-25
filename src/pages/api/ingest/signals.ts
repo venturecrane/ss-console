@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro'
 import { validateApiKey } from '../../../lib/auth/api-key'
 import { findOrCreateEntity } from '../../../lib/db/entities'
 import { appendContext, type ContextType } from '../../../lib/db/context'
+import { enrichEntity } from '../../../lib/enrichment'
 import { ORG_ID } from '../../../lib/constants'
 import { env } from 'cloudflare:workers'
 
@@ -20,7 +21,7 @@ const MAX_BODY_SIZE = 10 * 1024 // 10KB
 
 const ALLOWED_PIPELINES = ['review_mining', 'job_monitor', 'new_business', 'social_listening']
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request, locals }) => {
   // Reject oversized payloads
   const contentLength = request.headers.get('content-length')
   if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
@@ -114,6 +115,26 @@ export const POST: APIRoute = async ({ request }) => {
       source: sourcePipeline,
       metadata,
     })
+
+    // At-ingest enrichment for newly-created entities. The lead-gen workers
+    // (new_business, review_mining) already trigger enrichment from their own
+    // ingest paths, but the generic /api/ingest/signals endpoint is the
+    // catch-all for any external signal source — and prior to this it created
+    // entities without ever calling enrichEntity, so they were born with no
+    // dossier (and no `intelligence_brief` context entry, so the admin
+    // Dossier Summary panel never appeared). Detached via locals.cfContext
+    // so a 12-module Claude pipeline doesn't block the ingest response.
+    if (result.status === 'created') {
+      const enrichPromise = enrichEntity(env, ORG_ID, result.entity.id, {
+        mode: 'full',
+        triggered_by: 'ingest:signals',
+      }).catch((err) => {
+        console.error('[api/ingest/signals] background enrichment failed', { error: err })
+      })
+      if (locals.cfContext?.waitUntil) {
+        locals.cfContext.waitUntil(enrichPromise)
+      }
+    }
 
     return jsonResponse(result.status === 'created' ? 201 : 200, {
       status: result.status === 'created' ? 'created' : 'appended',
