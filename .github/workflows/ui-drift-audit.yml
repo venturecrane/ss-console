@@ -19,7 +19,7 @@ on:
       - '**/*.astro'
       - '**/*.css'
       - '.ui-drift.json'
-      - '.agents/skills/ui-drift-audit/**'
+      - '.github/workflows/ui-drift-audit.yml'
   push:
     branches: [main]
 
@@ -33,6 +33,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Sync canonical skills from crane-console
+        # The audit script lives in crane-console/.agents/skills/ui-drift-audit/.
+        # Locally, the launcher (crane-console/packages/crane-mcp/src/cli/launch-lib.ts:1185
+        # syncVentureSkills) mirrors it on every `crane <venture>` launch. CI has no
+        # launcher, so we sparse-clone canon and stage the script into the expected path.
+        uses: actions/checkout@v4
+        with:
+          repository: venturecrane/crane-console
+          sparse-checkout: |
+            .agents/skills/ui-drift-audit
+          sparse-checkout-cone-mode: false
+          path: .crane-canon
+
+      - name: Stage ui-drift-audit script
+        run: |
+          mkdir -p .agents/skills
+          cp -R .crane-canon/.agents/skills/ui-drift-audit .agents/skills/ui-drift-audit
+          rm -rf .crane-canon
 
       - name: Set up Python
         uses: actions/setup-python@v5
