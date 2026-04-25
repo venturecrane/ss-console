@@ -58,6 +58,7 @@ import {
   type InstrumentResult,
 } from './instrument'
 import type { ModuleId } from './modules'
+import { latestRunByModule } from '../db/enrichment-runs'
 
 export type EnrichMode = 'full' | 'reviews-and-news'
 
@@ -176,30 +177,49 @@ export async function enrichEntity(
   }
 
   // mode === 'full': run the full 12-module pipeline.
+  //
+  // Budget protection: when `force` is true, the operator clicked the admin
+  // "Run full enrichment" button intending to fill in gaps — not to re-bill
+  // Claude on every already-succeeded module. Re-running all 12 from scratch
+  // exceeds Cloudflare Workers' single-invocation budget (Cactus Creative
+  // Studio hit this — 22s of wall-clock spent on Tier 1+2 left no time for
+  // the brief, which timed out). When force is set, skip any module whose
+  // latest run is already `succeeded` and run only the rest. The panel
+  // continues to display the original succeeded row, so the skip is
+  // invisible to the operator. Cron full-mode (without force) is unaffected.
+  const skipIfSucceeded: Set<ModuleId> = new Set()
+  if (options.force) {
+    const latestRuns = await latestRunByModule(env.DB, entityId)
+    for (const [moduleId, run] of latestRuns) {
+      if (run.status === 'succeeded') skipIfSucceeded.add(moduleId)
+    }
+  }
+  const should = (m: ModuleId): boolean => !skipIfSucceeded.has(m)
+
   let current = entity
 
   // --- Tier 1: Contact + tech signals (parallel-safe but sequential for
   //             readability and because some modules update entity.phone /
   //             website, which downstream modules rely on). ---
 
-  current = await tryPlaces(env, orgId, current, result)
-  current = await tryWebsite(env, orgId, current, result)
-  current = await tryOutscraper(env, orgId, current, result)
-  await tryAcc(env, orgId, current, result)
-  await tryRoc(env, orgId, current, result)
+  if (should('google_places')) current = await tryPlaces(env, orgId, current, result)
+  if (should('website_analysis')) current = await tryWebsite(env, orgId, current, result)
+  if (should('outscraper')) current = await tryOutscraper(env, orgId, current, result)
+  if (should('acc_filing')) await tryAcc(env, orgId, current, result)
+  if (should('roc_license')) await tryRoc(env, orgId, current, result)
 
   // --- Tier 2: Review patterns + competitors + news. ---
 
-  await tryReviewAnalysis(env, orgId, current, result)
-  await tryCompetitors(env, orgId, current, result)
-  await tryNews(env, orgId, current, result)
+  if (should('review_analysis')) await tryReviewAnalysis(env, orgId, current, result)
+  if (should('competitors')) await tryCompetitors(env, orgId, current, result)
+  if (should('news_search')) await tryNews(env, orgId, current, result)
 
   // --- Tier 3: Deep intelligence (the old dossier path). ---
 
-  await tryDeepWebsite(env, orgId, current, result)
-  await tryReviewSynthesis(env, orgId, current, result)
-  await tryLinkedIn(env, orgId, current, result)
-  await tryIntelligenceBrief(env, orgId, current, result)
+  if (should('deep_website')) await tryDeepWebsite(env, orgId, current, result)
+  if (should('review_synthesis')) await tryReviewSynthesis(env, orgId, current, result)
+  if (should('linkedin')) await tryLinkedIn(env, orgId, current, result)
+  if (should('intelligence_brief')) await tryIntelligenceBrief(env, orgId, current, result)
 
   // --- Outreach draft from the full enriched context. Runs once at the end,
   //     not twice (the old promote+dossier pair called this at both steps). ---
