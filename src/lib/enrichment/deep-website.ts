@@ -134,39 +134,43 @@ export async function deepWebsiteAnalysis(
   const combined = pages.map((p) => `=== ${p.url} ===\n${cleanHtml(p.html)}`).join('\n\n')
   const truncated = combined.slice(0, 50_000) // Larger budget for Sonnet
 
-  try {
-    const response = await fetch(ANTHROPIC_API_URL, {
-      method: 'POST',
-      headers: {
-        'x-api-key': anthropicKey,
-        'anthropic-version': ANTHROPIC_VERSION,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        system: DEEP_ANALYSIS_PROMPT,
-        messages: [{ role: 'user', content: `Analyze this business website:\n\n${truncated}` }],
-      }),
-    })
+  // No outer try/catch: errors propagate to the instrumentation wrapper in
+  // src/lib/enrichment/index.ts which classifies them (parse_error,
+  // fetch_failed, etc.) and persists a failure row in enrichment_runs.
+  // Returning null here means "API ran cleanly but had no useful data"
+  // (recorded as `no_data`); throws mean "something broke" (recorded as
+  // `failed` with classified kind).
+  const response = await fetch(ANTHROPIC_API_URL, {
+    method: 'POST',
+    headers: {
+      'x-api-key': anthropicKey,
+      'anthropic-version': ANTHROPIC_VERSION,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      system: DEEP_ANALYSIS_PROMPT,
+      messages: [{ role: 'user', content: `Analyze this business website:\n\n${truncated}` }],
+    }),
+  })
 
-    if (!response.ok) return null
+  if (!response.ok) return null
 
-    const result = (await response.json()) as {
-      content?: Array<{ type: string; text?: string }>
-    }
-    let text = result?.content?.find((b) => b.type === 'text')?.text?.trim()
-    if (!text) return null
-    if (text.startsWith('```')) text = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
-
-    const parsed = JSON.parse(text)
-    return { ...parsed, pages_analyzed: pages.map((p) => p.url) }
-  } catch {
-    return null
+  const result = (await response.json()) as {
+    content?: Array<{ type: string; text?: string }>
   }
+  let text = result?.content?.find((b) => b.type === 'text')?.text?.trim()
+  if (!text) return null
+  if (text.startsWith('```')) text = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+
+  const parsed = JSON.parse(text)
+  return { ...parsed, pages_analyzed: pages.map((p) => p.url) }
 }
 
 async function safeFetch(url: string): Promise<string | null> {
+  // Per-page best-effort within deep_website. Returning null for one page
+  // is normal (404 on /careers, etc.) and must not poison the whole module.
   try {
     const response = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SMDBot/1.0)' },

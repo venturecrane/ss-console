@@ -143,8 +143,11 @@ export async function lookupOutscraper(
       photos_count: typeof place.photos_count === 'number' ? place.photos_count : null,
     }
   } catch (err) {
-    console.error(`[outscraper] Error for "${name}":`, err)
-    return null
+    console.error('[outscraper] error', {
+      name,
+      message: err instanceof Error ? err.message : String(err),
+    })
+    throw err
   }
 }
 

@@ -19,39 +19,35 @@ export async function lookupLinkedIn(
   location: string | null,
   apiKey: string
 ): Promise<LinkedInEnrichment | null> {
-  try {
-    const params = new URLSearchParams({
-      company_name: companyName,
-      company_location: location ?? 'Phoenix, Arizona',
-    })
+  const params = new URLSearchParams({
+    company_name: companyName,
+    company_location: location ?? 'Phoenix, Arizona',
+  })
 
-    const response = await fetch(`${PROXYCURL_API_URL}?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(10000),
-    })
+  const response = await fetch(`${PROXYCURL_API_URL}?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(10000),
+  })
 
-    if (!response.ok) return null
+  if (!response.ok) return null
 
-    const data = (await response.json()) as {
-      url?: string
-      name?: string
-      company_size?: number[]
-      industry?: string
-      description?: string
-    }
+  const data = (await response.json()) as {
+    url?: string
+    name?: string
+    company_size?: number[]
+    industry?: string
+    description?: string
+  }
 
-    if (!data.url) return null
+  if (!data.url) return null
 
-    return {
-      linkedin_url: data.url,
-      company_name: data.name ?? companyName,
-      employee_count: data.company_size
-        ? Math.round((data.company_size[0] + (data.company_size[1] ?? data.company_size[0])) / 2)
-        : null,
-      industry: data.industry ?? null,
-      description: data.description ?? null,
-    }
-  } catch {
-    return null
+  return {
+    linkedin_url: data.url,
+    company_name: data.name ?? companyName,
+    employee_count: data.company_size
+      ? Math.round((data.company_size[0] + (data.company_size[1] ?? data.company_size[0])) / 2)
+      : null,
+    industry: data.industry ?? null,
+    description: data.description ?? null,
   }
 }

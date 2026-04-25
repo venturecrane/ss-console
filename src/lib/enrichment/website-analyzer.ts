@@ -84,6 +84,8 @@ export async function analyzeWebsite(
 }
 
 async function fetchPage(url: string): Promise<string | null> {
+  // Per-page best-effort. Returning null for one page is normal (404 on
+  // /careers, etc.) and must not poison the whole module.
   try {
     const response = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SMDBot/1.0)' },
@@ -115,49 +117,45 @@ async function extractWithHaiku(
   htmlText: string,
   apiKey: string
 ): Promise<Omit<WebsiteEnrichment, 'tech_stack' | 'pages_analyzed'> | null> {
-  try {
-    const response = await fetch(ANTHROPIC_API_URL, {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': ANTHROPIC_VERSION,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        system: EXTRACTION_PROMPT,
-        messages: [
-          { role: 'user', content: `Analyze this business website content:\n\n${htmlText}` },
-        ],
-      }),
-    })
+  const response = await fetch(ANTHROPIC_API_URL, {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': ANTHROPIC_VERSION,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      system: EXTRACTION_PROMPT,
+      messages: [
+        { role: 'user', content: `Analyze this business website content:\n\n${htmlText}` },
+      ],
+    }),
+  })
 
-    if (!response.ok) return null
+  if (!response.ok) return null
 
-    const result = (await response.json()) as {
-      content?: Array<{ type: string; text?: string }>
-    }
+  const result = (await response.json()) as {
+    content?: Array<{ type: string; text?: string }>
+  }
 
-    const text = result?.content?.find((b) => b.type === 'text')?.text?.trim()
-    if (!text) return null
+  const text = result?.content?.find((b) => b.type === 'text')?.text?.trim()
+  if (!text) return null
 
-    // Strip code fences if present
-    let jsonText = text
-    if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
-    }
+  // Strip code fences if present
+  let jsonText = text
+  if (jsonText.startsWith('```')) {
+    jsonText = jsonText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+  }
 
-    const parsed = JSON.parse(jsonText)
-    return {
-      owner_name: typeof parsed.owner_name === 'string' ? parsed.owner_name : null,
-      team_size: typeof parsed.team_size === 'number' ? parsed.team_size : null,
-      founding_year: typeof parsed.founding_year === 'number' ? parsed.founding_year : null,
-      contact_email: typeof parsed.contact_email === 'string' ? parsed.contact_email : null,
-      services: Array.isArray(parsed.services) ? parsed.services : [],
-      quality: typeof parsed.quality === 'string' ? parsed.quality : 'unknown',
-    }
-  } catch {
-    return null
+  const parsed = JSON.parse(jsonText)
+  return {
+    owner_name: typeof parsed.owner_name === 'string' ? parsed.owner_name : null,
+    team_size: typeof parsed.team_size === 'number' ? parsed.team_size : null,
+    founding_year: typeof parsed.founding_year === 'number' ? parsed.founding_year : null,
+    contact_email: typeof parsed.contact_email === 'string' ? parsed.contact_email : null,
+    services: Array.isArray(parsed.services) ? parsed.services : [],
+    quality: typeof parsed.quality === 'string' ? parsed.quality : 'unknown',
   }
 }
