@@ -105,14 +105,14 @@ function formatCurrency(amount: number): string {
 >
   {
     saved && (
-      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
+      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-[var(--ss-radius-card)] mb-4">
         Quote saved.
       </div>
     )
   }
   {
     error && (
-      <div class="bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
+      <div class="bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded-[var(--ss-radius-card)] mb-4">
         {error === 'invalid_transition'
           ? 'Invalid status transition.'
           : error === 'no_sow'
@@ -131,7 +131,7 @@ function formatCurrency(amount: number): string {
   {/* Stale PDF warning (OQ-006) */}
   {
     isSowStale && (
-      <div class="bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
+      <div class="bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 rounded-[var(--ss-radius-card)] mb-4">
         The quote has been modified since the last SOW PDF was generated. Re-generate the PDF before
         sending.
       </div>
@@ -140,19 +140,21 @@ function formatCurrency(amount: number): string {
 
   {/* Header */}
   <div
-    class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card mb-6"
+    class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card mb-6"
   >
     <div class="flex items-start justify-between gap-stack">
       <div>
         <div class="flex items-center gap-row mb-2">
-          <h2 class="text-xl font-semibold text-[color:var(--color-text-primary)]">
+          <h2 class="text-xl font-semibold text-[color:var(--ss-color-text-primary)]">
             {entity.name}
           </h2>
           <span class={statusBadgeClass(status)}>
             {QUOTE_STATUSES.find((s) => s.value === status)?.label ?? status}
           </span>
         </div>
-        <div class="flex items-center gap-stack text-sm text-[color:var(--color-text-secondary)]">
+        <div
+          class="flex items-center gap-stack text-sm text-[color:var(--ss-color-text-secondary)]"
+        >
           <span>Created {formatDate(quote.created_at)}</span>
           {
             expiresAt && (
@@ -170,10 +172,10 @@ function formatCurrency(amount: number): string {
 
   {/* Line Item Editor */}
   <div
-    class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card mb-6"
+    class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card mb-6"
   >
     <div class="flex items-center justify-between mb-4">
-      <h3 class="text-lg font-semibold text-[color:var(--color-text-primary)]">Line Items</h3>
+      <h3 class="text-lg font-semibold text-[color:var(--ss-color-text-primary)]">Line Items</h3>
       <div id="line-item-warning" class="hidden text-sm text-amber-600 font-medium">
         Consider keeping scope focused — 3+ line items may indicate too broad an engagement (OQ-005)
       </div>
@@ -182,19 +184,20 @@ function formatCurrency(amount: number): string {
     <div id="line-items-container">
       <table class="w-full text-sm">
         <thead>
-          <tr class="border-b border-[color:var(--color-border)]">
-            <th class="text-left py-2 px-2 text-[color:var(--color-text-secondary)] font-medium w-8"
+          <tr class="border-b border-[color:var(--ss-color-border)]">
+            <th
+              class="text-left py-2 px-2 text-[color:var(--ss-color-text-secondary)] font-medium w-8"
               >#</th
             >
             <th
-              class="text-left py-2 px-2 text-[color:var(--color-text-secondary)] font-medium w-48"
+              class="text-left py-2 px-2 text-[color:var(--ss-color-text-secondary)] font-medium w-48"
               >Problem</th
             >
-            <th class="text-left py-2 px-2 text-[color:var(--color-text-secondary)] font-medium"
+            <th class="text-left py-2 px-2 text-[color:var(--ss-color-text-secondary)] font-medium"
               >Description</th
             >
             <th
-              class="text-right py-2 px-2 text-[color:var(--color-text-secondary)] font-medium w-24"
+              class="text-right py-2 px-2 text-[color:var(--ss-color-text-secondary)] font-medium w-24"
               >Est. Hours</th
             >
             {isDraft && <th class="py-2 px-2 w-10" />}
@@ -204,47 +207,49 @@ function formatCurrency(amount: number): string {
           {
             lineItems.map((item, index) => (
               <tr
-                class="border-b border-[color:var(--color-border-subtle)] line-item-row"
+                class="border-b border-[color:var(--ss-color-border-subtle)] line-item-row"
                 data-index={index}
               >
-                <td class="py-2 px-2 text-[color:var(--color-text-muted)] row-number">
+                <td class="py-2 px-2 text-[color:var(--ss-color-text-muted)] row-number">
                   {index + 1}
                 </td>
                 <td class="py-2 px-2">
                   {isDraft ? (
                     <input
                       type="text"
-                      class="w-full border border-[color:var(--color-border)] rounded px-2 py-1 text-sm item-problem"
+                      class="w-full border border-[color:var(--ss-color-border)] rounded px-2 py-1 text-sm item-problem"
                       value={item.problem}
                       placeholder="e.g., Scheduling chaos"
                     />
                   ) : (
-                    <span class="text-[color:var(--color-text-primary)]">{item.problem}</span>
+                    <span class="text-[color:var(--ss-color-text-primary)]">{item.problem}</span>
                   )}
                 </td>
                 <td class="py-2 px-2">
                   {isDraft ? (
                     <input
                       type="text"
-                      class="w-full border border-[color:var(--color-border)] rounded px-2 py-1 text-sm item-description"
+                      class="w-full border border-[color:var(--ss-color-border)] rounded px-2 py-1 text-sm item-description"
                       value={item.description}
                       placeholder="What we'll deliver"
                     />
                   ) : (
-                    <span class="text-[color:var(--color-text-primary)]">{item.description}</span>
+                    <span class="text-[color:var(--ss-color-text-primary)]">
+                      {item.description}
+                    </span>
                   )}
                 </td>
                 <td class="py-2 px-2 text-right">
                   {isDraft ? (
                     <input
                       type="number"
-                      class="w-20 border border-[color:var(--color-border)] rounded px-2 py-1 text-sm text-right item-hours"
+                      class="w-20 border border-[color:var(--ss-color-border)] rounded px-2 py-1 text-sm text-right item-hours"
                       value={item.estimated_hours}
                       min="0.5"
                       step="0.5"
                     />
                   ) : (
-                    <span class="text-[color:var(--color-text-primary)]">
+                    <span class="text-[color:var(--ss-color-text-primary)]">
                       {item.estimated_hours}
                     </span>
                   )}
@@ -253,7 +258,7 @@ function formatCurrency(amount: number): string {
                   <td class="py-2 px-2 text-center">
                     <button
                       type="button"
-                      class="text-[color:var(--color-text-muted)] hover:text-red-500 transition-colors remove-item-btn"
+                      class="text-[color:var(--ss-color-text-muted)] hover:text-red-500 transition-colors remove-item-btn"
                       title="Remove"
                     >
                       &times;
@@ -280,15 +285,15 @@ function formatCurrency(amount: number): string {
     </div>
 
     {/* Totals */}
-    <div class="mt-4 pt-4 border-t border-[color:var(--color-border)] flex justify-end">
+    <div class="mt-4 pt-4 border-t border-[color:var(--ss-color-border)] flex justify-end">
       <div class="text-right space-y-1">
-        <div class="text-sm text-[color:var(--color-text-secondary)]">
+        <div class="text-sm text-[color:var(--ss-color-text-secondary)]">
           Total hours: <span
             id="total-hours"
-            class="font-medium text-[color:var(--color-text-primary)]">{quote.total_hours}</span
+            class="font-medium text-[color:var(--ss-color-text-primary)]">{quote.total_hours}</span
           >
         </div>
-        <div class="text-lg font-semibold text-[color:var(--color-text-primary)]">
+        <div class="text-lg font-semibold text-[color:var(--ss-color-text-primary)]">
           Project price: <span id="total-price">{formatCurrency(quote.total_price)}</span>
         </div>
       </div>
@@ -297,22 +302,22 @@ function formatCurrency(amount: number): string {
 
   {/* Payment Structure */}
   <div
-    class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card mb-6"
+    class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card mb-6"
   >
-    <h3 class="text-lg font-semibold text-[color:var(--color-text-primary)] mb-4">
+    <h3 class="text-lg font-semibold text-[color:var(--ss-color-text-primary)] mb-4">
       Payment Structure
     </h3>
 
     <div class="space-y-row">
       <div class="flex items-center gap-stack">
-        <label class="text-sm text-[color:var(--color-text-secondary)] w-36"
+        <label class="text-sm text-[color:var(--ss-color-text-secondary)] w-36"
           >Deposit percentage:</label
         >
         {
           isDraft ? (
             <select
               id="deposit-pct-select"
-              class="border border-[color:var(--color-border)] rounded px-2 py-1 text-sm"
+              class="border border-[color:var(--ss-color-border)] rounded px-2 py-1 text-sm"
             >
               <option value="0.5" selected={depositPct === 0.5}>
                 50%
@@ -322,7 +327,7 @@ function formatCurrency(amount: number): string {
               </option>
             </select>
           ) : (
-            <span class="text-sm text-[color:var(--color-text-primary)]">
+            <span class="text-sm text-[color:var(--ss-color-text-primary)]">
               {Math.round(depositPct * 100)}%
             </span>
           )
@@ -338,10 +343,10 @@ function formatCurrency(amount: number): string {
         )
       }
 
-      <div class="text-sm text-[color:var(--color-text-secondary)] space-y-1">
+      <div class="text-sm text-[color:var(--ss-color-text-secondary)] space-y-1">
         <div class="flex justify-between max-w-xs">
           <span>Deposit:</span>
-          <span id="deposit-amount" class="font-medium text-[color:var(--color-text-primary)]">
+          <span id="deposit-amount" class="font-medium text-[color:var(--ss-color-text-primary)]">
             {formatCurrency(quote.deposit_amount ?? quote.total_price * depositPct)}
           </span>
         </div>
@@ -350,13 +355,13 @@ function formatCurrency(amount: number): string {
             <>
               <div class="flex justify-between max-w-xs">
                 <span>Mid-engagement milestone:</span>
-                <span class="font-medium text-[color:var(--color-text-primary)]">
+                <span class="font-medium text-[color:var(--ss-color-text-primary)]">
                   {formatCurrency(quote.total_price * 0.3)}
                 </span>
               </div>
               <div class="flex justify-between max-w-xs">
                 <span>Completion:</span>
-                <span class="font-medium text-[color:var(--color-text-primary)]">
+                <span class="font-medium text-[color:var(--ss-color-text-primary)]">
                   {formatCurrency(quote.total_price * 0.3)}
                 </span>
               </div>
@@ -366,7 +371,7 @@ function formatCurrency(amount: number): string {
               <span>Completion:</span>
               <span
                 id="completion-amount"
-                class="font-medium text-[color:var(--color-text-primary)]"
+                class="font-medium text-[color:var(--ss-color-text-primary)]"
               >
                 {formatCurrency(quote.total_price * (1 - depositPct))}
               </span>
@@ -379,10 +384,10 @@ function formatCurrency(amount: number): string {
 
   {/* Authored client-facing content (#377) */}
   <div
-    class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card mb-6"
+    class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card mb-6"
   >
     <div class="flex items-start justify-between mb-1">
-      <h3 class="text-lg font-semibold text-[color:var(--color-text-primary)]">
+      <h3 class="text-lg font-semibold text-[color:var(--ss-color-text-primary)]">
         Client-facing content
       </h3>
       {
@@ -397,7 +402,7 @@ function formatCurrency(amount: number): string {
         )
       }
     </div>
-    <p class="text-sm text-[color:var(--color-text-secondary)] mb-5">
+    <p class="text-sm text-[color:var(--ss-color-text-secondary)] mb-5">
       Authored per engagement. Renders on the client proposal page and SOW PDF. Quotes cannot be
       sent until the schedule and deliverables are populated.
     </p>
@@ -405,7 +410,7 @@ function formatCurrency(amount: number): string {
     {/* Schedule */}
     <div class="mb-6">
       <div class="flex items-center justify-between mb-2">
-        <label class="text-sm font-semibold text-[color:var(--color-text-primary)]">
+        <label class="text-sm font-semibold text-[color:var(--ss-color-text-primary)]">
           How we'll work (schedule)
         </label>
         {
@@ -420,13 +425,13 @@ function formatCurrency(amount: number): string {
           )
         }
       </div>
-      <p class="text-xs text-[color:var(--color-text-secondary)] mb-2">
+      <p class="text-xs text-[color:var(--ss-color-text-secondary)] mb-2">
         One row per phase. The label sits in the left gutter (e.g. "Discovery", "Build").
       </p>
       <div id="schedule-rows" data-empty-text="No schedule rows authored yet.">
         {
           schedule.length === 0 ? (
-            <div class="text-sm text-[color:var(--color-text-secondary)] italic py-2 schedule-empty-state">
+            <div class="text-sm text-[color:var(--ss-color-text-secondary)] italic py-2 schedule-empty-state">
               No schedule rows authored yet.
             </div>
           ) : (
@@ -436,19 +441,19 @@ function formatCurrency(amount: number): string {
                   <>
                     <input
                       type="text"
-                      class="w-32 border border-[color:var(--color-border)] rounded px-2 py-1 text-sm schedule-label"
+                      class="w-32 border border-[color:var(--ss-color-border)] rounded px-2 py-1 text-sm schedule-label"
                       value={row.label}
                       placeholder="Label"
                     />
                     <input
                       type="text"
-                      class="flex-1 border border-[color:var(--color-border)] rounded px-2 py-1 text-sm schedule-body"
+                      class="flex-1 border border-[color:var(--ss-color-border)] rounded px-2 py-1 text-sm schedule-body"
                       value={row.body}
                       placeholder="What happens in this phase"
                     />
                     <button
                       type="button"
-                      class="text-[color:var(--color-text-muted)] hover:text-red-500 transition-colors remove-schedule-row-btn px-2"
+                      class="text-[color:var(--ss-color-text-muted)] hover:text-red-500 transition-colors remove-schedule-row-btn px-2"
                       title="Remove"
                     >
                       &times;
@@ -456,10 +461,10 @@ function formatCurrency(amount: number): string {
                   </>
                 ) : (
                   <>
-                    <span class="w-32 text-sm font-medium text-[color:var(--color-text-secondary)]">
+                    <span class="w-32 text-sm font-medium text-[color:var(--ss-color-text-secondary)]">
                       {row.label}
                     </span>
-                    <span class="flex-1 text-sm text-[color:var(--color-text-primary)]">
+                    <span class="flex-1 text-sm text-[color:var(--ss-color-text-primary)]">
                       {row.body}
                     </span>
                   </>
@@ -474,7 +479,7 @@ function formatCurrency(amount: number): string {
     {/* Deliverables */}
     <div class="mb-6">
       <div class="flex items-center justify-between mb-2">
-        <label class="text-sm font-semibold text-[color:var(--color-text-primary)]">
+        <label class="text-sm font-semibold text-[color:var(--ss-color-text-primary)]">
           What you'll get (deliverables)
         </label>
         {
@@ -489,13 +494,13 @@ function formatCurrency(amount: number): string {
           )
         }
       </div>
-      <p class="text-xs text-[color:var(--color-text-secondary)] mb-2">
+      <p class="text-xs text-[color:var(--ss-color-text-secondary)] mb-2">
         Authored deliverables replace the line-item-derived list on the proposal page.
       </p>
       <div id="deliverable-rows" data-empty-text="No deliverables authored yet.">
         {
           deliverables.length === 0 ? (
-            <div class="text-sm text-[color:var(--color-text-secondary)] italic py-2 deliverable-empty-state">
+            <div class="text-sm text-[color:var(--ss-color-text-secondary)] italic py-2 deliverable-empty-state">
               No deliverables authored yet.
             </div>
           ) : (
@@ -506,12 +511,12 @@ function formatCurrency(amount: number): string {
                     <div class="flex-1 space-y-1">
                       <input
                         type="text"
-                        class="w-full border border-[color:var(--color-border)] rounded px-2 py-1 text-sm deliverable-title"
+                        class="w-full border border-[color:var(--ss-color-border)] rounded px-2 py-1 text-sm deliverable-title"
                         value={row.title}
                         placeholder="Title"
                       />
                       <textarea
-                        class="w-full border border-[color:var(--color-border)] rounded px-2 py-1 text-sm deliverable-body"
+                        class="w-full border border-[color:var(--ss-color-border)] rounded px-2 py-1 text-sm deliverable-body"
                         rows="2"
                         placeholder="Description"
                       >
@@ -520,7 +525,7 @@ function formatCurrency(amount: number): string {
                     </div>
                     <button
                       type="button"
-                      class="text-[color:var(--color-text-muted)] hover:text-red-500 transition-colors remove-deliverable-row-btn px-2"
+                      class="text-[color:var(--ss-color-text-muted)] hover:text-red-500 transition-colors remove-deliverable-row-btn px-2"
                       title="Remove"
                     >
                       &times;
@@ -528,10 +533,10 @@ function formatCurrency(amount: number): string {
                   </div>
                 ) : (
                   <div>
-                    <p class="text-sm font-semibold text-[color:var(--color-text-primary)]">
+                    <p class="text-sm font-semibold text-[color:var(--ss-color-text-primary)]">
                       {row.title}
                     </p>
-                    <p class="text-sm text-[color:var(--color-text-secondary)]">{row.body}</p>
+                    <p class="text-sm text-[color:var(--ss-color-text-secondary)]">{row.body}</p>
                   </div>
                 )}
               </div>
@@ -544,28 +549,28 @@ function formatCurrency(amount: number): string {
     {/* Engagement overview (SOW PDF) */}
     <div class="mb-6">
       <label
-        class="block text-sm font-semibold text-[color:var(--color-text-primary)] mb-1"
+        class="block text-sm font-semibold text-[color:var(--ss-color-text-primary)] mb-1"
         for="engagement-overview-input"
       >
         Engagement overview (SOW PDF)
       </label>
-      <p class="text-xs text-[color:var(--color-text-secondary)] mb-2">
+      <p class="text-xs text-[color:var(--ss-color-text-secondary)] mb-2">
         Renders on the SOW PDF "Engagement overview" page. Required before generating the SOW PDF.
       </p>
       {
         isDraft ? (
           <textarea
             id="engagement-overview-input"
-            class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm"
+            class="w-full border border-[color:var(--ss-color-border)] rounded px-3 py-2 text-sm"
             rows="3"
             placeholder="What this engagement is about, in one or two sentences."
           >
             {engagementOverview}
           </textarea>
         ) : (
-          <p class="text-sm text-[color:var(--color-text-primary)] whitespace-pre-wrap">
+          <p class="text-sm text-[color:var(--ss-color-text-primary)] whitespace-pre-wrap">
             {engagementOverview || (
-              <span class="italic text-[color:var(--color-text-muted)]">Not authored.</span>
+              <span class="italic text-[color:var(--ss-color-text-muted)]">Not authored.</span>
             )}
           </p>
         )
@@ -577,12 +582,12 @@ function formatCurrency(amount: number): string {
       isThreeMilestone && (
         <div class="mb-2">
           <label
-            class="block text-sm font-semibold text-[color:var(--color-text-primary)] mb-1"
+            class="block text-sm font-semibold text-[color:var(--ss-color-text-primary)] mb-1"
             for="milestone-label-input"
           >
             Mid-engagement milestone label
           </label>
-          <p class="text-xs text-[color:var(--color-text-secondary)] mb-2">
+          <p class="text-xs text-[color:var(--ss-color-text-secondary)] mb-2">
             Per-engagement label for the 30% mid-engagement milestone (e.g. "First-pass review",
             "Pilot rollout"). Optional; the SOW renders neutral wording when empty.
           </p>
@@ -590,14 +595,14 @@ function formatCurrency(amount: number): string {
             <input
               id="milestone-label-input"
               type="text"
-              class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm"
+              class="w-full border border-[color:var(--ss-color-border)] rounded px-3 py-2 text-sm"
               value={milestoneLabel}
               placeholder="Optional label for the mid-engagement milestone"
             />
           ) : (
-            <p class="text-sm text-[color:var(--color-text-primary)]">
+            <p class="text-sm text-[color:var(--ss-color-text-primary)]">
               {milestoneLabel || (
-                <span class="italic text-[color:var(--color-text-muted)]">Not authored.</span>
+                <span class="italic text-[color:var(--ss-color-text-muted)]">Not authored.</span>
               )}
             </p>
           )}
@@ -609,9 +614,11 @@ function formatCurrency(amount: number): string {
   {/* SOW PDF Status */}
   {
     hasSow && (
-      <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card mb-6">
-        <h3 class="text-lg font-semibold text-[color:var(--color-text-primary)] mb-2">SOW PDF</h3>
-        <div class="text-sm text-[color:var(--color-text-secondary)] space-y-1">
+      <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card mb-6">
+        <h3 class="text-lg font-semibold text-[color:var(--ss-color-text-primary)] mb-2">
+          SOW PDF
+        </h3>
+        <div class="text-sm text-[color:var(--ss-color-text-secondary)] space-y-1">
           <div>
             Generated: {sowGeneratedAt ? formatDate(latestSowRevision!.rendered_at) : 'Unknown'}
           </div>
@@ -625,9 +632,9 @@ function formatCurrency(amount: number): string {
 
   {/* Actions */}
   <div
-    class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+    class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card"
   >
-    <h3 class="text-lg font-semibold text-[color:var(--color-text-primary)] mb-4">Actions</h3>
+    <h3 class="text-lg font-semibold text-[color:var(--ss-color-text-primary)] mb-4">Actions</h3>
     <div class="flex flex-wrap gap-row">
       {/* Save Draft */}
       {
@@ -702,7 +709,7 @@ function formatCurrency(amount: number): string {
           <form method="POST" action={`/api/admin/quotes/${quoteId}/sign`} id="sign-form">
             <select
               name="signer_contact_id"
-              class="px-3 py-2 border border-[color:var(--color-border)] rounded text-sm bg-white"
+              class="px-3 py-2 border border-[color:var(--ss-color-border)] rounded text-sm bg-white"
               required
             >
               {contacts
@@ -730,7 +737,7 @@ function formatCurrency(amount: number): string {
             <input type="hidden" name="action" value="decline" />
             <button
               type="submit"
-              class="px-4 py-2 bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)] rounded hover:bg-[color:var(--color-border)] transition-colors text-sm font-medium"
+              class="px-4 py-2 bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)] rounded hover:bg-[color:var(--ss-color-border)] transition-colors text-sm font-medium"
             >
               Decline
             </button>
@@ -745,7 +752,7 @@ function formatCurrency(amount: number): string {
             <input type="hidden" name="action" value="expire" />
             <button
               type="submit"
-              class="px-4 py-2 bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)] rounded hover:bg-[color:var(--color-border)] transition-colors text-sm font-medium"
+              class="px-4 py-2 bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)] rounded hover:bg-[color:var(--ss-color-border)] transition-colors text-sm font-medium"
             >
               Mark Expired
             </button>
@@ -756,7 +763,7 @@ function formatCurrency(amount: number): string {
 
     {
       isTerminal && (
-        <p class="mt-3 text-sm text-[color:var(--color-text-secondary)]">
+        <p class="mt-3 text-sm text-[color:var(--ss-color-text-secondary)]">
           This quote is in a terminal state ({status}) and cannot be modified.
         </p>
       )
@@ -870,7 +877,7 @@ function formatCurrency(amount: number): string {
         if (rows.length === 0) {
           const div = document.createElement('div')
           div.className =
-            'text-sm text-[color:var(--color-text-secondary)] italic py-2 ' +
+            'text-sm text-[color:var(--ss-color-text-secondary)] italic py-2 ' +
             (isDeliverable ? 'deliverable-empty-state' : 'schedule-empty-state')
           div.textContent = container.getAttribute('data-empty-text') ?? ''
           container.appendChild(div)
@@ -924,9 +931,9 @@ function formatCurrency(amount: number): string {
         const div = document.createElement('div')
         div.className = 'flex gap-2 mb-2 schedule-row'
         div.innerHTML = `
-          <input type="text" class="w-32 border border-[color:var(--color-border)] rounded px-2 py-1 text-sm schedule-label" placeholder="Label" />
-          <input type="text" class="flex-1 border border-[color:var(--color-border)] rounded px-2 py-1 text-sm schedule-body" placeholder="What happens in this phase" />
-          <button type="button" class="text-[color:var(--color-text-muted)] hover:text-red-500 transition-colors remove-schedule-row-btn px-2" title="Remove">&times;</button>
+          <input type="text" class="w-32 border border-[color:var(--ss-color-border)] rounded px-2 py-1 text-sm schedule-label" placeholder="Label" />
+          <input type="text" class="flex-1 border border-[color:var(--ss-color-border)] rounded px-2 py-1 text-sm schedule-body" placeholder="What happens in this phase" />
+          <button type="button" class="text-[color:var(--ss-color-text-muted)] hover:text-red-500 transition-colors remove-schedule-row-btn px-2" title="Remove">&times;</button>
         `
         scheduleRowsContainer.appendChild(div)
       }
@@ -939,10 +946,10 @@ function formatCurrency(amount: number): string {
         div.innerHTML = `
           <div class="flex gap-2">
             <div class="flex-1 space-y-1">
-              <input type="text" class="w-full border border-[color:var(--color-border)] rounded px-2 py-1 text-sm deliverable-title" placeholder="Title" />
-              <textarea class="w-full border border-[color:var(--color-border)] rounded px-2 py-1 text-sm deliverable-body" rows="2" placeholder="Description"></textarea>
+              <input type="text" class="w-full border border-[color:var(--ss-color-border)] rounded px-2 py-1 text-sm deliverable-title" placeholder="Title" />
+              <textarea class="w-full border border-[color:var(--ss-color-border)] rounded px-2 py-1 text-sm deliverable-body" rows="2" placeholder="Description"></textarea>
             </div>
-            <button type="button" class="text-[color:var(--color-text-muted)] hover:text-red-500 transition-colors remove-deliverable-row-btn px-2" title="Remove">&times;</button>
+            <button type="button" class="text-[color:var(--ss-color-text-muted)] hover:text-red-500 transition-colors remove-deliverable-row-btn px-2" title="Remove">&times;</button>
           </div>
         `
         deliverableRowsContainer.appendChild(div)
@@ -987,21 +994,21 @@ function formatCurrency(amount: number): string {
       function addRow() {
         const index = body.querySelectorAll('.line-item-row').length
         const tr = document.createElement('tr')
-        tr.className = 'border-b border-[color:var(--color-border-subtle)] line-item-row'
+        tr.className = 'border-b border-[color:var(--ss-color-border-subtle)] line-item-row'
         tr.setAttribute('data-index', String(index))
         tr.innerHTML = `
-            <td class="py-2 px-2 text-[color:var(--color-text-muted)] row-number">${index + 1}</td>
+            <td class="py-2 px-2 text-[color:var(--ss-color-text-muted)] row-number">${index + 1}</td>
             <td class="py-2 px-2">
-              <input type="text" class="w-full border border-[color:var(--color-border)] rounded px-2 py-1 text-sm item-problem" value="" placeholder="e.g., Scheduling chaos" />
+              <input type="text" class="w-full border border-[color:var(--ss-color-border)] rounded px-2 py-1 text-sm item-problem" value="" placeholder="e.g., Scheduling chaos" />
             </td>
             <td class="py-2 px-2">
-              <input type="text" class="w-full border border-[color:var(--color-border)] rounded px-2 py-1 text-sm item-description" value="" placeholder="What we'll deliver" />
+              <input type="text" class="w-full border border-[color:var(--ss-color-border)] rounded px-2 py-1 text-sm item-description" value="" placeholder="What we'll deliver" />
             </td>
             <td class="py-2 px-2 text-right">
-              <input type="number" class="w-20 border border-[color:var(--color-border)] rounded px-2 py-1 text-sm text-right item-hours" value="0" min="0.5" step="0.5" />
+              <input type="number" class="w-20 border border-[color:var(--ss-color-border)] rounded px-2 py-1 text-sm text-right item-hours" value="0" min="0.5" step="0.5" />
             </td>
             <td class="py-2 px-2 text-center">
-              <button type="button" class="text-[color:var(--color-text-muted)] hover:text-red-500 transition-colors remove-item-btn" title="Remove">&times;</button>
+              <button type="button" class="text-[color:var(--ss-color-text-muted)] hover:text-red-500 transition-colors remove-item-btn" title="Remove">&times;</button>
             </td>
           `
         body.appendChild(tr)

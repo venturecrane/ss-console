@@ -93,21 +93,21 @@ const success = Astro.url.searchParams.get('saved')
 >
   {
     success && (
-      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
+      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-[var(--ss-radius-card)] mb-4">
         Follow-up updated successfully.
       </div>
     )
   }
 
   <div class="flex items-center justify-between mb-6">
-    <h2 class="text-xl font-semibold text-[color:var(--color-text-primary)]">Follow-ups</h2>
+    <h2 class="text-xl font-semibold text-[color:var(--ss-color-text-primary)]">Follow-ups</h2>
 
     {/* Type filter */}
     <form method="GET" class="flex items-center gap-2">
       <input type="hidden" name="tab" value={activeTab} />
       <select
         name="type"
-        class="text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-1.5 bg-white text-[color:var(--color-text-primary)]"
+        class="text-sm border border-[color:var(--ss-color-border)] rounded-[var(--ss-radius-card)] px-3 py-1.5 bg-white text-[color:var(--ss-color-text-primary)]"
         onchange="this.form.submit()"
       >
         <option value="">All types</option>
@@ -123,13 +123,13 @@ const success = Astro.url.searchParams.get('saved')
   </div>
 
   {/* Tabs */}
-  <div class="flex gap-1 mb-6 border-b border-[color:var(--color-border)]">
+  <div class="flex gap-1 mb-6 border-b border-[color:var(--ss-color-border)]">
     <a
       href={`/admin/follow-ups?tab=upcoming${filterType ? `&type=${filterType}` : ''}`}
       class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
         activeTab === 'upcoming'
           ? 'border-primary text-primary'
-          : 'border-transparent text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
+          : 'border-transparent text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-text-primary)]'
       }`}
     >
       Upcoming ({upcoming.length})
@@ -139,7 +139,7 @@ const success = Astro.url.searchParams.get('saved')
       class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
         activeTab === 'overdue'
           ? 'border-red-500 text-red-600'
-          : 'border-transparent text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
+          : 'border-transparent text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-text-primary)]'
       }`}
     >
       Overdue ({overdue.length})
@@ -149,7 +149,7 @@ const success = Astro.url.searchParams.get('saved')
       class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
         activeTab === 'completed'
           ? 'border-green-500 text-green-600'
-          : 'border-transparent text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
+          : 'border-transparent text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-text-primary)]'
       }`}
     >
       Completed ({completed.length})
@@ -163,8 +163,8 @@ const success = Astro.url.searchParams.get('saved')
         activeTab === 'overdue' ? overdue : activeTab === 'completed' ? completed : upcoming
       if (items.length === 0) {
         return (
-          <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card">
-            <p class="text-[color:var(--color-text-secondary)] text-sm">
+          <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card">
+            <p class="text-[color:var(--ss-color-text-secondary)] text-sm">
               {activeTab === 'upcoming' && 'No upcoming follow-ups.'}
               {activeTab === 'overdue' && 'No overdue follow-ups.'}
               {activeTab === 'completed' && 'No completed follow-ups.'}
@@ -173,29 +173,29 @@ const success = Astro.url.searchParams.get('saved')
         )
       }
       return (
-        <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] divide-y divide-[color:var(--color-border-subtle)]">
+        <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] divide-y divide-[color:var(--ss-color-border-subtle)]">
           {items.map((f: FollowUp) => (
             <div class="px-6 py-4">
               <div class="flex items-start justify-between gap-stack">
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2 mb-1">
                     <span
-                      class={`text-sm font-medium ${f.entity_id && clientMap[f.entity_id] ? 'text-[color:var(--color-text-primary)]' : 'italic text-[color:var(--color-text-muted)]'}`}
+                      class={`text-sm font-medium ${f.entity_id && clientMap[f.entity_id] ? 'text-[color:var(--ss-color-text-primary)]' : 'italic text-[color:var(--ss-color-text-muted)]'}`}
                     >
                       {f.entity_id ? (clientMap[f.entity_id] ?? 'Missing entity') : 'Unlinked'}
                     </span>
-                    <span class="text-xs bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)] px-2 py-0.5 rounded">
+                    <span class="text-xs bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)] px-2 py-0.5 rounded">
                       {getTypeLabel(f.type)}
                     </span>
                   </div>
-                  <div class="flex items-center gap-row text-xs text-[color:var(--color-text-muted)]">
+                  <div class="flex items-center gap-row text-xs text-[color:var(--ss-color-text-muted)]">
                     <span>{formatDate(f.scheduled_for)}</span>
                     {f.status === 'scheduled' && (
                       <span
                         class={
                           daysUntil(f.scheduled_for) < 0
                             ? 'text-red-500 font-medium'
-                            : 'text-[color:var(--color-text-secondary)]'
+                            : 'text-[color:var(--ss-color-text-secondary)]'
                         }
                       >
                         {daysLabel(f.scheduled_for)}
@@ -211,7 +211,7 @@ const success = Astro.url.searchParams.get('saved')
                       <input type="hidden" name="action" value="send_email" />
                       <button
                         type="submit"
-                        class="text-xs bg-primary text-white px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-primary/90 transition-colors"
+                        class="text-xs bg-primary text-white px-3 py-1.5 rounded-[var(--ss-radius-card)] hover:bg-primary/90 transition-colors"
                       >
                         Send Email
                       </button>
@@ -220,7 +220,7 @@ const success = Astro.url.searchParams.get('saved')
                       <input type="hidden" name="action" value="complete" />
                       <button
                         type="submit"
-                        class="text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-green-100 transition-colors"
+                        class="text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded-[var(--ss-radius-card)] hover:bg-green-100 transition-colors"
                       >
                         Mark Complete
                       </button>
@@ -229,7 +229,7 @@ const success = Astro.url.searchParams.get('saved')
                       <input type="hidden" name="action" value="skip" />
                       <button
                         type="submit"
-                        class="text-xs bg-[color:var(--color-background)] text-[color:var(--color-text-secondary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-border-subtle)] transition-colors"
+                        class="text-xs bg-[color:var(--ss-color-background)] text-[color:var(--ss-color-text-secondary)] px-3 py-1.5 rounded-[var(--ss-radius-card)] hover:bg-[color:var(--ss-color-border-subtle)] transition-colors"
                       >
                         Skip
                       </button>

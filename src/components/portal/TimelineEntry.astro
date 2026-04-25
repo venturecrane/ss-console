@@ -43,18 +43,18 @@ const {
 <div class="flex flex-col gap-row">
   <div class="flex items-baseline gap-stack">
     <span
-      class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold tabular-nums text-[color:var(--color-primary)]"
+      class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold tabular-nums text-[color:var(--ss-color-primary)]"
       >{date}</span
     >
     {
       actor && (
-        <span class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-text-primary)]">
+        <span class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-text-primary)]">
           · {actor}
         </span>
       )
     }
   </div>
-  <p class="text-body text-[color:var(--color-text-primary)] leading-[1.55]">{body}</p>
+  <p class="text-body text-[color:var(--ss-color-text-primary)] leading-[1.55]">{body}</p>
   {
     artifactLabel && artifactHref && (
       <div class="mt-row">

@@ -37,11 +37,11 @@ const { client, quotes } = Astro.props
 <PortalTabs pathname="/portal/quotes" />
 
 <main id="main" role="main" class="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 pb-24 md:pb-10">
-  <h1 class="text-display text-[color:var(--color-text-primary)] mb-section">Proposals</h1>
+  <h1 class="text-display text-[color:var(--ss-color-text-primary)] mb-section">Proposals</h1>
 
   {
     quotes.length === 0 ? (
-      <p class="text-caption text-[color:var(--color-text-muted)]">No proposals yet.</p>
+      <p class="text-caption text-[color:var(--ss-color-text-muted)]">No proposals yet.</p>
     ) : (
       <ul class="space-y-row" role="list">
         {quotes.map((quote) => (

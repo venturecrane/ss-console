@@ -45,16 +45,16 @@ const {
 const showCrumb = !!(crumbHref && crumbLabel)
 ---
 
-<header class={`border-b-[3px] border-[color:var(--color-text-primary)] py-6 md:py-10 ${klass}`}>
+<header class={`border-b-[3px] border-[color:var(--ss-color-text-primary)] py-6 md:py-10 ${klass}`}>
   {
     showCrumb && (
       <a
         href={crumbHref as string}
-        class="inline-flex items-center gap-2 min-h-11 -mx-1 px-1 font-['Archivo_Narrow'] text-xs md:text-sm font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+        class="inline-flex items-center gap-2 min-h-11 -mx-1 px-1 font-['Archivo_Narrow'] text-xs md:text-sm font-semibold uppercase tracking-[0.18em] text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-text-primary)] active:text-[color:var(--ss-color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2"
       >
         <span
           aria-hidden="true"
-          class="font-['Archivo'] font-black text-[color:var(--color-primary)]"
+          class="font-['Archivo'] font-black text-[color:var(--ss-color-primary)]"
         >
           ←
         </span>
@@ -72,20 +72,20 @@ const showCrumb = !!(crumbHref && crumbLabel)
     <div class="min-w-0 flex-1">
       {
         tag && (
-          <span class="inline-block mb-3 bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] px-3 py-1 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold whitespace-nowrap">
+          <span class="inline-block mb-3 bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] px-3 py-1 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold whitespace-nowrap">
             {tag}
           </span>
         )
       }
       <h1
-        class="font-['Archivo'] text-hero-mobile md:text-hero uppercase text-[color:var(--color-text-primary)] m-0"
+        class="font-['Archivo'] text-hero-mobile md:text-hero uppercase text-[color:var(--ss-color-text-primary)] m-0"
       >
         {h1}
       </h1>
     </div>
     {
       meta && (
-        <div class="font-mono text-xs uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)] whitespace-pre md:text-right leading-[1.9]">
+        <div class="font-mono text-xs uppercase tracking-[0.08em] text-[color:var(--ss-color-text-secondary)] whitespace-pre md:text-right leading-[1.9]">
           {meta}
         </div>
       )

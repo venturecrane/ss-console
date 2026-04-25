@@ -14,11 +14,11 @@ const { pillLabel, amountCents, amountLabel, ctaLabel, ctaHref, ctaSubtext } = A
 ---
 
 <section
-  class="border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)]"
+  class="border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)]"
   aria-label={pillLabel}
 >
   <div
-    class="flex items-center gap-3 bg-[color:var(--color-text-primary)] text-[color:var(--color-primary)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold"
+    class="flex items-center gap-3 bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-primary)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold"
   >
     {pillLabel}
   </div>
@@ -28,7 +28,7 @@ const { pillLabel, amountCents, amountLabel, ctaLabel, ctaHref, ctaSubtext } = A
         <>
           <MoneyDisplay amountCents={amountCents} size="hero" />
           {amountLabel && (
-            <p class="mt-3 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] font-semibold text-[color:var(--color-text-secondary)]">
+            <p class="mt-3 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] font-semibold text-[color:var(--ss-color-text-secondary)]">
               {amountLabel}
             </p>
           )}
@@ -38,14 +38,14 @@ const { pillLabel, amountCents, amountLabel, ctaLabel, ctaHref, ctaSubtext } = A
   </div>
   <a
     href={ctaHref}
-    class="flex items-center justify-between border-t-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] px-5 py-4 font-['Archivo'] text-sm font-bold uppercase tracking-[0.08em] text-[color:var(--color-background)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-inset"
+    class="flex items-center justify-between border-t-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] px-5 py-4 font-['Archivo'] text-sm font-bold uppercase tracking-[0.08em] text-[color:var(--ss-color-background)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-inset"
   >
     <span>{ctaLabel}</span>
     <span aria-hidden="true" class="font-black">→</span>
   </a>
   {
     ctaSubtext && (
-      <p class="px-5 py-3 border-t-[2px] border-[color:var(--color-text-primary)] font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+      <p class="px-5 py-3 border-t-[2px] border-[color:var(--ss-color-text-primary)] font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
         {ctaSubtext}
       </p>
     )

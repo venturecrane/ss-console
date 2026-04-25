@@ -60,22 +60,22 @@ const navItems = [
     <title>{title}</title>
   </head>
   <body
-    class="min-h-screen bg-[color:var(--color-background)] text-[color:var(--color-text-primary)]"
+    class="min-h-screen bg-[color:var(--ss-color-background)] text-[color:var(--ss-color-text-primary)]"
   >
     <SkipToMain />
     <header
       role="banner"
-      class="sticky top-0 z-50 h-14 md:h-16 bg-[color:var(--color-background)] border-b-[3px] border-[color:var(--color-text-primary)]"
+      class="sticky top-0 z-50 h-14 md:h-16 bg-[color:var(--ss-color-background)] border-b-[3px] border-[color:var(--ss-color-text-primary)]"
     >
       <div class={`${maxWidth} mx-auto h-full px-4 md:px-6 flex items-center justify-between`}>
         <div class="flex items-center gap-3">
           <a
             href="/admin"
-            class="font-['Archivo'] text-lg font-black uppercase tracking-[-0.01em] text-[color:var(--color-text-primary)] hover:text-[color:var(--color-primary)] active:text-[color:var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 transition-colors"
+            class="font-['Archivo'] text-lg font-black uppercase tracking-[-0.01em] text-[color:var(--ss-color-text-primary)] hover:text-[color:var(--ss-color-primary)] active:text-[color:var(--ss-color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2 transition-colors"
             >SMD Services</a
           >
           <span
-            class="font-['Archivo_Narrow'] text-[11px] font-bold uppercase tracking-[0.14em] border border-[color:var(--color-text-primary)] px-2 py-0.5 text-[color:var(--color-text-primary)]"
+            class="font-['Archivo_Narrow'] text-[11px] font-bold uppercase tracking-[0.14em] border border-[color:var(--ss-color-text-primary)] px-2 py-0.5 text-[color:var(--ss-color-text-primary)]"
             >Admin</span
           >
         </div>
@@ -91,10 +91,10 @@ const navItems = [
                     href={item.href}
                     aria-current={active ? 'page' : undefined}
                     class:list={[
-                      "inline-flex items-center min-h-11 px-2 -mx-2 font-['Archivo_Narrow'] text-sm font-semibold uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2",
+                      "inline-flex items-center min-h-11 px-2 -mx-2 font-['Archivo_Narrow'] text-sm font-semibold uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2",
                       active
-                        ? 'text-[color:var(--color-primary)] border-b-2 border-[color:var(--color-primary)]'
-                        : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)]',
+                        ? 'text-[color:var(--ss-color-primary)] border-b-2 border-[color:var(--ss-color-primary)]'
+                        : 'text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-text-primary)] active:text-[color:var(--ss-color-text-primary)]',
                     ]}
                   >
                     {item.label}
@@ -103,12 +103,12 @@ const navItems = [
               })
             }
           </nav>
-          <span class="text-sm text-[color:var(--color-text-muted)]" aria-hidden="true">|</span>
-          <span class="text-sm text-[color:var(--color-text-secondary)]">{session.email}</span>
+          <span class="text-sm text-[color:var(--ss-color-text-muted)]" aria-hidden="true">|</span>
+          <span class="text-sm text-[color:var(--ss-color-text-secondary)]">{session.email}</span>
           <form method="POST" action="/api/auth/logout">
             <button
               type="submit"
-              class="inline-flex items-center min-h-11 px-2 -mx-2 text-sm text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
+              class="inline-flex items-center min-h-11 px-2 -mx-2 text-sm text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-text-primary)] active:text-[color:var(--ss-color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2 rounded transition-colors"
             >
               Sign out
             </button>
@@ -119,12 +119,12 @@ const navItems = [
         <details class="relative md:hidden">
           <summary
             aria-label="Open menu"
-            class="list-none w-11 h-11 flex items-center justify-center rounded-[var(--radius-card)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-border-subtle)] active:bg-[color:var(--color-border-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 cursor-pointer"
+            class="list-none w-11 h-11 flex items-center justify-center rounded-[var(--ss-radius-card)] text-[color:var(--ss-color-text-secondary)] hover:bg-[color:var(--ss-color-border-subtle)] active:bg-[color:var(--ss-color-border-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2 cursor-pointer"
           >
             <span class="material-symbols-outlined" aria-hidden="true">menu</span>
           </summary>
           <div
-            class="absolute right-0 top-12 w-64 bg-[color:var(--color-background)] border-[3px] border-[color:var(--color-text-primary)] p-2 z-50"
+            class="absolute right-0 top-12 w-64 bg-[color:var(--ss-color-background)] border-[3px] border-[color:var(--ss-color-text-primary)] p-2 z-50"
           >
             <nav aria-label="Primary" class="flex flex-col">
               {
@@ -135,10 +135,10 @@ const navItems = [
                       href={item.href}
                       aria-current={active ? 'page' : undefined}
                       class:list={[
-                        'block px-3 py-2.5 text-sm rounded hover:bg-[color:var(--color-border-subtle)] active:bg-[color:var(--color-border-subtle)]',
+                        'block px-3 py-2.5 text-sm rounded hover:bg-[color:var(--ss-color-border-subtle)] active:bg-[color:var(--ss-color-border-subtle)]',
                         active
-                          ? 'text-[color:var(--color-primary)] font-medium'
-                          : 'text-[color:var(--color-text-primary)]',
+                          ? 'text-[color:var(--ss-color-primary)] font-medium'
+                          : 'text-[color:var(--ss-color-text-primary)]',
                       ]}
                     >
                       {item.label}
@@ -147,14 +147,14 @@ const navItems = [
                 })
               }
             </nav>
-            <hr class="my-2 border-[color:var(--color-border)]" />
-            <p class="px-3 py-1.5 text-xs text-[color:var(--color-text-secondary)] break-all">
+            <hr class="my-2 border-[color:var(--ss-color-border)]" />
+            <p class="px-3 py-1.5 text-xs text-[color:var(--ss-color-text-secondary)] break-all">
               {session.email}
             </p>
             <form method="POST" action="/api/auth/logout">
               <button
                 type="submit"
-                class="w-full text-left px-3 py-2.5 text-sm text-[color:var(--color-text-primary)] rounded hover:bg-[color:var(--color-border-subtle)] active:bg-[color:var(--color-border-subtle)]"
+                class="w-full text-left px-3 py-2.5 text-sm text-[color:var(--ss-color-text-primary)] rounded hover:bg-[color:var(--ss-color-border-subtle)] active:bg-[color:var(--ss-color-border-subtle)]"
               >
                 Sign out
               </button>
@@ -168,12 +168,12 @@ const navItems = [
       {
         breadcrumbs.length > 0 && (
           <nav aria-label="Breadcrumb" class="mb-4">
-            <ol class="flex flex-wrap items-center gap-1 text-sm text-[color:var(--color-text-secondary)]">
+            <ol class="flex flex-wrap items-center gap-1 text-sm text-[color:var(--ss-color-text-secondary)]">
               {breadcrumbs.map((crumb, i) => (
                 <>
                   {i > 0 && (
                     <li aria-hidden="true" class="flex items-center">
-                      <span class="material-symbols-outlined text-base text-[color:var(--color-text-muted)]">
+                      <span class="material-symbols-outlined text-base text-[color:var(--ss-color-text-muted)]">
                         chevron_right
                       </span>
                     </li>
@@ -182,14 +182,14 @@ const navItems = [
                     {crumb.href ? (
                       <a
                         href={crumb.href}
-                        class="hover:text-[color:var(--color-primary)] active:text-[color:var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
+                        class="hover:text-[color:var(--ss-color-primary)] active:text-[color:var(--ss-color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2 rounded transition-colors"
                       >
                         {crumb.label}
                       </a>
                     ) : (
                       <span
                         aria-current="page"
-                        class="text-[color:var(--color-text-primary)] font-medium"
+                        class="text-[color:var(--ss-color-text-primary)] font-medium"
                       >
                         {crumb.label}
                       </span>

@@ -266,7 +266,7 @@ function meetingSubstateBadgeClass(s: MeetingSubstate): string {
       return 'bg-blue-100 text-blue-700'
     case 'awaiting-booking':
     default:
-      return 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
+      return 'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]'
   }
 }
 
@@ -279,7 +279,7 @@ function tierBadgeClass(tier: string | null): string {
     case 'cool':
       return 'bg-blue-100 text-blue-700'
     case 'cold':
-      return 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
+      return 'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]'
     default:
       return ''
   }
@@ -302,9 +302,9 @@ function stageBadgeClass(stage: string): string {
     case 'ongoing':
       return 'border-teal-500 text-teal-600'
     case 'lost':
-      return 'border-slate-400 text-[color:var(--color-text-secondary)]'
+      return 'border-slate-400 text-[color:var(--ss-color-text-secondary)]'
     default:
-      return 'border-[color:var(--color-border)] text-[color:var(--color-text-secondary)]'
+      return 'border-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-secondary)]'
   }
 }
 
@@ -363,26 +363,26 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
 >
   {
     dismissed && (
-      <div class="bg-[color:var(--color-background)] border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
+      <div class="bg-[color:var(--ss-color-background)] border border-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-secondary)] text-sm px-4 py-3 rounded-[var(--ss-radius-card)] mb-4">
         {dismissedName ? `${dismissedName} dismissed.` : 'Entity dismissed.'}
       </div>
     )
   }
   {
     error && (
-      <div class="bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
+      <div class="bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded-[var(--ss-radius-card)] mb-4">
         {error}
       </div>
     )
   }
 
   <div class="flex items-center justify-between mb-6">
-    <h2 class="text-xl font-semibold text-[color:var(--color-text-primary)]">Entities</h2>
+    <h2 class="text-xl font-semibold text-[color:var(--ss-color-text-primary)]">Entities</h2>
     <form method="GET" class="flex items-center gap-2">
       <input type="hidden" name="stage" value={filterStage} />
       <select
         name="pipeline"
-        class="text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-1.5 bg-white text-[color:var(--color-text-primary)]"
+        class="text-sm border border-[color:var(--ss-color-border)] rounded-[var(--ss-radius-card)] px-3 py-1.5 bg-white text-[color:var(--ss-color-text-primary)]"
         onchange="this.form.submit()"
       >
         <option value="">All pipelines</option>
@@ -398,7 +398,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
   </div>
 
   {/* Stage tabs */}
-  <div class="flex gap-1 mb-6 border-b border-[color:var(--color-border)] overflow-x-auto">
+  <div class="flex gap-1 mb-6 border-b border-[color:var(--ss-color-border)] overflow-x-auto">
     {
       ENTITY_STAGES.map((s) => (
         <a
@@ -406,7 +406,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
           class={`px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
             filterStage === s.value
               ? stageBadgeClass(s.value) + ' border-current'
-              : 'border-transparent text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
+              : 'border-transparent text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-text-primary)]'
           }`}
         >
           {s.label}
@@ -414,8 +414,8 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
             <span
               class={`ml-1 text-xs px-1.5 py-0.5 rounded-full ${
                 filterStage === s.value
-                  ? 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-primary)]'
-                  : 'bg-[color:var(--color-background)] text-[color:var(--color-text-secondary)]'
+                  ? 'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-primary)]'
+                  : 'bg-[color:var(--ss-color-background)] text-[color:var(--ss-color-text-secondary)]'
               }`}
             >
               {stageCounts[s.value]}
@@ -429,13 +429,13 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
   {/* Entity list */}
   {
     displayEntities.length === 0 ? (
-      <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card">
+      <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card">
         {filterPipeline ? (
-          <p class="text-[color:var(--color-text-secondary)] text-sm">
+          <p class="text-[color:var(--ss-color-text-secondary)] text-sm">
             No <strong>{filterStage}</strong> entities match the selected pipeline.{' '}
             <a
               href={`/admin/entities?stage=${filterStage}`}
-              class="text-[color:var(--color-primary)] hover:underline"
+              class="text-[color:var(--ss-color-primary)] hover:underline"
             >
               Clear filter
             </a>
@@ -443,10 +443,10 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
           </p>
         ) : (
           <>
-            <p class="text-[color:var(--color-text-primary)] text-sm font-medium mb-1">
+            <p class="text-[color:var(--ss-color-text-primary)] text-sm font-medium mb-1">
               {EMPTY_STATE_COPY[filterStage].headline}
             </p>
-            <p class="text-[color:var(--color-text-secondary)] text-sm">
+            <p class="text-[color:var(--ss-color-text-secondary)] text-sm">
               {EMPTY_STATE_COPY[filterStage].hint}
             </p>
           </>
@@ -455,30 +455,30 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
     ) : (
       <div
         id="entity-list"
-        class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)]"
+        class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)]"
         data-bulk-enabled={bulkEnabled ? 'true' : 'false'}
       >
         {bulkEnabled && (
-          <div class="px-6 py-3 border-b border-[color:var(--color-border-subtle)] flex items-center gap-3 bg-[color:var(--color-background)]">
-            <label class="inline-flex items-center gap-2 text-xs text-[color:var(--color-text-secondary)] cursor-pointer select-none">
+          <div class="px-6 py-3 border-b border-[color:var(--ss-color-border-subtle)] flex items-center gap-3 bg-[color:var(--ss-color-background)]">
+            <label class="inline-flex items-center gap-2 text-xs text-[color:var(--ss-color-text-secondary)] cursor-pointer select-none">
               <input
                 type="checkbox"
                 id="bulk-select-all"
-                class="w-4 h-4 rounded border-[color:var(--color-border)] cursor-pointer"
+                class="w-4 h-4 rounded border-[color:var(--ss-color-border)] cursor-pointer"
                 aria-label="Select all on page"
               />
               Select all on page
             </label>
             <span
               id="bulk-count-inline"
-              class="text-xs text-[color:var(--color-text-muted)]"
+              class="text-xs text-[color:var(--ss-color-text-muted)]"
               aria-live="polite"
             >
               {displayEntities.length} {displayEntities.length === 1 ? 'entity' : 'entities'}
             </span>
           </div>
         )}
-        <div class="divide-y divide-[color:var(--color-border-subtle)]">
+        <div class="divide-y divide-[color:var(--ss-color-border-subtle)]">
           {displayEntities.map((e: Entity) => {
             const meta = signalMetadata.get(e.id)
             const problems = (meta?.top_problems ?? [])
@@ -532,7 +532,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
             const quoteAge = relativeTime(quoteTimestamp)
             return (
               <div
-                class="group relative px-6 py-4 flex items-start gap-3 hover:bg-[color:var(--color-background)] transition-colors"
+                class="group relative px-6 py-4 flex items-start gap-3 hover:bg-[color:var(--ss-color-background)] transition-colors"
                 data-entity-row
                 data-entity-id={e.id}
               >
@@ -540,7 +540,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                   <div class="relative z-10 pt-0.5">
                     <input
                       type="checkbox"
-                      class="bulk-select-row w-4 h-4 rounded border-[color:var(--color-border)] cursor-pointer"
+                      class="bulk-select-row w-4 h-4 rounded border-[color:var(--ss-color-border)] cursor-pointer"
                       data-entity-id={e.id}
                       data-entity-name={e.name}
                       aria-label={`Select ${e.name}`}
@@ -552,14 +552,14 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                     relative z-10 so they remain independently clickable. */}
                 <a
                   href={`/admin/entities/${e.id}`}
-                  class="absolute inset-0 z-0 rounded-[var(--radius-card)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)]"
+                  class="absolute inset-0 z-0 rounded-[var(--ss-radius-card)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-primary)]"
                   aria-label={`Open ${e.name}`}
                   tabindex="0"
                 />
                 <div class="flex items-start justify-between gap-stack flex-1 min-w-0">
                   <div class="min-w-0 flex-1">
                     <div class="flex items-center gap-2 mb-1 flex-wrap">
-                      <span class="text-sm font-medium text-[color:var(--color-text-primary)] group-hover:text-primary transition-colors">
+                      <span class="text-sm font-medium text-[color:var(--ss-color-text-primary)] group-hover:text-primary transition-colors">
                         {e.name}
                       </span>
                       {activeQuote && (
@@ -569,7 +569,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                             {activeQuote.version > 1 ? ` v${activeQuote.version}` : ''}
                           </span>
                           {quoteAge && (
-                            <span class="text-xs text-[color:var(--color-text-muted)]">
+                            <span class="text-xs text-[color:var(--ss-color-text-muted)]">
                               {quoteAge}
                             </span>
                           )}
@@ -615,7 +615,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                     {isSignal && problems.length > 0 && (
                       <div class="flex flex-wrap items-center gap-1 mb-1.5">
                         {problems.map((p) => (
-                          <span class="text-xs px-2 py-0.5 rounded-full bg-[color:var(--color-background)] text-[color:var(--color-text-secondary)] border border-[color:var(--color-border-subtle)]">
+                          <span class="text-xs px-2 py-0.5 rounded-full bg-[color:var(--ss-color-background)] text-[color:var(--ss-color-text-secondary)] border border-[color:var(--ss-color-border-subtle)]">
                             {p.label}
                           </span>
                         ))}
@@ -623,13 +623,13 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                     )}
 
                     {isSignal && outreachAngle && (
-                      <p class="text-xs text-[color:var(--color-text-secondary)] mb-1 line-clamp-2 italic">
+                      <p class="text-xs text-[color:var(--ss-color-text-secondary)] mb-1 line-clamp-2 italic">
                         {outreachAngle}
                       </p>
                     )}
 
                     {!isSignal && e.summary && (
-                      <p class="text-xs text-[color:var(--color-text-secondary)] mb-1 line-clamp-2">
+                      <p class="text-xs text-[color:var(--ss-color-text-secondary)] mb-1 line-clamp-2">
                         {e.summary}
                       </p>
                     )}
@@ -650,7 +650,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                       </p>
                     )}
 
-                    <div class="flex items-center gap-row text-xs text-[color:var(--color-text-muted)] mt-1 flex-wrap">
+                    <div class="flex items-center gap-row text-xs text-[color:var(--ss-color-text-muted)] mt-1 flex-wrap">
                       {isSignal && lastActivity ? (
                         <span>Last activity {formatDate(lastActivity)}</span>
                       ) : isSignal ? (
@@ -688,7 +688,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                           href={website.href}
                           target="_blank"
                           rel="noreferrer noopener"
-                          class="relative z-10 inline-flex items-center gap-1 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-primary)] transition-colors"
+                          class="relative z-10 inline-flex items-center gap-1 text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-primary)] transition-colors"
                           title={website.label}
                         >
                           <svg
@@ -712,7 +712,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                       {isSignal && e.phone && (
                         <a
                           href={`tel:${e.phone}`}
-                          class="relative z-10 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-primary)] transition-colors"
+                          class="relative z-10 text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-primary)] transition-colors"
                         >
                           {e.phone}
                         </a>
@@ -732,7 +732,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                             <form method="POST" action={`/api/admin/entities/${e.id}/promote`}>
                               <button
                                 type="submit"
-                                class="text-xs bg-primary text-white px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-primary/90 transition-colors"
+                                class="text-xs bg-primary text-white px-3 py-1.5 rounded-[var(--ss-radius-card)] hover:bg-primary/90 transition-colors"
                               >
                                 Promote
                               </button>
@@ -740,7 +740,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                             <form method="POST" action={`/api/admin/entities/${e.id}/dismiss`}>
                               <button
                                 type="submit"
-                                class="text-xs bg-[color:var(--color-background)] text-[color:var(--color-text-secondary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-border-subtle)] transition-colors"
+                                class="text-xs bg-[color:var(--ss-color-background)] text-[color:var(--ss-color-text-secondary)] px-3 py-1.5 rounded-[var(--ss-radius-card)] hover:bg-[color:var(--ss-color-border-subtle)] transition-colors"
                               >
                                 Dismiss
                               </button>
@@ -753,7 +753,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                           >
                             <button
                               type="submit"
-                              class="text-xs bg-primary text-white px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-primary/90 transition-colors"
+                              class="text-xs bg-primary text-white px-3 py-1.5 rounded-[var(--ss-radius-card)] hover:bg-primary/90 transition-colors"
                               title="Create a draft quote from the most recent completed meeting's notes"
                             >
                               Draft proposal
@@ -764,7 +764,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                             {rowOutreachMailto && (
                               <a
                                 href={rowOutreachMailto}
-                                class="text-xs border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-background)] transition-colors"
+                                class="text-xs border border-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-primary)] px-3 py-1.5 rounded-[var(--ss-radius-card)] hover:bg-[color:var(--ss-color-background)] transition-colors"
                                 title={`Open mail to ${rowContactEmail} with the draft pre-filled`}
                               >
                                 Send outreach
@@ -774,7 +774,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
                               <button
                                 type="button"
                                 data-open-reply-dialog={e.id}
-                                class="text-xs border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-background)] transition-colors"
+                                class="text-xs border border-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-primary)] px-3 py-1.5 rounded-[var(--ss-radius-card)] hover:bg-[color:var(--ss-color-background)] transition-colors"
                               >
                                 Log reply
                               </button>
@@ -808,7 +808,7 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
         {/* Sticky bulk action bar — hidden until a row is selected */}
         <div
           id="bulk-bar"
-          class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 hidden bg-[color:var(--color-text-primary)] text-white rounded-[var(--radius-card)] shadow-lg px-4 py-3 items-center gap-3 max-w-[calc(100%-2rem)]"
+          class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 hidden bg-[color:var(--ss-color-text-primary)] text-white rounded-[var(--ss-radius-card)] shadow-lg px-4 py-3 items-center gap-3 max-w-[calc(100%-2rem)]"
           role="region"
           aria-label="Bulk actions"
         >
@@ -819,21 +819,21 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
           <button
             type="button"
             id="bulk-outreach"
-            class="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-[var(--radius-card)] transition-colors"
+            class="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-[var(--ss-radius-card)] transition-colors"
           >
             Send outreach
           </button>
           <button
             type="button"
             id="bulk-export"
-            class="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-[var(--radius-card)] transition-colors"
+            class="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-[var(--ss-radius-card)] transition-colors"
           >
             Export CSV
           </button>
           <button
             type="button"
             id="bulk-dismiss"
-            class="text-xs bg-red-500/80 hover:bg-red-500 px-3 py-1.5 rounded-[var(--radius-card)] transition-colors"
+            class="text-xs bg-red-500/80 hover:bg-red-500 px-3 py-1.5 rounded-[var(--ss-radius-card)] transition-colors"
           >
             Dismiss
           </button>
@@ -855,26 +855,26 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
           aria-modal="true"
           aria-labelledby="bulk-dismiss-title"
         >
-          <div class="bg-white rounded-[var(--radius-card)] shadow-lg max-w-md w-full p-6">
+          <div class="bg-white rounded-[var(--ss-radius-card)] shadow-lg max-w-md w-full p-6">
             <h3
               id="bulk-dismiss-title"
-              class="text-base font-semibold text-[color:var(--color-text-primary)] mb-1"
+              class="text-base font-semibold text-[color:var(--ss-color-text-primary)] mb-1"
             >
               Dismiss <span id="bulk-dismiss-count">0</span> entities?
             </h3>
-            <p class="text-sm text-[color:var(--color-text-secondary)] mb-4">
+            <p class="text-sm text-[color:var(--ss-color-text-secondary)] mb-4">
               Each entity transitions to <strong>lost</strong>. A structured reason is recorded per
               entity. This can be undone individually from the Lost tab.
             </p>
             <label
               for="bulk-dismiss-reason"
-              class="block text-xs font-medium text-[color:var(--color-text-secondary)] mb-1"
+              class="block text-xs font-medium text-[color:var(--ss-color-text-secondary)] mb-1"
             >
               Reason (required)
             </label>
             <select
               id="bulk-dismiss-reason"
-              class="w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 bg-white text-[color:var(--color-text-primary)] mb-3"
+              class="w-full text-sm border border-[color:var(--ss-color-border)] rounded-[var(--ss-radius-card)] px-3 py-2 bg-white text-[color:var(--ss-color-text-primary)] mb-3"
             >
               {LOST_REASONS.map((r) => (
                 <option value={r.value}>{r.label}</option>
@@ -882,14 +882,14 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
             </select>
             <label
               for="bulk-dismiss-detail"
-              class="block text-xs font-medium text-[color:var(--color-text-secondary)] mb-1"
+              class="block text-xs font-medium text-[color:var(--ss-color-text-secondary)] mb-1"
             >
               Optional detail
             </label>
             <textarea
               id="bulk-dismiss-detail"
               rows="2"
-              class="w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 bg-white text-[color:var(--color-text-primary)] mb-4 resize-none"
+              class="w-full text-sm border border-[color:var(--ss-color-border)] rounded-[var(--ss-radius-card)] px-3 py-2 bg-white text-[color:var(--ss-color-text-primary)] mb-4 resize-none"
               placeholder="Optional context saved with the reason"
             />
             <div id="bulk-dismiss-error" class="text-xs text-red-600 mb-3 hidden" role="alert" />
@@ -897,14 +897,14 @@ function displayWebsite(raw: string | null): { href: string; label: string } | n
               <button
                 type="button"
                 id="bulk-dismiss-cancel"
-                class="text-sm px-3 py-1.5 rounded-[var(--radius-card)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-background)] transition-colors"
+                class="text-sm px-3 py-1.5 rounded-[var(--ss-radius-card)] text-[color:var(--ss-color-text-secondary)] hover:bg-[color:var(--ss-color-background)] transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 id="bulk-dismiss-confirm"
-                class="text-sm px-3 py-1.5 rounded-[var(--radius-card)] bg-red-600 text-white hover:bg-red-700 transition-colors"
+                class="text-sm px-3 py-1.5 rounded-[var(--ss-radius-card)] bg-red-600 text-white hover:bg-red-700 transition-colors"
               >
                 Dismiss entities
               </button>

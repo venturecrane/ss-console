@@ -294,7 +294,7 @@ const touchpointText: string | null = (() => {
     />
     <title>Portal — {BRAND_NAME}</title>
   </head>
-  <body class="min-h-screen bg-[color:var(--color-background)]">
+  <body class="min-h-screen bg-[color:var(--ss-color-background)]">
     <SkipToMain />
     <PortalHeader
       clientName={client.name}
@@ -306,7 +306,7 @@ const touchpointText: string | null = (() => {
           type="submit"
           aria-label="Sign out"
           title="Sign out"
-          class="inline-flex items-center justify-center w-9 h-9 rounded-full text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[color:var(--color-primary)]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 transition-colors"
+          class="inline-flex items-center justify-center w-9 h-9 rounded-full text-[color:var(--ss-color-text-muted)] hover:text-[color:var(--ss-color-text-primary)] hover:bg-[color:var(--ss-color-primary)]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2 transition-colors"
         >
           <span class="material-symbols-outlined text-[20px]">logout</span>
         </button>
@@ -325,23 +325,23 @@ const touchpointText: string | null = (() => {
       {
         dashboardError ? (
           <section
-            class="mt-10 border-[3px] border-[color:var(--color-error)] bg-[color:var(--color-background)] p-6 md:p-8"
+            class="mt-10 border-[3px] border-[color:var(--ss-color-error)] bg-[color:var(--ss-color-background)] p-6 md:p-8"
             aria-live="polite"
           >
-            <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-error)]">
+            <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-error)]">
               Something broke
             </p>
-            <h2 class="mt-2 font-['Archivo'] text-2xl md:text-3xl font-black uppercase tracking-[-0.02em] text-[color:var(--color-text-primary)]">
+            <h2 class="mt-2 font-['Archivo'] text-2xl md:text-3xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]">
               We couldn't load your portal.
             </h2>
-            <p class="mt-3 text-[color:var(--color-text-secondary)]">
+            <p class="mt-3 text-[color:var(--ss-color-text-secondary)]">
               Give it a moment and try again. If it keeps happening, reach the team using the
               contacts in the header.
             </p>
             <div class="mt-5">
               <a
                 href="/portal"
-                class="inline-flex items-center min-h-11 border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] px-5 py-2.5 font-['Archivo'] text-sm font-bold uppercase tracking-[0.08em] text-[color:var(--color-background)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                class="inline-flex items-center min-h-11 border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] px-5 py-2.5 font-['Archivo'] text-sm font-bold uppercase tracking-[0.08em] text-[color:var(--ss-color-background)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2"
               >
                 Retry
               </a>
@@ -365,26 +365,26 @@ const touchpointText: string | null = (() => {
           {
             pendingInvoice && invoicePillLabel ? (
               <section
-                class="border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)]"
+                class="border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)]"
                 aria-label="Pending invoice"
               >
-                <div class="flex items-center justify-between gap-3 bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold">
+                <div class="flex items-center justify-between gap-3 bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold">
                   <span>{invoicePillLabel}</span>
-                  <span class="text-[color:var(--color-primary)]">
+                  <span class="text-[color:var(--ss-color-primary)]">
                     № {pendingInvoice.id.slice(0, 2).toUpperCase()}
                   </span>
                 </div>
                 <div class="px-5 py-5">
                   <MoneyDisplay amountCents={invoiceAmountCents ?? 0} size="hero" />
                   {invoiceCaption && (
-                    <p class="mt-3 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] font-semibold text-[color:var(--color-text-secondary)]">
+                    <p class="mt-3 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] font-semibold text-[color:var(--ss-color-text-secondary)]">
                       {invoiceCaption}
                     </p>
                   )}
                 </div>
                 <a
                   href={`/portal/invoices/${pendingInvoice.id}`}
-                  class="flex items-center justify-between border-t-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] px-5 py-4 font-['Archivo'] text-sm font-bold uppercase tracking-[0.08em] text-[color:var(--color-background)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-inset"
+                  class="flex items-center justify-between border-t-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] px-5 py-4 font-['Archivo'] text-sm font-bold uppercase tracking-[0.08em] text-[color:var(--ss-color-background)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-inset"
                 >
                   <span>Pay invoice</span>
                   <span aria-hidden="true" class="font-black">
@@ -394,30 +394,30 @@ const touchpointText: string | null = (() => {
               </section>
             ) : touchpointText ? (
               <section
-                class="border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)] px-5 py-6"
+                class="border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)] px-5 py-6"
                 aria-label="Next check-in"
               >
-                <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-primary)]">
+                <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-primary)]">
                   Next check-in
                 </p>
-                <p class="mt-3 font-['Archivo'] text-3xl md:text-[2.5rem] font-black uppercase tracking-[-0.02em] leading-none text-[color:var(--color-text-primary)]">
+                <p class="mt-3 font-['Archivo'] text-3xl md:text-[2.5rem] font-black uppercase tracking-[-0.02em] leading-none text-[color:var(--ss-color-text-primary)]">
                   {touchpointText}
                 </p>
                 {consultantFirst && (
-                  <p class="mt-4 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+                  <p class="mt-4 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
                     with {consultantFirst}
                   </p>
                 )}
               </section>
             ) : (
               <section
-                class="border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)] px-5 py-6"
+                class="border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)] px-5 py-6"
                 aria-label="Engagement status"
               >
-                <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-primary)]">
+                <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-primary)]">
                   In flight
                 </p>
-                <p class="mt-3 text-[color:var(--color-text-secondary)]">
+                <p class="mt-3 text-[color:var(--ss-color-text-secondary)]">
                   Nothing needs your attention right now.
                 </p>
               </section>
@@ -441,19 +441,19 @@ const touchpointText: string | null = (() => {
 
         <section class="flex-1 min-w-0 md:order-1 mt-10 md:mt-0">
           <p
-            class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-text-secondary)]"
+            class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-text-secondary)]"
           >
             Recent activity
           </p>
           <h2
-            class="mt-2 font-['Archivo'] text-3xl md:text-4xl font-black uppercase tracking-[-0.02em] text-[color:var(--color-text-primary)]"
+            class="mt-2 font-['Archivo'] text-3xl md:text-4xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
           >
             Log
           </h2>
 
           {
             timelineEntries.length > 0 ? (
-              <div class="mt-6 border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)] p-5 md:p-7 space-y-6">
+              <div class="mt-6 border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)] p-5 md:p-7 space-y-6">
                 {timelineEntries.map((entry) => (
                   <TimelineEntry
                     date={entry.date}
@@ -465,8 +465,8 @@ const touchpointText: string | null = (() => {
                 ))}
               </div>
             ) : (
-              <div class="mt-6 border-[3px] border-[color:var(--color-text-primary)] p-6 md:p-8">
-                <p class="text-[color:var(--color-text-secondary)]">
+              <div class="mt-6 border-[3px] border-[color:var(--ss-color-text-primary)] p-6 md:p-8">
+                <p class="text-[color:var(--ss-color-text-secondary)]">
                   Nothing here yet. First entry lands after your next touchpoint.
                 </p>
               </div>

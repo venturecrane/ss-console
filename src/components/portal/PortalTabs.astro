@@ -77,7 +77,7 @@ function isActive(tab: TabDef, path: string): boolean {
 <!-- Desktop: horizontal burnt-orange-active tabs below the header. -->
 <nav
   aria-label="Portal sections"
-  class="hidden md:block sticky top-16 z-40 bg-[color:var(--color-background)] border-b-[3px] border-[color:var(--color-text-primary)]"
+  class="hidden md:block sticky top-16 z-40 bg-[color:var(--ss-color-background)] border-b-[3px] border-[color:var(--ss-color-text-primary)]"
 >
   <div class="max-w-5xl mx-auto">
     <ul class="flex items-stretch" role="list">
@@ -85,12 +85,12 @@ function isActive(tab: TabDef, path: string): boolean {
         tabs.map((tab, i) => {
           const active = isActive(tab, pathname)
           const base =
-            "inline-flex items-baseline gap-2 px-5 py-3 min-h-[44px] font-['Archivo_Narrow'] text-sm font-bold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+            "inline-flex items-baseline gap-2 px-5 py-3 min-h-[44px] font-['Archivo_Narrow'] text-sm font-bold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2"
           const state = active
-            ? 'bg-[color:var(--color-primary)] text-[color:var(--color-background)]'
-            : 'bg-transparent text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[color:var(--color-border-subtle)]'
+            ? 'bg-[color:var(--ss-color-primary)] text-[color:var(--ss-color-background)]'
+            : 'bg-transparent text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-text-primary)] hover:bg-[color:var(--ss-color-border-subtle)]'
           const isLast = i === tabs.length - 1
-          const divider = isLast ? '' : 'border-r-[2px] border-[color:var(--color-text-primary)]'
+          const divider = isLast ? '' : 'border-r-[2px] border-[color:var(--ss-color-text-primary)]'
           return (
             <li class={divider}>
               <a
@@ -100,7 +100,7 @@ function isActive(tab: TabDef, path: string): boolean {
               >
                 <span
                   aria-hidden="true"
-                  class={`font-mono text-xs tracking-[0.06em] ${active ? 'text-[color:var(--color-background)]' : 'text-[color:var(--color-primary)]'}`}
+                  class={`font-mono text-xs tracking-[0.06em] ${active ? 'text-[color:var(--ss-color-background)]' : 'text-[color:var(--ss-color-primary)]'}`}
                 >
                   § {tab.anchor}
                 </span>
@@ -117,17 +117,20 @@ function isActive(tab: TabDef, path: string): boolean {
 <!-- Mobile: fixed bottom bar, 3px ink top border, burnt-orange active tile. -->
 <nav
   aria-label="Portal sections"
-  class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[color:var(--color-background)] border-t-[3px] border-[color:var(--color-text-primary)] pb-[env(safe-area-inset-bottom)]"
+  class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[color:var(--ss-color-background)] border-t-[3px] border-[color:var(--ss-color-text-primary)] pb-[env(safe-area-inset-bottom)]"
 >
-  <ul class="grid grid-cols-4 divide-x-[2px] divide-[color:var(--color-text-primary)]" role="list">
+  <ul
+    class="grid grid-cols-4 divide-x-[2px] divide-[color:var(--ss-color-text-primary)]"
+    role="list"
+  >
     {
       tabs.map((tab) => {
         const active = isActive(tab, pathname)
         const base =
-          "flex flex-col items-center justify-center gap-0.5 py-2 min-h-[64px] font-['Archivo_Narrow'] text-xs font-bold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-inset"
+          "flex flex-col items-center justify-center gap-0.5 py-2 min-h-[64px] font-['Archivo_Narrow'] text-xs font-bold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-inset"
         const state = active
-          ? 'bg-[color:var(--color-primary)] text-[color:var(--color-background)]'
-          : 'bg-transparent text-[color:var(--color-text-primary)] active:bg-[color:var(--color-border-subtle)]'
+          ? 'bg-[color:var(--ss-color-primary)] text-[color:var(--ss-color-background)]'
+          : 'bg-transparent text-[color:var(--ss-color-text-primary)] active:bg-[color:var(--ss-color-border-subtle)]'
         return (
           <li>
             <a
@@ -137,7 +140,7 @@ function isActive(tab: TabDef, path: string): boolean {
             >
               <span
                 aria-hidden="true"
-                class={`font-mono text-[11px] leading-none tracking-[0.06em] ${active ? 'text-[color:var(--color-background)]' : 'text-[color:var(--color-primary)]'}`}
+                class={`font-mono text-[11px] leading-none tracking-[0.06em] ${active ? 'text-[color:var(--ss-color-background)]' : 'text-[color:var(--ss-color-primary)]'}`}
               >
                 § {tab.anchor}
               </span>

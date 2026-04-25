@@ -37,16 +37,16 @@ const telHref = phoneDigits ? `tel:${phoneDigits}` : null
 const mailtoHref = consultantEmail ? `mailto:${consultantEmail}` : null
 
 const iconClasses =
-  'inline-flex items-center justify-center w-11 h-11 rounded-[var(--radius-button)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-primary)] active:text-[color:var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2'
+  'inline-flex items-center justify-center w-11 h-11 rounded-[var(--ss-radius-button)] text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-primary)] active:text-[color:var(--ss-color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2'
 ---
 
 <header
   role="banner"
-  class="sticky top-0 z-50 h-14 md:h-16 w-full bg-[color:var(--color-background)] border-b-[3px] border-[color:var(--color-text-primary)]"
+  class="sticky top-0 z-50 h-14 md:h-16 w-full bg-[color:var(--ss-color-background)] border-b-[3px] border-[color:var(--ss-color-text-primary)]"
 >
   <div class="max-w-5xl mx-auto h-full px-4 md:px-6 flex items-center justify-between gap-stack">
     <p
-      class="font-['Archivo_Narrow'] text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--color-text-primary)] truncate"
+      class="font-['Archivo_Narrow'] text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--ss-color-text-primary)] truncate"
     >
       {clientName}
     </p>

@@ -21,14 +21,15 @@
 export type AdminActionVariant = 'primary' | 'destructive' | 'ghost'
 
 const STRUCTURE =
-  'inline-flex items-center text-xs px-3 py-1.5 rounded-[var(--radius-card)] transition-colors cursor-pointer select-none'
+  'inline-flex items-center text-xs px-3 py-1.5 rounded-[var(--ss-radius-card)] transition-colors cursor-pointer select-none'
 
 const TONE: Record<AdminActionVariant, string> = {
-  primary: 'bg-[color:var(--color-primary)] text-white hover:bg-[color:var(--color-primary-hover)]',
+  primary:
+    'bg-[color:var(--ss-color-primary)] text-white hover:bg-[color:var(--ss-color-primary-hover)]',
   destructive:
-    'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)] hover:bg-red-50 hover:text-[color:var(--color-error)]',
+    'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)] hover:bg-red-50 hover:text-[color:var(--ss-color-error)]',
   ghost:
-    'bg-white border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] hover:bg-[color:var(--color-background)]',
+    'bg-white border border-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-primary)] hover:bg-[color:var(--ss-color-background)]',
 }
 
 export function adminActionButtonClass(variant: AdminActionVariant): string {

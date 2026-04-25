@@ -162,7 +162,7 @@ const consultantPhone = engagement?.consultant_phone ?? null
     />
     <title>Proposal — Portal — {BRAND_NAME}</title>
   </head>
-  <body class="min-h-screen bg-[color:var(--color-background)]">
+  <body class="min-h-screen bg-[color:var(--ss-color-background)]">
     <SkipToMain />
     <PortalHeader
       clientName={client.name}
@@ -172,7 +172,7 @@ const consultantPhone = engagement?.consultant_phone ?? null
       <form method="POST" action="/api/auth/logout">
         <button
           type="submit"
-          class="text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] transition-colors"
+          class="text-sm text-[color:var(--ss-color-text-muted)] hover:text-[color:var(--ss-color-text-primary)] transition-colors"
         >
           Sign out
         </button>
@@ -199,55 +199,55 @@ const consultantPhone = engagement?.consultant_phone ?? null
           <!-- Mobile summary card (hidden on lg+ — right rail takes over there) -->
           <div class="lg:hidden mb-8">
             <div
-              class="border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)]"
+              class="border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)]"
             >
               <div
-                class="flex items-center justify-between gap-3 bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold"
+                class="flex items-center justify-between gap-3 bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold"
               >
                 <span>Engagement total</span>
-                <span class="text-[color:var(--color-primary)]">
+                <span class="text-[color:var(--ss-color-primary)]">
                   № {quote.id.slice(0, 2).toUpperCase()}
                 </span>
               </div>
               <div class="px-5 py-5">
                 <MoneyDisplay amountCents={totalCents} size="hero" />
                 <p
-                  class="mt-3 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] font-semibold text-[color:var(--color-text-secondary)]"
+                  class="mt-3 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] font-semibold text-[color:var(--ss-color-text-secondary)]"
                 >
                   Fixed · USD
                 </p>
-                <p class="mt-4 text-sm text-[color:var(--color-text-secondary)]">
+                <p class="mt-4 text-sm text-[color:var(--ss-color-text-secondary)]">
                   {paymentSplitText}
                 </p>
               </div>
 
               {
                 isSigned ? (
-                  <div class="border-t-[2px] border-[color:var(--color-text-primary)] bg-[color:var(--color-border-subtle)] px-5 py-4 flex items-center justify-between gap-3">
-                    <span class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-complete)] flex items-center gap-2">
+                  <div class="border-t-[2px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-border-subtle)] px-5 py-4 flex items-center justify-between gap-3">
+                    <span class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-complete)] flex items-center gap-2">
                       <span
                         aria-hidden="true"
-                        class="inline-flex items-center justify-center w-5 h-5 bg-[color:var(--color-complete)] text-[color:var(--color-background)] font-['Archivo'] font-black text-xs"
+                        class="inline-flex items-center justify-center w-5 h-5 bg-[color:var(--ss-color-complete)] text-[color:var(--ss-color-background)] font-['Archivo'] font-black text-xs"
                       >
                         ✓
                       </span>
                       Signed
                     </span>
                     {quote.accepted_at && (
-                      <span class="font-mono text-xs text-[color:var(--color-text-secondary)] tracking-[0.04em]">
+                      <span class="font-mono text-xs text-[color:var(--ss-color-text-secondary)] tracking-[0.04em]">
                         {formatShortDate(quote.accepted_at)}
                       </span>
                     )}
                   </div>
                 ) : isSuperseded ? (
-                  <div class="border-t-[2px] border-[color:var(--color-text-primary)] px-5 py-4">
-                    <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-primary)]">
+                  <div class="border-t-[2px] border-[color:var(--ss-color-text-primary)] px-5 py-4">
+                    <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-primary)]">
                       A revised version is available
                     </p>
                     {supersedingQuoteId && (
                       <a
                         href={`/portal/quotes/${supersedingQuoteId}`}
-                        class="mt-3 inline-flex items-center gap-2 font-['Archivo_Narrow'] text-sm font-bold uppercase tracking-[0.14em] text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+                        class="mt-3 inline-flex items-center gap-2 font-['Archivo_Narrow'] text-sm font-bold uppercase tracking-[0.14em] text-[color:var(--ss-color-primary)] hover:text-[color:var(--ss-color-primary-hover)]"
                       >
                         Go to the latest proposal
                         <span aria-hidden="true" class="font-['Archivo'] font-black">
@@ -257,19 +257,19 @@ const consultantPhone = engagement?.consultant_phone ?? null
                     )}
                   </div>
                 ) : isDeclined ? (
-                  <p class="border-t-[2px] border-[color:var(--color-text-primary)] px-5 py-4 text-sm text-[color:var(--color-text-secondary)]">
+                  <p class="border-t-[2px] border-[color:var(--ss-color-text-primary)] px-5 py-4 text-sm text-[color:var(--ss-color-text-secondary)]">
                     This proposal was declined.{surface.next ? ` ${surface.next}` : ''}
                   </p>
                 ) : isExpired ? (
                   surface.next ? (
-                    <p class="border-t-[2px] border-[color:var(--color-text-primary)] px-5 py-4 text-sm text-[color:var(--color-text-secondary)]">
+                    <p class="border-t-[2px] border-[color:var(--ss-color-text-primary)] px-5 py-4 text-sm text-[color:var(--ss-color-text-secondary)]">
                       {surface.next}
                     </p>
                   ) : null
                 ) : hasActiveSignature ? (
                   <a
                     href="#sign-surface"
-                    class="border-t-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] flex items-center justify-between gap-3 px-5 py-4 font-['Archivo'] text-sm font-bold uppercase tracking-[0.08em] text-[color:var(--color-background)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-inset"
+                    class="border-t-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] flex items-center justify-between gap-3 px-5 py-4 font-['Archivo'] text-sm font-bold uppercase tracking-[0.08em] text-[color:var(--ss-color-background)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-inset"
                   >
                     <span>Review and sign</span>
                     <span aria-hidden="true" class="font-black">
@@ -277,7 +277,7 @@ const consultantPhone = engagement?.consultant_phone ?? null
                     </span>
                   </a>
                 ) : (
-                  <p class="border-t-[2px] border-[color:var(--color-text-primary)] px-5 py-4 text-sm text-[color:var(--color-text-secondary)]">
+                  <p class="border-t-[2px] border-[color:var(--ss-color-text-primary)] px-5 py-4 text-sm text-[color:var(--ss-color-text-secondary)]">
                     Your proposal is being prepared. You'll get an email when it's ready to sign.
                   </p>
                 )
@@ -288,12 +288,12 @@ const consultantPhone = engagement?.consultant_phone ?? null
               pdfHref && (
                 <a
                   href={pdfHref}
-                  class="mt-4 flex items-center justify-between border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)] hover:bg-[color:var(--color-border-subtle)] px-5 py-3 font-['Archivo_Narrow'] text-sm font-bold uppercase tracking-[0.14em] text-[color:var(--color-text-primary)] transition-colors"
+                  class="mt-4 flex items-center justify-between border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)] hover:bg-[color:var(--ss-color-border-subtle)] px-5 py-3 font-['Archivo_Narrow'] text-sm font-bold uppercase tracking-[0.14em] text-[color:var(--ss-color-text-primary)] transition-colors"
                 >
                   <span>View the full PDF</span>
                   <span
                     aria-hidden="true"
-                    class="font-['Archivo'] font-black text-[color:var(--color-primary)]"
+                    class="font-['Archivo'] font-black text-[color:var(--ss-color-primary)]"
                   >
                     ↓
                   </span>
@@ -307,31 +307,33 @@ const consultantPhone = engagement?.consultant_phone ?? null
             <!-- § 01 What you'll get — rendered only when deliverables are authored. -->
             {
               deliverables.length > 0 && (
-                <section class="border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)]">
-                  <div class="flex items-center justify-between gap-3 bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold">
+                <section class="border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)]">
+                  <div class="flex items-center justify-between gap-3 bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold">
                     <span>What you'll get</span>
-                    <span class="text-[color:var(--color-primary)]">§ 01</span>
+                    <span class="text-[color:var(--ss-color-primary)]">§ 01</span>
                   </div>
                   <ol class="px-5 md:px-7 py-2">
                     {deliverables.map((d, i) => (
                       <li
                         class:list={[
                           'grid grid-cols-[48px_1fr] gap-4 py-5',
-                          i !== 0 ? 'border-t-[2px] border-[color:var(--color-text-primary)]' : '',
+                          i !== 0
+                            ? 'border-t-[2px] border-[color:var(--ss-color-text-primary)]'
+                            : '',
                         ]}
                       >
                         <span
                           aria-hidden="true"
-                          class="font-['Archivo'] text-2xl font-black text-[color:var(--color-primary)] tracking-[-0.02em] leading-none"
+                          class="font-['Archivo'] text-2xl font-black text-[color:var(--ss-color-primary)] tracking-[-0.02em] leading-none"
                         >
                           {String(i + 1).padStart(2, '0')}.
                         </span>
                         <div class="min-w-0">
-                          <h3 class="font-['Archivo'] text-lg md:text-xl font-black uppercase tracking-[-0.01em] text-[color:var(--color-text-primary)] m-0 leading-tight">
+                          <h3 class="font-['Archivo'] text-lg md:text-xl font-black uppercase tracking-[-0.01em] text-[color:var(--ss-color-text-primary)] m-0 leading-tight">
                             {d.title}
                           </h3>
                           {d.body && (
-                            <p class="mt-2 text-[color:var(--color-text-secondary)] leading-[1.55]">
+                            <p class="mt-2 text-[color:var(--ss-color-text-secondary)] leading-[1.55]">
                               {d.body}
                             </p>
                           )}
@@ -346,23 +348,25 @@ const consultantPhone = engagement?.consultant_phone ?? null
             <!-- § 02 How we'll work (only when authored — never synthesized; #377) -->
             {
               schedule.length > 0 && (
-                <section class="border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)]">
-                  <div class="flex items-center justify-between gap-3 bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold">
+                <section class="border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)]">
+                  <div class="flex items-center justify-between gap-3 bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold">
                     <span>How we'll work</span>
-                    <span class="text-[color:var(--color-primary)]">§ 02</span>
+                    <span class="text-[color:var(--ss-color-primary)]">§ 02</span>
                   </div>
                   <div class="px-5 md:px-7 py-2">
                     {schedule.map((row, i) => (
                       <div
                         class:list={[
                           'grid grid-cols-1 md:grid-cols-[140px_1fr] gap-3 md:gap-6 py-5',
-                          i !== 0 ? 'border-t-[2px] border-[color:var(--color-text-primary)]' : '',
+                          i !== 0
+                            ? 'border-t-[2px] border-[color:var(--ss-color-text-primary)]'
+                            : '',
                         ]}
                       >
-                        <span class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-primary)]">
+                        <span class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-primary)]">
                           {row.label}
                         </span>
-                        <p class="text-[color:var(--color-text-secondary)] leading-[1.55] m-0">
+                        <p class="text-[color:var(--ss-color-text-secondary)] leading-[1.55] m-0">
                           {row.body}
                         </p>
                       </div>
@@ -374,20 +378,20 @@ const consultantPhone = engagement?.consultant_phone ?? null
 
             <!-- § 03 Terms -->
             <section
-              class="border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)]"
+              class="border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)]"
             >
               <div
-                class="flex items-center justify-between gap-3 bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold"
+                class="flex items-center justify-between gap-3 bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold"
               >
                 <span>Terms</span>
-                <span class="text-[color:var(--color-primary)]">§ 03</span>
+                <span class="text-[color:var(--ss-color-primary)]">§ 03</span>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2">
                 <div
-                  class="px-5 py-5 md:border-r-[2px] md:border-[color:var(--color-text-primary)] border-b-[2px] md:border-b-0 border-[color:var(--color-text-primary)]"
+                  class="px-5 py-5 md:border-r-[2px] md:border-[color:var(--ss-color-text-primary)] border-b-[2px] md:border-b-0 border-[color:var(--ss-color-text-primary)]"
                 >
                   <p
-                    class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-text-secondary)]"
+                    class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-text-secondary)]"
                   >
                     Total
                   </p>
@@ -397,11 +401,11 @@ const consultantPhone = engagement?.consultant_phone ?? null
                 </div>
                 <div class="px-5 py-5">
                   <p
-                    class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-text-secondary)]"
+                    class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-text-secondary)]"
                   >
                     Payment schedule
                   </p>
-                  <p class="mt-3 text-[color:var(--color-text-primary)] leading-[1.55]">
+                  <p class="mt-3 text-[color:var(--ss-color-text-primary)] leading-[1.55]">
                     {paymentSplitText}
                   </p>
                 </div>
@@ -412,17 +416,17 @@ const consultantPhone = engagement?.consultant_phone ?? null
             {
               hasActiveSignature && (
                 <section id="sign-surface" class="mt-8">
-                  <div class="border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)]">
-                    <div class="flex items-center justify-between gap-3 bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold">
+                  <div class="border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)]">
+                    <div class="flex items-center justify-between gap-3 bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold">
                       <span>Review and sign</span>
-                      <span class="text-[color:var(--color-primary)]">§ 04</span>
+                      <span class="text-[color:var(--ss-color-primary)]">§ 04</span>
                     </div>
                     <div class="px-5 py-5">
-                      <p class="text-[color:var(--color-text-secondary)] mb-5">
+                      <p class="text-[color:var(--ss-color-text-secondary)] mb-5">
                         The full Statement of Work is below. Sign when you're ready.
                       </p>
                       <div
-                        class="border-[2px] border-[color:var(--color-text-primary)] overflow-hidden bg-[color:var(--color-surface)]"
+                        class="border-[2px] border-[color:var(--ss-color-text-primary)] overflow-hidden bg-[color:var(--ss-color-surface)]"
                         style="min-height: 600px;"
                       >
                         <iframe
@@ -442,7 +446,7 @@ const consultantPhone = engagement?.consultant_phone ?? null
             <!-- Consultant block (mobile — above footer; desktop hides here, shown in rail) -->
             {
               consultantName && (
-                <section class="lg:hidden mt-10 pt-10 border-t-[3px] border-[color:var(--color-text-primary)]">
+                <section class="lg:hidden mt-10 pt-10 border-t-[3px] border-[color:var(--ss-color-text-primary)]">
                   <ConsultantBlock
                     variant="trade-card"
                     name={consultantName}
@@ -452,7 +456,7 @@ const consultantPhone = engagement?.consultant_phone ?? null
                     nextTouchpointLabel={engagement?.next_touchpoint_label ?? null}
                     phone={engagement?.consultant_phone ?? null}
                   />
-                  <p class="mt-stack text-caption text-[color:var(--color-text-muted)]">
+                  <p class="mt-stack text-caption text-[color:var(--ss-color-text-muted)]">
                     Questions? Reach us using the contacts in the header.
                   </p>
                 </section>
@@ -466,55 +470,55 @@ const consultantPhone = engagement?.consultant_phone ?? null
           <div class="sticky top-40 space-y-6">
             <!-- Sign card — Plainspoken ticket chrome -->
             <div
-              class="border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)]"
+              class="border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)]"
             >
               <div
-                class="flex items-center justify-between gap-3 bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold"
+                class="flex items-center justify-between gap-3 bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold"
               >
                 <span>Engagement total</span>
-                <span class="text-[color:var(--color-primary)]"
+                <span class="text-[color:var(--ss-color-primary)]"
                   >№ {quote.id.slice(0, 2).toUpperCase()}</span
                 >
               </div>
               <div class="px-5 py-5">
                 <MoneyDisplay amountCents={totalCents} size="hero" />
                 <p
-                  class="mt-3 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] font-semibold text-[color:var(--color-text-secondary)]"
+                  class="mt-3 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] font-semibold text-[color:var(--ss-color-text-secondary)]"
                 >
                   Fixed · USD
                 </p>
-                <p class="mt-4 text-sm text-[color:var(--color-text-secondary)]">
+                <p class="mt-4 text-sm text-[color:var(--ss-color-text-secondary)]">
                   {paymentSplitText}
                 </p>
               </div>
 
               {
                 isSigned ? (
-                  <div class="border-t-[2px] border-[color:var(--color-text-primary)] bg-[color:var(--color-border-subtle)] px-5 py-4 flex items-center justify-between gap-3">
-                    <span class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-complete)] flex items-center gap-2">
+                  <div class="border-t-[2px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-border-subtle)] px-5 py-4 flex items-center justify-between gap-3">
+                    <span class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-complete)] flex items-center gap-2">
                       <span
                         aria-hidden="true"
-                        class="inline-flex items-center justify-center w-5 h-5 bg-[color:var(--color-complete)] text-[color:var(--color-background)] font-['Archivo'] font-black text-xs"
+                        class="inline-flex items-center justify-center w-5 h-5 bg-[color:var(--ss-color-complete)] text-[color:var(--ss-color-background)] font-['Archivo'] font-black text-xs"
                       >
                         ✓
                       </span>
                       Signed
                     </span>
                     {quote.accepted_at && (
-                      <span class="font-mono text-xs text-[color:var(--color-text-secondary)] tracking-[0.04em]">
+                      <span class="font-mono text-xs text-[color:var(--ss-color-text-secondary)] tracking-[0.04em]">
                         {formatShortDate(quote.accepted_at)}
                       </span>
                     )}
                   </div>
                 ) : isSuperseded ? (
-                  <div class="border-t-[2px] border-[color:var(--color-text-primary)] px-5 py-4">
-                    <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-primary)]">
+                  <div class="border-t-[2px] border-[color:var(--ss-color-text-primary)] px-5 py-4">
+                    <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-primary)]">
                       A revised version is available
                     </p>
                     {supersedingQuoteId && (
                       <a
                         href={`/portal/quotes/${supersedingQuoteId}`}
-                        class="mt-3 inline-flex items-center gap-2 font-['Archivo_Narrow'] text-sm font-bold uppercase tracking-[0.14em] text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)]"
+                        class="mt-3 inline-flex items-center gap-2 font-['Archivo_Narrow'] text-sm font-bold uppercase tracking-[0.14em] text-[color:var(--ss-color-primary)] hover:text-[color:var(--ss-color-primary-hover)]"
                       >
                         Go to the latest proposal
                         <span aria-hidden="true" class="font-['Archivo'] font-black">
@@ -525,14 +529,14 @@ const consultantPhone = engagement?.consultant_phone ?? null
                   </div>
                 ) : isDeclined || isExpired ? (
                   surface.next ? (
-                    <p class="border-t-[2px] border-[color:var(--color-text-primary)] px-5 py-4 text-sm text-[color:var(--color-text-secondary)]">
+                    <p class="border-t-[2px] border-[color:var(--ss-color-text-primary)] px-5 py-4 text-sm text-[color:var(--ss-color-text-secondary)]">
                       {surface.next}
                     </p>
                   ) : null
                 ) : hasActiveSignature ? (
                   <a
                     href="#sign-surface"
-                    class="border-t-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] flex items-center justify-between gap-3 px-5 py-4 font-['Archivo'] text-sm font-bold uppercase tracking-[0.08em] text-[color:var(--color-background)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-inset"
+                    class="border-t-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] flex items-center justify-between gap-3 px-5 py-4 font-['Archivo'] text-sm font-bold uppercase tracking-[0.08em] text-[color:var(--ss-color-background)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-inset"
                   >
                     <span>Review and sign</span>
                     <span aria-hidden="true" class="font-black">
@@ -540,7 +544,7 @@ const consultantPhone = engagement?.consultant_phone ?? null
                     </span>
                   </a>
                 ) : (
-                  <p class="border-t-[2px] border-[color:var(--color-text-primary)] px-5 py-4 text-sm text-[color:var(--color-text-secondary)]">
+                  <p class="border-t-[2px] border-[color:var(--ss-color-text-primary)] px-5 py-4 text-sm text-[color:var(--ss-color-text-secondary)]">
                     Your proposal is being prepared. You'll get an email when it's ready.
                   </p>
                 )
@@ -551,12 +555,12 @@ const consultantPhone = engagement?.consultant_phone ?? null
               pdfHref && (
                 <a
                   href={pdfHref}
-                  class="flex items-center justify-between border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)] hover:bg-[color:var(--color-border-subtle)] px-5 py-3 font-['Archivo_Narrow'] text-sm font-bold uppercase tracking-[0.14em] text-[color:var(--color-text-primary)] transition-colors"
+                  class="flex items-center justify-between border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)] hover:bg-[color:var(--ss-color-border-subtle)] px-5 py-3 font-['Archivo_Narrow'] text-sm font-bold uppercase tracking-[0.14em] text-[color:var(--ss-color-text-primary)] transition-colors"
                 >
                   <span>View the full PDF</span>
                   <span
                     aria-hidden="true"
-                    class="font-['Archivo'] font-black text-[color:var(--color-primary)]"
+                    class="font-['Archivo'] font-black text-[color:var(--ss-color-primary)]"
                   >
                     ↓
                   </span>
@@ -577,7 +581,7 @@ const consultantPhone = engagement?.consultant_phone ?? null
                     nextTouchpointLabel={engagement?.next_touchpoint_label ?? null}
                     phone={engagement?.consultant_phone ?? null}
                   />
-                  <p class="text-caption text-[color:var(--color-text-muted)] px-1">
+                  <p class="text-caption text-[color:var(--ss-color-text-muted)] px-1">
                     Questions? Reach us using the contacts in the header.
                   </p>
                 </>

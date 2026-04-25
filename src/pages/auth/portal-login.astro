@@ -46,14 +46,14 @@ const message = status ? statusMessages[status] : error ? statusMessages[error] 
     />
     <title>Sign In — SMD Services Portal</title>
   </head>
-  <body class="min-h-screen bg-[color:var(--color-background)]">
+  <body class="min-h-screen bg-[color:var(--ss-color-background)]">
     <SkipToMain />
     <header
       role="banner"
-      class="sticky top-0 z-50 h-14 md:h-16 bg-white border-b border-[color:var(--color-border)]"
+      class="sticky top-0 z-50 h-14 md:h-16 bg-white border-b border-[color:var(--ss-color-border)]"
     >
       <div class="max-w-md mx-auto h-full flex items-center justify-center px-4">
-        <span class="text-lg font-bold tracking-tight text-[color:var(--color-text-primary)]"
+        <span class="text-lg font-bold tracking-tight text-[color:var(--ss-color-text-primary)]"
           >SMD Services</span
         >
       </div>
@@ -66,14 +66,16 @@ const message = status ? statusMessages[status] : error ? statusMessages[error] 
     >
       <div class="w-full max-w-sm">
         <div class="text-center mb-8">
-          <p class="text-sm text-[color:var(--color-text-secondary)]">Client portal sign-in</p>
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)]">Client portal sign-in</p>
         </div>
 
         <div
-          class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-6"
+          class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-6"
         >
-          <h2 class="text-lg font-semibold text-[color:var(--color-text-primary)] mb-2">Sign in</h2>
-          <p class="text-sm text-[color:var(--color-text-secondary)] mb-6">
+          <h2 class="text-lg font-semibold text-[color:var(--ss-color-text-primary)] mb-2">
+            Sign in
+          </h2>
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)] mb-6">
             Enter your email and we'll send you a link to sign in.
           </p>
 
@@ -83,8 +85,8 @@ const message = status ? statusMessages[status] : error ? statusMessages[error] 
                 class:list={[
                   'mb-4 px-3 py-2 border rounded text-sm',
                   message.type === 'success'
-                    ? 'bg-[color:var(--color-complete)]/5 border-[color:var(--color-complete)]/30 text-[color:var(--color-complete)]'
-                    : 'bg-[color:var(--color-error)]/5 border-[color:var(--color-error)]/30 text-[color:var(--color-error)]',
+                    ? 'bg-[color:var(--ss-color-complete)]/5 border-[color:var(--ss-color-complete)]/30 text-[color:var(--ss-color-complete)]'
+                    : 'bg-[color:var(--ss-color-error)]/5 border-[color:var(--ss-color-error)]/30 text-[color:var(--ss-color-error)]',
                 ]}
               >
                 {message.text}
@@ -96,7 +98,7 @@ const message = status ? statusMessages[status] : error ? statusMessages[error] 
             <div>
               <label
                 for="email"
-                class="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1"
+                class="block text-sm font-medium text-[color:var(--ss-color-text-primary)] mb-1"
               >
                 Email
               </label>
@@ -107,7 +109,7 @@ const message = status ? statusMessages[status] : error ? statusMessages[error] 
                 required
                 autocomplete="email"
                 value={prefillEmail}
-                class="w-full px-3 py-2 border border-[color:var(--color-border)] rounded-[var(--radius-card)] text-sm
+                class="w-full px-3 py-2 border border-[color:var(--ss-color-border)] rounded-[var(--ss-radius-card)] text-sm
                      focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary
                      placeholder-slate-400"
                 placeholder="your@email.com"
@@ -116,7 +118,7 @@ const message = status ? statusMessages[status] : error ? statusMessages[error] 
 
             <button
               type="submit"
-              class="w-full bg-primary text-white py-2 px-4 rounded-[var(--radius-card)] text-sm font-medium
+              class="w-full bg-primary text-white py-2 px-4 rounded-[var(--ss-radius-card)] text-sm font-medium
                    hover:bg-primary-hover transition-colors focus:outline-none focus:ring-2
                    focus:ring-primary focus:ring-offset-2"
             >

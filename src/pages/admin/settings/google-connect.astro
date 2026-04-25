@@ -51,13 +51,13 @@ const errorMessages: Record<string, string> = {
     { label: 'Google Calendar' },
   ]}
 >
-  <h2 class="text-xl font-semibold text-[color:var(--color-text-primary)] mb-6">
+  <h2 class="text-xl font-semibold text-[color:var(--ss-color-text-primary)] mb-6">
     Google Calendar Integration
   </h2>
 
   {
     successParam === 'connected' && (
-      <div class="mb-6 p-stack bg-green-50 border border-green-200 rounded-[var(--radius-card)]">
+      <div class="mb-6 p-stack bg-green-50 border border-green-200 rounded-[var(--ss-radius-card)]">
         <p class="text-sm text-green-800">Google Calendar connected successfully.</p>
       </div>
     )
@@ -65,7 +65,7 @@ const errorMessages: Record<string, string> = {
 
   {
     successParam === 'disconnected' && (
-      <div class="mb-6 p-stack bg-blue-50 border border-blue-200 rounded-[var(--radius-card)]">
+      <div class="mb-6 p-stack bg-blue-50 border border-blue-200 rounded-[var(--ss-radius-card)]">
         <p class="text-sm text-blue-800">Google Calendar disconnected.</p>
       </div>
     )
@@ -73,7 +73,7 @@ const errorMessages: Record<string, string> = {
 
   {
     errorParam && (
-      <div class="mb-6 p-stack bg-red-50 border border-red-200 rounded-[var(--radius-card)]">
+      <div class="mb-6 p-stack bg-red-50 border border-red-200 rounded-[var(--ss-radius-card)]">
         <p class="text-sm text-red-800">
           {errorMessages[errorParam] ?? `Something went wrong (${errorParam}). Please try again.`}
         </p>
@@ -82,41 +82,41 @@ const errorMessages: Record<string, string> = {
   }
 
   <div
-    class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+    class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card"
   >
     {
       isConnected ? (
         <div>
           <div class="flex items-center gap-row mb-4">
             <div class="w-3 h-3 rounded-full bg-green-500" />
-            <span class="text-sm font-medium text-[color:var(--color-text-primary)]">
+            <span class="text-sm font-medium text-[color:var(--ss-color-text-primary)]">
               Connected
             </span>
           </div>
           <dl class="grid grid-cols-1 gap-row text-sm mb-6">
             <div>
-              <dt class="text-[color:var(--color-text-secondary)]">Account</dt>
-              <dd class="text-[color:var(--color-text-primary)] font-medium">
+              <dt class="text-[color:var(--ss-color-text-secondary)]">Account</dt>
+              <dd class="text-[color:var(--ss-color-text-primary)] font-medium">
                 {integration.account_email}
               </dd>
             </div>
             <div>
-              <dt class="text-[color:var(--color-text-secondary)]">Calendar</dt>
-              <dd class="text-[color:var(--color-text-primary)]">{integration.calendar_id}</dd>
+              <dt class="text-[color:var(--ss-color-text-secondary)]">Calendar</dt>
+              <dd class="text-[color:var(--ss-color-text-primary)]">{integration.calendar_id}</dd>
             </div>
             <div>
-              <dt class="text-[color:var(--color-text-secondary)]">Status</dt>
-              <dd class="text-[color:var(--color-text-primary)]">{integration.status}</dd>
+              <dt class="text-[color:var(--ss-color-text-secondary)]">Status</dt>
+              <dd class="text-[color:var(--ss-color-text-primary)]">{integration.status}</dd>
             </div>
             <div>
-              <dt class="text-[color:var(--color-text-secondary)]">Connected</dt>
-              <dd class="text-[color:var(--color-text-primary)]">
+              <dt class="text-[color:var(--ss-color-text-secondary)]">Connected</dt>
+              <dd class="text-[color:var(--ss-color-text-primary)]">
                 {new Date(integration.created_at).toLocaleDateString()}
               </dd>
             </div>
             {integration.last_error && (
               <div>
-                <dt class="text-[color:var(--color-text-secondary)]">Last error</dt>
+                <dt class="text-[color:var(--ss-color-text-secondary)]">Last error</dt>
                 <dd class="text-red-600">{integration.last_error}</dd>
               </div>
             )}
@@ -125,7 +125,7 @@ const errorMessages: Record<string, string> = {
             <input type="hidden" name="action" value="disconnect" />
             <button
               type="submit"
-              class="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-[var(--radius-card)] hover:bg-red-100 transition-colors"
+              class="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-[var(--ss-radius-card)] hover:bg-red-100 transition-colors"
               onclick="return confirm('Disconnect Google Calendar? Existing booked events will not be affected.')"
             >
               Disconnect
@@ -136,17 +136,17 @@ const errorMessages: Record<string, string> = {
         <div>
           <div class="flex items-center gap-row mb-4">
             <div class="w-3 h-3 rounded-full bg-slate-300" />
-            <span class="text-sm font-medium text-[color:var(--color-text-primary)]">
+            <span class="text-sm font-medium text-[color:var(--ss-color-text-primary)]">
               Not connected
             </span>
           </div>
-          <p class="text-sm text-[color:var(--color-text-secondary)] mb-6">
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)] mb-6">
             Connect your Google Calendar to automatically create events when assessments are booked
             and check availability in real time.
           </p>
           <a
             href="/api/auth/google/connect"
-            class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary rounded-[var(--radius-card)] hover:bg-primary/90 transition-colors"
+            class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary rounded-[var(--ss-radius-card)] hover:bg-primary/90 transition-colors"
           >
             Connect Google Calendar
           </a>

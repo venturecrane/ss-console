@@ -50,25 +50,27 @@ const dashboardStates = [
       rel="stylesheet"
     />
   </head>
-  <body class="min-h-screen bg-[color:var(--color-background)]">
+  <body class="min-h-screen bg-[color:var(--ss-color-background)]">
     <main class="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-10">
       <header>
-        <p class="text-[12px] font-bold tracking-[0.1em] uppercase text-[color:var(--color-meta)]">
+        <p
+          class="text-[12px] font-bold tracking-[0.1em] uppercase text-[color:var(--ss-color-meta)]"
+        >
           Dev harness
         </p>
         <h1
-          class="mt-3 font-['Archivo'] font-extrabold text-[32px] leading-[36px] tracking-[-0.02em] text-[color:var(--color-text-primary)]"
+          class="mt-3 font-['Archivo'] font-extrabold text-[32px] leading-[36px] tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
         >
           Portal error and edge states
         </h1>
-        <p class="mt-3 text-[15px] leading-[22px] text-[color:var(--color-text-secondary)]">
+        <p class="mt-3 text-[15px] leading-[22px] text-[color:var(--ss-color-text-secondary)]">
           Replace <code>:id</code> with a real invoice or quote ID from your local D1.
         </p>
       </header>
 
       <section>
         <h2
-          class="font-['Archivo'] font-bold text-[20px] leading-[26px] text-[color:var(--color-text-primary)] mb-4"
+          class="font-['Archivo'] font-bold text-[20px] leading-[26px] text-[color:var(--ss-color-text-primary)] mb-4"
         >
           Dashboard
         </h2>
@@ -78,7 +80,7 @@ const dashboardStates = [
               <li>
                 <a
                   href={s.path}
-                  class="text-[color:var(--color-primary)] hover:text-[color:var(--color-primary-hover)] text-sm"
+                  class="text-[color:var(--ss-color-primary)] hover:text-[color:var(--ss-color-primary-hover)] text-sm"
                 >
                   {s.label} — <code>{s.path}</code>
                 </a>
@@ -90,15 +92,17 @@ const dashboardStates = [
 
       <section>
         <h2
-          class="font-['Archivo'] font-bold text-[20px] leading-[26px] text-[color:var(--color-text-primary)] mb-4"
+          class="font-['Archivo'] font-bold text-[20px] leading-[26px] text-[color:var(--ss-color-text-primary)] mb-4"
         >
           Invoice
         </h2>
         <ul class="space-y-2">
           {
             invoiceStates.map((s) => (
-              <li class="text-sm text-[color:var(--color-text-secondary)]">
-                <span class="font-semibold text-[color:var(--color-text-primary)]">{s.label}</span>
+              <li class="text-sm text-[color:var(--ss-color-text-secondary)]">
+                <span class="font-semibold text-[color:var(--ss-color-text-primary)]">
+                  {s.label}
+                </span>
                 {s.query && <code class="ml-2">/portal/invoices/:id{s.query}</code>}
               </li>
             ))
@@ -108,15 +112,17 @@ const dashboardStates = [
 
       <section>
         <h2
-          class="font-['Archivo'] font-bold text-[20px] leading-[26px] text-[color:var(--color-text-primary)] mb-4"
+          class="font-['Archivo'] font-bold text-[20px] leading-[26px] text-[color:var(--ss-color-text-primary)] mb-4"
         >
           Proposal
         </h2>
         <ul class="space-y-2">
           {
             proposalStates.map((s) => (
-              <li class="text-sm text-[color:var(--color-text-secondary)]">
-                <span class="font-semibold text-[color:var(--color-text-primary)]">{s.label}</span>
+              <li class="text-sm text-[color:var(--ss-color-text-secondary)]">
+                <span class="font-semibold text-[color:var(--ss-color-text-primary)]">
+                  {s.label}
+                </span>
                 {s.query && <code class="ml-2">/portal/quotes/:id{s.query}</code>}
               </li>
             ))

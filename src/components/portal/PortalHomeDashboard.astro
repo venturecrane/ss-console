@@ -73,21 +73,21 @@ const contextHeadline = consultant ? 'Engagement in flight.' : 'Welcome.'
       /* ------------------------------------------------------------------ */
       <div class="flex flex-col gap-card">
         <section
-          class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-attention)]/30 p-card sm:p-section"
+          class="bg-[color:var(--ss-color-surface)] rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-attention)]/30 p-card sm:p-section"
           aria-live="polite"
         >
           <div class="flex items-start gap-row">
             <span
-              class="material-symbols-outlined text-[24px] text-[color:var(--color-attention)] mt-0.5"
+              class="material-symbols-outlined text-[24px] text-[color:var(--ss-color-attention)] mt-0.5"
               aria-hidden="true"
             >
               error
             </span>
             <div class="min-w-0">
-              <h1 class="text-title text-[color:var(--color-text-primary)]">
+              <h1 class="text-title text-[color:var(--ss-color-text-primary)]">
                 Something went wrong loading your portal.
               </h1>
-              <p class="mt-2 text-body text-[color:var(--color-text-secondary)]">
+              <p class="mt-2 text-body text-[color:var(--ss-color-text-secondary)]">
                 {consultantFirst
                   ? `Give it a moment and try again. If it keeps happening, ${consultantFirst} can help.`
                   : 'Give it a moment and try again.'}
@@ -95,7 +95,7 @@ const contextHeadline = consultant ? 'Engagement in flight.' : 'Welcome.'
               <div class="mt-5 flex flex-wrap gap-row">
                 <a
                   href="/portal"
-                  class="inline-flex items-center justify-center min-h-[44px] px-5 py-2.5 rounded-[var(--radius-button)] bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white text-body font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                  class="inline-flex items-center justify-center min-h-[44px] px-5 py-2.5 rounded-[var(--ss-radius-button)] bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] text-white text-body font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2"
                 >
                   Retry
                 </a>
@@ -122,7 +122,7 @@ const contextHeadline = consultant ? 'Engagement in flight.' : 'Welcome.'
         {/* Visually hidden H1 gives screen readers a page landmark.
             Sighted users see "Engagement in flight." / "Welcome." as the
             page-level context before the action content. */}
-        <h1 class="text-title text-[color:var(--color-text-primary)] mb-section">
+        <h1 class="text-title text-[color:var(--ss-color-text-primary)] mb-section">
           {contextHeadline}
         </h1>
 
@@ -146,26 +146,28 @@ const contextHeadline = consultant ? 'Engagement in flight.' : 'Welcome.'
               />
             ) : touchpointText ? (
               <section
-                class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card sm:p-section"
+                class="bg-[color:var(--ss-color-surface)] rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card sm:p-section"
                 aria-label="Next check-in"
               >
-                <p class="text-label uppercase text-[color:var(--color-primary)]">Next check-in</p>
-                <p class="mt-3 text-display text-[color:var(--color-text-primary)]">
+                <p class="text-label uppercase text-[color:var(--ss-color-primary)]">
+                  Next check-in
+                </p>
+                <p class="mt-3 text-display text-[color:var(--ss-color-text-primary)]">
                   {touchpointText}
                 </p>
                 {consultantFirst && (
-                  <p class="mt-2 text-caption text-[color:var(--color-text-muted)]">
+                  <p class="mt-2 text-caption text-[color:var(--ss-color-text-muted)]">
                     with {consultantFirst}
                   </p>
                 )}
               </section>
             ) : (
               <section
-                class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card sm:p-section"
+                class="bg-[color:var(--ss-color-surface)] rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card sm:p-section"
                 aria-label="Engagement status"
               >
-                <p class="text-label uppercase text-[color:var(--color-primary)]">In flight</p>
-                <p class="mt-3 text-body text-[color:var(--color-text-secondary)]">
+                <p class="text-label uppercase text-[color:var(--ss-color-primary)]">In flight</p>
+                <p class="mt-3 text-body text-[color:var(--ss-color-text-secondary)]">
                   Nothing needs your attention right now.
                 </p>
               </section>
@@ -185,10 +187,10 @@ const contextHeadline = consultant ? 'Engagement in flight.' : 'Welcome.'
 
           {/* Main column: Recent activity timeline. */}
           <section
-            class="flex-1 min-w-0 md:order-1 mt-section md:mt-0 pt-section md:pt-0 border-t md:border-t-0 border-[color:var(--color-border)]"
+            class="flex-1 min-w-0 md:order-1 mt-section md:mt-0 pt-section md:pt-0 border-t md:border-t-0 border-[color:var(--ss-color-border)]"
             aria-labelledby="timeline-heading"
           >
-            <h2 id="timeline-heading" class="text-title text-[color:var(--color-text-primary)]">
+            <h2 id="timeline-heading" class="text-title text-[color:var(--ss-color-text-primary)]">
               Recent activity
             </h2>
             {timelineEntries.length > 0 ? (
@@ -204,7 +206,7 @@ const contextHeadline = consultant ? 'Engagement in flight.' : 'Welcome.'
                 ))}
               </div>
             ) : (
-              <p class="mt-stack text-body text-[color:var(--color-text-secondary)]">
+              <p class="mt-stack text-body text-[color:var(--ss-color-text-secondary)]">
                 Nothing here yet. First entry lands after your next touchpoint.
               </p>
             )}

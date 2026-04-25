@@ -13,37 +13,37 @@
  */
 
 const STRUCTURE =
-  'inline-flex items-center px-2 py-1 rounded-[var(--radius-badge)] ' +
-  'font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold whitespace-nowrap'
+  'inline-flex items-center px-2 py-1 rounded-[var(--ss-radius-badge)] ' +
+  'font-mono text-label uppercase tracking-[var(--ss-text-letter-spacing-label)] font-semibold whitespace-nowrap'
 
 const TONE: Record<string, string> = {
   // Engagement lifecycle
-  scheduled: 'bg-[color:var(--color-primary)] text-white',
-  active: 'bg-[color:var(--color-complete)] text-white',
-  completed: 'bg-[color:var(--color-complete)] text-white',
-  handoff: 'bg-[color:var(--color-primary)] text-white',
-  safety_net: 'bg-[color:var(--color-attention)] text-white',
-  cancelled: 'bg-[color:var(--color-border)] text-[color:var(--color-text-secondary)]',
+  scheduled: 'bg-[color:var(--ss-color-primary)] text-white',
+  active: 'bg-[color:var(--ss-color-complete)] text-white',
+  completed: 'bg-[color:var(--ss-color-complete)] text-white',
+  handoff: 'bg-[color:var(--ss-color-primary)] text-white',
+  safety_net: 'bg-[color:var(--ss-color-attention)] text-white',
+  cancelled: 'bg-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-secondary)]',
 
   // Lead lifecycle
-  disqualified: 'bg-[color:var(--color-error)] text-white',
-  converted: 'bg-[color:var(--color-complete)] text-white',
+  disqualified: 'bg-[color:var(--ss-color-error)] text-white',
+  converted: 'bg-[color:var(--ss-color-complete)] text-white',
 
   // Quote lifecycle
-  draft: 'bg-[color:var(--color-border)] text-[color:var(--color-text-secondary)]',
-  sent: 'bg-[color:var(--color-primary)] text-white',
-  accepted: 'bg-[color:var(--color-complete)] text-white',
-  declined: 'bg-[color:var(--color-error)] text-white',
-  expired: 'bg-[color:var(--color-attention)] text-white',
-  superseded: 'bg-[color:var(--color-border)] text-[color:var(--color-text-secondary)]',
+  draft: 'bg-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-secondary)]',
+  sent: 'bg-[color:var(--ss-color-primary)] text-white',
+  accepted: 'bg-[color:var(--ss-color-complete)] text-white',
+  declined: 'bg-[color:var(--ss-color-error)] text-white',
+  expired: 'bg-[color:var(--ss-color-attention)] text-white',
+  superseded: 'bg-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-secondary)]',
 
   // Invoice lifecycle
-  paid: 'bg-[color:var(--color-complete)] text-white',
-  overdue: 'bg-[color:var(--color-error)] text-white',
-  void: 'bg-[color:var(--color-border)] text-[color:var(--color-text-secondary)]',
+  paid: 'bg-[color:var(--ss-color-complete)] text-white',
+  overdue: 'bg-[color:var(--ss-color-error)] text-white',
+  void: 'bg-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-secondary)]',
 }
 
-const FALLBACK = 'bg-[color:var(--color-border)] text-[color:var(--color-text-secondary)]'
+const FALLBACK = 'bg-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-secondary)]'
 
 export function statusBadgeClass(status: string): string {
   return `${STRUCTURE} ${TONE[status] ?? FALLBACK}`

@@ -36,7 +36,7 @@ describe('portal list pages: unified scaffolding (R7 registry)', () => {
         // Ticket chrome replaces the previous soft-card space-y-row stack.
         // The ink-bordered wrapper is the structural contract: rows stitch
         // together with their own 2px dividers inside.
-        expect(source()).toMatch(/border-\[3px\] border-\[color:var\(--color-text-primary\)\]/)
+        expect(source()).toMatch(/border-\[3px\] border-\[color:var\(--ss-color-text-primary\)\]/)
       })
 
       it('imports PortalListItem primitive', () => {

@@ -35,7 +35,7 @@ if (import.meta.env.PROD) {
     />
     <title>Portal component gallery — dev</title>
   </head>
-  <body class="min-h-screen bg-[color:var(--color-background)]">
+  <body class="min-h-screen bg-[color:var(--ss-color-background)]">
     <PortalHeader
       clientName="Delgado Plumbing"
       consultantPhone="+14805550100"
@@ -43,13 +43,15 @@ if (import.meta.env.PROD) {
       consultantFirstName="Scott"
     >
       <form method="POST" action="/api/auth/logout">
-        <button type="submit" class="text-sm text-[color:var(--color-text-muted)]">Sign out</button>
+        <button type="submit" class="text-sm text-[color:var(--ss-color-text-muted)]"
+          >Sign out</button
+        >
       </form>
     </PortalHeader>
 
     <main class="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-10">
       <section>
-        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+        <h2 class="text-lg font-bold text-[color:var(--ss-color-text-primary)] mb-4">
           ActionCard — invoice
         </h2>
         <ActionCard
@@ -63,7 +65,7 @@ if (import.meta.env.PROD) {
       </section>
 
       <section>
-        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+        <h2 class="text-lg font-bold text-[color:var(--ss-color-text-primary)] mb-4">
           ConsultantBlock
         </h2>
         <ConsultantBlock
@@ -76,9 +78,9 @@ if (import.meta.env.PROD) {
       </section>
 
       <section>
-        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">Timeline</h2>
+        <h2 class="text-lg font-bold text-[color:var(--ss-color-text-primary)] mb-4">Timeline</h2>
         <div
-          class="space-y-6 bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-lg p-6"
+          class="space-y-6 bg-[color:var(--ss-color-surface)] border border-[color:var(--ss-color-border)] rounded-lg p-6"
         >
           <TimelineEntry
             date="Apr 9"
@@ -96,7 +98,9 @@ if (import.meta.env.PROD) {
       </section>
 
       <section>
-        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">ArtifactChip</h2>
+        <h2 class="text-lg font-bold text-[color:var(--ss-color-text-primary)] mb-4">
+          ArtifactChip
+        </h2>
         <div class="flex gap-3">
           <ArtifactChip icon="description" label="scope_of_work.pdf" href="#" />
           <ArtifactChip icon="receipt_long" label="invoice_1023.pdf" href="#" />
@@ -104,9 +108,11 @@ if (import.meta.env.PROD) {
       </section>
 
       <section>
-        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">MoneyDisplay</h2>
+        <h2 class="text-lg font-bold text-[color:var(--ss-color-text-primary)] mb-4">
+          MoneyDisplay
+        </h2>
         <div
-          class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-lg p-6 space-y-4"
+          class="bg-[color:var(--ss-color-surface)] border border-[color:var(--ss-color-border)] rounded-lg p-6 space-y-4"
         >
           <div><MoneyDisplay amountCents={425000} size="display" /></div>
           <div><MoneyDisplay amountCents={425000} size="h2" /></div>
@@ -115,11 +121,11 @@ if (import.meta.env.PROD) {
       </section>
 
       <section>
-        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+        <h2 class="text-lg font-bold text-[color:var(--ss-color-text-primary)] mb-4">
           StatusPill — all tones
         </h2>
         <div
-          class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-lg p-6 flex flex-wrap gap-3"
+          class="bg-[color:var(--ss-color-surface)] border border-[color:var(--ss-color-border)] rounded-lg p-6 flex flex-wrap gap-3"
         >
           <StatusPill tone="info" label="Pending Review" />
           <StatusPill tone="success" label="Paid" />
@@ -131,7 +137,7 @@ if (import.meta.env.PROD) {
       </section>
 
       <section>
-        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+        <h2 class="text-lg font-bold text-[color:var(--ss-color-text-primary)] mb-4">
           PortalListItem — status variant (proposals)
         </h2>
         <div class="space-y-row">
@@ -167,7 +173,7 @@ if (import.meta.env.PROD) {
       </section>
 
       <section>
-        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+        <h2 class="text-lg font-bold text-[color:var(--ss-color-text-primary)] mb-4">
           PortalListItem — status variant (invoices)
         </h2>
         <div class="space-y-row">
@@ -203,7 +209,7 @@ if (import.meta.env.PROD) {
       </section>
 
       <section>
-        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+        <h2 class="text-lg font-bold text-[color:var(--ss-color-text-primary)] mb-4">
           PortalListItem — document variant
         </h2>
         <div class="space-y-row">
@@ -234,25 +240,25 @@ if (import.meta.env.PROD) {
         </div>
       </section>
 
-      <hr class="border-[color:var(--color-text-primary)] border-t-[3px] my-12" />
+      <hr class="border-[color:var(--ss-color-text-primary)] border-t-[3px] my-12" />
 
       <section class="space-y-4">
         <p
-          class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-primary)]"
+          class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-primary)]"
         >
           Plainspoken additions — PR A
         </p>
-        <p class="text-sm text-[color:var(--color-text-secondary)]">
+        <p class="text-sm text-[color:var(--ss-color-text-secondary)]">
           Everything below renders the new Plainspoken variants. Page consumers stay on `card` /
           `default` until PR B flips them, so live portal routes still show the legacy chrome.
         </p>
       </section>
 
       <section>
-        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+        <h2 class="text-lg font-bold text-[color:var(--ss-color-text-primary)] mb-4">
           PortalPageHead
         </h2>
-        <div class="border-[3px] border-[color:var(--color-text-primary)] px-5 md:px-8">
+        <div class="border-[3px] border-[color:var(--ss-color-text-primary)] px-5 md:px-8">
           <PortalPageHead
             crumbHref="#"
             crumbLabel="Home"
@@ -261,7 +267,7 @@ if (import.meta.env.PROD) {
             meta={'4 total\n1 open · 3 closed'}
           />
         </div>
-        <div class="mt-4 border-[3px] border-[color:var(--color-text-primary)] px-5 md:px-8">
+        <div class="mt-4 border-[3px] border-[color:var(--ss-color-text-primary)] px-5 md:px-8">
           <PortalPageHead
             crumbHref="#"
             crumbLabel="All proposals · № 03"
@@ -273,34 +279,34 @@ if (import.meta.env.PROD) {
       </section>
 
       <section>
-        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+        <h2 class="text-lg font-bold text-[color:var(--ss-color-text-primary)] mb-4">
           MoneyDisplay — Plainspoken sizes
         </h2>
-        <div class="border-[3px] border-[color:var(--color-text-primary)] p-6 space-y-5">
+        <div class="border-[3px] border-[color:var(--ss-color-text-primary)] p-6 space-y-5">
           <div class="flex items-baseline gap-6">
             <span
-              class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)] w-16"
+              class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)] w-16"
               >hero</span
             >
             <MoneyDisplay amountCents={525000} size="hero" />
           </div>
           <div class="flex items-baseline gap-6">
             <span
-              class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)] w-16"
+              class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)] w-16"
               >kpi</span
             >
             <MoneyDisplay amountCents={262500} size="kpi" />
           </div>
           <div class="flex items-baseline gap-6">
             <span
-              class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)] w-16"
+              class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)] w-16"
               >total</span
             >
             <MoneyDisplay amountCents={525000} size="total" />
           </div>
           <div class="flex items-baseline gap-6">
             <span
-              class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)] w-16"
+              class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)] w-16"
               >row</span
             >
             <MoneyDisplay amountCents={262500} size="row" />
@@ -309,10 +315,12 @@ if (import.meta.env.PROD) {
       </section>
 
       <section>
-        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+        <h2 class="text-lg font-bold text-[color:var(--ss-color-text-primary)] mb-4">
           StatusPill — outline tone (new)
         </h2>
-        <div class="border-[3px] border-[color:var(--color-text-primary)] p-6 flex flex-wrap gap-3">
+        <div
+          class="border-[3px] border-[color:var(--ss-color-text-primary)] p-6 flex flex-wrap gap-3"
+        >
           <StatusPill tone="outline" label="ARCHIVED" />
           <StatusPill tone="outline" label="EXPIRED" />
           <StatusPill tone="outline" label="COMPLETED" size="base" />
@@ -320,10 +328,10 @@ if (import.meta.env.PROD) {
       </section>
 
       <section>
-        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+        <h2 class="text-lg font-bold text-[color:var(--ss-color-text-primary)] mb-4">
           PortalListItem — ticket chrome · status (proposals)
         </h2>
-        <div class="border-[3px] border-[color:var(--color-text-primary)]">
+        <div class="border-[3px] border-[color:var(--ss-color-text-primary)]">
           <PortalListItem
             chrome="ticket"
             variant="status"
@@ -370,10 +378,10 @@ if (import.meta.env.PROD) {
       </section>
 
       <section>
-        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+        <h2 class="text-lg font-bold text-[color:var(--ss-color-text-primary)] mb-4">
           PortalListItem — ticket chrome · status (invoices)
         </h2>
-        <div class="border-[3px] border-[color:var(--color-text-primary)]">
+        <div class="border-[3px] border-[color:var(--ss-color-text-primary)]">
           <PortalListItem
             chrome="ticket"
             variant="status"
@@ -406,10 +414,10 @@ if (import.meta.env.PROD) {
       </section>
 
       <section>
-        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+        <h2 class="text-lg font-bold text-[color:var(--ss-color-text-primary)] mb-4">
           PortalListItem — ticket chrome · document
         </h2>
-        <div class="border-[3px] border-[color:var(--color-text-primary)]">
+        <div class="border-[3px] border-[color:var(--ss-color-text-primary)]">
           <PortalListItem
             chrome="ticket"
             variant="document"
@@ -453,13 +461,13 @@ if (import.meta.env.PROD) {
       </section>
 
       <section>
-        <h2 class="text-lg font-bold text-[color:var(--color-text-primary)] mb-4">
+        <h2 class="text-lg font-bold text-[color:var(--ss-color-text-primary)] mb-4">
           ConsultantBlock — trade-card variant · data-state matrix
         </h2>
         <div class="grid gap-6 md:grid-cols-2">
           <div>
             <p
-              class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)] mb-2"
+              class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)] mb-2"
             >
               A. phone + photo
             </p>
@@ -474,7 +482,7 @@ if (import.meta.env.PROD) {
           </div>
           <div>
             <p
-              class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)] mb-2"
+              class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)] mb-2"
             >
               B. phone + no photo
             </p>
@@ -489,7 +497,7 @@ if (import.meta.env.PROD) {
           </div>
           <div>
             <p
-              class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)] mb-2"
+              class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)] mb-2"
             >
               C. no phone + email
             </p>
@@ -505,7 +513,7 @@ if (import.meta.env.PROD) {
           </div>
           <div>
             <p
-              class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)] mb-2"
+              class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)] mb-2"
             >
               D. neither — contact row hidden
             </p>

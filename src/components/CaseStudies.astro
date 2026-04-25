@@ -40,20 +40,20 @@ const studies = [
 ---
 
 <section
-  class="bg-[color:var(--color-background)] px-6 py-24 border-t-[3px] border-[color:var(--color-text-primary)]"
+  class="bg-[color:var(--ss-color-background)] px-6 py-24 border-t-[3px] border-[color:var(--ss-color-text-primary)]"
 >
   <div class="mx-auto max-w-5xl">
     <div class="mb-4">
       <span
-        class="inline-block bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] font-['JetBrains_Mono'] text-xs font-semibold uppercase tracking-[0.14em] px-2 py-1 mb-4"
+        class="inline-block bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] font-['JetBrains_Mono'] text-xs font-semibold uppercase tracking-[0.14em] px-2 py-1 mb-4"
         >§ 06</span
       >
       <h2
-        class="font-['Archivo'] text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--color-text-primary)]"
+        class="font-['Archivo'] text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
       >
         The Kind of Work We Take On
       </h2>
-      <p class="mt-6 max-w-2xl font-['Archivo'] text-[color:var(--color-text-secondary)]">
+      <p class="mt-6 max-w-2xl font-['Archivo'] text-[color:var(--ss-color-text-secondary)]">
         Different businesses, similar patterns. These are the shapes we see, not specific
         engagements.
       </p>
@@ -62,10 +62,10 @@ const studies = [
     <div class="mt-16 space-y-12">
       {
         studies.map((study) => (
-          <div class="border-[3px] border-[color:var(--color-text-primary)]">
-            <div class="border-b-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-surface-inverse)] px-8 py-5 text-white">
+          <div class="border-[3px] border-[color:var(--ss-color-text-primary)]">
+            <div class="border-b-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-surface-inverse)] px-8 py-5 text-white">
               <div class="flex flex-wrap items-center gap-4">
-                <span class="inline-block bg-[color:var(--color-primary)] px-3 py-1 font-['Archivo_Narrow'] text-xs font-bold uppercase tracking-[0.12em] text-white">
+                <span class="inline-block bg-[color:var(--ss-color-primary)] px-3 py-1 font-['Archivo_Narrow'] text-xs font-bold uppercase tracking-[0.12em] text-white">
                   {study.vertical}
                 </span>
                 <h3 class="font-['Archivo'] text-lg font-bold uppercase tracking-[-0.01em]">
@@ -74,26 +74,26 @@ const studies = [
               </div>
               <div class="mt-4 flex flex-wrap gap-2">
                 {study.problems.map((problem) => (
-                  <span class="font-['JetBrains_Mono'] text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)] border border-[color:rgba(245,240,227,0.24)] px-2 py-1">
+                  <span class="font-['JetBrains_Mono'] text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--ss-color-text-muted)] border border-[color:rgba(245,240,227,0.24)] px-2 py-1">
                     {problem}
                   </span>
                 ))}
               </div>
             </div>
             <div class="grid gap-0 md:grid-cols-2">
-              <div class="border-b-[3px] border-[color:var(--color-text-primary)] px-8 py-8 md:border-b-0 md:border-r-[3px]">
-                <p class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--color-text-muted)]">
+              <div class="border-b-[3px] border-[color:var(--ss-color-text-primary)] px-8 py-8 md:border-b-0 md:border-r-[3px]">
+                <p class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--ss-color-text-muted)]">
                   The situation
                 </p>
-                <p class="mt-4 font-['Archivo'] leading-relaxed text-[color:var(--color-text-primary)]">
+                <p class="mt-4 font-['Archivo'] leading-relaxed text-[color:var(--ss-color-text-primary)]">
                   {study.challenge}
                 </p>
               </div>
               <div class="px-8 py-8">
-                <p class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--color-primary)]">
+                <p class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--ss-color-primary)]">
                   The solution
                 </p>
-                <p class="mt-4 font-['Archivo'] leading-relaxed text-[color:var(--color-text-primary)]">
+                <p class="mt-4 font-['Archivo'] leading-relaxed text-[color:var(--ss-color-text-primary)]">
                   {study.solution}
                 </p>
               </div>

@@ -19,45 +19,47 @@ const segments = [
 ---
 
 <section
-  class="bg-[color:var(--color-background)] px-6 py-24 border-t-[3px] border-[color:var(--color-text-primary)]"
+  class="bg-[color:var(--ss-color-background)] px-6 py-24 border-t-[3px] border-[color:var(--ss-color-text-primary)]"
 >
   <div class="mx-auto max-w-5xl">
     <div class="mb-16">
       <span
-        class="inline-block bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] font-['JetBrains_Mono'] text-xs font-semibold uppercase tracking-[0.14em] px-2 py-1 mb-4"
+        class="inline-block bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] font-['JetBrains_Mono'] text-xs font-semibold uppercase tracking-[0.14em] px-2 py-1 mb-4"
         >§ 05</span
       >
       <h2
-        class="font-['Archivo'] text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--color-text-primary)]"
+        class="font-['Archivo'] text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
       >
         Who We Help
       </h2>
     </div>
     <div
-      class="grid grid-cols-1 gap-0 md:grid-cols-3 border-t-[3px] border-[color:var(--color-text-primary)]"
+      class="grid grid-cols-1 gap-0 md:grid-cols-3 border-t-[3px] border-[color:var(--ss-color-text-primary)]"
     >
       {
         segments.map((s, i) => (
           <div
             class:list={[
-              'p-8 bg-[color:var(--color-background)] border-b-[3px] border-[color:var(--color-text-primary)]',
-              i !== 2 && 'md:border-r-[3px] md:border-[color:var(--color-text-primary)]',
+              'p-8 bg-[color:var(--ss-color-background)] border-b-[3px] border-[color:var(--ss-color-text-primary)]',
+              i !== 2 && 'md:border-r-[3px] md:border-[color:var(--ss-color-text-primary)]',
             ]}
           >
-            <h3 class="font-['Archivo'] text-xl font-bold uppercase tracking-[-0.01em] text-[color:var(--color-text-primary)]">
+            <h3 class="font-['Archivo'] text-xl font-bold uppercase tracking-[-0.01em] text-[color:var(--ss-color-text-primary)]">
               {s.title}
             </h3>
             <div class="mt-6">
-              <p class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--color-text-secondary)]">
+              <p class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--ss-color-text-secondary)]">
                 Sound familiar?
               </p>
-              <p class="mt-2 font-['Archivo'] text-[color:var(--color-text-primary)]">{s.pain}</p>
+              <p class="mt-2 font-['Archivo'] text-[color:var(--ss-color-text-primary)]">
+                {s.pain}
+              </p>
             </div>
-            <div class="mt-6 pt-6 border-t border-[color:var(--color-border)]">
-              <p class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--color-primary)]">
+            <div class="mt-6 pt-6 border-t border-[color:var(--ss-color-border)]">
+              <p class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--ss-color-primary)]">
                 How we help
               </p>
-              <p class="mt-2 font-['Archivo'] text-[color:var(--color-text-primary)]">{s.fix}</p>
+              <p class="mt-2 font-['Archivo'] text-[color:var(--ss-color-text-primary)]">{s.fix}</p>
             </div>
           </div>
         ))

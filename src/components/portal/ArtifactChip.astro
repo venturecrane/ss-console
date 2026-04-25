@@ -20,7 +20,7 @@ const { icon, label, href } = Astro.props
 
 <a
   href={href}
-  class="inline-flex items-center gap-1.5 font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] underline decoration-[color:var(--color-border)] hover:decoration-[color:var(--color-text-primary)] underline-offset-4 decoration-1 transition-colors"
+  class="inline-flex items-center gap-1.5 font-mono text-label uppercase tracking-[var(--ss-text-letter-spacing-label)] font-semibold text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-text-primary)] underline decoration-[color:var(--ss-color-border)] hover:decoration-[color:var(--ss-color-text-primary)] underline-offset-4 decoration-1 transition-colors"
 >
   {icon && <span class="material-symbols-outlined text-[14px]">{icon}</span>}
   <span>{label}</span>

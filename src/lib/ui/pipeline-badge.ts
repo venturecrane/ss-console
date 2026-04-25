@@ -23,7 +23,8 @@ const TONE: Record<string, string> = {
   website_intake: 'bg-teal-100 text-teal-700',
 }
 
-const FALLBACK = 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
+const FALLBACK =
+  'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]'
 
 export function pipelineBadgeClass(pipeline: string): string {
   return `${STRUCTURE} ${TONE[pipeline] ?? FALLBACK}`

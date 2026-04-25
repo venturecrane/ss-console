@@ -1,12 +1,12 @@
 <section
-  class="bg-[color:var(--color-surface-inverse)] px-6 py-24 text-white border-t-[3px] border-[color:var(--color-text-primary)]"
+  class="bg-[color:var(--ss-color-surface-inverse)] px-6 py-24 text-white border-t-[3px] border-[color:var(--ss-color-text-primary)]"
 >
   <div class="mx-auto max-w-5xl">
     <div class="mb-16 text-center">
       <p
-        class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-primary)] flex items-center justify-center gap-3"
+        class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--ss-color-primary)] flex items-center justify-center gap-3"
       >
-        <span class="inline-block w-2 h-2 bg-[color:var(--color-primary)]"></span>
+        <span class="inline-block w-2 h-2 bg-[color:var(--ss-color-primary)]"></span>
         Pricing Model
       </p>
       <h2
@@ -15,14 +15,16 @@
         Scoped to Your Business
       </h2>
       <p
-        class="mx-auto mt-6 max-w-2xl font-['Archivo'] text-lg text-[color:var(--color-text-muted)]"
+        class="mx-auto mt-6 max-w-2xl font-['Archivo'] text-lg text-[color:var(--ss-color-text-muted)]"
       >
         Every business is different. We quote a fixed price after we understand yours. No hourly
         billing, no open-ended retainers, no surprises.
       </p>
     </div>
 
-    <div class="mb-16 grid gap-0 md:grid-cols-3 border-y-[3px] border-[color:var(--color-primary)]">
+    <div
+      class="mb-16 grid gap-0 md:grid-cols-3 border-y-[3px] border-[color:var(--ss-color-primary)]"
+    >
       {
         [
           {
@@ -44,27 +46,29 @@
           <div
             class:list={['p-8', i !== 2 && 'md:border-r md:border-[color:rgba(245,240,227,0.16)]']}
           >
-            <p class="font-['JetBrains_Mono'] text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--color-primary)]">
+            <p class="font-['JetBrains_Mono'] text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--ss-color-primary)]">
               {stage.label}
             </p>
             <h3 class="mt-3 font-['Archivo'] text-2xl font-bold uppercase tracking-[-0.01em]">
               {stage.title}
             </h3>
-            <p class="mt-3 font-['Archivo'] text-[color:var(--color-text-muted)]">{stage.body}</p>
+            <p class="mt-3 font-['Archivo'] text-[color:var(--ss-color-text-muted)]">
+              {stage.body}
+            </p>
           </div>
         ))
       }
     </div>
 
     <div
-      class="mx-auto max-w-lg bg-[color:var(--color-background)] p-10 text-left text-[color:var(--color-text-primary)] border-[3px] border-[color:var(--color-primary)]"
+      class="mx-auto max-w-lg bg-[color:var(--ss-color-background)] p-10 text-left text-[color:var(--ss-color-text-primary)] border-[3px] border-[color:var(--ss-color-primary)]"
     >
       <p
-        class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-primary)] text-center"
+        class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--ss-color-primary)] text-center"
       >
         How We Price
       </p>
-      <div class="my-6 h-[2px] bg-[color:var(--color-text-primary)]"></div>
+      <div class="my-6 h-[2px] bg-[color:var(--ss-color-text-primary)]"></div>
       <ul class="space-y-5">
         {
           [
@@ -74,20 +78,20 @@
             'No commitment until after the first conversation',
           ].map((item) => (
             <li class="flex items-start gap-4">
-              <span class="mt-2 inline-block w-3 h-3 shrink-0 bg-[color:var(--color-primary)]" />
+              <span class="mt-2 inline-block w-3 h-3 shrink-0 bg-[color:var(--ss-color-primary)]" />
               <span class="font-['Archivo'] leading-snug">{item}</span>
             </li>
           ))
         }
       </ul>
       <a
-        class="mt-10 block w-full bg-[color:var(--color-primary)] border-[3px] border-[color:var(--color-text-primary)] py-4 text-center font-['Archivo'] font-bold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[color:var(--color-primary-hover)]"
+        class="mt-10 block w-full bg-[color:var(--ss-color-primary)] border-[3px] border-[color:var(--ss-color-text-primary)] py-4 text-center font-['Archivo'] font-bold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[color:var(--ss-color-primary-hover)]"
         href="/book"
       >
         Book a Call
       </a>
       <p
-        class="mt-4 text-center font-['Archivo_Narrow'] text-xs uppercase tracking-[0.12em] text-[color:var(--color-text-secondary)]"
+        class="mt-4 text-center font-['Archivo_Narrow'] text-xs uppercase tracking-[0.12em] text-[color:var(--ss-color-text-secondary)]"
       >
         No commitment. Let's just talk about your business.
       </p>

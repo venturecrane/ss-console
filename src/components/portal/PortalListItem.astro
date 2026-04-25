@@ -9,7 +9,7 @@
  *                        per row). Default for back-compat.
  *   chrome='ticket'    — Plainspoken bill-of-lading row. Flat, borderless
  *                        at the row level — consumer wraps rows in an
- *                        outer `border-[3px] border-[color:var(--color-text-primary)]`
+ *                        outer `border-[3px] border-[color:var(--ss-color-text-primary)]`
  *                        container (the rows' `border-b-[2px]` dividers
  *                        do the stitching). Plainspoken vocabulary: №
  *                        cell (status) or file-ext thumb (document), Archivo
@@ -78,24 +78,24 @@ const chrome: Chrome = props.chrome ?? 'card'
 
 // Card-chrome wrapper (existing rendering, unchanged).
 const cardShell = [
-  'block bg-[color:var(--color-surface)]',
-  'rounded-[var(--radius-card)] border border-[color:var(--color-border)]',
+  'block bg-[color:var(--ss-color-surface)]',
+  'rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)]',
   'p-card',
   'transition-colors',
-  'hover:border-[color:var(--color-text-muted)]',
+  'hover:border-[color:var(--ss-color-text-muted)]',
   'focus-visible:outline-none',
-  'focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2',
+  'focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2',
 ].join(' ')
 
 // Ticket-chrome wrapper — borderless row with bottom stitch. Consumer
 // provides outer 3px ink border.
 const ticketShell = [
-  'group block bg-[color:var(--color-surface)]',
-  'border-b-[2px] border-[color:var(--color-text-primary)] last:border-b-0',
+  'group block bg-[color:var(--ss-color-surface)]',
+  'border-b-[2px] border-[color:var(--ss-color-text-primary)] last:border-b-0',
   'transition-colors',
-  'hover:bg-[color:var(--color-border-subtle)]',
+  'hover:bg-[color:var(--ss-color-border-subtle)]',
   'focus-visible:outline-none',
-  'focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-inset',
+  'focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-inset',
 ].join(' ')
 ---
 
@@ -106,26 +106,26 @@ const ticketShell = [
         <div class="flex-1 min-w-0 flex flex-col gap-row">
           <div class="flex items-center gap-row flex-wrap">
             <StatusPill tone={props.tone} label={props.toneLabel} />
-            <span class="text-heading text-[color:var(--color-text-primary)] truncate">
+            <span class="text-heading text-[color:var(--ss-color-text-primary)] truncate">
               {props.title}
             </span>
           </div>
           <div class="flex items-baseline gap-row flex-wrap">
             <MoneyDisplay amountCents={props.amountCents} size="h2" />
             {props.metaCaption && (
-              <span class="text-caption text-[color:var(--color-text-muted)]">
+              <span class="text-caption text-[color:var(--ss-color-text-muted)]">
                 {props.metaCaption}
               </span>
             )}
             {props.trailingCaption && (
-              <span class="text-caption text-[color:var(--color-attention)]">
+              <span class="text-caption text-[color:var(--ss-color-attention)]">
                 {props.trailingCaption}
               </span>
             )}
           </div>
         </div>
         <span
-          class="material-symbols-outlined text-[color:var(--color-text-muted)] flex-shrink-0"
+          class="material-symbols-outlined text-[color:var(--ss-color-text-muted)] flex-shrink-0"
           aria-hidden="true"
         >
           chevron_right
@@ -144,21 +144,23 @@ const ticketShell = [
     >
       <div class="flex items-center gap-stack min-h-[44px]">
         <span
-          class="flex-shrink-0 w-10 h-10 rounded-[var(--radius-card)] bg-[color:var(--color-border-subtle)] flex items-center justify-center text-[color:var(--color-text-secondary)]"
+          class="flex-shrink-0 w-10 h-10 rounded-[var(--ss-radius-card)] bg-[color:var(--ss-color-border-subtle)] flex items-center justify-center text-[color:var(--ss-color-text-secondary)]"
           aria-hidden="true"
         >
           <span class="material-symbols-outlined">{props.icon}</span>
         </span>
         <div class="flex-1 min-w-0 flex flex-col gap-row">
-          <span class="text-heading text-[color:var(--color-text-primary)] truncate">
+          <span class="text-heading text-[color:var(--ss-color-text-primary)] truncate">
             {props.title}
           </span>
           {props.eyebrow && (
-            <span class="text-label uppercase text-[color:var(--color-meta)]">{props.eyebrow}</span>
+            <span class="text-label uppercase text-[color:var(--ss-color-meta)]">
+              {props.eyebrow}
+            </span>
           )}
         </div>
         <span
-          class="material-symbols-outlined text-[color:var(--color-text-muted)] flex-shrink-0"
+          class="material-symbols-outlined text-[color:var(--ss-color-text-muted)] flex-shrink-0"
           aria-hidden="true"
         >
           {props.trailingIcon}
@@ -174,42 +176,42 @@ const ticketShell = [
     <a href={props.href} class={ticketShell}>
       <div class="md:grid md:grid-cols-[56px_1fr_auto_auto_48px] md:items-stretch">
         {/* № cell */}
-        <div class="flex md:border-r-[2px] md:border-[color:var(--color-text-primary)] bg-[color:var(--color-text-primary)] text-[color:var(--color-primary)] items-center justify-center md:min-h-[88px] py-3 md:py-0 font-['Archivo'] font-black text-num-cell">
+        <div class="flex md:border-r-[2px] md:border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-primary)] items-center justify-center md:min-h-[88px] py-3 md:py-0 font-['Archivo'] font-black text-num-cell">
           {props.serial ? `№${props.serial}` : '№ —'}
         </div>
 
         {/* Main */}
-        <div class="md:border-r-[2px] md:border-[color:var(--color-text-primary)] px-5 py-4 md:py-5 flex flex-col justify-center gap-2">
+        <div class="md:border-r-[2px] md:border-[color:var(--ss-color-text-primary)] px-5 py-4 md:py-5 flex flex-col justify-center gap-2">
           <div class="flex items-center gap-3 flex-wrap">
-            <h3 class="font-['Archivo'] text-lg md:text-xl font-black uppercase tracking-[-0.01em] text-[color:var(--color-text-primary)] m-0 truncate">
+            <h3 class="font-['Archivo'] text-lg md:text-xl font-black uppercase tracking-[-0.01em] text-[color:var(--ss-color-text-primary)] m-0 truncate">
               {props.title}
             </h3>
             <StatusPill tone={props.tone} label={props.toneLabel} />
           </div>
           {props.subCaption && (
-            <p class="text-sm text-[color:var(--color-text-secondary)] m-0 line-clamp-2">
+            <p class="text-sm text-[color:var(--ss-color-text-secondary)] m-0 line-clamp-2">
               {props.subCaption}
             </p>
           )}
         </div>
 
         {/* Price */}
-        <div class="md:border-r-[2px] md:border-[color:var(--color-text-primary)] px-5 py-3 md:py-5 flex flex-col items-start md:items-end justify-center gap-1">
+        <div class="md:border-r-[2px] md:border-[color:var(--ss-color-text-primary)] px-5 py-3 md:py-5 flex flex-col items-start md:items-end justify-center gap-1">
           <MoneyDisplay amountCents={props.amountCents} size="row" />
-          <span class="font-['Archivo_Narrow'] text-label font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+          <span class="font-['Archivo_Narrow'] text-label font-semibold uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
             {props.metaCaption ?? 'Amount'}
           </span>
         </div>
 
         {/* Date */}
-        <div class="md:border-r-[2px] md:border-[color:var(--color-text-primary)] px-5 py-3 md:py-5 flex flex-col justify-center gap-1">
+        <div class="md:border-r-[2px] md:border-[color:var(--ss-color-text-primary)] px-5 py-3 md:py-5 flex flex-col justify-center gap-1">
           {props.metaLabel && (
-            <span class="font-['Archivo_Narrow'] text-label font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+            <span class="font-['Archivo_Narrow'] text-label font-semibold uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
               {props.metaLabel}
             </span>
           )}
           {props.trailingCaption && (
-            <span class="font-mono text-sm text-[color:var(--color-text-primary)]">
+            <span class="font-mono text-sm text-[color:var(--ss-color-text-primary)]">
               {props.trailingCaption}
             </span>
           )}
@@ -218,7 +220,7 @@ const ticketShell = [
         {/* Arrow */}
         <div
           aria-hidden="true"
-          class="hidden md:flex items-center justify-center font-['Archivo'] font-black text-2xl text-[color:var(--color-primary)] transition-transform group-hover:translate-x-0.5"
+          class="hidden md:flex items-center justify-center font-['Archivo'] font-black text-2xl text-[color:var(--ss-color-primary)] transition-transform group-hover:translate-x-0.5"
         >
           →
         </div>
@@ -237,44 +239,44 @@ const ticketShell = [
     >
       <div class="md:grid md:grid-cols-[88px_1fr_140px_180px_auto_48px] md:items-stretch">
         {/* Thumb */}
-        <div class="flex items-center justify-center md:border-r-[2px] md:border-[color:var(--color-text-primary)] bg-[color:var(--color-border-subtle)] md:min-h-[88px] py-3 md:py-0 font-['Archivo'] font-black text-num-cell text-[color:var(--color-text-primary)]">
+        <div class="flex items-center justify-center md:border-r-[2px] md:border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-border-subtle)] md:min-h-[88px] py-3 md:py-0 font-['Archivo'] font-black text-num-cell text-[color:var(--ss-color-text-primary)]">
           {props.fileExt ?? props.icon.slice(0, 3).toUpperCase()}
         </div>
 
         {/* Main */}
-        <div class="md:border-r-[2px] md:border-[color:var(--color-text-primary)] px-5 py-4 md:py-5 flex flex-col justify-center gap-2">
-          <h4 class="font-['Archivo'] text-lg font-black uppercase tracking-[-0.01em] text-[color:var(--color-text-primary)] m-0 truncate">
+        <div class="md:border-r-[2px] md:border-[color:var(--ss-color-text-primary)] px-5 py-4 md:py-5 flex flex-col justify-center gap-2">
+          <h4 class="font-['Archivo'] text-lg font-black uppercase tracking-[-0.01em] text-[color:var(--ss-color-text-primary)] m-0 truncate">
             {props.title}
           </h4>
           {props.eyebrow && (
-            <p class="text-sm text-[color:var(--color-text-secondary)] m-0 line-clamp-2">
+            <p class="text-sm text-[color:var(--ss-color-text-secondary)] m-0 line-clamp-2">
               {props.eyebrow}
             </p>
           )}
         </div>
 
         {/* Kind */}
-        <div class="md:border-r-[2px] md:border-[color:var(--color-text-primary)] px-5 py-3 md:py-5 flex flex-col justify-center gap-1">
-          <span class="font-['Archivo_Narrow'] text-label font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+        <div class="md:border-r-[2px] md:border-[color:var(--ss-color-text-primary)] px-5 py-3 md:py-5 flex flex-col justify-center gap-1">
+          <span class="font-['Archivo_Narrow'] text-label font-semibold uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
             Kind
           </span>
-          <span class="font-mono text-sm text-[color:var(--color-text-primary)]">
+          <span class="font-mono text-sm text-[color:var(--ss-color-text-primary)]">
             {props.kind ?? '—'}
           </span>
         </div>
 
         {/* Meta */}
-        <div class="md:border-r-[2px] md:border-[color:var(--color-text-primary)] px-5 py-3 md:py-5 flex flex-col justify-center gap-1">
-          <span class="font-['Archivo_Narrow'] text-label font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+        <div class="md:border-r-[2px] md:border-[color:var(--ss-color-text-primary)] px-5 py-3 md:py-5 flex flex-col justify-center gap-1">
+          <span class="font-['Archivo_Narrow'] text-label font-semibold uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
             Shared
           </span>
-          <span class="font-mono text-sm text-[color:var(--color-text-primary)]">
+          <span class="font-mono text-sm text-[color:var(--ss-color-text-primary)]">
             {props.eyebrow ?? '—'}
           </span>
         </div>
 
         {/* Stamp */}
-        <div class="md:border-r-[2px] md:border-[color:var(--color-text-primary)] px-5 py-3 md:py-5 flex items-center justify-start md:justify-center">
+        <div class="md:border-r-[2px] md:border-[color:var(--ss-color-text-primary)] px-5 py-3 md:py-5 flex items-center justify-start md:justify-center">
           {props.tone && props.toneLabel ? (
             <StatusPill tone={props.tone} label={props.toneLabel} />
           ) : null}
@@ -283,7 +285,7 @@ const ticketShell = [
         {/* Arrow */}
         <div
           aria-hidden="true"
-          class="hidden md:flex items-center justify-center font-['Archivo'] font-black text-xl text-[color:var(--color-primary)] transition-transform group-hover:translate-x-0.5"
+          class="hidden md:flex items-center justify-center font-['Archivo'] font-black text-xl text-[color:var(--ss-color-primary)] transition-transform group-hover:translate-x-0.5"
         >
           ↗
         </div>

@@ -39,10 +39,10 @@ const formatted = new Intl.NumberFormat('en-US', {
 // (see --text-*--font-weight in global.css). Legacy sizes keep their
 // original Modern Institutional treatment.
 const PLAINSPOKEN_SIZE_CLASS: Record<'hero' | 'total' | 'kpi' | 'row', string> = {
-  hero: 'text-hero-price text-[color:var(--color-text-primary)]',
-  total: 'text-section-h text-[color:var(--color-text-primary)]',
-  kpi: 'text-kpi text-[color:var(--color-text-primary)]',
-  row: 'text-price-row text-[color:var(--color-text-primary)]',
+  hero: 'text-hero-price text-[color:var(--ss-color-text-primary)]',
+  total: 'text-section-h text-[color:var(--ss-color-text-primary)]',
+  kpi: 'text-kpi text-[color:var(--ss-color-text-primary)]',
+  row: 'text-price-row text-[color:var(--ss-color-text-primary)]',
 }
 
 const isPlainspoken = size === 'hero' || size === 'total' || size === 'kpi' || size === 'row'
@@ -50,12 +50,12 @@ const isPlainspoken = size === 'hero' || size === 'total' || size === 'kpi' || s
 const sizeClass = isPlainspoken
   ? PLAINSPOKEN_SIZE_CLASS[size as 'hero' | 'total' | 'kpi' | 'row']
   : size === 'display'
-    ? 'font-display text-money font-medium text-[color:var(--color-text-primary)]'
+    ? 'font-display text-money font-medium text-[color:var(--ss-color-text-primary)]'
     : size === 'h2'
-      ? 'font-display text-title font-medium text-[color:var(--color-text-primary)]'
+      ? 'font-display text-title font-medium text-[color:var(--ss-color-text-primary)]'
       : emphasize
-        ? 'font-body text-body font-semibold text-[color:var(--color-text-primary)]'
-        : 'font-body text-body font-medium text-[color:var(--color-text-primary)]'
+        ? 'font-body text-body font-semibold text-[color:var(--ss-color-text-primary)]'
+        : 'font-body text-body font-medium text-[color:var(--ss-color-text-primary)]'
 ---
 
 <span class={`tabular-nums ${sizeClass} ${klass}`}>{formatted}</span>

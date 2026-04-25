@@ -13,38 +13,38 @@ const problems = [
 ---
 
 <section
-  class="bg-[color:var(--color-background)] px-6 py-24 border-t-[3px] border-[color:var(--color-text-primary)]"
+  class="bg-[color:var(--ss-color-background)] px-6 py-24 border-t-[3px] border-[color:var(--ss-color-text-primary)]"
 >
   <div class="mx-auto max-w-5xl">
     <div class="mb-16">
       <span
-        class="inline-block bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] font-['JetBrains_Mono'] text-xs font-semibold uppercase tracking-[0.14em] px-2 py-1 mb-4"
+        class="inline-block bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] font-['JetBrains_Mono'] text-xs font-semibold uppercase tracking-[0.14em] px-2 py-1 mb-4"
         >§ 01</span
       >
       <h2
-        class="font-['Archivo'] text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--color-text-primary)]"
+        class="font-['Archivo'] text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
       >
         Sound Familiar?
       </h2>
     </div>
     <div
-      class="grid grid-cols-1 gap-0 md:grid-cols-3 border-t-[3px] border-[color:var(--color-text-primary)]"
+      class="grid grid-cols-1 gap-0 md:grid-cols-3 border-t-[3px] border-[color:var(--ss-color-text-primary)]"
     >
       {
         problems.map((problem, i) => (
           <div
             class:list={[
-              'flex flex-col gap-6 bg-[color:var(--color-background)] p-8 min-h-[14rem] border-b-[3px] border-[color:var(--color-text-primary)]',
-              i % 3 !== 2 && 'md:border-r-[3px] md:border-[color:var(--color-text-primary)]',
+              'flex flex-col gap-6 bg-[color:var(--ss-color-background)] p-8 min-h-[14rem] border-b-[3px] border-[color:var(--ss-color-text-primary)]',
+              i % 3 !== 2 && 'md:border-r-[3px] md:border-[color:var(--ss-color-text-primary)]',
             ]}
           >
-            <p class="font-['JetBrains_Mono'] text-sm font-semibold tracking-[0.08em] text-[color:var(--color-primary)]">
+            <p class="font-['JetBrains_Mono'] text-sm font-semibold tracking-[0.08em] text-[color:var(--ss-color-primary)]">
               {String(i + 1).padStart(2, '0')}.
             </p>
-            <p class="font-['Archivo'] italic text-lg leading-relaxed text-[color:var(--color-text-primary)]">
+            <p class="font-['Archivo'] italic text-lg leading-relaxed text-[color:var(--ss-color-text-primary)]">
               "{problem.quote}"
             </p>
-            <p class="mt-auto pt-4 border-t border-[color:var(--color-border)] font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--color-primary)]">
+            <p class="mt-auto pt-4 border-t border-[color:var(--ss-color-border)] font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--ss-color-primary)]">
               {problem.name}
             </p>
           </div>

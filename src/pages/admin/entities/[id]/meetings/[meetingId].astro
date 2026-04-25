@@ -104,10 +104,11 @@ function stageBadgeClass(stage: string): string {
     engaged: 'bg-green-100 text-green-700',
     delivered: 'bg-emerald-100 text-emerald-700',
     ongoing: 'bg-teal-100 text-teal-700',
-    lost: 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]',
+    lost: 'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]',
   }
   return (
-    map[stage] ?? 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
+    map[stage] ??
+    'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]'
   )
 }
 
@@ -116,10 +117,11 @@ function tierBadgeClass(tier: string): string {
     hot: 'bg-red-100 text-red-700',
     warm: 'bg-amber-100 text-amber-700',
     cool: 'bg-blue-100 text-blue-700',
-    cold: 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]',
+    cold: 'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]',
   }
   return (
-    map[tier] ?? 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
+    map[tier] ??
+    'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]'
   )
 }
 
@@ -127,7 +129,7 @@ function contextTypeBadge(type: string): string {
   const map: Record<string, string> = {
     signal: 'bg-amber-100 text-amber-700',
     enrichment: 'bg-cyan-100 text-cyan-700',
-    note: 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]',
+    note: 'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]',
     transcript: 'bg-purple-100 text-purple-700',
     extraction: 'bg-indigo-100 text-indigo-700',
     outreach_draft: 'bg-blue-100 text-blue-700',
@@ -135,12 +137,14 @@ function contextTypeBadge(type: string): string {
     follow_up_result: 'bg-teal-100 text-teal-700',
     feedback: 'bg-emerald-100 text-emerald-700',
     parking_lot: 'bg-orange-100 text-orange-700',
-    stage_change: 'bg-[color:var(--color-background)] text-[color:var(--color-text-secondary)]',
+    stage_change:
+      'bg-[color:var(--ss-color-background)] text-[color:var(--ss-color-text-secondary)]',
     intake: 'bg-pink-100 text-pink-700',
     scorecard: 'bg-violet-100 text-violet-700',
   }
   return (
-    map[type] ?? 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
+    map[type] ??
+    'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]'
   )
 }
 
@@ -186,21 +190,21 @@ const isMeetingTerminal =
 >
   {
     error && (
-      <div class="bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
+      <div class="bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded-[var(--ss-radius-card)] mb-4">
         {decodeURIComponent(error)}
       </div>
     )
   }
   {
     saved && (
-      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
+      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-[var(--ss-radius-card)] mb-4">
         Changes saved.
       </div>
     )
   }
   {
     completed && (
-      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-[var(--radius-card)] mb-4">
+      <div class="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-[var(--ss-radius-card)] mb-4">
         Meeting completed. Pick a next action from the entity page.
       </div>
     )
@@ -208,12 +212,12 @@ const isMeetingTerminal =
 
   {/* Entity + Meeting Info */}
   <div
-    class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card mb-6"
+    class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card mb-6"
   >
     <div class="flex items-start justify-between gap-stack mb-4">
       <div>
         <div class="flex items-center gap-row mb-2">
-          <h2 class="text-xl font-semibold text-[color:var(--color-text-primary)]">
+          <h2 class="text-xl font-semibold text-[color:var(--ss-color-text-primary)]">
             {entity.name}
           </h2>
           <span class={`text-xs px-2 py-0.5 rounded ${stageBadgeClass(entity.stage)}`}>
@@ -228,7 +232,7 @@ const isMeetingTerminal =
           }
           {
             meeting.meeting_type && (
-              <span class="text-xs px-2 py-0.5 rounded bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]">
+              <span class="text-xs px-2 py-0.5 rounded bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]">
                 {meeting.meeting_type}
               </span>
             )
@@ -236,13 +240,13 @@ const isMeetingTerminal =
         </div>
 
         <div
-          class="flex items-center gap-stack text-sm text-[color:var(--color-text-secondary)] flex-wrap"
+          class="flex items-center gap-stack text-sm text-[color:var(--ss-color-text-secondary)] flex-wrap"
         >
           {
             entity.pain_score != null && (
               <span>
                 Pain:{' '}
-                <strong class="text-[color:var(--color-text-primary)]">
+                <strong class="text-[color:var(--ss-color-text-primary)]">
                   {entity.pain_score}/10
                 </strong>
               </span>
@@ -262,15 +266,17 @@ const isMeetingTerminal =
       schedule && (
         <div class="grid grid-cols-1 md:grid-cols-2 gap-stack text-sm">
           <div>
-            <span class="text-[color:var(--color-text-secondary)]">Scheduled:</span>
-            <span class="ml-1 text-[color:var(--color-text-primary)] font-medium">
+            <span class="text-[color:var(--ss-color-text-secondary)]">Scheduled:</span>
+            <span class="ml-1 text-[color:var(--ss-color-text-primary)] font-medium">
               {formatDateTime(schedule.slot_start_utc)}
             </span>
-            <span class="text-[color:var(--color-text-muted)] ml-1">({schedule.timezone})</span>
+            <span class="text-[color:var(--ss-color-text-muted)] ml-1">({schedule.timezone})</span>
           </div>
           <div>
-            <span class="text-[color:var(--color-text-secondary)]">Contact:</span>
-            <span class="ml-1 text-[color:var(--color-text-primary)]">{schedule.guest_name}</span>
+            <span class="text-[color:var(--ss-color-text-secondary)]">Contact:</span>
+            <span class="ml-1 text-[color:var(--ss-color-text-primary)]">
+              {schedule.guest_name}
+            </span>
             <a href={`mailto:${schedule.guest_email}`} class="ml-1 text-blue-600 hover:underline">
               {schedule.guest_email}
             </a>
@@ -281,7 +287,7 @@ const isMeetingTerminal =
                 href={schedule.google_meet_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex items-center gap-1.5 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-blue-700 transition-colors"
+                class="inline-flex items-center gap-1.5 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-[var(--ss-radius-card)] hover:bg-blue-700 transition-colors"
               >
                 Join Video Call
               </a>
@@ -304,7 +310,7 @@ const isMeetingTerminal =
     }
     {
       !schedule && meeting.scheduled_at && (
-        <div class="text-sm text-[color:var(--color-text-secondary)]">
+        <div class="text-sm text-[color:var(--ss-color-text-secondary)]">
           Scheduled: {formatDateTime(meeting.scheduled_at)}
         </div>
       )
@@ -313,16 +319,16 @@ const isMeetingTerminal =
 
   {/* Live Notes */}
   <div
-    class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card mb-6"
+    class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card mb-6"
   >
     <div class="flex items-center justify-between mb-3">
-      <h3 class="text-base font-semibold text-[color:var(--color-text-primary)]">Live Notes</h3>
-      <span id="save-status" class="text-xs text-[color:var(--color-text-muted)]">Saved</span>
+      <h3 class="text-base font-semibold text-[color:var(--ss-color-text-primary)]">Live Notes</h3>
+      <span id="save-status" class="text-xs text-[color:var(--ss-color-text-muted)]">Saved</span>
     </div>
     <textarea
       id="live-notes"
       rows="10"
-      class="w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono"
+      class="w-full text-sm border border-[color:var(--ss-color-border)] rounded-[var(--ss-radius-card)] px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono"
       placeholder="Take notes during the call...">{liveNotesValue}</textarea
     >
   </div>
@@ -330,18 +336,18 @@ const isMeetingTerminal =
   {/* Complete Meeting Form (collapsible) */}
   {
     !isMeetingTerminal && (
-      <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] mb-6">
+      <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] mb-6">
         <button
           type="button"
           id="toggle-complete"
-          class="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-[color:var(--color-background)] transition-colors"
+          class="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-[color:var(--ss-color-background)] transition-colors"
         >
-          <h3 class="text-base font-semibold text-[color:var(--color-text-primary)]">
+          <h3 class="text-base font-semibold text-[color:var(--ss-color-text-primary)]">
             Complete Meeting
           </h3>
           <svg
             id="toggle-icon"
-            class="w-5 h-5 text-[color:var(--color-text-muted)] transition-transform"
+            class="w-5 h-5 text-[color:var(--ss-color-text-muted)] transition-transform"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -357,7 +363,7 @@ const isMeetingTerminal =
 
         <div
           id="complete-form"
-          class="hidden px-6 pb-6 border-t border-[color:var(--color-border-subtle)]"
+          class="hidden px-6 pb-6 border-t border-[color:var(--ss-color-border-subtle)]"
         >
           <form
             method="POST"
@@ -368,7 +374,7 @@ const isMeetingTerminal =
             <div>
               <label
                 for="completion-notes"
-                class="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1"
+                class="block text-sm font-medium text-[color:var(--ss-color-text-primary)] mb-1"
               >
                 Outcome Notes
               </label>
@@ -376,7 +382,7 @@ const isMeetingTerminal =
                 name="completion_notes"
                 id="completion-notes"
                 rows="5"
-                class="w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                class="w-full text-sm border border-[color:var(--ss-color-border)] rounded-[var(--ss-radius-card)] px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 placeholder="What came out of this meeting? Decisions, next steps, anything worth remembering."
               />
             </div>
@@ -385,7 +391,7 @@ const isMeetingTerminal =
             <div>
               <label
                 for="duration_minutes"
-                class="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1"
+                class="block text-sm font-medium text-[color:var(--ss-color-text-primary)] mb-1"
               >
                 Duration (minutes)
               </label>
@@ -396,7 +402,7 @@ const isMeetingTerminal =
                 min="1"
                 max="300"
                 placeholder="30"
-                class="w-32 text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                class="w-32 text-sm border border-[color:var(--ss-color-border)] rounded-[var(--ss-radius-card)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               />
             </div>
 
@@ -404,20 +410,20 @@ const isMeetingTerminal =
             <div>
               <label
                 for="next_stage"
-                class="block text-sm font-medium text-[color:var(--color-text-primary)] mb-1"
+                class="block text-sm font-medium text-[color:var(--ss-color-text-primary)] mb-1"
               >
                 Next stage for {entity.name}
               </label>
               <select
                 name="next_stage"
                 id="next_stage"
-                class="w-full md:w-96 text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                class="w-full md:w-96 text-sm border border-[color:var(--ss-color-border)] rounded-[var(--ss-radius-card)] px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               >
                 {NEXT_STAGE_OPTIONS.map((opt) => (
                   <option value={opt.value}>{opt.label}</option>
                 ))}
               </select>
-              <p class="mt-1 text-xs text-[color:var(--color-text-muted)]">
+              <p class="mt-1 text-xs text-[color:var(--ss-color-text-muted)]">
                 Drafting a proposal is a separate action on the entity page — completing a meeting
                 never creates a quote by itself.
               </p>
@@ -427,7 +433,7 @@ const isMeetingTerminal =
             <div class="flex items-center gap-row pt-2">
               <button
                 type="submit"
-                class="text-sm bg-green-600 text-white px-6 py-2.5 rounded-[var(--radius-card)] hover:bg-green-700 transition-colors font-medium"
+                class="text-sm bg-green-600 text-white px-6 py-2.5 rounded-[var(--ss-radius-card)] hover:bg-green-700 transition-colors font-medium"
               >
                 Complete Meeting
               </button>
@@ -440,35 +446,35 @@ const isMeetingTerminal =
 
   {/* Entity Context Timeline */}
   <div
-    class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+    class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card"
   >
-    <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-4">
+    <h3 class="text-base font-semibold text-[color:var(--ss-color-text-primary)] mb-4">
       Entity Context Timeline
-      <span class="text-sm font-normal text-[color:var(--color-text-muted)] ml-1"
+      <span class="text-sm font-normal text-[color:var(--ss-color-text-muted)] ml-1"
         >({contextEntries.length} entries)</span
       >
     </h3>
 
     {
       timelineEntries.length === 0 && (
-        <p class="text-sm text-[color:var(--color-text-muted)]">No context entries yet.</p>
+        <p class="text-sm text-[color:var(--ss-color-text-muted)]">No context entries yet.</p>
       )
     }
 
     <div class="space-y-row">
       {
         timelineEntries.map((entry) => (
-          <div class="border border-[color:var(--color-border-subtle)] rounded-[var(--radius-card)] p-row">
+          <div class="border border-[color:var(--ss-color-border-subtle)] rounded-[var(--ss-radius-card)] p-row">
             <div class="flex items-center gap-2 mb-1">
               <span class={`text-xs px-1.5 py-0.5 rounded ${contextTypeBadge(entry.type)}`}>
                 {entry.type.replace(/_/g, ' ')}
               </span>
-              <span class="text-xs text-[color:var(--color-text-muted)]">{entry.source}</span>
-              <span class="text-xs text-[color:var(--color-text-muted)] ml-auto">
+              <span class="text-xs text-[color:var(--ss-color-text-muted)]">{entry.source}</span>
+              <span class="text-xs text-[color:var(--ss-color-text-muted)] ml-auto">
                 {formatDate(entry.created_at)}
               </span>
             </div>
-            <div class="text-sm text-[color:var(--color-text-primary)] whitespace-pre-wrap break-words">
+            <div class="text-sm text-[color:var(--ss-color-text-primary)] whitespace-pre-wrap break-words">
               {entry.content.length > 500 ? entry.content.slice(0, 500) + '...' : entry.content}
             </div>
           </div>

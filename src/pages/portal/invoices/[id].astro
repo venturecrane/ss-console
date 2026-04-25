@@ -205,7 +205,7 @@ const consultantFirstName: string | null = consultantName
     />
     <title>Invoice — {BRAND_NAME}</title>
   </head>
-  <body class="min-h-screen bg-[color:var(--color-background)]">
+  <body class="min-h-screen bg-[color:var(--ss-color-background)]">
     <SkipToMain />
     <PortalHeader
       clientName={client.name}
@@ -215,7 +215,7 @@ const consultantFirstName: string | null = consultantName
       <form method="POST" action="/api/auth/logout">
         <button
           type="submit"
-          class="text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-secondary)] transition-colors"
+          class="text-sm text-[color:var(--ss-color-text-muted)] hover:text-[color:var(--ss-color-text-secondary)] transition-colors"
         >
           Sign out
         </button>
@@ -246,14 +246,14 @@ const consultantFirstName: string | null = consultantName
           <div>
             {
               periodSubtitle && (
-                <p class="text-body-lg text-[color:var(--color-text-secondary)]">
+                <p class="text-body-lg text-[color:var(--ss-color-text-secondary)]">
                   {periodSubtitle}
                 </p>
               )
             }
             {
               !isPaid && dueCaption && (
-                <p class="mt-4 inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--color-text-muted)]">
+                <p class="mt-4 inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--ss-color-text-muted)]">
                   <span class="material-symbols-outlined text-[18px]" aria-hidden="true">
                     calendar_today
                   </span>
@@ -263,7 +263,7 @@ const consultantFirstName: string | null = consultantName
             }
             {
               isPaid && paidShortDate && (
-                <p class="mt-4 inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--color-complete)]">
+                <p class="mt-4 inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--ss-color-complete)]">
                   <span class="material-symbols-outlined text-[18px]" aria-hidden="true">
                     check_circle
                   </span>
@@ -279,22 +279,22 @@ const consultantFirstName: string | null = consultantName
             {
               isErrorState && (
                 <div
-                  class="mb-card rounded-lg border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-stack"
+                  class="mb-card rounded-lg border border-[color:var(--ss-color-attention)]/30 bg-[color:var(--ss-color-attention)]/5 p-stack"
                   role="status"
                 >
                   <div class="flex items-start gap-row">
-                    <span class="material-symbols-outlined text-[20px] text-[color:var(--color-attention)] mt-0.5">
+                    <span class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-attention)] mt-0.5">
                       error
                     </span>
                     <div class="min-w-0">
-                      <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                      <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
                         {isDeclined
                           ? 'Payment declined'
                           : isCardExpired
                             ? 'Card expired'
                             : 'Link expired'}
                       </p>
-                      <p class="mt-1 text-body text-[color:var(--color-text-secondary)]">
+                      <p class="mt-1 text-body text-[color:var(--ss-color-text-secondary)]">
                         {surface.next}
                       </p>
                     </div>
@@ -303,17 +303,17 @@ const consultantFirstName: string | null = consultantName
               )
             }
             <div
-              class="relative overflow-hidden rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-card"
+              class="relative overflow-hidden rounded-lg border border-[color:var(--ss-color-border)] bg-[color:var(--ss-color-surface)] p-card"
             >
               <div
-                class="absolute left-0 top-0 h-full w-1 bg-[color:var(--color-primary)]"
+                class="absolute left-0 top-0 h-full w-1 bg-[color:var(--ss-color-primary)]"
                 aria-hidden="true"
               >
               </div>
               <MoneyDisplay amountCents={amountCents} size="display" />
               {
                 !isPaid && (
-                  <p class="mt-1 text-label uppercase text-[color:var(--color-text-muted)]">
+                  <p class="mt-1 text-label uppercase text-[color:var(--ss-color-text-muted)]">
                     Remaining balance
                   </p>
                 )
@@ -325,7 +325,7 @@ const consultantFirstName: string | null = consultantName
                     <>
                       <a
                         href={stripeUrl!}
-                        class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                        class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2"
                       >
                         {isDeclined
                           ? 'Try again'
@@ -333,7 +333,7 @@ const consultantFirstName: string | null = consultantName
                             ? 'Update payment method'
                             : 'Pay invoice'}
                       </a>
-                      <div class="mt-3 flex items-center justify-center gap-2 text-label uppercase font-semibold text-[color:var(--color-text-muted)]">
+                      <div class="mt-3 flex items-center justify-center gap-2 text-label uppercase font-semibold text-[color:var(--ss-color-text-muted)]">
                         <span class="material-symbols-outlined text-[16px]" aria-hidden="true">
                           lock
                         </span>
@@ -341,7 +341,7 @@ const consultantFirstName: string | null = consultantName
                       </div>
                     </>
                   ) : (
-                    <div class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-secondary)] font-semibold">
+                    <div class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--ss-color-surface-muted)] text-[color:var(--ss-color-text-secondary)] font-semibold">
                       Payment link pending
                     </div>
                   ))
@@ -352,15 +352,15 @@ const consultantFirstName: string | null = consultantName
           <!-- What's included -->
           <div>
             <h2
-              class="font-['Archivo'] font-bold text-title text-[color:var(--color-text-primary)]"
+              class="font-['Archivo'] font-bold text-title text-[color:var(--ss-color-text-primary)]"
             >
               What's included
             </h2>
             <ul class="mt-stack flex flex-col">
               {
                 lineItems.map((li) => (
-                  <li class="flex justify-between items-baseline gap-card py-5 border-b border-[color:var(--color-border)]/60">
-                    <span class="text-body text-[color:var(--color-text-secondary)] max-w-[480px]">
+                  <li class="flex justify-between items-baseline gap-card py-5 border-b border-[color:var(--ss-color-border)]/60">
+                    <span class="text-body text-[color:var(--ss-color-text-secondary)] max-w-[480px]">
                       {li.description}
                     </span>
                     <MoneyDisplay amountCents={li.amount_cents} size="body" emphasize />
@@ -370,7 +370,7 @@ const consultantFirstName: string | null = consultantName
             </ul>
             <div class="mt-card pt-5 flex justify-between items-baseline">
               <span
-                class="font-['Archivo'] font-bold text-title text-[color:var(--color-text-primary)]"
+                class="font-['Archivo'] font-bold text-title text-[color:var(--ss-color-text-primary)]"
                 >Total</span
               >
               <MoneyDisplay amountCents={totalCents} size="h2" />
@@ -380,22 +380,22 @@ const consultantFirstName: string | null = consultantName
           <!-- Payment details -->
           <div>
             <h2
-              class="font-['Archivo'] font-bold text-title text-[color:var(--color-text-primary)]"
+              class="font-['Archivo'] font-bold text-title text-[color:var(--ss-color-text-primary)]"
             >
               Payment details
             </h2>
             <ul class="mt-stack grid grid-cols-1 sm:grid-cols-2 gap-card">
               {
                 dueShortDate && !isPaid && (
-                  <li class="flex items-start gap-row rounded-lg bg-[color:var(--color-surface)] p-card">
+                  <li class="flex items-start gap-row rounded-lg bg-[color:var(--ss-color-surface)] p-card">
                     <span
-                      class="material-symbols-outlined text-[20px] text-[color:var(--color-primary)]"
+                      class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-primary)]"
                       style="font-variation-settings: 'FILL' 1;"
                     >
                       event
                     </span>
                     <div class="min-w-0">
-                      <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                      <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
                         Due {dueShortDate}
                       </p>
                     </div>
@@ -404,15 +404,15 @@ const consultantFirstName: string | null = consultantName
               }
               {
                 isPaid && paidShortDate && (
-                  <li class="flex items-start gap-row rounded-lg bg-[color:var(--color-surface)] p-card">
+                  <li class="flex items-start gap-row rounded-lg bg-[color:var(--ss-color-surface)] p-card">
                     <span
-                      class="material-symbols-outlined text-[20px] text-[color:var(--color-complete)]"
+                      class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-complete)]"
                       style="font-variation-settings: 'FILL' 1;"
                     >
                       check_circle
                     </span>
                     <div class="min-w-0">
-                      <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                      <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
                         Paid {paidShortDate}
                       </p>
                     </div>
@@ -420,52 +420,52 @@ const consultantFirstName: string | null = consultantName
                 )
               }
               <li
-                class="flex items-start gap-row rounded-lg bg-[color:var(--color-surface)] p-card"
+                class="flex items-start gap-row rounded-lg bg-[color:var(--ss-color-surface)] p-card"
               >
                 <span
-                  class="material-symbols-outlined text-[20px] text-[color:var(--color-primary)]"
+                  class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-primary)]"
                   style="font-variation-settings: 'FILL' 1;"
                 >
                   check_circle
                 </span>
                 <div class="min-w-0">
-                  <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                  <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
                     Secure payment via Stripe
                   </p>
-                  <p class="mt-1 text-caption text-[color:var(--color-text-secondary)]">
+                  <p class="mt-1 text-caption text-[color:var(--ss-color-text-secondary)]">
                     End-to-end encrypted processing.
                   </p>
                 </div>
               </li>
               <li
-                class="flex items-start gap-row rounded-lg bg-[color:var(--color-surface)] p-card"
+                class="flex items-start gap-row rounded-lg bg-[color:var(--ss-color-surface)] p-card"
               >
                 <span
-                  class="material-symbols-outlined text-[20px] text-[color:var(--color-primary)]"
+                  class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-primary)]"
                   style="font-variation-settings: 'FILL' 1;"
                 >
                   check_circle
                 </span>
                 <div class="min-w-0">
-                  <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                  <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
                     Card or bank transfer
                   </p>
-                  <p class="mt-1 text-caption text-[color:var(--color-text-secondary)]">
+                  <p class="mt-1 text-caption text-[color:var(--ss-color-text-secondary)]">
                     Multiple payment methods accepted.
                   </p>
                 </div>
               </li>
               {
                 depositNote && (
-                  <li class="flex items-start gap-row rounded-lg bg-[color:var(--color-surface)] p-card sm:col-span-2">
+                  <li class="flex items-start gap-row rounded-lg bg-[color:var(--ss-color-surface)] p-card sm:col-span-2">
                     <span
-                      class="material-symbols-outlined text-[20px] text-[color:var(--color-primary)]"
+                      class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-primary)]"
                       style="font-variation-settings: 'FILL' 1;"
                     >
                       history
                     </span>
                     <div class="min-w-0">
-                      <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                      <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
                         {depositNote}
                       </p>
                     </div>
@@ -495,7 +495,7 @@ const consultantFirstName: string | null = consultantName
           <!-- Mobile-only back link -->
           <a
             href="/portal"
-            class="md:hidden inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
+            class="md:hidden inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-text-primary)]"
           >
             <span class="material-symbols-outlined text-[18px]">arrow_back</span>
             Engagement dashboard
@@ -506,27 +506,29 @@ const consultantFirstName: string | null = consultantName
         <aside class="hidden md:flex md:flex-col gap-card md:sticky md:top-8">
           {
             isPaid ? (
-              <div class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-section">
-                <p class="text-label uppercase text-[color:var(--color-complete)]">Paid</p>
+              <div class="bg-[color:var(--ss-color-surface)] rounded-lg border border-[color:var(--ss-color-border)] p-section">
+                <p class="text-label uppercase text-[color:var(--ss-color-complete)]">Paid</p>
                 <div class="mt-3">
                   <MoneyDisplay amountCents={amountCents} size="display" />
                 </div>
                 {paidShortDate && (
-                  <p class="mt-4 text-caption font-medium text-[color:var(--color-complete)]">
+                  <p class="mt-4 text-caption font-medium text-[color:var(--ss-color-complete)]">
                     Paid {paidShortDate}.
                   </p>
                 )}
               </div>
             ) : isLinkExpired ? (
-              <div class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-section">
-                <p class="text-label uppercase text-[color:var(--color-attention)]">Link expired</p>
+              <div class="bg-[color:var(--ss-color-surface)] rounded-lg border border-[color:var(--ss-color-border)] p-section">
+                <p class="text-label uppercase text-[color:var(--ss-color-attention)]">
+                  Link expired
+                </p>
                 <div class="mt-3">
                   <MoneyDisplay amountCents={amountCents} size="display" />
-                  <p class="mt-2 text-label uppercase text-[color:var(--color-text-muted)]">
+                  <p class="mt-2 text-label uppercase text-[color:var(--ss-color-text-muted)]">
                     Remaining balance
                   </p>
                 </div>
-                <p class="mt-6 text-body text-[color:var(--color-text-secondary)]">
+                <p class="mt-6 text-body text-[color:var(--ss-color-text-secondary)]">
                   {surface.next}
                 </p>
               </div>
@@ -534,18 +536,18 @@ const consultantFirstName: string | null = consultantName
               <>
                 {isErrorState && (
                   <div
-                    class="rounded-lg border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-stack"
+                    class="rounded-lg border border-[color:var(--ss-color-attention)]/30 bg-[color:var(--ss-color-attention)]/5 p-stack"
                     role="status"
                   >
                     <div class="flex items-start gap-row">
-                      <span class="material-symbols-outlined text-[20px] text-[color:var(--color-attention)] mt-0.5">
+                      <span class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-attention)] mt-0.5">
                         error
                       </span>
                       <div class="min-w-0">
-                        <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                        <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
                           {isDeclined ? 'Payment declined' : 'Card expired'}
                         </p>
-                        <p class="mt-1 text-body text-[color:var(--color-text-secondary)]">
+                        <p class="mt-1 text-body text-[color:var(--ss-color-text-secondary)]">
                           {surface.next}
                         </p>
                       </div>
@@ -554,12 +556,12 @@ const consultantFirstName: string | null = consultantName
                 )}
                 {isPayable ? (
                   <section
-                    class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-section"
+                    class="bg-[color:var(--ss-color-surface)] rounded-lg border border-[color:var(--ss-color-border)] p-section"
                     aria-label={
                       isDeclined ? 'Try again' : isCardExpired ? 'Update payment method' : pillLabel
                     }
                   >
-                    <p class="text-label uppercase text-[color:var(--color-text-muted)]">
+                    <p class="text-label uppercase text-[color:var(--ss-color-text-muted)]">
                       Remaining balance
                     </p>
                     <div class="mt-1">
@@ -567,7 +569,7 @@ const consultantFirstName: string | null = consultantName
                     </div>
                     <a
                       href={stripeUrl!}
-                      class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                      class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2"
                     >
                       {isDeclined
                         ? 'Try again'
@@ -575,7 +577,7 @@ const consultantFirstName: string | null = consultantName
                           ? 'Update payment method'
                           : 'Pay invoice'}
                     </a>
-                    <div class="mt-4 flex items-center justify-center gap-2 text-label uppercase font-semibold text-[color:var(--color-text-muted)]">
+                    <div class="mt-4 flex items-center justify-center gap-2 text-label uppercase font-semibold text-[color:var(--ss-color-text-muted)]">
                       <span class="material-symbols-outlined text-[16px]" aria-hidden="true">
                         lock
                       </span>
@@ -584,15 +586,15 @@ const consultantFirstName: string | null = consultantName
                   </section>
                 ) : (
                   <section
-                    class="bg-[color:var(--color-surface)] rounded-lg border border-[color:var(--color-border)] p-section"
+                    class="bg-[color:var(--ss-color-surface)] rounded-lg border border-[color:var(--ss-color-border)] p-section"
                     aria-label="Payment link pending"
                   >
-                    <p class="text-label uppercase text-[color:var(--color-text-muted)]">
+                    <p class="text-label uppercase text-[color:var(--ss-color-text-muted)]">
                       Payment link pending
                     </p>
                     <div class="mt-3">
                       <MoneyDisplay amountCents={amountCents} size="display" />
-                      <p class="mt-2 text-label uppercase text-[color:var(--color-text-muted)]">
+                      <p class="mt-2 text-label uppercase text-[color:var(--ss-color-text-muted)]">
                         Remaining balance
                       </p>
                     </div>
@@ -618,7 +620,7 @@ const consultantFirstName: string | null = consultantName
 
           <a
             href="/portal"
-            class="inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] px-2"
+            class="inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-text-primary)] px-2"
           >
             <span class="material-symbols-outlined text-[18px]">arrow_back</span>
             Engagement dashboard

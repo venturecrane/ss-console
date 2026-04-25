@@ -81,13 +81,13 @@ const totalCents = invoices.reduce((sum, i) => sum + Math.round(i.amount * 100),
     />
     <title>Invoices — {BRAND_NAME}</title>
   </head>
-  <body class="min-h-screen bg-[color:var(--color-background)]">
+  <body class="min-h-screen bg-[color:var(--ss-color-background)]">
     <SkipToMain />
     <PortalHeader clientName={clientName}>
       <form method="POST" action="/api/auth/logout">
         <button
           type="submit"
-          class="inline-flex items-center min-h-11 px-2 -mx-2 text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
+          class="inline-flex items-center min-h-11 px-2 -mx-2 text-sm text-[color:var(--ss-color-text-muted)] hover:text-[color:var(--ss-color-text-primary)] active:text-[color:var(--ss-color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2 rounded transition-colors"
         >
           Sign out
         </button>
@@ -107,31 +107,31 @@ const totalCents = invoices.reduce((sum, i) => sum + Math.round(i.amount * 100),
 
       {
         invoices.length === 0 ? (
-          <div class="mt-10 border-[3px] border-[color:var(--color-text-primary)] p-8 md:p-12 text-center">
-            <p class="font-['Archivo'] text-2xl md:text-3xl font-black uppercase tracking-[-0.02em] text-[color:var(--color-text-primary)]">
+          <div class="mt-10 border-[3px] border-[color:var(--ss-color-text-primary)] p-8 md:p-12 text-center">
+            <p class="font-['Archivo'] text-2xl md:text-3xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]">
               No invoices yet
             </p>
-            <p class="mt-3 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+            <p class="mt-3 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
               Invoices appear here once created for your engagement.
             </p>
           </div>
         ) : (
           <>
             {/* KPI trio */}
-            <div class="mt-8 grid grid-cols-1 md:grid-cols-3 border-[3px] border-[color:var(--color-text-primary)]">
-              <div class="p-6 md:p-7 md:border-r-[2px] md:border-[color:var(--color-text-primary)] border-b-[2px] md:border-b-0 border-[color:var(--color-text-primary)] md:last:border-b-0">
-                <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-text-secondary)]">
+            <div class="mt-8 grid grid-cols-1 md:grid-cols-3 border-[3px] border-[color:var(--ss-color-text-primary)]">
+              <div class="p-6 md:p-7 md:border-r-[2px] md:border-[color:var(--ss-color-text-primary)] border-b-[2px] md:border-b-0 border-[color:var(--ss-color-text-primary)] md:last:border-b-0">
+                <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-text-secondary)]">
                   Paid to date
                 </p>
                 <div class="mt-3">
                   <MoneyDisplay amountCents={paidCents} size="kpi" />
                 </div>
               </div>
-              <div class="bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] p-6 md:p-7 md:border-r-[2px] md:border-[color:var(--color-text-primary)] border-b-[2px] md:border-b-0 border-[color:var(--color-text-primary)]">
-                <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-primary)]">
+              <div class="bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] p-6 md:p-7 md:border-r-[2px] md:border-[color:var(--ss-color-text-primary)] border-b-[2px] md:border-b-0 border-[color:var(--ss-color-text-primary)]">
+                <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-primary)]">
                   Balance due
                 </p>
-                <div class="mt-3 font-['Archivo'] text-kpi tabular-nums text-[color:var(--color-background)]">
+                <div class="mt-3 font-['Archivo'] text-kpi tabular-nums text-[color:var(--ss-color-background)]">
                   {new Intl.NumberFormat('en-US', {
                     style: 'currency',
                     currency: 'USD',
@@ -140,7 +140,7 @@ const totalCents = invoices.reduce((sum, i) => sum + Math.round(i.amount * 100),
                 </div>
               </div>
               <div class="p-6 md:p-7">
-                <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-text-secondary)]">
+                <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-text-secondary)]">
                   Engagement total
                 </p>
                 <div class="mt-3">
@@ -150,10 +150,10 @@ const totalCents = invoices.reduce((sum, i) => sum + Math.round(i.amount * 100),
             </div>
 
             {/* Ledger */}
-            <p class="mt-10 mb-4 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] font-bold text-[color:var(--color-text-secondary)]">
+            <p class="mt-10 mb-4 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] font-bold text-[color:var(--ss-color-text-secondary)]">
               {invoices.length} invoice{invoices.length !== 1 ? 's' : ''}
             </p>
-            <div class="border-[3px] border-[color:var(--color-text-primary)]">
+            <div class="border-[3px] border-[color:var(--ss-color-text-primary)]">
               {invoices.map((inv: Invoice, idx: number) => (
                 <PortalListItem
                   chrome="ticket"

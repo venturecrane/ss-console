@@ -7,17 +7,17 @@ const navLinks = [
 
 <header
   role="banner"
-  class="sticky top-0 z-40 border-b-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)]"
+  class="sticky top-0 z-40 border-b-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)]"
 >
   <div
     class="mx-auto flex h-14 md:h-16 w-full max-w-5xl items-center justify-between gap-3 px-4 md:px-6"
   >
     <a
       href="/"
-      class="inline-flex items-baseline gap-2 font-['Archivo'] text-base md:text-lg font-black uppercase tracking-[-0.01em] text-[color:var(--color-text-primary)] hover:text-[color:var(--color-primary)] active:text-[color:var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+      class="inline-flex items-baseline gap-2 font-['Archivo'] text-base md:text-lg font-black uppercase tracking-[-0.01em] text-[color:var(--ss-color-text-primary)] hover:text-[color:var(--ss-color-primary)] active:text-[color:var(--ss-color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2"
     >
       <span
-        class="inline-block bg-[color:var(--color-primary)] text-white px-2 py-0.5 font-black tracking-[-0.01em]"
+        class="inline-block bg-[color:var(--ss-color-primary)] text-white px-2 py-0.5 font-black tracking-[-0.01em]"
         >SMD</span
       >
       <span>Services</span>
@@ -27,7 +27,7 @@ const navLinks = [
       {
         navLinks.map((item) => (
           <a
-            class="hidden md:inline-flex items-center min-h-11 px-1 font-['Archivo_Narrow'] text-sm font-semibold uppercase tracking-[0.12em] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+            class="hidden md:inline-flex items-center min-h-11 px-1 font-['Archivo_Narrow'] text-sm font-semibold uppercase tracking-[0.12em] text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-text-primary)] active:text-[color:var(--ss-color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2"
             href={item.href}
             data-ev={`nav-${item.label.toLowerCase()}`}
           >
@@ -36,7 +36,7 @@ const navLinks = [
         ))
       }
       <a
-        class="inline-flex items-center whitespace-nowrap min-h-11 border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] active:bg-[color:var(--color-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 px-3 md:px-5 py-2 font-['Archivo'] font-bold uppercase tracking-[0.08em] text-white text-xs md:text-sm transition-colors"
+        class="inline-flex items-center whitespace-nowrap min-h-11 border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] active:bg-[color:var(--ss-color-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2 px-3 md:px-5 py-2 font-['Archivo'] font-bold uppercase tracking-[0.08em] text-white text-xs md:text-sm transition-colors"
         href="/book"
         data-ev="nav-book">Book a Call</a
       >
@@ -46,7 +46,7 @@ const navLinks = [
         aria-controls="mobile-menu-dialog"
         aria-haspopup="dialog"
         data-nav-open
-        class="md:hidden inline-flex items-center justify-center min-w-11 min-h-11 px-3 border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)] font-['Archivo_Narrow'] text-xs font-bold uppercase tracking-[0.14em] text-[color:var(--color-text-primary)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 select-none transition-colors"
+        class="md:hidden inline-flex items-center justify-center min-w-11 min-h-11 px-3 border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)] font-['Archivo_Narrow'] text-xs font-bold uppercase tracking-[0.14em] text-[color:var(--ss-color-text-primary)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2 select-none transition-colors"
       >
         Menu
       </button>
@@ -63,7 +63,7 @@ const navLinks = [
   class="nav-dialog md:hidden"
   data-nav-dialog
 >
-  <div class="flex h-full w-full flex-col bg-[color:var(--color-surface-inverse)] text-white">
+  <div class="flex h-full w-full flex-col bg-[color:var(--ss-color-surface-inverse)] text-white">
     <!-- Overlay header: mirrors the bar structure so there is no visual jump.
          Brand on the left, Close on the right. -->
     <div class="flex h-14 flex-none items-center justify-between px-4 border-b-[3px] border-white">
@@ -73,7 +73,7 @@ const navLinks = [
         data-nav-link
       >
         <span
-          class="inline-block bg-[color:var(--color-primary)] text-white px-2 py-0.5 font-black tracking-[-0.01em]"
+          class="inline-block bg-[color:var(--ss-color-primary)] text-white px-2 py-0.5 font-black tracking-[-0.01em]"
           >SMD</span
         >
         <span>Services</span>
@@ -82,7 +82,7 @@ const navLinks = [
         type="button"
         aria-label="Close menu"
         data-nav-close
-        class="inline-flex items-center justify-center min-w-11 min-h-11 px-3 border-[3px] border-white bg-transparent font-['Archivo_Narrow'] text-xs font-bold uppercase tracking-[0.14em] text-white cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--color-surface-inverse)]"
+        class="inline-flex items-center justify-center min-w-11 min-h-11 px-3 border-[3px] border-white bg-transparent font-['Archivo_Narrow'] text-xs font-bold uppercase tracking-[0.14em] text-white cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--ss-color-surface-inverse)]"
       >
         Close
       </button>
@@ -100,7 +100,7 @@ const navLinks = [
                 class="flex items-baseline gap-4 px-5 py-6 min-h-[64px] font-['Archivo'] text-3xl font-black uppercase tracking-[-0.01em] text-white hover:bg-[color:rgba(245,240,227,0.06)]"
                 data-ev={`nav-mobile-${item.label.toLowerCase()}`}
               >
-                <span class="font-['JetBrains_Mono'] text-sm font-semibold tracking-[0.12em] text-[color:var(--color-primary)] min-w-[2.5rem]">
+                <span class="font-['JetBrains_Mono'] text-sm font-semibold tracking-[0.12em] text-[color:var(--ss-color-primary)] min-w-[2.5rem]">
                   § 0{i + 1}
                 </span>
                 <span>{item.label}</span>
@@ -117,7 +117,7 @@ const navLinks = [
         href="/book"
         data-nav-link
         data-ev="nav-mobile-book"
-        class="flex w-full items-center justify-center whitespace-nowrap border-[3px] border-white bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] px-5 py-4 font-['Archivo'] text-base font-bold uppercase tracking-[0.08em] text-white transition-colors"
+        class="flex w-full items-center justify-center whitespace-nowrap border-[3px] border-white bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] px-5 py-4 font-['Archivo'] text-base font-bold uppercase tracking-[0.08em] text-white transition-colors"
         >Book a Call</a
       >
     </div>

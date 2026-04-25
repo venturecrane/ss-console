@@ -110,9 +110,9 @@ export function lostReasonChipClass(code: string | null | undefined): string {
     case 'wrong-contact':
       return 'bg-purple-100 text-purple-700'
     case 'other':
-      return 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
+      return 'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]'
     default:
-      return 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
+      return 'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]'
   }
 }
 

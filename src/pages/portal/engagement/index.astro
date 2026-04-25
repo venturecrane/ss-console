@@ -90,7 +90,7 @@ const currentMilestoneLabel = engagement ? resolveEngagementLabel(engagement.sta
     />
     <title>Progress — {BRAND_NAME}</title>
   </head>
-  <body class="min-h-screen bg-[color:var(--color-background)]">
+  <body class="min-h-screen bg-[color:var(--ss-color-background)]">
     <SkipToMain />
     <PortalHeader
       clientName={clientName}
@@ -102,7 +102,7 @@ const currentMilestoneLabel = engagement ? resolveEngagementLabel(engagement.sta
           type="submit"
           aria-label="Sign out"
           title="Sign out"
-          class="inline-flex items-center justify-center w-9 h-9 text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 transition-colors"
+          class="inline-flex items-center justify-center w-9 h-9 text-[color:var(--ss-color-text-muted)] hover:text-[color:var(--ss-color-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2 transition-colors"
         >
           <span class="material-symbols-outlined text-[20px]">logout</span>
         </button>
@@ -131,11 +131,11 @@ const currentMilestoneLabel = engagement ? resolveEngagementLabel(engagement.sta
 
       {
         !engagement ? (
-          <div class="mt-10 border-[3px] border-[color:var(--color-text-primary)] p-8 md:p-12 text-center">
-            <p class="font-['Archivo'] text-2xl md:text-3xl font-black uppercase tracking-[-0.02em] text-[color:var(--color-text-primary)]">
+          <div class="mt-10 border-[3px] border-[color:var(--ss-color-text-primary)] p-8 md:p-12 text-center">
+            <p class="font-['Archivo'] text-2xl md:text-3xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]">
               No active engagement
             </p>
-            <p class="mt-3 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+            <p class="mt-3 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
               Progress appears here once your engagement begins.
             </p>
           </div>
@@ -143,14 +143,14 @@ const currentMilestoneLabel = engagement ? resolveEngagementLabel(engagement.sta
           <div class="mt-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-10 lg:gap-12 lg:items-start">
             <div class="flex flex-col gap-8 min-w-0">
               {/* § 01 Overview */}
-              <section class="border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)]">
-                <div class="flex items-center justify-between gap-3 bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold">
+              <section class="border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)]">
+                <div class="flex items-center justify-between gap-3 bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold">
                   <span>Overview</span>
-                  <span class="text-[color:var(--color-primary)]">§ 01</span>
+                  <span class="text-[color:var(--ss-color-primary)]">§ 01</span>
                 </div>
                 <div class="px-5 md:px-7 py-6">
                   {engagement.scope_summary && (
-                    <p class="text-[color:var(--color-text-secondary)] leading-[1.55]">
+                    <p class="text-[color:var(--ss-color-text-secondary)] leading-[1.55]">
                       {engagement.scope_summary}
                     </p>
                   )}
@@ -158,31 +158,31 @@ const currentMilestoneLabel = engagement ? resolveEngagementLabel(engagement.sta
                     class:list={[
                       'grid grid-cols-1 md:grid-cols-3',
                       engagement.scope_summary
-                        ? 'mt-6 pt-6 border-t-[2px] border-[color:var(--color-text-primary)]'
+                        ? 'mt-6 pt-6 border-t-[2px] border-[color:var(--ss-color-text-primary)]'
                         : '',
                     ]}
                   >
-                    <div class="py-3 md:py-0 md:pr-6 md:border-r-[2px] md:border-[color:var(--color-text-primary)]">
-                      <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-text-secondary)]">
+                    <div class="py-3 md:py-0 md:pr-6 md:border-r-[2px] md:border-[color:var(--ss-color-text-primary)]">
+                      <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-text-secondary)]">
                         Started
                       </p>
-                      <p class="mt-2 font-['Archivo'] text-xl md:text-2xl font-black uppercase tracking-[-0.01em] text-[color:var(--color-text-primary)]">
+                      <p class="mt-2 font-['Archivo'] text-xl md:text-2xl font-black uppercase tracking-[-0.01em] text-[color:var(--ss-color-text-primary)]">
                         {formatDate(engagement.start_date)}
                       </p>
                     </div>
-                    <div class="py-3 md:py-0 md:px-6 md:border-r-[2px] md:border-[color:var(--color-text-primary)] border-t-[2px] md:border-t-0 border-[color:var(--color-text-primary)]">
-                      <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-text-secondary)]">
+                    <div class="py-3 md:py-0 md:px-6 md:border-r-[2px] md:border-[color:var(--ss-color-text-primary)] border-t-[2px] md:border-t-0 border-[color:var(--ss-color-text-primary)]">
+                      <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-text-secondary)]">
                         Estimated completion
                       </p>
-                      <p class="mt-2 font-['Archivo'] text-xl md:text-2xl font-black uppercase tracking-[-0.01em] text-[color:var(--color-text-primary)]">
+                      <p class="mt-2 font-['Archivo'] text-xl md:text-2xl font-black uppercase tracking-[-0.01em] text-[color:var(--ss-color-text-primary)]">
                         {formatDate(engagement.estimated_end)}
                       </p>
                     </div>
-                    <div class="py-3 md:py-0 md:pl-6 border-t-[2px] md:border-t-0 border-[color:var(--color-text-primary)]">
-                      <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--color-text-secondary)]">
+                    <div class="py-3 md:py-0 md:pl-6 border-t-[2px] md:border-t-0 border-[color:var(--ss-color-text-primary)]">
+                      <p class="font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-text-secondary)]">
                         Current state
                       </p>
-                      <p class="mt-2 font-['Archivo'] text-xl md:text-2xl font-black uppercase tracking-[-0.01em] text-[color:var(--color-primary)]">
+                      <p class="mt-2 font-['Archivo'] text-xl md:text-2xl font-black uppercase tracking-[-0.01em] text-[color:var(--ss-color-primary)]">
                         {currentMilestoneLabel}
                       </p>
                     </div>
@@ -191,33 +191,33 @@ const currentMilestoneLabel = engagement ? resolveEngagementLabel(engagement.sta
               </section>
 
               {/* § 02 Milestones */}
-              <section class="border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)]">
-                <div class="flex items-center justify-between gap-3 bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold">
+              <section class="border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)]">
+                <div class="flex items-center justify-between gap-3 bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] px-5 py-2.5 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold">
                   <span>Milestones</span>
-                  <span class="text-[color:var(--color-primary)]">§ 02</span>
+                  <span class="text-[color:var(--ss-color-primary)]">§ 02</span>
                 </div>
 
                 {milestones.length === 0 ? (
                   <div class="px-5 md:px-7 py-6">
-                    <p class="text-[color:var(--color-text-secondary)]">
+                    <p class="text-[color:var(--ss-color-text-secondary)]">
                       Milestones appear here as your engagement progresses.
                     </p>
                   </div>
                 ) : (
-                  <ol class="divide-y-[2px] divide-[color:var(--color-text-primary)]">
+                  <ol class="divide-y-[2px] divide-[color:var(--ss-color-text-primary)]">
                     {milestones.map((m, idx) => {
                       const isDone = m.status === 'completed'
                       const isNow = m.status === 'in_progress'
                       const markerClass = isDone
-                        ? 'bg-[color:var(--color-text-primary)] text-[color:var(--color-primary)]'
+                        ? 'bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-primary)]'
                         : isNow
-                          ? 'bg-[color:var(--color-primary)] text-[color:var(--color-background)]'
-                          : 'bg-[color:var(--color-background)] text-[color:var(--color-text-primary)]'
+                          ? 'bg-[color:var(--ss-color-primary)] text-[color:var(--ss-color-background)]'
+                          : 'bg-[color:var(--ss-color-background)] text-[color:var(--ss-color-text-primary)]'
                       return (
                         <li class="grid grid-cols-[72px_1fr] md:grid-cols-[88px_1fr_auto] items-stretch">
                           <div
                             class:list={[
-                              'flex items-center justify-center font-["Archivo"] font-black text-2xl md:text-3xl tracking-[-0.02em] border-r-[2px] border-[color:var(--color-text-primary)]',
+                              'flex items-center justify-center font-["Archivo"] font-black text-2xl md:text-3xl tracking-[-0.02em] border-r-[2px] border-[color:var(--ss-color-text-primary)]',
                               markerClass,
                             ]}
                             aria-hidden="true"
@@ -225,15 +225,15 @@ const currentMilestoneLabel = engagement ? resolveEngagementLabel(engagement.sta
                             {String(idx + 1).padStart(2, '0')}
                           </div>
                           <div class="px-5 py-5 min-w-0">
-                            <h3 class="font-['Archivo'] text-lg md:text-xl font-black uppercase tracking-[-0.01em] text-[color:var(--color-text-primary)] m-0 leading-tight">
+                            <h3 class="font-['Archivo'] text-lg md:text-xl font-black uppercase tracking-[-0.01em] text-[color:var(--ss-color-text-primary)] m-0 leading-tight">
                               {m.name}
                             </h3>
                             {m.description && (
-                              <p class="mt-2 text-[color:var(--color-text-secondary)] leading-[1.55]">
+                              <p class="mt-2 text-[color:var(--ss-color-text-secondary)] leading-[1.55]">
                                 {m.description}
                               </p>
                             )}
-                            <p class="mt-3 font-mono text-xs uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">
+                            <p class="mt-3 font-mono text-xs uppercase tracking-[0.08em] text-[color:var(--ss-color-text-secondary)]">
                               {isDone && m.completed_at
                                 ? `Completed ${formatDate(m.completed_at)}`
                                 : m.due_date

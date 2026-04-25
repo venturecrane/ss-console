@@ -141,13 +141,13 @@ function kindFor(doc: DocumentEntry): string {
     />
     <title>Documents — {BRAND_NAME}</title>
   </head>
-  <body class="min-h-screen bg-[color:var(--color-background)]">
+  <body class="min-h-screen bg-[color:var(--ss-color-background)]">
     <SkipToMain />
     <PortalHeader clientName={clientName}>
       <form method="POST" action="/api/auth/logout">
         <button
           type="submit"
-          class="inline-flex items-center min-h-11 px-2 -mx-2 text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded transition-colors"
+          class="inline-flex items-center min-h-11 px-2 -mx-2 text-sm text-[color:var(--ss-color-text-muted)] hover:text-[color:var(--ss-color-text-primary)] active:text-[color:var(--ss-color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2 rounded transition-colors"
         >
           Sign out
         </button>
@@ -167,24 +167,24 @@ function kindFor(doc: DocumentEntry): string {
 
       {
         documents.length === 0 ? (
-          <div class="mt-10 border-[3px] border-[color:var(--color-text-primary)] p-8 md:p-12 text-center">
-            <p class="font-['Archivo'] text-2xl md:text-3xl font-black uppercase tracking-[-0.02em] text-[color:var(--color-text-primary)]">
+          <div class="mt-10 border-[3px] border-[color:var(--ss-color-text-primary)] p-8 md:p-12 text-center">
+            <p class="font-['Archivo'] text-2xl md:text-3xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]">
               No documents yet
             </p>
-            <p class="mt-3 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+            <p class="mt-3 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
               Documents will appear here as your engagement progresses.
             </p>
           </div>
         ) : (
           <>
-            <p class="mt-8 mb-4 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] font-bold text-[color:var(--color-text-secondary)]">
+            <p class="mt-8 mb-4 font-['Archivo_Narrow'] text-label uppercase tracking-[0.14em] font-bold text-[color:var(--ss-color-text-secondary)]">
               {documents.length} document{documents.length !== 1 ? 's' : ''}
             </p>
-            <div class="border-[3px] border-[color:var(--color-text-primary)]">
+            <div class="border-[3px] border-[color:var(--ss-color-text-primary)]">
               {engagement && (
-                <div class="flex items-center justify-between gap-3 bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] px-4 md:px-5 py-3 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold">
+                <div class="flex items-center justify-between gap-3 bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] px-4 md:px-5 py-3 font-['Archivo_Narrow'] text-label uppercase tracking-[0.18em] font-bold">
                   <span>Engagement № {engagement.id.slice(0, 2).toUpperCase()}</span>
-                  <span class="text-[color:var(--color-primary)]">
+                  <span class="text-[color:var(--ss-color-primary)]">
                     {documents.length} doc{documents.length !== 1 ? 's' : ''}
                   </span>
                 </div>

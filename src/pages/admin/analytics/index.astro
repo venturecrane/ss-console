@@ -188,27 +188,27 @@ function complianceBarWidth(pct: number): string {
   title="Analytics — SMD Services"
   breadcrumbs={[{ label: 'Dashboard', href: '/admin' }, { label: 'Analytics' }]}
 >
-  <h2 class="text-xl font-semibold text-[color:var(--color-text-primary)] mb-6">Analytics</h2>
+  <h2 class="text-xl font-semibold text-[color:var(--ss-color-text-primary)] mb-6">Analytics</h2>
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-card">
     {/* ── Pipeline Funnel ──────────────────────────────── */}
     <div
-      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+      class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card"
     >
-      <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-4">
+      <h3 class="text-base font-semibold text-[color:var(--ss-color-text-primary)] mb-4">
         Pipeline Funnel
       </h3>
       {
         totalClients === 0 ? (
-          <p class="text-sm text-[color:var(--color-text-secondary)]">No clients yet.</p>
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)]">No clients yet.</p>
         ) : (
           <div class="space-y-row">
             {pipelineStages.map((stage) => (
               <div class="flex items-center gap-row">
-                <span class="text-sm text-[color:var(--color-text-secondary)] w-24 shrink-0">
+                <span class="text-sm text-[color:var(--ss-color-text-secondary)] w-24 shrink-0">
                   {stage.label}
                 </span>
-                <div class="flex-1 bg-[color:var(--color-border-subtle)] rounded-full h-6 overflow-hidden">
+                <div class="flex-1 bg-[color:var(--ss-color-border-subtle)] rounded-full h-6 overflow-hidden">
                   <div
                     class={`h-full rounded-full ${stage.color} flex items-center justify-end pr-2`}
                     style={`width: ${pipelineBarWidth(pipeline[stage.key])}`}
@@ -221,11 +221,13 @@ function complianceBarWidth(pct: number): string {
                   </div>
                 </div>
                 {pipeline[stage.key] === 0 && (
-                  <span class="text-xs text-[color:var(--color-text-muted)] w-6 text-right">0</span>
+                  <span class="text-xs text-[color:var(--ss-color-text-muted)] w-6 text-right">
+                    0
+                  </span>
                 )}
               </div>
             ))}
-            <p class="text-xs text-[color:var(--color-text-muted)] mt-2 pt-2 border-t border-[color:var(--color-border-subtle)]">
+            <p class="text-xs text-[color:var(--ss-color-text-muted)] mt-2 pt-2 border-t border-[color:var(--ss-color-border-subtle)]">
               Total clients: {totalClients.toLocaleString()}
             </p>
           </div>
@@ -235,56 +237,58 @@ function complianceBarWidth(pct: number): string {
 
     {/* ── Engagement Health ────────────────────────────── */}
     <div
-      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+      class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card"
     >
-      <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-4">
+      <h3 class="text-base font-semibold text-[color:var(--ss-color-text-primary)] mb-4">
         Engagement Health
       </h3>
       {
         health.total_engagements === 0 ? (
-          <p class="text-sm text-[color:var(--color-text-secondary)]">
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)]">
             No completed engagements yet.
           </p>
         ) : (
           <div class="space-y-stack">
             <div class="grid grid-cols-2 gap-stack">
               <div>
-                <p class="text-2xl font-bold text-[color:var(--color-text-primary)]">
+                <p class="text-2xl font-bold text-[color:var(--ss-color-text-primary)]">
                   {health.avg_days_to_completion.toLocaleString()}
                 </p>
-                <p class="text-xs text-[color:var(--color-text-secondary)]">
+                <p class="text-xs text-[color:var(--ss-color-text-secondary)]">
                   Avg days to completion
                 </p>
               </div>
               <div>
-                <p class="text-2xl font-bold text-[color:var(--color-text-primary)]">
+                <p class="text-2xl font-bold text-[color:var(--ss-color-text-primary)]">
                   {health.total_engagements.toLocaleString()}
                 </p>
-                <p class="text-xs text-[color:var(--color-text-secondary)]">
+                <p class="text-xs text-[color:var(--ss-color-text-secondary)]">
                   Completed engagements
                 </p>
               </div>
               <div>
-                <p class="text-2xl font-bold text-[color:var(--color-text-primary)]">
+                <p class="text-2xl font-bold text-[color:var(--ss-color-text-primary)]">
                   {health.avg_parking_lot_items.toLocaleString()}
                 </p>
-                <p class="text-xs text-[color:var(--color-text-secondary)]">
+                <p class="text-xs text-[color:var(--ss-color-text-secondary)]">
                   Avg parking lot items
                 </p>
               </div>
               <div>
-                <p class="text-2xl font-bold text-[color:var(--color-text-primary)]">
+                <p class="text-2xl font-bold text-[color:var(--ss-color-text-primary)]">
                   {health.on_time_pct}%
                 </p>
-                <p class="text-xs text-[color:var(--color-text-secondary)]">On-time completion</p>
+                <p class="text-xs text-[color:var(--ss-color-text-secondary)]">
+                  On-time completion
+                </p>
               </div>
             </div>
             <div>
-              <div class="flex items-center justify-between text-xs text-[color:var(--color-text-secondary)] mb-1">
+              <div class="flex items-center justify-between text-xs text-[color:var(--ss-color-text-secondary)] mb-1">
                 <span>On-time rate</span>
                 <span>{health.on_time_pct}%</span>
               </div>
-              <div class="bg-[color:var(--color-border-subtle)] rounded-full h-3 overflow-hidden">
+              <div class="bg-[color:var(--ss-color-border-subtle)] rounded-full h-3 overflow-hidden">
                 <div
                   class="h-full rounded-full bg-emerald-500"
                   style={`width: ${complianceBarWidth(health.on_time_pct)}`}
@@ -298,45 +302,45 @@ function complianceBarWidth(pct: number): string {
 
     {/* ── Revenue Summary ─────────────────────────────── */}
     <div
-      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+      class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card"
     >
-      <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-4">
+      <h3 class="text-base font-semibold text-[color:var(--ss-color-text-primary)] mb-4">
         Revenue Summary
       </h3>
       {
         revenue.total_revenue === 0 ? (
-          <p class="text-sm text-[color:var(--color-text-secondary)]">No invoices yet.</p>
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)]">No invoices yet.</p>
         ) : (
           <div class="space-y-stack">
             <div class="grid grid-cols-3 gap-stack">
               <div>
-                <p class="text-lg font-bold text-[color:var(--color-text-primary)]">
+                <p class="text-lg font-bold text-[color:var(--ss-color-text-primary)]">
                   {formatCurrency(revenue.total_invoiced)}
                 </p>
-                <p class="text-xs text-[color:var(--color-text-secondary)]">Total invoiced</p>
+                <p class="text-xs text-[color:var(--ss-color-text-secondary)]">Total invoiced</p>
               </div>
               <div>
                 <p class="text-lg font-bold text-green-700">{formatCurrency(revenue.total_paid)}</p>
-                <p class="text-xs text-[color:var(--color-text-secondary)]">Total paid</p>
+                <p class="text-xs text-[color:var(--ss-color-text-secondary)]">Total paid</p>
               </div>
               <div>
                 <p class="text-lg font-bold text-amber-700">{formatCurrency(outstanding)}</p>
-                <p class="text-xs text-[color:var(--color-text-secondary)]">Outstanding</p>
+                <p class="text-xs text-[color:var(--ss-color-text-secondary)]">Outstanding</p>
               </div>
             </div>
 
             {revenue.by_month.length > 0 && (
               <div>
-                <h4 class="text-sm font-medium text-[color:var(--color-text-primary)] mb-2">
+                <h4 class="text-sm font-medium text-[color:var(--ss-color-text-primary)] mb-2">
                   Monthly Revenue
                 </h4>
                 <div class="space-y-2">
                   {revenue.by_month.map((m) => (
                     <div class="flex items-center gap-row">
-                      <span class="text-xs text-[color:var(--color-text-secondary)] w-20 shrink-0">
+                      <span class="text-xs text-[color:var(--ss-color-text-secondary)] w-20 shrink-0">
                         {formatMonthLabel(m.month)}
                       </span>
-                      <div class="flex-1 bg-[color:var(--color-border-subtle)] rounded-full h-5 overflow-hidden">
+                      <div class="flex-1 bg-[color:var(--ss-color-border-subtle)] rounded-full h-5 overflow-hidden">
                         <div
                           class="h-full rounded-full bg-green-500 flex items-center justify-end pr-2"
                           style={`width: ${revenueBarWidth(m.amount)}`}
@@ -356,16 +360,16 @@ function complianceBarWidth(pct: number): string {
 
             {revenue.by_vertical.length > 0 && (
               <div>
-                <h4 class="text-sm font-medium text-[color:var(--color-text-primary)] mb-2">
+                <h4 class="text-sm font-medium text-[color:var(--ss-color-text-primary)] mb-2">
                   Revenue by Vertical
                 </h4>
                 <div class="space-y-1">
                   {revenue.by_vertical.map((v) => (
                     <div class="flex items-center justify-between text-sm">
-                      <span class="text-[color:var(--color-text-secondary)]">
+                      <span class="text-[color:var(--ss-color-text-secondary)]">
                         {getVerticalLabel(v.vertical)}
                       </span>
-                      <span class="font-medium text-[color:var(--color-text-primary)]">
+                      <span class="font-medium text-[color:var(--ss-color-text-primary)]">
                         {formatCurrency(v.amount)}
                       </span>
                     </div>
@@ -380,53 +384,53 @@ function complianceBarWidth(pct: number): string {
 
     {/* ── Follow-up Compliance ────────────────────────── */}
     <div
-      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+      class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card"
     >
-      <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-4">
+      <h3 class="text-base font-semibold text-[color:var(--ss-color-text-primary)] mb-4">
         Follow-up Compliance
       </h3>
       {
         compliance.total === 0 ? (
-          <p class="text-sm text-[color:var(--color-text-secondary)]">No follow-ups yet.</p>
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)]">No follow-ups yet.</p>
         ) : (
           <div class="space-y-stack">
             <div class="text-center">
-              <p class="text-4xl font-bold text-[color:var(--color-text-primary)]">
+              <p class="text-4xl font-bold text-[color:var(--ss-color-text-primary)]">
                 {compliance.compliance_pct}%
               </p>
-              <p class="text-sm text-[color:var(--color-text-secondary)]">Compliance rate</p>
+              <p class="text-sm text-[color:var(--ss-color-text-secondary)]">Compliance rate</p>
             </div>
             <div class="grid grid-cols-3 gap-stack text-center">
               <div>
                 <p class="text-lg font-bold text-green-700">
                   {compliance.completed_on_time.toLocaleString()}
                 </p>
-                <p class="text-xs text-[color:var(--color-text-secondary)]">On time</p>
+                <p class="text-xs text-[color:var(--ss-color-text-secondary)]">On time</p>
               </div>
               <div>
                 <p class="text-lg font-bold text-amber-700">
                   {compliance.completed_late.toLocaleString()}
                 </p>
-                <p class="text-xs text-[color:var(--color-text-secondary)]">Late</p>
+                <p class="text-xs text-[color:var(--ss-color-text-secondary)]">Late</p>
               </div>
               <div>
                 <p class="text-lg font-bold text-red-700">{compliance.missed.toLocaleString()}</p>
-                <p class="text-xs text-[color:var(--color-text-secondary)]">Missed</p>
+                <p class="text-xs text-[color:var(--ss-color-text-secondary)]">Missed</p>
               </div>
             </div>
             <div>
-              <div class="flex items-center justify-between text-xs text-[color:var(--color-text-secondary)] mb-1">
+              <div class="flex items-center justify-between text-xs text-[color:var(--ss-color-text-secondary)] mb-1">
                 <span>Compliance</span>
                 <span>{compliance.compliance_pct}%</span>
               </div>
-              <div class="bg-[color:var(--color-border-subtle)] rounded-full h-3 overflow-hidden">
+              <div class="bg-[color:var(--ss-color-border-subtle)] rounded-full h-3 overflow-hidden">
                 <div
                   class="h-full rounded-full bg-green-500"
                   style={`width: ${complianceBarWidth(compliance.compliance_pct)}`}
                 />
               </div>
             </div>
-            <p class="text-xs text-[color:var(--color-text-muted)] pt-2 border-t border-[color:var(--color-border-subtle)]">
+            <p class="text-xs text-[color:var(--ss-color-text-muted)] pt-2 border-t border-[color:var(--ss-color-border-subtle)]">
               Total follow-ups: {compliance.total.toLocaleString()}
             </p>
           </div>
@@ -436,21 +440,21 @@ function complianceBarWidth(pct: number): string {
 
     {/* ── Quote Accuracy ──────────────────────────────── */}
     <div
-      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card md:col-span-2"
+      class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card md:col-span-2"
     >
-      <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-4">
+      <h3 class="text-base font-semibold text-[color:var(--ss-color-text-primary)] mb-4">
         Quote Accuracy
       </h3>
       {
         quoteAccuracy.length === 0 ? (
-          <p class="text-sm text-[color:var(--color-text-secondary)]">
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)]">
             No completed engagements yet.
           </p>
         ) : (
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead>
-                <tr class="text-left text-xs text-[color:var(--color-text-secondary)] border-b border-[color:var(--color-border)]">
+                <tr class="text-left text-xs text-[color:var(--ss-color-text-secondary)] border-b border-[color:var(--ss-color-border)]">
                   <th class="pb-2 font-medium">Client</th>
                   <th class="pb-2 font-medium text-right">Estimated</th>
                   <th class="pb-2 font-medium text-right">Actual</th>
@@ -458,7 +462,7 @@ function complianceBarWidth(pct: number): string {
                   <th class="pb-2 font-medium text-right">Accuracy</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-[color:var(--color-border-subtle)]">
+              <tbody class="divide-y divide-[color:var(--ss-color-border-subtle)]">
                 {quoteAccuracy.map((row) => {
                   const variance = row.actual_hours - row.estimated_hours
                   const varianceStr =
@@ -467,14 +471,16 @@ function complianceBarWidth(pct: number): string {
                       : `${variance.toLocaleString()}h`
                   return (
                     <tr>
-                      <td class="py-2 text-[color:var(--color-text-primary)]">{row.client_name}</td>
-                      <td class="py-2 text-right text-[color:var(--color-text-secondary)]">
+                      <td class="py-2 text-[color:var(--ss-color-text-primary)]">
+                        {row.client_name}
+                      </td>
+                      <td class="py-2 text-right text-[color:var(--ss-color-text-secondary)]">
                         {row.estimated_hours.toLocaleString()}h
                       </td>
-                      <td class="py-2 text-right text-[color:var(--color-text-secondary)]">
+                      <td class="py-2 text-right text-[color:var(--ss-color-text-secondary)]">
                         {row.actual_hours.toLocaleString()}h
                       </td>
-                      <td class="py-2 text-right text-[color:var(--color-text-secondary)]">
+                      <td class="py-2 text-right text-[color:var(--ss-color-text-secondary)]">
                         {varianceStr}
                       </td>
                       <td class="py-2 text-right">
@@ -489,16 +495,16 @@ function complianceBarWidth(pct: number): string {
                 })}
               </tbody>
               <tfoot>
-                <tr class="border-t border-[color:var(--color-border)] font-medium">
-                  <td class="py-2 text-[color:var(--color-text-primary)]">Average</td>
-                  <td class="py-2 text-right text-[color:var(--color-text-secondary)]">
+                <tr class="border-t border-[color:var(--ss-color-border)] font-medium">
+                  <td class="py-2 text-[color:var(--ss-color-text-primary)]">Average</td>
+                  <td class="py-2 text-right text-[color:var(--ss-color-text-secondary)]">
                     {Math.round(
                       quoteAccuracy.reduce((s, r) => s + r.estimated_hours, 0) /
                         quoteAccuracy.length
                     ).toLocaleString()}
                     h
                   </td>
-                  <td class="py-2 text-right text-[color:var(--color-text-secondary)]">
+                  <td class="py-2 text-right text-[color:var(--ss-color-text-secondary)]">
                     {Math.round(
                       quoteAccuracy.reduce((s, r) => s + r.actual_hours, 0) / quoteAccuracy.length
                     ).toLocaleString()}
@@ -522,28 +528,30 @@ function complianceBarWidth(pct: number): string {
   </div>
 
   {/* ── Site Traffic ─────────────────────────────────────── */}
-  <h3 class="text-lg font-semibold text-[color:var(--color-text-primary)] mt-10 mb-4">
+  <h3 class="text-lg font-semibold text-[color:var(--ss-color-text-primary)] mt-10 mb-4">
     Site Traffic
   </h3>
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-card">
     {/* ── Top pages (7d) ────────────────────────────────── */}
     <div
-      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+      class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card"
     >
-      <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-1">Top Pages</h3>
-      <p class="text-xs text-[color:var(--color-text-muted)] mb-4">Last 7 days, by page views</p>
+      <h3 class="text-base font-semibold text-[color:var(--ss-color-text-primary)] mb-1">
+        Top Pages
+      </h3>
+      <p class="text-xs text-[color:var(--ss-color-text-muted)] mb-4">Last 7 days, by page views</p>
       {
         topPaths.length === 0 ? (
-          <p class="text-sm text-[color:var(--color-text-secondary)]">No page views yet.</p>
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)]">No page views yet.</p>
         ) : (
           <div class="space-y-2">
             {topPaths.map((row) => (
               <div class="flex items-center gap-row">
-                <span class="text-sm text-[color:var(--color-text-secondary)] w-36 shrink-0 truncate font-mono">
+                <span class="text-sm text-[color:var(--ss-color-text-secondary)] w-36 shrink-0 truncate font-mono">
                   {row.path}
                 </span>
-                <div class="flex-1 bg-[color:var(--color-border-subtle)] rounded-full h-5 overflow-hidden">
+                <div class="flex-1 bg-[color:var(--ss-color-border-subtle)] rounded-full h-5 overflow-hidden">
                   <div
                     class="h-full rounded-full bg-blue-500 flex items-center justify-end pr-2"
                     style={`width: ${pathBarWidth(row.views)}`}
@@ -564,21 +572,25 @@ function complianceBarWidth(pct: number): string {
 
     {/* ── Top CTAs (7d) ─────────────────────────────────── */}
     <div
-      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+      class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card"
     >
-      <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-1">Top CTAs</h3>
-      <p class="text-xs text-[color:var(--color-text-muted)] mb-4">Last 7 days, by click count</p>
+      <h3 class="text-base font-semibold text-[color:var(--ss-color-text-primary)] mb-1">
+        Top CTAs
+      </h3>
+      <p class="text-xs text-[color:var(--ss-color-text-muted)] mb-4">
+        Last 7 days, by click count
+      </p>
       {
         topCtas.length === 0 ? (
-          <p class="text-sm text-[color:var(--color-text-secondary)]">No CTA clicks yet.</p>
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)]">No CTA clicks yet.</p>
         ) : (
           <div class="space-y-2">
             {topCtas.map((row) => (
               <div class="flex items-center gap-row">
-                <span class="text-sm text-[color:var(--color-text-secondary)] w-36 shrink-0 truncate font-mono">
+                <span class="text-sm text-[color:var(--ss-color-text-secondary)] w-36 shrink-0 truncate font-mono">
                   {row.cta}
                 </span>
-                <div class="flex-1 bg-[color:var(--color-border-subtle)] rounded-full h-5 overflow-hidden">
+                <div class="flex-1 bg-[color:var(--ss-color-border-subtle)] rounded-full h-5 overflow-hidden">
                   <div
                     class="h-full rounded-full bg-amber-500 flex items-center justify-end pr-2"
                     style={`width: ${ctaBarWidth(row.clicks)}`}
@@ -599,17 +611,17 @@ function complianceBarWidth(pct: number): string {
 
     {/* ── Conversion funnel (7d) ────────────────────────── */}
     <div
-      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card md:col-span-2"
+      class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card md:col-span-2"
     >
-      <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-1">
+      <h3 class="text-base font-semibold text-[color:var(--ss-color-text-primary)] mb-1">
         Conversion Funnel
       </h3>
-      <p class="text-xs text-[color:var(--color-text-muted)] mb-4">
+      <p class="text-xs text-[color:var(--ss-color-text-muted)] mb-4">
         Distinct sessions per step, last 7 days
       </p>
       {
         funnelTop === 0 ? (
-          <p class="text-sm text-[color:var(--color-text-secondary)]">No funnel data yet.</p>
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)]">No funnel data yet.</p>
         ) : (
           <div class="space-y-row">
             {funnelSteps.map((step, idx) => {
@@ -617,10 +629,10 @@ function complianceBarWidth(pct: number): string {
               const drop = idx === 0 ? '—' : dropOff(count, funnel[funnelSteps[idx - 1].key])
               return (
                 <div class="flex items-center gap-row">
-                  <span class="text-sm text-[color:var(--color-text-secondary)] w-44 shrink-0">
+                  <span class="text-sm text-[color:var(--ss-color-text-secondary)] w-44 shrink-0">
                     {step.label}
                   </span>
-                  <div class="flex-1 bg-[color:var(--color-border-subtle)] rounded-full h-6 overflow-hidden">
+                  <div class="flex-1 bg-[color:var(--ss-color-border-subtle)] rounded-full h-6 overflow-hidden">
                     <div
                       class="h-full rounded-full bg-emerald-500 flex items-center justify-end pr-2"
                       style={`width: ${funnelBarWidth(count)}`}
@@ -630,7 +642,7 @@ function complianceBarWidth(pct: number): string {
                       )}
                     </div>
                   </div>
-                  <span class="text-xs text-[color:var(--color-text-muted)] w-14 text-right">
+                  <span class="text-xs text-[color:var(--ss-color-text-muted)] w-14 text-right">
                     {drop}
                   </span>
                 </div>
@@ -643,17 +655,17 @@ function complianceBarWidth(pct: number): string {
 
     {/* ── Daily uniques (30d) ───────────────────────────── */}
     <div
-      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card md:col-span-2"
+      class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card md:col-span-2"
     >
-      <h3 class="text-base font-semibold text-[color:var(--color-text-primary)] mb-1">
+      <h3 class="text-base font-semibold text-[color:var(--ss-color-text-primary)] mb-1">
         Daily Uniques
       </h3>
-      <p class="text-xs text-[color:var(--color-text-muted)] mb-4">
+      <p class="text-xs text-[color:var(--ss-color-text-muted)] mb-4">
         Distinct sessions per day, last 30 days
       </p>
       {
         maxDailyUniques === 0 ? (
-          <p class="text-sm text-[color:var(--color-text-secondary)]">No session data yet.</p>
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)]">No session data yet.</p>
         ) : (
           <div>
             <svg
@@ -675,7 +687,7 @@ function complianceBarWidth(pct: number): string {
                 )
               })}
             </svg>
-            <div class="mt-2 flex justify-between text-xs text-[color:var(--color-text-muted)]">
+            <div class="mt-2 flex justify-between text-xs text-[color:var(--ss-color-text-muted)]">
               <span>{formatShortDate(dailyUniques[0].day)}</span>
               <span>{formatShortDate(dailyUniques[dailyUniques.length - 1].day)}</span>
             </div>

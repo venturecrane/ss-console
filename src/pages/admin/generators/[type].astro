@@ -256,9 +256,9 @@ function tierClass(tier: string | null): string {
     case 'cool':
       return 'bg-blue-100 text-blue-700'
     case 'cold':
-      return 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
+      return 'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]'
     default:
-      return 'bg-[color:var(--color-border-subtle)] text-[color:var(--color-text-secondary)]'
+      return 'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]'
   }
 }
 
@@ -292,24 +292,24 @@ const runDisabledReason = !runWorkerUrl
   ]}
 >
   <div class="mb-6">
-    <h2 class="text-xl font-semibold text-[color:var(--color-text-primary)]">
+    <h2 class="text-xl font-semibold text-[color:var(--ss-color-text-primary)]">
       {PIPELINE_LABELS[type]}
     </h2>
-    <p class="text-sm text-[color:var(--color-text-secondary)] mt-1">
+    <p class="text-sm text-[color:var(--ss-color-text-secondary)] mt-1">
       {PIPELINE_DESCRIPTIONS[type]}
     </p>
   </div>
 
   {
     saved && (
-      <div class="mb-6 p-stack bg-green-50 border border-green-200 rounded-[var(--radius-card)]">
+      <div class="mb-6 p-stack bg-green-50 border border-green-200 rounded-[var(--ss-radius-card)]">
         <p class="text-sm text-green-800">Configuration saved.</p>
       </div>
     )
   }
   {
     ran && (
-      <div class="mb-6 p-stack bg-green-50 border border-green-200 rounded-[var(--radius-card)]">
+      <div class="mb-6 p-stack bg-green-50 border border-green-200 rounded-[var(--ss-radius-card)]">
         <p class="text-sm text-green-800">
           Run complete. {ranSignals} signal{ranSignals === '1' ? '' : 's'} written.
         </p>
@@ -318,7 +318,7 @@ const runDisabledReason = !runWorkerUrl
   }
   {
     errorParam && (
-      <div class="mb-6 p-stack bg-red-50 border border-red-200 rounded-[var(--radius-card)]">
+      <div class="mb-6 p-stack bg-red-50 border border-red-200 rounded-[var(--ss-radius-card)]">
         <p class="text-sm text-red-800">
           {errorParam === 'run_not_configured'
             ? `Run-now is not configured. Set ${type.toUpperCase()}_WORKER_URL and LEAD_INGEST_API_KEY on this Pages project.`
@@ -329,7 +329,7 @@ const runDisabledReason = !runWorkerUrl
   }
   {
     configRow.parseError.length > 0 && (
-      <div class="mb-6 p-stack bg-yellow-50 border border-yellow-200 rounded-[var(--radius-card)]">
+      <div class="mb-6 p-stack bg-yellow-50 border border-yellow-200 rounded-[var(--ss-radius-card)]">
         <p class="text-sm text-yellow-800 font-medium mb-1">
           Stored configuration failed validation. Showing defaults.
         </p>
@@ -344,7 +344,7 @@ const runDisabledReason = !runWorkerUrl
 
   <section aria-labelledby="liveness" class="mb-8">
     <div
-      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+      class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card"
     >
       <div class="flex items-center justify-between gap-4 flex-wrap">
         <div class="flex items-center gap-row">
@@ -352,18 +352,18 @@ const runDisabledReason = !runWorkerUrl
             class={`w-3 h-3 rounded-full ${configRow.enabled ? 'bg-green-500' : 'bg-slate-300'}`}
           >
           </div>
-          <span class="text-sm font-medium text-[color:var(--color-text-primary)]">
+          <span class="text-sm font-medium text-[color:var(--ss-color-text-primary)]">
             {configRow.enabled ? 'Enabled' : 'Disabled'}
           </span>
-          <span class="text-xs text-[color:var(--color-text-muted)]">·</span>
-          <span class="text-sm text-[color:var(--color-text-secondary)]">
+          <span class="text-xs text-[color:var(--ss-color-text-muted)]">·</span>
+          <span class="text-sm text-[color:var(--ss-color-text-secondary)]">
             Last run: {formatRelative(configRow.last_run_at)}
           </span>
           {
             configRow.last_run_signals_count !== null && (
               <>
-                <span class="text-xs text-[color:var(--color-text-muted)]">·</span>
-                <span class="text-sm text-[color:var(--color-text-secondary)]">
+                <span class="text-xs text-[color:var(--ss-color-text-muted)]">·</span>
+                <span class="text-sm text-[color:var(--ss-color-text-secondary)]">
                   {configRow.last_run_signals_count} signal
                   {configRow.last_run_signals_count === 1 ? '' : 's'}
                 </span>
@@ -373,7 +373,7 @@ const runDisabledReason = !runWorkerUrl
           {
             configRow.last_run_error && (
               <>
-                <span class="text-xs text-[color:var(--color-text-muted)]">·</span>
+                <span class="text-xs text-[color:var(--ss-color-text-muted)]">·</span>
                 <span class="text-sm text-red-600">Error: {configRow.last_run_error}</span>
               </>
             )
@@ -384,7 +384,7 @@ const runDisabledReason = !runWorkerUrl
           <button
             type="submit"
             disabled={!runConfigured}
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-primary rounded-[var(--radius-card)] hover:bg-primary/90 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-primary rounded-[var(--ss-radius-card)] hover:bg-primary/90 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
             title={runConfigured ? 'Invoke worker now' : runDisabledReason}
           >
             <span class="material-symbols-outlined text-base">play_arrow</span>
@@ -394,7 +394,7 @@ const runDisabledReason = !runWorkerUrl
       </div>
       {
         !runConfigured && (
-          <p class="mt-2 text-xs text-[color:var(--color-text-secondary)]">
+          <p class="mt-2 text-xs text-[color:var(--ss-color-text-secondary)]">
             Run-now disabled: <code class="font-mono">{runDisabledReason}</code>
           </p>
         )
@@ -405,13 +405,13 @@ const runDisabledReason = !runWorkerUrl
   <section aria-labelledby="config-form" class="mb-8">
     <h3
       id="config-form"
-      class="text-base font-semibold text-[color:var(--color-text-primary)] mb-3"
+      class="text-base font-semibold text-[color:var(--ss-color-text-primary)] mb-3"
     >
       Configuration
     </h3>
     <form
       method="POST"
-      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card space-y-stack"
+      class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card space-y-stack"
     >
       <input type="hidden" name="action" value="save_config" />
 
@@ -421,9 +421,9 @@ const runDisabledReason = !runWorkerUrl
           id="enabled"
           name="enabled"
           checked={configRow.enabled}
-          class="w-4 h-4 rounded border-[color:var(--color-border)]"
+          class="w-4 h-4 rounded border-[color:var(--ss-color-border)]"
         />
-        <label for="enabled" class="text-sm font-medium text-[color:var(--color-text-primary)]">
+        <label for="enabled" class="text-sm font-medium text-[color:var(--ss-color-text-primary)]">
           Enabled — when unchecked, worker returns early and writes no signals
         </label>
       </div>
@@ -431,9 +431,9 @@ const runDisabledReason = !runWorkerUrl
       <div>
         <label
           for="target_verticals"
-          class="text-sm font-medium text-[color:var(--color-text-primary)] block mb-1"
+          class="text-sm font-medium text-[color:var(--ss-color-text-primary)] block mb-1"
         >
-          Target verticals <span class="text-xs text-[color:var(--color-text-secondary)]"
+          Target verticals <span class="text-xs text-[color:var(--ss-color-text-secondary)]"
             >(one per line)</span
           >
         </label>
@@ -441,10 +441,10 @@ const runDisabledReason = !runWorkerUrl
           id="target_verticals"
           name="target_verticals"
           rows="6"
-          class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm font-mono"
+          class="w-full border border-[color:var(--ss-color-border)] rounded px-3 py-2 text-sm font-mono"
           set:html={(configRow.config as NewBusinessConfig).target_verticals.join('\n')}
         />
-        <p class="text-xs text-[color:var(--color-text-secondary)] mt-1">
+        <p class="text-xs text-[color:var(--ss-color-text-secondary)] mt-1">
           Free-text. Suggestions: {VERTICALS.map((v) => v.replace(/_/g, ' ')).join(', ')}.
         </p>
       </div>
@@ -453,7 +453,7 @@ const runDisabledReason = !runWorkerUrl
         <div>
           <label
             for="revenue_min_usd"
-            class="text-sm font-medium text-[color:var(--color-text-primary)] block mb-1"
+            class="text-sm font-medium text-[color:var(--ss-color-text-primary)] block mb-1"
           >
             Revenue min (USD)
           </label>
@@ -464,13 +464,13 @@ const runDisabledReason = !runWorkerUrl
             value={(configRow.config as NewBusinessConfig).revenue_range.min_usd}
             min="0"
             step="50000"
-            class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm"
+            class="w-full border border-[color:var(--ss-color-border)] rounded px-3 py-2 text-sm"
           />
         </div>
         <div>
           <label
             for="revenue_max_usd"
-            class="text-sm font-medium text-[color:var(--color-text-primary)] block mb-1"
+            class="text-sm font-medium text-[color:var(--ss-color-text-primary)] block mb-1"
           >
             Revenue max (USD)
           </label>
@@ -481,7 +481,7 @@ const runDisabledReason = !runWorkerUrl
             value={(configRow.config as NewBusinessConfig).revenue_range.max_usd}
             min="0"
             step="50000"
-            class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm"
+            class="w-full border border-[color:var(--ss-color-border)] rounded px-3 py-2 text-sm"
           />
         </div>
       </div>
@@ -489,9 +489,9 @@ const runDisabledReason = !runWorkerUrl
       <div>
         <label
           for="geos"
-          class="text-sm font-medium text-[color:var(--color-text-primary)] block mb-1"
+          class="text-sm font-medium text-[color:var(--ss-color-text-primary)] block mb-1"
         >
-          Geographies <span class="text-xs text-[color:var(--color-text-secondary)]"
+          Geographies <span class="text-xs text-[color:var(--ss-color-text-secondary)]"
             >(one per line)</span
           >
         </label>
@@ -499,7 +499,7 @@ const runDisabledReason = !runWorkerUrl
           id="geos"
           name="geos"
           rows="2"
-          class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm font-mono"
+          class="w-full border border-[color:var(--ss-color-border)] rounded px-3 py-2 text-sm font-mono"
           set:html={(configRow.config as NewBusinessConfig).geos.join('\n')}
         />
       </div>
@@ -507,7 +507,7 @@ const runDisabledReason = !runWorkerUrl
       {
         type === 'new_business' && (
           <div>
-            <label class="text-sm font-medium text-[color:var(--color-text-primary)] block mb-2">
+            <label class="text-sm font-medium text-[color:var(--ss-color-text-primary)] block mb-2">
               Data sources
             </label>
             <div class="space-y-1">
@@ -517,13 +517,13 @@ const runDisabledReason = !runWorkerUrl
                     type="checkbox"
                     name={`soda_${s.city}`}
                     checked={s.enabled}
-                    class="w-4 h-4 rounded border-[color:var(--color-border)]"
+                    class="w-4 h-4 rounded border-[color:var(--ss-color-border)]"
                   />
                   <span class="font-mono text-xs">{s.city.replace(/_/g, ' ')}</span>
                 </label>
               ))}
             </div>
-            <p class="text-xs text-[color:var(--color-text-secondary)] mt-1">
+            <p class="text-xs text-[color:var(--ss-color-text-secondary)] mt-1">
               Per-city toggles. Unchecking skips that feed entirely on the next run.
             </p>
           </div>
@@ -535,16 +535,18 @@ const runDisabledReason = !runWorkerUrl
           <div>
             <label
               for="search_queries"
-              class="text-sm font-medium text-[color:var(--color-text-primary)] block mb-1"
+              class="text-sm font-medium text-[color:var(--ss-color-text-primary)] block mb-1"
             >
               Search queries{' '}
-              <span class="text-xs text-[color:var(--color-text-secondary)]">(one per line)</span>
+              <span class="text-xs text-[color:var(--ss-color-text-secondary)]">
+                (one per line)
+              </span>
             </label>
             <textarea
               id="search_queries"
               name="search_queries"
               rows="8"
-              class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm font-mono"
+              class="w-full border border-[color:var(--ss-color-border)] rounded px-3 py-2 text-sm font-mono"
               set:html={jm.search_queries.join('\n')}
             />
           </div>
@@ -557,24 +559,26 @@ const runDisabledReason = !runWorkerUrl
             <div>
               <label
                 for="discovery_queries"
-                class="text-sm font-medium text-[color:var(--color-text-primary)] block mb-1"
+                class="text-sm font-medium text-[color:var(--ss-color-text-primary)] block mb-1"
               >
                 Discovery queries{' '}
-                <span class="text-xs text-[color:var(--color-text-secondary)]">(one per line)</span>
+                <span class="text-xs text-[color:var(--ss-color-text-secondary)]">
+                  (one per line)
+                </span>
               </label>
               <textarea
                 id="discovery_queries"
                 name="discovery_queries"
                 rows="10"
-                class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm font-mono"
+                class="w-full border border-[color:var(--ss-color-border)] rounded px-3 py-2 text-sm font-mono"
                 set:html={rm.discovery_queries.join('\n')}
               />
             </div>
             <div>
-              <label class="text-sm font-medium text-[color:var(--color-text-primary)] block mb-1">
+              <label class="text-sm font-medium text-[color:var(--ss-color-text-primary)] block mb-1">
                 Search area
               </label>
-              <p class="text-xs text-[color:var(--color-text-secondary)] mb-2">
+              <p class="text-xs text-[color:var(--ss-color-text-secondary)] mb-2">
                 Google Places biases results near this point. Defaults are Phoenix downtown
                 (33.4484, -112.074) with a 50km radius — covers Scottsdale, Tempe, Mesa, Chandler,
                 Glendale.
@@ -583,7 +587,7 @@ const runDisabledReason = !runWorkerUrl
                 <div>
                   <label
                     for="geo_lat"
-                    class="text-xs text-[color:var(--color-text-secondary)] block mb-1"
+                    class="text-xs text-[color:var(--ss-color-text-secondary)] block mb-1"
                   >
                     Latitude
                   </label>
@@ -593,13 +597,13 @@ const runDisabledReason = !runWorkerUrl
                     name="geo_lat"
                     value={rm.geo_center.lat}
                     step="0.0001"
-                    class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm"
+                    class="w-full border border-[color:var(--ss-color-border)] rounded px-3 py-2 text-sm"
                   />
                 </div>
                 <div>
                   <label
                     for="geo_lon"
-                    class="text-xs text-[color:var(--color-text-secondary)] block mb-1"
+                    class="text-xs text-[color:var(--ss-color-text-secondary)] block mb-1"
                   >
                     Longitude
                   </label>
@@ -609,13 +613,13 @@ const runDisabledReason = !runWorkerUrl
                     name="geo_lon"
                     value={rm.geo_center.lon}
                     step="0.0001"
-                    class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm"
+                    class="w-full border border-[color:var(--ss-color-border)] rounded px-3 py-2 text-sm"
                   />
                 </div>
                 <div>
                   <label
                     for="geo_radius_km"
-                    class="text-xs text-[color:var(--color-text-secondary)] block mb-1"
+                    class="text-xs text-[color:var(--ss-color-text-secondary)] block mb-1"
                   >
                     Radius (km, 1–500)
                   </label>
@@ -626,7 +630,7 @@ const runDisabledReason = !runWorkerUrl
                     value={rm.geo_radius_km}
                     min="1"
                     max="500"
-                    class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm"
+                    class="w-full border border-[color:var(--ss-color-border)] rounded px-3 py-2 text-sm"
                   />
                 </div>
               </div>
@@ -647,16 +651,18 @@ const runDisabledReason = !runWorkerUrl
           <div>
             <label
               for="search_queries"
-              class="text-sm font-medium text-[color:var(--color-text-primary)] block mb-1"
+              class="text-sm font-medium text-[color:var(--ss-color-text-primary)] block mb-1"
             >
               Search queries{' '}
-              <span class="text-xs text-[color:var(--color-text-secondary)]">(one per line)</span>
+              <span class="text-xs text-[color:var(--ss-color-text-secondary)]">
+                (one per line)
+              </span>
             </label>
             <textarea
               id="search_queries"
               name="search_queries"
               rows="5"
-              class="w-full border border-[color:var(--color-border)] rounded px-3 py-2 text-sm font-mono"
+              class="w-full border border-[color:var(--ss-color-border)] rounded px-3 py-2 text-sm font-mono"
               set:html={sl.search_queries.join('\n')}
             />
           </div>
@@ -666,7 +672,7 @@ const runDisabledReason = !runWorkerUrl
       <div>
         <button
           type="submit"
-          class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-[var(--radius-card)] hover:bg-primary/90 transition-colors"
+          class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-[var(--ss-radius-card)] hover:bg-primary/90 transition-colors"
         >
           Save configuration
         </button>
@@ -675,29 +681,29 @@ const runDisabledReason = !runWorkerUrl
   </section>
 
   <section aria-labelledby="volume" class="mb-8">
-    <h3 id="volume" class="text-base font-semibold text-[color:var(--color-text-primary)] mb-3">
+    <h3 id="volume" class="text-base font-semibold text-[color:var(--ss-color-text-primary)] mb-3">
       Signal volume (30 days)
     </h3>
     <div
-      class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card"
+      class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card"
     >
       {
         daysWithData.length === 0 ? (
-          <p class="text-sm text-[color:var(--color-text-secondary)]">
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)]">
             No signals in the last 30 days.
           </p>
         ) : (
           <ul class="space-y-1">
             {daysWithData.map((d) => (
               <li class="flex items-center gap-3 text-sm">
-                <span class="text-xs text-[color:var(--color-text-secondary)] font-mono w-20">
+                <span class="text-xs text-[color:var(--ss-color-text-secondary)] font-mono w-20">
                   {d.day}
                 </span>
                 <span
                   class="h-3 bg-primary/20 rounded-sm"
                   style={`width: ${(d.count / maxDayCount) * 100}%; min-width: 2px;`}
                 />
-                <span class="text-xs text-[color:var(--color-text-primary)] font-medium">
+                <span class="text-xs text-[color:var(--ss-color-text-primary)] font-medium">
                   {d.count}
                 </span>
               </li>
@@ -709,31 +715,31 @@ const runDisabledReason = !runWorkerUrl
   </section>
 
   <section aria-labelledby="signals">
-    <h3 id="signals" class="text-base font-semibold text-[color:var(--color-text-primary)] mb-3">
+    <h3 id="signals" class="text-base font-semibold text-[color:var(--ss-color-text-primary)] mb-3">
       Last {signalRows.length} signals
     </h3>
     {
       signalRows.length === 0 ? (
-        <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card">
-          <p class="text-sm text-[color:var(--color-text-secondary)]">
+        <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card">
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)]">
             No signals yet for this pipeline.
           </p>
         </div>
       ) : (
-        <div class="bg-white rounded-[var(--radius-card)] border border-[color:var(--color-border)] divide-y divide-[color:var(--color-border-subtle)]">
+        <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] divide-y divide-[color:var(--ss-color-border-subtle)]">
           {signalRows.map((s) => (
             <details class="group">
-              <summary class="px-6 py-3 flex items-start justify-between gap-3 cursor-pointer hover:bg-[color:var(--color-background)] list-none">
+              <summary class="px-6 py-3 flex items-start justify-between gap-3 cursor-pointer hover:bg-[color:var(--ss-color-background)] list-none">
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2 flex-wrap">
                     <a
                       href={`/admin/entities/${s.id}`}
-                      class="text-sm font-medium text-[color:var(--color-text-primary)] hover:text-primary truncate"
+                      class="text-sm font-medium text-[color:var(--ss-color-text-primary)] hover:text-primary truncate"
                     >
                       {s.name}
                     </a>
                     {s.pain_score !== null && (
-                      <span class="text-xs text-[color:var(--color-text-secondary)]">
+                      <span class="text-xs text-[color:var(--ss-color-text-secondary)]">
                         Pain: {s.pain_score}/10
                       </span>
                     )}
@@ -743,30 +749,30 @@ const runDisabledReason = !runWorkerUrl
                       </span>
                     )}
                     {s.vertical && s.vertical !== 'unknown' && (
-                      <span class="text-xs text-[color:var(--color-text-secondary)] capitalize">
+                      <span class="text-xs text-[color:var(--ss-color-text-secondary)] capitalize">
                         {s.vertical.replace(/_/g, ' ')}
                       </span>
                     )}
                     {s.area && (
-                      <span class="text-xs text-[color:var(--color-text-muted)]">{s.area}</span>
+                      <span class="text-xs text-[color:var(--ss-color-text-muted)]">{s.area}</span>
                     )}
                   </div>
                   {s.context_content && (
-                    <p class="text-xs text-[color:var(--color-text-secondary)] mt-1 line-clamp-2">
+                    <p class="text-xs text-[color:var(--ss-color-text-secondary)] mt-1 line-clamp-2">
                       {s.context_content}
                     </p>
                   )}
                 </div>
-                <div class="flex items-center gap-2 shrink-0 text-xs text-[color:var(--color-text-muted)]">
+                <div class="flex items-center gap-2 shrink-0 text-xs text-[color:var(--ss-color-text-muted)]">
                   <span>{formatDate(s.created_at)}</span>
                   <span class="material-symbols-outlined text-sm group-open:rotate-90 transition-transform">
                     chevron_right
                   </span>
                 </div>
               </summary>
-              <div class="px-6 pb-4 pt-1 bg-[color:var(--color-background)]/50">
+              <div class="px-6 pb-4 pt-1 bg-[color:var(--ss-color-background)]/50">
                 {s.context_source_ref && (
-                  <p class="text-xs text-[color:var(--color-text-secondary)] mb-2">
+                  <p class="text-xs text-[color:var(--ss-color-text-secondary)] mb-2">
                     Source ref: <code class="font-mono">{s.context_source_ref}</code>
                   </p>
                 )}
@@ -775,7 +781,7 @@ const runDisabledReason = !runWorkerUrl
                     {prettyJson(s.context_metadata)}
                   </pre>
                 ) : (
-                  <p class="text-xs text-[color:var(--color-text-secondary)] italic">
+                  <p class="text-xs text-[color:var(--ss-color-text-secondary)] italic">
                     No metadata recorded.
                   </p>
                 )}

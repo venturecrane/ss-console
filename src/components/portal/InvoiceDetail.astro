@@ -117,7 +117,7 @@ const pathname = `/portal/invoices/${invoice.id}`
   <a
     href="/portal/invoices"
     aria-label="All invoices"
-    class="inline-flex items-center gap-1 min-h-11 px-2 -mx-2 mb-4 text-label uppercase font-semibold text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] active:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2 rounded-[var(--radius-card)]"
+    class="inline-flex items-center gap-1 min-h-11 px-2 -mx-2 mb-4 text-label uppercase font-semibold text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-text-primary)] active:text-[color:var(--ss-color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2 rounded-[var(--ss-radius-card)]"
   >
     <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
     All invoices
@@ -131,21 +131,21 @@ const pathname = `/portal/invoices/${invoice.id}`
       <!-- Hero: eyebrow + title + subtitle + status line -->
       <div>
         <div class="flex items-center gap-row">
-          <p class="text-label uppercase text-[color:var(--color-text-secondary)]">
+          <p class="text-label uppercase text-[color:var(--ss-color-text-secondary)]">
             {invoice.type.charAt(0).toUpperCase() + invoice.type.slice(1)} invoice
           </p>
           <StatusPill tone={pillTone} label={invoice.pillLabel} size="base" />
         </div>
 
         <h1
-          class="mt-3 font-display font-bold text-display tracking-[-0.02em] text-[color:var(--color-text-primary)]"
+          class="mt-3 font-display font-bold text-display tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
         >
           {invoice.title}
         </h1>
 
         {
           invoice.periodSubtitle && (
-            <p class="mt-3 text-body-lg text-[color:var(--color-text-secondary)]">
+            <p class="mt-3 text-body-lg text-[color:var(--ss-color-text-secondary)]">
               {invoice.periodSubtitle}
             </p>
           )
@@ -153,7 +153,7 @@ const pathname = `/portal/invoices/${invoice.id}`
 
         {
           !isPaid && invoice.dueCaption && (
-            <p class="mt-4 inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--color-text-muted)]">
+            <p class="mt-4 inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--ss-color-text-muted)]">
               <span class="material-symbols-outlined text-[18px]" aria-hidden="true">
                 calendar_today
               </span>
@@ -164,7 +164,7 @@ const pathname = `/portal/invoices/${invoice.id}`
 
         {
           isPaid && invoice.paidShortDate && (
-            <p class="mt-4 inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--color-complete)]">
+            <p class="mt-4 inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--ss-color-complete)]">
               <span class="material-symbols-outlined text-[18px]" aria-hidden="true">
                 check_circle
               </span>
@@ -179,21 +179,23 @@ const pathname = `/portal/invoices/${invoice.id}`
         {
           isErrorState && (
             <div
-              class="mb-card rounded-[var(--radius-card)] border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-stack"
+              class="mb-card rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-attention)]/30 bg-[color:var(--ss-color-attention)]/5 p-stack"
               role="status"
             >
               <div class="flex items-start gap-row">
                 <span
-                  class="material-symbols-outlined text-[20px] text-[color:var(--color-attention)] mt-0.5"
+                  class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-attention)] mt-0.5"
                   aria-hidden="true"
                 >
                   error
                 </span>
                 <div class="min-w-0">
-                  <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                  <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
                     {errorTitle}
                   </p>
-                  <p class="mt-1 text-body text-[color:var(--color-text-secondary)]">{errorBody}</p>
+                  <p class="mt-1 text-body text-[color:var(--ss-color-text-secondary)]">
+                    {errorBody}
+                  </p>
                 </div>
               </div>
             </div>
@@ -201,11 +203,11 @@ const pathname = `/portal/invoices/${invoice.id}`
         }
 
         <div
-          class="relative overflow-hidden rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-card"
+          class="relative overflow-hidden rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] bg-[color:var(--ss-color-surface)] p-card"
         >
           <!-- Accent bar -->
           <div
-            class={`absolute left-0 top-0 h-full w-1 ${isPaid ? 'bg-[color:var(--color-complete)]' : 'bg-[color:var(--color-primary)]'}`}
+            class={`absolute left-0 top-0 h-full w-1 ${isPaid ? 'bg-[color:var(--ss-color-complete)]' : 'bg-[color:var(--ss-color-primary)]'}`}
             aria-hidden="true"
           >
           </div>
@@ -215,12 +217,12 @@ const pathname = `/portal/invoices/${invoice.id}`
           {
             isPaid ? (
               invoice.paidShortDate && (
-                <p class="mt-2 text-caption font-medium text-[color:var(--color-complete)]">
+                <p class="mt-2 text-caption font-medium text-[color:var(--ss-color-complete)]">
                   Paid {invoice.paidShortDate}. Receipt attached.
                 </p>
               )
             ) : (
-              <p class="mt-1 text-label uppercase text-[color:var(--color-text-muted)]">
+              <p class="mt-1 text-label uppercase text-[color:var(--ss-color-text-muted)]">
                 Remaining balance
               </p>
             )
@@ -233,11 +235,11 @@ const pathname = `/portal/invoices/${invoice.id}`
                   <>
                     <a
                       href={invoice.stripeUrl}
-                      class="inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-[var(--radius-button)] bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                      class="inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-[var(--ss-radius-button)] bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2"
                     >
                       {ctaLabel}
                     </a>
-                    <div class="mt-3 flex items-center justify-center gap-2 text-label uppercase font-semibold text-[color:var(--color-text-muted)]">
+                    <div class="mt-3 flex items-center justify-center gap-2 text-label uppercase font-semibold text-[color:var(--ss-color-text-muted)]">
                       <span class="material-symbols-outlined text-[16px]" aria-hidden="true">
                         lock
                       </span>
@@ -245,7 +247,7 @@ const pathname = `/portal/invoices/${invoice.id}`
                     </div>
                   </>
                 ) : (
-                  <p class="text-body text-[color:var(--color-text-secondary)]">
+                  <p class="text-body text-[color:var(--ss-color-text-secondary)]">
                     Payment link pending — we will send it shortly.
                   </p>
                 )}
@@ -259,12 +261,12 @@ const pathname = `/portal/invoices/${invoice.id}`
                 {consultantContactHref ? (
                   <a
                     href={consultantContactHref}
-                    class="inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-[var(--radius-button)] bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                    class="inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-[var(--ss-radius-button)] bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2"
                   >
                     Contact the team
                   </a>
                 ) : (
-                  <p class="text-body text-[color:var(--color-text-secondary)]">
+                  <p class="text-body text-[color:var(--ss-color-text-secondary)]">
                     Reach us for a new payment link using the contacts in the header.
                   </p>
                 )}
@@ -278,18 +280,18 @@ const pathname = `/portal/invoices/${invoice.id}`
       {
         lineItems.length > 0 && (
           <div>
-            <h2 class="font-display font-semibold text-title text-[color:var(--color-text-primary)]">
+            <h2 class="font-display font-semibold text-title text-[color:var(--ss-color-text-primary)]">
               What's included
             </h2>
             <ul class="mt-stack flex flex-col" aria-label="Invoice line items">
               {lineItems.map((li) => (
-                <li class="flex justify-between items-baseline gap-card py-5 border-b border-[color:var(--color-border)]/60">
+                <li class="flex justify-between items-baseline gap-card py-5 border-b border-[color:var(--ss-color-border)]/60">
                   <div class="min-w-0">
-                    <span class="text-body text-[color:var(--color-text-secondary)]">
+                    <span class="text-body text-[color:var(--ss-color-text-secondary)]">
                       {li.label}
                     </span>
                     {li.caption && (
-                      <p class="mt-0.5 text-caption text-[color:var(--color-text-muted)]">
+                      <p class="mt-0.5 text-caption text-[color:var(--ss-color-text-muted)]">
                         {li.caption}
                       </p>
                     )}
@@ -299,7 +301,7 @@ const pathname = `/portal/invoices/${invoice.id}`
               ))}
             </ul>
             <div class="mt-card pt-5 flex justify-between items-baseline">
-              <span class="font-display font-semibold text-title text-[color:var(--color-text-primary)]">
+              <span class="font-display font-semibold text-title text-[color:var(--ss-color-text-primary)]">
                 Total
               </span>
               <MoneyDisplay amountCents={invoice.totalCents} size="h2" />
@@ -310,22 +312,22 @@ const pathname = `/portal/invoices/${invoice.id}`
 
       <!-- ── Payment details ── -->
       <div>
-        <h2 class="font-display font-semibold text-title text-[color:var(--color-text-primary)]">
+        <h2 class="font-display font-semibold text-title text-[color:var(--ss-color-text-primary)]">
           Payment details
         </h2>
         <ul class="mt-stack grid grid-cols-1 sm:grid-cols-2 gap-card">
           {
             invoice.dueShortDate && !isPaid && (
-              <li class="flex items-start gap-row rounded-[var(--radius-card)] bg-[color:var(--color-surface)] p-card">
+              <li class="flex items-start gap-row rounded-[var(--ss-radius-card)] bg-[color:var(--ss-color-surface)] p-card">
                 <span
-                  class="material-symbols-outlined text-[20px] text-[color:var(--color-primary)]"
+                  class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-primary)]"
                   style="font-variation-settings: 'FILL' 1;"
                   aria-hidden="true"
                 >
                   event
                 </span>
                 <div class="min-w-0">
-                  <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                  <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
                     Due {invoice.dueShortDate}
                   </p>
                 </div>
@@ -334,16 +336,16 @@ const pathname = `/portal/invoices/${invoice.id}`
           }
           {
             isPaid && invoice.paidShortDate && (
-              <li class="flex items-start gap-row rounded-[var(--radius-card)] bg-[color:var(--color-surface)] p-card">
+              <li class="flex items-start gap-row rounded-[var(--ss-radius-card)] bg-[color:var(--ss-color-surface)] p-card">
                 <span
-                  class="material-symbols-outlined text-[20px] text-[color:var(--color-complete)]"
+                  class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-complete)]"
                   style="font-variation-settings: 'FILL' 1;"
                   aria-hidden="true"
                 >
                   check_circle
                 </span>
                 <div class="min-w-0">
-                  <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                  <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
                     Paid {invoice.paidShortDate}
                   </p>
                 </div>
@@ -351,39 +353,39 @@ const pathname = `/portal/invoices/${invoice.id}`
             )
           }
           <li
-            class="flex items-start gap-row rounded-[var(--radius-card)] bg-[color:var(--color-surface)] p-card"
+            class="flex items-start gap-row rounded-[var(--ss-radius-card)] bg-[color:var(--ss-color-surface)] p-card"
           >
             <span
-              class="material-symbols-outlined text-[20px] text-[color:var(--color-primary)]"
+              class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-primary)]"
               style="font-variation-settings: 'FILL' 1;"
               aria-hidden="true"
             >
               lock
             </span>
             <div class="min-w-0">
-              <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+              <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
                 Secure payment via Stripe
               </p>
-              <p class="mt-1 text-caption text-[color:var(--color-text-secondary)]">
+              <p class="mt-1 text-caption text-[color:var(--ss-color-text-secondary)]">
                 End-to-end encrypted processing.
               </p>
             </div>
           </li>
           <li
-            class="flex items-start gap-row rounded-[var(--radius-card)] bg-[color:var(--color-surface)] p-card"
+            class="flex items-start gap-row rounded-[var(--ss-radius-card)] bg-[color:var(--ss-color-surface)] p-card"
           >
             <span
-              class="material-symbols-outlined text-[20px] text-[color:var(--color-primary)]"
+              class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-primary)]"
               style="font-variation-settings: 'FILL' 1;"
               aria-hidden="true"
             >
               credit_card
             </span>
             <div class="min-w-0">
-              <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+              <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
                 Card or bank transfer
               </p>
-              <p class="mt-1 text-caption text-[color:var(--color-text-secondary)]">
+              <p class="mt-1 text-caption text-[color:var(--ss-color-text-secondary)]">
                 Multiple payment methods accepted.
               </p>
             </div>
@@ -414,21 +416,23 @@ const pathname = `/portal/invoices/${invoice.id}`
       {
         isErrorState && (
           <div
-            class="rounded-[var(--radius-card)] border border-[color:var(--color-attention)]/30 bg-[color:var(--color-attention)]/5 p-stack"
+            class="rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-attention)]/30 bg-[color:var(--ss-color-attention)]/5 p-stack"
             role="status"
           >
             <div class="flex items-start gap-row">
               <span
-                class="material-symbols-outlined text-[20px] text-[color:var(--color-attention)] mt-0.5"
+                class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-attention)] mt-0.5"
                 aria-hidden="true"
               >
                 error
               </span>
               <div class="min-w-0">
-                <p class="text-body font-semibold text-[color:var(--color-text-primary)]">
+                <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
                   {errorTitle}
                 </p>
-                <p class="mt-1 text-body text-[color:var(--color-text-secondary)]">{errorBody}</p>
+                <p class="mt-1 text-body text-[color:var(--ss-color-text-secondary)]">
+                  {errorBody}
+                </p>
               </div>
             </div>
           </div>
@@ -439,28 +443,28 @@ const pathname = `/portal/invoices/${invoice.id}`
       {
         isPaid ? (
           <section
-            class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-section"
+            class="bg-[color:var(--ss-color-surface)] rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-section"
             aria-label="Invoice paid"
           >
-            <p class="text-label uppercase text-[color:var(--color-complete)]">Paid</p>
+            <p class="text-label uppercase text-[color:var(--ss-color-complete)]">Paid</p>
             <div class="mt-3">
               <MoneyDisplay amountCents={invoice.amountCents} size="display" />
             </div>
             {invoice.paidShortDate && (
-              <p class="mt-4 text-caption font-medium text-[color:var(--color-complete)]">
+              <p class="mt-4 text-caption font-medium text-[color:var(--ss-color-complete)]">
                 Paid {invoice.paidShortDate}. Receipt attached.
               </p>
             )}
           </section>
         ) : isLinkExpired ? (
           <section
-            class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-section"
+            class="bg-[color:var(--ss-color-surface)] rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-section"
             aria-label="Link expired"
           >
-            <p class="text-label uppercase text-[color:var(--color-attention)]">Link expired</p>
+            <p class="text-label uppercase text-[color:var(--ss-color-attention)]">Link expired</p>
             <div class="mt-3">
               <MoneyDisplay amountCents={invoice.amountCents} size="display" />
-              <p class="mt-2 text-label uppercase text-[color:var(--color-text-muted)]">
+              <p class="mt-2 text-label uppercase text-[color:var(--ss-color-text-muted)]">
                 Remaining balance
               </p>
             </div>
@@ -468,12 +472,12 @@ const pathname = `/portal/invoices/${invoice.id}`
               {consultantContactHref ? (
                 <a
                   href={consultantContactHref}
-                  class="inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-[var(--radius-button)] bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+                  class="inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-[var(--ss-radius-button)] bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2"
                 >
                   Contact consultant
                 </a>
               ) : (
-                <p class="text-body text-[color:var(--color-text-secondary)]">
+                <p class="text-body text-[color:var(--ss-color-text-secondary)]">
                   Contact your consultant for a new payment link.
                 </p>
               )}
@@ -481,27 +485,27 @@ const pathname = `/portal/invoices/${invoice.id}`
           </section>
         ) : invoice.isPayable && invoice.stripeUrl ? (
           <section
-            class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-section"
+            class="bg-[color:var(--ss-color-surface)] rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-section"
             aria-label={ctaLabel}
           >
-            <p class="text-label uppercase text-[color:var(--color-text-muted)]">
+            <p class="text-label uppercase text-[color:var(--ss-color-text-muted)]">
               Remaining balance
             </p>
             <div class="mt-1">
               <MoneyDisplay amountCents={invoice.amountCents} size="display" />
             </div>
             {invoice.dueCaption && (
-              <p class="mt-2 text-caption font-medium text-[color:var(--color-text-muted)]">
+              <p class="mt-2 text-caption font-medium text-[color:var(--ss-color-text-muted)]">
                 Due {invoice.dueCaption}.
               </p>
             )}
             <a
               href={invoice.stripeUrl}
-              class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-[var(--radius-button)] bg-[color:var(--color-primary)] hover:bg-[color:var(--color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+              class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-[var(--ss-radius-button)] bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2"
             >
               {ctaLabel}
             </a>
-            <div class="mt-4 flex items-center justify-center gap-2 text-label uppercase font-semibold text-[color:var(--color-text-muted)]">
+            <div class="mt-4 flex items-center justify-center gap-2 text-label uppercase font-semibold text-[color:var(--ss-color-text-muted)]">
               <span class="material-symbols-outlined text-[16px]" aria-hidden="true">
                 lock
               </span>
@@ -510,16 +514,16 @@ const pathname = `/portal/invoices/${invoice.id}`
           </section>
         ) : (
           <section
-            class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-section"
+            class="bg-[color:var(--ss-color-surface)] rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-section"
             aria-label="Payment link pending"
           >
-            <p class="text-label uppercase text-[color:var(--color-text-muted)]">
+            <p class="text-label uppercase text-[color:var(--ss-color-text-muted)]">
               Remaining balance
             </p>
             <div class="mt-3">
               <MoneyDisplay amountCents={invoice.amountCents} size="display" />
             </div>
-            <p class="mt-4 text-body text-[color:var(--color-text-secondary)]">
+            <p class="mt-4 text-body text-[color:var(--ss-color-text-secondary)]">
               Payment link pending — we will send it shortly.
             </p>
           </section>

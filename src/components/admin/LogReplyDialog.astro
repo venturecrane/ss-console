@@ -26,7 +26,7 @@ const formId = `reply-form-${instanceId}`
   id={dialogId}
   data-reply-dialog
   data-entity-id={entityId}
-  class="rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-0 backdrop:bg-black/40 w-full max-w-md"
+  class="rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-0 backdrop:bg-black/40 w-full max-w-md"
 >
   <form
     id={formId}
@@ -36,15 +36,15 @@ const formId = `reply-form-${instanceId}`
   >
     <div class="flex items-start justify-between mb-stack">
       <div>
-        <h3 class="text-base font-semibold text-[color:var(--color-text-primary)]">Log reply</h3>
-        <p class="text-xs text-[color:var(--color-text-muted)] mt-0.5">
+        <h3 class="text-base font-semibold text-[color:var(--ss-color-text-primary)]">Log reply</h3>
+        <p class="text-xs text-[color:var(--ss-color-text-muted)] mt-0.5">
           {entityName}
         </p>
       </div>
       <button
         type="button"
         data-close-dialog
-        class="text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] transition-colors"
+        class="text-xs text-[color:var(--ss-color-text-muted)] hover:text-[color:var(--ss-color-text-primary)] transition-colors"
         aria-label="Close"
       >
         Close
@@ -54,7 +54,7 @@ const formId = `reply-form-${instanceId}`
     <div class="space-y-stack">
       <div>
         <label
-          class="block text-xs font-medium text-[color:var(--color-text-secondary)] mb-1"
+          class="block text-xs font-medium text-[color:var(--ss-color-text-secondary)] mb-1"
           for={`${instanceId}-sentiment`}
         >
           Sentiment
@@ -63,7 +63,7 @@ const formId = `reply-form-${instanceId}`
           id={`${instanceId}-sentiment`}
           name="sentiment"
           required
-          class="w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 bg-white text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+          class="w-full text-sm border border-[color:var(--ss-color-border)] rounded-[var(--ss-radius-card)] px-3 py-2 bg-white text-[color:var(--ss-color-text-primary)] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
         >
           <option value="interested">Interested</option>
           <option value="declined">Declined</option>
@@ -74,7 +74,7 @@ const formId = `reply-form-${instanceId}`
 
       <div>
         <label
-          class="block text-xs font-medium text-[color:var(--color-text-secondary)] mb-1"
+          class="block text-xs font-medium text-[color:var(--ss-color-text-secondary)] mb-1"
           for={`${instanceId}-next-action`}
         >
           Suggested next action
@@ -83,21 +83,21 @@ const formId = `reply-form-${instanceId}`
           id={`${instanceId}-next-action`}
           name="next_action"
           required
-          class="w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 bg-white text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+          class="w-full text-sm border border-[color:var(--ss-color-border)] rounded-[var(--ss-radius-card)] px-3 py-2 bg-white text-[color:var(--ss-color-text-primary)] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
         >
           <option value="book_meeting">Book meeting</option>
           <option value="retry_later">Retry later</option>
           <option value="mark_lost">Mark lost</option>
           <option value="continue_conversation">Continue conversation</option>
         </select>
-        <p class="text-xs text-[color:var(--color-text-muted)] mt-1">
+        <p class="text-xs text-[color:var(--ss-color-text-muted)] mt-1">
           No stage change happens automatically. Use the stage buttons on the entity after saving.
         </p>
       </div>
 
       <div>
         <label
-          class="block text-xs font-medium text-[color:var(--color-text-secondary)] mb-1"
+          class="block text-xs font-medium text-[color:var(--ss-color-text-secondary)] mb-1"
           for={`${instanceId}-notes`}
         >
           Notes
@@ -107,7 +107,7 @@ const formId = `reply-form-${instanceId}`
           name="notes"
           rows="3"
           placeholder="Paste or summarize the reply..."
-          class="w-full text-sm border border-[color:var(--color-border)] rounded-[var(--radius-card)] px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+          class="w-full text-sm border border-[color:var(--ss-color-border)] rounded-[var(--ss-radius-card)] px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
         ></textarea>
       </div>
     </div>
@@ -116,13 +116,13 @@ const formId = `reply-form-${instanceId}`
       <button
         type="button"
         data-close-dialog
-        class="text-sm bg-[color:var(--color-background)] text-[color:var(--color-text-secondary)] px-3 py-1.5 rounded-[var(--radius-card)] hover:bg-[color:var(--color-border-subtle)] transition-colors"
+        class="text-sm bg-[color:var(--ss-color-background)] text-[color:var(--ss-color-text-secondary)] px-3 py-1.5 rounded-[var(--ss-radius-card)] hover:bg-[color:var(--ss-color-border-subtle)] transition-colors"
       >
         Cancel
       </button>
       <button
         type="submit"
-        class="text-sm bg-primary text-white px-4 py-1.5 rounded-[var(--radius-card)] hover:bg-primary/90 transition-colors"
+        class="text-sm bg-primary text-white px-4 py-1.5 rounded-[var(--ss-radius-card)] hover:bg-primary/90 transition-colors"
       >
         Save reply
       </button>

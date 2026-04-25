@@ -19,35 +19,37 @@ const steps = [
 ---
 
 <section
-  class="bg-[color:var(--color-background)] px-6 py-24 border-t-[3px] border-[color:var(--color-text-primary)]"
+  class="bg-[color:var(--ss-color-background)] px-6 py-24 border-t-[3px] border-[color:var(--ss-color-text-primary)]"
 >
   <div class="mx-auto max-w-5xl">
     <div class="mb-16">
       <span
-        class="inline-block bg-[color:var(--color-text-primary)] text-[color:var(--color-background)] font-['JetBrains_Mono'] text-xs font-semibold uppercase tracking-[0.14em] px-2 py-1 mb-4"
+        class="inline-block bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] font-['JetBrains_Mono'] text-xs font-semibold uppercase tracking-[0.14em] px-2 py-1 mb-4"
         >§ 02</span
       >
       <h2
-        class="font-['Archivo'] text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--color-text-primary)]"
+        class="font-['Archivo'] text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
       >
         How We Work Together
       </h2>
-      <p class="mt-6 max-w-2xl font-['Archivo'] text-lg text-[color:var(--color-text-secondary)]">
+      <p
+        class="mt-6 max-w-2xl font-['Archivo'] text-lg text-[color:var(--ss-color-text-secondary)]"
+      >
         A clear process from first conversation to full handoff.
       </p>
     </div>
-    <div class="space-y-0 border-t-[3px] border-[color:var(--color-text-primary)]">
+    <div class="space-y-0 border-t-[3px] border-[color:var(--ss-color-text-primary)]">
       {
         steps.map((step, i) => (
-          <div class="flex gap-8 py-10 border-b-[3px] border-[color:var(--color-text-primary)]">
-            <div class="font-['Archivo'] text-6xl font-black leading-none text-[color:var(--color-primary)] tracking-[-0.03em] min-w-[5rem]">
+          <div class="flex gap-8 py-10 border-b-[3px] border-[color:var(--ss-color-text-primary)]">
+            <div class="font-['Archivo'] text-6xl font-black leading-none text-[color:var(--ss-color-primary)] tracking-[-0.03em] min-w-[5rem]">
               {String(i + 1).padStart(2, '0')}
             </div>
             <div class="flex-1">
-              <h3 class="mb-3 font-['Archivo'] text-2xl font-bold uppercase tracking-[-0.01em] text-[color:var(--color-text-primary)]">
+              <h3 class="mb-3 font-['Archivo'] text-2xl font-bold uppercase tracking-[-0.01em] text-[color:var(--ss-color-text-primary)]">
                 {step.title}
               </h3>
-              <p class="font-['Archivo'] leading-relaxed text-[color:var(--color-text-secondary)]">
+              <p class="font-['Archivo'] leading-relaxed text-[color:var(--ss-color-text-secondary)]">
                 {step.description}
               </p>
             </div>

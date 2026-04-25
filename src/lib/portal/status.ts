@@ -3,7 +3,7 @@
  *
  * Source of truth for status rendering on all portal surfaces. Admin uses
  * src/lib/ui/status-badge.ts (raw Tailwind hex-family classes); portal uses
- * this module (semantic var(--color-*) tokens). They remain separate by
+ * this module (semantic var(--ss-color-*) tokens). They remain separate by
  * design — the portal is the drift surface and stays tone-based.
  *
  * Contract (UI-PATTERNS.md R7):
@@ -268,14 +268,14 @@ export function resolveMilestoneStampLabel(status: string): StampLabel {
  * internal states (draft, superseded) that rarely surface to the client.
  */
 export const TONE_CLASS: Record<Tone, string> = {
-  info: 'bg-[color:var(--color-primary)] text-white',
-  success: 'bg-[color:var(--color-complete)] text-white',
-  danger: 'bg-[color:var(--color-error)] text-white',
-  warning: 'bg-[color:var(--color-attention)] text-white',
-  neutral: 'bg-[color:var(--color-border)] text-[color:var(--color-text-secondary)]',
+  info: 'bg-[color:var(--ss-color-primary)] text-white',
+  success: 'bg-[color:var(--ss-color-complete)] text-white',
+  danger: 'bg-[color:var(--ss-color-error)] text-white',
+  warning: 'bg-[color:var(--ss-color-attention)] text-white',
+  neutral: 'bg-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-secondary)]',
   // Plainspoken bill-of-lading register: box-outlined stamp with ink text,
   // transparent background. Visually distinguishes archived/expired states
   // from the filled "attention-needed" tones above.
   outline:
-    'bg-transparent text-[color:var(--color-text-primary)] border-2 border-[color:var(--color-text-primary)]',
+    'bg-transparent text-[color:var(--ss-color-text-primary)] border-2 border-[color:var(--ss-color-text-primary)]',
 }

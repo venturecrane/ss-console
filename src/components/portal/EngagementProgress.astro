@@ -88,15 +88,15 @@ const { client, engagement, timeline, consultant } = Astro.props
 <PortalTabs pathname="/portal/engagement" />
 
 <main id="main" role="main" class="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 pb-24 md:pb-10">
-  <h1 class="text-display text-[color:var(--color-text-primary)] mb-section">Engagement</h1>
+  <h1 class="text-display text-[color:var(--ss-color-text-primary)] mb-section">Engagement</h1>
 
   <!-- Summary panel -->
   <section
-    class="bg-[color:var(--color-surface)] rounded-[var(--radius-card)] border border-[color:var(--color-border)] p-card mb-section"
+    class="bg-[color:var(--ss-color-surface)] rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card mb-section"
     aria-labelledby="summary-heading"
   >
     <div
-      class="flex items-center justify-between gap-stack pb-stack border-b border-[color:var(--color-border-subtle)] font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-muted)] tabular-nums"
+      class="flex items-center justify-between gap-stack pb-stack border-b border-[color:var(--ss-color-border-subtle)] font-mono text-label uppercase tracking-[var(--ss-text-letter-spacing-label)] font-semibold text-[color:var(--ss-color-text-muted)] tabular-nums"
     >
       <span>REF {engagement.reference}</span>
       <StatusPill tone={coerceTone(engagement.statusTone)} label={engagement.statusLabel} />
@@ -105,29 +105,33 @@ const { client, engagement, timeline, consultant } = Astro.props
     <div class="pt-card grid grid-cols-1 md:grid-cols-3 gap-stack md:gap-section">
       <div>
         <p
-          class="font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-muted)]"
+          class="font-mono text-label uppercase tracking-[var(--ss-text-letter-spacing-label)] font-semibold text-[color:var(--ss-color-text-muted)]"
         >
           Scope
         </p>
-        <p class="mt-row text-body text-[color:var(--color-text-primary)]">{engagement.scope}</p>
+        <p class="mt-row text-body text-[color:var(--ss-color-text-primary)]">{engagement.scope}</p>
       </div>
       <div>
         <p
-          class="font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-muted)]"
+          class="font-mono text-label uppercase tracking-[var(--ss-text-letter-spacing-label)] font-semibold text-[color:var(--ss-color-text-muted)]"
         >
           Opened
         </p>
-        <p class="mt-row font-mono text-body tabular-nums text-[color:var(--color-text-primary)]">
+        <p
+          class="mt-row font-mono text-body tabular-nums text-[color:var(--ss-color-text-primary)]"
+        >
           {engagement.openedOn}
         </p>
       </div>
       <div>
         <p
-          class="font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-muted)]"
+          class="font-mono text-label uppercase tracking-[var(--ss-text-letter-spacing-label)] font-semibold text-[color:var(--ss-color-text-muted)]"
         >
           Estimated completion
         </p>
-        <p class="mt-row font-mono text-body tabular-nums text-[color:var(--color-text-primary)]">
+        <p
+          class="mt-row font-mono text-body tabular-nums text-[color:var(--ss-color-text-primary)]"
+        >
           {engagement.estimatedCompletion}
         </p>
       </div>
@@ -138,19 +142,19 @@ const { client, engagement, timeline, consultant } = Astro.props
   <section class="mb-section" aria-labelledby="log-heading">
     <h2
       id="log-heading"
-      class="mb-stack pb-row border-b border-[color:var(--color-border)] font-mono text-label uppercase tracking-[var(--text-label--letter-spacing)] font-semibold text-[color:var(--color-text-primary)]"
+      class="mb-stack pb-row border-b border-[color:var(--ss-color-border)] font-mono text-label uppercase tracking-[var(--ss-text-letter-spacing-label)] font-semibold text-[color:var(--ss-color-text-primary)]"
     >
       Activity log
     </h2>
     {
       timeline.length === 0 ? (
-        <p class="text-caption text-[color:var(--color-text-muted)]">
+        <p class="text-caption text-[color:var(--ss-color-text-muted)]">
           The work begins at the first scheduled check-in.
         </p>
       ) : (
         <ol class="flex flex-col gap-stack" role="list">
           {timeline.map((entry) => (
-            <li class="pt-stack border-t border-[color:var(--color-border-subtle)] first:border-t-0 first:pt-0">
+            <li class="pt-stack border-t border-[color:var(--ss-color-border-subtle)] first:border-t-0 first:pt-0">
               <TimelineEntry
                 date={entry.date}
                 actor={entry.actor}

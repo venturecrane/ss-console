@@ -1,151 +1,149 @@
 @import '@venturecrane/tokens/ss.css';
 @import 'tailwindcss';
 
-@theme {
-  /* ------------------------------------------------------------------
-   * SMD Services — Plainspoken Sign Shop identity
-   * Migrated from Desert Functional on 2026-04-23.
-   * Paint-job, not brochure. 1950s commercial signage register.
-   * Full token documentation: .design/DESIGN.md
-   * ------------------------------------------------------------------ */
+/*
+ * SMD Services — Plainspoken Sign Shop identity
+ * Migrated from Desert Functional on 2026-04-23.
+ * Paint-job, not brochure. 1950s commercial signage register.
+ * Full token documentation: .design/DESIGN.md
+ *
+ * Stream C5 PR B (2026-04-25): values now sourced from
+ * @venturecrane/tokens/ss.css. The @theme inline block below maps
+ * Tailwind v4's expected namespaces (--color-*, --font-*, --text-*,
+ * --spacing-*, --radius-*) onto the package's --ss-* tokens so utility
+ * classes (bg-primary, text-display, font-body, p-section, rounded-card,
+ * etc.) continue to generate from the same single source of truth.
+ *
+ * Direct var() references in source files were codemodded to use
+ * --ss-* prefixed names — see PR description.
+ */
 
+@theme inline {
   /* ---------- Color roles ---------- */
-  --color-background: #f5f0e3; /* cream paper */
-  --color-surface: #f5f0e3; /* flat paper — cards defined by rules, not fill */
-  --color-surface-inverse: #1a1512; /* ink */
-  --color-border: rgba(26, 21, 18, 0.16);
-  --color-border-subtle: rgba(26, 21, 18, 0.08);
+  --color-background: var(--ss-color-background);
+  --color-surface: var(--ss-color-surface);
+  --color-surface-inverse: var(--ss-color-surface-inverse);
+  --color-border: var(--ss-color-border);
+  --color-border-subtle: var(--ss-color-border-subtle);
 
-  --color-text-primary: #1a1512;
-  --color-text-secondary: #4a423c;
-  --color-text-muted: #8a7f73;
+  --color-text-primary: var(--ss-color-text-primary);
+  --color-text-secondary: var(--ss-color-text-secondary);
+  --color-text-muted: var(--ss-color-text-muted);
 
-  --color-meta: #4a423c;
+  --color-meta: var(--ss-color-meta);
 
-  --color-primary: #c5501e; /* burnt orange */
-  --color-primary-hover: #a84318;
-  --color-action: #c5501e;
-  --color-attention: #c5501e;
-  --color-complete: #4a6b3e; /* olive — complement to burnt, not in prototype palette */
-  --color-error: #a02a2a;
+  --color-primary: var(--ss-color-primary);
+  --color-primary-hover: var(--ss-color-primary-hover);
+  --color-action: var(--ss-color-action);
+  --color-attention: var(--ss-color-attention);
+  --color-complete: var(--ss-color-complete);
+  --color-error: var(--ss-color-error);
 
   /* ---------- Typography families ---------- */
-  --font-display: 'Archivo', system-ui, sans-serif;
-  --font-body: 'Archivo', system-ui, sans-serif;
-  --font-accent-label: 'Archivo Narrow', 'Archivo', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: var(--ss-font-display);
+  --font-body: var(--ss-font-body);
+  --font-accent-label: var(--ss-font-accent-label);
+  --font-mono: var(--ss-font-mono);
 
-  /* ---------- Typography scale ---------- */
-  --text-display: 3rem; /* 48px */
-  --text-display--line-height: 3.375rem; /* 54px */
-  --text-display--font-weight: 500;
-  --text-display--letter-spacing: -0.01em;
-
-  --text-title: 1.75rem; /* 28px */
-  --text-title--line-height: 2.125rem; /* 34px */
-  --text-title--font-weight: 500;
-  --text-title--letter-spacing: -0.005em;
-
-  --text-heading: 1.125rem; /* 18px */
-  --text-heading--line-height: 1.5rem; /* 24px */
-  --text-heading--font-weight: 600;
-
-  --text-body-lg: 1.0625rem; /* 17px */
-  --text-body-lg--line-height: 1.625rem; /* 26px */
-  --text-body-lg--font-weight: 400;
-
-  --text-body: 1rem; /* 16px */
-  --text-body--line-height: 1.55rem;
-  --text-body--font-weight: 400;
-
-  --text-caption: 0.875rem; /* 14px */
-  --text-caption--line-height: 1.25rem; /* 20px */
-  --text-caption--font-weight: 500;
-
-  --text-label: 0.75rem; /* 12px */
-  --text-label--line-height: 1rem;
-  --text-label--font-weight: 500;
-  --text-label--letter-spacing: 0.08em;
-
-  --text-money: 2.75rem; /* 44px */
-  --text-money--line-height: 3rem;
-  --text-money--font-weight: 500;
-
-  /* ---------- Plainspoken display scale ----------
-   * Named tokens for the Plainspoken Sign Shop visual register. Each token
-   * ships with the Tailwind v4 sibling quartet (line-height, font-weight,
-   * letter-spacing) so utilities bake the full type style and consumers
-   * never reach for `text-[Npx] leading-[N] tracking-[N]` ad-hoc. Respects
-   * UI-PATTERNS R5 (typography scale only via named tokens).
-   *
-   * Line-heights target 0.92 × font-size on H1 sizes (Plainspoken mocks).
+  /* ---------- Typography scale ----------
+   * Tailwind v4 sibling quartet per token: size, line-height, font-weight,
+   * letter-spacing. The package emits flat --ss-text-{prop}-{name} keys;
+   * Tailwind v4 expects the sibling syntax --text-{name}--{prop}.
    */
+  --text-display: var(--ss-text-size-display);
+  --text-display--line-height: var(--ss-text-line-height-display);
+  --text-display--font-weight: var(--ss-text-weight-display);
+  --text-display--letter-spacing: var(--ss-text-letter-spacing-display);
 
-  /* Portal H1 — desktop */
-  --text-hero: 4.5rem; /* 72px */
-  --text-hero--line-height: 4.14rem; /* 0.92 × 72 */
-  --text-hero--font-weight: 900;
-  --text-hero--letter-spacing: -0.03em;
+  --text-title: var(--ss-text-size-title);
+  --text-title--line-height: var(--ss-text-line-height-title);
+  --text-title--font-weight: var(--ss-text-weight-title);
+  --text-title--letter-spacing: var(--ss-text-letter-spacing-title);
 
-  /* Portal H1 — mobile (used with md:text-hero) */
-  --text-hero-mobile: 2.75rem; /* 44px */
-  --text-hero-mobile--line-height: 2.53rem; /* 0.92 × 44 */
-  --text-hero-mobile--font-weight: 900;
-  --text-hero-mobile--letter-spacing: -0.03em;
+  --text-heading: var(--ss-text-size-heading);
+  --text-heading--line-height: var(--ss-text-line-height-heading);
+  --text-heading--font-weight: var(--ss-text-weight-heading);
 
-  /* Summary-card total price */
-  --text-hero-price: 4rem; /* 64px */
-  --text-hero-price--line-height: 3.68rem; /* 0.92 × 64 */
-  --text-hero-price--font-weight: 900;
-  --text-hero-price--letter-spacing: -0.04em;
+  --text-body-lg: var(--ss-text-size-body-lg);
+  --text-body-lg--line-height: var(--ss-text-line-height-body-lg);
+  --text-body-lg--font-weight: var(--ss-text-weight-body-lg);
 
-  /* KPI row big numbers */
-  --text-kpi: 2.75rem; /* 44px */
-  --text-kpi--line-height: 2.75rem;
-  --text-kpi--font-weight: 900;
-  --text-kpi--letter-spacing: -0.03em;
+  --text-body: var(--ss-text-size-body);
+  --text-body--line-height: var(--ss-text-line-height-body);
+  --text-body--font-weight: var(--ss-text-weight-body);
 
-  /* § block headings on detail pages */
-  --text-section-h: 2.25rem; /* 36px */
-  --text-section-h--line-height: 2.25rem;
-  --text-section-h--font-weight: 900;
-  --text-section-h--letter-spacing: -0.02em;
+  --text-caption: var(--ss-text-size-caption);
+  --text-caption--line-height: var(--ss-text-line-height-caption);
+  --text-caption--font-weight: var(--ss-text-weight-caption);
 
-  /* Row-level money (list rows, ledger amounts) */
-  --text-price-row: 1.75rem; /* 28px */
-  --text-price-row--line-height: 1.75rem;
-  --text-price-row--font-weight: 900;
-  --text-price-row--letter-spacing: -0.02em;
+  --text-label: var(--ss-text-size-label);
+  --text-label--line-height: var(--ss-text-line-height-label);
+  --text-label--font-weight: var(--ss-text-weight-label);
+  --text-label--letter-spacing: var(--ss-text-letter-spacing-label);
 
-  /* № / § cell glyph in ticket rows */
-  --text-num-cell: 1.375rem; /* 22px */
-  --text-num-cell--line-height: 1.375rem;
-  --text-num-cell--font-weight: 900;
-  --text-num-cell--letter-spacing: -0.01em;
+  --text-money: var(--ss-text-size-money);
+  --text-money--line-height: var(--ss-text-line-height-money);
+  --text-money--font-weight: var(--ss-text-weight-money);
+
+  /* Plainspoken display scale — Portal H1, hero price, KPI, etc. */
+  --text-hero: var(--ss-text-size-hero);
+  --text-hero--line-height: var(--ss-text-line-height-hero);
+  --text-hero--font-weight: var(--ss-text-weight-hero);
+  --text-hero--letter-spacing: var(--ss-text-letter-spacing-hero);
+
+  --text-hero-mobile: var(--ss-text-size-hero-mobile);
+  --text-hero-mobile--line-height: var(--ss-text-line-height-hero-mobile);
+  --text-hero-mobile--font-weight: var(--ss-text-weight-hero-mobile);
+  --text-hero-mobile--letter-spacing: var(--ss-text-letter-spacing-hero-mobile);
+
+  --text-hero-price: var(--ss-text-size-hero-price);
+  --text-hero-price--line-height: var(--ss-text-line-height-hero-price);
+  --text-hero-price--font-weight: var(--ss-text-weight-hero-price);
+  --text-hero-price--letter-spacing: var(--ss-text-letter-spacing-hero-price);
+
+  --text-kpi: var(--ss-text-size-kpi);
+  --text-kpi--line-height: var(--ss-text-line-height-kpi);
+  --text-kpi--font-weight: var(--ss-text-weight-kpi);
+  --text-kpi--letter-spacing: var(--ss-text-letter-spacing-kpi);
+
+  --text-section-h: var(--ss-text-size-section-h);
+  --text-section-h--line-height: var(--ss-text-line-height-section-h);
+  --text-section-h--font-weight: var(--ss-text-weight-section-h);
+  --text-section-h--letter-spacing: var(--ss-text-letter-spacing-section-h);
+
+  --text-price-row: var(--ss-text-size-price-row);
+  --text-price-row--line-height: var(--ss-text-line-height-price-row);
+  --text-price-row--font-weight: var(--ss-text-weight-price-row);
+  --text-price-row--letter-spacing: var(--ss-text-letter-spacing-price-row);
+
+  --text-num-cell: var(--ss-text-size-num-cell);
+  --text-num-cell--line-height: var(--ss-text-line-height-num-cell);
+  --text-num-cell--font-weight: var(--ss-text-weight-num-cell);
+  --text-num-cell--letter-spacing: var(--ss-text-letter-spacing-num-cell);
 
   /* ---------- Spacing rhythm ---------- */
-  --spacing-section: 3rem;
-  --spacing-card: 2rem;
-  --spacing-stack: 1rem;
-  --spacing-row: 0.75rem;
+  --spacing-section: var(--ss-space-section);
+  --spacing-card: var(--ss-space-card);
+  --spacing-stack: var(--ss-space-stack);
+  --spacing-row: var(--ss-space-row);
 
   /* ---------- Shape — flat institutional ---------- */
-  --radius-card: 0;
-  --radius-button: 0;
-  --radius-badge: 0;
+  --radius-card: var(--ss-radius-card);
+  --radius-button: var(--ss-radius-button);
+  --radius-badge: var(--ss-radius-badge);
 }
 
 @layer base {
   body {
-    background-color: var(--color-background);
-    color: var(--color-text-primary);
-    font-family: var(--font-body);
+    background-color: var(--ss-color-background);
+    color: var(--ss-color-text-primary);
+    font-family: var(--ss-font-body);
     -webkit-font-smoothing: antialiased;
   }
   h1,
   h2,
   h3 {
-    font-family: var(--font-display);
+    font-family: var(--ss-font-display);
   }
 }
 
