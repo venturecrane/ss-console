@@ -1,0 +1,43 @@
+# Gitleaks configuration — crane-console
+#
+# Plan §C.4 / §C.5: paired with the gitleaks-action@v2 step in
+# .github/workflows/security.yml. Inherits the upstream default ruleset
+# and adds project-specific exclusions for known-safe patterns.
+#
+# Reference: https://github.com/gitleaks/gitleaks#configuration
+
+# Inherit the default ruleset bundled with gitleaks (~80 detectors).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Global allowlist for crane-console monorepo"
+
+# Allowlist paths that legitimately contain credential-shaped strings:
+#   - lockfiles (npm hashes look like secrets)
+#   - dependency caches
+#   - test fixtures with intentionally fake secrets
+#   - documentation examples
+paths = [
+  '''.*node_modules/.*''',
+  '''package-lock\.json''',
+  '''.*\.lock''',
+  '''.*\.min\.js''',
+  '''test/fixtures/.*''',
+  '''__fixtures__/.*''',
+  '''workers/[^/]+/test/fixtures/.*''',
+  '''docs/.*\.md''',
+]
+
+# Allowlist commits that have already been audited. Empty by default —
+# add via PR with explicit captain approval.
+commits = []
+
+# Regexes that match known-safe placeholder values used in docs and tests.
+regexes = [
+  '''(?i)example[._-]?(api[._-]?key|secret|token)''',
+  '''(?i)your[._-]?(api[._-]?key|secret|token)[._-]?here''',
+  '''(?i)changeme''',
+  '''(?i)test[._-]?(api[._-]?key|secret|token|relay[._-]?key)''',
+  '''[a-f0-9]{32,64}\.(jpg|png|gif|webp)''',  # asset filenames look like hashes
+]

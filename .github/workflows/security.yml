@@ -8,16 +8,23 @@ on:
   schedule:
     # Daily at 13:00 UTC (06:00 Phoenix) so new advisories surface before the workday
     - cron: '0 13 * * *'
+  workflow_dispatch:
+
+# Plan v3.1 §H-3: explicit minimum permissions. Workflow only needs to
+# read the repository contents; it does not write commits, comments, or
+# artifacts. Explicit permissions block supersedes the repo default and
+# protects against accidental write-capable tokens leaking into the
+# authenticated curl calls below.
+permissions:
+  contents: read
+  # Required so npm ci can fetch @venturecrane/crane-test-harness from
+  # GitHub Packages via the workflow's GITHUB_TOKEN.
+  packages: read
 
 jobs:
   audit:
     name: npm audit (high+)
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      # Required so npm ci can fetch @venturecrane/crane-test-harness from
-      # GitHub Packages via the workflow's GITHUB_TOKEN.
-      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,3 +44,216 @@ jobs:
 
       - name: Audit (fail on high or critical)
         run: npm audit --audit-level=high
+
+  gitleaks:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Plan §C.5 fleet-lint #1: never hardcode the gitleaks version. The
+      # previous template pinned to gitleaks_8.21.2 which broke the entire
+      # fleet's security pipeline. We can't use gitleaks/gitleaks-action@v2
+      # because it requires a paid license for org repos. Install pattern
+      # below queries the GitHub releases API for the latest tag, so the
+      # version stays current automatically. Config lives in .gitleaks.toml.
+      #
+      # Plan v3.1 §H-3: the api.github.com curl MUST pass GITHUB_TOKEN via
+      # the Authorization header. Unauthenticated API calls share a 60/hour
+      # rate limit per GitHub Actions runner IP, and on busy days (or in
+      # orgs with many concurrent workflows) the rate limit is consumed
+      # before our call arrives, causing a 403 and a flaky Secret Detection
+      # failure. With authentication the rate limit is 5000/hr per token,
+      # more than sufficient. Fleet-lint rule #11 enforces this pattern.
+      - name: Install Gitleaks (latest release)
+        env:
+          GH_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          GITLEAKS_VERSION=$(curl -fsSL \
+            -H "Authorization: Bearer $GH_API_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/gitleaks/gitleaks/releases/latest \
+            | grep '"tag_name"' | head -1 | sed -E 's/.*"v?([^"]+)".*/\1/')
+          echo "Installing gitleaks v${GITLEAKS_VERSION}"
+          # The release tarball download does NOT need authentication (it's
+          # a public release asset served by github.com, not api.github.com)
+          # but we pass the header anyway for symmetry in case GitHub
+          # applies stricter rate limits to release downloads in the future.
+          curl -fsSL \
+            -H "Authorization: Bearer $GH_API_TOKEN" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          chmod +x gitleaks
+
+      - name: Run Gitleaks
+        run: |
+          echo "## Secret Detection" >> $GITHUB_STEP_SUMMARY
+          if ./gitleaks detect --source . --verbose --no-git --config .gitleaks.toml 2>&1 | tee gitleaks-output.txt; then
+            echo "No secrets detected." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Secrets Found" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat gitleaks-output.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+  typescript:
+    name: TypeScript Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@venturecrane'
+
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx astro check
+
+  semgrep:
+    name: Static Analysis (Semgrep)
+    runs-on: ubuntu-latest
+    container:
+      # Pinned container tag. Dependabot watches returntocorp/semgrep in
+      # .github/dependabot.yml so pin bumps land as PRs (auto-merged by
+      # .github/workflows/dependabot-auto-merge.yml when safe).
+      image: returntocorp/semgrep:1.157.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Semgrep
+        # POSIX-compatible shell script — the returntocorp/semgrep container
+        # uses Alpine ash, not bash, so ${PIPESTATUS[n]} is unavailable.
+        # We redirect to a file, capture $? directly, then cat for both the
+        # CI log and (on failure) $GITHUB_STEP_SUMMARY.
+        run: |
+          echo "## Static Analysis (Semgrep)" >> "$GITHUB_STEP_SUMMARY"
+          # `--error` fails on findings. `--strict` was tried but exits 3 on
+          # the ~0.4% of files in this repo that Semgrep can't fully parse
+          # (yaml/ts variants) — unrelated to security findings. Pack-load
+          # failures still surface loudly in the log without --strict.
+          set +e
+          semgrep scan \
+            --error \
+            --metrics=off \
+            --config=p/typescript \
+            --config=p/javascript \
+            --config=p/security-audit \
+            --config=p/owasp-top-ten \
+            --exclude=node_modules --exclude=dist --exclude='**/*.test.ts' \
+            > semgrep-output.txt 2>&1
+          rc=$?
+          set -e
+          cat semgrep-output.txt
+          if [ "$rc" -ne 0 ]; then
+            {
+              echo '### Findings'
+              echo '```'
+              cat semgrep-output.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$rc"
+          fi
+
+  nosemgrep-audit:
+    name: nosemgrep Justification Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require substantive justification on every nosemgrep
+        # Every `// nosemgrep` annotation must be followed by ` — ` or `: ` and
+        # at least 20 characters of justification prose. Without this audit,
+        # the gate degrades over time as agents silently silence findings by
+        # appending a bare `// nosemgrep` comment.
+        run: |
+          set -e
+          bad=$(grep -rnP --include='*.ts' --include='*.js' \
+            '//[[:space:]]*nosemgrep(:[^[:space:]]+)?[[:space:]]*(?:[—:][[:space:]]*.{0,19})?[[:space:]]*$' \
+            . \
+            --exclude-dir=node_modules --exclude-dir=dist || true)
+          if [ -n "$bad" ]; then
+            echo "nosemgrep annotations require ≥20 chars of justification after ' — ' or ': ':"
+            echo "$bad"
+            exit 1
+          fi
+          block=$(grep -rnzP --include='*.ts' --include='*.js' \
+            '/\*[^*]*nosemgrep[^*]*\*/' \
+            . \
+            --exclude-dir=node_modules --exclude-dir=dist || true)
+          if [ -n "$block" ]; then
+            echo "Block-comment nosemgrep not supported; use inline // nosemgrep:"
+            echo "$block"
+            exit 1
+          fi
+          disabled=$(grep -rn --include='*.ts' --include='*.js' 'semgrep-disable' . --exclude-dir=node_modules --exclude-dir=dist || true)
+          if [ -n "$disabled" ]; then
+            echo "'semgrep-disable' is banned; use rule-specific nosemgrep:"
+            echo "$disabled"
+            exit 1
+          fi
+
+  summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [audit, gitleaks, typescript, semgrep, nosemgrep-audit]
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          echo "## Security Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.audit.result }}" == "success" ]; then
+            echo "- npm audit: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- npm audit: FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.gitleaks.result }}" == "success" ]; then
+            echo "- Secret Detection: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Secret Detection: FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.typescript.result }}" == "success" ]; then
+            echo "- TypeScript: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- TypeScript: FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.semgrep.result }}" == "success" ]; then
+            echo "- Static Analysis (Semgrep): PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Static Analysis (Semgrep): FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.nosemgrep-audit.result }}" == "success" ]; then
+            echo "- nosemgrep Justification Audit: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- nosemgrep Justification Audit: FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Fail if any check failed
+          if [ "${{ needs.audit.result }}" != "success" ] || \
+             [ "${{ needs.gitleaks.result }}" != "success" ] || \
+             [ "${{ needs.typescript.result }}" != "success" ] || \
+             [ "${{ needs.semgrep.result }}" != "success" ] || \
+             [ "${{ needs.nosemgrep-audit.result }}" != "success" ]; then
+            echo ""
+            echo "One or more security checks failed."
+            exit 1
+          fi
