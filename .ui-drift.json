@@ -1,0 +1,8 @@
+{
+  "_comment": "UI drift audit thresholds for SS. Baseline captured 2026-04-25 (PR A — additive token import). raw_tailwind_color_classes is intentionally permissive at this stage — the codemod (PR B) lowers it. Hex/rgb count is already zero; that gate is hard.",
+  "thresholds": {
+    "raw_hex_rgb_in_jsx_max": 0,
+    "raw_hex_rgb_in_inline_style_max": 0,
+    "raw_tailwind_color_classes_max": 410
+  }
+}

@@ -326,6 +326,17 @@ Fetch the relevant module when working in that domain.
 
 Fetch with: `crane_doc('global', '<module>')`
 
+## Design System
+
+Load the enterprise pattern + component catalog before any UI work — design briefs, wireframes, component generation, design-related PR review:
+
+- Patterns (cross-venture UX problem/solution pairs): `crane_doc('global', 'design-system/patterns/index.md')`
+- Components (per-venture catalog of atoms, molecules, organisms): `crane_doc('global', 'design-system/components/index.md')`
+
+Then load this venture's spec for palette and tone: `crane_doc('ss', 'design-spec.md')`.
+
+The catalog is the shared vocabulary across all eight ventures — eight named patterns (status display by context, redundancy ban, button hierarchy, heading skip ban, typography scale, spacing rhythm, shared primitives, actions and menus) plus the components map (atoms / molecules / organisms with per-venture implementations). The catalog is a map, not a library — each venture maintains its own source. Cite a pattern by its file slug (`patterns/03-button-hierarchy.md`, etc.) when referencing it in PRs and skill output.
+
 ## Key Reference
 
 - **Decision Stack:** `docs/adr/decision-stack.md` (29 locked decisions across 6 layers — buy box, scope, pricing, assessment, distribution, delivery. Source of truth for all collateral and processes.)

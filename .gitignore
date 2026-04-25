@@ -36,3 +36,6 @@ coverage/
 
 # Playwright MCP output (screenshots, console dumps, snapshots)
 .playwright-mcp/
+
+# UI drift audit artifacts (regenerated per run, surfaced via CI)
+.design/audits/

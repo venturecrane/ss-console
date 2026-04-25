@@ -26,6 +26,7 @@
     "@astrojs/sitemap": "^3.7.2",
     "@formepdf/core": "^0.8.2",
     "@formepdf/react": "^0.8.2",
+    "@venturecrane/tokens": "0.0.2-alpha.0",
     "astro": "^6.1.7",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
