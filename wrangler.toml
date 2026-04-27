@@ -43,10 +43,10 @@ MEETING_URL = "https://zoom.us/j/4284801619"
 
 # Generator worker endpoints — invoked by /admin/generators "Run now" button.
 # Bearer-authed via LEAD_INGEST_API_KEY (secret). Set via `wrangler secret put`.
-# social_listening worker is not deployed yet — Run-now stays disabled.
 NEW_BUSINESS_WORKER_URL = "https://ss-new-business.automation-ab6.workers.dev"
 JOB_MONITOR_WORKER_URL = "https://ss-job-monitor.automation-ab6.workers.dev"
 REVIEW_MINING_WORKER_URL = "https://ss-review-mining.automation-ab6.workers.dev"
+SOCIAL_LISTENING_WORKER_URL = "https://ss-social-listening.automation-ab6.workers.dev"
 
 # Feature flag for the public /patterns aggregate page. Off by default.
 # Flip to "1" or "true" only after the unlock condition documented in

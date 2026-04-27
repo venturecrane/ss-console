@@ -105,3 +105,14 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: workers/review-mining
           command: deploy
+
+      - name: Install Social Listening Worker deps
+        run: cd workers/social-listening && npm ci
+
+      - name: Deploy Social Listening Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/social-listening
+          command: deploy
