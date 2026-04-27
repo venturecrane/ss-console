@@ -12,6 +12,7 @@
  */
 
 import { isQuoteAcceptanceReady } from '../sow/store'
+import { getDefaultOriginatingSignalId } from './signal-attribution'
 
 export interface Quote {
   id: string
@@ -49,6 +50,12 @@ export interface Quote {
   deliverables: string | null // JSON array of DeliverableRow
   engagement_overview: string | null
   milestone_label: string | null
+  /**
+   * Originating-signal attribution (#589). NULL until set; see
+   * `signal-attribution.ts`. Set by default at quote creation to the most
+   * recent signal on the entity.
+   */
+  originating_signal_id: string | null
   created_at: string
   updated_at: string
 }
@@ -137,6 +144,13 @@ export interface CreateQuoteData {
    * `superseded` — createQuote does not mutate the parent record.
    */
   parentQuoteId?: string | null
+  /**
+   * Originating signal attribution (#589). Same three-state contract as
+   * `CreateEngagementData.originating_signal_id`: undefined → default,
+   * string → explicit, null → skip default. Validation of the id belonging
+   * to the entity/org is the caller's responsibility.
+   */
+  originatingSignalId?: string | null
 }
 
 export interface UpdateQuoteData {
@@ -147,6 +161,12 @@ export interface UpdateQuoteData {
   deliverables?: DeliverableRow[] | null
   engagementOverview?: string | null
   milestoneLabel?: string | null
+  /**
+   * Edit attribution post-creation (#589). `null` clears, string sets, omit
+   * leaves unchanged. Recalculation of totals/version below is unaffected;
+   * attribution is metadata, not part of the quote's pricing identity.
+   */
+  originatingSignalId?: string | null
 }
 
 /**
@@ -323,10 +343,18 @@ export async function createQuote(
   // assessment primary key) unless the caller passes an explicit meetingId.
   const meetingIdValue = data.meetingId ?? data.assessmentId
 
+  // Resolve originating-signal attribution (#589). Same three-state contract
+  // as createEngagement — undefined defaults to most-recent, null is an
+  // explicit skip, string is an explicit override.
+  const originatingSignalId =
+    data.originatingSignalId === undefined
+      ? await getDefaultOriginatingSignalId(db, orgId, data.entityId)
+      : data.originatingSignalId
+
   await db
     .prepare(
-      `INSERT INTO quotes (id, org_id, entity_id, assessment_id, meeting_id, version, parent_quote_id, line_items, total_hours, rate, total_price, deposit_pct, deposit_amount, status, schedule, deliverables, engagement_overview, milestone_label, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO quotes (id, org_id, entity_id, assessment_id, meeting_id, version, parent_quote_id, line_items, total_hours, rate, total_price, deposit_pct, deposit_amount, status, schedule, deliverables, engagement_overview, milestone_label, originating_signal_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       id,
@@ -346,6 +374,7 @@ export async function createQuote(
       deliverablesJson,
       engagementOverview,
       milestoneLabel,
+      originatingSignalId,
       now,
       now
     )
@@ -421,6 +450,11 @@ export async function updateQuote(
     fields.push('milestone_label = ?')
     const trimmed = data.milestoneLabel?.trim() ?? null
     params.push(trimmed && trimmed.length > 0 ? trimmed : null)
+  }
+
+  if (data.originatingSignalId !== undefined) {
+    fields.push('originating_signal_id = ?')
+    params.push(data.originatingSignalId)
   }
 
   // Recalculate totals if line items or rate changed
@@ -523,6 +557,7 @@ export async function getActiveQuotesForEntities(
            line_items, total_hours, rate, total_price, deposit_pct,
            deposit_amount, status, sent_at, expires_at, accepted_at,
            schedule, deliverables, engagement_overview, milestone_label,
+           originating_signal_id,
            created_at, updated_at
     FROM (
       SELECT q.*,

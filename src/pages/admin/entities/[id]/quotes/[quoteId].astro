@@ -17,6 +17,7 @@ import type {
   DeliverableRow,
 } from '../../../../../lib/db/quotes'
 import { listContacts } from '../../../../../lib/db/contacts'
+import { listSignalsForEntity } from '../../../../../lib/db/signal-attribution'
 import { getSOWStateForQuote } from '../../../../../lib/sow/service'
 import { env } from 'cloudflare:workers'
 
@@ -38,11 +39,30 @@ const session = Astro.locals.session!
 const entityId = Astro.params.id!
 const quoteId = Astro.params.quoteId!
 
-const [entity, quote, contacts] = await Promise.all([
+const [entity, quote, contacts, entitySignals] = await Promise.all([
   getEntity(env.DB, session.orgId, entityId),
   getQuote(env.DB, session.orgId, quoteId),
   listContacts(env.DB, session.orgId, entityId),
+  listSignalsForEntity(env.DB, session.orgId, entityId),
 ])
+
+// Format helper for the originating-signal dropdown (#589). Single-line,
+// truncated, with pipeline + date + content snippet so an admin can pick the
+// right signal at a glance.
+function formatSignalLabel(s: {
+  source_pipeline: string
+  created_at: string
+  content: string
+}): string {
+  const date = new Date(s.created_at).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+  const oneLine = s.content.replace(/\s+/g, ' ').trim()
+  const snippet = oneLine.length > 80 ? `${oneLine.slice(0, 79)}…` : oneLine
+  return `[${s.source_pipeline}] ${date} — ${snippet}`
+}
 
 if (!entity) return Astro.redirect('/admin/entities?error=not_found')
 if (!quote) return Astro.redirect(`/admin/entities/${entityId}?error=not_found`)
@@ -577,6 +597,46 @@ function formatCurrency(amount: number): string {
       }
     </div>
 
+    {/* Originating signal (#589) */}
+    <div class="mb-6">
+      <label
+        class="block text-sm font-semibold text-[color:var(--ss-color-text-primary)] mb-1"
+        for="originating-signal-input"
+      >
+        Originating signal
+      </label>
+      <p class="text-xs text-[color:var(--ss-color-text-secondary)] mb-2">
+        Pipeline signal that produced this engagement. Defaults to the most recent signal on file.
+        Used for ROI-per-pipeline reporting; never rendered to the client.
+      </p>
+      {
+        isDraft ? (
+          <select
+            id="originating-signal-input"
+            class="w-full border border-[color:var(--ss-color-border)] rounded px-3 py-2 text-sm"
+          >
+            <option value="__none__" selected={!quote.originating_signal_id}>
+              — Unattributed —
+            </option>
+            {entitySignals.map((s) => (
+              <option value={s.id} selected={quote.originating_signal_id === s.id}>
+                {formatSignalLabel(s)}
+              </option>
+            ))}
+          </select>
+        ) : quote.originating_signal_id ? (
+          <p class="text-sm text-[color:var(--ss-color-text-primary)]">
+            {(() => {
+              const s = entitySignals.find((x) => x.id === quote.originating_signal_id)
+              return s ? formatSignalLabel(s) : 'Attributed (signal no longer visible).'
+            })()}
+          </p>
+        ) : (
+          <p class="text-sm italic text-[color:var(--ss-color-text-muted)]">Unattributed.</p>
+        )
+      }
+    </div>
+
     {/* Milestone label (three-milestone only) */}
     {
       isThreeMilestone && (
@@ -676,6 +736,12 @@ function formatCurrency(amount: number): string {
               name="milestone_label"
               id="save-milestone-label"
               value={milestoneLabel}
+            />
+            <input
+              type="hidden"
+              name="originating_signal_id"
+              id="save-originating-signal-id"
+              value={quote.originating_signal_id ?? '__none__'}
             />
             <button
               type="submit"
@@ -787,12 +853,14 @@ function formatCurrency(amount: number): string {
       const saveDeliverablesInput = document.getElementById('save-deliverables')
       const saveEngagementOverviewInput = document.getElementById('save-engagement-overview')
       const saveMilestoneLabelInput = document.getElementById('save-milestone-label')
+      const saveOriginatingSignalInput = document.getElementById('save-originating-signal-id')
       const scheduleRowsContainer = document.getElementById('schedule-rows')
       const deliverableRowsContainer = document.getElementById('deliverable-rows')
       const addScheduleRowBtn = document.getElementById('add-schedule-row-btn')
       const addDeliverableRowBtn = document.getElementById('add-deliverable-row-btn')
       const engagementOverviewInput = document.getElementById('engagement-overview-input')
       const milestoneLabelInput = document.getElementById('milestone-label-input')
+      const originatingSignalInput = document.getElementById('originating-signal-input')
       const generatePdfBtn = document.getElementById('generate-pdf-btn')
       const signBtn = document.getElementById('sign-btn')
 
@@ -922,6 +990,12 @@ function formatCurrency(amount: number): string {
         }
         if (saveMilestoneLabelInput && milestoneLabelInput) {
           saveMilestoneLabelInput.value = milestoneLabelInput.value
+        }
+        if (saveOriginatingSignalInput && originatingSignalInput) {
+          // Mirror the dropdown value (#589) into the save form. The "__none__"
+          // sentinel is sent verbatim — the API endpoint translates it back to
+          // null. Real signal ids pass through unchanged.
+          saveOriginatingSignalInput.value = originatingSignalInput.value
         }
       }
 
