@@ -23,7 +23,7 @@ A complete record of every strategic decision made across 6 layers of the SMD Se
 | **Payment terms**       | 50% deposit at signing, 50% at completion                                                             |
 | **Assessment**          | Free for first 3 clients, then $250 applied toward engagement                                         |
 | **Voice standard**      | We / our team throughout. Never I / the consultant.                                                   |
-| **Decisions locked**    | 29 decisions across 6 layers                                                                          |
+| **Decisions locked**    | 30 decisions across 6 layers (plus venture-wide #20 positioning standard)                             |
 | **Deliverables queued** | 11 artifacts ready to build                                                                           |
 
 ---
@@ -619,6 +619,47 @@ Question 4 doubles as a referral prompt. Same email, same moment, no extra step.
 
 ---
 
+## Decision #42 - Taxonomy Two-Layer Model
+
+**Issue:** smdservices/ss-console #591
+
+**ADR:** [docs/adr/0001-taxonomy-two-layer-model.md](./0001-taxonomy-two-layer-model.md)
+
+**Decision: Two taxonomies, deliberately distinct. The 6-category list is the _delivery_ taxonomy (what we offer). The 5-category list is the _observation_ taxonomy (what we detect from public data). Outreach speaks observation; marketing speaks delivery; the assessment call is the bridge.**
+
+**Delivery taxonomy (6 categories - source of truth: CLAUDE.md):**
+
+1. Process design
+2. Custom internal tools
+3. Systems integration
+4. Operational visibility
+5. Vendor/platform selection
+6. AI & automation
+
+Used on: marketing site, pricing framework, SOWs, Decision Stack language. This is the doctrinal positioning.
+
+**Observation taxonomy (5 IDs - source of truth: `src/portal/assessments/extraction-schema.ts`):**
+
+1. `process_design`
+2. `tool_systems`
+3. `data_visibility`
+4. `customer_pipeline`
+5. `team_operations`
+
+Used on: lead-gen prompts, scorecard, assessment intake extraction, entity-signal metadata. This is the operational pain we can detect from public data.
+
+**Why two layers.** The lists were authored by different sessions for different purposes and were never reconciled. Forcing one into the other would degrade both — the lead-gen schema is pain-detection-shaped, the marketing list is engagement-offering-shaped. The credibility gap (a prospect arriving from outreach hearing observation language and seeing delivery language on the site) closes through honest framing, not a forced merge.
+
+**Implementation.**
+
+- Marketing site (`src/components/WhatYouGet.astro`) gains one clarifying paragraph below the delivery list: this is how we deliver, not a checklist we run against the business; the right solution comes from the assessment conversation.
+- Lead-gen prompts already use 5-cat exclusively. An integration test asserts this stays true.
+- CLAUDE.md "Taxonomy divergence note" updated to reference the ADR and note resolution.
+
+**Captain authorized:** 2026-04-27, lead-gen strategy walkthrough. See [`docs/strategy/lead-gen-strategy-2026-04-25.md`](../strategy/lead-gen-strategy-2026-04-25.md), Diagnosis section item 4 and Decisions Locked table row 1.
+
+---
+
 ## Decision #30 - Case Study Creation
 
 **Issue:** smdservices/ss-console #30
@@ -719,6 +760,7 @@ All 11 artifacts are scaffolded as GitHub issues in smdservices/ss-console. Ever
 | #28   | Internal champion - identify at assessment, orient Day 1                                        |
 | #29   | Feedback collection - verbal at handoff, survey 30 days later                                   |
 | #30   | Case study workflow - agent-drafted, client-approved, one page                                  |
+| #42   | Taxonomy two-layer model - 5-cat observation, 6-cat delivery (see ADR 0001)                     |
 
 ---
 
