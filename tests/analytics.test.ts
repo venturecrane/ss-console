@@ -264,20 +264,25 @@ describe('analytics: dashboard page', () => {
   })
 
   it('color-codes quote accuracy within 20%, 20-40%, and >40%', () => {
+    // Updated for Plainspoken Sign Shop migration: token-mapped utilities
+    // replace raw Tailwind palette. On-target uses ink (Pattern 01: metadata,
+    // not status pill); off-target uses attention; way-off uses error.
     const code = source()
-    expect(code).toContain('text-green-700')
-    expect(code).toContain('text-amber-700')
-    expect(code).toContain('text-red-700')
+    expect(code).toContain('text-[color:var(--ss-color-text-primary)]') // on-target
+    expect(code).toContain('text-[color:var(--ss-color-attention)]') // off-target
+    expect(code).toContain('text-[color:var(--ss-color-error)]') // way-off
   })
 
   it('color-codes pipeline stages', () => {
+    // Updated for Plainspoken migration: pipeline stages now use the
+    // burnt-orange-tracks-active-progression / ink-marks-terminal-stages
+    // pattern (single-accent discipline). Stage taxonomy renamed to
+    // prospect/meetings/proposing/engaged/delivered/lost.
     const code = source()
-    expect(code).toContain('bg-slate-400') // prospect
-    expect(code).toContain('bg-blue-500') // assessed
-    expect(code).toContain('bg-amber-500') // quoted
-    expect(code).toContain('bg-green-500') // active
-    expect(code).toContain('bg-emerald-600') // completed
-    expect(code).toContain('bg-red-500') // dead
+    expect(code).toContain('bg-[color:var(--ss-color-text-secondary)]') // prospect/meetings (top-of-funnel, neutral)
+    expect(code).toContain('bg-[color:var(--ss-color-primary)]') // proposing/engaged (active, burnt orange)
+    expect(code).toContain('bg-[color:var(--ss-color-text-primary)]') // delivered (ink terminal)
+    expect(code).toContain('bg-[color:var(--ss-color-error)]') // lost (brick terminal)
   })
 })
 

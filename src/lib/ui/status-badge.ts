@@ -41,6 +41,11 @@ const TONE: Record<string, string> = {
   paid: 'bg-[color:var(--ss-color-complete)] text-white',
   overdue: 'bg-[color:var(--ss-color-error)] text-white',
   void: 'bg-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-secondary)]',
+
+  // Milestone lifecycle (`completed` shared with engagement above)
+  pending: 'bg-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-secondary)]',
+  in_progress: 'bg-[color:var(--ss-color-primary)] text-white',
+  skipped: 'bg-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-secondary)]',
 }
 
 const FALLBACK = 'bg-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-secondary)]'

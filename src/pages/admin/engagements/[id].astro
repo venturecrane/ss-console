@@ -12,6 +12,13 @@ import { listContext } from '../../../lib/db/context'
 import { listDocuments } from '../../../lib/storage/r2'
 import { env } from 'cloudflare:workers'
 
+// Context-entry type → flat eyebrow class. Per Pattern 01 these are
+// category labels above a record, not state — render as ink-on-cream
+// uppercase eyebrow, no fill, no rounded shape.
+function contextTypeEyebrowClass(): string {
+  return 'text-label uppercase font-mono text-[color:var(--ss-color-text-secondary)] tracking-[var(--ss-text-letter-spacing-label)]'
+}
+
 const session = Astro.locals.session!
 if (session.role !== 'admin') return Astro.redirect('/login')
 
@@ -51,53 +58,6 @@ function formatDate(d: string | null): string {
   })
 }
 
-function msBadgeClass(s: string): string {
-  switch (s) {
-    case 'pending':
-      return 'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]'
-    case 'in_progress':
-      return 'bg-blue-100 text-blue-700'
-    case 'completed':
-      return 'bg-green-100 text-green-700'
-    case 'skipped':
-      return 'bg-red-100 text-red-600'
-    default:
-      return 'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]'
-  }
-}
-
-function invoiceBadgeClass(s: string): string {
-  switch (s) {
-    case 'draft':
-      return 'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]'
-    case 'sent':
-      return 'bg-blue-100 text-blue-700'
-    case 'paid':
-      return 'bg-green-100 text-green-700'
-    case 'overdue':
-      return 'bg-red-100 text-red-600'
-    case 'void':
-      return 'bg-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-secondary)]'
-    default:
-      return 'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]'
-  }
-}
-
-function contextTypeBadgeClass(t: string): string {
-  switch (t) {
-    case 'note':
-      return 'bg-blue-100 text-blue-700'
-    case 'stage_change':
-      return 'bg-yellow-100 text-yellow-700'
-    case 'engagement_log':
-      return 'bg-green-100 text-green-700'
-    case 'feedback':
-      return 'bg-purple-100 text-purple-700'
-    default:
-      return 'bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)]'
-  }
-}
-
 function fileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -116,28 +76,28 @@ function fileSize(bytes: number): string {
   <div class="space-y-card">
     {
       saved && (
-        <div class="bg-green-50 border border-green-200 text-green-800 px-4 py-2 rounded text-sm">
+        <div class="border-l-4 border-[color:var(--ss-color-complete)] bg-[color:var(--ss-color-surface)] text-[color:var(--ss-color-text-primary)] px-4 py-2 text-sm">
           Changes saved.
         </div>
       )
     }
     {
       milestoneAdded && (
-        <div class="bg-green-50 border border-green-200 text-green-800 px-4 py-2 rounded text-sm">
+        <div class="border-l-4 border-[color:var(--ss-color-complete)] bg-[color:var(--ss-color-surface)] text-[color:var(--ss-color-text-primary)] px-4 py-2 text-sm">
           Milestone added.
         </div>
       )
     }
     {
       milestoneDeleted && (
-        <div class="bg-green-50 border border-green-200 text-green-800 px-4 py-2 rounded text-sm">
+        <div class="border-l-4 border-[color:var(--ss-color-complete)] bg-[color:var(--ss-color-surface)] text-[color:var(--ss-color-text-primary)] px-4 py-2 text-sm">
           Milestone deleted.
         </div>
       )
     }
     {
       error && (
-        <div class="bg-red-50 border border-red-200 text-red-800 px-4 py-2 rounded text-sm">
+        <div class="border-l-4 border-[color:var(--ss-color-error)] bg-[color:var(--ss-color-surface)] text-[color:var(--ss-color-text-primary)] px-4 py-2 text-sm">
           {error === 'invalid_status'
             ? 'Invalid status transition.'
             : error === 'invalid_transition'
@@ -181,9 +141,9 @@ function fileSize(bytes: number): string {
                   <input type="hidden" name="new_status" value={ns} />
                   <button
                     type="submit"
-                    class={`text-xs px-3 py-1.5 rounded font-medium border transition-colors ${
+                    class={`text-xs px-3 py-1.5 font-medium border transition-colors ${
                       ns === 'cancelled'
-                        ? 'border-red-300 text-red-700 hover:bg-red-50'
+                        ? 'border-[color:var(--ss-color-error)] text-[color:var(--ss-color-error)] hover:bg-[color:var(--ss-color-background)]'
                         : 'border-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-primary)] hover:bg-[color:var(--ss-color-background)]'
                     }`}
                   >
@@ -238,11 +198,7 @@ function fileSize(bytes: number): string {
             {depositInvoice && (
               <div class="mt-2 text-sm">
                 <span class="text-[color:var(--ss-color-text-secondary)]">Deposit Invoice:</span>{' '}
-                <span
-                  class={`text-xs px-2 py-0.5 rounded ${invoiceBadgeClass(depositInvoice.status)}`}
-                >
-                  {depositInvoice.status}
-                </span>
+                <span class={statusBadgeClass(depositInvoice.status)}>{depositInvoice.status}</span>
                 <span class="ml-2 text-[color:var(--ss-color-text-secondary)]">
                   ${depositInvoice.amount.toLocaleString()}
                 </span>
@@ -358,7 +314,7 @@ function fileSize(bytes: number): string {
           <div class="flex justify-end">
             <button
               type="submit"
-              class="bg-slate-900 text-white text-sm px-4 py-2 rounded hover:bg-slate-800 transition-colors"
+              class="bg-[color:var(--ss-color-primary)] text-white text-sm px-4 py-2 hover:bg-[color:var(--ss-color-primary-hover)] transition-colors"
             >
               Save Changes
             </button>
@@ -390,14 +346,15 @@ function fileSize(bytes: number): string {
               <div class="px-6 py-4 flex items-center justify-between gap-stack">
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2">
-                    <span class={`text-xs px-2 py-0.5 rounded ${msBadgeClass(ms.status)}`}>
-                      {ms.status}
-                    </span>
+                    <span class={statusBadgeClass(ms.status)}>{ms.status}</span>
                     <span class="text-sm font-medium text-[color:var(--ss-color-text-primary)] truncate">
                       {ms.name}
                     </span>
                     {ms.payment_trigger ? (
-                      <span class="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                      <span
+                        title="Payment trigger"
+                        class="inline-flex items-center px-1.5 py-0.5 bg-[color:var(--ss-color-attention)] text-white text-label uppercase font-mono tracking-[var(--ss-text-letter-spacing-label)]"
+                      >
                         $
                       </span>
                     ) : null}
@@ -423,10 +380,10 @@ function fileSize(bytes: number): string {
                       title={
                         ms.payment_trigger ? 'Remove payment trigger' : 'Set as payment trigger'
                       }
-                      class={`text-xs px-2 py-1 rounded border transition-colors ${
+                      class={`text-xs px-2 py-1 border transition-colors ${
                         ms.payment_trigger
-                          ? 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100'
-                          : 'border-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-muted)] hover:text-[color:var(--ss-color-text-secondary)] hover:border-[color:var(--ss-color-border)]'
+                          ? 'border-[color:var(--ss-color-attention)] text-[color:var(--ss-color-attention)] hover:bg-[color:var(--ss-color-background)]'
+                          : 'border-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-muted)] hover:text-[color:var(--ss-color-text-secondary)]'
                       }`}
                     >
                       $
@@ -443,11 +400,11 @@ function fileSize(bytes: number): string {
                       <input type="hidden" name="new_status" value={ns} />
                       <button
                         type="submit"
-                        class={`text-xs px-2.5 py-1 rounded border transition-colors ${
+                        class={`text-xs px-2.5 py-1 border transition-colors ${
                           ns === 'completed'
-                            ? 'border-green-300 text-green-700 hover:bg-green-50'
+                            ? 'border-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-primary)] hover:bg-[color:var(--ss-color-background)]'
                             : ns === 'in_progress'
-                              ? 'border-blue-300 text-blue-700 hover:bg-blue-50'
+                              ? 'border-[color:var(--ss-color-primary)] text-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-background)]'
                               : 'border-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-secondary)] hover:bg-[color:var(--ss-color-background)]'
                         }`}
                       >
@@ -471,7 +428,7 @@ function fileSize(bytes: number): string {
                       <input type="hidden" name="milestone_id" value={ms.id} />
                       <button
                         type="submit"
-                        class="text-xs px-2 py-1 rounded border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
+                        class="text-xs px-2 py-1 border border-[color:var(--ss-color-error)] text-[color:var(--ss-color-error)] hover:bg-[color:var(--ss-color-background)] transition-colors"
                         onclick="return confirm('Delete this milestone?')"
                       >
                         Del
@@ -553,7 +510,7 @@ function fileSize(bytes: number): string {
               <input type="hidden" name="sort_order" value={String(milestones.length)} />
               <button
                 type="submit"
-                class="ml-auto bg-slate-900 text-white text-xs px-3 py-1.5 rounded hover:bg-slate-800 transition-colors"
+                class="ml-auto bg-[color:var(--ss-color-primary)] text-white text-xs px-3 py-1.5 hover:bg-[color:var(--ss-color-primary-hover)] transition-colors"
               >
                 Add Milestone
               </button>
@@ -629,7 +586,7 @@ function fileSize(bytes: number): string {
               <button
                 type="button"
                 id="photo-upload"
-                class="hidden text-xs px-3 py-1.5 rounded bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+                class="hidden text-xs px-3 py-1.5 bg-[color:var(--ss-color-primary)] text-white hover:bg-[color:var(--ss-color-primary-hover)] transition-colors"
               >
                 Upload
               </button>
@@ -645,7 +602,7 @@ function fileSize(bytes: number): string {
                   <button
                     type="button"
                     id="photo-remove"
-                    class="text-xs px-3 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                    class="text-xs px-3 py-1.5 border border-[color:var(--ss-color-error)] text-[color:var(--ss-color-error)] hover:bg-[color:var(--ss-color-background)] transition-colors"
                   >
                     Remove
                   </button>
@@ -683,7 +640,7 @@ function fileSize(bytes: number): string {
                   <li class="flex items-center justify-between text-sm">
                     <a
                       href={`/api/admin/engagements/${engagementId}/deliverables/${name}`}
-                      class="text-blue-600 hover:underline truncate"
+                      class="text-[color:var(--ss-color-primary)] hover:underline truncate"
                     >
                       {name}
                     </a>
@@ -731,9 +688,7 @@ function fileSize(bytes: number): string {
             {invoices.map((inv) => (
               <div class="px-6 py-3 flex items-center justify-between text-sm">
                 <div class="flex items-center gap-row">
-                  <span class={`text-xs px-2 py-0.5 rounded ${invoiceBadgeClass(inv.status)}`}>
-                    {inv.status}
-                  </span>
+                  <span class={statusBadgeClass(inv.status)}>{inv.status}</span>
                   <span class="text-[color:var(--ss-color-text-primary)] capitalize">
                     {inv.type}
                   </span>
@@ -772,9 +727,7 @@ function fileSize(bytes: number): string {
             {contextEntries.map((entry) => (
               <div class="px-6 py-3">
                 <div class="flex items-center gap-2 mb-1">
-                  <span class={`text-xs px-2 py-0.5 rounded ${contextTypeBadgeClass(entry.type)}`}>
-                    {entry.type.replace(/_/g, ' ')}
-                  </span>
+                  <span class={contextTypeEyebrowClass()}>{entry.type.replace(/_/g, ' ')}</span>
                   <span class="text-xs text-[color:var(--ss-color-text-muted)]">
                     {formatDate(entry.created_at)}
                   </span>
@@ -804,14 +757,14 @@ function fileSize(bytes: number): string {
 
     uploadArea.addEventListener('dragover', (e) => {
       e.preventDefault()
-      uploadArea.classList.add('border-blue-400', 'bg-blue-50')
+      uploadArea.classList.add('drag-active')
     })
     uploadArea.addEventListener('dragleave', () => {
-      uploadArea.classList.remove('border-blue-400', 'bg-blue-50')
+      uploadArea.classList.remove('drag-active')
     })
     uploadArea.addEventListener('drop', (e) => {
       e.preventDefault()
-      uploadArea.classList.remove('border-blue-400', 'bg-blue-50')
+      uploadArea.classList.remove('drag-active')
       uploadFiles(e.dataTransfer.files)
     })
 
@@ -863,7 +816,7 @@ function fileSize(bytes: number): string {
       if (!photoStatus) return
       photoStatus.textContent = msg
       photoStatus.className = isError
-        ? 'mt-2 text-xs text-red-600'
+        ? 'mt-2 text-xs text-[color:var(--ss-color-error)]'
         : 'mt-2 text-xs text-[color:var(--ss-color-text-secondary)]'
     }
 
@@ -984,4 +937,13 @@ function fileSize(bytes: number): string {
       })
     }
   </script>
+
+  <style>
+    /* Drag-target feedback for the deliverables uploader. Toggled in JS via
+       the `.drag-active` class so the visual state stays in tokens. */
+    .drag-active {
+      border-color: var(--ss-color-primary);
+      background-color: var(--ss-color-background);
+    }
+  </style>
 </AdminLayout>
