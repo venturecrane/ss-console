@@ -1,13 +1,27 @@
 /**
- * Tests for the /api/scan/verify endpoint's Cloudflare Workflows dispatch
- * (#614).
+ * Tests for the /api/scan/verify endpoint's service-binding dispatch
+ * path (#618; original test scope #614).
+ *
+ * The original #614 implementation called `env.SCAN_WORKFLOW.create(...)`
+ * directly. Per #618 the Workflow now lives on a separate Worker
+ * (`workers/scan-workflow/`) and ss-web invokes it through a service
+ * binding (`env.SCAN_WORKFLOW_SERVICE.fetch(...)`). The test suite below
+ * mirrors that change: every assertion runs against the new service-
+ * binding-shaped mock, not the old direct-create mock.
  *
  * Asserts:
  *
- *   - When SCAN_WORKFLOW is bound, verify creates a Workflow instance and
- *     persists the returned instance id to scan_requests.workflow_run_id
- *   - When SCAN_WORKFLOW is not bound (dev / test), verify falls back to
- *     the legacy ctx.waitUntil path so local development still works
+ *   - When SCAN_WORKFLOW_SERVICE is bound and the dispatch endpoint
+ *     returns `{ ok: true, workflow_run_id }`, verify persists the
+ *     returned id to scan_requests.workflow_run_id
+ *   - When SCAN_WORKFLOW_SERVICE is not bound (dev / test), verify falls
+ *     back to the legacy ctx.waitUntil path so local development still
+ *     works
+ *   - When the dispatch fetch throws, verify falls back to ctx.waitUntil
+ *     so the scan is never lost
+ *   - When the dispatch returns a non-2xx response, verify falls back
+ *   - When the dispatch returns 2xx but a malformed payload, verify
+ *     falls back
  *   - The public response shape is unchanged (uniform { ok, status })
  */
 
@@ -57,7 +71,25 @@ function resetEnv() {
   for (const k of Object.keys(e)) delete e[k]
 }
 
-describe('/api/scan/verify — Workflows dispatch (#614)', () => {
+/**
+ * Build a service-binding-shaped mock whose `fetch` returns a JSON
+ * response. The verify endpoint expects either a 2xx with
+ * `{ ok: true, workflow_run_id: '...' }` (success) or anything else
+ * (treated as failure → fallback).
+ */
+function makeServiceBinding(handler: (req: Request) => Promise<Response> | Response) {
+  return {
+    fetch: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const req =
+        input instanceof Request
+          ? input
+          : new Request(typeof input === 'string' ? input : input.toString(), init)
+      return handler(req)
+    }),
+  }
+}
+
+describe('/api/scan/verify — service-binding dispatch (#618)', () => {
   let db: D1Database
 
   beforeEach(async () => {
@@ -67,9 +99,15 @@ describe('/api/scan/verify — Workflows dispatch (#614)', () => {
     vi.clearAllMocks()
   })
 
-  it('creates a Workflow instance and persists workflow_run_id when bound', async () => {
-    const create = vi.fn().mockResolvedValue({ id: 'wf-12345' })
-    Object.assign(testEnv, { SCAN_WORKFLOW: { create } })
+  it('dispatches via service binding and persists workflow_run_id when bound', async () => {
+    const binding = makeServiceBinding(
+      async () =>
+        new Response(JSON.stringify({ ok: true, workflow_run_id: 'wf-12345' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+    )
+    Object.assign(testEnv, { SCAN_WORKFLOW_SERVICE: binding })
 
     const { token, hash } = await generateScanToken()
     const row = await createScanRequest(db, {
@@ -90,8 +128,12 @@ describe('/api/scan/verify — Workflows dispatch (#614)', () => {
     expect(body.status).toBe('verified')
     expect(body.domain).toBe('example.com')
 
-    expect(create).toHaveBeenCalledTimes(1)
-    expect(create).toHaveBeenCalledWith({ params: { scanRequestId: row.id } })
+    // The dispatch endpoint received exactly one call with the right body.
+    expect(binding.fetch).toHaveBeenCalledTimes(1)
+    const [reqUrl, reqInit] = binding.fetch.mock.calls[0]
+    expect(reqUrl).toBe('https://internal/dispatch')
+    expect(reqInit?.method).toBe('POST')
+    expect(JSON.parse(String(reqInit?.body))).toEqual({ scanRequestId: row.id })
 
     // Workflow id was persisted.
     const updated = await getScanRequest(db, row.id)
@@ -102,8 +144,8 @@ describe('/api/scan/verify — Workflows dispatch (#614)', () => {
     expect(vi.mocked(runDiagnosticScan)).not.toHaveBeenCalled()
   })
 
-  it('falls back to ctx.waitUntil when SCAN_WORKFLOW is not bound', async () => {
-    // No SCAN_WORKFLOW in env.
+  it('falls back to ctx.waitUntil when SCAN_WORKFLOW_SERVICE is not bound', async () => {
+    // No SCAN_WORKFLOW_SERVICE in env.
     const { token, hash } = await generateScanToken()
     await createScanRequest(db, {
       email: 'a@b.com',
@@ -130,9 +172,11 @@ describe('/api/scan/verify — Workflows dispatch (#614)', () => {
     expect(vi.mocked(runDiagnosticScan)).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back when SCAN_WORKFLOW.create throws (does not lose the scan)', async () => {
-    const create = vi.fn().mockRejectedValue(new Error('quota exceeded'))
-    Object.assign(testEnv, { SCAN_WORKFLOW: { create } })
+  it('falls back when the service binding fetch throws', async () => {
+    const binding = makeServiceBinding(async () => {
+      throw new Error('binding offline')
+    })
+    Object.assign(testEnv, { SCAN_WORKFLOW_SERVICE: binding })
 
     const { token, hash } = await generateScanToken()
     await createScanRequest(db, {
@@ -152,15 +196,83 @@ describe('/api/scan/verify — Workflows dispatch (#614)', () => {
     const body = (await response.json()) as { ok: boolean; status: string }
     expect(body.status).toBe('verified')
 
-    // create() was attempted; fallback was invoked when it threw.
-    expect(create).toHaveBeenCalledTimes(1)
+    // Dispatch was attempted; fallback was invoked when it threw.
+    expect(binding.fetch).toHaveBeenCalledTimes(1)
+    expect(waitUntil).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(runDiagnosticScan)).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back when the dispatch endpoint returns a non-2xx response', async () => {
+    const binding = makeServiceBinding(
+      async () =>
+        new Response(JSON.stringify({ ok: false, error: 'workflow_binding_missing' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        })
+    )
+    Object.assign(testEnv, { SCAN_WORKFLOW_SERVICE: binding })
+
+    const { token, hash } = await generateScanToken()
+    await createScanRequest(db, {
+      email: 'a@b.com',
+      domain: 'example.com',
+      verification_token_hash: hash,
+      request_ip: '1.1.1.1',
+    })
+
+    const waitUntil = vi.fn()
+    const url = new URL(`https://smd.services/api/scan/verify?token=${token}`)
+    const response = await GET({
+      url,
+      locals: { session: null, cfContext: { waitUntil } as never },
+    } as never)
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { ok: boolean; status: string }
+    expect(body.status).toBe('verified')
+
+    expect(binding.fetch).toHaveBeenCalledTimes(1)
+    expect(waitUntil).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(runDiagnosticScan)).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back when the dispatch returns 2xx but malformed payload (no workflow_run_id)', async () => {
+    const binding = makeServiceBinding(
+      async () =>
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+    )
+    Object.assign(testEnv, { SCAN_WORKFLOW_SERVICE: binding })
+
+    const { token, hash } = await generateScanToken()
+    await createScanRequest(db, {
+      email: 'a@b.com',
+      domain: 'example.com',
+      verification_token_hash: hash,
+      request_ip: '1.1.1.1',
+    })
+
+    const waitUntil = vi.fn()
+    const url = new URL(`https://smd.services/api/scan/verify?token=${token}`)
+    const response = await GET({
+      url,
+      locals: { session: null, cfContext: { waitUntil } as never },
+    } as never)
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { ok: boolean; status: string }
+    expect(body.status).toBe('verified')
+
+    expect(binding.fetch).toHaveBeenCalledTimes(1)
     expect(waitUntil).toHaveBeenCalledTimes(1)
     expect(vi.mocked(runDiagnosticScan)).toHaveBeenCalledTimes(1)
   })
 
   it('returns invalid_token without invoking the workflow on a bad token', async () => {
-    const create = vi.fn()
-    Object.assign(testEnv, { SCAN_WORKFLOW: { create } })
+    const binding = makeServiceBinding(
+      async () => new Response(JSON.stringify({ ok: true }), { status: 200 })
+    )
+    Object.assign(testEnv, { SCAN_WORKFLOW_SERVICE: binding })
 
     const url = new URL('https://smd.services/api/scan/verify?token=not-a-real-token')
     const response = await GET({
@@ -172,6 +284,6 @@ describe('/api/scan/verify — Workflows dispatch (#614)', () => {
     expect(body.ok).toBe(false)
     expect(body.status).toBe('invalid_token')
     expect(body).not.toHaveProperty('domain')
-    expect(create).not.toHaveBeenCalled()
+    expect(binding.fetch).not.toHaveBeenCalled()
   })
 })

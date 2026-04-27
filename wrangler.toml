@@ -12,11 +12,17 @@
 # src/middleware.ts via hostname inspection.
 
 name = "ss-web"
-# Custom entrypoint (`src/worker.ts`) re-exports the adapter's fetch handler
-# alongside the Cloudflare Workflows class (#614). The
-# `@astrojs/cloudflare/entrypoints/server` default would only expose `fetch`,
-# leaving the [[workflows]] binding below with no class to bind to.
-main = "src/worker.ts"
+# No `main` override here — the @astrojs/cloudflare adapter writes
+# `dist/server/wrangler.json` with `main = "entry.mjs"` and that file is
+# what `wrangler deploy` ultimately consumes (via `.wrangler/deploy/config.json`
+# pointing at the dist/server config). A previous custom entrypoint at
+# src/worker.ts re-exported the ScanDiagnosticWorkflow class for an
+# in-Worker workflow binding (#614), but that pattern proved
+# unreliable in production (see #618 — the binding resolved to
+# `undefined` at runtime even though the build artifact carried the
+# binding entry). The Workflow now lives on its own Worker
+# (`workers/scan-workflow`) and is invoked through the `SCAN_WORKFLOW_SERVICE`
+# service binding declared below.
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
@@ -79,24 +85,20 @@ bucket_name = "ss-console-storage"
 binding = "CONSULTANT_PHOTOS"
 bucket_name = "smd-consultant-photos"
 
-# ---------- Cloudflare Workflows ----------
-# Durable orchestration for the Engine 1 /scan diagnostic pipeline (#614).
+# ---------- Service binding to scan-workflow Worker ----------
+# Cloudflare Workflows orchestration for the /scan diagnostic pipeline
+# lives on its own Worker (`ss-scan-workflow`, see `workers/scan-workflow/`).
+# This binding lets `/api/scan/verify` dispatch via:
 #
-# The pruned 6-module pipeline (places + outscraper + website_analysis +
-# review_synthesis + deep_website + intelligence_brief) takes longer than
-# the Workers `ctx.waitUntil` budget on the happy path. Workflows gives
-# us per-step checkpointing + automatic retries + total runtime up to
-# hours, so a 25s Claude call is just a step that takes 25s instead of
-# something that blows the isolate's budget.
+#   env.SCAN_WORKFLOW_SERVICE.fetch('https://internal/dispatch', { method: 'POST', body: ... })
 #
-# The Workflow class is exported from `src/lib/diagnostic/workflow.ts`
-# and re-exported from the Astro server entrypoint so the Cloudflare
-# Workers runtime can find it. Dispatched from `/api/scan/verify` via
-# `env.SCAN_WORKFLOW.create({ params: { scanRequestId } })`.
-[[workflows]]
-name = "scan-diagnostic"
-binding = "SCAN_WORKFLOW"
-class_name = "ScanDiagnosticWorkflow"
+# The target Worker's fetch handler creates a Workflow instance and
+# returns the instance id, which we persist to scan_requests.workflow_run_id.
+# Service bindings are not externally routable — the dispatch URL is
+# never reachable from the public internet.
+[[services]]
+binding = "SCAN_WORKFLOW_SERVICE"
+service = "ss-scan-workflow"
 
 # ---------- Workers KV (sessions) ----------
 [[kv_namespaces]]

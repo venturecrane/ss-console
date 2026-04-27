@@ -8,14 +8,20 @@ declare module '*.wasm' {
 }
 
 /**
- * Cloudflare Workflows binding shape. The runtime exposes `create()` to
- * spawn a new instance and `get()` to look up an existing one. The
- * adapter's auto-generated types don't include Workflows yet (as of
- * @cloudflare/workers-types 4.20260417), so we declare the minimum
- * surface we use.
+ * Service binding shape for the `ss-scan-workflow` Worker. ss-web's
+ * /api/scan/verify dispatches the Engine 1 diagnostic pipeline by POSTing
+ * to the internal `/dispatch` endpoint on this binding. The target Worker
+ * holds the `[[workflows]]` binding for the `ScanDiagnosticWorkflow`
+ * class — co-locating the binding with a vanilla (non-Astro) Worker is
+ * the durable workaround for #618 (the [[workflows]] binding was
+ * unreliable when sharing a bundle with Astro's build pipeline).
+ *
+ * Service bindings expose a `fetch` member with the same signature as
+ * the global fetch — Cloudflare routes the call into the target Worker
+ * without ever leaving the data plane.
  */
-interface ScanWorkflowBinding {
-  create(opts: { id?: string; params?: { scanRequestId: string } }): Promise<{ id: string }>
+interface ScanWorkflowServiceBinding {
+  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>
 }
 
 /**
@@ -128,13 +134,16 @@ declare namespace Cloudflare {
      */
     ENABLE_PUBLIC_PATTERNS?: string
     /**
-     * Cloudflare Workflow for the Engine 1 /scan diagnostic pipeline (#614).
-     * Class is `ScanDiagnosticWorkflow`, defined in
-     * `src/lib/diagnostic/workflow.ts` and re-exported from
-     * `src/worker.ts` so the [[workflows]] binding in wrangler.toml can
-     * find it. Dispatched from /api/scan/verify after token verification.
+     * Service binding to the `ss-scan-workflow` Worker (#618). Hosts the
+     * Engine 1 /scan diagnostic Workflow in its own Worker so the
+     * `[[workflows]]` binding registers reliably (it didn't when
+     * co-located with the Astro build pipeline — see #618). Dispatched
+     * from /api/scan/verify by POSTing to the binding's internal
+     * `/dispatch` endpoint with `{ scanRequestId }`. Optional in dev /
+     * vitest where the binding doesn't exist; the verify endpoint falls
+     * back to inline `ctx.waitUntil` execution in that case.
      */
-    SCAN_WORKFLOW: ScanWorkflowBinding
+    SCAN_WORKFLOW_SERVICE?: ScanWorkflowServiceBinding
   }
 }
 
