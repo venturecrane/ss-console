@@ -409,12 +409,14 @@ export async function finalizeCompletedSOWSignature(args: {
   const milestoneStmts = lineItems.map((item, i) =>
     db
       .prepare(
-        `INSERT INTO milestones (id, engagement_id, name, description, status, payment_trigger, sort_order, created_at)
-         VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)`
+        `INSERT INTO milestones (
+           id, engagement_id, org_id, name, description, status, payment_trigger, sort_order, created_at
+         ) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)`
       )
       .bind(
         milestoneIds[i],
         engagementId,
+        request.org_id,
         item.problem,
         item.description,
         i === lineItems.length - 1 ? 1 : 0,

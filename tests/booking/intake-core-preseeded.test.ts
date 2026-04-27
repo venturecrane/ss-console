@@ -4,6 +4,7 @@
  * When the booking came from an admin-issued signed link, the intake must:
  *   - Anchor to the pre-existing entity (no slug dedup / fan-out to a new row)
  *   - Reuse the pre-created `scheduled` assessment (no duplicate row)
+ *   - Ensure a canonical meeting row exists for that assessment id
  *   - Still capture the guest's email/name as a contact if they differ
  */
 
@@ -64,7 +65,7 @@ describe('processIntakeSubmission — pre-seeded admin booking link flow (#467)'
       .run()
   })
 
-  it('updates the pre-created assessment with the chosen slot instead of creating a new one', async () => {
+  it('updates the pre-created assessment and backfills the canonical meeting row', async () => {
     const slot = '2026-05-01T17:00:00.000Z'
 
     const result = await processIntakeSubmission(
@@ -80,13 +81,20 @@ describe('processIntakeSubmission — pre-seeded admin booking link flow (#467)'
       {
         entityId: ENTITY_ID,
         assessmentId: ASSESSMENT_ID,
+        meetingType: 'discovery',
         contactId: CONTACT_ID,
       }
     )
 
     expect(result.entityId).toBe(ENTITY_ID)
     expect(result.assessmentId).toBe(ASSESSMENT_ID)
+    expect(result.meetingId).toBe(ASSESSMENT_ID)
     expect(result.entityCreated).toBe(false)
+    expect(result.contactCreated).toBe(false)
+    expect(result.assessmentCreated).toBe(false)
+    expect(result.meetingCreated).toBe(true)
+    expect(result.previousAssessmentScheduledAt).toBeNull()
+    expect(result.previousMeetingScheduledAt).toBeNull()
 
     // Only one assessment row for this entity
     const assessments = await db
@@ -96,6 +104,15 @@ describe('processIntakeSubmission — pre-seeded admin booking link flow (#467)'
     expect(assessments.results).toHaveLength(1)
     expect(assessments.results[0].id).toBe(ASSESSMENT_ID)
     expect(assessments.results[0].scheduled_at).toBe(slot)
+
+    const meeting = await db
+      .prepare(`SELECT id, scheduled_at, meeting_type FROM meetings WHERE id = ? AND entity_id = ?`)
+      .bind(ASSESSMENT_ID, ENTITY_ID)
+      .first<{ id: string; scheduled_at: string; meeting_type: string | null }>()
+    expect(meeting).not.toBeNull()
+    expect(meeting!.id).toBe(ASSESSMENT_ID)
+    expect(meeting!.scheduled_at).toBe(slot)
+    expect(meeting!.meeting_type).toBe('discovery')
   })
 
   it('anchors to the pre-seeded entity even when the guest types a different business name', async () => {

@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro'
 import { createMagicLink } from '../../../lib/auth/magic-link'
+import { ORG_ID } from '../../../lib/constants'
 import { requirePortalBaseUrl } from '../../../lib/config/app-url'
 import { sendEmail } from '../../../lib/email/resend'
 import { buildMagicLinkUrl, magicLinkEmailHtml } from '../../../lib/email/templates'
@@ -44,9 +45,12 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim()
-    // Look up client user by email
-    const user = await env.DB.prepare(`SELECT * FROM users WHERE email = ? AND role = 'client'`)
-      .bind(normalizedEmail)
+    // Look up the client user in the current app org. Email is not globally
+    // unique across organizations.
+    const user = await env.DB.prepare(
+      `SELECT * FROM users WHERE org_id = ? AND email = ? AND role = 'client'`
+    )
+      .bind(ORG_ID, normalizedEmail)
       .first<UserRow>()
 
     if (!user) {
@@ -56,7 +60,11 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     }
 
     // Create magic link token
-    const token = await createMagicLink(env.DB, normalizedEmail)
+    const token = await createMagicLink(env.DB, {
+      orgId: user.org_id,
+      userId: user.id,
+      email: normalizedEmail,
+    })
 
     // Build the verification URL from the canonical PORTAL_BASE_URL.
     // Never derive from request host — see issue #173.

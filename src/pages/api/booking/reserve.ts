@@ -11,6 +11,7 @@ import {
 } from '../../../lib/booking/tokens'
 import { buildIcs, icsToBase64 } from '../../../lib/booking/ics'
 import { processIntakeSubmission, type PreSeededIntake } from '../../../lib/booking/intake-core'
+import { rollbackFailedBooking } from '../../../lib/booking/rollback'
 import { createScheduleStatement, updateScheduleGoogleSync } from '../../../lib/booking/schedule'
 import { verifyBookingLink } from '../../../lib/booking/signed-link'
 import {
@@ -36,9 +37,9 @@ const NOTIFY_EMAIL = 'team@smd.services'
  *
  * Atomic 3-phase booking flow:
  *   1. Preflight  — Turnstile, rate limit, input validation
- *   2. DB commit  — Intake (entity + contact + assessment) + schedule + hold + token
+ *   2. DB commit  — Intake + schedule sidecars + hold + token
  *   3. Google sync — Create calendar event; compensating rollback on failure
- *   4. Post-commit — Send confirmation email with ICS
+ *   4. Post-commit — Promote stage, send confirmation email with ICS
  *
  * Google event creation failure = booking failure. No silent fallback.
  */
@@ -137,6 +138,7 @@ export const POST: APIRoute = async ({ request }) => {
       preSeeded = {
         entityId: verify.payload.entity_id,
         assessmentId: verify.payload.assessment_id,
+        meetingType: verify.payload.meeting_type,
         contactId: verify.payload.contact_id,
       }
     } else {
@@ -195,6 +197,12 @@ export const POST: APIRoute = async ({ request }) => {
   let meetingScheduleId: string
   let manageToken: string
   let intakeLines: string[]
+  let entityCreated = false
+  let contactCreated = false
+  let contactId: string | undefined
+  let contextId: string | null = null
+  let previousAssessmentScheduledAt: string | null = null
+  let previousMeetingScheduledAt: string | null = null
 
   try {
     // 2b. Process intake (entity + contact + assessment)
@@ -223,7 +231,13 @@ export const POST: APIRoute = async ({ request }) => {
     assessmentId = intakeResult.assessmentId!
     meetingId = intakeResult.meetingId!
     entityId = intakeResult.entityId
+    entityCreated = intakeResult.entityCreated
+    contactCreated = intakeResult.contactCreated
+    contactId = intakeResult.contactId
+    contextId = intakeResult.contextId
     intakeLines = intakeResult.intakeLines
+    previousAssessmentScheduledAt = intakeResult.previousAssessmentScheduledAt
+    previousMeetingScheduledAt = intakeResult.previousMeetingScheduledAt
 
     // 2c. Generate manage token + hash
     manageToken = generateManageToken()
@@ -270,19 +284,6 @@ export const POST: APIRoute = async ({ request }) => {
       })
     meetingScheduleId = newMeetingScheduleId
     await meetingScheduleStmt.run()
-
-    // 2e. Promote entity stage to 'meetings' (only if currently 'prospect')
-    try {
-      await transitionStage(
-        env.DB,
-        ORG_ID,
-        entityId,
-        'meetings',
-        'Booking reserve: meeting scheduled'
-      )
-    } catch {
-      // Stage transition may fail if entity is already past prospect — that's fine
-    }
   } catch (err) {
     // DB commit failed — release hold and return error
     console.error('[api/booking/reserve] DB commit failed:', err)
@@ -294,13 +295,9 @@ export const POST: APIRoute = async ({ request }) => {
   // Phase 3: Google Calendar sync
   // -----------------------------------------------------------------------
   const calendarId = integration.calendar_id || BOOKING_CONFIG.consultant.calendar_id
-  let googleEventId: string | null = null
-  let googleEventLink: string | null = null
   let googleMeetUrl: string | null = null
 
   try {
-    const slotLabel = formatSlotLabelLong(slotStartUtc, BOOKING_CONFIG.consultant.timezone)
-
     const meetUrl = BOOKING_CONFIG.meeting_url
     const eventResult = await createGoogleCalendarEvent(accessToken, calendarId, {
       summary: `Assessment: ${businessName} (${name})`,
@@ -311,8 +308,6 @@ export const POST: APIRoute = async ({ request }) => {
       assessmentId,
     })
 
-    googleEventId = eventResult.eventId
-    googleEventLink = eventResult.htmlLink
     googleMeetUrl = meetUrl
 
     // Update both schedules with Google sync data. See the dual-write rationale
@@ -327,23 +322,41 @@ export const POST: APIRoute = async ({ request }) => {
       googleEventLink: eventResult.htmlLink,
       googleMeetUrl: meetUrl,
     })
+
+    // Promote the entity only after Google sync succeeds so a failed booking
+    // never leaves the CRM in a false "meeting scheduled" state.
+    try {
+      await transitionStage(
+        env.DB,
+        ORG_ID,
+        entityId,
+        'meetings',
+        'Booking reserve: meeting scheduled'
+      )
+    } catch {
+      // Entity may already be past prospect. Do not fail the booking.
+    }
   } catch (err) {
     // Google sync failed — compensating rollback
     console.error('[api/booking/reserve] Google Calendar event creation failed:', err)
 
     try {
-      // Delete both schedule sidecars, meeting + assessment, and the hold.
-      // Order matters — sidecars first so FK constraints don't block the drop.
-      await env.DB.batch([
-        env.DB.prepare('DELETE FROM meeting_schedule WHERE id = ?').bind(meetingScheduleId),
-        env.DB.prepare('DELETE FROM assessment_schedule WHERE id = ?').bind(scheduleId),
-        env.DB.prepare('DELETE FROM meetings WHERE id = ? AND org_id = ?').bind(meetingId, ORG_ID),
-        env.DB.prepare('DELETE FROM assessments WHERE id = ? AND org_id = ?').bind(
-          assessmentId,
-          ORG_ID
-        ),
-        env.DB.prepare('DELETE FROM booking_holds WHERE id = ?').bind(holdResult.id!),
-      ])
+      await rollbackFailedBooking(env.DB, {
+        orgId: ORG_ID,
+        holdId: holdResult.id!,
+        scheduleId,
+        meetingScheduleId,
+        assessmentId,
+        meetingId,
+        preserveBookingRows: Boolean(preSeeded),
+        previousAssessmentScheduledAt,
+        previousMeetingScheduledAt,
+        entityId,
+        entityCreated,
+        contactId,
+        contactCreated,
+        contextId,
+      })
     } catch (rollbackErr) {
       console.error('[api/booking/reserve] Rollback failed:', rollbackErr)
     }
