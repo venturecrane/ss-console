@@ -5,6 +5,7 @@ import {
   updateEngagementStatus,
 } from '../../../../lib/db/engagements'
 import type { EngagementStatus } from '../../../../lib/db/engagements'
+import { getSignalById } from '../../../../lib/db/signal-attribution'
 import { env } from 'cloudflare:workers'
 
 /**
@@ -70,6 +71,25 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
     const estimatedHours = formData.get('estimated_hours')
     const actualHours = formData.get('actual_hours')
 
+    // Originating-signal attribution edit (#589). Only present when the form
+    // includes the dropdown — absence means "no change". Same sentinel rules
+    // as the create endpoint: "" / missing = no change, "__none__" = clear,
+    // "<id>" = explicit override (validated against entity/org).
+    const signalRaw = formData.get('originating_signal_id')
+    let originatingSignalId: string | null | undefined
+    if (typeof signalRaw === 'string') {
+      const v = signalRaw.trim()
+      if (v === '__none__') {
+        originatingSignalId = null
+      } else if (v !== '') {
+        const signal = await getSignalById(env.DB, session.orgId, v)
+        // Reject mismatched entity scopes silently — UI shouldn't have rendered
+        // a foreign signal in the dropdown, but guard against tampered POSTs.
+        originatingSignalId =
+          signal && signal.entity_id === existing.entity_id ? signal.id : undefined
+      }
+    }
+
     await updateEngagement(env.DB, session.orgId, engagementId, {
       scope_summary:
         scopeSummary && typeof scopeSummary === 'string' ? scopeSummary.trim() || null : undefined,
@@ -87,6 +107,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
         actualHours && typeof actualHours === 'string' && actualHours.trim()
           ? parseFloat(actualHours) || null
           : undefined,
+      ...(originatingSignalId !== undefined && { originating_signal_id: originatingSignalId }),
     })
 
     return redirect(`/admin/engagements/${engagementId}?saved=1`, 302)

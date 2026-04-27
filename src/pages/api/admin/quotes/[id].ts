@@ -8,6 +8,7 @@ import {
 import type { LineItem, QuoteStatus, DeliverableRow } from '../../../../lib/db/quotes'
 import { getEntity } from '../../../../lib/db/entities'
 import { listContacts } from '../../../../lib/db/contacts'
+import { getSignalById } from '../../../../lib/db/signal-attribution'
 import type { SOWTemplateProps } from '../../../../lib/pdf/sow-template'
 import { createSOWRevisionForQuote } from '../../../../lib/sow/service'
 import { env } from 'cloudflare:workers'
@@ -285,6 +286,23 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
 
     if (typeof milestoneLabel === 'string') {
       updateData.milestoneLabel = milestoneLabel
+    }
+
+    // Originating-signal attribution edit (#589). Same sentinel rules as the
+    // engagement endpoints. Validation rejects ids belonging to a different
+    // entity or org silently — falls through to "no change" so a tampered
+    // POST can't reattribute an engagement to another tenant's signal.
+    const signalRaw = formData.get('originating_signal_id')
+    if (typeof signalRaw === 'string') {
+      const v = signalRaw.trim()
+      if (v === '__none__') {
+        updateData.originatingSignalId = null
+      } else if (v !== '') {
+        const signal = await getSignalById(env.DB, session.orgId, v)
+        if (signal && signal.entity_id === existing.entity_id) {
+          updateData.originatingSignalId = signal.id
+        }
+      }
     }
 
     await updateQuote(env.DB, session.orgId, quoteId, updateData)

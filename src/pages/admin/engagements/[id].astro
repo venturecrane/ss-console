@@ -9,6 +9,7 @@ import { listMilestones, VALID_TRANSITIONS as MS_TRANSITIONS } from '../../../li
 import type { MilestoneStatus } from '../../../lib/db/milestones'
 import { listInvoices } from '../../../lib/db/invoices'
 import { listContext } from '../../../lib/db/context'
+import { listSignalsForEntity } from '../../../lib/db/signal-attribution'
 import { listDocuments } from '../../../lib/storage/r2'
 import { env } from 'cloudflare:workers'
 
@@ -35,6 +36,24 @@ const invoices = await listInvoices(env.DB, session.orgId, { engagementId })
 const contextEntries = await listContext(env.DB, engagement.entity_id, {
   engagement_id: engagementId,
 })
+
+// Signals on file for this entity, most-recent first (#589). Powers the
+// originating-signal dropdown in the Edit Details form.
+const entitySignals = await listSignalsForEntity(env.DB, session.orgId, engagement.entity_id)
+
+function truncateSignal(content: string, max = 80): string {
+  const oneLine = content.replace(/\s+/g, ' ').trim()
+  return oneLine.length <= max ? oneLine : `${oneLine.slice(0, max - 1)}…`
+}
+
+function formatSignalLabel(s: { source_pipeline: string; created_at: string; content: string }) {
+  const date = new Date(s.created_at).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+  return `[${s.source_pipeline}] ${date} — ${truncateSignal(s.content)}`
+}
 
 const depositInvoice = invoices.find((i) => i.type === 'deposit')
 
@@ -310,6 +329,34 @@ function fileSize(bytes: number): string {
                 class="w-full border border-[color:var(--ss-color-border)] rounded px-3 py-2 text-sm"
               />
             </div>
+          </div>
+          <div>
+            <label
+              for="originating_signal_id"
+              class="block text-sm font-medium text-[color:var(--ss-color-text-primary)] mb-1"
+            >
+              Originating Signal
+            </label>
+            <select
+              id="originating_signal_id"
+              name="originating_signal_id"
+              class="w-full border border-[color:var(--ss-color-border)] rounded px-3 py-2 text-sm"
+            >
+              <option value="__none__" selected={!engagement.originating_signal_id}>
+                — Unattributed —
+              </option>
+              {
+                entitySignals.map((s) => (
+                  <option value={s.id} selected={engagement.originating_signal_id === s.id}>
+                    {formatSignalLabel(s)}
+                  </option>
+                ))
+              }
+            </select>
+            <p class="mt-1 text-xs text-[color:var(--ss-color-text-muted)]">
+              Pipeline signal that produced this engagement. Defaults to the most recent signal on
+              file. Used for ROI-per-pipeline reporting.
+            </p>
           </div>
           <div class="flex justify-end">
             <button

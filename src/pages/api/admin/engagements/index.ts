@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro'
 import { createEngagement } from '../../../../lib/db/engagements'
 import { createMilestone } from '../../../../lib/db/milestones'
+import { getSignalById } from '../../../../lib/db/signal-attribution'
 import { env } from 'cloudflare:workers'
 
 /**
@@ -53,8 +54,26 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     const scopeSummary = formData.get('scope_summary')
     const estimatedHours = formData.get('estimated_hours')
 
+    // Originating signal attribution (#589). Form may pass:
+    //   "" / missing  → defer to DAL default (most-recent signal)
+    //   "__none__"    → explicit unattributed (sentinel; admin chose blank)
+    //   "<id>"        → explicit override; we validate org/entity scoping
+    // Bad ids fall back to default rather than blocking engagement creation.
+    const signalRaw = formData.get('originating_signal_id')
+    const entityIdTrimmed = clientId.trim()
+    let originatingSignalId: string | null | undefined
+    if (typeof signalRaw === 'string') {
+      const v = signalRaw.trim()
+      if (v === '__none__') {
+        originatingSignalId = null
+      } else if (v !== '') {
+        const signal = await getSignalById(env.DB, session.orgId, v)
+        originatingSignalId = signal && signal.entity_id === entityIdTrimmed ? signal.id : undefined
+      }
+    }
+
     const engagement = await createEngagement(env.DB, session.orgId, {
-      entity_id: clientId.trim(),
+      entity_id: entityIdTrimmed,
       quote_id: quoteId.trim(),
       start_date:
         startDate && typeof startDate === 'string' && startDate.trim() ? startDate.trim() : null,
@@ -70,6 +89,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
         estimatedHours && typeof estimatedHours === 'string' && estimatedHours.trim()
           ? parseFloat(estimatedHours) || null
           : null,
+      ...(originatingSignalId !== undefined && { originating_signal_id: originatingSignalId }),
     })
 
     // Create default milestones if provided

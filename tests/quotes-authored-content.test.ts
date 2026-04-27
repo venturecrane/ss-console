@@ -66,6 +66,7 @@ function makeQuote(overrides: Partial<Quote> = {}): Quote {
     deliverables: null,
     engagement_overview: null,
     milestone_label: null,
+    originating_signal_id: null,
     created_at: '2026-04-15T00:00:00.000Z',
     updated_at: '2026-04-15T00:00:00.000Z',
     ...overrides,

@@ -7,6 +7,7 @@
 
 import { scheduleEngagementCadence } from '../follow-ups/scheduler'
 import { transitionStage } from './entities'
+import { getDefaultOriginatingSignalId } from './signal-attribution'
 
 export interface Engagement {
   id: string
@@ -28,6 +29,13 @@ export interface Engagement {
   consultant_phone: string | null
   next_touchpoint_at: string | null
   next_touchpoint_label: string | null
+  /**
+   * Context-row id (type='signal') that this engagement is attributed to (#589).
+   * NULL when the entity had no signals at engagement creation time, or when
+   * the admin explicitly cleared the attribution. Powers the per-pipeline ROI
+   * roll-up via `getEngagementsBySourcePipeline` in `signal-attribution.ts`.
+   */
+  originating_signal_id: string | null
   created_at: string
   updated_at: string
 }
@@ -75,6 +83,17 @@ export interface CreateEngagementData {
   start_date?: string | null
   estimated_end?: string | null
   estimated_hours?: number | null
+  /**
+   * Originating signal attribution (#589). Three states:
+   * - `undefined` (omitted): caller defers to the default — most-recent signal
+   *   for the entity, or NULL if the entity has none.
+   * - `string`: caller has an explicit signal id (e.g. admin override). Stored
+   *   as-is. The caller is responsible for validating the id belongs to this
+   *   entity/org.
+   * - `null`: caller explicitly wants the engagement unattributed (e.g.
+   *   inbound referral with no signal on file). Default-resolution is skipped.
+   */
+  originating_signal_id?: string | null
 }
 
 export interface UpdateEngagementData {
@@ -92,6 +111,13 @@ export interface UpdateEngagementData {
   consultant_phone?: string | null
   next_touchpoint_at?: string | null
   next_touchpoint_label?: string | null
+  /**
+   * Edit attribution post-creation (#589). Pass `null` to clear, a string
+   * to set, or omit to leave unchanged. The caller validates the id belongs
+   * to this entity/org before calling — see `getSignalById` in
+   * `signal-attribution.ts`.
+   */
+  originating_signal_id?: string | null
 }
 
 /**
@@ -187,10 +213,19 @@ export async function createEngagement(
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
 
+  // Resolve originating-signal attribution (#589). `undefined` means "use
+  // the default" — most-recent signal context-row for the entity, or NULL
+  // if the entity has none. Explicit `null` skips defaulting (admin chose
+  // to leave the engagement unattributed).
+  const originatingSignalId =
+    data.originating_signal_id === undefined
+      ? await getDefaultOriginatingSignalId(db, orgId, data.entity_id)
+      : data.originating_signal_id
+
   await db
     .prepare(
-      `INSERT INTO engagements (id, org_id, entity_id, quote_id, scope_summary, start_date, estimated_end, status, estimated_hours, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, ?)`
+      `INSERT INTO engagements (id, org_id, entity_id, quote_id, scope_summary, start_date, estimated_end, status, estimated_hours, originating_signal_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?)`
     )
     .bind(
       id,
@@ -201,6 +236,7 @@ export async function createEngagement(
       data.start_date ?? null,
       data.estimated_end ?? null,
       data.estimated_hours ?? null,
+      originatingSignalId,
       now,
       now
     )
@@ -298,6 +334,11 @@ export async function updateEngagement(
   if (data.next_touchpoint_label !== undefined) {
     fields.push('next_touchpoint_label = ?')
     params.push(data.next_touchpoint_label)
+  }
+
+  if (data.originating_signal_id !== undefined) {
+    fields.push('originating_signal_id = ?')
+    params.push(data.originating_signal_id)
   }
 
   if (fields.length === 0) {
