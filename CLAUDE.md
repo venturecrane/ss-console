@@ -330,8 +330,8 @@ Fetch with: `crane_doc('global', '<module>')`
 
 Load the enterprise pattern + component catalog before any UI work — design briefs, wireframes, component generation, design-related PR review:
 
-- Patterns (cross-venture UX problem/solution pairs): `crane_doc('global', 'design-system/patterns/index.md')`
-- Components (per-venture catalog of atoms, molecules, organisms): `crane_doc('global', 'design-system/components/index.md')`
+- Patterns (cross-venture UX problem/solution pairs): `crane_doc('global', 'design-system.patterns.index.md')`
+- Components (per-venture catalog of atoms, molecules, organisms): `crane_doc('global', 'design-system.components.index.md')`
 
 Then load this venture's spec for palette and tone: `crane_doc('ss', 'design-spec.md')`.
 
