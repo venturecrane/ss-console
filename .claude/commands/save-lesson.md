@@ -1,0 +1,29 @@
+# /save-lesson - Capture Session Lesson
+
+Capture a memoryable lesson or anti-pattern from the current session into the enterprise memory system. Agent drafts frontmatter and body from session context; Captain confirms before the note is written.
+
+## Usage
+
+```
+/save-lesson [optional one-line summary]
+```
+
+If a summary is omitted, the agent drafts one from recent session context.
+
+## What it does
+
+1. Infers `kind` (lesson vs anti-pattern), `scope`, and `applies_when` from session context.
+2. Drafts a 1-2 sentence body and shows it to you for confirmation.
+3. Applies the 3 memoryability tests (actionable, non-obvious, general enough to recur).
+4. Saves to VCMS with `status: draft, captain_approved: false`.
+5. Reports the saved note ID.
+
+Draft memories become injection-eligible only after Captain approval via `/memory-audit` or `crane_memory(update)`. For immediate `captain_approved: true` capture, use the "Memoryable moments?" step in `/eos`.
+
+## Examples
+
+```
+/save-lesson
+/save-lesson "parallel agents writing to the same branch collide — always use worktrees"
+/save-lesson "never run infisical secrets -o json — it dumps plaintext values into the transcript"
+```
