@@ -95,10 +95,6 @@ function formatDate(iso: string): string {
   })
 }
 
-function stageBadgeClass(_stage: string): string {
-  return 'bg-border-subtle text-text-secondary'
-}
-
 function tierBadgeClass(_tier: string): string {
   return 'bg-border-subtle text-text-secondary'
 }
@@ -179,7 +175,7 @@ const isMeetingTerminal =
           <h2 class="text-xl font-semibold text-[color:var(--ss-color-text-primary)]">
             {entity.name}
           </h2>
-          <span class={`text-xs px-2 py-0.5 rounded ${stageBadgeClass(entity.stage)}`}>
+          <span class={statusBadgeClass(entity.stage)}>
             {ENTITY_STAGES.find((s) => s.value === entity.stage)?.label ?? entity.stage}
           </span>
           {
