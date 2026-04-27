@@ -1,0 +1,207 @@
+---
+/**
+ * Magic-link verification landing page (#598).
+ *
+ * The prospect clicks the link in their inbox and lands here. The page
+ * server-side calls the verify API which:
+ *   - Hashes the inbound token, looks up the scan_request row.
+ *   - Marks it verified and kicks off the diagnostic pipeline via
+ *     ctx.waitUntil (so the response returns instantly).
+ *   - Returns a status string we render below.
+ *
+ * The page never echoes specific findings — those only ever arrive via
+ * email per the scoping doc Bar #6 (anti-competitor-intel). The page
+ * confirms "we got your click, the report is on its way" or surfaces a
+ * specific UX for the four failure modes (expired / invalid / failed /
+ * already_completed).
+ */
+import Base from '../../../layouts/Base.astro'
+import Nav from '../../../components/Nav.astro'
+import Footer from '../../../components/Footer.astro'
+import { env } from 'cloudflare:workers'
+import { hashScanToken, isScanTokenFresh } from '../../../lib/scan/tokens'
+import { getScanRequestByTokenHash, markScanVerified } from '../../../lib/db/scan-requests'
+import { runDiagnosticScan } from '../../../lib/diagnostic'
+
+const { token } = Astro.params
+
+type RenderState =
+  | { kind: 'verified'; domain: string }
+  | { kind: 'already_completed'; domain: string }
+  | { kind: 'thin_footprint'; domain: string }
+  | { kind: 'expired' }
+  | { kind: 'invalid' }
+  | { kind: 'failed' }
+
+let state: RenderState = { kind: 'invalid' }
+
+if (typeof token === 'string' && token.length > 0) {
+  const hash = await hashScanToken(token)
+  const row = await getScanRequestByTokenHash(env.DB, hash)
+  if (!row) {
+    state = { kind: 'invalid' }
+  } else if (row.scan_status === 'completed') {
+    state = { kind: 'already_completed', domain: row.domain }
+  } else if (row.scan_status === 'thin_footprint') {
+    state = { kind: 'thin_footprint', domain: row.domain }
+  } else if (row.scan_status === 'failed') {
+    state = { kind: 'failed' }
+  } else if (!isScanTokenFresh(row.created_at)) {
+    state = { kind: 'expired' }
+  } else {
+    await markScanVerified(env.DB, row.id)
+    state = { kind: 'verified', domain: row.domain }
+
+    // Fire the pipeline via ctx.waitUntil so it survives the response
+    // closing. Captain memory: never inline-await LLM pipelines.
+    const ctx = Astro.locals.cfContext
+    const scanPromise = runDiagnosticScan(
+      {
+        DB: env.DB,
+        ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
+        GOOGLE_PLACES_API_KEY: env.GOOGLE_PLACES_API_KEY,
+        OUTSCRAPER_API_KEY: env.OUTSCRAPER_API_KEY,
+        RESEND_API_KEY: env.RESEND_API_KEY,
+        APP_BASE_URL: env.APP_BASE_URL,
+      },
+      row.id
+    )
+    if (ctx?.waitUntil) {
+      ctx.waitUntil(scanPromise)
+    } else {
+      scanPromise.catch((err) => console.error('[scan/verify] dev-fallback scan threw:', err))
+    }
+  }
+}
+---
+
+<Base title="Scan confirmed | SMD Services" description="Your operational scan is running.">
+  <Nav />
+  <main id="main" role="main" class="px-6 py-20">
+    <div class="mx-auto max-w-xl text-center">
+      {
+        state.kind === 'verified' && (
+          <>
+            <p class="mb-3 font-['Archivo_Narrow'] text-xs font-bold uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
+              Confirmed
+            </p>
+            <h1 class="font-['Archivo'] text-3xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)] md:text-4xl">
+              Your scan is running.
+            </h1>
+            <p class="mt-4 text-lg text-[color:var(--ss-color-text-secondary)]">
+              We're reading the public footprint for <strong>{state.domain}</strong> now. Look for
+              an email from us in about 90 seconds with the report.
+            </p>
+            <p class="mt-6 text-sm text-[color:var(--ss-color-text-muted)]">
+              You can close this page. Nothing else to do.
+            </p>
+          </>
+        )
+      }
+
+      {
+        state.kind === 'already_completed' && (
+          <>
+            <h1 class="font-['Archivo'] text-3xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]">
+              Already sent.
+            </h1>
+            <p class="mt-4 text-lg text-[color:var(--ss-color-text-secondary)]">
+              We've already emailed the report for <strong>{state.domain}</strong>. Check your
+              inbox.
+            </p>
+            <p class="mt-6 text-sm text-[color:var(--ss-color-text-muted)]">
+              If you can't find it, check your spam folder. Still nothing? Email{' '}
+              <a href="mailto:team@smd.services" class="underline">
+                team@smd.services
+              </a>{' '}
+              and we'll re-send.
+            </p>
+          </>
+        )
+      }
+
+      {
+        state.kind === 'thin_footprint' && (
+          <>
+            <h1 class="font-['Archivo'] text-3xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]">
+              We sent you a note.
+            </h1>
+            <p class="mt-4 text-lg text-[color:var(--ss-color-text-secondary)]">
+              We tried to read <strong>{state.domain}</strong> but didn't find enough public
+              footprint to produce something useful. Check your email — we explained more there and
+              included a link to talk it through.
+            </p>
+            <p class="mt-8">
+              <a
+                href="/book"
+                class="inline-flex items-center whitespace-nowrap min-h-11 border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2 px-5 py-2 font-['Archivo'] font-bold uppercase tracking-[0.08em] text-white text-sm transition-colors"
+              >
+                Pick a time
+              </a>
+            </p>
+          </>
+        )
+      }
+
+      {
+        state.kind === 'expired' && (
+          <>
+            <h1 class="font-['Archivo'] text-3xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]">
+              Link expired.
+            </h1>
+            <p class="mt-4 text-lg text-[color:var(--ss-color-text-secondary)]">
+              Confirmation links work for 24 hours. You can request a new one.
+            </p>
+            <p class="mt-8">
+              <a
+                href="/scan"
+                class="inline-flex items-center whitespace-nowrap min-h-11 border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2 px-5 py-2 font-['Archivo'] font-bold uppercase tracking-[0.08em] text-white text-sm transition-colors"
+              >
+                Run a new scan
+              </a>
+            </p>
+          </>
+        )
+      }
+
+      {
+        state.kind === 'invalid' && (
+          <>
+            <h1 class="font-['Archivo'] text-3xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]">
+              We couldn't find that scan.
+            </h1>
+            <p class="mt-4 text-lg text-[color:var(--ss-color-text-secondary)]">
+              The link may have been mistyped or already used. You can start a new scan.
+            </p>
+            <p class="mt-8">
+              <a
+                href="/scan"
+                class="inline-flex items-center whitespace-nowrap min-h-11 border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2 px-5 py-2 font-['Archivo'] font-bold uppercase tracking-[0.08em] text-white text-sm transition-colors"
+              >
+                Start a new scan
+              </a>
+            </p>
+          </>
+        )
+      }
+
+      {
+        state.kind === 'failed' && (
+          <>
+            <h1 class="font-['Archivo'] text-3xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]">
+              Something went wrong.
+            </h1>
+            <p class="mt-4 text-lg text-[color:var(--ss-color-text-secondary)]">
+              The scan didn't complete. Please email{' '}
+              <a href="mailto:team@smd.services" class="underline">
+                team@smd.services
+              </a>{' '}
+              and we'll run it manually.
+            </p>
+          </>
+        )
+      }
+    </div>
+  </main>
+  <Footer />
+</Base>
