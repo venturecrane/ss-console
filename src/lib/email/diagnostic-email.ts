@@ -121,9 +121,17 @@ export interface DiagnosticReportEmailInput {
  * pre-flight gate should catch most thin-footprint cases before we ever
  * render, but a degraded LLM run that returns no signals shouldn't ship
  * an empty 5-section shell.
+ *
+ * #616: the title prefers `rendered.displayName` (the resolved
+ * canonical business name from Outscraper) over `input.businessName`
+ * (which may be a humanized-domain placeholder). Callers should still
+ * pass `input.businessName` for backwards compat — we use it as the
+ * final fallback when `displayName` is empty.
  */
 export function diagnosticReportEmailHtml(input: DiagnosticReportEmailInput): string {
-  const businessName = escapeHtml(input.businessName)
+  const titleSource =
+    (input.rendered.displayName && input.rendered.displayName.trim()) || input.businessName
+  const businessName = escapeHtml(titleSource)
   const bookingUrl = escapeHtml(input.bookingUrl)
 
   const sectionsHtml = input.rendered.hasContent

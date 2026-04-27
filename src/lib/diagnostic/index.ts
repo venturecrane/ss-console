@@ -537,7 +537,15 @@ export async function runOutscraper(
   try {
     const osc = await lookupOutscraper(entity.name, entity.area, env.OUTSCRAPER_API_KEY)
     if (!osc) return false
+    // #616 issue 1 — Outscraper returns the canonical business name from
+    // Google Maps (e.g. "Phoenix Animal Exterminator"). At entity-create
+    // time we set entity.name to a humanized-domain placeholder
+    // ("Phoenixanimalexterminator"); replace it with the canonical name
+    // when Outscraper returns one. Downstream callers (admin UI, email
+    // subject, future modules) all benefit.
+    const canonicalName = osc.name && osc.name.trim() ? osc.name.trim() : null
     await updateEntity(env.DB, ORG_ID, entity.id, {
+      name: canonicalName ?? undefined,
       phone: osc.phone ?? entity.phone ?? undefined,
       website: osc.website ?? entity.website ?? undefined,
     })

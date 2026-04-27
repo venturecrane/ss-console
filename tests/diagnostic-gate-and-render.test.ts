@@ -23,7 +23,13 @@ import type { D1Database } from '@cloudflare/workers-types'
 import { createEntity, getEntity } from '../src/lib/db/entities'
 import { appendContext } from '../src/lib/db/context'
 import { evaluateThinFootprintGate } from '../src/lib/diagnostic'
-import { renderDiagnosticReport } from '../src/lib/diagnostic/render'
+import {
+  renderDiagnosticReport,
+  resolveDisplayName,
+  isLikelyBusinessName,
+  humanizeProblemId,
+  humanizeThemeKey,
+} from '../src/lib/diagnostic/render'
 import {
   guardPlacesByDomain,
   isStrictDomainMatch,
@@ -137,7 +143,7 @@ describe('renderDiagnosticReport — anti-fabrication', () => {
     expect(overview?.bullets).toBeUndefined()
   })
 
-  it('renders "not publicly identified" when no owner_name signal exists — never invents', async () => {
+  it('renders "Insufficient data" placeholder when no owner_name signal exists — never invents (#616)', async () => {
     const entity = await createEntity(db, ORG_ID, {
       name: 'Anon HVAC',
       area: 'Phoenix, AZ',
@@ -162,10 +168,13 @@ describe('renderDiagnosticReport — anti-fabrication', () => {
     const bullets = profile?.bullets ?? []
     const ownerLine = bullets.find((b) => b.toLowerCase().startsWith('owner'))
     expect(ownerLine).toBeDefined()
-    expect(ownerLine).toContain('not publicly identified')
+    // #616 issue 2 — explicit "Insufficient data" wording, not the
+    // older "not publicly identified" phrasing.
+    expect(ownerLine).toContain('Insufficient data')
+    expect(ownerLine).toContain("we'll surface this in conversation")
     // Must NOT contain a fabricated proper name (catches the "Hi Owner"
     // / "John Smith"-style invention pattern).
-    expect(ownerLine!.split(':')[1]?.trim()).toBe('not publicly identified')
+    expect(ownerLine).not.toMatch(/[A-Z][a-z]+\s+[A-Z][a-z]+/)
   })
 
   it('renders authored owner_name when website_analysis provides one', async () => {
@@ -278,13 +287,6 @@ describe('renderDiagnosticReport — anti-fabrication', () => {
     await appendContext(db, ORG_ID, {
       entity_id: entity.id,
       type: 'enrichment',
-      source: 'google_places',
-      content: 'matched',
-      metadata: { reviewCount: 122, rating: 4.8 },
-    })
-    await appendContext(db, ORG_ID, {
-      entity_id: entity.id,
-      type: 'enrichment',
       source: 'review_synthesis',
       content: 'synthesized',
       metadata: { top_themes: ['quick response'] },
@@ -295,6 +297,16 @@ describe('renderDiagnosticReport — anti-fabrication', () => {
       source: 'website_analysis',
       content: 'analyzed',
       metadata: { services: ['HVAC repair', 'plumbing', 'electrical'] },
+    })
+    // Certifications from deep_website provide the third evidence-anchored
+    // fact (issue #616 removed the duplicated rating from this section, so
+    // facts now come from synthesis themes + services + certs / specialties).
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'deep_website',
+      content: 'deep',
+      metadata: { business_profile: { certifications: ['NATE-certified'] } },
     })
     const r = await renderDiagnosticReport(db, entity, null)
     const cs = r.sections.find((s) => s.id === 'conversation_starters')
@@ -501,5 +513,483 @@ describe('evaluateThinFootprintGate — #612 strict domain-match enforcement', (
     const env = { DB: db } as Parameters<typeof evaluateThinFootprintGate>[0]
     const r = await evaluateThinFootprintGate(env, entity, 'legacycaller.com')
     expect(r.thin).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// #616 — /scan diagnostic report rendering quality + anti-fab
+//
+// Bug exemplar: smoke test against `phoenixanimalexterminator.com` on
+// 2026-04-27 produced a real report with six distinct rendering issues.
+// Each test below locks one of the fixes from issue #616.
+// ---------------------------------------------------------------------------
+
+describe('#616 — title / displayName resolution', () => {
+  it('prefers Outscraper canonical name over the placeholder entity name', () => {
+    // entity.name at scan-start is the humanized domain placeholder.
+    const entity = {
+      id: 'e1',
+      name: 'Phoenixanimalexterminator',
+      area: 'Phoenix, AZ',
+    } as Parameters<typeof resolveDisplayName>[0]
+    const meta = new Map<string, Record<string, unknown> | null>([
+      ['outscraper', { name: 'Phoenix Animal Exterminator' }],
+    ])
+    expect(resolveDisplayName(entity, meta)).toBe('Phoenix Animal Exterminator')
+  })
+
+  it('falls back to entity.name when Outscraper is missing', () => {
+    const entity = {
+      id: 'e1',
+      name: 'Acme Co',
+      area: 'Phoenix, AZ',
+    } as Parameters<typeof resolveDisplayName>[0]
+    const meta = new Map<string, Record<string, unknown> | null>()
+    expect(resolveDisplayName(entity, meta)).toBe('Acme Co')
+  })
+
+  it('falls back to entity.name when Outscraper has no name field', () => {
+    const entity = {
+      id: 'e1',
+      name: 'Acme Co',
+      area: 'Phoenix, AZ',
+    } as Parameters<typeof resolveDisplayName>[0]
+    const meta = new Map<string, Record<string, unknown> | null>([['outscraper', { phone: '555' }]])
+    expect(resolveDisplayName(entity, meta)).toBe('Acme Co')
+  })
+})
+
+describe('#616 — owner section anti-fab (P1)', () => {
+  let db: D1Database
+  beforeEach(async () => {
+    db = await freshDb()
+  })
+
+  it('omits owner_name when Outscraper returns the BUSINESS name as owner_name (Pattern A/B)', async () => {
+    // The 2026-04-27 phoenixanimalexterminator.com bug exemplar.
+    // Outscraper's owner_title field returned the listing-claim title
+    // ("Phoenix Animal Exterminator"), which is the business itself —
+    // not a person. The renderer must NOT label that value as the owner.
+    const entity = await createEntity(db, ORG_ID, {
+      name: 'Phoenixanimalexterminator',
+      area: 'Phoenix, AZ',
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'outscraper',
+      content: 'matched',
+      metadata: {
+        name: 'Phoenix Animal Exterminator',
+        owner_name: 'Phoenix Animal Exterminator',
+        verified: true,
+      },
+    })
+    const r = await renderDiagnosticReport(db, entity, null)
+    const profile = r.sections.find((s) => s.id === 'owner_profile')
+    expect(profile?.rendered).toBe(true)
+    const ownerLine = (profile?.bullets ?? []).find((b) => b.toLowerCase().startsWith('owner'))
+    expect(ownerLine).toBeDefined()
+    // Critical: the line must NOT contain the business name.
+    expect(ownerLine).not.toContain('Phoenix Animal Exterminator')
+    // Renders the explicit "Insufficient data" placeholder per #616.
+    expect(ownerLine).toContain('Insufficient data')
+    expect(ownerLine).toContain("we'll surface this in conversation")
+  })
+
+  it("uses the new 'Insufficient data — surface in conversation' wording", async () => {
+    const entity = await createEntity(db, ORG_ID, {
+      name: 'Anon HVAC',
+      area: 'Phoenix, AZ',
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'website_analysis',
+      content: 'site analyzed',
+      metadata: {
+        owner_name: null,
+        team_size: null,
+        founding_year: null,
+        services: [],
+        quality: 'basic',
+        tech_stack: { scheduling: [], crm: [], reviews: [], payments: [], communication: [] },
+      },
+    })
+    const r = await renderDiagnosticReport(db, entity, null)
+    const profile = r.sections.find((s) => s.id === 'owner_profile')
+    const ownerLine = (profile?.bullets ?? []).find((b) => b.toLowerCase().startsWith('owner'))
+    // Per #616 issue 2 — explicit Insufficient data wording.
+    expect(ownerLine).toContain('Insufficient data')
+    expect(ownerLine).toContain("we'll surface this in conversation")
+  })
+
+  it('rejects business-name-as-owner even with corporate suffix variants', async () => {
+    // Outscraper sometimes returns "Acme HVAC LLC" as owner_title when
+    // the entity's canonical name is "Acme HVAC". Strip suffixes before
+    // comparing.
+    const entity = await createEntity(db, ORG_ID, {
+      name: 'Acme HVAC',
+      area: 'Phoenix, AZ',
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'outscraper',
+      content: 'matched',
+      metadata: {
+        name: 'Acme HVAC',
+        owner_name: 'Acme HVAC LLC',
+      },
+    })
+    const r = await renderDiagnosticReport(db, entity, null)
+    const profile = r.sections.find((s) => s.id === 'owner_profile')
+    const ownerLine = (profile?.bullets ?? []).find((b) => b.toLowerCase().startsWith('owner'))
+    expect(ownerLine).not.toContain('Acme HVAC LLC')
+    expect(ownerLine).toContain('Insufficient data')
+  })
+
+  it('still renders a real human owner name when sources provide one', async () => {
+    const entity = await createEntity(db, ORG_ID, {
+      name: 'Authored HVAC',
+      area: 'Phoenix, AZ',
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'outscraper',
+      content: 'matched',
+      metadata: {
+        name: 'Authored HVAC',
+        owner_name: 'Maria Rodriguez',
+      },
+    })
+    const r = await renderDiagnosticReport(db, entity, null)
+    const profile = r.sections.find((s) => s.id === 'owner_profile')
+    const ownerLine = (profile?.bullets ?? []).find((b) => b.toLowerCase().startsWith('owner'))
+    expect(ownerLine).toContain('Maria Rodriguez')
+    expect(ownerLine).not.toContain('Insufficient data')
+  })
+})
+
+describe('#616 — isLikelyBusinessName helper (anti-fab predicate)', () => {
+  it('matches identical strings ignoring case + non-alphanumerics', () => {
+    expect(isLikelyBusinessName('Phoenix Animal Exterminator', 'Phoenixanimalexterminator')).toBe(
+      true
+    )
+    expect(isLikelyBusinessName('phoenix-animal-exterminator', 'Phoenix Animal Exterminator')).toBe(
+      true
+    )
+  })
+
+  it('matches across corporate suffix variants (LLC, Inc, etc.)', () => {
+    expect(isLikelyBusinessName('Acme HVAC LLC', 'Acme HVAC')).toBe(true)
+    expect(isLikelyBusinessName('Acme HVAC, Inc.', 'Acme HVAC')).toBe(true)
+    expect(isLikelyBusinessName('Acme HVAC', 'Acme HVAC Co')).toBe(true)
+  })
+
+  it('does NOT match a real human name against the business name', () => {
+    expect(isLikelyBusinessName('Maria Rodriguez', 'Acme HVAC')).toBe(false)
+    expect(isLikelyBusinessName('John Smith', 'Acme HVAC LLC')).toBe(false)
+  })
+
+  it('handles empty/missing business names safely', () => {
+    expect(isLikelyBusinessName('Maria Rodriguez', null, undefined, '')).toBe(false)
+  })
+})
+
+describe('#616 — taxonomy + theme humanization (issue 3)', () => {
+  it('maps 5-cat observation IDs through PROBLEM_LABELS', () => {
+    expect(humanizeProblemId('process_design')).toBe('Process design')
+    expect(humanizeProblemId('tool_systems')).toBe('Tools & systems')
+    expect(humanizeProblemId('data_visibility')).toBe('Data & visibility')
+    expect(humanizeProblemId('customer_pipeline')).toBe('Customer pipeline')
+    expect(humanizeProblemId('team_operations')).toBe('Team operations')
+  })
+
+  it('passes through free-form problem strings unchanged', () => {
+    expect(humanizeProblemId('phone tag')).toBe('phone tag')
+    expect(humanizeProblemId('manual quoting')).toBe('manual quoting')
+  })
+
+  it('humanizes underscored review-theme keys', () => {
+    expect(humanizeThemeKey('limited_online_presence')).toBe('Limited online presence')
+    expect(humanizeThemeKey('quick_response')).toBe('Quick response')
+  })
+
+  it('preserves already-humanized themes', () => {
+    expect(humanizeThemeKey('Friendly staff')).toBe('Friendly staff')
+    expect(humanizeThemeKey('quick response')).toBe('Quick response')
+  })
+
+  it('renders engagement opportunity bullets with humanized labels (no raw IDs)', async () => {
+    const db = await freshDb()
+    const entity = await createEntity(db, ORG_ID, {
+      name: 'Taxo Test Biz',
+      area: 'Phoenix, AZ',
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'review_synthesis',
+      content: 'synthesized',
+      metadata: {
+        operational_problems: [
+          {
+            problem: 'data_visibility',
+            confidence: 'high',
+            evidence: 'Only 8 reviews across platforms',
+          },
+          {
+            problem: 'tool_systems',
+            confidence: 'medium',
+            evidence: "Website described as 'dated'",
+          },
+        ],
+      },
+    })
+    const r = await renderDiagnosticReport(db, entity, null)
+    const opp = r.sections.find((s) => s.id === 'engagement_opportunity')
+    expect(opp?.rendered).toBe(true)
+    const text = (opp?.bullets ?? []).join('\n')
+    // Lock the human labels.
+    expect(text).toContain('Data & visibility')
+    expect(text).toContain('Tools & systems')
+    // And lock that the raw IDs no longer leak.
+    expect(text).not.toContain('data_visibility')
+    expect(text).not.toContain('tool_systems')
+  })
+
+  it('renders conversation starters with humanized review themes', async () => {
+    const db = await freshDb()
+    const entity = await createEntity(db, ORG_ID, {
+      name: 'Themes Biz',
+      website: 'https://themes.example',
+      area: 'Phoenix, AZ',
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'review_synthesis',
+      content: 'synthesized',
+      metadata: { top_themes: ['limited_online_presence'] },
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'website_analysis',
+      content: 'analyzed',
+      metadata: { services: ['exterminator'] },
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'deep_website',
+      content: 'deep',
+      metadata: { business_profile: { certifications: ['NPMA'] } },
+    })
+    const r = await renderDiagnosticReport(db, entity, null)
+    const cs = r.sections.find((s) => s.id === 'conversation_starters')
+    expect(cs?.rendered).toBe(true)
+    const text = (cs?.bullets ?? []).join('\n')
+    expect(text).toContain('Limited online presence')
+    expect(text).not.toContain('limited_online_presence')
+  })
+})
+
+describe('#616 — internal contradiction guard (issue 4)', () => {
+  let db: D1Database
+  beforeEach(async () => {
+    db = await freshDb()
+  })
+
+  it('drops "no public scheduling" from gaps when Outscraper has a booking link', async () => {
+    const entity = await createEntity(db, ORG_ID, {
+      name: 'Booking Biz',
+      area: 'Phoenix, AZ',
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'website_analysis',
+      content: 'analyzed',
+      metadata: {
+        services: ['HVAC'],
+        quality: 'good',
+        tech_stack: { scheduling: [], crm: [], reviews: [], payments: [], communication: [] },
+      },
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'outscraper',
+      content: 'matched',
+      metadata: {
+        name: 'Booking Biz',
+        booking_link: 'https://book.example/biz',
+      },
+    })
+    const r = await renderDiagnosticReport(db, entity, null)
+    const tech = r.sections.find((s) => s.id === 'tech_ops')
+    expect(tech?.rendered).toBe(true)
+    const text = (tech?.bullets ?? []).join('\n')
+    // The booking-visible signal must still appear …
+    expect(text).toContain('Online booking visible')
+    // … and the gap claim must NOT include scheduling.
+    const gapsLine = (tech?.bullets ?? []).find((b) => b.startsWith('Apparent gaps'))
+    if (gapsLine) {
+      expect(gapsLine).not.toContain('scheduling')
+    }
+  })
+
+  it('still flags scheduling as a gap when no booking link exists', async () => {
+    const entity = await createEntity(db, ORG_ID, {
+      name: 'No Booking Biz',
+      area: 'Phoenix, AZ',
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'website_analysis',
+      content: 'analyzed',
+      metadata: {
+        services: ['HVAC'],
+        quality: 'basic',
+        tech_stack: { scheduling: [], crm: [], reviews: [], payments: [], communication: [] },
+      },
+    })
+    const r = await renderDiagnosticReport(db, entity, null)
+    const tech = r.sections.find((s) => s.id === 'tech_ops')
+    const gapsLine = (tech?.bullets ?? []).find((b) => b.startsWith('Apparent gaps'))
+    expect(gapsLine).toBeDefined()
+    expect(gapsLine).toContain('scheduling')
+  })
+})
+
+describe('#616 — duplicated rating + founded year provenance (issues 5 + 6)', () => {
+  let db: D1Database
+  beforeEach(async () => {
+    db = await freshDb()
+  })
+
+  it('does NOT re-render rating + review count in Conversation Starters', async () => {
+    const entity = await createEntity(db, ORG_ID, {
+      name: 'Rich Biz',
+      website: 'https://rich.example',
+      area: 'Phoenix, AZ',
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'google_places',
+      content: 'matched',
+      metadata: { reviewCount: 8, rating: 5 },
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'review_synthesis',
+      content: 'synthesized',
+      metadata: { top_themes: ['friendly staff'] },
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'website_analysis',
+      content: 'analyzed',
+      metadata: {
+        services: ['exterminator', 'pest control', 'inspections'],
+        quality: 'basic',
+      },
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'deep_website',
+      content: 'deep',
+      metadata: { business_profile: { certifications: ['NPMA'] } },
+    })
+    const r = await renderDiagnosticReport(db, entity, null)
+    const overview = r.sections.find((s) => s.id === 'business_overview')
+    const cs = r.sections.find((s) => s.id === 'conversation_starters')
+    // Business Overview keeps the rating.
+    const overviewText = (overview?.bullets ?? []).join('\n')
+    expect(overviewText).toContain('5 stars')
+    expect(overviewText).toContain('8 reviews')
+    // Conversation Starters must NOT restate the rating.
+    const csText = (cs?.bullets ?? []).join('\n')
+    expect(csText).not.toMatch(/\d+\s+(Google\s+)?reviews?\s+averaging/i)
+    expect(csText).not.toContain('averaging 5')
+  })
+
+  it('only renders founded year when website_analysis sourced it', async () => {
+    const entity = await createEntity(db, ORG_ID, {
+      name: 'Founded Biz',
+      website: 'https://founded.example',
+      area: 'Phoenix, AZ',
+    })
+    // deep_website provides a founding_year via heuristic — must NOT
+    // be surfaced (no provenance citation).
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'deep_website',
+      content: 'deep',
+      metadata: {
+        business_profile: { founding_year: 2009 },
+        owner_profile: { name: null, title: null, background: null },
+      },
+    })
+    const r = await renderDiagnosticReport(db, entity, null)
+    const profile = r.sections.find((s) => s.id === 'owner_profile')
+    const text = (profile?.bullets ?? []).join('\n')
+    expect(text).not.toMatch(/Founded:\s*2009/)
+  })
+
+  it('renders founded year with provenance when website_analysis sourced it', async () => {
+    const entity = await createEntity(db, ORG_ID, {
+      name: 'Sourced Biz',
+      website: 'https://sourced.example',
+      area: 'Phoenix, AZ',
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'website_analysis',
+      content: 'analyzed',
+      metadata: {
+        owner_name: 'Pat Doe',
+        team_size: 5,
+        founding_year: 2014,
+        services: ['x'],
+        quality: 'good',
+        tech_stack: { scheduling: [], crm: [], reviews: [], payments: [], communication: [] },
+      },
+    })
+    const r = await renderDiagnosticReport(db, entity, null)
+    const profile = r.sections.find((s) => s.id === 'owner_profile')
+    const text = (profile?.bullets ?? []).join('\n')
+    expect(text).toMatch(/Founded:\s*2014/)
+    // Provenance hint reassures the reader where the year came from.
+    expect(text).toContain('from website')
+  })
+})
+
+describe('#616 — RenderedReport.displayName populated', () => {
+  it('exposes the resolved displayName for the email title', async () => {
+    const db = await freshDb()
+    const entity = await createEntity(db, ORG_ID, {
+      name: 'Phoenixanimalexterminator',
+      area: 'Phoenix, AZ',
+    })
+    await appendContext(db, ORG_ID, {
+      entity_id: entity.id,
+      type: 'enrichment',
+      source: 'outscraper',
+      content: 'matched',
+      metadata: { name: 'Phoenix Animal Exterminator' },
+    })
+    const r = await renderDiagnosticReport(db, entity, null)
+    expect(r.displayName).toBe('Phoenix Animal Exterminator')
   })
 })
