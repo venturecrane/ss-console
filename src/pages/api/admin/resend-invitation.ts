@@ -94,7 +94,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
 
     // Create magic link
-    const token = await createMagicLink(env.DB, targetEmail)
+    const token = await createMagicLink(env.DB, {
+      orgId: user.org_id,
+      userId: user.id,
+      email: targetEmail,
+    })
 
     // Build verification URL from the canonical PORTAL_BASE_URL.
     // Never derive from request host — see issue #173.

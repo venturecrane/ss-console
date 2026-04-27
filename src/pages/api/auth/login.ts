@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro'
 import { verifyPassword } from '../../../lib/auth/password'
 import { createSession, buildSessionCookie } from '../../../lib/auth/session'
+import { ORG_ID } from '../../../lib/constants'
 import { rateLimitByIp } from '../../../lib/booking/rate-limit'
 import { env } from 'cloudflare:workers'
 
@@ -48,9 +49,12 @@ export const POST: APIRoute = async ({ request, redirect }) => {
       return redirect('/auth/login?error=missing', 302)
     }
 
-    // Look up user by email
-    const user = await env.DB.prepare(`SELECT * FROM users WHERE email = ? AND role = 'admin'`)
-      .bind(email.toLowerCase().trim())
+    // Look up the admin within the current app org. Email is not globally
+    // unique across organizations.
+    const user = await env.DB.prepare(
+      `SELECT * FROM users WHERE org_id = ? AND email = ? AND role = 'admin'`
+    )
+      .bind(ORG_ID, email.toLowerCase().trim())
       .first<UserRow>()
 
     if (!user || !user.password_hash) {

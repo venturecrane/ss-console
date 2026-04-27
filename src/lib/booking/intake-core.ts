@@ -8,8 +8,8 @@
 
 import { findOrCreateEntity, getEntity } from '../db/entities'
 import { createContact } from '../db/contacts'
-import { createAssessment, updateAssessment, getAssessment } from '../db/assessments'
-import { createMeeting } from '../db/meetings'
+import { updateAssessment, getAssessment } from '../db/assessments'
+import { createMeetingWithLegacyAssessment, ensureMeetingForAssessment } from '../db/meetings'
 import { appendContext } from '../db/context'
 
 export interface IntakeInput {
@@ -31,6 +31,7 @@ export interface IntakeInput {
 export interface PreSeededIntake {
   entityId: string
   assessmentId: string
+  meetingType?: string | null
   /**
    * When the admin identified a primary contact at send-link time, pass the
    * id here so we can reuse it rather than creating a duplicate contact when
@@ -56,6 +57,18 @@ export interface IntakeResult {
   meetingId: string | null
   /** Whether the entity was freshly created (vs. found by slug dedup). */
   entityCreated: boolean
+  /** Whether this intake created a new contact row. */
+  contactCreated: boolean
+  /** Context row id for compensating rollback on booking failures. */
+  contextId: string | null
+  /** Whether this intake created a new legacy assessment row. */
+  assessmentCreated: boolean
+  /** Whether this intake created a new canonical meeting row. */
+  meetingCreated: boolean
+  /** Previous legacy assessment scheduled_at before any booking mutation. */
+  previousAssessmentScheduledAt: string | null
+  /** Previous canonical meeting scheduled_at before any booking mutation. */
+  previousMeetingScheduledAt: string | null
   /** Formatted intake lines for use in admin notification emails. */
   intakeLines: string[]
 }
@@ -114,6 +127,7 @@ export async function processIntakeSubmission(
   //    otherwise fall back to email-based dedup and creation so we never
   //    drop the guest's real contact details on the floor.
   let contactId: string
+  let contactCreated = false
   const existingContact = await db
     .prepare('SELECT id FROM contacts WHERE org_id = ? AND email = ? LIMIT 1')
     .bind(orgId, input.email)
@@ -130,12 +144,14 @@ export async function processIntakeSubmission(
       email: input.email,
     })
     contactId = contact.id
+    contactCreated = true
   } else {
     const contact = await createContact(db, orgId, entityId, {
       name: input.name,
       email: input.email,
     })
     contactId = contact.id
+    contactCreated = true
   }
 
   // 3. Meeting + legacy assessment row.
@@ -151,6 +167,10 @@ export async function processIntakeSubmission(
   //    lands (follow-up issue #503).
   let meetingId: string | null = null
   let assessmentId: string | null = null
+  let assessmentCreated = false
+  let meetingCreated = false
+  let previousAssessmentScheduledAt: string | null = null
+  let previousMeetingScheduledAt: string | null = null
   if (preSeeded?.assessmentId && scheduledAt) {
     const existing = await getAssessment(db, orgId, preSeeded.assessmentId)
     if (!existing) {
@@ -158,25 +178,31 @@ export async function processIntakeSubmission(
         `Pre-seeded assessment not found: ${preSeeded.assessmentId}. The booking link may be stale.`
       )
     }
+    if (existing.entity_id !== entityId) {
+      throw new Error(
+        `Pre-seeded assessment ${preSeeded.assessmentId} does not belong to entity ${entityId}.`
+      )
+    }
+    previousAssessmentScheduledAt = existing.scheduled_at
     await updateAssessment(db, orgId, preSeeded.assessmentId, { scheduled_at: scheduledAt })
     assessmentId = preSeeded.assessmentId
-    // meetingId stays null for the pre-seeded path — legacy FK resolves via assessmentId.
+    const ensured = await ensureMeetingForAssessment(db, orgId, entityId, {
+      assessmentId: preSeeded.assessmentId,
+      scheduled_at: scheduledAt,
+      meeting_type: preSeeded.meetingType,
+    })
+    meetingId = ensured.meeting.id
+    meetingCreated = ensured.created
+    previousMeetingScheduledAt = ensured.previousScheduledAt
   } else if (scheduledAt) {
-    const meeting = await createMeeting(db, orgId, entityId, {
+    const meeting = await createMeetingWithLegacyAssessment(db, orgId, entityId, {
       scheduled_at: scheduledAt,
       meeting_type: 'assessment',
     })
     meetingId = meeting.id
     assessmentId = meeting.id
-
-    // Seed legacy row with the same primary key for FK compatibility.
-    await db
-      .prepare(
-        `INSERT INTO assessments (id, org_id, entity_id, scheduled_at, status, created_at)
-         VALUES (?, ?, ?, ?, 'scheduled', datetime('now'))`
-      )
-      .bind(meeting.id, orgId, entityId, scheduledAt)
-      .run()
+    assessmentCreated = true
+    meetingCreated = true
   }
 
   // 4. Append intake context
@@ -188,8 +214,9 @@ export async function processIntakeSubmission(
     intakeLines.push(`What they're trying to accomplish: ${input.biggestChallenge}`)
   if (input.howHeard) intakeLines.push(`How they found us: ${input.howHeard}`)
 
+  let contextId: string | null = null
   if (intakeLines.length > 0) {
-    await appendContext(db, orgId, {
+    const contextEntry = await appendContext(db, orgId, {
       entity_id: entityId,
       type: 'intake',
       content: intakeLines.join('\n'),
@@ -204,6 +231,7 @@ export async function processIntakeSubmission(
         how_heard: input.howHeard,
       },
     })
+    contextId = contextEntry.id
   }
 
   return {
@@ -212,6 +240,12 @@ export async function processIntakeSubmission(
     assessmentId,
     meetingId,
     entityCreated,
+    contactCreated,
+    contextId,
+    assessmentCreated,
+    meetingCreated,
+    previousAssessmentScheduledAt,
+    previousMeetingScheduledAt,
     intakeLines,
   }
 }

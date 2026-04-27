@@ -61,6 +61,18 @@ export interface CreateMeetingData {
   meeting_type?: string | null
 }
 
+export interface EnsureMeetingForAssessmentData {
+  assessmentId: string
+  scheduled_at?: string | null
+  meeting_type?: string | null
+}
+
+export interface EnsureMeetingForAssessmentResult {
+  meeting: Meeting
+  created: boolean
+  previousScheduledAt: string | null
+}
+
 export interface UpdateMeetingData {
   scheduled_at?: string | null
   completed_at?: string | null
@@ -179,6 +191,146 @@ export async function createMeeting(
     throw new Error('Failed to retrieve created meeting')
   }
   return meeting
+}
+
+/**
+ * Create the canonical meeting row and the legacy assessment mirror row using
+ * the same primary key during the monitoring window.
+ */
+export async function createMeetingWithLegacyAssessment(
+  db: D1Database,
+  orgId: string,
+  entityId: string,
+  data: CreateMeetingData
+): Promise<Meeting> {
+  const id = crypto.randomUUID()
+  const now = new Date().toISOString()
+
+  try {
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO meetings (
+            id, org_id, entity_id, meeting_type, scheduled_at, status, created_at
+          ) VALUES (?, ?, ?, ?, ?, 'scheduled', ?)`
+        )
+        .bind(id, orgId, entityId, data.meeting_type ?? null, data.scheduled_at ?? null, now),
+      db
+        .prepare(
+          `INSERT INTO assessments (
+            id, org_id, entity_id, scheduled_at, status, created_at
+          ) VALUES (?, ?, ?, ?, 'scheduled', ?)`
+        )
+        .bind(id, orgId, entityId, data.scheduled_at ?? null, now),
+    ])
+  } catch (error) {
+    await db.batch([
+      db.prepare('DELETE FROM meetings WHERE id = ? AND org_id = ?').bind(id, orgId),
+      db.prepare('DELETE FROM assessments WHERE id = ? AND org_id = ?').bind(id, orgId),
+    ])
+    throw error
+  }
+
+  const meeting = await getMeeting(db, orgId, id)
+  if (!meeting) {
+    throw new Error('Failed to retrieve created meeting')
+  }
+  return meeting
+}
+
+/**
+ * Ensure a canonical meeting row exists for a legacy assessment id, then keep
+ * its scheduled_at / meeting_type aligned with the booking flow.
+ */
+export async function ensureMeetingForAssessment(
+  db: D1Database,
+  orgId: string,
+  entityId: string,
+  data: EnsureMeetingForAssessmentData
+): Promise<EnsureMeetingForAssessmentResult> {
+  const existing = await getMeeting(db, orgId, data.assessmentId)
+  if (existing) {
+    const updated = await updateMeeting(db, orgId, data.assessmentId, {
+      scheduled_at: data.scheduled_at,
+      ...(data.meeting_type !== undefined ? { meeting_type: data.meeting_type } : {}),
+    })
+    if (!updated) {
+      throw new Error('Failed to update meeting for legacy assessment')
+    }
+    return {
+      meeting: updated,
+      created: false,
+      previousScheduledAt: existing.scheduled_at,
+    }
+  }
+
+  const assessment = await db
+    .prepare(
+      `SELECT entity_id, scheduled_at, status, created_at
+       FROM assessments
+       WHERE id = ? AND org_id = ?`
+    )
+    .bind(data.assessmentId, orgId)
+    .first<{
+      entity_id: string
+      scheduled_at: string | null
+      status: string
+      created_at: string
+    }>()
+
+  if (!assessment) {
+    throw new Error(`Assessment not found: ${data.assessmentId}`)
+  }
+
+  if (assessment.entity_id !== entityId) {
+    throw new Error(`Assessment ${data.assessmentId} does not belong to entity ${entityId}`)
+  }
+
+  try {
+    await db
+      .prepare(
+        `INSERT INTO meetings (
+          id, org_id, entity_id, meeting_type, scheduled_at, status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        data.assessmentId,
+        orgId,
+        entityId,
+        data.meeting_type ?? 'assessment',
+        data.scheduled_at ?? assessment.scheduled_at,
+        assessment.status,
+        assessment.created_at
+      )
+      .run()
+  } catch (error) {
+    const raced = await getMeeting(db, orgId, data.assessmentId)
+    if (!raced) throw error
+
+    const updated = await updateMeeting(db, orgId, data.assessmentId, {
+      scheduled_at: data.scheduled_at,
+      ...(data.meeting_type !== undefined ? { meeting_type: data.meeting_type } : {}),
+    })
+    if (!updated) {
+      throw new Error('Failed to update raced meeting for legacy assessment')
+    }
+    return {
+      meeting: updated,
+      created: false,
+      previousScheduledAt: raced.scheduled_at,
+    }
+  }
+
+  const meeting = await getMeeting(db, orgId, data.assessmentId)
+  if (!meeting) {
+    throw new Error('Failed to retrieve meeting for legacy assessment')
+  }
+
+  return {
+    meeting,
+    created: true,
+    previousScheduledAt: null,
+  }
 }
 
 /**

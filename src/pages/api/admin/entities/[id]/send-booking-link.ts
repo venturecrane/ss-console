@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro'
 import { getEntity, transitionStage } from '../../../../../lib/db/entities'
-import { createAssessment } from '../../../../../lib/db/assessments'
+import { createMeetingWithLegacyAssessment } from '../../../../../lib/db/meetings'
 import { listContacts } from '../../../../../lib/db/contacts'
 import { appendContext } from '../../../../../lib/db/context'
 import {
@@ -18,13 +18,13 @@ import { env } from 'cloudflare:workers'
  * that actually matches its label (#467).
  *
  * Flow:
- *   1. Create an assessment row in `scheduled` status with no `scheduled_at`
- *      yet — the schedule sidecar row is added by `/api/booking/reserve` when
- *      the prospect actually picks a slot.
- *   2. Transition the entity `prospect → assessing` (stage rename to
- *      `meetings` is tracked separately in #466 and will be adopted then).
+ *   1. Create a canonical meeting row in `scheduled` status with no
+ *      `scheduled_at` yet, and seed the legacy assessment mirror row with the
+ *      same primary key during the monitoring window.
+ *   2. Transition the entity `prospect → meetings`.
  *   3. Sign a booking-link token that carries the entity_id, contact_id,
- *      assessment_id, and admin-chosen duration. TTL defaults to 14 days.
+ *      assessment_id, meeting_type, and admin-chosen duration. TTL defaults
+ *      to 14 days.
  *   4. Append a context entry noting the link was sent, with a copyable
  *      outreach template and mailto URL.
  *   5. Return JSON with the signed URL and outreach template so the admin
@@ -85,17 +85,18 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     const contactEmail = primaryContact?.email ?? null
     const contactName = primaryContact?.name ?? null
 
-    // --- 1. Create the assessment row in scheduled status -------------------
+    // --- 1. Create the meeting row and the legacy assessment mirror ---------
     //
     // scheduled_at stays null until the prospect picks a slot via the public
-    // booking flow. The create helper sets status = 'scheduled' by default.
-    const assessment = await createAssessment(env.DB, session.orgId, entityId, {
+    // booking flow.
+    const meeting = await createMeetingWithLegacyAssessment(env.DB, session.orgId, entityId, {
       scheduled_at: null,
+      meeting_type: meetingType,
     })
 
-    // --- 2. Transition entity stage prospect → assessing --------------------
+    // --- 2. Transition entity stage prospect → meetings ---------------------
     //
-    // We do this AFTER creating the assessment row so the acceptance-criteria
+    // We do this AFTER creating the meeting row so the acceptance-criteria
     // invariant (stage transitions only after the meeting row exists) holds
     // even if the caller retries. If the stage transition fails we leave the
     // orphan `scheduled` assessment in place — it is harmless and a subsequent
@@ -122,7 +123,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       token = await signBookingLink({
         entity_id: entityId,
         contact_id: primaryContact?.id ?? null,
-        assessment_id: assessment.id,
+        assessment_id: meeting.id,
         duration_minutes: duration,
         meeting_type: meetingType,
       })
@@ -159,7 +160,8 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       source: 'send_booking_link',
       metadata: {
         trigger: 'send_booking_link',
-        assessment_id: assessment.id,
+        assessment_id: meeting.id,
+        meeting_id: meeting.id,
         duration_minutes: duration,
         meeting_type: meetingType,
         token_ttl_days: DEFAULT_BOOKING_LINK_TTL_DAYS,
@@ -175,7 +177,8 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
     return jsonResponse(200, {
       ok: true,
-      assessment_id: assessment.id,
+      assessment_id: meeting.id,
+      meeting_id: meeting.id,
       booking_url: bookingUrl,
       token_ttl_days: DEFAULT_BOOKING_LINK_TTL_DAYS,
       contact_email: contactEmail,

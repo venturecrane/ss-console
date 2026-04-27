@@ -10,7 +10,7 @@ import { env } from 'cloudflare:workers'
  *
  * When a client clicks their magic link, this page:
  *   1. Validates the token (exists, not expired, not used)
- *   2. Looks up the user by email
+ *   2. Looks up the bound user by id + org
  *   3. Creates a session (7-day expiry)
  *   4. Redirects to /portal with session cookie set
  *
@@ -23,15 +23,15 @@ if (!token) {
   return Astro.redirect('/auth/portal-login?error=invalid')
 }
 
-// Verify the magic link token
-const email = await verifyMagicLink(env.DB, token)
+// Verify and atomically consume the magic link token
+const verified = await verifyMagicLink(env.DB, token)
 
-if (!email) {
+if (!verified) {
   // Token is invalid, expired, or already used
   return Astro.redirect('/auth/portal-login?error=invalid')
 }
 
-// Look up the client user by email
+// Look up the bound client user by id + org. Email alone is not globally unique.
 interface UserRow {
   id: string
   org_id: string
@@ -41,8 +41,10 @@ interface UserRow {
   entity_id: string | null
 }
 
-const user = await env.DB.prepare(`SELECT * FROM users WHERE email = ? AND role = 'client'`)
-  .bind(email)
+const user = await env.DB.prepare(
+  `SELECT * FROM users WHERE id = ? AND org_id = ? AND role = 'client'`
+)
+  .bind(verified.userId, verified.orgId)
   .first<UserRow>()
 
 if (!user) {

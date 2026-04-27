@@ -3,12 +3,12 @@
  *
  * Verifies the acceptance criteria end-to-end:
  *   - Button behavior matches the label: the endpoint creates a scheduled
- *     assessment row and signs a booking URL. It does NOT perform a bare
- *     stage transition.
+ *     meeting row plus its legacy assessment mirror and signs a booking URL.
+ *     It does NOT perform a bare stage transition.
  *   - Signed URL has a TTL (14 days default).
  *   - Meeting row is created in status `scheduled` at click time, with
  *     `scheduled_at` null (prospect hasn't picked a slot yet).
- *   - Stage transitions to `assessing` only after the meeting row exists.
+ *   - Stage transitions to `meetings` only after the meeting row exists.
  *   - Auth: non-admin sessions are rejected.
  */
 
@@ -123,6 +123,7 @@ describe('POST /api/admin/entities/[id]/send-booking-link (#467)', () => {
     const body = (await response.json()) as {
       ok: boolean
       assessment_id: string
+      meeting_id: string
       booking_url: string
       token_ttl_days: number
       contact_email: string
@@ -131,6 +132,7 @@ describe('POST /api/admin/entities/[id]/send-booking-link (#467)', () => {
     }
     expect(body.ok).toBe(true)
     expect(body.assessment_id).toMatch(/^[0-9a-f-]+$/)
+    expect(body.meeting_id).toBe(body.assessment_id)
     expect(body.token_ttl_days).toBe(DEFAULT_BOOKING_LINK_TTL_DAYS)
     expect(body.contact_email).toBe('maria@phoenixplumbing.example')
     expect(body.booking_url).toMatch(/^https:\/\/smd\.services\/book\?t=/)
@@ -138,7 +140,7 @@ describe('POST /api/admin/entities/[id]/send-booking-link (#467)', () => {
     expect(body.outreach_template).toContain('Maria')
     expect(body.mailto_url).toMatch(/^mailto:/)
 
-    // --- AC: meeting row created in scheduled status, no slot yet -----------
+    // --- AC: legacy assessment row exists in scheduled status, no slot yet --
     const assessment = await db
       .prepare('SELECT * FROM assessments WHERE id = ?')
       .bind(body.assessment_id)
@@ -149,7 +151,30 @@ describe('POST /api/admin/entities/[id]/send-booking-link (#467)', () => {
     expect(assessment!.entity_id).toBe(ENTITY_ID)
     expect(assessment!.org_id).toBe(ORG_ID)
 
-    // --- AC: entity transitioned to `assessing` ----------------------------
+    // --- AC: canonical meeting row exists too, using the same id -----------
+    const meeting = await db
+      .prepare(
+        `SELECT id, status, scheduled_at, entity_id, org_id, meeting_type
+         FROM meetings WHERE id = ?`
+      )
+      .bind(body.meeting_id)
+      .first<{
+        id: string
+        status: string
+        scheduled_at: string | null
+        entity_id: string
+        org_id: string
+        meeting_type: string | null
+      }>()
+    expect(meeting).not.toBeNull()
+    expect(meeting!.id).toBe(body.assessment_id)
+    expect(meeting!.status).toBe('scheduled')
+    expect(meeting!.scheduled_at).toBeNull()
+    expect(meeting!.entity_id).toBe(ENTITY_ID)
+    expect(meeting!.org_id).toBe(ORG_ID)
+    expect(meeting!.meeting_type).toBe('discovery')
+
+    // --- AC: entity transitioned to `meetings` -----------------------------
     const entity = await db
       .prepare('SELECT stage FROM entities WHERE id = ?')
       .bind(ENTITY_ID)

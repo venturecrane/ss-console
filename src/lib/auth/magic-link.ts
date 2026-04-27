@@ -2,27 +2,42 @@
  * Magic link authentication for client portal access.
  *
  * Magic links are single-use, time-limited tokens sent via email.
- * They provide passwordless authentication for client users.
  *
  * Token lifecycle:
- *   1. createMagicLink() — generates crypto-random token, stores in D1 with 15min expiry
- *   2. verifyMagicLink() — validates token, marks as used, returns email
+ *   1. createMagicLink() - generates a crypto-random token and stores it in D1
+ *   2. verifyMagicLink() - atomically consumes the token and returns the bound user
  *
- * Security constraints (OQ-007):
+ * Security constraints:
  *   - Tokens expire after 15 minutes
- *   - Tokens are single-use (used_at set on verification)
+ *   - Tokens are single-use under concurrent requests
+ *   - Tokens are bound to a specific org_id + user_id, not just an email
  *   - Tokens are 64-character hex strings (32 bytes of entropy)
  */
 
-export const MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000 // 15 minutes
+export const MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000
 
 export interface MagicLinkRow {
   id: string
+  org_id: string
+  user_id: string
   email: string
   token: string
   expires_at: string
   used_at: string | null
   created_at: string
+}
+
+export interface MagicLinkSubject {
+  orgId: string
+  userId: string
+  email: string
+}
+
+export interface ConsumedMagicLink {
+  id: string
+  orgId: string
+  userId: string
+  email: string
 }
 
 /**
@@ -37,36 +52,49 @@ function generateToken(): string {
 }
 
 /**
- * Create a new magic link for the given email address.
- *
- * Stores the token in the magic_links table with a 15-minute expiry.
- * Returns the raw token (to be embedded in the magic link URL).
+ * Create a new magic link for the given user identity.
  */
-export async function createMagicLink(db: D1Database, email: string): Promise<string> {
+export async function createMagicLink(db: D1Database, subject: MagicLinkSubject): Promise<string> {
   const token = generateToken()
   const id = crypto.randomUUID()
   const expiresAt = new Date(Date.now() + MAGIC_LINK_EXPIRY_MS).toISOString()
 
   await db
     .prepare(
-      `INSERT INTO magic_links (id, email, token, expires_at)
-       VALUES (?, ?, ?, ?)`
+      `INSERT INTO magic_links (id, org_id, user_id, email, token, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
     )
-    .bind(id, email.toLowerCase().trim(), token, expiresAt)
+    .bind(id, subject.orgId, subject.userId, subject.email.toLowerCase().trim(), token, expiresAt)
     .run()
 
   return token
 }
 
 /**
- * Verify a magic link token.
+ * Atomically consume a magic link token.
  *
- * Checks that the token exists, has not expired, and has not been used.
- * On success, marks the token as used and returns the associated email.
- * On failure, returns null.
+ * Returns the bound user identity if the token existed, was unconsumed, and
+ * had not expired. Otherwise returns null.
  */
-export async function verifyMagicLink(db: D1Database, token: string): Promise<string | null> {
-  // Look up the token
+export async function verifyMagicLink(
+  db: D1Database,
+  token: string
+): Promise<ConsumedMagicLink | null> {
+  const now = new Date().toISOString()
+
+  const result = await db
+    .prepare(
+      `UPDATE magic_links
+       SET used_at = ?
+       WHERE token = ? AND used_at IS NULL AND expires_at > ?`
+    )
+    .bind(now, token, now)
+    .run()
+
+  if (!result.meta.changed_db || (result.meta.changes ?? 0) === 0) {
+    return null
+  }
+
   const row = await db
     .prepare(`SELECT * FROM magic_links WHERE token = ? LIMIT 1`)
     .bind(token)
@@ -76,21 +104,10 @@ export async function verifyMagicLink(db: D1Database, token: string): Promise<st
     return null
   }
 
-  // Check if already used
-  if (row.used_at !== null) {
-    return null
+  return {
+    id: row.id,
+    orgId: row.org_id,
+    userId: row.user_id,
+    email: row.email,
   }
-
-  // Check if expired
-  if (new Date(row.expires_at) <= new Date()) {
-    return null
-  }
-
-  // Mark as used (single-use enforcement)
-  await db
-    .prepare(`UPDATE magic_links SET used_at = datetime('now') WHERE id = ?`)
-    .bind(row.id)
-    .run()
-
-  return row.email
 }
