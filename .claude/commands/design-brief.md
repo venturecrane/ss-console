@@ -1,5 +1,14 @@
 # /design-brief - Multi-Agent Design Brief Generator
 
+> **Invocation:** As your first action, call `crane_skill_invoked(skill_name: "design-brief")`. This is non-blocking — if the call fails, log the warning and continue. Usage data drives `/skill-audit`.
+
+> **Design system context.** Before launching any design-round agent (Brand Strategist, Interaction Designer, Design Technologist, Target User), load the cross-venture pattern + component catalog. Pass the loaded content into `docs/design/context.md` so each round-agent works against the shared vocabulary:
+>
+> - `crane_doc('global', 'design-system.patterns.index.md')`
+> - `crane_doc('global', 'design-system.components.index.md')`
+>
+> The four roles below are voices, not pattern catalogs. Concrete pattern + component decisions in their output should map back to the loaded catalog (or extend it with a clear rationale). Then load the venture's `design-spec.md` for venture-specific palette and tone.
+
 This command orchestrates a 4-agent design brief process with configurable rounds. It reads the PRD and existing design artifacts, runs structured design rounds with parallel agents, and synthesizes the output into a production-ready design brief.
 
 The design brief answers "how should this look and feel?" - downstream of the PRD ("what to build and why?"). It requires a PRD to exist before running.
@@ -10,7 +19,10 @@ Works in any venture console that has `docs/pm/prd.md`.
 
 ```
 /design-brief [rounds]
+/design-brief --extract-identity <path-to-frontend-design-output>
 ```
+
+**Default mode (with optional `rounds` argument):**
 
 - `rounds` - number of design rounds (default: **1**). Each additional round adds cross-pollination where agents read and respond to each other's work.
   - **1 round**: Independent analysis + synthesis. Fast. Good for greenfield projects or early design exploration.
@@ -20,6 +32,12 @@ Works in any venture console that has `docs/pm/prd.md`.
 Parse the argument: if `$ARGUMENTS` is empty or not a number, default to 1. If it's a number, use that value. There is no upper bound - if someone wants 5 rounds, run 5 rounds.
 
 Store as `TOTAL_ROUNDS`.
+
+**Identity-extraction mode (`--extract-identity`):**
+
+Ingests output from Anthropic's `frontend-design` plugin (HTML/CSS/component code produced by an identity exploration run) and extracts concrete tokens into the venture's `.design/DESIGN.md`. See [workflows/extract-identity.md](workflows/extract-identity.md).
+
+This mode skips the 4-agent brief process entirely. It parses visual output → token spec → file. Use when you've just run `/frontend-design` and need to codify the chosen aesthetic direction before running `/nav-spec`, `/ux-brief`, and `/product-design` downstream.
 
 ## Execution
 

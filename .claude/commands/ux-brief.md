@@ -1,0 +1,347 @@
+# /ux-brief - UX Brief Authoring
+
+> **Invocation:** As your first action, call `crane_skill_invoked(skill_name: "ux-brief")`. This is non-blocking — if the call fails, log the warning and continue. Usage data drives `/skill-audit`.
+
+> **Design system context.** Before Phase 1 intake — and certainly before drafting v1 — load the cross-venture pattern + component catalog. Concept proposals (timeline / archive / action-centric, etc.) and chrome decisions in the brief should anchor on the loaded catalog or explicitly note the divergence:
+>
+> - `crane_doc('global', 'design-system/patterns/index.md')`
+> - `crane_doc('global', 'design-system/components/index.md')`
+>
+> Then load the venture's `design-spec.md` for venture-specific palette and tone. Anti-patterns the brief calls out should reconcile with Patterns 1–8 (status display by context, redundancy ban, button hierarchy, etc.) — those are enterprise-canonical and the brief should not contradict them silently.
+
+Produces a production-grade UX brief through a three-reviewer iteration (product, design, customer persona). When the brief is approved, the skill stops. To realize the brief into screens, run `/product-design`.
+
+## Arguments
+
+```
+/ux-brief [target] [--rounds=3]
+```
+
+- `target` — short name of the surface being designed (e.g., `client-portal`, `signup-flow`, `admin-inbox`). Required. Used for artifact file names.
+- `rounds` — brief review rounds (default **3**). Each round spawns three parallel reviewers; output is synthesized between rounds. Fewer than 3 is not recommended.
+
+Parse the arguments. If `target` is missing, stop and ask the user what surface they want to brief.
+
+## The methodology, in one paragraph
+
+This skill exists because a UX brief handed to a downstream design tool fails in predictable ways: the objectives are pretty but unmeasurable, the tokens are described in vibes instead of hex, the concepts all collapse into card-grid variations, and the generated output comes back padded with marketing chrome. This skill fixes each of those by running the brief through a critical three-reviewer pass (one of them a named customer who talks back), forcing structural divergence in the concept brief ("timeline vs archive vs action-centric, not three visual variations of the same layout"), and hardening every decision before generation begins. The final brief is a self-contained specification that downstream tools (e.g., `/product-design`) read to realize the screens — every step has a learning embedded, and the skill is the accumulated scar tissue of running this end-to-end.
+
+## Phases
+
+1. Intake — establish target, scope, existing context
+2. Draft brief v1
+3. Three-reviewer passes with synthesis
+4. Decision checkpoints — resolve open questions surfaced by reviewers
+5. Final brief, user-approved, saved to `.design/<target>-ux-brief.md`
+
+Each phase ends with a checkpoint. The user can stop at any checkpoint. Do not skip phases.
+
+---
+
+## Phase 1 — Intake
+
+Ask the user these questions if they aren't already answered by the conversation:
+
+1. **Target surface.** What surface are we designing? (e.g., "client portal home dashboard + invoice and proposal deep-link landings").
+2. **Authentication context.** Is the user logged in? Prospect? Public-web visitor? This shapes the "no marketing chrome" framing.
+3. **Customer persona seed.** Give me a realistic archetype — named if possible. Role, revenue range, tech comfort, what they care about. If the user hasn't thought about this, offer to draft one and confirm.
+4. **Any existing brief, PRD, or prior design** to build on? Check for `docs/pm/prd.md`, `docs/design/*`, `.design/*-ux-brief.md`, or a prior version of the target.
+
+Scan the repo for context:
+
+- `CLAUDE.md` for venture positioning / tone rules
+- `src/styles/globals.css` or `**/globals.css` for design tokens (hex values, type families)
+- `tailwind.config.*` for palette and type scale
+- Existing page at the target path (e.g., `src/pages/portal/*.astro`) for current data model and surface structure
+- `.design/DESIGN.md` if present (established design system for the venture)
+- `.design/NAVIGATION.md` if present (navigation specification). If absent, warn: "Consider running `/nav-spec` first — briefs produce more consistent results when navigation is spec'd." Proceed without; briefs still have value. When present and `spec-version >= 3`, each concept must include `task=` and `pattern=` tags per-screen (sourced from the spec's task model in §1 and pattern catalog in §4).
+
+Display an **Intake Summary** table:
+
+| Field          | Value                                         |
+| -------------- | --------------------------------------------- |
+| Target         | _e.g., `client-portal`_                       |
+| Authentication | _logged-in / prospect / public_               |
+| Persona        | _e.g., Mike Delgado, 52, plumbing HVAC owner_ |
+| Prior brief    | _path or "none"_                              |
+| Tokens source  | _path to globals.css or config_               |
+| Nav spec       | _spec-version N or "absent"_                  |
+| Venture code   | _resolved from `crane_ventures`_              |
+
+Present the table and ask: **"Does this capture the intake? Anything to correct before I draft?"**
+
+Wait for confirmation.
+
+---
+
+## Phase 2 — Draft v1
+
+Write a v1 brief to `.design/<target>-ux-brief.md` (create the directory if needed). Use this structure:
+
+```markdown
+# <Title> — UX Redesign Brief (v1)
+
+## Context
+
+<2-4 paragraphs: venture positioning, what this surface is for, why we're redesigning>
+
+## Scope
+
+<surfaces + viewports to be designed>
+
+## Visit modes
+
+<5-ish modes: action responder, status checker, etc. Be specific to this surface>
+
+## Objectives, ranked
+
+1. ... 2. ... 3. ... 4. ... 5. ...
+
+## Entry points (with email context)
+
+<each entry point, with the subject line and CTA from the email that triggers it>
+
+## Design principles
+
+<3-5 principles that constrain generation without dictating layout>
+
+## Three concepts requested (structurally distinct, not visual variations)
+
+A — <axis>
+B — <axis>
+C — <axis>
+
+## Worked example (fidelity reference)
+
+<one concept × one surface × one viewport, with inline type specs>
+
+## Above-fold specs for B and C
+
+<matching A's format>
+
+## What must be preserved
+
+<typography, palette, shape, voice>
+
+## What is open
+
+<layout, hierarchy, flow — full creative freedom>
+
+## Anti-patterns (do not produce)
+
+<bullet list of explicit no-gos>
+
+## Mobile spec
+
+<390×844, thumb zone, tap target, no hover, no horizontal scroll>
+
+## Desktop spec
+
+<1280px, right-rail placement, eye-level action>
+
+## Contact affordance spec
+
+<primary channel, fallback, SLA — operational commitment, not copy>
+
+## Copy samples (tone calibration)
+
+<5-6 lines showing the voice in concrete context>
+
+## Error states (must design)
+
+<per-surface error list — each includes named human + next step>
+
+## Activity timeline schema
+
+<if the surface has time-series data, define the event shape>
+
+## Money rule
+
+<dollar figures only, never bars or percentages, if applicable>
+
+## Photo placeholder rule
+
+<harder than "neutral placeholder" — use initials-in-circle or solid shape; never real faces>
+
+## Accessibility floor
+
+<WCAG 2.2 AA, focus rings with hex, landmarks, tap targets>
+
+## Success criteria
+
+**Primary acceptance test:** <one measurable design constraint — e.g., "on 390×844, [Pay invoice] button top edge at y ≤ 700px, no scroll">
+
+Secondary: <2-4 testable criteria>
+
+## Follow-ups (scheduled, not gaps)
+
+<real priorities scheduled after this pass, each with a target window>
+
+## Data available
+
+<data fields the design can use; ask for flag if design needs data we don't capture>
+
+## Constraints
+
+<stack, viewports, scope limits>
+
+## Approver
+
+<name — output reviewed before any iteration>
+
+## Appendix: Hard design tokens
+
+### Color
+
+<hex block — use exact values from globals.css or tailwind config>
+
+### Typography
+
+<family, weights, sizes, line-heights, tracking>
+
+### Spacing and shape
+
+<rounded, padding, rhythm, tap target, breakpoints>
+```
+
+Write the brief. Then present the draft to the user and proceed to Phase 3.
+
+---
+
+## Phase 3 — Three-reviewer passes
+
+Run `TOTAL_ROUNDS` iterations. Each iteration spawns three parallel agents via the Task tool using `subagent_type: general-purpose`. The three reviewers are:
+
+### Product manager reviewer
+
+**Role prompt preamble:**
+
+> You are a senior product manager at a [venture type] firm. You review UX briefs for client-facing surfaces. You are direct, critical, and do not validate work you find weak.
+
+**Focus:**
+
+- Are user objectives correctly framed and ranked?
+- Are lifecycle states complete? What failure states are missing (declined, paused, expired, disputed, cancelled, overdue)?
+- Are success criteria measurable? Name the primary metric.
+- Is scope bounded for a realistic first pass?
+- Does the data inventory match what the design is being asked to do?
+- Business logic edge cases: multi-contact reality, partial payments, SOW revisions, out-of-portal artifacts
+- Is "reach a human" spec'd as an affordance or left as a phrase?
+- Are empty/error states required? Accessibility floor? Approver named?
+
+### UX designer reviewer
+
+**Role prompt preamble:**
+
+> You are a senior UX designer with deep experience using AI code generators — v0, Magic Patterns, Figma Make, in-house skills like `/product-design`. You know what makes them produce generic output vs considered work.
+
+**Focus:**
+
+- Are design tokens described precisely enough? Vague tokens ("muted violet") produce inconsistent results. Require hex.
+- Is mobile-first a slogan or a constraint? Specific viewport, thumb zone, tap targets, no-hover rules.
+- Will three runs produce structurally distinct concepts, or three visual variations of the same layout? Commission structural divergence with explicit axis names.
+- Is information hierarchy clear? What dominates, what recedes?
+- Are anti-patterns named? Are placeholder instructions strong enough to prevent real-face drift?
+- Predict what a generation tool will produce as-is, including what's likely to go wrong.
+
+### Customer persona reviewer
+
+**Role prompt preamble (customize per surface):**
+
+> You are <NAME>, <AGE>. You own <BUSINESS>. <BACKGROUND: years, team, revenue>. You are not <disqualifying tech trait> but you run a real business with real software. <SPOUSE/PARTNER> handles <ROLE>. You just <TRIGGERING EVENT>. Someone handed you a document that describes people like you — how you use [target surface], what you need from it. Tell them if it sounds right. Call out patronizing language. Flag missing things they don't know about your actual life. Talk plainly. Swear if you want. Don't bullet-point at the top; talk first, then summarize.
+
+**Focus:**
+
+- Does this sound like real me, or like someone who's never talked to someone in my role?
+- What's patronizing? Soft? Over-explained?
+- What's missing about my actual life? (spouse access, SMS vs email, what I'd show my advisor)
+- What would I actually do on this surface vs what they think I'd do?
+
+**Persona discipline:**
+
+- Specific name, age, business details. "A business owner in the 30-55 age range" does not work. "Mike Delgado, 52, plumbing HVAC, 9 employees, $1.8M revenue, wife Elena does books" does.
+- Give the persona permission to push back on the brief's description of them. The most common persona finding: the brief describes the user in ways no user would recognize.
+
+### Round structure
+
+**Round 1:** Each reviewer critiques v1 from their role. Output format:
+
+```
+## Overall assessment
+[2-3 sentences, not diplomatic]
+
+## Critical issues (ranked)
+1. <issue + why it matters + specific fix>
+2. ...
+
+## Specific changes I'd make
+<concrete rewrites with proposed wording>
+
+## What's missing
+<things the brief does not address that it needs to>
+```
+
+Persona reviewer uses a different format — see their prompt above. They talk first, then summarize in three sections: got right / got wrong / still missing.
+
+**Between rounds:** Synthesize the feedback into a delta. Apply clear fixes directly to the brief. Surface disagreements or decisions that require user input as **open questions** — these become Phase 4 checkpoints.
+
+**Round 2:** Reviewers see v2 plus a summary of what changed from v1. They critique v2 specifically — what's still weak, what new issues emerged, what v2 got wrong in addressing Round 1 feedback.
+
+**Round 3:** Final polish pass. Reviewers are asked whether v3 is ready to ship. Format tightens to:
+
+```
+## Ready to ship? (Yes / Yes with caveats / No)
+## Any remaining critical issues?
+## Any last surgical edits?
+```
+
+**IMPORTANT**: All three reviewers in a round must be launched in a single Task tool message to run in parallel.
+
+---
+
+## Phase 4 — Decision checkpoints
+
+After each round, surface any decisions the reviewers flagged that require user judgment. Common examples:
+
+- An SLA promise in copy — is it an operational commitment or just marketing?
+- A user mode that was named but doesn't get its own surface — fold it into another mode, or design for it?
+- A concept that has an internal contradiction on a specific viewport — which way does it resolve?
+
+Present decisions as a short numbered list with your recommendation and rationale. Do NOT present 10 decisions — filter to the ones that will actually change the brief.
+
+Wait for the user's answers before proceeding.
+
+---
+
+## Phase 5 — Final brief saved
+
+Apply the last round's fixes and the user's decisions. Save the final brief to `.design/<target>-ux-brief.md`. Present the user a summary of:
+
+- Total rounds run
+- Major things that shifted v1 → final
+- Open decisions resolved
+
+Tell the user: **"Brief is complete. Run `/product-design` to realize the screens."**
+
+---
+
+## Embedded learnings
+
+1. **Personify the customer reviewer.** A named individual with real specifics produces sharper critique than a demographic. The persona should push back on the brief's description of them — that's usually where the brief is patronizing.
+
+2. **Structural divergence must be commissioned explicitly.** "Three structurally distinct concepts — timeline-centric, archive-centric, action-centric" works. "Three concepts" collapses into variations.
+
+3. **Tokens as hex, not vibes.** "Muted violet" is three different colors to three generation runs. Always include hex values from the venture's actual stylesheet.
+
+4. **Mobile-first as constraint, not slogan.** Specify viewport (390×844), thumb zone (bottom 40%), tap target (44px), no-hover rule, no-horizontal-scroll rule.
+
+5. **Anti-patterns need an affirmative frame.** "No nav tabs, no testimonials" is weaker than "This is an authenticated portal, not a marketing page. Chrome is strictly limited to what's listed below."
+
+6. **Placeholder instructions are weak.** "Neutral portrait placeholder" is routinely ignored. Either spec a solid shape ("solid indigo circle with initials") or a clearly abstract graphic ("geometric avatar, no face").
+
+---
+
+## Conventions
+
+- **Brief filename:** `.design/<target>-ux-brief.md`
+- **Versioning:** when iterating a target that already has a brief, move the prior version to `.design/<target>-ux-brief-v1.md` before overwriting.
