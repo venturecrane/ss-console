@@ -660,6 +660,46 @@ Used on: lead-gen prompts, scorecard, assessment intake extraction, entity-signa
 
 ---
 
+## Decision #43 - Outside View Unified Diagnostic (cross-layer)
+
+**Issue:** smdservices/ss-console — Outside View build issues filed 2026-04-27 (PR-A/B/C of Phase 1).
+
+**ADR:** [docs/adr/0002-outside-view-unified-diagnostic.md](./0002-outside-view-unified-diagnostic.md)
+
+**Decision: One product, three input depths, one persistent artifact resident in the portal. The Outside View replaces `/scorecard`, `/scan`, and `/get-started` (cold-mode) as three competing lead-magnet products.**
+
+The marketing site grew three lead-magnet surfaces in parallel — `/get-started` ("Tell Us About Your Business" form), `/scorecard` (structured form), and `/scan` (public-footprint diagnostic, shipped 2026-04-27 in PRs #608/#613/#615/#617/#619). The Captain identified the structural redundancy: all three feed the same engine — assess the business, name the gaps, suggest a next step — at different intake fidelities. They should be one product.
+
+**The product.** "Outside View" is doctrine. The verb form on the marketing site ("see what we see") and the noun form for the artifact ("your Outside View") frame the value proposition correctly: an experienced outside observer; what we see when we look at your business; nothing surveillance, nothing invasive, just public footprint plus pattern recognition.
+
+**Three input depths:**
+
+| Depth                   | Commitment                                    | Inputs                                               | Earns               |
+| ----------------------- | --------------------------------------------- | ---------------------------------------------------- | ------------------- |
+| **D1: Outside view**    | 30 sec (URL + email)                          | Public footprint (web, reviews, GBP, public records) | Offer D2            |
+| **D2: Conversation**    | 15 min voice/text with our agent              | D1 inputs + what the owner tells us                  | Offer D3            |
+| **D3: Assessment call** | 60 min, $0 for first 3, $250 thereafter (#13) | D1 + D2 + Scott's eyes                               | Engagement proposal |
+
+Same engine, same data model, same artifact shape. Fields fill progressively as depth increases.
+
+**Persistent home in the portal.** The artifact lives at `portal.smd.services/outside-view`, not in an inbox. Magic-link bridges the public form on `smd.services/outside-view` to the portal session. Adds a `prospect` role alongside `client`. The portal grows visibility as the relationship deepens — prospect → client_active → client_inactive — without a data-handoff seam at engagement signing.
+
+**Cross-layer impact.**
+
+- **Layer 1 (Buy Box).** Defines the product the prospect first encounters. Outside View is what they hire when they say yes.
+- **Layer 3 (Pricing).** Extends Decision #15 (ROI Anchor Math — "owner does the math, we ask the questions") from the assessment call into the asynchronous artifact. The artifact never quotes a fabricated dollar amount; it provides solvability + fix-shape + cost-shape, and the owner does the financial multiplication against their own numbers. Defends CLAUDE.md no-fabrication rule by construction.
+- **Layer 4 (Assessment).** D2 is a re-home of the conversational scorecard rewrite (formerly tracked in #482, now Phase 3 of Outside View). The assessment call (D3) is unchanged in shape but warm-starts from D1+D2 context.
+- **Layer 5 (Distribution).** Replaces the three competing lead-magnet products with one. Marketing site primary CTA points at D1 (`/outside-view`). D2/D3 reachable in one click from anywhere.
+- **Layer 6 (Delivery).** Portal-as-CRM: admin extensions surface prospect signals, agent triage, daily digest. Inbound (`/outside-view`) and outbound (existing entity-enrichment pipeline) feed the same data model — Scott's admin shows everything we know about an entity in one place.
+
+**Extends Decision #20 (positioning standard).** "Outside View" is the canonical lead-magnet name in copy. "Scorecard," "scan," and "Tell Us About" are retired terms. Voice standard ("we / our team," never "I / the consultant") applies inside the artifact and the conversation.
+
+**v1 simplifications (per critique).** v1 stores the existing `RenderedReport` shape from the shipped /scan pipeline as `outside_views.artifact_json` with versioning at the boundary. Canonical five-field-per-observation contract from ADR 0002 §3 ships in v2 as a forward migration. Phase 1 must not redesign the artifact during a re-aim — anti-fabrication hardening from #617 is preserved.
+
+**Captain authorized:** 2026-04-27, lead-magnet consolidation conversation + /critique 3 review (Devil's Advocate, Simplifier, Pragmatist). See ADR 0002 for full context, depth specifications, artifact contract, and phase plan.
+
+---
+
 ## Decision #30 - Case Study Creation
 
 **Issue:** smdservices/ss-console #30
@@ -731,36 +771,37 @@ All 11 artifacts are scaffolded as GitHub issues in smdservices/ss-console. Ever
 
 # Appendix - Decision Index
 
-| Issue | Decision                                                                                        |
-| ----- | ----------------------------------------------------------------------------------------------- |
-| #2    | Revenue-based qualification - $750k-$5M primary                                                 |
-| #3    | Launch verticals - home services + professional services + contractor/trades, problem-qualified |
-| #4    | Disqualification criteria - 4 hard stops, 5 soft flags                                          |
-| #5    | Ideal client profile - synthesis                                                                |
-| #6    | Financial visibility - in core with 30-day prerequisite gate                                    |
-| #9    | Tool evaluation framework - rubric-based, bias toward keep                                      |
-| #10   | Scope boundary language - positive definition + 4 exclusions                                    |
-| #11   | Scope creep protocol - parking lot, pre-handoff review                                          |
-| #12   | Retainer model - no retainer at launch, define after first delivery                             |
-| #13   | Paid assessment - free for first 3, then $250                                                   |
-| #14   | Payment terms - 50% deposit at signing, 50% at completion                                       |
-| #15   | ROI anchor math - owner does the math, we ask the questions                                     |
-| #16   | Pricing model - scope-based, $175/hr → $200 → $250 → $300 rate progression                      |
-| #17   | Assessment capture - MacWhisper Pro + Claude extraction                                         |
-| #18   | Assessment to proposal - solution design phase, SOW within 48 hours                             |
-| #19   | Follow-up cadence - 3-touch over 7 days, then mark dead                                         |
-| #20   | Positioning standard - we voice, team framing (venture-wide)                                    |
-| #21   | Networking strategy - BNI + chambers + vertical associations                                    |
-| #22   | Accountant partnership - co-value, no fee, warm handoff                                         |
-| #23   | Client referral incentive - no formal incentive, ask at handoff                                 |
-| #24   | Outreach messaging - vertical-specific message and channel                                      |
-| #25   | Pipeline math - 15-20 touches/week, 2-3 engagements/month, 25-30% close                         |
-| #26   | Review request - verbal at handoff, automated email 2 days later                                |
-| #27   | Safety net - 2-week async from handoff                                                          |
-| #28   | Internal champion - identify at assessment, orient Day 1                                        |
-| #29   | Feedback collection - verbal at handoff, survey 30 days later                                   |
-| #30   | Case study workflow - agent-drafted, client-approved, one page                                  |
-| #42   | Taxonomy two-layer model - 5-cat observation, 6-cat delivery (see ADR 0001)                     |
+| Issue | Decision                                                                                             |
+| ----- | ---------------------------------------------------------------------------------------------------- |
+| #2    | Revenue-based qualification - $750k-$5M primary                                                      |
+| #3    | Launch verticals - home services + professional services + contractor/trades, problem-qualified      |
+| #4    | Disqualification criteria - 4 hard stops, 5 soft flags                                               |
+| #5    | Ideal client profile - synthesis                                                                     |
+| #6    | Financial visibility - in core with 30-day prerequisite gate                                         |
+| #9    | Tool evaluation framework - rubric-based, bias toward keep                                           |
+| #10   | Scope boundary language - positive definition + 4 exclusions                                         |
+| #11   | Scope creep protocol - parking lot, pre-handoff review                                               |
+| #12   | Retainer model - no retainer at launch, define after first delivery                                  |
+| #13   | Paid assessment - free for first 3, then $250                                                        |
+| #14   | Payment terms - 50% deposit at signing, 50% at completion                                            |
+| #15   | ROI anchor math - owner does the math, we ask the questions                                          |
+| #16   | Pricing model - scope-based, $175/hr → $200 → $250 → $300 rate progression                           |
+| #17   | Assessment capture - MacWhisper Pro + Claude extraction                                              |
+| #18   | Assessment to proposal - solution design phase, SOW within 48 hours                                  |
+| #19   | Follow-up cadence - 3-touch over 7 days, then mark dead                                              |
+| #20   | Positioning standard - we voice, team framing (venture-wide)                                         |
+| #21   | Networking strategy - BNI + chambers + vertical associations                                         |
+| #22   | Accountant partnership - co-value, no fee, warm handoff                                              |
+| #23   | Client referral incentive - no formal incentive, ask at handoff                                      |
+| #24   | Outreach messaging - vertical-specific message and channel                                           |
+| #25   | Pipeline math - 15-20 touches/week, 2-3 engagements/month, 25-30% close                              |
+| #26   | Review request - verbal at handoff, automated email 2 days later                                     |
+| #27   | Safety net - 2-week async from handoff                                                               |
+| #28   | Internal champion - identify at assessment, orient Day 1                                             |
+| #29   | Feedback collection - verbal at handoff, survey 30 days later                                        |
+| #30   | Case study workflow - agent-drafted, client-approved, one page                                       |
+| #42   | Taxonomy two-layer model - 5-cat observation, 6-cat delivery (see ADR 0001)                          |
+| #43   | Outside View unified diagnostic - one product, three depths, portal-resident artifact (see ADR 0002) |
 
 ---
 
