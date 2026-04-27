@@ -4,8 +4,8 @@
 
 > **Design system context.** Before launching any design-round agent (Brand Strategist, Interaction Designer, Design Technologist, Target User), load the cross-venture pattern + component catalog. Pass the loaded content into `docs/design/context.md` so each round-agent works against the shared vocabulary:
 >
-> - `crane_doc('global', 'design-system.patterns.index.md')`
-> - `crane_doc('global', 'design-system.components.index.md')`
+> - `crane_doc('global', 'design-system/patterns/index.md')`
+> - `crane_doc('global', 'design-system/components/index.md')`
 >
 > The four roles below are voices, not pattern catalogs. Concrete pattern + component decisions in their output should map back to the loaded catalog (or extend it with a clear rationale). Then load the venture's `design-spec.md` for venture-specific palette and tone.
 

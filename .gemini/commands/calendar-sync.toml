@@ -44,7 +44,7 @@ For each venture/day entry from session history:
    - Create a new Google Calendar event with actual venture and times
    - Create a D1 record: `crane_schedule(action: "planned-event-create", ...)` with type='actual'
 
-**IMPORTANT: Never modify, replace, or delete planned events.** Planned events are the work schedule set by `/work-plan`. They stay on the calendar regardless of what actually happened. The calendar shows both planned blocks and actual session blocks side by side.
+**IMPORTANT: Never modify, replace, or delete planned events.** Planned events are the work schedule recorded via `crane_schedule`. They stay on the calendar regardless of what actually happened. The calendar shows both planned blocks and actual session blocks side by side.
 
 ### Step 3: Display Summary
 
@@ -66,8 +66,8 @@ Synced: 2 days, Already synced: 1 day
 
 After sync, Google Calendar should show:
 
-- **Past days**: Both planned blocks (from /work-plan) AND actual session blocks (from D1)
-- **Future days**: Planned blocks only (from /work-plan)
+- **Past days**: Both planned blocks (from `crane_schedule`) AND actual session blocks (from D1)
+- **Future days**: Planned blocks only (from `crane_schedule`)
 - Planned and actual events coexist — they are not mutually exclusive
 
 ## Timezone
