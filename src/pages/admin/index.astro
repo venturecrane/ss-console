@@ -469,7 +469,7 @@ const pipelineRows = (pipelineFreshness?.results ?? []).map((r) => {
           <div class="flex items-center gap-2">
             <div
               class:list={[
-                'w-2 h-2',
+                'w-2 h-2 rounded-full',
                 calStatus === 'active'
                   ? 'bg-[color:var(--ss-color-text-primary)]'
                   : calStatus === 'error' || calStatus === 'revoked'
@@ -524,7 +524,7 @@ const pipelineRows = (pipelineFreshness?.results ?? []).map((r) => {
             pipelineRows.map((p) => (
               <div class="flex items-center justify-between py-2">
                 <div class="flex items-center gap-2">
-                  <div class:list={['w-2 h-2', p.color]} />
+                  <div class:list={['w-2 h-2 rounded-full', p.color]} />
                   <span class="text-sm text-[color:var(--ss-color-text-secondary)]">{p.label}</span>
                 </div>
                 <span class="text-xs text-[color:var(--ss-color-text-muted)]">{p.ago}</span>

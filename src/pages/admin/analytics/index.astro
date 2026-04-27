@@ -228,9 +228,9 @@ function complianceBarWidth(pct: number): string {
                 <span class="text-sm text-[color:var(--ss-color-text-secondary)] w-24 shrink-0">
                   {stage.label}
                 </span>
-                <div class="flex-1 bg-[color:var(--ss-color-border-subtle)] h-6 overflow-hidden">
+                <div class="flex-1 bg-[color:var(--ss-color-border-subtle)] rounded-full h-6 overflow-hidden">
                   <div
-                    class={`h-full ${stage.color} flex items-center justify-end pr-2`}
+                    class={`h-full rounded-full ${stage.color} flex items-center justify-end pr-2`}
                     style={`width: ${pipelineBarWidth(pipeline[stage.key])}`}
                   >
                     {pipeline[stage.key] > 0 && (
@@ -308,9 +308,9 @@ function complianceBarWidth(pct: number): string {
                 <span>On-time rate</span>
                 <span>{health.on_time_pct}%</span>
               </div>
-              <div class="bg-[color:var(--ss-color-border-subtle)] h-3 overflow-hidden">
+              <div class="bg-[color:var(--ss-color-border-subtle)] rounded-full h-3 overflow-hidden">
                 <div
-                  class="h-full bg-[color:var(--ss-color-text-primary)]"
+                  class="h-full rounded-full bg-[color:var(--ss-color-text-primary)]"
                   style={`width: ${complianceBarWidth(health.on_time_pct)}`}
                 />
               </div>
@@ -360,9 +360,9 @@ function complianceBarWidth(pct: number): string {
                       <span class="text-xs text-[color:var(--ss-color-text-secondary)] w-20 shrink-0">
                         {formatMonthLabel(m.month)}
                       </span>
-                      <div class="flex-1 bg-[color:var(--ss-color-border-subtle)] h-5 overflow-hidden">
+                      <div class="flex-1 bg-[color:var(--ss-color-border-subtle)] rounded-full h-5 overflow-hidden">
                         <div
-                          class="h-full bg-[color:var(--ss-color-text-primary)] flex items-center justify-end pr-2"
+                          class="h-full rounded-full bg-[color:var(--ss-color-text-primary)] flex items-center justify-end pr-2"
                           style={`width: ${revenueBarWidth(m.amount)}`}
                         >
                           {m.amount > 0 && (
@@ -443,9 +443,9 @@ function complianceBarWidth(pct: number): string {
                 <span>Compliance</span>
                 <span>{compliance.compliance_pct}%</span>
               </div>
-              <div class="bg-[color:var(--ss-color-border-subtle)] h-3 overflow-hidden">
+              <div class="bg-[color:var(--ss-color-border-subtle)] rounded-full h-3 overflow-hidden">
                 <div
-                  class="h-full bg-[color:var(--ss-color-text-primary)]"
+                  class="h-full rounded-full bg-[color:var(--ss-color-text-primary)]"
                   style={`width: ${complianceBarWidth(compliance.compliance_pct)}`}
                 />
               </div>
@@ -571,9 +571,9 @@ function complianceBarWidth(pct: number): string {
                 <span class="text-sm text-[color:var(--ss-color-text-secondary)] w-36 shrink-0 truncate font-mono">
                   {row.path}
                 </span>
-                <div class="flex-1 bg-[color:var(--ss-color-border-subtle)] h-5 overflow-hidden">
+                <div class="flex-1 bg-[color:var(--ss-color-border-subtle)] rounded-full h-5 overflow-hidden">
                   <div
-                    class="h-full bg-[color:var(--ss-color-text-secondary)] flex items-center justify-end pr-2"
+                    class="h-full rounded-full bg-[color:var(--ss-color-text-secondary)] flex items-center justify-end pr-2"
                     style={`width: ${pathBarWidth(row.views)}`}
                   >
                     {row.views > 0 && (
@@ -610,9 +610,9 @@ function complianceBarWidth(pct: number): string {
                 <span class="text-sm text-[color:var(--ss-color-text-secondary)] w-36 shrink-0 truncate font-mono">
                   {row.cta}
                 </span>
-                <div class="flex-1 bg-[color:var(--ss-color-border-subtle)] h-5 overflow-hidden">
+                <div class="flex-1 bg-[color:var(--ss-color-border-subtle)] rounded-full h-5 overflow-hidden">
                   <div
-                    class="h-full bg-[color:var(--ss-color-primary)] flex items-center justify-end pr-2"
+                    class="h-full rounded-full bg-[color:var(--ss-color-primary)] flex items-center justify-end pr-2"
                     style={`width: ${ctaBarWidth(row.clicks)}`}
                   >
                     {row.clicks > 0 && (
@@ -652,9 +652,9 @@ function complianceBarWidth(pct: number): string {
                   <span class="text-sm text-[color:var(--ss-color-text-secondary)] w-44 shrink-0">
                     {step.label}
                   </span>
-                  <div class="flex-1 bg-[color:var(--ss-color-border-subtle)] h-6 overflow-hidden">
+                  <div class="flex-1 bg-[color:var(--ss-color-border-subtle)] rounded-full h-6 overflow-hidden">
                     <div
-                      class="h-full bg-[color:var(--ss-color-text-primary)] flex items-center justify-end pr-2"
+                      class="h-full rounded-full bg-[color:var(--ss-color-text-primary)] flex items-center justify-end pr-2"
                       style={`width: ${funnelBarWidth(count)}`}
                     >
                       {count > 0 && (
