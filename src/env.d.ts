@@ -59,6 +59,13 @@ declare namespace Cloudflare {
     /** Cloudflare Turnstile site key for the /book booking widget. Public. */
     PUBLIC_TURNSTILE_SITE_KEY?: string
     RESEND_API_KEY?: string
+    /**
+     * Resend webhook signing secret (`whsec_…` from the Resend dashboard
+     * webhook detail page). Used to verify Svix-signed webhook deliveries
+     * for the outreach attribution path. See
+     * src/pages/api/webhooks/resend.ts and issue #587.
+     */
+    RESEND_WEBHOOK_SECRET?: string
     ANTHROPIC_API_KEY?: string
     SIGNWELL_API_KEY?: string
     SIGNWELL_WEBHOOK_SECRET?: string

@@ -20,6 +20,7 @@ PORTAL_BASE_URL="http://localhost:4321"
 # These are documented for reference. Actual values must come from the
 # team vault — never commit real keys.
 RESEND_API_KEY=""
+RESEND_WEBHOOK_SECRET=""
 ANTHROPIC_API_KEY=""
 SIGNWELL_API_KEY=""
 SIGNWELL_WEBHOOK_SECRET=""
