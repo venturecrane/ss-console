@@ -207,6 +207,7 @@ We are in the **pre-launch phase**. Nothing has been sold yet. The immediate pri
 - [ ] Vertical selection for initial targeting (pick ONE vertical to start)
 - [ ] Outreach strategy (how to find and reach first 5 prospects; includes Vistage, EO Arizona, local networking)
 - [ ] Landing page (smd.services, credibility-focused, guide positioning)
+- [ ] **Outside View** — unified diagnostic front door across `smd.services` + `portal.smd.services`. Replaces `/scorecard`, `/scan`, and `/get-started` (cold-mode) as three competing lead-magnet products with one product at three input depths (D1 scan / D2 conversation / D3 assessment call). Doctrine: [ADR 0002](docs/adr/0002-outside-view-unified-diagnostic.md). D1 scan pipeline shipped (PRs #608/#613/#615/#617/#619). In progress: portal residency + retirement of competing surfaces.
 - [ ] Pipeline math (how many conversations to sustain profitability)
 - [ ] Phased geographic approach (Phoenix in-person first, remote-capable after proof of model)
 
