@@ -375,7 +375,9 @@ const runDisabledReason = !runWorkerUrl
             configRow.last_run_error && (
               <>
                 <span class="text-xs text-[color:var(--ss-color-text-muted)]">·</span>
-                <span class="text-sm text-[color:var(--ss-color-error)]">Error: {configRow.last_run_error}</span>
+                <span class="text-sm text-[color:var(--ss-color-error)]">
+                  Error: {configRow.last_run_error}
+                </span>
               </>
             )
           }

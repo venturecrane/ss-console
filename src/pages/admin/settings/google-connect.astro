@@ -58,7 +58,9 @@ const errorMessages: Record<string, string> = {
   {
     successParam === 'connected' && (
       <div class="mb-6 p-stack bg-[color:var(--ss-color-complete)]/10 border border-[color:var(--ss-color-complete)]/30 rounded-[var(--ss-radius-card)]">
-        <p class="text-sm text-[color:var(--ss-color-complete)]">Google Calendar connected successfully.</p>
+        <p class="text-sm text-[color:var(--ss-color-complete)]">
+          Google Calendar connected successfully.
+        </p>
       </div>
     )
   }
@@ -66,7 +68,9 @@ const errorMessages: Record<string, string> = {
   {
     successParam === 'disconnected' && (
       <div class="mb-6 p-stack bg-[color:var(--ss-color-border-subtle)] border border-[color:var(--ss-color-border)] rounded-[var(--ss-radius-card)]">
-        <p class="text-sm text-[color:var(--ss-color-text-secondary)]">Google Calendar disconnected.</p>
+        <p class="text-sm text-[color:var(--ss-color-text-secondary)]">
+          Google Calendar disconnected.
+        </p>
       </div>
     )
   }
@@ -88,7 +92,10 @@ const errorMessages: Record<string, string> = {
       isConnected ? (
         <div>
           <div class="flex items-center gap-row mb-4">
-            <div class="w-3 h-3 rounded-full bg-[color:var(--ss-color-text-primary)]" aria-hidden="true" />
+            <div
+              class="w-3 h-3 rounded-full bg-[color:var(--ss-color-text-primary)]"
+              aria-hidden="true"
+            />
             <span class="text-sm font-medium text-[color:var(--ss-color-text-primary)]">
               Connected
             </span>
@@ -135,7 +142,10 @@ const errorMessages: Record<string, string> = {
       ) : (
         <div>
           <div class="flex items-center gap-row mb-4">
-            <div class="w-3 h-3 rounded-full bg-[color:var(--ss-color-border)]" aria-hidden="true" />
+            <div
+              class="w-3 h-3 rounded-full bg-[color:var(--ss-color-border)]"
+              aria-hidden="true"
+            />
             <span class="text-sm font-medium text-[color:var(--ss-color-text-primary)]">
               Not connected
             </span>
