@@ -1,0 +1,313 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro'
+import {
+  PIPELINE_IDS,
+  SETTING_SPECS,
+  getPipelineSettings,
+  getPipelineSettingsRaw,
+  listPipelineSettingsAudit,
+  updatePipelineSettings,
+  type PipelineId,
+  type SettingSpec,
+} from '../../../lib/db/pipeline-settings'
+import { PIPELINE_LABELS } from '../../../lib/generators/types'
+import { env } from 'cloudflare:workers'
+
+/**
+ * Pipeline settings — admin-tunable thresholds and caps for the lead-gen
+ * workers. Closes issue #595.
+ *
+ * Form layout:
+ *   - One section per pipeline that has tunables (review_mining, job_monitor,
+ *     new_business). Pipelines with no tunables (social_listening) are
+ *     omitted entirely so the page does not show empty placeholders.
+ *   - Numeric inputs with `min`/`max` bound to each setting's spec range.
+ *   - "Reset to default" link per row writes the spec default back.
+ *
+ * Validation happens twice — HTML attributes give immediate feedback, and
+ * the DAL re-validates on POST so a hand-edited form cannot bypass the
+ * range checks. Ranges and defaults are owned by `SETTING_SPECS` in the
+ * DAL — this page is a thin form over that registry.
+ *
+ * Audit log: every change writes a row to `pipeline_settings_audit`. The
+ * recent-changes table at the bottom is the visible side of that log.
+ *
+ * Protected by auth middleware (admin role only).
+ */
+
+const session = Astro.locals.session!
+
+// Pipelines that actually have admin-tunable settings. Drives both the
+// form layout and the audit-log loop. Omits social_listening (no tunables).
+const TUNABLE_PIPELINES: PipelineId[] = PIPELINE_IDS.filter(
+  (p) => Object.keys(SETTING_SPECS[p]).length > 0
+)
+
+// ---------------------------------------------------------------------------
+// POST handler — save a pipeline's settings
+// ---------------------------------------------------------------------------
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData()
+  const pipeline = String(form.get('pipeline') ?? '') as PipelineId
+  if (!PIPELINE_IDS.includes(pipeline)) {
+    return Astro.redirect('/admin/settings/pipelines?error=unknown_pipeline', 302)
+  }
+
+  const inputs: Array<{ key: string; value: number }> = []
+  for (const [key, spec] of Object.entries(SETTING_SPECS[pipeline])) {
+    const raw = form.get(key)
+    if (typeof raw !== 'string' || raw.trim() === '') continue
+    const value = spec.type === 'int' ? Number.parseInt(raw, 10) : Number.parseFloat(raw)
+    inputs.push({ key, value })
+  }
+
+  const result = await updatePipelineSettings(env.DB, session.orgId, pipeline, inputs, {
+    userId: session.userId,
+    email: session.email,
+  })
+
+  if (!result.ok) {
+    const params = new URLSearchParams({ error: result.errors.join(' · '), pipeline })
+    return Astro.redirect(`/admin/settings/pipelines?${params.toString()}`, 302)
+  }
+
+  return Astro.redirect(
+    `/admin/settings/pipelines?saved=${pipeline}&changed=${result.changed}`,
+    302
+  )
+}
+
+// ---------------------------------------------------------------------------
+// GET — load resolved settings + raw rows for provenance + audit history
+// ---------------------------------------------------------------------------
+
+interface PipelineView {
+  pipeline: PipelineId
+  resolved: Record<string, number>
+  // Map key -> stored raw row (or undefined if defaulted)
+  rawByKey: Record<string, { value: string; updated_at: string; updated_by: string | null }>
+  specs: Record<string, SettingSpec>
+}
+
+const views: PipelineView[] = []
+for (const pipeline of TUNABLE_PIPELINES) {
+  const resolved = (await getPipelineSettings(
+    env.DB,
+    session.orgId,
+    pipeline
+  )) as unknown as Record<string, number>
+  const rawRows = await getPipelineSettingsRaw(env.DB, session.orgId, pipeline)
+  const rawByKey: Record<string, { value: string; updated_at: string; updated_by: string | null }> =
+    {}
+  for (const r of rawRows) {
+    rawByKey[r.key] = { value: r.value, updated_at: r.updated_at, updated_by: r.updated_by }
+  }
+  views.push({
+    pipeline,
+    resolved,
+    rawByKey,
+    specs: SETTING_SPECS[pipeline],
+  })
+}
+
+// Recent audit entries across all pipelines. We render them as a single
+// activity feed since per-pipeline history is rarely large enough to
+// justify three separate scrolling lists.
+const auditByPipeline = await Promise.all(
+  TUNABLE_PIPELINES.map((p) => listPipelineSettingsAudit(env.DB, session.orgId, p, 10))
+)
+const allAudit = auditByPipeline.flat().sort((a, b) => b.changed_at.localeCompare(a.changed_at))
+const recentAudit = allAudit.slice(0, 25)
+
+// URL feedback parameters for save/error banners.
+const url = new URL(Astro.request.url)
+const savedParam = url.searchParams.get('saved')
+const changedParam = url.searchParams.get('changed')
+const errorParam = url.searchParams.get('error')
+
+function formatRelative(iso: string | null): string {
+  if (!iso) return ''
+  const diff = Date.now() - new Date(iso).getTime()
+  const hours = Math.round(diff / (1000 * 60 * 60))
+  if (hours < 1) return 'Just now'
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.round(hours / 24)}d ago`
+}
+
+function inputStep(spec: SettingSpec): string {
+  return spec.type === 'int' ? '1' : '0.01'
+}
+---
+
+<AdminLayout
+  title="Pipeline settings — SMD Services"
+  breadcrumbs={[
+    { label: 'Dashboard', href: '/admin' },
+    { label: 'Generators', href: '/admin/generators' },
+    { label: 'Pipeline settings' },
+  ]}
+>
+  <div class="mb-6">
+    <h2 class="text-xl font-semibold text-[color:var(--ss-color-text-primary)]">
+      Pipeline settings
+    </h2>
+    <p class="text-sm text-[color:var(--ss-color-text-secondary)] mt-1">
+      Tunable thresholds and caps for the lead-gen workers. Each cron run reads these values at the
+      start of the run, so changes take effect on the next scheduled invocation without a deploy.
+    </p>
+    <p class="text-xs text-[color:var(--ss-color-text-muted)] mt-1">
+      Defaults match the constants that previously shipped in worker source. An empty settings table
+      preserves the old behavior. Closes <a
+        href="https://github.com/venturecrane/ss-console/issues/595"
+        class="underline hover:text-[color:var(--ss-color-primary)]">issue #595</a
+      >.
+    </p>
+  </div>
+
+  {
+    savedParam && (
+      <div class="mb-6 p-stack bg-[color:var(--ss-color-complete)]/10 border border-[color:var(--ss-color-complete)]/30 rounded-[var(--ss-radius-card)]">
+        <p class="text-sm text-[color:var(--ss-color-complete)]">
+          Saved {savedParam} settings. {changedParam ?? '0'} value
+          {changedParam === '1' ? '' : 's'} changed. Next run will pick up the new values.
+        </p>
+      </div>
+    )
+  }
+  {
+    errorParam && (
+      <div class="mb-6 p-stack bg-[color:var(--ss-color-error)]/10 border border-[color:var(--ss-color-error)]/30 rounded-[var(--ss-radius-card)]">
+        <p class="text-sm text-[color:var(--ss-color-error)]">{errorParam}</p>
+      </div>
+    )
+  }
+
+  <div class="space-y-8">
+    {
+      views.map((view) => (
+        <section
+          aria-labelledby={`heading-${view.pipeline}`}
+          class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card"
+        >
+          <header class="mb-4">
+            <h3
+              id={`heading-${view.pipeline}`}
+              class="text-base font-semibold text-[color:var(--ss-color-text-primary)]"
+            >
+              {PIPELINE_LABELS[view.pipeline]}
+            </h3>
+            <p class="text-xs text-[color:var(--ss-color-text-secondary)] mt-1">
+              <a
+                href={`/admin/generators/${view.pipeline}`}
+                class="underline hover:text-[color:var(--ss-color-primary)]"
+              >
+                View pipeline detail and run history
+              </a>
+            </p>
+          </header>
+          <form method="POST" class="space-y-stack">
+            <input type="hidden" name="pipeline" value={view.pipeline} />
+            {Object.entries(view.specs).map(([key, spec]) => {
+              const stored = view.rawByKey[key]
+              const value = view.resolved[key]
+              const isDefault = !stored
+              return (
+                <div>
+                  <div class="flex items-center justify-between gap-2 mb-1">
+                    <label
+                      for={`${view.pipeline}_${key}`}
+                      class="text-sm font-medium text-[color:var(--ss-color-text-primary)]"
+                    >
+                      {spec.label}{' '}
+                      <span class="text-xs text-[color:var(--ss-color-text-secondary)] font-normal">
+                        ({spec.min}–{spec.max})
+                      </span>
+                    </label>
+                    {isDefault ? (
+                      <span class="text-xs text-[color:var(--ss-color-text-muted)]">
+                        Default ({spec.default})
+                      </span>
+                    ) : (
+                      <span class="text-xs text-[color:var(--ss-color-text-muted)]">
+                        Set {formatRelative(stored.updated_at)}
+                        {stored.updated_by ? ` by ${stored.updated_by}` : ''}
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="number"
+                    id={`${view.pipeline}_${key}`}
+                    name={key}
+                    value={value}
+                    min={spec.min}
+                    max={spec.max}
+                    step={inputStep(spec)}
+                    required
+                    class="w-full max-w-xs border border-[color:var(--ss-color-border)] rounded px-3 py-2 text-sm font-mono"
+                  />
+                  <p class="text-xs text-[color:var(--ss-color-text-secondary)] mt-1">
+                    {spec.help}
+                  </p>
+                </div>
+              )
+            })}
+
+            <div class="pt-1">
+              <button
+                type="submit"
+                class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-[var(--ss-radius-card)] hover:bg-primary/90 transition-colors"
+              >
+                Save {PIPELINE_LABELS[view.pipeline]} settings
+              </button>
+            </div>
+          </form>
+        </section>
+      ))
+    }
+  </div>
+
+  <section aria-labelledby="audit-heading" class="mt-10">
+    <h3
+      id="audit-heading"
+      class="text-base font-semibold text-[color:var(--ss-color-text-primary)] mb-3"
+    >
+      Recent changes
+    </h3>
+    {
+      recentAudit.length === 0 ? (
+        <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card">
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)]">
+            No setting changes yet. Once admin tunes a value, the change history appears here.
+          </p>
+        </div>
+      ) : (
+        <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] divide-y divide-[color:var(--ss-color-border-subtle)]">
+          {recentAudit.map((row) => (
+            <div class="px-6 py-3 flex items-start justify-between gap-3 text-sm">
+              <div class="min-w-0 flex-1">
+                <p class="text-[color:var(--ss-color-text-primary)]">
+                  <span class="font-medium">{PIPELINE_LABELS[row.pipeline]}</span>
+                  <span class="text-[color:var(--ss-color-text-muted)]"> · </span>
+                  <code class="font-mono text-xs">{row.key}</code>
+                  <span class="text-[color:var(--ss-color-text-muted)]">: </span>
+                  <span class="font-mono text-xs">
+                    {row.old_value ?? '<unset>'} → {row.new_value}
+                  </span>
+                </p>
+                {row.actor_email && (
+                  <p class="text-xs text-[color:var(--ss-color-text-secondary)] mt-0.5">
+                    by {row.actor_email}
+                  </p>
+                )}
+              </div>
+              <span class="text-xs text-[color:var(--ss-color-text-muted)] whitespace-nowrap">
+                {formatRelative(row.changed_at)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )
+    }
+  </section>
+</AdminLayout>

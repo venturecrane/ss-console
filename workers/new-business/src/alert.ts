@@ -8,6 +8,7 @@ export interface RunSummary {
   newPermits: number
   qualified: number
   disqualified: number
+  belowThreshold: number
   written: number
   errors: number
   errorDetails: string[]
@@ -22,6 +23,7 @@ export async function sendFailureAlert(summary: RunSummary, resendApiKey: string
     `New (not deduped): ${summary.newPermits}`,
     `Qualified: ${summary.qualified}`,
     `Disqualified: ${summary.disqualified}`,
+    `Below pain threshold: ${summary.belowThreshold}`,
     `Written to D1: ${summary.written}`,
     `Errors: ${summary.errors}`,
     ``,

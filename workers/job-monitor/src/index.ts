@@ -14,6 +14,7 @@ import { ORG_ID } from '../../../src/lib/constants.js'
 import { findOrCreateEntity } from '../../../src/lib/db/entities.js'
 import { appendContext } from '../../../src/lib/db/context.js'
 import { getGeneratorConfig, recordGeneratorRun } from '../../../src/lib/db/generators.js'
+import { getPipelineSettings } from '../../../src/lib/db/pipeline-settings.js'
 import type { JobMonitorConfig } from '../../../src/lib/generators/types.js'
 import { enrichEntity } from '../../../src/lib/enrichment/index.js'
 import { searchJobs } from './serpapi.js'
@@ -40,11 +41,17 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
     newJobs: 0,
     qualified: 0,
     disqualified: 0,
+    belowThreshold: 0,
     written: 0,
     errors: 0,
     errorDetails: [],
     existingAppended: 0,
   }
+
+  // Resolve admin-tunable settings at the TOP of every run so the next cron
+  // tick picks up admin changes without a worker restart (issue #595).
+  const settings = await getPipelineSettings(env.DB, ORG_ID, 'job_monitor')
+  const painThreshold = settings.pain_threshold
 
   const configRow = await getGeneratorConfig(env.DB, ORG_ID, 'job_monitor')
   if (!configRow.enabled) {
@@ -117,6 +124,17 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
         continue
       }
 
+      // Apply admin-tunable pain_threshold (issue #595). The derived score
+      // collapses Claude `confidence` + `problems_signaled.length` into a
+      // 1-10 scale (see derivePainScore). Default threshold is 7, matching
+      // prior shipped behavior — but ops can lower it to surface medium-
+      // confidence single-problem jobs without redeploying.
+      const painScore = derivePainScore(qualification)
+      if (painScore < painThreshold) {
+        summary.belowThreshold++
+        continue
+      }
+
       summary.qualified++
 
       // Find or create entity
@@ -137,7 +155,6 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
 
       // Build metadata
       const dateFound = new Date().toISOString().split('T')[0]
-      const painScore = derivePainScore(qualification)
       const metadata: Record<string, unknown> = {
         job_hash: job.job_id,
         job_url: job.apply_options?.[0]?.link ?? null,
@@ -183,8 +200,8 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
 
   console.log(
     `Run complete: ${summary.newJobs} new, ${summary.existingAppended} existing, ` +
-      `${summary.qualified} qualified, ${summary.disqualified} disqualified, ` +
-      `${summary.written} written, ${summary.errors} errors`
+      `${summary.qualified} qualified (pain>=${painThreshold}), ${summary.disqualified} disqualified, ` +
+      `${summary.belowThreshold} below threshold, ${summary.written} written, ${summary.errors} errors`
   )
 
   await recordGeneratorRun(env.DB, ORG_ID, 'job_monitor', {

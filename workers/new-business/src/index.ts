@@ -15,10 +15,11 @@ import { ORG_ID } from '../../../src/lib/constants.js'
 import { findOrCreateEntity } from '../../../src/lib/db/entities.js'
 import { appendContext } from '../../../src/lib/db/context.js'
 import { getGeneratorConfig, recordGeneratorRun } from '../../../src/lib/db/generators.js'
+import { getPipelineSettings } from '../../../src/lib/db/pipeline-settings.js'
 import type { NewBusinessConfig } from '../../../src/lib/generators/types.js'
 import { enrichEntity } from '../../../src/lib/enrichment/index.js'
 import { fetchAllPermits, type SodaCity } from './soda.js'
-import { qualifyNewBusiness } from './qualify.js'
+import { qualifyNewBusiness, derivePainScore } from './qualify.js'
 import { sendFailureAlert, type RunSummary } from './alert.js'
 
 export interface Env {
@@ -42,10 +43,16 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
     newPermits: 0,
     qualified: 0,
     disqualified: 0,
+    belowThreshold: 0,
     written: 0,
     errors: 0,
     errorDetails: [],
   }
+
+  // Resolve admin-tunable pain_threshold at the TOP of every run so the next
+  // cron tick picks up admin changes without a worker restart (issue #595).
+  const settings = await getPipelineSettings(env.DB, ORG_ID, 'new_business')
+  const painThreshold = settings.pain_threshold
 
   const configRow = await getGeneratorConfig(env.DB, ORG_ID, 'new_business')
   if (!configRow.enabled) {
@@ -84,8 +91,19 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
         continue
       }
 
-      if (qualification.outreach_timing === 'not_recommended') {
-        summary.disqualified++
+      // Apply admin-tunable pain_threshold (issue #595). For new_business we
+      // derive a 0-10 score from `outreach_timing` (immediate=10,
+      // wait_30_days=7, wait_60_days=5, not_recommended=0). Default threshold
+      // is 1 — meaning only `not_recommended` permits are filtered, matching
+      // the prior shipped behavior. Ops can raise it to 6 to skip
+      // wait_60_days permits, or to 8 to act only on immediate-timing leads.
+      const painScore = derivePainScore(qualification)
+      if (painScore < painThreshold) {
+        if (qualification.outreach_timing === 'not_recommended') {
+          summary.disqualified++
+        } else {
+          summary.belowThreshold++
+        }
         continue
       }
 
@@ -118,6 +136,7 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
         vertical_match: qualification.vertical_match,
         size_estimate: qualification.size_estimate,
         outreach_timing: qualification.outreach_timing,
+        pain_score: painScore,
         ...(qualification.outreach_angle ? { outreach_angle: qualification.outreach_angle } : {}),
         date_found: dateFound,
       }
@@ -157,8 +176,9 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
   }
 
   console.log(
-    `Run complete: ${summary.newPermits} new, ${summary.qualified} qualified, ` +
-      `${summary.disqualified} disqualified, ${summary.written} written, ${summary.errors} errors`
+    `Run complete: ${summary.newPermits} new, ${summary.qualified} qualified (pain>=${painThreshold}), ` +
+      `${summary.disqualified} disqualified, ${summary.belowThreshold} below threshold, ` +
+      `${summary.written} written, ${summary.errors} errors`
   )
 
   await recordGeneratorRun(env.DB, ORG_ID, 'new_business', {

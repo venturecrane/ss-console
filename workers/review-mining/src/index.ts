@@ -15,6 +15,7 @@ import { ORG_ID } from '../../../src/lib/constants.js'
 import { findOrCreateEntity } from '../../../src/lib/db/entities.js'
 import { appendContext } from '../../../src/lib/db/context.js'
 import { getGeneratorConfig, recordGeneratorRun } from '../../../src/lib/db/generators.js'
+import { getPipelineSettings } from '../../../src/lib/db/pipeline-settings.js'
 import type { ReviewMiningConfig } from '../../../src/lib/generators/types.js'
 import { enrichEntity } from '../../../src/lib/enrichment/index.js'
 import { discoverBusinesses, fetchReviews } from './outscraper.js'
@@ -22,29 +23,16 @@ import { scoreReviews } from './qualify.js'
 import { sendFailureAlert, type RunSummary } from './alert.js'
 import type { DiscoveredBusiness } from './outscraper.js'
 
-const PAIN_THRESHOLD = 7
-
 // Per-business Outscraper cost. Reviews extraction is ~$3 per 1,000 place_ids
 // queried regardless of how many reviews come back. Source:
 // docs/lead-automation/specs/outscraper-queries.md ("Outscraper Pricing").
 const OUTSCRAPER_USD_PER_PLACE = 0.003
 
-// Default cap on businesses sent to Outscraper per run. Raised from 50 to 200
-// per issue #592 to lift the artificial top-of-funnel constraint identified
-// in the 2026-04-25 lead-gen audit. At ~$0.003/business that is ~$0.60/run,
-// ~$2.40/month at the weekly cron cadence. Both this cap and PAIN_THRESHOLD
-// will move into admin config under issue #595; until then they are constants
-// here, with `MAX_REVIEW_CHECKS` and `OUTSCRAPER_BUDGET_USD_PER_RUN` env vars
-// available as escape hatches without a code deploy.
-const DEFAULT_MAX_REVIEW_CHECKS = 200
-
-// Hard ceiling on how much a single run may spend on Outscraper. The cap above
-// is the primary constraint; this is a belt-and-suspenders guard so a future
-// change to discovery queries, geo radius, or batch logic can't blow through
-// the budget unobserved. At default settings (200 places, $0.003/place) a run
-// spends ~$0.60, comfortably under the $1.00 default. Override per environment
-// via the `OUTSCRAPER_BUDGET_USD_PER_RUN` env var.
-const DEFAULT_OUTSCRAPER_BUDGET_USD_PER_RUN = 1.0
+// Pain threshold + per-run cap + Outscraper budget guard now read from the
+// `pipeline_settings` table at the top of every run (issue #595). Defaults
+// in `src/lib/db/pipeline-settings.ts` match the constants that previously
+// shipped here (pain=7, cap=200, budget=$1.00) so the deploy is a no-op
+// until ops explicitly tunes a value via the admin UI.
 
 export interface Env {
   DB: D1Database
@@ -56,23 +44,6 @@ export interface Env {
   // Optional keys used by the at-ingest enrichment pipeline.
   SERPAPI_API_KEY?: string
   PROXYCURL_API_KEY?: string
-  // Optional overrides for the per-run cap and budget guard. Both are strings
-  // because Wrangler vars are strings; parsed at run start with sane fallbacks.
-  // Will be replaced by admin-config in issue #595.
-  MAX_REVIEW_CHECKS?: string
-  OUTSCRAPER_BUDGET_USD_PER_RUN?: string
-}
-
-function parsePositiveInt(value: string | undefined, fallback: number): number {
-  if (!value) return fallback
-  const parsed = Number.parseInt(value, 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
-}
-
-function parsePositiveFloat(value: string | undefined, fallback: number): number {
-  if (!value) return fallback
-  const parsed = Number.parseFloat(value)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
 async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
@@ -91,14 +62,14 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
     budgetGuardTripped: false,
   }
 
-  // Resolve the per-run cap and budget guard. Env vars are escape hatches so
-  // we can tune live without a code deploy; defaults are the values that
-  // shipped with #592. Both move into admin config under #595.
-  const maxReviewChecks = parsePositiveInt(env.MAX_REVIEW_CHECKS, DEFAULT_MAX_REVIEW_CHECKS)
-  const budgetUsd = parsePositiveFloat(
-    env.OUTSCRAPER_BUDGET_USD_PER_RUN,
-    DEFAULT_OUTSCRAPER_BUDGET_USD_PER_RUN
-  )
+  // Resolve admin-tunable settings at the TOP of every run so the next cron
+  // tick picks up admin changes without a worker restart (issue #595). The
+  // DAL transparently falls back to compiled-in defaults when the table is
+  // empty, so this is also the safe behavior on a fresh deploy.
+  const settings = await getPipelineSettings(env.DB, ORG_ID, 'review_mining')
+  const painThreshold = settings.pain_threshold
+  const maxReviewChecks = settings.max_review_checks
+  const budgetUsd = settings.outscraper_budget_usd_per_run
 
   const configRow = await getGeneratorConfig(env.DB, ORG_ID, 'review_mining')
   if (!configRow.enabled) {
@@ -203,7 +174,7 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
         continue
       }
 
-      if (scoring.pain_score < PAIN_THRESHOLD) {
+      if (scoring.pain_score < painThreshold) {
         summary.belowThreshold++
         continue
       }
@@ -276,7 +247,7 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
   }
 
   console.log(
-    `Run complete: ${summary.newBusinesses} new, ${summary.qualified} qualified (pain>=${PAIN_THRESHOLD}), ` +
+    `Run complete: ${summary.newBusinesses} new, ${summary.qualified} qualified (pain>=${painThreshold}), ` +
       `${summary.belowThreshold} below threshold, ${summary.written} written, ${summary.errors} errors, ` +
       `Outscraper spend ~$${summary.outscraperSpendUsd.toFixed(2)}` +
       (summary.budgetGuardTripped ? ' (budget guard tripped)' : '')

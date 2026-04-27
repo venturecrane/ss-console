@@ -83,3 +83,37 @@ export async function qualifyNewBusiness(
 
   return parsed as NewBusinessQualification
 }
+
+/**
+ * Derive a 0-10 pain score from a new-business qualification.
+ *
+ * The new-business pipeline qualifies via Claude `outreach_timing` (one of
+ * `immediate` / `wait_30_days` / `wait_60_days` / `not_recommended`) — there
+ * is no native numeric pain. We collapse it to a uniform scale so the
+ * admin-tunable `pain_threshold` setting (issue #595) has consistent
+ * semantics across all three pipelines.
+ *
+ * Mapping (immediate = strongest signal, sooner outreach):
+ *   - immediate       → 10
+ *   - wait_30_days    →  7
+ *   - wait_60_days    →  5
+ *   - not_recommended →  0
+ *
+ * The default threshold (1) preserves prior behavior: only `not_recommended`
+ * permits are filtered out. Ops can raise to 6 to skip wait_60_days, or to
+ * 8 to act only on immediate-timing leads.
+ */
+export function derivePainScore(q: NewBusinessQualification): number {
+  switch (q.outreach_timing) {
+    case 'immediate':
+      return 10
+    case 'wait_30_days':
+      return 7
+    case 'wait_60_days':
+      return 5
+    case 'not_recommended':
+      return 0
+    default:
+      return 0
+  }
+}
