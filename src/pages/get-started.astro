@@ -8,9 +8,31 @@ import { ENTITY_VERTICALS } from '../lib/db/entities'
 import { resolveTurnstileConfig } from '../lib/booking/turnstile'
 import { env } from 'cloudflare:workers'
 
+/**
+ * /get-started dual-mode page.
+ *
+ * Post-ADR 0002 Phase 1 PR-C this page has two surfaces:
+ *
+ *   - Cold mode (no `?booked` query): RETIRED. Redirect to /outside-view.
+ *     The middleware also serves the 301 ahead of this page; this is the
+ *     belt-and-suspenders fallback (per /critique 3 Devil's Advocate #3).
+ *
+ *   - Post-booking mode (`?booked=1`): LIVE. Renders the prep
+ *     questionnaire after a successful /book/thanks redirect. Survives
+ *     Phase 1 — the Outside View doesn't replace post-booking prep.
+ *
+ * The cleanup PR scheduled one week after PR-C ships will revisit this:
+ * if we want to fully retire /get-started, the post-booking prep moves
+ * to a portal page (the booker is, by definition, prospect-or-better).
+ */
+const isPostBooking = Astro.url.searchParams.has('booked')
+
+if (!isPostBooking) {
+  return Astro.redirect('/outside-view', 301)
+}
+
 // Fail-fast on Turnstile misconfiguration (#12). See book.astro for rationale.
 const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
-const isPostBooking = Astro.url.searchParams.has('booked')
 ---
 
 <Base

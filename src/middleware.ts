@@ -84,6 +84,33 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return context.redirect('/get-started?booked=1', 301)
   }
 
+  // Outside View redirects (ADR 0002 Phase 1 PR-C). Retire the three
+  // competing lead-magnet surfaces — /scan, /scorecard, and the cold-mode
+  // half of /get-started — into a single front door at /outside-view.
+  //
+  // Important guards:
+  //   - /scan exact match only (NOT startsWith). /scan/verify/[token]
+  //     is the magic-link landing page from in-flight emails sent before
+  //     this PR; redirecting that path would break those tokens.
+  //   - /scorecard is a startsWith; the form has no descendants today
+  //     but any future descendants should also funnel to /outside-view.
+  //   - /get-started has dual-mode behavior: with ?booked=1 it is the
+  //     post-booking prep page (still needed for /book/thanks redirect
+  //     above), so we redirect ONLY when no ?booked param is present.
+  //   - These are 301 (permanent). Source files at /scan/index.astro,
+  //     /scorecard.astro, /get-started.astro stay on disk as belt-and-
+  //     suspenders 301 emitters; they're scheduled for deletion in a
+  //     separate cleanup PR a week after this PR ships.
+  if (pathname === '/scan') {
+    return context.redirect('/outside-view', 301)
+  }
+  if (pathname === '/scorecard' || pathname.startsWith('/scorecard/')) {
+    return context.redirect('/outside-view', 301)
+  }
+  if (pathname === '/get-started' && !context.url.searchParams.has('booked')) {
+    return context.redirect('/outside-view', 301)
+  }
+
   // Initialize session as null for all routes
   context.locals.session = null
 

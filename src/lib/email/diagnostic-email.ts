@@ -177,7 +177,7 @@ export function diagnosticReportEmailHtml(input: DiagnosticReportEmailInput): st
 
       <p style="font-size:12px;color:#94a3b8;margin:24px 0 0;">
         ${BRAND_NAME} is a Phoenix-based operations consulting firm. You requested this report
-        from smd.services/scan. We don't add you to a mailing list and we don't share your
+        from smd.services/outside-view. We don't add you to a mailing list and we don't share your
         information with anyone else.
       </p>
     </div>

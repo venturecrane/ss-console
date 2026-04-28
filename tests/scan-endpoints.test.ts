@@ -12,7 +12,11 @@ import { resolve } from 'path'
 
 const startSrc = () => readFileSync(resolve('src/pages/api/scan/start.ts'), 'utf-8')
 const verifySrc = () => readFileSync(resolve('src/pages/api/scan/verify.ts'), 'utf-8')
-const formSrc = () => readFileSync(resolve('src/pages/scan/index.astro'), 'utf-8')
+// /scan/index.astro retired in PR-C (ADR 0002 Phase 1) — it's now a 301
+// emitter. The public form lives at /outside-view/index.astro; CLAUDE.md
+// tone-rule guards (no $ amounts, no fixed engagement timeframes,
+// no first-person singular, data-source disclosure) follow the form.
+const formSrc = () => readFileSync(resolve('src/pages/outside-view/index.astro'), 'utf-8')
 const verifyPageSrc = () => readFileSync(resolve('src/pages/scan/verify/[token].astro'), 'utf-8')
 
 describe('/api/scan/start', () => {
@@ -89,9 +93,9 @@ describe('/api/scan/verify', () => {
   })
 })
 
-describe('/scan public form', () => {
+describe('/outside-view public form (was /scan, retired ADR 0002 Phase 1 PR-C)', () => {
   it('page exists', () => {
-    expect(existsSync(resolve('src/pages/scan/index.astro'))).toBe(true)
+    expect(existsSync(resolve('src/pages/outside-view/index.astro'))).toBe(true)
   })
 
   it('renders the data-source disclosure (Bar #4)', () => {
