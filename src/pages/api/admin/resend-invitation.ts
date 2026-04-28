@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro'
-import { createMagicLink } from '../../../lib/auth/magic-link'
+import { createMagicLink, MAGIC_LINK_EXPIRY_MS } from '../../../lib/auth/magic-link'
 import { requirePortalBaseUrl } from '../../../lib/config/app-url'
 import { sendEmail } from '../../../lib/email/resend'
 import { buildMagicLinkUrl, portalInvitationEmailHtml } from '../../../lib/email/templates'
@@ -93,12 +93,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
     }
 
-    // Create magic link
-    const token = await createMagicLink(env.DB, {
-      orgId: user.org_id,
-      userId: user.id,
-      email: targetEmail,
-    })
+    // Create magic link (15-minute TTL for portal invitation).
+    const token = await createMagicLink(
+      env.DB,
+      {
+        orgId: user.org_id,
+        userId: user.id,
+        email: targetEmail,
+      },
+      MAGIC_LINK_EXPIRY_MS
+    )
 
     // Build verification URL from the canonical PORTAL_BASE_URL.
     // Never derive from request host — see issue #173.

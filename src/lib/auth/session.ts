@@ -22,10 +22,17 @@ export const SESSION_DURATION_MS = ADMIN_SESSION_DURATION_MS
 
 /**
  * Return session duration based on role.
- * Clients get 30 days (infrequent portal visitors), admins get 7 days.
+ *
+ * Clients and Outside View prospects (ADR 0002) get 30 days — infrequent
+ * portal visitors who shouldn't be re-authed every visit. Admins get 7
+ * days. The 24h figure on the prospect path is the magic-link TTL, NOT
+ * the session lifetime: once a prospect verifies, their session lasts
+ * the same as a client's.
  */
 export function getSessionDurationMs(role?: string): number {
-  return role === 'client' ? CLIENT_SESSION_DURATION_MS : ADMIN_SESSION_DURATION_MS
+  return role === 'client' || role === 'prospect'
+    ? CLIENT_SESSION_DURATION_MS
+    : ADMIN_SESSION_DURATION_MS
 }
 
 export interface SessionData {

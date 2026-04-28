@@ -22,6 +22,15 @@ import { env } from 'cloudflare:workers'
  */
 
 const session = Astro.locals.session!
+
+// Outside View prospects (ADR 0002) land here after magic-link verification
+// because the verify page redirects all portal sessions to /portal. Their
+// home is /portal/outside-view (the only tab they see), not the client
+// dashboard. Forward them before any client-shaped data fetches.
+if (session.role === 'prospect') {
+  return Astro.redirect('/portal/outside-view')
+}
+
 const portalData = await getPortalClient(env.DB, session.userId, session.orgId)
 if (!portalData) {
   return Astro.redirect('/auth/portal-login?error=no_account')

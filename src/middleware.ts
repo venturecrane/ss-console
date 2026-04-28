@@ -13,15 +13,16 @@ import { env } from 'cloudflare:workers'
  *
  * Host → path mapping (three custom domains on one Pages project):
  *   admin.smd.services/*   → rewritten to /admin/* (admin console, role=admin)
- *   portal.smd.services/*  → rewritten to /portal/* (client portal, role=client)
+ *   portal.smd.services/*  → rewritten to /portal/* (client portal,
+ *                            role=client | role=prospect per ADR 0002)
  *   smd.services/*         → marketing (public); /admin/* and /auth/login 301
  *                            to admin.smd.services for backwards compat
  *
  * Route protection:
  *   /admin/*       → requires role='admin', redirects to /auth/login
  *   /api/admin/*   → requires role='admin', returns 401 JSON
- *   /portal/*      → requires role='client', redirects to /auth/portal-login
- *   /api/portal/*  → requires role='client', returns 401 JSON
+ *   /portal/*      → requires role IN ('client', 'prospect'), redirects to /auth/portal-login
+ *   /api/portal/*  → requires role IN ('client', 'prospect'), returns 401 JSON
  *   /auth/*        → public (login pages)
  *   everything else → public
  *
@@ -161,8 +162,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
       return context.redirect('/auth/login')
     }
 
-    const requiredRole = isAdminRoute || isAdminApiRoute ? 'admin' : 'client'
-    if (context.locals.session.role !== requiredRole) {
+    // Role gate: admin routes admit only role='admin'. Portal routes admit
+    // role='client' AND role='prospect' (ADR 0002 — Outside View prospects
+    // share the portal surface with clients; tab visibility differentiates).
+    const sessionRole = context.locals.session.role
+    const isAdminAccess = (isAdminRoute || isAdminApiRoute) && sessionRole === 'admin'
+    const isPortalAccess =
+      (isPortalRoute || isPortalApiRoute) &&
+      (sessionRole === 'client' || sessionRole === 'prospect')
+    if (!isAdminAccess && !isPortalAccess) {
       if (isAdminApiRoute || isPortalApiRoute) {
         return new Response(JSON.stringify({ error: 'Forbidden' }), {
           status: 403,
@@ -186,9 +194,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (context.locals.session && token) {
     const isPortalHost = hostname.startsWith('portal.')
     const isAdminHost = hostname.startsWith('admin.')
-    const isClientSession = context.locals.session.role === 'client'
+    // Portal sessions cover clients and Outside View prospects (ADR 0002).
+    // Both share the portal host; admin sessions remain admin-only.
+    const isPortalSession =
+      context.locals.session.role === 'client' || context.locals.session.role === 'prospect'
     const isAdminSession = context.locals.session.role === 'admin'
-    const hostMatches = (isClientSession && isPortalHost) || (isAdminSession && isAdminHost)
+    const hostMatches = (isPortalSession && isPortalHost) || (isAdminSession && isAdminHost)
     if (hostMatches) {
       response.headers.append('Set-Cookie', buildSessionCookie(token, context.locals.session.role))
     } else if (hostname === 'smd.services' && isAdminSession) {
