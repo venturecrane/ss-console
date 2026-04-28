@@ -134,6 +134,22 @@ declare namespace Cloudflare {
      */
     ENABLE_PUBLIC_PATTERNS?: string
     /**
+     * Outside View Phase 1 PR-B feature flag (ADR 0002).
+     *
+     * Controls the destination of /scan completion emails. OFF by default
+     * at merge so the cutover ships behind a flag and shadow-writes
+     * outside_views rows + still sends the legacy diagnostic-report email.
+     * Captain inspects 1+ shadow row in admin/SQL, then flips this to "1"
+     * or "true" in wrangler.toml or via `wrangler secret put`. Once ON,
+     * new scans send a "Your Outside View is ready" magic-link email
+     * pointing at portal.smd.services/outside-view; the legacy email path
+     * is skipped.
+     *
+     * Rollback: flip this OFF; legacy email path resumes immediately.
+     * Any value other than "1" or "true" is treated as OFF.
+     */
+    OUTSIDE_VIEW_PORTAL_DELIVERY?: string
+    /**
      * Service binding to the `ss-scan-workflow` Worker (#618). Hosts the
      * Engine 1 /scan diagnostic Workflow in its own Worker so the
      * `[[workflows]]` binding registers reliably (it didn't when
