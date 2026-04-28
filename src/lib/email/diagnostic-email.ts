@@ -234,6 +234,84 @@ function insufficientDataFallbackHtml(): string {
 }
 
 // ---------------------------------------------------------------------------
+// 4. Outside View magic-link delivery (ADR 0002 Phase 1 PR-B)
+// ---------------------------------------------------------------------------
+
+export interface OutsideViewReadyEmailInput {
+  /** Resolved business name for the H1. Falls back to humanized domain when
+   *  the canonical Outscraper name isn't available. */
+  businessName: string
+  /** The URL the prospect clicks to land at portal.smd.services/outside-view
+   *  with a 24-hour magic-link session set. Already signed, ready to embed. */
+  portalLinkUrl: string
+}
+
+/**
+ * Sent when a /outside-view scan completes and the
+ * `OUTSIDE_VIEW_PORTAL_DELIVERY` flag is on. Replaces the legacy 5-section
+ * email body with a thin link-only email that takes the prospect to their
+ * persistent Outside View artifact in the portal.
+ *
+ * Why thin: the artifact lives in the portal, not in the inbox. The email's
+ * job is to deliver a working magic-link, set expectation that the artifact
+ * is "yours to keep, grows as you go deeper" (ADR 0002 §5), and stay out
+ * of the way otherwise.
+ *
+ * Voice rules: "we" only. No fabricated commitments. No fixed timeframes.
+ */
+export function outsideViewReadyEmailHtml(input: OutsideViewReadyEmailInput): string {
+  const businessName = escapeHtml(input.businessName)
+  const portalLinkUrl = escapeHtml(input.portalLinkUrl)
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:'Inter',Arial,sans-serif;">
+  <div style="max-width:520px;margin:40px auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
+    <div style="padding:32px 24px;">
+      <p style="font-size:13px;color:#64748b;margin:0 0 4px;text-transform:uppercase;letter-spacing:0.05em;">${BRAND_NAME} &middot; Your Outside View</p>
+      <h1 style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 16px;">${businessName}</h1>
+
+      <p style="font-size:15px;color:#334155;margin:0 0 16px;">
+        Your Outside View is ready. This is what we see when we look at your business
+        from outside &mdash; what anyone with our skills would see in your public
+        footprint, plus a read on what's likely behind it.
+      </p>
+
+      <p style="font-size:15px;color:#334155;margin:0 0 24px;">
+        It's yours to keep, and it grows as you go deeper.
+      </p>
+
+      <p style="margin:24px 0;">
+        <a href="${portalLinkUrl}"
+           style="display:inline-block;background-color:#1e40af;color:#ffffff;
+                  font-size:14px;font-weight:600;text-decoration:none;
+                  padding:12px 28px;border-radius:6px;">
+          Open your Outside View
+        </a>
+      </p>
+
+      <p style="font-size:13px;color:#64748b;margin:0 0 16px;word-break:break-all;">
+        Or paste this link into your browser:<br>
+        <a href="${portalLinkUrl}" style="color:#1e40af;">${portalLinkUrl}</a>
+      </p>
+
+      <p style="font-size:12px;color:#94a3b8;margin:24px 0 0;">
+        This link works for 24 hours. After that, request a new one from
+        ${BRAND_NAME}/auth/portal-login. We don't add you to a mailing list and
+        we don't share your information with anyone else.
+      </p>
+    </div>
+    <div style="background-color:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0;">
+      <p style="font-size:11px;color:#94a3b8;margin:0;">
+        &copy; ${new Date().getFullYear()} ${BRAND_NAME} &middot; Phoenix, AZ
+      </p>
+    </div>
+  </div>
+</body>
+</html>`
+}
+
+// ---------------------------------------------------------------------------
 // 3. Thin-footprint refusal
 // ---------------------------------------------------------------------------
 

@@ -62,7 +62,11 @@ import { deepWebsiteAnalysis } from '../enrichment/deep-website'
 import { generateDossier } from '../enrichment/dossier'
 import { getScanRequest, updateScanRequestRun, type ScanRequest } from '../db/scan-requests'
 import { sendOutreachEmail } from '../email/resend'
-import { diagnosticReportEmailHtml, thinFootprintEmailHtml } from '../email/diagnostic-email'
+import {
+  diagnosticReportEmailHtml,
+  outsideViewReadyEmailHtml,
+  thinFootprintEmailHtml,
+} from '../email/diagnostic-email'
 import { renderDiagnosticReport, type RenderedReport } from './render'
 import { guardPlacesByDomain } from './places-guard'
 import { sendScanFailureAlert } from './admin-alert'
@@ -688,6 +692,46 @@ export async function sendDiagnosticReportEmail(
   )
   if (!r.success) {
     console.error('[diagnostic] failed to send report email:', r.error)
+    return false
+  }
+  return true
+}
+
+/**
+ * Send the Outside View magic-link delivery email (ADR 0002 Phase 1 PR-B).
+ *
+ * Replaces `sendDiagnosticReportEmail` when the
+ * `OUTSIDE_VIEW_PORTAL_DELIVERY` feature flag is on. The email body is a
+ * thin link-only template; the actual artifact lives at
+ * portal.smd.services/outside-view, gated behind the magic-link session.
+ *
+ * The renderedDisplayName argument lets the workflow pass the same
+ * canonical business name (Outscraper-resolved) the legacy email used,
+ * preserving the title-case logic in render.ts:#616.
+ */
+export async function sendOutsideViewReadyEmail(
+  env: DiagnosticEnv,
+  scanRequest: ScanRequest,
+  entity: Entity,
+  portalLinkUrl: string,
+  renderedDisplayName?: string | null
+): Promise<boolean> {
+  const businessName = (renderedDisplayName && renderedDisplayName.trim()) || entity.name
+  const html = outsideViewReadyEmailHtml({
+    businessName,
+    portalLinkUrl,
+  })
+  const r = await sendOutreachEmail(
+    env.RESEND_API_KEY,
+    {
+      to: scanRequest.email,
+      subject: `Your Outside View is ready — ${businessName}`,
+      html,
+    },
+    { db: env.DB, orgId: ORG_ID, entityId: entity.id }
+  )
+  if (!r.success) {
+    console.error('[diagnostic] failed to send Outside View ready email:', r.error)
     return false
   }
   return true
