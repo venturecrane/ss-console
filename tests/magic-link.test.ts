@@ -8,7 +8,7 @@ import { resolve } from 'path'
 import type { D1Database } from '@cloudflare/workers-types'
 import { env as testEnv } from 'cloudflare:workers'
 
-import { createMagicLink, verifyMagicLink } from '../src/lib/auth/magic-link'
+import { createMagicLink, verifyMagicLink, MAGIC_LINK_EXPIRY_MS } from '../src/lib/auth/magic-link'
 import { POST } from '../src/pages/api/auth/magic-link'
 import { ORG_ID } from '../src/lib/constants'
 
@@ -63,11 +63,15 @@ describe('magic links', () => {
   })
 
   it('stores org_id and user_id, consumes once, and returns the bound subject', async () => {
-    const token = await createMagicLink(db, {
-      orgId: ORG_ID,
-      userId: PRIMARY_USER_ID,
-      email: 'Client@Example.com',
-    })
+    const token = await createMagicLink(
+      db,
+      {
+        orgId: ORG_ID,
+        userId: PRIMARY_USER_ID,
+        email: 'Client@Example.com',
+      },
+      MAGIC_LINK_EXPIRY_MS
+    )
 
     const stored = await db
       .prepare(
@@ -102,11 +106,15 @@ describe('magic links', () => {
   })
 
   it('allows only one winner under concurrent verification', async () => {
-    const token = await createMagicLink(db, {
-      orgId: ORG_ID,
-      userId: PRIMARY_USER_ID,
-      email: 'client@example.com',
-    })
+    const token = await createMagicLink(
+      db,
+      {
+        orgId: ORG_ID,
+        userId: PRIMARY_USER_ID,
+        email: 'client@example.com',
+      },
+      MAGIC_LINK_EXPIRY_MS
+    )
 
     const [a, b] = await Promise.all([verifyMagicLink(db, token), verifyMagicLink(db, token)])
     const winners = [a, b].filter(Boolean)
@@ -120,11 +128,15 @@ describe('magic links', () => {
   })
 
   it('rejects expired tokens', async () => {
-    const token = await createMagicLink(db, {
-      orgId: ORG_ID,
-      userId: PRIMARY_USER_ID,
-      email: 'client@example.com',
-    })
+    const token = await createMagicLink(
+      db,
+      {
+        orgId: ORG_ID,
+        userId: PRIMARY_USER_ID,
+        email: 'client@example.com',
+      },
+      MAGIC_LINK_EXPIRY_MS
+    )
 
     await db
       .prepare(`UPDATE magic_links SET expires_at = datetime('now', '-1 minute') WHERE token = ?`)

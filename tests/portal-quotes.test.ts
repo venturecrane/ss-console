@@ -55,10 +55,12 @@ describe('portal quotes: session helper', () => {
     expect(code).toContain('export async function getPortalClient')
   })
 
-  it('resolves client via users.entity_id', () => {
+  it('resolves portal user via users.entity_id', () => {
+    // Portal users are clients OR Outside View prospects per ADR 0002.
+    // The query was widened from `role = 'client'` to a role-set check.
     const code = readFileSync(resolve('src/lib/portal/session.ts'), 'utf-8')
     expect(code).toContain('entity_id')
-    expect(code).toContain("role = 'client'")
+    expect(code).toContain("role IN ('client', 'prospect')")
   })
 
   it('scopes user lookup by org_id to prevent cross-org access (#400)', () => {

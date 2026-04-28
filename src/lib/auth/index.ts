@@ -15,4 +15,9 @@ export {
   SESSION_DURATION_MS,
 } from './session'
 export type { SessionData } from './session'
-export { createMagicLink, verifyMagicLink, MAGIC_LINK_EXPIRY_MS } from './magic-link'
+export {
+  createMagicLink,
+  verifyMagicLink,
+  MAGIC_LINK_EXPIRY_MS,
+  PROSPECT_MAGIC_LINK_EXPIRY_MS,
+} from './magic-link'

@@ -8,13 +8,20 @@ import { env } from 'cloudflare:workers'
 /**
  * Magic link verification page — GET /auth/verify?token=...
  *
- * When a client clicks their magic link, this page:
+ * When a portal user (client or Outside View prospect) clicks their
+ * magic link, this page:
  *   1. Validates the token (exists, not expired, not used)
  *   2. Looks up the bound user by id + org
- *   3. Creates a session (7-day expiry)
+ *   3. Creates a session (30-day expiry for both portal roles)
  *   4. Redirects to /portal with session cookie set
  *
  * On failure, redirects to portal login with an error message.
+ *
+ * Per ADR 0002 (Outside View): the role query admits both 'client' and
+ * 'prospect'. Prospects redirect onward to /portal/outside-view from
+ * pages/portal/index.astro, where role-conditional rendering shows
+ * only their Outside View tab. Admin users do NOT enter through this
+ * page — admin login is at /auth/login on admin.smd.services.
  */
 
 const token = Astro.url.searchParams.get('token')
@@ -31,7 +38,9 @@ if (!verified) {
   return Astro.redirect('/auth/portal-login?error=invalid')
 }
 
-// Look up the bound client user by id + org. Email alone is not globally unique.
+// Look up the bound portal user by id + org. Email alone is not globally
+// unique across organizations. Both 'client' and 'prospect' roles are
+// portal-eligible (ADR 0002).
 interface UserRow {
   id: string
   org_id: string
@@ -42,7 +51,7 @@ interface UserRow {
 }
 
 const user = await env.DB.prepare(
-  `SELECT * FROM users WHERE id = ? AND org_id = ? AND role = 'client'`
+  `SELECT * FROM users WHERE id = ? AND org_id = ? AND role IN ('client', 'prospect')`
 )
   .bind(verified.userId, verified.orgId)
   .first<UserRow>()
