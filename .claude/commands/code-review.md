@@ -362,9 +362,17 @@ gh issue list --repo {ORG}/{REPO_NAME} --label "source:code-review" --state open
 
 If an existing open issue covers the same finding, skip creation and note it in the report.
 
-### Step 9: Done
+### Step 9: Record Completion and Display Summary
 
-Display a summary:
+**9a. Record completion in the Cadence Engine — this MUST happen before the summary.** Past runs have skipped this when it was framed as a tail action; if you skip it now, the briefing will say "Code Review (X) — UNTRACKED" even though the review ran.
+
+```
+crane_schedule(action: "complete", name: "code-review-{VENTURE_CODE}", result: "success", summary: "Grade: {GRADE}, {N} issues created", completed_by: "crane-mcp")
+```
+
+If `crane_schedule` returns an error, surface it in the summary so the gap is visible — do NOT silently move on.
+
+**9b. Display the summary:**
 
 ```
 Review complete.
@@ -373,6 +381,7 @@ Overall Grade: {GRADE} {trend}
 VCMS Scorecard: stored (tag: code-review)
 Full Report: docs/reviews/code-review-{date}.md
 Issues Created: {N} (or "none")
+Cadence: recorded (or "FAILED — {error}")
 
 Top action items:
 1. {Most important finding}
@@ -381,12 +390,6 @@ Top action items:
 ```
 
 Do NOT automatically commit the full report. The user may want to review it first.
-
-After displaying the summary, record the completion in the Cadence Engine:
-
-```
-crane_schedule(action: "complete", name: "code-review-{VENTURE_CODE}", result: "success", summary: "Grade: {GRADE}, {N} issues created", completed_by: "crane-mcp")
-```
 
 ---
 
