@@ -45,12 +45,20 @@ class_name = "ScanDiagnosticWorkflow"
 [observability]
 enabled = true
 
+# Non-secret env vars. APP_BASE_URL is the origin used by outbound URL
+# builders inside the workflow (booking links in the report email, magic-
+# link URLs for Outside View delivery). Must match the production origin
+# the email recipient will click into. Not a secret — committing the value
+# is fine.
+[vars]
+APP_BASE_URL = "https://smd.services"
+
 # ---------- Secrets (set via `wrangler secret put` or `wrangler secret bulk`) ----------
 # All secrets are set per-Worker. Captain provisions these from Infisical
 # after first deploy:
 #
 #   infisical export --env=prod --path=/ss --format=dotenv \
-#     | grep -E '^(RESEND_API_KEY|ANTHROPIC_API_KEY|GOOGLE_PLACES_API_KEY|OUTSCRAPER_API_KEY|LEAD_INGEST_API_KEY|APP_BASE_URL)=' \
+#     | grep -E '^(RESEND_API_KEY|ANTHROPIC_API_KEY|GOOGLE_PLACES_API_KEY|OUTSCRAPER_API_KEY|LEAD_INGEST_API_KEY)=' \
 #     | npx wrangler secret bulk --name ss-scan-workflow
 #
 # RESEND_API_KEY          — Resend transactional email (report + thin-footprint + admin alert)
@@ -58,4 +66,3 @@ enabled = true
 # GOOGLE_PLACES_API_KEY   — Google Places lookup (Tier 1 contact data)
 # OUTSCRAPER_API_KEY      — Outscraper business profile + reviews (Tier 1 contact data)
 # LEAD_INGEST_API_KEY     — Bearer token guarding the internal /dispatch endpoint
-# APP_BASE_URL            — Origin for outbound report links (e.g. https://smd.services)
