@@ -80,6 +80,20 @@ export interface Env {
   GOOGLE_PLACES_API_KEY?: string
   OUTSCRAPER_API_KEY?: string
   APP_BASE_URL?: string
+  /**
+   * Portal origin for outbound magic-link URLs minted by the Outside View
+   * delivery path. Without this, the fallback in workflow.ts resolves to
+   * APP_BASE_URL (https://smd.services, the marketing host) and prospects
+   * land on the wrong site after clicking the magic link.
+   */
+  PORTAL_BASE_URL?: string
+  /**
+   * Outside View Phase 1 PR-B feature flag. "1" routes the prospect to
+   * the new portal-magic-link email; "0" (or unset) keeps the legacy
+   * diagnostic-report email path. Declared in [vars] in wrangler.toml so
+   * the OFF state is explicit and any flip is a one-line, reviewable commit.
+   */
+  OUTSIDE_VIEW_PORTAL_DELIVERY?: string
 }
 
 interface DispatchRequestBody {

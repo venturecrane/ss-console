@@ -260,6 +260,156 @@ describe('ScanDiagnosticWorkflow — happy path', () => {
     expect(vi.mocked(sendOutreachEmail)).toHaveBeenCalled()
     // Admin alert was NOT called — the scan completed cleanly.
     expect(vi.mocked(sendScanFailureAlert)).not.toHaveBeenCalled()
+
+    // ADR 0002 PR-B shadow-write: outside_views row written
+    // unconditionally for every successful scan, regardless of feature
+    // flag state. Adding this assertion would have caught the
+    // page-orphan / role='client' silent-skip bug class earlier.
+    const ovRow = await db
+      .prepare('SELECT id, depth, scan_request_id FROM outside_views WHERE scan_request_id = ?')
+      .bind(id)
+      .first<{ id: string; depth: string; scan_request_id: string }>()
+    expect(ovRow).not.toBeNull()
+    expect(ovRow?.depth).toBe('d1')
+    expect(ovRow?.scan_request_id).toBe(id)
+  })
+})
+
+describe('ScanDiagnosticWorkflow — shadow-write decoupled from mint (ADR 0002)', () => {
+  let db: D1Database
+  beforeEach(async () => {
+    db = await freshDb()
+    vi.clearAllMocks()
+    // Wire mocks the same way the happy-path test does so the workflow
+    // reaches the render-and-email step.
+    vi.mocked(lookupGooglePlaces).mockResolvedValue({
+      phone: '+1 555 0123',
+      website: 'https://realbiz.com/',
+      rating: 4.6,
+      reviewCount: 33,
+      businessStatus: 'OPERATIONAL',
+      address: 'Phoenix, AZ',
+    })
+    vi.mocked(lookupOutscraper).mockResolvedValue({
+      phone: '+1 555 0123',
+      website: 'https://realbiz.com',
+      rating: 4.6,
+      review_count: 33,
+      verified: true,
+    } as unknown as Awaited<ReturnType<typeof lookupOutscraper>>)
+    vi.mocked(analyzeWebsite).mockResolvedValue({
+      pages_analyzed: ['/'],
+      quality: 'medium',
+      tech_stack: { scheduling: [], crm: [], reviews: [], payments: [], communication: [] },
+    } as unknown as Awaited<ReturnType<typeof analyzeWebsite>>)
+    vi.mocked(synthesizeReviews).mockResolvedValue({
+      customer_sentiment: 'positive',
+      sentiment_trend: 'stable',
+      top_themes: ['responsive scheduling'],
+      operational_problems: [],
+    } as unknown as Awaited<ReturnType<typeof synthesizeReviews>>)
+    vi.mocked(deepWebsiteAnalysis).mockResolvedValue({
+      digital_maturity: { score: 6, reasoning: 'partial CRM coverage' },
+    } as unknown as Awaited<ReturnType<typeof deepWebsiteAnalysis>>)
+    vi.mocked(generateDossier).mockResolvedValue('# Brief\n\nNarrative content.')
+  })
+
+  /**
+   * Pre-fix bug: prepareOutsideViewDelivery returned early for
+   * existing client-role users BEFORE calling createOutsideView,
+   * so Captain (role='client') could never inspect his own scan
+   * artifacts. This test asserts the unconditional shadow-write
+   * fires regardless of role.
+   */
+  it('writes outside_views row even when submission email matches existing client', async () => {
+    const submitted = 'realbiz.com'
+    const email = 'returning-client@example.com'
+    const id = await seedScan(db, submitted, email)
+
+    // Seed an existing client-role user with the prospect email.
+    const orgRow = await db.prepare('SELECT id FROM organizations LIMIT 1').first<{ id: string }>()
+    await db
+      .prepare(
+        `INSERT INTO users (id, org_id, email, name, role)
+         VALUES (?, ?, ?, ?, 'client')`
+      )
+      .bind('seed-client-user', orgRow!.id, email, 'Existing Client')
+      .run()
+
+    await runWorkflow(
+      {
+        DB: db,
+        GOOGLE_PLACES_API_KEY: 'test',
+        OUTSCRAPER_API_KEY: 'test',
+        ANTHROPIC_API_KEY: 'test',
+        RESEND_API_KEY: 'test',
+      },
+      id
+    )
+
+    // Shadow-write fired despite the client-skip on the mint.
+    const ovRow = await db
+      .prepare('SELECT id FROM outside_views WHERE scan_request_id = ?')
+      .bind(id)
+      .first()
+    expect(ovRow).not.toBeNull()
+
+    // No magic_link minted — the privilege-escalation defense held.
+    const magicRow = await db
+      .prepare('SELECT id FROM magic_links WHERE email = ?')
+      .bind(email)
+      .first()
+    expect(magicRow).toBeNull()
+  })
+
+  /**
+   * Q4 secondary failure mode from the code review: when an admin-role
+   * user matches the submission email, the pre-split implementation
+   * fell through to INSERT INTO users with role='prospect', which hit
+   * UNIQUE(org_id, email) and threw — silently swallowed by the
+   * outer catch. Post-split: artifact still writes, mint cleanly
+   * returns null without throwing.
+   */
+  it('writes outside_views row + skips mint cleanly when submission email matches admin user', async () => {
+    const submitted = 'realbiz.com'
+    const email = 'admin@example.com'
+    const id = await seedScan(db, submitted, email)
+
+    const orgRow = await db.prepare('SELECT id FROM organizations LIMIT 1').first<{ id: string }>()
+    await db
+      .prepare(
+        `INSERT INTO users (id, org_id, email, name, role)
+         VALUES (?, ?, ?, ?, 'admin')`
+      )
+      .bind('seed-admin-user', orgRow!.id, email, 'Existing Admin')
+      .run()
+
+    await runWorkflow(
+      {
+        DB: db,
+        GOOGLE_PLACES_API_KEY: 'test',
+        OUTSCRAPER_API_KEY: 'test',
+        ANTHROPIC_API_KEY: 'test',
+        RESEND_API_KEY: 'test',
+      },
+      id
+    )
+
+    const ovRow = await db
+      .prepare('SELECT id FROM outside_views WHERE scan_request_id = ?')
+      .bind(id)
+      .first()
+    expect(ovRow).not.toBeNull()
+
+    const magicRow = await db
+      .prepare('SELECT id FROM magic_links WHERE email = ?')
+      .bind(email)
+      .first()
+    expect(magicRow).toBeNull()
+
+    // The scan still completed — mint failure does not fail the workflow.
+    const sr = await getScanRequest(db, id)
+    expect(sr?.scan_status).toBe('completed')
   })
 })
 

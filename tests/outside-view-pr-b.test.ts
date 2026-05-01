@@ -64,19 +64,25 @@ describe('PR-B: workflow terminal step shadow-write + flag', () => {
     expect(src).toMatch(/sendOutsideViewReadyEmail/)
   })
 
-  it('terminal step calls prepareOutsideViewDelivery before email', () => {
-    expect(src).toMatch(/prepareOutsideViewDelivery/)
+  it('terminal step calls writeOutsideViewArtifact before mintProspectMagicLink', () => {
+    expect(src).toMatch(/writeOutsideViewArtifact/)
+    expect(src).toMatch(/mintProspectMagicLink/)
+    const idxArtifact = src.indexOf('writeOutsideViewArtifact(this.env')
+    const idxMint = src.indexOf('mintProspectMagicLink(')
+    expect(idxArtifact).toBeGreaterThan(0)
+    expect(idxMint).toBeGreaterThan(idxArtifact)
   })
 
-  it('shadow-write runs ALWAYS (not gated by flag)', () => {
-    // The flag check is on the email branch, not on prepareOutsideViewDelivery.
-    // prepareOutsideViewDelivery should be called before isOutsideViewDeliveryOn.
-    const idxPrepare = src.indexOf('prepareOutsideViewDelivery(')
+  it('shadow-write runs UNCONDITIONALLY (no role/flag gate before artifact write)', () => {
+    // writeOutsideViewArtifact must run before mintProspectMagicLink AND
+    // before the flag check. The split decouples shadow-write from the
+    // mint so client-role submitters still produce outside_views rows.
+    const idxArtifact = src.indexOf('writeOutsideViewArtifact(this.env')
     const idxFlagCheck = src.indexOf(
       'isOutsideViewDeliveryOn(this.env.OUTSIDE_VIEW_PORTAL_DELIVERY)'
     )
-    expect(idxPrepare).toBeGreaterThan(0)
-    expect(idxFlagCheck).toBeGreaterThan(idxPrepare)
+    expect(idxArtifact).toBeGreaterThan(0)
+    expect(idxFlagCheck).toBeGreaterThan(idxArtifact)
   })
 
   it('falls back to legacy email when flag OFF or magic-link unavailable', () => {
@@ -85,9 +91,13 @@ describe('PR-B: workflow terminal step shadow-write + flag', () => {
     )
   })
 
-  it('privilege-escalation defense: skips prospect path on existing client email', () => {
-    // The helper function should check role === 'client' and bail.
-    expect(src).toMatch(/existingUser\?\.role === 'client'[\s\S]*portalLinkUrl: null/)
+  it('mintProspectMagicLink skips for any non-prospect existing role (client, admin, etc.)', () => {
+    // The single guard `existingUser && existingUser.role !== 'prospect'`
+    // covers both the privilege-escalation defense (client) AND the
+    // admin-INSERT-throws bug class (Q4 in the code review).
+    expect(src).toMatch(
+      /existingUser && existingUser\.role !== 'prospect'[\s\S]*portalLinkUrl: null/
+    )
   })
 
   it('magic-link uses 24h TTL (PROSPECT_MAGIC_LINK_EXPIRY_MS)', () => {
@@ -99,15 +109,31 @@ describe('PR-B: workflow terminal step shadow-write + flag', () => {
   })
 
   it('portal URL points at /auth/verify (not directly at /portal/outside-view)', () => {
-    // The verify endpoint sets the cookie; landing direct at /portal would
-    // hit middleware without a session and bounce.
     expect(src).toMatch(/\/auth\/verify\?token=/)
   })
 
-  it('shadow-write swallows errors and returns null portalLinkUrl', () => {
+  it('writeOutsideViewArtifact swallows errors and returns outsideViewId: null', () => {
     expect(src).toMatch(
-      /catch\s*\(err\)\s*\{[\s\S]*prepareOutsideViewDelivery failed[\s\S]*return\s*\{\s*portalLinkUrl:\s*null/
+      /catch\s*\(err\)\s*\{[\s\S]*writeOutsideViewArtifact failed[\s\S]*return\s*\{\s*outsideViewId:\s*null/
     )
+  })
+
+  it('mintProspectMagicLink swallows errors and returns portalLinkUrl: null', () => {
+    expect(src).toMatch(
+      /catch\s*\(err\)\s*\{[\s\S]*mintProspectMagicLink failed[\s\S]*return\s*\{\s*portalLinkUrl:\s*null/
+    )
+  })
+})
+
+describe('PR-B: workers/scan-workflow wrangler.toml binds PORTAL_BASE_URL', () => {
+  const wranglerSrc = readFileSync(resolve('workers/scan-workflow/wrangler.toml'), 'utf-8')
+
+  it('declares PORTAL_BASE_URL in [vars] (not just as a comment)', () => {
+    expect(wranglerSrc).toMatch(/^PORTAL_BASE_URL\s*=\s*"https:\/\/portal\.smd\.services"/m)
+  })
+
+  it('declares OUTSIDE_VIEW_PORTAL_DELIVERY in [vars] for explicit flag state', () => {
+    expect(wranglerSrc).toMatch(/^OUTSIDE_VIEW_PORTAL_DELIVERY\s*=\s*"[01]"/m)
   })
 })
 

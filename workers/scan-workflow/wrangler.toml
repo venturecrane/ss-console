@@ -50,8 +50,21 @@ enabled = true
 # link URLs for Outside View delivery). Must match the production origin
 # the email recipient will click into. Not a secret — committing the value
 # is fine.
+#
+# PORTAL_BASE_URL is required for the Outside View magic-link emails:
+# without it, the fallback at workflow.ts (`env.PORTAL_BASE_URL ?? env.APP_BASE_URL`)
+# resolves to https://smd.services (marketing host) and prospects land on
+# the wrong site after clicking the link.
+#
+# OUTSIDE_VIEW_PORTAL_DELIVERY is the Outside View Phase 1 PR-B feature
+# flag. Declared explicitly as "0" (OFF) so the current value is visible
+# in git history and any future flip is a one-line, reviewable commit.
+# Flip to "1" to route prospects to the portal-magic-link email instead
+# of the legacy diagnostic-report email.
 [vars]
 APP_BASE_URL = "https://smd.services"
+PORTAL_BASE_URL = "https://portal.smd.services"
+OUTSIDE_VIEW_PORTAL_DELIVERY = "0"
 
 # ---------- Secrets (set via `wrangler secret put` or `wrangler secret bulk`) ----------
 # All secrets are set per-Worker. Captain provisions these from Infisical
