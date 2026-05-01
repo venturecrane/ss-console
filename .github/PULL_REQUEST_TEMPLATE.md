@@ -1,7 +1,9 @@
 <!--
-PR template enforces #377 process change. Every section is required unless
-explicitly marked optional. Reviewers: do not approve a PR that leaves the
-"Acceptance criteria status" or "Linked issue" sections blank or templated.
+Enterprise PR template. Every section is required unless explicitly marked
+optional. Reviewers: do not approve a PR that leaves the "Acceptance
+criteria status" or "Linked issue" sections blank or templated. AC
+auto-ticking on merge is documented at:
+https://github.com/venturecrane/crane-console/blob/main/docs/runbooks/ac-tick-workflow-rollout.md
 -->
 
 ## Summary
@@ -38,8 +40,8 @@ N/A, or deferred. Reviewers approve based on this table.
 <!--
 Only fill this section if you are deferring one or more ACs. Each deferred AC
 needs a rationale and a follow-on issue. The `scope-deferred` label is what
-unblocks the TODO-in-source CI check (#377 Move 1) — without this section
-filled in, that check will fail.
+unblocks any TODO-in-source CI check — without this section filled in, that
+check will fail.
 -->
 
 - **AC:** _(verbatim text)_
@@ -50,5 +52,36 @@ filled in, that check will fail.
 
 - [ ] `npm run verify` passes
 - [ ] _(feature-specific manual verification)_
+
+## Security Checklist
+
+<!--
+Pause and check each item. Self-attestation is the floor; the Semgrep gate
+and Secret Detection workflow are the belt-and-suspenders.
+-->
+
+- [ ] No secrets in code or comments
+- [ ] No PII exposed in frontend responses
+- [ ] Input validation on new endpoints
+- [ ] Parameterized queries for any SQL (use `.bind()`)
+- [ ] Auth required on new endpoints
+- [ ] No internal IDs that enable enumeration
+
+## Feature Impact
+
+<!--
+Does this PR remove, disable, or change any existing user-facing
+functionality?
+
+Write "None" if no existing features are affected.
+Write "Authorized — #{directive}" if the Captain approved the removal/change.
+If neither applies, STOP — fetch `crane_doc('global', 'guardrails.md')`.
+-->
+
+**Feature impact:** None
+
+## Deployment Notes
+
+<!-- Schema migrations, env vars, secret rotations, manual ops? Leave blank if standard deploy. -->
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
