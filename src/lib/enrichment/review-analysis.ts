@@ -3,6 +3,8 @@
  * Reads existing signal context for review evidence, analyzes owner engagement patterns.
  */
 
+import { ModuleError } from './instrument'
+
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
 const ANTHROPIC_VERSION = '2023-06-01'
 const MODEL = 'claude-haiku-4-5-20251001'
@@ -42,7 +44,14 @@ export async function analyzeReviewPatterns(
     }),
   })
 
-  if (!response.ok) return null
+  if (!response.ok) {
+    // Issue #631 follow-up: surface Anthropic errors as failed runs.
+    const body = await response.text().catch(() => '')
+    throw new ModuleError(
+      'api_error',
+      `Anthropic API returned ${response.status}: ${body.slice(0, 500)}`
+    )
+  }
 
   const result = (await response.json()) as { content?: Array<{ type: string; text?: string }> }
   const text = result?.content?.find((b) => b.type === 'text')?.text?.trim()

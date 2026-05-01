@@ -3,6 +3,8 @@
  * Reads existing signal and enrichment context, produces unified analysis.
  */
 
+import { ModuleError } from './instrument'
+
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
 const ANTHROPIC_VERSION = '2023-06-01'
 const MODEL = 'claude-sonnet-4-20250514'
@@ -49,7 +51,14 @@ export async function synthesizeReviews(
     }),
   })
 
-  if (!response.ok) return null
+  if (!response.ok) {
+    // Issue #631 follow-up: surface Anthropic errors as failed runs.
+    const body = await response.text().catch(() => '')
+    throw new ModuleError(
+      'api_error',
+      `Anthropic API returned ${response.status}: ${body.slice(0, 500)}`
+    )
+  }
 
   const result = (await response.json()) as {
     content?: Array<{ type: string; text?: string }>

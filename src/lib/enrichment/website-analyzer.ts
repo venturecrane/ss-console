@@ -3,6 +3,7 @@
  */
 
 import { detectTechStack, type TechStackResult } from './tech-stack.js'
+import { ModuleError } from './instrument'
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
 const ANTHROPIC_VERSION = '2023-06-01'
@@ -134,7 +135,16 @@ async function extractWithHaiku(
     }),
   })
 
-  if (!response.ok) return null
+  if (!response.ok) {
+    // Issue #631 follow-up: surface Anthropic errors as failed runs. The
+    // earlier `if (!response.ok) return null` for the website-fetch step
+    // (line ~95) is intentionally silent — that's the page fetch, not Claude.
+    const body = await response.text().catch(() => '')
+    throw new ModuleError(
+      'api_error',
+      `Anthropic API returned ${response.status}: ${body.slice(0, 500)}`
+    )
+  }
 
   const result = (await response.json()) as {
     content?: Array<{ type: string; text?: string }>

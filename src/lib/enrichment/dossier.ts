@@ -3,6 +3,8 @@
  * Synthesizes all accumulated context into a structured 2-3 page assessment.
  */
 
+import { ModuleError } from './instrument'
+
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
 const ANTHROPIC_VERSION = '2023-06-01'
 const MODEL = 'claude-sonnet-4-20250514'
@@ -71,7 +73,19 @@ export async function generateDossier(
     }),
   })
 
-  if (!response.ok) return null
+  if (!response.ok) {
+    // Issue #631 follow-up: surface Anthropic errors as failed runs rather
+    // than silently returning null (which records `no_data`). The 2026-04-30
+    // backfill incident demonstrated the cost of silent 401s — 171 entities
+    // marked no_data while the bad key sat unfixed. Throwing here lets the
+    // Workflow's per-step retry handle transients and end the run in
+    // `failed` state on permanent failures, visible in the dashboard.
+    const body = await response.text().catch(() => '')
+    throw new ModuleError(
+      'api_error',
+      `Anthropic API returned ${response.status}: ${body.slice(0, 500)}`
+    )
+  }
 
   const result = (await response.json()) as {
     content?: Array<{ type: string; text?: string }>
