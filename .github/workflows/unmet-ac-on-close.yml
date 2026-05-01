@@ -1,11 +1,20 @@
 name: Unmet AC on close
 
-# #377 Move 2 — block issue-close when ACs are unchecked.
+# #377 Move 2 — block issue-close when ACs are unchecked (manual closes only).
 #
 # When an issue is closed, parse its body for the "Acceptance criteria"
 # section. If any `- [ ]` items remain, reopen the issue and comment with
 # the unchecked list. Override available via the `force-close` label
 # applied before close (visible decision, not silent omission).
+#
+# This workflow now SKIPS when the close was driven by a PR merge — the
+# companion `tick-acs-on-merge.yml` handles those, ticking AC checkboxes
+# from the PR body's "Acceptance criteria status" table. This file remains
+# the safety net for manual issue closes only.
+#
+# `force-close` has dual meaning after the companion shipped:
+#   (a) author closing despite unchecked ACs (original purpose), or
+#   (b) auto-tick failed for a PR-driven close and a human is overriding.
 #
 # Rationale: the retroactive sweep on 2026-04-15 found that 95% of closed
 # issues with an Acceptance criteria section had unchecked items at close
@@ -35,7 +44,14 @@ jobs:
             const H2 = /^##\s+(.+?)\s*$/gm;
             const UNCHECKED = /^\s*-\s+\[ \]\s+(.+?)\s*$/gm;
 
-            const issue = context.payload.issue;
+            // Fetch fresh issue state — companion `tick-acs-on-merge` may have
+            // updated the body in parallel.
+            const fresh = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+            });
+            const issue = fresh.data;
             const labelNames = (issue.labels || []).map(l => l.name);
 
             if (labelNames.includes(OVERRIDE_LABEL)) {
@@ -44,6 +60,34 @@ jobs:
                 `closure approved without AC check.`
               );
               return;
+            }
+
+            // Skip when the close was driven by a PR merge — the companion
+            // workflow tick-acs-on-merge.yml owns that path. PR-driven closes
+            // have `commit_id` set on the most recent `closed` timeline event
+            // (the merge commit SHA). Manual closes do not.
+            try {
+              const events = await github.rest.issues.listEvents({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                per_page: 100,
+              });
+              const mostRecentClose = events.data
+                .filter(e => e.event === 'closed')
+                .pop();
+              if (mostRecentClose && mostRecentClose.commit_id != null) {
+                core.info(
+                  `Issue #${issue.number}: PR-driven close (commit ${mostRecentClose.commit_id.slice(0, 8)}) — ` +
+                  `companion workflow tick-acs-on-merge owns AC ticking. Skipping.`
+                );
+                return;
+              }
+            } catch (e) {
+              core.warning(
+                `Could not determine close source for #${issue.number}: ` +
+                `${e.message}. Proceeding with manual-close path (safe default).`
+              );
             }
 
             const body = issue.body || '';
