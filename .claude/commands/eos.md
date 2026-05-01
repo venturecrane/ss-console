@@ -83,15 +83,18 @@ This writes to D1 via the Crane Context API. The next session's SOD will read it
 If work was done across multiple ventures this session (e.g., started in dc-console then switched to crane-console), write a separate handoff for each venture:
 
 1. Identify all ventures that had meaningful work this session (commits, PRs, code changes, issue progress).
-2. For each venture, call `crane_handoff` with a `venture` parameter set to the venture code. This overrides auto-detection so you can write handoffs for ventures other than the current repo.
-3. Each handoff summary should cover only the work relevant to that venture.
+2. For each venture EXCEPT THE LAST, call `crane_handoff` with `venture: "<code>"` AND `final: false`. The `final: false` flag tells the API to create the handoff record but keep the session active so the next call doesn't 409 with "Session is not active".
+3. For the FINAL venture, call `crane_handoff` without `final` (or with `final: true`). This call ends the session.
+4. Each handoff summary should cover only the work relevant to that venture.
 
 Example for a session that touched both `dc` and `vc`:
 
 ```
-crane_handoff(summary: "Rebuilt AI assist panels...", status: "done", venture: "dc")
+crane_handoff(summary: "Rebuilt AI assist panels...", status: "done", venture: "dc", final: false)
 crane_handoff(summary: "Added /ship skill, command sync...", status: "done", venture: "vc")
 ```
+
+Order doesn't strictly matter, but the LAST call must omit `final: false` (or pass `final: true`) so the session terminates cleanly.
 
 ### 6. Report Completion
 
