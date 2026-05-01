@@ -181,6 +181,9 @@ export async function loadEntityDetailPage(params: {
   replyLogged: string | null
   stageUpdated: string | null
   dossierGenerated: string | null
+  contactAdded: string | null
+  contactUpdated: string | null
+  contactDeleted: string | null
   error: string | null
   showReEnrichButton: boolean
   showNewQuoteButton: boolean
@@ -257,6 +260,9 @@ export async function loadEntityDetailPage(params: {
   const replyLogged = params.url.searchParams.get('reply_logged')
   const stageUpdated = params.url.searchParams.get('stage_updated')
   const dossierGenerated = params.url.searchParams.get('dossier')
+  const contactAdded = params.url.searchParams.get('contact_added')
+  const contactUpdated = params.url.searchParams.get('contact_updated')
+  const contactDeleted = params.url.searchParams.get('contact_deleted')
   const error = params.url.searchParams.get('error')
 
   const hasOpenQuote = await hasOpenQuoteForEntity(params.db, params.orgId, params.entityId)
@@ -340,6 +346,9 @@ export async function loadEntityDetailPage(params: {
     replyLogged,
     stageUpdated,
     dossierGenerated,
+    contactAdded,
+    contactUpdated,
+    contactDeleted,
     error,
     showReEnrichButton,
     showNewQuoteButton,

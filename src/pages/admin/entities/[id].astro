@@ -3,6 +3,7 @@ import AdminLayout from '../../../layouts/AdminLayout.astro'
 import AdminFlashNotice from '../../../components/admin/AdminFlashNotice.astro'
 import LogReplyDialog from '../../../components/admin/LogReplyDialog.astro'
 import EnrichmentStatusPanel from '../../../components/admin/EnrichmentStatusPanel.astro'
+import EntityContactsPanel from '../../../components/admin/EntityContactsPanel.astro'
 import { statusBadgeClass } from '../../../lib/ui/status-badge'
 import { pipelineBadgeClass } from '../../../lib/ui/pipeline-badge'
 import { adminActionButtonClass } from '../../../lib/ui/admin-action-button'
@@ -55,6 +56,9 @@ const {
   replyLogged,
   stageUpdated,
   dossierGenerated,
+  contactAdded,
+  contactUpdated,
+  contactDeleted,
   error,
   showReEnrichButton,
   showNewQuoteButton,
@@ -122,6 +126,9 @@ const {
       />
     )
   }
+  {contactAdded && <AdminFlashNotice message="Contact added." />}
+  {contactUpdated && <AdminFlashNotice message="Contact updated." />}
+  {contactDeleted && <AdminFlashNotice message="Contact deleted." />}
   {error && <AdminFlashNotice kind="error" message={decodeURIComponent(error)} />}
 
   {/* Entity Summary */}
@@ -837,38 +844,9 @@ const {
   }
 
   {/* Related Data Panels */}
-  {
-    contacts.length > 0 && (
-      <details
-        class="bg-surface rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] mb-4"
-        open
-      >
-        <summary class="px-6 py-4 cursor-pointer font-medium text-[color:var(--ss-color-text-primary)]">
-          Contacts ({contacts.length})
-        </summary>
-        <div class="px-6 pb-4 divide-y divide-[color:var(--ss-color-border-subtle)]">
-          {contacts.map((c) => (
-            <div class="py-2 flex items-center justify-between">
-              <div>
-                <span class="text-sm font-medium text-[color:var(--ss-color-text-primary)]">
-                  {c.name}
-                </span>
-                {c.role && (
-                  <span class="text-xs bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)] px-1.5 py-0.5 rounded ml-2">
-                    {c.role}
-                  </span>
-                )}
-              </div>
-              <div class="text-xs text-[color:var(--ss-color-text-muted)] flex gap-row">
-                {c.email && <span>{c.email}</span>}
-                {c.phone && <span>{c.phone}</span>}
-              </div>
-            </div>
-          ))}
-        </div>
-      </details>
-    )
-  }
+  <div class="mb-4">
+    <EntityContactsPanel entityId={entity.id} contacts={contacts} />
+  </div>
 
   {
     meetings.length > 0 && (
