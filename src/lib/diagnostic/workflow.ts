@@ -64,7 +64,10 @@ import { ORG_ID } from '../constants'
 import { findOrCreateEntity, getEntity, type Entity } from '../db/entities'
 import { appendContext } from '../db/context'
 import { getScanRequest, updateScanRequestRun, type ScanRequest } from '../db/scan-requests'
-import { renderDiagnosticReport } from './render'
+import { createMagicLink, PROSPECT_MAGIC_LINK_EXPIRY_MS } from '../auth/magic-link'
+import { createOutsideView } from '../db/outside-views'
+import { renderedReportToArtifactJsonV1 } from '../db/outside-views/adapter'
+import { renderDiagnosticReport, type RenderedReport } from './render'
 import { sendScanFailureAlert } from './admin-alert'
 import {
   ScanModuleError,
@@ -78,6 +81,7 @@ import {
   runReviewSynthesis,
   runWebsiteAnalysis,
   sendDiagnosticReportEmail,
+  sendOutsideViewReadyEmail,
   sendThinFootprintEmail,
   type DiagnosticEnv,
 } from './index'
@@ -85,6 +89,12 @@ import {
 /**
  * Bindings the Workflow needs at runtime. Mirrors `DiagnosticEnv` from
  * the legacy orchestrator — keep them in sync.
+ *
+ * Outside View Phase 1 PR-B (ADR 0002) added:
+ *   - PORTAL_BASE_URL: builds the magic-link URL pointing at
+ *     portal.smd.services/auth/verify
+ *   - OUTSIDE_VIEW_PORTAL_DELIVERY: feature flag controlling email
+ *     destination (legacy report email vs Outside View magic-link email)
  */
 export interface ScanWorkflowBindings {
   DB: D1Database
@@ -93,6 +103,18 @@ export interface ScanWorkflowBindings {
   OUTSCRAPER_API_KEY?: string
   RESEND_API_KEY?: string
   APP_BASE_URL?: string
+  PORTAL_BASE_URL?: string
+  OUTSIDE_VIEW_PORTAL_DELIVERY?: string
+}
+
+/**
+ * Outside View feature flag check (ADR 0002 Phase 1 PR-B). The flag is
+ * "1" or "true" to enable; any other value (including unset) is OFF.
+ * Default OFF at merge so the cutover ships behind a flag and can be
+ * verified via shadow-write before user-visible behavior flips.
+ */
+function isOutsideViewDeliveryOn(flag: string | undefined): boolean {
+  return flag === '1' || flag === 'true'
 }
 
 /** Params passed to `env.SCAN_WORKFLOW.create({ params: ... })`. */
@@ -551,6 +573,22 @@ export class ScanDiagnosticWorkflow extends WorkflowEntrypoint<
     // Step: render + email. The renderer is pure deterministic logic
     // over the enrichment rows we just wrote; the Resend call is the
     // actual side-effect.
+    //
+    // Outside View Phase 1 PR-B (ADR 0002): writes an outside_views row
+    // with the rendered artifact and mints a 24h portal magic-link
+    // ALWAYS (shadow-write), regardless of feature flag state. This lets
+    // Captain inspect generated artifacts in admin/SQL before flipping
+    // OUTSIDE_VIEW_PORTAL_DELIVERY on. With the flag OFF the legacy
+    // diagnosticReportEmailHtml email goes out as before; with the flag
+    // ON the new outsideViewReadyEmailHtml magic-link email goes out
+    // and the legacy path is skipped.
+    //
+    // Privilege-escalation defense (per /critique 3 Devil's Advocate
+    // #4): if the submission email matches an existing role='client'
+    // user, do NOT mint a portal link. The legacy email still fires so
+    // the prospect (in this case actually a client) gets their report,
+    // but we never hand a 24h auth credential to a client's address via
+    // a public, unauthenticated form.
     // ---------------------------------------------------------------
     const renderResult = await step.do<RenderStepResult>(
       'render-and-email',
@@ -558,7 +596,27 @@ export class ScanDiagnosticWorkflow extends WorkflowEntrypoint<
       async () => {
         const entity = await loadEntity()
         const rendered = await renderDiagnosticReport(env.DB, entity, briefStep.markdown)
-        const sent = await sendDiagnosticReportEmail(env, scanRequestSnapshot, entity, rendered)
+
+        const portalDelivery = await prepareOutsideViewDelivery(
+          this.env,
+          scanRequestSnapshot,
+          entity,
+          rendered
+        )
+
+        const flagOn = isOutsideViewDeliveryOn(this.env.OUTSIDE_VIEW_PORTAL_DELIVERY)
+        const useOutsideViewEmail = flagOn && portalDelivery.portalLinkUrl !== null
+
+        const sent = useOutsideViewEmail
+          ? await sendOutsideViewReadyEmail(
+              env,
+              scanRequestSnapshot,
+              entity,
+              portalDelivery.portalLinkUrl as string,
+              rendered.displayName
+            )
+          : await sendDiagnosticReportEmail(env, scanRequestSnapshot, entity, rendered)
+
         return { emailSent: sent }
       }
     )
@@ -580,5 +638,119 @@ export class ScanDiagnosticWorkflow extends WorkflowEntrypoint<
     // Quiet the linter on the unused result we destructured for type
     // narrowing.
     void tier2
+  }
+}
+
+/**
+ * Outside View shadow-write + magic-link mint (ADR 0002 Phase 1 PR-B).
+ *
+ * Always runs at the render-and-email step terminal, regardless of
+ * `OUTSIDE_VIEW_PORTAL_DELIVERY` flag state. The flag controls only the
+ * email destination — the artifact is persisted into `outside_views`
+ * either way so Captain can inspect shadow-rendered rows in admin/SQL
+ * before flipping the flag.
+ *
+ * Returns `{ portalLinkUrl }` on success. `portalLinkUrl` is non-null
+ * iff a prospect path was minted; null when:
+ *   1. The submission email matches an existing role='client' user
+ *      (privilege-escalation defense — never mint a portal magic-link
+ *      to a client via the public scan form).
+ *   2. The shadow-write throws (DB error, magic-link insert failure).
+ *      We swallow the error rather than failing the workflow so the
+ *      legacy email path can still fire.
+ *
+ * Caller decides whether to use `portalLinkUrl` based on the feature
+ * flag. With flag OFF, caller ignores `portalLinkUrl` and sends the
+ * legacy email. With flag ON, caller sends the new magic-link email
+ * IF `portalLinkUrl` is non-null, otherwise falls back to legacy.
+ */
+async function prepareOutsideViewDelivery(
+  env: ScanWorkflowBindings,
+  scanRequest: ScanRequest,
+  entity: Entity,
+  rendered: RenderedReport
+): Promise<{ portalLinkUrl: string | null }> {
+  try {
+    const existingUser = await env.DB.prepare(
+      `SELECT id, role FROM users WHERE org_id = ? AND email = ? LIMIT 1`
+    )
+      .bind(ORG_ID, scanRequest.email)
+      .first<{ id: string; role: string }>()
+
+    if (existingUser?.role === 'client') {
+      // Privilege-escalation defense (per /critique 3 Devil's Advocate
+      // #4). Never mint a portal magic-link to an existing client via
+      // the public, unauthenticated /scan form. The legacy email path
+      // still fires; the client gets their report.
+      console.log(
+        `[outside-view] skipping prospect path: existing client matched on ${scanRequest.email}`
+      )
+      return { portalLinkUrl: null }
+    }
+
+    // Find or create prospect user. Reuse a pre-existing prospect row
+    // (e.g. from a prior scan that completed but never converted) rather
+    // than create duplicates.
+    let prospectUserId: string
+    if (existingUser?.role === 'prospect') {
+      prospectUserId = existingUser.id
+    } else {
+      prospectUserId = crypto.randomUUID()
+      await env.DB.prepare(
+        `INSERT INTO users (id, org_id, email, name, role, entity_id)
+         VALUES (?, ?, ?, ?, 'prospect', ?)`
+      )
+        .bind(
+          prospectUserId,
+          ORG_ID,
+          scanRequest.email,
+          // No human name yet; use the email address as a placeholder.
+          // The name is internal-only (admin entity view); prospects
+          // never see it.
+          scanRequest.email,
+          entity.id
+        )
+        .run()
+    }
+
+    // Insert the outside_views row (v1 stores the existing RenderedReport
+    // shape verbatim; canonical 5-field contract ships in v2).
+    await createOutsideView(env.DB, {
+      org_id: ORG_ID,
+      entity_id: entity.id,
+      scan_request_id: scanRequest.id,
+      depth: 'd1',
+      artifact_version: 1,
+      artifact_json: renderedReportToArtifactJsonV1(rendered),
+      rendered_at: new Date().toISOString(),
+    })
+
+    // Mint a 24h portal magic-link bound to the prospect user.
+    const token = await createMagicLink(
+      env.DB,
+      {
+        orgId: ORG_ID,
+        userId: prospectUserId,
+        email: scanRequest.email,
+      },
+      PROSPECT_MAGIC_LINK_EXPIRY_MS
+    )
+
+    // Build the verify URL on the portal host. PORTAL_BASE_URL is
+    // preferred; fall back to APP_BASE_URL if unset (the portal lives
+    // on the same Worker under a subdomain rewrite). The verify
+    // endpoint at /auth/verify on portal.smd.services consumes the
+    // token, sets the session cookie, and lands the prospect at
+    // /portal which redirects them onward to /portal/outside-view.
+    const portalBase = env.PORTAL_BASE_URL ?? env.APP_BASE_URL ?? 'https://portal.smd.services'
+    const portalLinkUrl = `${portalBase.replace(/\/$/, '')}/auth/verify?token=${encodeURIComponent(token)}`
+
+    return { portalLinkUrl }
+  } catch (err) {
+    // Shadow-write failures must not fail the workflow. The legacy email
+    // path is the safety net. Log and return null so the caller falls
+    // back to the legacy email regardless of flag state.
+    console.error('[outside-view] prepareOutsideViewDelivery failed:', err)
+    return { portalLinkUrl: null }
   }
 }

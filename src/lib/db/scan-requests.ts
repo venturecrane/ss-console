@@ -305,3 +305,31 @@ export async function countScanRequestsSince(db: D1Database, sinceIso: string): 
     .first<{ n: number }>()
   return row?.n ?? 0
 }
+
+/**
+ * Look up the most recent scan_request linked to a given entity. Used by
+ * the Outside View portal page to recover thin-footprint / failed status
+ * when no outside_views row exists yet (ADR 0002 Phase 1 PR-B).
+ *
+ * Tenancy: scan_requests don't carry org_id (the table is public-inbound),
+ * so the org scope is enforced via the entity_id-to-org join through the
+ * caller's session-resolved entity.
+ */
+export async function getScanRequestByEntity(
+  db: D1Database,
+  _orgId: string,
+  entityId: string
+): Promise<ScanRequest | null> {
+  // _orgId reserved for future when scan_requests gains an org_id column;
+  // signature is stable now to avoid churning callers.
+  const row = await db
+    .prepare(
+      `SELECT * FROM scan_requests
+       WHERE entity_id = ?
+       ORDER BY created_at DESC
+       LIMIT 1`
+    )
+    .bind(entityId)
+    .first<ScanRequest>()
+  return row ?? null
+}
