@@ -172,14 +172,21 @@ describe('/api/scan/verify — service-binding dispatch (#618)', () => {
     expect(vi.mocked(runDiagnosticScan)).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back when the service binding fetch throws', async () => {
+  // PR-2a contract change: when SCAN_WORKFLOW_SERVICE is BOUND but the
+  // dispatch fails (throw / 5xx / malformed), the verify-handler must
+  // mark the scan as failed instead of falling back to runDiagnosticScan.
+  // The previous "fall back to ctx.waitUntil" behavior re-created the
+  // original 30s-isolate-budget bug (#614) on any transient binding
+  // failure. New contract: dispatch failure → scan_status='failed', no
+  // legacy fallback call, no waitUntil invocation.
+  it('marks scan failed when service binding fetch throws (no runDiagnosticScan fallback)', async () => {
     const binding = makeServiceBinding(async () => {
       throw new Error('binding offline')
     })
     Object.assign(testEnv, { SCAN_WORKFLOW_SERVICE: binding })
 
     const { token, hash } = await generateScanToken()
-    await createScanRequest(db, {
+    const created = await createScanRequest(db, {
       email: 'a@b.com',
       domain: 'example.com',
       verification_token_hash: hash,
@@ -192,17 +199,24 @@ describe('/api/scan/verify — service-binding dispatch (#618)', () => {
       url,
       locals: { session: null, cfContext: { waitUntil } as never },
     } as never)
-    expect(response.status).toBe(200)
-    const body = (await response.json()) as { ok: boolean; status: string }
-    expect(body.status).toBe('verified')
+    expect(response.status).toBe(400)
+    const body = (await response.json()) as { ok: boolean; status: string; domain: string }
+    expect(body.ok).toBe(false)
+    expect(body.status).toBe('failed')
+    expect(body.domain).toBe('example.com')
 
-    // Dispatch was attempted; fallback was invoked when it threw.
+    // Dispatch was attempted; legacy fallback path was NOT invoked.
     expect(binding.fetch).toHaveBeenCalledTimes(1)
-    expect(waitUntil).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(runDiagnosticScan)).toHaveBeenCalledTimes(1)
+    expect(waitUntil).not.toHaveBeenCalled()
+    expect(vi.mocked(runDiagnosticScan)).not.toHaveBeenCalled()
+
+    // The scan_request row carries the failure detail.
+    const updated = await getScanRequest(db, created.id)
+    expect(updated?.scan_status).toBe('failed')
+    expect(updated?.error_message).toMatch(/dispatch_failed: binding offline/)
   })
 
-  it('falls back when the dispatch endpoint returns a non-2xx response', async () => {
+  it('marks scan failed when dispatch returns non-2xx (no runDiagnosticScan fallback)', async () => {
     const binding = makeServiceBinding(
       async () =>
         new Response(JSON.stringify({ ok: false, error: 'workflow_binding_missing' }), {
@@ -213,7 +227,7 @@ describe('/api/scan/verify — service-binding dispatch (#618)', () => {
     Object.assign(testEnv, { SCAN_WORKFLOW_SERVICE: binding })
 
     const { token, hash } = await generateScanToken()
-    await createScanRequest(db, {
+    const created = await createScanRequest(db, {
       email: 'a@b.com',
       domain: 'example.com',
       verification_token_hash: hash,
@@ -226,16 +240,21 @@ describe('/api/scan/verify — service-binding dispatch (#618)', () => {
       url,
       locals: { session: null, cfContext: { waitUntil } as never },
     } as never)
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(400)
     const body = (await response.json()) as { ok: boolean; status: string }
-    expect(body.status).toBe('verified')
+    expect(body.ok).toBe(false)
+    expect(body.status).toBe('failed')
 
     expect(binding.fetch).toHaveBeenCalledTimes(1)
-    expect(waitUntil).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(runDiagnosticScan)).toHaveBeenCalledTimes(1)
+    expect(waitUntil).not.toHaveBeenCalled()
+    expect(vi.mocked(runDiagnosticScan)).not.toHaveBeenCalled()
+
+    const updated = await getScanRequest(db, created.id)
+    expect(updated?.scan_status).toBe('failed')
+    expect(updated?.error_message).toMatch(/dispatch_failed:.*500/)
   })
 
-  it('falls back when the dispatch returns 2xx but malformed payload (no workflow_run_id)', async () => {
+  it('marks scan failed when dispatch returns 2xx but malformed payload (no fallback)', async () => {
     const binding = makeServiceBinding(
       async () =>
         new Response(JSON.stringify({ ok: true }), {
@@ -246,7 +265,7 @@ describe('/api/scan/verify — service-binding dispatch (#618)', () => {
     Object.assign(testEnv, { SCAN_WORKFLOW_SERVICE: binding })
 
     const { token, hash } = await generateScanToken()
-    await createScanRequest(db, {
+    const created = await createScanRequest(db, {
       email: 'a@b.com',
       domain: 'example.com',
       verification_token_hash: hash,
@@ -259,13 +278,17 @@ describe('/api/scan/verify — service-binding dispatch (#618)', () => {
       url,
       locals: { session: null, cfContext: { waitUntil } as never },
     } as never)
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(400)
     const body = (await response.json()) as { ok: boolean; status: string }
-    expect(body.status).toBe('verified')
+    expect(body.status).toBe('failed')
 
     expect(binding.fetch).toHaveBeenCalledTimes(1)
-    expect(waitUntil).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(runDiagnosticScan)).toHaveBeenCalledTimes(1)
+    expect(waitUntil).not.toHaveBeenCalled()
+    expect(vi.mocked(runDiagnosticScan)).not.toHaveBeenCalled()
+
+    const updated = await getScanRequest(db, created.id)
+    expect(updated?.scan_status).toBe('failed')
+    expect(updated?.error_message).toMatch(/dispatch_failed:.*workflow_run_id/)
   })
 
   it('returns invalid_token without invoking the workflow on a bad token', async () => {

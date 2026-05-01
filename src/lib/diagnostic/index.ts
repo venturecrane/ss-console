@@ -1,6 +1,33 @@
 /**
  * Engine 1 diagnostic orchestrator (#598, hardened in #612).
  *
+ * ⚠️  DIVERGED FROM PRODUCTION SEMANTICS — DEV/TEST ONLY  ⚠️
+ * ----------------------------------------------------------------
+ * `runDiagnosticScan` is the legacy in-process pipeline. Production
+ * uses `ScanDiagnosticWorkflow` in `./workflow.ts`, dispatched as a
+ * Cloudflare Workflow on the `ss-scan-workflow` Worker. This file
+ * exists ONLY as the dev/test fallback at `src/lib/scan/verify-handler.ts`
+ * (the no-binding branch) and as the source of module wrappers that
+ * the Workflow class re-imports.
+ *
+ * Known divergences from production:
+ *   - Tier 2 modules (website_analysis + review_synthesis) run
+ *     SEQUENTIALLY here; the Workflow runs them in parallel via Promise.all.
+ *   - The Outside View shadow-write (`createOutsideView` into the
+ *     `outside_views` table) is NOT performed here. The Workflow's
+ *     render-and-email step writes the artifact; this orchestrator
+ *     does not.
+ *   - The Outside View magic-link mint is NOT performed here.
+ *   - The dispatch-failure admin alert path is NOT exercised here.
+ *
+ * If you find yourself calling `runDiagnosticScan` from a NEW production
+ * code path, stop — use `env.SCAN_WORKFLOW_SERVICE` to dispatch the
+ * Workflow instead. The verify-handler's production error path
+ * intentionally marks scans `failed` rather than falling back to this
+ * legacy implementation, because doing so would re-create the original
+ * Worker isolate-budget bug (#614).
+ * ----------------------------------------------------------------
+ *
  * Runs the *pruned* 6-module pipeline behind smd.services/scan, with a
  * P0 thin-footprint pre-flight gate. Per the scoping doc
  * (`docs/strategy/diagnostic-scoping-2026-04-27.md`), the public scan path

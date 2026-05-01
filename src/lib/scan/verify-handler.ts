@@ -25,6 +25,7 @@ import {
   updateScanRequestRun,
 } from '../db/scan-requests'
 import { runDiagnosticScan } from '../diagnostic'
+import { sendScanFailureAlert } from '../diagnostic/admin-alert'
 
 export interface VerifyResponse {
   ok: boolean
@@ -112,21 +113,50 @@ export async function handleVerify(token: string, locals: App.Locals): Promise<V
         console.error('[scan/verify-handler] failed to persist workflow_run_id:', err)
       })
     } catch (err) {
-      // If the service binding itself or its handler rejects, fall
-      // through to the dev fallback below so the scan still runs — but
-      // log loudly: this is the new hot path and a silent failure here
-      // is the bug class #618 was chartered to prevent.
-      console.error('[scan/verify-handler] SCAN_WORKFLOW_SERVICE dispatch failed:', err)
-      runFallback(row.id, locals)
+      // Production path: service binding is bound but the dispatch call
+      // failed. Do NOT fall back to the legacy in-process pipeline —
+      // that would re-create the original isolate-budget bug (#614)
+      // by running runDiagnosticScan inside the ss-web Worker isolate.
+      // Instead, mark the scan as failed and surface that to the user;
+      // the operator can re-dispatch from admin tooling once the
+      // ss-scan-workflow Worker is reachable again.
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('[scan/verify-handler] SCAN_WORKFLOW_SERVICE dispatch failed:', message)
+      await updateScanRequestRun(env.DB, row.id, {
+        scan_status: 'failed',
+        error_message: `dispatch_failed: ${message}`.slice(0, 500),
+        scan_status_reason: `dispatch: ${message}`.slice(0, 500),
+      }).catch((dbErr) => {
+        console.error('[scan/verify-handler] failed to mark scan failed:', dbErr)
+      })
+      // Best-effort admin alert. Wrapped in .catch so a thrown alert
+      // (e.g. from PR-2a's RESEND_API_KEY guard) cannot escape this
+      // function and produce a 500 to the prospect.
+      await sendScanFailureAlert(env.RESEND_API_KEY, {
+        scanRequestId: row.id,
+        submittedDomain: row.domain,
+        requesterEmail: row.email,
+        failingModule: 'dispatch',
+        errorMessage: message,
+      }).catch((alertErr) => {
+        console.error('[scan/verify-handler] admin alert failed:', alertErr)
+      })
+      return { ok: false, status: 'failed', domain: row.domain }
     }
     return { ok: true, status: 'verified', domain: row.domain }
   }
 
   // Dev / test fallback: no service binding configured. Run the legacy
   // ctx.waitUntil pipeline so `astro dev`, vitest, and any environment
-  // without the bound `ss-scan-workflow` Worker continue to work. This
-  // branch must never run in production — verified by the [[services]]
-  // binding in wrangler.toml + the smoke test in #618.
+  // without the bound `ss-scan-workflow` Worker continue to work.
+  //
+  // PRODUCTION REACHABILITY: this branch is only entered when
+  // `env.SCAN_WORKFLOW_SERVICE` is undefined or has no `fetch` method.
+  // In production the [[services]] binding is declared in root
+  // wrangler.toml and resolves at runtime; so this branch is dev/test
+  // only. The original 30s-isolate-budget bug (#614) cannot recur in
+  // production because the dispatch-failure path above explicitly
+  // routes to scan_status='failed' rather than calling runFallback.
   runFallback(row.id, locals)
   return { ok: true, status: 'verified', domain: row.domain }
 }

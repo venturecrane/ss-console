@@ -275,6 +275,49 @@ describe('ScanDiagnosticWorkflow — happy path', () => {
   })
 })
 
+describe('ScanDiagnosticWorkflow — startup assertion (PR-2a)', () => {
+  let db: D1Database
+  beforeEach(async () => {
+    db = await freshDb()
+    vi.clearAllMocks()
+  })
+
+  it('throws when RESEND_API_KEY is unbound (post-idempotency-check)', async () => {
+    const id = await seedScan(db, 'realbiz.com')
+    // Workflow's outer try/catch records 'failed' rather than re-throwing,
+    // so we assert via the scan_request row state.
+    await runWorkflow(
+      { DB: db, ANTHROPIC_API_KEY: 'test', GOOGLE_PLACES_API_KEY: 'test' /* RESEND missing */ },
+      id
+    )
+    const row = await getScanRequest(db, id)
+    expect(row?.scan_status).toBe('failed')
+    expect(row?.error_message).toMatch(/RESEND_API_KEY unbound/)
+  })
+
+  it('throws when ANTHROPIC_API_KEY is unbound', async () => {
+    const id = await seedScan(db, 'realbiz.com')
+    await runWorkflow(
+      { DB: db, RESEND_API_KEY: 'test', GOOGLE_PLACES_API_KEY: 'test' /* ANTHROPIC missing */ },
+      id
+    )
+    const row = await getScanRequest(db, id)
+    expect(row?.scan_status).toBe('failed')
+    expect(row?.error_message).toMatch(/ANTHROPIC_API_KEY unbound/)
+  })
+
+  it('does NOT throw on already-completed scan even if secrets missing (idempotency holds)', async () => {
+    const id = await seedScan(db, 'realbiz.com')
+    // Pre-mark the scan completed.
+    await db.prepare("UPDATE scan_requests SET scan_status='completed' WHERE id=?").bind(id).run()
+    // Run with NO secrets — should short-circuit cleanly without throwing.
+    await runWorkflow({ DB: db }, id)
+    const row = await getScanRequest(db, id)
+    // Status unchanged from the pre-marked 'completed' value.
+    expect(row?.scan_status).toBe('completed')
+  })
+})
+
 describe('ScanDiagnosticWorkflow — shadow-write decoupled from mint (ADR 0002)', () => {
   let db: D1Database
   beforeEach(async () => {
@@ -440,7 +483,16 @@ describe('ScanDiagnosticWorkflow — retry behavior', () => {
       ['tier1-places-and-outscraper', { failTimes: 1, maxAttempts: 2 }],
     ])
 
-    const { stats } = await runWorkflow({ DB: db, GOOGLE_PLACES_API_KEY: 'test' }, id, overrides)
+    const { stats } = await runWorkflow(
+      {
+        DB: db,
+        GOOGLE_PLACES_API_KEY: 'test',
+        ANTHROPIC_API_KEY: 'test',
+        RESEND_API_KEY: 'test',
+      },
+      id,
+      overrides
+    )
 
     expect(stats.callsByStep.get('tier1-places-and-outscraper')).toBe(2)
 
@@ -574,7 +626,10 @@ describe('ScanDiagnosticWorkflow — thin-footprint gate', () => {
     // assertion below to match whichever reason fires.
 
     await runWorkflow(
-      { DB: db, RESEND_API_KEY: 'test' }, // No Places key, no Anthropic.
+      // No Places key by design (test case is "no website + no Places match").
+      // ANTHROPIC_API_KEY required by the runtime startup assertion (PR-2a)
+      // even though Tier 2/3 modules won't run after the gate trips.
+      { DB: db, RESEND_API_KEY: 'test', ANTHROPIC_API_KEY: 'test' },
       id
     )
 

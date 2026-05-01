@@ -328,6 +328,28 @@ export class ScanDiagnosticWorkflow extends WorkflowEntrypoint<
       return
     }
 
+    // ---------------------------------------------------------------
+    // Startup assertion: required secrets must be bound before we burn
+    // any compute. This Workflow is only ever invoked in production
+    // (the dev/test path uses the legacy in-process pipeline), so a
+    // missing secret here is a misconfiguration, not a dev convenience.
+    //
+    // Without this guard the pipeline would run all 4 Claude calls
+    // (~$0.14 of Anthropic spend per scan) and then silently send a
+    // dev-mode email that never leaves Resend. Captain debugged exactly
+    // this incident on 2026-05-01 — the ss-scan-workflow Worker had
+    // shipped with zero secrets bound for ~3 weeks before anyone noticed.
+    //
+    // Placed AFTER the idempotency short-circuit so an already-completed
+    // re-dispatch is a no-op even when this Worker is mid-secret-rotation.
+    // ---------------------------------------------------------------
+    if (!env.RESEND_API_KEY) {
+      throw new Error('[scan-workflow] RESEND_API_KEY unbound — cannot deliver report')
+    }
+    if (!env.ANTHROPIC_API_KEY) {
+      throw new Error('[scan-workflow] ANTHROPIC_API_KEY unbound — enrichment will be empty')
+    }
+
     // Mark scan_started_at on the row. Idempotent — Workflows may replay
     // this step on a retry; the column ends up with the latest start
     // time in the worst case, which is fine.
@@ -617,6 +639,38 @@ export class ScanDiagnosticWorkflow extends WorkflowEntrypoint<
               rendered.displayName
             )
           : await sendDiagnosticReportEmail(env, scanRequestSnapshot, entity, rendered)
+
+        // Detection net for the dev-mode silent-failure pattern: if the
+        // RESEND_API_KEY was bound BUT corrupt/revoked, sendEmail's
+        // dev-mode short-circuit at resend.ts fires and the synthetic
+        // outreach_events row gets message_id='dev-mode'. The startup
+        // assertion above only catches the unbound case; this catches
+        // the runtime-failure case. Best-effort, never throws.
+        if (sent) {
+          try {
+            const recent = await env.DB.prepare(
+              `SELECT message_id FROM outreach_events
+               WHERE entity_id = ? AND event_type = 'sent'
+               ORDER BY created_at DESC LIMIT 1`
+            )
+              .bind(entity.id)
+              .first<{ message_id: string | null }>()
+            if (recent?.message_id === 'dev-mode') {
+              console.error(
+                '[scan-workflow] Resend returned dev-mode message_id — RESEND_API_KEY is corrupt/revoked'
+              )
+              await sendScanFailureAlert(env.RESEND_API_KEY, {
+                scanRequestId: scanRequestSnapshot.id,
+                submittedDomain: scanRequestSnapshot.domain,
+                requesterEmail: scanRequestSnapshot.email,
+                failingModule: 'resend-dev-mode',
+                errorMessage: 'sendEmail returned dev-mode in production',
+              }).catch((err) => console.error('[scan-workflow] dev-mode alert failed:', err))
+            }
+          } catch (err) {
+            console.error('[scan-workflow] dev-mode check failed:', err)
+          }
+        }
 
         return { emailSent: sent }
       }
