@@ -64,7 +64,7 @@ enabled = true
 [vars]
 APP_BASE_URL = "https://smd.services"
 PORTAL_BASE_URL = "https://portal.smd.services"
-OUTSIDE_VIEW_PORTAL_DELIVERY = "0"
+OUTSIDE_VIEW_PORTAL_DELIVERY = "1"
 
 # ---------- Secrets (set via `wrangler secret put` or `wrangler secret bulk`) ----------
 # All secrets are set per-Worker. Captain provisions these from Infisical
