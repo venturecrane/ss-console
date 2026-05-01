@@ -97,9 +97,12 @@ describe('middleware: cookie refresh guard', () => {
   })
 
   it('refreshes cookie only when role matches host', () => {
+    // Portal sessions cover client AND prospect roles per ADR 0002 (Outside View).
+    // Admin sessions remain admin-only. The variable name shifted from
+    // isClientSession to isPortalSession to reflect the wider role-set.
     const code = source()
     expect(code).toMatch(
-      /hostMatches\s*=\s*\(isClientSession\s*&&\s*isPortalHost\)\s*\|\|\s*\(isAdminSession\s*&&\s*isAdminHost\)/
+      /hostMatches\s*=\s*\(isPortalSession\s*&&\s*isPortalHost\)\s*\|\|\s*\(isAdminSession\s*&&\s*isAdminHost\)/
     )
   })
 

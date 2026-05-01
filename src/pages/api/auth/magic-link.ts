@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro'
-import { createMagicLink } from '../../../lib/auth/magic-link'
+import { createMagicLink, MAGIC_LINK_EXPIRY_MS } from '../../../lib/auth/magic-link'
 import { ORG_ID } from '../../../lib/constants'
 import { requirePortalBaseUrl } from '../../../lib/config/app-url'
 import { sendEmail } from '../../../lib/email/resend'
@@ -45,10 +45,12 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim()
-    // Look up the client user in the current app org. Email is not globally
-    // unique across organizations.
+    // Look up the portal user in the current app org. Email is not globally
+    // unique across organizations. Both 'client' and 'prospect' roles are
+    // portal-eligible per ADR 0002 — a prospect who lost their Outside View
+    // magic-link can re-request from /auth/portal-login.
     const user = await env.DB.prepare(
-      `SELECT * FROM users WHERE org_id = ? AND email = ? AND role = 'client'`
+      `SELECT * FROM users WHERE org_id = ? AND email = ? AND role IN ('client', 'prospect')`
     )
       .bind(ORG_ID, normalizedEmail)
       .first<UserRow>()
@@ -59,12 +61,16 @@ export const POST: APIRoute = async ({ request, redirect }) => {
       return redirect('/auth/portal-login?status=sent', 302)
     }
 
-    // Create magic link token
-    const token = await createMagicLink(env.DB, {
-      orgId: user.org_id,
-      userId: user.id,
-      email: normalizedEmail,
-    })
+    // Create magic link token (15-minute TTL for client login resend).
+    const token = await createMagicLink(
+      env.DB,
+      {
+        orgId: user.org_id,
+        userId: user.id,
+        email: normalizedEmail,
+      },
+      MAGIC_LINK_EXPIRY_MS
+    )
 
     // Build the verification URL from the canonical PORTAL_BASE_URL.
     // Never derive from request host — see issue #173.
