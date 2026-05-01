@@ -2,6 +2,7 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro'
 import AdminFlashNotice from '../../../components/admin/AdminFlashNotice.astro'
 import EngagementParkingLotPanel from '../../../components/admin/EngagementParkingLotPanel.astro'
+import EngagementContactsPanel from '../../../components/admin/EngagementContactsPanel.astro'
 import { statusBadgeClass } from '../../../lib/ui/status-badge'
 import {
   contextTypeEyebrowClass,
@@ -35,6 +36,8 @@ const {
   contextEntries,
   parkingLot,
   entitySignals,
+  entityContacts,
+  engagementContacts,
   documents,
   nextStatuses,
   depositInvoice,
@@ -46,6 +49,9 @@ const {
   parkingLotAdded,
   parkingLotDispositioned,
   parkingLotDeleted,
+  engagementContactAdded,
+  engagementContactRemoved,
+  engagementContactPrimarySet,
 } = pageData
 ---
 
@@ -64,6 +70,9 @@ const {
     {parkingLotAdded && <AdminFlashNotice message="Parking lot item logged." />}
     {parkingLotDispositioned && <AdminFlashNotice message="Parking lot item dispositioned." />}
     {parkingLotDeleted && <AdminFlashNotice message="Parking lot item deleted." />}
+    {engagementContactAdded && <AdminFlashNotice message="Contact role assigned." />}
+    {engagementContactRemoved && <AdminFlashNotice message="Role assignment removed." />}
+    {engagementContactPrimarySet && <AdminFlashNotice message="Primary POC updated." />}
     {
       error && (
         <AdminFlashNotice
@@ -79,9 +88,17 @@ const {
                     ? 'Disposition note is required.'
                     : error === 'cannot_delete_dispositioned'
                       ? 'Cannot delete a dispositioned parking lot item.'
-                      : error === 'not_found'
-                        ? 'Resource not found.'
-                        : 'An error occurred.'
+                      : error === 'invalid_role'
+                        ? 'Invalid engagement role.'
+                        : error === 'invalid_contact'
+                          ? 'Selected contact does not belong to this engagement.'
+                          : error === 'missing_contact'
+                            ? 'Select a contact to assign.'
+                            : error === 'duplicate_role'
+                              ? 'That contact already holds this role on the engagement.'
+                              : error === 'not_found'
+                                ? 'Resource not found.'
+                                : 'An error occurred.'
           }
         />
       )
@@ -525,6 +542,12 @@ const {
         </div>
       </details>
     </div>
+
+    <EngagementContactsPanel
+      engagementId={engagementId}
+      engagementContacts={engagementContacts}
+      entityContacts={entityContacts}
+    />
 
     <EngagementParkingLotPanel engagementId={engagementId} parkingLot={parkingLot} />
 

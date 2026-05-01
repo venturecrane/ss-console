@@ -8,6 +8,8 @@ import { listInvoices } from '../db/invoices'
 import { listContext } from '../db/context'
 import { listParkingLot } from '../db/parking-lot'
 import { listSignalsForEntity } from '../db/signal-attribution'
+import { listContacts } from '../db/contacts'
+import { listEngagementContacts } from '../db/engagement-contacts'
 import { listDocuments } from '../storage/r2'
 
 type Database = Parameters<typeof getEntity>[0]
@@ -73,6 +75,12 @@ export async function loadEngagementDetailPage(params: {
   })
   const parkingLot = await listParkingLot(params.db, params.orgId, params.engagementId)
   const entitySignals = await listSignalsForEntity(params.db, params.orgId, engagement.entity_id)
+  const entityContacts = await listContacts(params.db, params.orgId, engagement.entity_id)
+  const engagementContacts = await listEngagementContacts(
+    params.db,
+    params.orgId,
+    params.engagementId
+  )
   const documents = await listDocuments(
     params.storage,
     `${params.orgId}/engagements/${params.engagementId}/docs/`
@@ -91,6 +99,8 @@ export async function loadEngagementDetailPage(params: {
     contextEntries,
     parkingLot,
     entitySignals,
+    entityContacts,
+    engagementContacts,
     documents,
     status,
     nextStatuses,
@@ -103,6 +113,9 @@ export async function loadEngagementDetailPage(params: {
     parkingLotAdded: params.url.searchParams.get('parking_lot_added'),
     parkingLotDispositioned: params.url.searchParams.get('parking_lot_dispositioned'),
     parkingLotDeleted: params.url.searchParams.get('parking_lot_deleted'),
+    engagementContactAdded: params.url.searchParams.get('engagement_contact_added'),
+    engagementContactRemoved: params.url.searchParams.get('engagement_contact_removed'),
+    engagementContactPrimarySet: params.url.searchParams.get('engagement_contact_primary_set'),
   }
 }
 

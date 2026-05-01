@@ -1,0 +1,189 @@
+---
+/**
+ * Engagement contacts panel for the admin engagement detail page
+ * (PRD US-003, CM-3, CM-4).
+ *
+ * Lists per-engagement role assignments (owner / decision_maker / champion)
+ * with the primary POC marker, and provides:
+ *   - "+ Assign contact" form (existing entity contact + role + primary toggle)
+ *   - Per-row "Make primary" + "Remove" actions
+ *
+ * The same contact can be assigned multiple roles per engagement (OQ-003) —
+ * the form picks one role at a time; submit twice to give one person two roles.
+ *
+ * Schema enforces UNIQUE(engagement_id, contact_id, role); the API handler
+ * surfaces dup attempts as `?error=duplicate_role`.
+ */
+import type { Contact } from '../../lib/db/contacts'
+import {
+  ENGAGEMENT_CONTACT_ROLES,
+  type EngagementContactWithDetails,
+} from '../../lib/db/engagement-contacts'
+
+interface Props {
+  engagementId: string
+  engagementContacts: EngagementContactWithDetails[]
+  entityContacts: Contact[]
+}
+
+const { engagementId, engagementContacts, entityContacts } = Astro.props
+
+const roleLabel = (role: string): string =>
+  ENGAGEMENT_CONTACT_ROLES.find((r) => r.value === role)?.label ?? role
+---
+
+<div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)]">
+  <div class="px-6 py-4 border-b border-[color:var(--ss-color-border-subtle)]">
+    <h2 class="font-medium text-[color:var(--ss-color-text-primary)]">Contacts &amp; Roles</h2>
+    <p class="text-xs text-[color:var(--ss-color-text-secondary)] mt-1">
+      Owner, decision maker, and champion for this engagement. One contact can hold multiple roles.
+      Mark a single row as the primary point of contact.
+    </p>
+  </div>
+
+  <div class="divide-y divide-[color:var(--ss-color-border-subtle)]">
+    {
+      engagementContacts.length === 0 && (
+        <div class="px-6 py-8 text-center text-sm text-[color:var(--ss-color-text-muted)]">
+          No role assignments yet.
+        </div>
+      )
+    }
+    {
+      engagementContacts.map((ec) => (
+        <div class="px-6 py-3 flex items-start justify-between gap-stack">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-sm font-medium text-[color:var(--ss-color-text-primary)]">
+                {ec.contact_name}
+              </span>
+              <span class="text-xs bg-[color:var(--ss-color-border-subtle)] text-[color:var(--ss-color-text-secondary)] px-1.5 py-0.5 rounded">
+                {roleLabel(ec.role)}
+              </span>
+              {ec.is_primary === 1 && (
+                <span class="text-xs bg-[color:var(--ss-color-primary)] text-white px-1.5 py-0.5 rounded">
+                  Primary POC
+                </span>
+              )}
+            </div>
+            <div class="text-xs text-[color:var(--ss-color-text-muted)] flex flex-wrap gap-x-3 mt-0.5">
+              {ec.contact_title && <span>{ec.contact_title}</span>}
+              {ec.contact_email && <span>{ec.contact_email}</span>}
+              {ec.contact_phone && <span>{ec.contact_phone}</span>}
+            </div>
+            {ec.notes && (
+              <p class="text-xs text-[color:var(--ss-color-text-secondary)] whitespace-pre-wrap pt-1">
+                {ec.notes}
+              </p>
+            )}
+          </div>
+          <div class="flex-shrink-0 flex items-center gap-2">
+            {ec.is_primary !== 1 && (
+              <form method="POST" action={`/api/admin/engagements/${engagementId}/contacts`}>
+                <input type="hidden" name="action" value="set_primary" />
+                <input type="hidden" name="engagement_contact_id" value={ec.id} />
+                <button
+                  type="submit"
+                  class="text-xs px-2 py-1 border border-[color:var(--ss-color-primary)] text-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-background)] transition-colors"
+                >
+                  Make primary
+                </button>
+              </form>
+            )}
+            <form method="POST" action={`/api/admin/engagements/${engagementId}/contacts`}>
+              <input type="hidden" name="_method" value="DELETE" />
+              <input type="hidden" name="engagement_contact_id" value={ec.id} />
+              <button
+                type="submit"
+                class="text-xs px-2 py-1 border border-[color:var(--ss-color-error)] text-[color:var(--ss-color-error)] hover:bg-[color:var(--ss-color-background)] transition-colors"
+                onclick="return confirm('Remove this role assignment?')"
+              >
+                Remove
+              </button>
+            </form>
+          </div>
+        </div>
+      ))
+    }
+  </div>
+
+  <details class="border-t border-[color:var(--ss-color-border-subtle)]">
+    <summary
+      class="px-6 py-3 cursor-pointer text-sm text-[color:var(--ss-color-text-secondary)] hover:text-[color:var(--ss-color-text-primary)]"
+    >
+      + Assign contact to role
+    </summary>
+    <div class="px-6 pb-4">
+      {
+        entityContacts.length === 0 ? (
+          <p class="text-xs text-[color:var(--ss-color-text-muted)]">
+            No contacts on the entity yet. Add a contact on the entity page first.
+          </p>
+        ) : (
+          <form
+            method="POST"
+            action={`/api/admin/engagements/${engagementId}/contacts`}
+            class="space-y-row"
+          >
+            <div class="grid grid-cols-2 gap-2">
+              <label class="text-xs font-medium text-[color:var(--ss-color-text-secondary)] col-span-2">
+                Contact *
+                <select
+                  name="contact_id"
+                  required
+                  class="mt-1 w-full border border-[color:var(--ss-color-border)] rounded px-3 py-1.5 text-sm"
+                >
+                  <option value="">Select a contact…</option>
+                  {entityContacts.map((c) => (
+                    <option value={c.id}>
+                      {c.name}
+                      {c.title ? ` — ${c.title}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label class="text-xs font-medium text-[color:var(--ss-color-text-secondary)]">
+                Role *
+                <select
+                  name="role"
+                  required
+                  class="mt-1 w-full border border-[color:var(--ss-color-border)] rounded px-3 py-1.5 text-sm"
+                >
+                  {ENGAGEMENT_CONTACT_ROLES.map((r) => (
+                    <option value={r.value}>{r.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label class="text-xs font-medium text-[color:var(--ss-color-text-secondary)] flex items-center gap-2 mt-5">
+                <input
+                  type="checkbox"
+                  name="is_primary"
+                  value="1"
+                  class="rounded border-[color:var(--ss-color-border)]"
+                />
+                Mark as primary POC
+              </label>
+              <label class="text-xs font-medium text-[color:var(--ss-color-text-secondary)] col-span-2">
+                Notes
+                <input
+                  type="text"
+                  name="notes"
+                  placeholder="Optional context — e.g. 'Cc on invoices'"
+                  class="mt-1 w-full border border-[color:var(--ss-color-border)] rounded px-3 py-1.5 text-sm"
+                />
+              </label>
+            </div>
+            <div class="flex">
+              <button
+                type="submit"
+                class="ml-auto bg-[color:var(--ss-color-primary)] text-white text-xs px-3 py-1.5 hover:bg-[color:var(--ss-color-primary-hover)] transition-colors"
+              >
+                Assign role
+              </button>
+            </div>
+          </form>
+        )
+      }
+    </div>
+  </details>
+</div>
