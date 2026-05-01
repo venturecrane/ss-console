@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro'
 import { validateApiKey } from '../../../lib/auth/api-key'
 import { findOrCreateEntity } from '../../../lib/db/entities'
 import { appendContext, type ContextType } from '../../../lib/db/context'
-import { enrichEntity } from '../../../lib/enrichment'
+import { dispatchEnrichmentWorkflow } from '../../../lib/enrichment/dispatch'
 import { ORG_ID } from '../../../lib/constants'
 import { env } from 'cloudflare:workers'
 
@@ -116,23 +116,25 @@ export const POST: APIRoute = async ({ request, locals }) => {
       metadata,
     })
 
-    // At-ingest enrichment for newly-created entities. The lead-gen workers
-    // (new_business, review_mining) already trigger enrichment from their own
-    // ingest paths, but the generic /api/ingest/signals endpoint is the
-    // catch-all for any external signal source — and prior to this it created
-    // entities without ever calling enrichEntity, so they were born with no
-    // dossier (and no `intelligence_brief` context entry, so the admin
-    // Dossier Summary panel never appeared). Detached via locals.cfContext
-    // so a 12-module Claude pipeline doesn't block the ingest response.
+    // At-ingest enrichment for newly-created entities. Dispatches the
+    // EnrichmentWorkflow on the dedicated `ss-enrichment-workflow` Worker
+    // (#631) — the legacy `ctx.waitUntil(enrichEntity(...))` path was being
+    // killed by Workers' post-response CPU budget, leaving 86% of created
+    // entities with no enrichment activity. The dispatch call returns
+    // instantly (Workflow is created on the binding side); we still wrap
+    // it in waitUntil so the ingest response isn't blocked by the
+    // dispatch round-trip itself.
     if (result.status === 'created') {
-      const enrichPromise = enrichEntity(env, ORG_ID, result.entity.id, {
+      const dispatchPromise = dispatchEnrichmentWorkflow(env, {
+        entityId: result.entity.id,
+        orgId: ORG_ID,
         mode: 'full',
         triggered_by: 'ingest:signals',
       }).catch((err) => {
-        console.error('[api/ingest/signals] background enrichment failed', { error: err })
+        console.error('[api/ingest/signals] enrichment dispatch failed', { error: err })
       })
       if (locals.cfContext?.waitUntil) {
-        locals.cfContext.waitUntil(enrichPromise)
+        locals.cfContext.waitUntil(dispatchPromise)
       }
     }
 

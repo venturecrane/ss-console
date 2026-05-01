@@ -25,6 +25,19 @@ interface ScanWorkflowServiceBinding {
 }
 
 /**
+ * Service binding shape for the `ss-enrichment-workflow` Worker (#631).
+ * ss-web's lead-gen workers and admin endpoints dispatch entity enrichment
+ * by POSTing to the internal `/dispatch` endpoint on this binding. The
+ * target Worker holds the `[[workflows]]` binding for the
+ * `EnrichmentWorkflow` class — co-locating the binding with a vanilla
+ * (non-Astro) Worker is the durable workaround for the Astro adapter
+ * bundler issue documented in #618.
+ */
+interface EnrichmentWorkflowServiceBinding {
+  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>
+}
+
+/**
  * Cloudflare Worker bindings and env vars.
  *
  * Accessed via `import { env } from 'cloudflare:workers'` (adapter v13+).
@@ -144,6 +157,16 @@ declare namespace Cloudflare {
      * back to inline `ctx.waitUntil` execution in that case.
      */
     SCAN_WORKFLOW_SERVICE?: ScanWorkflowServiceBinding
+    /**
+     * Service binding to the `ss-enrichment-workflow` Worker (#631). Hosts
+     * the EnrichmentWorkflow class for entity enrichment. Dispatched from
+     * lead-gen workers and admin endpoints by POSTing to the binding's
+     * internal `/dispatch` endpoint with `{ entityId, orgId, mode, triggered_by }`.
+     * Optional in dev / vitest where the binding doesn't exist; the
+     * dispatcher logs a warning and skips when absent in non-prod, throws
+     * in prod (a missing binding in prod is a deploy ordering bug).
+     */
+    ENRICHMENT_WORKFLOW_SERVICE?: EnrichmentWorkflowServiceBinding
   }
 }
 

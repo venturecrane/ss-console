@@ -22,6 +22,7 @@ export const MODULES = [
   { id: 'review_synthesis', tier: 3, displayName: 'Review Synthesis' },
   { id: 'linkedin', tier: 3, displayName: 'LinkedIn' },
   { id: 'intelligence_brief', tier: 3, displayName: 'Intelligence Brief' },
+  { id: 'outreach_draft', tier: 3, displayName: 'Outreach Draft' },
 ] as const
 
 export type ModuleId = (typeof MODULES)[number]['id']

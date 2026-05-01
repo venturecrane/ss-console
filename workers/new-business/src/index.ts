@@ -17,7 +17,7 @@ import { appendContext } from '../../../src/lib/db/context.js'
 import { getGeneratorConfig, recordGeneratorRun } from '../../../src/lib/db/generators.js'
 import { getPipelineSettings } from '../../../src/lib/db/pipeline-settings.js'
 import type { NewBusinessConfig } from '../../../src/lib/generators/types.js'
-import { enrichEntity } from '../../../src/lib/enrichment/index.js'
+import { dispatchEnrichmentWorkflow } from '../../../src/lib/enrichment/dispatch.js'
 import { fetchAllPermits, type SodaCity } from './soda.js'
 import { qualifyNewBusiness, derivePainScore } from './qualify.js'
 import { sendFailureAlert, type RunSummary } from './alert.js'
@@ -34,6 +34,13 @@ export interface Env {
   OUTSCRAPER_API_KEY?: string
   SERPAPI_API_KEY?: string
   PROXYCURL_API_KEY?: string
+  /**
+   * Service binding to ss-enrichment-workflow Worker (#631). Dispatched
+   * via dispatchEnrichmentWorkflow for every newly-created entity; replaces
+   * the legacy inline ctx.waitUntil orchestration that was being killed
+   * by the post-response CPU budget.
+   */
+  ENRICHMENT_WORKFLOW_SERVICE?: { fetch: typeof fetch }
 }
 
 async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
@@ -153,20 +160,27 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
 
       summary.written++
 
-      // At-ingest enrichment (issue #471). Fire-and-forget via waitUntil when
-      // we have an ExecutionContext so the 50-state cron loop is not blocked
-      // by N Claude round-trips. On the /run fetch path we also detach;
-      // enrichment errors are self-contained and should not turn a successful
-      // ingest into a failed run. Idempotent: the pipeline no-ops once a
-      // prior intelligence_brief exists.
-      const enrichPromise = enrichEntity(env, ORG_ID, entity.id, {
+      // At-ingest enrichment (#631). Dispatches the EnrichmentWorkflow on
+      // the dedicated Worker so the 50-state cron loop is not blocked by
+      // 12 module round-trips, and so the work itself is not killed by
+      // the Workers post-response CPU budget (the bug class the workflow
+      // refactor was chartered to escape). The dispatch call itself is
+      // fast (one fetch to the service binding); we still wrap it in
+      // waitUntil so the cron iteration doesn't await it. Idempotent:
+      // dispatch's pre-check skips entities that already have a brief.
+      const dispatchPromise = dispatchEnrichmentWorkflow(env, {
+        entityId: entity.id,
+        orgId: ORG_ID,
         mode: 'full',
         triggered_by: 'cron:new-business',
       }).catch((err) => {
-        console.error('[new_business] enrichment failed', { entityId: entity.id, error: err })
+        console.error('[new_business] enrichment dispatch failed', {
+          entityId: entity.id,
+          error: err,
+        })
       })
       if (ctx) {
-        ctx.waitUntil(enrichPromise)
+        ctx.waitUntil(dispatchPromise)
       }
     } catch (err) {
       summary.errors++

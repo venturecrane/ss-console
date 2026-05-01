@@ -3,11 +3,16 @@ main = "src/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Same D1 database as the Pages project (see root wrangler.toml)
+# Same D1 database as ss-web (see root wrangler.toml)
 [[d1_databases]]
 binding = "DB"
 database_name = "ss-console-db"
 database_id = "65171b23-d615-42a7-84e7-a4fac20d063c"
+
+# Service binding to ss-enrichment-workflow (#631). See workers/new-business/wrangler.toml.
+[[services]]
+binding = "ENRICHMENT_WORKFLOW_SERVICE"
+service = "ss-enrichment-workflow"
 
 [triggers]
 crons = ["0 13 * * *"]  # 13:00 UTC = 6:00 AM MST (Arizona, no DST)

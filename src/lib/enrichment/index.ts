@@ -1,43 +1,32 @@
 /**
- * Unified enrichment pipeline — issue #471.
+ * Per-module enrichment wrappers + admin retry runner.
  *
- * Merges what used to be two admin-triggered endpoints (`promote` and
- * `dossier`) into a single `enrichEntity()` call that runs automatically at
- * signal ingest time. The admin-click gate was the bottleneck — at ~8
- * signals/day and ~$0.25/enrichment, the cost is trivial compared with the
- * engagement value of a qualified lead, but the value only lands if every
- * signal actually gets enriched.
+ * Orchestration moved to `src/lib/enrichment/workflow.ts` (issue #631) — the
+ * legacy `enrichEntity()` + `runReviewsAndNews()` orchestrators were deleted
+ * because their `ctx.waitUntil`-detached invocation shape was being killed
+ * by Cloudflare Workers' post-response CPU budget on lead-gen ingest
+ * batches. The 30-day measurement on 2026-04-30 found 86% of created
+ * entities had no enrichment activity at all — the orchestrator promises
+ * never got CPU time before the Worker isolate was killed.
  *
- * ### Modes
+ * Cloudflare Workflows replaces that orchestration: each `try*` module
+ * wrapper below is invoked from a discrete `step.do(...)` call in the
+ * `EnrichmentWorkflow` class, with per-step durability, retries, and
+ * dashboard observability. The wrappers themselves are unchanged from the
+ * legacy implementation — `instrumentModule` writes the `enrichment_runs`
+ * row, `applyOutcome` accumulates the in-memory result. The workflow
+ * uses a fresh per-step `EnrichResult` since the database is the source
+ * of truth.
  *
- * - `full` (default) — the complete 12-module pipeline. Called from lead-gen
- *   workers on newly-ingested signals and from the "promote" admin wrapper.
- * - `reviews-and-news` — cheap refresh limited to review_analysis,
- *   review_synthesis, and news_search. Surfaced in admin as the "Re-enrich"
- *   button for stale-data refresh on entities that already have a full
- *   enrichment on file.
- *
- * ### Idempotency / cost control
- *
- * Full-mode enrichment is skipped when an `intelligence_brief` context entry
- * already exists — the brief is the last module to run in full mode, so its
- * presence means a prior full pipeline completed. Calling `enrichEntity` a
- * second time from a worker (dedupe race, retry, manual re-run) will not
- * re-bill Claude for an already-enriched entity. Re-enrich mode bypasses this
- * check by design — the caller explicitly asked for a refresh.
- *
- * ### Why a merge and not two calls
- *
- * The two endpoints fetched identical entity/context rows, ran
- * `generateOutreachDraft` twice (dossier overwrote promote's draft), and used
- * the same appendContext plumbing. Combining them removes the duplicate
- * outreach call, assembles context once per stage, and gives the worker a
- * single natural insertion point.
+ * The `runSingleModule` admin retry path (per-module Retry button) keeps
+ * its own thin orchestrator below — it's a synchronous admin-triggered
+ * single-module run, not subject to the cron-loop CPU budget that motivated
+ * the workflow refactor.
  */
 
 import type { Entity } from '../db/entities'
 import { getEntity, updateEntity } from '../db/entities'
-import { appendContext, assembleEntityContext, listContext } from '../db/context'
+import { appendContext, assembleEntityContext } from '../db/context'
 import { generateOutreachDraft } from '../claude/outreach'
 import { lookupGooglePlaces } from './google-places'
 import { analyzeWebsite } from './website-analyzer'
@@ -58,26 +47,8 @@ import {
   type InstrumentResult,
 } from './instrument'
 import type { ModuleId } from './modules'
-import { latestRunByModule } from '../db/enrichment-runs'
 
 export type EnrichMode = 'full' | 'reviews-and-news'
-
-export interface EnrichOptions {
-  mode?: EnrichMode
-  /**
-   * Force re-enrichment even when a prior intelligence brief exists. Admin
-   * "Re-enrich" uses this implicitly via `reviews-and-news`; this flag is
-   * available for a future "force full re-enrich" action if we add one.
-   */
-  force?: boolean
-  /**
-   * Provenance string written to every enrichment_runs row produced during
-   * this call. Examples: 'cron:new-business', 'admin:promote',
-   * 'admin:re-enrich', 'admin:retry:deep_website', 'ingest:signals'.
-   * Defaults to 'unknown' if not provided — callers should set it.
-   */
-  triggered_by?: string
-}
 
 export interface EnrichResult {
   entityId: string
@@ -95,10 +66,31 @@ export interface EnrichResult {
 }
 
 /**
+ * Build a fresh per-call `EnrichResult` accumulator. The Workflow's step
+ * bodies use a per-step accumulator so each step's `applyOutcome` calls
+ * stay local — the persistent record is `enrichment_runs`.
+ */
+export function createEnrichResult(
+  entityId: string,
+  mode: EnrichMode,
+  triggered_by: string
+): EnrichResult {
+  return {
+    entityId,
+    mode,
+    triggered_by,
+    completed: [],
+    skipped: [],
+    errors: [],
+    alreadyEnriched: false,
+  }
+}
+
+/**
  * Map a wrapper outcome into the legacy in-memory EnrichResult arrays so
- * existing callers (workers, promote endpoint) that read result.completed
- * continue to work. The persisted enrichment_runs row is the durable
- * record; this is best-effort accounting for the in-memory return value.
+ * callers that read result.completed continue to work. The persisted
+ * enrichment_runs row is the durable record; this is best-effort accounting
+ * for the in-memory return value.
  */
 function applyOutcome(result: EnrichResult, module: ModuleId, outcome: InstrumentResult): void {
   switch (outcome.status) {
@@ -118,7 +110,7 @@ function applyOutcome(result: EnrichResult, module: ModuleId, outcome: Instrumen
   }
 }
 
-type EnrichEnv = {
+export type EnrichEnv = {
   DB: D1Database
   ANTHROPIC_API_KEY?: string
   GOOGLE_PLACES_API_KEY?: string
@@ -127,159 +119,23 @@ type EnrichEnv = {
   SERPAPI_API_KEY?: string
 }
 
-/**
- * Run the unified enrichment pipeline for a single entity.
- *
- * All modules are best-effort — a single module failure does not abort the
- * run. Callers should not await this from a hot request path: workers use
- * `ctx.waitUntil(enrichEntity(...))` so ingest does not block on Claude.
- */
-export async function enrichEntity(
-  env: EnrichEnv,
-  orgId: string,
-  entityId: string,
-  options: EnrichOptions = {}
-): Promise<EnrichResult> {
-  const mode: EnrichMode = options.mode ?? 'full'
-  const result: EnrichResult = {
-    entityId,
-    mode,
-    triggered_by: options.triggered_by ?? 'unknown',
-    completed: [],
-    skipped: [],
-    errors: [],
-    alreadyEnriched: false,
-  }
-
-  const entity = await getEntity(env.DB, orgId, entityId)
-  if (!entity) {
-    result.errors.push('entity_not_found')
-    return result
-  }
-
-  // Idempotency: full-mode skips if a prior intelligence_brief exists. The
-  // brief is the last full-mode module, so its presence means a prior run
-  // completed. reviews-and-news intentionally bypasses this — it's the
-  // explicit "refresh" path.
-  if (mode === 'full' && !options.force) {
-    const existing = await listContext(env.DB, entityId, { type: 'enrichment' })
-    const hasBrief = existing.some((e) => e.source === 'intelligence_brief')
-    if (hasBrief) {
-      result.alreadyEnriched = true
-      return result
-    }
-  }
-
-  if (mode === 'reviews-and-news') {
-    await runReviewsAndNews(env, orgId, entity, result)
-    await regenerateOutreach(env, orgId, entity, result)
-    return result
-  }
-
-  // mode === 'full': run the full 12-module pipeline.
-  //
-  // Budget protection: when `force` is true, the operator clicked the admin
-  // "Run full enrichment" button intending to fill in gaps — not to re-bill
-  // Claude on every already-succeeded module. Re-running all 12 from scratch
-  // exceeds Cloudflare Workers' single-invocation budget (Cactus Creative
-  // Studio hit this — 22s of wall-clock spent on Tier 1+2 left no time for
-  // the brief, which timed out). When force is set, skip any module whose
-  // latest run is already `succeeded` and run only the rest. The panel
-  // continues to display the original succeeded row, so the skip is
-  // invisible to the operator. Cron full-mode (without force) is unaffected.
-  const skipIfSucceeded: Set<ModuleId> = new Set()
-  if (options.force) {
-    const latestRuns = await latestRunByModule(env.DB, entityId)
-    for (const [moduleId, run] of latestRuns) {
-      if (run.status === 'succeeded') skipIfSucceeded.add(moduleId)
-    }
-  }
-  const should = (m: ModuleId): boolean => !skipIfSucceeded.has(m)
-
-  let current = entity
-
-  // --- Tier 1: Contact + tech signals (parallel-safe but sequential for
-  //             readability and because some modules update entity.phone /
-  //             website, which downstream modules rely on). ---
-
-  if (should('google_places')) current = await tryPlaces(env, orgId, current, result)
-  if (should('website_analysis')) current = await tryWebsite(env, orgId, current, result)
-  if (should('outscraper')) current = await tryOutscraper(env, orgId, current, result)
-  if (should('acc_filing')) await tryAcc(env, orgId, current, result)
-  if (should('roc_license')) await tryRoc(env, orgId, current, result)
-
-  // --- Tier 2: Review patterns + competitors + news. ---
-
-  if (should('review_analysis')) await tryReviewAnalysis(env, orgId, current, result)
-  if (should('competitors')) await tryCompetitors(env, orgId, current, result)
-  if (should('news_search')) await tryNews(env, orgId, current, result)
-
-  // --- Tier 3: Deep intelligence (the old dossier path). ---
-
-  if (should('deep_website')) await tryDeepWebsite(env, orgId, current, result)
-  if (should('review_synthesis')) await tryReviewSynthesis(env, orgId, current, result)
-  if (should('linkedin')) await tryLinkedIn(env, orgId, current, result)
-  if (should('intelligence_brief')) await tryIntelligenceBrief(env, orgId, current, result)
-
-  // --- Outreach draft from the full enriched context. Runs once at the end,
-  //     not twice (the old promote+dossier pair called this at both steps). ---
-
-  await regenerateOutreach(env, orgId, current, result)
-
-  // Surface a next_action so the admin inbox shows "review and send" instead
-  // of leaving the signal inert. Only set if nothing's there already.
-  if (!current.next_action) {
-    try {
-      await updateEntity(env.DB, orgId, entityId, {
-        next_action: 'Review enrichment and send outreach email',
-        next_action_at: new Date().toISOString(),
-      })
-    } catch (err) {
-      console.error('[enrichEntity] failed to set next_action:', err)
-    }
-  }
-
-  return result
-}
-
 // ---------------------------------------------------------------------------
-// reviews-and-news (cheap refresh path)
+// Individual module wrappers — each is best-effort, instruments its own
+// `enrichment_runs` row, and is idempotent (a second run with the same
+// inputs writes another row but does not corrupt state).
+//
+// Tier 1 modules (`tryPlaces`, `tryOutscraper`) update entity.phone /
+// entity.website via `updateEntity`; downstream modules MUST re-load the
+// entity from D1 to see the fresh state. The Workflow class enforces this
+// by calling `getEntity(...)` at the top of every step body.
 // ---------------------------------------------------------------------------
 
-async function runReviewsAndNews(
+export async function tryPlaces(
   env: EnrichEnv,
   orgId: string,
   entity: Entity,
   result: EnrichResult
 ): Promise<void> {
-  await tryReviewAnalysis(env, orgId, entity, result)
-  await tryReviewSynthesis(env, orgId, entity, result)
-  await tryNews(env, orgId, entity, result)
-  // Backfill a missing intelligence_brief. Entities whose initial full
-  // pipeline crashed mid-run (Error 1101 era, Goodman's Landscape et al)
-  // ended up at `prospect` with partial enrichment and no brief; Re-enrich
-  // is the natural place to heal that. Only runs when a brief doesn't
-  // already exist, so repeat Re-enrich clicks don't re-bill Claude.
-  const existingBrief = await listContext(env.DB, entity.id, { type: 'enrichment' })
-  const hasBrief = existingBrief.some((e) => e.source === 'intelligence_brief')
-  if (!hasBrief) {
-    await tryIntelligenceBrief(env, orgId, entity, result)
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Individual module wrappers — each is best-effort and records its source
-// name in the result. Extracted from promote.ts / dossier.ts verbatim so the
-// behavioral semantics match what admins saw when clicking the buttons.
-// ---------------------------------------------------------------------------
-
-async function tryPlaces(
-  env: EnrichEnv,
-  orgId: string,
-  entity: Entity,
-  result: EnrichResult
-): Promise<Entity> {
-  let refreshedEntity: Entity = entity
   const outcome = await instrumentModule(
     {
       db: env.DB,
@@ -307,21 +163,18 @@ async function tryPlaces(
         source: 'google_places',
         metadata: places as unknown as Record<string, unknown>,
       })
-      const refreshed = await getEntity(env.DB, orgId, entity.id)
-      if (refreshed) refreshedEntity = refreshed
       return { kind: 'succeeded', context_entry_id: ce.id }
     }
   )
   applyOutcome(result, 'google_places', outcome)
-  return refreshedEntity
 }
 
-async function tryWebsite(
+export async function tryWebsite(
   env: EnrichEnv,
   orgId: string,
   entity: Entity,
   result: EnrichResult
-): Promise<Entity> {
+): Promise<void> {
   const outcome = await instrumentModule(
     {
       db: env.DB,
@@ -384,16 +237,14 @@ async function tryWebsite(
     }
   )
   applyOutcome(result, 'website_analysis', outcome)
-  return entity
 }
 
-async function tryOutscraper(
+export async function tryOutscraper(
   env: EnrichEnv,
   orgId: string,
   entity: Entity,
   result: EnrichResult
-): Promise<Entity> {
-  let refreshedEntity: Entity = entity
+): Promise<void> {
   const outcome = await instrumentModule(
     {
       db: env.DB,
@@ -436,16 +287,13 @@ async function tryOutscraper(
         source: 'outscraper',
         metadata: osc as unknown as Record<string, unknown>,
       })
-      const refreshed = await getEntity(env.DB, orgId, entity.id)
-      if (refreshed) refreshedEntity = refreshed
       return { kind: 'succeeded', context_entry_id: ce.id }
     }
   )
   applyOutcome(result, 'outscraper', outcome)
-  return refreshedEntity
 }
 
-async function tryAcc(
+export async function tryAcc(
   env: EnrichEnv,
   orgId: string,
   entity: Entity,
@@ -476,7 +324,7 @@ async function tryAcc(
   applyOutcome(result, 'acc_filing', outcome)
 }
 
-async function tryRoc(
+export async function tryRoc(
   env: EnrichEnv,
   orgId: string,
   entity: Entity,
@@ -510,7 +358,7 @@ async function tryRoc(
   applyOutcome(result, 'roc_license', outcome)
 }
 
-async function tryReviewAnalysis(
+export async function tryReviewAnalysis(
   env: EnrichEnv,
   orgId: string,
   entity: Entity,
@@ -547,7 +395,7 @@ async function tryReviewAnalysis(
   applyOutcome(result, 'review_analysis', outcome)
 }
 
-async function tryCompetitors(
+export async function tryCompetitors(
   env: EnrichEnv,
   orgId: string,
   entity: Entity,
@@ -587,7 +435,7 @@ async function tryCompetitors(
   applyOutcome(result, 'competitors', outcome)
 }
 
-async function tryNews(
+export async function tryNews(
   env: EnrichEnv,
   orgId: string,
   entity: Entity,
@@ -625,7 +473,7 @@ async function tryNews(
   applyOutcome(result, 'news_search', outcome)
 }
 
-async function tryDeepWebsite(
+export async function tryDeepWebsite(
   env: EnrichEnv,
   orgId: string,
   entity: Entity,
@@ -658,7 +506,7 @@ async function tryDeepWebsite(
   applyOutcome(result, 'deep_website', outcome)
 }
 
-async function tryReviewSynthesis(
+export async function tryReviewSynthesis(
   env: EnrichEnv,
   orgId: string,
   entity: Entity,
@@ -707,7 +555,7 @@ async function tryReviewSynthesis(
   applyOutcome(result, 'review_synthesis', outcome)
 }
 
-async function tryLinkedIn(
+export async function tryLinkedIn(
   env: EnrichEnv,
   orgId: string,
   entity: Entity,
@@ -739,7 +587,7 @@ async function tryLinkedIn(
   applyOutcome(result, 'linkedin', outcome)
 }
 
-async function tryIntelligenceBrief(
+export async function tryIntelligenceBrief(
   env: EnrichEnv,
   orgId: string,
   entity: Entity,
@@ -782,51 +630,64 @@ async function tryIntelligenceBrief(
   applyOutcome(result, 'intelligence_brief', outcome)
 }
 
-async function regenerateOutreach(
+/**
+ * Outreach draft generation. Wrapped in `instrumentModule` (issue #631)
+ * so failures land a `failed` row in `enrichment_runs` instead of vanishing
+ * into a console.error — the legacy implementation surfaced the failure
+ * only via `result.errors` (in-memory) and a console line, so a permanent
+ * outreach failure was effectively invisible.
+ *
+ * Uses the synthetic `outreach_draft` ModuleId added to `modules.ts`.
+ */
+export async function tryOutreach(
   env: EnrichEnv,
   orgId: string,
   entity: Entity,
   result: EnrichResult
 ): Promise<void> {
-  if (!env.ANTHROPIC_API_KEY) {
-    result.skipped.push('outreach_draft')
-    return
-  }
-  try {
-    const context = await assembleEntityContext(env.DB, entity.id, { maxBytes: 24_000 })
-    if (!context) {
-      result.skipped.push('outreach_draft')
-      return
-    }
-    const draft = await generateOutreachDraft(
-      env.ANTHROPIC_API_KEY,
-      entity.name,
-      context,
-      entity.vertical
-    )
-    await appendContext(env.DB, orgId, {
+  const outcome = await instrumentModule(
+    {
+      db: env.DB,
+      org_id: orgId,
       entity_id: entity.id,
-      type: 'outreach_draft',
-      content: draft,
-      source: 'claude',
-      metadata: {
-        model: 'claude-sonnet-4-20250514',
-        trigger: result.mode === 'full' ? 'at_ingest' : 're_enrich',
-        // Issue #594 — record which vertical guidance the prompt used so
-        // re-runs and audits can see the variant. Null/unrecognized
-        // verticals record as null and the generic backbone was used.
-        vertical: entity.vertical ?? null,
-      },
-    })
-    result.completed.push('outreach_draft')
-  } catch (err) {
-    console.error('[enrichEntity] outreach_draft failed:', err)
-    result.errors.push('outreach_draft')
-  }
+      module: 'outreach_draft',
+      mode: result.mode,
+      triggered_by: result.triggered_by,
+    },
+    async (): Promise<ModuleOutcome> => {
+      if (!env.ANTHROPIC_API_KEY) return { kind: 'skipped', reason: 'missing_api_key:anthropic' }
+      const context = await assembleEntityContext(env.DB, entity.id, { maxBytes: 24_000 })
+      if (!context) return { kind: 'skipped', reason: 'no_context' }
+      const draft = await generateOutreachDraft(
+        env.ANTHROPIC_API_KEY,
+        entity.name,
+        context,
+        entity.vertical
+      )
+      const ce = await appendContext(env.DB, orgId, {
+        entity_id: entity.id,
+        type: 'outreach_draft',
+        content: draft,
+        source: 'claude',
+        metadata: {
+          model: 'claude-sonnet-4-20250514',
+          trigger: result.mode === 'full' ? 'at_ingest' : 're_enrich',
+          // Issue #594 — record which vertical guidance the prompt used so
+          // re-runs and audits can see the variant. Null/unrecognized
+          // verticals record as null and the generic backbone was used.
+          vertical: entity.vertical ?? null,
+        },
+      })
+      return { kind: 'succeeded', context_entry_id: ce.id }
+    }
+  )
+  applyOutcome(result, 'outreach_draft', outcome)
 }
 
 // ---------------------------------------------------------------------------
 // Single-module runner — used by the admin "Retry" button per module.
+// Synchronous, single-module, single-shot — not subject to the cron-loop
+// CPU budget that motivated the workflow refactor (#631).
 // ---------------------------------------------------------------------------
 
 const SINGLE_RUNNERS: Record<
@@ -845,13 +706,14 @@ const SINGLE_RUNNERS: Record<
   review_synthesis: tryReviewSynthesis,
   linkedin: tryLinkedIn,
   intelligence_brief: tryIntelligenceBrief,
+  outreach_draft: tryOutreach,
 }
 
 /**
  * Execute a single named module against an entity. Used by the admin
  * per-module Retry button. Records a row in enrichment_runs with the
- * provided triggered_by. Bypasses the full-mode brief idempotency check
- * (the caller explicitly asked to re-run this one module).
+ * provided triggered_by. Bypasses idempotency checks (the caller
+ * explicitly asked to re-run this one module).
  */
 export async function runSingleModule(
   env: EnrichEnv,
@@ -860,15 +722,7 @@ export async function runSingleModule(
   module: ModuleId,
   options: { triggered_by: string } = { triggered_by: 'admin:retry' }
 ): Promise<EnrichResult> {
-  const result: EnrichResult = {
-    entityId,
-    mode: 'reviews-and-news',
-    triggered_by: options.triggered_by,
-    completed: [],
-    skipped: [],
-    errors: [],
-    alreadyEnriched: false,
-  }
+  const result = createEnrichResult(entityId, 'reviews-and-news', options.triggered_by)
 
   const entity = await getEntity(env.DB, orgId, entityId)
   if (!entity) {
