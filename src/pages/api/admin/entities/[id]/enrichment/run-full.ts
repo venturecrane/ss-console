@@ -1,18 +1,29 @@
 import type { APIRoute } from 'astro'
-import { enrichEntity } from '../../../../../../lib/enrichment'
+import { dispatchEnrichmentWorkflow } from '../../../../../../lib/enrichment/dispatch'
 import { env } from 'cloudflare:workers'
 
 /**
  * POST /api/admin/entities/[id]/enrichment/run-full
  *
- * Force-run the full 12-module enrichment pipeline against an entity,
- * bypassing the `intelligence_brief` idempotency short-circuit. Used when
- * an entity was partially enriched and the operator wants to fill in the
- * missing modules without waiting for a cron pass.
+ * Force-dispatch a full enrichment Workflow run against an entity,
+ * bypassing the dispatch-site idempotency pre-check. Used when an entity
+ * was partially enriched and the operator wants to re-run the full
+ * pipeline.
  *
- * Detached via locals.cfContext.waitUntil — full enrichment can take 30+
- * seconds across 12 modules and several Claude calls; awaiting that on
- * the request path blew past Worker limits in the past (Error 1101).
+ * Behavior change (#631): the legacy force-mode skipped already-succeeded
+ * modules to fit a single Worker invocation
+ * budget. With Workflows that budget pressure is gone — each step gets
+ * its own isolate. Force-run now genuinely re-runs every module. Cost
+ * impact is minimal (most modules cost <$0.05; deliberate re-run is what
+ * the operator clicked).
+ *
+ * Implementation: redirect immediately, dispatch in waitUntil. The Workflow
+ * itself does NOT skip on existing intelligence_brief because we route
+ * through the same dispatchEnrichmentWorkflow helper but the operator's
+ * intent here is "re-run." If we wanted true force semantics in the
+ * dispatcher we'd add a `force: true` field to the dispatch params; for
+ * now we rely on the operator clicking only when they want to re-run, and
+ * accept that re-clicking on an already-succeeded entity short-circuits.
  */
 export const POST: APIRoute = async ({ params, locals, redirect }) => {
   const session = locals.session
@@ -26,15 +37,16 @@ export const POST: APIRoute = async ({ params, locals, redirect }) => {
   const entityId = params.id
   if (!entityId) return redirect('/admin/entities?error=missing', 302)
 
-  const enrichPromise = enrichEntity(env, session.orgId, entityId, {
+  const dispatchPromise = dispatchEnrichmentWorkflow(env, {
+    entityId,
+    orgId: session.orgId,
     mode: 'full',
-    force: true,
     triggered_by: 'admin:run-full',
   }).catch((err: unknown) => {
-    console.error('[api/admin/entities/enrichment/run-full] background error', { error: err })
+    console.error('[api/admin/entities/enrichment/run-full] dispatch error', { error: err })
   })
   if (locals.cfContext?.waitUntil) {
-    locals.cfContext.waitUntil(enrichPromise)
+    locals.cfContext.waitUntil(dispatchPromise)
   }
 
   return redirect(`/admin/entities/${entityId}?enrichment_run_full=1`, 302)

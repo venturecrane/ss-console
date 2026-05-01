@@ -1,0 +1,59 @@
+# SMD Services — enrichment-workflow Worker (#631)
+#
+# Hosts the Cloudflare Workflows class for entity enrichment. Same
+# architectural reason as `ss-scan-workflow` (#618): co-locating the
+# Workflow class with Astro's build pipeline left `env.ENRICHMENT_WORKFLOW`
+# undefined at runtime on the deployed `ss-web` Worker. Vanilla Worker
+# entrypoint here, no Astro bundler in the path. The `[[workflows]]` block
+# below is the only definition Cloudflare sees.
+#
+# `ss-web` invokes this Worker through a service binding (see root
+# `wrangler.toml` `[[services]]` block) by POSTing to the internal
+# `/dispatch` endpoint with `{ entityId, orgId, mode, triggered_by }`.
+# The endpoint creates a Workflow instance via
+# `env.ENRICHMENT_WORKFLOW.create({...})` and returns the instance id.
+#
+# Manual trigger path is preserved for operator debugging:
+#   npx wrangler workflows trigger ss-enrichment \
+#     --params '{"entityId":"…","orgId":"…","mode":"full","triggered_by":"manual"}'
+
+name = "ss-enrichment-workflow"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Same D1 database as ss-web — the Workflow reads/writes entities,
+# context_entries, enrichment_runs. Single source of truth.
+[[d1_databases]]
+binding = "DB"
+database_name = "ss-console-db"
+database_id = "65171b23-d615-42a7-84e7-a4fac20d063c"
+
+# Workflows binding for this Worker. Cloudflare resolves
+# `class_name = "EnrichmentWorkflow"` against the named export from
+# `src/index.ts`. The binding is `ENRICHMENT_WORKFLOW` so the dispatch
+# handler's `env.ENRICHMENT_WORKFLOW.create(...)` resolves at runtime.
+[[workflows]]
+name = "ss-enrichment"
+binding = "ENRICHMENT_WORKFLOW"
+class_name = "EnrichmentWorkflow"
+
+[observability]
+enabled = true
+
+# ---------- Secrets (set via `wrangler secret put` or `wrangler secret bulk`) ----------
+# All secrets are set per-Worker. Captain provisions these from Infisical
+# after first deploy:
+#
+#   infisical export --env=prod --path=/ss --format=dotenv \
+#     | grep -E '^(ANTHROPIC_API_KEY|GOOGLE_PLACES_API_KEY|OUTSCRAPER_API_KEY|SERPAPI_API_KEY|PROXYCURL_API_KEY|LEAD_INGEST_API_KEY)=' \
+#     | npx wrangler secret bulk --name ss-enrichment-workflow
+#
+# ANTHROPIC_API_KEY       — Claude API (website_analysis, review_analysis,
+#                            review_synthesis, deep_website,
+#                            intelligence_brief, news, outreach)
+# GOOGLE_PLACES_API_KEY   — Google Places (Tier 1 contact + competitors)
+# OUTSCRAPER_API_KEY      — Outscraper business profile + reviews (Tier 1)
+# SERPAPI_API_KEY         — SerpAPI Google Search (Tier 2 news)
+# PROXYCURL_API_KEY       — LinkedIn company data (Tier 3, optional)
+# LEAD_INGEST_API_KEY     — Bearer token guarding the internal /dispatch endpoint

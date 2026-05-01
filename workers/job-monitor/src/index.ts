@@ -16,7 +16,7 @@ import { appendContext } from '../../../src/lib/db/context.js'
 import { getGeneratorConfig, recordGeneratorRun } from '../../../src/lib/db/generators.js'
 import { getPipelineSettings } from '../../../src/lib/db/pipeline-settings.js'
 import type { JobMonitorConfig } from '../../../src/lib/generators/types.js'
-import { enrichEntity } from '../../../src/lib/enrichment/index.js'
+import { dispatchEnrichmentWorkflow } from '../../../src/lib/enrichment/dispatch.js'
 import { searchJobs } from './serpapi.js'
 import { qualifyJob, derivePainScore } from './qualify.js'
 import { sendFailureAlert, type RunSummary } from './alert.js'
@@ -32,6 +32,8 @@ export interface Env {
   GOOGLE_PLACES_API_KEY?: string
   OUTSCRAPER_API_KEY?: string
   PROXYCURL_API_KEY?: string
+  /** Service binding to ss-enrichment-workflow Worker (#631). */
+  ENRICHMENT_WORKFLOW_SERVICE?: { fetch: typeof fetch }
 }
 
 async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
@@ -182,14 +184,18 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
 
       summary.written++
 
-      // At-ingest enrichment (issue #471). Detached so the ingest loop is not
-      // blocked by N Claude round-trips. Idempotent — no-op if a prior brief
-      // exists on this entity already.
-      const enrichPromise = enrichEntity(env, ORG_ID, entity.id, { mode: 'full' }).catch((err) => {
-        console.error('[job_monitor] enrichment failed for', entity.id, err)
+      // At-ingest enrichment (#631). Dispatches the EnrichmentWorkflow on
+      // the dedicated Worker; idempotent (skips if a prior brief exists).
+      const dispatchPromise = dispatchEnrichmentWorkflow(env, {
+        entityId: entity.id,
+        orgId: ORG_ID,
+        mode: 'full',
+        triggered_by: 'cron:job-monitor',
+      }).catch((err) => {
+        console.error('[job_monitor] enrichment dispatch failed for', entity.id, err)
       })
       if (ctx) {
-        ctx.waitUntil(enrichPromise)
+        ctx.waitUntil(dispatchPromise)
       }
     } catch (err) {
       summary.errors++

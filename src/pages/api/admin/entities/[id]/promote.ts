@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro'
 import { getEntity, transitionStage } from '../../../../../lib/db/entities'
-import { enrichEntity } from '../../../../../lib/enrichment'
+import { dispatchEnrichmentWorkflow } from '../../../../../lib/enrichment/dispatch'
 import { scheduleProspectCadence } from '../../../../../lib/follow-ups/scheduler'
 import { env } from 'cloudflare:workers'
 
@@ -9,14 +9,15 @@ import { env } from 'cloudflare:workers'
  *
  * Thin wrapper retained as the transport for the "Promote" button on the
  * admin signal row — it still handles the signal → prospect stage transition
- * and schedules the prospect follow-up cadence. Enrichment itself now runs
- * automatically at signal ingest (see src/lib/enrichment/index.ts and the
- * lead-gen workers), so on the typical signal this endpoint finds the entity
- * already fully enriched and `enrichEntity` returns `alreadyEnriched: true`
- * without re-billing Claude. For entities that arrived before the at-ingest
- * refactor shipped, the call does an on-demand backfill — but it runs under
- * ctx.waitUntil so a 12-module pipeline doesn't blow past Worker CPU /
- * subrequest limits and crash the redirect (Error 1101 on admin click).
+ * and schedules the prospect follow-up cadence. Enrichment itself runs on
+ * the dedicated EnrichmentWorkflow Worker (#631); on the typical signal
+ * the dispatch's idempotency pre-check finds an existing
+ * `intelligence_brief` and short-circuits without creating a Workflow,
+ * preserving the prior `alreadyEnriched: true` semantic. For entities
+ * that arrived before the at-ingest refactor shipped, dispatch creates a
+ * Workflow that runs the full 12-module pipeline durably with per-step
+ * retry — no longer subject to the post-response CPU budget that drove
+ * the original Error 1101 incident.
  */
 export const POST: APIRoute = async ({ params, locals, redirect }) => {
   const session = locals.session
@@ -42,19 +43,21 @@ export const POST: APIRoute = async ({ params, locals, redirect }) => {
       return redirect('/admin/entities?error=not_found', 302)
     }
 
-    // Enrichment backfill runs in the background. On the typical path the
-    // entity was already enriched at ingest so this resolves immediately via
-    // the alreadyEnriched short-circuit. On backfill it can hit 10+ external
-    // APIs and multiple Claude calls — awaiting that from the request path
-    // blew past Worker limits (Error 1101) on ~50% of promotes.
-    const enrichPromise = enrichEntity(env, session.orgId, entityId, {
+    // Enrichment dispatch runs in the background. On the typical path the
+    // entity was already enriched at ingest, so the dispatcher's
+    // idempotency pre-check returns alreadyEnriched without creating a
+    // Workflow. On backfill, the Workflow handles the full 12-module
+    // pipeline durably — no longer subject to the request-path CPU budget.
+    const dispatchPromise = dispatchEnrichmentWorkflow(env, {
+      entityId,
+      orgId: session.orgId,
       mode: 'full',
       triggered_by: 'admin:promote',
     }).catch((err) => {
-      console.error('[promote] Background enrichment failed', { error: err })
+      console.error('[promote] Background enrichment dispatch failed', { error: err })
     })
     if (locals.cfContext?.waitUntil) {
-      locals.cfContext.waitUntil(enrichPromise)
+      locals.cfContext.waitUntil(dispatchPromise)
     }
 
     try {

@@ -26,8 +26,10 @@ vi.mock('../../../src/lib/db/pipeline-settings.js', () => ({
   getPipelineSettings: vi.fn(),
 }))
 
-vi.mock('../../../src/lib/enrichment/index.js', () => ({
-  enrichEntity: vi.fn().mockResolvedValue(undefined),
+vi.mock('../../../src/lib/enrichment/dispatch.js', () => ({
+  dispatchEnrichmentWorkflow: vi
+    .fn()
+    .mockResolvedValue({ workflowRunId: 'wf-test', alreadyEnriched: false, dispatched: true }),
 }))
 
 // ---------------------------------------------------------------------------

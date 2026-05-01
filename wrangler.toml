@@ -100,6 +100,28 @@ bucket_name = "smd-consultant-photos"
 binding = "SCAN_WORKFLOW_SERVICE"
 service = "ss-scan-workflow"
 
+# ---------- Service binding to enrichment-workflow Worker ----------
+# Cloudflare Workflows orchestration for entity enrichment lives on its
+# own Worker (`ss-enrichment-workflow`, see `workers/enrichment-workflow/`).
+# Same architectural reasoning as the scan-workflow binding above: #631
+# was opened after the 2026-04-30 measurement found 86% of created
+# entities had no enrichment activity — the legacy
+# `ctx.waitUntil(enrichEntity(...))` path was being killed by Workers'
+# post-response CPU budget on lead-gen ingest batches.
+#
+# This binding lets the 7 trigger sites (lead-gen workers + admin
+# endpoints) dispatch enrichment via:
+#
+#   env.ENRICHMENT_WORKFLOW_SERVICE.fetch('https://internal/dispatch', {
+#     method: 'POST',
+#     body: JSON.stringify({ entityId, orgId, mode, triggered_by }),
+#   })
+#
+# The target Worker creates a Workflow instance and returns the instance id.
+[[services]]
+binding = "ENRICHMENT_WORKFLOW_SERVICE"
+service = "ss-enrichment-workflow"
+
 # ---------- Workers KV (sessions) ----------
 [[kv_namespaces]]
 binding = "SESSIONS"

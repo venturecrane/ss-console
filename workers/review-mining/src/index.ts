@@ -17,7 +17,7 @@ import { appendContext } from '../../../src/lib/db/context.js'
 import { getGeneratorConfig, recordGeneratorRun } from '../../../src/lib/db/generators.js'
 import { getPipelineSettings } from '../../../src/lib/db/pipeline-settings.js'
 import type { ReviewMiningConfig } from '../../../src/lib/generators/types.js'
-import { enrichEntity } from '../../../src/lib/enrichment/index.js'
+import { dispatchEnrichmentWorkflow } from '../../../src/lib/enrichment/dispatch.js'
 import { discoverBusinesses, fetchReviews } from './outscraper.js'
 import { scoreReviews } from './qualify.js'
 import { sendFailureAlert, type RunSummary } from './alert.js'
@@ -44,6 +44,8 @@ export interface Env {
   // Optional keys used by the at-ingest enrichment pipeline.
   SERPAPI_API_KEY?: string
   PROXYCURL_API_KEY?: string
+  /** Service binding to ss-enrichment-workflow Worker (#631). */
+  ENRICHMENT_WORKFLOW_SERVICE?: { fetch: typeof fetch }
 }
 
 async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
@@ -226,18 +228,21 @@ async function run(env: Env, ctx?: ExecutionContext): Promise<RunSummary> {
 
       summary.written++
 
-      // At-ingest enrichment (issue #471). Detached — the review-mining run
-      // already pays for Outscraper per business, and enrichment adds the
-      // Claude-powered dossier so the admin has something to act on without
-      // a second button click. Idempotent on re-runs.
-      const enrichPromise = enrichEntity(env, ORG_ID, entity.id, {
+      // At-ingest enrichment (#631). Dispatches the EnrichmentWorkflow on
+      // the dedicated Worker; idempotent (skips if a prior brief exists).
+      const dispatchPromise = dispatchEnrichmentWorkflow(env, {
+        entityId: entity.id,
+        orgId: ORG_ID,
         mode: 'full',
         triggered_by: 'cron:review-mining',
       }).catch((err) => {
-        console.error('[review_mining] enrichment failed', { entityId: entity.id, error: err })
+        console.error('[review_mining] enrichment dispatch failed', {
+          entityId: entity.id,
+          error: err,
+        })
       })
       if (ctx) {
-        ctx.waitUntil(enrichPromise)
+        ctx.waitUntil(dispatchPromise)
       }
     } catch (err) {
       summary.errors++

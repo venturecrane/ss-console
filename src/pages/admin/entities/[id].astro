@@ -406,7 +406,15 @@ function confidenceColor(_confidence: string): string {
     )
   }
   {
-    dossierGenerated && (
+    dossierGenerated === 'queued' && (
+      <div class="bg-surface border border-pending text-pending text-sm px-4 py-3 rounded-[var(--ss-radius-card)] mb-4">
+        Re-enrichment queued for {entity.name}. The pipeline runs in the background — refresh in
+        about 30 seconds to see updated reviews, synthesis, news, and outreach draft.
+      </div>
+    )
+  }
+  {
+    dossierGenerated === '1' && (
       <div class="bg-surface border border-complete text-complete text-sm px-4 py-3 rounded-[var(--ss-radius-card)] mb-4">
         Re-enriched {entity.name}. Refreshed reviews, synthesis, news, and outreach draft — see
         timeline below.
