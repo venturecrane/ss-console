@@ -197,6 +197,21 @@ interface AuthSession {
   expiresAt: string
 }
 
+interface TurnstileRenderOptions {
+  sitekey: string
+  callback?: (token: string) => void
+  'expired-callback'?: () => void
+  'error-callback'?: () => void
+}
+
+interface TurnstileApi {
+  render(container: Element, options: TurnstileRenderOptions): string
+  getResponse(widgetId?: string | null): string
+  reset(widgetId?: string | null): void
+}
+
+declare const turnstile: TurnstileApi | undefined
+
 declare namespace App {
   interface Locals {
     /** Populated by auth middleware on /admin/* and /portal/* routes. Null on public routes. */
