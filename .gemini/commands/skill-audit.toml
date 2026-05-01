@@ -1,0 +1,53 @@
+description = "---"
+
+prompt = """
+name: skill-audit
+description: Monthly skill health report. Audits all SKILL.md files for schema gaps, staleness, and deprecation queue status.
+version: 1.0.0
+scope: enterprise
+owner: captain
+status: stable
+---
+
+# /skill-audit - Monthly Skill Health Report
+
+Invoke the `crane_skill_audit` MCP tool and walk through the report.
+
+## How to run
+
+```
+/skill-audit
+```
+
+This command:
+
+1. Calls `crane_skill_audit()` with default parameters (`scope: all`, `stale_threshold_days: 180`, `include_deprecated: true`).
+2. Displays the structured report with sections for inventory, schema gaps, staleness, and the deprecation queue.
+3. Prompts you to review any flagged items.
+4. Records completion via `crane_schedule(action: "complete", name: "skill-audit", ...)`.
+
+## What to expect
+
+The report contains four sections:
+
+- **Inventory** - Total skills by scope, status, and owner.
+- **Schema gaps** - Skills missing required frontmatter fields. Each entry shows which fields are missing.
+- **Staleness** - Skills not touched in git for more than 180 days, sorted worst-first.
+- **Deprecation queue** - Skills with `status: deprecated`, sorted by days until sunset.
+
+Reference drift checking (broken MCP tool / file / command references) is not included here. Run `/skill-review --all` separately for that.
+
+## Options
+
+You can customize the audit:
+
+```
+crane_skill_audit(scope: "enterprise")          # enterprise skills only
+crane_skill_audit(stale_threshold_days: 90)     # tighter staleness window
+crane_skill_audit(include_deprecated: false)    # exclude deprecated from counts
+```
+
+## Full workflow
+
+See `.agents/skills/skill-audit/SKILL.md` for the complete step-by-step workflow including how to act on each report section and record completion.
+"""
