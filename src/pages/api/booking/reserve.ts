@@ -83,24 +83,12 @@ export const POST: APIRoute = async ({ request }) => {
   const name = trimString(body.name)
   const email = trimString(body.email)
   const businessName = trimString(body.business_name)
-  const phone = trimString(body.phone)
   const slotStartUtc = trimString(body.slot_start_utc)
 
   if (!name || !email || !businessName || !slotStartUtc) {
     return jsonResponse(400, {
       error: 'validation_failed',
       message: 'name, email, business_name, and slot_start_utc are required',
-    })
-  }
-  // Phone is required for new website-driven bookings (the unified intake
-  // collects it). Admin "Send booking link" flow may still come through
-  // without phone — those carry a prefill_token and we don't want to break
-  // pre-existing booking-link campaigns.
-  if (!phone && !body.prefill_token) {
-    return jsonResponse(400, {
-      error: 'validation_failed',
-      message: 'Phone is required.',
-      field_errors: { phone: 'Phone is required.' },
     })
   }
 
@@ -129,11 +117,7 @@ export const POST: APIRoute = async ({ request }) => {
     slotStart.getTime() + BOOKING_CONFIG.slot_minutes * 60_000
   ).toISOString()
 
-  // Optional intake fields. Categorical fields stay supported for the legacy
-  // /get-started prep flow that still uses /api/intake; the new unified intake
-  // on /book sends `message` (free text) and `website` instead.
-  const website = trimString(body.website) || null
-  const userMessage = typeof body.message === 'string' ? body.message.trim() : null
+  // Optional intake fields
   const vertical = trimString(body.vertical) || null
   const employeeCount = parseOptionalInt(body.employee_count)
   const yearsInBusiness = parseOptionalInt(body.years_in_business)
@@ -229,9 +213,6 @@ export const POST: APIRoute = async ({ request }) => {
         name,
         email,
         businessName,
-        phone,
-        website,
-        userMessage,
         vertical,
         employeeCount,
         yearsInBusiness,
@@ -239,7 +220,7 @@ export const POST: APIRoute = async ({ request }) => {
         howHeard,
       },
       slotStartUtc,
-      preSeeded ? 'admin_booking_link' : 'website_intake_booking',
+      preSeeded ? 'admin_booking_link' : undefined,
       preSeeded
     )
 

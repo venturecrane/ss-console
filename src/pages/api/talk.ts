@@ -10,11 +10,6 @@ import {
 /**
  * POST /api/talk
  *
- * @deprecated Replaced by /api/intake/send (the unified intake's "Send"
- * path) as part of the /talk + /book merge. Kept alive for one release
- * cycle to absorb in-flight POSTs from any tabs that loaded the old
- * /talk client JS during the deploy window. Remove in a follow-up PR.
- *
  * Voice-intake conversation endpoint. Receives a transcribed utterance
  * (browser-side STT via Web Speech API), sends it to Claude with the
  * conversation doctrine system prompt, returns the agent reply.
