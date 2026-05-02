@@ -36,7 +36,6 @@ function readMarketingFiles(): string[] {
     join(componentsDir, 'WhatYouGet.astro'),
     join(componentsDir, 'CaseStudies.astro'),
     join(componentsDir, 'About.astro'),
-    join(componentsDir, 'WhatWeWontDo.astro'),
     join(componentsDir, 'FinalCta.astro'),
     join(componentsDir, 'Footer.astro'),
     join(componentsDir, 'JsonLd.astro'),
@@ -54,7 +53,6 @@ describe('component existence', () => {
     'WhatYouGet.astro',
     'CaseStudies.astro',
     'About.astro',
-    'WhatWeWontDo.astro',
     'FinalCta.astro',
     'Footer.astro',
     'JsonLd.astro',
@@ -85,7 +83,6 @@ describe('voice standard', () => {
     'HowWePrice.astro',
     'WhatYouGet.astro',
     'About.astro',
-    'WhatWeWontDo.astro',
     'FinalCta.astro',
   ]
 
