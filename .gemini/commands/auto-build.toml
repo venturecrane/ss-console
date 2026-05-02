@@ -1,4 +1,6 @@
-# /auto-build - Vetted plan-and-execute workflow
+description = "Vetted plan-and-execute workflow"
+
+prompt = """
 
 This skill orchestrates a fixed six-step workflow the Captain runs by hand for non-trivial implementation tasks: enter plan mode → build a plan → run `/critique` → exit plan mode for approval → execute autonomously under Auto Mode. It is a thin coordination layer over harness primitives and the existing `/critique` skill. It does not reinvent any of those pieces.
 
@@ -150,3 +152,4 @@ The skill must explicitly forbid these. The Captain has flagged each one in feed
 - **Composability:** `/auto-build` ends at "PR opened, CI green, ready to merge." It does not invoke `/ship`. If the Captain wants ship-too, they invoke `/ship` after.
 - **Critique depth:** Single round per `/critique`'s own design. The Captain can re-invoke `/critique` manually if they want another round before approval.
 - **Trigger ownership:** Captain-invoked, not harness-suggested. The description field reflects this. Do not lower the bar by self-suggesting `/auto-build` in conversational responses; let the Captain decide.
+"""
