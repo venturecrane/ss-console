@@ -1,30 +1,31 @@
 ---
-// Who We Help — stage-of-business and objective-led, not pain-led. Pain
-// stays only in §01 ProblemCards.
+// Who This Is For: fit qualification.
 //
-// Doctrine: every claim here is either an owner-voiced symptom (extractive,
-// safe under the no-fabrication rule) or a capability pointer to §05 (the
-// six-capability grid at /#capabilities). No closeness-of-fix promises, no
-// outcome guarantees, no fabricated assurance.
-const segments = [
-  {
-    title: 'Outgrowing Your Tools',
-    where:
-      'You started with spreadsheets and free apps and they got you here. Data lives in five places, the same numbers get retyped across three tools, and you spend a chunk of your week keeping things from falling apart.',
-    starts: 'Vendor and platform selection. Systems integration.',
-  },
-  {
-    title: 'Stuck in Every Decision',
-    where:
-      "Nothing moves without you. Your team checks with you on things they should be able to handle, and you know it has to change, but there's no documented way of working for them to follow.",
-    starts: 'Process design. Operational visibility.',
-  },
-  {
-    title: 'Ready to Grow Without Breaking',
-    where:
-      "You could take on more work. You could hire. But you can see that the way things run today won't hold up under more weight, and growth feels riskier than it should.",
-    starts: 'Operational visibility. Process design.',
-  },
+// Rebuild rationale: the previous 3-box "stages of business" grid was SaaS
+// landing-page convention, not consulting-firm convention. It overlapped §01
+// (owner-voiced symptoms), §06 (capabilities), and §09 (anti-fit). It also
+// repeated "WHERE YOU ARE" three times (Redundancy Pattern violation per
+// patterns/02) and addressed the reader diagnostically.
+//
+// New shape: short qualifying lede + 2-column FIT / NOT A FIT comparison.
+// Every claim maps to authored content in CLAUDE.md or
+// docs/adr/decision-stack.md (no fabrication, Pattern A/B clean).
+//
+// Doctrine: "we" voice, third-person descriptive (no diagnostic "you"),
+// no published dollars, no fixed timeframes, no AI rhetoric, single-accent
+// burnt orange holds, plainspoken Sign Shop visual register.
+const fitSignals = [
+  'The owner makes the call. No partners or board to convince first.',
+  "The business is past survival mode. Payroll runs. There's a team in place.",
+  'Phoenix metro, or comfortable working with a Phoenix-based team remotely.',
+  'Open to changing how the work gets done.',
+]
+
+const notAFit = [
+  'The business is in active crisis. Stabilize first. We are not the right call mid-fire.',
+  "The work is bookkeeping cleanup, or building a new product from scratch. That's a different conversation.",
+  'The work needs ongoing staffing. We are not a fractional COO. We deliver and we leave.',
+  'Decisions need three or more signatures. We are not built for that approval process.',
 ]
 ---
 
@@ -40,54 +41,58 @@ const segments = [
       <h2
         class="font-['Archivo'] text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
       >
-        Who We Help
+        Who This Is For
       </h2>
       <p
         class="mt-6 max-w-2xl font-['Archivo'] text-lg text-balance text-[color:var(--ss-color-text-secondary)]"
       >
-        Three stages of business we know well. The capabilities we point to are the typical starting
-        point, not a promise of what the work will be.
+        This works best for established businesses where the owner is the one who decides.
       </p>
     </div>
+
     <div
-      class="grid grid-cols-1 gap-0 md:grid-cols-3 border-t-[3px] border-[color:var(--ss-color-text-primary)]"
+      class="grid grid-cols-1 gap-0 md:grid-cols-2 border-t-[3px] border-[color:var(--ss-color-text-primary)]"
     >
-      {
-        segments.map((s, i) => (
-          <div
-            class:list={[
-              'p-8 bg-[color:var(--ss-color-background)] border-b-[3px] border-[color:var(--ss-color-text-primary)]',
-              i !== 2 && 'md:border-r-[3px] md:border-[color:var(--ss-color-text-primary)]',
-            ]}
-          >
-            <h3 class="font-['Archivo'] text-xl font-bold uppercase tracking-[-0.01em] text-[color:var(--ss-color-text-primary)]">
-              {s.title}
-            </h3>
-            <div class="mt-6">
-              <p class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--ss-color-text-secondary)]">
-                Where you are
-              </p>
-              <p class="mt-2 font-['Archivo'] text-[color:var(--ss-color-text-primary)]">
-                {s.where}
-              </p>
-            </div>
-            <div class="mt-6 pt-6 border-t border-[color:var(--ss-color-border)]">
-              <p class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--ss-color-primary)]">
-                Where an engagement here usually starts
-              </p>
-              <p class="mt-2 font-['Archivo'] text-[color:var(--ss-color-text-primary)]">
-                <a
-                  href="/#capabilities"
-                  class="underline decoration-[color:var(--ss-color-primary)] decoration-2 underline-offset-4 hover:text-[color:var(--ss-color-primary)]"
-                  data-ev={`segment-capability-${s.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
-                >
-                  {s.starts}
-                </a>
-              </p>
-            </div>
-          </div>
-        ))
-      }
+      <div
+        class="p-8 bg-[color:var(--ss-color-background)] border-b-[3px] md:border-b-0 md:border-r-[3px] border-[color:var(--ss-color-text-primary)]"
+      >
+        <p
+          class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--ss-color-primary)]"
+        >
+          Fit
+        </p>
+        <ul class="mt-6 space-y-5">
+          {
+            fitSignals.map((item) => (
+              <li class="flex items-start gap-4">
+                <span class="mt-2 inline-block w-3 h-3 shrink-0 bg-[color:var(--ss-color-primary)]" />
+                <span class="font-['Archivo'] leading-relaxed text-[color:var(--ss-color-text-primary)]">
+                  {item}
+                </span>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+      <div class="p-8 bg-[color:var(--ss-color-background)]">
+        <p
+          class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--ss-color-text-secondary)]"
+        >
+          Not a fit
+        </p>
+        <ul class="mt-6 space-y-5">
+          {
+            notAFit.map((item) => (
+              <li class="flex items-start gap-4">
+                <span class="mt-2 inline-block w-3 h-3 shrink-0 border border-[color:var(--ss-color-text-primary)]" />
+                <span class="font-['Archivo'] leading-relaxed text-[color:var(--ss-color-text-primary)]">
+                  {item}
+                </span>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
     </div>
   </div>
 </section>
