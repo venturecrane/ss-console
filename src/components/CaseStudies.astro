@@ -36,6 +36,24 @@ const studies = [
       "A structured onboarding process so new hires know what to expect and aren't guessing from day one. Documented workflows for common policy types so the team handles things consistently. Simple tracking so managers can see workload and spot problems before they turn into resignations.",
     problems: ['Talent gaps', 'Process design', 'Operational visibility'],
   },
+  {
+    vertical: 'Home Services',
+    pattern: 'Estimates from field notes',
+    challenge:
+      'The owner takes photos and voice notes during a site visit, then writes up the estimate at home that night. Two or three hours per estimate, often after a twelve-hour day. The first one of the night reads sharp; the last one reads tired. Customers are waiting two or three days to hear back.',
+    solution:
+      "AI drafts a structured estimate from the photos and voice notes, following the firm's template. The owner reviews and edits in ten or fifteen minutes instead of writing from scratch. AI handles the structured-text part it is actually good at; the owner keeps the judgment about scope and price.",
+    problems: ['Owner bottleneck', 'AI and automation'],
+  },
+  {
+    vertical: 'Professional Services',
+    pattern: 'When AI is the wrong tool',
+    challenge:
+      'The firm wanted AI to draft client memos. They had seen demos and were worried about falling behind. Each memo required reading the file, understanding the relevant law, and making judgment calls about what the client needed to know. The drafting was not the slow part; the thinking was.',
+    solution:
+      'We said no to AI here. We built a stronger memo template library, a checklist the associate runs through, and a one-page reference for the most common matter types. The associates ship cleaner first drafts in less time. AI would have generated text that took longer to review and correct than to write from a good template.',
+    problems: ['Process design', 'Vendor and platform selection'],
+  },
 ]
 ---
 
@@ -53,9 +71,11 @@ const studies = [
       >
         Patterns We See
       </h2>
-      <p class="mt-6 max-w-2xl font-['Archivo'] text-[color:var(--ss-color-text-secondary)]">
-        Composite patterns drawn from problems we keep seeing across businesses your size. Not
-        specific engagements. As we close real engagements, those replace what is here.
+      <p
+        class="mt-6 max-w-2xl font-['Archivo'] text-lg text-balance text-[color:var(--ss-color-text-secondary)]"
+      >
+        Composite patterns drawn from problems we keep seeing. Not specific engagements. As we close
+        real ones, those replace what is here.
       </p>
     </div>
 
