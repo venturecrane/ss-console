@@ -1,6 +1,7 @@
 ---
-// How We Engage — replaces HowItWorks + Pricing flow grid. One narrative
-// of how an engagement runs, plus the price-shape rationale as a sub-block.
+// How We Engage — narrative of how an engagement runs, four beats.
+// Pricing was extracted to its own §04 HowWePrice (dark inverse-surface
+// section) per the IA review: pricing has H2 dignity, not sub-block.
 //
 // Doctrine: no fixed timeframes, no published dollar amounts, "we" voice,
 // no fabricated outcomes, no personalized outreach-promise templates.
@@ -21,13 +22,6 @@ const beats = [
     title: 'We build and train alongside your team',
     body: 'We design, build, configure, and train alongside your team. The engagement ends when your team is running what we built, with documentation in their hands. We stay available if a follow-up makes sense.',
   },
-]
-
-const priceShape = [
-  'Fixed price. You see the total before work starts.',
-  'Scoped to your objectives, not a vague retainer.',
-  'No commitment until after the conversation.',
-  'Smallest engagements start small. Pricing fits the shape of the problem.',
 ]
 ---
 
@@ -70,43 +64,6 @@ const priceShape = [
           </div>
         ))
       }
-    </div>
-
-    <div class="mt-16 grid grid-cols-1 gap-0 md:grid-cols-12">
-      <div
-        class="md:col-span-5 py-10 md:py-12 md:pr-10 border-b-[3px] md:border-b-0 md:border-r-[3px] border-[color:var(--ss-color-text-primary)]"
-      >
-        <p
-          class="font-['Archivo_Narrow'] text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--ss-color-primary)]"
-        >
-          How we price
-        </p>
-        <h3
-          class="mt-3 font-['Archivo'] text-3xl md:text-4xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
-        >
-          Scoped to your business
-        </h3>
-        <p
-          class="mt-6 font-['Archivo'] leading-relaxed text-[color:var(--ss-color-text-secondary)]"
-        >
-          Every business is different. We quote a fixed price after we understand yours. No hourly
-          billing, no open-ended retainers, no surprises.
-        </p>
-      </div>
-      <div class="md:col-span-7 py-10 md:py-12 md:pl-10">
-        <ul class="space-y-5">
-          {
-            priceShape.map((item) => (
-              <li class="flex items-start gap-4">
-                <span class="mt-2 inline-block w-3 h-3 shrink-0 bg-[color:var(--ss-color-primary)]" />
-                <span class="font-['Archivo'] leading-snug text-[color:var(--ss-color-text-primary)]">
-                  {item}
-                </span>
-              </li>
-            ))
-          }
-        </ul>
-      </div>
     </div>
   </div>
 </section>
