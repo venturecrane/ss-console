@@ -1,14 +1,354 @@
 ---
-/**
- * /talk has been merged into /book as the unified intake.
- *
- * Permanent redirect to /book. Both URLs share the same destination so
- * existing inbound links (referrals, marketing, search index) keep working.
- *
- * /api/talk is left alive for one release cycle to absorb in-flight POSTs
- * from any tabs that loaded the old client JS during deploy.
- */
-export const prerender = false
-
-return Astro.redirect('/book', 301)
+import Base from '../layouts/Base.astro'
+import Nav from '../components/Nav.astro'
+import Footer from '../components/Footer.astro'
 ---
+
+<Base
+  title="Talk to us | SMD Services"
+  description="Tell us where the business is now, where you're trying to take it, and what's in the way."
+>
+  <Nav />
+  <main id="main" role="main" class="px-6 py-20">
+    <div class="mx-auto max-w-2xl">
+      <header>
+        <h1 class="text-3xl font-bold text-[color:var(--ss-color-text-primary)] sm:text-4xl">
+          Talk to us about your business.
+        </h1>
+        <p class="mt-4 text-lg text-[color:var(--ss-color-text-secondary)]">
+          Tell us where the business is now, where you're trying to take it, and what's in the way.
+          Brief is fine; details help.
+        </p>
+      </header>
+
+      <section id="voice-shell" data-state="idle" class="mt-10">
+        <div class="relative">
+          <label for="text-input" class="sr-only">Tell us about your business</label>
+          <textarea
+            id="text-input"
+            rows="6"
+            placeholder="We run a 14-truck HVAC company in Mesa. Trying to add a second crew next year. Quoting is the bottleneck. We lose deals waiting on estimates."
+            class="block w-full rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-text-secondary)]/20 bg-white px-4 py-3 pr-28 text-base leading-relaxed text-[color:var(--ss-color-text-primary)] shadow-sm transition-colors placeholder:text-[color:var(--ss-color-text-secondary)]/50 focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed read-only:cursor-not-allowed read-only:bg-[color:var(--ss-color-text-secondary)]/5"
+          ></textarea>
+          <button
+            id="mic-btn"
+            type="button"
+            aria-label="Use voice input"
+            data-ev="talk-voice-input"
+            class="absolute bottom-3 right-14 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white shadow-md transition-all hover:opacity-90 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <span class="material-symbols-outlined" style="font-size: 20px;" aria-hidden="true"
+              >mic</span
+            >
+          </button>
+          <button
+            id="send-btn"
+            type="button"
+            aria-label="Send message"
+            disabled
+            data-ev="talk-text-submit"
+            class="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white shadow-md transition-all hover:opacity-90 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <span
+              id="send-icon"
+              class="material-symbols-outlined"
+              style="font-size: 20px;"
+              aria-hidden="true">arrow_upward</span
+            >
+          </button>
+        </div>
+
+        <div class="mt-4 text-right">
+          <a
+            id="start-over"
+            href="#"
+            hidden
+            data-ev="talk-start-over"
+            class="text-sm font-medium text-[color:var(--ss-color-text-secondary)] underline underline-offset-4 hover:text-[color:var(--ss-color-text-primary)]"
+            >Start over</a
+          >
+        </div>
+
+        <div
+          id="unsupported-browser"
+          hidden
+          class="mt-6 rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-text-secondary)]/20 bg-[color:var(--ss-color-text-secondary)]/5 px-4 py-3 text-sm text-[color:var(--ss-color-text-secondary)]"
+        >
+          Voice input needs Chrome, Edge, or Safari 14.5 or newer. You can still type your message
+          above.
+        </div>
+
+        <div
+          id="permission-error"
+          hidden
+          class="mt-6 rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-error)]/30 bg-[color:var(--ss-color-error)]/5 px-4 py-3 text-sm text-[color:var(--ss-color-error)]"
+        >
+          Microphone access was blocked. To allow it, click the lock or mic icon in your browser's
+          address bar, then reload this page. You can still type your message above.
+        </div>
+
+        <div
+          id="generic-error"
+          hidden
+          class="mt-6 rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-error)]/30 bg-[color:var(--ss-color-error)]/5 px-4 py-3 text-sm text-[color:var(--ss-color-error)]"
+        >
+          Something went wrong. Tap Send to retry.
+        </div>
+
+        <div id="response-slot" hidden aria-live="polite" class="mt-10">
+          <h2
+            class="mb-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--ss-color-text-secondary)]"
+          >
+            We hear you
+          </h2>
+          <div
+            id="response-content"
+            class="whitespace-pre-wrap rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-text-secondary)]/20 bg-white px-4 py-3 text-base leading-relaxed text-[color:var(--ss-color-text-primary)] shadow-sm"
+          >
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <Footer />
+
+  <style>
+    #voice-shell[data-state='listening'] #mic-btn {
+      background-color: var(--ss-color-error, #dc2626);
+      animation: mic-pulse 1.4s ease-in-out infinite;
+    }
+    #voice-shell[data-state='thinking'] #send-btn #send-icon {
+      animation: send-spin 1s linear infinite;
+    }
+    @keyframes mic-pulse {
+      0%,
+      100% {
+        box-shadow:
+          0 4px 6px -1px rgb(0 0 0 / 0.1),
+          0 0 0 0 rgb(220 38 38 / 0.4);
+      }
+      50% {
+        box-shadow:
+          0 4px 6px -1px rgb(0 0 0 / 0.1),
+          0 0 0 12px rgb(220 38 38 / 0);
+      }
+    }
+    @keyframes send-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+
+  <script is:inline>
+    ;(() => {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+      const shell = document.getElementById('voice-shell')
+      const textInput = document.getElementById('text-input')
+      const micBtn = document.getElementById('mic-btn')
+      const sendBtn = document.getElementById('send-btn')
+      const sendIcon = document.getElementById('send-icon')
+      const startOverLink = document.getElementById('start-over')
+      const responseSlot = document.getElementById('response-slot')
+      const responseContent = document.getElementById('response-content')
+      const unsupported = document.getElementById('unsupported-browser')
+      const permissionError = document.getElementById('permission-error')
+      const genericError = document.getElementById('generic-error')
+
+      const TIMEOUT_MS = 15000
+      let conversationId = null
+      let recognition = null
+      let timeoutHandle = null
+
+      const supportsVoice = !!SR
+      if (!supportsVoice) {
+        micBtn.hidden = true
+        unsupported.hidden = false
+      } else {
+        recognition = new SR()
+        recognition.lang = 'en-US'
+        recognition.interimResults = false
+        recognition.continuous = false
+        recognition.maxAlternatives = 1
+
+        recognition.onresult = (e) => {
+          let finalText = ''
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            if (e.results[i].isFinal) {
+              finalText += e.results[i][0].transcript
+            }
+          }
+          if (finalText) {
+            const current = textInput.value
+            const needsSpace = current.length > 0 && !/\s$/.test(current)
+            textInput.value = current + (needsSpace ? ' ' : '') + finalText
+            updateSendDisabled()
+          }
+        }
+
+        recognition.onerror = (e) => {
+          if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+            permissionError.hidden = false
+          } else if (e.error === 'no-speech' || e.error === 'aborted') {
+            // benign; no message
+          } else {
+            console.error('[talk] Speech recognition error', e.error)
+            genericError.hidden = false
+          }
+          setState('idle')
+        }
+
+        recognition.onend = () => {
+          if (shell.dataset.state === 'listening') {
+            setState('idle')
+          }
+        }
+      }
+
+      const isEmpty = () => textInput.value.trim().length === 0
+
+      const setState = (state) => {
+        shell.dataset.state = state
+        if (state === 'listening') {
+          textInput.readOnly = true
+          // Hide send entirely during listening (no enable/disable flicker
+          // when the recording starts/stops with text already in the box).
+          sendBtn.hidden = true
+          sendIcon.textContent = 'arrow_upward'
+        } else if (state === 'thinking') {
+          textInput.readOnly = false
+          if (supportsVoice) micBtn.disabled = true
+          sendBtn.hidden = false
+          sendBtn.disabled = false
+          sendIcon.textContent = 'progress_activity'
+        } else if (state === 'responded') {
+          textInput.readOnly = true
+          if (supportsVoice) micBtn.hidden = true
+          sendBtn.hidden = true
+          sendIcon.textContent = 'arrow_upward'
+          startOverLink.hidden = false
+        } else {
+          // idle
+          textInput.readOnly = false
+          if (supportsVoice) {
+            micBtn.disabled = false
+            micBtn.hidden = false
+          }
+          sendBtn.hidden = false
+          sendBtn.disabled = isEmpty()
+          sendIcon.textContent = 'arrow_upward'
+        }
+      }
+
+      const updateSendDisabled = () => {
+        if (shell.dataset.state === 'idle') {
+          sendBtn.disabled = isEmpty()
+        }
+      }
+
+      const clearErrors = () => {
+        permissionError.hidden = true
+        genericError.hidden = true
+      }
+
+      const submit = async () => {
+        const text = textInput.value.trim()
+        if (!text) return
+        if (shell.dataset.state === 'thinking') return
+        clearErrors()
+        responseSlot.hidden = false
+        responseContent.textContent = 'Thinking...'
+        setState('thinking')
+        responseSlot.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+
+        timeoutHandle = setTimeout(() => {
+          genericError.hidden = false
+          responseContent.textContent = ''
+          responseSlot.hidden = true
+          setState('idle')
+        }, TIMEOUT_MS)
+
+        try {
+          const res = await fetch('/api/talk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              transcript: text,
+              conversation_id: conversationId,
+            }),
+          })
+          if (timeoutHandle) clearTimeout(timeoutHandle)
+          const body = await res.json().catch(() => ({}))
+          if (!res.ok) {
+            console.error('[talk] API error', res.status, body)
+            genericError.hidden = false
+            responseContent.textContent = ''
+            responseSlot.hidden = true
+            setState('idle')
+            return
+          }
+          conversationId = body.conversation_id || conversationId
+          responseContent.textContent = body.reply || ''
+          setState('responded')
+        } catch (err) {
+          if (timeoutHandle) clearTimeout(timeoutHandle)
+          console.error('[talk] Network error', err)
+          genericError.hidden = false
+          responseContent.textContent = ''
+          responseSlot.hidden = true
+          setState('idle')
+        }
+      }
+
+      const startOver = (e) => {
+        if (e) e.preventDefault()
+        textInput.value = ''
+        responseContent.textContent = ''
+        responseSlot.hidden = true
+        startOverLink.hidden = true
+        conversationId = null
+        clearErrors()
+        setState('idle')
+        textInput.focus()
+      }
+
+      textInput.addEventListener('input', updateSendDisabled)
+
+      textInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault()
+          if (!sendBtn.disabled && shell.dataset.state === 'idle') {
+            submit()
+          }
+        }
+      })
+
+      sendBtn.addEventListener('click', () => {
+        submit()
+      })
+
+      if (supportsVoice && micBtn) {
+        micBtn.addEventListener('click', () => {
+          const state = shell.dataset.state
+          if (state === 'listening') {
+            recognition.stop()
+            return
+          }
+          if (state !== 'idle') return
+          clearErrors()
+          setState('listening')
+          try {
+            recognition.start()
+          } catch (err) {
+            console.error('[talk] start() failed', err)
+            setState('idle')
+          }
+        })
+      }
+
+      startOverLink.addEventListener('click', startOver)
+
+      setState('idle')
+    })()
+  </script>
+</Base>

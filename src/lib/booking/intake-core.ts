@@ -16,18 +16,6 @@ export interface IntakeInput {
   name: string
   email: string
   businessName: string
-  phone?: string | null
-  website?: string | null
-  /**
-   * Free-text "tell us about your business" content from the unified
-   * intake's textarea. When non-empty, always written as a context row
-   * so the consultant has the prospect's own words even when no
-   * categorical fields were collected.
-   *
-   * Closes the silent-loss bug where the Book path would lose the
-   * textarea content entirely if categorical fields were absent.
-   */
-  userMessage?: string | null
   vertical?: string | null
   employeeCount?: number | null
   yearsInBusiness?: number | null
@@ -129,8 +117,6 @@ export async function processIntakeSubmission(
       name: input.businessName,
       stage: 'prospect',
       source_pipeline: pipeline,
-      phone: input.phone ?? null,
-      website: input.website ?? null,
     })
     entityId = entity.id
     entityCreated = status === 'created'
@@ -220,17 +206,6 @@ export async function processIntakeSubmission(
   }
 
   // 4. Append intake context
-  //
-  // Two independent inputs feed this row:
-  //   (a) the user's free-text "tell us about your business" message
-  //       from the unified intake's textarea, and
-  //   (b) categorical intake lines from legacy /get-started prep flow
-  //       (vertical, employee count, years, challenge, how heard).
-  //
-  // We write a single context row that combines whatever is present.
-  // Critique #10: previously this only fired when intakeLines was non-empty,
-  // which silently lost the textarea content on the new unified intake's
-  // Book path. Now any non-empty input writes a row.
   const intakeLines: string[] = []
   if (input.vertical) intakeLines.push(`Vertical: ${input.vertical}`)
   if (input.employeeCount) intakeLines.push(`Employees: ${input.employeeCount}`)
@@ -239,24 +214,16 @@ export async function processIntakeSubmission(
     intakeLines.push(`What they're trying to accomplish: ${input.biggestChallenge}`)
   if (input.howHeard) intakeLines.push(`How they found us: ${input.howHeard}`)
 
-  const contentParts: string[] = []
-  const trimmedMessage = input.userMessage?.trim() ?? ''
-  if (trimmedMessage) contentParts.push(trimmedMessage)
-  if (intakeLines.length > 0) contentParts.push(intakeLines.join('\n'))
-
   let contextId: string | null = null
-  if (contentParts.length > 0) {
+  if (intakeLines.length > 0) {
     const contextEntry = await appendContext(db, orgId, {
       entity_id: entityId,
       type: 'intake',
-      content: contentParts.join('\n\n'),
+      content: intakeLines.join('\n'),
       source: pipeline,
       metadata: {
         name: input.name,
         email: input.email,
-        phone: input.phone ?? null,
-        website: input.website ?? null,
-        user_message: trimmedMessage || null,
         vertical: input.vertical,
         employee_count: input.employeeCount,
         years_in_business: input.yearsInBusiness,

@@ -58,7 +58,7 @@ describe('intake questionnaire canonical helper', () => {
   })
 })
 
-describe('intake surfaces', () => {
+describe('book and get-started intake surfaces', () => {
   const bookSrc = readFileSync(resolve('src/pages/book.astro'), 'utf-8')
   const getStartedSrc = readFileSync(resolve('src/pages/get-started.astro'), 'utf-8')
   const componentSrc = readFileSync(
@@ -66,29 +66,29 @@ describe('intake surfaces', () => {
     'utf-8'
   )
 
-  // /book was refactored from the categorical IntakeQuestionnaire to a
-  // UnifiedIntake (4 required fields + free-text textarea + AI follow-up).
-  // /get-started keeps using the shared questionnaire for the post-booking
-  // prep flow, where the categorical fields still serve a purpose.
-
-  it('/book renders the unified intake (post-merge with /talk)', () => {
+  it('both pages import the shared questionnaire primitive', () => {
     expect(bookSrc).toContain(
-      "import UnifiedIntake from '../components/booking/UnifiedIntake.astro'"
+      "import IntakeQuestionnaire from '../components/booking/IntakeQuestionnaire.astro'"
     )
-    expect(bookSrc).toContain('<UnifiedIntake')
-  })
-
-  it('/get-started still uses the shared categorical questionnaire (prep flow)', () => {
     expect(getStartedSrc).toContain(
       "import IntakeQuestionnaire from '../components/booking/IntakeQuestionnaire.astro'"
     )
+  })
+
+  it('renders booking mode on /book and prep mode on /get-started', () => {
+    expect(bookSrc).toContain('<IntakeQuestionnaire')
+    expect(bookSrc).toContain('mode="booking"')
     expect(getStartedSrc).toContain('<IntakeQuestionnaire idPrefix="gs" mode="prep" />')
   })
 
-  it('/get-started routes through the shared normalization helper', () => {
+  it('routes both page scripts through the shared normalization helper', () => {
+    expect(bookSrc).toContain(
+      "import { formDataToObject, normalizeIntakePayload } from '../lib/booking/intake-questionnaire'"
+    )
     expect(getStartedSrc).toContain(
       "import { formDataToObject, normalizeIntakePayload } from '../lib/booking/intake-questionnaire'"
     )
+    expect(bookSrc).toContain('normalizeIntakePayload(formDataToObject(new FormData(form)))')
     expect(getStartedSrc).toContain('normalizeIntakePayload(formDataToObject(new FormData(form)))')
   })
 
