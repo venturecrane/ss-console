@@ -6,119 +6,99 @@ import Footer from '../components/Footer.astro'
 
 <Base
   title="Talk to us | SMD Services"
-  description="Tell us about your business. Tap the mic and talk. We'll listen. A consultant takes it from here."
+  description="Tell us where the business is now, where you're trying to take it, and what's in the way."
 >
   <Nav />
   <main id="main" role="main" class="px-6 py-20">
     <div class="mx-auto max-w-2xl">
       <header class="text-center">
         <h1 class="text-3xl font-bold text-[color:var(--ss-color-text-primary)] sm:text-4xl">
-          Tell us about your business.
+          Talk to us about your business.
         </h1>
-        <p class="mt-3 text-lg text-[color:var(--ss-color-text-secondary)]">
-          Tap the mic and talk. We'll listen. A consultant takes it from here.
+        <p class="mt-4 text-lg text-[color:var(--ss-color-text-secondary)]">
+          Tell us where the business is now, where you're trying to take it, and what's in the way.
+          Brief is fine; details help.
         </p>
       </header>
 
-      <section id="voice-shell" data-state="idle" class="mt-12 flex flex-col items-center">
-        <button
-          id="mic-btn"
-          type="button"
-          aria-label="Tap to speak"
-          data-ev="talk-mic"
-          class="group flex h-32 w-32 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-all hover:scale-105 hover:opacity-90 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <span
-            id="mic-icon"
-            class="material-symbols-outlined"
-            style="font-size: 56px;"
-            aria-hidden="true">mic</span
+      <section id="voice-shell" data-state="idle" class="mt-10">
+        <div class="relative">
+          <label for="text-input" class="sr-only">Tell us about your business</label>
+          <textarea
+            id="text-input"
+            rows="6"
+            placeholder="We run a 14-truck HVAC company in Mesa. Trying to add a second crew next year but I'm the bottleneck on every quote..."
+            class="block w-full rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-text-secondary)]/20 bg-white px-4 py-3 pr-16 text-base leading-relaxed text-[color:var(--ss-color-text-primary)] shadow-sm transition-colors placeholder:text-[color:var(--ss-color-text-secondary)]/50 focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed read-only:cursor-not-allowed read-only:bg-[color:var(--ss-color-text-secondary)]/5"
+          ></textarea>
+          <button
+            id="mic-btn"
+            type="button"
+            aria-label="Use voice input"
+            data-ev="talk-voice-input"
+            class="absolute bottom-3 right-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary text-white shadow-md transition-all hover:opacity-90 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-40"
           >
-        </button>
+            <span class="material-symbols-outlined" style="font-size: 22px;" aria-hidden="true"
+              >mic</span
+            >
+          </button>
+        </div>
 
-        <p
-          id="mic-label"
-          class="mt-4 text-sm font-medium text-[color:var(--ss-color-text-secondary)]"
-        >
-          Tap to speak
-        </p>
+        <div class="mt-4 flex items-center justify-end gap-4">
+          <a
+            id="start-over"
+            href="#"
+            hidden
+            data-ev="talk-start-over"
+            class="text-sm font-medium text-[color:var(--ss-color-text-secondary)] underline underline-offset-4 hover:text-[color:var(--ss-color-text-primary)]"
+            >Start over</a
+          >
+          <button
+            id="send-btn"
+            type="button"
+            disabled
+            data-ev="talk-text-submit"
+            class="inline-flex items-center justify-center rounded-[var(--ss-radius-card)] bg-primary px-6 py-3 text-base font-semibold text-white shadow-sm transition-all hover:opacity-90 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Send it
+          </button>
+        </div>
 
         <div
           id="unsupported-browser"
           hidden
-          class="mt-8 w-full rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-text-secondary)]/30 bg-[color:var(--ss-color-text-secondary)]/5 px-4 py-3 text-sm text-[color:var(--ss-color-text-secondary)]"
+          class="mt-6 rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-text-secondary)]/20 bg-[color:var(--ss-color-text-secondary)]/5 px-4 py-3 text-sm text-[color:var(--ss-color-text-secondary)]"
         >
-          Voice input needs Chrome, Edge, or Safari 14.5 or newer. If you'd rather type, send us a
-          note at <a href="/contact" class="underline">contact</a>.
+          Voice input needs Chrome, Edge, or Safari 14.5 or newer. You can still type your message
+          above.
         </div>
 
         <div
           id="permission-error"
           hidden
-          class="mt-8 w-full rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-error)]/30 bg-[color:var(--ss-color-error)]/5 px-4 py-3 text-sm text-[color:var(--ss-color-error)]"
+          class="mt-6 rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-error)]/30 bg-[color:var(--ss-color-error)]/5 px-4 py-3 text-sm text-[color:var(--ss-color-error)]"
         >
           Microphone access was blocked. To allow it, click the lock or mic icon in your browser's
-          address bar, then reload this page.
+          address bar, then reload this page. You can still type your message above.
         </div>
 
         <div
           id="generic-error"
           hidden
-          class="mt-8 w-full rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-error)]/30 bg-[color:var(--ss-color-error)]/5 px-4 py-3 text-sm text-[color:var(--ss-color-error)]"
+          class="mt-6 rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-error)]/30 bg-[color:var(--ss-color-error)]/5 px-4 py-3 text-sm text-[color:var(--ss-color-error)]"
         >
-          Something went wrong. Tap the mic to try again.
+          Something went wrong. Tap Send to retry.
         </div>
 
-        <div class="mt-12 w-full space-y-6">
-          <div>
-            <h2
-              class="mb-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--ss-color-text-secondary)]"
-            >
-              You said
-            </h2>
-            <div
-              id="transcript-pane"
-              aria-live="polite"
-              class="min-h-[3rem] rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-text-secondary)]/15 bg-white px-4 py-3 text-base leading-relaxed text-[color:var(--ss-color-text-primary)]"
-            >
-              <span
-                id="transcript-placeholder"
-                class="text-[color:var(--ss-color-text-secondary)]/60"
-                >Your words will appear here.</span
-              >
-              <span id="transcript-final"></span>
-              <span
-                id="transcript-interim"
-                class="text-[color:var(--ss-color-text-secondary)]/60 italic"></span>
-            </div>
-          </div>
-
-          <div>
-            <h2
-              class="mb-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--ss-color-text-secondary)]"
-            >
-              We hear you
-            </h2>
-            <div
-              id="response-pane"
-              aria-live="polite"
-              class="min-h-[5rem] rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-text-secondary)]/15 bg-white px-4 py-3 text-base leading-relaxed text-[color:var(--ss-color-text-primary)]"
-            >
-              <span
-                id="response-placeholder"
-                class="text-[color:var(--ss-color-text-secondary)]/60"
-              >
-                Once you've said something, our agent will respond here.
-              </span>
-              <div id="response-content" hidden class="whitespace-pre-wrap"></div>
-              <div
-                id="response-loading"
-                hidden
-                class="text-[color:var(--ss-color-text-secondary)]/60"
-              >
-                Thinking...
-              </div>
-            </div>
+        <div id="response-slot" hidden aria-live="polite" class="mt-10">
+          <h2
+            class="mb-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--ss-color-text-secondary)]"
+          >
+            We hear you
+          </h2>
+          <div
+            id="response-content"
+            class="whitespace-pre-wrap rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-text-secondary)]/20 bg-white px-4 py-3 text-base leading-relaxed text-[color:var(--ss-color-text-primary)] shadow-sm"
+          >
           </div>
         </div>
       </section>
@@ -131,9 +111,6 @@ import Footer from '../components/Footer.astro'
       background-color: var(--ss-color-error, #dc2626);
       animation: mic-pulse 1.4s ease-in-out infinite;
     }
-    #voice-shell[data-state='thinking'] #mic-btn {
-      opacity: 0.6;
-    }
     @keyframes mic-pulse {
       0%,
       100% {
@@ -144,7 +121,7 @@ import Footer from '../components/Footer.astro'
       50% {
         box-shadow:
           0 4px 6px -1px rgb(0 0 0 / 0.1),
-          0 0 0 16px rgb(220 38 38 / 0);
+          0 0 0 12px rgb(220 38 38 / 0);
       }
     }
   </style>
@@ -153,69 +130,95 @@ import Footer from '../components/Footer.astro'
     ;(() => {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition
       const shell = document.getElementById('voice-shell')
+      const textInput = document.getElementById('text-input')
       const micBtn = document.getElementById('mic-btn')
-      const micLabel = document.getElementById('mic-label')
-      const transcriptPlaceholder = document.getElementById('transcript-placeholder')
-      const transcriptFinal = document.getElementById('transcript-final')
-      const transcriptInterim = document.getElementById('transcript-interim')
-      const responsePlaceholder = document.getElementById('response-placeholder')
+      const sendBtn = document.getElementById('send-btn')
+      const startOverLink = document.getElementById('start-over')
+      const responseSlot = document.getElementById('response-slot')
       const responseContent = document.getElementById('response-content')
-      const responseLoading = document.getElementById('response-loading')
       const unsupported = document.getElementById('unsupported-browser')
       const permissionError = document.getElementById('permission-error')
       const genericError = document.getElementById('generic-error')
 
-      if (!SR) {
-        unsupported.hidden = false
-        micBtn.disabled = true
-        micLabel.textContent = 'Voice input not supported'
-        return
-      }
-
-      const recognition = new SR()
-      recognition.lang = 'en-US'
-      recognition.interimResults = true
-      recognition.continuous = false
-      recognition.maxAlternatives = 1
-
-      let finalTranscript = ''
-      let interimTranscript = ''
+      const TIMEOUT_MS = 15000
       let conversationId = null
-      const MIC_LABELS = {
-        idle: 'Tap to speak',
-        listening: 'Listening. Tap to stop.',
-        thinking: 'Thinking...',
-        responded: 'Tap to speak again',
+      let recognition = null
+      let timeoutHandle = null
+
+      const supportsVoice = !!SR
+      if (!supportsVoice) {
+        micBtn.hidden = true
+        unsupported.hidden = false
+      } else {
+        recognition = new SR()
+        recognition.lang = 'en-US'
+        recognition.interimResults = false
+        recognition.continuous = false
+        recognition.maxAlternatives = 1
+
+        recognition.onresult = (e) => {
+          let finalText = ''
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            if (e.results[i].isFinal) {
+              finalText += e.results[i][0].transcript
+            }
+          }
+          if (finalText) {
+            const current = textInput.value
+            const needsSpace = current.length > 0 && !/\s$/.test(current)
+            textInput.value = current + (needsSpace ? ' ' : '') + finalText
+            updateSendDisabled()
+          }
+        }
+
+        recognition.onerror = (e) => {
+          if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+            permissionError.hidden = false
+          } else if (e.error === 'no-speech' || e.error === 'aborted') {
+            // benign; no message
+          } else {
+            console.error('[talk] Speech recognition error', e.error)
+            genericError.hidden = false
+          }
+          setState('idle')
+        }
+
+        recognition.onend = () => {
+          if (shell.dataset.state === 'listening') {
+            setState('idle')
+          }
+        }
       }
+
+      const isEmpty = () => textInput.value.trim().length === 0
 
       const setState = (state) => {
         shell.dataset.state = state
-        micLabel.textContent = MIC_LABELS[state] || ''
-        micBtn.setAttribute(
-          'aria-label',
-          state === 'listening' ? 'Stop recording' : MIC_LABELS[state] || 'Tap to speak'
-        )
-      }
-
-      const renderTranscript = () => {
-        if (finalTranscript || interimTranscript) {
-          transcriptPlaceholder.hidden = true
+        if (state === 'listening') {
+          textInput.readOnly = true
+          sendBtn.disabled = true
+        } else if (state === 'thinking') {
+          textInput.readOnly = false
+          if (supportsVoice) micBtn.disabled = true
+          sendBtn.disabled = true
+          sendBtn.textContent = 'Sending...'
+        } else if (state === 'responded') {
+          textInput.readOnly = true
+          if (supportsVoice) micBtn.hidden = true
+          sendBtn.hidden = true
+          startOverLink.hidden = false
+        } else {
+          textInput.readOnly = false
+          if (supportsVoice) micBtn.disabled = false
+          sendBtn.disabled = isEmpty()
+          sendBtn.textContent = 'Send it'
         }
-        transcriptFinal.textContent = finalTranscript
-        transcriptInterim.textContent = interimTranscript ? ' ' + interimTranscript : ''
       }
 
-      const showResponse = (text) => {
-        responsePlaceholder.hidden = true
-        responseLoading.hidden = true
-        responseContent.hidden = false
-        responseContent.textContent = text
-      }
-
-      const showResponseLoading = () => {
-        responsePlaceholder.hidden = true
-        responseContent.hidden = true
-        responseLoading.hidden = false
+      const updateSendDisabled = () => {
+        if (shell.dataset.state === 'idle') {
+          sendBtn.disabled = isEmpty()
+        }
       }
 
       const clearErrors = () => {
@@ -223,9 +226,21 @@ import Footer from '../components/Footer.astro'
         genericError.hidden = true
       }
 
-      const submitTranscript = async (text) => {
-        showResponseLoading()
+      const submit = async () => {
+        const text = textInput.value.trim()
+        if (!text) return
+        clearErrors()
+        responseSlot.hidden = false
+        responseContent.textContent = 'Thinking...'
         setState('thinking')
+
+        timeoutHandle = setTimeout(() => {
+          genericError.hidden = false
+          responseContent.textContent = ''
+          responseSlot.hidden = true
+          setState('idle')
+        }, TIMEOUT_MS)
+
         try {
           const res = await fetch('/api/talk', {
             method: 'POST',
@@ -235,88 +250,83 @@ import Footer from '../components/Footer.astro'
               conversation_id: conversationId,
             }),
           })
+          if (timeoutHandle) clearTimeout(timeoutHandle)
           const body = await res.json().catch(() => ({}))
           if (!res.ok) {
             console.error('[talk] API error', res.status, body)
             genericError.hidden = false
-            responsePlaceholder.hidden = false
-            responseLoading.hidden = true
+            responseContent.textContent = ''
+            responseSlot.hidden = true
             setState('idle')
             return
           }
           conversationId = body.conversation_id || conversationId
-          showResponse(body.reply || '')
+          responseContent.textContent = body.reply || ''
           setState('responded')
         } catch (err) {
+          if (timeoutHandle) clearTimeout(timeoutHandle)
           console.error('[talk] Network error', err)
           genericError.hidden = false
-          responsePlaceholder.hidden = false
-          responseLoading.hidden = true
+          responseContent.textContent = ''
+          responseSlot.hidden = true
           setState('idle')
         }
       }
 
-      recognition.onresult = (e) => {
-        interimTranscript = ''
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const text = e.results[i][0].transcript
-          if (e.results[i].isFinal) {
-            finalTranscript += text
-          } else {
-            interimTranscript += text
+      const startOver = (e) => {
+        if (e) e.preventDefault()
+        textInput.value = ''
+        responseContent.textContent = ''
+        responseSlot.hidden = true
+        startOverLink.hidden = true
+        sendBtn.hidden = false
+        if (supportsVoice) {
+          micBtn.hidden = false
+          micBtn.disabled = false
+        }
+        conversationId = null
+        clearErrors()
+        setState('idle')
+        textInput.focus()
+      }
+
+      textInput.addEventListener('input', updateSendDisabled)
+
+      textInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault()
+          if (!sendBtn.disabled && shell.dataset.state === 'idle') {
+            submit()
           }
         }
-        renderTranscript()
-      }
-
-      recognition.onerror = (e) => {
-        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-          permissionError.hidden = false
-          setState('idle')
-        } else if (e.error === 'no-speech' || e.error === 'aborted') {
-          setState('idle')
-        } else {
-          console.error('[talk] Speech recognition error', e.error)
-          genericError.hidden = false
-          setState('idle')
-        }
-      }
-
-      recognition.onend = () => {
-        const trimmed = finalTranscript.trim()
-        if (trimmed.length > 0 && shell.dataset.state === 'listening') {
-          submitTranscript(trimmed)
-        } else if (shell.dataset.state === 'listening') {
-          setState('idle')
-        }
-      }
-
-      micBtn.addEventListener('click', () => {
-        const state = shell.dataset.state
-        if (state === 'listening') {
-          recognition.stop()
-          return
-        }
-        // idle | thinking | responded — start a fresh utterance
-        if (state === 'thinking') return
-        clearErrors()
-        finalTranscript = ''
-        interimTranscript = ''
-        transcriptFinal.textContent = ''
-        transcriptInterim.textContent = ''
-        transcriptPlaceholder.hidden = false
-        responsePlaceholder.hidden = false
-        responseContent.hidden = true
-        responseLoading.hidden = true
-        setState('listening')
-        try {
-          recognition.start()
-        } catch (err) {
-          // start() throws if already started or in an invalid state
-          console.error('[talk] start() failed', err)
-          setState('idle')
-        }
       })
+
+      sendBtn.addEventListener('click', () => {
+        submit()
+      })
+
+      if (supportsVoice && micBtn) {
+        micBtn.addEventListener('click', () => {
+          const state = shell.dataset.state
+          if (state === 'listening') {
+            recognition.stop()
+            return
+          }
+          if (state !== 'idle') return
+          clearErrors()
+          setState('listening')
+          try {
+            recognition.start()
+          } catch (err) {
+            console.error('[talk] start() failed', err)
+            setState('idle')
+          }
+        })
+      }
+
+      startOverLink.addEventListener('click', startOver)
+
+      setState('idle')
     })()
   </script>
 </Base>
