@@ -1,0 +1,52 @@
+---
+import Base from '../layouts/Base.astro'
+import Nav from '../components/Nav.astro'
+import Footer from '../components/Footer.astro'
+---
+
+<Base
+  title="Privacy | SMD Services"
+  description="Privacy policy for smd.services. We collect only what you provide directly and use it only to respond to you."
+>
+  <Nav />
+  <main id="main" role="main" class="bg-[color:var(--ss-color-background)] px-6 py-20 md:py-24">
+    <div class="mx-auto max-w-2xl">
+      <h1
+        class="font-['Archivo'] text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
+      >
+        Privacy
+      </h1>
+
+      <div
+        class="mt-10 space-y-6 font-['Archivo'] text-lg leading-relaxed text-[color:var(--ss-color-text-primary)]"
+      >
+        <p>
+          smd.services collects only the information you provide directly: form submissions for
+          inquiries, scheduling data when you book a call, and email content when you contact us. We
+          use it only to respond to you and prepare for our conversation. We do not sell, rent, or
+          share this information with third parties.
+        </p>
+
+        <p>
+          The site uses minimal session cookies required for the booking flow. We do not run
+          third-party advertising trackers or behavioral profiling.
+        </p>
+
+        <p>
+          Email <a
+            href="mailto:team@smd.services"
+            class="underline decoration-[color:var(--ss-color-primary)] decoration-2 underline-offset-4 hover:text-[color:var(--ss-color-primary)]"
+            >team@smd.services</a
+          > with any privacy question or to request deletion of your information.
+        </p>
+      </div>
+
+      <p
+        class="mt-12 font-['Archivo_Narrow'] text-xs uppercase tracking-[0.12em] text-[color:var(--ss-color-text-muted)]"
+      >
+        Last updated: 2026-05-04
+      </p>
+    </div>
+  </main>
+  <Footer />
+</Base>
