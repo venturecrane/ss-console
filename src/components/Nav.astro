@@ -11,9 +11,17 @@ const navLinks = [{ href: '/contact', label: 'Contact' }]
   >
     <a
       href="/"
-      class="inline-block font-['Archivo'] text-base md:text-lg font-black uppercase tracking-[-0.01em] text-[color:var(--ss-color-text-primary)] hover:text-[color:var(--ss-color-primary)] active:text-[color:var(--ss-color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2"
+      aria-label="SMD Services"
+      class="inline-flex items-baseline gap-2 text-base md:text-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2"
     >
-      SMD Services
+      <span
+        class="inline-block bg-[color:var(--ss-color-primary)] px-1.5 py-0.5 font-['Archivo'] font-black uppercase leading-none tracking-tight text-white"
+        >SMD</span
+      >
+      <span
+        class="font-['Archivo_Narrow'] font-semibold leading-none text-[color:var(--ss-color-text-primary)]"
+        >Services</span
+      >
     </a>
 
     <div class="flex items-center gap-3 md:gap-6">
@@ -62,10 +70,15 @@ const navLinks = [{ href: '/contact', label: 'Contact' }]
     <div class="flex h-14 flex-none items-center justify-between px-4 border-b-[3px] border-white">
       <a
         href="/"
-        class="inline-block font-['Archivo'] text-base font-black uppercase tracking-[-0.01em] text-white"
+        aria-label="SMD Services"
+        class="inline-flex items-baseline gap-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--ss-color-surface-inverse)]"
         data-nav-link
       >
-        SMD Services
+        <span
+          class="inline-block bg-[color:var(--ss-color-primary)] px-1.5 py-0.5 font-['Archivo'] font-black uppercase leading-none tracking-tight text-white"
+          >SMD</span
+        >
+        <span class="font-['Archivo_Narrow'] font-semibold leading-none text-white">Services</span>
       </a>
       <button
         type="button"
