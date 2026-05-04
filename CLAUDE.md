@@ -121,6 +121,14 @@ No dollar amounts appear on the website or in marketing materials. The client se
 
 Always "we" / "our team." Never "I" / "the consultant." See Decision Stack #20 for full details.
 
+**Practitioner-firm exception (added 2026-05-03):** §07 "Who We Are" on the marketing home page is the one place where Scott speaks in first person. SMD is positioned as a practitioner firm — like a lawyer's office, a doctor's practice, or a craftsman's shop — where the founder _is_ the firm and there is a real team behind him. In that model, forced "we" voice in the founder bio reads insincere; first person is the only sincere voice. About speaks as Scott; every other section ships in firm-level "we" voice. The voice-standard test in `tests/landing-page.test.ts` excludes `About.astro` for this reason. Do not rewrite About to "we" voice without Captain explicitly reversing this call.
+
+**Identity-marker rule (added 2026-05-03):** Words that describe an aspirational self-quality (Captain's examples: "magic," "artist," "creative") must SHAPE the voice without being STATED on the page. Stating them reads as overclaim or self-flattery. Convey wonder via concrete language and what the work does, not by calling it magic. Convey creativity by showing it, not by calling it artistry. The rule applies to all marketing surfaces, not just About.
+
+### 7. No claim to know the prospect's business
+
+We do not write copy that implies pre-knowledge of a specific prospect's business. We are collaborators who learn the situation through conversation, not diagnosticians who arrive with answers. This rule covers both first-person ("I know what's wrong with your business") and implied ("This is what your business needs"). See `feedback_no_pretend_to_know_business.md`.
+
 ---
 
 ## The Business Model
