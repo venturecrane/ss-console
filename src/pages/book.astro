@@ -677,9 +677,17 @@ if (prefillToken) {
       // button. Defensively gated on `sendSucceeded` so a stale offer can't
       // open the slot picker without a captured lead behind it.
 
+      let slotsFetched = false
       intakeRoot.addEventListener('unified-pick-time', () => {
         if (!sendSucceeded || !submittedData) return
         slotPickerSection.hidden = false
+        // Lazy-fetch: SlotPicker no longer auto-fetches on mount (saves one
+        // /api/booking/slots round trip per visit for the majority of users
+        // who never open the picker). Trigger the first fetch on reveal.
+        if (!slotsFetched && picker.refetchSlots) {
+          picker.refetchSlots()
+          slotsFetched = true
+        }
         slotPickerSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
       })
 
