@@ -2,11 +2,11 @@
   class="border-t-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-surface-inverse)] text-white"
 >
   <div class="mx-auto w-full max-w-5xl px-6">
-    <!-- Region 1: Masthead. Refined filled-monogram wordmark — orange "SMD"
-         block + Archivo Narrow Semibold mixed-case "Services" descriptor.
-         The earlier text-only "practitioner-firm register" treatment was a
-         category error for a pre-launch firm with no name equity yet; one
-         deliberate visual anchor (the block) does the recognition work. -->
+    <!-- Region 1: Masthead. Filled-monogram wordmark — orange "SMD" block +
+         Archivo Narrow Semibold all-caps "SERVICES" descriptor. Matched
+         cap-height locks the two halves into a single mark; width-contrast
+         (Archivo Black vs Archivo Narrow) does the visual work that
+         case-contrast was failing to do. -->
     <div class="py-12 md:py-14">
       <a
         href="/"
@@ -17,7 +17,10 @@
           class="inline-block bg-[color:var(--ss-color-primary)] px-1.5 py-0.5 font-['Archivo'] font-black uppercase leading-none tracking-tight text-white"
           >SMD</span
         >
-        <span class="font-['Archivo_Narrow'] font-semibold leading-none text-white">Services</span>
+        <span
+          class="font-['Archivo_Narrow'] font-semibold uppercase tracking-[0.08em] leading-none text-white"
+          >Services</span
+        >
       </a>
     </div>
 
