@@ -508,7 +508,8 @@
       }
     })
 
-    // Public method for parent to refetch (e.g., after a 409)
+    // Public method for parent to fetch (first reveal) or refetch (after a 409).
+    // Idempotent on repeated calls within the stale window.
     picker.refetchSlots = fetchSlots
 
     // Public method to get guest tz
@@ -516,7 +517,9 @@
       return guestTz
     }
 
-    // Initial fetch
-    fetchSlots()
+    // No automatic fetch on mount. /book hides the slot-picker section until
+    // the user clicks "Pick a time to talk" post-Send; fetching slots eagerly
+    // wastes a /api/booking/slots round trip on every visitor (most never open
+    // the picker). The parent calls picker.refetchSlots() when revealing.
   })()
 </script>
