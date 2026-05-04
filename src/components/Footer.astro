@@ -2,46 +2,55 @@
   class="border-t-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-surface-inverse)] text-white"
 >
   <div class="mx-auto w-full max-w-5xl px-6">
-    <!-- Region 1: Masthead — brand mark. -->
+    <!-- Region 1: Masthead. Text-only wordmark, no filled-block accent.
+         Practitioner-firm register: a lawyer's office or doctor's practice
+         marks itself with a wordmark, not a colored block. -->
     <div class="py-12 md:py-14">
       <a
         href="/"
-        class="inline-flex items-baseline gap-2 font-['Archivo'] text-xl md:text-2xl font-black uppercase tracking-[-0.01em] text-white"
+        class="inline-block font-['Archivo'] text-xl md:text-2xl font-black uppercase tracking-[-0.01em] text-white hover:text-[color:var(--ss-color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--ss-color-surface-inverse)]"
       >
-        <span
-          class="inline-block bg-[color:var(--ss-color-primary)] text-white px-2.5 py-1 font-black tracking-[-0.01em]"
-          >SMD</span
-        >
-        <span>Services</span>
+        SMD Services
       </a>
     </div>
 
     <div class="h-px bg-[color:rgba(245,240,227,0.16)]"></div>
 
-    <!-- Region 2: Sitewide links. Routable destinations not otherwise
-         present in the chrome: AI (capability page, demoted from primary
-         nav per #640), Book a Call (also in nav and FinalCta but useful
-         here as a footer fallback), Contact. Brutalist-sparse mono
-         treatment to match the colophon. -->
+    <!-- Region 2: Footer nav, two-column layout.
+         Left column: conversion paths (Book a Call, Contact). Useful on
+         pages without a FinalCta directly above the footer (/ai, /book,
+         /contact).
+         Right column: legal hygiene (Terms, Privacy). -->
     <nav
       aria-label="Footer"
-      class="py-6 md:py-7 flex flex-wrap gap-x-6 gap-y-2 font-['Archivo_Narrow'] text-xs uppercase tracking-[0.12em] text-[color:var(--ss-color-text-muted)]"
+      class="py-6 md:py-7 flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-0 font-['Archivo_Narrow'] text-xs uppercase tracking-[0.12em] text-[color:var(--ss-color-text-muted)]"
     >
-      <a href="/ai" class="hover:text-white" data-ev="footer-ai">AI</a>
-      <a href="/book" class="hover:text-white" data-ev="footer-book">Book a Call</a>
-      <a href="/contact" class="hover:text-white" data-ev="footer-contact">Contact</a>
+      <div class="flex flex-wrap gap-x-6 gap-y-2">
+        <a href="/book" class="hover:text-white" data-ev="footer-book">Book a Call</a>
+        <a href="/contact" class="hover:text-white" data-ev="footer-contact">Contact</a>
+      </div>
+      <div class="flex flex-wrap gap-x-6 gap-y-2">
+        <a href="/terms" class="hover:text-white" data-ev="footer-terms">Terms</a>
+        <a href="/privacy" class="hover:text-white" data-ev="footer-privacy">Privacy</a>
+      </div>
     </nav>
 
     <div class="h-px bg-[color:rgba(245,240,227,0.16)]"></div>
 
-    <!-- Region 3: Colophon — legal left, location right. Nav and CTA are not
-         repeated here because they already live in the sticky header (mobile
-         menu overlay + desktop inline) and in the FinalCta section directly
-         above the footer. -->
+    <!-- Region 3: Colophon. Legal entity + parent company on the left,
+         location on the right. VentureCrane link is the inline anchor inside
+         the corporate identity line, not a standalone nav item. -->
     <div
       class="py-6 md:py-7 flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-0 font-['Archivo_Narrow'] text-xs uppercase tracking-[0.12em] text-[color:var(--ss-color-text-muted)]"
     >
-      <span>&copy; 2026 SMDurgan, LLC</span>
+      <span>
+        &copy; 2026 SMDurgan, LLC, part of <a
+          href="https://venturecrane.com"
+          rel="noopener"
+          class="hover:text-white"
+          data-ev="footer-venturecrane">VentureCrane</a
+        >
+      </span>
       <span>Phoenix, Arizona</span>
     </div>
   </div>

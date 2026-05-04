@@ -1,0 +1,61 @@
+---
+import Base from '../layouts/Base.astro'
+import Nav from '../components/Nav.astro'
+import Footer from '../components/Footer.astro'
+---
+
+<Base
+  title="Terms | SMD Services"
+  description="Terms of use for the smd.services website. Engagement-specific terms are documented in the Statement of Work for each engagement."
+>
+  <Nav />
+  <main id="main" role="main" class="bg-[color:var(--ss-color-background)] px-6 py-20 md:py-24">
+    <div class="mx-auto max-w-2xl">
+      <h1
+        class="font-['Archivo'] text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
+      >
+        Terms
+      </h1>
+
+      <div
+        class="mt-10 space-y-6 font-['Archivo'] text-lg leading-relaxed text-[color:var(--ss-color-text-primary)]"
+      >
+        <p>
+          These terms govern your use of the smd.services website. Engagement-specific terms,
+          including scope, deliverables, schedule, pricing, and obligations, are documented in the
+          Statement of Work for each engagement and supersede anything stated here.
+        </p>
+
+        <p>
+          The site is provided as-is. We make no warranty about uninterrupted availability or
+          fitness for any particular purpose.
+        </p>
+
+        <p>
+          Content on this site, including text, design, code, and images, is owned by SMDurgan, LLC.
+          Use beyond personal browsing requires written permission.
+        </p>
+
+        <p>
+          Arizona law governs these terms. Any disputes are resolved in courts in Maricopa County,
+          Arizona.
+        </p>
+
+        <p>
+          Questions: <a
+            href="mailto:team@smd.services"
+            class="underline decoration-[color:var(--ss-color-primary)] decoration-2 underline-offset-4 hover:text-[color:var(--ss-color-primary)]"
+            >team@smd.services</a
+          >.
+        </p>
+      </div>
+
+      <p
+        class="mt-12 font-['Archivo_Narrow'] text-xs uppercase tracking-[0.12em] text-[color:var(--ss-color-text-muted)]"
+      >
+        Last updated: 2026-05-04
+      </p>
+    </div>
+  </main>
+  <Footer />
+</Base>
