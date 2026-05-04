@@ -26,8 +26,19 @@ const MAX_MESSAGE_CHARS = 5000
  * (entity authority, replay safety, Turnstile single-use, server-side
  * conversation_id lookup) is deferred to a future PR with proper auth.
  *
- * Security: honeypot + Turnstile + IP rate limiting (10/hour).
+ * Security: render-timestamp check + Turnstile + IP rate limiting (10/hour).
+ *
+ * The previous offscreen `<input name="website_url">` honeypot was visible to
+ * Chrome's autofill classifier and suppressed autofill suggestions on the
+ * named identity fields (the offscreen positioning lived on the parent div,
+ * so to Chrome the input was a normal visible text field). Switched to a
+ * render-timestamp check: client captures Date.now() at form-script-execute
+ * time and sends `rendered_at`. Submissions under 2 seconds old are treated
+ * as bot-driven (200 silent OK so the bot thinks it succeeded). Real users
+ * take 30+ seconds to fill the form, easily clearing the threshold.
  */
+const MIN_FORM_FILL_MS = 2000
+
 export const POST: APIRoute = async ({ request, clientAddress }) => {
   let body: Record<string, unknown>
   try {
@@ -36,9 +47,11 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     return jsonResponse(400, { error: 'Invalid JSON' })
   }
 
-  // Honeypot — bots fill this hidden field, humans don't. 200 silent OK so the
-  // bot thinks it succeeded (matches /api/intake pattern).
-  if (typeof body.website_url === 'string' && body.website_url.trim() !== '') {
+  // Render-timestamp check. Reject submissions that arrive too soon after
+  // the form rendered. Missing/invalid timestamps are also rejected — clients
+  // older than this PR will need to refresh.
+  const renderedAt = typeof body.rendered_at === 'number' ? body.rendered_at : NaN
+  if (!Number.isFinite(renderedAt) || Date.now() - renderedAt < MIN_FORM_FILL_MS) {
     return jsonResponse(200, { ok: true })
   }
 

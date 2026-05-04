@@ -53,10 +53,15 @@ const { values } = Astro.props as Props
   class="rounded-[var(--ss-radius-card)] bg-white p-card sm:p-section"
 >
   <form id="unified-intake-form" class="space-y-5" novalidate autocomplete="on">
-    <!-- Honeypot — silently rejected server-side -->
-    <div class="absolute -left-[9999px]" aria-hidden="true">
-      <input type="text" name="website_url" tabindex="-1" autocomplete="off" />
-    </div>
+    <!-- Bot detection: timestamp-based, no hidden field. The init script
+         captures Date.now() at script-execute time and sends `rendered_at`
+         in the submit payload. Server rejects submissions under 2 seconds
+         old as bot-driven. The previous offscreen `<input name="website_url">`
+         honeypot was visible to Chrome's autofill classifier (the offscreen
+         positioning was on the parent div, not the input itself), which
+         downgraded the form's autofill trust score and suppressed
+         suggestions on the named identity fields. Timestamp check has zero
+         autofill side effects. -->
 
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <div>
@@ -393,6 +398,11 @@ const { values } = Astro.props as Props
       })
     }
 
+    // Captured at script-execute time. The page-level handler reads this off
+    // the unified-send detail and sends it as `rendered_at` to the server,
+    // which rejects submissions under 2s old as bot-driven.
+    const renderedAt = Date.now()
+
     function readFormData() {
       const fd = new FormData(form)
       return {
@@ -402,7 +412,7 @@ const { values } = Astro.props as Props
         phone: String(fd.get('phone') ?? '').trim(),
         website: String(fd.get('website') ?? '').trim() || null,
         message: String(fd.get('message') ?? '').trim(),
-        website_url: String(fd.get('website_url') ?? '').trim(), // honeypot
+        rendered_at: renderedAt,
       }
     }
 

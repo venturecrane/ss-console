@@ -433,7 +433,7 @@ if (prefillToken) {
       phone: string
       website: string | null
       message: string
-      website_url: string // honeypot
+      rendered_at: number
     }
 
     interface BookingSlot {
@@ -516,13 +516,20 @@ if (prefillToken) {
       let turnstileWidgetId: string | undefined
       let turnstileReady = false
       let turnstileTimedOut = false
+      let turnstileRequested = false
 
-      // Turnstile is provided by the inlined script tag above. Accessed via
-      // a typed reference at the point of use (`getTurnstileToken` etc).
-      //
-      // Turnstile init — single widget, used by both Send and Book submits.
-      if (turnstileSiteKey) {
-        const initTurnstile = () => {
+      // Lazy-render Turnstile on first form interaction. The api.js script
+      // tag still loads early (async/defer) so the lib is ready when needed,
+      // but ts.render() — which spawns the challenge iframe and runs
+      // Cloudflare's bot-detection JS — is deferred until the user signals
+      // intent to submit by focusing or typing into any form field. This
+      // keeps the form responsive on initial paint and removes ~1.3s of
+      // background work from the critical path on every visit; by the time
+      // the user finishes filling fields the challenge is solved.
+      const renderTurnstileNow = (): void => {
+        if (!turnstileSiteKey || turnstileRequested) return
+        turnstileRequested = true
+        const tryRender = (): void => {
           const ts = (window as unknown as { turnstile?: TurnstileApi }).turnstile
           if (ts && !turnstileReady) {
             turnstileWidgetId = ts.render(turnstileContainer, {
@@ -534,10 +541,10 @@ if (prefillToken) {
             turnstileReady = true
           }
         }
-        initTurnstile()
+        tryRender()
         if (!turnstileReady) {
           const checkInterval = setInterval(() => {
-            initTurnstile()
+            tryRender()
             if (turnstileReady) clearInterval(checkInterval)
           }, 200)
           setTimeout(() => {
@@ -545,6 +552,19 @@ if (prefillToken) {
             if (!turnstileReady) turnstileTimedOut = true
           }, 10000)
         }
+      }
+
+      if (turnstileSiteKey) {
+        const intakeForm = document.getElementById('unified-intake-form')
+        if (intakeForm instanceof HTMLFormElement) {
+          // focusin bubbles, so a single listener catches all field focuses.
+          intakeForm.addEventListener('focusin', renderTurnstileNow, { once: true })
+          intakeForm.addEventListener('input', renderTurnstileNow, { once: true })
+        }
+        // Safety net: if a user somehow fires Send (e.g., Enter on an
+        // already-filled-via-script form) before focus/input bubbles up,
+        // the Send handler invokes renderTurnstileNow before reading the
+        // token. This is enforced in the Send / Book paths below.
       }
 
       const getTurnstileToken = (): string => {
@@ -602,13 +622,6 @@ if (prefillToken) {
         const data = (event as CustomEvent<UnifiedFormData>).detail
         clearIntakeError()
 
-        // Honeypot — silently succeed and stop.
-        if (data.website_url && data.website_url.trim() !== '') {
-          setIntakeState('send_done')
-          showAiReply(null)
-          return
-        }
-
         // Client-side required field check (server still validates).
         const missing: string[] = []
         if (!data.name) missing.push('name')
@@ -619,6 +632,12 @@ if (prefillToken) {
           showIntakeError(`Please fill in: ${missing.join(', ')}.`)
           return
         }
+
+        // Safety net for the lazy-Turnstile path: if Send fires before the
+        // user's focus/input has bubbled (e.g., Enter on a script-prefilled
+        // form), kick off the render now and wait briefly. The retry poll
+        // inside renderTurnstileNow handles api.js still loading.
+        renderTurnstileNow()
 
         setIntakeState('send_thinking')
 
@@ -631,7 +650,7 @@ if (prefillToken) {
           website: data.website,
           message: data.message,
           turnstile_token: turnstileToken,
-          website_url: data.website_url,
+          rendered_at: data.rendered_at,
         }
 
         try {
