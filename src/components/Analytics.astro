@@ -1,0 +1,25 @@
+---
+// Adapted from vc-web/src/components/Analytics.astro. The hostname guard
+// is ss-console-specific: a 404 on admin.smd.services would otherwise
+// render Base.astro and load gtag under the admin hostname.
+
+const measurementId = import.meta.env.PUBLIC_GA4_MEASUREMENT_ID?.trim() ?? ''
+const internalHostPatterns =
+  import.meta.env.PUBLIC_GA4_INTERNAL_HOST_PATTERNS?.trim() ?? 'localhost,127.0.0.1,*.workers.dev'
+
+const hostname = Astro.url.hostname
+const isAuthSubdomain = hostname.startsWith('admin.') || hostname.startsWith('portal.')
+---
+
+{
+  measurementId && !isAuthSubdomain && (
+    <>
+      <script async src={`https://www.googletagmanager.com/gtag/js?id=${measurementId}`} />
+      <script
+        src="/js/ga4-init.js"
+        data-ga4-measurement-id={measurementId}
+        data-internal-host-patterns={internalHostPatterns}
+      />
+    </>
+  )
+}

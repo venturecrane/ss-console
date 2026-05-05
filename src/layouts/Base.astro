@@ -3,15 +3,20 @@ import '../styles/global.css'
 import JsonLd from '../components/JsonLd.astro'
 import SkipToMain from '../components/SkipToMain.astro'
 import EventsTracker from '../components/EventsTracker.astro'
+import Analytics from '../components/Analytics.astro'
 
 interface Props {
   title: string
   description?: string
+  // Set on routes that must not leak the URL to GA4 (token-bearing paths,
+  // unmatched 404s where pathname can echo a token from a bad URL).
+  disableAnalytics?: boolean
 }
 
 const {
   title,
   description = 'Operations consulting for Phoenix-area small businesses. We help growing businesses find the right path forward and get it done.',
+  disableAnalytics = false,
 } = Astro.props
 
 const canonicalUrl = new URL(Astro.url.pathname, 'https://smd.services')
@@ -50,6 +55,7 @@ const ogImageUrl = new URL('/og-image.png', 'https://smd.services')
 
     <title>{title}</title>
     <JsonLd />
+    {!disableAnalytics && <Analytics />}
   </head>
   <body>
     <SkipToMain />

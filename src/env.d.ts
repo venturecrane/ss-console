@@ -155,3 +155,12 @@ declare namespace App {
     cfContext?: ExecutionContext
   }
 }
+
+interface ImportMetaEnv {
+  readonly PUBLIC_GA4_MEASUREMENT_ID?: string
+  readonly PUBLIC_GA4_INTERNAL_HOST_PATTERNS?: string
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}
