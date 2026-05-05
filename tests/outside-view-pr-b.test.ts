@@ -1,20 +1,24 @@
 /**
- * Outside View Phase 1 PR-B — workflow re-aim + portal page smoke tests.
+ * Outside View Phase 1 PR-B — dormant-pipeline coverage.
+ *
+ * The user-visible Outside View surfaces (portal page, OutsideViewArtifact
+ * component, role-conditional PortalTabs) were retired in a separate PR;
+ * the assertions for those layers were removed alongside the source files.
+ * What remains here covers the dormant scan/diagnostic pipeline that is
+ * still callable via direct API and may not be retired immediately.
  *
  * Static-source assertions covering:
  *   1. Feature flag wiring: env binding declared, helper checks "1"|"true"
  *   2. Workflow terminal step: shadow-write happens regardless of flag,
  *      privilege-escalation defense for existing client emails, magic-link
  *      mint uses 24h TTL, portal URL built from PORTAL_BASE_URL.
- *   3. New email template: outsideViewReadyEmailHtml + sendOutsideViewReadyEmail
+ *   3. Email template: outsideViewReadyEmailHtml + sendOutsideViewReadyEmail
  *      with branded sender, no fabricated commitments.
- *   4. Portal page: queries outside_views by entity, renders via adapter,
- *      identical 404 for missing-view and missing-session (no enumeration).
- *   5. Role-conditional PortalTabs: prospect sees 1 tab, client sees 5.
+ *   4. getScanRequestByEntity helper — used by the workflow's re-run path.
  */
 
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync } from 'fs'
+import { readFileSync } from 'fs'
 import { resolve } from 'path'
 
 describe('PR-B: feature flag wiring', () => {
@@ -191,118 +195,6 @@ describe('PR-B: sendOutsideViewReadyEmail', () => {
     if (fnMatch) {
       expect(fnMatch[0]).toMatch(/sendOutreachEmail/)
     }
-  })
-})
-
-describe('PR-B: /portal/outside-view page', () => {
-  const path = 'src/pages/portal/outside-view/index.astro'
-
-  it('page exists', () => {
-    expect(existsSync(resolve(path))).toBe(true)
-  })
-
-  const src = readFileSync(resolve(path), 'utf-8')
-
-  it('queries via getActiveOutsideViewByEntity (org-scoped)', () => {
-    expect(src).toMatch(/getActiveOutsideViewByEntity\(env\.DB,\s*session\.orgId,\s*client\.id\)/)
-  })
-
-  it('parses artifact_json via the v1 adapter', () => {
-    expect(src).toMatch(
-      /parseArtifactJson\(outsideView\.artifact_json,\s*outsideView\.artifact_version\)/
-    )
-  })
-
-  it('returns identical 404 for missing-view and missing-session', () => {
-    // Missing portalData and missing-outsideView+non-thin-footprint both
-    // emit the exact same response: status 404, body "Not Found".
-    const not_found_responses = src.match(/new Response\('Not Found',\s*\{\s*status:\s*404\s*\}\)/g)
-    expect(not_found_responses).toBeTruthy()
-    expect((not_found_responses ?? []).length).toBeGreaterThanOrEqual(2)
-  })
-
-  it('renders thin-footprint copy inline when scan_status is thin_footprint', () => {
-    expect(src).toMatch(/scanStatusReason === 'thin_footprint'/)
-    expect(src).toMatch(/About your scan/)
-  })
-
-  it('renders OutsideViewArtifact when artifact parses', () => {
-    expect(src).toMatch(/<OutsideViewArtifact/)
-  })
-
-  it('passes role to PortalTabs for role-conditional rendering', () => {
-    expect(src).toMatch(/<PortalTabs[\s\S]*role=\{user\.role\}/)
-  })
-
-  it('declares prerender=false (SSR required for session+DB lookup)', () => {
-    expect(src).toMatch(/export const prerender = false/)
-  })
-})
-
-describe('PR-B: OutsideViewArtifact component', () => {
-  const path = 'src/components/portal/OutsideViewArtifact.astro'
-
-  it('component file exists', () => {
-    expect(existsSync(resolve(path))).toBe(true)
-  })
-
-  const src = readFileSync(resolve(path), 'utf-8')
-
-  it('accepts RenderedReport via props', () => {
-    expect(src).toMatch(
-      /import type \{ RenderedReport[\s\S]*from ['"]\.\.\/\.\.\/lib\/diagnostic\/render['"]/
-    )
-  })
-
-  it('walks rendered.sections', () => {
-    expect(src).toMatch(/rendered\.sections/)
-  })
-
-  it('honors hasContent flag for empty-state fallback', () => {
-    expect(src).toMatch(/rendered\.hasContent/)
-  })
-
-  it('renders insufficientDataNote for sections that flagged it', () => {
-    expect(src).toMatch(/insufficientDataNote/)
-  })
-
-  it('does not invent commitments (no "we will" / "kickoff" / "respond within")', () => {
-    // CLAUDE.md no-fab rule: components rendering data should never have
-    // hardcoded commitment copy. Outside View Phase 1 ships placeholder
-    // D2/D3 affordances ("coming soon") which is allowed.
-    expect(src).not.toMatch(/We'll reach out/i)
-    expect(src).not.toMatch(/within \d+ business day/i)
-    expect(src).not.toMatch(/respond within/i)
-  })
-})
-
-describe('PR-B: PortalTabs role-conditional rendering', () => {
-  const src = readFileSync(resolve('src/components/portal/PortalTabs.astro'), 'utf-8')
-
-  it('accepts a role prop', () => {
-    expect(src).toMatch(/role\?:\s*string/)
-  })
-
-  it('Outside View tab is the genesis tab (anchor 00, href /portal/outside-view)', () => {
-    expect(src).toMatch(/href:\s*['"]\/portal\/outside-view['"][\s\S]*anchor:\s*['"]00['"]/)
-  })
-
-  it('prospect role gets only the Outside View tab', () => {
-    expect(src).toMatch(/role === 'prospect'\s*\?\s*\[OUTSIDE_VIEW_TAB\]/)
-  })
-
-  it('client role gets Outside View + 4 client tabs', () => {
-    expect(src).toMatch(/\[OUTSIDE_VIEW_TAB,\s*\.\.\.CLIENT_TABS\]/)
-  })
-
-  it('mobile bar uses flex (not grid-cols-N) for variable tab count', () => {
-    expect(src).toMatch(/class="flex divide-x-\[2px\]/)
-    // grid-cols-4 should no longer be present
-    expect(src).not.toMatch(/grid grid-cols-4 divide-x/)
-  })
-
-  it('default role (omitted prop) behaves as client (back-compat)', () => {
-    expect(src).toMatch(/role\s*=\s*['"]client['"]/)
   })
 })
 

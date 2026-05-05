@@ -320,22 +320,6 @@ describe('PR-A: createMagicLink call sites pass explicit TTL', () => {
   })
 })
 
-describe('PR-A: portal index redirects prospects', () => {
-  const src = readFileSync(resolve('src/pages/portal/index.astro'), 'utf-8')
-
-  it('redirects role=prospect to /portal/outside-view', () => {
-    expect(src).toMatch(/session\.role === 'prospect'/)
-    expect(src).toMatch(/Astro\.redirect\(['"]\/portal\/outside-view['"]\)/)
-  })
-
-  it('redirect happens before client-shaped data fetch', () => {
-    const prospectRedirectIdx = src.indexOf("session.role === 'prospect'")
-    const portalDataIdx = src.indexOf('getPortalClient(')
-    expect(prospectRedirectIdx).toBeGreaterThan(0)
-    expect(portalDataIdx).toBeGreaterThan(prospectRedirectIdx)
-  })
-})
-
 describe('PR-A: outside_views CRUD module', () => {
   const src = readFileSync(resolve('src/lib/db/outside-views.ts'), 'utf-8')
 

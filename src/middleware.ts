@@ -85,12 +85,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return context.redirect('/get-started?booked=1', 301)
   }
 
-  // Lead-magnet retirement chain. The three legacy lead-magnet surfaces
-  // (/scan, /scorecard, /get-started cold-mode) originally redirected to
-  // /outside-view per ADR 0002. Outside View was retired after public-
-  // footprint scraping turned out not to surface anything useful, so the
-  // redirects now terminate at the home page rather than dangling visitors
-  // on an orphaned product.
+  // Lead-magnet retirement chain. The legacy lead-magnet surfaces
+  // (/scan, /scorecard, /get-started cold-mode, /outside-view) originally
+  // fed the Outside View product per ADR 0002. Outside View was retired
+  // after public-footprint scraping turned out not to surface anything
+  // useful, so the redirects now terminate at the home page rather than
+  // dangling visitors on an orphaned product.
   //
   // Important guards:
   //   - /scan exact match only (NOT startsWith). /scan/verify/[token]
@@ -102,10 +102,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
   //   - /get-started has dual-mode behavior: with ?booked=1 it is the
   //     post-booking prep page (still needed for /book/thanks redirect
   //     above), so we redirect ONLY when no ?booked param is present.
+  //   - /outside-view is a startsWith; the public marketing form would
+  //     otherwise still POST to /api/scan/start and mint orphan prospect
+  //     sessions whose post-login destination has been retired.
   //   - These are 301 (permanent). Source files at /scan/index.astro,
-  //     /scorecard.astro, /get-started.astro stay on disk as belt-and-
-  //     suspenders 301 emitters; full route deletion is a separate
-  //     cleanup PR coordinated with the conversation-mechanism team.
+  //     /scorecard.astro, /get-started.astro, /outside-view/index.astro
+  //     stay on disk as belt-and-suspenders 301 emitters; full route
+  //     deletion is tracked in the Outside View infrastructure follow-up.
   if (pathname === '/scan') {
     return context.redirect('/', 301)
   }
@@ -113,6 +116,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return context.redirect('/', 301)
   }
   if (pathname === '/get-started' && !context.url.searchParams.has('booked')) {
+    return context.redirect('/', 301)
+  }
+  if (pathname === '/outside-view' || pathname.startsWith('/outside-view/')) {
     return context.redirect('/', 301)
   }
 

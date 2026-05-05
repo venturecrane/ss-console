@@ -25,29 +25,11 @@
  * switching behavior observed in engagement sessions.
  */
 
-/**
- * Role gating per ADR 0002 (Outside View):
- *
- *   - role='prospect'  → only the Outside View tab. Prospects don't have
- *     an engagement, quotes, invoices, or documents to render. Showing
- *     those tabs would render empty pages and leak the existence of
- *     features they aren't entitled to.
- *
- *   - role='client'    → Outside View + the four existing tabs (Proposals,
- *     Invoices, Documents, Progress). The Outside View becomes the
- *     genesis tab and remains as a longitudinal reference for the
- *     lifetime of the relationship.
- *
- *   - role omitted (back-compat) → behaves as `client` so callers that
- *     haven't been updated to pass `role` still render the full nav.
- */
 interface Props {
   pathname: string
-  /** Session role from `Astro.locals.session.role`. Used to gate tab visibility. */
-  role?: string
 }
 
-const { pathname, role = 'client' } = Astro.props as Props
+const { pathname } = Astro.props as Props
 
 interface TabDef {
   href: string
@@ -56,14 +38,7 @@ interface TabDef {
   matchPrefix: string
 }
 
-const OUTSIDE_VIEW_TAB: TabDef = {
-  href: '/portal/outside-view',
-  label: 'Outside View',
-  anchor: '00',
-  matchPrefix: '/portal/outside-view',
-}
-
-const CLIENT_TABS: TabDef[] = [
+const tabs: TabDef[] = [
   {
     href: '/portal/quotes',
     label: 'Proposals',
@@ -89,8 +64,6 @@ const CLIENT_TABS: TabDef[] = [
     matchPrefix: '/portal/engagement',
   },
 ]
-
-const tabs: TabDef[] = role === 'prospect' ? [OUTSIDE_VIEW_TAB] : [OUTSIDE_VIEW_TAB, ...CLIENT_TABS]
 
 function isActive(tab: TabDef, path: string): boolean {
   if (path === '/portal' || path === '/portal/') return false
@@ -141,13 +114,7 @@ function isActive(tab: TabDef, path: string): boolean {
   </div>
 </nav>
 
-<!--
-  Mobile: fixed bottom bar, 3px ink top border, burnt-orange active tile.
-  Uses flex (not grid-cols-N) so the tab count can vary by role per ADR
-  0002 — prospects see 1 tab, clients see 5. With grid-cols-{n} we'd need
-  Tailwind to know the class at build time, which it can't for a
-  role-dependent count.
--->
+<!-- Mobile: fixed bottom bar, 3px ink top border, burnt-orange active tile. -->
 <nav
   aria-label="Portal sections"
   class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[color:var(--ss-color-background)] border-t-[3px] border-[color:var(--ss-color-text-primary)] pb-[env(safe-area-inset-bottom)]"
