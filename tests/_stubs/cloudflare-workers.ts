@@ -14,11 +14,11 @@
  * ---------------
  * `WorkflowEntrypoint` and the `WorkflowEvent` / `WorkflowStep` types are
  * provided as no-op stubs so production code that subclasses
- * WorkflowEntrypoint (`src/lib/diagnostic/workflow.ts`) imports cleanly
+ * WorkflowEntrypoint (`src/lib/enrichment/workflow.ts`) imports cleanly
  * under vitest. The workflow class is exercised in tests by instantiating
  * it directly with a mock `env` and a mock `step` — we bypass the real
  * Cloudflare Workflows runtime entirely. See
- * tests/diagnostic-workflow.test.ts.
+ * tests/enrichment-workflow.test.ts.
  */
 export const env: Record<string, unknown> = {}
 

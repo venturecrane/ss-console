@@ -13,16 +13,15 @@ import { env } from 'cloudflare:workers'
  *
  * Host → path mapping (three custom domains on one Pages project):
  *   admin.smd.services/*   → rewritten to /admin/* (admin console, role=admin)
- *   portal.smd.services/*  → rewritten to /portal/* (client portal,
- *                            role=client | role=prospect per ADR 0002)
+ *   portal.smd.services/*  → rewritten to /portal/* (client portal, role=client)
  *   smd.services/*         → marketing (public); /admin/* and /auth/login 301
  *                            to admin.smd.services for backwards compat
  *
  * Route protection:
  *   /admin/*       → requires role='admin', redirects to /auth/login
  *   /api/admin/*   → requires role='admin', returns 401 JSON
- *   /portal/*      → requires role IN ('client', 'prospect'), redirects to /auth/portal-login
- *   /api/portal/*  → requires role IN ('client', 'prospect'), returns 401 JSON
+ *   /portal/*      → requires role='client', redirects to /auth/portal-login
+ *   /api/portal/*  → requires role='client', returns 401 JSON
  *   /auth/*        → public (login pages)
  *   everything else → public
  *
@@ -86,29 +85,24 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
 
   // Lead-magnet retirement chain. The legacy lead-magnet surfaces
-  // (/scan, /scorecard, /get-started cold-mode, /outside-view) originally
-  // fed the Outside View product per ADR 0002. Outside View was retired
-  // after public-footprint scraping turned out not to surface anything
-  // useful, so the redirects now terminate at the home page rather than
-  // dangling visitors on an orphaned product.
+  // (/scan, /scorecard, /get-started cold-mode, /outside-view) fed the
+  // retired Outside View product per ADR 0002 (now superseded). The
+  // 301 redirects below stay live for permanent-bookmark backwards
+  // compat; the source files for /scan, /scorecard, /outside-view, and
+  // the diagnostic pipeline behind them have been deleted.
   //
   // Important guards:
-  //   - /scan exact match only (NOT startsWith). /scan/verify/[token]
-  //     is the magic-link landing page from in-flight emails sent before
-  //     Outside View was retired; redirecting that path would break those
-  //     tokens.
+  //   - /scan is exact match (NOT startsWith). The previous in-flight
+  //     /scan/verify/[token] magic-link landing was deleted alongside
+  //     the diagnostic pipeline; zero tokens were in flight at retirement.
   //   - /scorecard is a startsWith; the form has no descendants today
   //     but any future descendants should also funnel home.
   //   - /get-started has dual-mode behavior: with ?booked=1 it is the
   //     post-booking prep page (still needed for /book/thanks redirect
   //     above), so we redirect ONLY when no ?booked param is present.
-  //   - /outside-view is a startsWith; the public marketing form would
-  //     otherwise still POST to /api/scan/start and mint orphan prospect
-  //     sessions whose post-login destination has been retired.
-  //   - These are 301 (permanent). Source files at /scan/index.astro,
-  //     /scorecard.astro, /get-started.astro, /outside-view/index.astro
-  //     stay on disk as belt-and-suspenders 301 emitters; full route
-  //     deletion is tracked in the Outside View infrastructure follow-up.
+  //   - /outside-view is a startsWith; covers the deleted marketing form
+  //     and any descendant the worker layer might still see.
+  //   - These are 301 (permanent).
   if (pathname === '/scan') {
     return context.redirect('/', 301)
   }
@@ -172,14 +166,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
       return context.redirect('/auth/login')
     }
 
-    // Role gate: admin routes admit only role='admin'. Portal routes admit
-    // role='client' AND role='prospect' (ADR 0002 — Outside View prospects
-    // share the portal surface with clients; tab visibility differentiates).
+    // Role gate: admin routes admit only role='admin'. Portal routes
+    // admit only role='client'.
     const sessionRole = context.locals.session.role
     const isAdminAccess = (isAdminRoute || isAdminApiRoute) && sessionRole === 'admin'
-    const isPortalAccess =
-      (isPortalRoute || isPortalApiRoute) &&
-      (sessionRole === 'client' || sessionRole === 'prospect')
+    const isPortalAccess = (isPortalRoute || isPortalApiRoute) && sessionRole === 'client'
     if (!isAdminAccess && !isPortalAccess) {
       if (isAdminApiRoute || isPortalApiRoute) {
         return new Response(JSON.stringify({ error: 'Forbidden' }), {
@@ -204,10 +195,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (context.locals.session && token) {
     const isPortalHost = hostname.startsWith('portal.')
     const isAdminHost = hostname.startsWith('admin.')
-    // Portal sessions cover clients and Outside View prospects (ADR 0002).
-    // Both share the portal host; admin sessions remain admin-only.
-    const isPortalSession =
-      context.locals.session.role === 'client' || context.locals.session.role === 'prospect'
+    const isPortalSession = context.locals.session.role === 'client'
     const isAdminSession = context.locals.session.role === 'admin'
     const hostMatches = (isPortalSession && isPortalHost) || (isAdminSession && isAdminHost)
     if (hostMatches) {

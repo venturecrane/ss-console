@@ -1,9 +1,13 @@
 ---
 title: Outside View — Unified Diagnostic with Three Input Depths and Portal-Resident Artifact
 date: 2026-04-27
-status: accepted
+status: superseded
+superseded-date: 2026-05-04
 captain: Scott Durgan
 supersedes: none
+superseded-by:
+  - https://github.com/venturecrane/ss-console/pull/702
+  - https://github.com/venturecrane/ss-console/issues/703
 related-issues:
   - https://github.com/venturecrane/ss-console/issues/482
   - https://github.com/venturecrane/ss-console/issues/598
@@ -17,7 +21,16 @@ related-adr: 0001-taxonomy-two-layer-model.md
 
 # ADR 0002 — Outside View: Unified Diagnostic with Three Input Depths
 
-**Status:** Accepted (Captain decision, 2026-04-27, conversation on lead-magnet consolidation).
+**Status:** Superseded (2026-05-04). Outside View was retired in two PRs:
+
+- **PR #702** retired the user-visible surface (portal tab, `/portal/outside-view` route, public marketing form) to unblock a P0 client-portal bug after a client navigated to a route that returned plain-text "Not Found."
+- **#703 (the infrastructure retirement)** retired the prospect role plumbing, the diagnostic pipeline (`src/lib/diagnostic/`, ~2,764 LOC), the standalone `ss-scan-workflow` Cloudflare Worker, the `outside_views` and `scan_requests` D1 tables (both empty in production), and the related test suite.
+
+The decision below describes the original design intent. It is preserved verbatim for historical context. **Do not implement against this ADR.** The Outside View product was retired after public-footprint scraping turned out not to surface anything useful — a finding the original ADR did not anticipate. Lead-gen strategy lives elsewhere.
+
+---
+
+**Original status:** Accepted (Captain decision, 2026-04-27, conversation on lead-magnet consolidation).
 
 **Issues touched:** [#482](https://github.com/venturecrane/ss-console/issues/482), [#598](https://github.com/venturecrane/ss-console/issues/598), [#596](https://github.com/venturecrane/ss-console/issues/596), [#483](https://github.com/venturecrane/ss-console/issues/483), [#612](https://github.com/venturecrane/ss-console/issues/612), [#616](https://github.com/venturecrane/ss-console/issues/616).
 

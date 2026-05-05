@@ -194,8 +194,7 @@ describe('/auth/verify.astro page', () => {
   it('nulls Astro.locals.session before returning so middleware skips refresh of the OLD cookie', () => {
     // The bug: middleware at src/middleware.ts:194-204 refreshes the inbound
     // session cookie via Set-Cookie append AFTER the page returns. If a user
-    // arrives at /auth/verify with a pre-existing session cookie (e.g.
-    // Captain testing his prospect link from his client browser), the
+    // arrives at /auth/verify with a pre-existing session cookie, the
     // middleware's append wins over the page's Set-Cookie. Result: the new
     // session never takes effect.
     //

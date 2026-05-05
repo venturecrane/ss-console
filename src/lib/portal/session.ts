@@ -2,8 +2,8 @@
  * Portal session helpers.
  *
  * Resolves the entity record for an authenticated portal user.
- * Portal users are linked to entities via users.entity_id. Both 'client'
- * and 'prospect' roles are portal-eligible per ADR 0002 (Outside View).
+ * Portal users are linked to entities via users.entity_id. Only the
+ * 'client' role is portal-eligible.
  */
 
 import type { Entity } from '../db/entities'
@@ -25,10 +25,7 @@ interface UserRow {
  * portal user ID from one org from resolving against a different org's
  * session.
  *
- * Returns null if the user or entity is not found. The function name
- * `getPortalClient` predates the prospect role and is kept for caller
- * stability — `user.role` carries the discrimination if a caller needs
- * to branch on client-vs-prospect.
+ * Returns null if the user or entity is not found.
  */
 export async function getPortalClient(
   db: D1Database,
@@ -36,7 +33,7 @@ export async function getPortalClient(
   orgId: string
 ): Promise<{ user: UserRow; client: Entity } | null> {
   const user = await db
-    .prepare(`SELECT * FROM users WHERE id = ? AND role IN ('client', 'prospect') AND org_id = ?`)
+    .prepare(`SELECT * FROM users WHERE id = ? AND role = 'client' AND org_id = ?`)
     .bind(userId, orgId)
     .first<UserRow>()
 

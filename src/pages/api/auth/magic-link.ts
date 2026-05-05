@@ -46,11 +46,9 @@ export const POST: APIRoute = async ({ request, redirect }) => {
 
     const normalizedEmail = email.toLowerCase().trim()
     // Look up the portal user in the current app org. Email is not globally
-    // unique across organizations. Both 'client' and 'prospect' roles are
-    // portal-eligible per ADR 0002 — a prospect who lost their Outside View
-    // magic-link can re-request from /auth/portal-login.
+    // unique across organizations.
     const user = await env.DB.prepare(
-      `SELECT * FROM users WHERE org_id = ? AND email = ? AND role IN ('client', 'prospect')`
+      `SELECT * FROM users WHERE org_id = ? AND email = ? AND role = 'client'`
     )
       .bind(ORG_ID, normalizedEmail)
       .first<UserRow>()

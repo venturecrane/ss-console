@@ -8,7 +8,7 @@ import { env } from 'cloudflare:workers'
 /**
  * Magic link verification page — GET /auth/verify?token=...
  *
- * When a portal user clicks their magic link, this page:
+ * When a client clicks their magic link, this page:
  *   1. Validates the token (exists, not expired, not used)
  *   2. Looks up the bound user by id + org
  *   3. Creates a session (30-day expiry)
@@ -16,12 +16,8 @@ import { env } from 'cloudflare:workers'
  *
  * On failure, redirects to portal login with an error message.
  *
- * Role gating: the role query admits both 'client' and 'prospect' for
- * back-compat with the dormant Outside View pipeline. Prospect role
- * plumbing remains in place but Outside View is retired (partial); a
- * surviving prospect session is bounced to portal-login from
- * pages/portal/index.astro. Admin users do NOT enter through this page —
- * admin login is at /auth/login on admin.smd.services.
+ * Admin users do NOT enter through this page — admin login is at
+ * /auth/login on admin.smd.services.
  */
 
 const token = Astro.url.searchParams.get('token')
@@ -39,8 +35,7 @@ if (!verified) {
 }
 
 // Look up the bound portal user by id + org. Email alone is not globally
-// unique across organizations. Both 'client' and 'prospect' roles are
-// portal-eligible (ADR 0002).
+// unique across organizations.
 interface UserRow {
   id: string
   org_id: string
@@ -51,7 +46,7 @@ interface UserRow {
 }
 
 const user = await env.DB.prepare(
-  `SELECT * FROM users WHERE id = ? AND org_id = ? AND role IN ('client', 'prospect')`
+  `SELECT * FROM users WHERE id = ? AND org_id = ? AND role = 'client'`
 )
   .bind(verified.userId, verified.orgId)
   .first<UserRow>()
@@ -81,12 +76,11 @@ response.headers.set('Location', location)
 response.headers.set('Set-Cookie', setCookie)
 
 // Prevent the middleware's sliding-window refresh from appending a second
-// Set-Cookie with the OLD inbound session cookie (src/middleware.ts:194-204).
-// If the prospect/client clicked this magic link from a browser where they
-// were already signed in (e.g. Captain testing his own prospect link from
-// his client browser), the stale cookie would otherwise win. Nulling
-// Astro.locals.session here makes the middleware skip the refresh block;
-// the only Set-Cookie on the response is the new session.
+// Set-Cookie with the OLD inbound session cookie. If the client clicked
+// this magic link from a browser where another session was already
+// active, the stale cookie would otherwise win. Nulling Astro.locals.session
+// here makes the middleware skip the refresh block; the only Set-Cookie
+// on the response is the new session.
 Astro.locals.session = null
 
 return response

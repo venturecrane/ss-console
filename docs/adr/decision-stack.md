@@ -660,11 +660,13 @@ Used on: lead-gen prompts, scorecard, assessment intake extraction, entity-signa
 
 ---
 
-## Decision #43 - Outside View Unified Diagnostic (cross-layer)
+## Decision #43 - Outside View Unified Diagnostic (cross-layer) — SUPERSEDED 2026-05-04
+
+> **Superseded.** Outside View was retired in PR #702 (user-visible surface) and #703 (infrastructure). Public-footprint scraping turned out not to surface anything useful, and a half-retired state caused a P0 client-portal bug. The decision below is preserved as historical context; do not implement against it.
 
 **Issue:** smdservices/ss-console — Outside View build issues filed 2026-04-27 (PR-A/B/C of Phase 1).
 
-**ADR:** [docs/adr/0002-outside-view-unified-diagnostic.md](./0002-outside-view-unified-diagnostic.md)
+**ADR:** [docs/adr/0002-outside-view-unified-diagnostic.md](./0002-outside-view-unified-diagnostic.md) (superseded)
 
 **Decision: One product, three input depths, one persistent artifact resident in the portal. The Outside View replaces `/scorecard`, `/scan`, and `/get-started` (cold-mode) as three competing lead-magnet products.**
 

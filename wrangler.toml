@@ -15,14 +15,7 @@ name = "ss-web"
 # No `main` override here — the @astrojs/cloudflare adapter writes
 # `dist/server/wrangler.json` with `main = "entry.mjs"` and that file is
 # what `wrangler deploy` ultimately consumes (via `.wrangler/deploy/config.json`
-# pointing at the dist/server config). A previous custom entrypoint at
-# src/worker.ts re-exported the ScanDiagnosticWorkflow class for an
-# in-Worker workflow binding (#614), but that pattern proved
-# unreliable in production (see #618 — the binding resolved to
-# `undefined` at runtime even though the build artifact carried the
-# binding entry). The Workflow now lives on its own Worker
-# (`workers/scan-workflow`) and is invoked through the `SCAN_WORKFLOW_SERVICE`
-# service binding declared below.
+# pointing at the dist/server config).
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
@@ -85,26 +78,10 @@ bucket_name = "ss-console-storage"
 binding = "CONSULTANT_PHOTOS"
 bucket_name = "smd-consultant-photos"
 
-# ---------- Service binding to scan-workflow Worker ----------
-# Cloudflare Workflows orchestration for the /scan diagnostic pipeline
-# lives on its own Worker (`ss-scan-workflow`, see `workers/scan-workflow/`).
-# This binding lets `/api/scan/verify` dispatch via:
-#
-#   env.SCAN_WORKFLOW_SERVICE.fetch('https://internal/dispatch', { method: 'POST', body: ... })
-#
-# The target Worker's fetch handler creates a Workflow instance and
-# returns the instance id, which we persist to scan_requests.workflow_run_id.
-# Service bindings are not externally routable — the dispatch URL is
-# never reachable from the public internet.
-[[services]]
-binding = "SCAN_WORKFLOW_SERVICE"
-service = "ss-scan-workflow"
-
 # ---------- Service binding to enrichment-workflow Worker ----------
 # Cloudflare Workflows orchestration for entity enrichment lives on its
 # own Worker (`ss-enrichment-workflow`, see `workers/enrichment-workflow/`).
-# Same architectural reasoning as the scan-workflow binding above: #631
-# was opened after the 2026-04-30 measurement found 86% of created
+# #631 was opened after the 2026-04-30 measurement found 86% of created
 # entities had no enrichment activity — the legacy
 # `ctx.waitUntil(enrichEntity(...))` path was being killed by Workers'
 # post-response CPU budget on lead-gen ingest batches.

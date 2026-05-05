@@ -8,30 +8,11 @@ declare module '*.wasm' {
 }
 
 /**
- * Service binding shape for the `ss-scan-workflow` Worker. ss-web's
- * /api/scan/verify dispatches the Engine 1 diagnostic pipeline by POSTing
- * to the internal `/dispatch` endpoint on this binding. The target Worker
- * holds the `[[workflows]]` binding for the `ScanDiagnosticWorkflow`
- * class — co-locating the binding with a vanilla (non-Astro) Worker is
- * the durable workaround for #618 (the [[workflows]] binding was
- * unreliable when sharing a bundle with Astro's build pipeline).
- *
- * Service bindings expose a `fetch` member with the same signature as
- * the global fetch — Cloudflare routes the call into the target Worker
- * without ever leaving the data plane.
- */
-interface ScanWorkflowServiceBinding {
-  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>
-}
-
-/**
  * Service binding shape for the `ss-enrichment-workflow` Worker (#631).
  * ss-web's lead-gen workers and admin endpoints dispatch entity enrichment
  * by POSTing to the internal `/dispatch` endpoint on this binding. The
  * target Worker holds the `[[workflows]]` binding for the
- * `EnrichmentWorkflow` class — co-locating the binding with a vanilla
- * (non-Astro) Worker is the durable workaround for the Astro adapter
- * bundler issue documented in #618.
+ * `EnrichmentWorkflow` class.
  */
 interface EnrichmentWorkflowServiceBinding {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>
@@ -142,33 +123,6 @@ declare namespace Cloudflare {
      * Any other value keeps the page returning 404.
      */
     ENABLE_PUBLIC_PATTERNS?: string
-    /**
-     * Outside View Phase 1 PR-B feature flag (ADR 0002).
-     *
-     * Controls the destination of /scan completion emails. OFF by default
-     * at merge so the cutover ships behind a flag and shadow-writes
-     * outside_views rows + still sends the legacy diagnostic-report email.
-     * Captain inspects 1+ shadow row in admin/SQL, then flips this to "1"
-     * or "true" in wrangler.toml or via `wrangler secret put`. Once ON,
-     * new scans send a "Your Outside View is ready" magic-link email
-     * pointing at portal.smd.services/outside-view; the legacy email path
-     * is skipped.
-     *
-     * Rollback: flip this OFF; legacy email path resumes immediately.
-     * Any value other than "1" or "true" is treated as OFF.
-     */
-    OUTSIDE_VIEW_PORTAL_DELIVERY?: string
-    /**
-     * Service binding to the `ss-scan-workflow` Worker (#618). Hosts the
-     * Engine 1 /scan diagnostic Workflow in its own Worker so the
-     * `[[workflows]]` binding registers reliably (it didn't when
-     * co-located with the Astro build pipeline — see #618). Dispatched
-     * from /api/scan/verify by POSTing to the binding's internal
-     * `/dispatch` endpoint with `{ scanRequestId }`. Optional in dev /
-     * vitest where the binding doesn't exist; the verify endpoint falls
-     * back to inline `ctx.waitUntil` execution in that case.
-     */
-    SCAN_WORKFLOW_SERVICE?: ScanWorkflowServiceBinding
     /**
      * Service binding to the `ss-enrichment-workflow` Worker (#631). Hosts
      * the EnrichmentWorkflow class for entity enrichment. Dispatched from

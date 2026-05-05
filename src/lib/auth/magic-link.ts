@@ -1,6 +1,5 @@
 /**
- * Magic link authentication for portal access (admin login, client login,
- * Outside View prospect entry per ADR 0002).
+ * Magic link authentication for portal access (admin login, client login).
  *
  * Magic links are single-use, time-limited tokens sent via email.
  *
@@ -12,19 +11,13 @@
  *   - Tokens are single-use under concurrent requests
  *   - Tokens are bound to a specific org_id + user_id, not just an email
  *   - Tokens are 64-character hex strings (32 bytes of entropy)
- *   - TTL is REQUIRED at every call site (per ADR 0002 Phase 1 PR-A and
- *     /critique 3 Pragmatist #2). Default 15-min TTL is the right shape
- *     for admin/client login resends; the workflow path that mints
- *     prospect links uses 24h. Making TTL required prevents quietly
- *     extending admin-login lifetime by adding an option default in
- *     a future change.
+ *   - TTL is REQUIRED at every call site. Making TTL required prevents
+ *     quietly extending login-link lifetime by adding an option default
+ *     in a future change.
  */
 
 /** Default TTL for admin and client login magic links (15 minutes). */
 export const MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000
-
-/** Outside View prospect magic-link TTL (24 hours per ADR 0002). */
-export const PROSPECT_MAGIC_LINK_EXPIRY_MS = 24 * 60 * 60 * 1000
 
 export interface MagicLinkRow {
   id: string
@@ -65,9 +58,7 @@ function generateToken(): string {
  * Create a new magic link for the given user identity.
  *
  * `ttlMs` is REQUIRED — every call site must specify the lifetime explicitly.
- * Use `MAGIC_LINK_EXPIRY_MS` (15 min) for admin and client login flows,
- * `PROSPECT_MAGIC_LINK_EXPIRY_MS` (24 h) for the Outside View prospect
- * path per ADR 0002.
+ * Use `MAGIC_LINK_EXPIRY_MS` (15 min) for admin and client login flows.
  */
 export async function createMagicLink(
   db: D1Database,

@@ -33,31 +33,6 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm ci
 
-      # Deploy ss-scan-workflow BEFORE ss-web (#618). ss-web's
-      # `[[services]]` binding (`SCAN_WORKFLOW_SERVICE → ss-scan-workflow`)
-      # references this Worker by name. Cloudflare resolves service
-      # bindings lazily — deploying ss-web first does not error — but on
-      # the first ever deploy, dispatch invocations would 503 until
-      # ss-scan-workflow lands. Deploying the target first eliminates
-      # that window. Subsequent deploys are order-independent.
-      #
-      # Run BEFORE `npm run build`. The Astro build writes
-      # `.wrangler/deploy/config.json`, which sub-worker deploys discover
-      # when searching upward and refuse to proceed ("Found both a user
-      # configuration file and a deploy configuration file"). Doing the
-      # sub-worker deploy first avoids needing a teardown step for
-      # this Worker.
-      - name: Install Scan Workflow Worker deps
-        run: cd workers/scan-workflow && npm ci
-
-      - name: Deploy Scan Workflow Worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: workers/scan-workflow
-          command: deploy
-
       - name: Build
         run: npm run build
 

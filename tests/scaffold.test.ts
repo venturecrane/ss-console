@@ -38,16 +38,6 @@ describe('cloudflare SSR scaffolding', () => {
     const wrangler = readFileSync(resolve('wrangler.toml'), 'utf-8')
     // Workers mode: `[assets]` block. Pages-specific
     // `pages_build_output_dir` must not be present.
-    //
-    // No `main` override: the @astrojs/cloudflare adapter's
-    // `entrypoints/server` default is used. The previous custom
-    // `main = "src/worker.ts"` re-exported `ScanDiagnosticWorkflow` for
-    // an in-Worker [[workflows]] binding (#614), but production
-    // observed `env.SCAN_WORKFLOW` undefined at runtime (#618) — the
-    // Astro adapter's build artifact was unreliable as a Workflow host.
-    // The Workflow now lives on its own Worker (`workers/scan-workflow/`)
-    // and ss-web invokes it via the `SCAN_WORKFLOW_SERVICE` service
-    // binding asserted below.
     expect(wrangler).not.toContain('main = "src/worker.ts"')
     expect(wrangler).toContain('[assets]')
     expect(wrangler).toContain('run_worker_first = true')
@@ -58,30 +48,12 @@ describe('cloudflare SSR scaffolding', () => {
     expect(wrangler).toContain('binding = "STORAGE"')
     expect(wrangler).toContain('kv_namespaces')
     expect(wrangler).toContain('binding = "SESSIONS"')
-    // Service binding to the scan-workflow Worker (#618). The
-    // [[workflows]] binding lives on `workers/scan-workflow/wrangler.toml`,
-    // not here — co-locating the Workflow class with a vanilla Worker is
-    // the durable workaround for the bug described in #618.
-    expect(wrangler).toContain('[[services]]')
-    expect(wrangler).toContain('binding = "SCAN_WORKFLOW_SERVICE"')
-    expect(wrangler).toContain('service = "ss-scan-workflow"')
+    // The retired Outside View pipeline previously declared a
+    // [[services]] binding to `ss-scan-workflow` here. That worker and
+    // its binding were retired in the Outside View infrastructure cleanup.
     expect(wrangler).not.toContain('[[workflows]]')
     expect(wrangler).not.toContain('binding = "SCAN_WORKFLOW"')
-  })
-
-  it('scan-workflow Worker is scaffolded (#618)', () => {
-    const swPath = resolve('workers/scan-workflow')
-    expect(existsSync(swPath)).toBe(true)
-    expect(existsSync(resolve(swPath, 'wrangler.toml'))).toBe(true)
-    expect(existsSync(resolve(swPath, 'package.json'))).toBe(true)
-    expect(existsSync(resolve(swPath, 'src/index.ts'))).toBe(true)
-
-    // The [[workflows]] binding lives on this Worker — not on ss-web.
-    const swWrangler = readFileSync(resolve(swPath, 'wrangler.toml'), 'utf-8')
-    expect(swWrangler).toContain('name = "ss-scan-workflow"')
-    expect(swWrangler).toContain('[[workflows]]')
-    expect(swWrangler).toContain('binding = "SCAN_WORKFLOW"')
-    expect(swWrangler).toContain('class_name = "ScanDiagnosticWorkflow"')
+    expect(wrangler).not.toContain('SCAN_WORKFLOW_SERVICE')
   })
 
   it('env.d.ts declares Cloudflare binding types', () => {
@@ -133,20 +105,6 @@ describe('cloudflare SSR scaffolding', () => {
     expect(deploy).not.toContain('--project-name=ss-web')
     // Workers deploy + dry-run gate should be present.
     expect(deploy).toMatch(/command:\s*deploy\b/)
-  })
-
-  it('deploy workflow deploys ss-scan-workflow before ss-web (#618)', () => {
-    const deploy = readFileSync(resolve('.github/workflows/deploy.yml'), 'utf-8')
-    // ss-scan-workflow must deploy before the root `wrangler deploy` so
-    // ss-web's service binding has its target on the first ever deploy.
-    expect(deploy).toContain('workingDirectory: workers/scan-workflow')
-    const scanIdx = deploy.indexOf('workingDirectory: workers/scan-workflow')
-    // The root ss-web deploy is the one without `workingDirectory:` —
-    // identifiable by its named step. Search past the job name (line 9)
-    // by anchoring on the step header form `- name: Deploy to Cloudflare`.
-    const rootDeployIdx = deploy.indexOf('- name: Deploy to Cloudflare Workers')
-    expect(scanIdx).toBeGreaterThan(0)
-    expect(rootDeployIdx).toBeGreaterThan(scanIdx)
   })
 
   it('deploy workflow includes D1 migration step', () => {

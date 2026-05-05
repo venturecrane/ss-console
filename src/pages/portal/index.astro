@@ -23,16 +23,6 @@ import { env } from 'cloudflare:workers'
 
 const session = Astro.locals.session!
 
-// Outside View was retired (partial; see follow-up issue). Surviving
-// prospect sessions — possible only via the dormant scan pipeline — have
-// no portal home, and `getPortalClient` would otherwise resolve them
-// against the client dashboard (its WHERE clause still admits both
-// roles). Bounce them to login with a no-account error so they don't
-// land on a half-rendered client surface.
-if (session.role === 'prospect') {
-  return Astro.redirect('/auth/portal-login?error=no_account')
-}
-
 const portalData = await getPortalClient(env.DB, session.userId, session.orgId)
 if (!portalData) {
   return Astro.redirect('/auth/portal-login?error=no_account')
