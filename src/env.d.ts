@@ -86,8 +86,6 @@ declare namespace Cloudflare {
      * OAuth redirect and cause redirect_uri_mismatch errors.
      */
     ADMIN_BASE_URL?: string
-    /** Cloudflare Turnstile site key for the /book booking widget. Public. */
-    PUBLIC_TURNSTILE_SITE_KEY?: string
     RESEND_API_KEY?: string
     /**
      * Resend webhook signing secret (`whsec_…` from the Resend dashboard
@@ -117,8 +115,6 @@ declare namespace Cloudflare {
      * `openssl rand -base64 32`.
      */
     BOOKING_ENCRYPTION_KEY?: string
-    /** Cloudflare Turnstile secret key (paired with PUBLIC_TURNSTILE_SITE_KEY). */
-    TURNSTILE_SECRET_KEY?: string
     /** Static video call URL for booking events (e.g. Zoom personal meeting link). */
     MEETING_URL?: string
     /**
@@ -196,21 +192,6 @@ interface AuthSession {
   email: string
   expiresAt: string
 }
-
-interface TurnstileRenderOptions {
-  sitekey: string
-  callback?: (token: string) => void
-  'expired-callback'?: () => void
-  'error-callback'?: () => void
-}
-
-interface TurnstileApi {
-  render(container: Element, options: TurnstileRenderOptions): string
-  getResponse(widgetId?: string | null): string
-  reset(widgetId?: string | null): void
-}
-
-declare const turnstile: TurnstileApi | undefined
 
 declare namespace App {
   interface Locals {

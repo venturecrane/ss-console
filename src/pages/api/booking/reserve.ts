@@ -1,7 +1,6 @@
 import type { APIRoute } from 'astro'
 import { ORG_ID } from '../../../lib/constants'
 import { BOOKING_CONFIG } from '../../../lib/booking/config'
-import { resolveTurnstileConfig, verifyTurnstileToken } from '../../../lib/booking/turnstile'
 import { rateLimitByIp } from '../../../lib/booking/rate-limit'
 import { acquireHold, releaseHold } from '../../../lib/booking/holds'
 import {
@@ -36,7 +35,7 @@ const NOTIFY_EMAIL = 'team@smd.services'
  * POST /api/booking/reserve
  *
  * Atomic 3-phase booking flow:
- *   1. Preflight  — Turnstile, rate limit, input validation
+ *   1. Preflight  — rate limit, input validation
  *   2. DB commit  — Intake + schedule sidecars + hold + token
  *   3. Google sync — Create calendar event; compensating rollback on failure
  *   4. Post-commit — Promote stage, send confirmation email with ICS
@@ -58,19 +57,9 @@ export const POST: APIRoute = async ({ request }) => {
   // Phase 1: Preflight
   // -----------------------------------------------------------------------
 
-  // 1a. Turnstile verification
-  // resolveTurnstileConfig throws on misconfiguration (one key set but not
-  // the other, or neither set outside localhost) — the endpoint 500s rather
-  // than silently skipping bot verification (#12).
-  const turnstileConfig = resolveTurnstileConfig(env)
-  const turnstileToken = typeof body.turnstile_token === 'string' ? body.turnstile_token : null
+  // 1a. IP rate limiting (10/hour). Cloudflare zone-level Bot Fight Mode
+  // runs at the edge before requests reach this Worker.
   const clientIp = request.headers.get('cf-connecting-ip') ?? undefined
-  const turnstileResult = await verifyTurnstileToken(turnstileConfig, turnstileToken, clientIp)
-  if (!turnstileResult.success) {
-    return jsonResponse(403, { error: 'turnstile_failed', message: turnstileResult.error })
-  }
-
-  // 1b. IP rate limiting (10/hour)
   const rateLimitResult = await rateLimitByIp(env.BOOKING_CACHE, 'reserve', clientIp)
   if (!rateLimitResult.allowed) {
     return jsonResponse(429, {

@@ -1,6 +1,5 @@
 import type { APIRoute } from 'astro'
 import { processIntakeSubmission } from '../../lib/booking/intake-core'
-import { resolveTurnstileConfig, verifyTurnstileToken } from '../../lib/booking/turnstile'
 import { rateLimitByIp } from '../../lib/booking/rate-limit'
 import { sendEmail } from '../../lib/email/resend'
 import { ORG_ID } from '../../lib/constants'
@@ -19,7 +18,8 @@ const RATE_LIMIT = 5
  * Creates entity + contact + context (no assessment — that happens when
  * a call is actually scheduled). Sends admin notification.
  *
- * Security: Turnstile + honeypot + IP rate limiting (5/hour).
+ * Security: honeypot + IP rate limiting (5/hour). Cloudflare zone-level
+ * Bot Fight Mode runs at the edge before requests reach this Worker.
  */
 export const POST: APIRoute = async ({ request, clientAddress }) => {
   // Parse JSON body
@@ -33,17 +33,6 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
   // Honeypot check — bots fill this hidden field, humans don't
   if (typeof body.website_url === 'string' && body.website_url.trim() !== '') {
     return jsonResponse(200, { ok: true })
-  }
-
-  // Turnstile verification — resolveTurnstileConfig throws on misconfiguration (#12).
-  const turnstileConfig = resolveTurnstileConfig(env)
-  const turnstileResult = await verifyTurnstileToken(
-    turnstileConfig,
-    typeof body.turnstile_token === 'string' ? body.turnstile_token : null,
-    clientAddress
-  )
-  if (!turnstileResult.success) {
-    return jsonResponse(403, { error: 'Bot verification failed' })
   }
 
   // Rate limiting

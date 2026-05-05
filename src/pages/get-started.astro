@@ -5,8 +5,6 @@ import Base from '../layouts/Base.astro'
 import Nav from '../components/Nav.astro'
 import Footer from '../components/Footer.astro'
 import IntakeQuestionnaire from '../components/booking/IntakeQuestionnaire.astro'
-import { resolveTurnstileConfig } from '../lib/booking/turnstile'
-import { env } from 'cloudflare:workers'
 
 /**
  * /get-started dual-mode page.
@@ -29,9 +27,6 @@ const isPostBooking = Astro.url.searchParams.has('booked')
 if (!isPostBooking) {
   return Astro.redirect('/', 301)
 }
-
-// Fail-fast on Turnstile misconfiguration (#12). See book.astro for rationale.
-const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
 ---
 
 <Base
@@ -92,21 +87,13 @@ const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
           id="intake-form-container"
           class="mt-10 rounded-[var(--ss-radius-card)] bg-white p-6 sm:p-8"
         >
-          <form
-            id="intake-form"
-            class="space-y-5"
-            novalidate
-            data-turnstile-site-key={turnstileSiteKey}
-          >
+          <form id="intake-form" class="space-y-5" novalidate>
             <!-- Honeypot -->
             <div class="absolute -left-[9999px]" aria-hidden="true">
               <input type="text" name="website_url" tabindex="-1" autocomplete="off" />
             </div>
 
             <IntakeQuestionnaire idPrefix="gs" mode="prep" />
-
-            <!-- Turnstile -->
-            <div id="turnstile-container"></div>
 
             <!-- Error banner -->
             <div
@@ -169,18 +156,6 @@ const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
   </main>
   <Footer />
 
-  <!-- Turnstile script -->
-  {
-    turnstileSiteKey && (
-      <script
-        is:inline
-        src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
-        async
-        defer
-      />
-    )
-  }
-
   <script>
     import { formDataToObject, normalizeIntakePayload } from '../lib/booking/intake-questionnaire'
 
@@ -194,15 +169,13 @@ const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
       const submitBtnElement = document.getElementById('gs-submit')
       const errorBannerElement = document.getElementById('gs-error')
       const successPanelElement = document.getElementById('success-panel')
-      const turnstileContainerElement = document.getElementById('turnstile-container')
 
       if (
         !(formElement instanceof HTMLFormElement) ||
         !(formContainerElement instanceof HTMLElement) ||
         !(submitBtnElement instanceof HTMLButtonElement) ||
         !(errorBannerElement instanceof HTMLElement) ||
-        !(successPanelElement instanceof HTMLElement) ||
-        !(turnstileContainerElement instanceof HTMLElement)
+        !(successPanelElement instanceof HTMLElement)
       ) {
         return
       }
@@ -212,34 +185,6 @@ const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
       const submitBtn = submitBtnElement
       const errorBanner = errorBannerElement
       const successPanel = successPanelElement
-      const turnstileContainer = turnstileContainerElement
-      const turnstileSiteKey = form.dataset.turnstileSiteKey || ''
-      let turnstileWidgetId: string | undefined
-      let turnstileReady = false
-
-      if (turnstileSiteKey) {
-        const initTurnstile = function () {
-          if (typeof turnstile !== 'undefined' && !turnstileReady) {
-            turnstileWidgetId = turnstile.render(turnstileContainer, {
-              sitekey: turnstileSiteKey,
-              callback: function () {},
-              'expired-callback': function () {},
-              'error-callback': function () {},
-            })
-            turnstileReady = true
-          }
-        }
-        initTurnstile()
-        if (!turnstileReady) {
-          const checkInterval = setInterval(function () {
-            initTurnstile()
-            if (turnstileReady) clearInterval(checkInterval)
-          }, 200)
-          setTimeout(function () {
-            clearInterval(checkInterval)
-          }, 10000)
-        }
-      }
 
       form.addEventListener('submit', async function (event) {
         event.preventDefault()
@@ -248,10 +193,6 @@ const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
         submitBtn.textContent = 'Sending...'
 
         const data = normalizeIntakePayload(formDataToObject(new FormData(form)))
-
-        if (turnstileSiteKey && typeof turnstile !== 'undefined') {
-          data.turnstile_token = turnstile.getResponse(turnstileWidgetId) || ''
-        }
 
         try {
           const res = await fetch('/api/intake', {
@@ -269,9 +210,6 @@ const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
             errorBanner.classList.remove('hidden')
             submitBtn.disabled = false
             submitBtn.textContent = 'Send'
-            if (turnstileSiteKey && typeof turnstile !== 'undefined') {
-              turnstile.reset(turnstileWidgetId)
-            }
           }
         } catch {
           errorBanner.textContent = 'Something went wrong. Please try again.'

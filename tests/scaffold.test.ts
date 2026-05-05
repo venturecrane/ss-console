@@ -116,7 +116,7 @@ describe('cloudflare SSR scaffolding', () => {
     expect(notFound).not.toMatch(/export\s+const\s+prerender\s*=\s*true/)
   })
 
-  it('book page is SSR (needs runtime env for Turnstile key)', () => {
+  it('book page is SSR (needs runtime DB access for prefill-token entity lookup)', () => {
     const book = readFileSync(resolve('src/pages/book.astro'), 'utf-8')
     expect(book).toContain('export const prerender = false')
   })

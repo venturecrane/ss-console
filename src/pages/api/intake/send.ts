@@ -1,7 +1,6 @@
 import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 import { ORG_ID } from '../../../lib/constants'
-import { resolveTurnstileConfig, verifyTurnstileToken } from '../../../lib/booking/turnstile'
 import { rateLimitByIp } from '../../../lib/booking/rate-limit'
 import { processIntakeSubmission } from '../../../lib/booking/intake-core'
 import { appendContext } from '../../../lib/db/context'
@@ -23,10 +22,12 @@ const MAX_MESSAGE_CHARS = 5000
  * conversation feels alive, then notifies the team via email.
  *
  * Single-turn by design (V1). The architectural complexity of multi-turn
- * (entity authority, replay safety, Turnstile single-use, server-side
- * conversation_id lookup) is deferred to a future PR with proper auth.
+ * (entity authority, replay safety, server-side conversation_id lookup)
+ * is deferred to a future PR with proper auth.
  *
- * Security: render-timestamp check + Turnstile + IP rate limiting (10/hour).
+ * Security: render-timestamp check + IP rate limiting (10/hour).
+ * Cloudflare zone-level Bot Fight Mode runs at the edge before requests
+ * reach this Worker.
  *
  * The previous offscreen `<input name="website_url">` honeypot was visible to
  * Chrome's autofill classifier and suppressed autofill suggestions on the
@@ -53,18 +54,6 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
   const renderedAt = typeof body.rendered_at === 'number' ? body.rendered_at : NaN
   if (!Number.isFinite(renderedAt) || Date.now() - renderedAt < MIN_FORM_FILL_MS) {
     return jsonResponse(200, { ok: true })
-  }
-
-  // Turnstile — fail-fast on misconfiguration so we never silently bypass bot
-  // verification (matches /api/booking/reserve and /api/intake patterns).
-  const turnstileConfig = resolveTurnstileConfig(env)
-  const turnstileResult = await verifyTurnstileToken(
-    turnstileConfig,
-    typeof body.turnstile_token === 'string' ? body.turnstile_token : null,
-    clientAddress
-  )
-  if (!turnstileResult.success) {
-    return jsonResponse(403, { error: 'Bot verification failed' })
   }
 
   // Rate limit per IP.

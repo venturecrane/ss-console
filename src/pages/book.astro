@@ -8,15 +8,9 @@ import SlotPicker from '../components/booking/SlotPicker.astro'
 import UnifiedIntake from '../components/booking/UnifiedIntake.astro'
 import { getEntity } from '../lib/db/entities'
 import { getContact } from '../lib/db/contacts'
-import { resolveTurnstileConfig } from '../lib/booking/turnstile'
 import { verifyBookingLink } from '../lib/booking/signed-link'
 import { ORG_ID } from '../lib/constants'
 import { env } from 'cloudflare:workers'
-
-// Fail-fast on Turnstile misconfiguration. In non-localhost environments,
-// both keys must be set; otherwise this throws and the page 500s cleanly
-// rather than silently rendering a form that bypasses bot verification (#12).
-const turnstileSiteKey = resolveTurnstileConfig(env).siteKey
 
 // Prefill support for admin-issued links (#467). When `?t=<token>` is present
 // and verifies, we prefill the business name (and email if we have the
@@ -64,10 +58,7 @@ if (prefillToken) {
   <Nav />
   <main id="main" role="main">
     <!-- Intake -->
-    <section
-      class="bg-[color:var(--ss-color-background)] px-6 py-16 sm:py-24"
-      data-turnstile-site-key={turnstileSiteKey}
-    >
+    <section class="bg-[color:var(--ss-color-background)] px-6 py-16 sm:py-24">
       <div class="mx-auto max-w-3xl">
         <header class="mb-6">
           <h1 class="text-3xl font-bold text-[color:var(--ss-color-text-primary)] sm:text-4xl">
@@ -86,7 +77,6 @@ if (prefillToken) {
         }
 
         <UnifiedIntake
-          turnstileSiteKey={turnstileSiteKey}
           values={{
             name: prefillContactName ?? undefined,
             email: prefillEmail ?? undefined,
@@ -170,9 +160,6 @@ if (prefillToken) {
             Book Your Call
           </button>
         </div>
-
-        <!-- Turnstile widget (one instance shared by both Send and Book paths) -->
-        <div id="turnstile-container" class="mt-6"></div>
 
         <!-- Confirmation panel (replaces everything above on successful booking) -->
         <div
@@ -414,18 +401,6 @@ if (prefillToken) {
   </main>
   <Footer />
 
-  <!-- Turnstile script (only loaded if site key is set) -->
-  {
-    turnstileSiteKey && (
-      <script
-        is:inline
-        src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
-        async
-        defer
-      />
-    )
-  }
-
   <script>
     interface UnifiedFormData {
       name: string
@@ -461,21 +436,6 @@ if (prefillToken) {
       field_errors?: Record<string, string>
     }
 
-    interface TurnstileApi {
-      render(
-        container: HTMLElement,
-        options: {
-          sitekey: string
-          appearance?: 'always' | 'execute' | 'interaction-only'
-          callback?: () => void
-          'expired-callback'?: () => void
-          'error-callback'?: () => void
-        }
-      ): string
-      getResponse(widgetId: string | undefined): string | null
-      reset(widgetId: string | undefined): void
-    }
-
     ;(() => {
       const intakeRoot = document.getElementById('unified-intake')
       const slotPickerSection = document.getElementById('slot-picker-section')
@@ -486,13 +446,11 @@ if (prefillToken) {
       const bookSubmitBtn = document.getElementById('bf-submit')
       const errorBanner = document.getElementById('bf-error')
       const slotTakenBanner = document.getElementById('bf-slot-taken')
-      const turnstileContainer = document.getElementById('turnstile-container')
       const confirmPanel = document.getElementById('confirmation-panel')
       const emailFallback = document.getElementById('email-fallback-panel')
       const prefillTokenStore = document.getElementById(
         'prefill-token-store'
       ) as HTMLInputElement | null
-      const sectionElement = document.querySelector('section[data-turnstile-site-key]')
 
       if (
         !(intakeRoot instanceof HTMLElement) ||
@@ -504,106 +462,14 @@ if (prefillToken) {
         !(bookSubmitBtn instanceof HTMLButtonElement) ||
         !(errorBanner instanceof HTMLElement) ||
         !(slotTakenBanner instanceof HTMLElement) ||
-        !(turnstileContainer instanceof HTMLElement) ||
         !(confirmPanel instanceof HTMLElement) ||
-        !(emailFallback instanceof HTMLElement) ||
-        !(sectionElement instanceof HTMLElement)
+        !(emailFallback instanceof HTMLElement)
       ) {
         return
       }
 
       const picker = pickerElement as HTMLElement & { refetchSlots?: () => void }
-      const turnstileSiteKey = sectionElement.dataset.turnstileSiteKey || ''
       let currentSlot: BookingSlot | null = null
-      let turnstileWidgetId: string | undefined
-      let turnstileReady = false
-      let turnstileTimedOut = false
-      let turnstileRequested = false
-
-      // Render Turnstile during browser idle time after first paint, not on
-      // first form interaction. The challenge runs inside an iframe in a
-      // separate browsing context, so its network and fingerprinting work
-      // does not compete with the parent page's main thread (which handles
-      // form keystrokes). The only main-thread cost in the parent is
-      // ts.render() itself — small, and scheduled via requestIdleCallback
-      // when the browser has nothing else to do. By the time the user
-      // clicks a field, the challenge is solved silently in the background.
-      //
-      // Prior implementation deferred render to first focusin/input. That
-      // saved work on bounce visits but placed the cost on engaged users
-      // at exactly the wrong moment, making the form feel frozen during
-      // their first keystroke.
-      const renderTurnstileNow = (): void => {
-        if (!turnstileSiteKey || turnstileRequested) return
-        turnstileRequested = true
-        const tryRender = (): void => {
-          const ts = (window as unknown as { turnstile?: TurnstileApi }).turnstile
-          if (ts && !turnstileReady) {
-            turnstileWidgetId = ts.render(turnstileContainer, {
-              sitekey: turnstileSiteKey,
-              // 'interaction-only' hides the widget for visitors who pass
-              // the silent challenge (the vast majority). The visible
-              // "Verifying..." Cloudflare-branded box was undermining the
-              // page's polish without adding security: the silent challenge
-              // already runs and produces a token regardless of appearance.
-              // For the small fraction of visitors flagged as needing an
-              // interactive challenge, the widget appears for them — at
-              // which point seeing it is the expected affordance.
-              appearance: 'interaction-only',
-              callback: () => {},
-              'expired-callback': () => {},
-              'error-callback': () => {},
-            })
-            turnstileReady = true
-          }
-        }
-        tryRender()
-        if (!turnstileReady) {
-          const checkInterval = setInterval(() => {
-            tryRender()
-            if (turnstileReady) clearInterval(checkInterval)
-          }, 200)
-          setTimeout(() => {
-            clearInterval(checkInterval)
-            if (!turnstileReady) turnstileTimedOut = true
-          }, 10000)
-        }
-      }
-
-      if (turnstileSiteKey) {
-        // Schedule the render during browser idle time. With requestIdleCallback,
-        // the browser only invokes us when the main thread is otherwise free —
-        // so the render never competes with user interaction. setTimeout is the
-        // fallback for Safari (no rIC support as of 2026).
-        const idleScheduler = (
-          window as Window & {
-            requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number
-          }
-        ).requestIdleCallback
-        if (typeof idleScheduler === 'function') {
-          idleScheduler(() => renderTurnstileNow(), { timeout: 2000 })
-        } else {
-          setTimeout(() => renderTurnstileNow(), 200)
-        }
-        // Safety net: if a user fires Send before the idle callback has
-        // rendered Turnstile (very unlikely — would require submitting in
-        // under ~200ms after page load), the Send handler invokes
-        // renderTurnstileNow before reading the token. Enforced in the
-        // Send / Book paths below.
-      }
-
-      const getTurnstileToken = (): string => {
-        if (!turnstileSiteKey || turnstileTimedOut) return ''
-        const ts = (window as unknown as { turnstile?: TurnstileApi }).turnstile
-        if (!ts) return ''
-        return ts.getResponse(turnstileWidgetId) || ''
-      }
-
-      const resetTurnstile = (): void => {
-        if (!turnstileSiteKey) return
-        const ts = (window as unknown as { turnstile?: TurnstileApi }).turnstile
-        if (ts) ts.reset(turnstileWidgetId)
-      }
 
       const setIntakeState = (state: string): void => {
         intakeRoot.dispatchEvent(
@@ -658,15 +524,8 @@ if (prefillToken) {
           return
         }
 
-        // Safety net: if Send fires before the idle-scheduled render has
-        // run (very fast submit immediately after page load), kick off the
-        // render now. The retry poll inside renderTurnstileNow handles
-        // api.js still loading.
-        renderTurnstileNow()
-
         setIntakeState('send_thinking')
 
-        const turnstileToken = getTurnstileToken()
         const payload = {
           name: data.name,
           email: data.email,
@@ -674,7 +533,6 @@ if (prefillToken) {
           phone: data.phone,
           website: data.website,
           message: data.message,
-          turnstile_token: turnstileToken,
           rendered_at: data.rendered_at,
         }
 
@@ -694,16 +552,11 @@ if (prefillToken) {
             return
           }
 
-          // Reset Turnstile on any failure path so the user can retry.
-          resetTurnstile()
-
           if (res.status === 400 && body.field_errors) {
             const messages = Object.values(body.field_errors).join(' ')
             showIntakeError(messages || body.message || 'Some fields need attention.')
           } else if (res.status === 429) {
             showIntakeError('Too many submissions. Please wait a few minutes and try again.')
-          } else if (res.status === 403) {
-            showIntakeError('Security check failed. Please try again.')
           } else {
             showIntakeError(body.message || body.error || 'Something went wrong. Please try again.')
           }
@@ -832,7 +685,6 @@ if (prefillToken) {
         errorBanner.hidden = true
         slotTakenBanner.hidden = true
 
-        const turnstileToken = getTurnstileToken()
         // Booking POST. The user message was already persisted by Send
         // (and the AI reply context row written from /api/intake/send),
         // so we deliberately pass an empty `message` here. intake-core
@@ -847,7 +699,6 @@ if (prefillToken) {
           message: '',
           slot_start_utc: currentSlot.start_utc,
           timezone: currentSlot.timezone,
-          turnstile_token: turnstileToken,
         }
         if (prefillTokenStore && prefillTokenStore.value) {
           payload.prefill_token = prefillTokenStore.value
@@ -879,13 +730,6 @@ if (prefillToken) {
 
           if (res.status === 429) {
             showBookError('Too many booking attempts. Please wait a few minutes and try again.')
-            resetBookSubmit()
-            return
-          }
-
-          if (res.status === 403 && body.error === 'turnstile_failed') {
-            showBookError('Security check failed. Please try again.')
-            resetTurnstile()
             resetBookSubmit()
             return
           }
