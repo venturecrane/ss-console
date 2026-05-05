@@ -466,6 +466,7 @@ if (prefillToken) {
         container: HTMLElement,
         options: {
           sitekey: string
+          appearance?: 'always' | 'execute' | 'interaction-only'
           callback?: () => void
           'expired-callback'?: () => void
           'error-callback'?: () => void
@@ -540,6 +541,15 @@ if (prefillToken) {
           if (ts && !turnstileReady) {
             turnstileWidgetId = ts.render(turnstileContainer, {
               sitekey: turnstileSiteKey,
+              // 'interaction-only' hides the widget for visitors who pass
+              // the silent challenge (the vast majority). The visible
+              // "Verifying..." Cloudflare-branded box was undermining the
+              // page's polish without adding security: the silent challenge
+              // already runs and produces a token regardless of appearance.
+              // For the small fraction of visitors flagged as needing an
+              // interactive challenge, the widget appears for them — at
+              // which point seeing it is the expected affordance.
+              appearance: 'interaction-only',
               callback: () => {},
               'expired-callback': () => {},
               'error-callback': () => {},
