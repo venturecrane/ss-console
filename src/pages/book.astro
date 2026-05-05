@@ -519,14 +519,19 @@ if (prefillToken) {
       let turnstileTimedOut = false
       let turnstileRequested = false
 
-      // Lazy-render Turnstile on first form interaction. The api.js script
-      // tag still loads early (async/defer) so the lib is ready when needed,
-      // but ts.render() — which spawns the challenge iframe and runs
-      // Cloudflare's bot-detection JS — is deferred until the user signals
-      // intent to submit by focusing or typing into any form field. This
-      // keeps the form responsive on initial paint and removes ~1.3s of
-      // background work from the critical path on every visit; by the time
-      // the user finishes filling fields the challenge is solved.
+      // Render Turnstile during browser idle time after first paint, not on
+      // first form interaction. The challenge runs inside an iframe in a
+      // separate browsing context, so its network and fingerprinting work
+      // does not compete with the parent page's main thread (which handles
+      // form keystrokes). The only main-thread cost in the parent is
+      // ts.render() itself — small, and scheduled via requestIdleCallback
+      // when the browser has nothing else to do. By the time the user
+      // clicks a field, the challenge is solved silently in the background.
+      //
+      // Prior implementation deferred render to first focusin/input. That
+      // saved work on bounce visits but placed the cost on engaged users
+      // at exactly the wrong moment, making the form feel frozen during
+      // their first keystroke.
       const renderTurnstileNow = (): void => {
         if (!turnstileSiteKey || turnstileRequested) return
         turnstileRequested = true
@@ -556,16 +561,25 @@ if (prefillToken) {
       }
 
       if (turnstileSiteKey) {
-        const intakeForm = document.getElementById('unified-intake-form')
-        if (intakeForm instanceof HTMLFormElement) {
-          // focusin bubbles, so a single listener catches all field focuses.
-          intakeForm.addEventListener('focusin', renderTurnstileNow, { once: true })
-          intakeForm.addEventListener('input', renderTurnstileNow, { once: true })
+        // Schedule the render during browser idle time. With requestIdleCallback,
+        // the browser only invokes us when the main thread is otherwise free —
+        // so the render never competes with user interaction. setTimeout is the
+        // fallback for Safari (no rIC support as of 2026).
+        const idleScheduler = (
+          window as Window & {
+            requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number
+          }
+        ).requestIdleCallback
+        if (typeof idleScheduler === 'function') {
+          idleScheduler(() => renderTurnstileNow(), { timeout: 2000 })
+        } else {
+          setTimeout(() => renderTurnstileNow(), 200)
         }
-        // Safety net: if a user somehow fires Send (e.g., Enter on an
-        // already-filled-via-script form) before focus/input bubbles up,
-        // the Send handler invokes renderTurnstileNow before reading the
-        // token. This is enforced in the Send / Book paths below.
+        // Safety net: if a user fires Send before the idle callback has
+        // rendered Turnstile (very unlikely — would require submitting in
+        // under ~200ms after page load), the Send handler invokes
+        // renderTurnstileNow before reading the token. Enforced in the
+        // Send / Book paths below.
       }
 
       const getTurnstileToken = (): string => {
@@ -634,10 +648,10 @@ if (prefillToken) {
           return
         }
 
-        // Safety net for the lazy-Turnstile path: if Send fires before the
-        // user's focus/input has bubbled (e.g., Enter on a script-prefilled
-        // form), kick off the render now and wait briefly. The retry poll
-        // inside renderTurnstileNow handles api.js still loading.
+        // Safety net: if Send fires before the idle-scheduled render has
+        // run (very fast submit immediately after page load), kick off the
+        // render now. The retry poll inside renderTurnstileNow handles
+        // api.js still loading.
         renderTurnstileNow()
 
         setIntakeState('send_thinking')
