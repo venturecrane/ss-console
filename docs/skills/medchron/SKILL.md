@@ -325,11 +325,42 @@ and need the recipient's Azure credentials. They are reported as their own
 named bucket. Say so plainly rather than letting it sit inside "we open
 emails now".
 
-Measure the extracted text volume; it is the cost basis for the Step 4
-projection:
+### Then reduce the corpus, before you measure it
 
 ```bash
-wc -c $SMD_MC_DATA/<slug>/text/*.txt | tail -1
+python3 dedup_pages.py <slug> --dry-run    # read the numbers
+python3 dedup_pages.py <slug> --apply      # AFTER extract, BEFORE build_units
+```
+
+Records vendors deliver the same encounter several times - a single-date
+export, the same admission again inside a dated records folder, and a lifetime
+EMR report containing both - and stamp every page with the patient's name, MRN
+and a generation timestamp. On the matter this stage was built for, that was
+12.6% per-page furniture plus 20.2% already-seen pages: a third of the corpus,
+composed at Opus rates, for nothing. The stage is free and it is the single
+largest cost lever in the pipeline.
+
+Two invariants carry the safety, and the RUNBOOK holds the detail:
+
+- **A retained page keeps its original `[p.N]` label, always.** Citations are
+  remapped by `build_exhibits` as `(offset + ORIGINAL page)` against the whole
+  raw PDF, so skipping a page is invisible to them - until someone renumbers,
+  at which point every citation in a delivered chronology points at the wrong
+  page and the audit verifies claims against the wrong image. Nothing warns
+  you; it just ships wrong.
+- **The drop decision and its check must read different things.** The decision
+  uses alphabetic shingles with digits stripped; the check reads the dates and
+  doses that stripping made invisible. A page proposed for skipping whose
+  numbers appear nowhere else is rescued, not dropped - that is how two vendor
+  invoices with identical wording and different amounts survive. Rescues above
+  20% of proposals mean the threshold is wrong and the stage refuses.
+
+**Measure AFTER reducing.** The cost basis for the Step 4 projection is what
+composition will actually receive, not what extraction produced:
+
+```bash
+wc -c $SMD_MC_DATA/<slug>/text_dedup/*.txt | tail -1   # the cost basis
+wc -c $SMD_MC_DATA/<slug>/text/*.txt | tail -1         # pre-reduction, for the report
 ```
 
 ---
@@ -409,6 +440,11 @@ Take the stage list and the exact commands **from the RUNBOOK**, not from this
 file. The ordering constraints are repeated here because they are invariants
 rather than commands, and each one was learned from a delivered defect:
 
+- **`dedup_pages` runs after `extract` and before `build_units`.** It repoints
+  `extracted.jsonl`'s `text_path` at the reduced text and keeps the original
+  under `text_path_full`, so running it late (after `build_units` has already
+  selected on `text_path`) reduces nothing, and running it twice is a no-op
+  rather than a compounding cut.
 - **`billing_extract` runs before `build_units`.** `build_units` reads
   `billing_extract.jsonl` to mark billing-only documents `compose: false` (every
   chunk a bill type with a figure on every page); `map_run` skips them and the
