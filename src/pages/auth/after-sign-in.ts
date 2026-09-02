@@ -108,7 +108,15 @@ export const GET: APIRoute = async ({ locals, redirect, url }) => {
   }
 
   if (surface === 'admin') {
-    return redirect(getAdminBaseUrl(env) ? buildAdminUrl(env, '/') : '/admin', 302)
+    // Target `/admin` explicitly rather than the admin origin's root. On
+    // production the destination is identical — `admin.smd.services/admin`
+    // skips the subdomain rewrite (src/middleware.ts) because the path already
+    // starts with `/admin` — so this is one fewer hop. On staging it is the
+    // difference between working and not: staging runs on a single workers.dev
+    // host with no `admin.` subdomain to rewrite, so `buildAdminUrl(env, '/')`
+    // lands a signed-in admin on the marketing home and they never reach the
+    // console.
+    return redirect(getAdminBaseUrl(env) ? buildAdminUrl(env, '/admin') : '/admin', 302)
   }
   if (surface === 'portal') {
     return redirect(getPortalBaseUrl(env) ? buildPortalUrl(env, '/portal') : '/portal', 302)
