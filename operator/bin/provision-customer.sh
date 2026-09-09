@@ -336,10 +336,24 @@ if [ -f "${MEDCHRON_FIRM_YAML}" ]; then
   # the moment a person is watching. The schema comes from the invoking
   # checkout, which is why the rollout note says to reprovision from a SYNCED
   # primary: a stale checkout validates against a stale schema.
-  PYTHONPATH="${REPO_ROOT}/operator/runners/medchron" python3 - "${MEDCHRON_FIRM_YAML}" <<'PY' \
-    || die "medchron firm config for ${SLUG} does not validate against this checkout's runner schema; not uploading it (run 'git pull' on the primary and retry)"
+  #
+  # The interpreter is `uv run --with pyyaml`, the same one every other
+  # python block in this script uses, NOT the bare `python3`: the runner's
+  # config module imports PyYAML, which the laptop's system python does not
+  # carry. Live-caught 2026-09-09 on the first reprovision after ss#2718: the
+  # bare interpreter died on `import yaml` and the die line below blamed the
+  # config ("does not validate"), so a validator that could not run read as a
+  # config that was wrong. The two outcomes now carry different exit codes
+  # and different sentences.
+  rc=0
+  PYTHONPATH="${REPO_ROOT}/operator/runners/medchron" \
+    uv run --quiet --with pyyaml python3 - "${MEDCHRON_FIRM_YAML}" <<'PY' || rc=$?
 import sys
-from medchron import config
+try:
+    from medchron import config
+except Exception as exc:  # the validator itself could not start
+    print(f"medchron firm validator could not run: {exc}", file=sys.stderr)
+    sys.exit(3)
 
 try:
     cfg = config.load(sys.argv[1])
@@ -348,6 +362,11 @@ except config.ConfigError as exc:
     sys.exit(1)
 print(f"medchron firm config OK ({cfg.slug})")
 PY
+  case "${rc}" in
+    0) ;;
+    1) die "medchron firm config for ${SLUG} does not validate against this checkout's runner schema (see the line above); not uploading it. Fix the config in the engagements repo, or 'git pull' the primary if the schema is newer than this checkout" ;;
+    *) die "medchron firm config for ${SLUG} could not be validated (the validator did not run, rc=${rc}); not uploading it. Install uv or fix the interpreter; the config itself was not judged" ;;
+  esac
   # <<< medchron-firm-validate
   log "Uploading medchron-firm.yaml to R2: s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/medchron-firm.yaml"
   AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" \
