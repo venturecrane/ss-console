@@ -3,6 +3,7 @@
 # memory-audit -- reachability audit over this project's durable memory store.
 #
 #   .claude/bin/memory-audit              # audit the real store, JSON on stdout
+#   .claude/bin/memory-audit --wiring     # is the SessionStart hook actually firing?
 #   .claude/bin/memory-audit --self-test  # prove the audit can still fail
 #   .claude/bin/memory-audit <dir>        # audit some other store
 #
