@@ -487,20 +487,18 @@ personas:
         # a one-line settings change here when she asks.
         settings:
           treatment_gap_flag_days: 45
-          # Agreement 2.8 / Exhibit A row 11 (engagements #89, draft, unsigned as
-          # of 2026-08-29): medical documents read to produce requested chronology
+          # Agreement 2.8 / Exhibit A row 11 as sent 2026-09-09 (engagements #107,
+          # #112): PAGES of medical records read to produce requested chronology
           # PACKAGES per calendar month. The running chronology (this skill's memo)
           # is unmetered; the allowance governs the package the runner builds
-          # (ADR 0087). Read by the runner's allowance pre-flight, never by the
-          # agent; the Operator surfaces and stops at the crossing, it never
-          # carries on past it on its own.
-          chronology_package_document_allowance_per_month: 2000
-          # Exhibit A row 11 restated in PAGES (engagements #107, 2026-09-09).
-          # A document is not a unit of work: the delivered packages ran from a
-          # one-page bill to a 700-page hospital chart, and the cost of a
-          # package tracks its pages. The document key above is carried for ONE
-          # release so an older broker restarting mid-rollout still meters
-          # something; it is removed in the follow-up PR after the reprovision.
+          # (ADR 0087, amended 2026-09-09). Read by the runner's allowance
+          # pre-flight, never by the agent; the Operator surfaces and stops at
+          # the crossing, it never carries on past it on its own. A document is
+          # not a unit of work: the delivered packages ran from a one-page bill
+          # to a 700-page hospital chart, and the cost of a package tracks its
+          # pages. The earlier document key was carried for one release and
+          # removed once both seats were reprovisioned onto the page key
+          # (2026-09-09, vfy_01M23V6QKNRHN4SB1ZPRBWZ1V9).
           chronology_package_page_allowance_per_month: 15000
       # motions
       - name: motion-calendar-tracker # keeps motion deadlines/hearings current
