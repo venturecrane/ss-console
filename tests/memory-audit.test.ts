@@ -19,8 +19,13 @@
  * Harness requirements, each from a recorded incident here:
  *   - cleanEnv() strips every GIT_* var (tests/staleness-detection.test.ts:104-116).
  *     Without it GIT_DIR beats cwd and a fixture measures the real repository.
- *   - SS_BOARD_DIR points at a scratch dir on every run. On 2026-08-01 a verify
- *     run pruned a live session's own board record because a test did not.
+ *   - SS_MEMORY_DIR points at a scratch store on every run, so no test can read
+ *     or damage the real one. This is the isolation that matters here: the audit
+ *     reads only the memory store, never the session board. (SS_BOARD_DIR is
+ *     also pinned to scratch as belt-and-braces, borrowed from the sibling
+ *     harnesses, but this script does not read it. Said plainly because the
+ *     first draft of this header cited the 2026-08-01 board-pruning incident,
+ *     which belongs to those harnesses and not to this one.)
  *   - Stores are built with mkdtempSync, never checked-in fixtures, which drift.
  */
 import { execFileSync } from 'node:child_process'
@@ -89,7 +94,8 @@ const observedStatuses = new Set<number>()
 
 function run(
   args: string[],
-  env: Record<string, string> = {}
+  env: Record<string, string> = {},
+  cwd?: string
 ): { stdout: string; stderr: string; status: number } {
   const board = scratchDir('ss-memory-audit-board-')
   // execFileSync surfaces stderr only on the THROW path, and the clean-exit
@@ -104,6 +110,7 @@ function run(
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', errFd],
       env: cleanEnv({ SS_BOARD_DIR: board, ...env }),
+      ...(cwd ? { cwd } : {}),
     })
     out = { stdout, status: 0 }
   } catch (err) {
@@ -410,5 +417,102 @@ describe('memory-audit: the suite exercised both answers', () => {
     expect(observedStatuses.has(0)).toBe(true)
     expect(observedStatuses.has(1)).toBe(true)
     expect(observedStatuses.size).toBeGreaterThanOrEqual(2)
+  })
+})
+
+/**
+ * Regressions found by code review on this change, each probed before it was
+ * fixed. All are the same class: the audit treating something that is not a
+ * broken reference as one. A check whose false positives look like its findings
+ * gets switched off, so each gets a case in both directions.
+ */
+describe('memory-audit: false positives that would have discredited it', () => {
+  it('does not call a back-link to MEMORY.md dangling, but still catches a real absence', () => {
+    const dir = scratchDir('ss-memory-backlink-')
+    writeStore(dir, {
+      'MEMORY.md': '# Index\n\n- [Sub](sub_index.md)\n',
+      'sub_index.md': 'Back to [the index](MEMORY.md).\n',
+    })
+    const clean = audit(dir)
+    expect(clean.result.dangling).toEqual([])
+    expect(clean.result.ok).toBe(true)
+
+    // Control: a reference to something genuinely absent is still caught, so
+    // the fix widened "exists" without blinding the check.
+    writeStore(dir, { 'sub_index.md': 'See [gone](never_written.md).\n' })
+    const dirty = audit(dir)
+    expect(dirty.result.dangling).toEqual(['never_written.md'])
+    expect(dirty.status).toBe(1)
+  })
+
+  it('ignores a link inside a fenced block, but not the same link in prose', () => {
+    const dir = scratchDir('ss-memory-fence-')
+    writeStore(dir, {
+      'MEMORY.md': '# Index\n\n- [One](one.md) - hook\n',
+      'one.md': 'Example:\n\n```\n- [Row](not_a_real_memory.md)\n```\n',
+    })
+    const fenced = audit(dir)
+    expect(fenced.result.dangling).toEqual([])
+    expect(fenced.status).toBe(0)
+
+    // Control: unfence the identical line and it becomes a real reference.
+    writeStore(dir, { 'one.md': 'Example:\n\n- [Row](not_a_real_memory.md)\n' })
+    const prose = audit(dir)
+    expect(prose.result.dangling).toEqual(['not_a_real_memory.md'])
+    expect(prose.status).toBe(1)
+  })
+})
+
+/**
+ * The path resolution is the one piece of logic the original incident motivated,
+ * and it had no coverage: every other case injects SS_MEMORY_DIR and so never
+ * exercises it. Asserted through the reported dir, which is populated even when
+ * the store is absent, so no fixture store is needed.
+ */
+describe('memory-audit: canonical store resolution from a worktree', () => {
+  function resolvedDir(cwd: string): string {
+    return (JSON.parse(run([], {}, cwd).stdout) as AuditResult).dir
+  }
+
+  it('resolves the same store from the primary and from any worktree depth', () => {
+    const repo = scratchDir('ss-memory-repo-')
+    const single = join(repo, '.claude', 'worktrees', 'simple')
+    // EnterWorktree accepts "/"-separated names, so a worktree can be nested.
+    // The single-segment strip matched nothing there and resolved an empty
+    // sibling store instead of the real one. Probed 2026-09-09.
+    const nested = join(repo, '.claude', 'worktrees', 'team', 'feature-x')
+    mkdirSync(single, { recursive: true })
+    mkdirSync(nested, { recursive: true })
+
+    const fromPrimary = resolvedDir(repo)
+    expect(resolvedDir(single)).toBe(fromPrimary)
+    expect(resolvedDir(nested)).toBe(fromPrimary)
+
+    // Guard the guard: the equality above only means something if the resolved
+    // path actually derives from the repo path rather than being a constant.
+    expect(fromPrimary).toContain(repo.replaceAll('/', '-'))
+  })
+})
+
+/**
+ * --session-start is what makes the mechanisms-registry claim measurable, since
+ * an audit nothing runs is built rather than wired. It must never fail a session
+ * start, and it must stay quiet when there is nothing to say, or the startup
+ * block teaches agents to skim it.
+ */
+describe('memory-audit: the SessionStart mode', () => {
+  it('is silent and exit 0 when clean, speaks and stays exit 0 when not', () => {
+    const dir = scratchDir('ss-memory-session-')
+    writeStore(dir, CLEAN_STORE)
+    const quiet = run(['--session-start'], { SS_MEMORY_DIR: dir })
+    expect(quiet.stdout).toBe('')
+    expect(quiet.stderr).toBe('')
+    expect(quiet.status).toBe(0)
+
+    // An orphan speaks, and still does not fail the session.
+    writeStore(dir, { 'orphan.md': 'reachable from nothing\n' })
+    const loud = run(['--session-start'], { SS_MEMORY_DIR: dir })
+    expect(loud.stderr).toContain('orphan')
+    expect(loud.status).toBe(0)
   })
 })

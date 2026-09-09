@@ -69,7 +69,12 @@ const NOT_A_MEMORY = new Set([INDEX, 'MEMORY.md.bak'])
  * suffix so every session of this repo audits the one real store.
  */
 function canonicalProjectPath(cwd) {
-  return cwd.replace(/\/\.claude\/worktrees\/[^/]+$/, '')
+  // Greedy to the end, not one segment: EnterWorktree accepts `/`-separated
+  // names, so `.claude/worktrees/team/feature-x` is a legal worktree. The
+  // single-segment form matched nothing at all for those and stripped nothing,
+  // resolving the empty worktree sibling instead of the real store. Probed
+  // 2026-09-09.
+  return cwd.replace(/\/\.claude\/worktrees\/.*$/, '')
 }
 
 function resolveMemoryDir(env = process.env, cwd = process.cwd()) {
@@ -96,8 +101,13 @@ function resolveMemoryDir(env = process.env, cwd = process.cwd()) {
  * almost any other, which is precisely the check that cannot fail.
  */
 function linkTargets(text) {
+  // Fenced blocks are quoted examples, not links. A memory that documents link
+  // conventions (several here do) would otherwise have its illustration parsed
+  // as a real reference, and a fenced example naming a file that does not exist
+  // would report as dangling. Third instance of the same false-positive class.
+  const prose = text.replace(/```[\s\S]*?```/g, '')
   const out = []
-  for (const m of text.matchAll(/\]\((?:\.\/)?([A-Za-z0-9._-]+\.md)\)/g)) out.push(m[1])
+  for (const m of prose.matchAll(/\]\((?:\.\/)?([A-Za-z0-9._-]+\.md)\)/g)) out.push(m[1])
   return out
 }
 
@@ -197,7 +207,15 @@ function auditStore(dir) {
   }
 
   const orphans = memories.filter((n) => !reachable.has(n)).sort()
-  const dangling = [...referenced].filter((n) => !memorySet.has(n) && !atticSet.has(n)).sort()
+  /**
+   * Dangling asks "does this file exist", which is a DIFFERENT question from
+   * "is this file a memory". `memorySet` deliberately excludes MEMORY.md and
+   * MEMORY.md.bak so they are never orphan candidates, and reusing it here
+   * reported a sub-index's `[back to the index](MEMORY.md)` link as dangling,
+   * exit 1, on a store that was perfectly healthy. Probed 2026-09-09.
+   */
+  const onDisk = new Set([...memorySet, ...NOT_A_MEMORY])
+  const dangling = [...referenced].filter((n) => !onDisk.has(n) && !atticSet.has(n)).sort()
 
   const bytes = Buffer.byteLength(indexRaw, 'utf8')
   const lines = indexRaw.split('\n').length
@@ -306,6 +324,21 @@ function main() {
   const dirArg = argv.find((a) => !a.startsWith('-'))
   const dir = dirArg ?? resolveMemoryDir()
   const result = auditStore(dir)
+
+  /**
+   * --session-start is the SessionStart wiring, and it speaks ONLY when it has
+   * something to say. A registry entry claiming "the audit reports zero orphans
+   * across the sessions between now and the review date" is unmeasurable unless
+   * something actually runs it, and a report nobody runs is the built-not-wired
+   * failure this venture calls Law 9. It also stays silent when clean, matching
+   * session-peers.sh, because a line that fires on every session and says
+   * nothing new is how agents learn to skim the startup block.
+   */
+  if (argv.includes('--session-start')) {
+    if (!result.ok || result.warnings?.length) process.stderr.write(summarize(result))
+    return 0 // never fail a session start on hygiene plumbing
+  }
+
   process.stdout.write(JSON.stringify(result, null, 2) + '\n')
   process.stderr.write(summarize(result))
   return result.ok ? 0 : 1
