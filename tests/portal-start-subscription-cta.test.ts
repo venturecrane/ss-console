@@ -1,29 +1,40 @@
 /**
- * The Operator start door is one gate, offered where the client lands.
+ * The Operator start door is one gate, offered where the client lands, and
+ * acted on in one place.
  *
- * 2026-09-09: the firm's partner wrote that it was time to start paying, and
- * the Captain, signed in as a client of that firm, could not find a way to
- * start the monthly subscription. The door existed, on Billing, under the
- * ledger, on one page only; Home said "Being set up" and the Operator page
- * said "Setup in progress". Neither pointed at it. This pins:
+ * 2026-09-09, morning: the firm's partner wrote that it was time to start
+ * paying, and the Captain, signed in as a client of that firm, could not
+ * find a way to start the monthly subscription. The door existed, on
+ * Billing, under the ledger, on one page only.
  *
- *   1. ONE predicate (canStartOperatorSubscription) decides the door, and all
- *      three surfaces read it, so they can never disagree.
+ * 2026-09-09, later: with the door surfaced, the Captain read Billing as
+ * confusing: a subscription block with its own button, a Paid-to-date /
+ * Balance-due pair, then the invoice. Two primaries on one screen (Rule 3),
+ * the balance restated beside the one invoice (Rule 2), "Being set up"
+ * beside "Start" (Rule 1). Billing is now a ledger of ticket rows, and the
+ * act lives on the subscription page.
+ *
+ * This pins:
+ *   1. ONE predicate (canStartOperatorSubscription) decides the door.
  *   2. Home's Operator card carries the door as its needs-you action, ahead
- *      of the draft queue, with the authored price.
- *   3. The Operator hero renders the door (a POST to the start route) while
- *      provisioning, and the page wires it from the same predicate.
- *   4. Billing anchors the section the other two deep-link.
+ *      of the draft queue, with the authored price, linking to the
+ *      subscription page.
+ *   3. The Operator hero links to the same page; it does not POST.
+ *   4. Billing renders subscriptions as PortalListItem rows stamped by
+ *      subscriptionStamp, with no inline start button and no KPI pair.
+ *   5. The subscription page holds the one POST to the start route, through
+ *      the form kit, and the Manage-billing door once started.
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { D1Database } from '@cloudflare/workers-types'
 import {
-  BILLING_SUBSCRIPTIONS_HREF,
   canStartOperatorSubscription,
   formatWholeDollars,
   operatorMonthlyPriceCents,
+  operatorSubscriptionHref,
+  subscriptionStamp,
 } from '../src/lib/portal/billing'
 import { loadHomeCards } from '../src/lib/portal/home-cards'
 import { deriveOfferings } from '../src/lib/portal/offerings'
@@ -148,6 +159,41 @@ describe('canStartOperatorSubscription: the one start gate', () => {
     expect(formatWholeDollars(500000)).toBe('$5,000')
     expect(formatWholeDollars(123456)).toBe('$1,235')
   })
+
+  it('operatorSubscriptionHref is the one page every door lands on', () => {
+    expect(operatorSubscriptionHref('firm-a')).toBe('/portal/billing/subscriptions/firm-a')
+  })
+})
+
+describe('subscriptionStamp: one stamp per row, the state at scan time (Rule 1)', () => {
+  it('a startable row reads NOT STARTED, never "being set up"', () => {
+    expect(subscriptionStamp(row(), true)).toEqual({ tone: 'warning', label: 'NOT STARTED' })
+  })
+
+  it('an unpriced provisioning row is honestly being set up', () => {
+    expect(subscriptionStamp(row(), false)).toEqual({ tone: 'neutral', label: 'BEING SET UP' })
+  })
+
+  it('active, paused, and scheduled cancellation each get one stamp', () => {
+    expect(subscriptionStamp(row({ status: 'active' }), false)).toEqual({
+      tone: 'success',
+      label: 'ACTIVE',
+    })
+    expect(subscriptionStamp(row({ status: 'paused' }), false)).toEqual({
+      tone: 'danger',
+      label: 'PAUSED',
+    })
+    expect(
+      subscriptionStamp(
+        row({ status: 'active', settings_json: JSON.stringify({ cancel_at: '2026-10-08' }) }),
+        false
+      )
+    ).toEqual({ tone: 'neutral', label: 'CANCELS' })
+  })
+
+  it('anything else is archived, not invented', () => {
+    expect(subscriptionStamp(row({ status: 'cancelled' }), false).label).toBe('ARCHIVED')
+  })
 })
 
 describe('Home: the Operator card carries the start door', () => {
@@ -158,7 +204,7 @@ describe('Home: the Operator card carries the start door', () => {
     offerings: offeringsFor(sub),
   })
 
-  it('a startable operator reads "Ready to start", shows the price, and the needs-you action is the door', async () => {
+  it('a startable operator reads "Ready to start", shows the price, and the needs-you action lands on the subscription page', async () => {
     const cards = await loadHomeCards(makeDb({ recurringPrice: 5000 }), input(row()))
     const operator = cards.find((c) => c.key === 'operator')
     expect(operator).toBeDefined()
@@ -166,7 +212,7 @@ describe('Home: the Operator card carries the start door', () => {
     expect(operator?.meta).toEqual(['$5,000 per month'])
     expect(operator?.needsYou).toEqual({
       label: 'Start monthly subscription',
-      href: BILLING_SUBSCRIPTIONS_HREF,
+      href: '/portal/billing/subscriptions/firm-a',
     })
   })
 
@@ -224,32 +270,56 @@ describe('Home: the Operator card carries the start door', () => {
   })
 })
 
-describe('the three surfaces read the one gate', () => {
+describe('the surfaces read the one gate and act in one place', () => {
   const read = (p: string) => readFileSync(resolve(p), 'utf-8')
 
-  it('the Operator hero renders the door as a POST to the start route while provisioning', () => {
+  it('the Operator hero links to the subscription page while provisioning; it does not POST', () => {
     const hero = read('src/components/portal/operator/facets/OperatorHero.astro')
     expect(hero).toContain('provisioning && start ?')
     expect(hero).toContain('Ready to start')
-    expect(hero).toContain('<form method="POST" action={start.action}')
+    expect(hero).toContain('href={start.href}')
     expect(hero).toContain('Start monthly subscription')
+    expect(hero).not.toContain('start-subscription')
     // The plain setup posture survives for an unpriced row.
     expect(hero).toContain('Being set up')
   })
 
-  it('the Operator page decides with the shared predicate and passes the door to the hero', () => {
+  it('the Operator page decides with the shared predicate and hands the hero the page link', () => {
     const page = read('src/pages/portal/products/operator/[instance]/index.astro')
     expect(page).toContain('canStartOperatorSubscription(subscription, priceCents)')
-    expect(page).toContain('/start-subscription`')
+    expect(page).toContain('operatorSubscriptionHref(instance)')
     expect(page).toContain('start={startDoor}')
   })
 
-  it('Billing reads the shared predicate and anchors the section Home deep-links', () => {
+  it('Billing is a ledger: stamped rows through PortalListItem, no inline start, no KPI pair', () => {
     const billing = read('src/pages/portal/billing/index.astro')
     expect(billing).toContain('canStartOperatorSubscription(sub, operatorPriceCents)')
+    expect(billing).toContain('subscriptionStamp(sub, canStart(sub))')
+    expect(billing).toContain('operatorSubscriptionHref(sub.instance_slug)')
     expect(billing).toContain('id="subscriptions"')
-    expect(billing).toContain('Start monthly subscription')
-    expect(BILLING_SUBSCRIPTIONS_HREF).toBe('/portal/billing#subscriptions')
+    // No POST to the start route from the ledger (the comment naming the
+    // route file is documentation, not a form).
+    expect(billing).not.toContain('/start-subscription`')
+    expect(billing).not.toContain('Paid to date')
+    expect(billing).not.toContain('Balance due')
+    // The row's stamp is the status; no second status line beside it.
+    expect(billing).not.toContain('subscriptionStatusLabel')
+    expect(billing).not.toContain('subscriptionStatusProse')
+    expect(billing).toContain('due`')
+  })
+
+  it('the subscription page holds the one POST to the start route, through the form kit', () => {
+    const page = read('src/pages/portal/billing/subscriptions/[instance].astro')
+    expect(page).toContain('/start-subscription`')
+    expect(page).toContain(
+      "import SubmitButton from '../../../../components/portal/form/SubmitButton.astro'"
+    )
+    expect(page).toContain('label="Start monthly subscription" tone="primary"')
+    expect(page).toContain('/api/portal/billing/manage')
+    expect(page).toContain('canStartOperatorSubscription(subscription, priceCents)')
+    expect(page).toContain("roles.includes('principal')")
+    // Exactly one primary on the page: the start form renders only when startable.
+    expect(page.match(/tone="primary"/g)?.length).toBe(1)
   })
 
   it('the server route still re-checks the same facts (provisioning, no Stripe id, authored price)', () => {

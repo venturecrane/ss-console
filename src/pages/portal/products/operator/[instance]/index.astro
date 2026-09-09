@@ -42,6 +42,7 @@ import { getOperatorServiceForEntity } from '../../../../../lib/db/services'
 import {
   canStartOperatorSubscription,
   operatorMonthlyPriceCents,
+  operatorSubscriptionHref,
   type OperatorStartDoor,
 } from '../../../../../lib/portal/billing'
 import { env } from 'cloudflare:workers'
@@ -124,10 +125,7 @@ if (subscription && isProvisioning) {
   const service = await getOperatorServiceForEntity(env.DB, user.org_id, client.id)
   const priceCents = operatorMonthlyPriceCents(service?.recurring_price)
   if (canStartOperatorSubscription(subscription, priceCents) && priceCents !== null) {
-    startDoor = {
-      action: `/api/portal/products/operator/${instance}/start-subscription`,
-      priceCents,
-    }
+    startDoor = { href: operatorSubscriptionHref(instance), priceCents }
   }
 }
 
