@@ -1,0 +1,32 @@
+---
+/**
+ * An anchor that renders exactly like the form kit's SubmitButton
+ * (UI-PATTERNS Rule 8: one control geometry; Rule 3: `primary` is the one
+ * filled action a view gets). For acts that are navigations rather than
+ * form posts: paying an invoice on Stripe's hosted page, opening a
+ * checkout. Same h-11, same border weight, same tones, so a page with a
+ * kit button and a page with a link button read as the same page.
+ */
+interface Props {
+  href: string
+  label: string
+  tone?: 'neutral' | 'primary'
+  external?: boolean
+}
+const { href, label, tone = 'neutral', external = false } = Astro.props
+
+const TONES: Record<NonNullable<Props['tone']>, string> = {
+  neutral:
+    'border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)] text-[color:var(--ss-color-text-primary)] hover:bg-[color:var(--ss-color-text-primary)] hover:text-[color:var(--ss-color-background)]',
+  primary:
+    'border-[color:var(--ss-color-primary)] bg-[color:var(--ss-color-primary)] text-[color:var(--ss-color-background)] hover:border-[color:var(--ss-color-primary-hover)] hover:bg-[color:var(--ss-color-primary-hover)]',
+}
+---
+
+<a
+  href={href}
+  class={`inline-flex h-11 w-fit items-center whitespace-nowrap border-[3px] px-5 font-body text-body font-bold uppercase tracking-[0.08em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2 ${TONES[tone]}`}
+  {...external ? { target: '_blank', rel: 'noopener noreferrer' } : {}}
+>
+  {label}
+</a>
