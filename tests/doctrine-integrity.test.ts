@@ -158,6 +158,37 @@ describe('doctrine registry: enforcement pointers resolve', () => {
       )
     }
   })
+
+  /**
+   * Resolving to a real file is not the same as being invoked. A hook listed as
+   * enforcement that no harness event ever runs is built, not wired, and a
+   * reader of the law will believe the failure mode is closed when it can recur
+   * exactly as before.
+   *
+   * Caught on 2026-09-09 in PR #2722, which registered
+   * .claude/hooks/memory-audit.mjs under Law 2 while nothing invoked it. Two
+   * independent reviewers found it; the existing existsSync check could not,
+   * because the file did exist. `lib/` is excluded: those are modules imported
+   * by wired hooks, not entry points of their own.
+   */
+  it('every hook cited as enforcement is actually wired into settings.json', () => {
+    const settings = readFileSync(resolve('.claude/settings.json'), 'utf8')
+    const violations: string[] = []
+    for (const law of laws) {
+      for (const pointer of law.enforcement ?? []) {
+        if (typeof pointer !== 'string') continue
+        if (!/^\.claude\/hooks\/[^/]+\.(mjs|sh)$/.test(pointer)) continue
+        const basename = pointer.split('/').pop() as string
+        if (!settings.includes(basename)) {
+          violations.push(
+            `${law.id}: "${pointer}" is cited as enforcement but no hook in ` +
+              `.claude/settings.json runs it, so nothing invokes it`
+          )
+        }
+      }
+    }
+    expect(violations).toEqual([])
+  })
 })
 
 describe('doctrine registry: incident provenance', () => {

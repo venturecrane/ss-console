@@ -50,12 +50,16 @@ tier: gate
 enforcement:
   - .claude/hooks/engagement-guard.mjs
   - .claude/hooks/read-tracker.mjs
+  - .claude/hooks/memory-audit.mjs
   - tests/engagement-guard.test.ts
+  - tests/memory-audit.test.ts
 incidents:
   - date: 2026-07-26
     ref: Christa-reply session (critiqued the A&P pricing letter without loading the engagement posture sitting in the corpus; the write gate and read advisory exist because of this session)
   - date: 2026-06-03
     ref: feedback_no_revenue_band_anchoring (stale doc treated as live law; loading the wrong context is the sibling failure)
+  - date: 2026-09-09
+    ref: memory-store reachability audit (60 memory files in ~/.claude/projects/-Users-scottdurgan-dev-ss-console/memory/ were referenced from no index at all, unread for weeks, including standing Captain directives and two secret-leak hazards. A prior compaction of MEMORY.md deleted index rows instead of moving them to an archive index, so the pointer was not stale, it was gone. Nothing detected it; .claude/hooks/memory-audit.mjs is the detector)
 escalation: none pending
 ```
 
@@ -368,6 +372,12 @@ mechanisms:
     success_criterion: 'Zero duplicate-featureset builds across concurrent sessions between now and the review date; board records stay accurate (no ghost peers older than 24h observed in the primer output).'
     review: 2026-09-30
     on_failure: 'If ghosts or noise teach agents to skim the board block, tighten pruning or remove the block. A peer listing that is sometimes wrong is worse than the blindness it replaced.'
+  - id: memory-audit
+    file: .claude/hooks/memory-audit.mjs
+    hypothesis: 'Making index-to-store reachability computable turns silent memory loss into a detectable state, so a tiered index (a capped always-on MEMORY.md, depth behind sub-indexes and an attic) can be compacted without dropping memories on the floor (Law 2: an index line is the pointer, and a deleted pointer is a deleted memory).'
+    success_criterion: 'The audit reports zero orphans and zero dangling references across the sessions between now and the review date, with MEMORY.md under the 24985-byte read limit and trending at or below the 17510-byte recommended target; every non-zero exit is traceable to a compaction that a session then repaired rather than to a false positive.'
+    review: 2026-12-09
+    on_failure: 'If the orphan count is routinely non-zero because agents write memories faster than they index them, the fix is to move indexing into the write path, not to raise the cap. If the findings are false positives (prose parentheticals, links out of the store), narrow the link grammar or delete the mechanism: an audit whose noise is indistinguishable from its findings gets ignored, which is worse than not having it.'
 ```
 
 ## Closure loop
