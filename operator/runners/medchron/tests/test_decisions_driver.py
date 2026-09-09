@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
 
-from medchron import budget as budget_mod, config as config_mod, dag, decisions, driver as driver_mod, job as job_mod
+from medchron import (budget as budget_mod, config as config_mod, dag, decisions, driver as driver_mod,
+                      job as job_mod, llm as llm_mod)
 from medchron.state import RunState, state_path
 from medchron_testkit import (FIRM_CONFIG, FakeSeat, calls, doc_row, job_yaml, make_pdf, seed_folders,
                               seed_raw_manifest, write_ledger)
@@ -431,11 +433,13 @@ def test_job_cap_overrides_the_firm_default(tmp_path: Path, data_root: Path, fir
 
 
 # ---- the routine-11 limits, at the driver (2026-09-09) -----------------------
-def _firm(tmp_path: Path, **budget) -> Path:
+def _firm(tmp_path: Path, *, levers: dict | None = None, **budget) -> Path:
     """A firm config with the budget block overridden. Written per test so a
     boundary can be tested at values a real posture would never carry."""
     cfg = json.loads(json.dumps(FIRM_CONFIG))
     cfg["budget"].update(budget)
+    if levers:
+        cfg["levers"].update(levers)
     p = tmp_path / f"firm-{len(list(tmp_path.glob('firm-*.yaml')))}.yaml"
     p.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
     return p
@@ -608,3 +612,72 @@ def test_a_dry_run_measures_the_limits_and_spends_nothing(
     assert o.outcome == "dry_run"
     assert any(n.startswith("WOULD HOLD at vision: single_matter_page_threshold: ") for n in o.notes)
     assert calls(data_root) == []
+
+
+# ---- batch mode: the limit binds before the submission -------------------------
+class _BatchClient:
+    """Counts batch submissions. Nothing here should ever be reached by a batch
+    the limits refuse, which is the whole property."""
+
+    def __init__(self) -> None:
+        self.messages = self
+        self.batches = self
+        self.submitted: list[Any] = []
+
+    def create(self, **kw):
+        self.submitted.append(kw)
+        raise RuntimeError("stub: a batch reached the SDK")
+
+
+def _batcher(n: int):
+    """A stage that hands the doorway one batch of n page-shaped items."""
+    def run(sr) -> int:
+        items = [llm_mod.Item(custom_id=f"p{i}", messages=[{"role": "user", "content": [
+            {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "x"}},
+            {"type": "text", "text": "transcribe this page"}]}]) for i in range(n)]
+        sr.doorway.batch_call("vision", items, lambda *a: None, model="claude-sonnet-5",
+                              max_tokens=16, batch_dir=sr.slug_dir / "batch")
+        return 0
+    return run
+
+
+def test_a_batch_that_would_cross_the_cap_holds_before_it_is_submitted(
+    tmp_path: Path, data_root: Path, pricing_path: Path, fake_pipeline: Path
+) -> None:
+    """Batch mode has no per-call seam: nothing checks between a batch's items
+    and the whole thing is billed. So the limits see the batch's PROJECTED cost
+    before submission, and an overshoot is bounded to one batch. Without this a
+    firm that opted into batching would silently lose the per-call bound.
+    """
+    firm = _firm(tmp_path, per_job_cap_usd=1.0, usd_per_scanned_page=0.02,
+                 usd_per_million_chars=0.0, levers={"batch_stages": ["vision"]})
+    jd = _job(tmp_path, data_root, "job-batch-over")
+    _seed_extracted(data_root, pages=4)
+    client = _BatchClient()
+    d = _driver(jd, firm, pricing_path, start="vision", client=client)
+    d._runner_override = {"vision": _batcher(80)}       # 80 pages x 0.02 = 1.60, over a 1.00 cap
+    o = d.run()[0]
+    assert o.outcome == "held" and o.stage == "vision"
+    assert o.reason.startswith("per_job_cap_usd: ") and "the batch was not submitted" in o.reason
+    assert "$" not in o.reason and "USD" not in o.reason
+    assert client.submitted == []                       # nothing was ever sent
+
+
+def test_a_batch_inside_the_cap_is_submitted(
+    tmp_path: Path, data_root: Path, pricing_path: Path, fake_pipeline: Path
+) -> None:
+    """The pass direction: the same wiring must not refuse a batch that fits,
+    or the check above could pass by refusing everything."""
+    firm = _firm(tmp_path, per_job_cap_usd=1.0, usd_per_scanned_page=0.02,
+                 usd_per_million_chars=0.0, levers={"batch_stages": ["vision"]})
+    jd = _job(tmp_path, data_root, "job-batch-under")
+    _seed_extracted(data_root, pages=4)
+    client = _BatchClient()
+    d = _driver(jd, firm, pricing_path, start="vision", client=client)
+    d._runner_override = {"vision": _batcher(40)}       # 40 pages x 0.02 = 0.80, inside the cap
+    o = d.run()[0]
+    # The batch reached the submission, which is the property under test. The
+    # stub raises there rather than faking a whole batch lifecycle, so the run
+    # ends `failed` -- what matters is that no LIMIT refused it.
+    assert len(client.submitted) == 1
+    assert o.outcome != "held", o.reason

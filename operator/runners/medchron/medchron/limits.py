@@ -6,10 +6,14 @@ Four settings, checked at two moments:
   read ONCE, before the first paid stage, from the pages the extract stage
   actually found. Nothing is spent to learn them, so a matter that is too big
   costs nothing to refuse.
-* ``monthly_budget_usd`` and ``per_job_cap_usd`` are re-checked before EVERY
-  paid model call, through the doorway's ``before_request`` hook. Between-stage
-  checking was the old shape and it let a job run far past its cap inside one
-  long stage; per-call bounds the overshoot to one call.
+* ``monthly_budget_usd`` and ``per_job_cap_usd`` are re-checked before every
+  paid call in LIVE mode, through the doorway's ``before_request`` hook, and
+  before every BATCH submission with the batch's projected cost, through
+  ``before_batch``. So an overshoot is bounded to one call or one batch.
+  Between-stage checking was the old shape and it let a job run far past its
+  cap inside one long stage. Batch mode needs the other hook because a batch is
+  one commitment: nothing checks between its items and the whole thing is
+  billed, so the only place a limit can bind is before the submission.
 
 The grammar (2026-09-09, ADR 0087 amendment): every hold reason starts with the
 NAME OF THE SETTING that held it and carries no dollar figure -- not the cap's,
@@ -91,22 +95,27 @@ class Limits:
         self.check_before_paid(projected_usd=projected_usd, spent_usd=spent_usd, stage=stage)
 
     # ---- before every paid stage -------------------------------------------
-    def check_before_paid(self, *, projected_usd: float, spent_usd: float, stage: str) -> None:
-        """The month's budget and the job's cap against what this stage is
-        projected to add. A projection of zero still catches a run that has
-        already reached either line."""
+    def check_before_paid(self, *, projected_usd: float, spent_usd: float, stage: str,
+                          batch: bool = False) -> None:
+        """The month's budget and the job's cap against what this stage -- or,
+        with `batch`, this one batch submission -- is projected to add. A
+        projection of zero still catches a run that has already reached either
+        line."""
+        what = "this batch's projected cost" if batch else "this run's projected cost"
+        tail = "the batch was not submitted" if batch else "the package was not started"
+        # "at" reads right for one batch inside a stage; "before" for the stage.
+        when = "at" if batch else "before"
         month = self.month_spent_usd + spent_usd
         if month >= self.monthly_budget_usd or month + projected_usd > self.monthly_budget_usd:
             raise LimitHold(
                 BUDGET_SETTING,
-                f"{BUDGET_SETTING}: this run's projected cost added to the month's spend to date "
-                f"would exceed the monthly cost budget; the package was not started before {stage}",
+                f"{BUDGET_SETTING}: {what} added to the month's spend to date would exceed the "
+                f"monthly cost budget; {tail} {when} {stage}",
             )
         if spent_usd >= self.cap_usd or spent_usd + projected_usd > self.cap_usd:
             raise LimitHold(
                 CAP_SETTING,
-                f"{CAP_SETTING}: the run's projected cost would exceed the job's cost cap before "
-                f"{stage}; the package was not started",
+                f"{CAP_SETTING}: {what} would exceed the job's cost cap {when} {stage}; {tail}",
             )
 
     # ---- before every paid call ---------------------------------------------

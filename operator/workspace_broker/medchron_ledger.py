@@ -91,32 +91,41 @@ CREATE_SQL = (
     "cents INTEGER NOT NULL DEFAULT 0, "
     "reason TEXT, "
     "folder_id TEXT, "
-    "delivery_json TEXT, "
-    # The month a job's cents were first recorded against. A run that starts on
-    # the 31st and lands on the 1st debits the month it spent in, and a resume
-    # never moves a job between months. Stamped once, in record().
-    "month_charged TEXT"
+    "delivery_json TEXT"
     ")"
 )
 CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_medchron_jobs_created ON medchron_jobs(created_at)"
 
-# ONE debit rule for pages, documents and cents: a job DEBITS THE MONTH when it
-# recorded cents, whatever state it ended in. Counting delivered jobs only (the
-# rule before 2026-09-09) let a run that read thousands of pages and spent real
-# money leave no mark, because it held or failed after the money had moved. A
-# hold at zero cents is not a debit: nothing was read and nothing was spent.
+# ONE debit rule for pages, documents and cents: a job DEBITS THE MONTH IT WAS
+# CREATED IN whenever it recorded cents, in whatever state it ended. Two halves:
+#
+# * `cents > 0`, any state. Counting delivered jobs only (the rule before
+#   2026-09-09) let a run that read thousands of pages and spent real money
+#   leave no mark, because it held or failed after the money had moved. A hold
+#   at zero cents is not a debit: nothing was read and nothing was spent.
+# * Keyed on `created_at`, NOT on the month the cents landed in. A month-of-
+#   charge key was tried first and reverted the same day: `month_charged` is not
+#   in PROJECTION, and PROJECTION's shape is pinned by the overlay's
+#   `_MEDCHRON_JOBS_COLUMNS` this release, so the console could never see it.
+#   A job created on the 31st whose cents land on the 1st would then be debited
+#   to the new month on the seat and shown in the old month on the console --
+#   the two surfaces disagreeing about the same month, which is the one thing
+#   this rule exists to prevent. Created-month keying is a figure both surfaces
+#   can compute from a column both surfaces already have. Moving to month-of-
+#   charge is the next OVERLAY_REF bump's business (ADR 0087 amendment).
+#
 # Both forms are written out in full rather than composed: a query built by
 # concatenation reads as an injection risk to every scanner and every reviewer,
 # even when every part is a literal.
 _DEBITS_SQL = (
     "SELECT COALESCE(SUM(pages), 0) AS pages, COALESCE(SUM(documents), 0) AS documents, "
     "COALESCE(SUM(cents), 0) AS cents FROM medchron_jobs "
-    "WHERE cents > 0 AND COALESCE(month_charged, substr(created_at, 1, 7)) = ?"
+    "WHERE cents > 0 AND substr(created_at, 1, 7) = ?"
 )
 _DEBITS_SQL_EXCLUDING = (
     "SELECT COALESCE(SUM(pages), 0) AS pages, COALESCE(SUM(documents), 0) AS documents, "
     "COALESCE(SUM(cents), 0) AS cents FROM medchron_jobs "
-    "WHERE cents > 0 AND COALESCE(month_charged, substr(created_at, 1, 7)) = ? AND id <> ?"
+    "WHERE cents > 0 AND substr(created_at, 1, 7) = ? AND id <> ?"
 )
 
 # The console projection (the ``medchron_jobs`` runtime-read kind and the
@@ -247,12 +256,6 @@ class MedchronLedger:
         try:
             conn.execute(CREATE_SQL)
             conn.execute(CREATE_INDEX_SQL)
-            cols = {str(r["name"]) for r in conn.execute("PRAGMA table_info(medchron_jobs)").fetchall()}
-            if "month_charged" not in cols:
-                # A seat whose db predates the column. Existing rows keep None
-                # and fall back to their created_at month, which is what they
-                # were counted against before.
-                conn.execute("ALTER TABLE medchron_jobs ADD COLUMN month_charged TEXT")
             conn.commit()
         finally:
             conn.close()
@@ -266,7 +269,9 @@ class MedchronLedger:
     # and nothing was spent.
     def debits(self, month: str, exclude_job_id: str | None = None) -> dict[str, int]:
         """The month's debited pages, documents and cents, in one read so the
-        three can never disagree about which rows they counted."""
+        three can never disagree about which rows they counted. `month` is a
+        job's CREATED month, which is the same key the console's `monthTotals()`
+        uses, so the two surfaces cannot disagree about the same month."""
         conn = self._connect()
         try:
             if exclude_job_id:
@@ -294,7 +299,8 @@ class MedchronLedger:
         it is, so a caller can never read a page count as a document count.
         The document and cents figures ride alongside for the console and the
         runner's cost limits. `exclude_job_id` leaves one job's own row out,
-        which is what a resume needs so it is not metered against itself.
+        which is what a resume needs so it is not metered against itself. The
+        month is the job's CREATED month on this surface and on the console.
         """
         month = month_of(now or _iso_utc())
         pages = self.pages_used(month, exclude_job_id)
@@ -376,7 +382,7 @@ class MedchronLedger:
             raise ValueError(f"unknown state {state!r}")
         conn = self._connect()
         try:
-            cur = conn.execute("SELECT state, month_charged FROM medchron_jobs WHERE id=?", (job_id,)).fetchone()
+            cur = conn.execute("SELECT state FROM medchron_jobs WHERE id=?", (job_id,)).fetchone()
             if cur is None:
                 raise ValueError(f"no such job {job_id}")
             # ss#2616: a same-state re-record is a NOTE (a lost deliver wake,
@@ -384,15 +390,8 @@ class MedchronLedger:
             # the current state's type. Transitions stay monotonic otherwise.
             if state != cur["state"] and state not in _ALLOWED_NEXT[cur["state"]]:
                 raise ValueError(f"illegal transition {cur['state']} -> {state}")
-            now = _iso_utc()
             sets = ["state=?", "updated_at=?"]
-            vals: list[Any] = [state, now]
-            # Stamp the debit month the first time cents land, and never again:
-            # a run that starts on the 31st and finishes on the 1st debits the
-            # month it spent in, and a resume cannot move it.
-            if int(fields.get("cents") or 0) > 0 and not cur["month_charged"]:
-                sets.append("month_charged=?")
-                vals.append(month_of(now))
+            vals: list[Any] = [state, _iso_utc()]
             for col in ("documents", "pages", "cents"):
                 if col in fields:
                     v = fields[col]

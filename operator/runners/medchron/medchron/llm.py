@@ -209,6 +209,24 @@ class Item:
     meta: dict[str, Any] = field(default_factory=dict)
 
 
+def batch_chars(items: list[Item]) -> int:
+    """Request characters across a batch's items: what the chars-based
+    projection is priced from. Text blocks and plain string contents only;
+    image blocks are counted by item, not by byte (the transcription rate is
+    per page)."""
+    total = 0
+    for it in items:
+        for m in it.messages:
+            content = m.get("content")
+            if isinstance(content, str):
+                total += len(content)
+            elif isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        total += len(str(block.get("text") or ""))
+    return total
+
+
 @dataclass
 class BatchSummary:
     ok: list[str] = field(default_factory=list)
@@ -273,14 +291,21 @@ class Doorway:
     #: how a cap or a monthly budget stops a run inside a long stage instead
     #: of at the next stage boundary.
     before_request: Callable[[str], None] | None = None
+    #: Called with (stage, item count, total request characters) before a BATCH
+    #: is submitted. A batch is one commitment: nothing checks between its items
+    #: and the whole thing is billed, so the limits get the batch's projected
+    #: cost here rather than a per-call look they will never get. Without this
+    #: a firm that opts into batching would silently lose the per-call bound.
+    before_batch: Callable[[str, int, int], None] | None = None
 
     @classmethod
     def from_config(cls, cfg: FirmConfig, ledger: Ledger, *, client: Any = None,
                     log: Callable[[str], None] = print,
-                    before_request: Callable[[str], None] | None = None) -> "Doorway":
+                    before_request: Callable[[str], None] | None = None,
+                    before_batch: Callable[[str, int, int], None] | None = None) -> "Doorway":
         return cls(ledger=ledger, caching=bool(cfg.get("levers", "cache", True)),
                    batch_stages=frozenset(cfg.batch_stages) - NEVER_BATCHED, client=client, log=log,
-                   before_request=before_request)
+                   before_request=before_request, before_batch=before_batch)
 
     def _client(self, timeout: float | None) -> Any:
         if self.client is None:
@@ -331,12 +356,13 @@ class Doorway:
                    thinking: Any = None) -> BatchSummary:
         """Every item through the Batch API when the levers name the stage,
         else serially through call(). on_result fires once per item that
-        finished, in both modes; timed-out items fire nothing and are listed."""
+        finished, in both modes; timed-out items fire nothing and are listed.
+
+        The limits are checked in whichever place this mode can be stopped:
+        per call in live mode (through ``call``), and once per batch with the
+        batch's PROJECTED cost in batch mode, before the submission. A batch is
+        one commitment, so the check has to precede it or it cannot bind."""
         summary = BatchSummary()
-        if self.before_request is not None:
-            # Batch mode has no per-item doorway, so the limits get their one
-            # look before the submission; serial mode is checked per item below.
-            self.before_request(stage)
         if stage not in self.batch_stages:
             for it in items:
                 try:
@@ -357,6 +383,8 @@ class Doorway:
             return summary
         if stage in NEVER_BATCHED:
             raise DoorwayError(f"{stage} is never a batch job")
+        if self.before_batch is not None:
+            self.before_batch(stage, len(items), batch_chars(items))
         by_id = {it.custom_id: it for it in items}
         need = self._round(stage, items, by_id, summary, on_result, retry=False, model=model,
                            max_tokens=max_tokens, batch_dir=batch_dir, system=system, effort=effort,

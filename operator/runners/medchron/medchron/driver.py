@@ -247,9 +247,22 @@ class Driver:
         self.limits.check_before_paid(projected_usd=projected, spent_usd=spent, stage=stage.name)
 
     def _before_request(self, stage: str) -> None:
-        """The doorway hook: the cap and the month's budget re-read before
-        every paid call, so an overshoot is one call and not one stage."""
+        """The live-mode doorway hook: the cap and the month's budget re-read
+        before every paid call, so an overshoot is one call and not one stage.
+        Batch mode's twin is `_before_batch`; between them the bound is one
+        call or one batch."""
         self.limits.check_each_call(self.budget.refresh(), stage)
+
+    def _before_batch(self, stage: str, items: int, chars: int) -> None:
+        """The batch-mode twin. A batch is one commitment -- nothing checks
+        between its items and the whole thing is billed -- so the limits see
+        the batch's PROJECTED cost before it is submitted, and an overshoot is
+        bounded to one batch. Vision batches one item per page, so its rate is
+        per item; the other batchable stages are priced from their characters."""
+        projected = (items * self.limits.usd_per_scanned_page if stage == "vision"
+                     else self.budget.projection(chars))
+        self.limits.check_before_paid(projected_usd=projected, spent_usd=self.budget.refresh(),
+                                      stage=stage, batch=True)
 
     # ---- one unit ---------------------------------------------------------
     def run_unit(self, unit: job_mod.Unit, slug_done: set[str]) -> Outcome:
@@ -398,7 +411,8 @@ class Driver:
 
         sr = StageRun(job=self.job, cfg=self.cfg, unit=unit, slug_dir=self.slug_dir, decided=self.decided,
                       log=log, seat_factory=self._open_seat, client_factory=self._sdk_client,
-                      date_stamp=self.date_stamp, before_request=self._before_request)
+                      date_stamp=self.date_stamp, before_request=self._before_request,
+                      before_batch=self._before_batch)
         st.start(stage.name, input_sha=_stage_input_sha(self.slug_dir, stage))
         self.log(f"[run] {stage.name}: in-process")
         refusal: str | None = None

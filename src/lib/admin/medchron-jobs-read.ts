@@ -50,10 +50,16 @@ export interface MedchronMonthTotals {
   pages: number
   cents: number
   /** Pages and cents by the broker's OWN debit rule (2026-09-09): every job
-   * that recorded cents, whatever state it ended in. These are the figures the
-   * seat meters the allowance against, so the console must count the same rows
-   * or the page and the seat disagree about the same month. `pages`/`cents`
-   * above stay delivered-only: what actually reached the firm. */
+   * that recorded cents, whatever state it ended in, counted against the month
+   * it was CREATED in. Both halves of that rule are shared with the seat on
+   * purpose. The state half, because a run that spent real money and then held
+   * must not read as zero here. The keying half, because `created_at` is a
+   * column both surfaces already have: a month-of-charge key would live in a
+   * ledger column that is not in the broker's PROJECTION, and PROJECTION's
+   * shape is pinned by the overlay this release, so a job created on the 31st
+   * whose cents land on the 1st would be debited to one month on the seat and
+   * shown in the other here. `pages`/`cents` above stay delivered-only: what
+   * actually reached the firm. */
   pagesUsed: number
   centsUsed: number
 }

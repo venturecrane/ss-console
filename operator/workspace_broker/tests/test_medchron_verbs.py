@@ -242,6 +242,37 @@ def test_exclude_job_id_leaves_out_exactly_that_row(verbs):
     assert call(v, "medchron_allowance", exclude_job_id="not-a-job")["used"] == 300
 
 
+def test_a_job_debits_the_month_it_was_created_in_not_the_month_its_cents_landed(verbs):
+    """A run that starts on the 31st and finishes on the 1st debits the month
+    it was CREATED in, on this surface and on the console's.
+
+    A month-of-charge key was written first and reverted the same day: the
+    column it needs is not in PROJECTION, and PROJECTION's shape is pinned by
+    the overlay this release, so the console could never see it. The seat would
+    have debited the new month while the console showed the old one -- the two
+    surfaces disagreeing about the same month, which is the one thing this rule
+    exists to prevent. `created_at` is a column both surfaces already have.
+    """
+    import sqlite3
+
+    v, _, _ = verbs
+    job = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    # Backdate the row to the last day of the previous month, then record the
+    # cents now: creation in one month, charge in the next.
+    conn = sqlite3.connect(v.ledger._db_path)
+    try:
+        conn.execute("UPDATE medchron_jobs SET created_at=? WHERE id=?", ("2026-08-31T23:50:00.000Z", job))
+        conn.commit()
+    finally:
+        conn.close()
+    _deliver(v, job, pages=420, cents=1500)
+
+    august = v.ledger.allowance(1000, now="2026-08-31T23:59:00.000Z")
+    september = v.ledger.allowance(1000, now="2026-09-01T00:10:00.000Z")
+    assert (august["used"], august["cents_used"]) == (420, 1500)
+    assert (september["used"], september["cents_used"]) == (0, 0)
+
+
 # -- queue + ledger + audit --------------------------------------------------
 
 

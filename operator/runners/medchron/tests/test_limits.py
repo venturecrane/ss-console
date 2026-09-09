@@ -111,8 +111,13 @@ def _every_reason() -> list[LimitHold]:
         _hold(_limits(monthly_budget_usd=1.0, month_cents_used=100).check_each_call,
               spent_usd=12.34, stage="vision"),
         _hold(_limits(cap_usd=1.0).check_each_call, spent_usd=12.34, stage="audit"),
+        # The batch-mode variants: same two settings, different tail clause.
+        _hold(_limits(monthly_budget_usd=1.0).check_before_paid,
+              projected_usd=99.99, spent_usd=0.0, stage="vision", batch=True),
+        _hold(_limits(cap_usd=1.0).check_before_paid,
+              projected_usd=99.99, spent_usd=0.0, stage="vision", batch=True),
     ]
-    assert len(out) == 6
+    assert len(out) == 8
     return out
 
 
@@ -138,3 +143,25 @@ def test_the_settings_named_are_the_four_the_firm_and_the_seat_author() -> None:
     # The allowance setting is the seat key by name: a reply that named the
     # runner's field instead would point a firm at a key it cannot edit.
     assert limits_mod.ALLOWANCE_SETTING == "chronology_package_page_allowance_per_month"
+
+
+# ---- batch mode ---------------------------------------------------------------
+def test_a_batch_holds_on_its_own_projected_cost_and_says_the_batch_was_not_submitted() -> None:
+    """A batch is one commitment: nothing checks between its items and the whole
+    thing is billed, so the projection has to be checked before submission. The
+    reason says the batch was not submitted, not that the package was not
+    started, because earlier stages may well have run."""
+    lim = _limits(cap_usd=5.0)
+    lim.check_before_paid(projected_usd=5.0, spent_usd=0.0, stage="vision", batch=True)
+    hold = _hold(lim.check_before_paid, projected_usd=5.01, spent_usd=0.0, stage="vision", batch=True)
+    assert hold.setting == "per_job_cap_usd"
+    assert "this batch's projected cost" in hold.reason
+    assert "the batch was not submitted" in hold.reason
+    assert "the package was not started" not in hold.reason
+
+
+def test_the_batch_variant_also_answers_to_the_monthly_budget() -> None:
+    lim = _limits(monthly_budget_usd=10.0, month_cents_used=900)     # 9.00 already
+    lim.check_before_paid(projected_usd=1.0, spent_usd=0.0, stage="compose", batch=True)
+    hold = _hold(lim.check_before_paid, projected_usd=1.01, spent_usd=0.0, stage="compose", batch=True)
+    assert hold.setting == "monthly_budget_usd" and "the batch was not submitted at compose" in hold.reason

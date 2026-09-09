@@ -96,6 +96,27 @@ describe('monthTotals', () => {
     expect(m.pages).toBe(100)
     expect(m.cents).toBe(500)
   })
+
+  // The keying half of the debit rule, shared with the broker. A month-of-
+  // charge key would live in a ledger column that is not in the broker's
+  // PROJECTION, and PROJECTION's shape is pinned by the overlay this release,
+  // so this surface could never see it: the seat would debit one month and the
+  // console would show the other. `createdAt` is a column both surfaces have.
+  it('counts a job against the month it was created in, not the month it finished', () => {
+    const spanning = parseJobRow(
+      row({
+        id: '01',
+        created_at: '2026-08-31T23:50:00.000Z',
+        updated_at: '2026-09-01T04:20:00.000Z',
+        pages: 420,
+        cents: 1500,
+      })
+    )!
+    expect(monthTotals([spanning], '2026-08').pagesUsed).toBe(420)
+    expect(monthTotals([spanning], '2026-08').centsUsed).toBe(1500)
+    expect(monthTotals([spanning], '2026-09').pagesUsed).toBe(0)
+    expect(monthTotals([spanning], '2026-09').centsUsed).toBe(0)
+  })
 })
 
 describe('allowanceFromPersonas', () => {
