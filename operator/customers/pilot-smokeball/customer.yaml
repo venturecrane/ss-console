@@ -506,7 +506,6 @@ personas:
           treatment_gap_flag_days: 45 # PLACEHOLDER(christa): flag treatment gaps beyond this many days
           # Rehearsal-only value for the routine-11 package allowance (ADR 0087);
           # the client seat authors the contract figure.
-          chronology_package_document_allowance_per_month: 50
           # The page allowance (2026-09-09). Small on purpose: the rehearsal
           # seat's job is to prove the crossing, so a matter the sandbox
           # actually holds must be able to exceed it.
