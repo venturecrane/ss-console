@@ -1240,7 +1240,17 @@ describe('Operator customer Machine Dockerfile', () => {
     // retired smd seat from the overlay's contract snapshot. No paired twin
     // moves (neither commit touches a tracked pair); vocabulary and heartbeat
     // fields re-read as identical (empty range diff on schemas.py/heartbeat.py).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="e0288582c6fea9d0053d396caab0fda9a171cf18"')
+    // e0288582 -> 5770b79f (2026-09-08, overlay#348; ss voice-establishment). An
+    // Operator admin's email voice-establishment survey may now read the firm's
+    // own letters ACROSS matters — the read-time matter-mixing fence
+    // (shared/matter_gate.py content_read_refusal) is exempted for a
+    // seat-classified admin establishment session; the send-time fence is
+    // untouched and establishment never sends. The range e0288582..5770b79f is
+    // overlay#347 (send-render.yaml contract mirror, ss#2700) + overlay#348
+    // (matter_gate + hermes-smd-establishment), NEITHER a tracked .py twin, so
+    // every overlaySha256 is unchanged (verify-overlay-pairs.py 9/9 PASS at the
+    // new ref); only overlayRef moves.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="5770b79fea3206f01df343489d232daf2fdc4a2b"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
