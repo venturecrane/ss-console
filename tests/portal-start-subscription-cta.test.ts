@@ -328,3 +328,65 @@ describe('the surfaces read the one gate and act in one place', () => {
     expect(route).toContain('getOperatorServiceForEntity')
   })
 })
+
+describe('the two money detail pages share one shape (Captain, 2026-09-09: cohesive, not made without knowledge of each other)', () => {
+  const read = (p: string) => readFileSync(resolve(p), 'utf-8')
+  const invoice = () => read('src/pages/portal/billing/invoices/[id].astro')
+  const subscription = () => read('src/pages/portal/billing/subscriptions/[instance].astro')
+
+  it('both render their facts through PortalDetailTable / PortalDetailRow', () => {
+    for (const page of [invoice(), subscription()]) {
+      expect(page).toContain('components/portal/PortalDetailTable.astro')
+      expect(page).toContain('components/portal/PortalDetailRow.astro')
+      expect(page).toContain('<PortalDetailTable eyebrow=')
+    }
+  })
+
+  it('both carry one primary action with a mono caption under it, in the kit geometry', () => {
+    expect(subscription()).toContain('label="Start monthly subscription" tone="primary"')
+    expect(invoice()).toContain('components/portal/PortalActionLink.astro')
+    expect(invoice()).toContain('tone="primary"')
+    expect(invoice().match(/tone="primary"/g)?.length).toBe(1)
+    for (const page of [invoice(), subscription()]) {
+      expect(page).toContain('Opens secure')
+      expect(page).toContain('mt-3 font-mono text-label uppercase tracking-[0.14em]')
+    }
+  })
+
+  it('the invoice page left the calm card register (ADR 0082) and restates nothing the head already says', () => {
+    const page = invoice()
+    expect(page).not.toContain('rounded-lg')
+    expect(page).not.toContain('Remaining balance')
+    expect(page).not.toContain('material-symbols-outlined')
+    expect(page).not.toContain('md:sticky')
+    // The dates live in the head meta, once.
+    expect(page).not.toContain('calendar_today')
+    // The safety facts from #419 survive: Stripe link only when real; a
+    // pending state that is prose, never a link to a server route.
+    expect(page).toContain('stripe_hosted_url')
+    expect(page).toContain("'#dev-mode'")
+    expect(page).toContain('Payment link pending')
+    // The #419 comment names the old route; no link may point at it.
+    expect(page).not.toMatch(/href=["'{`][^"'}`]*\/api\/invoices\//)
+  })
+
+  it('the subscription page states no payment method (Stripe asks at checkout)', () => {
+    expect(subscription()).not.toContain('Payment method</')
+    expect(subscription()).not.toContain('label="Payment method"')
+    expect(subscription()).not.toContain('Bank account or card')
+  })
+
+  it('PortalActionLink renders the same tones and geometry as the kit SubmitButton', () => {
+    const link = read('src/components/portal/PortalActionLink.astro')
+    const button = read('src/components/portal/form/SubmitButton.astro')
+    const tone = (src: string, name: 'neutral' | 'primary') =>
+      src.match(new RegExp(`${name}:\\s*\\n?\\s*'([^']+)'`))?.[1]
+    expect(tone(link, 'primary')).toBeDefined()
+    expect(tone(link, 'primary')).toBe(tone(button, 'primary'))
+    expect(tone(link, 'neutral')).toBe(tone(button, 'neutral'))
+    for (const cls of ['h-11', 'border-[3px]', 'px-5', 'font-bold uppercase tracking-[0.08em]']) {
+      expect(link).toContain(cls)
+      expect(button).toContain(cls)
+    }
+  })
+})

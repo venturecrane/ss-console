@@ -1,0 +1,31 @@
+---
+/**
+ * The ink-bordered fact table every portal money detail page uses
+ * (UI-PATTERNS Rule 7: one primitive for a repeated pattern; Rule 8: the
+ * loud Plainspoken register). An optional mono eyebrow names the table the
+ * way Billing's section eyebrows name its lists, so a detail page reads as
+ * the row it came from, opened up. Rows are PortalDetailRow.
+ *
+ * Added 2026-09-09 when the Captain read the subscription page (loud) and
+ * the invoice page (calm card, pre-ADR 0082 holdout) side by side as two
+ * designs made without knowledge of each other.
+ */
+interface Props {
+  eyebrow?: string | null
+  label?: string | null
+}
+const { eyebrow = null, label = null } = Astro.props
+---
+
+<section class="mt-8" aria-label={label ?? eyebrow ?? undefined}>
+  {
+    eyebrow && (
+      <p class="mb-4 font-mono text-label uppercase tracking-[0.14em] font-bold text-[color:var(--ss-color-text-secondary)]">
+        {eyebrow}
+      </p>
+    )
+  }
+  <div class="border-[3px] border-[color:var(--ss-color-text-primary)]">
+    <slot />
+  </div>
+</section>
