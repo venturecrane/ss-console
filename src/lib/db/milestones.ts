@@ -358,7 +358,7 @@ async function sendStripeInvoiceForMilestone(args: StripeInvoiceArgs): Promise<v
       milestone_id: milestone.id,
       engagement_id: engagement.id,
     },
-    payment_settings: { payment_method_types: ['ach_debit', 'card'] },
+    payment_settings: { payment_method_types: ['us_bank_account', 'card'] },
   })
   const sentResult = await sendStripeInvoice(stripeApiKey, stripeResult.id)
   await updateInvoice(db, orgId, invoice.id, {
