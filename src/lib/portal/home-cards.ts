@@ -16,10 +16,10 @@ import { listInvoicesForEntity } from '../db/invoices'
 import { getOperatorServiceForEntity } from '../db/services'
 import { formatShortDate } from './formatters'
 import {
-  BILLING_SUBSCRIPTIONS_HREF,
   canStartOperatorSubscription,
   formatWholeDollars,
   operatorMonthlyPriceCents,
+  operatorSubscriptionHref,
 } from './billing'
 
 export interface OfferingCard {
@@ -125,7 +125,7 @@ async function operatorSummaryCard(
         href,
         statusLabel: 'Ready to start',
         meta: [`${formatWholeDollars(priceCents)} per month`],
-        needsYou: { label: 'Start monthly subscription', href: BILLING_SUBSCRIPTIONS_HREF },
+        needsYou: { label: 'Start monthly subscription', href: operatorSubscriptionHref(op.slug) },
       }
     }
   } catch {

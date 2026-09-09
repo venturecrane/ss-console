@@ -91,17 +91,16 @@ const showEscalation = !provisioning && level ? needsEscalationAffordance(level)
           Ready to start
         </h2>
         <p class="mt-2 font-mono text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
-          {formatWholeDollars(start.priceCents)} per month. Billing begins the day you start and
-          renews monthly. Cancel any time from Billing.
+          {formatWholeDollars(start.priceCents)} per month, not yet started.
         </p>
-        <form method="POST" action={start.action} class="mt-4">
-          <button
-            type="submit"
-            class="inline-flex min-h-11 items-center border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-text-primary)] px-5 font-body font-bold uppercase tracking-[0.08em] text-[color:var(--color-background)] transition-colors hover:bg-[color:var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
-          >
-            Start monthly subscription
-          </button>
-        </form>
+        {/* A link, not the act: the one primary lives on the subscription
+            page (UI-PATTERNS Rule 3), where the terms are stated in full. */}
+        <a
+          href={start.href}
+          class="mt-4 inline-flex min-h-11 items-center border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-text-primary)] px-5 font-body font-bold uppercase tracking-[0.08em] text-[color:var(--color-background)] transition-colors hover:bg-[color:var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+        >
+          Start monthly subscription →
+        </a>
       </>
     ) : provisioning ? (
       <>
