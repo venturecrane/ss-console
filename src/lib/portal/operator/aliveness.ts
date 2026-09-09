@@ -67,6 +67,10 @@ import type { SubscriptionRow } from '../product-access'
  */
 export type AlivenessLevel = 'idle' | 'running' | 'sticky_stop' | 'offline'
 
+/**
+ * @public Closed vocabulary. tests/portal-operator-aliveness.test.ts imports it and pins the set.
+ * No runtime caller, by design.
+ */
 export const ALIVENESS_LEVELS: readonly AlivenessLevel[] = [
   'idle',
   'running',
@@ -89,6 +93,9 @@ export const ALIVENESS_LEVELS: readonly AlivenessLevel[] = [
  *   offline     → warning — degraded; may or may not need attention
  *                           depending on hours-of-operation; reviewers
  *                           should look at the last-action timestamp
+ *
+ * @public Consumed by src/components/portal/operator/AlivenessHeader.astro, a component knip
+ * reports unused. Retiring that component is a product decision, not this gate's.
  */
 export function alivenessTone(level: AlivenessLevel): 'success' | 'info' | 'danger' | 'warning' {
   switch (level) {
@@ -286,6 +293,9 @@ function freshestMs(...timestamps: (string | null)[]): number | null {
  *
  * Closed vocabulary; the switch is exhaustive so any new level surfaces
  * at compile time.
+ *
+ * @public Consumed by src/components/portal/operator/AlivenessHeader.astro, a component knip
+ * reports unused. Retiring that component is a product decision, not this gate's.
  */
 export function formatAlivenessLevel(level: AlivenessLevel): string {
   switch (level) {

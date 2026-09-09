@@ -18,21 +18,6 @@ export interface TimeEntry {
   created_at: string
 }
 
-export type TimeEntryCategory =
-  'solution_design' | 'implementation' | 'training' | 'admin' | 'other'
-
-/**
- * @public Category-label table for admin selects. Pinned as a contract by
- * tests/time-entries.test.ts.
- */
-export const TIME_ENTRY_CATEGORIES: { value: TimeEntryCategory; label: string }[] = [
-  { value: 'solution_design', label: 'Solution Design' },
-  { value: 'implementation', label: 'Implementation' },
-  { value: 'training', label: 'Training' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'other', label: 'Other' },
-]
-
 export interface CreateTimeEntryData {
   date: string
   hours: number
@@ -45,24 +30,6 @@ export interface UpdateTimeEntryData {
   hours?: number
   description?: string | null
   category?: string | null
-}
-
-/**
- * List time entries for an engagement, scoped by org.
- * All reads, writes, and the actual-hours recalc are scoped by org_id for
- * defense-in-depth tenant isolation (#399). The DAL primitive cannot be
- * used to read or mutate rows outside the caller's org.
- */
-export async function listTimeEntries(
-  db: D1Database,
-  orgId: string,
-  engagementId: string
-): Promise<TimeEntry[]> {
-  const result = await db
-    .prepare('SELECT * FROM time_entries WHERE engagement_id = ? AND org_id = ? ORDER BY date DESC')
-    .bind(engagementId, orgId)
-    .all<TimeEntry>()
-  return result.results
 }
 
 /**

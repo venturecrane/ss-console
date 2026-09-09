@@ -46,6 +46,10 @@ export type CapabilityName =
  * Inclusive-start / exclusive-end ISO 8601 date range. Used by every
  * capability that lists time-bound records. `until` may be `null` to mean
  * "no upper bound" (e.g. "list every time entry since the matter opened").
+ *
+ * @public Capability-adapter contract, consumed by src/lib/operator/capabilities/email.ts and its
+ * sibling adapters, which knip reports unused (not runtime-wired). Retiring the layer is
+ * a Captain decision, not this gate's.
  */
 export interface DateRange {
   /** ISO 8601 timestamp. Inclusive. */
@@ -164,6 +168,10 @@ export type AdapterErrorCode =
  * `code`; adapters set `cause` to the underlying vendor exception so the
  * audit log can record what actually went wrong without re-throwing
  * vendor-shaped objects.
+ *
+ * @public Capability-adapter contract, consumed by src/lib/operator/capabilities/conformance.ts
+ * and src/lib/operator/capabilities/index.ts, which knip reports unused (not runtime-wired).
+ * Retiring the layer is a Captain decision, not this gate's.
  */
 export class AdapterError extends Error {
   readonly code: AdapterErrorCode
@@ -191,6 +199,10 @@ export class AdapterError extends Error {
 /**
  * Every capability interface extends this base. Adapters implement the
  * two methods on top of the capability-specific surface.
+ *
+ * @public Capability-adapter contract, consumed by src/lib/operator/capabilities/email.ts and its
+ * sibling adapters, which knip reports unused (not runtime-wired). Retiring the layer is
+ * a Captain decision, not this gate's.
  */
 export interface AdapterBase {
   /**
@@ -214,6 +226,10 @@ export interface AdapterBase {
  * these instead of raw vendor IDs so skill code does not depend on the
  * vendor's ID shape. The reference round-trips through the adapter for
  * subsequent calls.
+ *
+ * @public Capability-adapter contract, consumed by src/lib/operator/capabilities/index.ts, which
+ * knip reports unused (not runtime-wired). Retiring the layer is a Captain decision, not
+ * this gate's.
  */
 export interface OpaqueRef {
   /** Adapter-internal stable identifier. Treat as opaque. */

@@ -15,7 +15,7 @@ import {
 import type { D1Database } from '@cloudflare/workers-types'
 import path from 'node:path'
 import { sendOutreachEmail } from './resend'
-import { findSentByMessageId, listEventsByEntity } from '../db/outreach-events'
+import { findSentByMessageId, type OutreachEvent } from '../db/outreach-events'
 
 installWorkerdPolyfills()
 
@@ -23,6 +23,18 @@ const migrationsDir = path.resolve(__dirname, '../../../migrations')
 
 const ORG_ID = 'org-outreach-send'
 const ENTITY_ID = 'ent-outreach-send'
+
+async function eventsForEntity(db: D1Database, entityId: string): Promise<OutreachEvent[]> {
+  const result = await db
+    .prepare(
+      `SELECT * FROM outreach_events
+       WHERE entity_id = ?
+       ORDER BY created_at DESC`
+    )
+    .bind(entityId)
+    .all<OutreachEvent>()
+  return result.results ?? []
+}
 
 describe('sendOutreachEmail', () => {
   let db: D1Database
@@ -104,7 +116,7 @@ describe('sendOutreachEmail', () => {
       { db, orgId: ORG_ID, entityId: ENTITY_ID }
     )
 
-    const events = await listEventsByEntity(db, ENTITY_ID)
+    const events = await eventsForEntity(db, ENTITY_ID)
     expect(events.length).toBe(1)
     expect(events[0].event_type).toBe('sent')
     expect(events[0].message_id).toBe('dev-mode')
@@ -134,7 +146,7 @@ describe('sendOutreachEmail', () => {
         { db, orgId: ORG_ID, entityId: ENTITY_ID }
       )
 
-      const events = await listEventsByEntity(db, ENTITY_ID)
+      const events = await eventsForEntity(db, ENTITY_ID)
       expect(events.length).toBe(2)
       expect(events.every((e) => e.event_type === 'sent')).toBe(true)
       expect(new Set(events.map((e) => e.message_id)).size).toBe(2)

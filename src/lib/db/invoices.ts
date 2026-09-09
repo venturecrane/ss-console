@@ -47,8 +47,8 @@ export interface Invoice {
 export type InvoiceType =
   'deposit' | 'completion' | 'milestone' | 'assessment' | 'retainer' | 'implementation'
 
-/** @public Type-label table, one family with INVOICE_STATUSES. The label is
- * what a client reads as the invoice's title, so every type must carry one. */
+/** Type-label table. The label is what a client reads as the invoice's title,
+ * so every type must carry one. */
 export const INVOICE_TYPES: { value: InvoiceType; label: string }[] = [
   { value: 'deposit', label: 'Deposit' },
   { value: 'completion', label: 'Completion' },
@@ -67,18 +67,6 @@ export function invoiceTypeLabel(type: string): string | null {
 }
 
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'void'
-
-/**
- * @public Status-label table for admin selects, sibling of
- * ASSESSMENT_STATUSES and MILESTONE_STATUSES. Kept as one family.
- */
-export const INVOICE_STATUSES: { value: InvoiceStatus; label: string }[] = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'sent', label: 'Sent' },
-  { value: 'paid', label: 'Paid' },
-  { value: 'overdue', label: 'Overdue' },
-  { value: 'void', label: 'Void' },
-]
 
 /**
  * Valid status transitions enforced at the application layer.

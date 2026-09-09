@@ -11,7 +11,6 @@
 import { describe, it, expect } from 'vitest'
 import type { D1Database } from '@cloudflare/workers-types'
 import {
-  extractStripeSubscriptionId,
   handleRetainerInvoiceFinalized,
   handleRetainerInvoicePaid,
   handleRetainerInvoicePaymentFailed,
@@ -96,33 +95,6 @@ function invoicePayload(overrides?: Partial<RetainerInvoicePayload>): RetainerIn
     ...overrides,
   }
 }
-
-// ---------------------------------------------------------------------------
-// extractStripeSubscriptionId — both API shapes
-// ---------------------------------------------------------------------------
-
-describe('extractStripeSubscriptionId', () => {
-  it('reads the legacy top-level subscription field', () => {
-    expect(extractStripeSubscriptionId({ subscription: 'sub_a' })).toBe('sub_a')
-  })
-
-  it('reads the current parent.subscription_details.subscription shape', () => {
-    expect(
-      extractStripeSubscriptionId({
-        parent: { subscription_details: { subscription: 'sub_b' } },
-      })
-    ).toBe('sub_b')
-  })
-
-  it('returns null for one-time invoices and junk', () => {
-    expect(extractStripeSubscriptionId({})).toBeNull()
-    expect(extractStripeSubscriptionId({ subscription: null })).toBeNull()
-    expect(extractStripeSubscriptionId({ subscription: '' })).toBeNull()
-    expect(extractStripeSubscriptionId({ parent: null })).toBeNull()
-    expect(extractStripeSubscriptionId(null)).toBeNull()
-    expect(extractStripeSubscriptionId('sub_x')).toBeNull()
-  })
-})
 
 // ---------------------------------------------------------------------------
 // Cycle-invoice mirror

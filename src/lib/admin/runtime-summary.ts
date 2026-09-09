@@ -61,38 +61,3 @@ export async function getRuntimeSummary(
     .first<RuntimeSummaryRow>()
   return row ?? null
 }
-
-export interface SummaryFreshness {
-  stale: boolean
-  label: string
-}
-
-/** Default staleness threshold (seconds). A summary pushed less often than
- * roughly twice the heartbeat grace is treated as stale. */
-export const DEFAULT_SUMMARY_STALE_SECONDS = 600
-
-/**
- * Compute whether a summary is stale and a relative-age label, from `pushed_at`.
- * Mirrors the no-lie discipline of heartbeatDisplay: the label always shows the
- * real age so the fleet view can render "as of 3m ago" / "stale 47m".
- */
-export function summaryFreshness(
-  pushedAt: string | null,
-  staleSeconds: number = DEFAULT_SUMMARY_STALE_SECONDS,
-  now: Date = new Date()
-): SummaryFreshness {
-  if (!pushedAt) return { stale: true, label: 'no summary yet' }
-  const ts = Date.parse(pushedAt)
-  if (Number.isNaN(ts)) return { stale: true, label: 'invalid timestamp' }
-  const ageSec = Math.max(0, Math.floor((now.getTime() - ts) / 1000))
-  const stale = ageSec >= staleSeconds
-  const age = formatSummaryAge(ageSec)
-  return { stale, label: stale ? `stale ${age}` : `as of ${age} ago` }
-}
-
-function formatSummaryAge(sec: number): string {
-  if (sec < 60) return `${sec}s`
-  if (sec < 3600) return `${Math.floor(sec / 60)}m`
-  if (sec < 86400) return `${Math.floor(sec / 3600)}h`
-  return `${Math.floor(sec / 86400)}d`
-}

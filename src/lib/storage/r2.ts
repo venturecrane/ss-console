@@ -131,21 +131,6 @@ export async function uploadTranscript(
 }
 
 /**
- * Get a transcript URL or key for download.
- *
- * In Phase 1, this returns the R2 key directly. The admin can
- * use an API route to stream the file content.
- *
- * @param key - The R2 key of the stored transcript
- * @returns The key (or presigned URL in future phases)
- * @public Part of the transcript-storage surface, pinned as a contract by
- * tests/assessments.test.ts.
- */
-export function getTranscriptUrl(key: string): string {
-  return key
-}
-
-/**
  * Retrieve a transcript object from R2.
  *
  * @param r2 - The R2 bucket binding

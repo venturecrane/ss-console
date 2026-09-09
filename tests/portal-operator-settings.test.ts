@@ -8,130 +8,17 @@
 
 import { describe, it, expect } from 'vitest'
 import {
-  TRUST_CEILING_LEVELS,
   connectorRowsFromCustomerYaml,
   formatConnectorHealth,
   formatTrustCeilingLevel,
-  isTrustCeilingLevel,
-  skillToggleRowsFromPersona,
-  trustCeilingRowsFromPersona,
   type ConnectorHealth,
-  type TrustCeilingLevel,
 } from '../src/lib/portal/operator/settings'
-import type { PersonaConfig } from '../src/lib/portal/customer-config'
-
-function makePersona(exposure: Array<{ actionClass: string; ceiling: string }>): PersonaConfig {
-  return {
-    slug: 'p',
-    status: 'active',
-    name: 'Persona',
-    title: null,
-    signature_html: null,
-    tone: [],
-    send_as: null,
-    entitlements: {
-      exposure: Object.fromEntries(exposure.map((e) => [e.actionClass, e.ceiling])),
-    },
-    skills: exposure.map((e) => ({
-      name: e.actionClass,
-      initiation: { manual: true, scheduled: false, webhook: false },
-    })),
-    channel_bindings: [],
-  }
-}
-
-describe('isTrustCeilingLevel', () => {
-  it('accepts the three canonical values', () => {
-    expect(isTrustCeilingLevel('autonomous')).toBe(true)
-    expect(isTrustCeilingLevel('draft_for_review')).toBe(true)
-    expect(isTrustCeilingLevel('refused')).toBe(true)
-  })
-
-  it('rejects anything else', () => {
-    expect(isTrustCeilingLevel('AUTONOMOUS')).toBe(false)
-    expect(isTrustCeilingLevel('autosend')).toBe(false)
-    expect(isTrustCeilingLevel('')).toBe(false)
-    expect(isTrustCeilingLevel(null)).toBe(false)
-    expect(isTrustCeilingLevel(undefined)).toBe(false)
-    expect(isTrustCeilingLevel(0)).toBe(false)
-  })
-})
-
-describe('TRUST_CEILING_LEVELS', () => {
-  it('exposes the closed vocabulary in the expected order', () => {
-    expect(TRUST_CEILING_LEVELS).toEqual(['autonomous', 'draft_for_review', 'refused'])
-  })
-})
 
 describe('formatTrustCeilingLevel', () => {
   it('maps every value to a friendly label', () => {
     expect(formatTrustCeilingLevel('autonomous')).toBe('Autonomous')
     expect(formatTrustCeilingLevel('draft_for_review')).toBe('Draft for review')
     expect(formatTrustCeilingLevel('refused')).toBe('Refused')
-  })
-})
-
-describe('trustCeilingRowsFromPersona', () => {
-  it('returns an empty list when persona is null', () => {
-    expect(trustCeilingRowsFromPersona(null)).toEqual([])
-  })
-
-  it('projects authored exposure into canonical action-class rows', () => {
-    const persona = makePersona([
-      { actionClass: 'internal_write', ceiling: 'draft_for_review' },
-      { actionClass: 'external_send', ceiling: 'autonomous' },
-      { actionClass: 'destructive', ceiling: 'refused' },
-    ])
-    const rows = trustCeilingRowsFromPersona(persona)
-    // internal_write, external_send, external_send_internal, external_send_client,
-    // external_send_vendor, commitment, destructive, code_execution (ADR 0075)
-    expect(rows).toHaveLength(8)
-    expect(rows[0]).toEqual({
-      skillName: 'internal_write',
-      currentLevel: 'draft_for_review',
-      rawLevel: 'draft_for_review',
-      actionClass: 'internal_write',
-    })
-    expect(rows[1].currentLevel).toBe('autonomous') // external_send
-    expect(rows[2].currentLevel).toBeNull() // external_send_internal, unauthored → fail-closed
-    expect(rows[3].currentLevel).toBeNull() // external_send_client, unauthored → fail-closed
-    expect(rows[4].currentLevel).toBeNull() // external_send_vendor, unauthored → fail-closed
-    expect(rows[6].currentLevel).toBe('refused') // destructive
-  })
-
-  it('null-out currentLevel for an unknown ceiling, keeping rawLevel', () => {
-    const persona = makePersona([{ actionClass: 'internal_write', ceiling: 'mystery' }])
-    const rows = trustCeilingRowsFromPersona(persona)
-    expect(rows[0].currentLevel).toBeNull()
-    expect(rows[0].rawLevel).toBe('mystery')
-  })
-})
-
-describe('skillToggleRowsFromPersona', () => {
-  it('returns an empty list when persona is null', () => {
-    expect(skillToggleRowsFromPersona(null)).toEqual([])
-  })
-
-  it('marks configured skills as enabled', () => {
-    const persona = makePersona([
-      { actionClass: 'a', ceiling: 'autonomous' },
-      { actionClass: 'd', ceiling: 'draft_for_review' },
-    ])
-    const rows = skillToggleRowsFromPersona(persona)
-    expect(rows[0]).toEqual({ skillName: 'a', enabled: true, trustCeiling: null })
-    expect(rows[1]).toEqual({ skillName: 'd', enabled: true, trustCeiling: null })
-  })
-
-  it('does not infer skill enabled state from exposure', () => {
-    const persona = makePersona([{ actionClass: 'r', ceiling: 'refused' }])
-    const rows = skillToggleRowsFromPersona(persona)
-    expect(rows[0]).toEqual({ skillName: 'r', enabled: true, trustCeiling: null })
-  })
-
-  it('keeps unknown exposure out of skill toggle rows', () => {
-    const persona = makePersona([{ actionClass: 'u', ceiling: 'who-knows' }])
-    const rows = skillToggleRowsFromPersona(persona)
-    expect(rows[0]).toEqual({ skillName: 'u', enabled: true, trustCeiling: null })
   })
 })
 
@@ -188,17 +75,6 @@ describe('formatConnectorHealth', () => {
     ]
     for (const [value, label] of cases) {
       expect(formatConnectorHealth(value)).toBe(label)
-    }
-  })
-})
-
-// Empty-state contract regression — assert TrustCeilingLevel signature
-// stays in sync with the closed vocabulary.
-describe('TrustCeilingLevel type compile-time contract', () => {
-  it('every TRUST_CEILING_LEVELS value formats to a non-empty string', () => {
-    for (const level of TRUST_CEILING_LEVELS) {
-      const cast: TrustCeilingLevel = level
-      expect(formatTrustCeilingLevel(cast).length).toBeGreaterThan(0)
     }
   })
 })

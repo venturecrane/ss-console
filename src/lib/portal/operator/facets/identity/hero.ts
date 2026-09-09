@@ -105,7 +105,8 @@ export function resolveOperatorHero(
 ): OperatorHeroModel {
   // Select the active persona from the already-projected, typed config — no
   // second DB read, no reparse of personas_json (the projection already parsed
-  // it). Mirrors the selection in customer-config.ts::getActivePersona.
+  // it). The rule is "the persona whose status is active", the same one the
+  // skills facet applies.
   const persona = config?.personas.find((p) => p.status === 'active') ?? null
   const others = (config?.personas ?? []).filter((p) => p.status === 'active' && p !== persona)
   return {

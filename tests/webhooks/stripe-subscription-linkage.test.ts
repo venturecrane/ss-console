@@ -39,10 +39,7 @@ vi.mock('../../src/lib/webhooks/operator-checkout-handler', () => ({
 }))
 
 import { POST } from '../../src/pages/api/webhooks/stripe'
-import {
-  extractStripeSubscriptionId,
-  resolveStripeSubscriptionLinkage,
-} from '../../src/lib/webhooks/stripe-subscription-handler'
+import { resolveStripeSubscriptionLinkage } from '../../src/lib/webhooks/stripe-subscription-handler'
 
 installWorkerdPolyfills()
 
@@ -200,14 +197,6 @@ describe('resolveStripeSubscriptionLinkage', () => {
         parent: { type: 'subscription_details', subscription_details: { sub_id: 'sub_z' } },
       }).kind
     ).toBe('unrecognized')
-  })
-})
-
-describe('extractStripeSubscriptionId', () => {
-  it('parses the expanded-object shape (previously read as no linkage at all)', () => {
-    expect(
-      extractStripeSubscriptionId({ subscription: { id: 'sub_e', object: 'subscription' } })
-    ).toBe('sub_e')
   })
 })
 

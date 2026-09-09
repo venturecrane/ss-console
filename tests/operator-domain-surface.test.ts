@@ -14,13 +14,13 @@ import { resolve } from 'path'
 import type { D1Database } from '@cloudflare/workers-types'
 import { ORG_ID } from '../src/lib/constants'
 import type { AuthorityPosture } from '../src/lib/operator/authority'
+import type { ChangeRequestRow } from '../src/lib/portal/operator/change-request'
 import {
   resolveDomainSurface,
   resolveDomainSurfaceMode,
 } from '../src/lib/portal/operator/domain-surface'
 import {
   createChangeRequest,
-  listChangeRequestsForCustomer,
   listOpenChangeRequests,
   updateChangeRequestStatus,
 } from '../src/lib/portal/operator/change-request'
@@ -134,12 +134,24 @@ describe('createChangeRequest', () => {
   })
 })
 
+/** Direct read of a customer's own requests, recent first. */
+async function requestsForSlug(db: D1Database, slug: string): Promise<ChangeRequestRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM operator_change_requests
+        WHERE customer_slug = ? ORDER BY created_at DESC`
+    )
+    .bind(slug)
+    .all<ChangeRequestRow>()
+  return results ?? []
+}
+
 describe('change-request read + lifecycle', () => {
   it('lists a customer’s own requests and the admin open inbox', async () => {
     const db = await freshDb()
     await createChangeRequest(db, { ...baseInput, domain: 'connectors', summary: 'connect Clio' })
     await createChangeRequest(db, { ...baseInput, domain: 'memory', summary: 'review a rule' })
-    const mine = await listChangeRequestsForCustomer(db, SLUG)
+    const mine = await requestsForSlug(db, SLUG)
     expect(mine).toHaveLength(2)
     const inbox = await listOpenChangeRequests(db)
     expect(inbox).toHaveLength(2)
@@ -163,7 +175,7 @@ describe('change-request read + lifecycle', () => {
     expect(ok).toBe(true)
     const inbox = await listOpenChangeRequests(db)
     expect(inbox).toHaveLength(0)
-    const mine = await listChangeRequestsForCustomer(db, SLUG)
+    const mine = await requestsForSlug(db, SLUG)
     expect(mine[0].status).toBe('resolved')
     expect(mine[0].resolved_by_email).toBe('smd@smd.services')
     expect(mine[0].resolved_at).not.toBeNull()

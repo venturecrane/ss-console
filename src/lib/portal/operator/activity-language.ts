@@ -29,8 +29,8 @@
  * Copy rules: authored template sentences describing SHIPPED system
  * behavior only; entry.skill / entry.target / entry.reason are real data
  * and may be interpolated; nothing is invented (anti-fabrication policy).
- * The admin console keeps the raw vocabulary via formatAuditAction; a
- * guard test bans that function from client surfaces.
+ * The raw SCREAMING_SNAKE vocabulary never reaches a client surface; this
+ * module is the only client-facing renderer of an audit action.
  */
 
 import type { AuditEntry } from './audit'
@@ -373,17 +373,6 @@ export function mappedActionsForCategories(categoryKeys: readonly string[]): str
   return CLIENT_ACTIVITY_CATEGORIES.filter((c) => wanted.has(c.key)).flatMap((c) => [...c.actions])
 }
 
-export interface ClientActivityLine {
-  id: string
-  at: string
-  summary: string
-  categoryKey: string
-}
-
-const ACTION_TO_CATEGORY: ReadonlyMap<string, string> = new Map(
-  CLIENT_ACTIVITY_CATEGORIES.flatMap((c) => c.actions.map((a) => [a, c.key] as const))
-)
-
 /** Client-language summary for one entry, or null when unmapped. */
 export function clientSummaryFor(entry: AuditEntry): string | null {
   const build = CLIENT_LANGUAGE[entry.action]
@@ -419,6 +408,9 @@ export function activityDisposition(action: string): ActivityDisposition {
  * being an absent-key accident. Callers may log or count it; the guard test
  * (tests/activity-language-producers.test.ts) asserts the set is empty for every
  * action type with a declared runtime producer.
+ *
+ * @public Producer guard. tests/activity-language-producers.test.ts imports it and asserts the
+ * set is empty for every declared producer. No runtime caller, by design.
  */
 export function undeclaredClientActions(entries: readonly AuditEntry[]): string[] {
   const seen = new Set<string>()
@@ -426,29 +418,4 @@ export function undeclaredClientActions(entries: readonly AuditEntry[]): string[
     if (activityDisposition(entry.action) === 'undeclared') seen.add(entry.action)
   }
   return [...seen].sort()
-}
-
-/**
- * Map raw entries to client lines.
- *
- * Suppressed AND undeclared entries both render nothing, and that is deliberate
- * for suppressed and unavoidable for undeclared: the only alternative for an
- * action with no authored sentence is to invent one, which the venture forbids
- * (CLAUDE.md, "No fabricated client-facing content"). The difference is that
- * undeclared is a defect, reachable through {@link undeclaredClientActions},
- * rather than a silent absent-key drop.
- */
-export function toClientActivity(entries: readonly AuditEntry[]): ClientActivityLine[] {
-  const lines: ClientActivityLine[] = []
-  for (const entry of entries) {
-    const build = CLIENT_LANGUAGE[entry.action]
-    if (!build) continue
-    lines.push({
-      id: entry.id,
-      at: entry.ts,
-      summary: build(entry),
-      categoryKey: ACTION_TO_CATEGORY.get(entry.action) ?? 'other',
-    })
-  }
-  return lines
 }

@@ -14,16 +14,13 @@
  * actor role, and the resolver the page invokes.
  *
  * Data source: per-customer Hermes Machine D1 (ADR 0007 + 0009). The
- * portal Worker cannot bind directly to a per-customer D1; reads go
- * through an internal Hermes bridge (PR #907 architecture, runtime
- * wiring tracked in #821). Until that bridge ships, this resolver
- * returns an empty list with the correct typed shape so the page
- * machinery (filter bar, table, pagination) works end-to-end without
- * fabricating rows. No mock data. No placeholder copy. See
- * docs/style/empty-state-pattern.md.
- *
- * When the bridge lands, only `fetchAuditEntriesFromHermes` changes.
- * Filter parsing, validation, formatters, and the page UI stay put.
+ * portal Worker cannot bind directly to a per-customer D1; the live read
+ * goes through the frozen ADR 0043 runtime-read seam in
+ * `activity-read.ts`, which feeds the parsed rows into the filter / sort
+ * / paginate helpers here. (An earlier per-page resolver with a stub
+ * bridge fetch lived in this file until 2026-09-09; nothing called it
+ * once activity-read.ts took the seam, and it is gone.) No mock data. No
+ * placeholder copy. See docs/style/empty-state-pattern.md.
  *
  * Mirrors the shape of `src/lib/portal/operator/drafts.ts` deliberately
  * (sibling list view, same pagination contract). Differences:
@@ -39,7 +36,6 @@
  *     `ACCEPTED_ACTION_TYPES` vocabulary mirrored from the writer.
  */
 
-import type { SubscriptionRow } from '../product-access'
 import { type Page, paginate } from './pagination'
 
 /**
@@ -180,8 +176,6 @@ export const AUDIT_ACTION_TYPES = [
   'MEDCHRON_JOB_DELIVERED',
   'MEDCHRON_JOB_FAILED',
 ] as const
-
-export type AuditActionType = (typeof AUDIT_ACTION_TYPES)[number]
 
 /**
  * Console-ledger synthetic actions (portal_login_events / portal_action_events
@@ -615,21 +609,6 @@ export function formatAuditDecision(decision: AuditDecision | null): string {
 }
 
 /**
- * Human label for an audit action_type. Splits the SCREAMING_SNAKE
- * vocabulary into Title-cased words so the table reads as English
- * without a giant switch statement. Unknown values render verbatim.
- */
-export function formatAuditAction(action: string): string {
-  if (!action) return ''
-  return action
-    .split('_')
-    .map((word) =>
-      word.length === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-    )
-    .join(' ')
-}
-
-/**
  * Tone for the decision chip in the row. `refuse` is danger (the action
  * was blocked), `draft_for_review` is the neutral default (reviewer
  * gate is the standard posture), `allow` is the neutral success tone
@@ -665,52 +644,4 @@ export function distinctAuditSkills(rows: readonly AuditEntry[]): string[] {
     }
   }
   return Array.from(seen).sort()
-}
-
-/**
- * Collect the distinct action classes present in an audit list. Used by
- * the page to populate the action multi-select. The full vocabulary
- * lives in AUDIT_ACTION_TYPES; this helper narrows to "what's actually
- * shown on the current page" so reviewers don't see options that would
- * filter the page to zero. Sorted alphabetically.
- */
-export function distinctAuditActions(rows: readonly AuditEntry[]): string[] {
-  const seen = new Set<string>()
-  for (const row of rows) {
-    if (row.action.length > 0) {
-      seen.add(row.action)
-    }
-  }
-  return Array.from(seen).sort()
-}
-
-/**
- * Server-side resolver invoked by the audit list page. Today this
- * returns an empty list with the correct shape — the per-customer
- * Hermes bridge that feeds real audit rows is tracked in #821. When the
- * bridge lands, swap `fetchAuditEntriesFromHermes` for the bridge call
- * and leave the rest of the page machinery in place.
- *
- * IMPORTANT: do not seed mock rows here. The empty-state pattern is the
- * design contract (docs/style/empty-state-pattern.md) — the page must
- * render its empty state until real data lands, never fabricated
- * placeholders.
- */
-export async function listAuditEntries(
-  _subscription: SubscriptionRow,
-  params: AuditListParams
-): Promise<AuditListPage> {
-  const rows = await fetchAuditEntriesFromHermes(_subscription)
-  return buildAuditListPage(rows, params)
-}
-
-/**
- * Hermes bridge stub. Returns an empty list. When #821 (Hermes runtime
- * wiring) lands, replace the body with the bridge fetch — the
- * subscription row carries the customer identity needed to route to the
- * right Machine D1. Promise.resolve keeps the call shape async so the
- * future swap is body-only.
- */
-function fetchAuditEntriesFromHermes(_subscription: SubscriptionRow): Promise<AuditEntry[]> {
-  return Promise.resolve([])
 }

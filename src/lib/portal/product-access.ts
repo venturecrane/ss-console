@@ -43,18 +43,6 @@ export interface SubscriptionRow {
   updated_at: string
 }
 
-export interface ProductRoleRow {
-  id: string
-  org_id: string
-  user_id: string
-  entity_id: string
-  product_slug: string
-  role: string
-  granted_by: string | null
-  granted_at: string
-  revoked_at: string | null
-}
-
 export interface ProductAccess {
   subscription: SubscriptionRow
   roles: string[]

@@ -70,6 +70,9 @@ const CUSTOMER_FLY_APPS: Readonly<Record<string, string>> = Object.freeze({
  * customer.yaml`), and `seat.kind` does not separate provisioned from not
  * (pilot-law, retired 2026-08-25, was `sandbox` with no app; pilot-smokeball is `proving` and
  * does). So the decision is authored here and reviewed like any other code.
+ *
+ * @public Drift-guard surface, imported by tests/fly-app-registry-drift.test.ts. No runtime
+ * caller, by design: resolution goes through resolveCustomerFlyApp only.
  */
 export const UNPROVISIONED_CUSTOMERS: Readonly<Record<string, string>> = Object.freeze({})
 
@@ -78,6 +81,9 @@ export const UNPROVISIONED_CUSTOMERS: Readonly<Record<string, string>> = Object.
  * `tests/fly-app-registry-drift.test.ts`. Runtime callers must go through
  * {@link resolveCustomerFlyApp} — it is the one place the fail-closed default
  * lives.
+ *
+ * @public Drift-guard surface, imported by tests/fly-app-registry-drift.test.ts. No runtime
+ * caller, by design: resolution goes through resolveCustomerFlyApp only.
  */
 export const REGISTERED_CUSTOMER_FLY_APPS: Readonly<Record<string, string>> = CUSTOMER_FLY_APPS
 

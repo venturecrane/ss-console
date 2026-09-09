@@ -38,6 +38,10 @@
  */
 export type RbacSubAction = 'role_granted' | 'role_revoked' | 'invite_sent'
 
+/**
+ * @public Closed vocabulary. tests/portal-rbac-audit.test.ts imports it and pins the set. No
+ * runtime caller, by design.
+ */
 export const RBAC_SUB_ACTIONS: readonly RbacSubAction[] = [
   'role_granted',
   'role_revoked',

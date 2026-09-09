@@ -16,7 +16,7 @@
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 13",
     "lint:fix": "eslint --fix .",
-    "deadcode": "knip",
+    "deadcode": "knip --production",
     "typecheck": "astro check",
     "typecheck:workers": "for dir in workers/*/; do [ -f \"${dir}package.json\" ] || continue; echo \"Typechecking $dir\" && npm run typecheck --prefix \"$dir\" || exit 1; done",
     "test:workers": "for dir in workers/*/; do [ -f \"${dir}package.json\" ] || continue; echo \"Testing $dir\" && npm run test --prefix \"$dir\" || exit 1; done",
@@ -62,7 +62,8 @@
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.63.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "yaml": "^2.8.3"
   },
   "overrides": {
     "@cloudflare/workers-types": "$@cloudflare/workers-types",
@@ -74,7 +75,7 @@
     "js-cookie": "^3.0.7",
     "esbuild": "0.28.1",
     "ws": "8.21.0",
-    "yaml": "2.8.3",
+    "yaml": "$yaml",
     "brace-expansion": "^5.0.9",
     "js-yaml": "^4.3.1",
     "postcss": "8.5.23",

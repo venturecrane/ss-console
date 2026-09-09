@@ -59,10 +59,6 @@ describe('assessments: data access layer', () => {
     expect(code).toContain("'converted'")
   })
 
-  it('exports ASSESSMENT_STATUSES constant', () => {
-    expect(source()).toContain('export const ASSESSMENT_STATUSES')
-  })
-
   it('exports VALID_TRANSITIONS for status state machine', () => {
     expect(source()).toContain('export const VALID_TRANSITIONS')
   })
@@ -110,10 +106,6 @@ describe('assessments: R2 storage helper', () => {
 
   it('exports uploadTranscript function', () => {
     expect(source()).toContain('export async function uploadTranscript')
-  })
-
-  it('exports getTranscriptUrl function', () => {
-    expect(source()).toContain('export function getTranscriptUrl')
   })
 
   it('exports getTranscript function', () => {

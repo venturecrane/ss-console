@@ -32,32 +32,6 @@ import type { APIContext } from 'astro'
 import { clerkClient } from '@clerk/astro/server'
 import { normalizeEmail } from '../identity/email'
 
-/**
- * One Clerk-side participant in an organization. Discriminated by
- * `kind` so the Users page can render members and pending invitees
- * with different affordances (members get role grant/revoke buttons;
- * pending invitees get "invitation sent on …" metadata only).
- *
- * Field semantics:
- *   email          — Primary email on record at Clerk.
- *   name           — Best-effort display name. Empty string when
- *                    Clerk has no first/last name and the email is
- *                    the only identifier. Caller chooses how to fall
- *                    back (typically `name || email`).
- *   clerkUserId    — Clerk user ID for accepted members; null for
- *                    pending invitations.
- *   role           — Clerk Organization role (`org:admin`,
- *                    `org:member`, ...). Verbatim from Clerk.
- *   joinedAt       — ISO timestamp the member joined the org (members
- *                    only) or null for pending invitations.
- *   invitedAt      — ISO timestamp the invitation was sent (pending
- *                    invitations only) or null for members.
- *   expiresAt      — Pending-invitation expiry (ISO). null for
- *                    members and for invitations Clerk did not set
- *                    expiry on.
- */
-export type ClerkOrgParticipant = ClerkOrgMember | ClerkOrgPendingInvite
-
 export interface ClerkOrgMember {
   kind: 'member'
   email: string

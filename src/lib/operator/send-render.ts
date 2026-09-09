@@ -236,6 +236,9 @@ export function armingViolations(input: ArmingInput): ArmingViolation[] {
  * Contract hygiene, independent of any seat: every hash-verified declaration's
  * template must exist. Checked by the merge gate so a template deletion cannot
  * strand a declaration.
+ *
+ * @public Merge-gate check. tests/cron-send-arming-gate.test.ts imports it and runs it over
+ * the shipped declarations. No runtime caller, by design.
  */
 export function templateHygieneViolations(
   renders: Map<string, RenderDecl>,

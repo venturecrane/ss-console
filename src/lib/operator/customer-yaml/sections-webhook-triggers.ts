@@ -56,8 +56,8 @@ import { isPlainObject } from './helpers'
  * are eligible `webhook_triggers[].source` values with no `webhook_url`.
  *
  * Membership is keyed on the ADAPTER, not on `poll_seconds`: the cadence field
- * is optional under msgraph (unauthored ⇒ the overlay poller applies
- * DEFAULT_MSGRAPH_POLL_SECONDS), so a seat that omits it still polls.
+ * is optional under msgraph (unauthored ⇒ the overlay poller applies its own
+ * 45-second default), so a seat that omits it still polls.
  */
 const POLL_INBOUND_ADAPTERS: ReadonlySet<string> = new Set([MSGRAPH_ADAPTER])
 

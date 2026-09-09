@@ -9,7 +9,7 @@
  * src/lib/email/resend.ts handles missing RESEND_API_KEY.
  */
 
-import type { StripeCreateInvoiceParams, StripeInvoice, StripeInvoiceResult } from './types'
+import type { StripeCreateInvoiceParams, StripeInvoiceResult } from './types'
 
 const STRIPE_API_BASE = 'https://api.stripe.com/v1'
 
@@ -243,35 +243,5 @@ export async function voidStripeInvoice(
   })
   if (!res.ok) {
     throw new Error(`Stripe void failed ${res.status}: ${await res.text()}`)
-  }
-}
-
-export async function getStripeInvoice(
-  apiKey: string | undefined,
-  invoiceId: string
-): Promise<StripeInvoiceResult> {
-  if (!apiKey) {
-    console.log(`[DEV] Stripe: would get invoice ${invoiceId}`)
-    return { id: invoiceId, hosted_invoice_url: '#dev-mode', status: 'draft' }
-  }
-
-  const res = await fetch(`${STRIPE_API_BASE}/invoices/${invoiceId}`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
-  })
-
-  if (!res.ok) {
-    const errBody = await res.text()
-    throw new Error(`Stripe invoice get failed ${res.status}: ${errBody}`)
-  }
-
-  const invoice: StripeInvoice = await res.json()
-
-  return {
-    id: invoice.id,
-    hosted_invoice_url: invoice.hosted_invoice_url,
-    status: invoice.status,
   }
 }

@@ -219,8 +219,6 @@ export const SEND_ACTION_CLASSES = [
   'external_send_client',
   'external_send_vendor',
 ] as const
-export type SendActionClass = (typeof SEND_ACTION_CLASSES)[number]
-
 /**
  * Closed vocabulary for a `scope.outbound_roster` entry's `class` (ADR 0075).
  * A typed outbound-roster address is the firm's own `client`, a `records_vendor`,
@@ -618,14 +616,6 @@ export const MSGRAPH_GUID_PATTERN =
  * must be a valid environment-variable identifier.
  */
 export const MSGRAPH_SECRET_REF_PATTERN = /^fly-secret:[A-Za-z_][A-Za-z0-9_]*$/
-
-/**
- * Delta-poll cadence default (seconds) for the msgraph inbound poller
- * (spec D1/D5). Applied by the overlay poller when `poll_seconds` is unauthored.
- *
- * @public Consumed by the hermes-smd-overlay poller, not by this repo.
- */
-export const DEFAULT_MSGRAPH_POLL_SECONDS = 45
 
 /**
  * Microsoft Graph app-only mail auth (email-channel-seam spec D5). Parallel in

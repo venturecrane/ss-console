@@ -164,7 +164,8 @@ const CONFIG_COLUMNS = [
 /**
  * Build the idempotent `.sql` text for a projected row: an UPSERT into
  * `customer_configs` (re-projection overwrites every column but the PK) plus a
- * `customer_config_history` event that mirrors `recordCustomerConfigSync` —
+ * `customer_config_history` event (this SQL is the only writer of that table
+ * since 2026-09-09; the TypeScript helper it once mirrored had no caller) —
  * `prev_git_sha` = the slug's latest recorded sha, and the insert is skipped
  * when this exact sha is already recorded (the no-op guard). `syncedBy` is
  * `'manual'` when a human runs this under Captain approval, `'ci'` when the

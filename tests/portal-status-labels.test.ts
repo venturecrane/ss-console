@@ -3,7 +3,6 @@ import {
   STAMP_VOCABULARY,
   resolveQuoteStampLabel,
   resolveInvoiceStampLabel,
-  resolveEngagementStampLabel,
   resolveMilestoneStampLabel,
   type StampLabel,
 } from '../src/lib/portal/status'
@@ -26,15 +25,6 @@ const VOCAB = new Set<StampLabel>(STAMP_VOCABULARY)
 const QUOTE_STATUSES = ['draft', 'sent', 'accepted', 'declined', 'expired', 'superseded']
 
 const INVOICE_STATUSES = ['draft', 'sent', 'paid', 'overdue', 'void']
-
-const ENGAGEMENT_STATUSES = [
-  'scheduled',
-  'active',
-  'handoff',
-  'safety_net',
-  'completed',
-  'cancelled',
-]
 
 const MILESTONE_STATUSES = ['pending', 'in_progress', 'completed', 'skipped']
 
@@ -93,23 +83,6 @@ describe('portal status: invoice stamp round-trip', () => {
 
   it('invoice.overdue stamps as OVERDUE', () => {
     expect(resolveInvoiceStampLabel('overdue')).toBe('OVERDUE')
-  })
-})
-
-describe('portal status: engagement stamp round-trip', () => {
-  for (const status of ENGAGEMENT_STATUSES) {
-    it(`engagement.${status} resolves to a vocabulary label`, () => {
-      const stamp = resolveEngagementStampLabel(status)
-      expect(VOCAB.has(stamp)).toBe(true)
-    })
-  }
-
-  it('engagement.active stamps as UNDERWAY', () => {
-    expect(resolveEngagementStampLabel('active')).toBe('UNDERWAY')
-  })
-
-  it('engagement.safety_net stamps as IN PROG (stabilization compressed to vocab)', () => {
-    expect(resolveEngagementStampLabel('safety_net')).toBe('IN PROG')
   })
 })
 

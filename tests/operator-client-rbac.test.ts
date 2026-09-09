@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   clientRolePermits,
-  operableDomainsForRole,
   isClientRole,
   CLIENT_ROLES,
 } from '../src/lib/portal/operator/client-rbac'
@@ -27,9 +26,6 @@ describe('client-rbac: principal operates every switchable domain', () => {
       expect(clientRolePermits(['principal'], domain)).toBe(true)
     })
   }
-  it('operableDomainsForRole(principal) === the full switchable set', () => {
-    expect(operableDomainsForRole('principal')).toEqual([...SWITCHABLE_AUTHORITY_DOMAINS])
-  })
 })
 
 describe('client-rbac: staff operates only runtime + observability', () => {
@@ -48,9 +44,6 @@ describe('client-rbac: staff operates only runtime + observability', () => {
     ] as const) {
       expect(clientRolePermits(['staff'], domain)).toBe(false)
     }
-  })
-  it('operableDomainsForRole(staff) is exactly [runtime, observability] in canonical order', () => {
-    expect(operableDomainsForRole('staff')).toEqual(['runtime', 'observability'])
   })
 })
 
@@ -91,6 +84,5 @@ describe('client-rbac: composition and fail-closed behavior', () => {
   it('unknown / non-switchable domains are never operable', () => {
     expect(clientRolePermits(['principal'], 'not_a_domain')).toBe(false)
     expect(clientRolePermits(['principal'], 'cost')).toBe(false)
-    expect(operableDomainsForRole('nope')).toEqual([])
   })
 })

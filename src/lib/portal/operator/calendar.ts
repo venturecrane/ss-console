@@ -413,20 +413,6 @@ export function formatTimeRange(startsAt: string, endsAt: string): FormattedTime
 }
 
 /**
- * Collect the distinct skills present in a calendar item list, sorted
- * alphabetically. Mirrors `distinctSkills` in drafts.ts for parity
- * across the two surfaces — both use the same shape so the filter
- * machinery can be lifted into a shared util later without churn.
- */
-export function distinctCalendarSkills(rows: readonly CalendarItem[]): string[] {
-  const seen = new Set<string>()
-  for (const row of rows) {
-    seen.add(row.skill)
-  }
-  return Array.from(seen).sort()
-}
-
-/**
  * Server-side resolver invoked by the calendar list page. Today this
  * returns an empty list with the correct shape — the per-customer
  * Hermes bridge that feeds real items is tracked in #821, and the
