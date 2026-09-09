@@ -76,6 +76,14 @@ interface RescheduleArgs {
  * lines carry the 3% card-fee line (agreement §3.8), in which case card is
  * the only method. `due` is either the default terms (30 days) or an exact
  * instant when the Captain has set a due date.
+ *
+ * ACH is `us_bank_account` (ACH Direct Debit: the hosted invoice page
+ * collects and verifies the firm's bank account on the spot), never
+ * `ach_debit`. That older value is Stripe's legacy Sources-era type and only
+ * charges a bank account already verified on the customer; on a customer
+ * with none, the hosted page renders the invoice with no way to pay it,
+ * which is exactly what the Captain saw on the A&P implementation invoice
+ * on 2026-09-09. `tests/invoices.test.ts` pins the value.
  */
 interface StripeInvoiceSource {
   orgId: string
@@ -101,7 +109,7 @@ function stripeInvoiceParams(src: StripeInvoiceSource): StripeCreateInvoiceParam
     collection_method: 'send_invoice',
     metadata: { invoice_id: existing.id, org_id: orgId, type: existing.type, ...extraMetadata },
     payment_settings: {
-      payment_method_types: invoiceIsCardPayable(lines) ? ['card'] : ['ach_debit'],
+      payment_method_types: invoiceIsCardPayable(lines) ? ['card'] : ['us_bank_account'],
     },
   }
 }

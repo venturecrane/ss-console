@@ -254,6 +254,25 @@ describe('invoices: admin API routes', () => {
       expect(code).toContain('updateInvoiceStatus')
     })
 
+    it('restricts ACH invoices to us_bank_account, never the legacy ach_debit type', () => {
+      // ach_debit is Stripe's Sources-era ACH: it only charges a bank account
+      // already verified on the customer and the hosted invoice page collects
+      // nothing for it. On 2026-09-09 the A&P implementation invoice rendered
+      // with no way to pay because of it. us_bank_account collects and
+      // verifies the bank account on the page (what the subscription checkout
+      // already uses in src/lib/stripe/subscriptions.ts).
+      const files = [
+        'src/pages/api/admin/invoices/[id].ts',
+        'src/lib/db/milestones.ts',
+        'src/lib/stripe/client.ts',
+      ]
+      for (const file of files) {
+        const code = readFileSync(resolve(file), 'utf-8')
+        expect(code, file).not.toContain("'ach_debit'")
+      }
+      expect(source()).toContain("['us_bank_account']")
+    })
+
     it('handles reschedule action — re-issues in Stripe before voiding the original', () => {
       const code = source()
       expect(code).toContain("action === 'reschedule'")

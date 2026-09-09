@@ -169,7 +169,7 @@ describe('createStripeInvoice', () => {
         days_until_due: 3,
         collection_method: 'send_invoice',
         metadata: { invoice_id: 'inv-1', engagement_id: 'eng-1' },
-        payment_settings: { payment_method_types: ['ach_debit', 'card'] },
+        payment_settings: { payment_method_types: ['us_bank_account', 'card'] },
       })
     )
 
@@ -178,7 +178,10 @@ describe('createStripeInvoice', () => {
     expect(body.get('days_until_due')).toBe('3')
     expect(body.get('metadata[invoice_id]')).toBe('inv-1')
     expect(body.get('metadata[engagement_id]')).toBe('eng-1')
-    expect(body.getAll('payment_settings[payment_method_types][]')).toEqual(['ach_debit', 'card'])
+    expect(body.getAll('payment_settings[payment_method_types][]')).toEqual([
+      'us_bank_account',
+      'card',
+    ])
   })
 
   it('sends an exact due_date instead of days_until_due when one is given', async () => {
