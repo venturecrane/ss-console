@@ -120,6 +120,24 @@ receipt is a session the hook did not serve. A manual run deliberately does not
 stamp - proof a human can mint by running the tool shows the tool works, not
 that the wiring fires.
 
+Reachability is only half the question. The other half is whether the always-on
+tier changes what an agent does, and `MEMORY.md` pre-registers that experiment
+itself: on or after 2026-09-23, check whether any of the traps it lists still
+fired. `.claude/bin/trap-recurrence` is the instrument, and the review is on the
+venture schedule so it surfaces in the `/sos` briefing that morning rather than
+depending on someone remembering.
+
+What it counts is the distinction the decision turns on. An ENCOUNTER is the
+trap condition appearing in tool output; a STUMBLE is an encounter where the
+documented remedy did not follow. A pull request left BEHIND by a sibling merge
+is not a failure - one an agent answered by re-running `gh pr merge` is. Stumbles
+above zero justify a delivery hook; zero with encounters above zero means the
+tier is doing its job. The counter reports its own blind spots on every run, and
+its rules were narrowed by running them over thirty-two sessions of history:
+the first draft scored a thousand false stumbles on one rule and made another
+incapable of ever passing, either of which would have handed the review a
+predetermined answer.
+
 ## Escalation triggers - mandatory stop points
 
 The cadence has hard stops. An agent does not churn on a blocker; it escalates.
