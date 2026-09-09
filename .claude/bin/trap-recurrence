@@ -1,0 +1,24 @@
+#!/bin/bash
+#
+# trap-recurrence -- did the traps in MEMORY.md still fire after they were written down?
+#
+#   .claude/bin/trap-recurrence                    # since the traps block shipped (2026-09-09)
+#   .claude/bin/trap-recurrence --since 2026-01-01 # a different window
+#   .claude/bin/trap-recurrence --self-test        # prove the counter can fail
+#
+# Exit 0 when no trap was stumbled into in the window, 1 when one was (or when
+# the transcripts cannot be read). This is the instrument the traps block's own
+# pre-registered review depends on: "On/after 2026-09-23: check whether any of
+# these still recurred; if so a delivery hook is justified, if not this tier is
+# enough." That review is on the venture schedule; this answers it.
+#
+# The number that decides it is STUMBLES, not encounters. A trap condition that
+# arose and was handled correctly is the index tier working. The logic lives in
+# the .mjs; this only marshals arguments.
+set -u
+DIR=$(cd "$(dirname "$0")/.." && pwd)   # .claude/
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "trap-recurrence: not in a git tree" >&2; exit 1; }
+HOOK="$DIR/hooks/trap-recurrence.mjs"
+[ -f "$HOOK" ] || HOOK="$ROOT/.claude/hooks/trap-recurrence.mjs"
+
+node "$HOOK" "$@"
