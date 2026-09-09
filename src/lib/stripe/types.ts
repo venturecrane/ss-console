@@ -32,8 +32,10 @@ export interface StripeCreateInvoiceParams {
   description?: string
   /** Line items to include */
   line_items: StripeInvoiceLineItem[]
-  /** Days until due (default 15) */
+  /** Days until due (default 15). Ignored when `due_date` is given. */
   days_until_due?: number
+  /** Exact due instant as a Unix timestamp (seconds). Takes precedence over `days_until_due`. */
+  due_date?: number
   /** Collection method: 'send_invoice' sends email, 'charge_automatically' charges on file */
   collection_method?: 'send_invoice' | 'charge_automatically'
   /** Metadata key-value pairs */

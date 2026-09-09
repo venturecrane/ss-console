@@ -181,6 +181,19 @@ describe('invoices: portal detail view', () => {
     expect(code).toContain('getInvoiceForEntity')
     expect(code).toContain('listLineItemsForInvoice')
   })
+
+  it('carries no "Payment details" section (removed 2026-09-09)', () => {
+    // The section restated the due date already in the header and caption,
+    // and described Stripe's payment methods on SMD's own page. Captain
+    // direction: the page is the line items, the total, and the Pay card.
+    const code = source()
+    expect(code).not.toContain('Payment details')
+    expect(code).not.toContain('InvoicePaymentDetails')
+    expect(code).not.toContain('Card or bank transfer')
+    expect(existsSync(resolve('src/components/portal/InvoicePaymentDetails.astro'))).toBe(false)
+    const preview = readFileSync(resolve('src/components/portal/InvoiceDetail.astro'), 'utf-8')
+    expect(preview).not.toContain('Payment details')
+  })
 })
 
 describe('invoices: admin API routes', () => {
@@ -239,6 +252,21 @@ describe('invoices: admin API routes', () => {
       expect(code).toContain("action === 'void'")
       expect(code).toContain('voidStripeInvoice')
       expect(code).toContain('updateInvoiceStatus')
+    })
+
+    it('handles reschedule action — re-issues in Stripe before voiding the original', () => {
+      const code = source()
+      expect(code).toContain("action === 'reschedule'")
+      expect(code).toContain('dueDateToStripeTimestamp')
+      // Replacement first, row repointed second, original voided last, so the
+      // row never references a voided invoice with nothing payable behind it.
+      const create = code.indexOf('createStripeInvoice(env.STRIPE_API_KEY, params)')
+      const repoint = code.indexOf('stripe_invoice_id: created.id')
+      const voidOld = code.indexOf('voidStripeInvoice(env.STRIPE_API_KEY, previousStripeId)')
+      expect(create).toBeGreaterThan(-1)
+      expect(repoint).toBeGreaterThan(create)
+      expect(voidOld).toBeGreaterThan(repoint)
+      expect(code).toContain('error=stale_stripe_invoice')
     })
 
     it('handles mark_paid action — manual override for offline payments', () => {

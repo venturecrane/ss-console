@@ -45,6 +45,9 @@ const ERROR_NOTICES: Record<string, string> = {
   missing: 'The invoice form was incomplete.',
   missing_line_items: 'Author the line item before presenting or sending an invoice.',
   invalid_transition: 'That invoice action is not valid from its current status.',
+  invalid_due_date: 'Enter the new due date as YYYY-MM-DD.',
+  stale_stripe_invoice:
+    'The invoice was re-issued with the new due date, but the previous Stripe invoice could not be voided. Void it in the Stripe dashboard so the client cannot pay it twice.',
   server: 'Request failed. Check the logs.',
 }
 
@@ -58,7 +61,9 @@ export function resolveClientHubNotices(params: URLSearchParams): ClientHubNotic
   const error = params.get('error')
   const agreement = params.get('agreement')
   let success: string | null = null
-  if (params.get('saved')) success = 'Invoice updated.'
+  if (params.get('rescheduled')) {
+    success = 'Due date changed. The portal and the Stripe invoice both show the new date.'
+  } else if (params.get('saved')) success = 'Invoice updated.'
   else if (params.get('priced')) success = 'Monthly price saved.'
   else if (billing) success = BILLING_NOTICES[billing] ?? billing
   else if (agreement && AGREEMENT_NOTICES[agreement]) success = AGREEMENT_NOTICES[agreement]

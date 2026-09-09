@@ -39,7 +39,6 @@ export interface Props {
     totalCents: number
     status: string
     dueCaption: string | null
-    dueShortDate: string | null
     daysRemaining: number | null
     paidShortDate: string | null
     pillLabel: string
@@ -299,89 +298,6 @@ const pathname = `/portal/invoices/${invoice.id}`
           </div>
         )
       }
-
-      <!-- ── Payment details ── -->
-      <div>
-        <h2 class="font-display font-semibold text-title text-[color:var(--ss-color-text-primary)]">
-          Payment details
-        </h2>
-        <ul class="mt-stack grid grid-cols-1 sm:grid-cols-2 gap-card">
-          {
-            invoice.dueShortDate && !isPaid && (
-              <li class="flex items-start gap-row rounded-[var(--ss-radius-card)] bg-[color:var(--ss-color-surface)] p-card">
-                <span
-                  class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-primary)]"
-                  style="font-variation-settings: 'FILL' 1;"
-                  aria-hidden="true"
-                >
-                  event
-                </span>
-                <div class="min-w-0">
-                  <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
-                    Due {invoice.dueShortDate}
-                  </p>
-                </div>
-              </li>
-            )
-          }
-          {
-            isPaid && invoice.paidShortDate && (
-              <li class="flex items-start gap-row rounded-[var(--ss-radius-card)] bg-[color:var(--ss-color-surface)] p-card">
-                <span
-                  class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-complete)]"
-                  style="font-variation-settings: 'FILL' 1;"
-                  aria-hidden="true"
-                >
-                  check_circle
-                </span>
-                <div class="min-w-0">
-                  <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
-                    Paid {invoice.paidShortDate}
-                  </p>
-                </div>
-              </li>
-            )
-          }
-          <li
-            class="flex items-start gap-row rounded-[var(--ss-radius-card)] bg-[color:var(--ss-color-surface)] p-card"
-          >
-            <span
-              class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-primary)]"
-              style="font-variation-settings: 'FILL' 1;"
-              aria-hidden="true"
-            >
-              lock
-            </span>
-            <div class="min-w-0">
-              <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
-                Secure payment via Stripe
-              </p>
-              <p class="mt-1 text-caption text-[color:var(--ss-color-text-secondary)]">
-                End-to-end encrypted processing.
-              </p>
-            </div>
-          </li>
-          <li
-            class="flex items-start gap-row rounded-[var(--ss-radius-card)] bg-[color:var(--ss-color-surface)] p-card"
-          >
-            <span
-              class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-primary)]"
-              style="font-variation-settings: 'FILL' 1;"
-              aria-hidden="true"
-            >
-              credit_card
-            </span>
-            <div class="min-w-0">
-              <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
-                Card or bank transfer
-              </p>
-              <p class="mt-1 text-caption text-[color:var(--ss-color-text-secondary)]">
-                Multiple payment methods accepted.
-              </p>
-            </div>
-          </li>
-        </ul>
-      </div>
     </section>
 
     <!-- ── Desktop right rail (sticky) ── -->

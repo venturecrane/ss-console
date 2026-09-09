@@ -55,7 +55,10 @@ async function createStripeInvoiceRecord(
   const body = new URLSearchParams()
   body.append('customer', customerId)
   body.append('collection_method', params.collection_method ?? 'send_invoice')
-  body.append('days_until_due', String(params.days_until_due ?? 15))
+  // Stripe accepts exactly one of due_date / days_until_due on a send_invoice
+  // invoice; an exact instant wins when the caller has one.
+  if (params.due_date !== undefined) body.append('due_date', String(params.due_date))
+  else body.append('days_until_due', String(params.days_until_due ?? 15))
   if (params.description) body.append('description', params.description)
   if (params.metadata) {
     for (const [key, value] of Object.entries(params.metadata)) {

@@ -181,6 +181,20 @@ describe('createStripeInvoice', () => {
     expect(body.getAll('payment_settings[payment_method_types][]')).toEqual(['ach_debit', 'card'])
   })
 
+  it('sends an exact due_date instead of days_until_due when one is given', async () => {
+    queue(
+      json({ data: [{ id: 'cus_1' }] }),
+      json({ id: 'in_7', hosted_invoice_url: null, status: 'draft' }),
+      json({ id: 'ii_1' })
+    )
+
+    await createStripeInvoice(KEY, baseParams({ due_date: 1789023599, days_until_due: 30 }))
+
+    const body = bodyParams(calls[1])
+    expect(body.get('due_date')).toBe('1789023599')
+    expect(body.get('days_until_due')).toBeNull()
+  })
+
   it('posts one /invoiceitems request per line item with amount, currency, and description', async () => {
     queue(
       json({ data: [{ id: 'cus_1' }] }),

@@ -4,7 +4,8 @@
  * clients/[id].astro so the page stays under the file ceiling).
  *
  * Draft: present (portal only, no email) or send (portal + email).
- * Sent/overdue: mark paid. Draft/sent: void. Every form posts to
+ * Sent/overdue: mark paid, or change the due date (re-issues the Stripe
+ * invoice; no email). Draft/sent: void. Every form posts to
  * /api/admin/invoices/[id] and redirects back to the hub.
  */
 import type { Invoice } from '../../lib/db/invoices'
@@ -12,6 +13,7 @@ import { invoiceTypeLabel } from '../../lib/db/invoices'
 import { formatDate } from '../../lib/admin/entity-detail-page'
 import { formatMoney } from '../../lib/admin/client-hub'
 import { statusBadgeClass } from '../../lib/ui/status-badge'
+import InvoiceRescheduleForm from './InvoiceRescheduleForm.astro'
 
 interface Props {
   invoices: Invoice[]
@@ -74,6 +76,9 @@ const { invoices, hubUrl } = Astro.props
                 Mark paid
               </button>
             </form>
+          )}
+          {(inv.status === 'sent' || inv.status === 'overdue') && (
+            <InvoiceRescheduleForm invoiceId={inv.id} dueDate={inv.due_date} hubUrl={hubUrl} />
           )}
           {(inv.status === 'draft' || inv.status === 'sent') && (
             <form method="POST" action={`/api/admin/invoices/${inv.id}`}>
