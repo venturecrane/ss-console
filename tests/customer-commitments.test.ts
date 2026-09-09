@@ -234,15 +234,29 @@ describe('pilot-smokeball commitments contract (ADR 0075)', () => {
     // per-matter gates, the per-job cap, and the behavioral defaults are SMD
     // runner posture and live in the runner's per-firm config, never here
     // (ADR 0087; a value authored here is agent-readable and world-readable).
+    // Restated in PAGES (engagements #107, 2026-09-09): a document is not a
+    // unit of work, and the cost of a package tracks its pages.
+    expect(
+      byName('medical-chronology-maintainer')?.settings?.[
+        'chronology_package_page_allowance_per_month'
+      ],
+      'medical-chronology-maintainer must author the Exhibit A row 11 allowance: 15000 pages per month'
+    ).toBe(15000)
     expect(
       byName('medical-chronology-maintainer')?.settings?.[
         'chronology_package_document_allowance_per_month'
       ],
-      'medical-chronology-maintainer must author the Exhibit A row 11 allowance: 2000 documents per month'
+      'the document key is carried for ONE release so an older broker restarting mid-rollout still meters'
     ).toBe(2000)
     for (const key of Object.keys(byName('medical-chronology-maintainer')?.settings ?? {})) {
       expect(
-        ['treatment_gap_flag_days', 'chronology_package_document_allowance_per_month'],
+        [
+          'treatment_gap_flag_days',
+          'chronology_package_page_allowance_per_month',
+          // Removed by the follow-up PR once ashton-price and pilot-smokeball
+          // have been reprovisioned onto the page key.
+          'chronology_package_document_allowance_per_month',
+        ],
         `medical-chronology-maintainer.settings.${key}: only contract-derived keys are authored on the client seat (ADR 0087)`
       ).toContain(key)
     }

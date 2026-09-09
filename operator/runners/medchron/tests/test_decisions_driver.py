@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
 
-from medchron import budget as budget_mod, config as config_mod, dag, decisions, driver as driver_mod, job as job_mod
+from medchron import (budget as budget_mod, config as config_mod, dag, decisions, driver as driver_mod,
+                      job as job_mod, llm as llm_mod)
 from medchron.state import RunState, state_path
-from medchron_testkit import FakeSeat, calls, doc_row, job_yaml, make_pdf, seed_folders, seed_raw_manifest, write_ledger
+from medchron_testkit import (FIRM_CONFIG, FakeSeat, calls, doc_row, job_yaml, make_pdf, seed_folders,
+                              seed_raw_manifest, write_ledger)
 
 PROSE = ("Patient seen in clinic today for follow up of neck pain after the collision. "
          "The patient reports that the pain is improving with therapy and has no new complaints. ") * 6
@@ -397,8 +400,11 @@ def test_cap_refuses_before_the_first_paid_stage(job_dir: Path, data_root: Path,
     write_ledger(data_root, "alpha", [{"stage": "compose", "model": "claude-opus-5", "in": 40_000_000, "out": 0}])  # $200 already
     outs = _driver(job_dir, firm_config_path, pricing_path).run()
     o = outs[0]
-    assert o.outcome == "refused" and o.stage == "vision"
-    assert "cap 150.00 USD reached" in o.reason
+    # 2026-09-09: a limit is a HOLD, not a refusal, and its reason names the
+    # setting and carries no figure (the seat's content gates refuse a
+    # drafted dollar amount, so a reason with one cannot be relayed at all).
+    assert o.outcome == "held" and o.stage == "vision"
+    assert o.reason.startswith("per_job_cap_usd: ") and "USD" not in o.reason and "$" not in o.reason
     assert "vision_scan.py" not in [c["script"] for c in calls(data_root)]
 
 
@@ -422,5 +428,256 @@ def test_job_cap_overrides_the_firm_default(tmp_path: Path, data_root: Path, fir
     seed_folders(data_root, ["MEDICAL"])
     write_ledger(data_root, "alpha", [{"stage": "compose", "model": "claude-sonnet-5", "in": 1_000_000, "out": 0}])  # $2
     outs = _driver(jd, firm_config_path, pricing_path).run()
-    assert outs[0].outcome == "refused" and "cap 1.00 USD" in outs[0].reason
+    assert outs[0].outcome == "held" and outs[0].reason.startswith("per_job_cap_usd: ")
     assert yaml.safe_load((jd / "job.yaml").read_text())["cap_usd"] == 1.0
+
+
+# ---- the routine-11 limits, at the driver (2026-09-09) -----------------------
+def _firm(tmp_path: Path, *, levers: dict | None = None, **budget) -> Path:
+    """A firm config with the budget block overridden. Written per test so a
+    boundary can be tested at values a real posture would never carry."""
+    cfg = json.loads(json.dumps(FIRM_CONFIG))
+    cfg["budget"].update(budget)
+    if levers:
+        cfg["levers"].update(levers)
+    p = tmp_path / f"firm-{len(list(tmp_path.glob('firm-*.yaml')))}.yaml"
+    p.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+    return p
+
+
+def _seed_extracted(data_root: Path, *, pages: int, scanned: int = 0, chars: int = 0) -> None:
+    """The extract stage's own output, seeded so a limit can be measured
+    without paying for a pull. `start="vision"` then begins at the first paid
+    stage with these counts already on disk."""
+    rows = [{"id": "f1", "name": "f1", "pages": pages - scanned, "chars": chars}]
+    if scanned:
+        rows.append({"id": "f2", "name": "f2", "pages": scanned, "scan": True})
+    (data_root / "example-matter" / "extracted.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+
+
+def _limit_run(job_dir: Path, firm: Path, pricing_path: Path, **kw):
+    return _driver(job_dir, firm, pricing_path, start="vision", **kw).run()[0]
+
+
+def _job(tmp_path: Path, data_root: Path, name: str, **fields) -> Path:
+    jd = tmp_path / name
+    jd.mkdir()
+    body = yaml.safe_load(job_yaml(data_root))
+    body.update(fields)
+    (jd / "job.yaml").write_text(yaml.safe_dump(body, sort_keys=False), encoding="utf-8")
+    return jd
+
+
+def test_the_page_threshold_proceeds_at_the_line_and_holds_one_page_over(
+    job_dir: Path, data_root: Path, tmp_path: Path, pricing_path: Path, fake_pipeline: Path
+) -> None:
+    firm = _firm(tmp_path, single_matter_page_threshold=10)
+    _seed_extracted(data_root, pages=10)
+    assert _limit_run(job_dir, firm, pricing_path).outcome != "held"
+    _seed_extracted(data_root, pages=11)
+    o = _limit_run(_job(tmp_path, data_root, "job-over"), firm, pricing_path)
+    assert o.outcome == "held" and o.stage == "vision"
+    assert o.reason.startswith("single_matter_page_threshold: ") and "11 pages" in o.reason
+
+
+def test_the_month_page_allowance_proceeds_at_the_remainder_and_holds_one_page_over(
+    tmp_path: Path, data_root: Path, pricing_path: Path, fake_pipeline: Path
+) -> None:
+    firm = _firm(tmp_path)
+    _seed_extracted(data_root, pages=10)
+    for remaining in (10, 9):
+        jd = _job(tmp_path, data_root, f"job-allow-{remaining}", allowance_remaining_pages=remaining,
+                  month_cents_used=0, allowance_month="2026-09")
+        o = _limit_run(jd, firm, pricing_path)
+        if remaining == 9:
+            assert o.outcome == "held" and o.reason.startswith("chronology_package_page_allowance_per_month: ")
+            assert "9 pages remain in 2026-09's allowance" in o.reason
+        else:
+            assert o.outcome != "held", o.reason
+
+
+def test_the_month_budget_holds_before_the_first_paid_stage_from_the_projection(
+    tmp_path: Path, data_root: Path, pricing_path: Path, fake_pipeline: Path
+) -> None:
+    """The month's spend to date plus THIS run's projection. Neither alone
+    crosses the budget; together they do, and the run never starts."""
+    firm = _firm(tmp_path, monthly_budget_usd=10.0, usd_per_scanned_page=1.0)
+    _seed_extracted(data_root, pages=8, scanned=8)          # projects 8.00
+    jd = _job(tmp_path, data_root, "job-budget", month_cents_used=300, allowance_month="2026-09")
+    o = _limit_run(jd, firm, pricing_path)
+    assert o.outcome == "held" and o.reason.startswith("monthly_budget_usd: ")
+    assert "was not started before vision" in o.reason and "$" not in o.reason
+    assert calls(data_root) == []
+
+
+def test_the_envelope_can_lower_the_firm_cap_but_never_raise_it(
+    tmp_path: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, fake_pipeline: Path
+) -> None:
+    """The envelope used to win outright, which made the firm's cap advisory:
+    anything that could author an envelope could author its way past it."""
+    jd = tmp_path / "job-999"
+    jd.mkdir()
+    (jd / "job.yaml").write_text(job_yaml(data_root, cap=999.0))
+    seed_folders(data_root, ["MEDICAL"])
+    write_ledger(data_root, "alpha", [{"stage": "compose", "model": "claude-opus-5", "in": 40_000_000, "out": 0}])
+    o = _driver(jd, firm_config_path, pricing_path).run()[0]     # firm cap 150, ledger 200
+    assert o.outcome == "held" and o.reason.startswith("per_job_cap_usd: ")
+
+
+# ---- the doorway hook: a limit reached INSIDE a stage -------------------------
+class _Meter:
+    """A client whose every call costs the same measurable amount, so a trip
+    can be read as a call count: 50,000 input tokens of claude-sonnet-5 at the
+    test pricing table is exactly 0.10."""
+
+    class _U:
+        input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens = 50_000, 0, 0, 0
+
+    def __init__(self) -> None:
+        self.messages = self
+        self.calls: list[dict] = []
+
+    def create(self, **kw):
+        self.calls.append(kw)
+        return type("M", (), {"content": [type("B", (), {"type": "text", "text": "ok"})()],
+                              "stop_reason": "end_turn", "usage": self._U()})()
+
+
+def _spender(n: int = 20):
+    """A stage that keeps calling the doorway. Without the hook it spends the
+    whole way through; with it, the run stops at the first call past the line."""
+    def run(sr) -> int:
+        for _ in range(n):
+            sr.doorway.call("vision", model="claude-sonnet-5", messages=[{"role": "user", "content": "x"}],
+                            max_tokens=16)
+        return 0
+    return run
+
+
+def _in_stage(tmp_path: Path, data_root: Path, pricing_path: Path, firm: Path, name: str, **job_fields):
+    jd = _job(tmp_path, data_root, name, **job_fields)
+    _seed_extracted(data_root, pages=4)
+    client = _Meter()
+    d = _driver(jd, firm, pricing_path, start="vision", client=client)
+    d._runner_override = {"vision": _spender()}
+    return d.run()[0], client
+
+
+def test_the_cap_stops_a_run_inside_a_stage_within_one_paid_call(
+    tmp_path: Path, data_root: Path, pricing_path: Path, fake_pipeline: Path
+) -> None:
+    firm = _firm(tmp_path, per_job_cap_usd=0.25, usd_per_scanned_page=0.0001, usd_per_million_chars=0.0)
+    o, client = _in_stage(tmp_path, data_root, pricing_path, firm, "job-cap-instage")
+    assert o.outcome == "held" and o.stage == "vision"
+    assert o.reason.startswith("per_job_cap_usd: ") and "during vision; the run stopped" in o.reason
+    # Three calls at 0.10 = 0.30. The fourth is the one the hook refuses, so
+    # the overshoot is bounded to ONE call past the line, not one stage.
+    assert len(client.calls) == 3
+    assert 0.29 < o.dollars < 0.31
+
+
+def test_the_month_budget_stops_a_run_inside_a_stage(
+    tmp_path: Path, data_root: Path, pricing_path: Path, fake_pipeline: Path
+) -> None:
+    firm = _firm(tmp_path, monthly_budget_usd=0.50, usd_per_scanned_page=0.0001, usd_per_million_chars=0.0)
+    o, client = _in_stage(tmp_path, data_root, pricing_path, firm, "job-budget-instage",
+                          month_cents_used=30, allowance_month="2026-09")
+    assert o.outcome == "held" and o.reason.startswith("monthly_budget_usd: ")
+    assert len(client.calls) == 2      # 0.30 carried plus 0.20 spent reaches the line
+    assert "$" not in o.reason
+
+
+def test_seat_mode_refuses_a_job_that_carries_no_month_state(
+    job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, fake_pipeline: Path,
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Unmetered is not a state a client seat may run in. On a laptop the same
+    envelope is fine."""
+    monkeypatch.setenv("MEDCHRON_SEAT", "client")
+    with pytest.raises(driver_mod.DriverError, match="refusing to run unmetered"):
+        _driver(job_dir, firm_config_path, pricing_path)
+    monkeypatch.delenv("MEDCHRON_SEAT")
+    _driver(job_dir, firm_config_path, pricing_path)
+
+
+def test_a_dry_run_measures_the_limits_and_spends_nothing(
+    tmp_path: Path, data_root: Path, pricing_path: Path
+) -> None:
+    firm = _firm(tmp_path, single_matter_page_threshold=1)
+    jd = _job(tmp_path, data_root, "job-dry")
+    seed_folders(data_root, ["MEDICAL"])
+    _seed_extracted(data_root, pages=40)
+    o = _driver(jd, firm, pricing_path, dry_run=True, start="vision").run()[0]
+    assert o.outcome == "dry_run"
+    assert any(n.startswith("WOULD HOLD at vision: single_matter_page_threshold: ") for n in o.notes)
+    assert calls(data_root) == []
+
+
+# ---- batch mode: the limit binds before the submission -------------------------
+class _BatchClient:
+    """Counts batch submissions. Nothing here should ever be reached by a batch
+    the limits refuse, which is the whole property."""
+
+    def __init__(self) -> None:
+        self.messages = self
+        self.batches = self
+        self.submitted: list[Any] = []
+
+    def create(self, **kw):
+        self.submitted.append(kw)
+        raise RuntimeError("stub: a batch reached the SDK")
+
+
+def _batcher(n: int):
+    """A stage that hands the doorway one batch of n page-shaped items."""
+    def run(sr) -> int:
+        items = [llm_mod.Item(custom_id=f"p{i}", messages=[{"role": "user", "content": [
+            {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "x"}},
+            {"type": "text", "text": "transcribe this page"}]}]) for i in range(n)]
+        sr.doorway.batch_call("vision", items, lambda *a: None, model="claude-sonnet-5",
+                              max_tokens=16, batch_dir=sr.slug_dir / "batch")
+        return 0
+    return run
+
+
+def test_a_batch_that_would_cross_the_cap_holds_before_it_is_submitted(
+    tmp_path: Path, data_root: Path, pricing_path: Path, fake_pipeline: Path
+) -> None:
+    """Batch mode has no per-call seam: nothing checks between a batch's items
+    and the whole thing is billed. So the limits see the batch's PROJECTED cost
+    before submission, and an overshoot is bounded to one batch. Without this a
+    firm that opted into batching would silently lose the per-call bound.
+    """
+    firm = _firm(tmp_path, per_job_cap_usd=1.0, usd_per_scanned_page=0.02,
+                 usd_per_million_chars=0.0, levers={"batch_stages": ["vision"]})
+    jd = _job(tmp_path, data_root, "job-batch-over")
+    _seed_extracted(data_root, pages=4)
+    client = _BatchClient()
+    d = _driver(jd, firm, pricing_path, start="vision", client=client)
+    d._runner_override = {"vision": _batcher(80)}       # 80 pages x 0.02 = 1.60, over a 1.00 cap
+    o = d.run()[0]
+    assert o.outcome == "held" and o.stage == "vision"
+    assert o.reason.startswith("per_job_cap_usd: ") and "the batch was not submitted" in o.reason
+    assert "$" not in o.reason and "USD" not in o.reason
+    assert client.submitted == []                       # nothing was ever sent
+
+
+def test_a_batch_inside_the_cap_is_submitted(
+    tmp_path: Path, data_root: Path, pricing_path: Path, fake_pipeline: Path
+) -> None:
+    """The pass direction: the same wiring must not refuse a batch that fits,
+    or the check above could pass by refusing everything."""
+    firm = _firm(tmp_path, per_job_cap_usd=1.0, usd_per_scanned_page=0.02,
+                 usd_per_million_chars=0.0, levers={"batch_stages": ["vision"]})
+    jd = _job(tmp_path, data_root, "job-batch-under")
+    _seed_extracted(data_root, pages=4)
+    client = _BatchClient()
+    d = _driver(jd, firm, pricing_path, start="vision", client=client)
+    d._runner_override = {"vision": _batcher(40)}       # 40 pages x 0.02 = 0.80, inside the cap
+    o = d.run()[0]
+    # The batch reached the submission, which is the property under test. The
+    # stub raises there rather than faking a whole batch lifecycle, so the run
+    # ends `failed` -- what matters is that no LIMIT refused it.
+    assert len(client.submitted) == 1
+    assert o.outcome != "held", o.reason

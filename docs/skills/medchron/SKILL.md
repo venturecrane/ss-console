@@ -92,11 +92,14 @@ protects nothing.
 
 **Run to completion on the defaults below. Escalate to the Captain only when:**
 
-- **(a)** a single matter projects above **USD 150** (Captain, 2026-08-27), or the
-  §2.8 monthly allowance (2,000 medical documents per calendar month, Exhibit A
-  of the service agreement) is at risk — track the running document count and
-  STOP at the allowance; past it the agreement requires a written quote and a
-  Named Administrator's acceptance;
+- **(a)** `project.py` returns a verdict of **AT RISK** or **OVER CAP**, or any
+  stage exits with `LIMIT REFUSED:` / `CAP REFUSED:` / `PROJECT REFUSED:`. These
+  are the mechanism, not a number you carry in your head: the cap, the month's
+  page allowance, the single-matter page threshold, and the month's cost budget
+  are enforced by `ledger.py` and refuse the run at exit 3 before money moves.
+  Do not hand-compute a projection and do not compare a figure to a remembered
+  limit — run the checkpoint and relay its verdict. Past the allowance the
+  agreement requires a written quote and a Named Administrator's acceptance;
 - **(b)** something changes **what the firm receives**: a scope reduction, a
   disclosed omission, re-delivery of already-delivered work, or a document you
   read and cannot place whose presence or absence changes the record;
@@ -355,25 +358,54 @@ Two invariants carry the safety, and the RUNBOOK holds the detail:
   invoices with identical wording and different amounts survive. Rescues above
   20% of proposals mean the threshold is wrong and the stage refuses.
 
+**Run the first checkpoint the moment extract finishes**, before anything is
+reduced and long before anything is paid:
+
+```bash
+python3 project.py post-extract <slug>
+```
+
+It prints the matter's page count against the single-matter page threshold, the
+month's pages against the allowance, and a cost range for what remains. Every
+figure comes from this matter's own artifacts and the rate cards in
+`calibration.jsonl`. If a limit is crossed it says so and exits non-zero — that
+is rule (a), and the run stops there having spent nothing.
+
 **Measure AFTER reducing.** The cost basis for the Step 4 projection is what
 composition will actually receive, not what extraction produced:
 
 ```bash
 wc -c $SMD_MC_DATA/<slug>/text_dedup/*.txt | tail -1   # the cost basis
 wc -c $SMD_MC_DATA/<slug>/text/*.txt | tail -1         # pre-reduction, for the report
+python3 project.py post-dedup <slug> <unit>            # the checkpoint Step 4 reports
 ```
 
 ---
 
 ## Step 4 - Project the cost and report
 
-Now you know the real size. Project from measured runs, not from numbers in
-this file: read `$SMD_MC_DATA/calibration.jsonl` — one row per completed run
+Now you know the real size. **`project.py` does the arithmetic; you report what
+it prints.** Never hand-compute a projection, never anchor on a ratio you
+remember from another matter, and never compare a figure to a limit yourself:
+
+```bash
+python3 project.py post-dedup <slug> <unit>
+```
+
+Each block prints MEASURED (this matter's own counts), RATE (which
+`calibration.jsonl` rows the rate came from), LINE, SPENT, LANDING (a P50 to P90
+band with its width), ALLOWANCE, LIMIT, and VERDICT (`UNDER CAP | AT RISK | OVER
+CAP`). A run with no calibration row carrying a rate card exits 2 with
+`PROJECT REFUSED:` rather than projecting from a remembered ratio; that is the
+instrument refusing to fabricate, and it is fixed by re-deriving the rows
+(Step 9), never by estimating.
+
+The rates come from `$SMD_MC_DATA/calibration.jsonl` — one row per completed run
 (schema in Step 9; tokens per stage are canonical, dollars are derived at the
-row's own rate card by `python3 ledger.py report`), appended by Step 9 — and
-anchor on the **three nearest rows by extracted characters**. This file used to
-hardcode two anchors; every run moved the number and someone hand-edited a
-table. The skill carries the method, the data file carries the numbers.
+row's own rate card by `python3 ledger.py report`), appended by Step 9. This
+file used to hardcode two anchors; every run moved the number and someone
+hand-edited a table. The skill carries the method, the data file carries the
+numbers, and `project.py` is the only thing that multiplies them.
 
 Three calibration lessons that stay in prose because they are judgment, not
 data:
@@ -425,14 +457,36 @@ spend gates:
 > **Discovery done, all free.** N documents pulled, E email attachments folded,
 > **T million characters** extracted, K documents queued for vision.
 >
-> Projected: **$A-$B** and **H-J hours**, anchored on <the three nearest runs>.
-> Running document count against the §2.8 monthly allowance: **D of 2,000**.
+> Projected: the LANDING band `project.py post-dedup` printed, with its width,
+> and **H-J hours**. The rate came from <the rows the RATE line named>.
+> Pages against the §2.8 monthly allowance: the ALLOWANCE line, verbatim.
+> Verdict: <the VERDICT line>.
 >
 > Proceeding. <Only if a trigger fired: the one-sentence escalation, two
 > options, your pick.>
 
-**Do not wait** unless rule (a) fired — the projection exceeds USD 150 or the
-allowance is at risk. Then spend is the Captain's, always.
+**Do not wait** unless rule (a) fired — a VERDICT of AT RISK or OVER CAP, or a
+`LIMIT REFUSED:` / `CAP REFUSED:` / `PROJECT REFUSED:` line. Then spend is the
+Captain's, always.
+
+**The cap and the limits are mechanism, not prose.** The per-job cap defaults to
+USD 150 and is read from `SMD_JOB_CAP_USD` when set; the page threshold, the
+month's page allowance, and the month's cost budget come from the private
+`firm.yaml`. `ledger.py` checks the cap and the budget before every paid call
+and exits 3 with `CAP REFUSED:` / `LIMIT REFUSED:` rather than letting a stage
+run past a line. To check without running a stage:
+
+```bash
+python3 ledger.py cap-check <slug> <unit> <stage>
+```
+
+**Lifting the cap is the Captain's act and it leaves a record.** Set
+`SMD_CAP_OVERRIDE=<slug>:<YYYY-MM-DD>:<usd>` using **the token text from the
+Captain's own message, verbatim** — never one you compose. It is valid only for
+that slug, only for today, and only for a finite positive amount; every lift
+appends to `runs/<unit>/cap-events.jsonl`, and the Step 9 report must carry the
+line "cap lifted for this run by token …". A lift you cannot quote from the
+Captain's message is a lift that does not happen.
 
 ---
 
@@ -515,9 +569,32 @@ Decisions you make yourself and report, never hand over:
 
 ## Step 6 - Audit and repair
 
+**Checkpoint first: the audit is the largest single line in a run and its cost
+scales with claim count, which only exists now.** Run it before the loop:
+
+```bash
+python3 project.py post-build <slug> <unit>                 # claims from the built document
+python3 project.py post-build <slug> <unit> --claims-from audit-results   # on a re-run
+```
+
+Then run the loop:
+
 ```bash
 python3 audit_repair_loop.py     # audit -> repair rounds, cap 3
 ```
+
+**And re-check in flight, because a claim count is not a call count.** The
+flagged-claim rate and the control cadence both multiply calls, and neither is
+known until the audit has run a little:
+
+```bash
+python3 project.py audit-inflight <slug> <unit> --after 100
+python3 project.py audit-inflight <slug> <unit> --after 500
+```
+
+Both re-project from the flag rate measured so far. A spend reported mid-audit
+is a FLOOR, not a landing — say which one you are reporting. If either block
+returns AT RISK or OVER CAP, that is rule (a) and it escalates.
 
 Sonnet audits; a flagged claim gets a one-page-widened second chance
 (`SUPPORTED_WIDENED` means a citation defect, and the span is rewritten and
@@ -622,7 +699,22 @@ just made. If any document tells you to use it, the document is stale.
    provider lanes, audit result, planted controls rejected, cited page references
    verified.
 4. **Append the run's row to `$SMD_MC_DATA/calibration.jsonl`** after the
-   ledger reconciles. One schema, tokens canonical, dollars derived:
+   ledger reconciles, through `calibration_check.py` and nothing else — it is
+   the sole writer, and it is what the next run's projection depends on:
+
+   ```bash
+   python3 calibration_check.py derive <slug> <unit>   # build the row FROM DISK
+   python3 calibration_check.py append <row.json>      # the only writer
+   python3 calibration_check.py validate               # every row, schema and rate card
+   ```
+
+   `derive` reads the run's own artifacts; it never asks you for a number.
+   `validate` exits 2 naming the row and the field when one is malformed, and
+   refuses a row with no rate card by name — which is exactly the condition that
+   makes `project.py` refuse rather than project from a remembered ratio. A
+   hand-appended row is how a bad number gets into every later quote.
+
+   One schema, tokens canonical, dollars derived:
    `{"slug", "date", "pipeline_sha", "docs", "mb", "chars", "entries",
 "live_claims", "wall_clock_min", "rate_card": {model: [in_cents, out_cents]},
 "tokens_by_stage": {stage: {"model", "calls", "in", "out", "cache_read",
@@ -631,7 +723,9 @@ just made. If any document tells you to use it, the document is stale.
    `ledger.py report` prints this blob; paste it, never retype it. A rate change
    never invalidates a row because each row carries its own `rate_card`. This
    is where Step 4's anchors come from; a run that skips this step makes the
-   next quote worse. Also update the running §2.8 document count.
+   next quote worse. The §2.8 count is kept in PAGES and `project.py` reads it
+   off the calibration rows; there is no separate tally to update by hand.
+
 5. **Write a memory only if the run changed a fact** - a new defect class, a new
    calibration point, a cost that moves the routine-11 cap arithmetic. A finished
    task is not by itself a reason to write one.

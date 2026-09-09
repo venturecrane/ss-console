@@ -226,3 +226,47 @@ describe('behavioural: the extracted block, driven', () => {
     expect(v.vendorCalled).toBe(false)
   })
 })
+
+/**
+ * Step 2b validates firm.yaml against THIS CHECKOUT's runner schema before the
+ * bytes leave for R2 (2026-09-09). The runner's key set is closed and its four
+ * cost controls are required, so a firm.yaml the seat cannot load makes every
+ * chronology job DEFER -- a silent stall rather than a failure. Validating at
+ * provision time turns that into a refusal while a person is watching.
+ *
+ * Pinned statically: the block is inside the step-2b guard and strictly before
+ * the upload, and it imports the runner's own config module rather than
+ * re-implementing a schema that would then drift from it.
+ */
+describe('step 2b: the firm config is validated before it is uploaded', () => {
+  const block = (() => {
+    const start = src.indexOf('# >>> medchron-firm-validate')
+    const end = src.indexOf('# <<< medchron-firm-validate')
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    return src.slice(start, end)
+  })()
+
+  it('runs before the firm config is copied to R2, and inside the authored guard', () => {
+    const guard = src.indexOf('if [ -f "${MEDCHRON_FIRM_YAML}" ]; then')
+    const validate = src.indexOf('# >>> medchron-firm-validate')
+    const upload = src.indexOf(
+      's3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/medchron-firm.yaml"',
+      validate
+    )
+    expect(guard).toBeGreaterThan(-1)
+    expect(validate).toBeGreaterThan(guard)
+    expect(upload).toBeGreaterThan(validate)
+  })
+
+  it("uses the runner's own config module, from the invoking checkout", () => {
+    expect(block).toContain('operator/runners/medchron')
+    expect(block).toContain('from medchron import config')
+    expect(block).toContain('config.ConfigError')
+  })
+
+  it('a config that does not validate refuses the provision rather than uploading it', () => {
+    expect(block).toContain('|| die ')
+    expect(block).toContain('not uploading it')
+  })
+})

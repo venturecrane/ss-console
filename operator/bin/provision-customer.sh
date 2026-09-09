@@ -328,6 +328,27 @@ log "R2 upload OK"
 # runs no chronology routine; the runner refuses every job until it is there.
 MEDCHRON_FIRM_YAML="${SS_ENGAGEMENTS_DIR:-${HOME}/dev/engagements}/operator/customers/${SLUG}/medchron/firm.yaml"
 if [ -f "${MEDCHRON_FIRM_YAML}" ]; then
+  # >>> medchron-firm-validate
+  # Validate against THIS CHECKOUT's runner schema before the bytes leave for
+  # R2. The runner's key set is closed and its cost controls are required, so a
+  # firm.yaml the seat cannot load makes every chronology job defer until
+  # someone notices. Catching it here turns a silent stall into a refusal at
+  # the moment a person is watching. The schema comes from the invoking
+  # checkout, which is why the rollout note says to reprovision from a SYNCED
+  # primary: a stale checkout validates against a stale schema.
+  PYTHONPATH="${REPO_ROOT}/operator/runners/medchron" python3 - "${MEDCHRON_FIRM_YAML}" <<'PY' \
+    || die "medchron firm config for ${SLUG} does not validate against this checkout's runner schema; not uploading it (run 'git pull' on the primary and retry)"
+import sys
+from medchron import config
+
+try:
+    cfg = config.load(sys.argv[1])
+except config.ConfigError as exc:
+    print(f"medchron firm config: {exc}", file=sys.stderr)
+    sys.exit(1)
+print(f"medchron firm config OK ({cfg.slug})")
+PY
+  # <<< medchron-firm-validate
   log "Uploading medchron-firm.yaml to R2: s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/medchron-firm.yaml"
   AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" \
   AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \

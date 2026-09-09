@@ -6,7 +6,12 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { loadMedchronJobsView, monthTotals, parseJobRow } from '../src/lib/admin/medchron-jobs-read'
+import {
+  allowanceFromPersonas,
+  loadMedchronJobsView,
+  monthTotals,
+  parseJobRow,
+} from '../src/lib/admin/medchron-jobs-read'
 
 const ACTOR = { actor: 'captain@smd.services', actorRole: 'admin' }
 const noopAudit = { record: async () => {} }
@@ -60,7 +65,92 @@ describe('monthTotals', () => {
       documents: 40,
       pages: 900,
       cents: 4100,
+      // The held job also recorded cents, so it debits the month even though
+      // it delivered nothing.
+      pagesUsed: 1800,
+      centsUsed: 8200,
     })
+  })
+
+  // 2026-09-09: the tiles read pagesUsed/centsUsed, which follow the BROKER's
+  // debit rule. Counting delivered jobs only would let a run that read 3,000
+  // pages and spent real money show as zero on the page a person checks the
+  // month against, because it held after the money had moved.
+  it('counts pages and spend for every job that recorded a cost, not delivered ones only', () => {
+    const jobs = [
+      parseJobRow(row({ id: '01', pages: 100, cents: 500 }))!,
+      parseJobRow(
+        row({ id: '02', state: 'held', pages: 3000, cents: 2000, reason: 'per_job_cap_usd: ...' })
+      )!,
+      parseJobRow(row({ id: '03', state: 'failed', pages: 40, cents: 90 }))!,
+      parseJobRow(
+        row({ id: '04', state: 'held', pages: 9000, cents: 0, reason: 'the matter is too big' })
+      )!,
+    ]
+    const m = monthTotals(jobs, '2026-08')
+    expect(m.pagesUsed, 'a held or failed job that spent money still debits the month').toBe(3140)
+    expect(m.centsUsed).toBe(2590)
+    // A hold at zero cents read nothing and spent nothing: not a debit.
+    expect(m.pagesUsed).not.toBe(12140)
+    // The delivered-only figures are still what actually reached the firm.
+    expect(m.pages).toBe(100)
+    expect(m.cents).toBe(500)
+  })
+
+  // The keying half of the debit rule, shared with the broker. A month-of-
+  // charge key would live in a ledger column that is not in the broker's
+  // PROJECTION, and PROJECTION's shape is pinned by the overlay this release,
+  // so this surface could never see it: the seat would debit one month and the
+  // console would show the other. `createdAt` is a column both surfaces have.
+  it('counts a job against the month it was created in, not the month it finished', () => {
+    const spanning = parseJobRow(
+      row({
+        id: '01',
+        created_at: '2026-08-31T23:50:00.000Z',
+        updated_at: '2026-09-01T04:20:00.000Z',
+        pages: 420,
+        cents: 1500,
+      })
+    )!
+    expect(monthTotals([spanning], '2026-08').pagesUsed).toBe(420)
+    expect(monthTotals([spanning], '2026-08').centsUsed).toBe(1500)
+    expect(monthTotals([spanning], '2026-09').pagesUsed).toBe(0)
+    expect(monthTotals([spanning], '2026-09').centsUsed).toBe(0)
+  })
+})
+
+describe('allowanceFromPersonas', () => {
+  const personas = (settings: unknown, over: Record<string, unknown> = {}) =>
+    JSON.stringify([
+      { slug: 'other', skills: [{ name: 'client-verification-tracker' }] },
+      { slug: 'operator', skills: [{ name: 'medical-chronology-maintainer', settings, ...over }] },
+    ])
+
+  it('reads the authored page allowance', () => {
+    expect(
+      allowanceFromPersonas(personas({ chronology_package_page_allowance_per_month: 15000 }))
+    ).toBe(15000)
+  })
+
+  it('fails closed rather than inventing a denominator', () => {
+    // The pre-rename key is NOT a fallback: metering 2000 documents as 2000
+    // pages would show a firm a denominator it never authored.
+    expect(
+      allowanceFromPersonas(personas({ chronology_package_document_allowance_per_month: 2000 }))
+    ).toBeNull()
+    expect(allowanceFromPersonas(personas({}))).toBeNull()
+    expect(allowanceFromPersonas(personas(null))).toBeNull()
+    expect(
+      allowanceFromPersonas(
+        personas({ chronology_package_page_allowance_per_month: 15000 }, { enabled: false })
+      )
+    ).toBeNull()
+    expect(
+      allowanceFromPersonas(personas({ chronology_package_page_allowance_per_month: '15000' }))
+    ).toBeNull()
+    expect(allowanceFromPersonas('not json')).toBeNull()
+    expect(allowanceFromPersonas(undefined)).toBeNull()
+    expect(allowanceFromPersonas('{}')).toBeNull()
   })
 })
 

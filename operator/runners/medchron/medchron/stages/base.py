@@ -39,6 +39,14 @@ class StageRun:
     client_factory: Callable[[], Any] | None = None
     #: MM-DD-YY for the deliverable names; the driver stamps the run once.
     date_stamp: str = ""
+    #: Called with the stage name before every paid model call in live mode.
+    #: The driver binds it to the cost limits, so a limit reached inside a long
+    #: stage stops the run at the next call rather than at the next stage.
+    before_request: Callable[[str], None] | None = None
+    #: The batch-mode twin: (stage, item count, request characters), called
+    #: before a batch is submitted so the limits see the batch's projected cost.
+    #: A batch has no per-call seam to stop at, so this is where it binds.
+    before_batch: Callable[[str, int, int], None] | None = None
     _seat: Seat | None = field(default=None, repr=False)
     _doorway: Doorway | None = field(default=None, repr=False)
 
@@ -55,7 +63,9 @@ class StageRun:
         if self._doorway is None:
             ledger = Ledger(self.slug_dir / "runs" / self.unit.unit / "usage-ledger.jsonl")
             client = self.client_factory() if self.client_factory is not None else None
-            self._doorway = Doorway.from_config(self.cfg, ledger, client=client, log=self.log)
+            self._doorway = Doorway.from_config(self.cfg, ledger, client=client, log=self.log,
+                                               before_request=self.before_request,
+                                               before_batch=self.before_batch)
         return self._doorway
 
     @property

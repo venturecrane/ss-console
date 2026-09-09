@@ -188,6 +188,24 @@ def pages_read(extracted_jsonl: Path) -> int:
     return total
 
 
+def scanned_pages(extracted_jsonl: Path) -> int:
+    """Pages the extract stage routed to vision (no usable text layer). These
+    are the expensive pages: transcription is per page and it is what made the
+    measured cost of a scanned package what it is, so the pre-vision projection
+    counts these, not every page."""
+    if not extracted_jsonl.is_file():
+        return 0
+    total = 0
+    for line in extracted_jsonl.read_text(encoding="utf-8").splitlines():
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if row.get("scan") and isinstance(row.get("pages"), int):
+            total += row["pages"]
+    return total
+
+
 def extracted_chars(extracted_jsonl: Path) -> int:
     if not extracted_jsonl.is_file():
         return 0

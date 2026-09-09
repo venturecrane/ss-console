@@ -102,6 +102,17 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
     "budget": {
         "per_job_cap_usd": ("float", True),
         "usd_per_million_chars": ("float", True),
+        # The routine-11 cost controls (2026-09-09). All four are REQUIRED, not
+        # defaulted: a stale firm.yaml that predates them must refuse to run
+        # rather than run unmetered, which is exactly the state a 3,312-page
+        # package ran in when it crossed no limit anything enforced.
+        "monthly_budget_usd": ("float", True),
+        "single_matter_page_threshold": ("int", True),
+        # The measured rates the pre-stage projections are built from: the
+        # transcription cost of one scanned page, and the audit cost of one
+        # claim. Firm posture, so they live here and never on the seat.
+        "usd_per_scanned_page": ("float", True),
+        "usd_per_audit_claim": ("float", True),
     },
     "pipeline": {
         "python": ("str", False),
@@ -136,6 +147,22 @@ class FirmConfig:
     @property
     def per_job_cap_usd(self) -> float:
         return float(self.get("budget", "per_job_cap_usd"))
+
+    @property
+    def monthly_budget_usd(self) -> float:
+        return float(self.get("budget", "monthly_budget_usd"))
+
+    @property
+    def single_matter_page_threshold(self) -> int:
+        return int(self.get("budget", "single_matter_page_threshold"))
+
+    @property
+    def usd_per_scanned_page(self) -> float:
+        return float(self.get("budget", "usd_per_scanned_page"))
+
+    @property
+    def usd_per_audit_claim(self) -> float:
+        return float(self.get("budget", "usd_per_audit_claim"))
 
     def compiled(self, section: str, key: str) -> list[tuple[re.Pattern[str], str]]:
         """Compile a [{match, label|reason}] list once; the second field is
@@ -224,6 +251,15 @@ def _semantic_checks(data: dict[str, Any]) -> list[str]:
     budget = data.get("budget") or {}
     if budget and float(budget.get("per_job_cap_usd", 0)) <= 0:
         out.append("budget.per_job_cap_usd: must be > 0 (a zero cap refuses every paid stage)")
+    # A zero or negative control is not a control: it either refuses every job
+    # or meters nothing. Each is named separately so the validator's message
+    # points at the key the firm has to fix.
+    for key, what in (("monthly_budget_usd", "a zero budget refuses every job"),
+                      ("single_matter_page_threshold", "a zero threshold refuses every matter"),
+                      ("usd_per_scanned_page", "a zero rate projects every page at no cost"),
+                      ("usd_per_audit_claim", "a zero rate projects every claim at no cost")):
+        if key in budget and float(budget.get(key) or 0) <= 0:
+            out.append(f"budget.{key}: must be > 0 ({what})")
     return out
 
 

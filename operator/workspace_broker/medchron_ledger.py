@@ -63,7 +63,13 @@ _ALLOWED_NEXT = {
 }
 
 SKILL_NAME = "medical-chronology-maintainer"
-ALLOWANCE_KEY = "chronology_package_document_allowance_per_month"
+# 2026-09-09: the allowance is metered in PAGES, not documents. A document is
+# not a unit of work -- the delivered packages ranged from a one-page bill to a
+# 700-page hospital chart -- and the cost of a package tracks its pages. The
+# old key is deliberately NOT read as a fallback: a seat still carrying only
+# the document key reads as unauthored and submits nothing, which is the
+# fail-closed answer, and the refusal names the key the firm has to author.
+ALLOWANCE_KEY = "chronology_package_page_allowance_per_month"
 INCIDENT_SOURCES = frozenset({"matter_layout", "intake_document", "administrator_request", "record_citation"})
 _DOB_RE = re.compile(r"^\d{2}/\d{2}/\d{4}$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -89,6 +95,38 @@ CREATE_SQL = (
     ")"
 )
 CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_medchron_jobs_created ON medchron_jobs(created_at)"
+
+# ONE debit rule for pages, documents and cents: a job DEBITS THE MONTH IT WAS
+# CREATED IN whenever it recorded cents, in whatever state it ended. Two halves:
+#
+# * `cents > 0`, any state. Counting delivered jobs only (the rule before
+#   2026-09-09) let a run that read thousands of pages and spent real money
+#   leave no mark, because it held or failed after the money had moved. A hold
+#   at zero cents is not a debit: nothing was read and nothing was spent.
+# * Keyed on `created_at`, NOT on the month the cents landed in. A month-of-
+#   charge key was tried first and reverted the same day: `month_charged` is not
+#   in PROJECTION, and PROJECTION's shape is pinned by the overlay's
+#   `_MEDCHRON_JOBS_COLUMNS` this release, so the console could never see it.
+#   A job created on the 31st whose cents land on the 1st would then be debited
+#   to the new month on the seat and shown in the old month on the console --
+#   the two surfaces disagreeing about the same month, which is the one thing
+#   this rule exists to prevent. Created-month keying is a figure both surfaces
+#   can compute from a column both surfaces already have. Moving to month-of-
+#   charge is the next OVERLAY_REF bump's business (ADR 0087 amendment).
+#
+# Both forms are written out in full rather than composed: a query built by
+# concatenation reads as an injection risk to every scanner and every reviewer,
+# even when every part is a literal.
+_DEBITS_SQL = (
+    "SELECT COALESCE(SUM(pages), 0) AS pages, COALESCE(SUM(documents), 0) AS documents, "
+    "COALESCE(SUM(cents), 0) AS cents FROM medchron_jobs "
+    "WHERE cents > 0 AND substr(created_at, 1, 7) = ?"
+)
+_DEBITS_SQL_EXCLUDING = (
+    "SELECT COALESCE(SUM(pages), 0) AS pages, COALESCE(SUM(documents), 0) AS documents, "
+    "COALESCE(SUM(cents), 0) AS cents FROM medchron_jobs "
+    "WHERE cents > 0 AND substr(created_at, 1, 7) = ? AND id <> ?"
+)
 
 # The console projection (the ``medchron_jobs`` runtime-read kind and the
 # agent's status verb both read this): counts and states, never the envelope.
@@ -222,26 +260,62 @@ class MedchronLedger:
         finally:
             conn.close()
 
-    # -- allowance ---------------------------------------------------------
-    def documents_used(self, month: str) -> int:
+    # -- the month's debits ------------------------------------------------
+    # ONE rule for pages, documents and cents: a job DEBITS THE MONTH when it
+    # recorded cents, whatever state it ended in. Counting delivered jobs only
+    # (the rule before 2026-09-09) let a run that read 3,000 pages and spent
+    # real money against the vendor leave no mark, because it held or failed
+    # after the money moved. Held-at-zero jobs are not debits: nothing was read
+    # and nothing was spent.
+    def debits(self, month: str, exclude_job_id: str | None = None) -> dict[str, int]:
+        """The month's debited pages, documents and cents, in one read so the
+        three can never disagree about which rows they counted. `month` is a
+        job's CREATED month, which is the same key the console's `monthTotals()`
+        uses, so the two surfaces cannot disagree about the same month."""
         conn = self._connect()
         try:
-            row = conn.execute(
-                "SELECT COALESCE(SUM(documents), 0) AS n FROM medchron_jobs "
-                "WHERE state = 'delivered' AND substr(created_at, 1, 7) = ?",
-                (month,),
-            ).fetchone()
-            return int(row["n"])
+            if exclude_job_id:
+                row = conn.execute(_DEBITS_SQL_EXCLUDING, (month, exclude_job_id)).fetchone()
+            else:
+                row = conn.execute(_DEBITS_SQL, (month,)).fetchone()
+            return {"pages": int(row["pages"]), "documents": int(row["documents"]), "cents": int(row["cents"])}
         finally:
             conn.close()
 
-    def allowance(self, allowance: int | None, now: str | None = None) -> dict[str, Any]:
+    def pages_used(self, month: str, exclude_job_id: str | None = None) -> int:
+        return self.debits(month, exclude_job_id)["pages"]
+
+    def cents_used(self, month: str, exclude_job_id: str | None = None) -> int:
+        return self.debits(month, exclude_job_id)["cents"]
+
+    def documents_used(self, month: str, exclude_job_id: str | None = None) -> int:
+        return self.debits(month, exclude_job_id)["documents"]
+
+    def allowance(self, allowance: int | None, now: str | None = None,
+                  exclude_job_id: str | None = None) -> dict[str, Any]:
+        """The month's allowance state, in PAGES.
+
+        `used`/`remaining` are the allowance's own unit and `unit` says which
+        it is, so a caller can never read a page count as a document count.
+        The document and cents figures ride alongside for the console and the
+        runner's cost limits. `exclude_job_id` leaves one job's own row out,
+        which is what a resume needs so it is not metered against itself. The
+        month is the job's CREATED month on this surface and on the console.
+        """
         month = month_of(now or _iso_utc())
-        used = self.documents_used(month)
+        pages = self.pages_used(month, exclude_job_id)
+        extra: dict[str, Any] = {
+            "unit": "pages",
+            "pages_used": pages,
+            "documents_used": self.documents_used(month, exclude_job_id),
+            "cents_used": self.cents_used(month, exclude_job_id),
+        }
         if allowance is None:
-            return {"month": month, "allowance": None, "used": used, "remaining": 0, "authored": False}
-        return {"month": month, "allowance": allowance, "used": used, "remaining": max(0, allowance - used),
-                "authored": True}
+            return {"month": month, "allowance": None, "used": pages, "remaining": 0, "authored": False,
+                    "pages_remaining": 0, **extra}
+        remaining = max(0, allowance - pages)
+        return {"month": month, "allowance": allowance, "used": pages, "remaining": remaining,
+                "authored": True, "pages_remaining": remaining, **extra}
 
     # -- intake ------------------------------------------------------------
     def submit(self, envelope: dict[str, Any], *, remaining: int) -> str:
@@ -251,6 +325,12 @@ class MedchronLedger:
         now = _iso_utc()
         queued = dict(envelope)
         queued["job_id"] = job_id
+        # Both keys, the same integer, for ONE release. The allowance is in
+        # pages now; `allowance_remaining_documents` stays because the overlay's
+        # pinned tool relays that key by name and an old broker restarting
+        # during the rollout window still reads it. It goes when the pin moves
+        # (ADR 0087 amendment, first item of the next overlay bump).
+        queued["allowance_remaining_pages"] = int(remaining)
         queued["allowance_remaining_documents"] = int(remaining)
         queued["submitted_at"] = now
         conn = self._connect()

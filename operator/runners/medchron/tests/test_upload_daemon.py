@@ -10,12 +10,13 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+import yaml
 
 from medchron import config as config_mod, job as job_mod
 from medchron.daemon import BrokerError, Daemon, memory_cap_mode, sticky_level
 from medchron.stages import upload
 from medchron.stages.base import StageRun
-from medchron_testkit import FakeSeat
+from medchron_testkit import FIRM_CONFIG, FakeSeat
 
 
 # ---- upload ------------------------------------------------------------------
@@ -102,11 +103,24 @@ class FakeBroker:
         self.rows: dict[str, dict] = {}
         self.records: list[tuple[str, str, dict]] = []
         self.down = False
+        # The month's state the daemon re-reads before every run. `month` is a
+        # dict the test can mutate between ticks, which is how "fresh, not the
+        # envelope's stale copy" is made observable.
+        self.month = {"month": "2026-09", "allowance": 40, "used": 0, "remaining": 40, "authored": True,
+                      "unit": "pages", "pages_used": 0, "pages_remaining": 40, "documents_used": 0,
+                      "cents_used": 0}
+        self.allowance_calls: list[str | None] = []
 
     def status(self, job_id):
         if self.down:
             raise BrokerError("down")
         return self.rows.get(job_id)
+
+    def allowance(self, exclude_job_id=None):
+        self.allowance_calls.append(exclude_job_id)
+        if self.down:
+            raise BrokerError("down")
+        return dict(self.month)
 
     def record(self, job_id, state, fields):
         if self.down:
@@ -137,6 +151,25 @@ print(json.dumps([{"unit": "alpha", "outcome": "delivered", "reason": None, "sta
 """
 
 
+# Captured VERBATIM from the broker's own MedchronLedger.submit() (2026-09-09,
+# `validate_envelope(...)` then `submit(env, remaining=40)`, job_id and
+# submitted_at edited to fixed values). This is the W1/W2 wire: if either side
+# renames a key, the round-trip test below goes red rather than a seat
+# discovering it.
+BROKER_SUBMIT_ENVELOPE = {
+    "allowance_remaining_documents": 40,
+    "allowance_remaining_pages": 40,
+    "cap_usd": 25.0,
+    "incident": {"date": "2026-01-15", "source": "administrator_request"},
+    "job_id": "01Q",
+    "matter": {"id": "m-1", "number": "2026-PI-102", "title": "Example v. Example"},
+    "requested_by": "admin@example.test",
+    "submitted_at": "2026-09-09T17:11:01.062Z",
+    "units": [{"client_name": "Alpha Example", "dob": "01/02/1980", "name_token": "Example",
+               "surname": "Example", "unit": "alpha"}],
+}
+
+
 def _envelope(job_id: str) -> dict:
     return {"job_id": job_id, "matter": {"id": "m-1", "number": "2026-PI-102", "title": ""},
             "units": [{"unit": "alpha", "client_name": "Alpha Example", "name_token": "Example", "surname": "Example",
@@ -145,11 +178,23 @@ def _envelope(job_id: str) -> dict:
             "allowance_remaining_documents": 100, "cap_usd": 25}
 
 
+def _firm_yaml(tmp_path: Path) -> Path:
+    """The daemon refuses to start a job while the firm config does not
+    validate, so every daemon test needs one on disk."""
+    import yaml as _yaml
+
+    p = tmp_path / "firm.yaml"
+    if not p.is_file():
+        p.write_text(_yaml.safe_dump(FIRM_CONFIG, sort_keys=False), encoding="utf-8")
+    return p
+
+
 def _daemon(tmp_path: Path, script: str = OK_RUNNER, **kw) -> tuple[Daemon, FakeBroker]:
     run_dir = tmp_path / "run"
     (run_dir / "queue").mkdir(parents=True, exist_ok=True)
     broker = FakeBroker()
     now = {"t": 1_000_000.0}
+    kw.setdefault("firm_config", str(_firm_yaml(tmp_path)))
     d = Daemon(run_dir=run_dir, broker=broker, runner_cmd=_fake_runner(tmp_path, script), customer_slug="example",
                sticky_db=str(tmp_path / "sticky.db"), cgroup_root=tmp_path / "cgroup", child_uid=None,
                clock=lambda: now["t"], **kw)
@@ -438,3 +483,94 @@ def test_a_runner_with_no_verdict_wakes_without_a_stage(tmp_path):
     assert d.tick() == "failed"
     task = d._daemon_state("01C")["wake"]["task"]
     assert "Outcome: failed." in task and "Held at: runner (no verdict)." in task and "exited 3" not in task
+
+
+# ---- the month's state, read fresh per run (2026-09-09) -----------------------
+def test_every_run_reads_the_month_fresh_and_excludes_its_own_row(tmp_path):
+    """The envelope's copy of the month was true at submission and is stale the
+    moment any other job records cents, so the daemon re-reads before every run
+    and every resume. Its own row is excluded, or a resume would be metered
+    against the spend it already recorded."""
+    d, broker = _daemon(tmp_path)
+    _submit(d, broker, "01A")
+    assert d.tick() == "delivered"
+    first = yaml.safe_load((d.jobs / "01A" / "job.yaml").read_text())
+    assert first["allowance_remaining_pages"] == 40 and first["month_cents_used"] == 0
+    assert first["allowance_pages"] == 40 and first["month_pages_used"] == 0
+    assert first["allowance_month"] == "2026-09"
+    assert broker.allowance_calls == ["01A"]
+
+    broker.month.update(remaining=5, pages_used=35, cents_used=1234, used=35)
+    _submit(d, broker, "01B")
+    assert d.tick() == "delivered"
+    second = yaml.safe_load((d.jobs / "01B" / "job.yaml").read_text())
+    assert second["allowance_remaining_pages"] == 5 and second["month_cents_used"] == 1234
+    assert second["month_pages_used"] == 35
+    assert broker.allowance_calls == ["01A", "01B"]
+
+
+def test_a_job_defers_when_the_allowance_read_fails(tmp_path):
+    """Deferred, not failed: the job stays claimed, nothing is recorded, and
+    the next tick tries again."""
+    d, broker = _daemon(tmp_path)
+    _submit(d, broker, "01A")
+    assert d.claim_next() == "01A"
+    broker.down = True
+    assert d.run_job("01A") == "deferred"
+    assert broker.records == []
+    broker.down = False
+    assert d.tick() == "delivered"
+
+
+def test_a_job_defers_while_the_firm_config_does_not_validate(tmp_path):
+    """The rollout is safe in either order: customer.yaml and firm.yaml can
+    land minutes apart, and a job queued in between waits rather than failing.
+    Nothing is recorded, so the ledger carries no phantom transition."""
+    d, broker = _daemon(tmp_path, firm_config=str(tmp_path / "absent-firm.yaml"))
+    _submit(d, broker, "01A")
+    assert d.tick() == "deferred"
+    assert broker.records == [] and not (d.jobs / "01A" / "job.yaml").exists()
+    # The firm config lands; the same claimed job runs on the next tick.
+    d.firm_config = str(_firm_yaml(tmp_path))
+    assert d.tick() == "delivered"
+    assert [s for _, s, _ in broker.records] == ["running", "delivered"]
+
+
+LIMIT_HELD_RUNNER = """
+import json
+print(json.dumps([{"unit": "alpha", "outcome": "held", "stage": "vision", "dollars": 0.0, "pages": 3312,
+                   "documents": 0,
+                   "reason": "single_matter_page_threshold: the matter's file is 3,312 pages, above the "
+                             "firm's single-matter page threshold; the package was not started"}]))
+"""
+
+
+def test_a_limit_hold_is_recorded_as_a_hold_and_never_prefixed_refused(tmp_path):
+    """A contract hold is the product working. `refused:` is the daemon's
+    prefix for the runner's REFUSED vocabulary (an unexplained file, a broken
+    artifact) and must not be stamped on a limit the firm itself authored."""
+    d, broker = _daemon(tmp_path, LIMIT_HELD_RUNNER)
+    _submit(d, broker, "01A")
+    assert d.tick() == "held"
+    job_id, state, fields = broker.records[-1]
+    assert state == "held" and fields["pages"] == 3312
+    assert fields["reason"].startswith("single_matter_page_threshold: ")
+    assert not fields["reason"].startswith("refused: ")
+    assert "Held at: vision." in d._daemon_state("01A")["wake"]["task"]
+
+
+def test_a_real_broker_envelope_round_trips_into_a_job_the_runner_parses(tmp_path):
+    """The W1/W2 wire contract, both halves in one test: an envelope in the
+    exact shape the broker's own submit() writes goes through the daemon and
+    out the other side as a Job the runner parses, with the page fields
+    intact. A rename on either side breaks this."""
+    d, broker = _daemon(tmp_path)
+    envelope = dict(BROKER_SUBMIT_ENVELOPE)
+    broker.rows["01Q"] = {"state": "submitted"}
+    (d.queue / "01Q.json").write_text(json.dumps(envelope))
+    assert d.claim_next() == "01Q"
+    jd = d._write_job_yaml("01Q")
+    job = job_mod.load(jd)
+    assert job.allowance_remaining_pages == 40 and job.allowance_remaining_documents == 40
+    assert job.month_cents_used == 0 and job.allowance_month == "2026-09"
+    assert job.matter_number == "2026-PI-102" and job.units[0].unit == "alpha"

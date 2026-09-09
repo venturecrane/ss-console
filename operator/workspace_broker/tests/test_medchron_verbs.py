@@ -35,7 +35,7 @@ personas:
         enabled: true
         settings:
           treatment_gap_flag_days: 45
-          chronology_package_document_allowance_per_month: 100
+          chronology_package_page_allowance_per_month: 1000
 """
 
 
@@ -146,7 +146,7 @@ def test_validate_envelope_keeps_only_known_keys_and_derives_unit_slugs():
 def test_allowance_reads_the_skill_settings_and_fails_closed(tmp_path):
     p = tmp_path / "c.yaml"
     p.write_text(CUSTOMER_YAML)
-    assert allowance_from_customer_yaml(p) == 100
+    assert allowance_from_customer_yaml(p) == 1000
     p.write_text(CUSTOMER_YAML.replace("enabled: true", "enabled: false"))
     assert allowance_from_customer_yaml(p) is None
     p.write_text("personas:\n  - slug: operator\n    skills:\n      - name: other\n")
@@ -154,29 +154,123 @@ def test_allowance_reads_the_skill_settings_and_fails_closed(tmp_path):
     assert allowance_from_customer_yaml(tmp_path / "missing.yaml") is None
 
 
-def test_allowance_counts_delivered_documents_this_month_and_submit_stops_at_the_crossing(verbs):
+def _deliver(v, job_id, **fields):
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=job_id, state="running", fields={})
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=job_id, state="delivered", fields=fields)
+
+
+def test_allowance_counts_the_months_pages_and_submit_stops_at_the_crossing(verbs):
     v, _, _ = verbs
     a = call(v, "medchron_allowance")
-    assert (a["allowance"], a["used"], a["remaining"], a["authored"]) == (100, 0, 100, True)
+    assert (a["allowance"], a["used"], a["remaining"], a["authored"]) == (1000, 0, 1000, True)
+    assert a["unit"] == "pages" and a["pages_used"] == 0 and a["cents_used"] == 0
     j1 = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
-    call(v, "medchron_job_record", peer_uid=ROOT, job_id=j1, state="running", fields={})
-    call(v, "medchron_job_record", peer_uid=ROOT, job_id=j1, state="delivered",
-         fields={"documents": 60, "pages": 900, "cents": 4100, "folder_id": "f-1"})
+    _deliver(v, j1, documents=60, pages=600, cents=4100, folder_id="f-1")
     a = call(v, "medchron_allowance")
-    assert (a["used"], a["remaining"]) == (60, 40)
+    assert (a["used"], a["remaining"]) == (600, 400)
+    assert (a["pages_used"], a["pages_remaining"], a["documents_used"], a["cents_used"]) == (600, 400, 60, 4100)
     r = call(v, "medchron_job_submit", envelope=envelope())
-    assert r["accepted"] and r["allowance_remaining_documents"] == 40
-    call(v, "medchron_job_record", peer_uid=ROOT, job_id=r["job_id"], state="running", fields={})
-    call(v, "medchron_job_record", peer_uid=ROOT, job_id=r["job_id"], state="delivered", fields={"documents": 45})
+    assert r["accepted"] and r["allowance_remaining_pages"] == 400 and r["unit"] == "pages"
+    _deliver(v, r["job_id"], documents=45, pages=450, cents=100)
     r = call(v, "medchron_job_submit", envelope=envelope())
-    assert r["accepted"] is False and "allowance is spent" in r["reason"]
+    assert r["accepted"] is False
+    assert "monthly page allowance is spent (1,050 of 1,000 pages in" in r["reason"]
 
 
 def test_submit_refuses_when_no_allowance_is_authored(verbs, tmp_path):
     v, _, _ = verbs
     v.customer_yaml = str(tmp_path / "nope.yaml")
     r = call(v, "medchron_job_submit", envelope=envelope())
-    assert r["accepted"] is False and "no monthly document allowance" in r["reason"]
+    assert r["accepted"] is False and "no monthly page allowance" in r["reason"]
+
+
+def test_the_old_document_key_reads_as_unauthored_and_the_refusal_names_the_rename(verbs, tmp_path):
+    """A seat that still carries only the pre-2026-09-09 document key submits
+    NOTHING. Reading it as a page allowance would meter 2,000 pages as 2,000
+    documents; falling back silently would leave the seat metered in the wrong
+    unit with nobody told. The refusal names the key the firm must author."""
+    v, _, _ = verbs
+    p = tmp_path / "old.yaml"
+    p.write_text(CUSTOMER_YAML.replace("chronology_package_page_allowance_per_month",
+                                       "chronology_package_document_allowance_per_month"))
+    assert allowance_from_customer_yaml(p) is None
+    v.customer_yaml = str(p)
+    r = call(v, "medchron_job_submit", envelope=envelope())
+    assert r["accepted"] is False
+    assert "chronology_package_page_allowance_per_month" in r["reason"]
+
+
+# -- the one debit rule -------------------------------------------------------
+
+
+def test_a_job_debits_the_month_whenever_it_recorded_cents(verbs):
+    """The rule before 2026-09-09 counted DELIVERED jobs only, so a run that
+    read pages and spent real money left no mark when it held or failed after
+    the money had moved. Each case below is a separate falsifier of that."""
+    v, _, _ = verbs
+    held = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=held, state="running", fields={})
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=held, state="held",
+         fields={"pages": 120, "cents": 350, "reason": "per_job_cap_usd: ..."})
+    assert call(v, "medchron_allowance")["used"] == 120        # a HELD job with cents debits
+
+    failed = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=failed, state="running", fields={})
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=failed, state="failed", fields={"pages": 30, "cents": 90})
+    assert call(v, "medchron_allowance")["used"] == 150        # a FAILED job with cents debits
+
+    free = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=free, state="running", fields={})
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=free, state="held", fields={"pages": 9_000, "cents": 0})
+    a = call(v, "medchron_allowance")
+    assert a["used"] == 150 and a["cents_used"] == 440         # a ZERO-CENT hold does NOT debit
+
+
+def test_exclude_job_id_leaves_out_exactly_that_row(verbs):
+    """What a resume needs: the run must not be metered against the cents it
+    already recorded, and must still be metered against every other job."""
+    v, _, _ = verbs
+    a = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    b = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    _deliver(v, a, pages=100, cents=500)
+    _deliver(v, b, pages=200, cents=700)
+    assert call(v, "medchron_allowance")["used"] == 300
+    only_b = call(v, "medchron_allowance", exclude_job_id=a)
+    assert only_b["used"] == 200 and only_b["cents_used"] == 700
+    only_a = call(v, "medchron_allowance", exclude_job_id=b)
+    assert only_a["used"] == 100 and only_a["cents_used"] == 500
+    assert call(v, "medchron_allowance", exclude_job_id="not-a-job")["used"] == 300
+
+
+def test_a_job_debits_the_month_it_was_created_in_not_the_month_its_cents_landed(verbs):
+    """A run that starts on the 31st and finishes on the 1st debits the month
+    it was CREATED in, on this surface and on the console's.
+
+    A month-of-charge key was written first and reverted the same day: the
+    column it needs is not in PROJECTION, and PROJECTION's shape is pinned by
+    the overlay this release, so the console could never see it. The seat would
+    have debited the new month while the console showed the old one -- the two
+    surfaces disagreeing about the same month, which is the one thing this rule
+    exists to prevent. `created_at` is a column both surfaces already have.
+    """
+    import sqlite3
+
+    v, _, _ = verbs
+    job = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    # Backdate the row to the last day of the previous month, then record the
+    # cents now: creation in one month, charge in the next.
+    conn = sqlite3.connect(v.ledger._db_path)
+    try:
+        conn.execute("UPDATE medchron_jobs SET created_at=? WHERE id=?", ("2026-08-31T23:50:00.000Z", job))
+        conn.commit()
+    finally:
+        conn.close()
+    _deliver(v, job, pages=420, cents=1500)
+
+    august = v.ledger.allowance(1000, now="2026-08-31T23:59:00.000Z")
+    september = v.ledger.allowance(1000, now="2026-09-01T00:10:00.000Z")
+    assert (august["used"], august["cents_used"]) == (420, 1500)
+    assert (september["used"], september["cents_used"]) == (0, 0)
 
 
 # -- queue + ledger + audit --------------------------------------------------
@@ -188,7 +282,11 @@ def test_submit_writes_the_row_then_the_queue_file_with_the_remainder(verbs):
     files = list(queue.glob("*.json"))
     assert [f.stem for f in files] == [r["job_id"]]
     q = json.loads(files[0].read_text())
-    assert q["job_id"] == r["job_id"] and q["allowance_remaining_documents"] == 100
+    # Both keys, the same integer, for one release: the overlay's pinned tool
+    # relays the document key by name and an old broker restarting in the
+    # rollout window still reads it.
+    assert q["job_id"] == r["job_id"]
+    assert q["allowance_remaining_pages"] == 1000 == q["allowance_remaining_documents"]
     assert q["matter"]["number"] == "2026-PI-102" and q["request_ref"] == "thread-9"
     assert files[0].stat().st_mode & 0o777 == 0o640
     row = call(v, "medchron_job_status", job_id=r["job_id"])["job"]

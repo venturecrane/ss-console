@@ -17,6 +17,8 @@
  * never a stale table.
  */
 
+import type { D1Database } from '@cloudflare/workers-types'
+
 import {
   readMachineRuntime,
   type MachineRuntimeTransport,
@@ -47,7 +49,23 @@ export interface MedchronMonthTotals {
   documents: number
   pages: number
   cents: number
+  /** Pages and cents by the broker's OWN debit rule (2026-09-09): every job
+   * that recorded cents, whatever state it ended in, counted against the month
+   * it was CREATED in. Both halves of that rule are shared with the seat on
+   * purpose. The state half, because a run that spent real money and then held
+   * must not read as zero here. The keying half, because `created_at` is a
+   * column both surfaces already have: a month-of-charge key would live in a
+   * ledger column that is not in the broker's PROJECTION, and PROJECTION's
+   * shape is pinned by the overlay this release, so a job created on the 31st
+   * whose cents land on the 1st would be debited to one month on the seat and
+   * shown in the other here. `pages`/`cents` above stay delivered-only: what
+   * actually reached the firm. */
+  pagesUsed: number
+  centsUsed: number
 }
+
+/** The seat key the allowance is authored under. */
+export const ALLOWANCE_SETTING = 'chronology_package_page_allowance_per_month'
 
 export type MedchronJobsReadResult =
   | { status: 'not_enabled' }
@@ -95,6 +113,7 @@ export function monthTotals(
 ): MedchronMonthTotals {
   const inMonth = jobs.filter((j) => j.createdAt.slice(0, 7) === month)
   const delivered = inMonth.filter((j) => j.state === 'delivered')
+  const debited = inMonth.filter((j) => j.cents > 0)
   return {
     month,
     jobs: inMonth.length,
@@ -103,7 +122,69 @@ export function monthTotals(
     documents: delivered.reduce((s, j) => s + j.documents, 0),
     pages: delivered.reduce((s, j) => s + j.pages, 0),
     cents: delivered.reduce((s, j) => s + j.cents, 0),
+    pagesUsed: debited.reduce((s, j) => s + j.pages, 0),
+    centsUsed: debited.reduce((s, j) => s + j.cents, 0),
   }
+}
+
+/**
+ * The seat's authored monthly PAGE allowance, from the D1 projection's
+ * `personas_json`. Fail-closed: an unparseable projection, a disabled skill, a
+ * missing key, or a value that is not a non-negative integer all read as "no
+ * allowance authored", which the page shows as an absent denominator rather
+ * than inventing one. Never throws.
+ */
+export function allowanceFromPersonas(raw: unknown): number | null {
+  const personas = parseJson(raw)
+  if (!Array.isArray(personas)) return null
+  for (const persona of personas) {
+    if (typeof persona !== 'object' || persona === null) continue
+    const rawSkills = (persona as Record<string, unknown>)['skills']
+    if (!Array.isArray(rawSkills)) continue
+    const skills: unknown[] = rawSkills
+    const skill = skills.find(
+      (s) =>
+        typeof s === 'object' &&
+        s !== null &&
+        (s as Record<string, unknown>)['name'] === 'medical-chronology-maintainer'
+    )
+    if (skill !== undefined) return allowanceOfSkill(skill as Record<string, unknown>)
+  }
+  return null
+}
+
+/**
+ * The seat's authored page allowance for one customer, from the D1 projection.
+ * Lives here rather than in the page's frontmatter because raw D1 prepares stay
+ * out of pages (`tests/page-sql-readers.test.ts`). Fail-closed like the parser
+ * it wraps: an absent row is no allowance, not a zero.
+ */
+export async function loadAuthoredPageAllowance(
+  db: D1Database,
+  customerSlug: string
+): Promise<number | null> {
+  const row = await db
+    .prepare('SELECT personas_json FROM customer_configs WHERE customer_slug = ?')
+    .bind(customerSlug)
+    .first<{ personas_json: string }>()
+  return allowanceFromPersonas(row?.personas_json)
+}
+
+function parseJson(raw: unknown): unknown {
+  if (typeof raw !== 'string') return raw
+  try {
+    return JSON.parse(raw) as unknown
+  } catch {
+    return null
+  }
+}
+
+function allowanceOfSkill(skill: Record<string, unknown>): number | null {
+  if (skill['enabled'] === false) return null
+  const settings = skill['settings']
+  if (typeof settings !== 'object' || settings === null) return null
+  const value = (settings as Record<string, unknown>)[ALLOWANCE_SETTING]
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null
 }
 
 interface MedchronReadDeps {

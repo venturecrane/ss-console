@@ -283,7 +283,7 @@ rows:
         Exhibit A (engagements #89) defines two forms of this record: the running
         chronology is this skill's memo and stays unmetered; the requested
         chronology package is built by the SMD runner on this seat and filed through
-        the connector, governed by the seat's chronology_package_document_allowance_per_month
+        the connector, governed by the seat's chronology_package_page_allowance_per_month
         setting and the runner's registered gates (ADR 0087). Since ss#2616 the skill
         carries the request path: a Named Administrator's ask becomes a submitted
         runner job (allowance pre-flight, dual-probe matter resolution), and the
