@@ -25,6 +25,7 @@ import {
   type AlivenessLevel,
 } from '../../../../lib/portal/operator/aliveness'
 import type { OperatorHeroModel } from '../../../../lib/portal/operator/facets/identity/hero'
+import { formatWholeDollars, type OperatorStartDoor } from '../../../../lib/portal/billing'
 
 interface Props {
   model: OperatorHeroModel
@@ -32,12 +33,19 @@ interface Props {
   /** True while the subscription is still provisioning — renders the setup
    *  posture instead of the aliveness signal. */
   provisioning?: boolean
+  /** While provisioning: the start door, when it is open. */
+  start?: OperatorStartDoor | null
 }
 
 // "Contact your consultant" contacts a person (Captain finding, 2026-07-15:
 // it previously routed to the settings hub, which answers nothing when the
 // operator is down). team@smd.services is the operational-escalation address.
-const { model, escalationHref = 'mailto:team@smd.services', provisioning = false } = Astro.props
+const {
+  model,
+  escalationHref = 'mailto:team@smd.services',
+  provisioning = false,
+  start = null,
+} = Astro.props
 const displayName = model.name ?? 'Your operator'
 const personaLine = model.title ? `${displayName} · ${model.title}` : displayName
 
@@ -77,7 +85,25 @@ const showEscalation = !provisioning && level ? needsEscalationAffordance(level)
   </p>
 
   {
-    provisioning ? (
+    provisioning && start ? (
+      <>
+        <h2 class="mt-2 font-body text-2xl font-black uppercase tracking-[-0.02em] text-[color:var(--color-text-primary)] md:text-3xl">
+          Ready to start
+        </h2>
+        <p class="mt-2 font-mono text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+          {formatWholeDollars(start.priceCents)} per month. Billing begins the day you start and
+          renews monthly. Cancel any time from Billing.
+        </p>
+        <form method="POST" action={start.action} class="mt-4">
+          <button
+            type="submit"
+            class="inline-flex min-h-11 items-center border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-text-primary)] px-5 font-body font-bold uppercase tracking-[0.08em] text-[color:var(--color-background)] transition-colors hover:bg-[color:var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-offset-2"
+          >
+            Start monthly subscription
+          </button>
+        </form>
+      </>
+    ) : provisioning ? (
       <>
         <h2 class="mt-2 font-body text-2xl font-black uppercase tracking-[-0.02em] text-[color:var(--color-text-primary)] md:text-3xl">
           Being set up
