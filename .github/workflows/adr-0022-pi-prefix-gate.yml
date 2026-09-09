@@ -37,48 +37,34 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Install ripgrep
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y ripgrep
-
+      # Plain grep, no package install. The gate once installed ripgrep via
+      # apt, and `apt-get update` on a hosted runner refreshes every
+      # third-party repo the image ships with; on 2026-09-09 Google's
+      # Chrome apt mirror served a corrupt index and the gate failed twice
+      # on a branch with nothing to find. A fixed-string recursive grep is
+      # the same search with no network dependency.
       - name: Scan for law-pi- prefix in active paths
         run: |
-          set -euo pipefail
+          set -uo pipefail
           # ADR files are exempt — they describe the historical state.
           # Active paths: src/, tests/, operator/skills/, operator/bundles/,
           # operator/fixtures/ (sans the moved law-firm/pi/ subtree which
           # no longer exists), docs/specs/, docs/runbooks/, docs/pm/.
-          if rg --quiet 'law-pi-' \
-              src/ tests/ scripts/ \
-              operator/skills/ \
-              operator/bundles/ \
-              operator/fixtures/ \
-              operator/grading/ \
-              operator/templates/ \
-              operator/customers/ \
-              operator/adapter/ \
-              operator/bin/ \
-              operator/tests/ \
-              operator/verticals/ \
-              docs/specs/ docs/runbooks/ docs/pm/ \
-              2>/dev/null; then
+          # Only directories that exist are scanned; a missing directory is
+          # not a finding.
+          paths=()
+          for p in src tests scripts \
+              operator/skills operator/bundles operator/fixtures \
+              operator/grading operator/templates operator/customers \
+              operator/adapter operator/bin operator/tests operator/verticals \
+              docs/specs docs/runbooks docs/pm; do
+            [ -d "$p" ] && paths+=("$p")
+          done
+          hits=$(grep -rlF 'law-pi-' "${paths[@]}" 2>/dev/null || true)
+          if [ -n "$hits" ]; then
             echo "::error::law-pi- prefix found in active paths — ADR 0022 Stream 4 migration is locked."
             echo "Files containing the prefix:"
-            rg -l 'law-pi-' \
-              src/ tests/ scripts/ \
-              operator/skills/ \
-              operator/bundles/ \
-              operator/fixtures/ \
-              operator/grading/ \
-              operator/templates/ \
-              operator/customers/ \
-              operator/adapter/ \
-              operator/bin/ \
-              operator/tests/ \
-              operator/verticals/ \
-              docs/specs/ docs/runbooks/ docs/pm/ \
-              || true
+            echo "$hits"
             echo ""
             echo "If reintroducing the prefix is intentional (rare), update the"
             echo "whitelist in .github/workflows/adr-0022-pi-prefix-gate.yml."
