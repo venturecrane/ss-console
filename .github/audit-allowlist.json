@@ -1,6 +1,13 @@
 {
-  "$comment": "Time-boxed npm-audit exceptions. Each entry is a GHSA the CI audit gate will tolerate at high/critical severity UNTIL `expires`. After that date the allowlist is ignored and the gate fails again, forcing resolution. Consumed by scripts/audit-allowlist.mjs (Security workflow). This is NOT a place to silence real exposure: every entry must be triaged non-reachable in this app and tracked to a fix. Currently EMPTY: the last entry (GHSA-2v37-7h3g-55p8, nanoid <3.3.18) was cleared on 2026-08-14 by the nanoid@^3 -> ^3.3.18 override (#2196); root and all workers/* trees audit to 0.",
-  "expires": null,
-  "tracking": null,
-  "allow": {}
+  "$comment": "Time-boxed npm-audit exceptions. Each entry is a GHSA the CI audit gate will tolerate at high/critical severity UNTIL `expires`. After that date the allowlist is ignored and the gate fails again, forcing resolution. Consumed by scripts/audit-allowlist.mjs (Security workflow). This is NOT a place to silence real exposure: every entry must be triaged non-reachable in this app and tracked to a fix. 2026-09-09 (Captain-authorized): six high/critical advisories were blocking the required Security Summary gate on every PR, and their patched releases sit newer than the .npmrc min-release-age cooldown — the exact case this file exists for. Two are critical Astro issues; accepted as temporary risk only, tracked in #2711, expiring 2026-09-23.",
+  "expires": "2026-09-23",
+  "tracking": "https://github.com/venturecrane/ss-console/issues/2711",
+  "allow": {
+    "GHSA-26w7-cxv4-gfx2": "Astro: RCE via AVIF image optimization (critical). Temp exception, cooldown-blocked fix, tracked #2711.",
+    "GHSA-376h-93r7-7g6f": "Astro: authorization bypass from missing base path-segment boundary check (critical). Temp exception, tracked #2711.",
+    "GHSA-2883-xcg3-v3hh": "js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources (high). Temp exception, tracked #2711.",
+    "GHSA-rgj7-g3m4-5g8c": "sharp: libheif vulnerabilities GHSA-g89c-p67h-r497 / GHSA-2jg2-4ch7-h545 (high). Temp exception, tracked #2711.",
+    "GHSA-w27v-7q3p-w38r": "SVGO: removeScripts allows executable links through namespace and control-character bypasses (high). Temp exception, tracked #2711.",
+    "GHSA-4vpr-x523-8j87": "SVGO: removeScripts incompletely sanitizes executable HTML in SVG foreignObject elements (high). Temp exception, tracked #2711."
+  }
 }
