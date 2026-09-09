@@ -10,6 +10,8 @@
 
 import type { D1Database } from '@cloudflare/workers-types'
 import type { SubscriptionRow } from './product-access'
+import type { Tone } from './status'
+import { parseCancelAt } from '../db/subscriptions'
 
 export function parseStripeCustomerId(settingsJson: string | null): string | null {
   try {
@@ -77,16 +79,52 @@ export function canStartOperatorSubscription(
 }
 
 /** The client's start door as a surface renders it, present only when
- *  canStartOperatorSubscription holds (the page decides; components render). */
+ *  canStartOperatorSubscription holds (the page decides; components render).
+ *  Home and the Operator hero LINK to the subscription page, where the one
+ *  primary action lives (UI-PATTERNS Rule 3: one primary per view); only that
+ *  page POSTs to the start route. */
 export interface OperatorStartDoor {
-  /** POST target: the start-subscription route for this instance. */
-  action: string
+  /** The subscription page for this instance (operatorSubscriptionHref). */
+  href: string
   /** Authored monthly price, integer cents. */
   priceCents: number
 }
 
-/** Where the start door lives on the Billing surface (deep link target). */
-export const BILLING_SUBSCRIPTIONS_HREF = '/portal/billing#subscriptions'
+/**
+ * The subscription page for an operator instance: the one place the
+ * client starts it (Stripe Checkout) and, once started, manages it (the
+ * Stripe Billing Portal door). Billing rows, Home's card and the Operator
+ * hero all land here. Read-only ledger on Billing; the act on its own page,
+ * the same list-to-detail shape invoices already have.
+ */
+export function operatorSubscriptionHref(instanceSlug: string): string {
+  return `/portal/billing/subscriptions/${instanceSlug}`
+}
+
+/**
+ * The stamp a subscription row carries on the Billing ledger (UI-PATTERNS
+ * Rule 1: list rows use the pill). One fact, one rendering: the stamp IS
+ * the status, so the row shows no second status line. A startable row
+ * reads NOT STARTED, not "being set up": the Operator may well be running;
+ * what has not happened is the client's own start.
+ */
+export function subscriptionStamp(
+  sub: Pick<SubscriptionRow, 'status' | 'settings_json'>,
+  startable: boolean
+): { tone: Tone; label: string } {
+  if (startable) return { tone: 'warning', label: 'NOT STARTED' }
+  if (parseCancelAt(sub.settings_json)) return { tone: 'neutral', label: 'CANCELS' }
+  switch (sub.status) {
+    case 'active':
+      return { tone: 'success', label: 'ACTIVE' }
+    case 'paused':
+      return { tone: 'danger', label: 'PAUSED' }
+    case 'provisioning':
+      return { tone: 'neutral', label: 'BEING SET UP' }
+    default:
+      return { tone: 'neutral', label: 'ARCHIVED' }
+  }
+}
 
 /** Whole-dollar rendering for prose contexts (MoneyDisplay for markup). */
 export function formatWholeDollars(amountCents: number): string {
