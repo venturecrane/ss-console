@@ -90,7 +90,7 @@ describe('createOperatorCheckoutSession (the client starts the retainer)', () =>
     const create = calls.find((c) => c.url.endsWith('/checkout/sessions') && c.method === 'POST')
     const body = new URLSearchParams(create!.body)
     expect(body.get('mode')).toBe('subscription')
-    expect(body.getAll('payment_method_types[]')).toEqual(['us_bank_account', 'card'])
+    expect(body.getAll('payment_method_types[]')).toEqual(['us_bank_account'])
     expect(body.get('payment_method_options[us_bank_account][verification_method]')).toBe(
       'automatic'
     )

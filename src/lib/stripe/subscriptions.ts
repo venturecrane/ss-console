@@ -114,8 +114,10 @@ export interface OperatorCheckoutResult {
 /**
  * Create the Checkout Session a client uses to START the retainer.
  *
- * Subscription mode, monthly, ACH Direct Debit (verification automatic:
- * instant via Financial Connections, micro-deposits as fallback) and card.
+ * Subscription mode, monthly, ACH Direct Debit only (verification automatic:
+ * instant via Financial Connections, micro-deposits as fallback). No card:
+ * the Captain set ACH as the sole method for invoices and the retainer on
+ * 2026-09-09; a card client is a decision to make when one exists.
  * The first month is paid on Stripe's page; the subscription is created by
  * Stripe on completion, charge_automatically, and the webhook binds it.
  * No Stripe Tax: the retainer is a managed service, priced as authored.
@@ -140,7 +142,6 @@ export async function createOperatorCheckoutSession(
   body.append('line_items[0][price_data][product]', productId)
   body.append('line_items[0][price_data][recurring][interval]', 'month')
   body.append('payment_method_types[]', 'us_bank_account')
-  body.append('payment_method_types[]', 'card')
   body.append('payment_method_options[us_bank_account][verification_method]', 'automatic')
   body.append('customer_email', params.customer_email)
   body.append('client_reference_id', params.user_id)
