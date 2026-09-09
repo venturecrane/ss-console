@@ -495,6 +495,13 @@ personas:
           # agent; the Operator surfaces and stops at the crossing, it never
           # carries on past it on its own.
           chronology_package_document_allowance_per_month: 2000
+          # Exhibit A row 11 restated in PAGES (engagements #107, 2026-09-09).
+          # A document is not a unit of work: the delivered packages ran from a
+          # one-page bill to a 700-page hospital chart, and the cost of a
+          # package tracks its pages. The document key above is carried for ONE
+          # release so an older broker restarting mid-rollout still meters
+          # something; it is removed in the follow-up PR after the reprovision.
+          chronology_package_page_allowance_per_month: 15000
       # motions
       - name: motion-calendar-tracker # keeps motion deadlines/hearings current
         version: pending

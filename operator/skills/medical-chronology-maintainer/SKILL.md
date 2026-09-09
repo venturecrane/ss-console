@@ -165,7 +165,7 @@ runs. This follows the pack write posture
   and billing worksheet the firm asks for on a matter) is a different product: it is
   built by the SMD runner on this Machine and filed through the connector into its
   own dated folder, governed by the runner's registered gates and the firm's monthly
-  allowance (ADR 0087). Since ss#2616 this skill carries the REQUEST path for that
+  page allowance (ADR 0087). Since ss#2616 this skill carries the REQUEST path for that
   product — BUILD submits the job, APPEND submits a new-records-only job, DELIVER
   reports the outcome — but it **never composes package content itself**: not a
   page, not an exhibit, not a figure. The memo records the delivered folder, the
@@ -254,15 +254,23 @@ initiation; this mode runs only on such a request, never on a schedule or a sign
    `get_files_on_matter` + `list_folders`, tell the requester what will be read and
    what will be left out (the firm's authored exclusions apply on the runner side);
    a folder that plainly does not fit the pattern is a question, not a silent skip.
-4. **Pre-flight the allowance.** Call `medchron_allowance`. If it is not authored
-   or the remainder is zero, relay the tool's refusal sentence verbatim and stop -
-   the Operator stops at the crossing and surfaces the item; it never runs past it.
+4. **Pre-flight the allowance.** Call `medchron_allowance`. The allowance is
+   metered in the unit the response's `unit` field names, which is pages: quote
+   that field, say "pages", and never restate the setting's key name to a
+   requester. If it is not authored or the remainder is zero, relay the tool's
+   refusal sentence verbatim and stop - the Operator stops at the crossing and
+   surfaces the item; it never runs past it. A matter larger than the remaining
+   pages is refused by the runner before anything is read, so a big matter near
+   the end of a month is a conversation to have now, not after a build.
 5. **Submit.** Call `medchron_job_submit` with the resolved matter id and number,
    the units (name, surname, DOB, folder prefix when joint), the incident date and
    its source, the claimed injuries when authored, and `requested_by` +
    `request_ref` from the asking message. Relay the ticket (job id) or the refusal
-   sentence verbatim in the reply. Make no promise about timing: the delivery lands
-   on the matter in its own dated folder, and this skill reports when it does.
+   sentence verbatim in the reply. An accepted submission comes back with
+   `allowance_remaining_pages`: that is what is left of the month after this job,
+   in pages, and it is the figure to quote if the requester asks. Make no promise
+   about timing: the delivery lands on the matter in its own dated folder, and
+   this skill reports when it does.
 
 ## APPEND - only the new records (ss#2616)
 
@@ -307,18 +315,32 @@ comes back from `medchron_job_status`, never from the wake.
    rules.
 4. **Held:** no memo edit, no task. Reply to the requester with the hold reason's
    substance (read from the status row in step 1; the wake carries only the
-   stage) - which gate held it (the cost cap, the document allowance, an
-   unexplained file, an unmatched folder) and what would resume it. A hold is the
-   product working, not an apology.
+   stage) - which limit or gate held it and what would resume it. A hold is the
+   product working, not an apology. The runner's reason begins with the name of
+   the setting that held it; say what it means in the firm's words, and name
+   pages where the reason gives a page count:
+   - `per_job_cap_usd` - the job's own cost cap. A bigger matter than the cap
+     was sized for; SMD raises it or the package is split.
+   - `chronology_package_page_allowance_per_month` - the seat's monthly page
+     allowance. Say how many pages the matter holds and how many remain.
+   - `single_matter_page_threshold` - the matter is larger than the firm's
+     single-matter page threshold. Say the page count; this one is a scoping
+     conversation, not a retry.
+   - `monthly_budget_usd` - the month's chronology cost budget. Nothing about
+     this matter is wrong; the month is spent.
 5. **No requester** (a rehearsal submission): record the outcome in the memo,
    create no task, send nothing, stop.
 6. **Never restate a dollar figure from the runner's reason** in a memo or a
    reply. The content gates refuse agent-drafted dollar amounts on sight
    (proven live 2026-08-31: a held-job report quoting the reason's cost
    projection was refused four times and never landed), so name the constraint
-   by its setting ("the job's cost cap", "the monthly document allowance") and
+   in words ("the job's cost cap", "the month's chronology cost budget") and
    cite the job id - the exact figures live on the job's console row and in the
-   audit ledger, which is where a number question gets sent.
+   audit ledger, which is where a number question gets sent. Since 2026-09-09
+   the runner's reasons carry no dollar figure at all, so relaying one means it
+   came from somewhere else and does not belong in the reply. Page counts are
+   different: they are the metered unit and the firm authored the allowance, so
+   quote them plainly.
 
 ## The autonomy dial
 

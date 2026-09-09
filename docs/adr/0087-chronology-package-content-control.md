@@ -1,6 +1,6 @@
 # ADR 0087: The chronology package is filed by the runner, and the runner's gates are its content control
 
-Status: Accepted (Captain decision 2026-08-27, option (a); recorded 2026-08-29)
+Status: Accepted (Captain decision 2026-08-27, option (a); recorded 2026-08-29), amended 2026-09-09
 Issue: [#2611](https://github.com/venturecrane/ss-console/issues/2611) (slice 2 of epic [#2618](https://github.com/venturecrane/ss-console/issues/2618))
 Related: [#2439](https://github.com/venturecrane/ss-console/issues/2439) (the forcing incident), ADR 0062 (cost plane), ADR 0075 (scalar skill settings), ADR 0083 (output classes), ADR 0086 (identifier gate posture), `operator/contracts/runtime-controls.yaml`, engagements `service-agreement.md` Exhibit A row 11 (routine 11, two forms)
 
@@ -54,7 +54,7 @@ The memo remains an agent write and remains subject to the outbound gates. Its f
 
 ## Acceptance criteria
 
-- [ ] `customer.yaml` on ashton-price authors exactly two routine-11 settings keys (`treatment_gap_flag_days`, `chronology_package_document_allowance_per_month`); pinned by `tests/customer-commitments.test.ts`.
+- [ ] `customer.yaml` on ashton-price authors exactly two routine-11 settings keys (`treatment_gap_flag_days`, `chronology_package_page_allowance_per_month`); pinned by `tests/customer-commitments.test.ts`. (Amended 2026-09-09: the document key is carried alongside for one release and the test allows both until the reprovision.)
 - [ ] Four `unprobed` rows in `runtime-controls.yaml` with paired HOLD probes; conformance tests green.
 - [ ] (runtime) A running-chronology memo in the slice-1 format lands on a pilot matter through the live gates; `crane_verify` id in the slice-1 PR.
 - [ ] (runtime, slice 5) A planted violation in each runner gate is refused on the Machine; the rows move to `enforced`.
@@ -62,3 +62,27 @@ The memo remains an agent write and remains subject to the outbound gates. Its f
 ## Verification
 
 `cd operator && python -m pytest bin/tests/test_runtime_control_conformance.py bin/tests/test_control_probes.py`; `npm run verify`; `operator/bin/control-probes.py --kind seat --seat pilot-smokeball` reports the four probes as HOLD.
+
+## Amendment 2026-09-09: the package is metered in pages, and the cost limits are enforced per paid call
+
+The forcing case was a delivered package that crossed no limit anything enforced: 3,312 pages, 88 percent of them scanned, and a cost several times what a package of that shape had been sized at. Four things were wrong at once, and each is now a mechanism.
+
+**1. The unit is pages, not documents.** `chronology_package_document_allowance_per_month` becomes `chronology_package_page_allowance_per_month` (ashton-price 15,000; pilot-smokeball 40). A document is not a unit of work: the delivered packages ranged from a one-page bill to a several-hundred-page hospital chart, and what a package costs tracks its pages. The old key is **not** read as a fallback; a seat still carrying only it reads as unauthored and submits nothing, and the refusal names the new key. Both keys are authored for ONE release so an older broker restarting inside the rollout window still meters something, and the document key is removed after the reprovision.
+
+**2. One debit rule.** A job debits the month's pages and cents when it **recorded cents**, in whatever state it ended, keyed on the month those cents were first recorded. The previous rule counted delivered jobs only, so a run that read thousands of pages and spent real money left no mark whenever it held or failed after the money had moved. Held-at-zero jobs are not debits: nothing was read and nothing was spent.
+
+**3. Four private controls, required not defaulted.** The runner's firm config (engagements repo) gains `monthly_budget_usd`, `single_matter_page_threshold`, `usd_per_scanned_page`, and `usd_per_audit_claim`, all required and all `> 0`. A firm.yaml predating them refuses to load rather than running unmetered, which is exactly the state routine 11 was in. They stay private because they are pricing-adjacent SMD posture; the seat still authors exactly one figure, the allowance.
+
+**4. Enforcement moves from the stage boundary to the paid call, and the envelope can only lower the cap.** `cap = min(envelope, firm)` -- the envelope used to win outright, which made the firm's cap advisory. The cap and the monthly budget are re-read through the doorway's `before_request` hook before every paid call, so an overshoot is **bounded to within one paid call** rather than one stage; the two page limits are still read once, before the first paid stage, from this matter's own extract output, so a matter too big to build costs nothing to refuse.
+
+**The hold grammar.** Every hold reason begins with the name of the setting that held it and carries **no dollar figure**, the per-job cap's included. Two reasons: the seat's outbound content gates refuse an agent-drafted dollar amount on sight, so a reason carrying one cannot be relayed to the requester at all (live 2026-08-31, refused four times); and these strings are fixtures in a public repository. Page counts are allowed: they are the metered unit and the firm authored the allowance. Figures live in the run's state file, `log-<stage>.txt`, and the job's console row.
+
+**Console.** The chronology page shows the month's pages against the authored allowance and the month's runner spend across all jobs, both by the debit rule above so the page and the seat cannot disagree about the same month. The monthly cost budget is deliberately **not** a denominator there: dollars stay off D1 (this ADR's private-posture clause), so the page shows spend without asserting a budget it does not hold.
+
+**First item of the next `OVERLAY_REF` bump.** The overlay's pinned tool relays `allowance_remaining_documents` by name; renaming it to `allowance_remaining_pages` and adding a `budget_cents` column to the console seam are the first items of the next overlay bump, at which point the compatibility key comes out of the broker and the seat config.
+
+### Amended acceptance criteria
+
+- [ ] The broker meters pages, applies one debit rule, and its allowance verb reports its `unit`; the runner refuses a firm config missing any of the four controls; every hold reason names its setting and carries no figure. Pinned by `runners/medchron/tests/test_limits.py`, `test_config_job.py`, `test_decisions_driver.py`, and `workspace_broker/tests/test_medchron_verbs.py`.
+- [ ] (runtime) On a live seat, a matter over the single-matter page threshold is held at zero spend, and a job whose cap is reached mid-stage stops within one paid call; `crane_verify` ids in the rollout PR.
+- [ ] (runtime) The admin chronology page shows the month's pages against the authored allowance on `admin.smd.services`; `crane_verify` id.

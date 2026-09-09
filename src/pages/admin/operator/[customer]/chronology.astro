@@ -3,6 +3,7 @@ import AdminLayout from '../../../../layouts/AdminLayout.astro'
 import { resolveEntityIdBySlug } from '../../../../lib/admin/operator-overview'
 import {
   loadMedchronJobsView,
+  loadAuthoredPageAllowance,
   formatCents,
   type MedchronJobsReadResult,
 } from '../../../../lib/admin/medchron-jobs-read'
@@ -33,6 +34,15 @@ const slug = Astro.params.customer ?? ''
 const entityId = await resolveEntityIdBySlug(env.DB, slug)
 const notFound = entityId === null
 const configured = isRuntimeReadConfigured(env)
+
+// The allowance denominator comes from the seat's own authored config as D1
+// projected it. Absent (unauthored, disabled, or a projection this page cannot
+// parse) means the tile shows the numerator alone: an invented denominator
+// would misreport how much of the month's allowance is left.
+let allowancePages: number | null = null
+if (!notFound) {
+  allowancePages = await loadAuthoredPageAllowance(env.DB, slug)
+}
 
 let result: MedchronJobsReadResult = { status: 'not_enabled' }
 if (!notFound) {
@@ -130,10 +140,16 @@ const statePill: Record<string, string> = {
                     value: `${result.month.delivered} / ${result.month.held}`,
                   },
                   {
-                    label: 'Documents read (delivered)',
-                    value: result.month.documents.toLocaleString('en-US'),
+                    label: 'Pages read / allowance',
+                    value:
+                      allowancePages === null
+                        ? result.month.pagesUsed.toLocaleString('en-US')
+                        : `${result.month.pagesUsed.toLocaleString('en-US')} / ${allowancePages.toLocaleString('en-US')}`,
                   },
-                  { label: 'Runner spend (delivered)', value: formatCents(result.month.cents) },
+                  {
+                    label: 'Runner spend (month, all jobs)',
+                    value: formatCents(result.month.centsUsed),
+                  },
                 ].map((tile) => (
                   <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card">
                     <p class="text-xs tracking-wide uppercase text-[color:var(--ss-color-text-muted)]">
@@ -192,9 +208,12 @@ const statePill: Record<string, string> = {
                   </table>
                 </div>
                 <p class="text-xs text-[color:var(--ss-color-text-muted)] mt-3">
-                  Spend is the runner's own ledger, priced from the seat's pricing table. The
-                  nightly cost plane books the same tokens to this customer's workspace on the costs
-                  page; the two are separate lanes and are never added together.
+                  Pages and spend above count every job that recorded a cost this month, whatever
+                  state it ended in, which is the same rule the seat meters the allowance by. Spend
+                  is the runner's own ledger, priced from the seat's pricing table. The nightly cost
+                  plane books the same tokens to this customer's workspace on the costs page; the
+                  two are separate lanes and are never added together. The monthly cost budget and
+                  the per-job cap are seat posture and are not shown here.
                 </p>
               </div>
             </>
