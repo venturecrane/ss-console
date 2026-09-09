@@ -99,7 +99,7 @@ The delivery surface once a quote is accepted. It shows the engagement header (s
 - **Deliverables and consultant photo** - file uploads to R2 (`engagements/[id]/deliverables`, `engagements/[id]/consultant-photo`).
 - **Time entries** - logged hours against the engagement (`/api/admin/time-entries`).
 
-Invoices are sent and voided from the invoice endpoints (`/api/admin/invoices/[id]`): `send` creates the invoice in Stripe and emails the hosted link, `void` voids it, and a mark-paid path records an offline payment. The integration mechanics (Stripe, SignWell, R2, Google) are in `/admin/playbook/integrations-tooling`.
+Invoices are sent and voided from the invoice endpoints (`/api/admin/invoices/[id]`): `send` creates the invoice in Stripe and emails the hosted link, `present` finalizes it in Stripe with no email so it is payable in the portal only, `void` voids it, and a mark-paid path records an offline payment. A `reschedule` action changes the due date of a presented or sent invoice: Stripe does not allow a due date to change once an invoice is finalized, so the action issues a replacement Stripe invoice with the same authored lines and payment method, points the row at it, then voids the original. No email goes out; the client sees the new date in the portal and on the Stripe payment page. The integration mechanics (Stripe, SignWell, R2, Google) are in `/admin/playbook/integrations-tooling`.
 
 ## Clients, Services, and Billing
 

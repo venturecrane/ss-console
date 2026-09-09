@@ -5,7 +5,6 @@ import { loadPortalInvoiceDetail } from '../../../../lib/portal/invoice-detail'
 import { invoiceTypeLabel } from '../../../../lib/db/invoices'
 import PortalPageHead from '../../../../components/portal/PortalPageHead.astro'
 import MoneyDisplay from '../../../../components/portal/MoneyDisplay.astro'
-import InvoicePaymentDetails from '../../../../components/portal/InvoicePaymentDetails.astro'
 import { resolveInvoiceState } from '../../../../lib/portal/states'
 import { formatShortDate } from '../../../../lib/portal/formatters'
 import { env } from 'cloudflare:workers'
@@ -126,7 +125,6 @@ const periodSubtitle = invoice.description ? `For ${invoice.description}` : null
 const dueCaption = formatDueCaption(invoice.due_date)
 const daysRemaining = daysUntil(invoice.due_date)
 const paidShortDate = formatShortDate(invoice.paid_at)
-const dueShortDate = formatShortDate(invoice.due_date)
 
 // Pill label for the right-rail action card
 let pillLabel = 'Invoice'
@@ -138,11 +136,12 @@ if (isPaid) {
   else pillLabel = `Due in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`
 }
 
-// A "deposit already received" note must come from an authoritative payment
-// record, never inferred from the line-items/amount delta — asserting a payment
-// fact from arithmetic is a fabrication (Pattern B). Left null until a real
-// deposit-payment source exists to render it from.
-const depositNote = null
+// The page carries no payment-facts grid below the total. The due date is in the
+// header meta and the caption above the line items, the payment method is
+// Stripe's to state on its own page, and a "deposit already received" note
+// would have to come from an authoritative payment record, never from the
+// line-items/amount delta (Pattern B). Removed 2026-09-09 at the Captain's
+// direction: the section restated the page and its grid read as noise.
 ---
 
 <PortalShell
@@ -298,13 +297,6 @@ const depositNote = null
           <MoneyDisplay amountCents={totalCents} size="h2" />
         </div>
       </div>
-
-      <InvoicePaymentDetails
-        dueShortDate={dueShortDate}
-        isPaid={isPaid}
-        paidShortDate={paidShortDate}
-        depositNote={depositNote}
-      />
     </section>
 
     <!-- Desktop right rail (sticky) -->
