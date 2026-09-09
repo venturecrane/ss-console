@@ -37,8 +37,21 @@ import {
   promoteCorrection,
   type CorrectionProperty,
   type PromoteCorrectionInput,
-  type VoiceCorrectionRow,
 } from '../src/lib/portal/operator/voice-corrections'
+
+/**
+ * The D1 row this test reads back directly. The module's exported row type
+ * went with its list readers on 2026-09-09 (no production caller); the test
+ * types only the columns it asserts on.
+ */
+interface VoiceCorrectionRow {
+  id: string
+  status: string
+  statement: string | null
+  promoted_body: string | null
+  spec_sha256: string | null
+  superseded_by: string | null
+}
 import {
   buildSpecDocument,
   collectAuthoredBodies,

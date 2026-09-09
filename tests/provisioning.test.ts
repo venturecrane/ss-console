@@ -25,7 +25,6 @@ import {
   serializeCustomerYaml,
   validateCandidate,
   verticalOptions,
-  addonOptionsFor,
   trustCeilingOptions,
   userRoleOptions,
   capabilityOptions,
@@ -81,8 +80,6 @@ describe('option sources are real schema constants', () => {
     expect(trustCeilingOptions()).toEqual(['autonomous', 'confirm', 'draft_for_review', 'refused'])
     expect(userRoleOptions()).toEqual(['principal', 'staff', 'compliance'])
     expect(capabilityOptions()).toContain('Email')
-    expect(addonOptionsFor('law-firm')).toContain('pi')
-    expect(addonOptionsFor('mixed')).toEqual([])
   })
 })
 

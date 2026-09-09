@@ -4,7 +4,7 @@ import {
   MAPPED_ACTIONS,
   SUPPRESSED_ACTIONS,
   mappedActionsForCategories,
-  toClientActivity,
+  clientSummaryFor,
 } from '../src/lib/portal/operator/activity-language'
 import { AUDIT_ACTION_TYPES } from '../src/lib/portal/operator/audit'
 import type { AuditEntry } from '../src/lib/portal/operator/audit'
@@ -180,9 +180,9 @@ describe('failure outcomes are visible to the client (ss#2320)', () => {
 
   for (const [action, copy] of outcomes) {
     it(`${action} renders for the client`, () => {
-      const lines = toClientActivity([entry(action)])
-      expect(lines, `${action} rendered nothing on the client feed`).toHaveLength(1)
-      expect(lines[0].summary).toBe(copy)
+      const summary = clientSummaryFor(entry(action))
+      expect(summary, `${action} rendered nothing on the client feed`).not.toBeNull()
+      expect(summary).toBe(copy)
     })
   }
 
@@ -197,7 +197,7 @@ describe('failure outcomes are visible to the client (ss#2320)', () => {
     // Pattern A: a sentence implying future business behaviour we have not
     // contracted. The system does not retry these sends.
     for (const [action] of outcomes) {
-      const summary = toClientActivity([entry(action)])[0].summary
+      const summary = clientSummaryFor(entry(action)) ?? ''
       expect(summary, `${action} implies a commitment`).not.toMatch(
         /\b(will|we'll|retry|retrying|shortly|follow up|try again)\b/i
       )
@@ -205,39 +205,46 @@ describe('failure outcomes are visible to the client (ss#2320)', () => {
   })
 })
 
-describe('toClientActivity', () => {
-  it('drops unmapped and unknown actions entirely', () => {
-    const lines = toClientActivity([
+describe('clientSummaryFor', () => {
+  // The batch mapper this block once exercised (`toClientActivity`) fed the
+  // Home feeds that no page loaded; it was removed 2026-09-09. The language
+  // table it read is live through this single-entry renderer, so the same
+  // anti-fabrication guards hold here.
+  it('renders nothing for unmapped and unknown actions', () => {
+    const summaries = [
       entry('INVARIANT_VIOLATION'),
       entry('LLM_TURN_COMPLETED'),
       entry('HONCHO_CONCLUSION_DISMISSED'),
       entry('DRAFT_CREATED'),
-    ])
-    expect(lines).toHaveLength(1)
-    expect(lines[0].summary).toContain('draft')
+    ].map(clientSummaryFor)
+    expect(summaries.filter((s) => s !== null)).toHaveLength(1)
+    expect(summaries[3]).toContain('draft')
   })
 
   it('never leaks raw action vocabulary into summaries', () => {
-    const lines = toClientActivity(AUDIT_ACTION_TYPES.map((a) => entry(a)))
-    for (const line of lines) {
-      expect(line.summary).not.toMatch(/[A-Z]{2,}_[A-Z]/)
-      expect(line.summary.toLowerCase()).not.toContain('invariant')
+    for (const action of AUDIT_ACTION_TYPES) {
+      const summary = clientSummaryFor(entry(action))
+      if (summary === null) continue
+      expect(summary).not.toMatch(/[A-Z]{2,}_[A-Z]/)
+      expect(summary.toLowerCase()).not.toContain('invariant')
     }
   })
 
   it('interpolates real row data only where present', () => {
-    const withSkill = toClientActivity([entry('SKILL_ENABLED', { skill: 'inbox-triage' })])
-    expect(withSkill[0].summary).toBe('A skill was turned on: inbox-triage')
-    const noSkill = toClientActivity([entry('SKILL_ENABLED')])
-    expect(noSkill[0].summary).toBe('A skill was turned on')
-    const escalation = toClientActivity([entry('ESCALATION_FIRED', { reason: 'Payment bounced' })])
-    expect(escalation[0].summary).toBe('Payment bounced')
+    expect(clientSummaryFor(entry('SKILL_ENABLED', { skill: 'inbox-triage' }))).toBe(
+      'A skill was turned on: inbox-triage'
+    )
+    expect(clientSummaryFor(entry('SKILL_ENABLED'))).toBe('A skill was turned on')
+    expect(clientSummaryFor(entry('ESCALATION_FIRED', { reason: 'Payment bounced' }))).toBe(
+      'Payment bounced'
+    )
   })
 
-  it('assigns the category that owns the action', () => {
-    const [line] = toClientActivity([entry('CONNECTOR_BOUND', { target: 'Google Calendar' })])
-    expect(line.categoryKey).toBe('connections')
-    expect(line.summary).toBe('Connected Google Calendar')
+  it('the connections category owns CONNECTOR_BOUND', () => {
+    expect(mappedActionsForCategories(['connections'])).toContain('CONNECTOR_BOUND')
+    expect(clientSummaryFor(entry('CONNECTOR_BOUND', { target: 'Google Calendar' }))).toBe(
+      'Connected Google Calendar'
+    )
   })
 })
 

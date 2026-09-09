@@ -2,8 +2,8 @@
  * Operator settings — typed contracts for the config-derived rows the
  * console renders:
  *
- *   - Trust ceiling rows per action class
- *   - Skill toggles (per-persona skill list)
+ *   - The trust-ceiling vocabulary and its label
+ *   - The skill-toggle row shape
  *   - Connector status rows
  *
  * Source of truth is `customer.yaml` per
@@ -17,9 +17,6 @@
  * the portal surface was chrome over a stub — no ingestion wiring
  * existed. Client-voice establishment is its own workstream.
  */
-
-import type { PersonaConfig } from '../customer-config'
-import type { ActionClass, AuthoredExposureActionClass } from '../../operator/customer-yaml/types'
 
 // ---------------------------------------------------------------------------
 // Trust ceiling
@@ -43,20 +40,13 @@ import type { ActionClass, AuthoredExposureActionClass } from '../../operator/cu
  */
 export type TrustCeilingLevel = 'autonomous' | 'draft_for_review' | 'refused'
 
-export const TRUST_CEILING_LEVELS: readonly TrustCeilingLevel[] = [
-  'autonomous',
-  'draft_for_review',
-  'refused',
-] as const
-
-export function isTrustCeilingLevel(value: unknown): value is TrustCeilingLevel {
-  return typeof value === 'string' && (TRUST_CEILING_LEVELS as readonly string[]).includes(value)
-}
-
 /**
  * Human label for a TrustCeilingLevel. Closed vocabulary; unknown
  * values fall through to the raw value rather than fabricating a
  * friendly label.
+ *
+ * @public Consumed by src/components/portal/operator/SkillTogglesSection.astro, a component knip
+ * reports unused. Retiring that component is a product decision, not this gate's.
  */
 export function formatTrustCeilingLevel(level: TrustCeilingLevel): string {
   switch (level) {
@@ -67,78 +57,6 @@ export function formatTrustCeilingLevel(level: TrustCeilingLevel): string {
     case 'refused':
       return 'Refused'
   }
-}
-
-/**
- * One row in the trust-ceiling section. Shape mirrors the persona
- * skill entry from customer.yaml, with the ceiling parsed against
- * the closed vocabulary. Unknown ceiling strings render as the raw
- * value so a hand-edited customer.yaml does not silently change
- * runtime behavior.
- */
-export interface TrustCeilingRow {
-  skillName: string
-  currentLevel: TrustCeilingLevel | null
-  rawLevel: string
-  actionClass: ActionClass
-}
-
-/**
- * Project a persona's skill list into trust-ceiling rows. Order is
- * preserved (skills are authored in priority order by the customer
- * principal in customer.yaml).
- */
-export function trustCeilingRowsFromPersona(persona: PersonaConfig | null): TrustCeilingRow[] {
-  if (!persona) return []
-  const classes: AuthoredExposureActionClass[] = [
-    'internal_write',
-    'external_send',
-    'external_send_internal',
-    'external_send_client',
-    'external_send_vendor',
-    'commitment',
-    'destructive',
-    'code_execution',
-  ]
-  return classes.map((actionClass) => {
-    const level = persona.entitlements.exposure[actionClass]
-    return {
-      skillName: actionClass,
-      currentLevel: isTrustCeilingLevel(level) ? level : null,
-      rawLevel: typeof level === 'string' ? level : '',
-      actionClass,
-    }
-  })
-}
-
-// ---------------------------------------------------------------------------
-// Skill toggles
-// ---------------------------------------------------------------------------
-
-/**
- * One skill toggle row. Sourced from the customer's persona skill
- * list — a skill is "enabled" for this customer iff it appears in
- * persona.skills. Initiation modes are displayed separately from exposure.
- *
- *   skillName       — slug from `operator/skills/<name>/SKILL.md`
- *   enabled         — true when the persona configures the skill
- *                     and its ceiling is not `refused`
- *   trustCeiling    — current ceiling (or null when the persona's
- *                     ceiling does not match the closed vocabulary)
- */
-export interface SkillToggleRow {
-  skillName: string
-  enabled: boolean
-  trustCeiling: TrustCeilingLevel | null
-}
-
-export function skillToggleRowsFromPersona(persona: PersonaConfig | null): SkillToggleRow[] {
-  if (!persona) return []
-  return persona.skills.map((s) => ({
-    skillName: s.name,
-    enabled: true,
-    trustCeiling: null,
-  }))
 }
 
 // ---------------------------------------------------------------------------
@@ -157,6 +75,10 @@ export function skillToggleRowsFromPersona(persona: PersonaConfig | null): Skill
  */
 export type ConnectorHealth = 'ok' | 'warn' | 'fail' | 'unconfigured'
 
+/**
+ * @public Consumed by src/components/portal/operator/ConnectorStatusSection.astro, a component
+ * knip reports unused. Retiring that component is a product decision, not this gate's.
+ */
 export function formatConnectorHealth(health: ConnectorHealth): string {
   switch (health) {
     case 'ok':
@@ -243,6 +165,27 @@ export function connectorRowsFromCustomerYaml(connectorsYaml: unknown): Connecto
 // endpoint only logged intent. Real voice-sample ingestion is the #1851 /
 // voice-establishment workstream; nothing renders sample chrome until the
 // wiring exists (feedback: never build the chrome ahead of the wiring).
-// The live exports above (trust ceilings, skill toggles, connectors) are
-// consumed by the facet resolvers and remain.
+// The per-persona row projections (trust-ceiling rows, skill-toggle rows)
+// went the same way on 2026-09-09: no facet resolver called them. What remains
+// is the closed vocabularies, their labels, and the connector rows.
 // ---------------------------------------------------------------------------
+
+/**
+ * One skill toggle row. Sourced from the customer's persona skill
+ * list — a skill is "enabled" for this customer iff it appears in
+ * persona.skills. Initiation modes are displayed separately from exposure.
+ *
+ *   skillName       — slug from `operator/skills/<name>/SKILL.md`
+ *   enabled         — true when the persona configures the skill
+ *                     and its ceiling is not `refused`
+ *   trustCeiling    — current ceiling (or null when the persona's
+ *                     ceiling does not match the closed vocabulary)
+ *
+ * @public Consumed by src/components/portal/operator/SkillTogglesSection.astro, a component
+ * knip reports unused. Retiring that component is a product decision, not this gate's.
+ */
+export interface SkillToggleRow {
+  skillName: string
+  enabled: boolean
+  trustCeiling: TrustCeilingLevel | null
+}

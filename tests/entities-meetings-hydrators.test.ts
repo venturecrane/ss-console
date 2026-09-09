@@ -21,8 +21,36 @@ import { resolve } from 'path'
 import type { D1Database } from '@cloudflare/workers-types'
 
 import { createEntity } from '../src/lib/db/entities'
-import { createMeeting, getMeetingsForEntities } from '../src/lib/db/meetings'
+import { getMeetingsForEntities } from '../src/lib/db/meetings'
 import { getQuotesForEntities } from '../src/lib/db/quotes'
+
+/**
+ * Insert a meeting row directly. Mirrors the columns the meetings DAL writes
+ * (status defaults to 'scheduled'); the hydrator under test only reads from
+ * `meetings`, so no originating-signal graph is needed behind it.
+ */
+async function insertMeetingRaw(
+  db: D1Database,
+  orgId: string,
+  entityId: string,
+  data: { meeting_type?: string | null; scheduled_at?: string | null } = {}
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO meetings (id, org_id, entity_id, meeting_type, scheduled_at, status, originating_signal_id, created_at)
+       VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?)`
+    )
+    .bind(
+      crypto.randomUUID(),
+      orgId,
+      entityId,
+      data.meeting_type ?? null,
+      data.scheduled_at ?? null,
+      null,
+      new Date().toISOString()
+    )
+    .run()
+}
 
 /**
  * Insert a quote row directly, bypassing createQuote's assessment FK
@@ -81,9 +109,9 @@ describe('getMeetingsForEntities', () => {
   it('groups meetings by entity_id', async () => {
     const a = await createEntity(db, ORG_ID, { name: 'A' })
     const b = await createEntity(db, ORG_ID, { name: 'B' })
-    await createMeeting(db, ORG_ID, a.id, { meeting_type: 'discovery' })
-    await createMeeting(db, ORG_ID, a.id, { meeting_type: 'follow_up' })
-    await createMeeting(db, ORG_ID, b.id, { meeting_type: 'review' })
+    await insertMeetingRaw(db, ORG_ID, a.id, { meeting_type: 'discovery' })
+    await insertMeetingRaw(db, ORG_ID, a.id, { meeting_type: 'follow_up' })
+    await insertMeetingRaw(db, ORG_ID, b.id, { meeting_type: 'review' })
 
     const result = await getMeetingsForEntities(db, ORG_ID, [a.id, b.id])
     expect(result.get(a.id)?.length).toBe(2)
@@ -92,11 +120,11 @@ describe('getMeetingsForEntities', () => {
 
   it('orders by COALESCE(scheduled_at, created_at) DESC within each entity', async () => {
     const e = await createEntity(db, ORG_ID, { name: 'Acme' })
-    await createMeeting(db, ORG_ID, e.id, {
+    await insertMeetingRaw(db, ORG_ID, e.id, {
       scheduled_at: '2026-05-01T00:00:00Z',
       meeting_type: 'newer',
     })
-    await createMeeting(db, ORG_ID, e.id, {
+    await insertMeetingRaw(db, ORG_ID, e.id, {
       scheduled_at: '2026-04-01T00:00:00Z',
       meeting_type: 'older',
     })
@@ -111,7 +139,7 @@ describe('getMeetingsForEntities', () => {
       .bind('org-other', 'Other', 'other')
       .run()
     const e = await createEntity(db, 'org-other', { name: 'Leak' })
-    await createMeeting(db, 'org-other', e.id, { meeting_type: 'leak' })
+    await insertMeetingRaw(db, 'org-other', e.id, { meeting_type: 'leak' })
 
     const result = await getMeetingsForEntities(db, ORG_ID, [e.id])
     expect(result.size).toBe(0)

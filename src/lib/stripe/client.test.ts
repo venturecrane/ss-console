@@ -12,7 +12,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   createStripeInvoice,
   finalizeStripeInvoice,
-  getStripeInvoice,
   sendStripeInvoice,
   voidStripeInvoice,
 } from './client'
@@ -377,7 +376,7 @@ describe('sendStripeInvoice', () => {
 })
 
 // ---------------------------------------------------------------------------
-// voidStripeInvoice / getStripeInvoice
+// voidStripeInvoice
 // ---------------------------------------------------------------------------
 
 describe('voidStripeInvoice', () => {
@@ -397,38 +396,5 @@ describe('voidStripeInvoice', () => {
   it('dev mode: no network call', async () => {
     await voidStripeInvoice(undefined, 'in_1')
     expect(calls).toHaveLength(0)
-  })
-})
-
-describe('getStripeInvoice', () => {
-  it('GETs the invoice and maps id, hosted url, and status', async () => {
-    queue(
-      json({
-        id: 'in_9',
-        object: 'invoice',
-        status: 'open',
-        hosted_invoice_url: 'https://pay.stripe.com/in_9',
-      })
-    )
-    const result = await getStripeInvoice(KEY, 'in_9')
-    expect(calls[0].url).toBe(`${API}/invoices/in_9`)
-    expect(calls[0].init?.method).toBe('GET')
-    expect(headersOf(calls[0]).Authorization).toBe(`Bearer ${KEY}`)
-    expect(result).toEqual({
-      id: 'in_9',
-      hosted_invoice_url: 'https://pay.stripe.com/in_9',
-      status: 'open',
-    })
-  })
-
-  it('throws on failure with the status code', async () => {
-    queue(json({ error: 'missing' }, 404))
-    await expect(getStripeInvoice(KEY, 'in_9')).rejects.toThrow(/Stripe invoice get failed 404/)
-  })
-
-  it('dev mode: returns a draft stub without any network call', async () => {
-    const result = await getStripeInvoice(undefined, 'in_dev')
-    expect(calls).toHaveLength(0)
-    expect(result).toEqual({ id: 'in_dev', hosted_invoice_url: '#dev-mode', status: 'draft' })
   })
 })

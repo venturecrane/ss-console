@@ -64,7 +64,3 @@ const PROVIDERS: Record<string, OAuthProvider> = {
 export function getOAuthProvider(slug: string): OAuthProvider | null {
   return PROVIDERS[slug] ?? null
 }
-
-export function listOAuthProviderSlugs(): string[] {
-  return Object.keys(PROVIDERS)
-}

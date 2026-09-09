@@ -175,48 +175,6 @@ export async function getMeeting(
 }
 
 /**
- * Create a new meeting linked to an entity. Returns the created record.
- */
-export async function createMeeting(
-  db: D1Database,
-  orgId: string,
-  entityId: string,
-  data: CreateMeetingData
-): Promise<Meeting> {
-  const id = crypto.randomUUID()
-  const now = new Date().toISOString()
-
-  // Resolve originating-signal attribution (#589). See createEngagement /
-  // createQuote for the same three-state default contract.
-  const originatingSignalId =
-    data.originating_signal_id === undefined
-      ? await getDefaultOriginatingSignalId(db, orgId, entityId)
-      : data.originating_signal_id
-
-  await db
-    .prepare(
-      `INSERT INTO meetings (id, org_id, entity_id, meeting_type, scheduled_at, status, originating_signal_id, created_at)
-     VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?)`
-    )
-    .bind(
-      id,
-      orgId,
-      entityId,
-      data.meeting_type ?? null,
-      data.scheduled_at ?? null,
-      originatingSignalId,
-      now
-    )
-    .run()
-
-  const meeting = await getMeeting(db, orgId, id)
-  if (!meeting) {
-    throw new Error('Failed to retrieve created meeting')
-  }
-  return meeting
-}
-
-/**
  * Create the canonical meeting row and the legacy assessment mirror row using
  * the same primary key during the monitoring window.
  */

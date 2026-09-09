@@ -6,11 +6,21 @@
   // they were cleaned, and nothing stopped the next 55 from accumulating.
   // `npm run deadcode` is that stop, and it runs in .github/workflows/verify.yml.
   //
-  // Scope is deliberately narrow: ONE rule blocks (`exports` / `nsExports`).
-  // Everything else knip can report is printed but non-blocking, because this
+  // Scope is deliberately narrow: two rules block (`exports` / `nsExports`,
+  // and `types` since 2026-09-09, which was already clean). Everything else
+  // knip can report is printed as a warning and does not block, because this
   // repo has three shapes knip cannot fully trace (.astro islands, the Python
   // operator tree, and wrangler-side worker config) and a gate that fails on
   // false positives gets disabled within a month.
+  //
+  // PRODUCTION MODE (2026-09-09 code review, Code Quality #2). `npm run
+  // deadcode` runs `knip --production`. Patterns suffixed `!` below are the
+  // production set; everything else (tests/**, stubs, fixtures) is dev-only
+  // and is NOT an importer in production mode. Before this, tests/** was a
+  // project file, so an export whose only caller was a test read as used, and
+  // 39 such exports passed a green gate (agreed by two independent methods).
+  // Production mode is knip's own mechanism for exactly that, and the `!`
+  // suffix is how it knows which patterns are production.
 
   // An export referenced only inside its own file is not dead code; it is an
   // over-broad `export` keyword. This repo has ~300 of those (module-local
@@ -26,30 +36,30 @@
       "entry": [
         // Client bundles loaded via <script src="/js/..."> from .astro
         // components (MetaPixel.astro, GA4.astro). No import edge exists.
-        "public/js/*.js",
+        "public/js/*.js!",
 
         // Standalone maintenance/migration scripts. Invoked by hand or by a
         // workflow, never imported.
-        "scripts/*.{ts,mjs}",
-        "src/lib/seo/sitemap-filter.mjs",
+        "scripts/*.{ts,mjs}!",
+        "src/lib/seo/sitemap-filter.mjs!",
 
         // Claude Code harness hooks: wired by .claude/settings.json and run by
         // the harness as subprocesses.
-        ".claude/hooks/*.mjs",
+        ".claude/hooks/*.mjs!",
 
         // Node-side operator tooling. `cli.ts` is the runtime door; `index.ts`
         // is the documented public surface of each module (see the file header
         // in src/lib/operator/customer-yaml/index.ts). Knip does not report
         // unused exports in entry files, which is the correct treatment for a
         // published surface whose consumers live outside this repo.
-        "operator/*/cli.ts",
-        "operator/*/index.ts",
+        "operator/*/cli.ts!",
+        "operator/*/index.ts!",
 
         // Same reasoning: the customer.yaml module's two public doors. Their
         // re-export blocks are the contract other repos import against (ADR
         // 0012 §5 names the configs-repo CI as a consumer).
-        "src/lib/operator/customer-yaml/index.ts",
-        "src/lib/operator/customer-yaml/validator.ts",
+        "src/lib/operator/customer-yaml/index.ts!",
+        "src/lib/operator/customer-yaml/validator.ts!",
 
         // Vitest stubs and fixtures reached through vite `resolve.alias` or a
         // script, not a static import from a test.
@@ -57,12 +67,13 @@
         "tests/fixtures/*.ts",
       ],
       "project": [
-        "src/**/*.{ts,tsx,astro,mjs,css}",
-        "scripts/**/*.{ts,mjs}",
+        "src/**/*.{ts,tsx,astro,mjs,css}!",
+        "scripts/**/*.{ts,mjs}!",
+        // Dev-only: no `!`. In production mode a test is not an importer.
         "tests/**/*.ts",
-        "operator/*/**/*.ts",
-        "public/js/*.js",
-        ".claude/hooks/**/*.mjs",
+        "operator/*/**/*.ts!",
+        "public/js/*.js!",
+        ".claude/hooks/**/*.mjs!",
       ],
       "ignoreDependencies": [
         // `cloudflare:workers` is a Workers runtime built-in (the adapter v13
@@ -87,35 +98,42 @@
   ],
 
   "rules": {
-    // The ratchet: an exported value that nothing in the repo imports.
-    // An export that must survive without an importer carries an explicit
-    // `@public` JSDoc tag at its definition, with the reason next to it.
+    // The ratchet: an exported value that nothing in production imports.
+    // An export that must survive without a production importer carries an
+    // explicit `@public` JSDoc tag at its definition, naming the path that
+    // consumes it. tests/public-waivers.test.ts checks every tag: the path
+    // must exist and must import the symbol (a test that greps the export's
+    // source line does not count). Two shapes qualify: a contract consumed
+    // only by a test by design (drift guards, closed vocabularies, SQL-CASE
+    // twins, merge-gate checks), and an export whose consumer is a file knip
+    // reports unused (a cluster nobody has retired yet).
     "exports": "error",
     "nsExports": "error",
 
-    // Exported *types* number ~450 on the current tree. Most are the public
-    // shape of a module whose consumers destructure the value and never name
-    // the type. Enabling this today would force either a mass un-export or a
-    // mass ignore, and neither is a quality gain. Off deliberately; a separate
-    // pass can decide.
-    "types": "off",
-    "nsTypes": "off",
-    "enumMembers": "off",
-    "namespaceMembers": "off",
+    // Unused exported types. The 2026-08-23 review's config said enabling this
+    // "would force a mass un-export"; the 2026-09-09 review ran it and it was
+    // already clean, so it blocks. Same @public escape hatch as values.
+    "types": "error",
+    "nsTypes": "error",
+    "enumMembers": "warn",
+    "namespaceMembers": "warn",
 
-    // Reported by `npm run deadcode`, but non-blocking: .astro islands,
-    // wrangler config and the Python operator tree all create edges knip
-    // cannot follow, so these categories carry false positives.
-    "files": "off",
-    "dependencies": "off",
-    "devDependencies": "off",
-    "optionalPeerDependencies": "off",
-    "unlisted": "off",
-    "binaries": "off",
-    "unresolved": "off",
-    "duplicates": "off",
-    "cycles": "off",
-    "catalog": "off",
-    "catalogReferences": "off",
+    // Reported by `npm run deadcode`, non-blocking. `warn` is the setting that
+    // makes that sentence true: `off` (what this block said until 2026-09-09)
+    // drops a category before collection, so nothing was ever printed. These
+    // stay non-blocking because .astro islands, wrangler config and the Python
+    // operator tree all create edges knip cannot follow, so they carry false
+    // positives. Read the warnings; do not silence them.
+    "files": "warn",
+    "dependencies": "warn",
+    "devDependencies": "warn",
+    "optionalPeerDependencies": "warn",
+    "unlisted": "warn",
+    "binaries": "warn",
+    "unresolved": "warn",
+    "duplicates": "warn",
+    "cycles": "warn",
+    "catalog": "warn",
+    "catalogReferences": "warn",
   },
 }

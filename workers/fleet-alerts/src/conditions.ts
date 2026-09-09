@@ -31,8 +31,11 @@ export const SPEC_CONTROL_BROKEN_PREFIX = 'spec_control_broken:'
 export const WEBHOOK_SURFACE_MISSING_PREFIX = 'webhook_surface_missing:'
 
 /**
- * Every prefixed class. Used by the stale-holds SQL builder and by the guard test
- * that asserts no caller has reintroduced a hardcoded offset.
+ * Every prefixed class, for the guard test that asserts no caller has
+ * reintroduced a hardcoded offset.
+ *
+ * @public Guard surface. workers/fleet-alerts/src/stale-holds.test.ts imports it to assert no
+ * caller reintroduced a hardcoded offset. No runtime caller, by design.
  */
 export const CONDITION_PREFIXES = [
   CONNECTOR_DOWN_PREFIX,

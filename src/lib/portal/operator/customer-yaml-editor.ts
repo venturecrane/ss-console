@@ -13,16 +13,19 @@
  *      locked fields. The locked fields are always returned for display
  *      (with a "Captain-managed" badge) but never accepted as input.
  *
- *   2. A locked-field policy (`LOCKED_FIELD_PATHS`, `isLockedFieldPath`)
- *      that enumerates which JSONPath-style field paths the customer
- *      side may never write. Drawn from the issue + the schema spec at
- *      `docs/specs/operator/customer-yaml-schema.md`.
+ *   2. A locked-field policy that is structural, not a list: the editable
+ *      surface is the closed `EditableCustomerConfig` shape, and every
+ *      Captain-only field (identity, vertical pinning, machine, memory,
+ *      token refs, custody, auth mode, authority) is pulled from the
+ *      CURRENT yaml by `lockedFromCurrent`, never from the input. (A
+ *      `LOCKED_FIELD_PATHS` list once sat beside this; nothing enforced
+ *      through it, and it was removed 2026-09-09.)
  *
  *   3. A merger (`applyEditableChanges`) that takes a current full YAML
  *      and an `EditableCustomerConfig` and returns the next full YAML.
- *      The merger NEVER writes locked paths even if they appear in the
- *      input — defense in depth against a malformed POST body smuggling
- *      a field name the route forgot to strip.
+ *      Because of (2), the merger cannot write a locked path even if one
+ *      appears in the input — defense in depth against a malformed POST
+ *      body smuggling a field name the route forgot to strip.
  *
  *   4. A diff helper (`computeChangedFields`) that produces the list of
  *      JSONPath strings whose values changed between two snapshots. Used
@@ -53,59 +56,6 @@ import {
   reconstructFromProjection,
   type ProjectedLockedFields,
 } from './customer-config-reconstruct'
-
-// ============================================================================
-// Locked-field policy
-// ============================================================================
-
-/**
- * JSONPath-style field paths whose customer-side mutation is rejected.
- * Some entries reference structures that v1 does not yet ship
- * (`safety.sticky_stop.*`); they are listed defensively so the
- * cross-cutting concern is in one place when those structures land.
- *
- *   - Plain dotted paths target a single field.
- *   - `prefix.*` matches any direct child of `prefix`.
- *   - `prefix.*.suffix` matches any direct child whose nested path
- *     completes with `suffix`.
- */
-export const LOCKED_FIELD_PATHS: readonly string[] = [
-  'schema_version',
-  'customer_id',
-  'customer_name',
-  'vertical',
-  'practice_areas',
-  'fly_region',
-  'model',
-  'hermes_ref',
-  'machine.size',
-  'machine.memory_mb',
-  'memory.d1_namespace',
-  'memory.r2_vault_path',
-  'memory.vectorize_index',
-  'connectors.*.token_ref',
-  'safety.sticky_stop.*',
-] as const
-
-const LOCKED_PATH_SET: ReadonlySet<string> = new Set(LOCKED_FIELD_PATHS)
-
-export function isLockedFieldPath(path: string): boolean {
-  if (LOCKED_PATH_SET.has(path)) return true
-  for (const locked of LOCKED_FIELD_PATHS) {
-    if (locked.includes('*') && matchesWildcard(locked, path)) return true
-  }
-  return false
-}
-
-function matchesWildcard(pattern: string, candidate: string): boolean {
-  const patternSegments = pattern.split('.')
-  const candidateSegments = candidate.split('.')
-  if (patternSegments.length !== candidateSegments.length) return false
-  for (let i = 0; i < patternSegments.length; i++) {
-    if (patternSegments[i] !== '*' && patternSegments[i] !== candidateSegments[i]) return false
-  }
-  return true
-}
 
 // ============================================================================
 // Public types — editable + locked surfaces

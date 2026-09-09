@@ -14,7 +14,6 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   cancelOperatorSubscription,
   createOperatorCheckoutSession,
-  getOperatorSubscription,
   pauseOperatorSubscription,
   resumeOperatorSubscription,
 } from '../src/lib/stripe/subscriptions'
@@ -168,16 +167,5 @@ describe('pause / resume / cancel', () => {
     const result = await cancelOperatorSubscription(KEY, 'sub_9')
     expect(result.status).toBe('canceled')
     expect(calls[0].method).toBe('DELETE')
-  })
-
-  it('getOperatorSubscription reports pause posture from pause_collection presence', async () => {
-    stubStripe([
-      {
-        match: '/subscriptions/sub_9',
-        json: { id: 'sub_9', status: 'active', pause_collection: { behavior: 'void' } },
-      },
-    ])
-    const state = await getOperatorSubscription(KEY, 'sub_9')
-    expect(state.paused).toBe(true)
   })
 })

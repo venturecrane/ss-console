@@ -29,10 +29,6 @@ describe('milestones: data access layer', () => {
     expect(source()).toContain('export async function updateMilestoneStatus')
   })
 
-  it('exports bulkCreateMilestones function', () => {
-    expect(source()).toContain('export async function bulkCreateMilestones')
-  })
-
   it('exports deleteMilestone function', () => {
     expect(source()).toContain('export async function deleteMilestone')
   })
@@ -59,10 +55,6 @@ describe('milestones: data access layer', () => {
     expect(code).toContain("'in_progress'")
     expect(code).toContain("'completed'")
     expect(code).toContain("'skipped'")
-  })
-
-  it('exports MILESTONE_STATUSES constant', () => {
-    expect(source()).toContain('export const MILESTONE_STATUSES')
   })
 
   it('exports VALID_TRANSITIONS for status state machine', () => {
@@ -100,20 +92,6 @@ describe('milestones: data access layer', () => {
   it('supports payment_trigger flag', () => {
     const code = source()
     expect(code).toContain('payment_trigger')
-  })
-
-  it('bulkCreateMilestones creates multiple milestones', () => {
-    const code = source()
-    expect(code).toContain('bulkCreateMilestones')
-    expect(code).toContain('createMilestone')
-    // Should iterate over array
-    expect(code).toContain('milestones.length')
-  })
-
-  it('bulkCreateMilestones assigns sort_order sequentially', () => {
-    const code = source()
-    // Should use index for default sort order
-    expect(code).toContain('sort_order: data.sort_order ?? i')
   })
 
   it('createMilestone handles sort_order', () => {

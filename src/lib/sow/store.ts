@@ -29,18 +29,6 @@ export interface SOWRevision {
   updated_at: string
 }
 
-export interface CreateSOWRevisionData {
-  org_id: string
-  quote_id: string
-  quote_version: number
-  sow_number: string
-  unsigned_storage_key: string
-  checksum_sha256: string
-  rendered_by: string
-  rendered_at: string
-  metadata_json?: string | null
-}
-
 export interface SOWSendAuthorization {
   id: string
   org_id: string

@@ -25,7 +25,6 @@ import {
   applyCalendarSort,
   buildCalendarListPage,
   detectConflicts,
-  distinctCalendarSkills,
   formatCalendarItemType,
   formatTimeRange,
   listCalendarItems,
@@ -407,26 +406,6 @@ describe('formatTimeRange', () => {
     expect(formatted.datePart).toBe('not-a-date')
     expect(formatted.timePart).toBe('also-not')
     expect(formatted.tzPart).toBe('')
-  })
-})
-
-describe('distinctCalendarSkills', () => {
-  it('returns empty array for empty input', () => {
-    expect(distinctCalendarSkills([])).toEqual([])
-  })
-
-  it('returns unique skills sorted alphabetically', () => {
-    const rows: CalendarItem[] = [
-      makeItem({ id: 'a', skill: 'hearing-prep' }),
-      makeItem({ id: 'b', skill: 'deposition-scheduling' }),
-      makeItem({ id: 'c', skill: 'hearing-prep' }),
-      makeItem({ id: 'd', skill: 'deadline-tracking' }),
-    ]
-    expect(distinctCalendarSkills(rows)).toEqual([
-      'deadline-tracking',
-      'deposition-scheduling',
-      'hearing-prep',
-    ])
   })
 })
 

@@ -23,29 +23,3 @@ export function formatShortDate(iso: string | null | undefined): string {
     ...(sameYear ? {} : { year: 'numeric' }),
   })
 }
-
-/**
- * Due caption: "Due Monday, April 20" for a future date; "Overdue — was
- * Monday, April 20" for past. Used on invoice list rows + the detail
- * action card.
- *
- * @public The shared composer. Kept as the canonical form while
- * src/pages/portal/billing/invoices/[id].astro wraps its own local variant;
- * that comment names this function as the alternative.
- */
-export function formatRelativeDueCaption(iso: string | null | undefined): string | null {
-  if (!iso) return null
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return null
-  const long = d.toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  })
-  const now = Date.now()
-  const diffMs = d.getTime() - now
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
-  if (diffDays < 0) return `Overdue — was ${long}`
-  if (diffDays === 0) return `Due today`
-  return `Due ${long}`
-}

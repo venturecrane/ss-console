@@ -245,30 +245,6 @@ export async function cancelOperatorSubscription(
   return { id: data.id, status: data.status }
 }
 
-/** Fetch current subscription state (status + pause posture) for display/verification. */
-export async function getOperatorSubscription(
-  apiKey: string | undefined,
-  subscriptionId: string
-): Promise<{ id: string; status: string; paused: boolean }> {
-  if (!apiKey) {
-    console.log(`[DEV] Stripe: would get subscription ${subscriptionId}`)
-    return { id: subscriptionId, status: 'active', paused: false }
-  }
-  const res = await fetch(`${STRIPE_API_BASE}/subscriptions/${subscriptionId}`, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${apiKey}` },
-  })
-  if (!res.ok) {
-    throw new Error(`Stripe subscription get failed ${res.status}: ${await res.text()}`)
-  }
-  const data: { id: string; status: string; pause_collection: unknown } = await res.json()
-  return {
-    id: data.id,
-    status: data.status,
-    paused: data.pause_collection !== null && data.pause_collection !== undefined,
-  }
-}
-
 /** The three values Stripe documents for Checkout Session `payment_status`. */
 export type CheckoutPaymentStatus = 'paid' | 'unpaid' | 'no_payment_required'
 

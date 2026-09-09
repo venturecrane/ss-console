@@ -21,7 +21,7 @@ import { env as testEnv } from 'cloudflare:workers'
 import {
   createChangeRequest,
   listOpenChangeRequests,
-  listChangeRequestsForCustomer,
+  type ChangeRequestRow,
 } from '../src/lib/portal/operator/change-request'
 import {
   actionToStatus,
@@ -34,6 +34,16 @@ installWorkerdPolyfills()
 const migrationsDir = path.resolve(__dirname, '../migrations')
 const ORG_ID = 'org-1'
 const ENTITY_ID = 'ent-cr'
+
+async function requestsForCustomer(customerSlug: string): Promise<ChangeRequestRow[]> {
+  const { results } = await testEnv.DB.prepare(
+    `SELECT * FROM operator_change_requests
+      WHERE customer_slug = ? ORDER BY created_at DESC LIMIT 50`
+  )
+    .bind(customerSlug)
+    .all<ChangeRequestRow>()
+  return results ?? []
+}
 
 interface MinimalSession {
   userId: string
@@ -170,7 +180,7 @@ describe('POST /api/admin/operator/requests/[action]', () => {
 
     // No longer open; the row carries the resolver identity + note.
     expect(await listOpenChangeRequests(testEnv.DB)).toHaveLength(0)
-    const [row] = await listChangeRequestsForCustomer(testEnv.DB, 'acme')
+    const [row] = await requestsForCustomer('acme')
     expect(row.status).toBe('resolved')
     expect(row.resolved_by_email).toBe('captain@example.com')
     expect(row.resolution_note).toBe('Added via config path.')
@@ -199,7 +209,7 @@ describe('POST /api/admin/operator/requests/[action]', () => {
     )
     expect(res.status).toBe(200)
     expect(await listOpenChangeRequests(testEnv.DB)).toHaveLength(0)
-    const [row] = await listChangeRequestsForCustomer(testEnv.DB, 'acme')
+    const [row] = await requestsForCustomer('acme')
     expect(row.status).toBe('declined')
     expect(row.resolution_note).toBe('Out of current scope.')
   })

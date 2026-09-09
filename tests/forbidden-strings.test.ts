@@ -752,28 +752,6 @@ describe('operator customer.yaml invariants', () => {
   })
 })
 
-describe('client surfaces render curated activity language only', () => {
-  // Portal IA rebuild, Captain decision 7 (2026-07-07): raw runtime audit
-  // vocabulary ("INVARIANT_VIOLATION" title-cased to "Invariant Violation")
-  // must never render on a client surface. formatAuditAction is the raw
-  // mechanical transform and stays admin-side; client surfaces go through
-  // src/lib/portal/operator/activity-language.ts (allowlist; unmapped
-  // renders nothing).
-  const CLIENT_SURFACE_ROOTS = [resolve('src/pages/portal'), resolve('src/components/portal')]
-
-  it('formatAuditAction is not imported by any client surface', () => {
-    for (const root of CLIENT_SURFACE_ROOTS) {
-      for (const file of collectSourceFiles(root)) {
-        const content = readFileSync(file, 'utf-8')
-        expect(
-          content.includes('formatAuditAction'),
-          `${file} references formatAuditAction — client surfaces must use activity-language`
-        ).toBe(false)
-      }
-    }
-  })
-})
-
 describe('operator client-portal surfaces stay vertical-agnostic (ADR 0052)', () => {
   // The Operator is a vertical-agnostic product (ADR 0052): client-portal
   // surfaces must not reintroduce law-vertical vocabulary or demo persona

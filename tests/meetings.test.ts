@@ -24,7 +24,6 @@ import type { D1Database } from '@cloudflare/workers-types'
 
 import { createEntity, type EntityStage } from '../src/lib/db/entities'
 import {
-  createMeeting,
   getMeeting,
   listMeetings,
   updateMeeting,
@@ -44,6 +43,36 @@ async function seedOrg(db: D1Database) {
     .run()
 }
 
+/**
+ * Insert a meeting row directly and return its id. Mirrors the columns the
+ * meetings DAL writes; the tests below exercise the read/update primitives,
+ * not row creation.
+ */
+async function insertMeetingRaw(
+  db: D1Database,
+  orgId: string,
+  entityId: string,
+  data: { meeting_type?: string | null; scheduled_at?: string | null } = {}
+): Promise<string> {
+  const id = crypto.randomUUID()
+  await db
+    .prepare(
+      `INSERT INTO meetings (id, org_id, entity_id, meeting_type, scheduled_at, status, originating_signal_id, created_at)
+       VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?)`
+    )
+    .bind(
+      id,
+      orgId,
+      entityId,
+      data.meeting_type ?? null,
+      data.scheduled_at ?? null,
+      null,
+      new Date().toISOString()
+    )
+    .run()
+  return id
+}
+
 describe('migration 0025: meetings table + backfill', () => {
   let db: D1Database
 
@@ -60,9 +89,10 @@ describe('migration 0025: meetings table + backfill', () => {
       stage: 'prospect',
     })
 
-    const meeting = await createMeeting(db, ORG_ID, entity.id, { scheduled_at: null })
-    expect(meeting.meeting_type).toBeNull()
-    expect(meeting.status).toBe('scheduled')
+    const id = await insertMeetingRaw(db, ORG_ID, entity.id, { scheduled_at: null })
+    const meeting = await getMeeting(db, ORG_ID, id)
+    expect(meeting?.meeting_type).toBeNull()
+    expect(meeting?.status).toBe('scheduled')
   })
 
   it('creates the meeting_schedule table', async () => {
@@ -264,63 +294,48 @@ describe('meetings DAL', () => {
     entityId = entity.id
   })
 
-  it('creates a meeting with default meeting_type=null', async () => {
-    const m = await createMeeting(db, ORG_ID, entityId, { scheduled_at: null })
-    expect(m.meeting_type).toBeNull()
-    expect(m.status).toBe('scheduled')
-    expect(m.entity_id).toBe(entityId)
-  })
-
-  it('creates a meeting with an explicit meeting_type tag', async () => {
-    const m = await createMeeting(db, ORG_ID, entityId, {
-      scheduled_at: null,
-      meeting_type: 'discovery',
-    })
-    expect(m.meeting_type).toBe('discovery')
-  })
-
   it('round-trips completion_notes via updateMeeting', async () => {
-    const m = await createMeeting(db, ORG_ID, entityId, { scheduled_at: null })
-    const updated = await updateMeeting(db, ORG_ID, m.id, {
+    const id = await insertMeetingRaw(db, ORG_ID, entityId, { scheduled_at: null })
+    const updated = await updateMeeting(db, ORG_ID, id, {
       completion_notes: 'Good discovery call, needs proposal.',
     })
     expect(updated?.completion_notes).toBe('Good discovery call, needs proposal.')
   })
 
   it('blocks invalid status transitions', async () => {
-    const m = await createMeeting(db, ORG_ID, entityId, { scheduled_at: null })
+    const id = await insertMeetingRaw(db, ORG_ID, entityId, { scheduled_at: null })
     // scheduled → converted is NOT allowed; must go scheduled → completed → converted
-    await expect(updateMeetingStatus(db, ORG_ID, m.id, 'converted')).rejects.toThrow(
+    await expect(updateMeetingStatus(db, ORG_ID, id, 'converted')).rejects.toThrow(
       'Invalid status transition'
     )
   })
 
   it('allows scheduled → completed → converted', async () => {
-    const m = await createMeeting(db, ORG_ID, entityId, { scheduled_at: null })
-    const completed = await updateMeetingStatus(db, ORG_ID, m.id, 'completed')
+    const id = await insertMeetingRaw(db, ORG_ID, entityId, { scheduled_at: null })
+    const completed = await updateMeetingStatus(db, ORG_ID, id, 'completed')
     expect(completed?.status).toBe('completed')
     expect(completed?.completed_at).toBeTruthy()
-    const converted = await updateMeetingStatus(db, ORG_ID, m.id, 'converted')
+    const converted = await updateMeetingStatus(db, ORG_ID, id, 'converted')
     expect(converted?.status).toBe('converted')
   })
 
   it('lists meetings scoped by entity', async () => {
-    const m1 = await createMeeting(db, ORG_ID, entityId, { scheduled_at: null })
+    const m1Id = await insertMeetingRaw(db, ORG_ID, entityId, { scheduled_at: null })
     // Different entity should not surface.
     const other = await createEntity(db, ORG_ID, {
       name: 'Other',
       stage: 'prospect',
     })
-    await createMeeting(db, ORG_ID, other.id, { scheduled_at: null })
+    await insertMeetingRaw(db, ORG_ID, other.id, { scheduled_at: null })
     const listed = await listMeetings(db, ORG_ID, entityId)
-    expect(listed.map((m) => m.id)).toEqual([m1.id])
+    expect(listed.map((m) => m.id)).toEqual([m1Id])
   })
 
   it('getMeeting is scoped by org_id', async () => {
-    const m = await createMeeting(db, ORG_ID, entityId, { scheduled_at: null })
-    const byOrg = await getMeeting(db, ORG_ID, m.id)
-    expect(byOrg?.id).toBe(m.id)
-    const otherOrg = await getMeeting(db, 'other-org', m.id)
+    const id = await insertMeetingRaw(db, ORG_ID, entityId, { scheduled_at: null })
+    const byOrg = await getMeeting(db, ORG_ID, id)
+    expect(byOrg?.id).toBe(id)
+    const otherOrg = await getMeeting(db, 'other-org', id)
     expect(otherOrg).toBeNull()
   })
 })

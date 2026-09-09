@@ -209,6 +209,10 @@ export function resolveStandingCaps(rows: readonly RoutineGridRow[]): string[] {
 }
 
 /** The closed banned-tool display map's keys (for the repo coverage guard). */
+/**
+ * @public Coverage guard. tests/operator-work-facet.test.ts imports it to assert every banned tool
+ * in the repo has a display sentence. No runtime caller, by design.
+ */
 export function mappedBannedTools(): string[] {
   return Object.keys(BANNED_TOOL_SENTENCE)
 }

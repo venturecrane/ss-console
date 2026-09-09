@@ -54,21 +54,12 @@ export type ServiceCadence = 'one_time' | 'recurring'
 export type ServiceStatus = 'proposed' | 'active' | 'completed' | 'churned'
 
 /**
- * Commercial-lifecycle transitions — deliberately coarser than the delivery
- * lifecycle on the child (engagement/subscription). `engagements.status` and
- * `subscriptions.status` remain authoritative; `services.status` is a rollup.
- */
-export const SERVICE_VALID_TRANSITIONS: Record<ServiceStatus, ServiceStatus[]> = {
-  proposed: ['active', 'churned'],
-  active: ['completed', 'churned'],
-  completed: [],
-  churned: [],
-}
-
-/**
  * Project a consulting engagement's delivery status onto the commercial
  * rollup. MUST stay in lockstep with the CASE in
  * migrations/0069_service_spine_backfill_consulting.sql (asserted in tests).
+ *
+ * @public Readable twin of the SQL CASE in migrations/0069_service_spine_backfill_consulting.sql.
+ * tests/services.test.ts imports it and pins the mapping. The projection itself runs in SQL.
  */
 export function projectConsultingStatus(engagementStatus: string): ServiceStatus {
   switch (engagementStatus) {
@@ -86,6 +77,9 @@ export function projectConsultingStatus(engagementStatus: string): ServiceStatus
  * Project an operator subscription's status onto the commercial rollup. MUST
  * stay in lockstep with the CASE in
  * migrations/0070_service_spine_backfill_operator.sql (asserted in tests).
+ *
+ * @public Readable twin of the SQL CASE in migrations/0070_service_spine_backfill_operator.sql.
+ * tests/services.test.ts imports it and pins the mapping. The projection itself runs in SQL.
  */
 export function projectOperatorStatus(subscriptionStatus: string): ServiceStatus {
   switch (subscriptionStatus) {
@@ -183,54 +177,6 @@ export async function listServices(
     .bind(...params)
     .all<Service>()
   return result.results
-}
-
-export async function getServicesForEntity(
-  db: D1Database,
-  orgId: string,
-  entityId: string
-): Promise<Service[]> {
-  const result = await db
-    .prepare('SELECT * FROM services WHERE org_id = ? AND entity_id = ? ORDER BY created_at DESC')
-    .bind(orgId, entityId)
-    .all<Service>()
-  return result.results
-}
-
-export async function updateServiceStatus(
-  db: D1Database,
-  orgId: string,
-  serviceId: string,
-  newStatus: ServiceStatus
-): Promise<Service | null> {
-  const existing = await getService(db, orgId, serviceId)
-  if (!existing) {
-    return null
-  }
-
-  const validNext = SERVICE_VALID_TRANSITIONS[existing.status] ?? []
-  if (!validNext.includes(newStatus)) {
-    throw new Error(
-      `Invalid service status transition: ${existing.status} -> ${newStatus}. Valid transitions: ${validNext.join(', ') || 'none (terminal state)'}`
-    )
-  }
-
-  // Terminal commercial states stamp ended_at.
-  const stampEnded = newStatus === 'completed' || newStatus === 'churned'
-  const updates = ['status = ?', "updated_at = datetime('now')"]
-  const params: (string | number | null)[] = [newStatus]
-  if (stampEnded) {
-    updates.push('ended_at = ?')
-    params.push(new Date().toISOString())
-  }
-  params.push(serviceId, orgId)
-
-  await db
-    .prepare(`UPDATE services SET ${updates.join(', ')} WHERE id = ? AND org_id = ?`)
-    .bind(...params)
-    .run()
-
-  return getService(db, orgId, serviceId)
 }
 
 // ===========================================================================

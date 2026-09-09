@@ -3,7 +3,6 @@ import { getEngagement, VALID_TRANSITIONS } from '../db/engagements'
 import type { EngagementStatus } from '../db/engagements'
 import { getQuote } from '../db/quotes'
 import { listMilestones, VALID_TRANSITIONS as MILESTONE_TRANSITIONS } from '../db/milestones'
-import type { MilestoneStatus } from '../db/milestones'
 import { listInvoices } from '../db/invoices'
 import { listContext } from '../db/context'
 import { listParkingLot } from '../db/parking-lot'
@@ -118,5 +117,3 @@ export async function loadEngagementDetailPage(params: {
     engagementContactPrimarySet: params.url.searchParams.get('engagement_contact_primary_set'),
   }
 }
-
-export type { MilestoneStatus }

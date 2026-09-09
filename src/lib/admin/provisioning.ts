@@ -38,7 +38,6 @@ import type { D1Database } from '@cloudflare/workers-types'
 import {
   validate,
   ACCEPTED_VERTICALS,
-  ACCEPTED_ADDONS,
   ACCEPTED_EXPOSURE_CEILINGS,
   ACCEPTED_USER_ROLES,
   type ValidationResult,
@@ -310,10 +309,6 @@ export function validateCandidate(doc: Record<string, unknown>): CandidateValida
 
 export function verticalOptions(): readonly string[] {
   return ACCEPTED_VERTICALS
-}
-
-export function addonOptionsFor(vertical: string): readonly string[] {
-  return ACCEPTED_ADDONS[vertical as keyof typeof ACCEPTED_ADDONS] ?? []
 }
 
 export function trustCeilingOptions(): readonly string[] {

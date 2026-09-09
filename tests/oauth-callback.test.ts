@@ -6,7 +6,7 @@ import {
   verifyOAuthState,
   DEFAULT_STATE_TTL_SECONDS,
 } from '../src/lib/oauth/state'
-import { getOAuthProvider, listOAuthProviderSlugs } from '../src/lib/oauth/providers'
+import { getOAuthProvider } from '../src/lib/oauth/providers'
 import { GET as oauthCallback } from '../src/pages/api/oauth/callback'
 
 const SIGNING_KEY_B64 = 'YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE='
@@ -155,12 +155,6 @@ describe('oauth/state', () => {
 })
 
 describe('oauth/providers registry', () => {
-  it('exposes microsoft-graph and google-workspace by their canonical slugs', () => {
-    const slugs = listOAuthProviderSlugs()
-    expect(slugs).toContain('microsoft-graph')
-    expect(slugs).toContain('google-workspace')
-  })
-
   it('returns null for an unknown slug', () => {
     expect(getOAuthProvider('not-a-provider')).toBeNull()
   })

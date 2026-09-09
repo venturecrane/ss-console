@@ -304,6 +304,9 @@ function getContextAuthority(entry: ContextEntry): ContextAuthority {
  *
  * Respects size budgets to avoid blowing up token counts.
  * Transcripts are included as summaries unless `includeTranscripts` is true.
+ *
+ * @public Consumed by src/lib/claude/assessment-to-quote.ts, which knip reports unused (no route
+ * calls it). Retiring that path is a product decision, not this gate's.
  */
 export async function assembleEntityContext(
   db: D1Database,

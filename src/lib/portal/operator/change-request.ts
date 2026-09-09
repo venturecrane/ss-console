@@ -80,22 +80,6 @@ export async function createChangeRequest(
   return { ok: true, id: result?.id ?? 0 }
 }
 
-/** A client's own change requests (most recent first). */
-export async function listChangeRequestsForCustomer(
-  db: D1Database,
-  customerSlug: string,
-  limit = 50
-): Promise<ChangeRequestRow[]> {
-  const { results } = await db
-    .prepare(
-      `SELECT * FROM operator_change_requests
-        WHERE customer_slug = ? ORDER BY created_at DESC LIMIT ?`
-    )
-    .bind(customerSlug, limit)
-    .all<ChangeRequestRow>()
-  return results ?? []
-}
-
 /**
  * The admin inbox: open (unhandled) change requests across all customers, most
  * recent first. Fleet-wide read of a console-side table — not runtime D1.

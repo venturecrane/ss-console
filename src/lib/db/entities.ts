@@ -106,15 +106,6 @@ export interface CreateEntityData {
   source_pipeline?: string | null
 }
 
-export interface UpdateEntityData {
-  name?: string
-  phone?: string | null
-  website?: string | null
-  next_action?: string | null
-  next_action_at?: string | null
-  summary?: string | null
-}
-
 export type FindOrCreateResult =
   { status: 'created'; entity: Entity } | { status: 'found'; entity: Entity }
 

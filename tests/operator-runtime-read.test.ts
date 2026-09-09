@@ -29,12 +29,7 @@ import {
   createRuntimeReadAudit,
   isRuntimeReadConfigured,
 } from '../src/lib/operator/runtime-read-transport'
-import {
-  getRuntimeSummary,
-  listRuntimeSummary,
-  summaryFreshness,
-  DEFAULT_SUMMARY_STALE_SECONDS,
-} from '../src/lib/admin/runtime-summary'
+import { getRuntimeSummary, listRuntimeSummary } from '../src/lib/admin/runtime-summary'
 
 const migrationsDir = resolve(process.cwd(), 'migrations')
 
@@ -220,27 +215,5 @@ describe('runtime summary store', () => {
     const found = await getRuntimeSummary(db, 'alpha-firm')
     expect(found?.summary_status).toBe('yellow')
     expect(await getRuntimeSummary(db, 'nobody')).toBeNull()
-  })
-})
-
-describe('summaryFreshness', () => {
-  const base = new Date('2026-06-08T12:00:00.000Z')
-
-  it('flags no-summary state', () => {
-    expect(summaryFreshness(null, DEFAULT_SUMMARY_STALE_SECONDS, base).stale).toBe(true)
-  })
-
-  it('is fresh within the staleness window', () => {
-    const pushed = new Date(base.getTime() - 60_000).toISOString()
-    const f = summaryFreshness(pushed, DEFAULT_SUMMARY_STALE_SECONDS, base)
-    expect(f.stale).toBe(false)
-    expect(f.label).toContain('ago')
-  })
-
-  it('is stale past the window and never lies reassuringly', () => {
-    const pushed = new Date(base.getTime() - 3600_000).toISOString()
-    const f = summaryFreshness(pushed, DEFAULT_SUMMARY_STALE_SECONDS, base)
-    expect(f.stale).toBe(true)
-    expect(f.label).toContain('stale')
   })
 })

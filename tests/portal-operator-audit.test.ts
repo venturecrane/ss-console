@@ -7,12 +7,6 @@
  * piece is independently exercised here so the URL contract
  * (filter / sort / pagination) is regression-protected against drift
  * before the Hermes bridge (#821) lands and starts shipping real rows.
- *
- * The page-rendering resolver `listAuditEntries` returns an empty list
- * today (no bridge). That contract is also tested here — we want the
- * build to fail loudly if a future change starts seeding mock rows
- * from this module, since that would be a Pattern A/B fabrication
- * violation per CLAUDE.md.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -31,18 +25,14 @@ import {
   buildAuditListPage,
   decisionTone,
   defaultAuditDateRange,
-  distinctAuditActions,
   distinctAuditSkills,
-  formatAuditAction,
   formatAuditDecision,
   formatAuditTimestamp,
-  listAuditEntries,
   paginateAuditEntries,
   parseAuditListParams,
   type AuditEntry,
   type AuditListParams,
 } from '../src/lib/portal/operator/audit'
-import type { SubscriptionRow } from '../src/lib/portal/product-access'
 
 function makeEntry(overrides: Partial<AuditEntry> = {}): AuditEntry {
   return {
@@ -389,18 +379,6 @@ describe('formatAuditTimestamp', () => {
   })
 })
 
-describe('formatAuditAction', () => {
-  it('title-cases SCREAMING_SNAKE values', () => {
-    expect(formatAuditAction('DRAFT_CREATED')).toBe('Draft Created')
-    expect(formatAuditAction('CONNECTOR_AUTH_RESTORED')).toBe('Connector Auth Restored')
-    expect(formatAuditAction('FABRICATION_FILTER_TRIGGERED')).toBe('Fabrication Filter Triggered')
-  })
-
-  it('returns the empty string for empty input', () => {
-    expect(formatAuditAction('')).toBe('')
-  })
-})
-
 describe('formatAuditDecision / decisionTone', () => {
   it('maps every decision value to a friendly label', () => {
     expect(formatAuditDecision('allow')).toBe('Allowed')
@@ -426,10 +404,9 @@ describe('formatAuditDecision / decisionTone', () => {
   })
 })
 
-describe('distinctAuditSkills / distinctAuditActions', () => {
+describe('distinctAuditSkills', () => {
   it('returns empty array for empty input', () => {
     expect(distinctAuditSkills([])).toEqual([])
-    expect(distinctAuditActions([])).toEqual([])
   })
 
   it('returns unique skills sorted alphabetically, dropping null', () => {
@@ -440,43 +417,5 @@ describe('distinctAuditSkills / distinctAuditActions', () => {
       makeEntry({ id: 'd', skill: 'deadline' }),
     ]
     expect(distinctAuditSkills(rows)).toEqual(['deadline', 'intake'])
-  })
-
-  it('returns unique actions sorted alphabetically', () => {
-    const rows: AuditEntry[] = [
-      makeEntry({ id: 'a', action: 'DRAFT_CREATED' }),
-      makeEntry({ id: 'b', action: 'TRUST_PROMOTED' }),
-      makeEntry({ id: 'c', action: 'DRAFT_CREATED' }),
-    ]
-    expect(distinctAuditActions(rows)).toEqual(['DRAFT_CREATED', 'TRUST_PROMOTED'])
-  })
-})
-
-describe('listAuditEntries', () => {
-  it('returns an empty page until the Hermes bridge wires in (#821)', async () => {
-    // No fabrication: the bridge stub returns []. If a future change
-    // adds mock rows in fetchAuditEntriesFromHermes this test fails
-    // loudly (CLAUDE.md Pattern A/B violation).
-    const stubSubscription: SubscriptionRow = {
-      id: 'sub-test',
-      org_id: 'org-test',
-      entity_id: 'ent-test',
-      product_slug: 'operator',
-      instance_slug: 'smd',
-      status: 'active',
-      started_at: '2026-05-21T00:00:00Z',
-      ended_at: null,
-      settings_json: null,
-      service_id: null,
-      stripe_subscription_id: null,
-      created_at: '2026-05-21T00:00:00Z',
-      updated_at: '2026-05-21T00:00:00Z',
-    }
-    const page = await listAuditEntries(stubSubscription, baseParams)
-    expect(page.rows).toEqual([])
-    expect(page.totalCount).toBe(0)
-    expect(page.page).toBe(1)
-    expect(page.pageCount).toBe(1)
-    expect(page.pageSize).toBe(DEFAULT_AUDIT_PAGE_SIZE)
   })
 })

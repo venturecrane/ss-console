@@ -1,71 +1,21 @@
 /**
- * Configure surface model (client-portal §5.6). Read-side helpers for the
- * skills / governance / voice / scope / hours sub-domains. Pure — no I/O.
+ * Configure surface model (client-portal §5.6). Read-side parsers for the
+ * scope / hours sub-domains. Pure — no I/O.
  *
- * Governance is rendered on the ACTION-CLASS model (ADR 0025), not the legacy
- * per-skill scalar. At launch every config domain is Read + Request, so this
- * surface shows the non-raisable vertical FLOORS (the hard stops the client
- * can never cross) per action class — the accurate, always-available half of
- * the model. The per-action configured ceilings surface when the projection
- * carries persona exposure and the configuration/trust switch is flipped
- * operable. Until then the runtime treats an unconfigured action class as
- * fail-closed (refused) — never "drafts for review" (ADR 0035 landmine).
+ * The governance-floor rows and ceiling labels that once lived here were
+ * removed 2026-09-09: no facet rendered them, and ADR 0073 had already
+ * emptied every vertical floor. Governance is still the ACTION-CLASS model
+ * (ADR 0025); the runtime treats an unconfigured action class as fail-closed
+ * (refused), never "drafts for review" (ADR 0035 landmine).
  */
 
-import { getVerticalFloor, type Ceiling } from './config-governance'
 import {
-  ACCEPTED_ACTION_CLASSES,
   OUTBOUND_ROSTER_CLASSES,
-  type ActionClass,
   type OutboundRosterClass,
   type OutboundRosterEntry,
   type Scope,
   type BusinessHours,
 } from '../../operator/customer-yaml/types'
-
-export const ACTION_CLASS_LABEL: Record<ActionClass, string> = {
-  read: 'Read',
-  internal_write: 'Internal write',
-  external_send: 'External send (outside)',
-  external_send_internal: 'Internal send (staff)',
-  external_send_client: 'Client send',
-  external_send_vendor: 'Records-vendor send',
-  commitment: 'Commitment',
-  destructive: 'Destructive',
-  code_execution: 'Code execution',
-}
-
-export interface GovernanceFloorRow {
-  actionClass: ActionClass
-  label: string
-  /** The non-raisable floor for this action class, or null when none applies. */
-  floor: Ceiling | null
-}
-
-/**
- * The action-class governance rows: every action class with its vertical floor.
- * A null floor means the vertical sets no hard stop for that class (the client,
- * once operable, may set any ceiling); a non-null floor is the hard stop the
- * client cannot raise above. No vertical currently declares one (the law-firm
- * external_send floor was removed 2026-07, ADR 0073).
- */
-export function buildGovernanceFloorRows(vertical: string | null): GovernanceFloorRow[] {
-  return ACCEPTED_ACTION_CLASSES.map((ac) => ({
-    actionClass: ac,
-    label: ACTION_CLASS_LABEL[ac],
-    floor: getVerticalFloor(vertical, ac),
-  }))
-}
-
-export function formatCeiling(c: Ceiling): string {
-  return c === 'autonomous'
-    ? 'Autonomous'
-    : c === 'confirm'
-      ? 'Confirm'
-      : c === 'draft_for_review'
-        ? 'Draft for review'
-        : 'Refused'
-}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)

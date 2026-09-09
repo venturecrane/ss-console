@@ -86,15 +86,3 @@ export function clientRolePermits(roles: readonly string[], domain: string): boo
   }
   return false
 }
-
-/**
- * The set of switchable domains a single role may operate. Exposed for surfaces
- * that need to reason over a role's full operability footprint (e.g. a nav that
- * dims domains a role can never act on). Returns an empty array for unknown
- * roles. Order follows SWITCHABLE_AUTHORITY_DOMAINS for stable rendering.
- */
-export function operableDomainsForRole(role: string): SwitchableAuthorityDomain[] {
-  if (!isClientRole(role)) return []
-  const set = OPERABILITY[role]
-  return SWITCHABLE_AUTHORITY_DOMAINS.filter((d) => set.has(d))
-}

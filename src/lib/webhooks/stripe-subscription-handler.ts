@@ -149,18 +149,6 @@ function subscriptionSignal(
 }
 
 /**
- * The subscription id, or null when there is not a readable one.
- *
- * Retained for call sites that only need the id. Anything that decides how to
- * ROUTE an event must use {@link resolveStripeSubscriptionLinkage} instead —
- * null here still cannot distinguish "no subscription" from "cannot read it".
- */
-export function extractStripeSubscriptionId(invoice: unknown): string | null {
-  const linkage = resolveStripeSubscriptionLinkage(invoice)
-  return linkage.kind === 'linked' ? linkage.subscriptionId : null
-}
-
-/**
  * An invoice signalled a subscription linkage this code cannot read.
  *
  * Loud on three surfaces, because each catches a different reader: an error
@@ -729,5 +717,3 @@ export async function alertTeam(
     console.error('[stripe-subscription] alert email failed:', subject, err)
   }
 }
-
-export type { SubscriptionBillingRow }
