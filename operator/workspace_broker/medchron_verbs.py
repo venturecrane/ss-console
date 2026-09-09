@@ -24,6 +24,7 @@ import json
 from typing import Any
 
 from .medchron_ledger import (
+    ALLOWANCE_KEY,
     AUDIT_TYPE,
     STATES,
     EnvelopeError,
@@ -101,7 +102,9 @@ class MedchronVerbs:
         if self.ledger is None:
             raise ValueError("medchron ledger not configured on this broker")
         if action == "medchron_allowance":
-            return {"ok": True, **self.ledger.allowance(allowance_from_customer_yaml(self.customer_yaml))}
+            exclude = str(request.get("exclude_job_id") or "") or None
+            return {"ok": True, **self.ledger.allowance(allowance_from_customer_yaml(self.customer_yaml),
+                                                        exclude_job_id=exclude)}
         if action == "medchron_job_status":
             job_id = str(request.get("job_id") or "")
             if job_id:
@@ -123,19 +126,28 @@ class MedchronVerbs:
             return {"ok": True, "accepted": False, "reason": str(exc)}
         state = self.ledger.allowance(allowance_from_customer_yaml(self.customer_yaml))
         if not state["authored"]:
+            # The key is named because the seat that hits this is usually one
+            # whose customer.yaml still carries only the pre-2026-09-09
+            # document key: a firm cannot fix a key it is not told about.
             return {"ok": True, "accepted": False,
-                    "reason": "no monthly document allowance is authored for this seat; nothing can be submitted"}
+                    "reason": "no monthly page allowance is authored for this seat "
+                              f"({ALLOWANCE_KEY}); nothing can be submitted"}
         if state["remaining"] <= 0:
             return {"ok": True, "accepted": False,
-                    "reason": f"the monthly allowance is spent ({state['used']} of {state['allowance']} documents in "
-                              f"{state['month']}); the Operator stops here and surfaces the item"}
+                    "reason": f"the monthly page allowance is spent ({state['used']:,} of "
+                              f"{state['allowance']:,} pages in {state['month']}); the Operator stops here "
+                              "and surfaces the item"}
         job_id = self.ledger.submit(envelope, remaining=state["remaining"])
         self._audit(AUDIT_TYPE["submitted"],
                     {"job_id": job_id, "matter_number": envelope["matter"]["number"], "units": len(envelope["units"]),
+                     "allowance_remaining_pages": state["remaining"],
                      "allowance_remaining_documents": state["remaining"],
                      "requested_by": envelope.get("requested_by"), "request_ref": envelope.get("request_ref")},
                     envelope["matter"]["id"])
-        return {"ok": True, "accepted": True, "job_id": job_id, "state": "submitted",
+        return {"ok": True, "accepted": True, "job_id": job_id, "state": "submitted", "unit": state["unit"],
+                "allowance_remaining_pages": state["remaining"],
+                # Kept for one release: the overlay's pinned tool relays this
+                # key by name (ADR 0087 amendment).
                 "allowance_remaining_documents": state["remaining"]}
 
     def _record(self, request: dict[str, Any]) -> dict[str, Any]:

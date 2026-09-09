@@ -37,6 +37,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from . import config as config_mod
+
 logger = logging.getLogger("medchron.daemon")
 
 RUN_DIR_ENV = "SMD_MEDCHRON_RUN_DIR"
@@ -101,6 +103,15 @@ class BrokerClient:
     def record(self, job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any]:
         return self._request({"action": "medchron_job_record", "job_id": job_id, "state": state, "fields": fields})
 
+    def allowance(self, exclude_job_id: str | None = None) -> dict[str, Any]:
+        """The month's page allowance and spend as the broker counts them now.
+        `exclude_job_id` leaves THIS job's own row out, so a resume does not
+        meter a run against the cents it already recorded."""
+        req: dict[str, Any] = {"action": "medchron_allowance"}
+        if exclude_job_id:
+            req["exclude_job_id"] = exclude_job_id
+        return self._request(req)
+
 
 def sticky_level(db_path: str) -> str | None:
     """The seat's worst persisted sticky-stop level, read-only; None when no
@@ -159,6 +170,8 @@ class Daemon:
     started_at: float = field(default_factory=time.time)
     jobs_run: int = 0
     wakes_failed: int = 0
+    #: Explicit firm-config path; None resolves the env/default the seat uses.
+    firm_config: str | None = None
     gate_url: str = field(default_factory=lambda: os.environ.get(GATE_URL_ENV) or DEFAULT_GATE_URL)
     wake_secret: str = field(default_factory=lambda: os.environ.get(WAKE_SECRET_ENV, ""))
 
@@ -270,10 +283,22 @@ class Daemon:
             # a job that resolved controls there refused forever (2026-09-04).
             "install_root": str(self.run_dir),
         }
-        for key in ("injuries", "cap_usd", "allowance_remaining_documents", "selection", "requested_by",
-                    "request_ref"):
+        for key in ("injuries", "cap_usd", "allowance_remaining_documents", "allowance_remaining_pages",
+                    "selection", "requested_by", "request_ref"):
             if env.get(key) is not None:
                 doc[key] = env[key]
+        # The month's state is read FRESH here, on every run and every resume,
+        # never taken from the envelope: the envelope's copy was true when the
+        # job was submitted and is stale the moment any other job records cents.
+        # This job's own row is excluded so a resume is not metered against the
+        # spend it already recorded.
+        state = self.broker.allowance(exclude_job_id=job_id)
+        doc["allowance_pages"] = int(state.get("allowance") or 0)
+        doc["allowance_remaining_pages"] = int(state.get("remaining") or 0)
+        doc["month_pages_used"] = int(state.get("pages_used") or 0)
+        doc["month_cents_used"] = int(state.get("cents_used") or 0)
+        if state.get("month"):
+            doc["allowance_month"] = str(state["month"])
         import yaml
 
         (jd / "job.yaml").write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
@@ -319,7 +344,22 @@ class Daemon:
         return preexec
 
     def run_job(self, job_id: str) -> str:
-        jd = self._write_job_yaml(job_id)
+        # The firm config first, before anything is recorded. A seat whose
+        # firm.yaml has not caught up with this runner's schema DEFERS: the job
+        # stays claimed, nothing is written to the ledger, and the next tick
+        # tries again. That is what makes the rollout safe in either order --
+        # customer.yaml and firm.yaml can land minutes apart without a job
+        # failing in between.
+        try:
+            config_mod.load(self.firm_config)
+        except config_mod.ConfigError as exc:
+            logger.warning("firm config not usable yet, deferring %s: %s", job_id, exc)
+            return "deferred"
+        try:
+            jd = self._write_job_yaml(job_id)
+        except BrokerError as exc:
+            logger.warning("could not read the month's allowance for %s, deferring: %s", job_id, exc)
+            return "deferred"
         st = self._daemon_state(job_id)
         try:
             self.broker.record(job_id, "running", {})

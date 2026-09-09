@@ -63,7 +63,13 @@ _ALLOWED_NEXT = {
 }
 
 SKILL_NAME = "medical-chronology-maintainer"
-ALLOWANCE_KEY = "chronology_package_document_allowance_per_month"
+# 2026-09-09: the allowance is metered in PAGES, not documents. A document is
+# not a unit of work -- the delivered packages ranged from a one-page bill to a
+# 700-page hospital chart -- and the cost of a package tracks its pages. The
+# old key is deliberately NOT read as a fallback: a seat still carrying only
+# the document key reads as unauthored and submits nothing, which is the
+# fail-closed answer, and the refusal names the key the firm has to author.
+ALLOWANCE_KEY = "chronology_package_page_allowance_per_month"
 INCIDENT_SOURCES = frozenset({"matter_layout", "intake_document", "administrator_request", "record_citation"})
 _DOB_RE = re.compile(r"^\d{2}/\d{2}/\d{4}$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -85,10 +91,33 @@ CREATE_SQL = (
     "cents INTEGER NOT NULL DEFAULT 0, "
     "reason TEXT, "
     "folder_id TEXT, "
-    "delivery_json TEXT"
+    "delivery_json TEXT, "
+    # The month a job's cents were first recorded against. A run that starts on
+    # the 31st and lands on the 1st debits the month it spent in, and a resume
+    # never moves a job between months. Stamped once, in record().
+    "month_charged TEXT"
     ")"
 )
 CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_medchron_jobs_created ON medchron_jobs(created_at)"
+
+# ONE debit rule for pages, documents and cents: a job DEBITS THE MONTH when it
+# recorded cents, whatever state it ended in. Counting delivered jobs only (the
+# rule before 2026-09-09) let a run that read thousands of pages and spent real
+# money leave no mark, because it held or failed after the money had moved. A
+# hold at zero cents is not a debit: nothing was read and nothing was spent.
+# Both forms are written out in full rather than composed: a query built by
+# concatenation reads as an injection risk to every scanner and every reviewer,
+# even when every part is a literal.
+_DEBITS_SQL = (
+    "SELECT COALESCE(SUM(pages), 0) AS pages, COALESCE(SUM(documents), 0) AS documents, "
+    "COALESCE(SUM(cents), 0) AS cents FROM medchron_jobs "
+    "WHERE cents > 0 AND COALESCE(month_charged, substr(created_at, 1, 7)) = ?"
+)
+_DEBITS_SQL_EXCLUDING = (
+    "SELECT COALESCE(SUM(pages), 0) AS pages, COALESCE(SUM(documents), 0) AS documents, "
+    "COALESCE(SUM(cents), 0) AS cents FROM medchron_jobs "
+    "WHERE cents > 0 AND COALESCE(month_charged, substr(created_at, 1, 7)) = ? AND id <> ?"
+)
 
 # The console projection (the ``medchron_jobs`` runtime-read kind and the
 # agent's status verb both read this): counts and states, never the envelope.
@@ -218,30 +247,69 @@ class MedchronLedger:
         try:
             conn.execute(CREATE_SQL)
             conn.execute(CREATE_INDEX_SQL)
+            cols = {str(r["name"]) for r in conn.execute("PRAGMA table_info(medchron_jobs)").fetchall()}
+            if "month_charged" not in cols:
+                # A seat whose db predates the column. Existing rows keep None
+                # and fall back to their created_at month, which is what they
+                # were counted against before.
+                conn.execute("ALTER TABLE medchron_jobs ADD COLUMN month_charged TEXT")
             conn.commit()
         finally:
             conn.close()
 
-    # -- allowance ---------------------------------------------------------
-    def documents_used(self, month: str) -> int:
+    # -- the month's debits ------------------------------------------------
+    # ONE rule for pages, documents and cents: a job DEBITS THE MONTH when it
+    # recorded cents, whatever state it ended in. Counting delivered jobs only
+    # (the rule before 2026-09-09) let a run that read 3,000 pages and spent
+    # real money against the vendor leave no mark, because it held or failed
+    # after the money moved. Held-at-zero jobs are not debits: nothing was read
+    # and nothing was spent.
+    def debits(self, month: str, exclude_job_id: str | None = None) -> dict[str, int]:
+        """The month's debited pages, documents and cents, in one read so the
+        three can never disagree about which rows they counted."""
         conn = self._connect()
         try:
-            row = conn.execute(
-                "SELECT COALESCE(SUM(documents), 0) AS n FROM medchron_jobs "
-                "WHERE state = 'delivered' AND substr(created_at, 1, 7) = ?",
-                (month,),
-            ).fetchone()
-            return int(row["n"])
+            if exclude_job_id:
+                row = conn.execute(_DEBITS_SQL_EXCLUDING, (month, exclude_job_id)).fetchone()
+            else:
+                row = conn.execute(_DEBITS_SQL, (month,)).fetchone()
+            return {"pages": int(row["pages"]), "documents": int(row["documents"]), "cents": int(row["cents"])}
         finally:
             conn.close()
 
-    def allowance(self, allowance: int | None, now: str | None = None) -> dict[str, Any]:
+    def pages_used(self, month: str, exclude_job_id: str | None = None) -> int:
+        return self.debits(month, exclude_job_id)["pages"]
+
+    def cents_used(self, month: str, exclude_job_id: str | None = None) -> int:
+        return self.debits(month, exclude_job_id)["cents"]
+
+    def documents_used(self, month: str, exclude_job_id: str | None = None) -> int:
+        return self.debits(month, exclude_job_id)["documents"]
+
+    def allowance(self, allowance: int | None, now: str | None = None,
+                  exclude_job_id: str | None = None) -> dict[str, Any]:
+        """The month's allowance state, in PAGES.
+
+        `used`/`remaining` are the allowance's own unit and `unit` says which
+        it is, so a caller can never read a page count as a document count.
+        The document and cents figures ride alongside for the console and the
+        runner's cost limits. `exclude_job_id` leaves one job's own row out,
+        which is what a resume needs so it is not metered against itself.
+        """
         month = month_of(now or _iso_utc())
-        used = self.documents_used(month)
+        pages = self.pages_used(month, exclude_job_id)
+        extra: dict[str, Any] = {
+            "unit": "pages",
+            "pages_used": pages,
+            "documents_used": self.documents_used(month, exclude_job_id),
+            "cents_used": self.cents_used(month, exclude_job_id),
+        }
         if allowance is None:
-            return {"month": month, "allowance": None, "used": used, "remaining": 0, "authored": False}
-        return {"month": month, "allowance": allowance, "used": used, "remaining": max(0, allowance - used),
-                "authored": True}
+            return {"month": month, "allowance": None, "used": pages, "remaining": 0, "authored": False,
+                    "pages_remaining": 0, **extra}
+        remaining = max(0, allowance - pages)
+        return {"month": month, "allowance": allowance, "used": pages, "remaining": remaining,
+                "authored": True, "pages_remaining": remaining, **extra}
 
     # -- intake ------------------------------------------------------------
     def submit(self, envelope: dict[str, Any], *, remaining: int) -> str:
@@ -251,6 +319,12 @@ class MedchronLedger:
         now = _iso_utc()
         queued = dict(envelope)
         queued["job_id"] = job_id
+        # Both keys, the same integer, for ONE release. The allowance is in
+        # pages now; `allowance_remaining_documents` stays because the overlay's
+        # pinned tool relays that key by name and an old broker restarting
+        # during the rollout window still reads it. It goes when the pin moves
+        # (ADR 0087 amendment, first item of the next overlay bump).
+        queued["allowance_remaining_pages"] = int(remaining)
         queued["allowance_remaining_documents"] = int(remaining)
         queued["submitted_at"] = now
         conn = self._connect()
@@ -302,7 +376,7 @@ class MedchronLedger:
             raise ValueError(f"unknown state {state!r}")
         conn = self._connect()
         try:
-            cur = conn.execute("SELECT state FROM medchron_jobs WHERE id=?", (job_id,)).fetchone()
+            cur = conn.execute("SELECT state, month_charged FROM medchron_jobs WHERE id=?", (job_id,)).fetchone()
             if cur is None:
                 raise ValueError(f"no such job {job_id}")
             # ss#2616: a same-state re-record is a NOTE (a lost deliver wake,
@@ -310,8 +384,15 @@ class MedchronLedger:
             # the current state's type. Transitions stay monotonic otherwise.
             if state != cur["state"] and state not in _ALLOWED_NEXT[cur["state"]]:
                 raise ValueError(f"illegal transition {cur['state']} -> {state}")
+            now = _iso_utc()
             sets = ["state=?", "updated_at=?"]
-            vals: list[Any] = [state, _iso_utc()]
+            vals: list[Any] = [state, now]
+            # Stamp the debit month the first time cents land, and never again:
+            # a run that starts on the 31st and finishes on the 1st debits the
+            # month it spent in, and a resume cannot move it.
+            if int(fields.get("cents") or 0) > 0 and not cur["month_charged"]:
+                sets.append("month_charged=?")
+                vals.append(month_of(now))
             for col in ("documents", "pages", "cents"):
                 if col in fields:
                     v = fields[col]

@@ -18,6 +18,7 @@ import yaml
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DOB_RE = re.compile(r"^\d{2}/\d{2}/\d{4}$")
+MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 INCIDENT_SOURCES = {"matter_layout", "intake_document", "administrator_request", "record_citation"}
 
 
@@ -60,6 +61,16 @@ class Job:
     # never writes here on a seat, and never a matter's bytes anywhere.
     install_root: Path
     allowance_remaining_documents: int | None = None
+    # The month's state as the broker read it, stamped fresh before every run
+    # and every resume (the daemon re-fetches; the envelope's own copy goes
+    # stale the moment another job records cents). `allowance_month` is the
+    # month those counts belong to, so a run that spans midnight on the last
+    # of the month can say which month it metered against.
+    allowance_pages: int | None = None
+    allowance_remaining_pages: int | None = None
+    month_pages_used: int | None = None
+    month_cents_used: int | None = None
+    allowance_month: str | None = None
     selection_overrides: dict[str, Any] = field(default_factory=dict)
     requested_by: str | None = None
     request_ref: str | None = None
@@ -79,6 +90,18 @@ def _req(d: dict[str, Any], key: str, where: str) -> Any:
     if key not in d or d[key] in (None, ""):
         raise JobError(f"{where}.{key}: required")
     return d[key]
+
+
+def _opt_nonneg_int(d: dict[str, Any], key: str) -> int | None:
+    """An optional count the broker stamped. Absent is None (a laptop run);
+    present and malformed is a refusal, never a coerced zero, because a zero
+    remainder and an unknown remainder mean opposite things to the limits."""
+    value = d.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise JobError(f"job.{key}: must be a non-negative integer")
+    return value
 
 
 def parse(data: Any, *, path: Path) -> Job:
@@ -124,9 +147,10 @@ def parse(data: Any, *, path: Path) -> Job:
     cap = data.get("cap_usd")
     if cap is not None and (not isinstance(cap, (int, float)) or cap <= 0):
         raise JobError("job.cap_usd: must be a positive number when present")
-    allowance = data.get("allowance_remaining_documents")
-    if allowance is not None and (not isinstance(allowance, int) or allowance < 0):
-        raise JobError("job.allowance_remaining_documents: must be a non-negative integer")
+    allowance = _opt_nonneg_int(data, "allowance_remaining_documents")
+    month = data.get("allowance_month")
+    if month is not None and not (isinstance(month, str) and MONTH_RE.match(month)):
+        raise JobError("job.allowance_month: expected YYYY-MM")
     data_root = data.get("data_root")
     if not data_root:
         raise JobError("job.data_root: required (the durable data root outside any repo)")
@@ -147,6 +171,11 @@ def parse(data: Any, *, path: Path) -> Job:
         data_root=Path(str(data_root)).expanduser(),
         install_root=Path(install_root).expanduser(),
         allowance_remaining_documents=allowance,
+        allowance_pages=_opt_nonneg_int(data, "allowance_pages"),
+        allowance_remaining_pages=_opt_nonneg_int(data, "allowance_remaining_pages"),
+        month_pages_used=_opt_nonneg_int(data, "month_pages_used"),
+        month_cents_used=_opt_nonneg_int(data, "month_cents_used"),
+        allowance_month=str(month) if month is not None else None,
         selection_overrides=dict(data.get("selection") or {}),
         requested_by=data.get("requested_by"),
         request_ref=data.get("request_ref"),

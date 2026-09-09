@@ -33,6 +33,7 @@ from typing import Any, Callable
 
 from .config import FirmConfig
 from .ledger import Ledger, count_pages
+from .limits import LimitHold
 
 # Only rows a call site actually leaves to the table. Every other stage passes
 # effort itself or ships at the API default: every effort reading on
@@ -267,12 +268,19 @@ class Doorway:
     max_wait_s: float = 86400.0
     client: Any = None
     log: Callable[[str], None] = print
+    #: Called with the stage name before every interactive call, BEFORE any
+    #: money moves. The driver binds the cost limits here; raising from it is
+    #: how a cap or a monthly budget stops a run inside a long stage instead
+    #: of at the next stage boundary.
+    before_request: Callable[[str], None] | None = None
 
     @classmethod
     def from_config(cls, cfg: FirmConfig, ledger: Ledger, *, client: Any = None,
-                    log: Callable[[str], None] = print) -> "Doorway":
+                    log: Callable[[str], None] = print,
+                    before_request: Callable[[str], None] | None = None) -> "Doorway":
         return cls(ledger=ledger, caching=bool(cfg.get("levers", "cache", True)),
-                   batch_stages=frozenset(cfg.batch_stages) - NEVER_BATCHED, client=client, log=log)
+                   batch_stages=frozenset(cfg.batch_stages) - NEVER_BATCHED, client=client, log=log,
+                   before_request=before_request)
 
     def _client(self, timeout: float | None) -> Any:
         if self.client is None:
@@ -289,6 +297,8 @@ class Doorway:
              backoff: float = 20.0, timeout: float | None = None, custom_id: str | None = None) -> Result:
         """One interactive call. Retries transport/429/5xx; re-raises 4xx at
         once. Always writes a ledger row, so a paid call is never invisible."""
+        if self.before_request is not None:
+            self.before_request(stage)
         params, markers = build_params_marked(stage, model=model, messages=messages, max_tokens=max_tokens,
                                               system=system, effort=effort, cache_blocks=cache_blocks, tools=tools,
                                               tool_choice=tool_choice, thinking=thinking, caching=self.caching)
@@ -323,12 +333,21 @@ class Doorway:
         else serially through call(). on_result fires once per item that
         finished, in both modes; timed-out items fire nothing and are listed."""
         summary = BatchSummary()
+        if self.before_request is not None:
+            # Batch mode has no per-item doorway, so the limits get their one
+            # look before the submission; serial mode is checked per item below.
+            self.before_request(stage)
         if stage not in self.batch_stages:
             for it in items:
                 try:
                     r = self.call(stage, model=model, system=system, messages=it.messages, max_tokens=max_tokens,
                                   effort=effort, cache_blocks=cache_blocks, tools=tools, tool_choice=tool_choice,
                                   thinking=thinking, custom_id=it.custom_id)
+                except LimitHold:
+                    # A limit is not one item's failure: it stops the stage.
+                    # Swallowing it here would turn the gate into a page of
+                    # "failed" transcriptions and keep spending.
+                    raise
                 except Exception as exc:  # noqa: BLE001 - one item's failure is one result
                     summary.failed[it.custom_id] = str(exc)
                     on_result(it, None, str(exc))

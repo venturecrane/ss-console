@@ -24,7 +24,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import __version__, budget as budget_mod, config as config_mod, dag, decisions, icd_tables, job as job_mod, seat as seat_mod
+from . import (__version__, budget as budget_mod, config as config_mod, dag, decisions, icd_tables,
+               job as job_mod, limits as limits_mod, seat as seat_mod)
 from .stages.base import StageRefusal, StageRun
 from .state import RunState, state_path
 
@@ -161,16 +162,94 @@ class Driver:
         self.pipeline = None if dry_run else _pipeline_dir()
         pricing_path = Path(pricing or os.environ.get(budget_mod.PRICING_ENV) or budget_mod.PRICING_DEFAULT)
         self.pricing = budget_mod.Pricing.load(pricing_path)
-        cap = self.job.cap_usd if self.job.cap_usd is not None else self.cfg.per_job_cap_usd
+        # The envelope can only LOWER the firm's cap. It used to win outright,
+        # which made the cap advisory: anything that could author an envelope
+        # could author its way past the firm's posture.
+        firm_cap = self.cfg.per_job_cap_usd
+        cap = firm_cap if self.job.cap_usd is None else min(self.job.cap_usd, firm_cap)
+        if self.job.cap_usd is not None and self.job.cap_usd > firm_cap:
+            self.log("[cap] the envelope asked for a higher cap than the firm's; the firm's cap stands")
         self.slug_dir = self.job.data_root / self.job.slug
         ledgers = [self.slug_dir / "runs" / u.unit / "usage-ledger.jsonl" for u in self.job.units]
         ledgers.append(self.job.data_root / "usage-ledger-orphan.jsonl")
         self.budget = budget_mod.Budget(self.pricing, cap, ledgers, float(self.cfg.get("budget", "usd_per_million_chars")))
+        self.limits = self._build_limits(cap)
+        self._first_paid_checked = False
         self.date_stamp = time.strftime("%m-%d-%y")
         self.decided: dict[str, Any] = {}
         problems = dag.validate_dag()
         if problems:
             raise DriverError("DAG invalid: " + "; ".join(problems))
+
+    def _build_limits(self, cap: float) -> limits_mod.Limits:
+        """The job's copy of the firm's four controls plus the month's state.
+
+        SEAT MODE FAILS CLOSED. On a client seat the daemon stamps the month's
+        counts into every job.yaml before every run; if they are absent the
+        broker could not be reached or the envelope is from an older shape,
+        and the honest answer is a refusal, not a run metered by the job cap
+        alone. A laptop run (no MEDCHRON_SEAT) is allowed to run without them.
+        """
+        job = self.job
+        if os.environ.get("MEDCHRON_SEAT") == "client" and (
+            job.allowance_remaining_pages is None or job.month_cents_used is None
+        ):
+            raise DriverError(
+                "seat mode: the job envelope carries no month state "
+                "(allowance_remaining_pages, month_cents_used); refusing to run unmetered"
+            )
+        return limits_mod.Limits(
+            cap_usd=cap,
+            monthly_budget_usd=self.cfg.monthly_budget_usd,
+            single_matter_page_threshold=self.cfg.single_matter_page_threshold,
+            usd_per_scanned_page=self.cfg.usd_per_scanned_page,
+            usd_per_audit_claim=self.cfg.usd_per_audit_claim,
+            month_cents_used=job.month_cents_used,
+            allowance_remaining_pages=job.allowance_remaining_pages,
+            allowance_month=job.allowance_month,
+        )
+
+    def _projection(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> float:
+        """What this paid stage is projected to add, in dollars, from THIS
+        matter's own artifacts. Zero for a stage with no measured rate: the
+        limits still catch a run that already reached a line."""
+        if stage.name == "vision":
+            return (budget_mod.scanned_pages(extracted) * self.limits.usd_per_scanned_page
+                    + self.budget.projection(budget_mod.extracted_chars(extracted)))
+        if stage.name == "audit":
+            return self._claims(ctx) * self.limits.usd_per_audit_claim
+        return 0.0
+
+    def _claims(self, ctx: dag.Ctx) -> int:
+        """Claims in the built chronology, counted with the audit gate's OWN
+        extractor, so the projection counts what the audit will actually call
+        on rather than a remembered ratio from some other matter."""
+        from .audit import claims as claims_mod
+        from .audit.page_text import exhibit_paths
+
+        doc = self.slug_dir / "runs" / ctx.unit.unit / "final-chronology.md"
+        if not doc.is_file():
+            return 0
+        keep = set(exhibit_paths(self.slug_dir / "out" / ctx.unit.unit))
+        body = claims_mod.body_of(doc.read_text(encoding="utf-8"))
+        return len(claims_mod.extract_claims(body, keep))
+
+    def _check_limits(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> None:
+        """Before a paid stage. The first paid stage of the process also asks
+        the two page questions, which cost nothing to answer."""
+        spent = self.budget.refresh()
+        projected = self._projection(stage, ctx, extracted)
+        if not self._first_paid_checked:
+            self._first_paid_checked = True
+            self.limits.check_before_first_paid(pages=budget_mod.pages_read(extracted),
+                                                projected_usd=projected, spent_usd=spent, stage=stage.name)
+            return
+        self.limits.check_before_paid(projected_usd=projected, spent_usd=spent, stage=stage.name)
+
+    def _before_request(self, stage: str) -> None:
+        """The doorway hook: the cap and the month's budget re-read before
+        every paid call, so an overshoot is one call and not one stage."""
+        self.limits.check_each_call(self.budget.refresh(), stage)
 
     # ---- one unit ---------------------------------------------------------
     def run_unit(self, unit: job_mod.Unit, slug_done: set[str]) -> Outcome:
@@ -232,6 +311,14 @@ class Driver:
                  notes: list[str]) -> Outcome | None:
         unit = ctx.unit
         if self.dry_run:
+            if stage.paid:
+                # A dry run measures the limits without spending: the hold is a
+                # note, and the run carries on so every later hold is measured
+                # too (the same shape the decision hooks use).
+                try:
+                    self._check_limits(stage, ctx, extracted)
+                except limits_mod.LimitHold as hold:
+                    notes.append(f"WOULD HOLD at {stage.name}: {hold.reason}")
             self.log(f"[dry-run] would run {stage.name}: {stage.script} {' '.join(stage.argv(ctx))}")
             return None
         if stage.once_per_machine and (icd_tables.icd_dir(self.job.install_root) / icd_tables.VERSION_FILE).is_file():
@@ -239,14 +326,9 @@ class Driver:
             return None
         if stage.paid:
             try:
-                self.budget.check(stage=stage.name, extracted_chars=budget_mod.extracted_chars(extracted)
-                                  if stage.name == "vision" else None)
-            except budget_mod.BudgetError as exc:
-                st.finish(stage.name, status="refused", exit_code=None, dollars=self.budget.spent(),
-                          pages=budget_mod.pages_read(extracted), note=str(exc))
-                st.end("refused", str(exc))
-                return Outcome(unit.unit, "refused", str(exc), stage.name, self.budget.spent(),
-                               budget_mod.pages_read(extracted), notes)
+                self._check_limits(stage, ctx, extracted)
+            except limits_mod.LimitHold as hold:
+                return self._hold(hold, stage, unit, st, extracted, notes)
         if stage.runner is not None:
             return self._execute_in_process(stage, ctx, st, extracted, notes)
         script = (self.pipeline or Path(".")) / stage.script
@@ -279,6 +361,18 @@ class Driver:
         st.end(outcome, reason)
         return Outcome(unit.unit, outcome, reason, stage.name, dollars, pages, notes)
 
+    def _hold(self, hold: limits_mod.LimitHold, stage: dag.Stage, unit: job_mod.Unit, st: RunState,
+              extracted: Path, notes: list[str]) -> Outcome:
+        """A limit held the run. This is a HOLD, not a refusal: the firm's own
+        posture stopped the package, nothing went wrong, and the daemon relays
+        it unprefixed so the seat's reply names the setting rather than an
+        error."""
+        pages = budget_mod.pages_read(extracted)
+        st.finish(stage.name, status="held", exit_code=None, dollars=self.budget.spent(), pages=pages,
+                  note=hold.reason)
+        st.end("held", hold.reason)
+        return Outcome(unit.unit, "held", hold.reason, stage.name, self.budget.spent(), pages, notes)
+
     def _open_seat(self):
         if self._seat is None:
             self._seat = self._seat_factory()
@@ -304,13 +398,21 @@ class Driver:
 
         sr = StageRun(job=self.job, cfg=self.cfg, unit=unit, slug_dir=self.slug_dir, decided=self.decided,
                       log=log, seat_factory=self._open_seat, client_factory=self._sdk_client,
-                      date_stamp=self.date_stamp)
+                      date_stamp=self.date_stamp, before_request=self._before_request)
         st.start(stage.name, input_sha=_stage_input_sha(self.slug_dir, stage))
         self.log(f"[run] {stage.name}: in-process")
         refusal: str | None = None
         runner = getattr(self, "_runner_override", {}).get(stage.name, stage.runner)
         try:
             code = int(runner(sr))
+        except limits_mod.LimitHold as hold:
+            # A limit tripped mid-stage, through the doorway hook. Whatever the
+            # stage had written stays on disk for the resume; the run stops here.
+            lines.append(f"HELD: {hold.reason}")
+            (self.slug_dir / "runs" / unit.unit).mkdir(parents=True, exist_ok=True)
+            (self.slug_dir / "runs" / unit.unit / f"log-{stage.name}.txt").write_text(
+                "\n".join(lines) + "\n", encoding="utf-8")
+            return self._hold(hold, stage, unit, st, extracted, notes)
         except StageRefusal as exc:
             code, refusal = -1, str(exc)
             lines.append(f"REFUSED: {exc}")
