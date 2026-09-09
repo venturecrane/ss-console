@@ -21,6 +21,18 @@
 # any hold red. Standardized with control-probes.py (#2395) and
 # reconcile-outcomes.py (#2399).
 #
+# A HOLD IS INTERIM OR IT IS NOT A HOLD (2026-09-09). The body-verify phase
+# grades a send dispatched BEFORE its inbox's plain-stamp deploy edge, on a
+# seat that has since crossed it, as `pre_stamp_edge`: counted and printed
+# indented, never a HOLD line. Nothing anyone does can ever produce that row's
+# counterpart stamp, this job scans the whole mailbox with no window, and so a
+# hold on it was a red that could not go green -- eleven scheduled runs in a
+# row (09-01..09-09) on the single 09-01 escalator send, seventeen critical
+# notifications, nobody acting: the "control that pages on its own blips"
+# above, observed. The no-edge case (a seat that has never stamped) still
+# holds; there the stamp may yet arrive. operator/bin/lib/send_verify.py
+# carries the rule and operator/bin/tests/test_send_verify.py its falsifier.
+#
 # MEMORY (ss#2386). This job used to file a fresh P1 EVERY DAY re-reporting the
 # same 11 historical finds, until five copies of one finding were open at once.
 # Two layers of memory now sit between a find and an issue:

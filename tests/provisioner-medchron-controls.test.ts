@@ -266,7 +266,27 @@ describe('step 2b: the firm config is validated before it is uploaded', () => {
   })
 
   it('a config that does not validate refuses the provision rather than uploading it', () => {
-    expect(block).toContain('|| die ')
+    expect(block).toContain('die ')
     expect(block).toContain('not uploading it')
+  })
+
+  /**
+   * Live-caught 2026-09-09: the block ran under the bare system `python3`,
+   * which has no PyYAML, so `import yaml` inside the runner's config module
+   * died and the die line blamed the CONFIG. A validator that cannot run must
+   * say so, not read as a wrong config. Two pins: the interpreter is the
+   * script's own `uv run --with pyyaml` pattern (a bare `python3 -` fails
+   * this), and "could not run" and "does not validate" are distinct exits.
+   */
+  it('runs under uv with pyyaml, never the bare system interpreter', () => {
+    expect(block).toContain('uv run --quiet --with pyyaml python3 -')
+    expect(block).not.toMatch(/medchron"\s+python3 - /)
+  })
+
+  it('tells a validator that could not run apart from a config that failed', () => {
+    expect(block).toContain('could not run')
+    expect(block).toContain('sys.exit(3)')
+    expect(block).toContain('does not validate')
+    expect(block).toContain('could not be validated')
   })
 })
