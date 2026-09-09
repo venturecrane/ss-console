@@ -94,6 +94,19 @@ seats pick the stamps up, a templated send missing its counterpart stamp is a
 HOLD line ("templated send with no wake hash") -- red, filed nowhere -- because
 the stamp's absence is a deployment-skew fact, not an accusation.
 
+A HOLD IS INTERIM OR IT IS NOT A HOLD. The word means "unevaluated today,
+evaluable once someone acts" -- deploy the pin, fix the transport. A row
+dispatched BEFORE the inbox's plain-stamp edge on a seat that has since crossed
+it is different in kind: no action by anyone will ever produce its counterpart
+stamp, and the scheduled run scans the whole mailbox with no window, so a hold
+on it is a red that cannot go green. That is a check that cannot fail, mirrored
+(Law 12), and it mutes the control (2026-09-01..09-09: eleven consecutive red
+scheduled runs on the single 09-01 escalator send, seventeen unresolved
+critical notifications, nobody acting). Such a row grades ``pre_stamp_edge``:
+neither hold nor finding, counted and printed indented under the inbox so the
+number stays visible, never a ``HOLD`` line. The no-edge case keeps its hold --
+the stamp may still arrive.
+
 CROSS-RUN INVARIANTS cover the ``compositional`` skills the hash join cannot:
 the same routine must not flap recipients across runs, and the same item_key
 must keep its ACK code. The two-tier grading (first-seen values PROPOSE rows
@@ -112,7 +125,16 @@ from typing import Callable, Optional
 
 # One physical line on purpose: this module sits at the size ratchet's ceiling
 # (tests/operator-module-size.test.ts counts physical non-comment lines).
-from send_attribution import ATTRIBUTED_BY_HASH, _usable_ids, attribution_counts, claim_dispatch_stamp, claim_wake, message_attributor, plain_stamp_edge, stamps_plain_at  # noqa: F401 -- attribution_counts re-exported
+from send_attribution import (
+    ATTRIBUTED_BY_HASH,
+    _usable_ids,
+    attribution_counts,
+    claim_dispatch_stamp,
+    claim_wake,
+    message_attributor,
+    plain_stamp_edge,
+    stamps_plain_at,
+)  # noqa: F401 -- attribution_counts re-exported
 from send_invariants import (  # noqa: F401 -- re-exports; callers and tests read unchanged
     DEFAULT_INVARIANTS_PATH,
     InvariantFinding,
@@ -124,9 +146,13 @@ from send_invariants import (  # noqa: F401 -- re-exports; callers and tests rea
     recipient_invariant,
 )
 
-_OPERATOR_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_OPERATOR_DIR = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 SEND_RENDER_PATH = os.path.join(_OPERATOR_DIR, "contracts", "send-render.yaml")
-CANON_VECTORS_PATH = os.path.join(_OPERATOR_DIR, "contracts", "fixtures", "body-canon-vectors.json")
+CANON_VECTORS_PATH = os.path.join(
+    _OPERATOR_DIR, "contracts", "fixtures", "body-canon-vectors.json"
+)
 
 #: How long after a wake a dispatch may land and still be that wake's send.
 #: The terminal-state contract's ``scheduled_outbound`` window
@@ -145,6 +171,9 @@ VERDICT_NO_WAKE_HASH = "no_wake_hash"  # hold
 VERDICT_NO_DISPATCH_STAMP = "no_dispatch_stamp"  # hold
 VERDICT_BODY_UNAVAILABLE = "body_unavailable"  # hold
 VERDICT_CHANNEL_MISMATCH = "channel_mismatch_hold"  # hold until rehearsal calibrates
+VERDICT_PRE_EDGE = (
+    "pre_stamp_edge"  # neither hold nor finding: unverifiable by construction
+)
 
 _HOLD_VERDICTS = (
     VERDICT_NO_WAKE_HASH,
@@ -224,7 +253,9 @@ def load_send_render(path: str = SEND_RENDER_PATH) -> dict[str, RenderDecl]:
             raise SendRenderError(
                 f"{path}: skills.{skill} declares render: {render} but names no template"
             )
-        out[str(skill)] = RenderDecl(skill=str(skill), render=str(render), template=template)
+        out[str(skill)] = RenderDecl(
+            skill=str(skill), render=str(render), template=template
+        )
     return out
 
 
@@ -270,11 +301,15 @@ class DispatchStamp:
     row_id: Optional[str] = None
     plain_body_sha256: str = ""  # "" == overlay predates the stamp; hold, never find
     plain_consumed: bool = False  # one stamp vouches for exactly one channel body
-    join_keys: frozenset = frozenset()  # message ids / audit token: the identity join (B7)
+    join_keys: frozenset = (
+        frozenset()
+    )  # message ids / audit token: the identity join (B7)
 
 
 def _parse_ts(value) -> datetime:
-    return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc)
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(
+        timezone.utc
+    )
 
 
 def _metadata(row: dict) -> dict:
@@ -301,9 +336,15 @@ def _hash_entries(meta: dict) -> tuple[list[str], list[str]]:
         if isinstance(entry, str) and entry:
             full.append(entry)
         elif isinstance(entry, dict):
-            if isinstance(entry.get("body_sha256_full"), str) and entry["body_sha256_full"]:
+            if (
+                isinstance(entry.get("body_sha256_full"), str)
+                and entry["body_sha256_full"]
+            ):
                 full.append(entry["body_sha256_full"])
-            if isinstance(entry.get("body_sha256_skeleton"), str) and entry["body_sha256_skeleton"]:
+            if (
+                isinstance(entry.get("body_sha256_skeleton"), str)
+                and entry["body_sha256_skeleton"]
+            ):
                 skeleton.append(entry["body_sha256_skeleton"])
     return full, skeleton
 
@@ -322,7 +363,9 @@ def index_wakes(rows: list[dict]) -> list[WakeStamp]:
         items = [
             entry
             for entry in (raw_items if isinstance(raw_items, list) else [])
-            if isinstance(entry, dict) and entry.get("item_key") and entry.get("ack_code")
+            if isinstance(entry, dict)
+            and entry.get("item_key")
+            and entry.get("ack_code")
         ]
         out.append(
             WakeStamp(
@@ -389,7 +432,9 @@ class BodyVerdict:
     expected_sha256: Optional[str] = None
     actual_sha256: Optional[str] = None
     detail: Optional[str] = None
-    attribution: str = ""  # skill | hash | "" -- how the pair was made (send_attribution)
+    attribution: str = (
+        ""  # skill | hash | "" -- how the pair was made (send_attribution)
+    )
 
     @property
     def is_finding(self) -> bool:
@@ -398,6 +443,14 @@ class BodyVerdict:
     @property
     def is_hold(self) -> bool:
         return self.verdict in _HOLD_VERDICTS
+
+    @property
+    def is_degraded(self) -> bool:
+        return self.verdict == VERDICT_DEGRADED
+
+    @property
+    def is_pre_edge(self) -> bool:
+        return self.verdict == VERDICT_PRE_EDGE
 
 
 def verify_hash_join(
@@ -440,7 +493,9 @@ def verify_hash_join(
     return verdicts
 
 
-def _grade_pair(wake: WakeStamp, dispatch: DispatchStamp, attribution: str) -> BodyVerdict:
+def _grade_pair(
+    wake: WakeStamp, dispatch: DispatchStamp, attribution: str
+) -> BodyVerdict:
     common = {
         # The wake's name when the dispatch carried none (attributed by hash).
         "skill_name": dispatch.skill_name or wake.skill_name,
@@ -457,7 +512,9 @@ def _grade_pair(wake: WakeStamp, dispatch: DispatchStamp, attribution: str) -> B
             **common,
         )
     if dispatch.rendered_body_sha256 in wake.hashes_full:
-        return BodyVerdict(verdict=VERDICT_MATCH, detail=_ATTRIBUTION_DETAIL.get(attribution), **common)
+        return BodyVerdict(
+            verdict=VERDICT_MATCH, detail=_ATTRIBUTION_DETAIL.get(attribution), **common
+        )
     if dispatch.rendered_body_sha256 in wake.hashes_skeleton:
         # The authored fallback ladder delivered the identifier-free skeleton.
         # Designed behavior under a render fault -- reported, never a finding.
@@ -563,11 +620,15 @@ def _grade_channel_body(
         body = fetch_body(message)
     except Exception as exc:  # noqa: BLE001 -- transport discipline: any failure HOLDS
         return BodyVerdict(
-            verdict=VERDICT_BODY_UNAVAILABLE, detail=f"body fetch failed: {exc}", **common
+            verdict=VERDICT_BODY_UNAVAILABLE,
+            detail=f"body fetch failed: {exc}",
+            **common,
         )
     if not isinstance(body, str) or not body:
         return BodyVerdict(
-            verdict=VERDICT_BODY_UNAVAILABLE, detail="channel returned no text body", **common
+            verdict=VERDICT_BODY_UNAVAILABLE,
+            detail="channel returned no text body",
+            **common,
         )
     digest = canonical_body_sha256(body)
     if digest in wake.hashes_full:
@@ -600,25 +661,14 @@ def _grade_channel_body(
         # make; the plain stamp, not the raw wake hash, is what it expected.
         common["expected_sha256"] = stamp.plain_body_sha256
         return _graded(
-            digest == stamp.plain_body_sha256, digest, "the dispatch plain_body_sha256", common, identified
+            digest == stamp.plain_body_sha256,
+            digest,
+            "the dispatch plain_body_sha256",
+            common,
+            identified,
         )
     if not stamps_plain_at(plain_edge, stamp):
-        # PRE-DEPLOY ROW. Written by an overlay that predates
-        # hermes-smd-overlay#338 (before the inbox's first stamped row, or no
-        # stamped row exists at all): absence carries no information, the send
-        # may well have been down-rendered with nothing recording it, and grading
-        # a conformant templated send against the raw markdown would file a false
-        # BODY_DIVERGED. Hold, exactly as before.
-        return BodyVerdict(
-            verdict=VERDICT_CHANNEL_MISMATCH,
-            actual_sha256=digest,
-            detail=(
-                "channel body hash differs from wake stamp and this dispatch row predates "
-                "the inbox's first plain_body_sha256 stamp (overlay predates the plain "
-                "stamp; hold, not finding)"
-            ),
-            **common,
-        )
+        return _behind_the_edge(plain_edge, digest, common)
     # POST-DEPLOY ROW. The overlay that wrote this row stamps plain hashes, so it
     # omitted this one deliberately: no down-render ran (prose reply,
     # composer-supplied html), which means the channel text IS the bytes the gate
@@ -633,7 +683,52 @@ def _grade_channel_body(
     )
 
 
-def _graded(matched: bool, digest: str, against: str, common: dict, identified: bool) -> BodyVerdict:
+def _behind_the_edge(plain_edge, digest: str, common: dict) -> BodyVerdict:
+    """A PRE-DEPLOY ROW: written by an overlay that predates
+    hermes-smd-overlay#338, so absence of the plain stamp carries no
+    information, the send may well have been down-rendered with nothing
+    recording it, and grading it against the raw markdown would file a false
+    BODY_DIVERGED. Never a finding. Which NON-finding it is depends on whether
+    the seat has crossed the edge yet:
+
+    * NO EDGE on the inbox -- the seat may still be on the old pin, and the
+      stamp may still arrive once it is reprovisioned. Unevaluated today,
+      evaluable tomorrow: a HOLD, red, the pressure to deploy.
+    * AN EDGE EXISTS and this row is before it -- the seat now stamps, and
+      this row is permanently on the far side of the boundary. No reprovision,
+      no rehearsal, no fetch can ever produce its counterpart. Reddening the
+      run on it every day is a check that cannot go green, which measures
+      nothing (Law 12) and mutes the control: 2026-09-01..09-09 the scheduled
+      run went red eleven times running on the single 09-01 escalator send,
+      seventeen critical notifications accrued, and nobody acted. Reported as
+      ``pre_stamp_edge`` -- counted, visible, indented -- and never a hold.
+    """
+    if plain_edge is None:
+        return BodyVerdict(
+            verdict=VERDICT_CHANNEL_MISMATCH,
+            actual_sha256=digest,
+            detail=(
+                "channel body hash differs from wake stamp and no dispatch row on this "
+                "inbox carries plain_body_sha256 yet (overlay predates the plain stamp; "
+                "hold, not finding)"
+            ),
+            **common,
+        )
+    return BodyVerdict(
+        verdict=VERDICT_PRE_EDGE,
+        actual_sha256=digest,
+        detail=(
+            "channel body hash differs from wake stamp and this dispatch row predates "
+            "the inbox's first plain_body_sha256 stamp; the seat stamps now, so nothing "
+            "can ever grade this row (unverifiable by construction; neither hold nor finding)"
+        ),
+        **common,
+    )
+
+
+def _graded(
+    matched: bool, digest: str, against: str, common: dict, identified: bool
+) -> BodyVerdict:
     """MATCH or the finding, said once. Calibration is done: with a
     same-representation counterpart in hand, a mismatch can no longer be
     explained away by an uncalibrated channel transform, so it is a FINDING --
@@ -690,8 +785,12 @@ class SendVerifier:
         # Two tiers (send_invariants.py): conflicts with COMMITTED expectations
         # are findings; first-seen values are proposals for a reviewed
         # send-invariants.json PR, never findings.
-        findings, proposals = recipient_invariant(rows, self._declares, self._invariants)
-        ack_findings, ack_proposals = ack_invariant(wakes, self._declares, self._invariants)
+        findings, proposals = recipient_invariant(
+            rows, self._declares, self._invariants
+        )
+        ack_findings, ack_proposals = ack_invariant(
+            wakes, self._declares, self._invariants
+        )
         return verdicts, findings + ack_findings, proposals + ack_proposals
 
 
@@ -706,118 +805,7 @@ def verifier_from_contract(
 # ---------------------------------------------------------------------------
 
 
-def has_findings(verdicts: list[BodyVerdict], invariants: list[InvariantFinding]) -> bool:
-    return any(v.is_finding for v in verdicts) or bool(invariants)
-
-
-def has_holds(verdicts: list[BodyVerdict]) -> bool:
-    return any(v.is_hold for v in verdicts)
-
-
-def render_lines(
-    inbox: str,
-    verdicts: list[BodyVerdict],
-    invariants: list[InvariantFinding],
-    proposals: Optional[list[InvariantProposal]] = None,
-) -> list[str]:
-    """Report lines for one inbox. HOLD lines start in column 0 with `HOLD`
-    (the workflow greps ``^HOLD`` and reddens the run on them); finding lines
-    are indented under the inbox like the reconciler's own; PROPOSAL lines are
-    the human's paste-ready rows for a send-invariants.json PR and never
-    redden anything."""
-    lines: list[str] = []
-    for verdict in verdicts:
-        if verdict.is_finding:
-            lines.append(
-                f"        BODY_DIVERGED {verdict.skill_name} "
-                f"dispatch={verdict.dispatch_ts or '-'} "
-                f"expected={verdict.expected_sha256 or '-'} actual={verdict.actual_sha256 or '-'}"
-            )
-        elif verdict.verdict == VERDICT_DEGRADED:
-            lines.append(
-                f"        degraded {verdict.skill_name} "
-                f"dispatch={verdict.dispatch_ts or '-'} (skeleton fallback delivered)"
-            )
-    for finding in invariants:
-        lines.append(
-            f"        INVARIANT {finding.rule} {finding.skill_name} key={finding.hashed_key} "
-            f"expected={finding.expected or '-'} actual={finding.actual or '-'}"
-        )
-    for proposal in proposals or []:
-        if proposal.rule == "recipient_set":
-            lines.append(
-                f"        PROPOSAL recipient_set {proposal.skill_name}: add "
-                f'"{proposal.hashed_key}" to recipients["{proposal.skill_name}"] '
-                "in operator/bin/send-invariants.json (reviewed PR)"
-            )
-        else:
-            lines.append(
-                f"        PROPOSAL ack_stability {proposal.skill_name}: add "
-                f'ack_codes["{proposal.hashed_key}"] = "{proposal.value}" '
-                "in operator/bin/send-invariants.json (reviewed PR)"
-            )
-    holds: dict[str, int] = {}
-    for verdict in verdicts:
-        if verdict.is_hold:
-            holds[f"{verdict.verdict} [{verdict.skill_name}]"] = (
-                holds.get(f"{verdict.verdict} [{verdict.skill_name}]", 0) + 1
-            )
-    for reason, count in sorted(holds.items()):
-        lines.append(f"HOLD  {inbox}: body-verify {count} send(s) {reason}")
-    # The two attribution metrics, printed whenever anything was paired: a seat
-    # whose column stopped being written shows up as by_hash climbing and
-    # by_skill falling, which is a number moving rather than silence.
-    counts = attribution_counts(verdicts)
-    if any(counts.values()):
-        lines.append(f"        attributed_by_skill={counts['attributed_by_skill']} attributed_by_hash={counts['attributed_by_hash']}")
-    return lines
-
-
-def digest_keys(
-    inbox: str, verdicts: list[BodyVerdict], invariants: list[InvariantFinding]
-) -> list[str]:
-    """Stable keys for the reconciler's finding fingerprint, so the existing
-    issue-dedupe machinery covers the new classes with zero workflow changes."""
-    keys = [
-        f"{inbox}|body:{v.skill_name}|{v.dispatch_ts or v.wake_ts}|{v.actual_sha256}"
-        for v in verdicts
-        if v.is_finding
-    ]
-    keys += [f"{inbox}|inv:{f.rule}|{f.hashed_key}|{f.actual or ''}" for f in invariants]
-    return keys
-
-
-#: The COMPLETE emission surfaces for --json. Fixed key allowlists on purpose
-#: (never dataclasses.asdict of something that might grow a field): what is
-#: listed here is ALL that can ever leave the process, so a regressed verdict
-#: that grew a body field still emits nothing new.
-_VERDICT_EMIT_KEYS = (
-    "skill_name",
-    "verdict",
-    "wake_ts",
-    "dispatch_ts",
-    "message_id",
-    "expected_sha256",
-    "actual_sha256",
-    "detail",
-    "attribution",
-)
-_INVARIANT_EMIT_KEYS = ("rule", "skill_name", "hashed_key", "expected", "actual", "detail")
-_PROPOSAL_EMIT_KEYS = ("rule", "skill_name", "hashed_key", "value")
-
-
-def as_dicts(
-    verdicts: list[BodyVerdict],
-    invariants: list[InvariantFinding],
-    proposals: Optional[list[InvariantProposal]] = None,
-) -> tuple[list[dict], list[dict], list[dict]]:
-    """--json emission through the fixed allowlists above."""
-    return (
-        [{key: getattr(v, key) for key in _VERDICT_EMIT_KEYS} for v in verdicts],
-        [{key: getattr(f, key) for key in _INVARIANT_EMIT_KEYS} for f in invariants],
-        [{key: getattr(p, key) for key in _PROPOSAL_EMIT_KEYS} for p in proposals or []],
-    )
-
+from send_report import as_dicts, digest_keys, has_findings, has_holds, render_lines  # noqa: E402,F401 -- re-exports; callers and tests read unchanged
 
 __all__ = [
     "BodyVerdict",
