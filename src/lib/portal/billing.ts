@@ -41,6 +41,62 @@ export async function getStripeCustomerIdForSubscription(
   return parseStripeCustomerId(row?.settings_json ?? null)
 }
 
+/**
+ * The authored monthly price (services.recurring_price, dollars) as integer
+ * cents; null when nothing is authored. No price, no start door, nothing
+ * invented (docs/style/empty-state-pattern.md).
+ */
+export function operatorMonthlyPriceCents(recurringPrice: unknown): number | null {
+  return typeof recurringPrice === 'number' && Number.isFinite(recurringPrice) && recurringPrice > 0
+    ? Math.round(recurringPrice * 100)
+    : null
+}
+
+/**
+ * The ONE start gate for the Operator retainer (Captain, 2026-08-29: the
+ * retainer starts only by the client's own click). True when the operator
+ * row is still `provisioning`, no Stripe subscription is attached, the row
+ * names its instance, and a monthly price is authored. Home, the Operator
+ * page and Billing all read this so the door is the same door everywhere;
+ * the server route (start-subscription.ts) re-checks the same facts.
+ */
+export function canStartOperatorSubscription(
+  sub: Pick<
+    SubscriptionRow,
+    'product_slug' | 'status' | 'stripe_subscription_id' | 'instance_slug'
+  >,
+  priceCents: number | null
+): boolean {
+  return (
+    sub.product_slug === 'operator' &&
+    sub.status === 'provisioning' &&
+    !sub.stripe_subscription_id &&
+    !!sub.instance_slug &&
+    priceCents !== null
+  )
+}
+
+/** The client's start door as a surface renders it, present only when
+ *  canStartOperatorSubscription holds (the page decides; components render). */
+export interface OperatorStartDoor {
+  /** POST target: the start-subscription route for this instance. */
+  action: string
+  /** Authored monthly price, integer cents. */
+  priceCents: number
+}
+
+/** Where the start door lives on the Billing surface (deep link target). */
+export const BILLING_SUBSCRIPTIONS_HREF = '/portal/billing#subscriptions'
+
+/** Whole-dollar rendering for prose contexts (MoneyDisplay for markup). */
+export function formatWholeDollars(amountCents: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(Math.round(amountCents / 100))
+}
+
 /** Display names for subscription rows on the Billing surface. */
 const PRODUCT_DISPLAY_NAMES: Record<string, string> = {
   operator: 'Operator',

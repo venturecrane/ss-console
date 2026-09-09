@@ -15,6 +15,8 @@ import {
 } from '../../../lib/portal/operator/account-read'
 import { resolvePortalOfferings } from '../../../lib/portal/offerings'
 import {
+  canStartOperatorSubscription,
+  operatorMonthlyPriceCents,
   parseStripeCustomerId,
   productDisplayName,
   resolveStartDoneMessage,
@@ -51,18 +53,10 @@ const subscriptions = offerings.subscriptions
 // priced from the authored monthly price. No price authored → no door, and
 // nothing invented: the row shows as being set up.
 const operatorService = await getOperatorServiceForEntity(env.DB, user.org_id, client.id)
-const operatorPriceCents =
-  typeof operatorService?.recurring_price === 'number' && operatorService.recurring_price > 0
-    ? Math.round(operatorService.recurring_price * 100)
-    : null
+const operatorPriceCents = operatorMonthlyPriceCents(operatorService?.recurring_price)
+// One gate, shared with Home and the Operator page (lib/portal/billing.ts).
 function canStart(sub: (typeof subscriptions)[number]): boolean {
-  return (
-    sub.product_slug === 'operator' &&
-    sub.status === 'provisioning' &&
-    !sub.stripe_subscription_id &&
-    !!sub.instance_slug &&
-    operatorPriceCents !== null
-  )
+  return canStartOperatorSubscription(sub, operatorPriceCents)
 }
 
 function resolveDateLabel(inv: Invoice): string {
@@ -179,7 +173,7 @@ const csTone = startStatus === 'done' ? 'success' : 'error'
 
   {
     subscriptions.length > 0 && (
-      <section class="mt-8" aria-label="Subscriptions">
+      <section id="subscriptions" class="mt-8 scroll-mt-16" aria-label="Subscriptions">
         <p class="mb-4 font-mono text-label uppercase tracking-[0.14em] font-bold text-[color:var(--ss-color-text-secondary)]">
           Subscriptions
         </p>
@@ -222,7 +216,7 @@ const csTone = startStatus === 'done' ? 'success' : 'error'
                     type="submit"
                     class="px-5 py-2.5 border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] font-bold uppercase tracking-[0.08em] font-body hover:bg-[color:var(--ss-color-background)] hover:text-[color:var(--ss-color-text-primary)] transition-colors"
                   >
-                    Start subscription
+                    Start monthly subscription
                   </button>
                 </form>
               )}

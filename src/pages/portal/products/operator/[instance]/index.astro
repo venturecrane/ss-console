@@ -38,6 +38,12 @@ import { buildConnectionRows } from '../../../../../lib/portal/operator/connecti
 import { parseBusinessHours } from '../../../../../lib/portal/operator/configure'
 import { loadTeamRoster, type TeamMember } from '../../../../../lib/portal/operator/team-read'
 import { readChangeRequestFlash } from '../../../../../lib/portal/operator/change-request-flash'
+import { getOperatorServiceForEntity } from '../../../../../lib/db/services'
+import {
+  canStartOperatorSubscription,
+  operatorMonthlyPriceCents,
+  type OperatorStartDoor,
+} from '../../../../../lib/portal/billing'
 import { env } from 'cloudflare:workers'
 
 /**
@@ -109,6 +115,21 @@ if (!subscription) {
   }
 }
 const isProvisioning = subscription?.status === 'provisioning'
+
+// The start door (the same gate Home and Billing read): a priced, still-
+// provisioning row with no Stripe subscription offers Start here, where the
+// client lands, not only on the Billing ledger. The route re-checks the facts.
+let startDoor: OperatorStartDoor | null = null
+if (subscription && isProvisioning) {
+  const service = await getOperatorServiceForEntity(env.DB, user.org_id, client.id)
+  const priceCents = operatorMonthlyPriceCents(service?.recurring_price)
+  if (canStartOperatorSubscription(subscription, priceCents) && priceCents !== null) {
+    startDoor = {
+      action: `/api/portal/products/operator/${instance}/start-subscription`,
+      priceCents,
+    }
+  }
+}
 
 let customerConfig = null
 if (access) {
@@ -339,7 +360,7 @@ const empty = surfaceState !== 'active' ? EMPTY[surfaceState] : null
         <div class="mt-3">
           {/* One status signal: while provisioning, the hero itself states the
               setup posture (no aliveness alarm, no separate banner). */}
-          <OperatorHero model={heroModel} provisioning={isProvisioning} />
+          <OperatorHero model={heroModel} provisioning={isProvisioning} start={startDoor} />
         </div>
         {overview.publishedOn && (
           <p class="mt-2 font-mono text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
