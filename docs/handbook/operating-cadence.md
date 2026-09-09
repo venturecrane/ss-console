@@ -108,6 +108,18 @@ state a session can see rather than something discovered weeks later, and it
 warns without failing when the index is over the target, because a soft cue that
 breaks the build gets switched off.
 
+The detector runs at every session start and, by design, says nothing when the
+store is healthy - which left it with the same hole it was built to close: a
+clean run and a hook that never fired produce identical output, namely none. So
+each hook run now stamps `.memory-audit-receipt.json` beside the store, and
+`memory-audit --wiring` answers whether the hook is firing. The receipt alone
+would be circular (a hook that stops running also stops updating its own
+receipt), so the check compares it against the session transcripts the harness
+writes whether or not any hook runs: a session that started after the last
+receipt is a session the hook did not serve. A manual run deliberately does not
+stamp - proof a human can mint by running the tool shows the tool works, not
+that the wiring fires.
+
 ## Escalation triggers - mandatory stop points
 
 The cadence has hard stops. An agent does not churn on a blocker; it escalates.

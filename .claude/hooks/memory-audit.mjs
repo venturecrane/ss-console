@@ -3,6 +3,7 @@
  * memory-audit.mjs -- reachability audit over the durable memory store.
  *
  *   .claude/bin/memory-audit              # audit the real store
+ *   .claude/bin/memory-audit --wiring     # is the SessionStart hook actually firing?
  *   .claude/bin/memory-audit --self-test  # prove the audit can fail
  *
  * WHY THIS EXISTS. On 2026-09-09 an audit of
@@ -60,6 +61,31 @@ const INDEX = 'MEMORY.md'
 const ATTIC = 'attic'
 /** Not memories: the index itself and the backup a compaction leaves behind. */
 const NOT_A_MEMORY = new Set([INDEX, 'MEMORY.md.bak'])
+
+/**
+ * PROOF OF EXECUTION. `--session-start` speaks only when it has something to
+ * say, which is right for signal hygiene and wrong for trust: a clean run and a
+ * hook that never fired produce byte-identical output, namely none. The check
+ * written to make silent memory loss detectable was itself silent in exactly
+ * the way it was built to catch. Measured 2026-09-09: the SessionStart block
+ * printed session-peers.sh output and nothing from this hook, and no artifact
+ * anywhere could distinguish "clean" from "never ran".
+ *
+ * So every hook run drops a receipt. Only the hook path writes it -- a manual
+ * `memory-audit` deliberately does NOT, because a receipt a human can forge by
+ * running the tool proves the tool works, not that the wiring fires.
+ *
+ * Not a `.md` file, so `listMarkdown` never sees it and it can never be counted
+ * as a memory or an orphan.
+ */
+const RECEIPT_FILE = '.memory-audit-receipt.json'
+
+/**
+ * Grace between a session's transcript appearing and its hook receipt landing.
+ * Both happen at session start with no guaranteed order, so without this the
+ * current session's own transcript is permanent evidence against the hook.
+ */
+const RECEIPT_GRACE_MS = 120_000
 
 /**
  * Claude Code keys a project's store by the session path with `/` and `.`
@@ -262,6 +288,96 @@ function auditStore(dir) {
   }
 }
 
+function writeReceipt(dir, result, now = Date.now()) {
+  try {
+    fs.writeFileSync(
+      path.join(dir, RECEIPT_FILE),
+      JSON.stringify(
+        { at: new Date(now).toISOString(), ok: result.ok, total: result.total, pid: process.pid },
+        null,
+        2
+      ) + '\n'
+    )
+  } catch {
+    // Best effort. A store we cannot write to is a finding for the audit
+    // proper, not a reason to fail a session start on hygiene plumbing.
+  }
+}
+
+function readReceipt(dir) {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(dir, RECEIPT_FILE), 'utf8'))
+    const at = Date.parse(raw.at)
+    return Number.isFinite(at) ? { ...raw, atMs: at } : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Is the SessionStart hook actually firing?
+ *
+ * The receipt alone cannot answer that: if the hook stops running, the receipt
+ * stops updating, and a check that reads only the receipt sees a quiet store
+ * and calls it quiet. Circular. The non-circular witness is the transcript
+ * directory -- Claude Code writes one `.jsonl` per session into the store's
+ * parent whether or not any hook fires, so a session that STARTED after the
+ * last receipt is a session the hook did not serve.
+ *
+ * birthtime, not mtime: the live session appends to its transcript constantly,
+ * so its mtime is always newer than any receipt and mtime would report every
+ * healthy session as a failure.
+ */
+function auditWiring(dir, now = Date.now(), projectDir = path.dirname(dir)) {
+  const receipt = readReceipt(dir)
+  let sessions = []
+  try {
+    sessions = fs
+      .readdirSync(projectDir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith('.jsonl'))
+      .map((e) => {
+        const s = fs.statSync(path.join(projectDir, e.name))
+        return { name: e.name, startedMs: (s.birthtime ?? s.mtime).getTime() }
+      })
+  } catch {
+    return {
+      ok: true,
+      unknown: true,
+      message: `wiring: cannot check (no transcript directory at ${projectDir})`,
+    }
+  }
+
+  if (!receipt) {
+    return {
+      ok: false,
+      lastRun: null,
+      unserved: sessions.length,
+      message:
+        `wiring: the SessionStart hook has NEVER recorded a run (no ${RECEIPT_FILE}), ` +
+        `across ${sessions.length} session transcript(s)`,
+    }
+  }
+
+  const unserved = sessions.filter((s) => s.startedMs > receipt.atMs + RECEIPT_GRACE_MS)
+  if (unserved.length) {
+    return {
+      ok: false,
+      lastRun: receipt.at,
+      unserved: unserved.length,
+      message:
+        `wiring: ${unserved.length} session(s) started after the hook's last run (${receipt.at}) -- ` +
+        `the SessionStart entry in .claude/settings.json is not firing`,
+    }
+  }
+
+  return {
+    ok: true,
+    lastRun: receipt.at,
+    unserved: 0,
+    message: `wiring: hook last ran ${receipt.at}, no session has started unserved since`,
+  }
+}
+
 function summarize(r) {
   const head = r.missing
     ? `memory-audit: STORE MISSING (${r.dir})`
@@ -272,6 +388,7 @@ function summarize(r) {
   const lines = [head]
   for (const p of r.problems) lines.push(`  ! ${p}`)
   for (const w of r.warnings ?? []) lines.push(`  ~ ${w}`)
+  if (r.wiring) lines.push(`  ${r.wiring.ok ? '·' : '!'} ${r.wiring.message}`)
   for (const o of r.orphans.slice(0, 20)) lines.push(`    orphan: ${o}`)
   if (r.orphans.length > 20) lines.push(`    ... and ${r.orphans.length - 20} more`)
   for (const d of r.dangling.slice(0, 20)) lines.push(`    dangling: ${d}`)
@@ -305,6 +422,33 @@ function selfTest() {
     const clean = auditStore(dir)
     if (clean.orphans.length) failures.push(`linked store still reported orphans: ${clean.orphans}`)
     if (!clean.ok) failures.push(`linked store reported problems: ${clean.problems}`)
+
+    /**
+     * The wiring check gets its own falsifier, and it needs one more than the
+     * orphan check does: its failure mode is silence, so a wiring check that
+     * cannot report "not firing" is indistinguishable from the bug it exists
+     * to catch. Three states, all three asserted.
+     */
+    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-audit-sessions-'))
+    try {
+      const never = auditWiring(dir, Date.now(), projectDir)
+      if (never.ok) failures.push('a store with no receipt reported the hook as firing')
+
+      // A session transcript that starts well after the last receipt is the
+      // signature of a hook that has stopped running.
+      fs.writeFileSync(path.join(projectDir, 'session.jsonl'), '{}\n')
+      writeReceipt(dir, clean, Date.now() - 60 * 60 * 1000)
+      const stale = auditWiring(dir, Date.now(), projectDir)
+      if (stale.ok) failures.push('an unserved session did NOT trip the wiring check')
+      if (stale.unserved !== 1) failures.push(`expected 1 unserved session, got ${stale.unserved}`)
+
+      // Control: the same session, once the hook has run for it, is clean.
+      writeReceipt(dir, clean, Date.now())
+      const served = auditWiring(dir, Date.now(), projectDir)
+      if (!served.ok) failures.push(`a served session still reported unwired: ${served.message}`)
+    } finally {
+      fs.rmSync(projectDir, { recursive: true, force: true })
+    }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
   }
@@ -313,7 +457,7 @@ function selfTest() {
     process.stderr.write(`memory-audit --self-test FAILED\n${failures.map((f) => `  ! ${f}`).join('\n')}\n`)
     return 1
   }
-  process.stderr.write('memory-audit --self-test passed (orphan detected, control clean)\n')
+  process.stderr.write('memory-audit --self-test passed (orphan detected, wiring gap detected, controls clean)\n')
   return 0
 }
 
@@ -335,8 +479,22 @@ function main() {
    * nothing new is how agents learn to skim the startup block.
    */
   if (argv.includes('--session-start')) {
+    // The receipt is written BEFORE the early return, and on every run whatever
+    // the verdict: its claim is "the hook fired", which is true even of a run
+    // that found problems and especially of one that found nothing to say.
+    if (!result.missing) writeReceipt(dir, result)
     if (!result.ok || result.warnings?.length) process.stderr.write(summarize(result))
     return 0 // never fail a session start on hygiene plumbing
+  }
+
+  // Manual runs report the wiring but never stamp it: a receipt a human can
+  // mint by running the tool is not evidence that the hook runs itself.
+  result.wiring = auditWiring(dir)
+
+  if (argv.includes('--wiring')) {
+    process.stdout.write(JSON.stringify(result.wiring, null, 2) + '\n')
+    process.stderr.write(`memory-audit ${result.wiring.message}\n`)
+    return result.wiring.ok ? 0 : 1
   }
 
   process.stdout.write(JSON.stringify(result, null, 2) + '\n')

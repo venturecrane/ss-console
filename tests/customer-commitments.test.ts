@@ -242,21 +242,19 @@ describe('pilot-smokeball commitments contract (ADR 0075)', () => {
       ],
       'medical-chronology-maintainer must author the Exhibit A row 11 allowance: 15000 pages per month'
     ).toBe(15000)
+    // The transitional document key is gone: both seats were reprovisioned
+    // onto the page key on 2026-09-09 (vfy_01M23V6QKNRHN4SB1ZPRBWZ1V9), and a
+    // broker that reads only the page key must never find the old one
+    // authored beside it again.
     expect(
       byName('medical-chronology-maintainer')?.settings?.[
         'chronology_package_document_allowance_per_month'
       ],
-      'the document key is carried for ONE release so an older broker restarting mid-rollout still meters'
-    ).toBe(2000)
+      'the document allowance key was retired 2026-09-09; the allowance is in pages'
+    ).toBeUndefined()
     for (const key of Object.keys(byName('medical-chronology-maintainer')?.settings ?? {})) {
       expect(
-        [
-          'treatment_gap_flag_days',
-          'chronology_package_page_allowance_per_month',
-          // Removed by the follow-up PR once ashton-price and pilot-smokeball
-          // have been reprovisioned onto the page key.
-          'chronology_package_document_allowance_per_month',
-        ],
+        ['treatment_gap_flag_days', 'chronology_package_page_allowance_per_month'],
         `medical-chronology-maintainer.settings.${key}: only contract-derived keys are authored on the client seat (ADR 0087)`
       ).toContain(key)
     }

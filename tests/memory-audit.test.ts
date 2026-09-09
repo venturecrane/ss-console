@@ -31,6 +31,7 @@
 import { execFileSync } from 'node:child_process'
 import {
   closeSync,
+  existsSync,
   mkdtempSync,
   mkdirSync,
   openSync,
@@ -514,5 +515,101 @@ describe('memory-audit: the SessionStart mode', () => {
     const loud = run(['--session-start'], { SS_MEMORY_DIR: dir })
     expect(loud.stderr).toContain('orphan')
     expect(loud.status).toBe(0)
+  })
+})
+
+/**
+ * PROOF OF EXECUTION. The SessionStart mode's virtue -- silence when clean --
+ * is also the hole: a clean run and a hook that never fired emit identical
+ * output, namely none. Measured on the real store 2026-09-09, the wiring check
+ * reported "NEVER recorded a run" across 31 session transcripts, which is what
+ * the store had actually been doing.
+ *
+ * The receipt alone cannot close this. If the hook stops firing the receipt
+ * stops updating, and a check reading only the receipt sees a quiet store and
+ * calls it quiet -- circular. The witness is the transcript directory, written
+ * by the harness per session whether or not any hook runs. Both directions are
+ * asserted here because this check's failure mode IS silence.
+ */
+describe('memory-audit: proof that the SessionStart hook fired', () => {
+  it('stamps a receipt on the hook path and never on a manual run', () => {
+    const dir = scratchDir('ss-memory-receipt-')
+    writeStore(dir, CLEAN_STORE)
+    const receipt = join(dir, '.memory-audit-receipt.json')
+
+    // A manual audit must NOT mint proof: a receipt a human can forge by
+    // running the tool shows the tool works, not that the wiring fires.
+    audit(dir)
+    expect(existsSync(receipt)).toBe(false)
+
+    run(['--session-start'], { SS_MEMORY_DIR: dir })
+    expect(existsSync(receipt)).toBe(true)
+    const stamped = JSON.parse(readFileSync(receipt, 'utf8')) as { at: string; ok: boolean }
+    expect(Number.isFinite(Date.parse(stamped.at))).toBe(true)
+    expect(stamped.ok).toBe(true)
+  })
+
+  it('stamps even when the store has problems, because the claim is "the hook ran"', () => {
+    const dir = scratchDir('ss-memory-receipt-dirty-')
+    writeStore(dir, { ...CLEAN_STORE, 'orphan.md': 'nothing points here\n' })
+    run(['--session-start'], { SS_MEMORY_DIR: dir })
+    const stamped = JSON.parse(readFileSync(join(dir, '.memory-audit-receipt.json'), 'utf8')) as {
+      ok: boolean
+    }
+    expect(stamped.ok).toBe(false)
+  })
+
+  it('the receipt is never counted as a memory or an orphan', () => {
+    const dir = scratchDir('ss-memory-receipt-notamemory-')
+    writeStore(dir, CLEAN_STORE)
+    run(['--session-start'], { SS_MEMORY_DIR: dir })
+    const { result } = audit(dir)
+    expect(result.total).toBe(2)
+    expect(result.orphans).toEqual([])
+    expect(result.ok).toBe(true)
+  })
+
+  it('reports a hook that has never run, one that has stopped, and a healthy one', () => {
+    // The store must sit inside the project dir the transcripts live in, which
+    // is the real layout: <project>/memory/ beside <project>/*.jsonl.
+    const project = scratchDir('ss-memory-wiring-')
+    const dir = join(project, 'memory')
+    mkdirSync(dir, { recursive: true })
+    writeStore(dir, CLEAN_STORE)
+
+    // 1. Never run: no receipt at all.
+    const never = run(['--wiring'], { SS_MEMORY_DIR: dir })
+    expect(never.status).toBe(1)
+    expect(never.stderr).toContain('NEVER recorded a run')
+
+    // 2. Healthy: the hook has run and no session has started since.
+    run(['--session-start'], { SS_MEMORY_DIR: dir })
+    const healthy = run(['--wiring'], { SS_MEMORY_DIR: dir })
+    expect(healthy.status).toBe(0)
+    expect(healthy.stderr).toContain('no session has started unserved')
+
+    // 3. Stopped firing: a session transcript born after the last receipt.
+    //    Backdate the receipt rather than sleep, so the test states the
+    //    condition instead of racing the grace window.
+    writeFileSync(join(project, 'session.jsonl'), '{}\n')
+    const stale = JSON.parse(readFileSync(join(dir, '.memory-audit-receipt.json'), 'utf8')) as {
+      at: string
+    }
+    stale.at = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    writeFileSync(join(dir, '.memory-audit-receipt.json'), JSON.stringify(stale))
+    const stopped = run(['--wiring'], { SS_MEMORY_DIR: dir })
+    expect(stopped.status).toBe(1)
+    expect(stopped.stderr).toContain('is not firing')
+
+    // Control on the same store: re-run the hook and the finding clears.
+    run(['--session-start'], { SS_MEMORY_DIR: dir })
+    const recovered = run(['--wiring'], { SS_MEMORY_DIR: dir })
+    expect(recovered.status).toBe(0)
+  })
+
+  it('the built-in falsifier now covers the wiring check too', () => {
+    const r = run(['--self-test'])
+    expect(r.status).toBe(0)
+    expect(r.stderr).toContain('wiring gap detected')
   })
 })

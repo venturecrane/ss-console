@@ -77,7 +77,6 @@ describe('customer-config projection: real smd yaml', () => {
     })
     expect(skills.find((s) => s.name === 'medical-chronology-maintainer')?.settings).toEqual({
       treatment_gap_flag_days: 45,
-      chronology_package_document_allowance_per_month: 2000,
       chronology_package_page_allowance_per_month: 15000,
     })
     // Skills without authored settings must project WITHOUT the key (byte-stable).
