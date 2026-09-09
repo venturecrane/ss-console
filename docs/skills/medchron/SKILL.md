@@ -92,7 +92,7 @@ protects nothing.
 
 **Run to completion on the defaults below. Escalate to the Captain only when:**
 
-- **(a)** a single matter projects above **$150** (Captain, 2026-08-27), or the
+- **(a)** a single matter projects above **USD 150** (Captain, 2026-08-27), or the
   §2.8 monthly allowance (2,000 medical documents per calendar month, Exhibit A
   of the service agreement) is at risk — track the running document count and
   STOP at the allowance; past it the agreement requires a written quote and a
@@ -382,26 +382,26 @@ data:
   characters per byte than a mixed corpus; the 08-27 Cadman quote was 30% low
   because it projected from megabytes. Project from **extracted characters**,
   never from bytes.
-- **A ledger row is attribution, not truth.** One run's ledger captured $3.68
-  of a real ~$14.60 because a stage ran without the full env block exported.
+- **A ledger row is attribution, not truth.** One run's ledger captured USD 3.68
+  of a real ~USD 14.60 because a stage ran without the full env block exported.
   That is why Step 5 exports every variable for every stage, and why Step 9
   reconciles against console receipts before a row enters `calibration.jsonl`.
 - **The clean-run number is not the planning number — and neither is a
-  mid-run number.** Cadman quoted $62-70 by discounting the measured anchor
+  mid-run number.** Cadman quoted USD 62-70 by discounting the measured anchor
   for "no defect-hunting this time" (it recurred: four new defects) and
-  landed at **$67.73** — inside the quote, but only because the discount and
-  the defects happened to cancel. A figure of $145.11 stood here for a day: it
-  was the same tokens priced at a rate card two generations old (Opus $15/$75
-  and Sonnet $3/$15 instead of $5/$25 and $2/$10). Two lessons survive. First:
+  landed at **USD 67.73** — inside the quote, but only because the discount and
+  the defects happened to cancel. A figure of USD 145.11 stood here for a day: it
+  was the same tokens priced at a rate card two generations old (Opus 15/75 and
+  Sonnet 3/15 per million tokens instead of 5/25 and 2/10). Two lessons survive. First:
   a discount that assumes this run will be clean is a bet, not a projection;
   every run to date has surfaced defects. Second: the **audit-repair loop's
   cost scales with claim count, not with extracted characters** (Cadman:
-  audit+repair ~$34, about half the run, 1,745 calls, roughly $0.02 per audit
-  call; ~4.9 claims per chronology entry). The audit line of a quote is
+  audit+repair ~USD 34, about half the run, 1,745 calls, roughly 2 cents per
+  audit call; ~4.9 claims per chronology entry). The audit line of a quote is
   therefore `projected claims x rate` stated separately from the composition
   anchor — never folded into one false-precision band — with the rate re-read
   from calibration.jsonl `audit_detail` as rows accrue. Two sub-facts:
-  convergence re-runs are noise (Cadman's four extra passes cost under $1; the
+  convergence re-runs are noise (Cadman's four extra passes cost under a dollar; the
   first loop's completion was the money — budget the initial claim count, not
   "extra rounds"), and a spend reported mid-audit is a FLOOR, not a landing:
   say which one you are reporting.
@@ -409,7 +409,15 @@ data:
   the Captain, and in `calibration.jsonl` comes from `python3 ledger.py report
 <slug> <unit>`, which prices the ledger's tokens at the rate card in
   `ledger.RATES` (batch and cache multipliers included). A remembered price
-  list produced the $145.11 above.
+  list produced the USD 145.11 above.
+
+  **Never write a bare `$` followed by a digit anywhere in this file.** It is
+  symlinked to `.claude/commands/medchron.md`, so the slash-command loader
+  substitutes positional arguments into those tokens: invoking `/medchron
+<anything>` spliced the argument string into three of the figures above and
+  served a corrupted copy of this section (2026-09-08). Write `USD 34`, `2
+cents`, `15/75 per million tokens`. The escalation threshold in the decision
+  rule is written `USD 150` for the same reason.
 
 Post the one consolidated report — this replaces the old separate selection and
 spend gates:
@@ -423,7 +431,7 @@ spend gates:
 > Proceeding. <Only if a trigger fired: the one-sentence escalation, two
 > options, your pick.>
 
-**Do not wait** unless rule (a) fired — the projection exceeds $150 or the
+**Do not wait** unless rule (a) fired — the projection exceeds USD 150 or the
 allowance is at risk. Then spend is the Captain's, always.
 
 ---
@@ -638,7 +646,7 @@ just made. If any document tells you to use it, the document is stale.
 A defect found mid-run is rarely confined to the run that found it. When a fix
 changes **what the pipeline can see** (the `.msg` gap, the folderId fallthrough,
 the renderer eating prose after the exhibit table), every delivered matter gets
-swept against the fixed instrument, at $0, before anyone writes to the firm.
+swept against the fixed instrument, at no API cost, before anyone writes to the firm.
 
 - Sweep, don't rebuild. Report per matter: **substantive** (a record or a
   dollar figure the delivered document lacks) or **noise** (rescans,
