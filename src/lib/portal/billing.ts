@@ -12,6 +12,9 @@ import type { D1Database } from '@cloudflare/workers-types'
 import type { SubscriptionRow } from './product-access'
 import type { Tone } from './status'
 import { parseCancelAt } from '../db/subscriptions'
+import { cardProcessingFeeCents } from '../db/invoices'
+import { operatorPaymentMethod } from '../db/services'
+import type { OperatorPaymentMethod, Service } from '../db/services'
 
 export function parseStripeCustomerId(settingsJson: string | null): string | null {
   try {
@@ -55,6 +58,33 @@ export function operatorMonthlyPriceCents(recurringPrice: unknown): number | nul
 }
 
 /**
+ * What the client is charged each month, on the rail authored for them
+ * (services.payment_method). ACH is the price and nothing else. Card adds
+ * the 3% processing fee (agreement §3.8; the same rate and line the
+ * one-time invoices carry) as its own figure, so every surface can state
+ * the fee before the client pays. Null when no price is authored.
+ */
+export interface OperatorMonthlyCharge {
+  paymentMethod: OperatorPaymentMethod
+  /** Authored monthly price, integer cents. */
+  priceCents: number
+  /** The card processing fee, integer cents; 0 on ACH. */
+  feeCents: number
+  /** priceCents + feeCents: the amount Stripe charges each month. */
+  totalCents: number
+}
+
+export function operatorMonthlyCharge(
+  service: Pick<Service, 'recurring_price' | 'payment_method'> | null | undefined
+): OperatorMonthlyCharge | null {
+  const priceCents = operatorMonthlyPriceCents(service?.recurring_price)
+  if (priceCents === null) return null
+  const paymentMethod = operatorPaymentMethod(service)
+  const feeCents = paymentMethod === 'card' ? cardProcessingFeeCents(priceCents) : 0
+  return { paymentMethod, priceCents, feeCents, totalCents: priceCents + feeCents }
+}
+
+/**
  * The ONE start gate for the Operator retainer (Captain, 2026-08-29: the
  * retainer starts only by the client's own click). True when the operator
  * row is still `provisioning`, no Stripe subscription is attached, the row
@@ -86,7 +116,7 @@ export function canStartOperatorSubscription(
 export interface OperatorStartDoor {
   /** The subscription page for this instance (operatorSubscriptionHref). */
   href: string
-  /** Authored monthly price, integer cents. */
+  /** The monthly charge on the authored rail, integer cents (price plus any card fee). */
   priceCents: number
 }
 
