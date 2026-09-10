@@ -1,6 +1,7 @@
 import type { APIContext, APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 import { errorResponse } from '../../lib/api/helpers'
+import { rateLimitByIp } from '../../lib/booking/rate-limit'
 
 /**
  * POST /api/events
@@ -22,15 +23,31 @@ import { errorResponse } from '../../lib/api/helpers'
  *     booking IDs, etc. that leak into URLs do not land in the events
  *     table.
  *
- * Rate limit: 100 events per session_id per minute (D1-backed fixed
- * window). Bursts above that are silently clamped — the endpoint returns
- * 204 regardless to keep the client script simple.
+ * Rate limit, two layers, both silently clamping to 204 so the client script
+ * stays simple:
+ *   1. Per IP (KV-backed, `rateLimitByIp`): EVENTS_IP_LIMIT_PER_HOUR batches
+ *      per hour per `cf-connecting-ip`. This is the bound the caller cannot
+ *      move, because the session id below is caller-supplied. Without it a
+ *      client rotating session ids had an unbounded D1 write (2026-08-23
+ *      review C3, carried three reviews, closed 2026-09-10).
+ *   2. Per session (D1-backed fixed window): 100 events per session_id per
+ *      minute, counted from the events table itself.
+ *
+ * Session identity: the `ss_sid` cookie is authoritative when present and
+ * well-formed. `body.session_id` only seeds the id when there is no cookie
+ * yet (the tracker's first batch races the cookie write). A body id that
+ * disagrees with a valid cookie is ignored, so a client cannot spread one
+ * browser's events across many sessions by lying in the body. The cookie
+ * is NOT HttpOnly on purpose: EventsTracker.astro reads and writes it from
+ * document.cookie (readCookie / writeCookie), so the client and server share
+ * one id.
  *
  * Request shape:
  *   {
- *     session_id: string,        // client-generated UUID (optional; if
- *                                //   missing, server sets a cookie and
- *                                //   generates one)
+ *     session_id: string,        // client-generated UUID (optional; used only
+ *                                //   when no ss_sid cookie is present; if both
+ *                                //   are missing the server generates one and
+ *                                //   sets the cookie)
  *     events: Array<{
  *       event_name: string,      // e.g. "page_view", "cta_click"
  *       path?: string,           // scrubbed server-side
@@ -52,6 +69,13 @@ const MAX_METADATA_BYTES = 2048
 const MAX_UA_LEN = 512
 const MAX_REFERRER_LEN = 512
 const RATE_LIMIT_PER_MINUTE = 100
+/**
+ * Per-IP ceiling on POST batches per hour. The tracker flushes at most one
+ * batch every FLUSH_DEBOUNCE_MS (2s) plus one on pagehide, so a human on a
+ * single IP cannot approach this; an office NAT with dozens of browsers
+ * still fits. Above it the endpoint clamps to 204 without writing.
+ */
+const EVENTS_IP_LIMIT_PER_HOUR = 600
 
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
 const SAFE_STRING_RE = /^[a-zA-Z0-9_\-.:/]+$/
@@ -71,9 +95,11 @@ function resolveSessionId(
 } {
   const cookieSid = parseCookie(request.headers.get('cookie'), COOKIE_NAME)
   const clientSid = typeof body.session_id === 'string' ? body.session_id : null
+  // Cookie first: it is the identity the browser cannot rewrite per request.
+  // The body id is a seed for the cookieless first batch only.
   const sessionId =
-    (clientSid && UUID_RE.test(clientSid) && clientSid) ||
     (cookieSid && UUID_RE.test(cookieSid) && cookieSid) ||
+    (clientSid && UUID_RE.test(clientSid) && clientSid) ||
     crypto.randomUUID()
   return { sessionId, needSetCookie: sessionId !== cookieSid }
 }
@@ -125,6 +151,19 @@ async function handlePost({ request }: APIContext): Promise<Response> {
   const { sessionId, needSetCookie } = resolveSessionId(request, body)
   const cookieSidOrNull = needSetCookie ? sessionId : null
 
+  // Layer 1: the per-IP bound the caller cannot move (see header).
+  const clientIp = request.headers.get('cf-connecting-ip') ?? undefined
+  const ipLimit = await rateLimitByIp(
+    env.BOOKING_CACHE,
+    'events',
+    clientIp,
+    EVENTS_IP_LIMIT_PER_HOUR
+  )
+  if (!ipLimit.allowed) {
+    return buildResponse(204, cookieSidOrNull, request)
+  }
+
+  // Layer 2: the per-session minute bucket.
   const allowed = await checkRateLimit(env.DB, sessionId)
   if (!allowed) {
     return buildResponse(204, cookieSidOrNull, request)

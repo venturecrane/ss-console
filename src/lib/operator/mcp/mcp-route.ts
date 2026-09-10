@@ -1,6 +1,10 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { RuntimeReadResult, RuntimeReadQuery } from '../runtime-read'
-import { buildMcpMetadataPath, type ResolvedMcpCustomer } from './customer-resolution'
+import {
+  buildMcpMetadataPath,
+  resolveLocalUserIdForSubject,
+  type ResolvedMcpCustomer,
+} from './customer-resolution'
 import { dispatchMcpRequest, getMcpToolName, parseMcpBody } from './mcp-handler'
 import { recordMcpAudit } from './mcp-audit'
 import { jitIssueGrant, MCP_OPEN_GRANT_TTL_DAYS } from './grant-store'
@@ -140,7 +144,10 @@ async function attemptOpenPolicyJit(
     customer: deps.customer,
     subject,
     tokenAudience: failure.tokenAudience ?? [],
-    localUserId: subject,
+    // Same rule as the grant read-back path (customer-resolution.ts): a portal
+    // user of this firm connecting over MCP is audited under their users.id, a
+    // grant-only firm employee under the Clerk subject.
+    localUserId: await resolveLocalUserIdForSubject(deps.db, deps.customer.entityId, subject),
     email,
     profile: c.default_profile,
   }
