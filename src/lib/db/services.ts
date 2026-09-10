@@ -43,6 +43,13 @@ export interface Service {
   status: ServiceStatus
   /** REAL to match invoices.amount/quotes.total_price. NULL for one_time; authored per-quote for operator. */
   recurring_price: number | null
+  /**
+   * The rail the recurring fee is collected by (migration 0113). Authored
+   * per client next to the price; `ach` for every row that predates it.
+   * `card` adds the 3% processing fee line (agreement §3.8) to the checkout
+   * and to every monthly invoice. Read through `operatorPaymentMethod`.
+   */
+  payment_method: string
   started_at: string | null
   ended_at: string | null
   created_at: string
@@ -52,6 +59,25 @@ export interface Service {
 export type ServiceType = 'consulting' | 'operator'
 export type ServiceCadence = 'one_time' | 'recurring'
 export type ServiceStatus = 'proposed' | 'active' | 'completed' | 'churned'
+
+/**
+ * How the Operator retainer is collected (Operator Service Agreement §3.8;
+ * Captain, 2026-08-29 for the fee, 2026-09-10 for the first card client).
+ * `ach` is bank account at checkout with no fee; `card` is a card at
+ * checkout plus the 3% processing fee on every monthly charge.
+ */
+export type OperatorPaymentMethod = 'ach' | 'card'
+
+export function isOperatorPaymentMethod(value: unknown): value is OperatorPaymentMethod {
+  return value === 'ach' || value === 'card'
+}
+
+/** The stored rail, parsed; anything unrecognised reads as ACH (no fee, the safe default). */
+export function operatorPaymentMethod(
+  service: Pick<Service, 'payment_method'> | null | undefined
+): OperatorPaymentMethod {
+  return isOperatorPaymentMethod(service?.payment_method) ? service.payment_method : 'ach'
+}
 
 /**
  * Project a consulting engagement's delivery status onto the commercial
@@ -236,6 +262,30 @@ export async function setOperatorPrice(
     recurring_price: price,
     started_at: new Date().toISOString(),
   })
+}
+
+/**
+ * Author the rail the retainer is collected by (migration 0113). Same
+ * forward writer as the price: the commercial record only, never the
+ * provisioning row. Creates the operator service (unpriced) if none exists,
+ * so a rail authored before a price is not lost.
+ */
+export async function setOperatorPaymentMethod(
+  db: D1Database,
+  orgId: string,
+  entityId: string,
+  method: OperatorPaymentMethod
+): Promise<Service> {
+  const existing =
+    (await getOperatorServiceForEntity(db, orgId, entityId)) ??
+    (await setOperatorPrice(db, orgId, entityId, null))
+  await db
+    .prepare(`UPDATE services SET payment_method = ?, updated_at = ? WHERE id = ? AND org_id = ?`)
+    .bind(method, new Date().toISOString(), existing.id, orgId)
+    .run()
+  const updated = await getService(db, orgId, existing.id)
+  if (!updated) throw new Error(`Failed to update operator service ${existing.id}`)
+  return updated
 }
 
 // ===========================================================================

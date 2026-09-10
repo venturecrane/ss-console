@@ -15,6 +15,9 @@ import {
   findSpineDrift,
   hasSpineDrift,
   setOperatorPrice,
+  setOperatorPaymentMethod,
+  operatorPaymentMethod,
+  isOperatorPaymentMethod,
   getOperatorServiceForEntity,
 } from '../src/lib/db/services'
 import { createEngagement } from '../src/lib/db/engagements'
@@ -310,6 +313,52 @@ describe('setOperatorPrice (ADR 0046 operator arc)', () => {
     const cleared = await setOperatorPrice(db, ORG, 'ent-1', null)
     expect(cleared.recurring_price).toBeNull()
     expect(cleared.status).toBe('active')
+  })
+})
+
+describe('setOperatorPaymentMethod (migration 0113, agreement §3.8)', () => {
+  let db: D1Database
+  beforeEach(async () => {
+    db = createTestD1()
+    await runMigrations(db, { files: discoverNumericMigrations(migrationsDir) })
+    await seed(db)
+  })
+
+  it('a priced service is born on ACH (no fee) and reads as such', async () => {
+    const svc = await setOperatorPrice(db, ORG, 'ent-1', 5000)
+    expect(svc.payment_method).toBe('ach')
+    expect(operatorPaymentMethod(svc)).toBe('ach')
+    expect(operatorPaymentMethod(null)).toBe('ach')
+  })
+
+  it('authors card on the same row the price lives on, and back to ach', async () => {
+    const priced = await setOperatorPrice(db, ORG, 'ent-1', 5000)
+    const card = await setOperatorPaymentMethod(db, ORG, 'ent-1', 'card')
+    expect(card.id).toBe(priced.id)
+    expect(card.payment_method).toBe('card')
+    expect(card.recurring_price).toBe(5000)
+    expect(operatorPaymentMethod(card)).toBe('card')
+    const ach = await setOperatorPaymentMethod(db, ORG, 'ent-1', 'ach')
+    expect(ach.payment_method).toBe('ach')
+    expect(
+      (await servicesForEntity(db, 'ent-1')).filter((s) => s.type === 'operator')
+    ).toHaveLength(1)
+  })
+
+  it('a rail authored before any price creates the (unpriced) operator service', async () => {
+    const svc = await setOperatorPaymentMethod(db, ORG, 'ent-2', 'card')
+    expect(svc.type).toBe('operator')
+    expect(svc.recurring_price).toBeNull()
+    expect(svc.payment_method).toBe('card')
+    const priced = await setOperatorPrice(db, ORG, 'ent-2', 4000)
+    expect(priced.id).toBe(svc.id)
+    expect(priced.payment_method).toBe('card')
+  })
+
+  it('anything unrecognised in the column reads as ach', () => {
+    expect(operatorPaymentMethod({ payment_method: 'crypto' })).toBe('ach')
+    expect(isOperatorPaymentMethod('card')).toBe(true)
+    expect(isOperatorPaymentMethod('CARD')).toBe(false)
   })
 })
 

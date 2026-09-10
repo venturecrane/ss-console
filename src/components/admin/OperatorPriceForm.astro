@@ -1,0 +1,82 @@
+---
+import { formatMoney } from '../../lib/admin/client-hub'
+import { cardProcessingFeeCents } from '../../lib/db/invoices'
+import type { OperatorPaymentMethod } from '../../lib/db/services'
+
+/**
+ * The Operator's commercial record on the client hub: the authored monthly
+ * price (ADR 0046) and the rail it is collected by (migration 0113). Card
+ * adds the 3% processing fee line (agreement §3.8) to checkout and to every
+ * monthly invoice; ACH carries no fee. Both post to the operator-price route.
+ */
+interface Props {
+  entityId: string
+  operatorPrice: number | null
+  operatorPaymentRail: OperatorPaymentMethod
+}
+
+const { entityId, operatorPrice, operatorPaymentRail } = Astro.props
+---
+
+<div
+  class="mt-3 flex items-baseline justify-between border-t border-[color:var(--ss-color-border-subtle)] pt-3"
+>
+  <span
+    class="font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]"
+  >
+    Monthly price
+  </span>
+  <span
+    class:list={[
+      'font-mono text-base font-bold',
+      operatorPrice == null && 'text-[color:var(--ss-color-text-muted)]',
+    ]}
+  >
+    {operatorPrice == null ? 'Not set' : `${formatMoney(operatorPrice)}/mo`}
+  </span>
+</div>
+<form
+  method="POST"
+  action={`/api/admin/clients/${entityId}/operator-price`}
+  class="mt-2.5 flex items-center gap-2"
+>
+  <span class="font-mono text-sm text-[color:var(--ss-color-text-secondary)]">$</span>
+  <input
+    type="number"
+    name="monthly_price"
+    min="0"
+    step="1"
+    value={operatorPrice ?? ''}
+    placeholder="0"
+    class="w-28 border border-[color:var(--ss-color-border)] px-2 py-1 font-mono text-sm"
+  />
+  <span class="font-mono text-[11px] text-[color:var(--ss-color-text-muted)]"> / mo </span>
+  {
+    /* The rail the retainer is collected by (migration 0113). Card adds
+      the 3% processing fee line (agreement §3.8) to checkout and to
+      every monthly invoice; ACH carries no fee. */
+  }
+  <select
+    name="payment_method"
+    aria-label="Payment method"
+    class="border border-[color:var(--ss-color-border)] px-2 py-1 font-mono text-sm"
+  >
+    <option value="ach" selected={operatorPaymentRail === 'ach'}> ACH, no fee </option>
+    <option value="card" selected={operatorPaymentRail === 'card'}> Card, +3% fee </option>
+  </select>
+  <button
+    type="submit"
+    class="border border-[color:var(--ss-color-primary)] px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-primary)]"
+  >
+    Save
+  </button>
+</form>
+{
+  operatorPaymentRail === 'card' && operatorPrice != null && (
+    <p class="mt-2 text-sm text-[color:var(--ss-color-text-muted)]">
+      Paid by card: {formatMoney(operatorPrice)} plus a{' '}
+      {formatMoney(cardProcessingFeeCents(Math.round(operatorPrice * 100)) / 100)} card processing
+      fee (3%) each month.
+    </p>
+  )
+}

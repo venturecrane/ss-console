@@ -39,11 +39,22 @@
  * as client.ts / resend.ts.
  */
 
+import { CARD_FEE_LINE_DESCRIPTION, cardProcessingFeeCents } from '../db/invoices'
+import type { OperatorPaymentMethod } from '../db/services'
+
 const STRIPE_API_BASE = 'https://api.stripe.com/v1'
 
 /** Metadata marker that identifies the shared retainer product. */
 const RETAINER_PRODUCT_MARKER = { key: 'smd_product', value: 'operator-retainer' } as const
 const RETAINER_PRODUCT_NAME = 'SMD Operator Retainer'
+/**
+ * The shared product behind the recurring card-fee line (agreement §3.8).
+ * Its name is the line the client reads on Checkout and on every monthly
+ * invoice: the same text the one-time invoices carry, so a card client
+ * sees one phrase for one fee everywhere.
+ */
+const CARD_FEE_PRODUCT_MARKER = { key: 'smd_product', value: 'operator-card-fee' } as const
+const CARD_FEE_PRODUCT_NAME = CARD_FEE_LINE_DESCRIPTION
 
 /** The checkout-session metadata key + value the webhook routes on. */
 export const OPERATOR_CHECKOUT_PRODUCT_SLUG = 'operator'
@@ -61,11 +72,16 @@ export interface StripeSubscriptionResult {
 }
 
 /**
- * Resolve the shared retainer Product by its metadata marker; create it on
- * first use. One product for the whole SKU — per-seat prices are inline.
+ * Resolve a shared Product by its metadata marker; create it on first use.
+ * One product per SKU (the retainer, the card fee) — per-seat prices are
+ * inline.
  */
-async function resolveRetainerProductId(apiKey: string): Promise<string> {
-  const query = `metadata['${RETAINER_PRODUCT_MARKER.key}']:'${RETAINER_PRODUCT_MARKER.value}'`
+async function resolveProductId(
+  apiKey: string,
+  marker: { key: string; value: string },
+  name: string
+): Promise<string> {
+  const query = `metadata['${marker.key}']:'${marker.value}'`
   const searchRes = await fetch(
     `${STRIPE_API_BASE}/products/search?query=${encodeURIComponent(query)}`,
     { method: 'GET', headers: { Authorization: `Bearer ${apiKey}` } }
@@ -75,8 +91,8 @@ async function resolveRetainerProductId(apiKey: string): Promise<string> {
     if (data.data.length > 0) return data.data[0].id
   }
   const body = new URLSearchParams()
-  body.append('name', RETAINER_PRODUCT_NAME)
-  body.append(`metadata[${RETAINER_PRODUCT_MARKER.key}]`, RETAINER_PRODUCT_MARKER.value)
+  body.append('name', name)
+  body.append(`metadata[${marker.key}]`, marker.value)
   const res = await fetch(`${STRIPE_API_BASE}/products`, {
     method: 'POST',
     headers: stripeHeaders(apiKey),
@@ -94,6 +110,13 @@ export interface CreateOperatorCheckoutParams {
   customer_email: string
   /** Monthly retainer in cents (services.recurring_price × 100). */
   monthly_amount_cents: number
+  /**
+   * The authored rail (services.payment_method). `ach` offers a bank account
+   * and nothing else; `card` offers a card and adds the recurring 3%
+   * processing-fee line (agreement §3.8) so the fee is on the page before
+   * the client pays and on every monthly invoice after.
+   */
+  payment_method: OperatorPaymentMethod
   /** Local entity id, stamped into metadata for cross-reference. */
   entity_id: string
   /** Local subscriptions.id — the row the webhook attaches to and promotes. */
@@ -114,10 +137,14 @@ export interface OperatorCheckoutResult {
 /**
  * Create the Checkout Session a client uses to START the retainer.
  *
- * Subscription mode, monthly, ACH Direct Debit only (verification automatic:
- * instant via Financial Connections, micro-deposits as fallback). No card:
- * the Captain set ACH as the sole method for invoices and the retainer on
- * 2026-09-09; a card client is a decision to make when one exists.
+ * Subscription mode, monthly, on the rail authored for the client. ACH
+ * (the default) is ACH Direct Debit only, verification automatic: instant
+ * via Financial Connections, micro-deposits as fallback. Card (authored on
+ * the client hub when a client asks; the first did on 2026-09-10) offers a
+ * card only and carries a second recurring line, the 3% processing fee of
+ * agreement §3.8, so Checkout shows the fee before payment and every
+ * monthly invoice carries it as its own line. One session cannot offer both
+ * rails and add the fee only for a card, which is why the rail is authored.
  * The first month is paid on Stripe's page; the subscription is created by
  * Stripe on completion, charge_automatically, and the webhook binds it.
  * No Stripe Tax: the retainer is a managed service, priced as authored.
@@ -132,7 +159,7 @@ export async function createOperatorCheckoutSession(
     console.log(`[DEV] Stripe: would create checkout for $${dollars}/mo retainer`)
     return { id: devId, url: '#dev-mode' }
   }
-  const productId = await resolveRetainerProductId(apiKey)
+  const productId = await resolveProductId(apiKey, RETAINER_PRODUCT_MARKER, RETAINER_PRODUCT_NAME)
 
   const body = new URLSearchParams()
   body.append('mode', 'subscription')
@@ -141,8 +168,25 @@ export async function createOperatorCheckoutSession(
   body.append('line_items[0][price_data][currency]', 'usd')
   body.append('line_items[0][price_data][product]', productId)
   body.append('line_items[0][price_data][recurring][interval]', 'month')
-  body.append('payment_method_types[]', 'us_bank_account')
-  body.append('payment_method_options[us_bank_account][verification_method]', 'automatic')
+  if (params.payment_method === 'card') {
+    const feeProductId = await resolveProductId(
+      apiKey,
+      CARD_FEE_PRODUCT_MARKER,
+      CARD_FEE_PRODUCT_NAME
+    )
+    body.append('line_items[1][quantity]', '1')
+    body.append(
+      'line_items[1][price_data][unit_amount]',
+      String(cardProcessingFeeCents(params.monthly_amount_cents))
+    )
+    body.append('line_items[1][price_data][currency]', 'usd')
+    body.append('line_items[1][price_data][product]', feeProductId)
+    body.append('line_items[1][price_data][recurring][interval]', 'month')
+    body.append('payment_method_types[]', 'card')
+  } else {
+    body.append('payment_method_types[]', 'us_bank_account')
+    body.append('payment_method_options[us_bank_account][verification_method]', 'automatic')
+  }
   body.append('customer_email', params.customer_email)
   body.append('client_reference_id', params.user_id)
   body.append('success_url', params.success_url)
