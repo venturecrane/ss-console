@@ -463,7 +463,25 @@ def test_unwired_backends_empty_when_all_wired(tmp_path):
     assert pipeline.unwired_destructive_backends() == []
 
 
-def test_cli_live_refuses_when_backends_unwired(tmp_path):
+@pytest.fixture
+def _no_ambient_backends(monkeypatch):
+    """The CLI wires real backends from the environment. A unit test must see
+    NONE of them, whatever the developer's shell holds (a logged-in `fly` CLI
+    is enough to wire the Fly destroyer), so the wiring hook is replaced with
+    one that reports everything unwired."""
+    from bin.lib import decommission_cli
+
+    monkeypatch.setattr(
+        decommission_cli,
+        "backends_from_env",
+        lambda slug, root: ({}, {n: False for n in decommission_cli.BACKEND_REQUIREMENTS}),
+    )
+    # Same discipline for the seam preserver: a shell with the runtime-read
+    # env staged would otherwise make this unit test dial a real Machine.
+    monkeypatch.setattr(decommission_cli, "seam_client_from_env", lambda slug: None)
+
+
+def test_cli_live_refuses_when_backends_unwired(tmp_path, _no_ambient_backends):
     from bin.lib.decommission_cli import main
 
     customers_root = _copy_fixture(tmp_path)
@@ -485,7 +503,7 @@ def test_cli_live_refuses_when_backends_unwired(tmp_path):
     assert not list(customers_root.glob("smd.decommissioned.*"))
 
 
-def test_cli_live_allow_unwired_runs_and_tombstones(tmp_path):
+def test_cli_live_allow_unwired_runs_and_tombstones(tmp_path, _no_ambient_backends):
     from bin.lib.decommission_cli import main
 
     customers_root = _copy_fixture(tmp_path)

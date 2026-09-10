@@ -10,7 +10,7 @@
     "operator/connectors/smokeball/smokeball_connector/server.py": 1099,
     "operator/customers/pilot-smokeball/seed/seed_data.py": 515,
     "operator/customers/pilot-smokeball/seed/seed_voice_letters.py": 644,
-    "operator/safety-substrate/sticky_stop.py": 526,
+    "operator/safety-substrate/sticky_stop.py": 521,
     "operator/skills/client-verification-tracker/pre_run.py": 642,
     "operator/skills/deadline-miss-escalator/pre_run.py": 832,
     "operator/skills/lien-ledger-tracker/pre_run.py": 969,
