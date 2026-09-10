@@ -71,7 +71,7 @@ def load(install_root: Path) -> dict[str, Any]:
     if vp.is_file():
         try:
             version = json.loads(vp.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 - a corrupt version file reads as no version; the ICD tables themselves are still loaded
             version = {}
     return {"icd10": _load_icd10(p10), "icd9": _load_icd9(p9), "version": version, "dir": str(d)}
 

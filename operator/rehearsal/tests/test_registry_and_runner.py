@@ -15,8 +15,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from rehearsal import registry, run as runner  # noqa: E402 -- path injected above
-from rehearsal.scoring import EXPECT_KINDS, PASS, SKIPPED  # noqa: E402
+from rehearsal import registry, run as runner
+from rehearsal.scoring import EXPECT_KINDS, PASS, SKIPPED
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 

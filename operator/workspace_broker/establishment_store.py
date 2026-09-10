@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import Any
 
 from .audit_ledger import _iso_utc
-from .establishment_constants import *  # noqa: F403 — vocabulary and tuning surface
-from .establishment_validation import *  # noqa: F403 — validators and renderers
+from .establishment_constants import *  # vocabulary and tuning surface
+from .establishment_validation import *  # validators and renderers
 from .establishment_constants import (  # noqa: F401 — `import *` skips _names
     _CLASS_SLUG_CHARS,
     _ID_PATTERN,
@@ -1091,7 +1091,7 @@ class EstablishmentStore:
                 f"the seat config is not readable ({exc.__class__.__name__}); "
                 "no act can be proposed"
             ) from exc
-        except Exception as exc:  # noqa: BLE001 - an unparseable config authorizes nothing
+        except Exception as exc:
             raise EstablishmentValidationError(
                 f"the seat config is not parseable ({exc.__class__.__name__}); "
                 "no act can be proposed"

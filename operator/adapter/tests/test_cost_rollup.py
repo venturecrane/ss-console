@@ -38,7 +38,7 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[2]))  # operator/ on sys.path
 
-from adapter.cost_rollup import (  # noqa: E402
+from adapter.cost_rollup import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     DriverCategory,
     MonthlyRollup,
     SqliteRowReader,

@@ -30,7 +30,6 @@ import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 import pytest
 
@@ -38,13 +37,12 @@ _HERE = Path(__file__).resolve()
 # operator/ on sys.path so `from adapter.audit_log import ...` resolves.
 sys.path.insert(0, str(_HERE.parents[2]))
 
-from adapter.audit_log import (  # noqa: E402
+from adapter.audit_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     ACCEPTED_ACTION_TYPES,
-    AuditEvent,
     AuditLogWriter,
     SqliteExecutor,
 )
-from bin.lib.decommission import (  # noqa: E402
+from bin.lib.decommission import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     DecommissionPipeline,
     DecommissionStepFailed,
     FilesystemTombstoner,
@@ -678,7 +676,7 @@ def test_compliance_archiver_writes_manifest(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-from bin.lib.decommission import (  # noqa: E402
+from bin.lib.decommission import (  # noqa: E402 - the package import follows the fixture prelude the module builds above
     InMemoryAuditLogPreserver,
     VERTICAL_AUDIT_LOG_DAYS_DEFAULTS,
     resolve_audit_log_days,

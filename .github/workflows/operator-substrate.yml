@@ -78,7 +78,17 @@ jobs:
         # ruff lints the tree against operator/ruff.toml (see that file's header
         # for why the rule selection is narrow and why it is a gate, not a
         # baseline).
-        run: python3 -m pip install --quiet pytest pyyaml cryptography ruff
+        # pyright (pinned) runs in basic mode under operator/pyproject.toml and is
+        # ratcheted by bin/pyright-ratchet.py; the pip package fetches its own node.
+        run: python3 -m pip install --quiet pytest pyyaml cryptography ruff pyright==1.1.406
+
+      # The safe half of packaging (operator/pyproject.toml header): the tree is
+      # installed as packages so imports resolve the way they will once the
+      # seat image installs it too. The sys.path shims stay until that
+      # reprovision-proven follow-up.
+      - name: Install the operator tree as packages
+        if: steps.changes.outputs.relevant == 'true'
+        run: python3 -m pip install --quiet -e ./operator
 
       - name: Run ruff
         if: steps.changes.outputs.relevant == 'true'
@@ -88,6 +98,37 @@ jobs:
         # existed, no Python linter ran here at all and every one was inert.
         working-directory: operator
         run: ruff check .
+
+      # RUF100 (in ruff.toml) deletes suppressions for rules ruff does not
+      # enable; this is the other half: every surviving noqa says what it
+      # protects. Same shape as the nosemgrep gate in security.yml.
+      - name: Every noqa carries a reason
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator
+        run: python3 bin/noqa-reasons.py
+
+      # pyright, ratcheted: contracts/operator-pyright-baseline.json records
+      # errors per file; any file that grows fails, and improvement asks for a
+      # regenerate so the number only moves down. `|| true` because pyright
+      # exits 1 on any error and the ratchet, not the raw exit, is the gate.
+      - name: pyright (ratcheted)
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator
+        run: |
+          set -euo pipefail
+          pyright --outputjson > /tmp/pyright.json || true
+          python3 bin/pyright-ratchet.py /tmp/pyright.json
+
+      # shellcheck never ran anywhere before 2026-09-10; five `shellcheck
+      # disable` directives sat in workflow run: blocks, which no linter reads.
+      # The generated env-array file is excluded (no shebang by design).
+      - name: shellcheck (operator shell)
+        if: steps.changes.outputs.relevant == 'true'
+        run: |
+          set -euo pipefail
+          git ls-files 'operator/**/*.sh' 'operator/*.sh' \
+            | grep -v '_env-arrays.generated.sh' \
+            | xargs shellcheck --severity=warning
 
       - name: Run run()-style safety invariants
         if: steps.changes.outputs.relevant == 'true'

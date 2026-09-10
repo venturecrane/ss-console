@@ -136,10 +136,10 @@ def run(sr: StageRun) -> int:
 def _mint_with_retry(sr: StageRun, ids: list[str]) -> list[dict[str, Any]]:
     try:
         return sr.seat.mint(sr.job.matter_id, ids)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - a mint failure of any kind is retried once; the second failure is recorded per file id below
         sr.log(f"MINT FAIL ({str(exc)[:120]}); retrying once")
         time.sleep(MINT_RETRY_PAUSE_SECONDS)
         try:
             return sr.seat.mint(sr.job.matter_id, ids)
-        except Exception as exc2:  # noqa: BLE001
+        except Exception as exc2:  # noqa: BLE001 - the second mint failure is recorded per file id so the download stage reports exactly which files failed
             return [{"id": i, "error": f"mint failed twice: {str(exc2)[:120]}"} for i in ids]

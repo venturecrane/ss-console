@@ -21,7 +21,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
-import secret_custody as sc  # noqa: E402
+import secret_custody as sc
 
 _OP = Path(__file__).resolve().parents[2]
 _PROVISION = _OP / "bin" / "provision-customer.sh"

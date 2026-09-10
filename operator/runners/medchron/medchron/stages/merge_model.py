@@ -24,7 +24,7 @@ def _run_batch(sr: StageRun, d: Path, model: str, system: str, text: str, label:
     try:
         r = sr.doorway.call("merge", model=model, system=system, messages=[{"role": "user", "content": text}],
                             max_tokens=MAX_TOKENS, stream=True, custom_id=f"merge{label}")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - a doorway failure on one batch is logged; the stage falls back to splitting the batch below
         sr.log(f"  merge {label} failed: {str(exc)[:110]}")
     if r is not None:
         append_jsonl(d / "usage.jsonl", {"chunk": f"merge{label}", "in": r.usage.input_tokens,

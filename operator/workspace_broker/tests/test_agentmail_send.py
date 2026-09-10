@@ -87,7 +87,7 @@ class FakeHTTP:
         self.calls: list[tuple[str, str, dict | None]] = []
         self.responses = responses or {}
 
-    def __call__(self, request, timeout=None):  # noqa: ANN001 - urllib signature
+    def __call__(self, request, timeout=None):
         body = json.loads(request.data.decode()) if request.data else None
         self.calls.append((request.method, request.full_url, body))
         payload = {"inboxes": [{"inbox_id": SEAT_INBOX}]}
@@ -585,7 +585,7 @@ def test_a_transport_failure_is_not_recorded_as_a_refusal(tmp_path: Path) -> Non
     """The seat was permitted to write; saying otherwise would misread the ledger."""
 
     class Boom(FakeHTTP):
-        def __call__(self, request, timeout=None):  # noqa: ANN001
+        def __call__(self, request, timeout=None):
             if request.method == "POST":
                 raise OSError("connection reset")
             return super().__call__(request, timeout)

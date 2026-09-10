@@ -7,7 +7,6 @@ import json
 from pathlib import Path
 from types import SimpleNamespace as NS
 
-import pytest
 
 from medchron import config as config_mod, job as job_mod
 from medchron.audit import anchors as AN, claims as CL, coverage, diag, page_text, render, repair, verify as VF

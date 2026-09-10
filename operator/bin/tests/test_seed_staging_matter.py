@@ -42,7 +42,7 @@ _LIB = Path(__file__).resolve().parents[1] / "lib"
 if str(_LIB) not in sys.path:
     sys.path.insert(0, str(_LIB))
 
-from seed_fixtures import FIXTURES  # noqa: E402
+from seed_fixtures import FIXTURES  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 _BIN = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("seed_staging_matter", _BIN / "seed-staging-matter.py")

@@ -28,7 +28,7 @@ import pytest
 _BIN = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_BIN / "lib"))
 
-import send_verify as sv  # noqa: E402 -- path injected above
+import send_verify as sv  # noqa: E402 -- path injected above; the import must follow the sys.path shim
 
 # The reconciler, spec-loaded the way test_reconcile_sends.py does, to drive the
 # integrated render()/--json paths the leak tests must cover.

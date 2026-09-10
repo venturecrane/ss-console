@@ -243,6 +243,6 @@ class PageIndex:
         for d in self._docs.values():
             try:
                 d.close()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 - closing one document handle failing must not stop the other handles from closing
                 pass
         self._docs.clear()

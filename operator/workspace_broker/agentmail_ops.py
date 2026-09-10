@@ -160,7 +160,7 @@ class AgentMailOps:
             raise AgentMailTransportError(
                 f"agentmail {method} {path} failed: HTTP {exc.code}"
             ) from exc
-        except Exception as exc:  # noqa: BLE001 - urllib raises a wide family
+        except Exception as exc:
             raise AgentMailTransportError(f"agentmail {method} {path} failed: {exc}") from exc
         try:
             parsed = json.loads(raw)

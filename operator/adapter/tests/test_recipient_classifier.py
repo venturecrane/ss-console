@@ -16,9 +16,9 @@ from pathlib import Path
 # operator/ root, so `adapter.*` imports resolve.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-import pytest  # noqa: E402
+import pytest
 
-from adapter.recipient_classifier import (  # noqa: E402
+from adapter.recipient_classifier import (
     ACTION_CLASS_EXTERNAL_SEND,
     ACTION_CLASS_EXTERNAL_SEND_CLIENT,
     ACTION_CLASS_EXTERNAL_SEND_INTERNAL,

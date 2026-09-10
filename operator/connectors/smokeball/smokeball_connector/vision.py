@@ -358,7 +358,7 @@ def _stream(body: bytes, headers: dict[str, str]) -> tuple[str, str | None]:
                         stop_reason = str(delta.get("stop_reason"))
     except _StreamFailed:
         raise
-    except Exception as exc:  # noqa: BLE001 — any transport fault is an api_error
+    except Exception as exc:
         raise _StreamFailed(exc.__class__.__name__) from exc
     finally:
         close = getattr(client, "close", None)

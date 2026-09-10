@@ -13,12 +13,11 @@ from __future__ import annotations
 
 import json
 import re
-import secrets
 import sqlite3
 from hashlib import sha256
 from typing import Any
 
-from .establishment_constants import *  # noqa: F403 — vocabulary and tuning surface
+from .establishment_constants import *  # vocabulary and tuning surface
 from .establishment_constants import (  # noqa: F401 — `import *` skips _names
     _CLASS_SLUG_CHARS,
     _ID_PATTERN,

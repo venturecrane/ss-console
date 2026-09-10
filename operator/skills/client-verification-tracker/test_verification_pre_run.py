@@ -37,7 +37,7 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[2]))
 
-from adapter.audit_log import AuditLogWriter, SuppressedWakeWriter  # noqa: E402
+from adapter.audit_log import AuditLogWriter, SuppressedWakeWriter  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 _PRE_RUN_PATH = _HERE.parent / "pre_run.py"
 _spec = importlib.util.spec_from_file_location("cvt_pre_run", _PRE_RUN_PATH)

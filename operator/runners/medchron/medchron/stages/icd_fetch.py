@@ -57,7 +57,7 @@ def vendor(dest: Path, fetch: Fetch = _http_fetch) -> dict:
     z10, z9 = fetch(ICD10_URL), fetch(ICD9_URL)
     (dest / ICD10_FILE).write_bytes(_member(z10, ICD10_MEMBER))
     (dest / ICD9_FILE).write_bytes(_member(z9, ICD9_MEMBER))
-    sha = lambda b: hashlib.sha256(b).hexdigest()  # noqa: E731
+    sha = lambda b: hashlib.sha256(b).hexdigest()  # noqa: E731 - a one-line digest alias used twice on the next lines; a def adds only a name
     version = {
         "fetched": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "icd10cm": {"label": ICD10_LABEL, "url": ICD10_URL, "member": ICD10_MEMBER, "file": ICD10_FILE,

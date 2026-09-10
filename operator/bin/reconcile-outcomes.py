@@ -72,15 +72,15 @@ import yaml
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
 
-import seam_pull  # noqa: E402 -- path injected above
-from sender_class import (  # noqa: E402 -- ss#2581, split out for the module-size ceiling
-    CUSTOMERS_DIR,
-    SENDER_FIRM,
-    SENDER_PROBE,
-    SENDER_SMD,
-    SENDER_UNKNOWN,
-    SENDER_UNRECORDED,
-    SIBLING_KEY_WINDOW_SECONDS,
+import seam_pull
+from sender_class import (
+    CUSTOMERS_DIR,  # noqa: F401 - re-exported: test_reconcile_outcomes reads it as a module attribute
+    SENDER_FIRM,  # noqa: F401 - re-exported: test_reconcile_outcomes reads it as a module attribute
+    SENDER_PROBE,  # noqa: F401 - re-exported: test_reconcile_outcomes reads it as a module attribute
+    SENDER_SMD,  # noqa: F401 - re-exported: test_reconcile_outcomes reads it as a module attribute
+    SENDER_UNKNOWN,  # noqa: F401 - re-exported: test_reconcile_outcomes reads it as a module attribute
+    SENDER_UNRECORDED,  # noqa: F401 - re-exported: test_reconcile_outcomes reads it as a module attribute
+    SIBLING_KEY_WINDOW_SECONDS,  # noqa: F401 - re-exported: test_reconcile_outcomes reads it as a module attribute
     classify_senders,
     load_roster,
     sender_breakdown as _sender_breakdown,

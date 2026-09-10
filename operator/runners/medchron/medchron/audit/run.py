@@ -134,7 +134,7 @@ class Round:
                 cv = VF.verify_image(self.doorway, self.model, c["claim"], [img_block(ci)] if ci else [],
                                      f"Exhibit {other} p.1", custom_id=c["key"] + f"-ctl{other}")
                 kind, extra = f"control(vs Ex{other})", {"mode": "image"}
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 - a control verification raising is recorded as an ERROR verdict for that claim; the audit continues
             cv, kind, extra = {**ERROR, "note": str(exc)[:200]}, f"control(vs Ex{other})", {"mode": self.mode}
         cv.pop("supporting_pages", None)
         CL.append_row(self.paths.results, {"key": c["key"] + f"-ctl{other}", "kind": kind, "exhibit": c["exhibit"],
@@ -170,7 +170,7 @@ class Round:
         ex = cl["exhibit"]
         try:
             block = index.window_text(ex, cl["pages"])
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 - a window-text failure is logged and the cluster's claims re-run in image mode below
             self.log(f"  ER Ex{ex} cluster window failed: {str(exc)[:120]}; running its claims in image mode")
             for c in cl["claims"]:
                 self.run_image(c, pdfs, index, doc_sha, ts)
@@ -181,7 +181,7 @@ class Round:
                 try:
                     tv = VF.verify_text(self.doorway, self.model, c["claim"], block, c["pages"], c["anchors"], cite_label,
                                         custom_id=c["key"])
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:  # noqa: BLE001 - a text verification raising is recorded as an ERROR verdict for that claim; the audit continues
                     tv = {**ERROR, "note": str(exc)[:200], "supporting_pages": []}
                 rec = {"key": c["key"], "kind": "real", "exhibit": ex, "page_spec": c["page_spec"], "pages": c["pages"],
                        "claim": c["claim"][:500], "mode": "text", "text_then_image": False,
@@ -215,7 +215,7 @@ class Round:
                                                            "widened": widened, "doc_sha": doc_sha, "ts": ts})
                         self.log(f"  -- REVERSE Ex{ex} p.{c['page_spec'] or '1'}: {'agree' if agree else '!! DISAGREE'}")
                 self.control_for(c, pdfs, index, doc_sha, ts)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001 - one claim's worker dying is recorded as that claim's ERROR row; the remaining claims still run
                 self.log(f"  ER Ex{ex} p.{c['page_spec']} worker died: {str(exc)[:120]}")
                 CL.append_row(self.paths.results, {"key": c["key"], "kind": "real", "exhibit": ex,
                                                    "page_spec": c["page_spec"], "pages": c.get("pages", []),
@@ -267,7 +267,7 @@ class Round:
         for k, p in pdfs.items():
             try:
                 npages[k] = len(PdfReader(str(p)).pages)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001 - an unreadable exhibit is logged and skipped; the audit still runs over the readable ones
                 self.log(f"  !! Ex{k} unreadable as PDF: {str(exc)[:90]}")
         body = CL.body_of(self.paths.doc.read_text(encoding="utf-8"))
         claims = CL.extract_claims(body, set(npages))

@@ -7,12 +7,11 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
 
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[3]))
 
-from adapter.evidence.manifest import (  # noqa: E402
+from adapter.evidence.manifest import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     PACKET_VERSION,
     SIGNER_EMAIL,
     SIGNER_NAME,

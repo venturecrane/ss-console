@@ -270,7 +270,7 @@ async def ingest_anthropic_billing(
 
     try:
         rows = await source.fetch_daily_usage(api_key, day)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 - the vendor fetch failing must not abort the day's ingest; it is logged and the day is marked unfetched
         log.warning(
             "anthropic_billing fetch failed for %s: %s",
             day_str,
@@ -383,7 +383,7 @@ async def run_ingest_for_customer(
             ctx.anthropic_api_key,
             day,
         )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 - one source raising must not abort the other sources' ingest; it is logged as that source's failure
         log.error(
             "ingest_anthropic_billing raised for %s on %s: %s",
             ctx.customer_slug,

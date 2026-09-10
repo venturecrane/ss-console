@@ -31,12 +31,12 @@ _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[2]))  # operator/ on sys.path (for adapter.*)
 sys.path.insert(0, str(_HERE.parent))  # the skill dir itself (for pre_run)
 
-from adapter.audit_log import (  # noqa: E402
+from adapter.audit_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     AuditLogWriter,
     AuditWriteError,
     SuppressedWakeWriter,
 )
-from pre_run import (  # noqa: E402
+from pre_run import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     AnomalyThresholds,
     BaselineMetrics,
     CampaignMetrics,

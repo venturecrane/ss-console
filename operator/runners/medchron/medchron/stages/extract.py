@@ -129,7 +129,7 @@ def _extract_one(d: Path, r: dict[str, Any], scans: list[dict[str, Any]]) -> dic
         elif ext in WORD_EXTS:
             try:
                 txt = docx_text(path)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001 - docx extraction failing is recorded as that document's error with empty text; the stage continues
                 rec["error"] = f"docx: {exc}"[:120]
                 txt = ""
             if txt:

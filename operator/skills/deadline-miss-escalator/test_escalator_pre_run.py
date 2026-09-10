@@ -36,7 +36,7 @@ from pathlib import Path
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[2]))
 
-from adapter.audit_log import AuditLogWriter, SuppressedWakeWriter  # noqa: E402
+from adapter.audit_log import AuditLogWriter, SuppressedWakeWriter  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 _PRE_RUN_PATH = _HERE.parent / "pre_run.py"
 _spec = importlib.util.spec_from_file_location("deadline_escalator_pre_run", _PRE_RUN_PATH)
@@ -549,7 +549,7 @@ load_escalation_config = _pre_run.load_escalation_config
 
 # The vendored ledger module the skill loads at runtime — used here to mint
 # real events so the tests exercise the true item_key/state join.
-import importlib.util as _il  # noqa: E402
+import importlib.util as _il  # noqa: E402 - imported beside the ledger loader it serves, after the pre_run module is loaded above
 
 _LEDGER_PATH = _HERE.parent / "escalation_ledger.py"
 _lspec = _il.spec_from_file_location("escalation_ledger_test", _LEDGER_PATH)

@@ -227,7 +227,7 @@ def _pdf_text_and_pages(blob: bytes) -> tuple[str, int]:
     try:
         reader = PdfReader(io.BytesIO(blob))
         pages = [page.extract_text() or "" for page in reader.pages]
-    except Exception as exc:  # noqa: BLE001 - malformed PDFs must fail closed, not crash the server
+    except Exception as exc:
         raise UnsupportedDocumentError(f"PDF could not be parsed: {exc}") from exc
     return "\n\n".join(p.strip() for p in pages if p.strip()), len(pages)
 
@@ -245,7 +245,7 @@ def _docx_text(blob: bytes) -> str:
         blob = _dotx_to_docx_bytes(blob)
     try:
         doc = Document(io.BytesIO(blob))
-    except Exception as exc:  # noqa: BLE001 - malformed DOCX must fail closed, not crash the server
+    except Exception as exc:
         raise UnsupportedDocumentError(f"DOCX could not be parsed: {exc}") from exc
     parts: list[str] = [p.text for p in doc.paragraphs if p.text.strip()]
     for table in doc.tables:

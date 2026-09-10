@@ -236,7 +236,7 @@ def hold_matter_snapshot_hashes(
             continue
         try:
             hold_key = ledger.item_key(matter_id, hold_source_id, hold_label, None)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 - an item whose key cannot be derived is skipped; the snapshot is a best-effort read, never a raise
             continue
         hold_state = states.get(hold_key)
         if hold_state is None or (

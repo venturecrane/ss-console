@@ -510,7 +510,7 @@ def test_flipping_owner_and_upload_flags_changes_no_classification():
     ]
     base, _ = vsc.survey(FakeClient(), firm_name=FIRM, vocabulary=VOCAB)
     other, _ = vsc.survey(FakeClient(docs=flipped), firm_name=FIRM, vocabulary=VOCAB)
-    verdicts = lambda rep: {  # noqa: E731
+    verdicts = lambda rep: {  # noqa: E731 - test-local shorthand over a report shape; a def adds only a name
         r["file_id"]: (r["firm_authored"], r["cohort_proposal"], r["doc_type"])
         for r in rep["documents"]
     }
@@ -637,7 +637,7 @@ def test_everything_not_projected_is_excluded_with_a_reason(report_and_entries):
 def test_rendered_manifest_is_what_the_fetch_bridge_parses(tmp_path: Path, report_and_entries):
     """The end of this script is the start of voice-fetch-corpus.py: its REAL
     manifest loader must accept what we emit, resolved by id."""
-    yaml = pytest.importorskip("yaml")  # noqa: F841
+    yaml = pytest.importorskip("yaml")
     _, entries = report_and_entries
     dest = tmp_path / "exemplars.yaml"
     vsc.write_manifest(entries, str(dest), firm_name=FIRM, generated_at="2026-08-10T00:00:00+00:00")

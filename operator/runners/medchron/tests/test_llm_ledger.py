@@ -12,7 +12,6 @@ from types import SimpleNamespace as NS
 import pytest
 
 from medchron import budget as budget_mod, config as config_mod, ledger as ledger_mod, llm
-from medchron_testkit import FIRM_CONFIG
 
 IMG = {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "AAAA"}}
 TOOL = {"name": "record_verdict", "input_schema": {"type": "object"}}

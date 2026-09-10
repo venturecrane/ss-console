@@ -25,20 +25,20 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[3]))
 
-from adapter.evidence import signing  # noqa: E402
+from adapter.evidence import signing  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 pytest.importorskip(
     "cryptography",
     reason="packet signing requires the cryptography package; CI installs it",
 )
 
-from cryptography.exceptions import InvalidSignature  # noqa: E402
-from cryptography.hazmat.primitives import serialization  # noqa: E402
-from cryptography.hazmat.primitives.asymmetric.ed25519 import (  # noqa: E402
+from cryptography.exceptions import InvalidSignature  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from cryptography.hazmat.primitives import serialization  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     Ed25519PrivateKey,
 )
 
-from .test_packet import _build_pair, _request, _seed_audit_row, _write_customer_yaml  # noqa: E402
+from .test_packet import _build_pair, _request, _seed_audit_row, _write_customer_yaml  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 
 def _key_env(monkeypatch) -> Ed25519PrivateKey:

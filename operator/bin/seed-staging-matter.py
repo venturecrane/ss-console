@@ -47,7 +47,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 
-from seed_fixtures import FIXTURES  # noqa: E402
+from seed_fixtures import FIXTURES
 
 
 def _client():

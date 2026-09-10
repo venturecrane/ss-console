@@ -321,7 +321,7 @@ def run() -> tuple[bool, str]:
     """
     try:
         return _self_check_fixtures()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 - boot self-check: any raise is a FAIL line for the substrate runner, never a crash at boot
         return False, f"FAIL: spec-dir ownership self-check raised {type(e).__name__}: {e}"
 
 

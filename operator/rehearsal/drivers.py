@@ -115,7 +115,7 @@ def _agentmail(method: str, path: str, key: str, body: dict | None = None) -> tu
         # segment is built here; no caller supplies a scheme or host. Same
         # suppression and reasoning as operator/bin/rehearse-card.py.
         # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-        with urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_S) as response:  # noqa: S310
+        with urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_S) as response:  # noqa: S310 - host is the AGENTMAIL_API_BASE constant, https, no caller supplies a scheme
             return response.status, json.loads(response.read().decode() or "{}")
     except urllib.error.HTTPError as exc:
         return exc.code, {"raw": exc.read().decode()[:400]}

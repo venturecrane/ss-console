@@ -42,7 +42,7 @@ import sqlite3
 import time
 from datetime import UTC, datetime, timedelta
 
-from .audit_ledger import _encode_crockford, _iso_utc, _ulid  # format in lockstep
+from .audit_ledger import _encode_crockford, _iso_utc  # format in lockstep
 
 
 def _mint_id_and_stamp() -> tuple[str, str]:

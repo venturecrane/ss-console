@@ -18,7 +18,6 @@ Read-only. Exit 1 on any mismatch, so it can gate a later step.
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 
@@ -30,7 +29,7 @@ SEED_YAML = os.path.join(
 )
 
 sys.path.insert(0, HERE)
-from seed_staging import Api  # noqa: E402
+from seed_staging import Api  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 
 def listing(payload):

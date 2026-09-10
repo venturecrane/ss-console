@@ -29,7 +29,7 @@ def _run_part(sr: StageRun, d: Path, model: str, system: str, text: str, label: 
         r = sr.doorway.call("map-repair", model=model, system=system, messages=[{"role": "user", "content": text}],
                             max_tokens=max_tokens, effort="", stream=True, cache_blocks=("system",),
                             custom_id=f"repair-{label}")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - a doorway failure on one part is recorded as that part's error and the stage continues with the rest
         sr.log(f"  {label}: {str(exc)[:120]}")
         return None, "error"
     append_jsonl(d / "usage.jsonl", {"chunk": label, "in": r.usage.input_tokens, "out": r.usage.output_tokens,

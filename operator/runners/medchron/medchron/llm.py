@@ -191,7 +191,7 @@ def classify_error(exc: BaseException) -> str:
     """'retry' for transport/429/5xx, 'raise' for 4xx invalid requests."""
     try:
         import anthropic
-    except Exception:  # noqa: BLE001 - pragma: no cover
+    except Exception:  # noqa: BLE001 - the anthropic SDK may be absent in the audit venv; classify by message text then
         return "raise" if "invalid_request" in str(exc) else "retry"
     if isinstance(exc, (anthropic.APIConnectionError, anthropic.RateLimitError)):
         return "retry"
@@ -260,7 +260,7 @@ def _batch_files(batch_dir: Path, stage: str) -> dict[str, dict[str, Any]]:
         if p.name.startswith(f"batch-{stage}-") and p.suffix == ".json":
             try:
                 files[p.name] = json.loads(p.read_text(encoding="utf-8"))
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 - a corrupt batch file is skipped so the batch index still lists the readable ones
                 continue
     return files
 
@@ -337,7 +337,7 @@ class Doorway:
                         msg = st.get_final_message()
                 else:
                     msg = client.messages.create(**params)
-            except Exception as exc:  # noqa: BLE001 - classified below
+            except Exception as exc:
                 last = exc
                 if classify_error(exc) == "raise":
                     raise

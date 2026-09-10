@@ -41,7 +41,14 @@ operator/workspace_broker/**
 # client's deps, so it runs in its own venv step; a runner change must run it.
 operator/runners/**
 operator/tests/**
+# 2026-09-10 review, top action item 4: operator/tests/test_closeout_seed.py
+# executes operator/fixtures/law-firm/pi/lien-ledger-tracker/seed/render_seed.py
+# by subprocess, and the conformance test now walks every substrate test for
+# the fixture paths it opens or runs. A fixture-only PR ran nothing before.
+operator/fixtures/**
 operator/pytest.ini
+# The project manifest: pyright config and the package set CI installs.
+operator/pyproject.toml
 # The lint config itself: narrowing the rule selection must re-run the gate
 # it narrows.
 operator/ruff.toml

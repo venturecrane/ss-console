@@ -38,8 +38,8 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[3]))
 
-from adapter.audit_log import AuditLogWriter, SqliteExecutor  # noqa: E402
-from adapter.evidence.packet import (  # noqa: E402
+from adapter.audit_log import AuditLogWriter, SqliteExecutor  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from adapter.evidence.packet import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     EvidencePacketBuilder,
     EvidencePacketError,
     PacketActor,
@@ -289,7 +289,12 @@ def _request(tmp_path: Path, customer_yaml: Path, **over) -> PacketRequest:
     return PacketRequest(**base)
 
 
-def test_build_emits_targz_with_every_expected_file(tmp_path):
+def test_build_emits_targz_with_every_expected_file(tmp_path, monkeypatch):
+    # The signing key is read from ambient os.environ (signing.py); a developer
+    # shell with the real key staged would sign the packet and add manifest.sig,
+    # turning the expected-file list red for a reason unrelated to the code
+    # (code review 2026-09-10, Testing 4). The signed path has its own test.
+    monkeypatch.delenv("EVIDENCE_PACKET_SIGNING_KEY_B64", raising=False)
     builder, conn = _build_pair(tmp_path)
     _seed_audit_row(
         conn,

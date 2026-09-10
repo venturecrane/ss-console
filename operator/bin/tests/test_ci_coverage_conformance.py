@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import configparser
 import importlib.util
+import re
 from pathlib import Path
 
 import yaml
@@ -246,6 +247,47 @@ def test_detect_script_fails_closed_and_matches_the_list(tmp_path: Path) -> None
     with contextlib.redirect_stdout(buf):
         rc = _detect.main(["--base", "0" * 40, "--head", "HEAD", "--paths", str(PATHS_FILE)])
     assert rc == 0 and "relevant=true" in buf.getvalue()
+
+
+_PATH_LITERAL = re.compile(r"""["'](?P<p>(?:operator/)?(?:fixtures|customers|contracts|templates|skills|verticals)/[A-Za-z0-9_./\-]+)["']""")
+
+
+def _paths_a_test_reaches(test_file: Path) -> list[str]:
+    """Repo-relative paths a substrate test opens or executes, read from its
+    string literals. Not every literal is a path, so only the shapes the
+    tree uses are matched (a known area, then a slash-separated tail)."""
+    out = []
+    for m in _PATH_LITERAL.finditer(test_file.read_text(encoding="utf-8")):
+        lit = m.group("p")
+        repo_rel = lit if lit.startswith("operator/") else f"operator/{lit}"
+        out.append(repo_rel)
+    return out
+
+
+def test_every_path_a_substrate_test_reaches_triggers_the_workflow() -> None:
+    """2026-09-10 review, top action item 4. `operator/tests/test_closeout_seed.py`
+    executes a script under `operator/fixtures/` by subprocess, and that
+    directory was not in the list: a fixture-only PR reported "No substrate
+    paths changed" and merged green, while the break surfaced on the next
+    unrelated PR. The test-file check above cannot see this; this one walks
+    each substrate test for the paths it reaches."""
+    paths = _trigger_paths(_load_workflow())
+    untriggered = []
+    for rel in _operator_test_files():
+        if rel.parts[0] in PYTEST_EXEMPT_TOPDIRS:
+            continue
+        for reached in _paths_a_test_reaches(OPERATOR_DIR / rel):
+            if not any(_matches(pat, reached) for pat in paths):
+                untriggered.append(f"{rel.as_posix()} -> {reached}")
+    assert not untriggered, (
+        "substrate tests reach paths whose change would NOT run the suites "
+        f"(extend {PATHS_FILE.name}): {sorted(set(untriggered))}"
+    )
+    # The instrument must see the case it exists for.
+    seed = OPERATOR_DIR / "tests" / "test_closeout_seed.py"
+    assert any(p.startswith("operator/fixtures/") for p in _paths_a_test_reaches(seed)), (
+        "the closeout seed test no longer references operator/fixtures/; re-check the matcher"
+    )
 
 
 def test_connector_tests_are_covered_by_the_conformance_step_trigger() -> None:

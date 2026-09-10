@@ -134,7 +134,7 @@ def record(stage, model, usage, extra=None):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "a") as fh:
             fh.write(json.dumps(rec) + "\n")
-    except Exception:
+    except Exception:  # noqa: BLE001 - the ledger is best-effort telemetry; a write failure must never break the drafting call it records
         pass
 
 
@@ -190,7 +190,7 @@ def _read_rows(path):
                 continue
             try:
                 rows.append(json.loads(line))
-            except Exception:
+            except Exception:  # noqa: BLE001 - a corrupt ledger line is skipped so the readable rows are still returned
                 continue
     return rows
 

@@ -21,9 +21,9 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from rehearsal import registry  # noqa: E402 -- path injected above
-from rehearsal.report import Run  # noqa: E402
-from rehearsal.scoring import (  # noqa: E402
+from rehearsal import registry
+from rehearsal.report import Run
+from rehearsal.scoring import (
     FAIL,
     PASS,
     SKIPPED,

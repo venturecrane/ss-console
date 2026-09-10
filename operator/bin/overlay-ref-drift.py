@@ -28,7 +28,6 @@ that is informational, not drift, unless --strict.
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import sys
 from dataclasses import dataclass
@@ -36,7 +35,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
-import seam_pull  # noqa: E402 — path injected above
+import seam_pull
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_DOCKERFILE = _REPO_ROOT / "operator" / "templates" / "Dockerfile"

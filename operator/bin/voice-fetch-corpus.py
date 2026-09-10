@@ -104,7 +104,7 @@ class ResolutionError(Exception):
 # Shared with voice-ingest-corpus.py (moved to the lib 2026-08-10, #2222, so
 # the fetch and ingest gates cannot drift). Re-exported here so callers and
 # tests keep their `vfc.load_cohort_vocabulary` / `vfc.BASE_COHORTS` handles.
-from bin.lib.voice_corpus import BASE_COHORTS, load_cohort_vocabulary  # noqa: E402,F401
+from bin.lib.voice_corpus import BASE_COHORTS, load_cohort_vocabulary  # noqa: E402,F401 - after the path shim; re-exported so vfc.load_cohort_vocabulary keeps working
 
 
 # ---------------------------------------------------------------------------

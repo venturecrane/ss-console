@@ -127,7 +127,6 @@ already matches the target and makes no changes).
 
 from __future__ import annotations
 
-import dataclasses
 import enum
 import logging
 import re

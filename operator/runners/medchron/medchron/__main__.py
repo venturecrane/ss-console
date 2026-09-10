@@ -22,7 +22,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     except (driver_mod.DriverError, config_mod.ConfigError) as exc:
         print(f"medchron: {exc}", file=sys.stderr)
         return 2
-    except Exception as exc:  # the envelope or budget refused; still a sentence, never a trace
+    except Exception as exc:  # noqa: BLE001 - the envelope or budget refused; the CLI prints a sentence, never a trace
         print(f"medchron: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
     print(driver_mod.to_json(outcomes) if args.json else driver_mod.report(outcomes))

@@ -42,12 +42,12 @@ sys.path.insert(0, str(_HERE.parents[2]))  # operator/
 # we use the same dash-named-directory trick the other invariant tests use.
 sys.path.insert(0, str(_HERE.parents[1]))  # operator/safety-substrate/
 
-from adapter.audit_log import (  # noqa: E402
+from adapter.audit_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     AuditEvent,
     AuditLogWriter,
     SqliteExecutor,
 )
-from sticky_stop import (  # noqa: E402
+from sticky_stop import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     DEFAULT_THRESHOLDS,
     SqliteStickyStopStore,
     StickyStopCondition,
@@ -55,7 +55,6 @@ from sticky_stop import (  # noqa: E402
     StickyStopLevel,
     StickyStopMachine,
     StickyStopAuditRecord,
-    StickyStopState,
     StickyStopThresholds,
 )
 

@@ -21,9 +21,9 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-import workspace_broker.operations as ops_mod  # noqa: E402
-from workspace_broker.google_auth import authored_identities, credentials  # noqa: E402
-from workspace_broker.operations import WorkspaceOperations  # noqa: E402
+import workspace_broker.operations as ops_mod
+from workspace_broker.google_auth import authored_identities, credentials
+from workspace_broker.operations import WorkspaceOperations
 
 MANAGED = "smdurgan@smdurgan.com"
 SEND_AS = ["scott@smd.services", "team@smd.services", "smdurgan@smdurgan.com"]

@@ -21,8 +21,8 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[2]))
 
-from bin.lib.decommission import DecommissionPipeline  # noqa: E402
-from bin.lib.decommission_backends import (  # noqa: E402
+from bin.lib.decommission import DecommissionPipeline  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from bin.lib.decommission_backends import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     AGENTMAIL_API,
     ARCHIVE_SEGMENT,
     CLOUDFLARE_API,
@@ -38,7 +38,7 @@ from bin.lib.decommission_backends import (  # noqa: E402
     http_request,
     seat_inbox_address,
 )
-from bin.lib.console_d1 import ConsoleD1  # noqa: E402
+from bin.lib.console_d1 import ConsoleD1  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 
 def _run(coro):

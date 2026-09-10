@@ -128,7 +128,7 @@ import logging
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Mapping, Optional, Sequence
+from typing import Mapping, Optional
 
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[2]))  # operator/ on sys.path
@@ -552,7 +552,7 @@ def run() -> tuple[bool, str]:
     """
     try:
         return _self_check_fixtures()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 - boot self-check: any raise is a FAIL line for the substrate runner, never a crash at boot
         return (False, f"FAIL: invariant 6 self-check raised {type(e).__name__}: {e}")
 
 

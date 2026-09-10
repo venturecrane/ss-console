@@ -115,7 +115,7 @@ def seat_secret_names(app: str) -> set[str] | None:
         return None
     try:
         return {row["name"] for row in json.loads(out) if isinstance(row, dict) and "name" in row}
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - flyctl JSON of an unexpected shape reads as UNKNOWN, which is the readiness report's honest answer
         return None
 
 
@@ -297,7 +297,7 @@ def check_machine(rep: Report, app: str, no_seat: bool) -> None:
     try:
         machines = json.loads(out)
         states = [m.get("state", "?") for m in machines] or ["(none)"]
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - an unparseable machine list reads as UNKNOWN; the readiness report reports, it does not crash
         rep.add("machine", "machine state", UNKNOWN, "unparseable machine list", "a parseable list")
         return
     started = any(s == "started" for s in states)

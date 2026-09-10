@@ -27,12 +27,12 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[2]))  # operator/ on sys.path
 
-from adapter.audit_log import (  # noqa: E402
+from adapter.audit_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     AuditLogWriter,
     AuditWriteError,
     SqliteExecutor,
 )
-from adapter.namespace_assertion import (  # noqa: E402
+from adapter.namespace_assertion import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     NamespaceAssertionError,
     NamespacedD1Executor,
     NamespacedR2Client,

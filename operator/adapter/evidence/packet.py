@@ -97,7 +97,6 @@ import json
 import logging
 import re
 import tarfile
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -714,7 +713,7 @@ async def _fetch_chain_pin(
         rows = await reader.fetch_all(
             "SELECT row_hash FROM audit_log WHERE row_hash = ? LIMIT 1", [pinned_head]
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         # Two ways the question cannot be asked, and neither is an answer: no
         # audit_log table, and an audit_log without the chain columns (a
         # snapshot written before they were preserved). Anything else re-raises
@@ -951,7 +950,7 @@ async def _fetch_optional(
     """
     try:
         return await reader.fetch_all(sql, list(params or []))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         msg = str(exc).lower()
         if "no such table" in msg or "does not exist" in msg:
             log.warning("evidence read skipped (table absent): %s", exc)
@@ -1623,7 +1622,7 @@ class EvidencePacketBuilder:
         )
         try:
             await self.audit_writer.write(event)  # type: ignore[attr-defined]
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             # If chain-of-custody fails, the packet that exists on disk
             # is unprovable. Surface the failure rather than swallow it.
             raise EvidencePacketError(

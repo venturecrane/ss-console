@@ -57,9 +57,9 @@ import yaml
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
 
-import console_d1  # noqa: E402 -- path injected above
-import cron_slots  # noqa: E402 -- path injected above
-import seam_pull  # noqa: E402 -- path injected above
+import console_d1
+import cron_slots
+import seam_pull
 
 EXIT_CLEAN = 0
 EXIT_FINDING = 1
