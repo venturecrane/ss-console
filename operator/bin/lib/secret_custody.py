@@ -136,8 +136,12 @@ _CUSTOMER_PREFIX: tuple[str, ...] = (
 # every staged name without falling through to CUSTOMER by accident.
 _INFRA_EXACT: frozenset[str] = frozenset(
     {
-        # Shared observability (provision-customer.sh:424-425).
+        # Shared observability (provision-customer.sh, step 6b).
         "SENTRY_DSN",
+        # Per-seat since migration 0114: minted by lib/machine_credential.py at
+        # provisioning, SMD-owned, never a customer's credential. Infra because
+        # the console holds the hash and the seat holds the plaintext; nothing
+        # about it is handed to the customer.
         "MACHINE_HEARTBEAT_KEY",
         # Brave Search web-search connector (provision-customer.sh,
         # native:brave-free block; ADR 0070). BRAVE_SEARCH_API_KEY is SMD's

@@ -221,12 +221,13 @@ def test_runtime_read_key_stripped_from_agent_before_gateway_exec() -> None:
 
 
 def test_heartbeat_secrets_stripped_from_agent_before_gateway_exec() -> None:
-    """ADR 0023: MACHINE_HEARTBEAT_KEY (shared fleet bearer) and
-    HEALTHCHECKS_PING_URL must be stripped from the agent (hermes gateway) env —
-    AFTER the webhook-gate launch (whose emitter holds the inherited copies) and
-    BEFORE the gateway exec. The shared key + attacker-controlled X-Tenant-Slug
-    would otherwise let a code-executing agent forge cross-tenant heartbeats
-    (ADR 0023 locked-decision #10); the ping URL would let it spoof liveness."""
+    """ADR 0023: MACHINE_HEARTBEAT_KEY (this seat's own bearer since migration
+    0114; the shared fleet bearer before it) and HEALTHCHECKS_PING_URL must be
+    stripped from the agent (hermes gateway) env — AFTER the webhook-gate launch
+    (whose emitter holds the inherited copies) and BEFORE the gateway exec. An
+    agent holding the key could write a false "green" for its own seat (and,
+    before 0114, forge another tenant's via X-Tenant-Slug, ADR 0023
+    locked-decision #10); the ping URL would let it spoof liveness."""
     lines = _code_lines(_BOOTSTRAP)
     gate_idx = _first_index(lines, r"hermes-smd-webhook-gate")
     gateway_idx = _first_index(lines, r"\bexec\b.*\bhermes\b.*\bgateway\s+run\b")

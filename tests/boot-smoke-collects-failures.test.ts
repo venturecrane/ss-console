@@ -147,9 +147,14 @@ exit 0
   const uv = `#!/usr/bin/env bash
 prog=""; file=""
 for a in "$@"; do
+  # The file pattern is tested FIRST: the yaml path itself can contain the
+  # word "machine" (a worktree named machine-credentials did, 2026-09-10),
+  # and with the program pattern first that path was taken as the program,
+  # the file was never set, and every case in this file went red for a
+  # reason unrelated to what it asserts.
   case "$a" in
-    *machine*|*hermes_ref*) prog="$a" ;;
     */customer.yaml) file="$a" ;;
+    *machine*|*hermes_ref*) prog="$a" ;;
   esac
 done
 [ -n "$file" ] || exit 1
