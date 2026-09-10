@@ -64,11 +64,10 @@ SYNTHETIC_FIRM: dict[str, Any] = {
     },
     "levers": {"batch_stages": [], "audit_mode": "image", "cache": True, "compose_max_tokens": 128000},
     "chronology": {"treatment_gap_days": 45, "pre_incident_history": "include"},
-    # Invented posture, not any firm's: the four cost controls exist here so the
-    # seat probes and the tests have a config that satisfies the closed key set.
+    # Invented posture, not any firm's: the cost controls exist here so the seat
+    # probes and the tests have a config that satisfies the closed key set.
     "budget": {"per_job_cap_usd": 150.0, "usd_per_million_chars": 10.0, "monthly_budget_usd": 500.0,
-               "single_matter_page_threshold": 2500, "usd_per_scanned_page": 0.03,
-               "usd_per_audit_claim": 0.06},
+               "usd_per_scanned_page": 0.03, "usd_per_audit_claim": 0.06},
     "pipeline": {},
 }
 

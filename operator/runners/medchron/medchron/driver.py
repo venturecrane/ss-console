@@ -201,7 +201,6 @@ class Driver:
         return limits_mod.Limits(
             cap_usd=cap,
             monthly_budget_usd=self.cfg.monthly_budget_usd,
-            single_matter_page_threshold=self.cfg.single_matter_page_threshold,
             usd_per_scanned_page=self.cfg.usd_per_scanned_page,
             usd_per_audit_claim=self.cfg.usd_per_audit_claim,
             month_cents_used=job.month_cents_used,
