@@ -18,10 +18,23 @@ Exit codes
 * ``4`` — unexpected non-step exception (audit writer init failure,
   config-parse failure, etc.).
 * ``5`` — refused: a ``--live`` run was requested but one or more
-  destructive backends are unwired stubs, so the run would report a
-  clean decommission while customer data remains (issue #1123). Wire the
-  real backends, or pass ``--allow-unwired`` for a dev/fixture run that
-  explicitly tolerates skipped deletions.
+  destructive backends are unwired, so the run would report a clean
+  decommission while customer data remains (issue #1123). The real
+  backends live in ``bin.lib.decommission_backends`` and wire themselves
+  from the environment; the refusal names the credential each missing one
+  needs. Stage them (``infisical run --env prod --path /ss -- ...``), or
+  pass ``--allow-unwired`` for a dev/fixture run that explicitly tolerates
+  skipped deletions.
+
+Credentials the real backends read (all optional; an absent one leaves that
+backend unwired and the ``--live`` gate armed):
+
+* ``CLOUDFLARE_API_TOKEN`` + ``CLOUDFLARE_ACCOUNT_ID`` (or the provisioning
+  script's ``CF_API_TOKEN`` / ``CF_ACCOUNT_ID``) — R2 prefix deletion; the
+  ``CLOUDFLARE_`` names also drive wrangler for Vectorize and D1.
+* ``AGENTMAIL_API_KEY`` — the org key; deletes the seat's inbox.
+* ``FLY_API_TOKEN``, or a logged-in ``fly`` CLI — ``fly apps destroy``.
+* ``HEALTHCHECKS_API_KEY`` — deletes the seat's healthchecks.io check.
 """
 
 from __future__ import annotations
@@ -51,6 +64,7 @@ from bin.lib.decommission import (  # noqa: E402
     StepStatus,
     _load_customer_yaml,
 )
+from bin.lib.decommission_backends import BACKEND_REQUIREMENTS, backends_from_env  # noqa: E402
 from bin.lib.seam_pull import SeamAuditLogPreserver, seam_client_from_env  # noqa: E402
 
 log = logging.getLogger("aie.bin.decommission_cli")
@@ -242,6 +256,18 @@ async def _run(args: argparse.Namespace) -> int:
     if seam_client is not None:
         pipeline_kwargs["audit_log_preserver"] = SeamAuditLogPreserver(seam_client)
 
+    # The destructive backends (R2, Vectorize, AgentMail, Fly, observability)
+    # wire themselves from whatever credentials are staged. An absent
+    # credential leaves that backend as its stub, and the #1123 gate below
+    # refuses the --live run naming exactly what is missing.
+    backend_kwargs, wired = backends_from_env(args.slug, customers_root)
+    pipeline_kwargs.update(backend_kwargs)
+    for name, ok in wired.items():
+        print(
+            f"[backends] {name}: {'wired' if ok else 'UNWIRED (needs ' + BACKEND_REQUIREMENTS[name] + ')'}",
+            file=sys.stderr,
+        )
+
     pipeline = DecommissionPipeline(
         customer_slug=args.slug,
         customers_root=customers_root,
@@ -258,11 +284,14 @@ async def _run(args: argparse.Namespace) -> int:
     if args.live:
         unwired = pipeline.unwired_destructive_backends()
         if unwired and not args.allow_unwired:
+            needs = "; ".join(
+                f"{name} needs {BACKEND_REQUIREMENTS.get(name, 'its client')}" for name in unwired
+            )
             print(
                 "[live] REFUSING: destructive backend(s) not wired — "
                 f"{', '.join(unwired)}. A --live run would report a clean "
                 "decommission while that customer data, the Fly Machine, and "
-                "its secrets remain. Wire the real implementations, or pass "
+                f"its secrets remain. Stage the credentials ({needs}), or pass "
                 "--allow-unwired for a dev/fixture run that explicitly "
                 "tolerates skipped deletions.",
                 file=sys.stderr,

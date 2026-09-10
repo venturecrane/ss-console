@@ -70,6 +70,7 @@ case "${EXIT_CODE}" in
   2)  log "preflight failed (exit 2): see stderr" ;;
   3)  log "decommission halted mid-sequence (exit 3): re-run with same slug to resume" ;;
   4)  log "unexpected error (exit 4): see stderr" ;;
+  5)  log "REFUSED (exit 5): a --live run was requested but one or more destructive backends are unwired; nothing was touched. Stage the missing credentials (see decommission_cli.py header) or pass --allow-unwired for a dev/fixture run" ;;
   130) log "interrupted (exit 130)" ;;
   *)  log "unknown exit ${EXIT_CODE}" ;;
 esac

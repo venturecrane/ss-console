@@ -156,6 +156,14 @@ for slug in "${slugs[@]}"; do
     echo "Skipping template dir: $slug"
     continue
   fi
+  # A decommissioned seat keeps its dir as `<slug>.decommissioned.<date>` with
+  # its customer.yaml inside (operator/bin/lib/decommission.py, step 08). It is
+  # a historical record, not a seat: never publish it, and never let its dotted
+  # name reach the slug guard below as if someone had authored it.
+  if [[ "$slug" == *.decommissioned.* ]]; then
+    echo "Skipping decommissioned seat dir: $slug"
+    continue
+  fi
 
   # customer.yaml gone → the customer dir was retired. Retirement is a manual,
   # Captain-gated operation; a merge never deletes the object a live Machine
