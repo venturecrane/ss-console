@@ -32,6 +32,7 @@ import type { D1Database } from '@cloudflare/workers-types'
 import {
   canStartOperatorSubscription,
   formatWholeDollars,
+  operatorMonthlyCharge,
   operatorMonthlyPriceCents,
   operatorSubscriptionHref,
   subscriptionStamp,
@@ -83,7 +84,12 @@ function makeDb(opts: {
                 return Promise.resolve(
                   opts.recurringPrice === undefined
                     ? null
-                    : { id: 'svc-1', type: 'operator', recurring_price: opts.recurringPrice }
+                    : {
+                        id: 'svc-1',
+                        type: 'operator',
+                        recurring_price: opts.recurringPrice,
+                        payment_method: 'ach',
+                      }
                 )
               }
               if (sql.includes('FROM fleet_status')) return Promise.resolve(null)
@@ -286,7 +292,7 @@ describe('the surfaces read the one gate and act in one place', () => {
 
   it('the Operator page decides with the shared predicate and hands the hero the page link', () => {
     const page = read('src/pages/portal/products/operator/[instance]/index.astro')
-    expect(page).toContain('canStartOperatorSubscription(subscription, priceCents)')
+    expect(page).toContain('canStartOperatorSubscription(subscription, charge.priceCents)')
     expect(page).toContain('operatorSubscriptionHref(instance)')
     expect(page).toContain('start={startDoor}')
   })
@@ -388,5 +394,48 @@ describe('the two money detail pages share one shape (Captain, 2026-09-09: cohes
       expect(link).toContain(cls)
       expect(button).toContain(cls)
     }
+  })
+})
+
+describe('the monthly charge on the authored rail (agreement §3.8; first card client 2026-09-10)', () => {
+  it('ACH is the price and nothing else', () => {
+    expect(operatorMonthlyCharge({ recurring_price: 5000, payment_method: 'ach' })).toEqual({
+      paymentMethod: 'ach',
+      priceCents: 500000,
+      feeCents: 0,
+      totalCents: 500000,
+    })
+  })
+
+  it('card adds the 3% fee as its own figure and in the total', () => {
+    expect(operatorMonthlyCharge({ recurring_price: 5000, payment_method: 'card' })).toEqual({
+      paymentMethod: 'card',
+      priceCents: 500000,
+      feeCents: 15000,
+      totalCents: 515000,
+    })
+  })
+
+  it('no authored price, no charge, whatever the rail', () => {
+    expect(operatorMonthlyCharge({ recurring_price: null, payment_method: 'card' })).toBeNull()
+    expect(operatorMonthlyCharge(null)).toBeNull()
+  })
+
+  it('every start-door surface states the charged total, not the bare price', () => {
+    for (const file of [
+      'src/lib/portal/home-cards.ts',
+      'src/pages/portal/products/operator/[instance]/index.astro',
+      'src/pages/portal/billing/subscriptions/[instance].astro',
+    ]) {
+      const code = readFileSync(resolve(file), 'utf-8')
+      expect(code, file).toContain('operatorMonthlyCharge(')
+      expect(code, file).not.toContain('operatorMonthlyPriceCents(')
+    }
+    const page = readFileSync(
+      resolve('src/pages/portal/billing/subscriptions/[instance].astro'),
+      'utf-8'
+    )
+    expect(page).toContain('Card processing fee (3%)')
+    expect(page).toContain('charge.totalCents')
   })
 })

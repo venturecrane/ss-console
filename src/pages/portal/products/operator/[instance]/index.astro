@@ -41,7 +41,7 @@ import { readChangeRequestFlash } from '../../../../../lib/portal/operator/chang
 import { getOperatorServiceForEntity } from '../../../../../lib/db/services'
 import {
   canStartOperatorSubscription,
-  operatorMonthlyPriceCents,
+  operatorMonthlyCharge,
   operatorSubscriptionHref,
   type OperatorStartDoor,
 } from '../../../../../lib/portal/billing'
@@ -123,9 +123,10 @@ const isProvisioning = subscription?.status === 'provisioning'
 let startDoor: OperatorStartDoor | null = null
 if (subscription && isProvisioning) {
   const service = await getOperatorServiceForEntity(env.DB, user.org_id, client.id)
-  const priceCents = operatorMonthlyPriceCents(service?.recurring_price)
-  if (canStartOperatorSubscription(subscription, priceCents) && priceCents !== null) {
-    startDoor = { href: operatorSubscriptionHref(instance), priceCents }
+  const charge = operatorMonthlyCharge(service)
+  if (charge && canStartOperatorSubscription(subscription, charge.priceCents)) {
+    // The hero states what is charged each month on the authored rail.
+    startDoor = { href: operatorSubscriptionHref(instance), priceCents: charge.totalCents }
   }
 }
 
