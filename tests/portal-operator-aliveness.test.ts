@@ -9,16 +9,14 @@
  *
  * The resolver reads the customer's `fleet_status` heartbeat row
  * (ADR 0023 Wave 1, wired in #1678); a customer with no row resolves to
- * null and the AlivenessHeader renders nothing per
+ * null and the dashboard renders nothing per
  * docs/style/empty-state-pattern.md. These tests cover:
  *
  *   - The closed AlivenessLevel vocabulary
- *   - alivenessTone → Tone mapping (closed switch)
  *   - deriveAlivenessFromBridge — the pure transition. Priority and edge
  *     cases (sticky-stop wins, in-flight wins, missing timestamp,
  *     unparseable timestamp, threshold crossing, heartbeat-driven
  *     liveness).
- *   - formatAlivenessLevel — friendly headline per level
  *   - formatLastActionRelative — relative-time bucket boundaries
  *   - formatLastActionAbsolute — null + unparseable handling
  *   - needsEscalationAffordance — true only for the unhealthy postures
@@ -42,9 +40,7 @@ import { ORG_ID } from '../src/lib/constants'
 import {
   ALIVENESS_LEVELS,
   OFFLINE_THRESHOLD_MINUTES,
-  alivenessTone,
   deriveAlivenessFromBridge,
-  formatAlivenessLevel,
   formatLastActionAbsolute,
   formatLastActionRelative,
   needsEscalationAffordance,
@@ -116,29 +112,6 @@ describe('ALIVENESS_LEVELS', () => {
 describe('OFFLINE_THRESHOLD_MINUTES', () => {
   it('is 30 minutes (documented default)', () => {
     expect(OFFLINE_THRESHOLD_MINUTES).toBe(30)
-  })
-})
-
-describe('alivenessTone', () => {
-  it('maps each level to its assigned tone', () => {
-    const cases: Array<[AlivenessLevel, ReturnType<typeof alivenessTone>]> = [
-      ['idle', 'success'],
-      ['running', 'info'],
-      ['sticky_stop', 'danger'],
-      ['offline', 'warning'],
-    ]
-    for (const [level, expected] of cases) {
-      expect(alivenessTone(level)).toBe(expected)
-    }
-  })
-})
-
-describe('formatAlivenessLevel', () => {
-  it('maps each level to a friendly headline', () => {
-    expect(formatAlivenessLevel('idle')).toBe('Idle')
-    expect(formatAlivenessLevel('running')).toBe('Running')
-    expect(formatAlivenessLevel('sticky_stop')).toBe('Paused by safety check')
-    expect(formatAlivenessLevel('offline')).toBe('Offline')
   })
 })
 
