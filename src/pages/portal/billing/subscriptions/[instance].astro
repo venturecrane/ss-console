@@ -15,7 +15,7 @@ import { getOperatorServiceForEntity } from '../../../../lib/db/services'
 import { parseCancelAt } from '../../../../lib/db/subscriptions'
 import {
   canStartOperatorSubscription,
-  operatorMonthlyPriceCents,
+  operatorMonthlyCharge,
   parseStripeCustomerId,
 } from '../../../../lib/portal/billing'
 import { formatShortDate } from '../../../../lib/portal/formatters'
@@ -28,9 +28,11 @@ import { env } from 'cloudflare:workers'
  * primary action (UI-PATTERNS Rule 3) and states, before the client commits,
  * what the system will do: the authored price, monthly in advance, and
  * cancellation at the end of the paid month (what the Billing Portal
- * configuration does, mirrored by setSubscriptionCancelSchedule). The
- * payment method is Stripe's to ask for at checkout, not a fact of this
- * page (Captain, 2026-09-09).
+ * configuration does, mirrored by setSubscriptionCancelSchedule). The rail
+ * is authored per client (services.payment_method, migration 0113): bank
+ * account, or card with the 3% processing fee of agreement §3.8 shown here
+ * as its own row and in the charged total, so the fee is stated before the
+ * client pays.
  *
  * Same shape as the invoice page (invoices/[id].astro): head with the
  * status in the meta column, one ink-bordered fact table, one primary
@@ -63,7 +65,9 @@ if (!subscription) return Astro.redirect('/portal/billing')
 const operatorName = offerings.operators.find((o) => o.slug === instance)?.displayName ?? 'Operator'
 
 const service = await getOperatorServiceForEntity(env.DB, user.org_id, client.id)
-const priceCents = operatorMonthlyPriceCents(service?.recurring_price)
+const charge = operatorMonthlyCharge(service)
+const priceCents = charge?.priceCents ?? null
+const byCard = charge?.paymentMethod === 'card'
 const startable = canStartOperatorSubscription(subscription, priceCents)
 const roles = await listProductRoles(env.DB, user.id, client.id, 'operator')
 const isPrincipal = roles.includes('principal')
@@ -111,9 +115,23 @@ const statusLine = startable
         )
       }
     </PortalDetailRow>
+    {
+      charge && byCard && (
+        <PortalDetailRow label="Card processing fee (3%)">
+          <MoneyDisplay amountCents={charge.feeCents} size="row" /> per month
+        </PortalDetailRow>
+      )
+    }
+    {
+      charge && byCard && (
+        <PortalDetailRow label="Charged monthly">
+          <MoneyDisplay amountCents={charge.totalCents} size="row" /> per month
+        </PortalDetailRow>
+      )
+    }
     <PortalDetailRow label="Billed">
       Monthly in advance. The first month is paid when you start; each month after that is charged
-      automatically.
+      automatically{byCard ? ' to the card you enter at checkout' : ''}.
     </PortalDetailRow>
     <PortalDetailRow label="Cancelling">
       Any time, from this page. Service continues to the end of the month you have paid for, and you

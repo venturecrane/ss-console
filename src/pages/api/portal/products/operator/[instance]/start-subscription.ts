@@ -1,7 +1,10 @@
 import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 import { resolveOperatorAccess } from '../../../../../../lib/portal/operator-access'
-import { getOperatorServiceForEntity } from '../../../../../../lib/db/services'
+import {
+  getOperatorServiceForEntity,
+  operatorPaymentMethod,
+} from '../../../../../../lib/db/services'
 import { createOperatorCheckoutSession } from '../../../../../../lib/stripe/subscriptions'
 import { getPortalBaseUrl } from '../../../../../../lib/config/app-url'
 
@@ -11,8 +14,9 @@ import { getPortalBaseUrl } from '../../../../../../lib/config/app-url'
  * subscription in the portal; nothing is billed or sent on their behalf).
  *
  * A principal on this instance clicks Start on Billing; this creates a
- * Stripe Checkout Session (subscription mode, ACH or card, first month paid
- * on Stripe's page) and 303s to it. The session is inert until they pay;
+ * Stripe Checkout Session (subscription mode, on the rail authored for the
+ * client: ACH, or card with the 3% fee line, first month paid on Stripe's
+ * page) and 303s to it. The session is inert until they pay;
  * the checkout.session.completed webhook then binds the subscription and
  * promotes the row to active.
  *
@@ -56,6 +60,7 @@ export const POST: APIRoute = async ({ params, locals }) => {
     const session = await createOperatorCheckoutSession(env.STRIPE_API_KEY, {
       customer_email: access.user.email,
       monthly_amount_cents: Math.round(price * 100),
+      payment_method: operatorPaymentMethod(service),
       entity_id: access.client.id,
       subscription_row_id: sub.id,
       user_id: access.user.id,

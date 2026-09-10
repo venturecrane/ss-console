@@ -14,6 +14,7 @@ import EntityTimelineEntry from '../../../components/admin/EntityTimelineEntry.a
 import ClientInvoiceRows from '../../../components/admin/ClientInvoiceRows.astro'
 import IssueInvoiceForm from '../../../components/admin/IssueInvoiceForm.astro'
 import OperatorAgreementDocs from '../../../components/admin/OperatorAgreementDocs.astro'
+import OperatorPriceForm from '../../../components/admin/OperatorPriceForm.astro'
 import { loadEntityDetailPage, formatDate } from '../../../lib/admin/entity-detail-page'
 import { listFleetRoster, personaSummary, posturePill } from '../../../lib/admin/fleet-roster'
 import {
@@ -25,7 +26,7 @@ import {
 } from '../../../lib/admin/client-hub'
 import { resolveClientHubNotices } from '../../../lib/admin/client-hub-notices'
 import { ENTITY_VERTICALS } from '../../../lib/db/entities'
-import { getOperatorServiceForEntity } from '../../../lib/db/services'
+import { getOperatorServiceForEntity, operatorPaymentMethod } from '../../../lib/db/services'
 import { getSubscriptionForBilling, parseCancelAt } from '../../../lib/db/subscriptions'
 import { listOperatorAgreementDocumentsForEntity } from '../../../lib/db/operator-agreements'
 import { statusBadgeClass } from '../../../lib/ui/status-badge'
@@ -51,6 +52,7 @@ const operatorService = operator
   ? await getOperatorServiceForEntity(env.DB, session.orgId, entityId)
   : null
 const operatorPrice = operatorService?.recurring_price ?? null
+const operatorPaymentRail = operatorPaymentMethod(operatorService)
 // Retainer billing state (#1679): the (entity,'operator') subscriptions row +
 // its Stripe attachment. Billing controls render only when the row exists —
 // provisioning owns access grants; billing never creates one.
@@ -204,44 +206,11 @@ const LINK_ACT =
                 {personaSummary(operator.personas)}
                 {operator.config_error && ' · config needs attention'}
               </div>
-              <div class="mt-3 flex items-baseline justify-between border-t border-[color:var(--ss-color-border-subtle)] pt-3">
-                <span class="font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]">
-                  Monthly price
-                </span>
-                <span
-                  class:list={[
-                    'font-mono text-base font-bold',
-                    operatorPrice == null && 'text-[color:var(--ss-color-text-muted)]',
-                  ]}
-                >
-                  {operatorPrice == null ? 'Not set' : `${formatMoney(operatorPrice)}/mo`}
-                </span>
-              </div>
-              <form
-                method="POST"
-                action={`/api/admin/clients/${entityId}/operator-price`}
-                class="mt-2.5 flex items-center gap-2"
-              >
-                <span class="font-mono text-sm text-[color:var(--ss-color-text-secondary)]">$</span>
-                <input
-                  type="number"
-                  name="monthly_price"
-                  min="0"
-                  step="1"
-                  value={operatorPrice ?? ''}
-                  placeholder="0"
-                  class="w-28 border border-[color:var(--ss-color-border)] px-2 py-1 font-mono text-sm"
-                />
-                <span class="font-mono text-[11px] text-[color:var(--ss-color-text-muted)]">
-                  / mo
-                </span>
-                <button
-                  type="submit"
-                  class="border border-[color:var(--ss-color-primary)] px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-primary)]"
-                >
-                  Save
-                </button>
-              </form>
+              <OperatorPriceForm
+                entityId={entityId}
+                operatorPrice={operatorPrice}
+                operatorPaymentRail={operatorPaymentRail}
+              />
               {operatorSubscription && (
                 <div class="mt-3 border-t border-[color:var(--ss-color-border-subtle)] pt-3">
                   <div class="flex items-baseline justify-between">

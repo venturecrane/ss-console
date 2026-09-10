@@ -18,7 +18,7 @@ import { formatShortDate } from './formatters'
 import {
   canStartOperatorSubscription,
   formatWholeDollars,
-  operatorMonthlyPriceCents,
+  operatorMonthlyCharge,
   operatorSubscriptionHref,
 } from './billing'
 
@@ -117,14 +117,16 @@ async function operatorSummaryCard(
   // under the ledger, and the client did not find it).
   try {
     const service = await getOperatorServiceForEntity(db, orgId, entityId)
-    const priceCents = operatorMonthlyPriceCents(service?.recurring_price)
-    if (canStartOperatorSubscription(op.subscription, priceCents) && priceCents !== null) {
+    const charge = operatorMonthlyCharge(service)
+    if (charge && canStartOperatorSubscription(op.subscription, charge.priceCents)) {
       return {
         key: 'operator',
         label: 'Operator',
         href,
         statusLabel: 'Ready to start',
-        meta: [`${formatWholeDollars(priceCents)} per month`],
+        // The amount charged each month on the authored rail: the price, plus
+        // the card fee when the client pays by card (stated before payment).
+        meta: [`${formatWholeDollars(charge.totalCents)} per month`],
         needsYou: { label: 'Start monthly subscription', href: operatorSubscriptionHref(op.slug) },
       }
     }
