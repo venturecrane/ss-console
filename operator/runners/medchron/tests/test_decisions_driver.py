@@ -469,16 +469,18 @@ def _job(tmp_path: Path, data_root: Path, name: str, **fields) -> Path:
     return jd
 
 
-def test_the_page_threshold_proceeds_at_the_line_and_holds_one_page_over(
+def test_a_large_matter_is_not_held_by_any_per_matter_page_line(
     job_dir: Path, data_root: Path, tmp_path: Path, pricing_path: Path, fake_pipeline: Path
 ) -> None:
-    firm = _firm(tmp_path, single_matter_page_threshold=10)
-    _seed_extracted(data_root, pages=10)
+    """Through the driver, not just the Limits object: a firm config carries no
+    per-matter page ceiling any more, so a big matter reaches the paid stages.
+
+    Falsifier: put a per-matter page gate back into the firm schema and this
+    run holds at vision instead of proceeding.
+    """
+    firm = _firm(tmp_path)
+    _seed_extracted(data_root, pages=12_000)
     assert _limit_run(job_dir, firm, pricing_path).outcome != "held"
-    _seed_extracted(data_root, pages=11)
-    o = _limit_run(_job(tmp_path, data_root, "job-over"), firm, pricing_path)
-    assert o.outcome == "held" and o.stage == "vision"
-    assert o.reason.startswith("single_matter_page_threshold: ") and "11 pages" in o.reason
 
 
 def test_the_month_page_allowance_proceeds_at_the_remainder_and_holds_one_page_over(
@@ -604,13 +606,13 @@ def test_seat_mode_refuses_a_job_that_carries_no_month_state(
 def test_a_dry_run_measures_the_limits_and_spends_nothing(
     tmp_path: Path, data_root: Path, pricing_path: Path
 ) -> None:
-    firm = _firm(tmp_path, single_matter_page_threshold=1)
+    firm = _firm(tmp_path, per_job_cap_usd=0.01)
     jd = _job(tmp_path, data_root, "job-dry")
     seed_folders(data_root, ["MEDICAL"])
-    _seed_extracted(data_root, pages=40)
+    _seed_extracted(data_root, pages=40, scanned=40)
     o = _driver(jd, firm, pricing_path, dry_run=True, start="vision").run()[0]
     assert o.outcome == "dry_run"
-    assert any(n.startswith("WOULD HOLD at vision: single_matter_page_threshold: ") for n in o.notes)
+    assert any(n.startswith("WOULD HOLD at vision: per_job_cap_usd: ") for n in o.notes)
     assert calls(data_root) == []
 
 

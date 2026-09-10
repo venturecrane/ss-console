@@ -540,8 +540,8 @@ LIMIT_HELD_RUNNER = """
 import json
 print(json.dumps([{"unit": "alpha", "outcome": "held", "stage": "vision", "dollars": 0.0, "pages": 3312,
                    "documents": 0,
-                   "reason": "single_matter_page_threshold: the matter's file is 3,312 pages, above the "
-                             "firm's single-matter page threshold; the package was not started"}]))
+                   "reason": "chronology_package_page_allowance_per_month: the matter's file is 3,312 pages "
+                             "and 500 pages remain in this cycle's allowance; the package was not started"}]))
 """
 
 
@@ -554,7 +554,7 @@ def test_a_limit_hold_is_recorded_as_a_hold_and_never_prefixed_refused(tmp_path)
     assert d.tick() == "held"
     job_id, state, fields = broker.records[-1]
     assert state == "held" and fields["pages"] == 3312
-    assert fields["reason"].startswith("single_matter_page_threshold: ")
+    assert fields["reason"].startswith("chronology_package_page_allowance_per_month: ")
     assert not fields["reason"].startswith("refused: ")
     assert "Held at: vision." in d._daemon_state("01A")["wake"]["task"]
 
