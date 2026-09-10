@@ -44,12 +44,14 @@
  *   - no in-flight marker is pushed today, so 'running' never renders
  *     from this source — we do not infer it from timestamps.
  *
- * A customer with no `fleet_status` row resolves to null and the
- * AlivenessHeader renders the empty-state branch (no fabricated
- * activity, per `docs/style/empty-state-pattern.md`).
+ * A customer with no `fleet_status` row resolves to null and the consumer
+ * (the identity hero facet, `facets/identity/hero.ts`) renders the
+ * empty-state branch (no fabricated activity, per
+ * `docs/style/empty-state-pattern.md`). The dedicated header band that once
+ * consumed this signal was removed 2026-09-10; no page mounted it.
  *
  * The derivation helper `deriveAlivenessFromBridge` is exported pure
- * and tested directly. The component does not derive from raw inputs;
+ * and tested directly. The consumer does not derive from raw inputs;
  * it consumes the resolved signal.
  *
  * Per-customer: the resolver takes a `SubscriptionRow` and the bridge
@@ -77,38 +79,6 @@ export const ALIVENESS_LEVELS: readonly AlivenessLevel[] = [
   'sticky_stop',
   'offline',
 ] as const
-
-/**
- * Tone for the aliveness chip, drawn from the portal `Tone` vocabulary
- * in `src/lib/portal/status.ts`. Returned as a string here to avoid
- * importing the full tone module at the resolver layer — the component
- * is the only consumer that needs the typed value, and it imports both
- * sides.
- *
- * Assignment rationale:
- *   idle        → success — the Machine is healthy and reachable
- *   running     → info    — actively working; reviewer-noticeable but
- *                           not actionable
- *   sticky_stop → danger  — Captain escalation required
- *   offline     → warning — degraded; may or may not need attention
- *                           depending on hours-of-operation; reviewers
- *                           should look at the last-action timestamp
- *
- * @public Consumed by src/components/portal/operator/AlivenessHeader.astro, a component knip
- * reports unused. Retiring that component is a product decision, not this gate's.
- */
-export function alivenessTone(level: AlivenessLevel): 'success' | 'info' | 'danger' | 'warning' {
-  switch (level) {
-    case 'idle':
-      return 'success'
-    case 'running':
-      return 'info'
-    case 'sticky_stop':
-      return 'danger'
-    case 'offline':
-      return 'warning'
-  }
-}
 
 /**
  * Number of minutes of audit-log silence after which a Machine is
@@ -285,29 +255,6 @@ function freshestMs(...timestamps: (string | null)[]): number | null {
     if (freshest === null || ms > freshest) freshest = ms
   }
   return freshest
-}
-
-/**
- * Friendly label for an AlivenessLevel. The component pairs this with
- * the chip tone; the label is the headline text in the header band.
- *
- * Closed vocabulary; the switch is exhaustive so any new level surfaces
- * at compile time.
- *
- * @public Consumed by src/components/portal/operator/AlivenessHeader.astro, a component knip
- * reports unused. Retiring that component is a product decision, not this gate's.
- */
-export function formatAlivenessLevel(level: AlivenessLevel): string {
-  switch (level) {
-    case 'idle':
-      return 'Idle'
-    case 'running':
-      return 'Running'
-    case 'sticky_stop':
-      return 'Paused by safety check'
-    case 'offline':
-      return 'Offline'
-  }
 }
 
 /**
