@@ -127,15 +127,19 @@ describe('#2498 the heartbeat carries what the ledger says about itself', () => 
     expect((await stored(db))?.audit_write_failures).toBe(4)
   })
 
-  it('a junk count is stored NULL rather than guessed at', async () => {
-    for (const junk of [-1, 1.5, '3', true, null]) {
-      db = createTestD1()
-      await runMigrations(db, { files: discoverNumericMigrations(migrationsDir) })
-      await seed(db)
-      Object.assign(testEnv, { DB: db })
-      await POST(beat({ audit_write_failures: junk }))
-      expect((await stored(db))?.audit_write_failures ?? null).toBeNull()
-    }
+  // One case per test, not five migrated databases inside one 5-second test:
+  // the loop form timed out under full-suite load on two of three verify runs
+  // on 2026-09-10 while passing in isolation. Each case gets the fresh DB the
+  // suite's beforeEach already builds, and its own timeout budget.
+  it.each([
+    ['negative', -1],
+    ['fractional', 1.5],
+    ['numeric string', '3'],
+    ['boolean', true],
+    ['null', null],
+  ])('a junk count (%s) is stored NULL rather than guessed at', async (_label, junk) => {
+    await POST(beat({ audit_write_failures: junk }))
+    expect((await stored(db))?.audit_write_failures ?? null).toBeNull()
   })
 
   it('the chain head is stored only when it is actually a hash', async () => {
