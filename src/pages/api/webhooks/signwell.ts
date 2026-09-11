@@ -85,7 +85,7 @@ export const POST: APIRoute = async ({ request }) => {
   const webhookSecret = env.SIGNWELL_WEBHOOK_SECRET
   if (!webhookSecret) {
     console.error('[webhook/signwell] SIGNWELL_WEBHOOK_SECRET not configured')
-    return errorResponse(500, 'Server misconfigured')
+    return errorResponse(500, 'server_misconfigured')
   }
 
   // --- Parse body (required — SignWell puts the hash inside the JSON) ---
@@ -94,13 +94,13 @@ export const POST: APIRoute = async ({ request }) => {
     const rawBody = await request.text()
     rawPayload = JSON.parse(rawBody) as unknown
   } catch {
-    return errorResponse(400, 'Invalid JSON')
+    return errorResponse(400, 'invalid_json')
   }
 
   // --- Extract verification fields only (no logging/dispatch yet) ---
   const verificationFields = SignWellVerificationFieldsSchema.safeParse(rawPayload)
   if (!verificationFields.success) {
-    return errorResponse(400, 'Missing event fields')
+    return errorResponse(400, 'validation_failed', 'Missing event fields.')
   }
   const eventType = verificationFields.data.event.type
   const eventTime = verificationFields.data.event.time
@@ -110,19 +110,19 @@ export const POST: APIRoute = async ({ request }) => {
   const isValid = await verifyEventHash(eventType, eventTime, eventHash, webhookSecret)
   if (!isValid) {
     console.error('[webhook/signwell] Invalid event hash')
-    return errorResponse(401, 'Invalid signature')
+    return errorResponse(401, 'invalid_signature')
   }
 
   // --- Timestamp freshness check (replay protection) ---
   const nowSeconds = Math.floor(Date.now() / 1000)
   if (nowSeconds - eventTime > MAX_WEBHOOK_AGE_SECONDS) {
     console.error(`[webhook/signwell] Stale webhook: event.time ${eventTime}, now ${nowSeconds}`)
-    return errorResponse(401, 'Stale webhook')
+    return errorResponse(401, 'stale', 'Stale webhook.')
   }
 
   const payloadResult = SignWellWebhookPayloadSchema.safeParse(rawPayload)
   if (!payloadResult.success) {
-    return errorResponse(400, 'Malformed event payload')
+    return errorResponse(400, 'validation_failed', 'Malformed event payload.')
   }
   const payload: SignWellWebhookPayload = payloadResult.data
 
@@ -131,7 +131,7 @@ export const POST: APIRoute = async ({ request }) => {
     const apiKey = env.SIGNWELL_API_KEY
     if (!apiKey) {
       console.error('[webhook/signwell] SIGNWELL_API_KEY not configured')
-      return errorResponse(500, 'Server misconfigured')
+      return errorResponse(500, 'server_misconfigured')
     }
 
     return handleDocumentCompleted(

@@ -19,17 +19,17 @@ export const GET: APIRoute = async ({ locals, params }) => {
 
   const assessmentId = params.id
   if (!assessmentId) {
-    return errorResponse(400, 'Assessment ID required')
+    return errorResponse(400, 'validation_failed', 'Assessment ID required.')
   }
 
   const assessment = await getAssessment(env.DB, session.orgId, assessmentId)
   if (!assessment || !assessment.transcript_path) {
-    return errorResponse(404, 'Transcript not found')
+    return errorResponse(404, 'not_found', 'Transcript not found.')
   }
 
   const object = await getTranscript(env.STORAGE, assessment.transcript_path)
   if (!object) {
-    return errorResponse(404, 'Transcript file not found in storage')
+    return errorResponse(404, 'not_found', 'Transcript file not found in storage.')
   }
 
   const originalName = object.customMetadata?.originalName ?? 'transcript.txt'

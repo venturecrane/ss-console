@@ -76,15 +76,15 @@ async function authorize(
   instance: string | null
 ): Promise<Response | AuthorizedContext> {
   const portalData = await getPortalClient(env.DB, locals)
-  if (!portalData) return errorResponse(401, 'Unauthorized')
-  if (!portalData.client) return errorResponse(403, 'Forbidden')
+  if (!portalData) return errorResponse(401, 'unauthorized')
+  if (!portalData.client) return errorResponse(403, 'forbidden', 'Forbidden.')
 
   const { user, client } = portalData
   const roles = await listProductRoles(env.DB, user.id, client.id, PRODUCT_SLUG)
-  if (!roles.includes('principal')) return errorResponse(403, 'Forbidden')
+  if (!roles.includes('principal')) return errorResponse(403, 'forbidden', 'Forbidden.')
 
   const subscription = await getProductSubscription(env.DB, client.id, PRODUCT_SLUG)
-  if (!subscription) return errorResponse(404, 'No active subscription')
+  if (!subscription) return errorResponse(404, 'no_active_subscription')
 
   // Layer-1 authority gate (ADR 0041): inviting people is the people_access
   // domain. At launch (managed posture) SMD operates the roster; refuse the

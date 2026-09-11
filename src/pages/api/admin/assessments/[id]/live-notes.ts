@@ -1,4 +1,4 @@
-import { jsonResponse } from '../../../../../lib/api/helpers'
+import { jsonResponse, errorResponse } from '../../../../../lib/api/helpers'
 import type { APIRoute } from 'astro'
 import { getAssessment, updateAssessment } from '../../../../../lib/db/assessments'
 import { env } from 'cloudflare:workers'
@@ -19,7 +19,7 @@ export const PUT: APIRoute = async ({ request, locals, params }) => {
 
   const assessmentId = params.id
   if (!assessmentId) {
-    return jsonResponse(400, { error: 'Assessment ID required' })
+    return errorResponse(400, 'validation_failed', 'Assessment ID required.')
   }
 
   try {
@@ -27,12 +27,12 @@ export const PUT: APIRoute = async ({ request, locals, params }) => {
     const liveNotes = body.live_notes
 
     if (typeof liveNotes !== 'string') {
-      return jsonResponse(400, { error: 'live_notes must be a string' })
+      return errorResponse(400, 'validation_failed', 'live_notes must be a string.')
     }
 
     const existing = await getAssessment(env.DB, session.orgId, assessmentId)
     if (!existing) {
-      return jsonResponse(404, { error: 'Assessment not found' })
+      return errorResponse(404, 'not_found', 'Assessment not found.')
     }
 
     await updateAssessment(env.DB, session.orgId, assessmentId, {
@@ -42,6 +42,6 @@ export const PUT: APIRoute = async ({ request, locals, params }) => {
     return jsonResponse(200, { ok: true })
   } catch (err) {
     console.error('[api/admin/assessments/[id]/live-notes] Error:', err)
-    return jsonResponse(500, { error: 'Internal server error' })
+    return errorResponse(500, 'internal_error')
   }
 }

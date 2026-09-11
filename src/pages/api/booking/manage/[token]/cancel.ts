@@ -1,4 +1,4 @@
-import { escapeHtml, jsonResponse } from '../../../../../lib/api/helpers'
+import { escapeHtml, jsonResponse, errorResponse } from '../../../../../lib/api/helpers'
 import type { APIContext, APIRoute } from 'astro'
 import { ORG_ID } from '../../../../../lib/constants'
 import { hashManageToken } from '../../../../../lib/booking/tokens'
@@ -159,7 +159,7 @@ async function handlePost({ params, request }: APIContext): Promise<Response> {
   const rawToken = params.token
 
   if (!rawToken || typeof rawToken !== 'string') {
-    return jsonResponse(400, { error: 'Missing token' })
+    return errorResponse(400, 'missing_token')
   }
 
   // Parse optional reason from body
@@ -178,21 +178,19 @@ async function handlePost({ params, request }: APIContext): Promise<Response> {
     const schedule = await getScheduleByManageToken(env.DB, tokenHash)
 
     if (!schedule) {
-      return jsonResponse(404, { error: 'not_found', message: 'This booking link is not valid.' })
+      return errorResponse(404, 'not_found', 'This booking link is not valid.')
     }
 
     if (isManageTokenExpired(schedule)) {
-      return jsonResponse(410, {
-        error: 'expired',
-        message: 'This manage link has expired. Please contact us if you need to make changes.',
-      })
+      return errorResponse(
+        410,
+        'expired',
+        'This manage link has expired. Please contact us if you need to make changes.'
+      )
     }
 
     if (schedule.cancelled_at) {
-      return jsonResponse(409, {
-        error: 'already_cancelled',
-        message: 'This booking has already been cancelled.',
-      })
+      return errorResponse(409, 'already_cancelled', 'This booking has already been cancelled.')
     }
 
     // Cancel in DB — mirror the write to both tables during the monitoring window.
@@ -224,7 +222,7 @@ async function handlePost({ params, request }: APIContext): Promise<Response> {
     return jsonResponse(200, { ok: true, cancelled: true })
   } catch (err) {
     console.error('[api/booking/manage/cancel] Error:', err)
-    return jsonResponse(500, { error: 'Internal server error' })
+    return errorResponse(500, 'internal_error')
   }
 }
 

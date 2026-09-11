@@ -107,7 +107,10 @@ describe('middleware: cross-site mutation guard', () => {
       userId: ADMIN_CLERK_ID,
     })
     expect(res.status).toBe(403)
-    expect(await res.json()).toEqual({ error: 'cross_site_request', detail: 'sec-fetch-site' })
+    expect(await res.json()).toMatchObject({
+      error: 'cross_site_request',
+      detail: 'sec-fetch-site',
+    })
   })
 
   it('refuses an authenticated portal POST whose Origin is another site', async () => {
@@ -118,7 +121,10 @@ describe('middleware: cross-site mutation guard', () => {
       userId: CLIENT_CLERK_ID,
     })
     expect(res.status).toBe(403)
-    expect(await res.json()).toEqual({ error: 'cross_site_request', detail: 'origin-mismatch' })
+    expect(await res.json()).toMatchObject({
+      error: 'cross_site_request',
+      detail: 'origin-mismatch',
+    })
   })
 
   it('lets a same-origin authenticated POST through to the route', async () => {

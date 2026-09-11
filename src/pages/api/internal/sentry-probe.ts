@@ -17,7 +17,7 @@
  * Expected caller-visible result: HTTP 500. Expected far-end effect: an
  * event in Sentry project ss-web tagged with the probe message below.
  */
-import { jsonResponse } from '../../../lib/api/helpers'
+import { errorResponse } from '../../../lib/api/helpers'
 import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 import { verifyMachineRequest } from '../../../lib/auth/machine-key'
@@ -25,7 +25,7 @@ import { verifyMachineRequest } from '../../../lib/auth/machine-key'
 export const POST: APIRoute = async ({ request }) => {
   const auth = await verifyMachineRequest(request, env.MACHINE_HEARTBEAT_KEY, env.DB)
   if (!auth.ok) {
-    return jsonResponse(auth.status, { error: 'Unauthorized' })
+    return errorResponse(auth.status, 'unauthorized')
   }
 
   throw new Error(`sentry-probe: deliberate uncaught error (tenant=${auth.slug})`)

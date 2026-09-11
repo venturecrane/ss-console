@@ -55,7 +55,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     customerSlug: instance ?? '',
   })
   if (access.kind === 'redirect') {
-    return errorResponse(403, 'Forbidden')
+    return errorResponse(403, 'forbidden', 'Forbidden.')
   }
 
   const capabilityName = formData.get('capabilityName')

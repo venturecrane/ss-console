@@ -163,6 +163,7 @@ if (!isPostBooking) {
 
     interface IntakeResponse {
       error?: string
+      message?: string
     }
 
     ;(() => {
@@ -208,7 +209,7 @@ if (!isPostBooking) {
             successPanel.classList.remove('hidden')
           } else {
             const body = (await res.json()) as IntakeResponse
-            errorBanner.textContent = body.error || 'Something went wrong. Please try again.'
+            errorBanner.textContent = body.message || 'Something went wrong. Please try again.'
             errorBanner.classList.remove('hidden')
             submitBtn.disabled = false
             submitBtn.textContent = 'Send'

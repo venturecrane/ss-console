@@ -178,7 +178,7 @@ async function handlePost({ request, locals, redirect, params }: APIContext): Pr
 
   const engagementId = params.id
   if (!engagementId) {
-    return errorResponse(400, 'Engagement ID required')
+    return errorResponse(400, 'validation_failed', 'Engagement ID required.')
   }
 
   try {

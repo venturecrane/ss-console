@@ -1,4 +1,4 @@
-import { jsonResponse } from '../../../../lib/api/helpers'
+import { jsonResponse, errorResponse } from '../../../../lib/api/helpers'
 import type { APIRoute } from 'astro'
 import { hashManageToken } from '../../../../lib/booking/tokens'
 import { getScheduleByManageToken, isManageTokenExpired } from '../../../../lib/booking/schedule'
@@ -19,7 +19,7 @@ export const GET: APIRoute = async ({ params }) => {
   const rawToken = params.token
 
   if (!rawToken || typeof rawToken !== 'string') {
-    return jsonResponse(400, { error: 'Missing token' })
+    return errorResponse(400, 'missing_token')
   }
 
   try {
@@ -27,18 +27,19 @@ export const GET: APIRoute = async ({ params }) => {
     const schedule = await getScheduleByManageToken(env.DB, tokenHash)
 
     if (!schedule) {
-      return jsonResponse(404, {
-        error: 'not_found',
-        message:
-          'This booking link is not valid. It may have already been used or the booking was cancelled.',
-      })
+      return errorResponse(
+        404,
+        'not_found',
+        'This booking link is not valid. It may have already been used or the booking was cancelled.'
+      )
     }
 
     if (isManageTokenExpired(schedule)) {
-      return jsonResponse(410, {
-        error: 'expired',
-        message: 'This manage link has expired. Please contact us if you need to make changes.',
-      })
+      return errorResponse(
+        410,
+        'expired',
+        'This manage link has expired. Please contact us if you need to make changes.'
+      )
     }
 
     const displayTz = schedule.guest_timezone || schedule.timezone
@@ -65,6 +66,6 @@ export const GET: APIRoute = async ({ params }) => {
     })
   } catch (err) {
     console.error('[api/booking/manage] Error:', err)
-    return jsonResponse(500, { error: 'Internal server error' })
+    return errorResponse(500, 'internal_error')
   }
 }

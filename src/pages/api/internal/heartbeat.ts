@@ -64,7 +64,7 @@
  * authoritative red signal.
  */
 
-import { jsonResponse } from '../../../lib/api/helpers'
+import { jsonResponse, errorResponse } from '../../../lib/api/helpers'
 import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 import { verifyMachineRequest } from '../../../lib/auth/machine-key'
@@ -85,18 +85,18 @@ import {
 export const POST: APIRoute = async ({ request }) => {
   const auth = await verifyMachineRequest(request, env.MACHINE_HEARTBEAT_KEY, env.DB)
   if (!auth.ok) {
-    return jsonResponse(401, { error: 'unauthorized' })
+    return errorResponse(401, 'unauthorized')
   }
 
   let body: HeartbeatBody
   try {
     body = await request.json<HeartbeatBody>()
   } catch {
-    return jsonResponse(400, { error: 'invalid_json' })
+    return errorResponse(400, 'invalid_json')
   }
 
   if (typeof body.heartbeat_ts !== 'string' || body.heartbeat_ts.length === 0) {
-    return jsonResponse(400, { error: 'missing_heartbeat_ts' })
+    return errorResponse(400, 'missing_heartbeat_ts')
   }
 
   const heartbeatStatus = deriveHeartbeatStatus(
