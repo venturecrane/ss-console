@@ -52,7 +52,7 @@ One `INBOUND_RECEIVED` row (`operator/adapter/audit_log.py` / `d1-schema.md`) pe
 
 ## CI corpus
 
-The boundary's CODE behavior is asserted deterministically (no live model). Items 1 to 3 are the overlay's (`tests/test_inbound.py`, `tests/test_inbound_fence_completeness.py`); item 4 is this repo's `operator/adapter/tests/test_trust_gate_injection.py`, run by `operator-substrate.yml`. The ten-file injection corpus at `operator/adapter/tests/fixtures/inbound-injection/` was item 2's input until 2026-09-11 and is not exercised by any test until it is ported to the overlay beside the fence it tests:
+The boundary's CODE behavior is asserted deterministically (no live model). Items 1 to 3 are the overlay's (`tests/test_inbound.py`, `tests/test_inbound_fence_completeness.py`); item 4 is this repo's `operator/adapter/tests/test_trust_gate_injection.py`, run by `operator-substrate.yml`. The ten-file injection corpus (item 2's input) lives beside the fence it tests, in the overlay at `tests/fixtures/inbound-injection/`, driven by `tests/test_inbound_injection_corpus.py` against the real fence (overlay PR #349); the ss-console copy was removed in the same change:
 
 1. the whole untrusted body lands inside the nonce fence;
 2. each fixture's injection payload sits only inside the fence (no instruction-position leak);
