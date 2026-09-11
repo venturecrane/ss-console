@@ -1,14 +1,22 @@
 import type { APIRoute } from 'astro'
 import { createOAuthState } from '../../../../lib/db/oauth-states.js'
 import { requireAdminBaseUrl } from '../../../../lib/config/app-url.js'
+import { resolveAdminSessionForRoute } from '../../../../lib/auth/admin-session'
 import { env } from 'cloudflare:workers'
 
 /**
  * GET /api/auth/google/connect
  *
- * Initiates the Google OAuth consent flow. Admin-only (session required).
- * Creates a single-use state nonce in D1, then redirects the browser
- * to Google's OAuth consent screen.
+ * Initiates the Google OAuth consent flow. Admin-only. Creates a single-use
+ * state nonce in D1, then redirects the browser to Google's OAuth consent
+ * screen.
+ *
+ * The admin identity is resolved HERE, not read from `locals.session`: this
+ * path is `/api/auth/*`, which the middleware exempts from the admin rewrite
+ * and never runs the admin session shim on, so `locals.session` is always
+ * null here. Until 2026-09-10 the route gated on it anyway and bounced every
+ * admin who clicked Connect on the settings page back to sign-in
+ * (tests/google-connect-route.test.ts pins both directions).
  *
  * Scopes requested:
  * - openid + email (required so the callback can fetch the connecting
@@ -26,7 +34,7 @@ const SCOPES = [
 ].join(' ')
 
 export const GET: APIRoute = async ({ locals, redirect }) => {
-  const session = locals.session
+  const session = await resolveAdminSessionForRoute(locals, env.DB, env.SESSIONS)
   if (!session) {
     return redirect('/auth/sign-in?error=unauthorized', 302)
   }

@@ -9,6 +9,7 @@
  */
 
 import { appendContextRaw } from '../db/context.js'
+import { escapeHtml } from '../api/helpers.js'
 import { sendEmail } from '../email/resend.js'
 import { ORG_ID, SYSTEM_ENTITY_ID } from '../constants.js'
 import { BOOKING_CONFIG } from './config.js'
@@ -168,14 +169,6 @@ export async function recordBookingError(
 // ---------------------------------------------------------------------------
 // Email template
 // ---------------------------------------------------------------------------
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
 
 function buildAlertEmailHtml(
   kind: BookingAlertKind,

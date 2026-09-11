@@ -1,4 +1,5 @@
 import type { APIRoute, APIContext } from 'astro'
+import { captureError } from '../../../../../lib/observability/sentry'
 import { clerkClient } from '@clerk/astro/server'
 import { getPortalClient } from '../../../../../lib/portal/session'
 import { getProductSubscription, listProductRoles } from '../../../../../lib/portal/product-access'
@@ -56,16 +57,12 @@ function usersUrl(instance: string | null): string {
   return instance ? `${OPERATOR_LANDING}/${instance}/settings/users` : OPERATOR_LANDING
 }
 
-function redirectWithStatus(instance: string | null, status: string): Response {
+function redirectToUsersPage(instance: string | null, status: string): Response {
   const target = `${usersUrl(instance)}?status=${encodeURIComponent(status)}`
   return new Response(null, {
     status: 303,
     headers: { Location: target },
   })
-}
-
-function jsonError(status: number, message: string): Response {
-  return errorResponse(status, message)
 }
 
 interface AuthorizedContext {
@@ -79,21 +76,21 @@ async function authorize(
   instance: string | null
 ): Promise<Response | AuthorizedContext> {
   const portalData = await getPortalClient(env.DB, locals)
-  if (!portalData) return jsonError(401, 'Unauthorized')
-  if (!portalData.client) return jsonError(403, 'Forbidden')
+  if (!portalData) return errorResponse(401, 'Unauthorized')
+  if (!portalData.client) return errorResponse(403, 'Forbidden')
 
   const { user, client } = portalData
   const roles = await listProductRoles(env.DB, user.id, client.id, PRODUCT_SLUG)
-  if (!roles.includes('principal')) return jsonError(403, 'Forbidden')
+  if (!roles.includes('principal')) return errorResponse(403, 'Forbidden')
 
   const subscription = await getProductSubscription(env.DB, client.id, PRODUCT_SLUG)
-  if (!subscription) return jsonError(404, 'No active subscription')
+  if (!subscription) return errorResponse(404, 'No active subscription')
 
   // Layer-1 authority gate (ADR 0041): inviting people is the people_access
   // domain. At launch (managed posture) SMD operates the roster; refuse the
   // mutation server-side rather than trust the portal's read-only render.
   if (!(await isPeopleAccessOperable(env.DB, client.id))) {
-    return redirectWithStatus(instance, 'not_permitted')
+    return redirectToUsersPage(instance, 'not_permitted')
   }
 
   return { user, client, instance }
@@ -121,11 +118,11 @@ export const POST: APIRoute = async (context: APIContext) => {
   if (ctxOrResponse instanceof Response) return ctxOrResponse
   const ctx = ctxOrResponse
 
-  if (!ctx.client.clerk_org_id) return redirectWithStatus(instance, 'no_clerk_org')
-  if (!ctx.user.clerk_user_id) return redirectWithStatus(instance, 'no_clerk_user')
+  if (!ctx.client.clerk_org_id) return redirectToUsersPage(instance, 'no_clerk_org')
+  if (!ctx.user.clerk_user_id) return redirectToUsersPage(instance, 'no_clerk_user')
 
   const email = parseEmail(formData)
-  if (!email) return redirectWithStatus(instance, 'invalid_email')
+  if (!email) return redirectToUsersPage(instance, 'invalid_email')
 
   const redirectUrl = `${new URL(context.request.url).origin}/portal/products/operator`
   let invitationId: string
@@ -144,13 +141,14 @@ export const POST: APIRoute = async (context: APIContext) => {
     // small set to friendly status values and fall back to a generic
     // 'invite_failed' otherwise.
     const message = err instanceof Error ? err.message : String(err)
-    if (/already a member/i.test(message)) return redirectWithStatus(instance, 'already_member')
+    if (/already a member/i.test(message)) return redirectToUsersPage(instance, 'already_member')
     if (/already invited|duplicate/i.test(message))
-      return redirectWithStatus(instance, 'already_invited')
+      return redirectToUsersPage(instance, 'already_invited')
     // The invitee's address is client PII; the customer id is enough to find
     // the attempt, and the message carries Clerk's reason.
     console.error('Clerk invitation failed', { customer_id: ctx.client.id, message })
-    return redirectWithStatus(instance, 'invite_failed')
+    captureError(err, 'portal.invitations.clerk')
+    return redirectToUsersPage(instance, 'invite_failed')
   }
 
   await recordRbacAuditEvent(
@@ -184,7 +182,8 @@ export const POST: APIRoute = async (context: APIContext) => {
     })
   } catch (err) {
     console.error('invitations: failed to record portal_action_events row', err)
+    captureError(err, 'portal.invitations.ledger')
   }
 
-  return redirectWithStatus(instance, 'invited')
+  return redirectToUsersPage(instance, 'invited')
 }

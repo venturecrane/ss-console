@@ -36,17 +36,13 @@ function settingsUrl(instance: string | null): string {
   return instance ? `${OPERATOR_LANDING}/${instance}/settings` : OPERATOR_LANDING
 }
 
-function redirectWithStatus(instance: string | null, status: string): Response {
+function redirectToSettings(instance: string | null, status: string): Response {
   const base = settingsUrl(instance)
   const sep = base.includes('?') ? '&' : '?'
   return new Response(null, {
     status: 303,
     headers: { Location: `${base}${sep}status=${encodeURIComponent(status)}` },
   })
-}
-
-function jsonError(status: number, message: string): Response {
-  return errorResponse(status, message)
 }
 
 export const POST: APIRoute = async ({ locals, request }) => {
@@ -59,12 +55,12 @@ export const POST: APIRoute = async ({ locals, request }) => {
     customerSlug: instance ?? '',
   })
   if (access.kind === 'redirect') {
-    return jsonError(403, 'Forbidden')
+    return errorResponse(403, 'Forbidden')
   }
 
   const capabilityName = formData.get('capabilityName')
   if (typeof capabilityName !== 'string' || capabilityName === '') {
-    return redirectWithStatus(instance, 'invalid_capability')
+    return redirectToSettings(instance, 'invalid_capability')
   }
 
   console.info('settings.connector_reconsent.intent', {
@@ -91,5 +87,5 @@ export const POST: APIRoute = async ({ locals, request }) => {
     console.error('connector-reconsent: failed to record portal_action_events row', err)
   }
 
-  return redirectWithStatus(instance, 'reconsent_started')
+  return redirectToSettings(instance, 'reconsent_started')
 }

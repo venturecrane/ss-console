@@ -2,9 +2,11 @@
  * OAuth provider registry for Operator connector consent flows.
  *
  * Each provider entry knows how to exchange an authorization code for an
- * access + refresh token pair on its issuer. The callback at
- * /api/oauth/callback dispatches by provider slug after validating the
- * signed state parameter.
+ * access + refresh token pair on its issuer. The portal callback at
+ * src/pages/portal/products/operator/oauth/[connector]/callback.ts
+ * dispatches by provider slug after validating the signed state parameter.
+ * (The admin-subdomain callback at /api/oauth/callback was deleted
+ * 2026-09-10: nothing issued a state that returned to it.)
  *
  * Provider slugs match the `connectors:` value shape in customer.yaml
  * (see docs/specs/operator/customer-yaml-schema.md and the per-connector

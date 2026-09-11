@@ -36,7 +36,7 @@ import {
 } from '../../../../../lib/operator/customer-yaml/types'
 import { requireAdminSession } from '../../../../../lib/auth/admin-session'
 
-function redirectWithStatus(slug: string, status: string): Response {
+function redirectToGovernance(slug: string, status: string): Response {
   const target = `/admin/operator/${encodeURIComponent(slug)}/governance?status=${encodeURIComponent(status)}`
   return new Response(null, { status: 303, headers: { Location: target } })
 }
@@ -86,20 +86,20 @@ async function handlePost(ctx: APIContext): Promise<Response> {
 
   const slug = ctx.params.customer ?? ''
   const entityId = await resolveEntityIdBySlug(env.DB, slug)
-  if (!entityId) return redirectWithStatus(slug, 'not_found')
+  if (!entityId) return redirectToGovernance(slug, 'not_found')
 
   const result = parseForm(await ctx.request.formData())
-  if ('error' in result) return redirectWithStatus(slug, result.error)
+  if ('error' in result) return redirectToGovernance(slug, result.error)
   const { personaSlug, skillName, actionClass, level } = result.parsed
 
   const config = await readGovernanceConfig(env.DB, slug)
   if (!config.ok) {
-    return redirectWithStatus(slug, config.error === 'not_found' ? 'not_found' : 'malformed')
+    return redirectToGovernance(slug, config.error === 'not_found' ? 'not_found' : 'malformed')
   }
 
   const persona = config.personas.find((p) => p.slug === personaSlug) ?? config.personas[0]
   const skill = persona?.skills.find((s) => s.name === skillName)
-  if (!skill) return redirectWithStatus(slug, 'not_found')
+  if (!skill) return redirectToGovernance(slug, 'not_found')
 
   // The old value is the currently-authored ceiling for this cell. An unauthored
   // class resolves to 'refused' (fail-closed) — authoring it is an honest raise.
@@ -116,7 +116,7 @@ async function handlePost(ctx: APIContext): Promise<Response> {
     new_value: level,
   })
 
-  return redirectWithStatus(slug, applied.outcome === 'accepted' ? 'saved' : 'floor_blocked')
+  return redirectToGovernance(slug, applied.outcome === 'accepted' ? 'saved' : 'floor_blocked')
 }
 
 export const POST: APIRoute = (ctx) => handlePost(ctx)
