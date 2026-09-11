@@ -117,6 +117,39 @@ def _opt_nonneg_int(d: dict[str, Any], key: str) -> int | None:
     return value
 
 
+def _period_fields(data: dict[str, Any]) -> dict[str, str | None]:
+    """Validate the four period fields and return them as `Job` kwargs.
+
+    Split out of `parse` so the function-size ratchet keeps tightening: the
+    ratchet only ever moves down, and a validator is the easiest place for a
+    function to quietly sprawl.
+
+    `MONTH_RE` is deliberately UNCHANGED and still rejects `2026-9`. The cycle
+    label is a SEPARATE field rather than a widened month, so this validator
+    never has to decide whether a string is a date or a phrase -- which is the
+    ambiguity that makes both readers wrong.
+    """
+    month = data.get("allowance_month")
+    if month is not None and not (isinstance(month, str) and MONTH_RE.match(month)):
+        raise JobError("job.allowance_month: expected YYYY-MM")
+    label = data.get("allowance_cycle_label")
+    if label is not None and not (isinstance(label, str) and 0 < len(label) <= 60):
+        raise JobError("job.allowance_cycle_label: expected a short phrase")
+    for key in ("allowance_cycle_start", "allowance_cycle_end"):
+        bound = data.get(key)
+        if bound is not None and not (isinstance(bound, str) and CYCLE_BOUND_RE.match(bound)):
+            raise JobError(f"job.{key}: expected YYYY-MM-DDTHH:MM:SS.mmmZ")
+    start, end = data.get("allowance_cycle_start"), data.get("allowance_cycle_end")
+    if start is not None and end is not None and not start < end:
+        raise JobError("job.allowance_cycle_start: must be before allowance_cycle_end")
+    return {
+        "allowance_month": str(month) if month is not None else None,
+        "allowance_cycle_label": str(label) if label is not None else None,
+        "allowance_cycle_start": str(start) if start is not None else None,
+        "allowance_cycle_end": str(end) if end is not None else None,
+    }
+
+
 def stamp_period(doc: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
     """Write the broker's period state into a job.yaml document.
 
@@ -186,22 +219,7 @@ def parse(data: Any, *, path: Path) -> Job:
     if cap is not None and (not isinstance(cap, (int, float)) or cap <= 0):
         raise JobError("job.cap_usd: must be a positive number when present")
     allowance = _opt_nonneg_int(data, "allowance_remaining_documents")
-    month = data.get("allowance_month")
-    if month is not None and not (isinstance(month, str) and MONTH_RE.match(month)):
-        raise JobError("job.allowance_month: expected YYYY-MM")
-    # MONTH_RE is deliberately UNCHANGED and still rejects `2026-9`: the cycle
-    # label is a separate field rather than a widened month, so this validator
-    # never has to decide whether a string is a date or a phrase.
-    label = data.get("allowance_cycle_label")
-    if label is not None and not (isinstance(label, str) and 0 < len(label) <= 60):
-        raise JobError("job.allowance_cycle_label: expected a short phrase")
-    for key in ("allowance_cycle_start", "allowance_cycle_end"):
-        bound = data.get(key)
-        if bound is not None and not (isinstance(bound, str) and CYCLE_BOUND_RE.match(bound)):
-            raise JobError(f"job.{key}: expected YYYY-MM-DDTHH:MM:SS.mmmZ")
-    start, end = data.get("allowance_cycle_start"), data.get("allowance_cycle_end")
-    if start is not None and end is not None and not start < end:
-        raise JobError("job.allowance_cycle_start: must be before allowance_cycle_end")
+    period = _period_fields(data)
     data_root = data.get("data_root")
     if not data_root:
         raise JobError("job.data_root: required (the durable data root outside any repo)")
@@ -226,10 +244,7 @@ def parse(data: Any, *, path: Path) -> Job:
         allowance_remaining_pages=_opt_nonneg_int(data, "allowance_remaining_pages"),
         month_pages_used=_opt_nonneg_int(data, "month_pages_used"),
         month_cents_used=_opt_nonneg_int(data, "month_cents_used"),
-        allowance_month=str(month) if month is not None else None,
-        allowance_cycle_label=str(label) if label is not None else None,
-        allowance_cycle_start=str(start) if start is not None else None,
-        allowance_cycle_end=str(end) if end is not None else None,
+        **period,
         selection_overrides=dict(data.get("selection") or {}),
         requested_by=data.get("requested_by"),
         request_ref=data.get("request_ref"),
