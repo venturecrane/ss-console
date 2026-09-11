@@ -283,7 +283,8 @@ describe('handleInvoicePaid — idempotency', () => {
     expect(afterSecond?.updated_at).toBe(afterFirst?.updated_at)
 
     // Phase 2 also runs only once — the replay short-circuits before email.
-    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1)
+    // One run sends two: the client thank-you and the team@ alert.
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -311,21 +312,36 @@ describe('handleInvoicePaid — confirmation email', () => {
   it('sends the payment confirmation to the primary contact with the formatted amount', async () => {
     await handleInvoicePaid(db, 'resend-key', makeEvent(STRIPE_DEPOSIT_ID))
 
-    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(2)
     const [apiKey, payload] = vi.mocked(sendEmail).mock.calls[0]
     expect(apiKey).toBe('resend-key')
     expect(payload.to).toBe(CONTACT_EMAIL)
     expect(payload.subject).toBe('Payment received — thank you')
     expect(payload.html).toContain('$3,500.00')
     expect(payload.html).toContain('Stripe Test Business')
+
+    // The money is also announced to team@ — a paid invoice must never be
+    // discovered later in the Stripe dashboard (#2737).
+    const [, alert] = vi.mocked(sendEmail).mock.calls[1]
+    expect(alert.to).toBe('team@smd.services')
+    expect(alert.subject).toBe('Payment received — Stripe Test Business, $3,500.00')
+    expect(alert.html).toContain(STRIPE_DEPOSIT_ID)
+    expect(alert.html).toContain('$3,500.00')
   })
 
-  it('skips the email when the entity has no contact email, still returning 200', async () => {
+  it('skips the client email when the entity has no contact, but still alerts team@', async () => {
     await db.prepare('DELETE FROM contacts WHERE entity_id = ?').bind(ENTITY_ID).run()
 
     const res = await handleInvoicePaid(db, 'resend-key', makeEvent(STRIPE_DEPOSIT_ID))
     expect(res.status).toBe(200)
-    expect(vi.mocked(sendEmail)).not.toHaveBeenCalled()
+
+    // The thank-you is conditional on a contact address; the team@ alert is
+    // not. A missing client contact must not silence the money signal.
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1)
+    const [, alert] = vi.mocked(sendEmail).mock.calls[0]
+    expect(alert.to).toBe('team@smd.services')
+    expect(alert.subject).toContain('Payment received —')
+    expect(alert.html).toContain('$3,500.00')
 
     const invoice = await getInvoiceRow(db, DEPOSIT_INVOICE_ID)
     expect(invoice?.status).toBe('paid')
