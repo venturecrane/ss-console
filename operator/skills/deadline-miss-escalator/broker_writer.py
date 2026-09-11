@@ -1,8 +1,13 @@
-"""Broker heartbeat writer for the escalator pre_run (SUPPRESSED/EMITTED_WAKE).
+"""Broker heartbeat writer for a bespoke-gate pre_run (SUPPRESSED/EMITTED_WAKE).
+
+CANONICAL SOURCE is ``operator/skills/deadline-miss-escalator/broker_writer.py``.
+Every other skill that loads the writer as a sibling carries a byte-identical
+copy, discovered and gated by ``operator/tests/test_broker_writer_sync.py``.
+Edit the canonical, restamp the copies, never edit a copy.
 
 Split out of ``pre_run.py`` as a sibling module (the module-size ratchet:
 ``tests/operator-module-size.test.ts``), loaded by the same candidates walk as
-the vendored ``escalation_ledger.py`` — the scheduler stages ``pre_run.py``
+the vendored ``escalation_ledger.py``: the scheduler stages ``pre_run.py``
 alone, and the skill dir on the volume carries the siblings.
 
 FAILURE DIRECTION IS THE ALREADY-DESIGNED ONE. If this module cannot be

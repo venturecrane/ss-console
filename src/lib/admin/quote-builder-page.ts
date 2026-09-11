@@ -1,19 +1,13 @@
 import { getEntity } from '../db/entities'
+import { getQuote, QUOTE_STATUSES, VALID_TRANSITIONS } from '../db/quotes'
+import { getMissingAuthoredContent, parseDeliverables, parseSchedule } from '../db/quote-content'
 import {
-  getMissingAuthoredContent,
-  getQuote,
-  parseDeliverables,
-  parseSchedule,
-  QUOTE_STATUSES,
-  VALID_TRANSITIONS,
-} from '../db/quotes'
-import {
-  parseLineItems,
   type DeliverableRow,
   type LineItem,
   type QuoteStatus,
   type ScheduleRow,
 } from '../db/quotes'
+import { parseLineItems } from '../db/quote-content'
 import { listContacts } from '../db/contacts'
 import { listSignalsForEntity } from '../db/signal-attribution'
 import { getSOWStateForQuote } from '../sow/service'

@@ -8,8 +8,8 @@ import {
   handleRetainerInvoiceFinalized,
   handleRetainerInvoicePaid,
   handleRetainerInvoicePaymentFailed,
-  handleSubscriptionLifecycle,
 } from '../../../lib/webhooks/stripe-subscription-handler'
+import { handleSubscriptionLifecycle } from '../../../lib/webhooks/stripe-subscription-lifecycle'
 import { handleHostedAgentCheckoutCompleted } from '../../../lib/webhooks/hosted-agent-checkout-handler'
 import {
   handleOperatorCheckoutAsyncPaymentFailed,

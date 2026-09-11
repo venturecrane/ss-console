@@ -9,7 +9,7 @@
 
 import { buildAppUrl } from '../config/app-url'
 import type { Quote } from '../db/quotes'
-import { getMissingAuthoredContent } from '../db/quotes'
+import { getMissingAuthoredContent } from '../db/quote-content'
 import type { SOWTemplateProps } from '../pdf/sow-template'
 import {
   createSOWSendAuthorization,

@@ -48,7 +48,7 @@ import {
   handleDepositInvoiceJob,
   handleSignedEmailJob,
   handlePortalInvitationJob,
-} from '../src/lib/sow/service-finalize'
+} from '../src/lib/sow/outbox-jobs'
 import type { OutboxJob } from '../src/lib/sow/store'
 import { createContact } from '../src/lib/db/contacts'
 
