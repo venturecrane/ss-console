@@ -77,9 +77,7 @@ def _snapshot_role_node(node) -> dict | None:
     if not isinstance(node, dict):
         return None
     contact = node.get("contact")
-    contact_id = node.get("contactId") or (
-        contact.get("id") if isinstance(contact, dict) else None
-    )
+    contact_id = node.get("contactId") or (contact.get("id") if isinstance(contact, dict) else None)
     relationships = []
     rels = node.get("relationships")
     if isinstance(rels, list):
@@ -170,9 +168,7 @@ def role_snapshot_projection(matter, roles) -> dict:
 
 def role_snapshot_hash(projection: dict) -> str:
     """sha256 over the canonical JSON form of the projection."""
-    canonical = json.dumps(
-        projection, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    )
+    canonical = json.dumps(projection, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -239,9 +235,7 @@ def hold_matter_snapshot_hashes(
         except Exception:  # noqa: BLE001 - an item whose key cannot be derived is skipped; the snapshot is a best-effort read, never a raise
             continue
         hold_state = states.get(hold_key)
-        if hold_state is None or (
-            hold_state.attempts == 0 and getattr(hold_state, "determination", None) is None
-        ):
+        if hold_state is None or (hold_state.attempts == 0 and getattr(hold_state, "determination", None) is None):
             continue
         try:
             hashes[matter_id] = snapshot_hash_fn(matter_id)

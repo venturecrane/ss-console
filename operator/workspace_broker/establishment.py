@@ -80,7 +80,6 @@ WHAT THIS MODULE STILL CANNOT SEE. Whether the sender is an Operator admin.
 the authored allow list in customer.yaml, which this uid cannot read.
 """
 
-
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------

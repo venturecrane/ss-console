@@ -1,6 +1,7 @@
 """`medchron probe <gate>`: each registered control's planted violation is
 refused by the installed package, offline, and the CLI says so on one line
 (the seat probe's expect_pattern is `^REFUSED <gate>`)."""
+
 from __future__ import annotations
 
 import pytest

@@ -20,6 +20,7 @@ Output: msg_manifest.jsonl (the container pull), msg_pdfs/ (deduped bytes),
 msg_attachments.json (the report the fold hook reads), and on fold: rows
 appended to raw_manifest.jsonl with `from_email`, files as msgatt-<sha12><ext>.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -37,12 +38,12 @@ CONTAINER_EXTS = {".msg", ".rpmsg"}
 # Attachment kinds that are never a medical record.
 SKIP_EXT = {".gif", ".ico", ".p7s", ".vcf", ".ics", ".htm", ".html", ".txt", ".xml", ".eml"}
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp"}
-IMAGE_MIN = 50_000        # only true icons fall below this; signature glyphs are single-digit KB
+IMAGE_MIN = 50_000  # only true icons fall below this; signature glyphs are single-digit KB
 DOC_EXT = {".doc", ".docx", ".rtf"}
 # Microsoft RMS-protected payloads: undecryptable without the recipient's
 # credentials. Reported by name so the hole is visible, never "opened".
 ENCRYPTED_EXT = {".rpmsg"}
-MIN_BYTES = 20_000        # inline signature images and logos
+MIN_BYTES = 20_000  # inline signature images and logos
 KEEP = {"pdf", "image", "doc"}
 
 
@@ -91,13 +92,17 @@ def pull_containers(sr: StageRun, targets: list[dict[str, Any]], fpath: dict[str
     todo = [t for t in targets if t["id"] not in done]
     sr.log(f"{sr.slug}: {len(targets)} containers on the matter, {len(done)} already pulled, {len(todo)} to pull")
     for i in range(0, len(todo), BATCH):
-        batch = todo[i:i + BATCH]
+        batch = todo[i : i + BATCH]
         byid = {m["id"]: m for m in _mint_with_retry(sr, [b["id"] for b in batch])}
         for b in batch:
             m = byid.get(b["id"]) or {}
-            rec: dict[str, Any] = {"id": b["id"], "name": b["name"], "ext": b["ext"],
-                                   "folder": fpath.get(b.get("folderId"), "/(root)"),
-                                   "size_expected": b.get("size")}
+            rec: dict[str, Any] = {
+                "id": b["id"],
+                "name": b["name"],
+                "ext": b["ext"],
+                "folder": fpath.get(b.get("folderId"), "/(root)"),
+                "size_expected": b.get("size"),
+            }
             url = m.get("url")
             if not url:
                 rec.update(ok=False, error=m.get("error", "no url"))
@@ -123,33 +128,52 @@ class _Index:
         self.errors: list[dict[str, Any]] = []
         self.encrypted: list[dict[str, Any]] = []
         self.dropped: list[dict[str, Any]] = []
-        self.counts = {"pdf": 0, "image": 0, "doc": 0, "other": 0, "encrypted": 0,
-                       "skipped-kind": 0, "skipped-tiny": 0}
+        self.counts = {"pdf": 0, "image": 0, "doc": 0, "other": 0, "encrypted": 0, "skipped-kind": 0, "skipped-tiny": 0}
         self.outdir = d / "msg_pdfs"
         self.outdir.mkdir(parents=True, exist_ok=True)
 
     def add_standalone_encrypted(self, rec: dict[str, Any]) -> None:
         self.counts["encrypted"] += 1
-        self.encrypted.append({"email": rec["name"], "attachment": rec["name"],
-                               "bytes": rec.get("size_got") or rec.get("size_expected") or 0,
-                               "standalone": True})
+        self.encrypted.append(
+            {
+                "email": rec["name"],
+                "attachment": rec["name"],
+                "bytes": rec.get("size_got") or rec.get("size_expected") or 0,
+                "standalone": True,
+            }
+        )
 
     def add_attachment(self, subject: str, name: str, data: bytes) -> None:
         kind = classify(name, len(data))
         self.counts[kind] = self.counts.get(kind, 0) + 1
-        h = hashlib.sha256(data).hexdigest()   # hash EVERYTHING, kept or not
+        h = hashlib.sha256(data).hexdigest()  # hash EVERYTHING, kept or not
         if kind == "encrypted":
             self.encrypted.append({"email": subject, "attachment": name, "bytes": len(data)})
         if kind not in KEEP:
-            self.dropped.append({"kind": kind, "attachment": name, "bytes": len(data), "email": subject,
-                                 "sha12": h[:12], "already_pulled_as": self.have.get(h)})
+            self.dropped.append(
+                {
+                    "kind": kind,
+                    "attachment": name,
+                    "bytes": len(data),
+                    "email": subject,
+                    "sha12": h[:12],
+                    "already_pulled_as": self.have.get(h),
+                }
+            )
             return
         if h not in self.by_hash:
             ext = os.path.splitext(name)[1].lower() or ".bin"
             out = self.outdir / f"{h[:12]}{ext}"
             out.write_bytes(data)
-            rec_a: dict[str, Any] = {"sha256": h, "bytes": len(data), "kind": kind, "local": out.name,
-                                     "already_pulled_as": self.have.get(h), "names": [], "emails": []}
+            rec_a: dict[str, Any] = {
+                "sha256": h,
+                "bytes": len(data),
+                "kind": kind,
+                "local": out.name,
+                "already_pulled_as": self.have.get(h),
+                "names": [],
+                "emails": [],
+            }
             if kind == "image":
                 wh = image_dims(data)
                 if wh:
@@ -169,7 +193,7 @@ def index_containers(sr: StageRun, pulled: list[dict[str, Any]], have: dict[str,
     msgs = [r for r in pulled if r.get("ok") and r.get("path")]
     for n, rec in enumerate(msgs, 1):
         if (rec.get("ext") or "").lower() in ENCRYPTED_EXT:
-            ix.add_standalone_encrypted(rec)   # not OLE2; extract_msg cannot open it
+            ix.add_standalone_encrypted(rec)  # not OLE2; extract_msg cannot open it
             continue
         try:
             m = extract_msg.Message(rec["path"])
@@ -186,7 +210,7 @@ def index_containers(sr: StageRun, pulled: list[dict[str, Any]], have: dict[str,
                     ix.errors.append({"email": subject, "attachment": name, "error": str(exc)[:120]})
                     continue
                 if not isinstance(data, bytes):
-                    ix.counts["other"] += 1   # a nested .msg comes back as a Message
+                    ix.counts["other"] += 1  # a nested .msg comes back as a Message
                     continue
                 ix.add_attachment(subject, name, data)
         finally:
@@ -202,8 +226,7 @@ def index_containers(sr: StageRun, pulled: list[dict[str, Any]], have: dict[str,
 def run_index(sr: StageRun) -> int:
     d = sr.slug_dir
     fpath = sr.folder_paths()
-    targets = [x for x in sr.manifest()
-               if not x.get("deleted") and (x.get("ext") or "").lower() in CONTAINER_EXTS]
+    targets = [x for x in sr.manifest() if not x.get("deleted") and (x.get("ext") or "").lower() in CONTAINER_EXTS]
     have = already_pulled_hashes(d)
     comparable = bool(have)
     if not targets:
@@ -217,27 +240,43 @@ def run_index(sr: StageRun) -> int:
     if not comparable:
         sr.log("raw_manifest.jsonl is empty for this slug: every attachment reads NEW by construction")
     _write_report(d, comparable, idx, ix.counts, ix.errors, opened, ix.encrypted, ix.dropped)
-    sr.log(f"emails opened {opened}; distinct attachments {len(idx)}; already in the pull "
-           f"{len(idx) - len(new)}; {'new to the corpus' if comparable else 'unverified (no baseline)'} "
-           f"{len(new)}; encrypted {len(ix.encrypted)}; errors {len(ix.errors)}")
+    sr.log(
+        f"emails opened {opened}; distinct attachments {len(idx)}; already in the pull "
+        f"{len(idx) - len(new)}; {'new to the corpus' if comparable else 'unverified (no baseline)'} "
+        f"{len(new)}; encrypted {len(ix.encrypted)}; errors {len(ix.errors)}"
+    )
     return 0
 
 
-def _write_report(d: Path, comparable: bool, idx: list[dict[str, Any]], counts: dict[str, int],
-                  errors: list, opened: int, encrypted: list, dropped: list) -> None:
+def _write_report(
+    d: Path,
+    comparable: bool,
+    idx: list[dict[str, Any]],
+    counts: dict[str, int],
+    errors: list,
+    opened: int,
+    encrypted: list,
+    dropped: list,
+) -> None:
     new = [r for r in idx if not r["already_pulled_as"]]
-    (d / "msg_attachments.json").write_text(json.dumps({
-        "comparable": comparable,
-        "distinct_attachments": len(idx),
-        "new_to_the_corpus": len(new) if comparable else None,
-        "already_pulled": len(idx) - len(new),
-        "attachment_counts": counts,
-        "emails_opened": opened,
-        "encrypted": encrypted,
-        "dropped_unkept": dropped,
-        "errors": errors,
-        "attachments": idx,
-    }, indent=1), encoding="utf-8")
+    (d / "msg_attachments.json").write_text(
+        json.dumps(
+            {
+                "comparable": comparable,
+                "distinct_attachments": len(idx),
+                "new_to_the_corpus": len(new) if comparable else None,
+                "already_pulled": len(idx) - len(new),
+                "attachment_counts": counts,
+                "emails_opened": opened,
+                "encrypted": encrypted,
+                "dropped_unkept": dropped,
+                "errors": errors,
+                "attachments": idx,
+            },
+            indent=1,
+        ),
+        encoding="utf-8",
+    )
 
 
 def run_fold(sr: StageRun) -> int:
@@ -269,11 +308,20 @@ def run_fold(sr: StageRun) -> int:
         ext = os.path.splitext(r["local"])[1] or ".pdf"
         dest = raw / f"msgatt-{r['sha256'][:12]}{ext}"
         shutil.copyfile(d / "msg_pdfs" / r["local"], dest)
-        append_jsonl(d / "raw_manifest.jsonl", {
-            "id": f"msgatt-{r['sha256'][:12]}", "name": r["names"][0], "ext": ext,
-            "folder": "/(email attachment)", "from_email": r["emails"][0] if r["emails"] else None,
-            "size_expected": r["bytes"], "size_got": r["bytes"], "sha256": r["sha256"],
-            "path": str(dest), "ok": True,
-        })
+        append_jsonl(
+            d / "raw_manifest.jsonl",
+            {
+                "id": f"msgatt-{r['sha256'][:12]}",
+                "name": r["names"][0],
+                "ext": ext,
+                "folder": "/(email attachment)",
+                "from_email": r["emails"][0] if r["emails"] else None,
+                "size_expected": r["bytes"],
+                "size_got": r["bytes"],
+                "sha256": r["sha256"],
+                "path": str(dest),
+                "ok": True,
+            },
+        )
     sr.log(f"FOLDED {len(picks)} attachment(s), {sum(r['bytes'] for r in picks):,} bytes, into raw/")
     return 0

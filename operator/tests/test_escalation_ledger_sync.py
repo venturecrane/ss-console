@@ -78,8 +78,7 @@ def test_manifest_records_the_canonical_hash() -> None:
     pair = _escalation_pair()
     actual = hashlib.sha256(_CANONICAL.read_bytes()).hexdigest()
     assert pair["sha256"] == actual, (
-        f"overlay-pairs.json sha256 for {_CANONICAL_REL} is stale.\n"
-        f"  recorded {pair['sha256']}\n  actual   {actual}"
+        f"overlay-pairs.json sha256 for {_CANONICAL_REL} is stale.\n  recorded {pair['sha256']}\n  actual   {actual}"
     )
 
 

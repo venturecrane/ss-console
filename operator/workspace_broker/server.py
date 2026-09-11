@@ -67,9 +67,7 @@ class GrantStore:
         now = int(time.time())
         body = {**claims, "nonce": nonce, "iat": now, "exp": now + GRANT_TTL_SECONDS}
         encoded = _b64encode(_canonical(body))
-        signature = _b64encode(
-            hmac.new(self._key, encoded.encode(), hashlib.sha256).digest()
-        )
+        signature = _b64encode(hmac.new(self._key, encoded.encode(), hashlib.sha256).digest())
         with self._lock:
             self._pending[nonce] = body["exp"]
         return f"{encoded}.{signature}"
@@ -97,9 +95,7 @@ class GrantStore:
 
     def sign_receipt(self, receipt: dict[str, Any]) -> str:
         """Sign execution evidence with the broker-only grant key."""
-        return _b64encode(
-            hmac.new(self._key, _canonical(receipt), hashlib.sha256).digest()
-        )
+        return _b64encode(hmac.new(self._key, _canonical(receipt), hashlib.sha256).digest())
 
 
 class Broker:
@@ -180,9 +176,7 @@ class Broker:
         if explicit_ledger:
             self.escalation_ledger_path: str | None = explicit_ledger
         elif audit_db_path:
-            self.escalation_ledger_path = str(
-                Path(audit_db_path).parent / "escalation-ledger.jsonl"
-            )
+            self.escalation_ledger_path = str(Path(audit_db_path).parent / "escalation-ledger.jsonl")
         else:
             self.escalation_ledger_path = None
         self._escalation_lock = threading.Lock()
@@ -213,7 +207,8 @@ class Broker:
         # queue dir is root:workspace-broker 0770 on the volume. Requires the
         # audit ledger: a job that cannot be recorded must not be queued.
         self.medchron = MedchronVerbs.build(
-            self, audit_db_path=audit_db_path, queue_dir=os.environ.get("SMD_MEDCHRON_QUEUE_DIR"))
+            self, audit_db_path=audit_db_path, queue_dir=os.environ.get("SMD_MEDCHRON_QUEUE_DIR")
+        )
         # ss#2258: AgentMail transmit moves behind this uid boundary. The gateway
         # keeps an inbox-scoped key with message_send/draft_send WITHHELD, so the
         # agent process can read and draft but is vendor-refused from
@@ -225,9 +220,7 @@ class Broker:
         if agentmail_credential and self.ledger is not None:
             credential = Path(agentmail_credential)
             materialize_agentmail_credential(credential)
-            self.agentmail = AgentMailOps(
-                credential, self.customer_path, self.customer_slug
-            )
+            self.agentmail = AgentMailOps(credential, self.customer_path, self.customer_slug)
         else:
             self.agentmail = None
         # ss#2258 msgraph wave. Same verb shape, same recipient fence, same
@@ -253,9 +246,7 @@ class Broker:
             if read_credential_env:
                 read_credential = Path(read_credential_env)
                 materialize_msgraph_read_credential(read_credential)
-            self.msgraph = MsGraphOps(
-                graph_credential, self.customer_path, read_credential_path=read_credential
-            )
+            self.msgraph = MsGraphOps(graph_credential, self.customer_path, read_credential_path=read_credential)
         else:
             self.msgraph = None
 
@@ -284,9 +275,7 @@ class Broker:
         self.agent_uid = uid
         return self.agent_uid
 
-    def handle(
-        self, request: dict[str, Any], peer_pid: int, peer_uid: int | None = None
-    ) -> dict[str, Any]:
+    def handle(self, request: dict[str, Any], peer_pid: int, peer_uid: int | None = None) -> dict[str, Any]:
         """One request in, one reply out. The verb table (``verbs.py``) owns
         both the gate and the dispatch; this method exists so the socket
         handler and every test keep calling ``broker.handle``."""
@@ -324,7 +313,8 @@ def main() -> None:
     broker.socket_path.unlink(missing_ok=True)
     with ThreadedUnixServer(str(broker.socket_path), RequestHandler) as server:
         server.broker = broker  # type: ignore[attr-defined]
-        os.chmod(broker.socket_path, 0o660)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions - Broker owner and connector group require socket access; all other users remain denied.
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions - Broker owner and connector group require socket access; all other users remain denied.
+        os.chmod(broker.socket_path, 0o660)
         server.serve_forever()
 
 

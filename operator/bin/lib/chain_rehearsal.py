@@ -102,9 +102,7 @@ def rehearse_mismatch(
         "last_seen_heartbeat_ts": None,
     }
     outcome = evaluate_export(slug, rows, synthetic)
-    lines.append(
-        f"  export  {len(rows)} rows, real head {(outcome.details.get('head') or '')[:12]}"
-    )
+    lines.append(f"  export  {len(rows)} rows, real head {(outcome.details.get('head') or '')[:12]}")
     lines.append(f"  real pin {(real_pin or {}).get('audit_head', '(none)')[:12]} (untouched)")
     lines.append(f"  verdict {outcome.state}: {outcome.headline}")
 
@@ -130,9 +128,7 @@ def rehearse_mismatch(
     if problem:
         lines.append(f"  FAILED  the alert row could not be written: {problem}")
         return EXIT_REHEARSAL_FAILED, lines
-    lines.append(
-        f"  alert   written under driver {REHEARSAL_DRIVER_PREFIX}{slug} — the alarm fired"
-    )
+    lines.append(f"  alert   written under driver {REHEARSAL_DRIVER_PREFIX}{slug} — the alarm fired")
 
     try:
         console.clear_rehearsal_alerts(slug=slug)

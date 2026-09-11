@@ -25,9 +25,7 @@ from smokeball_connector.client import SmokeballClient
 
 
 def _mock_client(handler) -> SmokeballClient:
-    client = SmokeballClient(
-        region="us", environment="staging", client_id="cid", client_secret="sec", api_key="apikey"
-    )
+    client = SmokeballClient(region="us", environment="staging", client_id="cid", client_secret="sec", api_key="apikey")
     client._http = httpx.Client(transport=httpx.MockTransport(handler))
     return client
 
@@ -38,9 +36,7 @@ def _contacts_handler(contacts: dict[str, dict], captured: list[httpx.Request] |
             captured.append(request)
         path = request.url.path
         if path.endswith("/oauth2/token"):
-            return httpx.Response(
-                200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"}
-            )
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"})
         if "/contacts/" in path:
             cid = path.rsplit("/", 1)[-1]
             if cid in contacts:
@@ -116,9 +112,7 @@ def test_failed_lookup_marks_incomplete_rather_than_dropping_silently() -> None:
 def test_party_without_an_address_marks_incomplete() -> None:
     # A party we cannot address cannot be matched against a recipient, so the set
     # is not a sound basis for a non-membership verdict.
-    client = _mock_client(
-        _contacts_handler({"c1": _person("Bell", "b@x.io"), "d1": _person("Draper")})
-    )
+    client = _mock_client(_contacts_handler({"c1": _person("Bell", "b@x.io"), "d1": _person("Draper")}))
     matter = _matter()
     srv._attach_parties(client, matter)
     assert matter["parties_complete"] is False
@@ -152,9 +146,7 @@ def test_list_path_attaches_no_parties() -> None:
     # _CAPTION_MAX_LOOKUPS bounds the list path, and a truncated party set is
     # byte-identical to a complete one. Only the unbounded single-matter read
     # may produce membership.
-    client = _mock_client(
-        _contacts_handler({"c1": _person("Bell", "b@x.io"), "d1": _person("Draper", "d@x.io")})
-    )
+    client = _mock_client(_contacts_handler({"c1": _person("Bell", "b@x.io"), "d1": _person("Draper", "d@x.io")}))
     resp = {"value": [_matter()]}
     srv._attach_captions_to_list(client, resp)
     assert "parties" not in resp["value"][0]
@@ -177,9 +169,7 @@ def test_budget_exhaustion_is_not_cached_as_a_resolved_fact() -> None:
 def test_caption_still_composes_from_the_shared_fetch() -> None:
     captured: list[httpx.Request] = []
     client = _mock_client(
-        _contacts_handler(
-            {"c1": _person("Alvarez", "a@x.io"), "d1": _person("Draper", "d@x.io")}, captured
-        )
+        _contacts_handler({"c1": _person("Alvarez", "a@x.io"), "d1": _person("Draper", "d@x.io")}, captured)
     )
     matter = _matter()
     srv._attach_caption(client, matter)
@@ -212,15 +202,11 @@ def test_unfiltered_untruncated_contact_listing_is_complete() -> None:
 def test_full_page_is_not_complete() -> None:
     # Indistinguishable from a truncated one — the exact case that must not be
     # trusted, and the one a naive "we got a response" check would pass.
-    assert (
-        srv._contact_listing_is_complete(_listing(500), offset=0, limit=500, narrowed=False) is False
-    )
+    assert srv._contact_listing_is_complete(_listing(500), offset=0, limit=500, narrowed=False) is False
 
 
 def test_later_page_is_not_complete() -> None:
-    assert (
-        srv._contact_listing_is_complete(_listing(3), offset=500, limit=500, narrowed=False) is False
-    )
+    assert srv._contact_listing_is_complete(_listing(3), offset=500, limit=500, narrowed=False) is False
 
 
 def test_narrowed_listing_is_not_complete() -> None:
@@ -232,18 +218,13 @@ def test_narrowed_listing_is_not_complete() -> None:
 
 def test_malformed_envelope_is_not_complete() -> None:
     assert srv._contact_listing_is_complete({}, offset=0, limit=500, narrowed=False) is False
-    assert (
-        srv._contact_listing_is_complete({"value": "nope"}, offset=0, limit=500, narrowed=False)
-        is False
-    )
+    assert srv._contact_listing_is_complete({"value": "nope"}, offset=0, limit=500, narrowed=False) is False
 
 
 def _list_matters_handler(items: list[dict]):
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/oauth2/token"):
-            return httpx.Response(
-                200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"}
-            )
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"})
         if request.url.path.endswith("/matters"):
             return httpx.Response(200, json={"value": items})
         return httpx.Response(200, json={"ok": True})

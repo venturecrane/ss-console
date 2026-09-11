@@ -18,6 +18,7 @@ class enters. A citation counts only where prose carries it: a bare
 citation on a line of its own once let two exhibits pass this gate while
 appearing nowhere in the chronology.
 """
+
 from __future__ import annotations
 
 import json
@@ -50,9 +51,9 @@ def cited_exhibits(body: str) -> tuple[set[int], set[int]]:
     hollow: set[int] = set()
     for m in re.finditer(r"\(Exhibit (\d+)", body):
         n = int(m.group(1))
-        before = body[:m.start()].split("\n")[-1].strip()
+        before = body[: m.start()].split("\n")[-1].strip()
         if not before:
-            prev = [ln for ln in body[:m.start()].split("\n") if ln.strip()]
+            prev = [ln for ln in body[: m.start()].split("\n") if ln.strip()]
             before = prev[-1].strip() if prev else ""
             if before.endswith(")") and CITE_ALONE.fullmatch(before):
                 before = ""
@@ -90,11 +91,20 @@ def run(sr: StageRun) -> int:
             sr.log(f"orphans.json: entry without a name and a reason: {o}")
             return 1
         orphans[name] = reason
-    dropped = [k for k, r in pulled.items() if k not in owners and k not in dupes and k not in orphans
-               and (r.get("ext") or "").lower() in EXT_OK and not any(rx.search(r.get("name") or "") for rx in exclude_names)]
+    dropped = [
+        k
+        for k, r in pulled.items()
+        if k not in owners
+        and k not in dupes
+        and k not in orphans
+        and (r.get("ext") or "").lower() in EXT_OK
+        and not any(rx.search(r.get("name") or "") for rx in exclude_names)
+    ]
     if dropped:
-        sr.log(f"COVERAGE GATE FAIL: {len(dropped)} pulled file(s) never reached the composition set (not duplicates, "
-               f"not excluded):")
+        sr.log(
+            f"COVERAGE GATE FAIL: {len(dropped)} pulled file(s) never reached the composition set (not duplicates, "
+            f"not excluded):"
+        )
         for k in sorted(dropped):
             sr.log(f"   x {k[:78]}")
         return 1
@@ -102,7 +112,9 @@ def run(sr: StageRun) -> int:
     if len(units_seen) > 1:
         shared = [k for k, us in owners.items() if len(us) > 1]
         elsewhere = sum(1 for k in pulled if k not in in_unit and k in owners)
-        sr.log(f"  matter has {len(units_seen)} units; {elsewhere} pulled file(s) belong to other units, {len(shared)} in more than one")
+        sr.log(
+            f"  matter has {len(units_seen)} units; {elsewhere} pulled file(s) belong to other units, {len(shared)} in more than one"
+        )
     for name in sorted(orphans):
         sr.log(f"    ~ {name[:62]:62s} {orphans[name][:48]}")
 
@@ -136,8 +148,10 @@ def run(sr: StageRun) -> int:
         else:
             reason = classify_name(name, rules)
         (explained.append((name, reason)) if reason else unexplained.append(name))
-    sr.log(f"{unit}: {len(in_unit)} source file(s) in the composition set; cited {len(cited_files & set(in_unit))}; "
-           f"excluded with reason {len(explained)}; UNEXPLAINED {len(unexplained)}")
+    sr.log(
+        f"{unit}: {len(in_unit)} source file(s) in the composition set; cited {len(cited_files & set(in_unit))}; "
+        f"excluded with reason {len(explained)}; UNEXPLAINED {len(unexplained)}"
+    )
     for name, reason in explained:
         sr.log(f"    ~ {name[:62]:62s} {reason[:48]}")
     if unexplained:

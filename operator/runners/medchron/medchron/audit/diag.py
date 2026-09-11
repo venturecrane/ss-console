@@ -7,6 +7,7 @@ carries), when the pages moved for another reason (`recited`: different
 paper, no carry), when a repair changed the words (`rewrite`: re-audit), or
 when nothing relates to it any more (`dropped`).
 """
+
 from __future__ import annotations
 
 import json
@@ -29,7 +30,9 @@ def page_remap(slug_dir: Path, unit: str) -> dict[int, dict[int, int]]:
     if not result:
         return {}
     pm = out_dir / "page_map.json"
-    totals = {e["exhibit"]: e["total_pages"] for e in json.loads(pm.read_text(encoding="utf-8"))} if pm.is_file() else {}
+    totals = (
+        {e["exhibit"]: e["total_pages"] for e in json.loads(pm.read_text(encoding="utf-8"))} if pm.is_file() else {}
+    )
     origs = {p.name for p in out_dir.iterdir() if p.name.endswith(".pdf.orig")} if out_dir.is_dir() else set()
     remap: dict[int, dict[int, int]] = {}
     for ex_s, drops in (result.get("drops") or {}).items():
@@ -56,13 +59,14 @@ def remap_pages(pages: list[int], remap: dict[int, dict[int, int]], exhibit: int
     out = []
     for p in pages:
         if p not in m:
-            return None       # a cited page was dropped: not a clean remap
+            return None  # a cited page was dropped: not a clean remap
         out.append(m[p])
     return out
 
 
-def classify_orphans(rows: list[dict[str, Any]], live: list[dict[str, Any]], remap: dict[int, dict[int, int]]
-                     ) -> list[tuple[dict[str, Any], str, dict[str, Any] | None]]:
+def classify_orphans(
+    rows: list[dict[str, Any]], live: list[dict[str, Any]], remap: dict[int, dict[int, int]]
+) -> list[tuple[dict[str, Any], str, dict[str, Any] | None]]:
     cur = {c["key"]: c for c in live}
     by_ex_text: dict[tuple, list] = {}
     by_ex_pages: dict[tuple, list] = {}
@@ -82,13 +86,19 @@ def classify_orphans(rows: list[dict[str, Any]], live: list[dict[str, Any]], rem
             out.append((r, "remap", hit) if hit is not None else (r, "recited", same_text[0]))
             continue
         at_pages = by_ex_pages.get((ex, tuple(r.get("pages") or [])), []) or (
-            by_ex_pages.get((ex, tuple(new_pages)), []) if new_pages else [])
+            by_ex_pages.get((ex, tuple(new_pages)), []) if new_pages else []
+        )
         out.append((r, "rewrite", at_pages[0]) if at_pages else (r, "dropped", None))
     return out
 
 
-def rekey_rows(results_path: Path, rows: list[dict[str, Any]], live: list[dict[str, Any]],
-               remap: dict[int, dict[int, int]], doc_sha: str | None = None) -> int:
+def rekey_rows(
+    results_path: Path,
+    rows: list[dict[str, Any]],
+    live: list[dict[str, Any]],
+    remap: dict[int, dict[int, int]],
+    doc_sha: str | None = None,
+) -> int:
     """Carry a verdict across a page remap: for every orphan classed remap
     whose current twin has the remapped pages and no verdict of its own,
     append a copy under the new key. Returns the count carried."""
@@ -100,8 +110,15 @@ def rekey_rows(results_path: Path, rows: list[dict[str, Any]], live: list[dict[s
         if remap_pages(r.get("pages") or [], remap, r.get("exhibit")) != hit["pages"]:
             continue
         rec = dict(r)
-        rec.update({"key": hit["key"], "page_spec": hit["page_spec"], "pages": hit["pages"], "rekeyed_from": r["key"],
-                    "rekeyed_pages": r.get("pages")})
+        rec.update(
+            {
+                "key": hit["key"],
+                "page_spec": hit["page_spec"],
+                "pages": hit["pages"],
+                "rekeyed_from": r["key"],
+                "rekeyed_pages": r.get("pages"),
+            }
+        )
         if doc_sha:
             rec["doc_sha"] = doc_sha
         CL.append_row(results_path, rec)

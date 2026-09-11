@@ -14,6 +14,7 @@ Medical History heading: that text would be dropped by the entry parser and
 the section would be missing from the deliverable with nothing downstream
 able to see it (three delivered chronologies shipped that way).
 """
+
 from __future__ import annotations
 
 import json
@@ -45,14 +46,16 @@ def split_prior(text: str) -> tuple[str, str]:
     form varies ("Prior Medical History", "# ...", "**...**"); match any and
     normalise to the bare text. Anything else ahead of the first entry refuses."""
     m = re.search(r"(?m)^\d{2}/\d{2}/\d{4}\s*$", text)
-    head = text[:m.start()].strip() if m else ""
+    head = text[: m.start()].strip() if m else ""
     if not head:
         return "", text
     lines = head.splitlines()
     if not PRIOR_HEAD.match(lines[0]):
-        raise BuildRefusal(f"{len(head)} chars precede the first dated entry but the first line is not a Prior Medical "
-                           f"History heading: {lines[0][:120]!r}; this text would be dropped from the deliverable")
-    return "\n".join(["Prior Medical History"] + lines[1:]).strip(), text[m.start():] if m else ""
+        raise BuildRefusal(
+            f"{len(head)} chars precede the first dated entry but the first line is not a Prior Medical "
+            f"History heading: {lines[0][:120]!r}; this text would be dropped from the deliverable"
+        )
+    return "\n".join(["Prior Medical History"] + lines[1:]).strip(), text[m.start() :] if m else ""
 
 
 def parse_entries(text: str) -> list[dict[str, Any]]:
@@ -66,8 +69,14 @@ def parse_entries(text: str) -> list[dict[str, Any]]:
         head = lines[1] if len(lines) > 1 else ""
         prov = head.split("|")[0].strip() if "|" in head else head.strip()
         first_cite = CITE.search(e)
-        entries.append({"iso": f"{m.group(3)}-{m.group(1)}-{m.group(2)}", "provider": prov, "text": e,
-                        "ref": first_cite.group(0)[1:-1] if first_cite else ""})
+        entries.append(
+            {
+                "iso": f"{m.group(3)}-{m.group(1)}-{m.group(2)}",
+                "provider": prov,
+                "text": e,
+                "ref": first_cite.group(0)[1:-1] if first_cite else "",
+            }
+        )
     entries.sort(key=lambda x: x["iso"])
     return entries
 
@@ -82,7 +91,9 @@ def provider_rows(entries: list[dict[str, Any]], canon: Canon) -> list[tuple]:
     rows = []
     for prov, a in agg.items():
         ds = sorted(a["dates"])
-        period = f"{ds[0][5:7]}/{ds[0][8:10]}/{ds[0][:4]}" + (f" - {ds[-1][5:7]}/{ds[-1][8:10]}/{ds[-1][:4]}" if ds[-1] != ds[0] else "")
+        period = f"{ds[0][5:7]}/{ds[0][8:10]}/{ds[0][:4]}" + (
+            f" - {ds[-1][5:7]}/{ds[-1][8:10]}/{ds[-1][:4]}" if ds[-1] != ds[0] else ""
+        )
         rows.append((ds[0], prov, period, len(ds), a["ref"]))
     return sorted(rows)
 
@@ -152,17 +163,29 @@ def run(sr: StageRun) -> int:
             label = icd_tables.describe(code, tables)
             (desc.__setitem__(code, label) if label else blank.append(code))
         (rd / "icd_descriptors.json").write_text(json.dumps(desc, indent=1), encoding="utf-8")
-        sr.log(f"  ICD descriptors: {len(desc)}/{len(icd)} resolved, {len(blank)} left blank" + (f": {', '.join(blank)}" if blank else ""))
-    note = (rd / "preincident_note.txt").read_text(encoding="utf-8").strip() if (rd / "preincident_note.txt").is_file() else ""
+        sr.log(
+            f"  ICD descriptors: {len(desc)}/{len(icd)} resolved, {len(blank)} left blank"
+            + (f": {', '.join(blank)}" if blank else "")
+        )
+    note = (
+        (rd / "preincident_note.txt").read_text(encoding="utf-8").strip()
+        if (rd / "preincident_note.txt").is_file()
+        else ""
+    )
 
-    o = [f"{sr.unit.client_name} - Medical Chronology\n", "## Treatment Timeline\n",
-         "| Medical Provider | Treatment Period | Visits | Reference |"]
+    o = [
+        f"{sr.unit.client_name} - Medical Chronology\n",
+        "## Treatment Timeline\n",
+        "| Medical Provider | Treatment Period | Visits | Reference |",
+    ]
     o += [f"| {prov} | {period} | {n} | {ref} |" for _, prov, period, n, ref in rows]
     o += ["", "## Diagnostic Highlights\n", "| ICD Code | Description | First Diagnosed | Reference |"]
     for _key, (first, code, prov) in sorted(icd.items(), key=lambda kv: (kv[1][0], kv[1][1])):
         same_day = [e for e in entries if e["iso"] == first]
         best = max(same_day, key=lambda e: len(_toks(e.get("provider")) & _toks(prov)), default=None)
-        o.append(f"| {code} | {desc.get(code, '')} | {first[5:7]}/{first[8:10]}/{first[:4]} | {best['ref'] if best else ''} |")
+        o.append(
+            f"| {code} | {desc.get(code, '')} | {first[5:7]}/{first[8:10]}/{first[:4]} | {best['ref'] if best else ''} |"
+        )
     o += ["", "## Medical Chronology\n"]
     if prior_block:
         o.append(prior_block + "\n")
@@ -175,6 +198,8 @@ def run(sr: StageRun) -> int:
     out = "\n".join(o)
     (rd / "final-chronology.md").write_text(out, encoding="utf-8")
     pre = sum(1 for e in entries if e["iso"] < sr.job.incident_date)
-    sr.log(f"{unit}: {len(entries)} entries ({pre} pre-incident), {len(rows)} providers, {len(icd)} ICD codes, "
-           f"{len(pm)} exhibits, {len(out.split())} words")
+    sr.log(
+        f"{unit}: {len(entries)} entries ({pre} pre-incident), {len(rows)} providers, {len(icd)} ICD codes, "
+        f"{len(pm)} exhibits, {len(out.split())} words"
+    )
     return 0

@@ -40,7 +40,11 @@ def test_diagnostics_outside_the_operator_root_are_not_ours() -> None:
     machine-specific and its errors are pyright's, not the tree's."""
     report = _report({"a.py": 1})
     report["generalDiagnostics"].append(
-        {"file": "/opt/hostedtoolcache/Python/3.14.7/x64/lib/python3.14/string/templatelib.py", "severity": "error", "message": "x"}
+        {
+            "file": "/opt/hostedtoolcache/Python/3.14.7/x64/lib/python3.14/string/templatelib.py",
+            "severity": "error",
+            "message": "x",
+        }
     )
     assert pr.errors_per_file(report) == {"a.py": 1}
 

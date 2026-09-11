@@ -59,8 +59,7 @@ def test_all_gated_skills_carry_a_byte_identical_stamp() -> None:
             drifted.append(skill)
     assert not missing, f"missing pre_run.py stamp: {missing}"
     assert not drifted, (
-        f"pre_run.py drifted from templates/pre_run_gate.py: {drifted} — "
-        "edit the template and restamp, never the copy"
+        f"pre_run.py drifted from templates/pre_run_gate.py: {drifted} — edit the template and restamp, never the copy"
     )
 
 
@@ -88,9 +87,7 @@ def test_unknown_count_wakes(capsys) -> None:
 def test_empty_seat_suppresses_after_heartbeat(capsys, monkeypatch) -> None:
     gate = _load_gate()
     written = []
-    monkeypatch.setattr(
-        gate, "write_suppressed_wake_heartbeat", lambda skill: written.append(skill) or True
-    )
+    monkeypatch.setattr(gate, "write_suppressed_wake_heartbeat", lambda skill: written.append(skill) or True)
     gate.decide_and_emit(0, "lien-ledger-tracker")
     assert _emitted(capsys) == {"wakeAgent": False}
     assert written == ["lien-ledger-tracker"]
@@ -318,11 +315,7 @@ def test_both_verbs_carry_the_same_metadata_keys(dummy_broker) -> None:
     """One writer for both halves, so the fields cannot drift apart."""
     gate = _load_gate()
     gate.write_suppressed_wake_heartbeat("trial-binder-assembler")
-    gate.write_emitted_wake_heartbeat(
-        "trial-binder-assembler", "hydrated_seat:open_matters_present"
-    )
+    gate.write_emitted_wake_heartbeat("trial-binder-assembler", "hydrated_seat:open_matters_present")
     suppress, emitted = dummy_broker.received
     assert set(suppress["row"]) == set(emitted["row"])
-    assert set(json.loads(suppress["row"]["metadata"])) == set(
-        json.loads(emitted["row"]["metadata"])
-    )
+    assert set(json.loads(suppress["row"]["metadata"])) == set(json.loads(emitted["row"]["metadata"]))

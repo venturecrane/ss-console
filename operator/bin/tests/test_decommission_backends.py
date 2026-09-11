@@ -124,9 +124,7 @@ def test_r2_deletes_every_object_under_the_seat_prefixes_but_never_the_archive()
 
 
 def test_r2_empty_namespace_is_a_clean_skip():
-    http = _FakeHttp(
-        {("GET", f"{CLOUDFLARE_API}/accounts/"): HttpResponse(200, {"result": [], "result_info": {}})}
-    )
+    http = _FakeHttp({("GET", f"{CLOUDFLARE_API}/accounts/"): HttpResponse(200, {"result": [], "result_info": {}})})
     manifest = _run(CloudflareR2NamespaceDeleter("acct", "tok", http=http).delete_namespace("acme"))
     assert manifest["skipped"] is True
     assert manifest["reason"] == "namespace_already_empty"
@@ -329,7 +327,9 @@ def test_observability_reports_observed_row_counts():
     """The manifest is a probe: each table is counted before and after, and
     the numbers reported are what was read back, not what was attempted."""
     runner = _d1_runner()
-    manifest = _run(HealthchecksAndFleetStatusCleanup(None, ConsoleD1(runner=runner), http=_FakeHttp({})).cleanup("acme"))
+    manifest = _run(
+        HealthchecksAndFleetStatusCleanup(None, ConsoleD1(runner=runner), http=_FakeHttp({})).cleanup("acme")
+    )
     for key in ("fleet_status", "runtime_summary", "machine_credentials"):
         assert manifest[f"{key}_rows_deleted"] == 1
         assert manifest[f"{key}_rows_remaining"] == 0
@@ -347,7 +347,9 @@ def test_observability_reports_a_delete_that_matched_nothing():
     """A DELETE that removed no row must not be reported as a deletion; the
     read-back count is what the flag is computed from."""
     runner = _d1_runner(inert={"fleet_status"})
-    manifest = _run(HealthchecksAndFleetStatusCleanup(None, ConsoleD1(runner=runner), http=_FakeHttp({})).cleanup("acme"))
+    manifest = _run(
+        HealthchecksAndFleetStatusCleanup(None, ConsoleD1(runner=runner), http=_FakeHttp({})).cleanup("acme")
+    )
     assert manifest["fleet_status_rows_deleted"] == 0
     assert manifest["fleet_status_rows_remaining"] == 1
     assert manifest["fleet_status_row_deleted"] is False
@@ -358,7 +360,9 @@ def test_observability_tolerates_a_d1_without_machine_credentials():
     """Before migration 0114 lands the table does not exist; that is an
     observation (nothing to revoke), reported as such rather than raised."""
     runner = _d1_runner(missing={"machine_credentials"})
-    manifest = _run(HealthchecksAndFleetStatusCleanup(None, ConsoleD1(runner=runner), http=_FakeHttp({})).cleanup("acme"))
+    manifest = _run(
+        HealthchecksAndFleetStatusCleanup(None, ConsoleD1(runner=runner), http=_FakeHttp({})).cleanup("acme")
+    )
     assert manifest["machine_credentials_table_present"] is False
     assert manifest["machine_credentials_row_deleted"] is False
     assert manifest["machine_credentials_rows_deleted"] == 0
@@ -422,7 +426,11 @@ def test_backends_from_env_wires_nothing_without_credentials(tmp_path):
         customer_slug="acme", customers_root=tmp_path, archive_root=tmp_path / "a", audit_writer=object()
     )
     assert set(pipeline.unwired_destructive_backends()) >= {
-        "r2_deleter", "vectorize_deleter", "agentmail", "fly", "observability"
+        "r2_deleter",
+        "vectorize_deleter",
+        "agentmail",
+        "fly",
+        "observability",
     }
 
 
@@ -462,5 +470,7 @@ def test_backends_from_env_does_not_arm_fly_from_a_logged_in_cli(tmp_path):
 
 
 def test_backends_from_env_arms_fly_only_from_a_staged_token(tmp_path):
-    kwargs, wired = backends_from_env("acme", tmp_path, {"FLY_API_TOKEN": "f"}, runner=_FakeRunner({}), http=_FakeHttp({}))
+    kwargs, wired = backends_from_env(
+        "acme", tmp_path, {"FLY_API_TOKEN": "f"}, runner=_FakeRunner({}), http=_FakeHttp({})
+    )
     assert wired["fly"] is True and isinstance(kwargs["fly"], FlyAppDestroyer)

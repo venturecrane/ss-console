@@ -31,9 +31,7 @@ M2 = "062d73bd-4d91-41a7-8160-34bea8f7f81b"
 
 
 def _mock_client(handler) -> SmokeballClient:
-    client = SmokeballClient(
-        region="us", environment="staging", client_id="cid", client_secret="sec", api_key="apikey"
-    )
+    client = SmokeballClient(region="us", environment="staging", client_id="cid", client_secret="sec", api_key="apikey")
     client._http = httpx.Client(transport=httpx.MockTransport(handler))
     return client
 
@@ -48,9 +46,7 @@ def _handler(matters: dict[str, dict], captured: list[httpx.Request] | None = No
             captured.append(request)
         path = request.url.path
         if path.endswith("/oauth2/token"):
-            return httpx.Response(
-                200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"}
-            )
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"})
         if "/matters/" in path:
             mid = path.rsplit("/", 1)[-1]
             if mid in matters:
@@ -124,9 +120,7 @@ def test_task_with_no_matter_ref_is_untouched() -> None:
 def test_enrichment_never_raises_on_a_broken_read() -> None:
     def boom(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/oauth2/token"):
-            return httpx.Response(
-                200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"}
-            )
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"})
         return httpx.Response(500, json={"error": "upstream exploded"})
 
     client = _mock_client(boom)
@@ -153,9 +147,7 @@ def test_list_shares_one_lookup_across_rows_on_the_same_matter() -> None:
 
 
 def test_list_resolves_each_distinct_matter() -> None:
-    client = _mock_client(
-        _handler({M1: {"id": M1, "number": "2026-PI-101"}, M2: {"id": M2, "number": "2026-PI-106"}})
-    )
+    client = _mock_client(_handler({M1: {"id": M1, "number": "2026-PI-101"}, M2: {"id": M2, "number": "2026-PI-106"}}))
     resp = {"value": [_task(M1), _task(M2)]}
     srv._attach_matter_refs_to_list(client, resp)
     assert [t["matterNumber"] for t in resp["value"]] == ["2026-PI-101", "2026-PI-106"]
@@ -169,8 +161,7 @@ def test_list_lookup_budget_is_bounded() -> None:
     srv._attach_matter_refs_to_list(client, resp)
     assert len(_matter_gets(captured)) <= srv._MATTER_REF_MAX_LOOKUPS
     # Rows past the budget carry no number — they must not carry a guessed one.
-    assert all("matterNumber" not in t or t["matterNumber"].startswith("2026-PI-")
-               for t in resp["value"])
+    assert all("matterNumber" not in t or t["matterNumber"].startswith("2026-PI-") for t in resp["value"])
 
 
 def test_list_tolerates_a_non_envelope_response() -> None:

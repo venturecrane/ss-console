@@ -101,11 +101,23 @@ def ruff_complexities(root: Path, ruff: str = "ruff") -> dict[str, int]:
     """`{ "rel/path.py::name": complexity }` for every def over the ceiling, from ruff."""
     proc = subprocess.run(
         [
-            ruff, "check", "--isolated", "--select", "C901",
-            "--config", f"lint.mccabe.max-complexity={COMPLEXITY_CEILING}",
-            "--target-version", "py311", "--output-format", "json", "--no-cache", ".",
+            ruff,
+            "check",
+            "--isolated",
+            "--select",
+            "C901",
+            "--config",
+            f"lint.mccabe.max-complexity={COMPLEXITY_CEILING}",
+            "--target-version",
+            "py311",
+            "--output-format",
+            "json",
+            "--no-cache",
+            ".",
         ],
-        cwd=root, capture_output=True, text=True,
+        cwd=root,
+        capture_output=True,
+        text=True,
     )
     if proc.returncode not in (0, 1):
         raise RuntimeError(f"ruff C901 run failed: {proc.stderr.strip() or proc.stdout.strip()}")

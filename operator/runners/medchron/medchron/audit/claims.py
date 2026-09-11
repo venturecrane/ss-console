@@ -9,6 +9,7 @@ assertion about the record, and is never audited. Out-of-range pages are a
 FINDING, never a clamp: a citation the firm cannot follow is the defect an
 audit exists to find.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -56,14 +57,21 @@ def extract_claims(body: str, keep: set[int]) -> list[dict[str, Any]]:
     claims: list[dict[str, Any]] = []
     cursor = 0
     for m in CITE.finditer(body):
-        seg = body[cursor:m.start()].split("\n\n")[-1].strip()
+        seg = body[cursor : m.start()].split("\n\n")[-1].strip()
         cursor = m.end()
         n = int(m.group(1))
         if n not in keep or len(seg) < 30 or seg.lstrip().startswith("[NTD:"):
             continue
         spec = m.group(2)
-        claims.append({"exhibit": n, "page_spec": (spec or "").strip(), "cite": m.group(0), "claim": seg,
-                       "key": claim_key(n, spec, seg)})
+        claims.append(
+            {
+                "exhibit": n,
+                "page_spec": (spec or "").strip(),
+                "cite": m.group(0),
+                "claim": seg,
+                "key": claim_key(n, spec, seg),
+            }
+        )
     return claims
 
 
@@ -94,8 +102,13 @@ def lineage_orphans(rows: list[dict[str, Any]], current_keys: set[str], sha: str
     """Keys of prior real rows for THIS body that are not current keys: the
     double-sweep signature (the hashing or the extraction changed under an
     unchanged document, and resuming would re-bill every claim)."""
-    return sorted({r["key"] for r in rows if r.get("kind") == "real" and r.get("doc_sha") == sha
-                   and r.get("key") not in current_keys})
+    return sorted(
+        {
+            r["key"]
+            for r in rows
+            if r.get("kind") == "real" and r.get("doc_sha") == sha and r.get("key") not in current_keys
+        }
+    )
 
 
 def latest_real(rows: list[dict[str, Any]], live_keys: set[str]) -> dict[str, dict[str, Any]]:

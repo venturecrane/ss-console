@@ -18,6 +18,7 @@ and saving (per-page insert_pdf reached 38 GB resident on a 2,141-page
 production); the original stays beside it as `.orig`, a second apply refuses,
 and the audit's render cache is cleared because every page number just moved.
 """
+
 from __future__ import annotations
 
 import json
@@ -203,14 +204,18 @@ def _run(sr: StageRun, mode: str) -> int:
             ok, r = page_match(src[o - 1], dst[t - 1])
             changed = (t != o) or any(p < o for p in drops[ex])
             if ok is None or (ok is False and r >= 0.99 and not changed and not falsify):
-                unverifiable.append([ex, o, changed, "render failed" if ok is None else f"pixel {r:.4f} on unmoved page"])
+                unverifiable.append(
+                    [ex, o, changed, "render failed" if ok is None else f"pixel {r:.4f} on unmoved page"]
+                )
                 if changed:
                     miss += 1
                 continue
             if not ok:
                 miss += 1
         bad += miss
-        sr.log(f"  Ex{ex}: {len(src)} -> {len(dst)} pages, {len(rel)} cited refs  [{'OK' if miss == 0 else f'{miss} MISMATCH'}]")
+        sr.log(
+            f"  Ex{ex}: {len(src)} -> {len(dst)} pages, {len(rel)} cited refs  [{'OK' if miss == 0 else f'{miss} MISMATCH'}]"
+        )
         dst.close()
         src.close()
         if apply and not falsify and miss == 0:
@@ -220,19 +225,33 @@ def _run(sr: StageRun, mode: str) -> int:
         else:
             tmp.unlink(missing_ok=True)
     if falsify:
-        sr.log(f"FALSIFIER: {bad} mismatch(es) with a one-page offset. "
-               + ("Check can fail; trustworthy." if bad or not checks else "!! CHECK CANNOT FAIL"))
+        sr.log(
+            f"FALSIFIER: {bad} mismatch(es) with a one-page offset. "
+            + ("Check can fail; trustworthy." if bad or not checks else "!! CHECK CANNOT FAIL")
+        )
         return 0 if (bad or not checks) else 1
     if bad:
-        sr.log(f"!! {bad} citation(s) do NOT land on the same page (or moved and could not be verified). Nothing written.")
+        sr.log(
+            f"!! {bad} citation(s) do NOT land on the same page (or moved and could not be verified). Nothing written."
+        )
         return 1
-    sr.log(f"all {len(checks)} verifiable cited page references verified identical"
-           + (f" ({len(unverifiable)} unmoved page(s) unverifiable, reported)" if unverifiable else ""))
+    sr.log(
+        f"all {len(checks)} verifiable cited page references verified identical"
+        + (f" ({len(unverifiable)} unmoved page(s) unverifiable, reported)" if unverifiable else "")
+    )
     if apply:
         cpath.write_text(out_md, encoding="utf-8")
-        (d / f"strip_result{sfx}.json").write_text(json.dumps({
-            "drops": {str(k): sorted(v) for k, v in drops.items()}, "new_page_counts": newcount,
-            "unverifiable": unverifiable}, indent=1), encoding="utf-8")
+        (d / f"strip_result{sfx}.json").write_text(
+            json.dumps(
+                {
+                    "drops": {str(k): sorted(v) for k, v in drops.items()},
+                    "new_page_counts": newcount,
+                    "unverifiable": unverifiable,
+                },
+                indent=1,
+            ),
+            encoding="utf-8",
+        )
         cache = outdir / "auditpages"
         if cache.is_dir():
             n = 0

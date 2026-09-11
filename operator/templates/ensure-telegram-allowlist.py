@@ -29,6 +29,7 @@ Usage:
   ensure-telegram-allowlist.py [--check] [HERMES_HOME]
   (HERMES_HOME defaults to the $HERMES_HOME env var, then /opt/data.)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -71,9 +72,7 @@ def _env_allowlist() -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(
-        description="Refuse to launch an unrestricted (fail-open) Telegram bot."
-    )
+    parser = argparse.ArgumentParser(description="Refuse to launch an unrestricted (fail-open) Telegram bot.")
     parser.add_argument("--check", action="store_true", help="verify-only (boot smoke test)")
     parser.add_argument(
         "hermes_home",

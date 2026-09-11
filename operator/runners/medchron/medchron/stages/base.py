@@ -6,6 +6,7 @@ changes nothing about how the driver reads it. Writes are the same artifacts
 the frozen scripts wrote, in the same shapes, because every later stage
 (ported or not) reads them.
 """
+
 from __future__ import annotations
 
 import json
@@ -63,9 +64,14 @@ class StageRun:
         if self._doorway is None:
             ledger = Ledger(self.slug_dir / "runs" / self.unit.unit / "usage-ledger.jsonl")
             client = self.client_factory() if self.client_factory is not None else None
-            self._doorway = Doorway.from_config(self.cfg, ledger, client=client, log=self.log,
-                                               before_request=self.before_request,
-                                               before_batch=self.before_batch)
+            self._doorway = Doorway.from_config(
+                self.cfg,
+                ledger,
+                client=client,
+                log=self.log,
+                before_request=self.before_request,
+                before_batch=self.before_batch,
+            )
         return self._doorway
 
     @property

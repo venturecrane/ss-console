@@ -71,9 +71,7 @@ def test_the_neutered_breaker_is_actually_neutered() -> None:
     """Guard the falsifier itself: if `_neuter` stopped neutering, every
     red-before-green assertion above would silently become a tautology."""
     mod, machine = cp._machine(cp.ProbeContext(neutered=True))
-    state = cp._await(
-        machine.record_cost_cents(customer="probe", persona="probe", amount_cents=10**6)
-    )
+    state = cp._await(machine.record_cost_cents(customer="probe", persona="probe", amount_cents=10**6))
     assert state.level == mod.StickyStopLevel.OK
     # No raise: that is the defect being simulated.
     cp._await(machine.assert_allowed(customer="probe", persona="probe"))
@@ -93,8 +91,15 @@ def test_self_test_catches_a_probe_that_cannot_fail() -> None:
     try:
         rows = cp.self_test(
             cp.ProbeContext(),
-            {"cannot_fail": {"probe": "cannot_fail", "control": "x", "kind": "local",
-                             "expect": "refuse", "runner": "_always_fires"}},
+            {
+                "cannot_fail": {
+                    "probe": "cannot_fail",
+                    "control": "x",
+                    "kind": "local",
+                    "expect": "refuse",
+                    "runner": "_always_fires",
+                }
+            },
         )
     finally:
         cp.LOCAL_PROBES.pop("_always_fires")
@@ -110,8 +115,7 @@ def test_inert_control_that_fires_is_a_finding_not_a_celebration() -> None:
     """An `expected-fail` probe that FIRES means the registry row is wrong, and
     the run must go red on it. Otherwise a control quietly getting wired would
     read as the same green as one that never was."""
-    spec = {"probe": "p", "control": "c", "kind": "local", "expect": "expected-fail",
-            "runner": "_fires"}
+    spec = {"probe": "p", "control": "c", "kind": "local", "expect": "expected-fail", "runner": "_fires"}
     cp.LOCAL_PROBES["_fires"] = lambda s, c: (True, "wired now")
     try:
         result = cp.run_probe(spec, cp.ProbeContext())
@@ -128,8 +132,7 @@ def test_a_probe_that_raises_is_never_a_pass() -> None:
     cp.LOCAL_PROBES["_boom"] = _boom
     try:
         result = cp.run_probe(
-            {"probe": "p", "control": "c", "kind": "local", "expect": "refuse",
-             "runner": "_boom"},
+            {"probe": "p", "control": "c", "kind": "local", "expect": "refuse", "runner": "_boom"},
             cp.ProbeContext(),
         )
     finally:
@@ -139,8 +142,7 @@ def test_a_probe_that_raises_is_never_a_pass() -> None:
 
 def test_missing_runner_holds_rather_than_passing() -> None:
     result = cp.run_probe(
-        {"probe": "p", "control": "c", "kind": "local", "expect": "refuse",
-         "runner": "does_not_exist"},
+        {"probe": "p", "control": "c", "kind": "local", "expect": "refuse", "runner": "does_not_exist"},
         cp.ProbeContext(),
     )
     assert result.status == cp.HOLD
@@ -178,22 +180,30 @@ def test_seat_transport_failure_holds_and_is_not_a_finding() -> None:
     def _explode(slug, argv):
         raise OSError("no such seat")
 
-    spec = {"probe": "p", "control": "c", "kind": "seat", "expect": "refuse",
-            "seat_command": ["true"], "expect_pattern": "x"}
+    spec = {
+        "probe": "p",
+        "control": "c",
+        "kind": "seat",
+        "expect": "refuse",
+        "seat_command": ["true"],
+        "expect_pattern": "x",
+    }
     result = cp.run_probe(spec, cp.ProbeContext(seat="smd-staging", run_seat=_explode))
     assert result.status == cp.HOLD
     assert not result.is_finding
 
 
 def test_seat_probe_fires_when_the_driver_output_matches() -> None:
-    spec = {"probe": "p", "control": "c", "kind": "seat", "expect": "refuse",
-            "seat_command": ["echo"], "expect_pattern": "REFUSED"}
-    ok = cp.run_probe(
-        spec, cp.ProbeContext(seat="s", run_seat=lambda slug, argv: (0, "gate REFUSED the send"))
-    )
-    bad = cp.run_probe(
-        spec, cp.ProbeContext(seat="s", run_seat=lambda slug, argv: (0, "gate allowed the send"))
-    )
+    spec = {
+        "probe": "p",
+        "control": "c",
+        "kind": "seat",
+        "expect": "refuse",
+        "seat_command": ["echo"],
+        "expect_pattern": "REFUSED",
+    }
+    ok = cp.run_probe(spec, cp.ProbeContext(seat="s", run_seat=lambda slug, argv: (0, "gate REFUSED the send")))
+    bad = cp.run_probe(spec, cp.ProbeContext(seat="s", run_seat=lambda slug, argv: (0, "gate allowed the send")))
     assert (ok.status, bad.status) == (cp.PASS, cp.FAIL)
 
 
@@ -202,16 +212,15 @@ def test_hold_exits_two_and_findings_exit_one() -> None:
     exact defect that let the send reconciler scan nothing for weeks."""
     code = subprocess.run(
         [sys.executable, str(_BIN / "control-probes.py"), "--kind", "boot"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     ).returncode
     assert code == 2, "a run made entirely of holds must not exit 0"
 
 
 def test_local_run_is_clean_today() -> None:
     """The suite's own live state: every local probe attempted, no findings."""
-    proc = subprocess.run(
-        [sys.executable, str(_BIN / "control-probes.py")], capture_output=True, text=True
-    )
+    proc = subprocess.run([sys.executable, str(_BIN / "control-probes.py")], capture_output=True, text=True)
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 

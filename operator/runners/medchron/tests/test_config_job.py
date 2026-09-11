@@ -145,8 +145,14 @@ def test_the_cost_controls_are_read_back_as_typed_values(firm_config_path: Path)
 
 def test_the_month_state_round_trips_off_the_envelope(tmp_path: Path, data_root: Path) -> None:
     body = yaml.safe_load(job_yaml(data_root))
-    body.update(allowance_pages=15000, allowance_remaining_pages=1200, month_pages_used=13800,
-                month_cents_used=4310, allowance_month="2026-09", allowance_remaining_documents=1200)
+    body.update(
+        allowance_pages=15000,
+        allowance_remaining_pages=1200,
+        month_pages_used=13800,
+        month_cents_used=4310,
+        allowance_month="2026-09",
+        allowance_remaining_documents=1200,
+    )
     job = job_mod.parse(body, path=tmp_path / "job.yaml")
     assert (job.allowance_pages, job.allowance_remaining_pages) == (15000, 1200)
     assert (job.month_pages_used, job.month_cents_used) == (13800, 4310)

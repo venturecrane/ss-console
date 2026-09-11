@@ -127,8 +127,7 @@ def test_every_bound_class_exists() -> None:
             assert artifact.get("artifact"), f"{skill}: an internal entry has no artifact slug"
             assert artifact.get("seam"), f"{skill}: artifact {artifact.get('artifact')!r} names no seam"
             assert artifact["class"] in classes, (
-                f"{skill}: artifact {artifact['artifact']!r} references unknown class "
-                f"{artifact['class']!r}"
+                f"{skill}: artifact {artifact['artifact']!r} references unknown class {artifact['class']!r}"
             )
 
 

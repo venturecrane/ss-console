@@ -11,6 +11,7 @@ $0 and offline: none of the four gates needs the model or the matter to say
 no. The synthetic firm config lives here (not in the tests) so the seat can
 run the probes without the firm's private tables and the tests can reuse it.
 """
+
 from __future__ import annotations
 
 import json
@@ -66,13 +67,20 @@ SYNTHETIC_FIRM: dict[str, Any] = {
     "chronology": {"treatment_gap_days": 45, "pre_incident_history": "include"},
     # Invented posture, not any firm's: the cost controls exist here so the seat
     # probes and the tests have a config that satisfies the closed key set.
-    "budget": {"per_job_cap_usd": 150.0, "usd_per_million_chars": 10.0, "monthly_budget_usd": 500.0,
-               "usd_per_scanned_page": 0.03, "usd_per_audit_claim": 0.06},
+    "budget": {
+        "per_job_cap_usd": 150.0,
+        "usd_per_million_chars": 10.0,
+        "monthly_budget_usd": 500.0,
+        "usd_per_scanned_page": 0.03,
+        "usd_per_audit_claim": 0.06,
+    },
     "pipeline": {},
 }
 
-_MIN_PDF = (b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
-            b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n")
+_MIN_PDF = (
+    b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+    b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n"
+)
 
 
 def _scene(tmp: Path, *, joint: bool = False) -> tuple[StageRun, Path, list[str]]:
@@ -81,23 +89,55 @@ def _scene(tmp: Path, *, joint: bool = False) -> tuple[StageRun, Path, list[str]
     data_root = tmp / "data"
     slug_dir = data_root / "example-matter"
     slug_dir.mkdir(parents=True)
-    units = [{"unit": "alpha", "client_name": "Alpha Example", "name_token": "Alpha", "surname": "Example",
-              "dob": "01/01/1970", **({"folder_prefix": "/Alpha_Example"} if joint else {})}]
+    units = [
+        {
+            "unit": "alpha",
+            "client_name": "Alpha Example",
+            "name_token": "Alpha",
+            "surname": "Example",
+            "dob": "01/01/1970",
+            **({"folder_prefix": "/Alpha_Example"} if joint else {}),
+        }
+    ]
     if joint:
-        units.append({"unit": "beta", "client_name": "Beta Example", "name_token": "Beta", "surname": "Sample",
-                      "dob": "02/02/1980", "folder_prefix": "/Beta_Sample"})
+        units.append(
+            {
+                "unit": "beta",
+                "client_name": "Beta Example",
+                "name_token": "Beta",
+                "surname": "Sample",
+                "dob": "02/02/1980",
+                "folder_prefix": "/Beta_Sample",
+            }
+        )
     job_dir = tmp / "job"
     job_dir.mkdir()
-    (job_dir / "job.yaml").write_text(yaml.safe_dump({
-        "slug": "example-matter", "matter": {"number": "0000-XX-000", "id": "probe", "title": "Probe"},
-        "units": units, "incident": {"date": "2026-01-15", "source": "administrator_request"},
-        "data_root": str(data_root),
-    }, sort_keys=False), encoding="utf-8")
+    (job_dir / "job.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "slug": "example-matter",
+                "matter": {"number": "0000-XX-000", "id": "probe", "title": "Probe"},
+                "units": units,
+                "incident": {"date": "2026-01-15", "source": "administrator_request"},
+                "data_root": str(data_root),
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
     log: list[str] = []
     job = job_mod.load(job_dir)
     cfg = config_mod.load(str(firm))
-    sr = StageRun(job=job, cfg=cfg, unit=job.units[0], slug_dir=slug_dir, decided={}, log=log.append,
-                  seat_factory=lambda: None, date_stamp="01-01-26")
+    sr = StageRun(
+        job=job,
+        cfg=cfg,
+        unit=job.units[0],
+        slug_dir=slug_dir,
+        decided={},
+        log=log.append,
+        seat_factory=lambda: None,
+        date_stamp="01-01-26",
+    )
     return sr, slug_dir, log
 
 
@@ -107,9 +147,13 @@ def probe_provenance(tmp: Path) -> tuple[bool, str]:
     sr, d, log = _scene(tmp)
     (d / "units").mkdir()
     (d / "units" / "alpha.json").write_text(json.dumps([{"id": "a", "name": "unexplained", "ext": ".pdf"}]))
-    (d / "raw_manifest.jsonl").write_text(json.dumps({"id": "a", "name": "unexplained", "ext": ".pdf", "ok": True}) + "\n")
+    (d / "raw_manifest.jsonl").write_text(
+        json.dumps({"id": "a", "name": "unexplained", "ext": ".pdf", "ok": True}) + "\n"
+    )
     (d / "runs" / "alpha").mkdir(parents=True)
-    (d / "runs" / "alpha" / "entries_final.md").write_text("01/02/2026\nX | Medical Diagnoses\n\nY. (Exhibit 1 - p. 1)\n")
+    (d / "runs" / "alpha" / "entries_final.md").write_text(
+        "01/02/2026\nX | Medical Diagnoses\n\nY. (Exhibit 1 - p. 1)\n"
+    )
     (d / "out" / "alpha").mkdir(parents=True)
     (d / "out" / "alpha" / "page_map.json").write_text("[]")
     code = provenance.check(sr)
@@ -122,7 +166,8 @@ def probe_claim_audit(tmp: Path) -> tuple[bool, str]:
     sr, d, _ = _scene(tmp)
     (d / "runs" / "alpha").mkdir(parents=True)
     (d / "runs" / "alpha" / "final-chronology.md").write_text(
-        "## Medical Chronology\n\nA planted claim long enough to be audited. (Exhibit 1 - p. 1)\n## Exhibit List\n")
+        "## Medical Chronology\n\nA planted claim long enough to be audited. (Exhibit 1 - p. 1)\n## Exhibit List\n"
+    )
     (d / "out" / "alpha").mkdir(parents=True)
     (d / "out" / "alpha" / "Exhibit 1 - X - 01-02-2026 (Medical Records).pdf").write_bytes(_MIN_PDF)
     ok, summary = claim_audit.check(d, "alpha")
@@ -136,11 +181,13 @@ def probe_extractive(tmp: Path) -> tuple[bool, str]:
     sr, d, log = _scene(tmp)
     (d / "runs" / "alpha").mkdir(parents=True)
     (d / "runs" / "alpha" / "final-chronology.md").write_text(
-        "## Medical Chronology\n\nA claim. (Exhibit 1 - p. 1)\n## Exhibit List\n")
+        "## Medical Chronology\n\nA claim. (Exhibit 1 - p. 1)\n## Exhibit List\n"
+    )
     (d / "out" / "alpha").mkdir(parents=True)
     (d / "out" / "alpha" / "Exhibit 1 - X - 01-02-2026 (Medical Records).pdf").write_bytes(_MIN_PDF)
-    (d / "nonrecord.json").write_text(json.dumps(
-        {"1": {"pages": 1, "blocks": [], "drop_pages": [1], "unknown": [], "cited_collision": [1]}}))
+    (d / "nonrecord.json").write_text(
+        json.dumps({"1": {"pages": 1, "blocks": [], "drop_pages": [1], "unknown": [], "cited_collision": [1]}})
+    )
     code = extractive.dry_run(sr)
     return code == 1, f"exit {code}; " + " | ".join(log)[-300:]
 
@@ -151,13 +198,21 @@ def probe_cross_client(tmp: Path) -> tuple[bool, str]:
     _, d, _ = _scene(tmp, joint=True)
     (d / "units").mkdir()
     (d / "text").mkdir()
-    (d / "units.json").write_text(json.dumps({"alpha": {"surname": "Example", "dob": "01/01/1970"},
-                                             "beta": {"surname": "Sample", "dob": "02/02/1980"}}))
+    (d / "units.json").write_text(
+        json.dumps(
+            {"alpha": {"surname": "Example", "dob": "01/01/1970"}, "beta": {"surname": "Sample", "dob": "02/02/1980"}}
+        )
+    )
     (d / "text" / "a.txt").write_text("Patient Example seen 01/01/1970 DOB, follow up.")
     (d / "text" / "b.txt").write_text("CMS-1500 patient DOB 02021980 claim form.")
-    (d / "units" / "alpha.json").write_text(json.dumps([
-        {"id": "a", "name": "note", "text_path": str(d / "text" / "a.txt")},
-        {"id": "b", "name": "claim", "text_path": str(d / "text" / "b.txt")}]))
+    (d / "units" / "alpha.json").write_text(
+        json.dumps(
+            [
+                {"id": "a", "name": "note", "text_path": str(d / "text" / "a.txt")},
+                {"id": "b", "name": "claim", "text_path": str(d / "text" / "b.txt")},
+            ]
+        )
+    )
     (d / "units" / "beta.json").write_text("[]")
     found, checked, missing = cross_client.flags(d)
     flagged = [f["file"] for f in found]

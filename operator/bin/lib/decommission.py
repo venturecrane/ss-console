@@ -116,8 +116,7 @@ class DecommissionStepFailed(RuntimeError):
 
     def __init__(self, step_name: str, customer_slug: str, cause: BaseException) -> None:
         super().__init__(
-            f"decommission step {step_name!r} failed for customer {customer_slug!r}: "
-            f"{type(cause).__name__}: {cause}"
+            f"decommission step {step_name!r} failed for customer {customer_slug!r}: {type(cause).__name__}: {cause}"
         )
         self.step_name = step_name
         self.customer_slug = customer_slug
@@ -135,10 +134,10 @@ class DecommissionStepFailed(RuntimeError):
 
 
 class StepStatus(str, enum.Enum):
-    PLANNED = "planned"      # dry-run; nothing executed
-    EXECUTED = "executed"    # live run; work performed
-    SKIPPED = "skipped"      # input already absent or stub
-    FAILED = "failed"        # live run; exception raised
+    PLANNED = "planned"  # dry-run; nothing executed
+    EXECUTED = "executed"  # live run; work performed
+    SKIPPED = "skipped"  # input already absent or stub
+    FAILED = "failed"  # live run; exception raised
 
 
 @dataclass(frozen=True)
@@ -220,9 +219,7 @@ class NoOpObservabilityCleanupStub:
     _SKIPPED_REASON = "external_client_not_wired"
 
     async def cleanup(self, customer_slug: str) -> dict:
-        log.info(
-            "observability.cleanup skipped (no client wired) customer=%s", customer_slug
-        )
+        log.info("observability.cleanup skipped (no client wired) customer=%s", customer_slug)
         return {
             "skipped": True,
             "reason": self._SKIPPED_REASON,
@@ -349,11 +346,7 @@ class FilesystemTombstoner:
         # Move the directory and drop a marker file at its root.
         live_dir.rename(tomb_dir)
         marker = tomb_dir / "DECOMMISSIONED.md"
-        preserve_line = (
-            f"audit_log_preserve_until: {audit_log_preserve_until}\n"
-            if audit_log_preserve_until
-            else ""
-        )
+        preserve_line = f"audit_log_preserve_until: {audit_log_preserve_until}\n" if audit_log_preserve_until else ""
         marker.write_text(
             "# Decommissioned\n\n"
             f"This directory contained the customer config for `{customer_slug}` until "
@@ -670,9 +663,7 @@ class DecommissionPipeline:
     fly: FlyMachineManager = field(default_factory=NoOpFlyStub)
     observability: ObservabilityCleanup = field(default_factory=NoOpObservabilityCleanupStub)
     archiver: ComplianceArchiver = field(default_factory=InMemoryComplianceArchiver)
-    audit_log_preserver: AuditLogPreserver = field(
-        default_factory=InMemoryAuditLogPreserver
-    )
+    audit_log_preserver: AuditLogPreserver = field(default_factory=InMemoryAuditLogPreserver)
     tombstoner: Optional[FilesystemTombstoner] = None
     # Parsed customer.yaml (or None when the file is missing/unparseable).
     # Drives `resolve_audit_log_days` for the step-2 carve-out. Tests inject
@@ -744,13 +735,10 @@ class DecommissionPipeline:
                         "pull audit ledger + ADR-0016 memory tables via the "
                         "runtime-read seam to the archive dir (pull-before-destroy)"
                     ),
-                    "preserver_wired": not isinstance(
-                        self.audit_log_preserver, InMemoryAuditLogPreserver
-                    ),
+                    "preserver_wired": not isinstance(self.audit_log_preserver, InMemoryAuditLogPreserver),
                     "audit_log_days": resolve_audit_log_days(self.customer_yaml),
                     "audit_log_preserve_until": (
-                        datetime.now(timezone.utc)
-                        + timedelta(days=resolve_audit_log_days(self.customer_yaml))
+                        datetime.now(timezone.utc) + timedelta(days=resolve_audit_log_days(self.customer_yaml))
                     ).isoformat(),
                 },
             ),
@@ -823,46 +811,60 @@ class DecommissionPipeline:
         )
 
         # Step 2 — preserve Machine-local data (pull-before-destroy, #1355)
-        results.append(await self._run_step(
-            "02_preserve_machine_data",
-            self._step_preserve_machine_data,
-        ))
+        results.append(
+            await self._run_step(
+                "02_preserve_machine_data",
+                self._step_preserve_machine_data,
+            )
+        )
 
         # Step 3 — R2 namespace delete
-        results.append(await self._run_step(
-            "03_r2_namespace",
-            self._step_r2_namespace,
-        ))
+        results.append(
+            await self._run_step(
+                "03_r2_namespace",
+                self._step_r2_namespace,
+            )
+        )
 
         # Step 4 — Vectorize indexes delete
-        results.append(await self._run_step(
-            "04_vectorize_indexes",
-            self._step_vectorize_indexes,
-        ))
+        results.append(
+            await self._run_step(
+                "04_vectorize_indexes",
+                self._step_vectorize_indexes,
+            )
+        )
 
         # Step 5 — AgentMail
-        results.append(await self._run_step(
-            "05_agentmail",
-            self._step_agentmail,
-        ))
+        results.append(
+            await self._run_step(
+                "05_agentmail",
+                self._step_agentmail,
+            )
+        )
 
         # Step 6 — Fly Machine
-        results.append(await self._run_step(
-            "06_fly_machine",
-            self._step_fly_machine,
-        ))
+        results.append(
+            await self._run_step(
+                "06_fly_machine",
+                self._step_fly_machine,
+            )
+        )
 
         # Step 7 — Compliance archive
-        results.append(await self._run_step(
-            "07_compliance_archive",
-            self._step_compliance_archive,
-        ))
+        results.append(
+            await self._run_step(
+                "07_compliance_archive",
+                self._step_compliance_archive,
+            )
+        )
 
         # Step 8 — Tombstone
-        results.append(await self._run_step(
-            "08_tombstone",
-            self._step_tombstone,
-        ))
+        results.append(
+            await self._run_step(
+                "08_tombstone",
+                self._step_tombstone,
+            )
+        )
 
         # Step 9 — Observability cleanup (ADR 0023 Wave 1)
         # Runs at the tail of the pipeline because the work is
@@ -872,10 +874,12 @@ class DecommissionPipeline:
         # expiration alert could fire; the windowed noise is acceptable
         # vs. the structural cost of weaving observability into the
         # core teardown sequence.
-        results.append(await self._run_step(
-            "09_observability_cleanup",
-            self._step_observability_cleanup,
-        ))
+        results.append(
+            await self._run_step(
+                "09_observability_cleanup",
+                self._step_observability_cleanup,
+            )
+        )
 
         # Final marker: DECOMMISSION_FINAL records the end of the pipeline.
         await self._write_audit_row(
@@ -929,9 +933,7 @@ class DecommissionPipeline:
         # was never provisioned and never written (see module docstring).
         audit_log_days = resolve_audit_log_days(self.customer_yaml)
         archive_dir = self.archive_root / self.customer_slug
-        audit_log_manifest = await self.audit_log_preserver.preserve(
-            self.customer_slug, archive_dir, audit_log_days
-        )
+        audit_log_manifest = await self.audit_log_preserver.preserve(self.customer_slug, archive_dir, audit_log_days)
         # Emit a discrete audit row so the decommission report names the
         # carve-out and its manifest explicitly.
         await self._write_audit_row(
@@ -993,12 +995,8 @@ class DecommissionPipeline:
         # Pass the resolved preserve-until so the marker file names the
         # audit-log retention deadline alongside the tombstone date.
         audit_log_days = resolve_audit_log_days(self.customer_yaml)
-        preserve_until = (
-            datetime.now(timezone.utc) + timedelta(days=audit_log_days)
-        ).isoformat()
-        return self.tombstoner.tombstone(
-            self.customer_slug, audit_log_preserve_until=preserve_until
-        )
+        preserve_until = (datetime.now(timezone.utc) + timedelta(days=audit_log_days)).isoformat()
+        return self.tombstoner.tombstone(self.customer_slug, audit_log_preserve_until=preserve_until)
 
     async def _step_observability_cleanup(self) -> dict:
         # ADR 0023 Wave 1: cancel the healthchecks.io check and delete

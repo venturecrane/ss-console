@@ -108,9 +108,7 @@ def evaluate_lock_payload(bucket: str, payload: Any) -> tuple[bool, str]:
         covers, why = _rule_covers_archive(rule)
         if covers:
             rule_id = rule.get("id") if isinstance(rule, dict) else None
-            return True, (
-                f"Bucket lock rule {rule_id!r} covers {ARCHIVE_PREFIX} on {bucket}: {why}."
-            )
+            return True, (f"Bucket lock rule {rule_id!r} covers {ARCHIVE_PREFIX} on {bucket}: {why}.")
         rejected.append(why)
     return False, _lock_unproven(bucket, "; ".join(rejected))
 
@@ -144,8 +142,7 @@ def _rule_covers_archive(rule: Any) -> tuple[bool, str]:
             return False, f"rule {rule_id!r} has a non-integer maxAgeSeconds"
         if seconds < LOCK_MIN_SECONDS:
             return False, (
-                f"rule {rule_id!r} retains for {seconds}s, short of the "
-                f"{LOCK_MIN_SECONDS}s the record is committed to"
+                f"rule {rule_id!r} retains for {seconds}s, short of the {LOCK_MIN_SECONDS}s the record is committed to"
             )
         return True, f"retained for {seconds}s"
 

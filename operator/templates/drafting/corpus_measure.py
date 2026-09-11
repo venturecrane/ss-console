@@ -45,6 +45,7 @@ Oversize files are listed by name, and documents left unread when the time
 budget expires are counted in ``not_attempted_budget``. A partial measurement
 says which part it is; it never reports a smaller corpus as a complete one.
 """
+
 from __future__ import annotations
 
 import json
@@ -136,6 +137,7 @@ def coverage(tally):
 # imported and tested on a workstation with no connector installed.
 # --------------------------------------------------------------------------
 
+
 def _walk(client, matter_id):
     out = []
 
@@ -166,8 +168,7 @@ def _walk(client, matter_id):
 def measure(matter_id, budget_seconds=900.0):
     sys.path.insert(0, "/opt/connectors/smokeball")
     from smokeball_connector.client import build_client_from_env
-    from smokeball_connector.extract import (UnsupportedDocumentError,
-                                             extract_text)
+    from smokeball_connector.extract import UnsupportedDocumentError, extract_text
 
     started = time.time()
     client = build_client_from_env()
@@ -193,8 +194,7 @@ def measure(matter_id, budget_seconds=900.0):
             continue
         size = f.get("sizeBytes") or 0
         if size > SIZE_CAP_BYTES:
-            t["skipped_oversize"].append(
-                {"name": (f.get("name") or "?")[:60], "bytes": size})
+            t["skipped_oversize"].append({"name": (f.get("name") or "?")[:60], "bytes": size})
             continue
         try:
             _meta, blob = client.download_file(matter_id, f.get("id"))
@@ -202,8 +202,7 @@ def measure(matter_id, budget_seconds=900.0):
             account(t, ext, outcome="error")
             continue
         try:
-            text = extract_text(blob, file_name=f.get("name") or "",
-                                file_extension=ext)
+            text = extract_text(blob, file_name=f.get("name") or "", file_extension=ext)
         except UnsupportedDocumentError:
             account(t, ext, outcome="unsupported")
             continue
@@ -217,8 +216,7 @@ def measure(matter_id, budget_seconds=900.0):
             biggest.append((n, (f.get("name") or "?")[:50]))
         time.sleep(0.05)
 
-    t["biggest"] = [{"chars": n, "name": nm}
-                    for n, nm in sorted(biggest, reverse=True)[:5]]
+    t["biggest"] = [{"chars": n, "name": nm} for n, nm in sorted(biggest, reverse=True)[:5]]
     t["record_coverage"] = coverage(t)
     t["elapsed_s"] = round(time.time() - started, 1)
     return t
@@ -226,8 +224,7 @@ def measure(matter_id, budget_seconds=900.0):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("usage: corpus_measure.py <matter_id> [budget_seconds]",
-              file=sys.stderr)
+        print("usage: corpus_measure.py <matter_id> [budget_seconds]", file=sys.stderr)
         sys.exit(2)
     budget = float(sys.argv[2]) if len(sys.argv) > 2 else 900.0
     print("@@SEAT@@" + json.dumps(measure(sys.argv[1], budget)))

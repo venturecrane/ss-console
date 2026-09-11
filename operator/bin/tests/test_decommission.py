@@ -184,9 +184,14 @@ def test_dry_run_returns_planned_steps_and_does_nothing(tmp_path):
     plan = _run(pipeline.plan())
 
     assert [r.name for r in plan] == [
-        "01_drain", "02_preserve_machine_data", "03_r2_namespace",
-        "04_vectorize_indexes", "05_agentmail", "06_fly_machine",
-        "07_compliance_archive", "08_tombstone",
+        "01_drain",
+        "02_preserve_machine_data",
+        "03_r2_namespace",
+        "04_vectorize_indexes",
+        "05_agentmail",
+        "06_fly_machine",
+        "07_compliance_archive",
+        "08_tombstone",
         "09_observability_cleanup",
     ]
     for r in plan:
@@ -232,9 +237,7 @@ def test_live_runs_full_sequence_and_writes_audit_trail(tmp_path):
     archive = list((tmp_path / "archive" / "smd").glob("compliance-packet-manifest-*.json"))
     assert len(archive) == 1
     # Audit rows: begin/end per step + DECOMMISSION_FINAL.
-    rows = conn.execute(
-        "SELECT action_type FROM audit_log ORDER BY id"
-    ).fetchall()
+    rows = conn.execute("SELECT action_type FROM audit_log ORDER BY id").fetchall()
     action_types = [r[0] for r in rows]
     # Pipeline boundaries + per-step lifecycle rows (2026-06-12 review:
     # steps no longer reuse INITIATED/DRAIN_COMPLETE).
@@ -529,9 +532,7 @@ def test_cli_live_allow_unwired_runs_and_tombstones(tmp_path, _no_ambient_backen
 
 
 def _untouched(customers_root: Path) -> bool:
-    return (customers_root / "smd" / "customer.yaml").exists() and not list(
-        customers_root.glob("smd.decommissioned.*")
-    )
+    return (customers_root / "smd" / "customer.yaml").exists() and not list(customers_root.glob("smd.decommissioned.*"))
 
 
 @pytest.mark.parametrize("confirm", [None, "sdm", "SMD"])
@@ -575,7 +576,9 @@ def test_cli_allow_unwired_refused_without_fixture_root(tmp_path, _no_ambient_ba
     assert _untouched(real_root)
 
     # An explicit --customers-root that IS the real root (or a path under it).
-    rc = main(["smd", "--live", "--confirm-slug", "smd", "--allow-unwired", "--customers-root", str(real_root), *common])
+    rc = main(
+        ["smd", "--live", "--confirm-slug", "smd", "--allow-unwired", "--customers-root", str(real_root), *common]
+    )
     assert rc == 5
     assert _untouched(real_root)
 
@@ -583,7 +586,9 @@ def test_cli_allow_unwired_refused_without_fixture_root(tmp_path, _no_ambient_ba
     fixture_root = tmp_path / "elsewhere"
     fixture_root.mkdir()
     shutil.copytree(real_root / "smd", fixture_root / "smd")
-    rc = main(["smd", "--live", "--confirm-slug", "smd", "--allow-unwired", "--customers-root", str(fixture_root), *common])
+    rc = main(
+        ["smd", "--live", "--confirm-slug", "smd", "--allow-unwired", "--customers-root", str(fixture_root), *common]
+    )
     assert rc == 0
     assert _untouched(real_root)
     assert not (fixture_root / "smd").exists()
@@ -783,10 +788,7 @@ def test_step_2_runs_audit_log_preservation_before_memory_voice(tmp_path):
     assert Path(preserved["archive_path"]).exists()
     # Carve-out emits its own audit row distinct from the canonical
     # memory + voice cleanup row.
-    rows = conn.execute(
-        "SELECT metadata FROM audit_log "
-        "WHERE action_type = 'DECOMMISSION_STEP_COMPLETE'"
-    ).fetchall()
+    rows = conn.execute("SELECT metadata FROM audit_log WHERE action_type = 'DECOMMISSION_STEP_COMPLETE'").fetchall()
     carve_out = [r[0] for r in rows if "audit_log_preserved" in (r[0] or "")]
     assert carve_out, "expected at least one audit row tagged with audit_log_preserved"
     # The carve-out row records the resolved retention window + deadline.

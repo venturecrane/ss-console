@@ -56,9 +56,7 @@ def test_manifest_to_dict_carries_required_fields():
 
 
 def test_manifest_file_hashes_sorted_for_determinism():
-    m = build_manifest(
-        **_base_kwargs(file_hashes={"z.txt": "z", "a.txt": "a", "m.txt": "m"})
-    )
+    m = build_manifest(**_base_kwargs(file_hashes={"z.txt": "z", "a.txt": "a", "m.txt": "m"}))
     body = m.to_dict()
     assert list(body["file_hashes"].keys()) == ["a.txt", "m.txt", "z.txt"]
 

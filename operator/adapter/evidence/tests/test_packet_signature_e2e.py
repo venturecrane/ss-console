@@ -103,9 +103,7 @@ def test_a_tampered_manifest_fails_verification(tmp_path, monkeypatch):
         key.public_key().verify(signature, manifest_bytes.replace(b"acme", b"acmf"))
 
 
-def test_manifest_declares_the_algorithm_and_key_id_it_was_signed_with(
-    tmp_path, monkeypatch
-):
+def test_manifest_declares_the_algorithm_and_key_id_it_was_signed_with(tmp_path, monkeypatch):
     """A reader can tell which key to fetch, from the packet alone."""
     import json
 

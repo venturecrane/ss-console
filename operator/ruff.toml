@@ -25,8 +25,9 @@
 # uncovered site, not an allowlist:
 #
 #   S101   4889 / —     assert. Correct in pytest; would need a test-file carve-out.
-#   E501   2119 / —     line-too-long. `ruff format` at line-length 120 is the
-#                       companion change (wave 2b); E501 follows it.
+#   E501   2119 / —     line-too-long. `ruff format` at line-length 120 now runs
+#                       (wave 2b); selecting E501 is the follow-up once the
+#                       long string literals it would flag are decided.
 #   ANN001 1287 / —     missing arg annotations. pyright (pyproject.toml,
 #                       ratcheted) is the type gate now.
 #   SLF001  166 / 9     private-member-access.
@@ -50,6 +51,14 @@
 # ratchet, so the 32 + 51 existing entries can only shrink.
 
 target-version = "py311"
+
+# One line length, one formatter (2026-09-10 review, Code Quality 7: no
+# Python line-length convention existed; `ruff check --select E501` reported
+# 4,346 lines at 88 and 380 at 120, so 120 is the width the tree already
+# writes to). `ruff format --check` runs in operator-substrate.yml; a file
+# that is not formatted is a red check, the same way prettier gates the
+# TypeScript half.
+line-length = 120
 
 # Vendored virtualenvs and caches are not our source.
 extend-exclude = [
@@ -81,3 +90,27 @@ select = [
     "F401", # unused-import: highest value per edit; 28 suppressions were already in place
     "RUF100", # unused-noqa: a `# noqa` naming a rule ruff does not enable is deleted, not kept
 ]
+
+[format]
+# The ten overlay twins (contracts/overlay-pairs.json adapterPath) are
+# byte-identical mirrors of overlay runtime files, and the five skill copies
+# of escalation_ledger.py are byte-identical to that twin
+# (tests/test_escalation_ledger_sync.py). Formatting them is a PAIRED
+# cross-repo change (ss-console first, then the overlay, then the pin bump),
+# not a one-repo chore, so the formatter skips them until that pair ships.
+exclude = [
+    "adapter/voice/transform.py",
+    "adapter/audit_log.py",
+    "adapter/namespace_assertion.py",
+    "adapter/d1_env.py",
+    "workspace_broker/chain.py",
+    "safety-substrate/citation_filter.py",
+    "safety-substrate/identifier_filter.py",
+    "adapter/recipient_classifier.py",
+    "workspace_broker/escalation_ledger.py",
+    "safety-substrate/sticky_stop.py",
+    "skills/*/escalation_ledger.py",
+]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = false

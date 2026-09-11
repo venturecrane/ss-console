@@ -58,7 +58,7 @@ def desired_ref_from_dockerfile(path: Path) -> str:
     text = path.read_text(encoding="utf-8")
     m = _OVERLAY_REF_RE.search(text)
     if not m:
-        raise ValueError(f"no ARG OVERLAY_REF=\"...\" found in {path}")
+        raise ValueError(f'no ARG OVERLAY_REF="..." found in {path}')
     return m.group(1)
 
 
@@ -67,9 +67,7 @@ def discover_slugs(customers_dir: Path) -> list[str]:
     if not customers_dir.is_dir():
         return []
     return sorted(
-        p.name
-        for p in customers_dir.iterdir()
-        if p.is_dir() and p.name != "_template" and not p.name.startswith(".")
+        p.name for p in customers_dir.iterdir() if p.is_dir() and p.name != "_template" and not p.name.startswith(".")
     )
 
 
@@ -148,14 +146,12 @@ def classify(
         elif refs_match(desired, observed.value):
             results.append(DriftResult(slug, "current", observed.value, observed.source))
         else:
-            results.append(
-                DriftResult(slug, "drift", observed.value, observed.source, "running ref != pinned ref")
-            )
+            results.append(DriftResult(slug, "drift", observed.value, observed.source, "running ref != pinned ref"))
     return results
 
 
 def _short(ref: Optional[str]) -> str:
-    return (ref[:12] if ref else "-")
+    return ref[:12] if ref else "-"
 
 
 def render(desired: str, results: list[DriftResult]) -> str:

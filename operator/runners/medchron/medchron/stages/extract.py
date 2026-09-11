@@ -13,6 +13,7 @@ Output (the shapes every later stage reads):
   text/<id>.txt     the text with [p.N] markers
   scan_queue.json   files needing the vision pass
 """
+
 from __future__ import annotations
 
 import json
@@ -23,8 +24,8 @@ from typing import Any
 from .base import StageRun, read_jsonl
 
 GLYPH_RUN = re.compile(r"(?:/\d+ ?){4,}")
-GLYPH_THRESHOLD = 0.08     # junk files score 0.21-0.31; the highest clean file 0.031
-ENGLISH_FLOOR = 0.02       # ciphered files 0.0000; lowest legitimate (a bill) 0.0317
+GLYPH_THRESHOLD = 0.08  # junk files score 0.21-0.31; the highest clean file 0.031
+ENGLISH_FLOOR = 0.02  # ciphered files 0.0000; lowest legitimate (a bill) 0.0317
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
 WORD_EXTS = {".docx", ".doc"}
 
@@ -32,7 +33,8 @@ WORD_EXTS = {".docx", ".doc"}
 # prose or clinical narrative, including tables and forms.
 _STOP = frozenset(
     "the and of to in for with was were is are on at by a an patient this that "
-    "no not his her he she had has been from as or be date name page report".split())
+    "no not his her he she had has been from as or be date name page report".split()
+)
 
 
 def pdf_text(path: Path) -> list[tuple[int, str]]:

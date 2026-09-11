@@ -64,8 +64,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--customer", required=True)
     ap.add_argument("--fixtures", type=Path, required=True)
-    ap.add_argument("--strict", action="store_true",
-                    help="exit non-zero on any failure (default in bootstrap)")
+    ap.add_argument("--strict", action="store_true", help="exit non-zero on any failure (default in bootstrap)")
     args = ap.parse_args()
 
     tests_dir: Path = args.fixtures

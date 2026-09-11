@@ -197,9 +197,7 @@ class Citation:
 
     def __post_init__(self) -> None:
         if not isinstance(self.source_kind, SourceKind):
-            raise TypeError(
-                f"source_kind must be SourceKind, got {type(self.source_kind).__name__}"
-            )
+            raise TypeError(f"source_kind must be SourceKind, got {type(self.source_kind).__name__}")
         if not self.source_id:
             raise ValueError("source_id is required and must be non-empty")
         if self.span is not None:
@@ -213,9 +211,7 @@ class Citation:
             if start < 0 or end <= start:
                 raise ValueError("span must satisfy 0 <= start < end")
         if self.source_kind is SourceKind.VERBATIM_QUOTE and self.span is None:
-            raise ValueError(
-                "VERBATIM_QUOTE citations must carry a span identifying the quoted range"
-            )
+            raise ValueError("VERBATIM_QUOTE citations must carry a span identifying the quoted range")
 
 
 # ---------------------------------------------------------------------------
@@ -398,8 +394,7 @@ def enforce_citations(
                     kind=CitationViolationKind.MISSING_CITATION,
                     rendered_excerpt=excerpt,
                     detail=(
-                        "field is declared fact_bearing and rendered non-empty "
-                        "content, but no Citation is attached"
+                        "field is declared fact_bearing and rendered non-empty content, but no Citation is attached"
                     ),
                 )
             )
@@ -415,10 +410,7 @@ def enforce_citations(
                     field_name=field_name,
                     kind=CitationViolationKind.EMPTY_SOURCE_ID,
                     rendered_excerpt=excerpt,
-                    detail=(
-                        f"Citation present (kind={citation.source_kind.value}) "
-                        "but source_id is empty"
-                    ),
+                    detail=(f"Citation present (kind={citation.source_kind.value}) but source_id is empty"),
                 )
             )
             continue
@@ -428,10 +420,7 @@ def enforce_citations(
                     field_name=field_name,
                     kind=CitationViolationKind.MALFORMED_CITATION,
                     rendered_excerpt=excerpt,
-                    detail=(
-                        f"Citation.source_kind is not a SourceKind: "
-                        f"{type(citation.source_kind).__name__}"
-                    ),
+                    detail=(f"Citation.source_kind is not a SourceKind: {type(citation.source_kind).__name__}"),
                 )
             )
             continue
@@ -441,9 +430,7 @@ def enforce_citations(
                     field_name=field_name,
                     kind=CitationViolationKind.MALFORMED_CITATION,
                     rendered_excerpt=excerpt,
-                    detail=(
-                        "VERBATIM_QUOTE Citation missing required span"
-                    ),
+                    detail=("VERBATIM_QUOTE Citation missing required span"),
                 )
             )
             continue
@@ -538,8 +525,7 @@ def _self_check_fixtures() -> tuple[bool, str]:
 
     return (
         True,
-        "PASS: invariant 6 enforces citation attachment on fact-bearing fields "
-        "(2 of 2 self-check fixtures held)",
+        "PASS: invariant 6 enforces citation attachment on fact-bearing fields (2 of 2 self-check fixtures held)",
     )
 
 

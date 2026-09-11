@@ -196,9 +196,7 @@ def test_run_once_emits_wake_on_anomaly():
     def factory():
         return SuppressedWakeWriter(AuditLogWriter(executor))
 
-    code, out = _capture_stdout(
-        run_once(connectors, AnomalyThresholds(), factory)
-    )
+    code, out = _capture_stdout(run_once(connectors, AnomalyThresholds(), factory))
     assert code == 0
     # The wake line carries the facts the gate computed (#2253). A bare
     # wakeAgent flag left the woken turn to source per-item facts itself, and
@@ -282,9 +280,7 @@ def test_run_once_wake_survives_a_writer_without_the_emitted_wake_method():
             return "x"
 
     connectors = [FakeConnector([_make_snapshot(cpl=25.0, cpl_avg=10.0)])]
-    code, out = _capture_stdout(
-        run_once(connectors, AnomalyThresholds(), lambda: _LegacyWriter())
-    )
+    code, out = _capture_stdout(run_once(connectors, AnomalyThresholds(), lambda: _LegacyWriter()))
     assert code == 0
     assert json.loads(out)["wakeAgent"] is True
     assert json.loads(out)["decision_basis"] == "anomaly_above_threshold"
@@ -347,9 +343,7 @@ def test_run_once_falls_back_to_wake_on_audit_failure():
     def factory():
         return SuppressedWakeWriter(AuditLogWriter(executor))
 
-    code, out = _capture_stdout(
-        run_once(connectors, AnomalyThresholds(), factory)
-    )
+    code, out = _capture_stdout(run_once(connectors, AnomalyThresholds(), factory))
     assert code == 0
     parsed = json.loads(out)
     assert parsed == {
@@ -366,9 +360,7 @@ def test_run_once_falls_back_to_wake_when_writer_factory_returns_none():
     that suppress requires a trail; absent a trail, always wake."""
     connectors = [FakeConnector([_make_snapshot()])]
 
-    code, out = _capture_stdout(
-        run_once(connectors, AnomalyThresholds(), lambda: None)
-    )
+    code, out = _capture_stdout(run_once(connectors, AnomalyThresholds(), lambda: None))
     assert code == 0
     parsed = json.loads(out)
     assert parsed == {
@@ -398,9 +390,7 @@ def test_wake_payload_carries_every_firing_campaign_across_platforms():
             ]
         )
     ]
-    code, out = _capture_stdout(
-        run_once(connectors, AnomalyThresholds(), lambda: None)
-    )
+    code, out = _capture_stdout(run_once(connectors, AnomalyThresholds(), lambda: None))
     assert code == 0
     plans = {p["campaign_id"]: p for p in json.loads(out)["plans"]}
     assert plans["a"]["kind"] == "cpl_spike" and plans["a"]["platform"] == "meta"
@@ -413,17 +403,8 @@ def test_wake_payload_carries_every_firing_campaign_across_platforms():
 def test_wake_payload_truncation_announces_itself():
     """Over the cap the list is partial, and the payload says so. A truncated
     list that reads as complete is a check that cannot fail (Law 12)."""
-    connectors = [
-        FakeConnector(
-            [
-                _make_snapshot(campaign_id=f"camp_{i}", cpl=25.0, cpl_avg=10.0)
-                for i in range(58)
-            ]
-        )
-    ]
-    code, out = _capture_stdout(
-        run_once(connectors, AnomalyThresholds(), lambda: None)
-    )
+    connectors = [FakeConnector([_make_snapshot(campaign_id=f"camp_{i}", cpl=25.0, cpl_avg=10.0) for i in range(58)])]
+    code, out = _capture_stdout(run_once(connectors, AnomalyThresholds(), lambda: None))
     assert code == 0
     parsed = json.loads(out)
     assert parsed["plans_total"] == 58
@@ -435,17 +416,8 @@ def test_wake_payload_truncation_announces_itself():
 def test_wake_payload_untruncated_says_so_explicitly():
     """The flag is present on the complete case too, so its absence never has
     to be read as "complete"."""
-    connectors = [
-        FakeConnector(
-            [
-                _make_snapshot(campaign_id=f"camp_{i}", cpl=25.0, cpl_avg=10.0)
-                for i in range(4)
-            ]
-        )
-    ]
-    code, out = _capture_stdout(
-        run_once(connectors, AnomalyThresholds(), lambda: None)
-    )
+    connectors = [FakeConnector([_make_snapshot(campaign_id=f"camp_{i}", cpl=25.0, cpl_avg=10.0) for i in range(4)])]
+    code, out = _capture_stdout(run_once(connectors, AnomalyThresholds(), lambda: None))
     assert code == 0
     parsed = json.loads(out)
     assert parsed["plans_total"] == parsed["plans_emitted"] == 4

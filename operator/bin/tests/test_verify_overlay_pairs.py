@@ -98,9 +98,7 @@ def test_manifest_overlay_ref_matches_dockerfile():
     dockerfile = _DOCKERFILE.read_text(encoding="utf-8")
     match = re.search(r'ARG\s+OVERLAY_REF=["\']?([^"\'\s]+)["\']?', dockerfile)
     assert match, "Dockerfile ARG OVERLAY_REF not found"
-    assert m["overlayRef"] == match.group(1), (
-        f"manifest overlayRef {m['overlayRef']} != Dockerfile {match.group(1)}"
-    )
+    assert m["overlayRef"] == match.group(1), f"manifest overlayRef {m['overlayRef']} != Dockerfile {match.group(1)}"
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +110,4 @@ def test_sha256_file_matches_known_value(tmp_path):
     f = tmp_path / "x.txt"
     f.write_bytes(b"hello")
     # sha256("hello")
-    assert (
-        mod._sha256_file(f)
-        == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
-    )
+    assert mod._sha256_file(f) == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"

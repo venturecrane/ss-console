@@ -11,6 +11,7 @@ Outputs under runs/<unit>/: entries.md (standalone entries, pre-merge),
 clusters.md (same date+provider fragments for the merge), exhibit_map.json
 (file name -> exhibit number), billing_dates.md, conflicts.md, files_seen.md.
 """
+
 from __future__ import annotations
 
 import json
@@ -81,8 +82,11 @@ class Resolver:
 def parse_maps(d: Path, maps: list[str]) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
     entries: list[dict[str, Any]] = []
     buckets: dict[str, list[str]] = {"billing_dates.md": [], "conflicts.md": [], "files_seen.md": []}
-    names = (("BILLING-DATES", "billing_dates.md"), ("CONFLICTS / REFERENCED-BUT-ABSENT", "conflicts.md"),
-             ("FILES-SEEN", "files_seen.md"))
+    names = (
+        ("BILLING-DATES", "billing_dates.md"),
+        ("CONFLICTS / REFERENCED-BUT-ABSENT", "conflicts.md"),
+        ("FILES-SEEN", "files_seen.md"),
+    )
     for fn in maps:
         txt = (d / fn).read_text(encoding="utf-8")
         body = section(txt, "ENTRIES")
@@ -98,8 +102,15 @@ def parse_maps(d: Path, maps: list[str]) -> tuple[list[dict[str, Any]], dict[str
                 m = DATE_HEAD.match(chunk)
                 if m is None:
                     continue
-                entries.append({"date": f"{m.group(3)}-{m.group(1)}-{m.group(2)}", "provider": prov,
-                                "key": norm_provider(prov), "text": chunk, "src": fn})
+                entries.append(
+                    {
+                        "date": f"{m.group(3)}-{m.group(1)}-{m.group(2)}",
+                        "provider": prov,
+                        "key": norm_provider(prov),
+                        "text": chunk,
+                        "src": fn,
+                    }
+                )
         for name, out in names:
             s = section(txt, re.escape(name))
             if s and "none" not in s.lower()[:20]:
@@ -130,7 +141,9 @@ def substitute(text: str, exhibit: dict[str, int], resolve: Resolver) -> str:
         n = exhibit.get(resolve(m.group(1)) or m.group(1).strip())
         # split, not findall: matching consumes the separating comma so a
         # second ", p. N" group could never match and would be silently lost.
-        pages = ", ".join(p for p in (re.sub(r"\s+", "", g).strip(",") for g in re.split(r",\s*p\.\s*", m.group(2))) if p)
+        pages = ", ".join(
+            p for p in (re.sub(r"\s+", "", g).strip(",") for g in re.split(r",\s*p\.\s*", m.group(2))) if p
+        )
         return f"(Exhibit {n} - p. {pages})" if n else m.group(0)
 
     def one_np(m: re.Match) -> str:
@@ -167,7 +180,9 @@ def run(sr: StageRun) -> int:
         sr.log(f"REFUSING TO ASSEMBLE: chunk(s) {refused} were refused and carry no entries")
         return 1
     entries, buckets = parse_maps(d, maps)
-    real_names = [f["name"] + (f.get("ext") or "") for f in read_json(sr.slug_dir / "units" / f"{sr.unit.unit}.json", [])]
+    real_names = [
+        f["name"] + (f.get("ext") or "") for f in read_json(sr.slug_dir / "units" / f"{sr.unit.unit}.json", [])
+    ]
     resolve = Resolver(real_names)
     exhibit = exhibit_numbers(entries, resolve)
     (d / "exhibit_map.json").write_text(json.dumps(exhibit, indent=1), encoding="utf-8")

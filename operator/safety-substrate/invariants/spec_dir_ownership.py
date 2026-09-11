@@ -187,7 +187,7 @@ def verify_spec_dir(
         result.violations.append(OwnershipViolation(str(root), f"cannot resolve ({exc})"))
         return result
 
-    paths = [root] + sorted(root.rglob("*"))[: _MAX_PATHS]
+    paths = [root] + sorted(root.rglob("*"))[:_MAX_PATHS]
     for path in paths:
         result.checked += 1
         # lstat, not stat: a symlink's own mode must be read without following
@@ -219,14 +219,11 @@ def verify_spec_dir(
         if reason:
             kind = "directory" if stat.S_ISDIR(st.st_mode) else "file"
             extra = (
-                " — directory write permits create, replace, and rename even when every "
-                "file inside is read-only"
+                " — directory write permits create, replace, and rename even when every file inside is read-only"
                 if kind == "directory"
                 else ""
             )
-            result.violations.append(
-                OwnershipViolation(str(path), f"{kind} is {reason}{extra}")
-            )
+            result.violations.append(OwnershipViolation(str(path), f"{kind} is {reason}{extra}"))
 
     return result
 
@@ -303,7 +300,8 @@ def _self_check_fixtures() -> tuple[bool, str]:
         # The negative fixture. World-writable is the one agent-writable state
         # reachable without root, so it is what the smoke check uses to prove
         # the loop actually refuses rather than merely running.
-        os.chmod(body, 0o666)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        os.chmod(body, 0o666)
         bad = verify_spec_dir(str(root))
         if bad.passed:
             return False, "FAIL: a world-writable spec body should have been refused"

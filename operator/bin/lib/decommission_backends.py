@@ -173,9 +173,8 @@ class CloudflareR2NamespaceDeleter:
                 return keys
 
     def _delete(self, bucket: str, key: str) -> bool:
-        url = (
-            f"{CLOUDFLARE_API}/accounts/{self.account_id}/r2/buckets/{bucket}/objects/"
-            + urllib.parse.quote(key, safe="")
+        url = f"{CLOUDFLARE_API}/accounts/{self.account_id}/r2/buckets/{bucket}/objects/" + urllib.parse.quote(
+            key, safe=""
         )
         resp = self.http("DELETE", url, self._headers(), None)
         if resp.status in (200, 204):
@@ -247,9 +246,7 @@ class WranglerVectorizeIndexDeleter:
                 continue
             proc = self.runner(["npx", "wrangler", "vectorize", "delete", name])
             if proc.returncode != 0:
-                raise RuntimeError(
-                    f"vectorize delete {name} failed: {proc.stderr.strip() or proc.stdout.strip()}"
-                )
+                raise RuntimeError(f"vectorize delete {name} failed: {proc.stderr.strip() or proc.stdout.strip()}")
             deleted.append(name)
         manifest: dict = {"indexes_deleted": len(deleted), "indexes": deleted}
         if not deleted:
@@ -297,9 +294,7 @@ class AgentMailInboxDeprovisioner:
         return {"Authorization": f"Bearer {self.api_key}", "Accept": "application/json"}
 
     async def deprovision(self, customer_slug: str) -> dict:
-        address = seat_inbox_address(
-            self.customers_root / customer_slug / "customer.yaml", customer_slug
-        )
+        address = seat_inbox_address(self.customers_root / customer_slug / "customer.yaml", customer_slug)
         listing = self.http("GET", f"{AGENTMAIL_API}/inboxes", self._headers(), None)
         if listing.status != 200 or not isinstance(listing.body, dict):
             raise RuntimeError(f"agentmail list inboxes failed: HTTP {listing.status}")
@@ -370,9 +365,7 @@ class FlyAppDestroyer:
             return {"skipped": True, "reason": "app_already_absent", "app_destroyed": False, "app": app}
         proc = self.runner(["fly", "apps", "destroy", app, "--yes"])
         if proc.returncode != 0:
-            raise RuntimeError(
-                f"fly apps destroy {app} failed: {proc.stderr.strip() or proc.stdout.strip()}"
-            )
+            raise RuntimeError(f"fly apps destroy {app} failed: {proc.stderr.strip() or proc.stdout.strip()}")
         return {"skipped": False, "app_destroyed": True, "app": app}
 
 
@@ -563,9 +556,7 @@ def backends_from_env(
         wired["fly"] = True
     hc_key = env.get("HEALTHCHECKS_API_KEY")
     if hc_key and wrangler_token:
-        kwargs["observability"] = HealthchecksAndFleetStatusCleanup(
-            hc_key, ConsoleD1(runner=runner), http=http
-        )
+        kwargs["observability"] = HealthchecksAndFleetStatusCleanup(hc_key, ConsoleD1(runner=runner), http=http)
         wired["observability"] = True
     return kwargs, wired
 

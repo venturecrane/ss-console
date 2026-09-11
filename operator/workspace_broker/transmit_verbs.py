@@ -321,8 +321,7 @@ def agentmail(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid
 def msgraph(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
     if broker.msgraph is None or broker.ledger is None:
         raise ValueError(
-            "msgraph transmit is not configured on this broker "
-            "(needs SMD_MSGRAPH_CREDENTIAL_PATH and an audit ledger)"
+            "msgraph transmit is not configured on this broker (needs SMD_MSGRAPH_CREDENTIAL_PATH and an audit ledger)"
         )
     return dispatch_transmit(
         broker,

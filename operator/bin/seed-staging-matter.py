@@ -56,9 +56,7 @@ def _client():
     import would make the consistency tests skip everywhere they actually run,
     and a skipped test measures nothing."""
     sys.path.insert(0, "/app/connectors/smokeball")
-    os.environ.setdefault(
-        "SMOKEBALL_REFRESH_TOKEN_FILE", "/opt/data/.smokeball-mcp/refresh_token"
-    )
+    os.environ.setdefault("SMOKEBALL_REFRESH_TOKEN_FILE", "/opt/data/.smokeball-mcp/refresh_token")
     from smokeball_connector.client import build_client_from_env
 
     return build_client_from_env()
@@ -67,9 +65,7 @@ def _client():
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("slug", choices=sorted(FIXTURES), help="which matter's record to seed")
-    ap.add_argument(
-        "--list", action="store_true", dest="just_list", help="print the set and exit; uploads nothing"
-    )
+    ap.add_argument("--list", action="store_true", dest="just_list", help="print the set and exit; uploads nothing")
     args = ap.parse_args(argv)
     fixture = FIXTURES[args.slug]
 
@@ -83,10 +79,7 @@ def main(argv: list[str] | None = None) -> int:
 
     c = _client()
     existing = c.get(f"/matters/{fixture.matter_id}/documents/files", Limit=200, Offset=0)
-    have = {
-        f.get("name")
-        for f in (existing.get("value") if isinstance(existing, dict) else existing) or []
-    }
+    have = {f.get("name") for f in (existing.get("value") if isinstance(existing, dict) else existing) or []}
     print(f"already on matter: {len(have)}")
 
     added = skipped = failed = 0

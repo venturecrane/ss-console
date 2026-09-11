@@ -177,10 +177,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         type=str,
         default=None,
         metavar="SLUG",
-        help=(
-            "Required with --live: must equal the positional slug. The shell "
-            "wrapper prompts for it on a TTY."
-        ),
+        help=("Required with --live: must equal the positional slug. The shell wrapper prompts for it on a TTY."),
     )
     p.add_argument(
         "--allow-unwired",
@@ -251,12 +248,8 @@ def _resolve_paths(args: argparse.Namespace) -> tuple[Path, Path, Path]:
     """Resolve customers_root / archive_root / audit_db with sensible defaults."""
     repo_root = Path(__file__).resolve().parents[3]
     customers_root = args.customers_root or _default_customers_root()
-    archive_root = args.archive_root or (
-        repo_root / "operator" / ".decommission-archive"
-    )
-    audit_db = args.audit_db or (
-        customers_root / args.slug / ".decommission-audit.sqlite"
-    )
+    archive_root = args.archive_root or (repo_root / "operator" / ".decommission-archive")
+    audit_db = args.audit_db or (customers_root / args.slug / ".decommission-audit.sqlite")
     return customers_root, archive_root, audit_db
 
 
@@ -351,9 +344,7 @@ async def _run(args: argparse.Namespace) -> int:
     if args.live:
         unwired = pipeline.unwired_destructive_backends()
         if unwired and not args.allow_unwired:
-            needs = "; ".join(
-                f"{name} needs {BACKEND_REQUIREMENTS.get(name, 'its client')}" for name in unwired
-            )
+            needs = "; ".join(f"{name} needs {BACKEND_REQUIREMENTS.get(name, 'its client')}" for name in unwired)
             print(
                 "[live] REFUSING: destructive backend(s) not wired — "
                 f"{', '.join(unwired)}. A --live run would report a clean "

@@ -18,9 +18,7 @@ import pytest
 _BIN = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_BIN / "lib"))
 
-_spec = importlib.util.spec_from_file_location(
-    "check_agentmail_lists", _BIN / "check-agentmail-lists.py"
-)
+_spec = importlib.util.spec_from_file_location("check_agentmail_lists", _BIN / "check-agentmail-lists.py")
 lists = importlib.util.module_from_spec(_spec)
 sys.modules["check_agentmail_lists"] = lists
 _spec.loader.exec_module(lists)
@@ -39,9 +37,7 @@ def test_rostered_recipients_covers_all_four_authored_sources():
             "failure_recipients": ["team@smd.services"],
         },
         "scope": {
-            "outbound_roster": [
-                {"address": "ap-client-standin@agentmail.to", "class": "client"}
-            ],
+            "outbound_roster": [{"address": "ap-client-standin@agentmail.to", "class": "client"}],
             "inbound_allow_from": ["smdurgan@smdurgan.com", "not-an-address"],
         },
     }
@@ -83,8 +79,13 @@ def test_an_unrecognized_entry_shape_holds_rather_than_reading_empty():
 
 def test_a_send_block_match_on_the_address_is_the_finding():
     report = lists.grade_seat(
-        "pilot", "pilot@agentmail.to", ["scott@smd.services"],
-        org_block=["scott@smd.services"], org_allow=[], inbox_block=[], inbox_allow=[],
+        "pilot",
+        "pilot@agentmail.to",
+        ["scott@smd.services"],
+        org_block=["scott@smd.services"],
+        org_allow=[],
+        inbox_block=[],
+        inbox_allow=[],
     )
     assert [f.kind for f in report.findings] == ["send_block_match"]
     assert report.findings[0].scope == "org"
@@ -92,8 +93,13 @@ def test_a_send_block_match_on_the_address_is_the_finding():
 
 def test_a_domain_block_entry_matches_every_rostered_address_on_it():
     report = lists.grade_seat(
-        "pilot", "pilot@agentmail.to", ["scott@smd.services", "team@smd.services"],
-        org_block=[], org_allow=[], inbox_block=["smd.services"], inbox_allow=[],
+        "pilot",
+        "pilot@agentmail.to",
+        ["scott@smd.services", "team@smd.services"],
+        org_block=[],
+        org_allow=[],
+        inbox_block=["smd.services"],
+        inbox_allow=[],
     )
     assert len(report.findings) == 2
     assert all(f.kind == "send_block_match" for f in report.findings)
@@ -101,19 +107,26 @@ def test_a_domain_block_entry_matches_every_rostered_address_on_it():
 
 def test_a_nonempty_send_allow_that_omits_a_rostered_address_is_the_finding():
     report = lists.grade_seat(
-        "pilot", "pilot@agentmail.to", ["scott@smd.services", "vendor@records.invalid"],
-        org_block=[], org_allow=[],
-        inbox_block=[], inbox_allow=["scott@smd.services"],
+        "pilot",
+        "pilot@agentmail.to",
+        ["scott@smd.services", "vendor@records.invalid"],
+        org_block=[],
+        org_allow=[],
+        inbox_block=[],
+        inbox_allow=["scott@smd.services"],
     )
-    assert [(f.kind, f.recipient) for f in report.findings] == [
-        ("send_allow_omission", "vendor@records.invalid")
-    ]
+    assert [(f.kind, f.recipient) for f in report.findings] == [("send_allow_omission", "vendor@records.invalid")]
 
 
 def test_an_empty_allow_list_constrains_nothing():
     report = lists.grade_seat(
-        "pilot", "pilot@agentmail.to", ["scott@smd.services"],
-        org_block=[], org_allow=[], inbox_block=[], inbox_allow=[],
+        "pilot",
+        "pilot@agentmail.to",
+        ["scott@smd.services"],
+        org_block=[],
+        org_allow=[],
+        inbox_block=[],
+        inbox_allow=[],
     )
     assert report.findings == [] and not report.is_finding
 
@@ -136,9 +149,10 @@ def test_findings_render_the_series_marker_and_digest():
     the set moved. A findings-derived issue key would re-file the whole report
     as a duplicate the day one new address lands."""
     finding = lists.SeatListsReport(
-        slug="pilot", inbox="pilot@agentmail.to", rostered=1,
-        findings=[lists.ListsFinding(scope="org", kind="send_block_match",
-                                     entry="x@y.z", recipient="x@y.z")],
+        slug="pilot",
+        inbox="pilot@agentmail.to",
+        rostered=1,
+        findings=[lists.ListsFinding(scope="org", kind="send_block_match", entry="x@y.z", recipient="x@y.z")],
     )
     rendered = lists.render([finding])
     assert "reconcile-series: agentmail-lists" in rendered
@@ -156,22 +170,16 @@ def test_findings_render_the_series_marker_and_digest():
 def test_digest_is_stable_content_only_and_moves_with_the_set():
     def _report(entries):
         return lists.SeatListsReport(
-            slug="pilot", inbox="pilot@agentmail.to",
-            findings=[
-                lists.ListsFinding(scope="org", kind="send_block_match", entry=e, recipient=e)
-            for e in entries
-            ],
+            slug="pilot",
+            inbox="pilot@agentmail.to",
+            findings=[lists.ListsFinding(scope="org", kind="send_block_match", entry=e, recipient=e) for e in entries],
         )
 
     # Stable across runs (no volatile fields in the key)...
-    assert lists.finding_digest([_report(["a@b.c"])]) == lists.finding_digest(
-        [_report(["a@b.c"])]
-    )
+    assert lists.finding_digest([_report(["a@b.c"])]) == lists.finding_digest([_report(["a@b.c"])])
     # ...and it MOVES when the set grows, which is what triggers the comment
     # on the SAME rolling issue rather than a second issue.
-    assert lists.finding_digest([_report(["a@b.c"])]) != lists.finding_digest(
-        [_report(["a@b.c", "d@e.f"])]
-    )
+    assert lists.finding_digest([_report(["a@b.c"])]) != lists.finding_digest([_report(["a@b.c", "d@e.f"])])
     assert lists.finding_digest([_report([])]) == ""
 
 
@@ -322,9 +330,7 @@ def _record_fetch(monkeypatch, *, forbid_inbox=False):
         if inbox is not None:
             used[inbox] = api_key
             if forbid_inbox:
-                raise lists.ListsForbidden(
-                    f"agentmail GET /inboxes/{inbox}/lists/{direction}/{kind} failed: HTTP 403"
-                )
+                raise lists.ListsForbidden(f"agentmail GET /inboxes/{inbox}/lists/{direction}/{kind} failed: HTTP 403")
         return []
 
     monkeypatch.setattr(lists, "fetch_list", _fake_fetch)
@@ -362,9 +368,7 @@ def test_inbox_403_under_the_per_seat_key_holds_honestly(monkeypatch, capsys):
     assert "HOLD  pilot-smokeball@agentmail.to" in lists.render([report])
 
 
-def test_inbox_403_under_only_the_shared_key_is_a_noted_skip_naming_the_var(
-    monkeypatch, capsys
-):
+def test_inbox_403_under_only_the_shared_key_is_a_noted_skip_naming_the_var(monkeypatch, capsys):
     monkeypatch.delenv("AGENTMAIL_API_KEY__PILOT_SMOKEBALL", raising=False)
     _record_fetch(monkeypatch, forbid_inbox=True)
     report = lists.check_seat("pilot-smokeball", "shared-key", ([], []))

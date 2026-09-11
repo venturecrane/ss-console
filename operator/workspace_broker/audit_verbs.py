@@ -68,19 +68,27 @@ def _append_pinned(broker: Any, action: str, request: dict[str, Any], action_typ
     return {"ok": True, "id": ledger.append(row)}
 
 
-def suppressed_wake_append(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def suppressed_wake_append(
+    broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     return _append_pinned(broker, action, request, "SUPPRESSED_WAKE")
 
 
-def emitted_wake_append(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def emitted_wake_append(
+    broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     return _append_pinned(broker, action, request, "EMITTED_WAKE")
 
 
-def webhook_suppressed_append(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def webhook_suppressed_append(
+    broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     return _append_pinned(broker, action, request, "WEBHOOK_SUPPRESSED")
 
 
-def correction_propose(broker: Any, _action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def correction_propose(
+    broker: Any, _action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     ledger = _ledger(broker)
     row = build_correction_row(request.get("proposal"))
     return {"ok": True, "id": ledger.append(row), "status": PROPOSED_STATUS}

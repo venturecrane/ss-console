@@ -11,6 +11,7 @@ HOLD and REFUSE write nothing to the matter. The run's outcome is one word plus
 one reason, printed as JSON and as a sentence, because the person reading it
 cannot see any artifact.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -24,8 +25,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import (__version__, budget as budget_mod, config as config_mod, dag, decisions, icd_tables,
-               job as job_mod, limits as limits_mod, seat as seat_mod)
+from . import (
+    __version__,
+    budget as budget_mod,
+    config as config_mod,
+    dag,
+    decisions,
+    icd_tables,
+    job as job_mod,
+    limits as limits_mod,
+    seat as seat_mod,
+)
 from .stages.base import StageRefusal, StageRun
 from .state import RunState, state_path
 
@@ -39,7 +49,7 @@ class DriverError(RuntimeError):
 @dataclass
 class Outcome:
     unit: str
-    outcome: str            # delivered | held | refused | failed | dry_run
+    outcome: str  # delivered | held | refused | failed | dry_run
     reason: str | None
     stage: str | None
     dollars: float
@@ -83,8 +93,9 @@ def _pipeline_sha(pipeline: Path) -> str:
     """The git sha of the pipeline checkout when available, else a content sha
     over its scripts, so the state file names the code the run was made with."""
     try:
-        out = subprocess.run(["git", "-C", str(pipeline), "rev-parse", "HEAD"],
-                             capture_output=True, text=True, timeout=10, check=False)
+        out = subprocess.run(
+            ["git", "-C", str(pipeline), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10, check=False
+        )
         if out.returncode == 0 and out.stdout.strip():
             return out.stdout.strip()
     except (OSError, subprocess.SubprocessError):
@@ -98,16 +109,18 @@ def _pipeline_sha(pipeline: Path) -> str:
 
 def _env_block(job: job_mod.Job, cfg: config_mod.FirmConfig, unit: job_mod.Unit) -> dict[str, str]:
     env = dict(os.environ)
-    env.update({
-        "SMD_MC_DATA": str(job.data_root),
-        "SMD_SLUG": job.slug,
-        "SMD_UNIT": unit.unit,
-        "SMD_INCIDENT_DATE": job.incident_date,
-        "SMD_BATCH_STAGES": ",".join(cfg.batch_stages),
-        "SMD_CACHE": "1" if cfg.get("levers", "cache", True) else "0",
-        "SMD_AUDIT_MODE": str(cfg.get("levers", "audit_mode", "image")),
-        "SMD_COMPOSE_MAX_TOKENS": str(cfg.get("levers", "compose_max_tokens", 128000)),
-    })
+    env.update(
+        {
+            "SMD_MC_DATA": str(job.data_root),
+            "SMD_SLUG": job.slug,
+            "SMD_UNIT": unit.unit,
+            "SMD_INCIDENT_DATE": job.incident_date,
+            "SMD_BATCH_STAGES": ",".join(cfg.batch_stages),
+            "SMD_CACHE": "1" if cfg.get("levers", "cache", True) else "0",
+            "SMD_AUDIT_MODE": str(cfg.get("levers", "audit_mode", "image")),
+            "SMD_COMPOSE_MAX_TOKENS": str(cfg.get("levers", "compose_max_tokens", 128000)),
+        }
+    )
     for tier, model in (cfg.get("models", "tiers") or {}).items():
         env[f"SMD_MODEL_{tier.upper()}"] = str(model)
     for key in list(env):
@@ -143,9 +156,18 @@ def _stage_input_sha(slug_dir: Path, stage: dag.Stage) -> str | None:
 
 
 class Driver:
-    def __init__(self, job_dir: Path, *, firm_config: str | None = None, pricing: str | None = None,
-                 dry_run: bool = False, start: str | None = None, log=print, seat_factory=None,
-                 client=None) -> None:
+    def __init__(
+        self,
+        job_dir: Path,
+        *,
+        firm_config: str | None = None,
+        pricing: str | None = None,
+        dry_run: bool = False,
+        start: str | None = None,
+        log=print,
+        seat_factory=None,
+        client=None,
+    ) -> None:
         self.job = job_mod.load(job_dir)
         self.cfg = config_mod.load(firm_config)
         self.dry_run = dry_run
@@ -172,7 +194,9 @@ class Driver:
         self.slug_dir = self.job.data_root / self.job.slug
         ledgers = [self.slug_dir / "runs" / u.unit / "usage-ledger.jsonl" for u in self.job.units]
         ledgers.append(self.job.data_root / "usage-ledger-orphan.jsonl")
-        self.budget = budget_mod.Budget(self.pricing, cap, ledgers, float(self.cfg.get("budget", "usd_per_million_chars")))
+        self.budget = budget_mod.Budget(
+            self.pricing, cap, ledgers, float(self.cfg.get("budget", "usd_per_million_chars"))
+        )
         self.limits = self._build_limits(cap)
         self._first_paid_checked = False
         self.date_stamp = time.strftime("%m-%d-%y")
@@ -213,8 +237,9 @@ class Driver:
         matter's own artifacts. Zero for a stage with no measured rate: the
         limits still catch a run that already reached a line."""
         if stage.name == "vision":
-            return (budget_mod.scanned_pages(extracted) * self.limits.usd_per_scanned_page
-                    + self.budget.projection(budget_mod.extracted_chars(extracted)))
+            return budget_mod.scanned_pages(extracted) * self.limits.usd_per_scanned_page + self.budget.projection(
+                budget_mod.extracted_chars(extracted)
+            )
         if stage.name == "audit":
             return self._claims(ctx) * self.limits.usd_per_audit_claim
         return 0.0
@@ -240,8 +265,9 @@ class Driver:
         projected = self._projection(stage, ctx, extracted)
         if not self._first_paid_checked:
             self._first_paid_checked = True
-            self.limits.check_before_first_paid(pages=budget_mod.pages_read(extracted),
-                                                projected_usd=projected, spent_usd=spent, stage=stage.name)
+            self.limits.check_before_first_paid(
+                pages=budget_mod.pages_read(extracted), projected_usd=projected, spent_usd=spent, stage=stage.name
+            )
             return
         self.limits.check_before_paid(projected_usd=projected, spent_usd=spent, stage=stage.name)
 
@@ -258,15 +284,14 @@ class Driver:
         the batch's PROJECTED cost before it is submitted, and an overshoot is
         bounded to one batch. Vision batches one item per page, so its rate is
         per item; the other batchable stages are priced from their characters."""
-        projected = (items * self.limits.usd_per_scanned_page if stage == "vision"
-                     else self.budget.projection(chars))
-        self.limits.check_before_paid(projected_usd=projected, spent_usd=self.budget.refresh(),
-                                      stage=stage, batch=True)
+        projected = items * self.limits.usd_per_scanned_page if stage == "vision" else self.budget.projection(chars)
+        self.limits.check_before_paid(projected_usd=projected, spent_usd=self.budget.refresh(), stage=stage, batch=True)
 
     # ---- one unit ---------------------------------------------------------
     def run_unit(self, unit: job_mod.Unit, slug_done: set[str]) -> Outcome:
-        st = RunState.load_or_new(state_path(self.job.data_root, self.job.slug, unit.unit),
-                                  slug=self.job.slug, unit=unit.unit)
+        st = RunState.load_or_new(
+            state_path(self.job.data_root, self.job.slug, unit.unit), slug=self.job.slug, unit=unit.unit
+        )
         st.runner_version = __version__
         st.pipeline_sha = _pipeline_sha(self.pipeline) if self.pipeline else f"medchron-{__version__}"
         ctx = dag.Ctx(job=self.job, unit=unit, date_stamp=self.date_stamp)
@@ -309,18 +334,25 @@ class Driver:
                 # is how a rule's hold rate is read off delivered matters.
                 notes.append(f"WOULD HOLD at {stage.name}: {reason}")
                 return None
-            st.finish(stage.name, status="held", exit_code=None, dollars=self.budget.refresh(),
-                      pages=None, note=reason)
+            st.finish(stage.name, status="held", exit_code=None, dollars=self.budget.refresh(), pages=None, note=reason)
             st.end("held", reason)
-            return Outcome(unit.unit, "held", reason, stage.name, self.budget.refresh(),
-                           budget_mod.pages_read(self.slug_dir / "extracted.jsonl"), notes)
+            return Outcome(
+                unit.unit,
+                "held",
+                reason,
+                stage.name,
+                self.budget.refresh(),
+                budget_mod.pages_read(self.slug_dir / "extracted.jsonl"),
+                notes,
+            )
         if not self.dry_run:
             st.finish(stage.name, status="done", exit_code=0, dollars=self.budget.refresh(), pages=None)
         self.log(f"[decide] {stage.name}: ok" + (f" ({'; '.join(d.notes)})" if d.notes else ""))
         return None
 
-    def _execute(self, stage: dag.Stage, ctx: dag.Ctx, st: RunState, extracted: Path,
-                 notes: list[str]) -> Outcome | None:
+    def _execute(
+        self, stage: dag.Stage, ctx: dag.Ctx, st: RunState, extracted: Path, notes: list[str]
+    ) -> Outcome | None:
         unit = ctx.unit
         if self.dry_run:
             if stage.paid:
@@ -345,21 +377,40 @@ class Driver:
             return self._execute_in_process(stage, ctx, st, extracted, notes)
         script = (self.pipeline or Path(".")) / stage.script
         if self.pipeline is None or not script.is_file():
-            st.finish(stage.name, status="failed", exit_code=None, dollars=None, pages=None,
-                      note=f"script missing: {script}")
+            st.finish(
+                stage.name, status="failed", exit_code=None, dollars=None, pages=None, note=f"script missing: {script}"
+            )
             st.end("failed", f"pipeline script missing: {stage.script}")
-            return Outcome(unit.unit, "failed", f"pipeline script missing: {stage.script}", stage.name,
-                           self.budget.spent(), budget_mod.pages_read(extracted), notes)
+            return Outcome(
+                unit.unit,
+                "failed",
+                f"pipeline script missing: {stage.script}",
+                stage.name,
+                self.budget.spent(),
+                budget_mod.pages_read(extracted),
+                notes,
+            )
         argv = _resolve_argv(stage, ctx, self.slug_dir, self.decided)
-        cmd = (["bash", str(script)] if script.suffix == ".sh"
-               else [str(self.cfg.get("pipeline", "python") or sys.executable), str(script), *argv])
+        cmd = (
+            ["bash", str(script)]
+            if script.suffix == ".sh"
+            else [str(self.cfg.get("pipeline", "python") or sys.executable), str(script), *argv]
+        )
         st.start(stage.name, input_sha=_stage_input_sha(self.slug_dir, stage))
         self.log(f"[run] {stage.name}: {' '.join(cmd[1:])}")
-        proc = subprocess.run(cmd, cwd=self.slug_dir, env=_env_block(self.job, self.cfg, unit),
-                              capture_output=True, text=True, check=False)
+        proc = subprocess.run(
+            cmd,
+            cwd=self.slug_dir,
+            env=_env_block(self.job, self.cfg, unit),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         tail = (proc.stdout + proc.stderr)[-2000:]
         (self.slug_dir / "runs" / unit.unit).mkdir(parents=True, exist_ok=True)
-        (self.slug_dir / "runs" / unit.unit / f"log-{stage.name}.txt").write_text(proc.stdout + proc.stderr, encoding="utf-8")
+        (self.slug_dir / "runs" / unit.unit / f"log-{stage.name}.txt").write_text(
+            proc.stdout + proc.stderr, encoding="utf-8"
+        )
         dollars = self.budget.refresh()
         pages = budget_mod.pages_read(extracted)
         if proc.returncode == 0:
@@ -373,15 +424,21 @@ class Driver:
         st.end(outcome, reason)
         return Outcome(unit.unit, outcome, reason, stage.name, dollars, pages, notes)
 
-    def _hold(self, hold: limits_mod.LimitHold, stage: dag.Stage, unit: job_mod.Unit, st: RunState,
-              extracted: Path, notes: list[str]) -> Outcome:
+    def _hold(
+        self,
+        hold: limits_mod.LimitHold,
+        stage: dag.Stage,
+        unit: job_mod.Unit,
+        st: RunState,
+        extracted: Path,
+        notes: list[str],
+    ) -> Outcome:
         """A limit held the run. This is a HOLD, not a refusal: the firm's own
         posture stopped the package, nothing went wrong, and the daemon relays
         it unprefixed so the seat's reply names the setting rather than an
         error."""
         pages = budget_mod.pages_read(extracted)
-        st.finish(stage.name, status="held", exit_code=None, dollars=self.budget.spent(), pages=pages,
-                  note=hold.reason)
+        st.finish(stage.name, status="held", exit_code=None, dollars=self.budget.spent(), pages=pages, note=hold.reason)
         st.end("held", hold.reason)
         return Outcome(unit.unit, "held", hold.reason, stage.name, self.budget.spent(), pages, notes)
 
@@ -397,8 +454,9 @@ class Driver:
             self._client = anthropic.Anthropic(timeout=600.0, max_retries=0)
         return self._client
 
-    def _execute_in_process(self, stage: dag.Stage, ctx: dag.Ctx, st: RunState, extracted: Path,
-                            notes: list[str]) -> Outcome | None:
+    def _execute_in_process(
+        self, stage: dag.Stage, ctx: dag.Ctx, st: RunState, extracted: Path, notes: list[str]
+    ) -> Outcome | None:
         """A ported stage: same state record, same log file, same exit-code
         reading as a subprocess stage, so nothing downstream can tell."""
         unit = ctx.unit
@@ -408,10 +466,19 @@ class Driver:
             lines.append(msg)
             self.log(f"  {msg}")
 
-        sr = StageRun(job=self.job, cfg=self.cfg, unit=unit, slug_dir=self.slug_dir, decided=self.decided,
-                      log=log, seat_factory=self._open_seat, client_factory=self._sdk_client,
-                      date_stamp=self.date_stamp, before_request=self._before_request,
-                      before_batch=self._before_batch)
+        sr = StageRun(
+            job=self.job,
+            cfg=self.cfg,
+            unit=unit,
+            slug_dir=self.slug_dir,
+            decided=self.decided,
+            log=log,
+            seat_factory=self._open_seat,
+            client_factory=self._sdk_client,
+            date_stamp=self.date_stamp,
+            before_request=self._before_request,
+            before_batch=self._before_batch,
+        )
         st.start(stage.name, input_sha=_stage_input_sha(self.slug_dir, stage))
         self.log(f"[run] {stage.name}: in-process")
         refusal: str | None = None
@@ -424,7 +491,8 @@ class Driver:
             lines.append(f"HELD: {hold.reason}")
             (self.slug_dir / "runs" / unit.unit).mkdir(parents=True, exist_ok=True)
             (self.slug_dir / "runs" / unit.unit / f"log-{stage.name}.txt").write_text(
-                "\n".join(lines) + "\n", encoding="utf-8")
+                "\n".join(lines) + "\n", encoding="utf-8"
+            )
             return self._hold(hold, stage, unit, st, extracted, notes)
         except StageRefusal as exc:
             code, refusal = -1, str(exc)
@@ -433,7 +501,9 @@ class Driver:
             code = 1
             lines.append(traceback.format_exc())
         (self.slug_dir / "runs" / unit.unit).mkdir(parents=True, exist_ok=True)
-        (self.slug_dir / "runs" / unit.unit / f"log-{stage.name}.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        (self.slug_dir / "runs" / unit.unit / f"log-{stage.name}.txt").write_text(
+            "\n".join(lines) + "\n", encoding="utf-8"
+        )
         dollars = self.budget.refresh()
         pages = budget_mod.pages_read(extracted)
         if code == 0:

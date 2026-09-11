@@ -1,5 +1,6 @@
 """The system prompts, as package data, with the firm's heading menu filled
 from its config so the prompt and the falsifier agree on what a heading is."""
+
 from __future__ import annotations
 
 from importlib import resources

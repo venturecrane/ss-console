@@ -284,9 +284,7 @@ def test_run_once_wake_is_unchanged_when_the_emitted_wake_write_fails(tmp_path, 
     def factory():
         return SuppressedWakeWriter(AuditLogWriter(executor))
 
-    code, out = _capture_stdout(
-        run_once(sources, EscalationWindows(), factory, today=TODAY, now=NOW)
-    )
+    code, out = _capture_stdout(run_once(sources, EscalationWindows(), factory, today=TODAY, now=NOW))
     assert code == 0
     payload = json.loads(out)
     payload.pop("digest")  # ss #2405: same digest as the succeeding case
@@ -325,11 +323,7 @@ def test_run_once_wake_survives_a_writer_without_the_emitted_wake_method():
             return "x"
 
     sources = [FakeSource([_dl(days_out=5, task_id="task-9")])]
-    code, out = _capture_stdout(
-        run_once(
-            sources, EscalationWindows(), lambda: _LegacyWriter(), today=TODAY, now=NOW
-        )
-    )
+    code, out = _capture_stdout(run_once(sources, EscalationWindows(), lambda: _LegacyWriter(), today=TODAY, now=NOW))
     assert code == 0
     parsed = json.loads(out)
     assert parsed["wakeAgent"] is True
@@ -471,9 +465,7 @@ def test_parse_pull_excludes_probe_artifacts() -> None:
     }
     deadlines, problem, _probe = parse_pull(raw)
     assert problem is None
-    assert [(d.task_id, d.authored_date.isoformat()) for d in deadlines] == [
-        ("t-r", "2026-07-21")
-    ]
+    assert [(d.task_id, d.authored_date.isoformat()) for d in deadlines] == [("t-r", "2026-07-21")]
 
 
 def test_parse_pull_error_key_is_a_problem() -> None:
@@ -702,9 +694,7 @@ def test_wake_payload_carries_last_raised_only_when_the_ledger_has_one() -> None
 def test_wake_payload_truncation_announces_itself() -> None:
     """Over the cap the list is partial, and the payload says so. A truncated
     list that reads as complete is a check that cannot fail (Law 12)."""
-    deadlines = [
-        _dl(days_out=(i % 14), matter_id=f"m-{i}", task_id=f"t-{i}") for i in range(58)
-    ]
+    deadlines = [_dl(days_out=(i % 14), matter_id=f"m-{i}", task_id=f"t-{i}") for i in range(58)]
     code, out = _capture_stdout(
         run_once(
             [FakeSource(deadlines)],
@@ -853,9 +843,7 @@ def test_digest_counts_equal_list_lengths_per_matter():
     # 7 firing stable items: 5 most-overdue go to needs_you, 2 to admin —
     # and each admin matter's count equals its code-list length (the PI-106
     # falsifier: two items on one matter can never render as "1").
-    items = [
-        _dl(matter_id="m-a", days_out=-40 + i, task_id=f"t-{i}") for i in range(5)
-    ] + [
+    items = [_dl(matter_id="m-a", days_out=-40 + i, task_id=f"t-{i}") for i in range(5)] + [
         _dl(matter_id="m-b", days_out=-2, task_id="t-b1"),
         _dl(matter_id="m-b", days_out=-1, task_id="t-b2"),
     ]
@@ -945,9 +933,7 @@ def test_digest_out_of_range_and_closed_matters_are_excluded():
 
 def test_digest_probe_stats_render_only_when_present():
     live = [_dl(matter_id="m-1", days_out=1, task_id="t-1")]
-    d = project_digest(
-        live, EscalationWindows(), _ledger, today=TODAY, probe_stats={"excluded": 0, "stale": 0}
-    )
+    d = project_digest(live, EscalationWindows(), _ledger, today=TODAY, probe_stats={"excluded": 0, "stale": 0})
     assert "probe_artifacts" not in d
     d2 = project_digest(
         live,
@@ -1001,9 +987,7 @@ def test_run_once_wake_line_carries_the_digest():
     def factory():
         return None  # fail-open writer path still emits the decision's digest
 
-    code, out = _capture_stdout(
-        run_once(sources, EscalationWindows(), factory, today=TODAY, now=NOW)
-    )
+    code, out = _capture_stdout(run_once(sources, EscalationWindows(), factory, today=TODAY, now=NOW))
     assert code == 0
     payload = json.loads(out)
     assert payload["wakeAgent"] is True
@@ -1067,9 +1051,7 @@ def _handoff_path(home) -> Path:
     return Path(home) / ".smd" / "pre_run" / "deadline-miss-escalator.json"
 
 
-def test_the_wake_writes_a_handoff_whose_dates_are_the_dates_it_emitted(
-    tmp_path, monkeypatch
-) -> None:
+def test_the_wake_writes_a_handoff_whose_dates_are_the_dates_it_emitted(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     payload = json.loads(_wake_stdout())
     record = json.loads(_handoff_path(tmp_path).read_text(encoding="utf-8"))
@@ -1101,9 +1083,7 @@ def test_the_handoff_is_readable_only_by_its_owner(tmp_path, monkeypatch) -> Non
     assert mode & 0o077 == 0, f"group/other bits set: {oct(mode)}"
 
 
-def test_a_temp_file_left_by_a_crashed_run_does_not_wedge_the_writer(
-    tmp_path, monkeypatch
-) -> None:
+def test_a_temp_file_left_by_a_crashed_run_does_not_wedge_the_writer(tmp_path, monkeypatch) -> None:
     """The open is O_EXCL so it cannot follow a planted symlink. Without the
     unlink in front of it, one crashed run would silence the handoff forever."""
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
@@ -1182,9 +1162,7 @@ def _enriched_fixture():
 
 def test_parse_pull_carries_the_code_projected_matter_number():
     fixture = _enriched_fixture()
-    deadlines, problem, _stats = _pre_run.parse_pull(
-        {"tasks": fixture["tasks"], "events": []}
-    )
+    deadlines, problem, _stats = _pre_run.parse_pull({"tasks": fixture["tasks"], "events": []})
     assert problem is None
     assert deadlines, "the live capture holds open tasks with due dates"
     for d in deadlines:
@@ -1198,9 +1176,7 @@ def test_the_digest_item_number_matches_the_source_record_for_every_item():
     per item — a digest item carrying another matter's number, or a composed
     one, fails here."""
     fixture = _enriched_fixture()
-    deadlines, _problem, _stats = _pre_run.parse_pull(
-        {"tasks": fixture["tasks"], "events": []}
-    )
+    deadlines, _problem, _stats = _pre_run.parse_pull({"tasks": fixture["tasks"], "events": []})
     ledger = _pre_run._load_ledger_module()
     digest = _pre_run.project_digest(
         deadlines,
@@ -1211,11 +1187,7 @@ def test_the_digest_item_number_matches_the_source_record_for_every_item():
     rendered = 0
     for section in ("needs_you", "under_active_escalation_elsewhere", "blanket_ack_only"):
         band = digest.get(section) or []
-        items = (
-            [i for g in band["matters"] for i in g["items"]]
-            if isinstance(band, dict)
-            else band
-        )
+        items = [i for g in band["matters"] for i in g["items"]] if isinstance(band, dict) else band
         for item in items:
             source = fixture["matters"][item["matter_id"]]
             assert item["matter_number"] == source["number"]
@@ -1292,11 +1264,7 @@ def test_the_handoff_records_group_each_matters_dates_under_its_number(tmp_path,
         ]
     }
     _pre_run._write_pre_run_handoff(payload)
-    written = json.loads(
-        (tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.json").read_text(
-            encoding="utf-8"
-        )
-    )
+    written = json.loads((tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.json").read_text(encoding="utf-8"))
     assert written["records"] == [
         {"matterNumber": "PI-2026-0001", "dates": ["2026-07-08", "2026-07-14"]},
         {"matterNumber": "PI-2026-0002", "dates": ["2026-07-10"]},
@@ -1323,19 +1291,11 @@ def test_the_handoff_records_include_each_matters_last_raised_day(tmp_path, monk
         }
     }
     _pre_run._write_pre_run_handoff(payload)
-    written = json.loads(
-        (tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    assert written["records"] == [
-        {"matterNumber": "2026-PI-101", "dates": ["2026-07-08", "2026-08-24"]}
-    ]
+    written = json.loads((tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.json").read_text(encoding="utf-8"))
+    assert written["records"] == [{"matterNumber": "2026-PI-101", "dates": ["2026-07-08", "2026-08-24"]}]
 
 
-def test_load_matter_lookup_budget_reads_the_authored_value_and_allows_zero(
-    tmp_path, monkeypatch
-):
+def test_load_matter_lookup_budget_reads_the_authored_value_and_allows_zero(tmp_path, monkeypatch):
     """Zero is a legitimate authored value — the staging lever that forces the
     degraded path for the runtime rehearsal. Missing or malformed → default."""
     yaml_path = tmp_path / "customer.yaml"
@@ -1344,15 +1304,9 @@ def test_load_matter_lookup_budget_reads_the_authored_value_and_allows_zero(
     yaml_path.write_text("escalation:\n  matter_lookup_budget: 25\n", encoding="utf-8")
     assert _pre_run.load_matter_lookup_budget(str(yaml_path)) == 25
     yaml_path.write_text("escalation: {}\n", encoding="utf-8")
-    assert (
-        _pre_run.load_matter_lookup_budget(str(yaml_path))
-        == _pre_run._DEFAULT_MATTER_LOOKUP_BUDGET
-    )
+    assert _pre_run.load_matter_lookup_budget(str(yaml_path)) == _pre_run._DEFAULT_MATTER_LOOKUP_BUDGET
     yaml_path.write_text("escalation:\n  matter_lookup_budget: -3\n", encoding="utf-8")
-    assert (
-        _pre_run.load_matter_lookup_budget(str(yaml_path))
-        == _pre_run._DEFAULT_MATTER_LOOKUP_BUDGET
-    )
+    assert _pre_run.load_matter_lookup_budget(str(yaml_path)) == _pre_run._DEFAULT_MATTER_LOOKUP_BUDGET
     monkeypatch.delenv("SMD_CUSTOMER_YAML_PATH", raising=False)
     assert _pre_run.load_matter_lookup_budget(None) == _pre_run._DEFAULT_MATTER_LOOKUP_BUDGET
 
@@ -1380,9 +1334,7 @@ def test_the_subprocess_source_passes_the_budget_in_the_env_and_captures_counts(
         return R()
 
     monkeypatch.setattr(_pre_run.subprocess, "run", fake_run)
-    source = _pre_run.SmokeballSubprocessSource(
-        EscalationWindows(), date(2026, 8, 24), matter_lookup_budget=7
-    )
+    source = _pre_run.SmokeballSubprocessSource(EscalationWindows(), date(2026, 8, 24), matter_lookup_budget=7)
     assert source.pull_deadlines() == []
     assert seen["env_budget"] == "7"
     # argv stays exactly interpreter, -c, snippet, and the two date strings
@@ -1419,9 +1371,7 @@ def test_zero_resolved_with_failures_suppresses_and_pages_not_sends():
     def factory():
         return SuppressedWakeWriter(AuditLogWriter(executor))
 
-    code, out = _capture_stdout(
-        run_once(sources, EscalationWindows(), factory, today=TODAY, now=NOW)
-    )
+    code, out = _capture_stdout(run_once(sources, EscalationWindows(), factory, today=TODAY, now=NOW))
     assert code == 0
     assert json.loads(out) == {"wakeAgent": False}
     (call,) = executor.calls
@@ -1446,9 +1396,7 @@ def test_degraded_suppress_with_a_failed_audit_write_wakes_stripped():
     def factory():
         return SuppressedWakeWriter(AuditLogWriter(executor))
 
-    code, out = _capture_stdout(
-        run_once(sources, EscalationWindows(), factory, today=TODAY, now=NOW)
-    )
+    code, out = _capture_stdout(run_once(sources, EscalationWindows(), factory, today=TODAY, now=NOW))
     assert code == 0
     payload = json.loads(out)
     assert payload == {
@@ -1475,9 +1423,7 @@ def test_partial_failure_ships_the_digest_and_pages_the_degradation():
     def factory():
         return SuppressedWakeWriter(AuditLogWriter(executor))
 
-    code, out = _capture_stdout(
-        run_once(sources, EscalationWindows(), factory, today=TODAY, now=NOW)
-    )
+    code, out = _capture_stdout(run_once(sources, EscalationWindows(), factory, today=TODAY, now=NOW))
     assert code == 0
     payload = json.loads(out)
     assert payload["wakeAgent"] is True
@@ -1495,19 +1441,13 @@ def test_partial_failure_ships_the_digest_and_pages_the_degradation():
 def test_authored_absence_alone_is_never_degraded():
     """A firm whose matters carry no numbers keeps its deadline watch: the
     digest ships with "no number on record" per item and nothing pages."""
-    sources = [
-        FakeSource(
-            [_dl_num(absent="no_number_on_record", days_out=5, task_id="t-1")]
-        )
-    ]
+    sources = [FakeSource([_dl_num(absent="no_number_on_record", days_out=5, task_id="t-1")])]
     executor = FakeExecutor()
 
     def factory():
         return SuppressedWakeWriter(AuditLogWriter(executor))
 
-    code, out = _capture_stdout(
-        run_once(sources, EscalationWindows(), factory, today=TODAY, now=NOW)
-    )
+    code, out = _capture_stdout(run_once(sources, EscalationWindows(), factory, today=TODAY, now=NOW))
     assert code == 0
     payload = json.loads(out)
     assert payload["wakeAgent"] is True
@@ -1687,9 +1627,7 @@ def test_blind_wake_dispatches_the_authored_failure_note(tmp_path, monkeypatch):
 
 
 def test_blind_wake_falls_back_to_authored_fallback_recipients(tmp_path, monkeypatch):
-    envelope_path = _authored_seat(
-        tmp_path, monkeypatch, red_flag=(), fallback=("ops@smd.services",)
-    )
+    envelope_path = _authored_seat(tmp_path, monkeypatch, red_flag=(), fallback=("ops@smd.services",))
     _blind(monkeypatch, "pre_run_crashed_fail_open", _FakeWakeWriter())
     d = json.loads(envelope_path.read_text(encoding="utf-8"))["dispatches"][0]
     assert d["recipients"] == ["ops@smd.services"]
@@ -1747,9 +1685,7 @@ def test_envelope_build_fault_writes_the_failure_note(tmp_path, monkeypatch):
     )
     assert out.get("dispatch_variant") == "failure_note"
     assert out["dispatch_expected"] is True
-    assert json.loads(envelope_path.read_text(encoding="utf-8"))["failure_note_reason"] == (
-        "envelope_build_failed"
-    )
+    assert json.loads(envelope_path.read_text(encoding="utf-8"))["failure_note_reason"] == ("envelope_build_failed")
 
 
 def test_a_clean_run_with_nothing_to_say_sends_no_failure_note(tmp_path, monkeypatch):
@@ -1781,16 +1717,12 @@ def test_a_clean_run_with_nothing_to_say_sends_no_failure_note(tmp_path, monkeyp
 # CI has none, same honest limitation as tests/heartbeat-field-parity.test.ts.
 # ---------------------------------------------------------------------------
 
-_OVERLAY_DIR = Path(
-    os.environ.get("SS_OVERLAY_DIR") or (Path.home() / "dev" / "hermes-smd-overlay")
-)
+_OVERLAY_DIR = Path(os.environ.get("SS_OVERLAY_DIR") or (Path.home() / "dev" / "hermes-smd-overlay"))
 _OVERLAY_AVAILABLE = (_OVERLAY_DIR / ".git").exists()
 
 
 def _pinned_overlay_ref() -> str:
-    dockerfile = (_PRE_RUN_PATH.parents[2] / "templates" / "Dockerfile").read_text(
-        encoding="utf-8"
-    )
+    dockerfile = (_PRE_RUN_PATH.parents[2] / "templates" / "Dockerfile").read_text(encoding="utf-8")
     m = re.search(r'ARG OVERLAY_REF="([0-9a-f]{40})"', dockerfile)
     assert m, "no ARG OVERLAY_REF in operator/templates/Dockerfile"
     return m.group(1)
@@ -1823,9 +1755,7 @@ def test_failure_note_envelope_passes_the_pinned_dispatchers_validator(tmp_path,
     # the envelope supplies each one. It catches the drift that actually
     # bites -- the dispatcher starting to require a field we do not write --
     # and it does NOT prove value-level acceptance.
-    func = re.search(
-        r"^def _valid_dispatch\(entry: object\) -> bool:\n(?:[ \t].*\n|\n)+", source, re.M
-    )
+    func = re.search(r"^def _valid_dispatch\(entry: object\) -> bool:\n(?:[ \t].*\n|\n)+", source, re.M)
     assert func, "could not lift _valid_dispatch out of the pinned dispatcher"
     required = set(re.findall(r'entry\.get\("(\w+)"', func.group(0)))
     # A regex that silently matched nothing would make every assertion below
@@ -1836,8 +1766,7 @@ def test_failure_note_envelope_passes_the_pinned_dispatchers_validator(tmp_path,
         missing = [k for k in required if k not in entry]
         assert missing == [], (
             "the pinned dispatcher reads %s and the failure-note envelope omits %s; "
-            "it would be refused whole and the turn would compose the gap"
-            % (sorted(required), missing)
+            "it would be refused whole and the turn would compose the gap" % (sorted(required), missing)
         )
         assert isinstance(entry["recipients"], list) and entry["recipients"]
         assert isinstance(entry["subject"], str) and entry["subject"].strip()

@@ -195,10 +195,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         "--customer-yaml",
         type=Path,
         default=None,
-        help=(
-            "Path to customer.yaml; default: "
-            "operator/customers/<slug>/customer.yaml"
-        ),
+        help=("Path to customer.yaml; default: operator/customers/<slug>/customer.yaml"),
     )
     p.add_argument(
         "--audit-db",
@@ -267,10 +264,7 @@ async def _run(args: argparse.Namespace) -> int:
         yaml_loader = yaml.safe_load
         yaml_dumper = lambda data: yaml.safe_dump(data, sort_keys=True)  # noqa: E731 - a one-line dumper alias bound beside its loader; a def adds only a name
     except ImportError:
-        log.warning(
-            "pyyaml not installed; falling back to JSON-shaped yaml. "
-            "Install pyyaml for full fidelity."
-        )
+        log.warning("pyyaml not installed; falling back to JSON-shaped yaml. Install pyyaml for full fidelity.")
 
     builder = EvidencePacketBuilder(
         reader=read_executor,

@@ -56,9 +56,14 @@ def verbs(tmp_path):
     ledger = LedgerWriter(db)
     (tmp_path / "customer.yaml").write_text(CUSTOMER_YAML)
     queue = tmp_path / "queue"
-    v = MedchronVerbs(MedchronLedger(db, queue), customer_yaml=str(tmp_path / "customer.yaml"),
-                      customer_slug="example", audit_append=ledger.append, gateway_pid=GATEWAY_PID,
-                      resolve_agent_uid=lambda: AGENT_UID)
+    v = MedchronVerbs(
+        MedchronLedger(db, queue),
+        customer_yaml=str(tmp_path / "customer.yaml"),
+        customer_slug="example",
+        audit_append=ledger.append,
+        gateway_pid=GATEWAY_PID,
+        resolve_agent_uid=lambda: AGENT_UID,
+    )
     return v, ledger, queue
 
 
@@ -94,8 +99,12 @@ def test_record_is_root_only_and_list_is_agent_or_root(verbs):
         call(v, "medchron_job_record", job_id=job_id, state="running", fields={})
     with pytest.raises(PermissionError):
         call(v, "medchron_job_record", peer_pid=999, peer_uid=AGENT_UID, job_id=job_id, state="running", fields={})
-    assert call(v, "medchron_job_record", peer_pid=1, peer_uid=ROOT, job_id=job_id, state="running",
-                fields={})["job"]["state"] == "running"
+    assert (
+        call(v, "medchron_job_record", peer_pid=1, peer_uid=ROOT, job_id=job_id, state="running", fields={})["job"][
+            "state"
+        ]
+        == "running"
+    )
     with pytest.raises(PermissionError):
         call(v, "medchron_job_list", peer_pid=999, peer_uid=12345)
     assert [j["id"] for j in call(v, "medchron_job_list", peer_pid=999, peer_uid=AGENT_UID)["jobs"]] == [job_id]
@@ -104,8 +113,14 @@ def test_record_is_root_only_and_list_is_agent_or_root(verbs):
 def test_a_broker_without_the_ledger_refuses(tmp_path):
     with pytest.raises(ValueError):
         medchron_dispatch(None, "medchron_allowance", {}, GATEWAY_PID, AGENT_UID)
-    v = MedchronVerbs(None, customer_yaml="/nonexistent", customer_slug="x", audit_append=lambda r: None,
-                      gateway_pid=GATEWAY_PID, resolve_agent_uid=lambda: AGENT_UID)
+    v = MedchronVerbs(
+        None,
+        customer_yaml="/nonexistent",
+        customer_slug="x",
+        audit_append=lambda r: None,
+        gateway_pid=GATEWAY_PID,
+        resolve_agent_uid=lambda: AGENT_UID,
+    )
     with pytest.raises(ValueError):
         call(v, "medchron_allowance")
 
@@ -119,8 +134,12 @@ def test_a_broker_without_the_ledger_refuses(tmp_path):
         {"matter": {"id": "", "number": "x"}},
         {"units": []},
         {"units": [{"client_name": "A", "surname": "B", "dob": "1980-01-02"}]},
-        {"units": [{"client_name": "A", "surname": "B", "dob": "01/02/1980"},
-                   {"client_name": "C", "surname": "D", "dob": "01/02/1981"}]},   # joint without folder_prefix
+        {
+            "units": [
+                {"client_name": "A", "surname": "B", "dob": "01/02/1980"},
+                {"client_name": "C", "surname": "D", "dob": "01/02/1981"},
+            ]
+        },  # joint without folder_prefix
         {"incident": {"date": "01/15/2026", "source": "administrator_request"}},
         {"incident": {"date": "2026-01-15", "source": "guess"}},
         {"cap_usd": 0},
@@ -191,8 +210,11 @@ def test_the_old_document_key_reads_as_unauthored_and_the_refusal_names_the_rena
     unit with nobody told. The refusal names the key the firm must author."""
     v, _, _ = verbs
     p = tmp_path / "old.yaml"
-    p.write_text(CUSTOMER_YAML.replace("chronology_package_page_allowance_per_month",
-                                       "chronology_package_document_allowance_per_month"))
+    p.write_text(
+        CUSTOMER_YAML.replace(
+            "chronology_package_page_allowance_per_month", "chronology_package_document_allowance_per_month"
+        )
+    )
     assert allowance_from_customer_yaml(p) is None
     v.customer_yaml = str(p)
     r = call(v, "medchron_job_submit", envelope=envelope())
@@ -210,20 +232,26 @@ def test_a_job_debits_the_month_whenever_it_recorded_cents(verbs):
     v, _, _ = verbs
     held = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
     call(v, "medchron_job_record", peer_uid=ROOT, job_id=held, state="running", fields={})
-    call(v, "medchron_job_record", peer_uid=ROOT, job_id=held, state="held",
-         fields={"pages": 120, "cents": 350, "reason": "per_job_cap_usd: ..."})
-    assert call(v, "medchron_allowance")["used"] == 120        # a HELD job with cents debits
+    call(
+        v,
+        "medchron_job_record",
+        peer_uid=ROOT,
+        job_id=held,
+        state="held",
+        fields={"pages": 120, "cents": 350, "reason": "per_job_cap_usd: ..."},
+    )
+    assert call(v, "medchron_allowance")["used"] == 120  # a HELD job with cents debits
 
     failed = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
     call(v, "medchron_job_record", peer_uid=ROOT, job_id=failed, state="running", fields={})
     call(v, "medchron_job_record", peer_uid=ROOT, job_id=failed, state="failed", fields={"pages": 30, "cents": 90})
-    assert call(v, "medchron_allowance")["used"] == 150        # a FAILED job with cents debits
+    assert call(v, "medchron_allowance")["used"] == 150  # a FAILED job with cents debits
 
     free = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
     call(v, "medchron_job_record", peer_uid=ROOT, job_id=free, state="running", fields={})
     call(v, "medchron_job_record", peer_uid=ROOT, job_id=free, state="held", fields={"pages": 9_000, "cents": 0})
     a = call(v, "medchron_allowance")
-    assert a["used"] == 150 and a["cents_used"] == 440         # a ZERO-CENT hold does NOT debit
+    assert a["used"] == 150 and a["cents_used"] == 440  # a ZERO-CENT hold does NOT debit
 
 
 def test_exclude_job_id_leaves_out_exactly_that_row(verbs):
@@ -290,7 +318,7 @@ def test_submit_writes_the_row_then_the_queue_file_with_the_remainder(verbs):
     assert q["matter"]["number"] == "2026-PI-102" and q["request_ref"] == "thread-9"
     assert files[0].stat().st_mode & 0o777 == 0o640
     row = call(v, "medchron_job_status", job_id=r["job_id"])["job"]
-    assert row["state"] == "submitted" and "matter_id" not in row     # the projection: counts and states only
+    assert row["state"] == "submitted" and "matter_id" not in row  # the projection: counts and states only
     assert audit_types(ledger._db_path) == ["MEDCHRON_JOB_SUBMITTED"]
 
 
@@ -303,13 +331,22 @@ def test_transitions_are_monotonic_and_each_pins_its_audit_type(verbs):
     rec("running")
     with pytest.raises(ValueError):
         rec("submitted")
-    row = rec("delivered", documents=12, pages=300, cents=1200, folder_id="f-9",
-              delivery={"files": [{"name": "A.docx", "sha256": "ab", "bytes": 10}]})["job"]
+    row = rec(
+        "delivered",
+        documents=12,
+        pages=300,
+        cents=1200,
+        folder_id="f-9",
+        delivery={"files": [{"name": "A.docx", "sha256": "ab", "bytes": 10}]},
+    )["job"]
     assert (row["documents"], row["pages"], row["cents"], row["folder_id"]) == (12, 300, 1200, "f-9")
     with pytest.raises(ValueError):
         rec("running")
     assert audit_types(ledger._db_path) == [
-        "MEDCHRON_JOB_SUBMITTED", "MEDCHRON_JOB_RUNNING", "MEDCHRON_JOB_HELD", "MEDCHRON_JOB_RUNNING",
+        "MEDCHRON_JOB_SUBMITTED",
+        "MEDCHRON_JOB_RUNNING",
+        "MEDCHRON_JOB_HELD",
+        "MEDCHRON_JOB_RUNNING",
         "MEDCHRON_JOB_DELIVERED",
     ]
     with pytest.raises(ValueError):
@@ -326,7 +363,8 @@ def test_audit_rows_carry_counts_and_ids_never_the_envelope(verbs):
     conn = sqlite3.connect(ledger._db_path)
     try:
         (meta, matter_ref, actor) = conn.execute(
-            "SELECT metadata, matter_ref, actor FROM audit_log ORDER BY rowid DESC LIMIT 1").fetchone()
+            "SELECT metadata, matter_ref, actor FROM audit_log ORDER BY rowid DESC LIMIT 1"
+        ).fetchone()
     finally:
         conn.close()
     assert "private" not in meta and "Example" not in meta and json.loads(meta)["job_id"] == j
@@ -337,11 +375,23 @@ def test_a_same_state_record_is_a_note_with_an_audit_row(verbs):
     v, ledger, _ = verbs
     j = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
     call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state="running", fields={})
-    call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state="delivered",
-         fields={"documents": 3, "pages": 30, "cents": 100})
+    call(
+        v,
+        "medchron_job_record",
+        peer_uid=ROOT,
+        job_id=j,
+        state="delivered",
+        fields={"documents": 3, "pages": 30, "cents": 100},
+    )
     # ss#2616: a lost deliver wake re-records the same state as a note.
-    row = call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state="delivered",
-               fields={"wake": {"wake_failed": True, "outcome": "status 404"}})["job"]
+    row = call(
+        v,
+        "medchron_job_record",
+        peer_uid=ROOT,
+        job_id=j,
+        state="delivered",
+        fields={"wake": {"wake_failed": True, "outcome": "status 404"}},
+    )["job"]
     assert row["state"] == "delivered" and row["documents"] == 3
     assert audit_types(ledger._db_path)[-2:] == ["MEDCHRON_JOB_DELIVERED", "MEDCHRON_JOB_DELIVERED"]
     import sqlite3
@@ -359,8 +409,9 @@ def test_a_same_state_record_is_a_note_with_an_audit_row(verbs):
 
 def test_submit_sanitizes_selection_to_known_keys(verbs):
     v, _, queue = verbs
-    r = call(v, "medchron_job_submit",
-             envelope=envelope(selection={"include_file_ids": ["f-1", "f-2"], "sneaky": ["x"]}))
+    r = call(
+        v, "medchron_job_submit", envelope=envelope(selection={"include_file_ids": ["f-1", "f-2"], "sneaky": ["x"]})
+    )
     assert r["accepted"]
     q = json.loads(next(queue.glob("*.json")).read_text())
     assert q["selection"] == {"include_file_ids": ["f-1", "f-2"]}

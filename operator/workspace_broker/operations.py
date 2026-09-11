@@ -45,9 +45,7 @@ class WorkspaceOperations:
         default, _, send_as = authored_identities(_customer_google_auth(self._customer_path))
         effective = (mailbox or "").strip() or default
         if from_addr not in send_as.get(effective, set()):
-            raise RuntimeError(
-                f"from {from_addr!r} is not an authored send-as for {effective!r}"
-            )
+            raise RuntimeError(f"from {from_addr!r} is not an authored send-as for {effective!r}")
 
     def _handlers(self) -> dict[str, Operation]:
         return {
@@ -116,13 +114,7 @@ class WorkspaceOperations:
         body: dict[str, Any] = {"message": {"raw": raw}}
         if payload.get("thread_id"):
             body["message"]["threadId"] = str(payload["thread_id"])
-        return (
-            self._service("gmail", "v1", mailbox)
-            .users()
-            .drafts()
-            .create(userId="me", body=body)
-            .execute()
-        )
+        return self._service("gmail", "v1", mailbox).users().drafts().create(userId="me", body=body).execute()
 
     def gmail_modify(self, payload: dict[str, Any]) -> Any:
         body = {
@@ -160,13 +152,7 @@ class WorkspaceOperations:
         ):
             if payload.get(source):
                 params[target] = payload[source]
-        return (
-            self._service("calendar", "v3")
-            .events()
-            .list(**params)
-            .execute()
-            .get("items", [])
-        )
+        return self._service("calendar", "v3").events().list(**params).execute().get("items", [])
 
     def calendar_get(self, payload: dict[str, Any]) -> Any:
         return (
@@ -239,13 +225,7 @@ class WorkspaceOperations:
         }
         if query:
             params["q"] = " and ".join(query)
-        return (
-            self._service("drive", "v3")
-            .files()
-            .list(**params)
-            .execute()
-            .get("files", [])
-        )
+        return self._service("drive", "v3").files().list(**params).execute().get("files", [])
 
     def drive_get(self, payload: dict[str, Any]) -> Any:
         return (
@@ -268,9 +248,7 @@ class WorkspaceOperations:
             )
             .execute()
         )
-        return (
-            data.decode("utf-8", errors="replace") if isinstance(data, bytes) else data
-        )
+        return data.decode("utf-8", errors="replace") if isinstance(data, bytes) else data
 
     def docs_create(self, payload: dict[str, Any]) -> Any:
         docs = self._service("docs", "v1")
@@ -280,18 +258,11 @@ class WorkspaceOperations:
         return doc
 
     def docs_get(self, payload: dict[str, Any]) -> Any:
-        return (
-            self._service("docs", "v1")
-            .documents()
-            .get(documentId=str(payload["document_id"]))
-            .execute()
-        )
+        return self._service("docs", "v1").documents().get(documentId=str(payload["document_id"])).execute()
 
     def docs_append(self, payload: dict[str, Any]) -> Any:
         docs = self._service("docs", "v1")
-        return self._append_doc_text(
-            docs, str(payload["document_id"]), str(payload["text"])
-        )
+        return self._append_doc_text(docs, str(payload["document_id"]), str(payload["text"]))
 
     @staticmethod
     def _append_doc_text(docs: Any, document_id: str, text: str) -> Any:
@@ -308,9 +279,7 @@ class WorkspaceOperations:
                 }
             ]
         }
-        return (
-            docs.documents().batchUpdate(documentId=document_id, body=request).execute()
-        )
+        return docs.documents().batchUpdate(documentId=document_id, body=request).execute()
 
     def sheets_create(self, payload: dict[str, Any]) -> Any:
         return (

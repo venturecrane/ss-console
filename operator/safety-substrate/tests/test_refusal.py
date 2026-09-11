@@ -126,27 +126,15 @@ def _rows(conn: sqlite3.Connection) -> list[dict]:
 
 
 def _decision_rows(rows: list[dict]) -> list[dict]:
-    return [
-        r
-        for r in rows
-        if r["metadata"] and r["metadata"].get("trust_ceiling_decision") is True
-    ]
+    return [r for r in rows if r["metadata"] and r["metadata"].get("trust_ceiling_decision") is True]
 
 
 def _notification_rows(rows: list[dict]) -> list[dict]:
-    return [
-        r
-        for r in rows
-        if r["metadata"] and r["metadata"].get("refusal_notification") is True
-    ]
+    return [r for r in rows if r["metadata"] and r["metadata"].get("refusal_notification") is True]
 
 
 def _captain_alert_rows(rows: list[dict]) -> list[dict]:
-    return [
-        r
-        for r in rows
-        if r["metadata"] and r["metadata"].get("refusal_cascade_alert") is True
-    ]
+    return [r for r in rows if r["metadata"] and r["metadata"].get("refusal_cascade_alert") is True]
 
 
 def _handler(
@@ -214,10 +202,7 @@ def test_handle_writes_decision_row_and_notification_row_and_aborts():
     assert nrow["action_type"] == "DRAFT_REJECTED"
     assert nrow["metadata"]["notification_eligible"] is True
     assert nrow["metadata"]["refusal_notification"] is True
-    assert (
-        nrow["metadata"]["customer_message"]
-        == CustomerMessage.APPROVAL_REQUIRED_COMMITMENT.value
-    )
+    assert nrow["metadata"]["customer_message"] == CustomerMessage.APPROVAL_REQUIRED_COMMITMENT.value
     assert nrow["metadata"]["decision_audit_id"] == outcome.decision_audit_id
     assert nrow["metadata"]["trace_id"] == "trace-01HXYZ"
     assert nrow["metadata"]["skill_version"] == "2.1.0"
@@ -277,9 +262,7 @@ def test_one_refusal_emits_exactly_one_trust_ceiling_decision_row():
         (DecisionReason.UNKNOWN_ACTION_CLASS, CustomerMessage.UNKNOWN_ACTION),
     ],
 )
-def test_each_refuse_reason_maps_to_expected_customer_message(
-    reason, expected_message
-):
+def test_each_refuse_reason_maps_to_expected_customer_message(reason, expected_message):
     writer, conn = _writer()
     handler = _handler(writer)
     outcome = _run(
@@ -499,11 +482,7 @@ def test_refusal_handler_does_not_emit_sticky_stop_rows():
             )
         )
     rows = _rows(conn)
-    sticky_rows = [
-        r
-        for r in rows
-        if r["metadata"] and r["metadata"].get("sticky_stop_transition") is True
-    ]
+    sticky_rows = [r for r in rows if r["metadata"] and r["metadata"].get("sticky_stop_transition") is True]
     assert sticky_rows == []
 
 
@@ -626,13 +605,9 @@ def test_in_memory_counter_drops_events_outside_window():
     counter = InMemoryRefusalCounter(window_seconds=60)
     t0 = datetime(2026, 5, 21, 12, 0, 0, tzinfo=timezone.utc)
     assert counter.record_and_count(customer="c", skill="s", now=t0) == 1
-    assert counter.record_and_count(
-        customer="c", skill="s", now=t0 + timedelta(seconds=30)
-    ) == 2
+    assert counter.record_and_count(customer="c", skill="s", now=t0 + timedelta(seconds=30)) == 2
     # Advance outside the window: only the most recent event remains.
-    assert counter.record_and_count(
-        customer="c", skill="s", now=t0 + timedelta(seconds=120)
-    ) == 1
+    assert counter.record_and_count(customer="c", skill="s", now=t0 + timedelta(seconds=120)) == 1
 
 
 def test_in_memory_counter_partitions_by_customer_and_skill():
@@ -642,12 +617,6 @@ def test_in_memory_counter_partitions_by_customer_and_skill():
     counter.record_and_count(customer="acme", skill="s2", now=t0)
     counter.record_and_count(customer="other", skill="s1", now=t0)
     # Each combination tracked independently.
-    assert (
-        counter.record_and_count(customer="acme", skill="s1", now=t0) == 2
-    )
-    assert (
-        counter.record_and_count(customer="acme", skill="s2", now=t0) == 2
-    )
-    assert (
-        counter.record_and_count(customer="other", skill="s1", now=t0) == 2
-    )
+    assert counter.record_and_count(customer="acme", skill="s1", now=t0) == 2
+    assert counter.record_and_count(customer="acme", skill="s2", now=t0) == 2
+    assert counter.record_and_count(customer="other", skill="s1", now=t0) == 2

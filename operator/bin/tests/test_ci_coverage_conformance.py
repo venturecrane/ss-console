@@ -156,8 +156,7 @@ def test_every_test_file_area_triggers_the_workflow() -> None:
         if not any(_matches(pat, repo_rel) for pat in paths):
             untriggered.append(repo_rel)
     assert not untriggered, (
-        "test files whose changes would NOT run the substrate suites "
-        f"(extend {PATHS_FILE.name}): {untriggered}"
+        f"test files whose changes would NOT run the substrate suites (extend {PATHS_FILE.name}): {untriggered}"
     )
 
 
@@ -202,14 +201,9 @@ def test_every_suite_step_is_gated_on_the_detect_step() -> None:
     assert "substrate-paths-changed.py" in (detect.get("run") or "")
     assert names[-1] == SKIP_STEP_NAME, "the last step must be the legible skip report"
     assert steps[-1].get("if") == "steps.changes.outputs.relevant != 'true'"
-    ungated = [
-        s.get("name")
-        for s in steps[detect_idx + 1 : -1]
-        if (s.get("if") or "").strip() != GUARD
-    ]
+    ungated = [s.get("name") for s in steps[detect_idx + 1 : -1] if (s.get("if") or "").strip() != GUARD]
     assert not ungated, (
-        "steps after the detect step must carry "
-        f"`if: {GUARD}` so an unrelated PR does not run the suites: {ungated}"
+        f"steps after the detect step must carry `if: {GUARD}` so an unrelated PR does not run the suites: {ungated}"
     )
     # And the steps before it are exactly the checkout, with full history so
     # base...head resolves.
@@ -249,7 +243,9 @@ def test_detect_script_fails_closed_and_matches_the_list(tmp_path: Path) -> None
     assert rc == 0 and "relevant=true" in buf.getvalue()
 
 
-_PATH_LITERAL = re.compile(r"""["'](?P<p>(?:operator/)?(?:fixtures|customers|contracts|templates|skills|verticals)/[A-Za-z0-9_./\-]+)["']""")
+_PATH_LITERAL = re.compile(
+    r"""["'](?P<p>(?:operator/)?(?:fixtures|customers|contracts|templates|skills|verticals)/[A-Za-z0-9_./\-]+)["']"""
+)
 
 
 def _paths_a_test_reaches(test_file: Path) -> list[str]:

@@ -46,6 +46,7 @@ from .establishment_validation import (  # noqa: F401 — `import *` skips _name
 
 logger = logging.getLogger(__name__)
 
+
 class PendingRuleStore:
     """Rules stated but not yet confirmed, in the broker-owned audit DB.
 
@@ -164,11 +165,7 @@ class PendingRuleStore:
         now = time.time()
         ttl = ttl_for_kind(kind)
         digest = _hash_text(text)
-        payload_json = (
-            None
-            if payload is None
-            else json.dumps(payload, sort_keys=True, separators=(",", ":"))
-        )
+        payload_json = None if payload is None else json.dumps(payload, sort_keys=True, separators=(",", ":"))
         conn = self._connect()
         try:
             for _attempt in range(8):
@@ -202,9 +199,7 @@ class PendingRuleStore:
                     # exactly the ambiguity the tag exists to remove.
                     continue
             else:
-                raise EstablishmentValidationError(
-                    "could not mint a free proposal id; try again"
-                )
+                raise EstablishmentValidationError("could not mint a free proposal id; try again")
         finally:
             conn.close()
         return {
@@ -230,16 +225,12 @@ class PendingRuleStore:
         """
         conn = self._connect()
         try:
-            row = conn.execute(
-                "SELECT * FROM pending_rules WHERE proposal_id=?", (proposal_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM pending_rules WHERE proposal_id=?", (proposal_id,)).fetchone()
         finally:
             conn.close()
         return self._hydrate(row) if row is not None else None
 
-    def open_for(
-        self, sender: str, include_for_admin: bool, now: float | None = None
-    ) -> list[dict[str, Any]]:
+    def open_for(self, sender: str, include_for_admin: bool, now: float | None = None) -> list[dict[str, Any]]:
         """Unconsumed, unexpired rules this sender may confirm.
 
         Their OWN pending rules always; every rule awaiting an admin only when
@@ -276,9 +267,7 @@ class PendingRuleStore:
             conn.close()
         return [self._hydrate(row) for row in rows]
 
-    def unreported_outcomes_for(
-        self, sender: str | None, now: float | None = None
-    ) -> list[dict[str, Any]]:
+    def unreported_outcomes_for(self, sender: str | None, now: float | None = None) -> list[dict[str, Any]]:
         """Rows that ENDED and whose author has not been told: declined by an
         administrator, lapsed unanswered, or observed installed.
 
@@ -345,9 +334,7 @@ class PendingRuleStore:
             conn.close()
         return [self._hydrate(row) for row in rows]
 
-    def claim_notify(
-        self, proposal_id: str, claimed_by: str, now: float | None = None
-    ) -> bool:
+    def claim_notify(self, proposal_id: str, claimed_by: str, now: float | None = None) -> bool:
         """Take the right to send ONE row's outcome letter. True iff THIS call
         took it.
 
@@ -695,4 +682,3 @@ class PendingRuleStore:
             "notify_claimed_at": _column(row, "notify_claimed_at"),
             "notify_claimed_by": _column(row, "notify_claimed_by"),
         }
-

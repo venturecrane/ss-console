@@ -56,9 +56,7 @@ def _assert_proving_seat(slug: str) -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--slug", required=True)
     group = ap.add_mutually_exclusive_group(required=True)
     group.add_argument("--class", dest="output_class", help="retire one class")

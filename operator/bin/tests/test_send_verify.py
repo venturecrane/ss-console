@@ -32,9 +32,7 @@ import send_verify as sv  # noqa: E402 -- path injected above; the import must f
 
 # The reconciler, spec-loaded the way test_reconcile_sends.py does, to drive the
 # integrated render()/--json paths the leak tests must cover.
-_spec = importlib.util.spec_from_file_location(
-    "reconcile_sends", _BIN / "reconcile-sends.py"
-)
+_spec = importlib.util.spec_from_file_location("reconcile_sends", _BIN / "reconcile-sends.py")
 rec = importlib.util.module_from_spec(_spec)
 sys.modules["reconcile_sends"] = rec
 _spec.loader.exec_module(rec)
@@ -120,9 +118,7 @@ def _declares(mode="templated"):
             render="slot-templated",
             template="operator/skills/client-verification-tracker/render.py",
         ),
-        "medical-records-chaser": sv.RenderDecl(
-            skill="medical-records-chaser", render="compositional"
-        ),
+        "medical-records-chaser": sv.RenderDecl(skill="medical-records-chaser", render="compositional"),
     }
 
 
@@ -134,21 +130,15 @@ def _declares(mode="templated"):
 def test_canonical_hash_matches_every_shared_vector():
     """The fixture is the arbiter BOTH repos load. An implementation drift here
     fails this suite the same way it fails the overlay's."""
-    fixture = json.loads(
-        (CONTRACTS / "fixtures" / "body-canon-vectors.json").read_text()
-    )
+    fixture = json.loads((CONTRACTS / "fixtures" / "body-canon-vectors.json").read_text())
     vectors = fixture["vectors"]
     assert len(vectors) >= 8
     for vector in vectors:
-        assert sv.canonical_body_sha256(vector["input"]) == vector["sha256"], vector[
-            "name"
-        ]
+        assert sv.canonical_body_sha256(vector["input"]) == vector["sha256"], vector["name"]
 
 
 def test_the_required_trailing_newline_vector_exists_and_is_an_equivalence():
-    fixture = json.loads(
-        (CONTRACTS / "fixtures" / "body-canon-vectors.json").read_text()
-    )
+    fixture = json.loads((CONTRACTS / "fixtures" / "body-canon-vectors.json").read_text())
     by_name = {v["name"]: v for v in fixture["vectors"]}
     assert "trailing_newline" in by_name
     assert by_name["trailing_newline"]["sha256"] == by_name["plain_two_lines"]["sha256"]
@@ -161,15 +151,10 @@ def test_only_space_and_tab_strip_exotic_whitespace_is_content():
     here than at the render-side stamp sites (which strip " \\t" only) and
     false-HOLD the channel check. The nbsp_tail_survives vector is the shared
     pin; this test states the semantics directly."""
-    fixture = json.loads(
-        (CONTRACTS / "fixtures" / "body-canon-vectors.json").read_text()
-    )
+    fixture = json.loads((CONTRACTS / "fixtures" / "body-canon-vectors.json").read_text())
     by_name = {v["name"]: v for v in fixture["vectors"]}
     assert "nbsp_tail_survives" in by_name
-    assert (
-        sv.canonical_body_sha256("Hello\xa0\n")
-        == by_name["nbsp_tail_survives"]["sha256"]
-    )
+    assert sv.canonical_body_sha256("Hello\xa0\n") == by_name["nbsp_tail_survives"]["sha256"]
     # The exotic tails are CONTENT: none of them may collapse to plain "Hello".
     plain = sv.canonical_body_sha256("Hello")
     for tail in ("\xa0", "\x0c", "\x0b"):
@@ -240,13 +225,7 @@ def test_a_diverged_dispatch_hash_is_the_finding():
 def test_a_skeleton_match_grades_degraded_never_diverged():
     full = sv.canonical_body_sha256("full body")
     skeleton = sv.canonical_body_sha256("skeleton body")
-    wakes = sv.index_wakes(
-        [
-            _wake_row(
-                hashes=[{"body_sha256_full": full, "body_sha256_skeleton": skeleton}]
-            )
-        ]
-    )
+    wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": full, "body_sha256_skeleton": skeleton}])])
     dispatches = sv.index_dispatches([_dispatch_row(sha=skeleton, variant="skeleton")])
     verdicts = sv.verify_hash_join(wakes, dispatches, _declares())
     assert [v.verdict for v in verdicts] == [sv.VERDICT_DEGRADED]
@@ -273,15 +252,9 @@ def test_a_templated_dispatch_with_no_stamp_holds():
 
 def test_compositional_skills_are_never_hash_graded():
     sha = sv.canonical_body_sha256("body")
-    wakes = sv.index_wakes(
-        [_wake_row(skill="medical-records-chaser", hashes=[{"body_sha256_full": sha}])]
-    )
+    wakes = sv.index_wakes([_wake_row(skill="medical-records-chaser", hashes=[{"body_sha256_full": sha}])])
     dispatches = sv.index_dispatches(
-        [
-            _dispatch_row(
-                skill="medical-records-chaser", sha=sv.canonical_body_sha256("other")
-            )
-        ]
+        [_dispatch_row(skill="medical-records-chaser", sha=sv.canonical_body_sha256("other"))]
     )
     assert sv.verify_hash_join(wakes, dispatches, _declares()) == []
 
@@ -291,9 +264,7 @@ def test_one_wake_cannot_launder_more_dispatches_than_it_stamped():
     dispatch; the second dispatch in the window must answer for itself."""
     sha = sv.canonical_body_sha256("body")
     wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": sha}])])
-    dispatches = sv.index_dispatches(
-        [_dispatch_row(minute=1, sha=sha), _dispatch_row(minute=2, sha=sha)]
-    )
+    dispatches = sv.index_dispatches([_dispatch_row(minute=1, sha=sha), _dispatch_row(minute=2, sha=sha)])
     verdicts = sv.verify_hash_join(wakes, dispatches, _declares())
     assert sorted(v.verdict for v in verdicts) == [
         sv.VERDICT_MATCH,
@@ -342,9 +313,7 @@ def test_the_pair_a_diverged_dispatch_is_a_finding_with_the_column_and_silent_wi
     sent_sha = sv.canonical_body_sha256("recomposed body")
     wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": wake_sha}])])
     labelled = sv.index_dispatches([_dispatch_row(sha=sent_sha)])
-    assert [v.verdict for v in sv.verify_hash_join(wakes, labelled, _declares())] == [
-        sv.VERDICT_DIVERGED
-    ]
+    assert [v.verdict for v in sv.verify_hash_join(wakes, labelled, _declares())] == [sv.VERDICT_DIVERGED]
     wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": wake_sha}])])
     unlabelled = sv.index_dispatches([_dispatch_row(sha=sent_sha, skill=None)])
     assert unlabelled[0].skill_name == ""
@@ -387,16 +356,8 @@ def test_a_labelled_dispatch_is_attributed_by_skill_and_counted_so():
 def test_an_unlabelled_skeleton_dispatch_attributes_by_hash_and_grades_degraded():
     full = sv.canonical_body_sha256("full body")
     skeleton = sv.canonical_body_sha256("skeleton body")
-    wakes = sv.index_wakes(
-        [
-            _wake_row(
-                hashes=[{"body_sha256_full": full, "body_sha256_skeleton": skeleton}]
-            )
-        ]
-    )
-    dispatches = sv.index_dispatches(
-        [_dispatch_row(sha=skeleton, variant="skeleton", skill=None)]
-    )
+    wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": full, "body_sha256_skeleton": skeleton}])])
+    dispatches = sv.index_dispatches([_dispatch_row(sha=skeleton, variant="skeleton", skill=None)])
     verdicts = sv.verify_hash_join(wakes, dispatches, _declares())
     assert [v.verdict for v in verdicts] == [sv.VERDICT_DEGRADED]
     assert verdicts[0].attribution == "hash"
@@ -427,9 +388,7 @@ def test_hash_attribution_respects_the_window_and_the_declaration():
     assert sv.verify_hash_join(wakes, sv.index_dispatches([late]), _declares()) == []
     # A compositional wake's hashes attribute nothing: only hash-verified
     # declarations may claim by hash, same rule as the skill path.
-    wakes = sv.index_wakes(
-        [_wake_row(skill="medical-records-chaser", hashes=[{"body_sha256_full": sha}])]
-    )
+    wakes = sv.index_wakes([_wake_row(skill="medical-records-chaser", hashes=[{"body_sha256_full": sha}])])
     dispatches = sv.index_dispatches([_dispatch_row(sha=sha, skill=None)])
     assert sv.verify_hash_join(wakes, dispatches, _declares()) == []
 
@@ -490,9 +449,7 @@ def test_channel_body_matching_the_wake_hash_grades_match():
     body = "Deadline alert body\n"
     sha = sv.canonical_body_sha256(body)
     wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": sha}])])
-    verdicts = sv.verify_channel_bodies(
-        [_sent_message()], wakes, _declares(), lambda m: body
-    )
+    verdicts = sv.verify_channel_bodies([_sent_message()], wakes, _declares(), lambda m: body)
     assert [v.verdict for v in verdicts] == [sv.VERDICT_MATCH]
 
 
@@ -544,27 +501,21 @@ def test_a_window_spanning_the_plain_stamp_deploy_grades_each_row_by_its_side_of
     plain = "Deadline alert body\n"
     raw_sha, plain_sha = sv.canonical_body_sha256(raw), sv.canonical_body_sha256(plain)
     day_later = datetime(2026, 8, 31, 9, 0, tzinfo=UTC)
-    pre = _dispatch_row(
-        minute=1, sha=raw_sha, message_id="<m-pre>"
-    )  # 08-30, no plain stamp
+    pre = _dispatch_row(minute=1, sha=raw_sha, message_id="<m-pre>")  # 08-30, no plain stamp
     post = _dispatch_row(minute=1, sha=raw_sha, plain=plain_sha, message_id="<m-post>")
     post["ts"] = (day_later.replace(minute=1)).isoformat()
     post["id"] = "disp-post"
     wake_post = _wake_row(hashes=[{"body_sha256_full": raw_sha}])
     wake_post["ts"] = day_later.isoformat()
     wake_post["id"] = "wake-post"
-    wakes = sv.index_wakes(
-        [_wake_row(hashes=[{"body_sha256_full": raw_sha}]), wake_post]
-    )
+    wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": raw_sha}]), wake_post])
     dispatches = sv.index_dispatches([pre, post])
     assert [d.plain_body_sha256 for d in dispatches] == ["", plain_sha]
     sent = [
         _sent_message(minute=1, mid="<m-pre>"),
         {**_sent_message(minute=1, mid="<m-post>"), "timestamp": post["ts"]},
     ]
-    verdicts = sv.verify_channel_bodies(
-        sent, wakes, _declares(), lambda m: plain, dispatches=dispatches
-    )
+    verdicts = sv.verify_channel_bodies(sent, wakes, _declares(), lambda m: plain, dispatches=dispatches)
     graded = {v.message_id: v.verdict for v in verdicts}
     assert graded == {"<m-pre>": sv.VERDICT_PRE_EDGE, "<m-post>": sv.VERDICT_MATCH}
     pre_verdict = next(v for v in verdicts if v.message_id == "<m-pre>")
@@ -602,9 +553,7 @@ def _edge_scene():
 def _report_for(rows, sent, body):
     verifier = sv.SendVerifier(_declares(), {"recipients": {}, "ack_codes": {}})
     verdicts, findings, proposals = verifier.verify_inbox(sent, rows, lambda m: body)
-    report = rec.InboxReport(
-        inbox="pilot-smokeball@agentmail.to", slug="pilot-smokeball"
-    )
+    report = rec.InboxReport(inbox="pilot-smokeball@agentmail.to", slug="pilot-smokeball")
     report.sent_total = len(sent)
     report.body_verdicts, report.invariant_findings = verdicts, findings
     report.invariant_proposals = proposals
@@ -630,29 +579,18 @@ def test_a_row_behind_the_edge_neither_reddens_nor_files_and_the_same_row_with_n
     assert rec.exit_code([report]) == rec.EXIT_CLEAN
     rendered = rec.render([report])
     assert not any(line.startswith("HOLD") for line in rendered.splitlines())
-    assert (
-        "pre-edge 1 send(s) unverifiable by construction [deadline-miss-escalator]"
-        in rendered
-    )
+    assert "pre-edge 1 send(s) unverifiable by construction [deadline-miss-escalator]" in rendered
     assert rec.finding_digest([report]) == ""
     emitted = rec.report_dict(report)["body_verdicts"]
-    assert sv.VERDICT_PRE_EDGE in {
-        v["verdict"] for v in emitted
-    }  # visible in --json too
+    assert sv.VERDICT_PRE_EDGE in {v["verdict"] for v in emitted}  # visible in --json too
 
     # The falsifier: no edge on the inbox, the same row holds and reddens.
     report_no_edge = _report_for([wakes[0], dispatches[0]], sent[:1], plain)
-    assert [v.verdict for v in report_no_edge.body_verdicts if v.message_id] == [
-        sv.VERDICT_CHANNEL_MISMATCH
-    ]
+    assert [v.verdict for v in report_no_edge.body_verdicts if v.message_id] == [sv.VERDICT_CHANNEL_MISMATCH]
     assert sv.has_holds(report_no_edge.body_verdicts)
     assert rec.exit_code([report_no_edge]) == rec.EXIT_HOLD
-    assert any(
-        line.startswith("HOLD") for line in rec.render([report_no_edge]).splitlines()
-    )
-    assert "no dispatch row on this inbox carries plain_body_sha256 yet" in (
-        report_no_edge.body_verdicts[-1].detail
-    )
+    assert any(line.startswith("HOLD") for line in rec.render([report_no_edge]).splitlines())
+    assert "no dispatch row on this inbox carries plain_body_sha256 yet" in (report_no_edge.body_verdicts[-1].detail)
 
 
 def test_pre_edge_is_its_own_class_not_a_hold_in_disguise():
@@ -661,9 +599,7 @@ def test_pre_edge_is_its_own_class_not_a_hold_in_disguise():
     verdict. A regression that slipped `pre_stamp_edge` back into
     `_HOLD_VERDICTS` would fail here before it reddened a run."""
     assert sv.VERDICT_PRE_EDGE not in sv._HOLD_VERDICTS
-    verdict = sv.BodyVerdict(
-        skill_name="deadline-miss-escalator", verdict=sv.VERDICT_PRE_EDGE
-    )
+    verdict = sv.BodyVerdict(skill_name="deadline-miss-escalator", verdict=sv.VERDICT_PRE_EDGE)
     assert verdict.is_pre_edge
     assert not verdict.is_hold and not verdict.is_finding and not verdict.is_degraded
     for name in (
@@ -785,19 +721,11 @@ def test_a_channel_body_matching_the_plain_stamp_grades_match():
     wake stamp. That is a correct send, not a divergence."""
     raw = "**Deadline** alert body\n"
     plain = "Deadline alert body\n"  # what render_plain attached to the channel
-    wakes = sv.index_wakes(
-        [_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])]
-    )
+    wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])])
     dispatches = sv.index_dispatches(
-        [
-            _dispatch_row(
-                sha=sv.canonical_body_sha256(raw), plain=sv.canonical_body_sha256(plain)
-            )
-        ]
+        [_dispatch_row(sha=sv.canonical_body_sha256(raw), plain=sv.canonical_body_sha256(plain))]
     )
-    verdicts = sv.verify_channel_bodies(
-        [_sent_message()], wakes, _declares(), lambda m: plain, dispatches=dispatches
-    )
+    verdicts = sv.verify_channel_bodies([_sent_message()], wakes, _declares(), lambda m: plain, dispatches=dispatches)
     assert [v.verdict for v in verdicts] == [sv.VERDICT_MATCH]
     assert not verdicts[0].is_finding and not verdicts[0].is_hold
 
@@ -808,9 +736,7 @@ def test_a_channel_body_matching_neither_stamp_is_a_finding():
     a mismatch against it can no longer be explained by a channel transform."""
     raw = "**Deadline** alert body\n"
     plain = "Deadline alert body\n"
-    wakes = sv.index_wakes(
-        [_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])]
-    )
+    wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])])
     dispatches = sv.index_dispatches(
         [
             _dispatch_row(
@@ -853,15 +779,9 @@ def test_an_unidentified_divergence_is_a_hold_never_a_finding():
     divergence found by proximity is a guess, and a guess holds."""
     raw = "**Deadline** alert body\n"
     plain = "Deadline alert body\n"
-    wakes = sv.index_wakes(
-        [_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])]
-    )
+    wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])])
     dispatches = sv.index_dispatches(
-        [
-            _dispatch_row(
-                sha=sv.canonical_body_sha256(raw), plain=sv.canonical_body_sha256(plain)
-            )
-        ]
+        [_dispatch_row(sha=sv.canonical_body_sha256(raw), plain=sv.canonical_body_sha256(plain))]
     )
     verdicts = sv.verify_channel_bodies(
         [_sent_message()],
@@ -928,9 +848,7 @@ def test_the_cross_skill_scene_grades_the_tracker_against_its_own_dispatch():
         lambda m: bodies[m["message_id"]],
         dispatches=dispatches,
     )
-    assert [(v.message_id, v.verdict) for v in verdicts] == [
-        ("<m-tracker>", sv.VERDICT_MATCH)
-    ]
+    assert [(v.message_id, v.verdict) for v in verdicts] == [("<m-tracker>", sv.VERDICT_MATCH)]
     assert verdicts[0].skill_name == "client-verification-tracker"
     # Graded against ITS row's plain stamp, not the in-turn row's.
     assert verdicts[0].expected_sha256 == sv.canonical_body_sha256(tracker_plain)
@@ -997,9 +915,7 @@ def test_an_unlabelled_row_identified_by_hash_still_finds_a_divergence():
     by hash, same rule as the primary check) -- and a channel body that
     matches neither hash is then a finding, not a hold."""
     raw, plain = "**Deadline** alert body\n", "Deadline alert body\n"
-    wakes = sv.index_wakes(
-        [_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])]
-    )
+    wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])])
     dispatches = sv.index_dispatches(
         [
             _dispatch_row(
@@ -1020,9 +936,7 @@ def test_an_unlabelled_row_identified_by_hash_still_finds_a_divergence():
     assert [v.verdict for v in verdicts] == [sv.VERDICT_DIVERGED]
     # And the conformant twin of the same scene grades MATCH through the same
     # identified row.
-    wakes = sv.index_wakes(
-        [_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])]
-    )
+    wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])])
     dispatches = sv.index_dispatches(
         [
             _dispatch_row(
@@ -1033,9 +947,7 @@ def test_an_unlabelled_row_identified_by_hash_still_finds_a_divergence():
             )
         ]
     )
-    verdicts = sv.verify_channel_bodies(
-        [_sent_message()], wakes, _declares(), lambda m: plain, dispatches=dispatches
-    )
+    verdicts = sv.verify_channel_bodies([_sent_message()], wakes, _declares(), lambda m: plain, dispatches=dispatches)
     assert [v.verdict for v in verdicts] == [sv.VERDICT_MATCH]
 
 
@@ -1044,9 +956,7 @@ def test_msgraph_messages_join_on_the_audit_row_token():
     ULID off the X-SMD-Audit-Row header; the dispatch row recorded the same
     token. That is the identity join on the paying seat's channel."""
     raw, plain = "**Deadline** alert body\n", "Deadline alert body\n"
-    wakes = sv.index_wakes(
-        [_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])]
-    )
+    wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])])
     dispatches = sv.index_dispatches(
         [
             _dispatch_row(
@@ -1067,9 +977,7 @@ def test_msgraph_messages_join_on_the_audit_row_token():
         lambda m: "something else entirely",
         dispatches=dispatches,
     )
-    assert [v.verdict for v in verdicts] == [
-        sv.VERDICT_DIVERGED
-    ]  # identified => finding
+    assert [v.verdict for v in verdicts] == [sv.VERDICT_DIVERGED]  # identified => finding
 
 
 def test_identity_beats_proximity_when_choosing_the_stamp_to_grade_against():
@@ -1078,9 +986,7 @@ def test_identity_beats_proximity_when_choosing_the_stamp_to_grade_against():
     not the oldest unconsumed one."""
     raw = "**Deadline** alert body\n"
     first_plain, second_plain = "Deadline alert body A\n", "Deadline alert body B\n"
-    wakes = sv.index_wakes(
-        [_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}] * 2)]
-    )
+    wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}] * 2)])
     dispatches = sv.index_dispatches(
         [
             _dispatch_row(
@@ -1117,15 +1023,9 @@ def test_one_plain_stamp_cannot_vouch_for_two_channel_bodies():
     body in the window."""
     plain = "Deadline alert body\n"
     raw = "**Deadline** alert body\n"
-    wakes = sv.index_wakes(
-        [_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}] * 2)]
-    )
+    wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}] * 2)])
     dispatches = sv.index_dispatches(
-        [
-            _dispatch_row(
-                sha=sv.canonical_body_sha256(raw), plain=sv.canonical_body_sha256(plain)
-            )
-        ]
+        [_dispatch_row(sha=sv.canonical_body_sha256(raw), plain=sv.canonical_body_sha256(plain))]
     )
     verdicts = sv.verify_channel_bodies(
         [_sent_message(minute=1, mid="<m1>"), _sent_message(minute=2, mid="<m2>")],
@@ -1145,9 +1045,7 @@ def test_a_plain_stamp_outside_the_window_does_not_vouch():
     different run must not rescue this run's body."""
     plain = "Deadline alert body\n"
     raw = "**Deadline** alert body\n"
-    wakes = sv.index_wakes(
-        [_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])]
-    )
+    wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])])
     dispatches = sv.index_dispatches(
         [
             _dispatch_row(
@@ -1175,23 +1073,15 @@ def test_body_unavailable_stays_a_hold_even_with_a_plain_stamp():
     """A body we could not fetch is a transport fact. The promotion must not
     turn a 503 into an accusation."""
     raw = "**Deadline** alert body\n"
-    wakes = sv.index_wakes(
-        [_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])]
-    )
+    wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])])
     dispatches = sv.index_dispatches(
-        [
-            _dispatch_row(
-                sha=sv.canonical_body_sha256(raw), plain=sv.canonical_body_sha256("x")
-            )
-        ]
+        [_dispatch_row(sha=sv.canonical_body_sha256(raw), plain=sv.canonical_body_sha256("x"))]
     )
 
     def _explode(_message):
         raise RuntimeError("HTTP 503")
 
-    verdicts = sv.verify_channel_bodies(
-        [_sent_message()], wakes, _declares(), _explode, dispatches=dispatches
-    )
+    verdicts = sv.verify_channel_bodies([_sent_message()], wakes, _declares(), _explode, dispatches=dispatches)
     assert [v.verdict for v in verdicts] == [sv.VERDICT_BODY_UNAVAILABLE]
     assert verdicts[0].is_hold and not verdicts[0].is_finding
     # And an unfetchable body must not burn the stamp for a later message.
@@ -1212,9 +1102,7 @@ def test_the_dispatch_stamp_stays_structurally_body_free():
         assert name not in ("body", "text", "content", "html", "raw", "snippet"), (
             f"DispatchStamp.{name} is a body-content field; the leak safety is structural"
         )
-        assert not _BODY_FIELD_PATTERN.search(name), (
-            f"DispatchStamp.{name} could hold body content"
-        )
+        assert not _BODY_FIELD_PATTERN.search(name), f"DispatchStamp.{name} could hold body content"
 
 
 def test_the_dispatch_stamp_leak_check_can_fail():
@@ -1254,12 +1142,8 @@ def test_ack_codes_first_seen_against_empty_committed_are_proposals_not_findings
     invariants-PR reviewer sees side by side -- visible, not paged."""
     wakes = sv.index_wakes(
         [
-            _wake_row(
-                minute=0, items=[{"item_key": "matter-1|SOL", "ack_code": "AK7Q"}]
-            ),
-            _wake_row(
-                minute=30, items=[{"item_key": "matter-1|SOL", "ack_code": "ZZ99"}]
-            ),
+            _wake_row(minute=0, items=[{"item_key": "matter-1|SOL", "ack_code": "AK7Q"}]),
+            _wake_row(minute=30, items=[{"item_key": "matter-1|SOL", "ack_code": "ZZ99"}]),
         ]
     )
     findings, proposals = sv.ack_invariant(wakes, _declares(), _EMPTY_COMMITTED)
@@ -1275,17 +1159,11 @@ def test_ack_codes_first_seen_against_empty_committed_are_proposals_not_findings
 def test_a_committed_ack_code_that_conflicts_is_the_finding():
     key = sv._item_hash("deadline-miss-escalator", "matter-1|SOL")
     committed = {"recipients": {}, "ack_codes": {key: "AK7Q"}}
-    wakes = sv.index_wakes(
-        [_wake_row(items=[{"item_key": "matter-1|SOL", "ack_code": "AK7Q"}])]
-    )
+    wakes = sv.index_wakes([_wake_row(items=[{"item_key": "matter-1|SOL", "ack_code": "AK7Q"}])])
     assert sv.ack_invariant(wakes, _declares(), committed) == ([], [])
-    drifted = sv.index_wakes(
-        [_wake_row(items=[{"item_key": "matter-1|SOL", "ack_code": "XX00"}])]
-    )
+    drifted = sv.index_wakes([_wake_row(items=[{"item_key": "matter-1|SOL", "ack_code": "XX00"}])])
     findings, proposals = sv.ack_invariant(drifted, _declares(), committed)
-    assert [(f.rule, f.expected, f.actual) for f in findings] == [
-        ("ack_stability", "AK7Q", "XX00")
-    ]
+    assert [(f.rule, f.expected, f.actual) for f in findings] == [("ack_stability", "AK7Q", "XX00")]
     assert proposals == []
 
 
@@ -1323,9 +1201,7 @@ def test_a_recipient_outside_a_nonempty_committed_set_is_the_flapping_finding():
     ]
     committed = {
         "recipients": {
-            "medical-records-chaser": [
-                sv._recipient_hash("medical-records-chaser", "records@vendor.invalid")
-            ]
+            "medical-records-chaser": [sv._recipient_hash("medical-records-chaser", "records@vendor.invalid")]
         },
         "ack_codes": {},
     }
@@ -1359,9 +1235,7 @@ def test_the_committed_invariants_file_parses():
 # LEAK SAFETY (the public-repo constraint)
 # ---------------------------------------------------------------------------
 
-_BODY_FIELD_PATTERN = re.compile(
-    r"body(?!_sha256|_variant)|text|content|html", re.IGNORECASE
-)
+_BODY_FIELD_PATTERN = re.compile(r"body(?!_sha256|_variant)|text|content|html", re.IGNORECASE)
 
 
 def _walk_for_sentinel(value, path="$"):
@@ -1411,13 +1285,9 @@ def _sentinel_report():
         ),
     ]
     verifier = sv.SendVerifier(_declares(), {"recipients": {}, "ack_codes": {}})
-    verdicts, invariants, proposals = verifier.verify_inbox(
-        [_sent_message()], rows, lambda m: body
-    )
+    verdicts, invariants, proposals = verifier.verify_inbox([_sent_message()], rows, lambda m: body)
     assert [v.verdict for v in verdicts] == [sv.VERDICT_DIVERGED, sv.VERDICT_DIVERGED]
-    report = rec.InboxReport(
-        inbox="pilot-smokeball@agentmail.to", slug="pilot-smokeball"
-    )
+    report = rec.InboxReport(inbox="pilot-smokeball@agentmail.to", slug="pilot-smokeball")
     report.sent_total = 1
     report.body_verdicts = verdicts
     report.invariant_findings = invariants
@@ -1453,11 +1323,7 @@ def test_the_walker_itself_can_fail():
         def is_hold(self):
             return False
 
-    leaked = {
-        "verdicts": [
-            {"skill_name": "x", "verdict": "BODY_DIVERGED", "body": f"a {SENTINEL} b"}
-        ]
-    }
+    leaked = {"verdicts": [{"skill_name": "x", "verdict": "BODY_DIVERGED", "body": f"a {SENTINEL} b"}]}
     assert _walk_for_sentinel(leaked) != []
     # And the structural test would refuse the field name.
     assert "body" in RegressedVerdict.__dataclass_fields__
@@ -1473,9 +1339,7 @@ def test_render_lines_and_digest_keys_carry_hashes_only():
     )
     for line in lines:
         assert SENTINEL not in line
-    for key in sv.digest_keys(
-        report.inbox, report.body_verdicts, report.invariant_findings
-    ):
+    for key in sv.digest_keys(report.inbox, report.body_verdicts, report.invariant_findings):
         assert SENTINEL not in key
 
 

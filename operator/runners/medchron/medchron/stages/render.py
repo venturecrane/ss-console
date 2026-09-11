@@ -12,6 +12,7 @@ rendered as bold runs, not printed as asterisks. Timeline images render next
 to the output document, never in a shared directory (one client's calendar
 once rendered inside another's chronology).
 """
+
 from __future__ import annotations
 
 import re
@@ -54,8 +55,9 @@ def write_cell(cell: Any, blocks: list[tuple[str, bool, bool]], font: str, size:
             r.bold, r.font.size, r.font.name, r.font.color.rgb = bool(bold), Pt(size), font, S.BLACK
 
 
-def summary_table(doc: Any, rows: list[str], widths: list[float], font: str, header_fill: str = "f1f1f1",
-                  bold_first_col: bool = True) -> None:
+def summary_table(
+    doc: Any, rows: list[str], widths: list[float], font: str, header_fill: str = "f1f1f1", bold_first_col: bool = True
+) -> None:
     from docx.enum.table import WD_TABLE_ALIGNMENT
 
     cells = [[c.strip() for c in r.strip().strip("|").split("|")] for r in rows]
@@ -96,8 +98,13 @@ def parse_entries(block: str) -> list[dict[str, Any]]:
         except ValueError:
             continue
         lines = chunk.splitlines()
-        out.append({"date": lines[0].strip(), "provider": lines[1].split("|")[0].strip() if len(lines) > 1 else "",
-                    "body": lines[2:]})
+        out.append(
+            {
+                "date": lines[0].strip(),
+                "provider": lines[1].split("|")[0].strip() if len(lines) > 1 else "",
+                "body": lines[2:],
+            }
+        )
     return out
 
 
@@ -172,16 +179,30 @@ def run(sr: StageRun) -> int:
     font = str(sr.cfg.get("format", "font") or "Calibri")
     headings = {str(h) for h in (sr.cfg.get("format", "subsections") or [])} | {"Discharge / Discontinuation in Care"}
     title = text.splitlines()[0].strip()
-    prov_rows = [ln for ln in section(text, "Treatment Timeline", "Diagnostic Highlights").splitlines() if ln.strip().startswith("|")]
-    icd_rows = [ln for ln in section(text, "Diagnostic Highlights", "Medical Chronology").splitlines() if ln.strip().startswith("|")]
+    prov_rows = [
+        ln
+        for ln in section(text, "Treatment Timeline", "Diagnostic Highlights").splitlines()
+        if ln.strip().startswith("|")
+    ]
+    icd_rows = [
+        ln
+        for ln in section(text, "Diagnostic Highlights", "Medical Chronology").splitlines()
+        if ln.strip().startswith("|")
+    ]
     body = section(text, "Medical Chronology", "Exhibit List")
     ex_block = text.split("## Exhibit List", 1)[1].split(LIMITS, 1)[0]
     ex_rows = [ln for ln in ex_block.splitlines() if ln.strip().startswith("|")]
     limits_block = text.split(LIMITS, 1)[1] if LIMITS in text else ""
     incident = date(*(int(x) for x in sr.job.incident_date.split("-")))
     imgdir = out_dir / "img"
-    visuals = timeline.render(text, imgdir, incident, int(sr.cfg.get("chronology", "treatment_gap_days", 45)),
-                              Canon(sr.cfg), {h.lower() for h in headings})
+    visuals = timeline.render(
+        text,
+        imgdir,
+        incident,
+        int(sr.cfg.get("chronology", "treatment_gap_days", 45)),
+        Canon(sr.cfg),
+        {h.lower() for h in headings},
+    )
 
     doc = Document()
     S.build_styles(doc, font)
@@ -239,7 +260,9 @@ def run(sr: StageRun) -> int:
     dst = out_dir / name.replace("{CLIENT}", sr.unit.client_name).replace("{MM-DD-YY}", stamp)
     out_dir.mkdir(parents=True, exist_ok=True)
     doc.save(str(dst))
-    sr.log(f"wrote {dst.name}: {len(entries)} entries, {max(len(prov_rows) - 1, 0)} providers, {max(len(icd_rows) - 1, 0)} ICD rows, "
-           f"{max(len(ex_rows) - 1, 0)} exhibits, {len(visuals['years'])} calendar year(s), {len(visuals['gaps'])} gap bar(s), "
-           f"{limits_emitted} limitations line(s)")
+    sr.log(
+        f"wrote {dst.name}: {len(entries)} entries, {max(len(prov_rows) - 1, 0)} providers, {max(len(icd_rows) - 1, 0)} ICD rows, "
+        f"{max(len(ex_rows) - 1, 0)} exhibits, {len(visuals['years'])} calendar year(s), {len(visuals['gaps'])} gap bar(s), "
+        f"{limits_emitted} limitations line(s)"
+    )
     return 0

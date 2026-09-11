@@ -29,9 +29,7 @@ TrustClass = Literal["internal", "known_external", "unknown_external"]
 Surface = Literal["inbox_triage", "webhook", "connector", "mcp", "fetch"]
 Verification = Literal["verified", "unverified", "not_applicable"]
 
-ACCEPTED_TRUST_CLASSES: frozenset[str] = frozenset(
-    {"internal", "known_external", "unknown_external"}
-)
+ACCEPTED_TRUST_CLASSES: frozenset[str] = frozenset({"internal", "known_external", "unknown_external"})
 
 # The default + the floor: absent positive evidence of identity, inbound
 # content is untrusted.

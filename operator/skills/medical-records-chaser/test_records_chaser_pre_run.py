@@ -136,9 +136,7 @@ def _hold_event(item, *, event="fired", ts, attempt=1):
 
 
 def _stall_event(item, *, ts, attempt=1):
-    key = _ledger.item_key(
-        item.matter_id, STALL_SOURCE_PREFIX + str(item.task_id), "mrc-stall", None
-    )
+    key = _ledger.item_key(item.matter_id, STALL_SOURCE_PREFIX + str(item.task_id), "mrc-stall", None)
     return _ledger.make_event(
         skill="medical-records-chaser",
         matter_id=item.matter_id,

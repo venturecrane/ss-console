@@ -286,9 +286,7 @@ def test_fires_on_overlay_runtime_slug_disagreement():
     result = verify_storage_bindings(snap)
     assert not result.passed
     assert any(
-        "disagrees with" in m.reason
-        and "cross-Machine isolation failure mode" in m.reason
-        for m in result.mismatches
+        "disagrees with" in m.reason and "cross-Machine isolation failure mode" in m.reason for m in result.mismatches
     )
 
 

@@ -112,11 +112,7 @@ def render_lines(
 def _count_by_skill(verdicts, *, with_verdict: bool = False) -> dict[str, int]:
     counts: dict[str, int] = {}
     for verdict in verdicts:
-        key = (
-            f"{verdict.verdict} [{verdict.skill_name}]"
-            if with_verdict
-            else verdict.skill_name
-        )
+        key = f"{verdict.verdict} [{verdict.skill_name}]" if with_verdict else verdict.skill_name
         counts[key] = counts.get(key, 0) + 1
     return counts
 
@@ -125,13 +121,9 @@ def digest_keys(inbox: str, verdicts: list, invariants: list) -> list[str]:
     """Stable keys for the reconciler's finding fingerprint, so the existing
     issue-dedupe machinery covers the new classes with zero workflow changes."""
     keys = [
-        f"{inbox}|body:{v.skill_name}|{v.dispatch_ts or v.wake_ts}|{v.actual_sha256}"
-        for v in verdicts
-        if v.is_finding
+        f"{inbox}|body:{v.skill_name}|{v.dispatch_ts or v.wake_ts}|{v.actual_sha256}" for v in verdicts if v.is_finding
     ]
-    keys += [
-        f"{inbox}|inv:{f.rule}|{f.hashed_key}|{f.actual or ''}" for f in invariants
-    ]
+    keys += [f"{inbox}|inv:{f.rule}|{f.hashed_key}|{f.actual or ''}" for f in invariants]
     return keys
 
 
@@ -170,10 +162,7 @@ def as_dicts(
     return (
         [{key: getattr(v, key) for key in _VERDICT_EMIT_KEYS} for v in verdicts],
         [{key: getattr(f, key) for key in _INVARIANT_EMIT_KEYS} for f in invariants],
-        [
-            {key: getattr(p, key) for key in _PROPOSAL_EMIT_KEYS}
-            for p in proposals or []
-        ],
+        [{key: getattr(p, key) for key in _PROPOSAL_EMIT_KEYS} for p in proposals or []],
     )
 
 

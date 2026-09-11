@@ -82,8 +82,7 @@ def _matches(sub: dict[str, Any], desired: dict[str, Any]) -> bool:
     is handled by ``force_recreate`` from the orchestrator."""
     return (
         str(sub.get("eventNotificationUrl", "")) == desired["eventNotificationUrl"]
-        and sorted(str(e) for e in (sub.get("eventTypes") or []))
-        == desired["eventTypes"]
+        and sorted(str(e) for e in (sub.get("eventTypes") or [])) == desired["eventTypes"]
     )
 
 
@@ -154,17 +153,13 @@ def reconcile(intent: dict[str, Any]) -> dict[str, Any]:
 
     desired = desired_from_intent(intent)
     if desired is None:
-        _err(
-            f"{slug}: no verifiable subscription to register (no event types or no key) — skipping"
-        )
+        _err(f"{slug}: no verifiable subscription to register (no event types or no key) — skipping")
         return manifest("skipped:no_verifiable_desired")
 
     try:
         client = build_client_from_env()
     except Exception as exc:  # noqa: BLE001 - ValueError (auth_code without a token) or a missing secret: not connected yet is a skip, not a crash
-        _err(
-            f"{slug}: client not constructable (likely not connected yet): {exc} — skip, retry next trigger"
-        )
+        _err(f"{slug}: client not constructable (likely not connected yet): {exc} — skip, retry next trigger")
         return manifest("skipped:not_connected", detail=str(exc))
 
     try:
@@ -185,13 +180,9 @@ def reconcile(intent: dict[str, Any]) -> dict[str, Any]:
             not str(s.get("name", "")).startswith(f"op-managed:{slug}:")
             and _origin(str(s.get("eventNotificationUrl", ""))) == our_origin
         ):
-            _err(
-                f"{slug}: NOTE unmanaged subscription {s.get('id')!r} at our gate URL — leaving it untouched"
-            )
+            _err(f"{slug}: NOTE unmanaged subscription {s.get('id')!r} at our gate URL — leaving it untouched")
 
-    plan = plan_reconcile(
-        desired, actual, slug, force_recreate=bool(intent.get("force_recreate"))
-    )
+    plan = plan_reconcile(desired, actual, slug, force_recreate=bool(intent.get("force_recreate")))
     if plan.skipped:
         _err(f"{slug}: {plan.skipped} — skipping")
         return manifest(f"skipped:{plan.skipped}")
@@ -202,9 +193,7 @@ def reconcile(intent: dict[str, Any]) -> dict[str, Any]:
             client.delete_webhook_subscription(sid)
             deleted.append(sid)
         except Exception as exc:  # noqa: BLE001 - a failed delete leaves a partial state the next trigger heals; the manifest says so
-            _err(
-                f"{slug}: DELETE /webhooks/{sid} failed: {exc} — partial; next trigger heals"
-            )
+            _err(f"{slug}: DELETE /webhooks/{sid} failed: {exc} — partial; next trigger heals")
             return manifest("error:delete_failed", deleted=deleted, detail=str(exc))
 
     created: list[str] = []
@@ -215,9 +204,7 @@ def reconcile(intent: dict[str, Any]) -> dict[str, Any]:
             created.append(str(sid) if sid else payload["name"])
         except Exception as exc:  # noqa: BLE001 - a failed create is reported in the manifest as error:create_failed; the next trigger heals
             _err(f"{slug}: POST /webhooks failed: {exc} — partial; next trigger heals")
-            return manifest(
-                "error:create_failed", created=created, deleted=deleted, detail=str(exc)
-            )
+            return manifest("error:create_failed", created=created, deleted=deleted, detail=str(exc))
 
     status = "steady" if not created and not deleted else "applied"
     _err(

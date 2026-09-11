@@ -8,6 +8,7 @@ The tool result is PARSED, never assumed: 'required' in a schema is not a
 guarantee the field arrives, and a verdict without 'note' once killed a run
 at 104 of 585 claims.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -24,8 +25,11 @@ VERDICT_TOOL = {
         "properties": {
             "verdict": {"type": "string", "enum": list(VERDICTS)},
             "unsupported_assertions": {"type": "array", "items": {"type": "string"}},
-            "contradictions": {"type": "array", "items": {"type": "string"},
-                               "description": "Assertions the pages CONTRADICT. Most serious category."},
+            "contradictions": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Assertions the pages CONTRADICT. Most serious category.",
+            },
             "note": {"type": "string", "description": "One sentence: what the pages actually are."},
         },
         "required": ["verdict", "unsupported_assertions", "contradictions", "note"],
@@ -38,9 +42,11 @@ VERDICT_TOOL_TEXT = {
         "type": "object",
         "properties": {
             **VERDICT_TOOL["input_schema"]["properties"],
-            "supporting_pages": {"type": "array", "items": {"type": "integer"},
-                                 "description": "Page numbers in the window where the supporting text was found. "
-                                                "Empty if none."},
+            "supporting_pages": {
+                "type": "array",
+                "items": {"type": "integer"},
+                "description": "Page numbers in the window where the supporting text was found. Empty if none.",
+            },
         },
         "required": VERDICT_TOOL["input_schema"]["required"] + ["supporting_pages"],
     },
@@ -115,8 +121,12 @@ def normalize(v: Any) -> dict[str, Any]:
     def strlist(x: Any) -> list[str]:
         return [str(i) for i in x] if isinstance(x, list) else []
 
-    return {"verdict": verdict, "unsupported_assertions": strlist(v.get("unsupported_assertions")),
-            "contradictions": strlist(v.get("contradictions")), "note": str(v.get("note") or "(no note returned)")}
+    return {
+        "verdict": verdict,
+        "unsupported_assertions": strlist(v.get("unsupported_assertions")),
+        "contradictions": strlist(v.get("contradictions")),
+        "note": str(v.get("note") or "(no note returned)"),
+    }
 
 
 def normalize_text(v: Any) -> dict[str, Any]:
@@ -139,24 +149,45 @@ def _tool_input(message: Any) -> Any:
     return None
 
 
-def verify_image(doorway: llm.Doorway, model: str, claim: str, images: list[dict], cite_label: str,
-                 custom_id: str | None = None) -> dict[str, Any]:
-    r = doorway.call("audit", model=model, max_tokens=4000, thinking={"type": "adaptive"}, tools=[VERDICT_TOOL],
-                     tool_choice=TOOL_CHOICE, cache_blocks=(),
-                     messages=[{"role": "user", "content": [*images, {"type": "text", "text": PROMPT.format(cite=cite_label, claim=claim)}]}],
-                     custom_id=custom_id)
+def verify_image(
+    doorway: llm.Doorway, model: str, claim: str, images: list[dict], cite_label: str, custom_id: str | None = None
+) -> dict[str, Any]:
+    r = doorway.call(
+        "audit",
+        model=model,
+        max_tokens=4000,
+        thinking={"type": "adaptive"},
+        tools=[VERDICT_TOOL],
+        tool_choice=TOOL_CHOICE,
+        cache_blocks=(),
+        messages=[
+            {
+                "role": "user",
+                "content": [*images, {"type": "text", "text": PROMPT.format(cite=cite_label, claim=claim)}],
+            }
+        ],
+        custom_id=custom_id,
+    )
     got = _tool_input(r.message)
     if got is None:
-        return {"verdict": "PAGE_UNREADABLE", "unsupported_assertions": [], "contradictions": [],
-                "note": "no tool call returned"}
+        return {
+            "verdict": "PAGE_UNREADABLE",
+            "unsupported_assertions": [],
+            "contradictions": [],
+            "note": "no tool call returned",
+        }
     return normalize(got)
 
 
 def text_request(window_block: str, claim: str, cited: list[int], anchors: list[str], cite_label: str) -> list[dict]:
     """Window block first (the cached prefix, content index 0), claim tail
     last (unique per call, never marked)."""
-    tail = CLAIM_TAIL.format(cite=cite_label, claim=claim, cited=", ".join(f"p.{p}" for p in cited),
-                             anchors=", ".join(a.split(":", 1)[1] for a in anchors) or "(none extracted)")
+    tail = CLAIM_TAIL.format(
+        cite=cite_label,
+        claim=claim,
+        cited=", ".join(f"p.{p}" for p in cited),
+        anchors=", ".join(a.split(":", 1)[1] for a in anchors) or "(none extracted)",
+    )
     return [{"type": "text", "text": window_block}, {"type": "text", "text": tail}]
 
 
@@ -169,14 +200,35 @@ def text_verdict(raw: Any, cited: list[int]) -> dict[str, Any]:
     return v
 
 
-def verify_text(doorway: llm.Doorway, model: str, claim: str, window_block: str, cited: list[int],
-                anchors: list[str], cite_label: str, custom_id: str | None = None) -> dict[str, Any]:
-    r = doorway.call("audit", model=model, system=SYSTEM_TEXT,
-                     messages=[{"role": "user", "content": text_request(window_block, claim, cited, anchors, cite_label)}],
-                     max_tokens=4000, tools=[VERDICT_TOOL_TEXT], tool_choice=TOOL_CHOICE,
-                     thinking={"type": "adaptive"}, cache_blocks=("user:0",), custom_id=custom_id)
+def verify_text(
+    doorway: llm.Doorway,
+    model: str,
+    claim: str,
+    window_block: str,
+    cited: list[int],
+    anchors: list[str],
+    cite_label: str,
+    custom_id: str | None = None,
+) -> dict[str, Any]:
+    r = doorway.call(
+        "audit",
+        model=model,
+        system=SYSTEM_TEXT,
+        messages=[{"role": "user", "content": text_request(window_block, claim, cited, anchors, cite_label)}],
+        max_tokens=4000,
+        tools=[VERDICT_TOOL_TEXT],
+        tool_choice=TOOL_CHOICE,
+        thinking={"type": "adaptive"},
+        cache_blocks=("user:0",),
+        custom_id=custom_id,
+    )
     got = _tool_input(r.message)
     if got is None:
-        return {"verdict": "PAGE_UNREADABLE", "unsupported_assertions": [], "contradictions": [],
-                "note": "no tool call returned", "supporting_pages": []}
+        return {
+            "verdict": "PAGE_UNREADABLE",
+            "unsupported_assertions": [],
+            "contradictions": [],
+            "note": "no tool call returned",
+            "supporting_pages": [],
+        }
     return text_verdict(got, cited)

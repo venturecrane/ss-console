@@ -7,14 +7,32 @@ from typing import Any
 import pytest
 import yaml
 
-from medchron import (budget as budget_mod, config as config_mod, dag, decisions, driver as driver_mod,
-                      job as job_mod, llm as llm_mod)
+from medchron import (
+    budget as budget_mod,
+    config as config_mod,
+    dag,
+    decisions,
+    driver as driver_mod,
+    job as job_mod,
+    llm as llm_mod,
+)
 from medchron.state import RunState, state_path
-from medchron_testkit import (FIRM_CONFIG, FakeSeat, calls, doc_row, job_yaml, make_pdf, seed_folders,
-                              seed_raw_manifest, write_ledger)
+from medchron_testkit import (
+    FIRM_CONFIG,
+    FakeSeat,
+    calls,
+    doc_row,
+    job_yaml,
+    make_pdf,
+    seed_folders,
+    seed_raw_manifest,
+    write_ledger,
+)
 
-PROSE = ("Patient seen in clinic today for follow up of neck pain after the collision. "
-         "The patient reports that the pain is improving with therapy and has no new complaints. ") * 6
+PROSE = (
+    "Patient seen in clinic today for follow up of neck pain after the collision. "
+    "The patient reports that the pain is improving with therapy and has no new complaints. "
+) * 6
 
 
 def _cfg(firm_config_path: Path) -> config_mod.FirmConfig:
@@ -31,7 +49,9 @@ def test_selection_is_subtraction_with_disclosure(job_dir: Path, data_root: Path
     assert (data_root / "example-matter" / "include.json").is_file()
 
 
-def test_selection_joint_matter_uses_unit_folders_and_shared(tmp_path: Path, data_root: Path, firm_config_path: Path) -> None:
+def test_selection_joint_matter_uses_unit_folders_and_shared(
+    tmp_path: Path, data_root: Path, firm_config_path: Path
+) -> None:
     jd = tmp_path / "job"
     jd.mkdir()
     (jd / "job.yaml").write_text(job_yaml(data_root, joint=True))
@@ -51,25 +71,38 @@ def test_selection_holds_when_a_unit_folder_is_missing(tmp_path: Path, data_root
     assert d.held and "Beta_Example" in d.holds[0]
 
 
-def test_fold_keeps_everything_but_skip_types_and_discloses_encrypted(job_dir: Path, data_root: Path, firm_config_path: Path) -> None:
+def test_fold_keeps_everything_but_skip_types_and_discloses_encrypted(
+    job_dir: Path, data_root: Path, firm_config_path: Path
+) -> None:
     # The shape stages/msg.py writes: kept attachments only, with the pull's
     # name when the bytes are already in the corpus; encrypted ones by name.
-    (data_root / "example-matter" / "msg_attachments.json").write_text(json.dumps({
-        "comparable": True,
-        "attachments": [
-            {"sha256": "a" * 64, "local": "aaaaaaaaaaaa.pdf", "kind": "pdf", "already_pulled_as": None},
-            {"sha256": "c" * 64, "local": "cccccccccccc.png", "kind": "image", "already_pulled_as": None},
-            {"sha256": "e" * 64, "local": "eeeeeeeeeeee.pdf", "kind": "pdf", "already_pulled_as": "filed copy.pdf"},
-        ],
-        "encrypted": [{"email": "RE: records", "attachment": "secure.rpmsg", "bytes": 30000}],
-    }))
+    (data_root / "example-matter" / "msg_attachments.json").write_text(
+        json.dumps(
+            {
+                "comparable": True,
+                "attachments": [
+                    {"sha256": "a" * 64, "local": "aaaaaaaaaaaa.pdf", "kind": "pdf", "already_pulled_as": None},
+                    {"sha256": "c" * 64, "local": "cccccccccccc.png", "kind": "image", "already_pulled_as": None},
+                    {
+                        "sha256": "e" * 64,
+                        "local": "eeeeeeeeeeee.pdf",
+                        "kind": "pdf",
+                        "already_pulled_as": "filed copy.pdf",
+                    },
+                ],
+                "encrypted": [{"email": "RE: records", "attachment": "secure.rpmsg", "bytes": 30000}],
+            }
+        )
+    )
     d = decisions.fold(job_mod.load(job_dir), _cfg(firm_config_path), data_root / "example-matter", dry_run=False)
     assert d.payload["fold"] == ["a" * 12, "c" * 12]
     assert d.payload["_disclosed_encrypted"] == ["secure.rpmsg"]
     assert any("1 encrypted attachment" in n for n in d.notes)
 
 
-def test_billing_docs_carries_the_pulled_path_and_no_invented_page_count(job_dir: Path, data_root: Path, firm_config_path: Path) -> None:
+def test_billing_docs_carries_the_pulled_path_and_no_invented_page_count(
+    job_dir: Path, data_root: Path, firm_config_path: Path
+) -> None:
     """billing_extract renders `path`; a row without a real file is the seat
     KeyError of 2026-09-04. The manifest carries no page count, so the row
     carries none either (the stage counts what it renders)."""
@@ -77,12 +110,15 @@ def test_billing_docs_carries_the_pulled_path_and_no_invented_page_count(job_dir
     (sd / "raw").mkdir()
     invoice = sd / "raw" / "f2.pdf"
     invoice.write_bytes(make_pdf(["Total charges $1,800.00"]))
-    seed_raw_manifest(data_root, [
-        {"id": "f1", "name": "clinic note", "ok": True, "path": str(sd / "raw" / "f1.pdf")},
-        {"id": "f2", "name": "Example Clinic invoice", "ok": True, "path": str(invoice)},
-        {"id": "f3", "name": "Example Clinic invoice", "ok": True, "path": None, "duplicate_of": "f2"},
-        {"id": "f4", "name": "old bill", "ok": False, "error": "no url"},
-    ])
+    seed_raw_manifest(
+        data_root,
+        [
+            {"id": "f1", "name": "clinic note", "ok": True, "path": str(sd / "raw" / "f1.pdf")},
+            {"id": "f2", "name": "Example Clinic invoice", "ok": True, "path": str(invoice)},
+            {"id": "f3", "name": "Example Clinic invoice", "ok": True, "path": None, "duplicate_of": "f2"},
+            {"id": "f4", "name": "old bill", "ok": False, "error": "no url"},
+        ],
+    )
     d = decisions.billing_docs(job_mod.load(job_dir), _cfg(firm_config_path), sd, dry_run=False)
     assert not d.held
     assert d.payload["docs"] == [{"id": "f2", "name": "Example Clinic invoice", "path": str(invoice)}]
@@ -95,24 +131,32 @@ def test_billing_docs_carries_the_pulled_path_and_no_invented_page_count(job_dir
     assert d.held and "ledger scan" in d.holds[0]
 
 
-def test_orphans_explains_by_config_reason_and_holds_on_residue(job_dir: Path, data_root: Path, firm_config_path: Path) -> None:
+def test_orphans_explains_by_config_reason_and_holds_on_residue(
+    job_dir: Path, data_root: Path, firm_config_path: Path
+) -> None:
     sd = data_root / "example-matter"
     (sd / "units").mkdir()
     (sd / "units" / "alpha.json").write_text(json.dumps([{"id": "f1", "name": "clinic note", "pages": 3}]))
-    seed_raw_manifest(data_root, [
-        {"id": "f1", "name": "clinic note.pdf", "ok": True},
-        {"id": "f2", "name": "Retainer signed.pdf", "ok": True},
-        {"id": "f3", "name": "unknown scan.pdf", "ok": True},
-    ])
+    seed_raw_manifest(
+        data_root,
+        [
+            {"id": "f1", "name": "clinic note.pdf", "ok": True},
+            {"id": "f2", "name": "Retainer signed.pdf", "ok": True},
+            {"id": "f3", "name": "unknown scan.pdf", "ok": True},
+        ],
+    )
     job = job_mod.load(job_dir)
     d = decisions.orphans(job, _cfg(firm_config_path), sd, job.units[0], dry_run=False)
     assert d.held and "unknown scan.pdf" in d.holds[0]
     assert not (sd / "orphans.json").exists()
-    seed_raw_manifest(data_root, [
-        {"id": "f1", "name": "clinic note.pdf", "ok": True},
-        {"id": "f2", "name": "Retainer signed.pdf", "ok": True},
-        {"id": "f3", "name": "image001", "ext": ".png", "size_got": 1168, "ok": True},
-    ])
+    seed_raw_manifest(
+        data_root,
+        [
+            {"id": "f1", "name": "clinic note.pdf", "ok": True},
+            {"id": "f2", "name": "Retainer signed.pdf", "ok": True},
+            {"id": "f3", "name": "image001", "ext": ".png", "size_got": 1168, "ok": True},
+        ],
+    )
     d = decisions.orphans(job, _cfg(firm_config_path), sd, job.units[0], dry_run=False)
     assert not d.held
     reasons = [o["reason"] for o in json.loads((sd / "orphans.json").read_text())["orphans"]]
@@ -123,13 +167,19 @@ def test_orphans_explains_by_config_reason_and_holds_on_residue(job_dir: Path, d
 def test_control_picks_the_page_with_most_native_text(job_dir: Path, data_root: Path, firm_config_path: Path) -> None:
     sd = data_root / "example-matter"
     (sd / "out" / "alpha").mkdir(parents=True)
-    (sd / "out" / "alpha" / "page_map.json").write_text(json.dumps([
-        {"exhibit": 1, "files": [{"file": "sparse scan.pdf", "start_page": 1, "pages": 10}]},
-        {"exhibit": 2, "files": [{"file": "dense notes.pdf", "start_page": 1, "pages": 5}]},
-    ]))
+    (sd / "out" / "alpha" / "page_map.json").write_text(
+        json.dumps(
+            [
+                {"exhibit": 1, "files": [{"file": "sparse scan.pdf", "start_page": 1, "pages": 10}]},
+                {"exhibit": 2, "files": [{"file": "dense notes.pdf", "start_page": 1, "pages": 5}]},
+            ]
+        )
+    )
     (sd / "extracted.jsonl").write_text(
-        json.dumps({"name": "sparse scan", "pages": 10, "chars": 400}) + "\n"
-        + json.dumps({"name": "dense notes", "pages": 5, "chars": 12000}) + "\n"
+        json.dumps({"name": "sparse scan", "pages": 10, "chars": 400})
+        + "\n"
+        + json.dumps({"name": "dense notes", "pages": 5, "chars": 12000})
+        + "\n"
     )
     job = job_mod.load(job_dir)
     d = decisions.control(job, _cfg(firm_config_path), sd, job.units[0], dry_run=False)
@@ -150,24 +200,38 @@ def _seat() -> FakeSeat:
     work on."""
     f1 = make_pdf([""] + [f"{PROSE} Page {i} of the record." for i in range(2, 8)])
     f2, f9 = make_pdf(["Example Clinic\nTotal charges $1,800.00"]), make_pdf([PROSE])
-    docs = [doc_row("f1", "f1.pdf", "fold-med", len(f1)), doc_row("f2", "Example Clinic invoice.pdf", "fold-med", len(f2)),
-            doc_row("f9", "Retainer signed.pdf", "fold-med", len(f9))]
-    return FakeSeat(docs, [{"id": "fold-med", "name": "MEDICAL", "parentId": None, "path": "/MEDICAL"}],
-                    {"f1": f1, "f2": f2, "f9": f9})
+    docs = [
+        doc_row("f1", "f1.pdf", "fold-med", len(f1)),
+        doc_row("f2", "Example Clinic invoice.pdf", "fold-med", len(f2)),
+        doc_row("f9", "Retainer signed.pdf", "fold-med", len(f9)),
+    ]
+    return FakeSeat(
+        docs,
+        [{"id": "fold-med", "name": "MEDICAL", "parentId": None, "path": "/MEDICAL"}],
+        {"f1": f1, "f2": f2, "f9": f9},
+    )
 
 
-REAL_MAP = ("## ENTRIES\n01/20/2026\nExample Clinic | Patient Complaints & Limitations\n\n"
-            "The patient reports neck pain after the collision rated 6 of 10. (FILE: f1.pdf, p. 2)\n\n"
-            "Medical Diagnoses\n\nCervical strain. (FILE: f1.pdf, p. 3)\n\n"
-            "## INDEX\n2026-01-20 | Example Clinic | S13.4XXA | f1.pdf\n\n## BILLING-DATES\nnone in this chunk\n\n"
-            "## CONFLICTS / REFERENCED-BUT-ABSENT\nnone observed\n\n## FILES-SEEN\n"
-            "=== FILE: f1.pdf (fileId f1) === entries: 1\n")
+REAL_MAP = (
+    "## ENTRIES\n01/20/2026\nExample Clinic | Patient Complaints & Limitations\n\n"
+    "The patient reports neck pain after the collision rated 6 of 10. (FILE: f1.pdf, p. 2)\n\n"
+    "Medical Diagnoses\n\nCervical strain. (FILE: f1.pdf, p. 3)\n\n"
+    "## INDEX\n2026-01-20 | Example Clinic | S13.4XXA | f1.pdf\n\n## BILLING-DATES\nnone in this chunk\n\n"
+    "## CONFLICTS / REFERENCED-BUT-ABSENT\nnone observed\n\n## FILES-SEEN\n"
+    "=== FILE: f1.pdf (fileId f1) === entries: 1\n"
+)
 SUPPORTED = {"verdict": "SUPPORTED", "unsupported_assertions": [], "contradictions": [], "note": "on the page"}
 UNSUPPORTED = {"verdict": "UNSUPPORTED", "unsupported_assertions": ["x"], "contradictions": [], "note": "not this page"}
-BILL = {"doc_type": "MEDICAL_BILL", "provider": "Example Clinic", "patient": "Alpha Example",
-        "date_first": "01/20/2026", "date_last": "01/20/2026",
-        "printed_totals": [{"label": "Total charges", "amount": "$1,800.00", "page": 1}],
-        "line_items": [{"date": "01/20/2026", "description": "visit", "charge": "$1,800.00", "page": 1}], "notes": ""}
+BILL = {
+    "doc_type": "MEDICAL_BILL",
+    "provider": "Example Clinic",
+    "patient": "Alpha Example",
+    "date_first": "01/20/2026",
+    "date_last": "01/20/2026",
+    "printed_totals": [{"label": "Total charges", "amount": "$1,800.00", "page": 1}],
+    "line_items": [{"date": "01/20/2026", "description": "visit", "charge": "$1,800.00", "page": 1}],
+    "notes": "",
+}
 
 
 class _Usage:
@@ -175,13 +239,23 @@ class _Usage:
 
 
 def _text_msg(text: str):
-    return type("M", (), {"content": [type("B", (), {"type": "text", "text": text})()], "stop_reason": "end_turn",
-                          "usage": _Usage()})()
+    return type(
+        "M",
+        (),
+        {"content": [type("B", (), {"type": "text", "text": text})()], "stop_reason": "end_turn", "usage": _Usage()},
+    )()
 
 
 def _tool_msg(payload: dict):
-    return type("M", (), {"content": [type("B", (), {"type": "tool_use", "input": payload})()], "stop_reason": "tool_use",
-                          "usage": _Usage()})()
+    return type(
+        "M",
+        (),
+        {
+            "content": [type("B", (), {"type": "tool_use", "input": payload})()],
+            "stop_reason": "tool_use",
+            "usage": _Usage(),
+        },
+    )()
 
 
 class _Stream:
@@ -209,7 +283,7 @@ class _NoNetwork:
     def __init__(self) -> None:
         self.messages = self
         self.calls: list[dict] = []
-        self.classified: list[str] = []      # every page label the classifier was asked about
+        self.classified: list[str] = []  # every page label the classifier was asked about
 
     def _system(self, kw) -> str:
         sysm = kw.get("system")
@@ -244,22 +318,38 @@ def _controls(install_root: Path) -> None:
     data_root, which is fresh per job on a seat)."""
     ctl = install_root / "controls"
     ctl.mkdir(parents=True, exist_ok=True)
-    (ctl / "control-order.pdf").write_bytes(make_pdf(["Order #: 1\nRequested Date Range: 2026\nvendor@example-retrieval.com"]))
+    (ctl / "control-order.pdf").write_bytes(
+        make_pdf(["Order #: 1\nRequested Date Range: 2026\nvendor@example-retrieval.com"])
+    )
     (ctl / "control-index.pdf").write_bytes(make_pdf(["This list is computer generated\nabdomen 4\n"]))
-    (ctl / "controls.json").write_text(json.dumps([{"pdf": "controls/control-order.pdf", "page": 1, "label": "ORDER"},
-                                                   {"pdf": "controls/control-index.pdf", "page": 1, "label": "INDEX"}]))
+    (ctl / "controls.json").write_text(
+        json.dumps(
+            [
+                {"pdf": "controls/control-order.pdf", "page": 1, "label": "ORDER"},
+                {"pdf": "controls/control-index.pdf", "page": 1, "label": "INDEX"},
+            ]
+        )
+    )
     icd = ctl / "icd"
     icd.mkdir(exist_ok=True)
-    (icd / "icd10cm_order.txt").write_text("{:<5} {:<7} {} {:<60} {}\n".format("00001", "S134XXA", "1", "Sprain of lig", "Sprain of ligaments of cervical spine, initial encounter"))
+    (icd / "icd10cm_order.txt").write_text(
+        "{:<5} {:<7} {} {:<60} {}\n".format(
+            "00001", "S134XXA", "1", "Sprain of lig", "Sprain of ligaments of cervical spine, initial encounter"
+        )
+    )
     (icd / "CMS32_DESC_LONG_DX.txt").write_text("7242 Lumbago\n")
     (icd / "VERSION.json").write_text("{}")
 
 
-def _driver(job_dir: Path, firm_config_path: Path, pricing_path: Path, break_at: str | None = None, **kw) -> driver_mod.Driver:
+def _driver(
+    job_dir: Path, firm_config_path: Path, pricing_path: Path, break_at: str | None = None, **kw
+) -> driver_mod.Driver:
     kw.setdefault("seat_factory", _seat)
     kw.setdefault("client", _NoNetwork())
     _controls(job_mod.load(job_dir).install_root)
-    d = driver_mod.Driver(job_dir, firm_config=str(firm_config_path), pricing=str(pricing_path), log=lambda *_: None, **kw)
+    d = driver_mod.Driver(
+        job_dir, firm_config=str(firm_config_path), pricing=str(pricing_path), log=lambda *_: None, **kw
+    )
     if break_at:
         # One in-process crash at the named stage, then the real runner: how a
         # kill mid-stage looks to the state file.
@@ -276,7 +366,9 @@ def _driver(job_dir: Path, firm_config_path: Path, pricing_path: Path, break_at:
     return d
 
 
-def test_dry_run_authors_nothing_and_runs_nothing(job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path) -> None:
+def test_dry_run_authors_nothing_and_runs_nothing(
+    job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path
+) -> None:
     seed_folders(data_root, ["MEDICAL"])
     outs = _driver(job_dir, firm_config_path, pricing_path, dry_run=True).run()
     assert outs[0].outcome == "dry_run"
@@ -290,7 +382,7 @@ def test_dry_run_authors_nothing_and_runs_nothing(job_dir: Path, data_root: Path
 def test_the_whole_dag_runs_in_process_without_the_frozen_pipeline(
     tmp_path: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delenv("MEDCHRON_PIPELINE_DIR", raising=False)   # no frozen checkout anywhere
+    monkeypatch.delenv("MEDCHRON_PIPELINE_DIR", raising=False)  # no frozen checkout anywhere
     # The seat's layout: a fresh per-job data_root and a separate install root
     # carrying the controls and ICD tables. Nothing under data_root/controls.
     job_dir, install_root = tmp_path / "job", tmp_path / "install"
@@ -313,7 +405,9 @@ def test_the_whole_dag_runs_in_process_without_the_frozen_pipeline(
     assert json.loads((sd / "nonrecord.json").read_text())["1"]["drop_pages"] == []
     assert json.loads((sd / "scanned_labels.json").read_text())["controls_ok"] is True
     audit_rows = [json.loads(line) for line in (sd / "out" / "alpha" / "audit-results.jsonl").read_text().splitlines()]
-    assert [r["verdict"] for r in audit_rows if r["kind"] == "real"] == ["SUPPORTED"]   # "Cervical strain." is under the 30-char floor
+    assert [r["verdict"] for r in audit_rows if r["kind"] == "real"] == [
+        "SUPPORTED"
+    ]  # "Cervical strain." is under the 30-char floor
     assert "GATE PASS" in (sd / "runs" / "alpha" / "log-audit.txt").read_text()
     # The worksheet read the invoice the run transcribed: one claim form, no
     # ledger, so the total is stated as not derivable rather than invented.
@@ -334,7 +428,11 @@ def test_the_whole_dag_runs_in_process_without_the_frozen_pipeline(
     assert [(b["id"], b["name"]) for b in billing] == [("f2", "Example Clinic invoice")]
     assert Path(billing[0]["path"]).is_file() and "pages" not in billing[0]
     extract = json.loads((sd / "billing_extract.jsonl").read_text().splitlines()[-1])
-    assert extract["file"] == "Example Clinic invoice" and extract["pages"] == 1 and extract["chunks"][0]["doc_type"] == "MEDICAL_BILL"
+    assert (
+        extract["file"] == "Example Clinic invoice"
+        and extract["pages"] == 1
+        and extract["chunks"][0]["doc_type"] == "MEDICAL_BILL"
+    )
     assert "  1pp  Example Clinic invoice" in (sd / "runs" / "alpha" / "log-billing_extract.txt").read_text()
     # The scanned-page classifier reached its controls gate with a real target
     # (the record's blank cover sheet) and read the falsifier from the INSTALL
@@ -348,36 +446,67 @@ def test_the_whole_dag_runs_in_process_without_the_frozen_pipeline(
     # The ICD tables resolved against the install root too: the descriptor in
     # the doc above came from there (nothing under data_root could supply it)
     # and the once-per-machine fetch was skipped as present, not attempted.
-    icd_state = RunState.load_or_new(state_path(data_root, "example-matter", "alpha"), slug="x", unit="y").stage("icd_tables")
+    icd_state = RunState.load_or_new(state_path(data_root, "example-matter", "alpha"), slug="x", unit="y").stage(
+        "icd_tables"
+    )
     assert icd_state.status == "skipped" and icd_state.note == "present"
     # The paid $0-in-this-run stages ran in-process too: no scans, the invoice
     # marked billing-only (compose skip from evidence), one unit.
     unit_rows = {r["id"]: r for r in json.loads((sd / "units" / "alpha.json").read_text())}
-    assert sorted(unit_rows) == ["f1", "f2"] and unit_rows["f2"]["compose"] is False and "compose" not in unit_rows["f1"]
+    assert (
+        sorted(unit_rows) == ["f1", "f2"] and unit_rows["f2"]["compose"] is False and "compose" not in unit_rows["f1"]
+    )
     assert json.loads((sd / "orphans.json").read_text())["orphans"][0]["reason"].startswith("engagement document")
-    assert calls(data_root) == []                      # nothing runs as a subprocess any more
+    assert calls(data_root) == []  # nothing runs as a subprocess any more
     out = sd / "out" / "alpha"
     assert list(out.glob("Alpha Example - Medical Chronology *.docx"))
     manifest = json.loads((out / "upload_manifest.json").read_text())
-    assert [m["name"][:9] for m in manifest] == ["Alpha Exa", "Alpha Exa", "Exhibit 1"]   # chronology, worksheet, exhibit and all(m["sha256"] for m in manifest)
+    assert [m["name"][:9] for m in manifest] == [
+        "Alpha Exa",
+        "Alpha Exa",
+        "Exhibit 1",
+    ]  # chronology, worksheet, exhibit and all(m["sha256"] for m in manifest)
     assert (out / "img" / "timeline.png").is_file()
     st = RunState.load_or_new(state_path(data_root, "example-matter", "alpha"), slug="x", unit="y")
     assert st.outcome == "delivered"
-    for name in ("list_matter", "download", "extract_after_fold", "vision", "billing_extract", "build_units",
-                 "map", "repair_truncated", "assemble", "merge", "group", "filter", "exhibits", "condense",
-                 "summarize", "build_doc", "classify_nonrecord", "strip_apply", "coverage_gate", "billing_chart",
-                 "billing_docx", "audit", "manifest"):
+    for name in (
+        "list_matter",
+        "download",
+        "extract_after_fold",
+        "vision",
+        "billing_extract",
+        "build_units",
+        "map",
+        "repair_truncated",
+        "assemble",
+        "merge",
+        "group",
+        "filter",
+        "exhibits",
+        "condense",
+        "summarize",
+        "build_doc",
+        "classify_nonrecord",
+        "strip_apply",
+        "coverage_gate",
+        "billing_chart",
+        "billing_docx",
+        "audit",
+        "manifest",
+    ):
         assert st.is_done(name), name
     assert doc.startswith("Alpha Example - Medical Chronology") and "## Records Reviewed and Limitations" in doc
     assert "This chronology was prepared from 3 documents" in doc
     assert (sd / "runs" / "alpha" / "entries_condensed.md").is_file()
     assert (sd / "runs" / "alpha" / "map-01.md").read_text() == REAL_MAP
     assert (sd / "runs" / "alpha" / "merged.md").read_text() == ""
-    assert o.dollars > 0    # the compose, classify and audit calls were ledgered and priced
+    assert o.dollars > 0  # the compose, classify and audit calls were ledgered and priced
     assert st.pipeline_sha.startswith("medchron-")
 
 
-def test_resume_skips_done_stages_after_a_kill(job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, fake_pipeline: Path) -> None:
+def test_resume_skips_done_stages_after_a_kill(
+    job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, fake_pipeline: Path
+) -> None:
     seed_folders(data_root, ["MEDICAL"])
     # a crash mid-run: the render stage raises once (a broken chronology file)
     sd = data_root / "example-matter"
@@ -391,13 +520,17 @@ def test_resume_skips_done_stages_after_a_kill(job_dir: Path, data_root: Path, f
     assert calls(data_root)[before:] == []
     st = RunState.load_or_new(state_path(data_root, "example-matter", "alpha"), slug="x", unit="y")
     assert st.outcome == "delivered"
-    assert st.stage("download").attempts == 1   # the pull was not repeated
+    assert st.stage("download").attempts == 1  # the pull was not repeated
     assert st.stage("build_units").attempts == 1 and st.stage("render").attempts == 2
 
 
-def test_cap_refuses_before_the_first_paid_stage(job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, fake_pipeline: Path) -> None:
+def test_cap_refuses_before_the_first_paid_stage(
+    job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, fake_pipeline: Path
+) -> None:
     seed_folders(data_root, ["MEDICAL"])
-    write_ledger(data_root, "alpha", [{"stage": "compose", "model": "claude-opus-5", "in": 40_000_000, "out": 0}])  # $200 already
+    write_ledger(
+        data_root, "alpha", [{"stage": "compose", "model": "claude-opus-5", "in": 40_000_000, "out": 0}]
+    )  # $200 already
     outs = _driver(job_dir, firm_config_path, pricing_path).run()
     o = outs[0]
     # 2026-09-09: a limit is a HOLD, not a refusal, and its reason names the
@@ -408,25 +541,33 @@ def test_cap_refuses_before_the_first_paid_stage(job_dir: Path, data_root: Path,
     assert "vision_scan.py" not in [c["script"] for c in calls(data_root)]
 
 
-def test_exit_code_map_yields_the_vocabulary(job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, fake_pipeline: Path) -> None:
+def test_exit_code_map_yields_the_vocabulary(
+    job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, fake_pipeline: Path
+) -> None:
     seed_folders(data_root, ["MEDICAL"])
     outs = _driver(job_dir, firm_config_path, pricing_path, break_at="build_units").run()
     assert outs[0].outcome == "failed" and outs[0].stage == "build_units" and "boom" in outs[0].reason
 
 
-def test_unknown_model_in_ledger_refuses_the_run(job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, fake_pipeline: Path) -> None:
+def test_unknown_model_in_ledger_refuses_the_run(
+    job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, fake_pipeline: Path
+) -> None:
     seed_folders(data_root, ["MEDICAL"])
     write_ledger(data_root, "alpha", [{"stage": "compose", "model": "claude-mystery-7", "in": 10, "out": 0}])
     with pytest.raises(budget_mod.BudgetError, match="refusing to price it at zero"):
         _driver(job_dir, firm_config_path, pricing_path).run()
 
 
-def test_job_cap_overrides_the_firm_default(tmp_path: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, fake_pipeline: Path) -> None:
+def test_job_cap_overrides_the_firm_default(
+    tmp_path: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, fake_pipeline: Path
+) -> None:
     jd = tmp_path / "job"
     jd.mkdir()
     (jd / "job.yaml").write_text(job_yaml(data_root, cap=1.0))
     seed_folders(data_root, ["MEDICAL"])
-    write_ledger(data_root, "alpha", [{"stage": "compose", "model": "claude-sonnet-5", "in": 1_000_000, "out": 0}])  # $2
+    write_ledger(
+        data_root, "alpha", [{"stage": "compose", "model": "claude-sonnet-5", "in": 1_000_000, "out": 0}]
+    )  # $2
     outs = _driver(jd, firm_config_path, pricing_path).run()
     assert outs[0].outcome == "held" and outs[0].reason.startswith("per_job_cap_usd: ")
     assert yaml.safe_load((jd / "job.yaml").read_text())["cap_usd"] == 1.0
@@ -453,7 +594,8 @@ def _seed_extracted(data_root: Path, *, pages: int, scanned: int = 0, chars: int
     if scanned:
         rows.append({"id": "f2", "name": "f2", "pages": scanned, "scan": True})
     (data_root / "example-matter" / "extracted.jsonl").write_text(
-        "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+        "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8"
+    )
 
 
 def _limit_run(job_dir: Path, firm: Path, pricing_path: Path, **kw):
@@ -489,8 +631,14 @@ def test_the_month_page_allowance_proceeds_at_the_remainder_and_holds_one_page_o
     firm = _firm(tmp_path)
     _seed_extracted(data_root, pages=10)
     for remaining in (10, 9):
-        jd = _job(tmp_path, data_root, f"job-allow-{remaining}", allowance_remaining_pages=remaining,
-                  month_cents_used=0, allowance_month="2026-09")
+        jd = _job(
+            tmp_path,
+            data_root,
+            f"job-allow-{remaining}",
+            allowance_remaining_pages=remaining,
+            month_cents_used=0,
+            allowance_month="2026-09",
+        )
         o = _limit_run(jd, firm, pricing_path)
         if remaining == 9:
             assert o.outcome == "held" and o.reason.startswith("chronology_package_page_allowance_per_month: ")
@@ -505,7 +653,7 @@ def test_the_month_budget_holds_before_the_first_paid_stage_from_the_projection(
     """The month's spend to date plus THIS run's projection. Neither alone
     crosses the budget; together they do, and the run never starts."""
     firm = _firm(tmp_path, monthly_budget_usd=10.0, usd_per_scanned_page=1.0)
-    _seed_extracted(data_root, pages=8, scanned=8)          # projects 8.00
+    _seed_extracted(data_root, pages=8, scanned=8)  # projects 8.00
     jd = _job(tmp_path, data_root, "job-budget", month_cents_used=300, allowance_month="2026-09")
     o = _limit_run(jd, firm, pricing_path)
     assert o.outcome == "held" and o.reason.startswith("monthly_budget_usd: ")
@@ -523,7 +671,7 @@ def test_the_envelope_can_lower_the_firm_cap_but_never_raise_it(
     (jd / "job.yaml").write_text(job_yaml(data_root, cap=999.0))
     seed_folders(data_root, ["MEDICAL"])
     write_ledger(data_root, "alpha", [{"stage": "compose", "model": "claude-opus-5", "in": 40_000_000, "out": 0}])
-    o = _driver(jd, firm_config_path, pricing_path).run()[0]     # firm cap 150, ledger 200
+    o = _driver(jd, firm_config_path, pricing_path).run()[0]  # firm cap 150, ledger 200
     assert o.outcome == "held" and o.reason.startswith("per_job_cap_usd: ")
 
 
@@ -542,18 +690,28 @@ class _Meter:
 
     def create(self, **kw):
         self.calls.append(kw)
-        return type("M", (), {"content": [type("B", (), {"type": "text", "text": "ok"})()],
-                              "stop_reason": "end_turn", "usage": self._U()})()
+        return type(
+            "M",
+            (),
+            {
+                "content": [type("B", (), {"type": "text", "text": "ok"})()],
+                "stop_reason": "end_turn",
+                "usage": self._U(),
+            },
+        )()
 
 
 def _spender(n: int = 20):
     """A stage that keeps calling the doorway. Without the hook it spends the
     whole way through; with it, the run stops at the first call past the line."""
+
     def run(sr) -> int:
         for _ in range(n):
-            sr.doorway.call("vision", model="claude-sonnet-5", messages=[{"role": "user", "content": "x"}],
-                            max_tokens=16)
+            sr.doorway.call(
+                "vision", model="claude-sonnet-5", messages=[{"role": "user", "content": "x"}], max_tokens=16
+            )
         return 0
+
     return run
 
 
@@ -583,16 +741,21 @@ def test_the_month_budget_stops_a_run_inside_a_stage(
     tmp_path: Path, data_root: Path, pricing_path: Path, fake_pipeline: Path
 ) -> None:
     firm = _firm(tmp_path, monthly_budget_usd=0.50, usd_per_scanned_page=0.0001, usd_per_million_chars=0.0)
-    o, client = _in_stage(tmp_path, data_root, pricing_path, firm, "job-budget-instage",
-                          month_cents_used=30, allowance_month="2026-09")
+    o, client = _in_stage(
+        tmp_path, data_root, pricing_path, firm, "job-budget-instage", month_cents_used=30, allowance_month="2026-09"
+    )
     assert o.outcome == "held" and o.reason.startswith("monthly_budget_usd: ")
-    assert len(client.calls) == 2      # 0.30 carried plus 0.20 spent reaches the line
+    assert len(client.calls) == 2  # 0.30 carried plus 0.20 spent reaches the line
     assert "$" not in o.reason
 
 
 def test_seat_mode_refuses_a_job_that_carries_no_month_state(
-    job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, fake_pipeline: Path,
-    monkeypatch: pytest.MonkeyPatch
+    job_dir: Path,
+    data_root: Path,
+    firm_config_path: Path,
+    pricing_path: Path,
+    fake_pipeline: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Unmetered is not a state a client seat may run in. On a laptop the same
     envelope is fine."""
@@ -603,9 +766,7 @@ def test_seat_mode_refuses_a_job_that_carries_no_month_state(
     _driver(job_dir, firm_config_path, pricing_path)
 
 
-def test_a_dry_run_measures_the_limits_and_spends_nothing(
-    tmp_path: Path, data_root: Path, pricing_path: Path
-) -> None:
+def test_a_dry_run_measures_the_limits_and_spends_nothing(tmp_path: Path, data_root: Path, pricing_path: Path) -> None:
     firm = _firm(tmp_path, per_job_cap_usd=0.01)
     jd = _job(tmp_path, data_root, "job-dry")
     seed_folders(data_root, ["MEDICAL"])
@@ -633,13 +794,28 @@ class _BatchClient:
 
 def _batcher(n: int):
     """A stage that hands the doorway one batch of n page-shaped items."""
+
     def run(sr) -> int:
-        items = [llm_mod.Item(custom_id=f"p{i}", messages=[{"role": "user", "content": [
-            {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "x"}},
-            {"type": "text", "text": "transcribe this page"}]}]) for i in range(n)]
-        sr.doorway.batch_call("vision", items, lambda *a: None, model="claude-sonnet-5",
-                              max_tokens=16, batch_dir=sr.slug_dir / "batch")
+        items = [
+            llm_mod.Item(
+                custom_id=f"p{i}",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "x"}},
+                            {"type": "text", "text": "transcribe this page"},
+                        ],
+                    }
+                ],
+            )
+            for i in range(n)
+        ]
+        sr.doorway.batch_call(
+            "vision", items, lambda *a: None, model="claude-sonnet-5", max_tokens=16, batch_dir=sr.slug_dir / "batch"
+        )
         return 0
+
     return run
 
 
@@ -651,18 +827,23 @@ def test_a_batch_that_would_cross_the_cap_holds_before_it_is_submitted(
     before submission, and an overshoot is bounded to one batch. Without this a
     firm that opted into batching would silently lose the per-call bound.
     """
-    firm = _firm(tmp_path, per_job_cap_usd=1.0, usd_per_scanned_page=0.02,
-                 usd_per_million_chars=0.0, levers={"batch_stages": ["vision"]})
+    firm = _firm(
+        tmp_path,
+        per_job_cap_usd=1.0,
+        usd_per_scanned_page=0.02,
+        usd_per_million_chars=0.0,
+        levers={"batch_stages": ["vision"]},
+    )
     jd = _job(tmp_path, data_root, "job-batch-over")
     _seed_extracted(data_root, pages=4)
     client = _BatchClient()
     d = _driver(jd, firm, pricing_path, start="vision", client=client)
-    d._runner_override = {"vision": _batcher(80)}       # 80 pages x 0.02 = 1.60, over a 1.00 cap
+    d._runner_override = {"vision": _batcher(80)}  # 80 pages x 0.02 = 1.60, over a 1.00 cap
     o = d.run()[0]
     assert o.outcome == "held" and o.stage == "vision"
     assert o.reason.startswith("per_job_cap_usd: ") and "the batch was not submitted" in o.reason
     assert "$" not in o.reason and "USD" not in o.reason
-    assert client.submitted == []                       # nothing was ever sent
+    assert client.submitted == []  # nothing was ever sent
 
 
 def test_a_batch_inside_the_cap_is_submitted(
@@ -670,13 +851,18 @@ def test_a_batch_inside_the_cap_is_submitted(
 ) -> None:
     """The pass direction: the same wiring must not refuse a batch that fits,
     or the check above could pass by refusing everything."""
-    firm = _firm(tmp_path, per_job_cap_usd=1.0, usd_per_scanned_page=0.02,
-                 usd_per_million_chars=0.0, levers={"batch_stages": ["vision"]})
+    firm = _firm(
+        tmp_path,
+        per_job_cap_usd=1.0,
+        usd_per_scanned_page=0.02,
+        usd_per_million_chars=0.0,
+        levers={"batch_stages": ["vision"]},
+    )
     jd = _job(tmp_path, data_root, "job-batch-under")
     _seed_extracted(data_root, pages=4)
     client = _BatchClient()
     d = _driver(jd, firm, pricing_path, start="vision", client=client)
-    d._runner_override = {"vision": _batcher(40)}       # 40 pages x 0.02 = 0.80, inside the cap
+    d._runner_override = {"vision": _batcher(40)}  # 40 pages x 0.02 = 0.80, inside the cap
     o = d.run()[0]
     # The batch reached the submission, which is the property under test. The
     # stub raises there rather than faking a whole batch lifecycle, so the run

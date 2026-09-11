@@ -126,9 +126,7 @@ def cmd_patch_matter(args: argparse.Namespace) -> None:
     if code != 200:
         sys.exit(f"GET matter {code}: {matter}")
     base = (matter.get("description") or "").split(" [l2-trigger")[0]
-    code, resp = api.call(
-        "PATCH", f"/matters/{matter_id}", {"description": f"{base} [l2-trigger: {args.note}]"}
-    )
+    code, resp = api.call("PATCH", f"/matters/{matter_id}", {"description": f"{base} [l2-trigger: {args.note}]"})
     print(json.dumps({"command": "patch-matter", "matter": args.matter, "status": code, "resp": resp}))
 
 
@@ -156,9 +154,7 @@ def cmd_ensure_inbox(args: argparse.Namespace) -> None:
     ):
         print(json.dumps({"command": "ensure-inbox", "inbox": target, "status": "exists"}))
         return
-    code, resp = _agentmail(
-        "POST", "/v0/inboxes", {"username": args.username, "display_name": args.display}
-    )
+    code, resp = _agentmail("POST", "/v0/inboxes", {"username": args.username, "display_name": args.display})
     print(json.dumps({"command": "ensure-inbox", "inbox": target, "status": code, "resp": resp}))
 
 
@@ -174,9 +170,7 @@ def cmd_send_email(args: argparse.Namespace) -> None:
                 "content_type": "application/pdf",
             }
         ]
-    code, resp = _agentmail(
-        "POST", f"/v0/inboxes/{_inbox_path(args.from_inbox)}/messages/send", body
-    )
+    code, resp = _agentmail("POST", f"/v0/inboxes/{_inbox_path(args.from_inbox)}/messages/send", body)
     print(json.dumps({"command": "send-email", "from": args.from_inbox, "to": args.to, "status": code, "resp": resp}))
 
 
@@ -206,9 +200,7 @@ def cmd_read_doc_sha(args: argparse.Namespace) -> None:
     # the whole file.
     sys.path.insert(
         0,
-        os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "connectors", "smokeball"
-        ),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "connectors", "smokeball"),
     )
     from smokeball_connector.extract import UnsupportedDocumentError, extract_text
 

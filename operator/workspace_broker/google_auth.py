@@ -13,9 +13,7 @@ import yaml
 
 def materialize_credential(credential_path: Path) -> None:
     """Decode the configured Google credential into the broker-owned store."""
-    encoded = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or os.environ.get(
-        "GOOGLE_TOKEN_JSON"
-    )
+    encoded = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or os.environ.get("GOOGLE_TOKEN_JSON")
     if not encoded:
         return
     raw = base64.b64decode(encoded, validate=True)
@@ -77,23 +75,15 @@ def credentials(credential_path: Path, customer_path: Path, subject: str = ""):
     if info.get("type") == "service_account":
         config = _customer_google_auth(customer_path)
         default, allowed, _ = authored_identities(config)
-        scopes = [
-            scope.strip()
-            for scope in config.get("scopes") or []
-            if isinstance(scope, str) and scope.strip()
-        ]
+        scopes = [scope.strip() for scope in config.get("scopes") or [] if isinstance(scope, str) and scope.strip()]
         effective = str(subject or "").strip() or default
         if not effective or not scopes:
             raise RuntimeError("DWD requires authored subject and scopes")
         if effective not in allowed:
-            raise RuntimeError(
-                f"subject {effective!r} is not an authored impersonation target"
-            )
+            raise RuntimeError(f"subject {effective!r} is not an authored impersonation target")
         from google.oauth2 import service_account
 
-        return service_account.Credentials.from_service_account_info(
-            info, scopes=scopes, subject=effective
-        )
+        return service_account.Credentials.from_service_account_info(info, scopes=scopes, subject=effective)
 
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials

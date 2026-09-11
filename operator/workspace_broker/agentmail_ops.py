@@ -137,9 +137,7 @@ class AgentMailOps:
     def _request(self, path: str, method: str, body: dict[str, Any] | None) -> dict[str, Any]:
         key = load_send_key(self._credential_path)
         if not key:
-            raise AgentMailTransportError(
-                "no AgentMail send credential in the broker store; refusing to send"
-            )
+            raise AgentMailTransportError("no AgentMail send credential in the broker store; refusing to send")
         data = json.dumps(body).encode() if body is not None else None
         request = urllib.request.Request(
             self._base_url + path,
@@ -157,9 +155,7 @@ class AgentMailOps:
             with opener(request, timeout=TIMEOUT_S) as response:
                 raw = response.read().decode("utf-8") or "{}"
         except urllib.error.HTTPError as exc:  # includes a vendor-side 403
-            raise AgentMailTransportError(
-                f"agentmail {method} {path} failed: HTTP {exc.code}"
-            ) from exc
+            raise AgentMailTransportError(f"agentmail {method} {path} failed: HTTP {exc.code}") from exc
         except Exception as exc:
             raise AgentMailTransportError(f"agentmail {method} {path} failed: {exc}") from exc
         try:
@@ -232,9 +228,7 @@ class AgentMailOps:
         source = self._request(self._path("messages", message_id), "GET", None)
         sender = normalize_address(source.get("from") or source.get("from_"))
         if not sender:
-            raise AgentMailRefused(
-                f"cannot determine who sent message {message_id!r}; refusing to reply"
-            )
+            raise AgentMailRefused(f"cannot determine who sent message {message_id!r}; refusing to reply")
         policy = authored_policy(self._customer_path)
         if not policy.allows_reply_to(sender):
             raise AgentMailRefused(

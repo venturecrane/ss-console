@@ -47,8 +47,7 @@ def test_every_scenario_names_the_incident_it_replays_and_its_own_falsifier() ->
     for scenario in registry.load_scenarios():
         assert scenario["replays"], f"{scenario['id']} replays nothing"
         assert len(str(scenario["falsifier"]).split()) >= 15, (
-            f"{scenario['id']}: a falsifier that does not say what would make this scenario "
-            "meaningless is decoration"
+            f"{scenario['id']}: a falsifier that does not say what would make this scenario meaningless is decoration"
         )
 
 
@@ -90,9 +89,7 @@ def test_running_without_credentials_skips_and_exits_non_zero(tmp_path, monkeypa
     """
     for variable in ("AGENTMAIL_API_KEY", "OPERATOR_RUNTIME_READ_SECRET", "OPERATOR_RUNTIME_READ_URL"):
         monkeypatch.delenv(variable, raising=False)
-    monkeypatch.setattr(
-        runner, "make_seam_client", lambda slug: _RigOnTheCandidate(runner.pinned_overlay_ref())
-    )
+    monkeypatch.setattr(runner, "make_seam_client", lambda slug: _RigOnTheCandidate(runner.pinned_overlay_ref()))
     code = runner.main(["--seat", "pilot-smokeball", "--drive", "--out", str(tmp_path)])
     assert code == runner.EXIT_INCOMPLETE
     reports = sorted(tmp_path.glob("*.md"))
@@ -114,10 +111,7 @@ def test_the_runner_refuses_a_client_seat_before_driving_anything(tmp_path, caps
 
 
 def test_the_runner_refuses_an_unknown_seat(tmp_path) -> None:
-    assert (
-        runner.main(["--seat", "no-such-seat", "--drive", "--out", str(tmp_path)])
-        == runner.EXIT_REFUSED
-    )
+    assert runner.main(["--seat", "no-such-seat", "--drive", "--out", str(tmp_path)]) == runner.EXIT_REFUSED
 
 
 def test_the_suite_sends_nothing_unless_it_is_armed(tmp_path, capsys) -> None:

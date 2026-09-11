@@ -264,12 +264,7 @@ def test_id_and_created_at_come_from_one_clock_read(tmp_path):
     ulid_ms = 0
     for ch in job_id[:10]:
         ulid_ms = ulid_ms * 32 + _CROCKFORD.index(ch)
-    stamp_ms = int(
-        datetime.strptime(row["created_at"], "%Y-%m-%dT%H:%M:%S.%fZ")
-        .replace(tzinfo=UTC)
-        .timestamp()
-        * 1000
-    )
+    stamp_ms = int(datetime.strptime(row["created_at"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=UTC).timestamp() * 1000)
     assert ulid_ms == stamp_ms, (
         f"ULID says {ulid_ms}, created_at says {stamp_ms}: the two were minted "
         "from separate clock reads and can disagree (ss#2486)"

@@ -109,9 +109,7 @@ def main() -> None:
         print("\nDRY RUN - nothing will be created.\n")
 
     manifest = load_manifest()
-    manifest["created_at"] = manifest.get("created_at") or time.strftime(
-        "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
-    )
+    manifest["created_at"] = manifest.get("created_at") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     manifest["source"] = os.path.relpath(SEED_YAML, REPO_ROOT)
 
     api = None if dry else Api()
@@ -155,9 +153,11 @@ def main() -> None:
         if matter.get("closed"):
             body["closedDate"] = as_datetime(str(matter["closed"]))
         if dry:
-            print(f"matter {key} ({matter['number']}): WOULD CREATE  status={body['status']} "
-                  f"type={'MVA' if body['matterTypeId'] == MVA_PLAINTIFF_CA else 'PI'} "
-                  f"clients={len(matter['clients'])} closed={'yes' if matter.get('closed') else 'no'}")
+            print(
+                f"matter {key} ({matter['number']}): WOULD CREATE  status={body['status']} "
+                f"type={'MVA' if body['matterTypeId'] == MVA_PLAINTIFF_CA else 'PI'} "
+                f"clients={len(matter['clients'])} closed={'yes' if matter.get('closed') else 'no'}"
+            )
             continue
         resource = api.create_async("/matters", body, f"matter {key}")
         manifest["matters"][key] = resource["id"]

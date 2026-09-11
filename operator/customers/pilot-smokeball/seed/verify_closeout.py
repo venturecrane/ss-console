@@ -84,8 +84,7 @@ def main() -> int:
             issues.append(f"closed {closed or '(blank)'} != {want_closed or '(blank)'}")
         verdict = "OK" if not issues else "; ".join(issues)
         problems.extend(f"{number}: {i}" for i in issues)
-        print(f"{number:<14}{str(got.get('status')):<10}{len(clients):<9}"
-              f"{opened:<12}{closed or '-':<12}{verdict}")
+        print(f"{number:<14}{str(got.get('status')):<10}{len(clients):<9}{opened:<12}{closed or '-':<12}{verdict}")
 
     print("\nNOT CHECKED HERE: the Medicals and Settlement Details provider rows.")
     print("They are layout values, no app holds layouts/write, and they are keyed by hand.")

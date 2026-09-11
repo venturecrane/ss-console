@@ -42,9 +42,7 @@ from adapter.audit_log import (  # noqa: E402 - the import needs the sys.path sh
 )
 
 _PRE_RUN_PATH = _HERE.parent / "pre_run.py"
-_spec = importlib.util.spec_from_file_location(
-    "retainer_hours_pre_run", _PRE_RUN_PATH
-)
+_spec = importlib.util.spec_from_file_location("retainer_hours_pre_run", _PRE_RUN_PATH)
 assert _spec is not None and _spec.loader is not None
 _pre_run = importlib.util.module_from_spec(_spec)
 sys.modules["retainer_hours_pre_run"] = _pre_run
@@ -190,18 +188,14 @@ def test_assign_bucket_high_confidence_at_or_above_min_days():
 
 def test_decide_suppresses_when_balanced_midweek():
     utils = [_make_util(actual_mtd_hours=30.0)]  # BALANCED at 75%
-    decision = decide(
-        utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=TUESDAY
-    )
+    decision = decide(utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=TUESDAY)
     assert decision.wake is False
     assert decision.decision_basis == "all_clients_in_balanced_or_under_warning"
 
 
 def test_decide_suppresses_when_under_warning_midweek():
     utils = [_make_util(actual_mtd_hours=20.0)]  # UNDER_WARNING at 50%
-    decision = decide(
-        utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=TUESDAY
-    )
+    decision = decide(utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=TUESDAY)
     assert decision.wake is False
     assert decision.decision_basis == "all_clients_in_balanced_or_under_warning"
 
@@ -210,18 +204,14 @@ def test_decide_wakes_on_monday_even_with_all_balanced():
     """The weekly mandatory boundary fires even when nothing is wrong.
     Owner relies on the absence-of-noise as a signal."""
     utils = [_make_util(actual_mtd_hours=30.0)]  # BALANCED
-    decision = decide(
-        utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=MONDAY
-    )
+    decision = decide(utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=MONDAY)
     assert decision.wake is True
     assert decision.decision_basis == "weekly_mandatory_boundary"
 
 
 def test_decide_wakes_on_over_critical_client():
     utils = [_make_util(actual_mtd_hours=50.0)]  # OVER_CRITICAL at 125%
-    decision = decide(
-        utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=TUESDAY
-    )
+    decision = decide(utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=TUESDAY)
     assert decision.wake is True
     assert decision.decision_basis == "client_in_critical_band"
     assert decision.extra_metadata["critical_clients"][0]["bucket"] == "OVER_CRITICAL"
@@ -231,18 +221,14 @@ def test_decide_wakes_on_over_warning_client():
     """OVER_WARNING is also a critical wake bucket — the owner needs to
     know before it tips into OVER_CRITICAL."""
     utils = [_make_util(actual_mtd_hours=40.0)]  # OVER_WARNING at 100%
-    decision = decide(
-        utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=TUESDAY
-    )
+    decision = decide(utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=TUESDAY)
     assert decision.wake is True
     assert decision.extra_metadata["critical_clients"][0]["bucket"] == "OVER_WARNING"
 
 
 def test_decide_wakes_on_under_critical_client():
     utils = [_make_util(actual_mtd_hours=10.0)]  # UNDER_CRITICAL at 25%
-    decision = decide(
-        utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=TUESDAY
-    )
+    decision = decide(utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=TUESDAY)
     assert decision.wake is True
     assert decision.extra_metadata["critical_clients"][0]["bucket"] == "UNDER_CRITICAL"
 
@@ -256,9 +242,7 @@ def test_decide_wakes_on_previously_critical_pending_ack():
             previously_critical_pending_ack=True,
         )
     ]
-    decision = decide(
-        utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=TUESDAY
-    )
+    decision = decide(utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=TUESDAY)
     assert decision.wake is True
     assert decision.decision_basis == "previously_critical_pending_ack"
     assert decision.extra_metadata["pending_ack_clients"] == ["client_a"]
@@ -270,9 +254,7 @@ def test_decide_aggregates_multiple_critical_clients():
         _make_util(client_slug="b", actual_mtd_hours=10.0),  # UNDER_CRITICAL
         _make_util(client_slug="c", actual_mtd_hours=30.0),  # BALANCED
     ]
-    decision = decide(
-        utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=TUESDAY
-    )
+    decision = decide(utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=TUESDAY)
     assert decision.wake is True
     critical = decision.extra_metadata["critical_clients"]
     assert len(critical) == 2
@@ -282,9 +264,7 @@ def test_decide_aggregates_multiple_critical_clients():
 def test_decide_monday_takes_precedence_over_no_critical():
     """Monday boundary fires even if no client would otherwise wake."""
     utils = [_make_util(actual_mtd_hours=30.0)]
-    decision = decide(
-        utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=MONDAY
-    )
+    decision = decide(utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=MONDAY)
     assert decision.decision_basis == "weekly_mandatory_boundary"
 
 
@@ -307,9 +287,7 @@ def test_run_once_emits_wake_on_monday():
     def factory():
         return SuppressedWakeWriter(AuditLogWriter(executor))
 
-    code, out = _capture_stdout(
-        run_once(connectors, BucketThresholds(), factory, now=MONDAY)
-    )
+    code, out = _capture_stdout(run_once(connectors, BucketThresholds(), factory, now=MONDAY))
     assert code == 0
     # The cadence wake carries a basis and NO plans, BY DESIGN (#2253): nothing
     # about a particular client triggered it, so there is no per-item fact to
@@ -344,9 +322,7 @@ def test_run_once_emits_wake_on_critical_client_midweek():
     def factory():
         return SuppressedWakeWriter(AuditLogWriter(executor))
 
-    code, out = _capture_stdout(
-        run_once(connectors, BucketThresholds(), factory, now=TUESDAY)
-    )
+    code, out = _capture_stdout(run_once(connectors, BucketThresholds(), factory, now=TUESDAY))
     assert code == 0
     # The wake line carries the facts the gate computed (#2253). A bare
     # wakeAgent flag left the woken turn to source the band and the projection
@@ -395,9 +371,7 @@ def test_run_once_wake_is_unchanged_when_the_emitted_wake_write_fails():
     def factory():
         return SuppressedWakeWriter(AuditLogWriter(executor))
 
-    code, out = _capture_stdout(
-        run_once(connectors, BucketThresholds(), factory, now=TUESDAY)
-    )
+    code, out = _capture_stdout(run_once(connectors, BucketThresholds(), factory, now=TUESDAY))
     assert code == 0
     assert json.loads(out) == {
         "wakeAgent": True,
@@ -428,9 +402,7 @@ def test_run_once_wake_survives_a_writer_without_the_emitted_wake_method():
             return "x"
 
     connectors = [FakeConnector([_make_util(actual_mtd_hours=50.0)])]
-    code, out = _capture_stdout(
-        run_once(connectors, BucketThresholds(), lambda: _LegacyWriter(), now=TUESDAY)
-    )
+    code, out = _capture_stdout(run_once(connectors, BucketThresholds(), lambda: _LegacyWriter(), now=TUESDAY))
     assert code == 0
     parsed = json.loads(out)
     assert parsed["wakeAgent"] is True
@@ -443,14 +415,8 @@ def test_run_once_emits_wake_with_slug_only_plans_on_pending_ack():
     on that branch BEFORE assigning buckets, so the plan carries the slug and
     nulls. Null here means "the gate computed no bucket this tick", never
     "this client is fine" — the turn reads the figure itself."""
-    connectors = [
-        FakeConnector(
-            [_make_util(actual_mtd_hours=30.0, previously_critical_pending_ack=True)]
-        )
-    ]
-    code, out = _capture_stdout(
-        run_once(connectors, BucketThresholds(), lambda: None, now=TUESDAY)
-    )
+    connectors = [FakeConnector([_make_util(actual_mtd_hours=30.0, previously_critical_pending_ack=True)])]
+    code, out = _capture_stdout(run_once(connectors, BucketThresholds(), lambda: None, now=TUESDAY))
     assert code == 0
     assert json.loads(out) == {
         "wakeAgent": True,
@@ -477,9 +443,7 @@ def test_run_once_writes_audit_then_suppresses_on_quiet_tuesday():
     def factory():
         return SuppressedWakeWriter(AuditLogWriter(executor))
 
-    code, out = _capture_stdout(
-        run_once(connectors, BucketThresholds(), factory, now=TUESDAY)
-    )
+    code, out = _capture_stdout(run_once(connectors, BucketThresholds(), factory, now=TUESDAY))
     assert code == 0
     assert json.loads(out) == {"wakeAgent": False}
     assert len(executor.calls) == 1
@@ -511,9 +475,7 @@ def test_run_once_falls_back_to_wake_on_audit_failure():
     def factory():
         return SuppressedWakeWriter(AuditLogWriter(executor))
 
-    code, out = _capture_stdout(
-        run_once(connectors, BucketThresholds(), factory, now=TUESDAY)
-    )
+    code, out = _capture_stdout(run_once(connectors, BucketThresholds(), factory, now=TUESDAY))
     assert code == 0
     parsed = json.loads(out)
     assert parsed == {
@@ -529,9 +491,7 @@ def test_run_once_falls_back_to_wake_when_writer_factory_returns_none():
     that suppress requires a trail; absent a trail, always wake."""
     connectors = [FakeConnector([_make_util(actual_mtd_hours=30.0)])]
 
-    code, out = _capture_stdout(
-        run_once(connectors, BucketThresholds(), lambda: None, now=TUESDAY)
-    )
+    code, out = _capture_stdout(run_once(connectors, BucketThresholds(), lambda: None, now=TUESDAY))
     assert code == 0
     parsed = json.loads(out)
     assert parsed == {
@@ -544,22 +504,13 @@ def test_run_once_falls_back_to_wake_when_writer_factory_returns_none():
 def test_run_once_suppresses_with_multiple_clients_all_balanced():
     """Realistic agency: 5 clients, all balanced, on a quiet Tuesday.
     Exactly one audit row written; no agent wake."""
-    connectors = [
-        FakeConnector(
-            [
-                _make_util(client_slug=f"client_{i}", actual_mtd_hours=30.0)
-                for i in range(5)
-            ]
-        )
-    ]
+    connectors = [FakeConnector([_make_util(client_slug=f"client_{i}", actual_mtd_hours=30.0) for i in range(5)])]
     executor = FakeExecutor()
 
     def factory():
         return SuppressedWakeWriter(AuditLogWriter(executor))
 
-    code, out = _capture_stdout(
-        run_once(connectors, BucketThresholds(), factory, now=TUESDAY)
-    )
+    code, out = _capture_stdout(run_once(connectors, BucketThresholds(), factory, now=TUESDAY))
     assert code == 0
     assert json.loads(out) == {"wakeAgent": False}
     assert len(executor.calls) == 1
@@ -588,9 +539,7 @@ def test_wake_payload_carries_every_critical_client_with_its_band():
             ]
         )
     ]
-    code, out = _capture_stdout(
-        run_once(connectors, BucketThresholds(), lambda: None, now=TUESDAY)
-    )
+    code, out = _capture_stdout(run_once(connectors, BucketThresholds(), lambda: None, now=TUESDAY))
     assert code == 0
     plans = {p["client_slug"]: p for p in json.loads(out)["plans"]}
     assert set(plans) == {"a", "b"}  # c is BALANCED — not a finding
@@ -604,12 +553,8 @@ def test_wake_payload_flags_a_low_confidence_projection():
     """Three elapsed days extrapolated to a month is a weaker claim than
     fifteen, and the gate already knows which it made. Handing the percentage
     over without the flag invites the turn to state both identically."""
-    connectors = [
-        FakeConnector([_make_util(actual_mtd_hours=12.0, mtd_days_elapsed=3)])
-    ]
-    code, out = _capture_stdout(
-        run_once(connectors, BucketThresholds(), lambda: None, now=TUESDAY)
-    )
+    connectors = [FakeConnector([_make_util(actual_mtd_hours=12.0, mtd_days_elapsed=3)])]
+    code, out = _capture_stdout(run_once(connectors, BucketThresholds(), lambda: None, now=TUESDAY))
     assert code == 0
     assert json.loads(out)["plans"][0]["low_confidence"] is True
 
@@ -617,17 +562,8 @@ def test_wake_payload_flags_a_low_confidence_projection():
 def test_wake_payload_truncation_announces_itself():
     """Over the cap the list is partial, and the payload says so. A truncated
     list that reads as complete is a check that cannot fail (Law 12)."""
-    connectors = [
-        FakeConnector(
-            [
-                _make_util(client_slug=f"client_{i}", actual_mtd_hours=50.0)
-                for i in range(58)
-            ]
-        )
-    ]
-    code, out = _capture_stdout(
-        run_once(connectors, BucketThresholds(), lambda: None, now=TUESDAY)
-    )
+    connectors = [FakeConnector([_make_util(client_slug=f"client_{i}", actual_mtd_hours=50.0) for i in range(58)])]
+    code, out = _capture_stdout(run_once(connectors, BucketThresholds(), lambda: None, now=TUESDAY))
     assert code == 0
     parsed = json.loads(out)
     assert parsed["plans_total"] == 58
@@ -639,17 +575,8 @@ def test_wake_payload_truncation_announces_itself():
 def test_wake_payload_untruncated_says_so_explicitly():
     """The flag is present on the complete case too, so its absence never has
     to be read as "complete"."""
-    connectors = [
-        FakeConnector(
-            [
-                _make_util(client_slug=f"client_{i}", actual_mtd_hours=50.0)
-                for i in range(4)
-            ]
-        )
-    ]
-    code, out = _capture_stdout(
-        run_once(connectors, BucketThresholds(), lambda: None, now=TUESDAY)
-    )
+    connectors = [FakeConnector([_make_util(client_slug=f"client_{i}", actual_mtd_hours=50.0) for i in range(4)])]
+    code, out = _capture_stdout(run_once(connectors, BucketThresholds(), lambda: None, now=TUESDAY))
     assert code == 0
     parsed = json.loads(out)
     assert parsed["plans_total"] == parsed["plans_emitted"] == 4
@@ -662,9 +589,7 @@ def test_decide_plans_mirror_the_critical_set():
         _make_util(client_slug="b", actual_mtd_hours=10.0),  # UNDER_CRITICAL
         _make_util(client_slug="c", actual_mtd_hours=30.0),  # BALANCED
     ]
-    decision = decide(
-        utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=TUESDAY
-    )
+    decision = decide(utils, BucketThresholds(), raw_inputs_for_digest=b"x", now=TUESDAY)
     assert {p.client_slug for p in decision.plans} == {"a", "b"}
     assert len(decision.plans) == len(decision.extra_metadata["critical_clients"])
 

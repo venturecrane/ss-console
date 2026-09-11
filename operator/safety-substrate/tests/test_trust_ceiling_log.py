@@ -87,8 +87,7 @@ def _rows(conn: sqlite3.Connection) -> list[dict]:
     ).fetchall()
     out = []
     for row in raw:
-        (id_, action_type, actor, actor_role, skill_name, matter_ref,
-         trust_ceiling, metadata) = row
+        (id_, action_type, actor, actor_role, skill_name, matter_ref, trust_ceiling, metadata) = row
         out.append(
             {
                 "id": id_,
@@ -610,9 +609,6 @@ def test_filter_predicate_matches_trust_ceiling_rows_only():
     )
     rows = _rows(conn)
     assert len(rows) == 2
-    matched = [
-        r for r in rows
-        if r["metadata"] and r["metadata"].get("trust_ceiling_decision") is True
-    ]
+    matched = [r for r in rows if r["metadata"] and r["metadata"].get("trust_ceiling_decision") is True]
     assert len(matched) == 1
     assert matched[0]["metadata"]["reason"] == "read_allowed"

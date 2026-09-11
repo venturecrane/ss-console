@@ -229,9 +229,7 @@ EXIT_HOLD = 2
 
 #: Sends this control has already reported, so a scheduled run alerts only on
 #: what is new. Committed and PR-updated on purpose (ss#2386, see module header).
-DEFAULT_BASELINE_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "reconcile-sends-baseline.json"
-)
+DEFAULT_BASELINE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reconcile-sends-baseline.json")
 
 
 @dataclass
@@ -278,9 +276,7 @@ def _parse_ts(value) -> datetime:
 
 
 def _agentmail_get(path: str, api_key: str, *, opener=None) -> dict:
-    request = urllib.request.Request(
-        AGENTMAIL_API_BASE + path, headers={"Authorization": f"Bearer {api_key}"}
-    )
+    request = urllib.request.Request(AGENTMAIL_API_BASE + path, headers={"Authorization": f"Bearer {api_key}"})
     open_fn = opener or urllib.request.urlopen
     try:
         with open_fn(request, timeout=_HTTP_TIMEOUT_S) as response:
@@ -374,9 +370,7 @@ def reconcile_mailbox(
     report.matched_exact = exact
     report.matched_tool_path = tool_path
     report.matched_broker = broker
-    report.unaccounted, report.baselined = split_baselined(
-        report.inbox, unaccounted, baseline or set()
-    )
+    report.unaccounted, report.baselined = split_baselined(report.inbox, unaccounted, baseline or set())
     if verifier is not None:
         # Phase 4 (lib/send_verify.py). The body fetcher is per-message, only
         # ever invoked for hash-verified routines, and its result flows into
@@ -384,8 +378,8 @@ def reconcile_mailbox(
         def _fetch(message: dict):
             return fetch_graph_body(seat, token, str(message.get("graph_id") or ""), opener=opener)
 
-        report.body_verdicts, report.invariant_findings, report.invariant_proposals = (
-            verifier.verify_inbox(sent, rows, _fetch)
+        report.body_verdicts, report.invariant_findings, report.invariant_proposals = verifier.verify_inbox(
+            sent, rows, _fetch
         )
     return report
 
@@ -507,8 +501,7 @@ def _claim(candidates: list[dict], stamp: datetime) -> bool:
         (
             candidate
             for candidate in candidates
-            if not candidate["claimed"]
-            and abs((candidate["ts"] - stamp).total_seconds()) <= TOOL_PATH_WINDOW_S
+            if not candidate["claimed"] and abs((candidate["ts"] - stamp).total_seconds()) <= TOOL_PATH_WINDOW_S
         ),
         None,
     )
@@ -523,10 +516,7 @@ def reconcile(sent: list[dict], rows: list[dict]) -> tuple[int, int, int, list[d
     known_ids, tool_sends, broker_sends = index_audit(rows)
 
     remaining = [
-        m
-        for m in sent
-        if m.get("message_id") not in known_ids
-        and (m.get(_AUDIT_TOKEN_KEY) or "\x00") not in known_ids
+        m for m in sent if m.get("message_id") not in known_ids and (m.get(_AUDIT_TOKEN_KEY) or "\x00") not in known_ids
     ]
     matched_exact = len(sent) - len(remaining)
 
@@ -583,9 +573,7 @@ def load_baseline(path: str | None = None) -> set[str]:
     return {
         fingerprint(entry["inbox"], entry)
         for entry in entries
-        if isinstance(entry, dict)
-        and entry.get("inbox")
-        and (entry.get("message_id") or entry.get("timestamp"))
+        if isinstance(entry, dict) and entry.get("inbox") and (entry.get("message_id") or entry.get("timestamp"))
     }
 
 
@@ -619,9 +607,7 @@ def finding_digest(reports: list[InboxReport]) -> str:
         + [
             key
             for report in reports
-            for key in send_verify.digest_keys(
-                report.inbox, report.body_verdicts, report.invariant_findings
-            )
+            for key in send_verify.digest_keys(report.inbox, report.body_verdicts, report.invariant_findings)
         ]
     )
     if not keys:
@@ -673,10 +659,17 @@ def slug_for_inbox(inbox: str, slugs: list[str]) -> str | None:
     return next((s for s in slugs if s.lower() == local), None)
 
 
-def reconcile_inbox(inbox: str, slugs: list[str], api_key: str, since, *, opener=None,
-                    client_factory=seam_pull.seam_client_from_env,
-                    baseline: set[str] | None = None,
-                    verifier: "send_verify.SendVerifier | None" = None) -> InboxReport:
+def reconcile_inbox(
+    inbox: str,
+    slugs: list[str],
+    api_key: str,
+    since,
+    *,
+    opener=None,
+    client_factory=seam_pull.seam_client_from_env,
+    baseline: set[str] | None = None,
+    verifier: "send_verify.SendVerifier | None" = None,
+) -> InboxReport:
     slug = slug_for_inbox(inbox, slugs)
     report = InboxReport(inbox=inbox, slug=slug)
     if slug is None:
@@ -739,8 +732,8 @@ def reconcile_inbox(inbox: str, slugs: list[str], api_key: str, since, *, opener
             text = parsed.get("text") if isinstance(parsed, dict) else None
             return text if isinstance(text, str) else None
 
-        report.body_verdicts, report.invariant_findings, report.invariant_proposals = (
-            verifier.verify_inbox(sent, rows, _fetch)
+        report.body_verdicts, report.invariant_findings, report.invariant_proposals = verifier.verify_inbox(
+            sent, rows, _fetch
         )
     return report
 
@@ -754,10 +747,7 @@ def render(reports: list[InboxReport]) -> str:
             lines.append(f"HOLD  {report.inbox}: {report.held}")
             continue
         if report.non_seat_reason:
-            lines.append(
-                f"n/a   {report.inbox} sent={report.sent_total} "
-                f"— not a seat: {report.non_seat_reason}"
-            )
+            lines.append(f"n/a   {report.inbox} sent={report.sent_total} — not a seat: {report.non_seat_reason}")
             continue
         owner = report.slug or "UNOWNED"
         lines.append(
@@ -809,9 +799,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--days", type=int, help="only consider sends in the last N days")
     parser.add_argument("--inbox", action="append", help="limit to these inboxes")
     parser.add_argument("--json", action="store_true", help="machine-readable output")
-    parser.add_argument(
-        "--baseline", help=f"path to the already-reported baseline (default {DEFAULT_BASELINE_PATH})"
-    )
+    parser.add_argument("--baseline", help=f"path to the already-reported baseline (default {DEFAULT_BASELINE_PATH})")
     parser.add_argument(
         "--no-baseline",
         action="store_true",
@@ -831,9 +819,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.since:
         since = _parse_ts(args.since if "T" in args.since else args.since + "T00:00:00Z")
 
-    slugs = sorted(
-        d for d in os.listdir(_customers_dir()) if not d.startswith("_") and not d.startswith(".")
-    )
+    slugs = sorted(d for d in os.listdir(_customers_dir()) if not d.startswith("_") and not d.startswith("."))
 
     baseline = set() if args.no_baseline else load_baseline(args.baseline)
     try:
@@ -901,9 +887,7 @@ def report_dict(r: InboxReport) -> dict:
     }
 
 
-def _reconcile_agentmail(
-    args, slugs, since, baseline: set[str], verifier=None
-) -> list[InboxReport]:
+def _reconcile_agentmail(args, slugs, since, baseline: set[str], verifier=None) -> list[InboxReport]:
     """The AgentMail half, unchanged in behaviour and now able to hold alone."""
     api_key = os.environ.get("AGENTMAIL_API_KEY")
     if not api_key:
@@ -918,10 +902,7 @@ def _reconcile_agentmail(
         inboxes = args.inbox or list_inboxes(api_key)
     except ReconcileError as exc:
         return [InboxReport(inbox="agentmail", slug=None, held=str(exc))]
-    return [
-        reconcile_inbox(i, slugs, api_key, since, baseline=baseline, verifier=verifier)
-        for i in inboxes
-    ]
+    return [reconcile_inbox(i, slugs, api_key, since, baseline=baseline, verifier=verifier) for i in inboxes]
 
 
 def _reconcile_msgraph(args, since, baseline: set[str], verifier=None) -> list[InboxReport]:
@@ -950,15 +931,11 @@ def _reconcile_msgraph(args, since, baseline: set[str], verifier=None) -> list[I
                 held="no seat authors adapter msgraph; the channel was not evaluated",
             )
         ]
-    return [
-        reconcile_mailbox(seat, since, baseline=baseline, verifier=verifier) for seat in seats
-    ]
+    return [reconcile_mailbox(seat, since, baseline=baseline, verifier=verifier) for seat in seats]
 
 
 def _customers_dir() -> str:
-    return os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "customers"
-    )
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "customers")
 
 
 if __name__ == "__main__":

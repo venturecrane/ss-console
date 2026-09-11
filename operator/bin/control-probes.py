@@ -240,13 +240,9 @@ def probe_sticky_stop_pause_pin(spec: dict, ctx: ProbeContext) -> tuple[bool, st
 
 
 _ARM_DRIVERS = {
-    "record_tool_failure": lambda m: [
-        m.record_tool_failure(customer="probe", persona="probe") for _ in range(1)
-    ],
+    "record_tool_failure": lambda m: [m.record_tool_failure(customer="probe", persona="probe") for _ in range(1)],
     "record_refusal": lambda m: [m.record_refusal(customer="probe", persona="probe")],
-    "record_runtime_seconds": lambda m: [
-        m.record_runtime_seconds(customer="probe", persona="probe", seconds=7200)
-    ],
+    "record_runtime_seconds": lambda m: [m.record_runtime_seconds(customer="probe", persona="probe", seconds=7200)],
 }
 
 
@@ -288,9 +284,7 @@ def _drive_ladder_or_raise(mod, machine, arm: str) -> None:
     state = None
     for _ in range(calls):
         if arm == "record_runtime_seconds":
-            state = _await(
-                machine.record_runtime_seconds(customer="probe", persona="probe", seconds=7200)
-            )
+            state = _await(machine.record_runtime_seconds(customer="probe", persona="probe", seconds=7200))
         else:
             state = _await(getattr(machine, arm)(customer="probe", persona="probe"))
     if arm == "record_runtime_seconds":
@@ -362,9 +356,7 @@ LOCAL_PROBES: dict[str, Callable[[dict, ProbeContext], tuple[bool, str]]] = {
 
 
 def run_seat_command(slug: str, argv: list[str]) -> tuple[int, str]:
-    proc = subprocess.run(
-        [str(SEAT_PROBE), slug, *argv], capture_output=True, text=True, timeout=180
-    )
+    proc = subprocess.run([str(SEAT_PROBE), slug, *argv], capture_output=True, text=True, timeout=180)
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
 
@@ -412,9 +404,7 @@ def run_probe(spec: dict, ctx: ProbeContext) -> ProbeResult:
     expect = spec.get("expect", "refuse")
     base = {"probe": name, "control": spec.get("control", "?"), "kind": kind}
     falsifier = (
-        "the control fires -> UNEXPECTED_PASS"
-        if expect == "expected-fail"
-        else "the control does not fire -> FAIL"
+        "the control fires -> UNEXPECTED_PASS" if expect == "expected-fail" else "the control does not fire -> FAIL"
     )
     try:
         if kind == "local":
@@ -434,9 +424,7 @@ def run_probe(spec: dict, ctx: ProbeContext) -> ProbeResult:
     except ProbeHold as exc:
         return ProbeResult(**base, status=HOLD, detail=str(exc), falsifier=falsifier)
     except Exception as exc:  # noqa: BLE001 - a local probe has no transport to blame
-        return ProbeResult(
-            **base, status=FAIL, detail=f"probe raised: {exc!r}", falsifier=falsifier
-        )
+        return ProbeResult(**base, status=FAIL, detail=f"probe raised: {exc!r}", falsifier=falsifier)
     if expect == "expected-fail":
         status = UNEXPECTED_PASS if fired else EXPECTED_FAIL
     else:
@@ -485,9 +473,7 @@ def falsify(spec: dict, ctx: ProbeContext) -> ProbeContext:
             seat=ctx.seat,
             run_seat=ctx.run_seat,
         )
-    return ProbeContext(
-        substrate_dir=ctx.substrate_dir, search_root=ctx.search_root, neutered=True
-    )
+    return ProbeContext(substrate_dir=ctx.substrate_dir, search_root=ctx.search_root, neutered=True)
 
 
 def _planted_caller_tree(arm: str) -> Path:
@@ -621,9 +607,7 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(
                 {
                     "results": [r.__dict__ for r in suite.results],
-                    "not_attempted": [
-                        {"probe": n, "kind": k, "control": c} for n, k, c in suite.skipped
-                    ],
+                    "not_attempted": [{"probe": n, "kind": k, "control": c} for n, k, c in suite.skipped],
                 },
                 indent=2,
             )
