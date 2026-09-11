@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro'
 import { listEngagements } from '../../../../../lib/db/engagements'
 import { getPortalClient } from '../../../../../lib/portal/session'
 import { env } from 'cloudflare:workers'
-import { jsonResponse } from '../../../../../lib/api/helpers'
+import { errorResponse } from '../../../../../lib/api/helpers'
 
 /**
  * GET /api/portal/consultants/photo/:key
@@ -29,10 +29,6 @@ const CONTENT_TYPES: Record<string, string> = {
   png: 'image/png',
 }
 
-function jsonError(status: number, error: string): Response {
-  return jsonResponse(status, { error })
-}
-
 function getContentType(key: string, objectContentType?: string): string {
   if (objectContentType) return objectContentType
   const ext = key.substring(key.lastIndexOf('.') + 1).toLowerCase()
@@ -46,20 +42,20 @@ function isInvalidKey(key: string): boolean {
 export const GET: APIRoute = async ({ locals, params }) => {
   const key = params.key
   if (!key) {
-    return jsonError(400, 'Key required')
+    return errorResponse(400, 'Key required')
   }
 
   const portalData = await getPortalClient(env.DB, locals)
   if (!portalData) {
-    return jsonError(401, 'Unauthorized')
+    return errorResponse(401, 'Unauthorized')
   }
   if (!portalData.client) {
-    return jsonError(403, 'Forbidden')
+    return errorResponse(403, 'Forbidden')
   }
 
   const engagementPrefix = `${portalData.user.org_id}/engagements/`
   if (!key.startsWith(engagementPrefix) || isInvalidKey(key)) {
-    return jsonError(403, 'Forbidden')
+    return errorResponse(403, 'Forbidden')
   }
 
   const engagements = await listEngagements(env.DB, portalData.user.org_id, portalData.client.id)
@@ -67,12 +63,12 @@ export const GET: APIRoute = async ({ locals, params }) => {
     key.startsWith(`${engagementPrefix}${engagement.id}/`)
   )
   if (!isClientEngagementPhoto) {
-    return jsonError(403, 'Forbidden')
+    return errorResponse(403, 'Forbidden')
   }
 
   const object = await env.CONSULTANT_PHOTOS.get(key)
   if (!object) {
-    return jsonError(404, 'Not found')
+    return errorResponse(404, 'Not found')
   }
 
   return new Response(object.body, {

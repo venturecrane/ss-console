@@ -135,7 +135,7 @@ This runbook is performed **once** by Captain. The resulting `client_id` and `cl
    - **Supported account types:** _Accounts in any organizational directory (Any Microsoft Entra ID tenant — multitenant)_.
      - Multi-tenant is required because each customer law-firm tenant will consent independently.
    - **Redirect URI:** `Web` → `https://portal.smd.services/operator/oauth/microsoft-graph/callback`
-     - This is the customer-facing portal subdomain per [oauth-lifecycle.md](../../specs/operator/oauth-lifecycle.md) "Re-consent callback URL". The admin-subdomain endpoint at `https://admin.smd.services/api/oauth/callback` from PR #936 stays in place as the v1 backstop and may be added as a second registered URI during the transition window.
+     - This is the customer-facing portal subdomain per [oauth-lifecycle.md](../../specs/operator/oauth-lifecycle.md) "Re-consent callback URL". The admin-subdomain endpoint at `https://admin.smd.services/api/oauth/callback` from PR #936 was deleted 2026-09-10 (nothing initiated a flow that returned to it); do not register it as a second registered URI during the transition window.
 4. Click **Register**. Record the **Application (client) ID** — this becomes `MICROSOFT_GRAPH_CLIENT_ID`.
 
 ## Configure API permissions (Phase 1)

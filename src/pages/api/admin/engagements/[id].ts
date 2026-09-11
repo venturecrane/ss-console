@@ -5,6 +5,7 @@ import {
   updateEngagementStatus,
 } from '../../../../lib/db/engagements'
 import type { EngagementStatus } from '../../../../lib/db/engagements'
+import { scheduleEngagementCadence } from '../../../../lib/follow-ups/scheduler'
 import { getSignalById } from '../../../../lib/db/signal-attribution'
 import { env } from 'cloudflare:workers'
 import { requireAdminSession } from '../../../../lib/auth/admin-session'
@@ -88,7 +89,8 @@ async function handlePost({ request, locals, redirect, params }: APIContext): Pr
           env.DB,
           session.orgId,
           engagementId,
-          newStatus as EngagementStatus
+          newStatus as EngagementStatus,
+          { scheduleHandoffCadence: scheduleEngagementCadence }
         )
       } catch (err) {
         console.error('[api/admin/engagements/[id]] Status transition error:', err)

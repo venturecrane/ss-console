@@ -16,10 +16,7 @@ import {
   type Scope,
   type BusinessHours,
 } from '../../operator/customer-yaml/types'
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
-}
+import { isRecord } from '../../api/helpers'
 
 function strArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []

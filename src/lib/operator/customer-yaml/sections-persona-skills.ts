@@ -156,7 +156,7 @@ export function checkPersonaEntitlements(
 
 // Restrictiveness ordering for the exposure / exposure_ceiling coherence
 // check (higher == more restrictive). Local mirror of the frozen governance
-// table (src/lib/portal/operator/config-governance.ts) — the validator layer
+// table (src/lib/operator/vertical-floors.ts) — the validator layer
 // stays free of portal imports.
 const CEILING_RESTRICTIVENESS: Record<ExposureCeiling, number> = {
   autonomous: 0,

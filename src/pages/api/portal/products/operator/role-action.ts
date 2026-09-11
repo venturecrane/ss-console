@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro'
+import { captureError } from '../../../../../lib/observability/sentry'
 import { getPortalClient } from '../../../../../lib/portal/session'
 import { getProductSubscription, listProductRoles } from '../../../../../lib/portal/product-access'
 import {
@@ -58,16 +59,12 @@ function usersUrl(instance: string | null): string {
   return instance ? `${OPERATOR_LANDING}/${instance}/settings/users` : OPERATOR_LANDING
 }
 
-function redirectWithStatus(instance: string | null, status: string): Response {
+function redirectToUsersPage(instance: string | null, status: string): Response {
   const target = `${usersUrl(instance)}?status=${encodeURIComponent(status)}`
   return new Response(null, {
     status: 303,
     headers: { Location: target },
   })
-}
-
-function jsonError(status: number, message: string): Response {
-  return errorResponse(status, message)
 }
 
 interface AuthorizedContext {
@@ -87,22 +84,22 @@ async function authorize(
   instance: string | null
 ): Promise<Response | AuthorizedContext> {
   const portalData = await getPortalClient(env.DB, locals)
-  if (!portalData) return jsonError(401, 'Unauthorized')
-  if (!portalData.client) return jsonError(403, 'Forbidden')
+  if (!portalData) return errorResponse(401, 'Unauthorized')
+  if (!portalData.client) return errorResponse(403, 'Forbidden')
 
   const { user, client } = portalData
   const callerRoles = await listProductRoles(env.DB, user.id, client.id, PRODUCT_SLUG)
-  if (!callerRoles.includes('principal')) return jsonError(403, 'Forbidden')
+  if (!callerRoles.includes('principal')) return errorResponse(403, 'Forbidden')
 
   const subscription = await getProductSubscription(env.DB, client.id, PRODUCT_SLUG)
-  if (!subscription) return jsonError(404, 'No active subscription')
+  if (!subscription) return errorResponse(404, 'No active subscription')
 
   // Layer-1 authority gate (ADR 0041): roles live in the people_access domain.
   // At launch (managed posture) the client org does not operate its own roster
   // — SMD does. Refuse the mutation server-side rather than trust the portal's
   // read-only render. Mirrors the connectors-secret precedent.
   if (!(await isPeopleAccessOperable(env.DB, client.id))) {
-    return redirectWithStatus(instance, 'not_permitted')
+    return redirectToUsersPage(instance, 'not_permitted')
   }
 
   return { user, client, orgId: user.org_id, instance }
@@ -195,6 +192,7 @@ async function emitRoleAudit(
     })
   } catch (err) {
     console.error('role-action: failed to record portal_action_events row', err)
+    captureError(err, 'portal.role-action.ledger')
   }
 }
 
@@ -204,7 +202,7 @@ async function handleRevoke(
   target: TargetUserRow
 ): Promise<Response> {
   if (!(await isSafeSelfPrincipalRevoke(ctx, parsed))) {
-    return redirectWithStatus(ctx.instance, 'cannot_revoke_last_principal')
+    return redirectToUsersPage(ctx.instance, 'cannot_revoke_last_principal')
   }
   const changed = await revokeProductRole(env.DB, {
     userId: parsed.targetUserId,
@@ -213,7 +211,7 @@ async function handleRevoke(
     role: parsed.role,
   })
   if (changed) await emitRoleAudit(ctx, parsed, target, 'role_revoked')
-  return redirectWithStatus(ctx.instance, changed ? 'revoked' : 'no_change')
+  return redirectToUsersPage(ctx.instance, changed ? 'revoked' : 'no_change')
 }
 
 async function handleGrant(
@@ -230,7 +228,7 @@ async function handleGrant(
     grantedBy: ctx.user.id,
   })
   if (changed) await emitRoleAudit(ctx, parsed, target, 'role_granted')
-  return redirectWithStatus(ctx.instance, changed ? 'granted' : 'no_change')
+  return redirectToUsersPage(ctx.instance, changed ? 'granted' : 'no_change')
 }
 
 export const POST: APIRoute = async ({ request, locals }) => {
@@ -243,11 +241,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const ctx = ctxOrResponse
 
   const parsed = parseForm(formData)
-  if (typeof parsed === 'string') return redirectWithStatus(instance, parsed)
+  if (typeof parsed === 'string') return redirectToUsersPage(instance, parsed)
 
   const target = await loadTargetUser(parsed.targetUserId, ctx.orgId)
   if (target === null) {
-    return redirectWithStatus(instance, 'user_not_found')
+    return redirectToUsersPage(instance, 'user_not_found')
   }
 
   return parsed.kind === 'revoke'

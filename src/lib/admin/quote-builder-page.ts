@@ -7,7 +7,13 @@ import {
   QUOTE_STATUSES,
   VALID_TRANSITIONS,
 } from '../db/quotes'
-import type { DeliverableRow, LineItem, QuoteStatus, ScheduleRow } from '../db/quotes'
+import {
+  parseLineItems,
+  type DeliverableRow,
+  type LineItem,
+  type QuoteStatus,
+  type ScheduleRow,
+} from '../db/quotes'
 import { listContacts } from '../db/contacts'
 import { listSignalsForEntity } from '../db/signal-attribution'
 import { getSOWStateForQuote } from '../sow/service'
@@ -58,7 +64,7 @@ export async function loadQuoteBuilderPage(params: {
   if (!entity) return { missing: 'entity' as const }
   if (!quote) return { missing: 'quote' as const }
 
-  const lineItems: LineItem[] = JSON.parse(quote.line_items)
+  const lineItems: LineItem[] = parseLineItems(quote.line_items)
   const status = quote.status as QuoteStatus
   const validTransitions = VALID_TRANSITIONS[status] ?? []
   const isDraft = status === 'draft'

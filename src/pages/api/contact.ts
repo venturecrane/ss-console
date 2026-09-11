@@ -1,4 +1,4 @@
-import { jsonResponse } from '../../lib/api/helpers'
+import { escapeHtml, isValidEmail, jsonResponse, trimString } from '../../lib/api/helpers'
 import type { APIContext, APIRoute } from 'astro'
 import { sendEmail } from '../../lib/email/resend'
 import { rateLimitByIp } from '../../lib/booking/rate-limit'
@@ -18,28 +18,6 @@ import { env } from 'cloudflare:workers'
 
 const CONTROL_CHAR_RE = /[\r\n\0]/
 const NOTIFY_EMAIL = 'team@smd.services'
-
-function trimString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null
-}
-
-function isValidEmail(email: string): boolean {
-  if (email.length > 254) return false
-  const parts = email.split('@')
-  if (parts.length !== 2) return false
-  const [local, domain] = parts
-  if (!local || !domain) return false
-  if (domain.indexOf('.') === -1) return false
-  return true
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
 
 function validateContactBody(body: Record<string, unknown>):
   | {

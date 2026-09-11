@@ -360,19 +360,7 @@ export async function listOutboxJobsForSignatureRequest(
   return result.results
 }
 
-export async function isQuoteAcceptanceReady(
-  db: D1Database,
-  orgId: string,
-  quoteId: string
-): Promise<boolean> {
-  const row = await db
-    .prepare(
-      `SELECT 1
-       FROM signature_requests
-       WHERE org_id = ? AND quote_id = ? AND status = 'completed' AND signed_storage_key IS NOT NULL
-       LIMIT 1`
-    )
-    .bind(orgId, quoteId)
-    .first<{ 1: number }>()
-  return !!row
-}
+// The acceptance-readiness read (a completed signature request with a
+// persisted signed artifact) lives in src/lib/db/quotes.ts next to the status
+// transition it guards, so the data layer enforces it without reaching up into
+// this module (code review 2026-09-10, Architecture 7).

@@ -32,7 +32,7 @@ import { getCustomerConfig } from '../../../../../lib/portal/customer-config'
 import { resolveDomainAuthority, isSwitchableDomain } from '../../../../../lib/operator/authority'
 import { requireAdminSession } from '../../../../../lib/auth/admin-session'
 
-function redirectWithStatus(slug: string, status: string): Response {
+function redirectToAuthority(slug: string, status: string): Response {
   const target = `/admin/operator/${encodeURIComponent(slug)}/authority?status=${encodeURIComponent(status)}`
   return new Response(null, { status: 303, headers: { Location: target } })
 }
@@ -44,17 +44,17 @@ async function handlePost(ctx: APIContext): Promise<Response> {
 
   const slug = ctx.params.customer ?? ''
   const entityId = await resolveEntityIdBySlug(env.DB, slug)
-  if (!entityId) return redirectWithStatus(slug, 'not_found')
+  if (!entityId) return redirectToAuthority(slug, 'not_found')
 
   const form = await ctx.request.formData()
   const domain = form.get('domain')
   const newHolder = form.get('new_holder')
   if (typeof domain !== 'string' || typeof newHolder !== 'string') {
-    return redirectWithStatus(slug, 'invalid_holder')
+    return redirectToAuthority(slug, 'invalid_holder')
   }
 
   const config = await getCustomerConfig(env.DB, entityId)
-  if (!config) return redirectWithStatus(slug, 'not_found')
+  if (!config) return redirectToAuthority(slug, 'not_found')
 
   // Current holder is the materialized posture (the only honest "old" value).
   const oldHolder = isSwitchableDomain(domain)
@@ -66,7 +66,7 @@ async function handlePost(ctx: APIContext): Promise<Response> {
     old_holder: oldHolder,
     new_holder: newHolder,
   })
-  if (!validation.ok) return redirectWithStatus(slug, validation.error)
+  if (!validation.ok) return redirectToAuthority(slug, validation.error)
 
   await recordAuthorityFlip(env.DB, {
     entity_id: entityId,
@@ -79,7 +79,7 @@ async function handlePost(ctx: APIContext): Promise<Response> {
     new_holder: validation.new_holder,
   })
 
-  return redirectWithStatus(slug, 'saved')
+  return redirectToAuthority(slug, 'saved')
 }
 
 export const POST: APIRoute = (ctx) => handlePost(ctx)

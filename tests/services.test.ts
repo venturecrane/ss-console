@@ -14,8 +14,7 @@ import {
   projectOperatorStatus,
   findSpineDrift,
   hasSpineDrift,
-  setOperatorPrice,
-  setOperatorPaymentMethod,
+  setOperatorPriceAndPaymentMethod,
   operatorPaymentMethod,
   isOperatorPaymentMethod,
   getOperatorServiceForEntity,
@@ -279,7 +278,7 @@ async function seedConfig(db: D1Database, entityId: string, slug: string) {
     .run()
 }
 
-describe('setOperatorPrice (ADR 0046 operator arc)', () => {
+describe('setOperatorPriceAndPaymentMethod: the price (ADR 0046 operator arc)', () => {
   let db: D1Database
   beforeEach(async () => {
     db = createTestD1()
@@ -288,7 +287,7 @@ describe('setOperatorPrice (ADR 0046 operator arc)', () => {
   })
 
   it('creates an active operator service when none exists', async () => {
-    const svc = await setOperatorPrice(db, ORG, 'ent-1', 1200)
+    const svc = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 1200, null)
     expect(svc.type).toBe('operator')
     expect(svc.cadence).toBe('recurring')
     expect(svc.status).toBe('active')
@@ -300,8 +299,8 @@ describe('setOperatorPrice (ADR 0046 operator arc)', () => {
   })
 
   it('updates the price on an existing operator service (no second row)', async () => {
-    const first = await setOperatorPrice(db, ORG, 'ent-1', 1000)
-    const second = await setOperatorPrice(db, ORG, 'ent-1', 1500)
+    const first = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 1000, null)
+    const second = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 1500, null)
     expect(second.id).toBe(first.id) // same row, no duplicate
     expect(second.recurring_price).toBe(1500)
     const all = await servicesForEntity(db, 'ent-1')
@@ -309,14 +308,14 @@ describe('setOperatorPrice (ADR 0046 operator arc)', () => {
   })
 
   it('clears the price to null (unpriced) without deleting the service', async () => {
-    await setOperatorPrice(db, ORG, 'ent-1', 900)
-    const cleared = await setOperatorPrice(db, ORG, 'ent-1', null)
+    await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 900, null)
+    const cleared = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', null, null)
     expect(cleared.recurring_price).toBeNull()
     expect(cleared.status).toBe('active')
   })
 })
 
-describe('setOperatorPaymentMethod (migration 0113, agreement §3.8)', () => {
+describe('setOperatorPriceAndPaymentMethod: the rail (migration 0113, agreement §3.8)', () => {
   let db: D1Database
   beforeEach(async () => {
     db = createTestD1()
@@ -325,20 +324,20 @@ describe('setOperatorPaymentMethod (migration 0113, agreement §3.8)', () => {
   })
 
   it('a priced service is born on ACH (no fee) and reads as such', async () => {
-    const svc = await setOperatorPrice(db, ORG, 'ent-1', 5000)
+    const svc = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 5000, null)
     expect(svc.payment_method).toBe('ach')
     expect(operatorPaymentMethod(svc)).toBe('ach')
     expect(operatorPaymentMethod(null)).toBe('ach')
   })
 
   it('authors card on the same row the price lives on, and back to ach', async () => {
-    const priced = await setOperatorPrice(db, ORG, 'ent-1', 5000)
-    const card = await setOperatorPaymentMethod(db, ORG, 'ent-1', 'card')
+    const priced = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 5000, null)
+    const card = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 5000, 'card')
     expect(card.id).toBe(priced.id)
     expect(card.payment_method).toBe('card')
     expect(card.recurring_price).toBe(5000)
     expect(operatorPaymentMethod(card)).toBe('card')
-    const ach = await setOperatorPaymentMethod(db, ORG, 'ent-1', 'ach')
+    const ach = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 5000, 'ach')
     expect(ach.payment_method).toBe('ach')
     expect(
       (await servicesForEntity(db, 'ent-1')).filter((s) => s.type === 'operator')
@@ -346,11 +345,11 @@ describe('setOperatorPaymentMethod (migration 0113, agreement §3.8)', () => {
   })
 
   it('a rail authored before any price creates the (unpriced) operator service', async () => {
-    const svc = await setOperatorPaymentMethod(db, ORG, 'ent-2', 'card')
+    const svc = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-2', null, 'card')
     expect(svc.type).toBe('operator')
     expect(svc.recurring_price).toBeNull()
     expect(svc.payment_method).toBe('card')
-    const priced = await setOperatorPrice(db, ORG, 'ent-2', 4000)
+    const priced = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-2', 4000, null)
     expect(priced.id).toBe(svc.id)
     expect(priced.payment_method).toBe('card')
   })
@@ -372,7 +371,7 @@ describe('findSpineDrift — operator classes (ADR 0046)', () => {
 
   it('is clean when a live operator has a commercial service', async () => {
     await seedConfig(db, 'ent-1', 'ent-1')
-    await setOperatorPrice(db, ORG, 'ent-1', 1200)
+    await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 1200, null)
     const drift = await findSpineDrift(db, ORG)
     expect(hasSpineDrift(drift)).toBe(false)
   })
@@ -385,7 +384,7 @@ describe('findSpineDrift — operator classes (ADR 0046)', () => {
   })
 
   it('flags an active operator service whose entity has no config', async () => {
-    const svc = await setOperatorPrice(db, ORG, 'ent-1', 1200) // creates service, no config seeded
+    const svc = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 1200, null) // creates service, no config seeded
     const drift = await findSpineDrift(db, ORG)
     expect(hasSpineDrift(drift)).toBe(true)
     expect(drift.operatorServicesWithoutConfig.map((s) => s.id)).toContain(svc.id)

@@ -1,4 +1,5 @@
 import type { APIContext, APIRoute } from 'astro'
+import { trimString } from '../../../../lib/api/helpers'
 import { createEngagement } from '../../../../lib/db/engagements'
 import { createMilestone } from '../../../../lib/db/milestones'
 import { getSignalById } from '../../../../lib/db/signal-attribution'
@@ -40,10 +41,6 @@ async function resolveSignalId(
   if (v === '') return undefined
   const signal = await getSignalById(db, orgId, v)
   return signal && signal.entity_id === entityId ? signal.id : undefined
-}
-
-function trimString(value: FormDataEntryValue | null): string | null {
-  return value && typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
 async function createFormMilestones(

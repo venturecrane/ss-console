@@ -390,7 +390,7 @@ describe.skipIf(!overlayAvailable)('heartbeat field parity vs the overlay checko
     expect(overlayWords.length).toBeGreaterThanOrEqual(5)
 
     const ingestSource = readFileSync(
-      path.join(repoRoot, 'src/pages/api/internal/heartbeat.ts'),
+      path.join(repoRoot, 'src/lib/operator/heartbeat-parsers.ts'),
       'utf8'
     )
     const ingestBlock = /const GATEWAY_SUPERVISOR_STATES = new Set\(\[([\s\S]*?)\]\)/.exec(
@@ -428,7 +428,7 @@ describe.skipIf(!overlayAvailable)('heartbeat field parity vs the overlay checko
     expect(overlayWords.length).toBeGreaterThanOrEqual(4)
 
     const ingestSource = readFileSync(
-      path.join(repoRoot, 'src/pages/api/internal/heartbeat.ts'),
+      path.join(repoRoot, 'src/lib/operator/heartbeat-parsers.ts'),
       'utf8'
     )
     const ingestBlock = /const STICKY_STOP_CONDITIONS = new Set\(\[([\s\S]*?)\]\)/.exec(

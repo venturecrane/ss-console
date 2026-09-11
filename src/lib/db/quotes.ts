@@ -11,8 +11,8 @@
  * - Deposit is 50% by default, 3-milestone for 40+ hour engagements (Decision #14)
  */
 
-import { isQuoteAcceptanceReady } from '../sow/store'
 import { getDefaultOriginatingSignalId } from './signal-attribution'
+import { signedArtifactExists } from './signature-requests'
 
 export interface Quote {
   id: string
@@ -198,12 +198,17 @@ function isLineItem(row: unknown): row is LineItem {
 export function parseLineItems(raw: string | null): LineItem[] {
   if (!raw) return []
   try {
-    const parsed = JSON.parse(raw)
+    const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(isLineItem)
+    const rows: unknown[] = parsed
+    return rows.filter(isLineItem)
   } catch {
     return []
   }
+}
+
+function isRow(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 /**
@@ -214,14 +219,12 @@ export function parseLineItems(raw: string | null): LineItem[] {
 export function parseSchedule(quote: Pick<Quote, 'schedule'>): ScheduleRow[] {
   if (!quote.schedule) return []
   try {
-    const parsed = JSON.parse(quote.schedule)
+    const parsed: unknown = JSON.parse(quote.schedule)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(
+    const rows: unknown[] = parsed
+    return rows.filter(
       (row): row is ScheduleRow =>
-        row != null &&
-        typeof row === 'object' &&
-        typeof row.label === 'string' &&
-        typeof row.body === 'string'
+        isRow(row) && typeof row.label === 'string' && typeof row.body === 'string'
     )
   } catch {
     return []
@@ -235,14 +238,12 @@ export function parseSchedule(quote: Pick<Quote, 'schedule'>): ScheduleRow[] {
 export function parseDeliverables(quote: Pick<Quote, 'deliverables'>): DeliverableRow[] {
   if (!quote.deliverables) return []
   try {
-    const parsed = JSON.parse(quote.deliverables)
+    const parsed: unknown = JSON.parse(quote.deliverables)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(
+    const rows: unknown[] = parsed
+    return rows.filter(
       (row): row is DeliverableRow =>
-        row != null &&
-        typeof row === 'object' &&
-        typeof row.title === 'string' &&
-        typeof row.body === 'string'
+        isRow(row) && typeof row.title === 'string' && typeof row.body === 'string'
     )
   } catch {
     return []
@@ -747,7 +748,7 @@ export async function updateQuoteStatus(
 
   // Acceptance guard: require SignWell signing flow completion
   if (newStatus === 'accepted') {
-    const acceptanceReady = await isQuoteAcceptanceReady(db, orgId, quoteId)
+    const acceptanceReady = await signedArtifactExists(db, orgId, quoteId)
     if (!acceptanceReady) {
       throw new Error(
         'Cannot accept quote: a completed signed signature request with a persisted signed artifact is required.'
