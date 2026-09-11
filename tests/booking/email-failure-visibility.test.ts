@@ -20,10 +20,7 @@ import { resolve } from 'path'
 
 // The reserve handler delegates its guest-confirmation send to
 // confirmation-emails.ts; the manage handlers keep their send logic inline.
-const confirmationSrc = readFileSync(
-  resolve('src/pages/api/booking/confirmation-emails.ts'),
-  'utf-8'
-)
+const confirmationSrc = readFileSync(resolve('src/lib/booking/confirmation-emails.ts'), 'utf-8')
 const rescheduleSrc = readFileSync(
   resolve('src/pages/api/booking/manage/[token]/reschedule.ts'),
   'utf-8'

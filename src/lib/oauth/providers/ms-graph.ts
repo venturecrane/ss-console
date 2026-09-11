@@ -1,9 +1,8 @@
 /**
  * Microsoft Graph OAuth provider entry.
  *
- * Provider-specific token-exchange details for the unified callback at
- * `src/pages/api/oauth/callback.ts` and the customer-facing portal
- * callback at `src/pages/portal/products/operator/oauth/[connector]/callback.astro`.
+ * Provider-specific token-exchange details for the customer-facing portal
+ * callback at `src/pages/portal/products/operator/oauth/[connector]/callback.ts`.
  *
  * Scope discipline: read + draft only. `Mail.Send` is explicitly absent
  * — programmatic send is the wave-2 stream (issue #881) under a separate
