@@ -141,10 +141,7 @@ def check_pinned_head(
                 "verdict": PIN_DESCENDS,
                 "pinned_head": pinned_head,
                 "current_head": current_head,
-                "reason": (
-                    "The pinned head is still in this export and the chain has "
-                    "grown past it."
-                ),
+                "reason": ("The pinned head is still in this export and the chain has grown past it."),
             }
 
     return {

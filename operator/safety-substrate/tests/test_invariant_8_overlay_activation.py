@@ -178,7 +178,7 @@ def run() -> tuple[bool, str]:
         umbrella = _load_umbrella(overlay)
         ctx = _RecordingCtx()
         registered = umbrella.load_and_register_subplugins(ctx)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 - run()-style invariant: an overlay register() raise IS the finding, reported as FAIL rather than raised
         return (False, f"FAIL: overlay register() raised: {type(e).__name__}: {e}")
 
     missing = [p for p in _FUNCTIONAL if p not in registered]
@@ -195,7 +195,7 @@ def run() -> tuple[bool, str]:
             conn = sqlite3.connect(f"file:{binding}?mode=ro", uri=True)
             tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
             conn.close()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001 - run()-style invariant: an unreadable audit db IS the finding, reported as FAIL rather than raised
             return (False, f"FAIL: audit db unreadable at {binding}: {type(e).__name__}: {e}")
         if "audit_log" not in tables:
             return (False, f"FAIL: audit_log not created at {binding} — ensure_schema did not run")

@@ -19,7 +19,7 @@ from pathlib import Path
 # operator/ root, so `adapter.*` imports resolve.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from adapter.inbound_envelope import (  # noqa: E402
+from adapter.inbound_envelope import (
     ADMIN_VERIFICATION_DETAIL,
     DEFAULT_TRUST_CLASS,
     SENDER_STATUS_PREFIX,
@@ -30,7 +30,7 @@ from adapter.inbound_envelope import (  # noqa: E402
     with_sender_status,
     wrap_inbound,
 )
-from adapter.trust_ceiling import ActionClass, Ceiling, enforce  # noqa: E402
+from adapter.trust_ceiling import ActionClass, Ceiling, enforce
 
 # Adversarial inbound prompt-injection corpus (ADR 0027 inbound trust boundary).
 # Platform-level safety QA — co-located with this test, vertical-neutral.
@@ -241,7 +241,7 @@ class TestSenderStatusFraming:
         assert SENDER_STATUS_PREFIX in out[:cut]
         assert "admin@firm.test" in out[:cut]
         # The region below the delimiter is untouched.
-        assert out[cut:] == self._PROMPT[self._PROMPT.find(UNTRUSTED_EMAIL_DELIMITER):]
+        assert out[cut:] == self._PROMPT[self._PROMPT.find(UNTRUSTED_EMAIL_DELIMITER) :]
 
     def test_non_admin_dispatch_is_byte_identical(self):
         out = with_sender_status(self._PROMPT, envelope=self._env(detail=None), address="rostered@firm.test")

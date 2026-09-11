@@ -15,6 +15,7 @@ are never sent a third time. A pass that produced nothing exits 1.
 Outputs under runs/<unit>/: chunk-XX.txt, chunk-XX.sha, map-XX.md (map-XX-k.md
 for halves), usage.jsonl (per call: tokens, stop, sha, window).
 """
+
 from __future__ import annotations
 
 import json
@@ -104,8 +105,14 @@ class _Composer:
             self.sr.log(f"chunk {c.label} refused (attempt {c.attempts})")
             return "refused"
         chunk_id: Any = int(c.label) if c.part is None else c.label
-        row = {"chunk": chunk_id, "in": r.usage.input_tokens, "out": r.usage.output_tokens, "stop": r.stop_reason,
-               "sha": sha(c.text), "max_tokens": self.max_tokens}
+        row = {
+            "chunk": chunk_id,
+            "in": r.usage.input_tokens,
+            "out": r.usage.output_tokens,
+            "stop": r.stop_reason,
+            "sha": sha(c.text),
+            "max_tokens": self.max_tokens,
+        }
         if r.empty:
             self.log_usage(empty=True, **row)
             self.sr.log(f"chunk {c.label} EMPTY: {len(r.text)}B from {len(c.text)}B of source")
@@ -119,9 +126,17 @@ class _Composer:
 
     def compose_one(self, c: Chunk) -> str:
         try:
-            r = self.sr.doorway.call("compose", model=self.model, system=self.system,
-                                     messages=[{"role": "user", "content": c.text}], max_tokens=self.max_tokens,
-                                     effort="", stream=True, cache_blocks=("system",), custom_id=c.out_name[:-3])
+            r = self.sr.doorway.call(
+                "compose",
+                model=self.model,
+                system=self.system,
+                messages=[{"role": "user", "content": c.text}],
+                max_tokens=self.max_tokens,
+                effort="",
+                stream=True,
+                cache_blocks=("system",),
+                custom_id=c.out_name[:-3],
+            )
         except Exception as exc:  # noqa: BLE001 - classified by handle()
             return self.handle(c, None, str(exc))
         return self.handle(c, r, None)
@@ -138,7 +153,7 @@ class _Composer:
                 self.refused.append(c.label)
                 self.sr.log(f"chunk {c.label} REFUSED after {REFUSAL_ATTEMPTS} attempts")
             return []
-        if c.part is not None:                      # empty after the split: give up
+        if c.part is not None:  # empty after the split: give up
             self.emptied.append(c.label)
             self.sr.log(f"chunk {c.label} still empty after the split; not composed")
             return []
@@ -170,17 +185,31 @@ class _Composer:
         result instead of composing again."""
         pending = list(todo)
         while pending:
-            items = [llm.Item(custom_id=f"{c.out_name[:-3]}-{sha(c.text)[:12]}-a{c.attempts + 1}",
-                              messages=[{"role": "user", "content": c.text}], meta={"chunk": c}) for c in pending]
+            items = [
+                llm.Item(
+                    custom_id=f"{c.out_name[:-3]}-{sha(c.text)[:12]}-a{c.attempts + 1}",
+                    messages=[{"role": "user", "content": c.text}],
+                    meta={"chunk": c},
+                )
+                for c in pending
+            ]
             nxt: list[Chunk] = []
 
             def on_result(item: llm.Item, r: llm.Result | None, err: str | None) -> None:
                 c = item.meta["chunk"]
                 nxt.extend(self.after(c, self.handle(c, r, err)))
 
-            s = self.sr.doorway.batch_call("compose", items, on_result, model=self.model, system=self.system,
-                                           max_tokens=self.max_tokens, effort="", cache_blocks=("system",),
-                                           batch_dir=self.d)
+            s = self.sr.doorway.batch_call(
+                "compose",
+                items,
+                on_result,
+                model=self.model,
+                system=self.system,
+                max_tokens=self.max_tokens,
+                effort="",
+                cache_blocks=("system",),
+                batch_dir=self.d,
+            )
             if s.timed_out:
                 self.sr.log(f"compose: {len(s.timed_out)} chunk(s) in a batch still processing; rerun resumes it")
                 return

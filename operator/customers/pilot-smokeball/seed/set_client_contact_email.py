@@ -57,11 +57,7 @@ def main() -> None:
     if code != 200:
         sys.exit(f"could not list matters: HTTP {code}")
     matter = next(
-        (
-            m
-            for m in _first(matters, "value", "items")
-            if isinstance(m, dict) and m.get("number") == args.matter_number
-        ),
+        (m for m in _first(matters, "value", "items") if isinstance(m, dict) and m.get("number") == args.matter_number),
         None,
     )
     if matter is None:

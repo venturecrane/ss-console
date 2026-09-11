@@ -133,7 +133,6 @@ _HOLD_LABEL = "chase-hold"
 # (vfy_01M1CB0NTKCV3ACRY0P6QD6JX7); fixture: tests/role_snapshot_probe.json.
 
 
-
 # ---------------------------------------------------------------------------
 # Verification-item source protocol — the real adapter reads the open
 # verification TRACKING tasks the skill maintains on each matter (one per
@@ -179,8 +178,7 @@ class VerificationSource(Protocol):
     """Adapter the real Smokeball reader satisfies: one VerificationItem per open
     verification tracking task the skill maintains."""
 
-    def pull_open_verifications(self) -> Sequence[VerificationItem]:
-        ...
+    def pull_open_verifications(self) -> Sequence[VerificationItem]: ...
 
 
 # ---------------------------------------------------------------------------
@@ -280,9 +278,7 @@ def load_chase_config(customer_yaml_path: str | None = None) -> tuple[ChaseConfi
         escalate_after_attempts=_pos_int_or_none(settings.get("escalate_after_attempts")),
     )
     esc = data.get("escalation") if isinstance(data, dict) else None
-    refire_days = _pos_int(
-        esc.get("refire_days") if isinstance(esc, dict) else None, _DEFAULT_REFIRE_DAYS
-    )
+    refire_days = _pos_int(esc.get("refire_days") if isinstance(esc, dict) else None, _DEFAULT_REFIRE_DAYS)
     return config, refire_days
 
 
@@ -467,13 +463,9 @@ def decide(
     # other internal raise (never daily, but never once-ever either): a held
     # chase re-surfaces every refire_days until the dials are authored (#1899).
     if not config.authored:
-        sentinel_key = ledger.item_key(
-            "", _CONFIG_SENTINEL_SOURCE_ID, _CONFIG_SENTINEL_LABEL, ""
-        )
+        sentinel_key = ledger.item_key("", _CONFIG_SENTINEL_SOURCE_ID, _CONFIG_SENTINEL_LABEL, "")
         sentinel_state = states.get(sentinel_key)
-        if not ledger.should_fire(
-            sentinel_state, today, refire_days=refire_days, ack_snooze_days=refire_days
-        ):
+        if not ledger.should_fire(sentinel_state, today, refire_days=refire_days, ack_snooze_days=refire_days):
             return WakeDecision(
                 wake=False,
                 decision_basis="chase_config_unauthored_within_refire_window",
@@ -531,9 +523,7 @@ def decide(
             if (
                 not already_surfacing
                 and not hold_state.handed_off
-                and ledger.should_fire(
-                    hold_state, today, refire_days=refire_days, ack_snooze_days=refire_days
-                )
+                and ledger.should_fire(hold_state, today, refire_days=refire_days, ack_snooze_days=refire_days)
             ):
                 plans.append(
                     ItemPlan(
@@ -650,7 +640,6 @@ def decide(
 # ---------------------------------------------------------------------------
 # Runtime entrypoint — wires the verification source + broker heartbeat + stdout.
 # ---------------------------------------------------------------------------
-
 
 
 # ---------------------------------------------------------------------------
@@ -779,7 +768,6 @@ def _emit_wake(
     return 0
 
 
-
 def _item_to_dict(item: VerificationItem) -> dict:
     return {
         "matter_id": item.matter_id,
@@ -856,9 +844,7 @@ async def run_once(
     for source in sources:
         pulled = list(source.pull_open_verifications())
         items.extend(pulled)
-        raw_input_blob += json.dumps(
-            [_item_to_dict(i) for i in pulled], sort_keys=True
-        ).encode("utf-8")
+        raw_input_blob += json.dumps([_item_to_dict(i) for i in pulled], sort_keys=True).encode("utf-8")
 
     role_snapshot_hashes = _snapshot_hashes_for(items, ledger, ledger_events, snapshot_hash_fn)
 
@@ -986,9 +972,6 @@ def _extract_items(payload) -> list | None:
     return None
 
 
-
-
-
 def _matter_id_of(item: dict) -> str:
     # The live Smokeball /tasks payload carries the matter as a NESTED link
     # object ({"matter": {"id": ..., "href": ...}}), not a flat matterId —
@@ -1096,9 +1079,7 @@ class SmokeballSubprocessSource:
         self._today = today
 
     def pull_open_verifications(self) -> Sequence[VerificationItem]:
-        connector_python = os.environ.get(
-            "SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT
-        )
+        connector_python = os.environ.get("SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT)
         result = subprocess.run(  # raises on timeout → caller wakes
             # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args — argv[0] is the module-constant connector-venv interpreter, overridable only via SMD_CONNECTOR_VENV_PYTHON from the Machine's own boot env (same trust domain; the test seam). The snippet is a module constant; no request/agent-controlled data reaches argv.
             [connector_python, "-c", _PULL_SNIPPET],
@@ -1107,10 +1088,7 @@ class SmokeballSubprocessSource:
             timeout=_PULL_TIMEOUT_SECONDS,
         )
         if result.returncode != 0:
-            raise RuntimeError(
-                f"smokeball pull exit {result.returncode}: "
-                f"{(result.stderr or '').strip()[:500]}"
-            )
+            raise RuntimeError(f"smokeball pull exit {result.returncode}: {(result.stderr or '').strip()[:500]}")
         raw = json.loads((result.stdout or "").strip().splitlines()[-1])
         items, problem = parse_pull(raw, today=self._today)
         if problem:

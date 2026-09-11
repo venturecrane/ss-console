@@ -37,7 +37,7 @@ import sys
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[2]))  # operator/ on sys.path
 
-from adapter.audit_log import (  # noqa: E402
+from adapter.audit_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     ACCEPTED_ACTION_TYPES,
     ActorRole,
     AuditEvent,
@@ -193,7 +193,7 @@ def test_write_rejects_unknown_action_type():
 
 def test_write_wraps_executor_failure_as_audit_write_error():
     class BoomExecutor:
-        async def execute(self, sql, params):  # noqa: ARG002
+        async def execute(self, sql, params):
             raise RuntimeError("D1 unreachable")
 
     writer = AuditLogWriter(BoomExecutor())
@@ -209,9 +209,7 @@ def test_metadata_is_deterministic_json():
     md_b = {"a": 2, "b": 1}
     u1 = _run(writer.write(AuditEvent(action_type="DRAFT_CREATED", actor="agent", metadata=md_a)))
     u2 = _run(writer.write(AuditEvent(action_type="DRAFT_CREATED", actor="agent", metadata=md_b)))
-    rows = conn.execute(
-        "SELECT metadata FROM audit_log WHERE id IN (?, ?) ORDER BY id", (u1, u2)
-    ).fetchall()
+    rows = conn.execute("SELECT metadata FROM audit_log WHERE id IN (?, ?) ORDER BY id", (u1, u2)).fetchall()
     assert rows[0][0] == rows[1][0]
     assert rows[0][0] == '{"a":2,"b":1}'
 

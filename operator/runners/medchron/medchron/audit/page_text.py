@@ -15,6 +15,7 @@ Page numbers are the ones a citation uses: the CURRENT exhibit PDF on disk.
 The strip stage may have removed pages after page_map.json was written, so
 the index inverts the recorded drops before it walks the map.
 """
+
 from __future__ import annotations
 
 import json
@@ -37,13 +38,13 @@ def parse_segments(text: str) -> dict[int, tuple[str, bool]]:
     marks = list(_MARK.finditer(text))
     for i, m in enumerate(marks):
         end = marks[i + 1].start() if i + 1 < len(marks) else len(text)
-        out[int(m.group(1))] = (text[m.end():end].strip("\n"), "machine transcription" in m.group(2))
+        out[int(m.group(1))] = (text[m.end() : end].strip("\n"), "machine transcription" in m.group(2))
     return out
 
 
 def _shingles(text: str, n: int = 8) -> set[str]:
     s = re.sub(r"\s+", "", (text or "").lower())
-    return {s[i:i + n] for i in range(0, max(len(s) - n + 1, 0))}
+    return {s[i : i + n] for i in range(0, max(len(s) - n + 1, 0))}
 
 
 def content_agrees(a: str, b: str, floor: float = 0.5) -> bool:
@@ -81,8 +82,14 @@ def page_traits(page: Any) -> dict[str, Any]:
     text = page.get_text()
     if _CHECKBOX.search(text):
         checkbox = True
-    return {"invisible": invisible, "ocr_font": ocr_font, "widgets": widgets, "checkbox": checkbox,
-            "chars": len(text), "text": text}
+    return {
+        "invisible": invisible,
+        "ocr_font": ocr_font,
+        "widgets": widgets,
+        "checkbox": checkbox,
+        "chars": len(text),
+        "text": text,
+    }
 
 
 class PageIndex:
@@ -243,6 +250,6 @@ class PageIndex:
         for d in self._docs.values():
             try:
                 d.close()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 - closing one document handle failing must not stop the other handles from closing
                 pass
         self._docs.clear()

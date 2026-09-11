@@ -42,7 +42,7 @@ _LIB = Path(__file__).resolve().parents[1] / "lib"
 if str(_LIB) not in sys.path:
     sys.path.insert(0, str(_LIB))
 
-from seed_fixtures import FIXTURES  # noqa: E402
+from seed_fixtures import FIXTURES  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 _BIN = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("seed_staging_matter", _BIN / "seed-staging-matter.py")
@@ -74,9 +74,7 @@ def _money(text: str) -> list[float]:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize(
-    ("slug", "total"), [("chen-pi102", 41515.00), ("whitfield-pi104", 25430.00)]
-)
+@pytest.mark.parametrize(("slug", "total"), [("chen-pi102", 41515.00), ("whitfield-pi104", 25430.00)])
 def test_billing_line_items_sum_to_the_stated_total(slug: str, total: float) -> None:
     """A demand traces every medical figure to this document. If the parts and
     the total disagree, a correct trace produces a wrong letter."""
@@ -127,9 +125,7 @@ def test_chronology_dates_appear_in_their_source_records(slug: str) -> None:
 
 
 def _long_date(iso: str) -> str:
-    months = (
-        "January February March April May June July August September October November December"
-    ).split()
+    months = ("January February March April May June July August September October November December").split()
     y, m, d = iso.split("-")
     return f"{months[int(m) - 1]} {int(d)}, {y}"
 
@@ -260,9 +256,7 @@ def test_the_record_covers_what_the_drafter_asked_for(slug: str) -> None:
     names = " | ".join(n for n, _ in FIXTURES[slug].docs).lower()
     for required in ("chronology", "billing summary", "wage loss", "policy limits"):
         assert required in names, f"{slug} is missing {required}"
-    assert any(k in names for k in ("incident report", "collision report")), (
-        f"{slug} has no incident/collision record"
-    )
+    assert any(k in names for k in ("incident report", "collision report")), f"{slug} has no incident/collision record"
 
 
 # --------------------------------------------------------------------------- #

@@ -151,9 +151,7 @@ def test_rejected_when_peer_uid_missing(tmp_path: Path) -> None:
     """Two-arg handle() callers (legacy wire) cannot reach the verb."""
     broker = _broker(tmp_path)
     with pytest.raises(PermissionError):
-        broker.handle(
-            {"action": "escalation_event_append", "event": _fired()}, peer_pid=GATEWAY_PID
-        )
+        broker.handle({"action": "escalation_event_append", "event": _fired()}, peer_pid=GATEWAY_PID)
 
 
 def test_event_must_be_an_object(tmp_path: Path) -> None:

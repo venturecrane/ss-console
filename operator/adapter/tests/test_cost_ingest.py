@@ -31,10 +31,9 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[2]))  # operator/ on sys.path
 
-from adapter.cost_ingest import (  # noqa: E402
+from adapter.cost_ingest import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     CustomerIngestContext,
     IngestRunResult,
-    SourceIngestResult,
     _compute_anthropic_cents,
     ingest_anthropic_billing,
     load_anthropic_pricing,
@@ -88,10 +87,7 @@ class _FakeAnthropicSource:
 
 def _read_rows(conn: sqlite3.Connection) -> list[tuple]:
     cur = conn.cursor()
-    cur.execute(
-        "SELECT date, driver, amount_cents, units, unit_type "
-        "FROM cost_telemetry ORDER BY date, driver"
-    )
+    cur.execute("SELECT date, driver, amount_cents, units, unit_type FROM cost_telemetry ORDER BY date, driver")
     return cur.fetchall()
 
 
@@ -118,9 +114,7 @@ def test_compute_anthropic_cents_known_model():
     pricing = load_anthropic_pricing()
     # Opus 4.7: 1500 cents per M input, 7500 cents per M output
     # 2,000,000 input tokens -> 3000 cents; 1,000,000 output -> 7500 cents
-    in_cents, out_cents, warn = _compute_anthropic_cents(
-        "claude-opus-4-7", 2_000_000, 1_000_000, pricing
-    )
+    in_cents, out_cents, warn = _compute_anthropic_cents("claude-opus-4-7", 2_000_000, 1_000_000, pricing)
     assert in_cents == 3000
     assert out_cents == 7500
     assert warn is None
@@ -128,9 +122,7 @@ def test_compute_anthropic_cents_known_model():
 
 def test_compute_anthropic_cents_unknown_model():
     pricing = load_anthropic_pricing()
-    in_cents, out_cents, warn = _compute_anthropic_cents(
-        "claude-unknown-99", 1_000_000, 1_000_000, pricing
-    )
+    in_cents, out_cents, warn = _compute_anthropic_cents("claude-unknown-99", 1_000_000, 1_000_000, pricing)
     assert in_cents == 0
     assert out_cents == 0
     assert warn is not None
@@ -140,9 +132,7 @@ def test_compute_anthropic_cents_unknown_model():
 def test_compute_anthropic_cents_integer_floor():
     pricing = load_anthropic_pricing()
     # 1 input token at 1500 cents/million = floor(1500/1_000_000) = 0
-    in_cents, out_cents, _ = _compute_anthropic_cents(
-        "claude-opus-4-7", 1, 0, pricing
-    )
+    in_cents, out_cents, _ = _compute_anthropic_cents("claude-opus-4-7", 1, 0, pricing)
     assert in_cents == 0
     assert out_cents == 0
 
@@ -265,17 +255,11 @@ def test_ingest_anthropic_source_failure_returns_not_ok():
 def test_upsert_accumulates_on_repeat():
     conn = _make_conn()
     executor = _SqliteExecutor(conn)
-    source = _FakeAnthropicSource(
-        [("claude-opus-4-7", 1_000_000, 1_000_000)]
-    )
+    source = _FakeAnthropicSource([("claude-opus-4-7", 1_000_000, 1_000_000)])
 
-    asyncio.run(
-        ingest_anthropic_billing(executor, source, "k", date(2026, 5, 22))
-    )
+    asyncio.run(ingest_anthropic_billing(executor, source, "k", date(2026, 5, 22)))
     # Second run same day — UPSERT must accumulate
-    asyncio.run(
-        ingest_anthropic_billing(executor, source, "k", date(2026, 5, 22))
-    )
+    asyncio.run(ingest_anthropic_billing(executor, source, "k", date(2026, 5, 22)))
 
     rows = _read_rows(conn)
     in_row = next(r for r in rows if r[1] == "claude_api_input_tokens")
@@ -303,9 +287,7 @@ def test_run_ingest_aggregates_anthropic_source():
     )
     anthropic_src = _FakeAnthropicSource([("claude-opus-4-7", 100, 200)])
 
-    result = asyncio.run(
-        run_ingest_for_customer(ctx, anthropic_src, day=date(2026, 5, 22))
-    )
+    result = asyncio.run(run_ingest_for_customer(ctx, anthropic_src, day=date(2026, 5, 22)))
 
     assert isinstance(result, IngestRunResult)
     sources = [s.source for s in result.sources]
@@ -322,9 +304,7 @@ def test_run_ingest_anthropic_failure_is_captured():
     )
     anthropic_src = _FakeAnthropicSource([], raises=RuntimeError("HTTP 503"))
 
-    result = asyncio.run(
-        run_ingest_for_customer(ctx, anthropic_src, day=date(2026, 5, 22))
-    )
+    result = asyncio.run(run_ingest_for_customer(ctx, anthropic_src, day=date(2026, 5, 22)))
 
     sources = {s.source: s for s in result.sources}
     assert not sources["anthropic_billing"].ok

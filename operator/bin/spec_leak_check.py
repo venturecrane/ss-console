@@ -314,10 +314,7 @@ def containment_findings(spec: str, corpus: dict[str, str], size: int) -> list[F
         while i <= len(spec_tokens) - size:
             if tuple(spec_tokens[i : i + size]) in doc_grams:
                 end = i + size
-                while (
-                    end < len(spec_tokens)
-                    and tuple(spec_tokens[end - size + 1 : end + 1]) in doc_grams
-                ):
+                while end < len(spec_tokens) and tuple(spec_tokens[end - size + 1 : end + 1]) in doc_grams:
                     end += 1
                 findings.append(
                     Finding(
@@ -538,8 +535,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if report.clean:
         exempt = (
-            f" {report.approved_used} approved fixed string(s) exempt,"
-            f" {report.approved_tokens} token(s)."
+            f" {report.approved_used} approved fixed string(s) exempt, {report.approved_tokens} token(s)."
             if report.approved_used
             else ""
         )

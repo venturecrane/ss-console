@@ -8,6 +8,7 @@ Treatment gaps are reported within the claim period only (pre-incident
 intervals are gaps in ordinary care, not breaks in injury treatment), at the
 firm's `chronology.treatment_gap_days`.
 """
+
 from __future__ import annotations
 
 import re
@@ -94,9 +95,18 @@ def draw_swimlane(per: dict[str, list[date]], colors: dict[str, str], incident: 
             else:
                 ax.plot([a.toordinal(), b.toordinal()], [y, y], lw=6.0, color=c, solid_capstyle="round", zorder=3)
     ax.axvline(incident.toordinal(), color="#1f3864", ls="--", lw=1.2, zorder=4)
-    ax.annotate(f"Date of Incident\n{incident.strftime('%m/%d/%Y')}", xy=(incident.toordinal(), len(lanes) - 0.35),
-                ha="center", va="bottom", fontsize=7.5, color="#1f3864", fontname=FONT, linespacing=1.3, zorder=6,
-                bbox=dict(boxstyle="round,pad=0.25", facecolor="white", edgecolor="none", alpha=0.92))
+    ax.annotate(
+        f"Date of Incident\n{incident.strftime('%m/%d/%Y')}",
+        xy=(incident.toordinal(), len(lanes) - 0.35),
+        ha="center",
+        va="bottom",
+        fontsize=7.5,
+        color="#1f3864",
+        fontname=FONT,
+        linespacing=1.3,
+        zorder=6,
+        bbox=dict(boxstyle="round,pad=0.25", facecolor="white", edgecolor="none", alpha=0.92),
+    )
     ax.set_yticks(range(len(lanes)))
     ax.set_yticklabels([f if len(f) <= 30 else f[:29] + "…" for f in reversed(lanes)], fontsize=7.5, fontname=FONT)
     ticks, labels = [], []
@@ -135,11 +145,41 @@ def draw_year(year: int, months: list[int], marked: dict[date, str], out: Path) 
         ax = axes[idx]
         bb = ax.get_position()
         aspect = (bb.width * fw) / (bb.height * fh)
-        ax.add_patch(mpatches.FancyBboxPatch((0.01, 0.01), 0.98, 0.98, boxstyle="round,pad=0.012,rounding_size=0.03",
-                                             facecolor="#f4f4f6", edgecolor="none", transform=ax.transAxes, zorder=0))
-        ax.text(0.5, 0.93, month_name[mo], ha="center", va="center", fontsize=8.2, fontname=FONT, transform=ax.transAxes, color="#222222")
+        ax.add_patch(
+            mpatches.FancyBboxPatch(
+                (0.01, 0.01),
+                0.98,
+                0.98,
+                boxstyle="round,pad=0.012,rounding_size=0.03",
+                facecolor="#f4f4f6",
+                edgecolor="none",
+                transform=ax.transAxes,
+                zorder=0,
+            )
+        )
+        ax.text(
+            0.5,
+            0.93,
+            month_name[mo],
+            ha="center",
+            va="center",
+            fontsize=8.2,
+            fontname=FONT,
+            transform=ax.transAxes,
+            color="#222222",
+        )
         for c, dn in enumerate("SMTWTFS"):
-            ax.text(0.09 + c * 0.137, 0.80, dn, ha="center", va="center", fontsize=6.4, color="#8a8a8a", fontname=FONT, transform=ax.transAxes)
+            ax.text(
+                0.09 + c * 0.137,
+                0.80,
+                dn,
+                ha="center",
+                va="center",
+                fontsize=6.4,
+                color="#8a8a8a",
+                fontname=FONT,
+                transform=ax.transAxes,
+            )
         for r, week in enumerate(cal.monthdayscalendar(year, mo)):
             for c, day in enumerate(week):
                 if not day:
@@ -147,10 +187,29 @@ def draw_year(year: int, months: list[int], marked: dict[date, str], out: Path) 
                 x, y = 0.09 + c * 0.137, 0.68 - r * 0.115
                 hit = date(year, mo, day) in marked
                 if hit:
-                    ax.add_patch(mpatches.Ellipse((x, y), 0.086, 0.086 * aspect, facecolor=marked[date(year, mo, day)],
-                                                  edgecolor="none", transform=ax.transAxes, zorder=2))
-                ax.text(x, y, f"{day:02d}", ha="center", va="center", fontsize=6.2, fontname=FONT, zorder=3,
-                        color="white" if hit else "#4a4a4a", transform=ax.transAxes)
+                    ax.add_patch(
+                        mpatches.Ellipse(
+                            (x, y),
+                            0.086,
+                            0.086 * aspect,
+                            facecolor=marked[date(year, mo, day)],
+                            edgecolor="none",
+                            transform=ax.transAxes,
+                            zorder=2,
+                        )
+                    )
+                ax.text(
+                    x,
+                    y,
+                    f"{day:02d}",
+                    ha="center",
+                    va="center",
+                    fontsize=6.2,
+                    fontname=FONT,
+                    zorder=3,
+                    color="white" if hit else "#4a4a4a",
+                    transform=ax.transAxes,
+                )
     fig.suptitle(str(year), x=0.055, y=0.99, ha="left", fontsize=13, fontname=FONT, color="#1a1a1a")
     fig.tight_layout(rect=(0, 0, 1, 0.955))
     fig.savefig(str(out), bbox_inches="tight", facecolor="white")
@@ -169,16 +228,37 @@ def draw_legend(lanes: list[str], colors: dict[str, str], out: Path) -> None:
     for i, fac in enumerate(lanes):
         r, c = divmod(i, ncol)
         x, y = c * 0.253, 0.74 - r * (0.9 / max(nrow, 1))
-        ax.add_patch(mpatches.FancyBboxPatch((x, y - 0.11), 0.238, 0.22, boxstyle="round,pad=0.004,rounding_size=0.09",
-                                             facecolor=colors[fac], edgecolor="none", transform=ax.transAxes, zorder=1))
-        ax.text(x + 0.012, y, fac if len(fac) <= 27 else fac[:26] + "…", fontsize=6.6, fontname=FONT, va="center",
-                ha="left", color="#1a1a1a", zorder=2, transform=ax.transAxes)
+        ax.add_patch(
+            mpatches.FancyBboxPatch(
+                (x, y - 0.11),
+                0.238,
+                0.22,
+                boxstyle="round,pad=0.004,rounding_size=0.09",
+                facecolor=colors[fac],
+                edgecolor="none",
+                transform=ax.transAxes,
+                zorder=1,
+            )
+        )
+        ax.text(
+            x + 0.012,
+            y,
+            fac if len(fac) <= 27 else fac[:26] + "…",
+            fontsize=6.6,
+            fontname=FONT,
+            va="center",
+            ha="left",
+            color="#1a1a1a",
+            zorder=2,
+            transform=ax.transAxes,
+        )
     fig.savefig(str(out), bbox_inches="tight", facecolor="white")
     plt.close(fig)
 
 
-def render(md_text: str, outdir: Path, incident: date, gap_days: int, canon: Callable[[str], str],
-           headings: set[str]) -> dict[str, Any]:
+def render(
+    md_text: str, outdir: Path, incident: date, gap_days: int, canon: Callable[[str], str], headings: set[str]
+) -> dict[str, Any]:
     """Draw the three visuals into `outdir` (stale charts cleared first: the
     renderer globs cal-*.png, and one client's calendar once rendered inside
     another client's chronology). Returns the gaps and the lane order."""

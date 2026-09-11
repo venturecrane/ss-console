@@ -31,13 +31,11 @@ _OPERATOR = _HERE.parents[2]
 sys.path.insert(0, str(_OPERATOR))
 sys.path.insert(0, str(_OPERATOR / "workspace_broker"))
 
-from chain import CHAIN_COLUMNS, GENESIS, compute_row_hash  # noqa: E402
+from chain import CHAIN_COLUMNS, GENESIS, compute_row_hash  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 # The script has a dash in its name, so it is loaded by path rather than
 # imported. Same shape the other bin/ script tests use.
-_spec = importlib.util.spec_from_file_location(
-    "audit_chain_watch", _OPERATOR / "bin" / "audit-chain-watch.py"
-)
+_spec = importlib.util.spec_from_file_location("audit_chain_watch", _OPERATOR / "bin" / "audit-chain-watch.py")
 watch = importlib.util.module_from_spec(_spec)
 assert _spec.loader is not None
 # Registered BEFORE exec: @dataclass resolves its own module out of sys.modules,
@@ -228,12 +226,8 @@ def test_the_archive_key_and_digest_are_reproducible(tmp_path):
     def uploader(local: Path, destination: str) -> None:
         uploaded.append((local, destination))
 
-    first = watch.archive_export(
-        "seat", rows, bucket="b", uploader=uploader, work_dir=tmp_path / "one"
-    )
-    second = watch.archive_export(
-        "seat", rows, bucket="b", uploader=uploader, work_dir=tmp_path / "two"
-    )
+    first = watch.archive_export("seat", rows, bucket="b", uploader=uploader, work_dir=tmp_path / "one")
+    second = watch.archive_export("seat", rows, bucket="b", uploader=uploader, work_dir=tmp_path / "two")
     assert first.key.startswith("audit/seat/") and first.key.endswith(".json.gz")
     assert uploaded[0][1] == f"s3://b/{first.key}"
     # Same rows, same bytes, same digest -- a gzip mtime would break this and
@@ -252,18 +246,14 @@ def test_the_archive_key_names_the_day_the_time_and_the_chain_tip():
     """
     when = datetime(2026, 8, 21, 13, 39, 7, tzinfo=timezone.utc)
     head = "a1b2c3d4e5f6" + "0" * 52
-    assert watch.archive_key("seat", head, now=when) == (
-        "audit/seat/2026-08-21/133907Z-a1b2c3d4e5f6.json.gz"
-    )
+    assert watch.archive_key("seat", head, now=when) == ("audit/seat/2026-08-21/133907Z-a1b2c3d4e5f6.json.gz")
 
 
 def test_a_headless_export_says_nohead_rather_than_inventing_a_tip():
     """An export with no chained rows has no tip, and the key must say so."""
     when = datetime(2026, 8, 21, 8, 0, 0, tzinfo=timezone.utc)
     for head in (None, ""):
-        assert watch.archive_key("seat", head, now=when) == (
-            "audit/seat/2026-08-21/080000Z-nohead.json.gz"
-        )
+        assert watch.archive_key("seat", head, now=when) == ("audit/seat/2026-08-21/080000Z-nohead.json.gz")
 
 
 def test_two_runs_in_one_utc_day_write_two_different_keys(tmp_path):
@@ -373,10 +363,7 @@ def test_the_lock_probe_asks_the_r2_bucket_lock_endpoint(monkeypatch):
 
     ok, note = watch.probe_bucket_lock("smd-audit-archive", fetch=fetch)
     assert ok is True
-    assert asked == [
-        f"https://api.cloudflare.com/client/v4/accounts/{'a' * 32}"
-        "/r2/buckets/smd-audit-archive/lock"
-    ]
+    assert asked == [f"https://api.cloudflare.com/client/v4/accounts/{'a' * 32}/r2/buckets/smd-audit-archive/lock"]
     assert "audit-7y" in note
 
 
@@ -424,9 +411,7 @@ def test_a_rule_scoped_below_the_archive_prefix_does_not_confirm_the_lock():
 
 def test_a_rule_covering_the_whole_bucket_does_confirm_the_lock():
     """The other side of the prefix check: broader than audit/ still covers audit/."""
-    ok, _ = watch.evaluate_lock_payload(
-        "smd-audit-archive", _lock_body(dict(_OBSERVED_RULE, prefix=""))
-    )
+    ok, _ = watch.evaluate_lock_payload("smd-audit-archive", _lock_body(dict(_OBSERVED_RULE, prefix="")))
     assert ok is True
 
 
@@ -493,10 +478,7 @@ def test_exit_codes_are_the_control_probes_tri_state():
     assert watch.resolve_exit([_outcome(watch.FINDING)], [], True) == watch.EXIT_FINDING
     # A finding outranks a hold: it is the louder fact and it is already on the
     # alert sink. The hold still shows in the report.
-    assert (
-        watch.resolve_exit([_outcome(watch.FINDING), _outcome(watch.HOLD)], [], True)
-        == watch.EXIT_FINDING
-    )
+    assert watch.resolve_exit([_outcome(watch.FINDING), _outcome(watch.HOLD)], [], True) == watch.EXIT_FINDING
     # An unlocked archive prefix reddens an otherwise clean run. An off-box copy
     # anyone can delete is a backup, not a record.
     assert watch.resolve_exit([_outcome(watch.CLEAN)], [], False) == watch.EXIT_HOLD

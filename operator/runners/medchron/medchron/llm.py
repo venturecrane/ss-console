@@ -23,6 +23,7 @@ the next run, and the stage exits non-zero so the driver resumes it later. And
 levers arrive as arguments from the firm config, never from the environment;
 the audit stage refuses the Batch API no matter what the levers say.
 """
+
 from __future__ import annotations
 
 import json
@@ -41,10 +42,10 @@ from .limits import LimitHold
 # 0.99 text similarity and a truncated date anchor; compose high: regression
 # not whole), so a table row for them would be dead text that reads as policy.
 EFFORT_DEFAULTS = {"audit": "medium", "repair": "medium", "merge": "low", "condense": "low"}
-NEVER_BATCHED = {"audit"}     # the audit is the gate; it is never a batch job
+NEVER_BATCHED = {"audit"}  # the audit is the gate; it is never a batch job
 
-BATCH_BYTE_BUDGET = 200_000_000     # API ceiling is 256 MB; leave headroom
-BATCH_COUNT_BUDGET = 10_000         # API ceiling is 100k; keep batches restartable
+BATCH_BYTE_BUDGET = 200_000_000  # API ceiling is 256 MB; leave headroom
+BATCH_COUNT_BUDGET = 10_000  # API ceiling is 100k; keep batches restartable
 _CACHE_MARK = {"type": "ephemeral"}
 
 
@@ -84,10 +85,20 @@ def _validate_thinking(thinking: Any) -> dict[str, str] | None:
     return {"type": "adaptive"}
 
 
-def build_params_marked(stage: str, *, model: str, messages: list[dict[str, Any]], max_tokens: int,
-                        system: Any = None, effort: str | None = None, cache_blocks: tuple[str, ...] = ("system",),
-                        tools: Any = None, tool_choice: Any = None, thinking: Any = None,
-                        caching: bool = True) -> tuple[dict[str, Any], int]:
+def build_params_marked(
+    stage: str,
+    *,
+    model: str,
+    messages: list[dict[str, Any]],
+    max_tokens: int,
+    system: Any = None,
+    effort: str | None = None,
+    cache_blocks: tuple[str, ...] = ("system",),
+    tools: Any = None,
+    tool_choice: Any = None,
+    thinking: Any = None,
+    caching: bool = True,
+) -> tuple[dict[str, Any], int]:
     """The kwargs for client.messages.create / .stream, and how many cache
     markers were placed. Never mutates its inputs."""
     cache_blocks = tuple(cache_blocks or ())
@@ -175,8 +186,9 @@ def make_result(message: Any, messages: list[dict[str, Any]], batch: bool = Fals
     text = _text_of(message)
     stop = getattr(message, "stop_reason", None) or ""
     empty = stop == "end_turn" and len(text.strip()) < 0.02 * _input_chars(messages)
-    return Result(text=text, message=message, stop_reason=stop, usage=getattr(message, "usage", None),
-                  batch=batch, empty=empty)
+    return Result(
+        text=text, message=message, stop_reason=stop, usage=getattr(message, "usage", None), batch=batch, empty=empty
+    )
 
 
 class _ZeroUsage:
@@ -191,7 +203,7 @@ def classify_error(exc: BaseException) -> str:
     """'retry' for transport/429/5xx, 'raise' for 4xx invalid requests."""
     try:
         import anthropic
-    except Exception:  # noqa: BLE001 - pragma: no cover
+    except Exception:  # noqa: BLE001 - the anthropic SDK may be absent in the audit venv; classify by message text then
         return "raise" if "invalid_request" in str(exc) else "retry"
     if isinstance(exc, (anthropic.APIConnectionError, anthropic.RateLimitError)):
         return "retry"
@@ -235,8 +247,9 @@ class BatchSummary:
     batch_ids: list[str] = field(default_factory=list)
 
 
-def _split_requests(reqs: list[dict[str, Any]], byte_budget: int = BATCH_BYTE_BUDGET,
-                    count_budget: int = BATCH_COUNT_BUDGET) -> list[list[dict[str, Any]]]:
+def _split_requests(
+    reqs: list[dict[str, Any]], byte_budget: int = BATCH_BYTE_BUDGET, count_budget: int = BATCH_COUNT_BUDGET
+) -> list[list[dict[str, Any]]]:
     batches: list[list[dict[str, Any]]] = []
     cur: list[dict[str, Any]] = []
     size = 0
@@ -260,7 +273,7 @@ def _batch_files(batch_dir: Path, stage: str) -> dict[str, dict[str, Any]]:
         if p.name.startswith(f"batch-{stage}-") and p.suffix == ".json":
             try:
                 files[p.name] = json.loads(p.read_text(encoding="utf-8"))
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 - a corrupt batch file is skipped so the batch index still lists the readable ones
                 continue
     return files
 
@@ -268,7 +281,7 @@ def _batch_files(batch_dir: Path, stage: str) -> dict[str, dict[str, Any]]:
 def _next_index(existing: dict[str, Any], stage: str) -> int:
     n = 0
     for fn in existing:
-        core = fn[len(f"batch-{stage}-"):-len(".json")].split("-")[0]
+        core = fn[len(f"batch-{stage}-") : -len(".json")].split("-")[0]
         if core.isdigit():
             n = max(n, int(core) + 1)
     return n
@@ -279,6 +292,7 @@ def _next_index(existing: dict[str, Any], stage: str) -> int:
 class Doorway:
     """Levers come from the firm config, the ledger is the unit's, the client is
     injectable (tests never touch the network)."""
+
     ledger: Ledger
     caching: bool = True
     batch_stages: frozenset[str] = frozenset()
@@ -299,13 +313,25 @@ class Doorway:
     before_batch: Callable[[str, int, int], None] | None = None
 
     @classmethod
-    def from_config(cls, cfg: FirmConfig, ledger: Ledger, *, client: Any = None,
-                    log: Callable[[str], None] = print,
-                    before_request: Callable[[str], None] | None = None,
-                    before_batch: Callable[[str, int, int], None] | None = None) -> "Doorway":
-        return cls(ledger=ledger, caching=bool(cfg.get("levers", "cache", True)),
-                   batch_stages=frozenset(cfg.batch_stages) - NEVER_BATCHED, client=client, log=log,
-                   before_request=before_request, before_batch=before_batch)
+    def from_config(
+        cls,
+        cfg: FirmConfig,
+        ledger: Ledger,
+        *,
+        client: Any = None,
+        log: Callable[[str], None] = print,
+        before_request: Callable[[str], None] | None = None,
+        before_batch: Callable[[str, int, int], None] | None = None,
+    ) -> "Doorway":
+        return cls(
+            ledger=ledger,
+            caching=bool(cfg.get("levers", "cache", True)),
+            batch_stages=frozenset(cfg.batch_stages) - NEVER_BATCHED,
+            client=client,
+            log=log,
+            before_request=before_request,
+            before_batch=before_batch,
+        )
 
     def _client(self, timeout: float | None) -> Any:
         if self.client is None:
@@ -316,17 +342,42 @@ class Doorway:
             return self.client.with_options(timeout=timeout)
         return self.client
 
-    def call(self, stage: str, *, model: str, messages: list[dict[str, Any]], max_tokens: int, system: Any = None,
-             effort: str | None = None, cache_blocks: tuple[str, ...] = ("system",), stream: bool = False,
-             tools: Any = None, tool_choice: Any = None, thinking: Any = None, attempts: int = 3,
-             backoff: float = 20.0, timeout: float | None = None, custom_id: str | None = None) -> Result:
+    def call(
+        self,
+        stage: str,
+        *,
+        model: str,
+        messages: list[dict[str, Any]],
+        max_tokens: int,
+        system: Any = None,
+        effort: str | None = None,
+        cache_blocks: tuple[str, ...] = ("system",),
+        stream: bool = False,
+        tools: Any = None,
+        tool_choice: Any = None,
+        thinking: Any = None,
+        attempts: int = 3,
+        backoff: float = 20.0,
+        timeout: float | None = None,
+        custom_id: str | None = None,
+    ) -> Result:
         """One interactive call. Retries transport/429/5xx; re-raises 4xx at
         once. Always writes a ledger row, so a paid call is never invisible."""
         if self.before_request is not None:
             self.before_request(stage)
-        params, markers = build_params_marked(stage, model=model, messages=messages, max_tokens=max_tokens,
-                                              system=system, effort=effort, cache_blocks=cache_blocks, tools=tools,
-                                              tool_choice=tool_choice, thinking=thinking, caching=self.caching)
+        params, markers = build_params_marked(
+            stage,
+            model=model,
+            messages=messages,
+            max_tokens=max_tokens,
+            system=system,
+            effort=effort,
+            cache_blocks=cache_blocks,
+            tools=tools,
+            tool_choice=tool_choice,
+            thinking=thinking,
+            caching=self.caching,
+        )
         e = params.get("output_config", {}).get("effort")
         client = self._client(timeout)
         last: BaseException | None = None
@@ -337,23 +388,43 @@ class Doorway:
                         msg = st.get_final_message()
                 else:
                     msg = client.messages.create(**params)
-            except Exception as exc:  # noqa: BLE001 - classified below
+            except Exception as exc:
                 last = exc
                 if classify_error(exc) == "raise":
                     raise
                 if n + 1 < attempts:
                     time.sleep(backoff * (n + 1))
                 continue
-            self.ledger.record(stage, model, msg.usage, effort=e, cache=bool(markers), batch=False,
-                               pages=count_pages(messages), custom_id=custom_id)
+            self.ledger.record(
+                stage,
+                model,
+                msg.usage,
+                effort=e,
+                cache=bool(markers),
+                batch=False,
+                pages=count_pages(messages),
+                custom_id=custom_id,
+            )
             return make_result(msg, params["messages"])
         raise last if last else DoorwayError(f"{stage}: exhausted attempts")
 
     # ---- batch -----------------------------------------------------------
-    def batch_call(self, stage: str, items: list[Item], on_result: Callable[[Item, Result | None, str | None], None],
-                   *, model: str, max_tokens: int, batch_dir: Path, system: Any = None, effort: str | None = None,
-                   cache_blocks: tuple[str, ...] = ("system",), tools: Any = None, tool_choice: Any = None,
-                   thinking: Any = None) -> BatchSummary:
+    def batch_call(
+        self,
+        stage: str,
+        items: list[Item],
+        on_result: Callable[[Item, Result | None, str | None], None],
+        *,
+        model: str,
+        max_tokens: int,
+        batch_dir: Path,
+        system: Any = None,
+        effort: str | None = None,
+        cache_blocks: tuple[str, ...] = ("system",),
+        tools: Any = None,
+        tool_choice: Any = None,
+        thinking: Any = None,
+    ) -> BatchSummary:
         """Every item through the Batch API when the levers name the stage,
         else serially through call(). on_result fires once per item that
         finished, in both modes; timed-out items fire nothing and are listed.
@@ -366,9 +437,19 @@ class Doorway:
         if stage not in self.batch_stages:
             for it in items:
                 try:
-                    r = self.call(stage, model=model, system=system, messages=it.messages, max_tokens=max_tokens,
-                                  effort=effort, cache_blocks=cache_blocks, tools=tools, tool_choice=tool_choice,
-                                  thinking=thinking, custom_id=it.custom_id)
+                    r = self.call(
+                        stage,
+                        model=model,
+                        system=system,
+                        messages=it.messages,
+                        max_tokens=max_tokens,
+                        effort=effort,
+                        cache_blocks=cache_blocks,
+                        tools=tools,
+                        tool_choice=tool_choice,
+                        thinking=thinking,
+                        custom_id=it.custom_id,
+                    )
                 except LimitHold:
                     # A limit is not one item's failure: it stops the stage.
                     # Swallowing it here would turn the gate into a page of
@@ -386,23 +467,61 @@ class Doorway:
         if self.before_batch is not None:
             self.before_batch(stage, len(items), batch_chars(items))
         by_id = {it.custom_id: it for it in items}
-        need = self._round(stage, items, by_id, summary, on_result, retry=False, model=model,
-                           max_tokens=max_tokens, batch_dir=batch_dir, system=system, effort=effort,
-                           cache_blocks=cache_blocks, tools=tools, tool_choice=tool_choice, thinking=thinking)
+        need = self._round(
+            stage,
+            items,
+            by_id,
+            summary,
+            on_result,
+            retry=False,
+            model=model,
+            max_tokens=max_tokens,
+            batch_dir=batch_dir,
+            system=system,
+            effort=effort,
+            cache_blocks=cache_blocks,
+            tools=tools,
+            tool_choice=tool_choice,
+            thinking=thinking,
+        )
         if need:
             self.log(f"  batch: retrying {len(need)} item(s) once")
-            again = self._round(stage, [by_id[c] for c in need], by_id, summary, on_result, retry=True,
-                                model=model, max_tokens=max_tokens, batch_dir=batch_dir, system=system,
-                                effort=effort, cache_blocks=cache_blocks, tools=tools, tool_choice=tool_choice,
-                                thinking=thinking)
+            again = self._round(
+                stage,
+                [by_id[c] for c in need],
+                by_id,
+                summary,
+                on_result,
+                retry=True,
+                model=model,
+                max_tokens=max_tokens,
+                batch_dir=batch_dir,
+                system=system,
+                effort=effort,
+                cache_blocks=cache_blocks,
+                tools=tools,
+                tool_choice=tool_choice,
+                thinking=thinking,
+            )
             for cid, err in again.items():
                 summary.failed[cid] = err
                 on_result(by_id[cid], None, err)
         return summary
 
-    def _round(self, stage: str, todo: list[Item], by_id: dict[str, Item], summary: BatchSummary,
-               on_result: Callable, *, retry: bool, model: str, max_tokens: int, batch_dir: Path,
-               **shape: Any) -> dict[str, str]:
+    def _round(
+        self,
+        stage: str,
+        todo: list[Item],
+        by_id: dict[str, Item],
+        summary: BatchSummary,
+        on_result: Callable,
+        *,
+        retry: bool,
+        model: str,
+        max_tokens: int,
+        batch_dir: Path,
+        **shape: Any,
+    ) -> dict[str, str]:
         """Submit (or resume) batches for `todo`. Returns {custom_id: error}
         for items that need a retry; a timed-out batch's items go to
         summary.timed_out and are never resubmitted."""
@@ -423,8 +542,9 @@ class Doorway:
         for it in todo:
             if it.custom_id in claimed:
                 continue
-            p, mk = build_params_marked(stage, model=model, messages=it.messages, max_tokens=max_tokens,
-                                        caching=self.caching, **shape)
+            p, mk = build_params_marked(
+                stage, model=model, messages=it.messages, max_tokens=max_tokens, caching=self.caching, **shape
+            )
             e, markers = p.get("output_config", {}).get("effort"), mk
             fresh.append({"custom_id": it.custom_id, "params": p})
         n = _next_index(existing, stage)
@@ -432,8 +552,16 @@ class Doorway:
             path = batch_dir / f"batch-{stage}-{n}{'-retry' if retry else ''}.json"
             b = client.messages.batches.create(requests=group)
             batch_dir.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps({"id": b.id, "custom_ids": [r["custom_id"] for r in group],
-                                        "submitted_ts": time.strftime("%Y-%m-%dT%H:%M:%S")}), encoding="utf-8")
+            path.write_text(
+                json.dumps(
+                    {
+                        "id": b.id,
+                        "custom_ids": [r["custom_id"] for r in group],
+                        "submitted_ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    }
+                ),
+                encoding="utf-8",
+            )
             self.log(f"  batch: submitted {b.id} ({len(group)} requests)")
             ids.append(b.id)
             n += 1
@@ -453,16 +581,33 @@ class Doorway:
                 rtype = res.result.type
                 if rtype == "succeeded":
                     msg = res.result.message
-                    self.ledger.record(stage, model, msg.usage, effort=e, cache=bool(markers), batch=True,
-                                       pages=count_pages(it.messages), custom_id=cid)
+                    self.ledger.record(
+                        stage,
+                        model,
+                        msg.usage,
+                        effort=e,
+                        cache=bool(markers),
+                        batch=True,
+                        pages=count_pages(it.messages),
+                        custom_id=cid,
+                    )
                     if getattr(msg, "stop_reason", None) == "refusal":
                         need[cid] = "refusal"
                         continue
                     summary.ok.append(cid)
                     on_result(it, make_result(msg, it.messages, batch=True), None)
                 else:
-                    self.ledger.record(stage, model, _ZeroUsage(), effort=e, cache=bool(markers), batch=True,
-                                       pages=count_pages(it.messages), custom_id=cid, error=rtype)
+                    self.ledger.record(
+                        stage,
+                        model,
+                        _ZeroUsage(),
+                        effort=e,
+                        cache=bool(markers),
+                        batch=True,
+                        pages=count_pages(it.messages),
+                        custom_id=cid,
+                        error=rtype,
+                    )
                     need[cid] = rtype
         for it in todo:
             if it.custom_id in seen or it.custom_id in need:

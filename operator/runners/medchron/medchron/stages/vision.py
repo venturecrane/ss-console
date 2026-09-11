@@ -13,6 +13,7 @@ left incomplete (a batch still processing, a page that never returned) is an
 exit 1, not a printed line under "VISION DONE". The driver records the stage
 as failed with that reason and the next run resumes the same batch.
 """
+
 from __future__ import annotations
 
 import base64
@@ -25,8 +26,8 @@ from .base import StageRun, append_jsonl, read_jsonl
 
 PAGE_TIMEOUT = 180.0
 MAX_TOKENS = 8000
-GROUP_B64_BUDGET = 400_000_000   # rendered pages held in memory per submission
-IMAGE_B64_LIMIT = 4_500_000      # the API judges the encoded size
+GROUP_B64_BUDGET = 400_000_000  # rendered pages held in memory per submission
+IMAGE_B64_LIMIT = 4_500_000  # the API judges the encoded size
 SYSTEM = (
     "You transcribe one scanned page of a medical or administrative record. "
     "Output ONLY the literal text content of the page, reading order, no "
@@ -72,14 +73,22 @@ def render_page(page: Any, log, name: str, pno: int) -> str:
 def page_item(rec: dict[str, Any], pno: int, b64: str) -> llm.Item:
     return llm.Item(
         custom_id=f"{rec['id']}-p{pno}",
-        messages=[{"role": "user", "content": [
-            {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}},
-            {"type": "text", "text": "Transcribe this page."}]}],
-        meta={"id": rec["id"], "page": pno, "name": rec["name"]})
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}},
+                    {"type": "text", "text": "Transcribe this page."},
+                ],
+            }
+        ],
+        meta={"id": rec["id"], "page": pno, "name": rec["name"]},
+    )
 
 
-def _gather(sr: StageRun, queue: list[dict[str, Any]], src: dict[str, str], log_path: Path
-            ) -> tuple[dict[str, dict[str, Any]], list[tuple[dict[str, Any], int, str]]]:
+def _gather(
+    sr: StageRun, queue: list[dict[str, Any]], src: dict[str, str], log_path: Path
+) -> tuple[dict[str, dict[str, Any]], list[tuple[dict[str, Any], int, str]]]:
     import pymupdf
 
     d = sr.slug_dir
@@ -152,8 +161,17 @@ def run(sr: StageRun) -> int:
         groups.append(group)
     timed_out = 0
     for items in groups:
-        s = sr.doorway.batch_call("vision", items, on_result, model=model, system=SYSTEM, max_tokens=MAX_TOKENS,
-                                  effort="", cache_blocks=("system",), batch_dir=d / "batch")
+        s = sr.doorway.batch_call(
+            "vision",
+            items,
+            on_result,
+            model=model,
+            system=SYSTEM,
+            max_tokens=MAX_TOKENS,
+            effort="",
+            cache_blocks=("system",),
+            batch_dir=d / "batch",
+        )
         timed_out += len(s.timed_out)
 
     incomplete = 0
@@ -168,13 +186,23 @@ def run(sr: StageRun) -> int:
         (d / "text" / f"{rec['id']}.txt").write_text(body, encoding="utf-8")
         # Failure markers are counted like illegible marks, so pages_out ==
         # pages cannot report CLEAN over a page that transcribed to nothing.
-        append_jsonl(log_path, {"id": rec["id"], "name": rec["name"], "pages": npages, "pages_out": len(done),
-                                "failed_pages": sum(1 for t in done.values() if FAILED in t or REFUSED in t),
-                                "illegible_marks": sum(t.count("[illegible]") for t in done.values())})
+        append_jsonl(
+            log_path,
+            {
+                "id": rec["id"],
+                "name": rec["name"],
+                "pages": npages,
+                "pages_out": len(done),
+                "failed_pages": sum(1 for t in done.values() if FAILED in t or REFUSED in t),
+                "illegible_marks": sum(t.count("[illegible]") for t in done.values()),
+            },
+        )
         sr.log(f"scanned {rec['name'][:50]}: {npages}pp")
     if incomplete:
-        sr.log(f"VISION INCOMPLETE: {incomplete} file(s) not finished"
-               + (f" ({timed_out} page(s) in a batch still processing; rerun resumes it)" if timed_out else ""))
+        sr.log(
+            f"VISION INCOMPLETE: {incomplete} file(s) not finished"
+            + (f" ({timed_out} page(s) in a batch still processing; rerun resumes it)" if timed_out else "")
+        )
         return 1
     sr.log("VISION DONE")
     return 0

@@ -23,9 +23,11 @@ def _capture_client(captured: list[httpx.Request]) -> MsGraphClient:
         if request.url.path.endswith("/oauth2/v2.0/token"):
             return httpx.Response(200, json=_TOKEN)
         captured.append(request)
-        if request.url.path.endswith("/sendMail") or request.url.path.endswith(
-            "/reply"
-        ) or request.url.path.endswith("/replyAll"):
+        if (
+            request.url.path.endswith("/sendMail")
+            or request.url.path.endswith("/reply")
+            or request.url.path.endswith("/replyAll")
+        ):
             return httpx.Response(202)
         # create_draft -> Graph returns the created message
         return httpx.Response(201, json={"id": "draft-1", "isDraft": True})
@@ -48,9 +50,7 @@ def _body(request: httpx.Request) -> dict:
 def test_send_message_string_recipient_becomes_nesting() -> None:
     captured: list[httpx.Request] = []
     client = _capture_client(captured)
-    result = client.send_mail(
-        to="client@acme.com", subject="Hi", body_text="hello there"
-    )
+    result = client.send_mail(to="client@acme.com", subject="Hi", body_text="hello there")
     req = next(r for r in captured if r.url.path.endswith("/sendMail"))
     payload = _body(req)
     assert payload["saveToSentItems"] is True
@@ -90,9 +90,7 @@ def test_send_message_targets_pinned_mailbox_sendmail_path() -> None:
 def test_blank_addresses_are_dropped() -> None:
     captured: list[httpx.Request] = []
     client = _capture_client(captured)
-    client.send_mail(
-        to=["keep@acme.com", "", "  "], subject="s", body_text="b"
-    )
+    client.send_mail(to=["keep@acme.com", "", "  "], subject="s", body_text="b")
     msg = _body(next(r for r in captured if r.url.path.endswith("/sendMail")))["message"]
     assert msg["toRecipients"] == [{"emailAddress": {"address": "keep@acme.com"}}]
 
@@ -101,9 +99,7 @@ def test_blank_addresses_are_dropped() -> None:
 def test_create_draft_posts_message_to_messages_path() -> None:
     captured: list[httpx.Request] = []
     client = _capture_client(captured)
-    result = client.create_draft(
-        to="c@acme.com", subject="Draft", body_text="wip", cc=["cc@acme.com"]
-    )
+    result = client.create_draft(to="c@acme.com", subject="Draft", body_text="wip", cc=["cc@acme.com"])
     req = next(r for r in captured if r.url.path.endswith("/messages"))
     assert req.url.path == "/v1.0/users/operator@example.com/messages"
     payload = _body(req)

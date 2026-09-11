@@ -139,19 +139,13 @@ def test_registry_has_maintainer_and_controls() -> None:
 
 def test_keys_match_control_ids() -> None:
     for key, spec in _controls().items():
-        assert spec.get("control") == key, (
-            f"control map key {key!r} != entry's control id {spec.get('control')!r}"
-        )
+        assert spec.get("control") == key, f"control map key {key!r} != entry's control id {spec.get('control')!r}"
 
 
 def test_status_and_class_are_valid() -> None:
     for key, spec in _controls().items():
-        assert spec.get("status") in _VALID_STATUS, (
-            f"{key}: invalid status {spec.get('status')!r}"
-        )
-        assert spec.get("class") in _VALID_CLASS, (
-            f"{key}: invalid class {spec.get('class')!r}"
-        )
+        assert spec.get("status") in _VALID_STATUS, f"{key}: invalid status {spec.get('status')!r}"
+        assert spec.get("class") in _VALID_CLASS, f"{key}: invalid class {spec.get('class')!r}"
         assert spec.get("owner"), f"{key}: every control needs a named owner"
 
 
@@ -202,9 +196,7 @@ def test_candidate_probes_resolve_and_are_not_claimed_as_live() -> None:
         name = spec.get("candidate_probe")
         if not name:
             continue
-        assert spec.get("status") != "enforced", (
-            f"{key}: an enforced row must use live_probe, not candidate_probe"
-        )
+        assert spec.get("status") != "enforced", f"{key}: an enforced row must use live_probe, not candidate_probe"
         assert name in probes, f"{key}: candidate_probe {name!r} has no entry in the probe specs"
         assert probes[name].get("control") == key, f"{key}: candidate probe names another control"
 
@@ -253,11 +245,7 @@ def test_every_safety_critical_hook_is_covered() -> None:
     """
     required = _hook_surface().get("requiredHooks") or {}
     safety_hooks = {h for h, meta in required.items() if meta.get("safetyCritical")}
-    covered = {
-        _hook_of(spec.get("wired_via", ""))
-        for spec in _controls().values()
-        if spec.get("wired_via")
-    }
+    covered = {_hook_of(spec.get("wired_via", "")) for spec in _controls().values() if spec.get("wired_via")}
     missing = safety_hooks - covered
     assert not missing, (
         f"safety-critical hook(s) {sorted(missing)} are declared in "
@@ -283,9 +271,7 @@ def test_wired_via_hooks_exist_in_surface() -> None:
         if not wired or _tool_of(wired) or _runner_of(wired):
             continue
         hook = _hook_of(wired)
-        assert hook in required, (
-            f"{key}: wired_via names hook {hook!r} which is not in overlay-hook-surface.json"
-        )
+        assert hook in required, f"{key}: wired_via names hook {hook!r} which is not in overlay-hook-surface.json"
 
 
 def test_runner_wired_controls_name_a_module_the_runner_ships() -> None:
@@ -368,9 +354,7 @@ def test_ss_console_substrate_paths_exist() -> None:
         assert module, f"{key}: substrate_module is required"
         if module.startswith(("overlay:", "engagements:")):
             continue
-        assert (_OP / module).is_file(), (
-            f"{key}: substrate_module {module!r} does not exist under operator/"
-        )
+        assert (_OP / module).is_file(), f"{key}: substrate_module {module!r} does not exist under operator/"
 
 
 def test_tracking_references_are_well_formed() -> None:
@@ -378,9 +362,7 @@ def test_tracking_references_are_well_formed() -> None:
         if spec.get("status") == "enforced":
             continue
         tracking = spec.get("tracking", "")
-        assert _TRACKING_RE.match(tracking), (
-            f"{key}: tracking {tracking!r} must be `ADR-NNNN:Bx`, `#<issue>`, or a URL"
-        )
+        assert _TRACKING_RE.match(tracking), f"{key}: tracking {tracking!r} must be `ADR-NNNN:Bx`, `#<issue>`, or a URL"
 
 
 def test_adr_tracking_resolves_when_present() -> None:

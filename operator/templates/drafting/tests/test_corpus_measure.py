@@ -101,8 +101,7 @@ class AccountTest(unittest.TestCase):
         for outcome in ("read", "dark", "unsupported", "error", "budget"):
             t = cm.new_tally("m")
             cm.account(t, "pdf", chars=1, outcome=outcome)
-            counted = (t["read_ok"] + t["dark_scanned"] + t["unsupported"]
-                       + t["errors"] + t["not_attempted_budget"])
+            counted = t["read_ok"] + t["dark_scanned"] + t["unsupported"] + t["errors"] + t["not_attempted_budget"]
             self.assertEqual(counted, 1, outcome)
 
 
@@ -142,8 +141,7 @@ class SafetyTest(unittest.TestCase):
         # cannot reach vision. If someone swaps in extract_text_ex with
         # allow_vision, the measurement silently starts billing per page.
         src = _MODULE_PATH.read_text()
-        code = "\n".join(ln for ln in src.splitlines()
-                         if not ln.strip().startswith("#"))
+        code = "\n".join(ln for ln in src.splitlines() if not ln.strip().startswith("#"))
         body = code.split('"""', 2)[-1]
         self.assertNotIn("allow_vision=True", body)
         self.assertNotIn("extract_text_ex", body)

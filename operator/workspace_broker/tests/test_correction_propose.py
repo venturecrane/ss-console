@@ -56,9 +56,7 @@ def _proposal(**overrides) -> dict:
 
 def _stored_metadata(tmp_path: Path) -> dict:
     conn = sqlite3.connect(str(tmp_path / "audit.db"))
-    row = conn.execute(
-        "SELECT action_type, metadata FROM audit_log ORDER BY rowid DESC LIMIT 1"
-    ).fetchone()
+    row = conn.execute("SELECT action_type, metadata FROM audit_log ORDER BY rowid DESC LIMIT 1").fetchone()
     conn.close()
     assert row[0] == CORRECTION_ACTION_TYPE
     return json.loads(row[1])
@@ -251,9 +249,7 @@ def test_capture_row_joins_the_hash_chain(tmp_path: Path) -> None:
         peer_uid=AGENT_UID,
     )
     conn = sqlite3.connect(str(tmp_path / "audit.db"))
-    rows = conn.execute(
-        "SELECT action_type, prev_hash, row_hash FROM audit_log ORDER BY rowid"
-    ).fetchall()
+    rows = conn.execute("SELECT action_type, prev_hash, row_hash FROM audit_log ORDER BY rowid").fetchall()
     conn.close()
     assert [r[0] for r in rows] == ["TOOL_CALL_COMPLETED", CORRECTION_ACTION_TYPE]
     assert rows[1][1] == rows[0][2]

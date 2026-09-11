@@ -114,7 +114,10 @@ def run() -> tuple[bool, str]:
             f"FAIL: pinned stop did not block destructive action after compaction (audit={decision.audit_action})",
         )
 
-    return (True, "PASS: invariant 4 holds — pinned stop survives compaction; enforce_with_session refuses despite approval")
+    return (
+        True,
+        "PASS: invariant 4 holds — pinned stop survives compaction; enforce_with_session refuses despite approval",
+    )
 
 
 if __name__ == "__main__":

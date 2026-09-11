@@ -80,7 +80,6 @@ WHAT THIS MODULE STILL CANNOT SEE. Whether the sender is an Operator admin.
 the authored allow list in customer.yaml, which this uid cannot read.
 """
 
-
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
@@ -108,16 +107,16 @@ from __future__ import annotations
 # relocated class, which are the two ways a split like this actually goes wrong.
 # ---------------------------------------------------------------------------
 
-from .establishment_constants import *  # noqa: F401,F403
-from .establishment_validation import *  # noqa: F401,F403
-from .pending_rule_store import PendingRuleStore  # noqa: F401
-from .establishment_store import EstablishmentStore  # noqa: F401
+from .establishment_constants import *  # vocabulary and tuning surface
+from .establishment_validation import *  # validators and renderers
+from .pending_rule_store import PendingRuleStore
+from .establishment_store import EstablishmentStore
 
 # The private names too. Nothing outside this package imports them today, but
 # `import *` skips underscore names and the recorded surface fixture is asserted
 # in BOTH directions — so re-exporting them keeps the guarantee total rather than
 # "public names only, and trust me about the rest".
-from .establishment_constants import (  # noqa: F401
+from .establishment_constants import (  # noqa: F401 - re-exported so the surface lockdown covers private names too (see above)
     _CLASS_SLUG_CHARS,
     _ID_PATTERN,
     _MAX_ACT_DISPLAY_NAME,
@@ -130,7 +129,7 @@ from .establishment_constants import (  # noqa: F401
     _NAME_SLUG_KEEP,
     _PROPOSAL_ID_PATTERN,
 )
-from .establishment_validation import (  # noqa: F401
+from .establishment_validation import (  # noqa: F401 - re-exported so the surface lockdown covers private names too (see above)
     _URL_PATTERN,
     _bounded_str,
     _column,

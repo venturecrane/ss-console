@@ -83,9 +83,7 @@ def test_heartbeat_rejected_when_peer_uid_missing(tmp_path: Path) -> None:
     """Two-arg handle() callers (legacy wire) cannot reach the heartbeat verb."""
     broker = _broker(tmp_path)
     with pytest.raises(PermissionError):
-        broker.handle(
-            {"action": "suppressed_wake_append", "row": _row()}, peer_pid=GATEWAY_PID
-        )
+        broker.handle({"action": "suppressed_wake_append", "row": _row()}, peer_pid=GATEWAY_PID)
     assert broker.ledger.count() == 0
 
 
@@ -129,7 +127,10 @@ def test_heartbeat_row_joins_the_hash_chain(tmp_path: Path) -> None:
     """Heartbeat rows are ordinary chained ledger rows, not a side store."""
     broker = _broker(tmp_path)
     broker.handle(
-        {"action": "audit_append", "row": {"action_type": "TOOL_CALL_COMPLETED", "actor": "agent", "actor_role": "agent"}},
+        {
+            "action": "audit_append",
+            "row": {"action_type": "TOOL_CALL_COMPLETED", "actor": "agent", "actor_role": "agent"},
+        },
         peer_pid=GATEWAY_PID,
         peer_uid=AGENT_UID,
     )
@@ -141,9 +142,7 @@ def test_heartbeat_row_joins_the_hash_chain(tmp_path: Path) -> None:
     import sqlite3
 
     conn = sqlite3.connect(str(tmp_path / "audit.db"))
-    rows = conn.execute(
-        "SELECT action_type, prev_hash, row_hash FROM audit_log ORDER BY rowid"
-    ).fetchall()
+    rows = conn.execute("SELECT action_type, prev_hash, row_hash FROM audit_log ORDER BY rowid").fetchall()
     conn.close()
     assert [r[0] for r in rows] == ["TOOL_CALL_COMPLETED", "SUPPRESSED_WAKE"]
     # The heartbeat row chains off the prior row's hash.

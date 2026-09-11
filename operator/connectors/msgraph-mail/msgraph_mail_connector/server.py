@@ -113,9 +113,7 @@ def create_draft(
     are plain addresses (a single string or a list). Classified INTERNAL_WRITE: the
     operator staging a message in its own mailbox, never an external send. Returns
     the created draft (carries the new message ``id``)."""
-    return _get_client().create_draft(
-        to=to, subject=subject, body_text=body_text, cc=cc
-    )
+    return _get_client().create_draft(to=to, subject=subject, body_text=body_text, cc=cc)
 
 
 @server.tool()
@@ -130,15 +128,11 @@ def send_message(
     overlay's recipient extraction classifies before the send is allowed. Classified
     EXTERNAL_SEND (recipient-reclassified per ADR 0072: an all-INTERNAL recipient set
     still sends rather than degrading to a draft)."""
-    return _get_client().send_mail(
-        to=to, subject=subject, body_text=body_text, cc=cc
-    )
+    return _get_client().send_mail(to=to, subject=subject, body_text=body_text, cc=cc)
 
 
 @server.tool()
-def reply_message(
-    message_id: str, body_text: str, reply_all: bool = False
-) -> Any:
+def reply_message(message_id: str, body_text: str, reply_all: bool = False) -> Any:
     """Reply on an existing thread (``reply`` or, with ``reply_all=True``,
     ``replyAll``). Graph derives the recipients from the original message, so this is
     the recipient-LOCKED send path — the reply cannot be redirected to a new address.

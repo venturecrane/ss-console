@@ -63,6 +63,21 @@ describe('auth: session module', () => {
 })
 
 describe('auth: buildSessionCookie behavior', () => {
+  it('pins the cookie attributes the CSRF and XSS posture rests on', async () => {
+    // HttpOnly keeps the token from page script; Secure keeps it off plain
+    // HTTP; SameSite=Lax is the first CSRF layer (src/lib/security/cross-site.ts
+    // is the second). A change to any of these is a security change and should
+    // turn this red (2026-09-09 review, Security LOW 7).
+    const { buildSessionCookie } = await import('../src/lib/auth/session')
+    const attrs = buildSessionCookie('test-token', 'client')
+      .split(';')
+      .map((part) => part.trim())
+    expect(attrs).toContain('HttpOnly')
+    expect(attrs).toContain('Secure')
+    expect(attrs).toContain('SameSite=Lax')
+    expect(attrs).toContain('Path=/')
+  })
+
   it('sets 30-day Max-Age for client role', async () => {
     const { buildSessionCookie } = await import('../src/lib/auth/session')
     const cookie = buildSessionCookie('test-token', 'client')

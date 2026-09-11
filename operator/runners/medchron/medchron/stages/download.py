@@ -13,6 +13,7 @@ Exit 1 when any target is still not pulled after the pass: the frozen script
 printed the failures and exited 0, which is exactly the kind of outcome an
 agent reading stdout would catch and a driver would not.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -28,8 +29,15 @@ MINT_RETRY_PAUSE_SECONDS = 5.0
 BATCH_PAUSE_SECONDS = 1.0
 
 
-def wanted(doc: dict[str, Any], *, folder_path: str, prefixes: list[str], excludes: list[str],
-           root_pdfs: bool, doc_exts: set[str]) -> bool:
+def wanted(
+    doc: dict[str, Any],
+    *,
+    folder_path: str,
+    prefixes: list[str],
+    excludes: list[str],
+    root_pdfs: bool,
+    doc_exts: set[str],
+) -> bool:
     if doc.get("deleted"):
         return False
     ext = (doc.get("ext") or "").lower()
@@ -66,9 +74,18 @@ def run(sr: StageRun) -> int:
     raw.mkdir(parents=True, exist_ok=True)
     log_path = sr.slug_dir / "raw_manifest.jsonl"
 
-    targets = [d for d in sr.manifest()
-               if wanted(d, folder_path=fpath.get(d.get("folderId"), "/(root)"), prefixes=prefixes,
-                         excludes=excludes, root_pdfs=root_pdfs, doc_exts=doc_exts)]
+    targets = [
+        d
+        for d in sr.manifest()
+        if wanted(
+            d,
+            folder_path=fpath.get(d.get("folderId"), "/(root)"),
+            prefixes=prefixes,
+            excludes=excludes,
+            root_pdfs=root_pdfs,
+            doc_exts=doc_exts,
+        )
+    ]
     file_ids = sel.get("include_file_ids")
     if file_ids:
         # ss#2616 append runs: only the named documents, from the full matter
@@ -90,15 +107,19 @@ def run(sr: StageRun) -> int:
     pulled = dupes = failed = 0
     batches = (len(todo) + BATCH - 1) // BATCH
     for i in range(0, len(todo), BATCH):
-        batch = todo[i:i + BATCH]
+        batch = todo[i : i + BATCH]
         ids = [b["id"] for b in batch]
         minted = _mint_with_retry(sr, ids)
         byid = {m["id"]: m for m in minted}
         for b in batch:
             m = byid.get(b["id"]) or {}
-            rec: dict[str, Any] = {"id": b["id"], "name": b["name"], "ext": b["ext"],
-                                   "folder": fpath.get(b.get("folderId"), "/(root)"),
-                                   "size_expected": b.get("size")}
+            rec: dict[str, Any] = {
+                "id": b["id"],
+                "name": b["name"],
+                "ext": b["ext"],
+                "folder": fpath.get(b.get("folderId"), "/(root)"),
+                "size_expected": b.get("size"),
+            }
             url = m.get("url")
             if not url:
                 rec.update(ok=False, error=m.get("error", "no url"))
@@ -136,10 +157,10 @@ def run(sr: StageRun) -> int:
 def _mint_with_retry(sr: StageRun, ids: list[str]) -> list[dict[str, Any]]:
     try:
         return sr.seat.mint(sr.job.matter_id, ids)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - a mint failure of any kind is retried once; the second failure is recorded per file id below
         sr.log(f"MINT FAIL ({str(exc)[:120]}); retrying once")
         time.sleep(MINT_RETRY_PAUSE_SECONDS)
         try:
             return sr.seat.mint(sr.job.matter_id, ids)
-        except Exception as exc2:  # noqa: BLE001
+        except Exception as exc2:  # noqa: BLE001 - the second mint failure is recorded per file id so the download stage reports exactly which files failed
             return [{"id": i, "error": f"mint failed twice: {str(exc2)[:120]}"} for i in ids]

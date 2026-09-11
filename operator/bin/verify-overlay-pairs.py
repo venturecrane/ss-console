@@ -67,6 +67,7 @@ def _fetch_overlay(repo: str, ref: str, dest: Path) -> None:
     Raises subprocess.CalledProcessError on any git failure; the caller maps
     that to exit code 2 (environment), distinct from a hash mismatch (1).
     """
+
     def run(*args: str) -> None:
         subprocess.run(args, cwd=dest, check=True, capture_output=True, text=True)
 
@@ -96,8 +97,7 @@ def main() -> int:
     malformed = [
         p.get("overlayPath", "<unknown>")
         for p in pairs
-        if not isinstance(p.get("overlaySha256"), str)
-        or len(p.get("overlaySha256", "")) != 64
+        if not isinstance(p.get("overlaySha256"), str) or len(p.get("overlaySha256", "")) != 64
     ]
     if malformed:
         print(
@@ -127,8 +127,7 @@ def main() -> int:
             runtime_file = dest / overlay_path
             if not runtime_file.is_file():
                 failures.append(
-                    f"{overlay_path}: MISSING at {ref} "
-                    "(renamed/removed in overlay without a manifest update?)"
+                    f"{overlay_path}: MISSING at {ref} (renamed/removed in overlay without a manifest update?)"
                 )
                 continue
             actual = _sha256_file(runtime_file)

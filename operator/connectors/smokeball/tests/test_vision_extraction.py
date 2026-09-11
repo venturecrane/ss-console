@@ -72,9 +72,7 @@ def _pdf(pages: list[str], raw_ops: list[str] | None = None) -> bytes:
         if raw_ops:
             content += "\n" + raw_ops[index]
         stream = content.encode()
-        objs.append(
-            b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream"
-        )
+        objs.append(b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream")
         content_num = len(objs)
         objs.append(
             b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents "
@@ -88,9 +86,7 @@ def _pdf(pages: list[str], raw_ops: list[str] | None = None) -> bytes:
     font_num = len(objs)
     objs = [o.replace(b"__FONT__", str(font_num).encode()) for o in objs]
     objs[0] = b"<< /Type /Catalog /Pages 2 0 R >>"
-    objs[1] = (
-        b"<< /Type /Pages /Kids [" + " ".join(kids).encode() + b"] /Count " + str(len(pages)).encode() + b" >>"
-    )
+    objs[1] = b"<< /Type /Pages /Kids [" + " ".join(kids).encode() + b"] /Count " + str(len(pages)).encode() + b" >>"
 
     out = bytearray(b"%PDF-1.4\n")
     offsets = []
@@ -101,9 +97,7 @@ def _pdf(pages: list[str], raw_ops: list[str] | None = None) -> bytes:
     out += f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n".encode()
     for off in offsets:
         out += f"{off:010d} 00000 n \n".encode()
-    out += (
-        f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n"
-    ).encode()
+    out += (f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n").encode()
     return bytes(out)
 
 
@@ -136,9 +130,7 @@ def _isolated_env(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
 
 
 def _sse(events: list[dict]) -> bytes:
-    return b"".join(
-        f"event: {e.get('type')}\ndata: {json.dumps(e)}\n\n".encode() for e in events
-    )
+    return b"".join(f"event: {e.get('type')}\ndata: {json.dumps(e)}\n\n".encode() for e in events)
 
 
 def _page_events(text: str, *, stop_reason: str = "end_turn") -> list[dict]:
@@ -181,9 +173,7 @@ def _install_pages(monkeypatch: pytest.MonkeyPatch, pages: list):
         text, stop = item if isinstance(item, tuple) else (item, "end_turn")
         return httpx.Response(200, content=_sse(_page_events(text, stop_reason=stop)))
 
-    monkeypatch.setattr(
-        vision, "_http_client", lambda _timeout: httpx.Client(transport=httpx.MockTransport(handler))
-    )
+    monkeypatch.setattr(vision, "_http_client", lambda _timeout: httpx.Client(transport=httpx.MockTransport(handler)))
     return captured
 
 
@@ -221,9 +211,7 @@ def _forbid_http(monkeypatch: pytest.MonkeyPatch) -> list[str]:
         calls.append(str(request.url))
         return httpx.Response(500, json={"error": {"message": "must not be called"}})
 
-    monkeypatch.setattr(
-        vision, "_http_client", lambda _timeout: httpx.Client(transport=httpx.MockTransport(handler))
-    )
+    monkeypatch.setattr(vision, "_http_client", lambda _timeout: httpx.Client(transport=httpx.MockTransport(handler)))
     return calls
 
 
@@ -231,17 +219,13 @@ def _forbid_http(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 
 def test_scanned_pdf_is_transcribed_with_page_markers(monkeypatch: pytest.MonkeyPatch) -> None:
-    captured = _install_pages(
-        monkeypatch, ["IMPRESSION: disc extrusion at L5-S1.", "Signed, radiologist."]
-    )
+    captured = _install_pages(monkeypatch, ["IMPRESSION: disc extrusion at L5-S1.", "Signed, radiologist."])
     result = extract_text_ex(SCANNED, file_extension=".pdf", allow_vision=True)
     assert result.method == METHOD_VISION
     assert result.reason is None
     assert result.pages == 2
     assert len(captured) == 2, "one call per page"
-    assert result.text == (
-        "[p.1]\nIMPRESSION: disc extrusion at L5-S1.\n\n[p.2]\nSigned, radiologist."
-    )
+    assert result.text == ("[p.1]\nIMPRESSION: disc extrusion at L5-S1.\n\n[p.2]\nSigned, radiologist.")
 
 
 def test_each_call_carries_exactly_one_page(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -391,9 +375,7 @@ def test_a_truncated_page_fails_the_whole_document(monkeypatch: pytest.MonkeyPat
     """A page that stopped early is a page with a silent hole in it, and half an
     MRI report is worse than none. The pages that DID transcribe are discarded
     with it — a partial document must never be presented as whole."""
-    captured = _install_pages(
-        monkeypatch, ["IMPRESSION: disc extru", ("Signed", "max_tokens")]
-    )
+    captured = _install_pages(monkeypatch, ["IMPRESSION: disc extru", ("Signed", "max_tokens")])
     result = extract_text_ex(SCANNED, file_extension=".pdf", allow_vision=True)
     assert result.method == METHOD_NONE_SCANNED
     assert result.reason == extract.REASON_TRUNCATED
@@ -596,9 +578,7 @@ def test_the_cache_is_bounded_and_evicts_oldest_first(monkeypatch: pytest.Monkey
     assert extract_cache.cache_get(blobs[-1]) == "T" * 200, "the newest entry must survive"
 
 
-def test_an_unwritable_cache_dir_never_breaks_extraction(
-    monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
+def test_an_unwritable_cache_dir_never_breaks_extraction(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     blocked = tmp_path / "blocked"
     blocked.write_text("not a directory", encoding="utf-8")
     monkeypatch.setenv(extract_cache.CACHE_DIR_ENV, str(blocked / "cache"))
@@ -774,18 +754,14 @@ def test_record_check_warns_and_names_every_machine_transcription(tmp_path) -> N
     import os
     from pathlib import Path
 
-    checker = (
-        Path(__file__).resolve().parents[3] / "templates" / "drafting" / "drafting_gate_check.py"
-    )
+    checker = Path(__file__).resolve().parents[3] / "templates" / "drafting" / "drafting_gate_check.py"
     assert checker.is_file(), "the real checker must be present or this proves nothing"
     os.environ[record_check.CHECKER_PATH_ENV] = str(checker)
     try:
         verdict = record_check.run_record_check(
             "# DRAFT\n\nThe imaging shows a disc extrusion at L5-S1 per the MRI report.\n",
             [("Police Report.txt", "The collision occurred on December 8, 2025.")],
-            vision_sources=[
-                ("Adv MRI Report.pdf", "IMPRESSION: disc extrusion at L5-S1 per the MRI report.")
-            ],
+            vision_sources=[("Adv MRI Report.pdf", "IMPRESSION: disc extrusion at L5-S1 per the MRI report.")],
         )
     finally:
         os.environ.pop(record_check.CHECKER_PATH_ENV, None)

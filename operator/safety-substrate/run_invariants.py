@@ -55,7 +55,7 @@ def load_test(test_path: Path):
         if e.name == "pytest":
             return None, _PYTEST_ONLY_MARKER
         return None, f"{type(e).__name__}: {e}"
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 - the runner loads every invariant module; one module failing to import must not stop the others from running
         return None, f"{type(e).__name__}: {e}"
     return getattr(module, "run", None), None
 
@@ -64,8 +64,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--customer", required=True)
     ap.add_argument("--fixtures", type=Path, required=True)
-    ap.add_argument("--strict", action="store_true",
-                    help="exit non-zero on any failure (default in bootstrap)")
+    ap.add_argument("--strict", action="store_true", help="exit non-zero on any failure (default in bootstrap)")
     args = ap.parse_args()
 
     tests_dir: Path = args.fixtures
@@ -112,7 +111,7 @@ def main() -> int:
             continue
         try:
             ok, message = run_fn()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001 - one invariant raising must not stop the remaining invariants; the raise is recorded as that invariant's failure
             failures.append(f"{tf.name}: raised {type(e).__name__}: {e}")
             continue
         if ok:

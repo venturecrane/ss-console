@@ -43,10 +43,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "workspace_broker"))
-from chain import CHAIN_COLUMNS, verify_chain  # noqa: E402
+from chain import CHAIN_COLUMNS, verify_chain
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lib.chain_pin import PIN_NOT_SUPPLIED, check_pinned_head  # noqa: E402
+from lib.chain_pin import PIN_NOT_SUPPLIED, check_pinned_head
 
 
 def rows_from_sqlite(path: str) -> list[dict]:

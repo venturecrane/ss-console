@@ -15,6 +15,7 @@ parsed, never computed by the model; an amount at or above
 the worksheet refuses to render over one. On a joint matter the patient
 filter quarantines the other plaintiff's bills.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,9 +28,11 @@ from .base import StageRun, read_json, read_jsonl
 NON_PROVIDER = {"VENDOR_INVOICE", "CERTIFICATE", "RECORDS_ONLY", "OTHER"}
 ADJ_LABEL = re.compile(r"adjust|write.?off|contractual|disallow", re.I)
 MULTI = re.compile(r"multiple providers|see line items|;|,\s*\w+\s*\(PAR\)", re.I)
-LEDGER_TOTAL = [(re.compile(r"overall\s*-\s*total|grand\s*total", re.I), 3),
-                (re.compile(r"^overall$|total\s*charges?$|account\s*total|total\s*billed", re.I), 2),
-                (re.compile(r"^charge$|balance|amount\s*due|self.pay", re.I), 1)]
+LEDGER_TOTAL = [
+    (re.compile(r"overall\s*-\s*total|grand\s*total", re.I), 3),
+    (re.compile(r"^overall$|total\s*charges?$|account\s*total|total\s*billed", re.I), 2),
+    (re.compile(r"^charge$|balance|amount\s*due|self.pay", re.I), 1),
+]
 FORM_BOX = re.compile(r"^\s*\d{1,2}\s*[.)]")
 SPLIT_COLUMN = re.compile(r"^(\d{1,3}(?:,\d{3})*|\d+)(?:\s+|\s*[Il|!¦]\s*)(\d{2})$")
 
@@ -49,11 +52,11 @@ def money(s: Any, suspect: list[tuple[str, float]], suspect_at: float) -> float 
     t = str(s).replace("$", "").strip()
     if "?" in t:
         return None
-    m = re.match(r"^(\d{1,3}(?:,\d{3})*),(\d{2})$", t)      # a decimal comma
+    m = re.match(r"^(\d{1,3}(?:,\d{3})*),(\d{2})$", t)  # a decimal comma
     if m:
         t = m.group(1).replace(",", "") + "." + m.group(2)
     else:
-        m2 = SPLIT_COLUMN.match(t)                          # dollars and cents in adjacent boxes
+        m2 = SPLIT_COLUMN.match(t)  # dollars and cents in adjacent boxes
         t = (m2.group(1).replace(",", "") + "." + m2.group(2)) if m2 else t.replace(",", "")
     try:
         v = round(float(t), 2)
@@ -105,8 +108,12 @@ class Matcher:
             firsts = [r["first"] for r in rows_ if r["first"]]
             lasts = [r["last"] for r in rows_ if r["last"]]
             head = re.split(r"[,(\-]", rows_[0]["provider"])[0].strip()
-            merged = {"provider": f"{head} (all departments)", "first": min(firsts) if firsts else None,
-                      "last": max(lasts) if lasts else None, "merged_from": [r["provider"] for r in rows_]}
+            merged = {
+                "provider": f"{head} (all departments)",
+                "first": min(firsts) if firsts else None,
+                "last": max(lasts) if lasts else None,
+                "merged_from": [r["provider"] for r in rows_],
+            }
             self.match[merged["provider"]] = self.match.get(rows_[0]["provider"], [])
             out.append(merged)
         return sorted(out, key=lambda r: r["first"] or "9999")
@@ -132,7 +139,9 @@ def run(sr: StageRun) -> int:
     suspect: list[tuple[str, float]] = []
     matcher = Matcher(sr.cfg, d)
     spine = matcher.collapse(matcher.timeline((d / "runs" / unit / "final-chronology.md").read_text(encoding="utf-8")))
-    bills: dict[str, dict[str, Any]] = defaultdict(lambda: {"totals": [], "docs": set(), "bdates": [], "adjustments": []})
+    bills: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"totals": [], "docs": set(), "bdates": [], "adjustments": []}
+    )
     unmatched: dict[str, dict[str, Any]] = defaultdict(lambda: {"totals": [], "docs": set()})
     vendor: list = []
     subro: list = []
@@ -156,7 +165,9 @@ def run(sr: StageRun) -> int:
                 vendor.append((r["file"], c.get("provider")))
                 continue
             if kind == "LIEN_SUBROGATION":
-                subro.append((r["file"], c.get("provider"), [t.get("amount") for t in c.get("printed_totals") or []][:3]))
+                subro.append(
+                    (r["file"], c.get("provider"), [t.get("amount") for t in c.get("printed_totals") or []][:3])
+                )
                 continue
             if kind in NON_PROVIDER:
                 continue
@@ -193,8 +204,11 @@ def run(sr: StageRun) -> int:
     rows: list[dict[str, Any]] = []
     for row in spine:
         e = bills.get(row["provider"], {"totals": [], "docs": set(), "bdates": [], "adjustments": []})
-        ranked = sorted(((total_rank(lab) if kd == "LEDGER" else 0, a, lab, fl, pg) for a, lab, fl, pg, kd in e["totals"]),
-                        key=lambda t: (t[0], t[1]), reverse=True)
+        ranked = sorted(
+            ((total_rank(lab) if kd == "LEDGER" else 0, a, lab, fl, pg) for a, lab, fl, pg, kd in e["totals"]),
+            key=lambda t: (t[0], t[1]),
+            reverse=True,
+        )
         best = next((t for t in ranked if t[0] > 0), None)
         if best:
             ours, obasis = best[1], best[3].strip()
@@ -205,28 +219,76 @@ def run(sr: StageRun) -> int:
             ours, obasis = None, "no bill located"
         amt, basis = (lien[row["provider"]], "Firm lien report") if row["provider"] in lien else (ours, obasis)
         grand += amt or 0.0
-        alternates = [a for a in sorted({round(x, 2) for x, lab, _, _, kd in e["totals"] if x > 0 and kd == "LEDGER" and total_rank(lab)}, reverse=True)
-                      if amt is None or (abs(a - amt) > max(100.0, 0.01 * amt) and a >= 0.5 * amt)][:6]
-        rows.append({**row, "total": amt, "basis": basis, "ours": ours, "lien": lien.get(row["provider"]),
-                     "docs": sorted(e["docs"]),
-                     "adjustments": [{"amount": a, "label": lab, "doc": fl, "page": pg} for a, lab, fl, pg in sorted(e.get("adjustments") or [], reverse=True)],
-                     "alternates": alternates})
+        alternates = [
+            a
+            for a in sorted(
+                {round(x, 2) for x, lab, _, _, kd in e["totals"] if x > 0 and kd == "LEDGER" and total_rank(lab)},
+                reverse=True,
+            )
+            if amt is None or (abs(a - amt) > max(100.0, 0.01 * amt) and a >= 0.5 * amt)
+        ][:6]
+        rows.append(
+            {
+                **row,
+                "total": amt,
+                "basis": basis,
+                "ours": ours,
+                "lien": lien.get(row["provider"]),
+                "docs": sorted(e["docs"]),
+                "adjustments": [
+                    {"amount": a, "label": lab, "doc": fl, "page": pg}
+                    for a, lab, fl, pg in sorted(e.get("adjustments") or [], reverse=True)
+                ],
+                "alternates": alternates,
+            }
+        )
         sr.log(f"{row['provider'][:43]:<44}{(f'{amt:,.2f}' if amt is not None else '-'):>15}  {basis[:44]}")
     for k, v in lien.items():
         if not any(r["provider"] == k for r in rows):
             grand += v
-            rows.append({"provider": k, "first": None, "last": None, "total": v, "basis": "Firm lien report", "ours": None,
-                         "lien": v, "docs": [], "adjustments": [], "alternates": []})
+            rows.append(
+                {
+                    "provider": k,
+                    "first": None,
+                    "last": None,
+                    "total": v,
+                    "basis": "Firm lien report",
+                    "ours": None,
+                    "lien": v,
+                    "docs": [],
+                    "adjustments": [],
+                    "alternates": [],
+                }
+            )
     gaps = [r for r in rows if r["total"] is None]
-    sr.log(f"{'GRAND TOTAL' if not gaps else 'SUBTOTAL'} {grand:,.2f}" + (f"  INCOMPLETE: {len(gaps)} provider(s) have no derivable total" if gaps else ""))
+    sr.log(
+        f"{'GRAND TOTAL' if not gaps else 'SUBTOTAL'} {grand:,.2f}"
+        + (f"  INCOMPLETE: {len(gaps)} provider(s) have no derivable total" if gaps else "")
+    )
     if unmatched:
         sr.log(f"!! {len(unmatched)} billing document label(s) not matched to a chronology provider; NOT in the total")
-    (d / f"billing_chart{sfx}.json").write_text(json.dumps({
-        "rows": rows, "grand_total": round(grand, 2), "inherited_attribution": [list(x) for x in inherited],
-        "unmatched": {k: sorted({round(a, 2) for a, _, _, _, _ in v["totals"]}, reverse=True)[:5] for k, v in unmatched.items()},
-        "subrogation": [[a, str(b), c] for a, b, c in subro], "vendor_invoices": [[a, str(b)] for a, b in vendor],
-        "quarantined": quarantine, "failed_pages": failed, "unit": unit, "patient_filter": patient,
-        "suspect_amounts": [[str(a), b] for a, b in suspect]}, indent=1), encoding="utf-8")
+    (d / f"billing_chart{sfx}.json").write_text(
+        json.dumps(
+            {
+                "rows": rows,
+                "grand_total": round(grand, 2),
+                "inherited_attribution": [list(x) for x in inherited],
+                "unmatched": {
+                    k: sorted({round(a, 2) for a, _, _, _, _ in v["totals"]}, reverse=True)[:5]
+                    for k, v in unmatched.items()
+                },
+                "subrogation": [[a, str(b), c] for a, b, c in subro],
+                "vendor_invoices": [[a, str(b)] for a, b in vendor],
+                "quarantined": quarantine,
+                "failed_pages": failed,
+                "unit": unit,
+                "patient_filter": patient,
+                "suspect_amounts": [[str(a), b] for a, b in suspect],
+            },
+            indent=1,
+        ),
+        encoding="utf-8",
+    )
     if suspect:
         sr.log(f"!! {len(suspect)} amount(s) at or above the suspect threshold; likely a LOST DECIMAL in transcription")
     return 0

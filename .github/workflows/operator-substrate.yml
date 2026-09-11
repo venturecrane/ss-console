@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The detect step diffs base...head; both need to be in the clone.
           fetch-depth: 0
@@ -63,7 +63,7 @@ jobs:
 
       - name: Set up Python
         if: steps.changes.outputs.relevant == 'true'
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '>=3.11'
 
@@ -78,7 +78,23 @@ jobs:
         # ruff lints the tree against operator/ruff.toml (see that file's header
         # for why the rule selection is narrow and why it is a gate, not a
         # baseline).
-        run: python3 -m pip install --quiet pytest pyyaml cryptography ruff
+        # pyright (pinned) runs in basic mode under operator/pyproject.toml and is
+        # ratcheted by bin/pyright-ratchet.py; the pip package fetches its own node.
+        # ruff is pinned too. RUF100 (unused-noqa) follows each version's BLE001
+        # exemptions: 0.16 exempts a handler that logs with exc_info, 0.15 does
+        # not, and an unpinned install turned a locally green tree red at one
+        # site on 2026-09-10. Bump deliberately: `uvx ruff@<new> check .` and
+        # `format --check .` locally first, then move this pin and the note in
+        # ruff.toml together.
+        run: python3 -m pip install --quiet pytest pyyaml cryptography ruff==0.15.17 pyright==1.1.406
+
+      # The safe half of packaging (operator/pyproject.toml header): the tree is
+      # installed as packages so imports resolve the way they will once the
+      # seat image installs it too. The sys.path shims stay until that
+      # reprovision-proven follow-up.
+      - name: Install the operator tree as packages
+        if: steps.changes.outputs.relevant == 'true'
+        run: python3 -m pip install --quiet -e ./operator
 
       - name: Run ruff
         if: steps.changes.outputs.relevant == 'true'
@@ -88,6 +104,45 @@ jobs:
         # existed, no Python linter ran here at all and every one was inert.
         working-directory: operator
         run: ruff check .
+
+      # One formatter for the Python half, the way prettier is for the
+      # TypeScript half (ruff.toml [format], line-length 120). Fix locally with
+      # `cd operator && ruff format .`.
+      - name: ruff format --check
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator
+        run: ruff format --check .
+
+      # RUF100 (in ruff.toml) deletes suppressions for rules ruff does not
+      # enable; this is the other half: every surviving noqa says what it
+      # protects. Same shape as the nosemgrep gate in security.yml.
+      - name: Every noqa carries a reason
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator
+        run: python3 bin/noqa-reasons.py
+
+      # pyright, ratcheted: contracts/operator-pyright-baseline.json records
+      # errors per file; any file that grows fails, and improvement asks for a
+      # regenerate so the number only moves down. `|| true` because pyright
+      # exits 1 on any error and the ratchet, not the raw exit, is the gate.
+      - name: pyright (ratcheted)
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator
+        run: |
+          set -euo pipefail
+          pyright --outputjson > /tmp/pyright.json || true
+          python3 bin/pyright-ratchet.py /tmp/pyright.json
+
+      # shellcheck never ran anywhere before 2026-09-10; five `shellcheck
+      # disable` directives sat in workflow run: blocks, which no linter reads.
+      # The generated env-array file is excluded (no shebang by design).
+      - name: shellcheck (operator shell)
+        if: steps.changes.outputs.relevant == 'true'
+        run: |
+          set -euo pipefail
+          git ls-files 'operator/**/*.sh' 'operator/*.sh' \
+            | grep -v '_env-arrays.generated.sh' \
+            | xargs shellcheck --severity=warning
 
       - name: Run run()-style safety invariants
         if: steps.changes.outputs.relevant == 'true'
@@ -154,7 +209,7 @@ jobs:
       # image gets.
       - name: Set up uv (connector venvs)
         if: steps.changes.outputs.relevant == 'true'
-        uses: astral-sh/setup-uv@f98e06938123ccabd21905ea5d0069192241f9f1 # v8.3.1
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Author-built connector conformance
         if: steps.changes.outputs.relevant == 'true'

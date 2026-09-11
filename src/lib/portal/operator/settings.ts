@@ -1,10 +1,10 @@
 /**
- * Operator settings — typed contracts for the config-derived rows the
- * console renders:
+ * Operator settings — the connector-status rows the console renders from
+ * the config projection.
  *
- *   - The trust-ceiling vocabulary and its label
- *   - The skill-toggle row shape
- *   - Connector status rows
+ * The trust-ceiling vocabulary, its label, and the skill-toggle row shape
+ * that once lived here went with the components that rendered them
+ * (2026-09-10; nothing mounted those components).
  *
  * Source of truth is `customer.yaml` per
  * [ADR 0012](../../../../docs/adr/0012-customer-yaml-storage.md); the
@@ -17,47 +17,6 @@
  * the portal surface was chrome over a stub — no ingestion wiring
  * existed. Client-voice establishment is its own workstream.
  */
-
-// ---------------------------------------------------------------------------
-// Trust ceiling
-// ---------------------------------------------------------------------------
-
-/**
- * Closed vocabulary for the exposure decision attached to a persona action
- * class. The old exported names are retained for component compatibility while
- * the UI is renamed.
- *
- *   autonomous       — the Operator may execute and send without
- *                      a human reviewer in the loop
- *   draft_for_review — default; the Operator proposes; a reviewer
- *                      must approve and send
- *   refused          — the skill is configured but the Operator
- *                      will refuse to run it
- *
- * The vocabulary is closed because adding a value silently breaks
- * persona-renderer dispatch in both the portal and Hermes. New
- * ceilings require a customer.yaml schema bump.
- */
-export type TrustCeilingLevel = 'autonomous' | 'draft_for_review' | 'refused'
-
-/**
- * Human label for a TrustCeilingLevel. Closed vocabulary; unknown
- * values fall through to the raw value rather than fabricating a
- * friendly label.
- *
- * @public Consumed by src/components/portal/operator/SkillTogglesSection.astro, a component knip
- * reports unused. Retiring that component is a product decision, not this gate's.
- */
-export function formatTrustCeilingLevel(level: TrustCeilingLevel): string {
-  switch (level) {
-    case 'autonomous':
-      return 'Autonomous'
-    case 'draft_for_review':
-      return 'Draft for review'
-    case 'refused':
-      return 'Refused'
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Connector status
@@ -74,23 +33,6 @@ export function formatTrustCeilingLevel(level: TrustCeilingLevel): string {
  * `docs/specs/operator/capability-contracts.md`.
  */
 export type ConnectorHealth = 'ok' | 'warn' | 'fail' | 'unconfigured'
-
-/**
- * @public Consumed by src/components/portal/operator/ConnectorStatusSection.astro, a component
- * knip reports unused. Retiring that component is a product decision, not this gate's.
- */
-export function formatConnectorHealth(health: ConnectorHealth): string {
-  switch (health) {
-    case 'ok':
-      return 'OK'
-    case 'warn':
-      return 'Warn'
-    case 'fail':
-      return 'Fail'
-    case 'unconfigured':
-      return 'Unconfigured'
-  }
-}
 
 /**
  * One connector row.
@@ -169,23 +111,3 @@ export function connectorRowsFromCustomerYaml(connectorsYaml: unknown): Connecto
 // went the same way on 2026-09-09: no facet resolver called them. What remains
 // is the closed vocabularies, their labels, and the connector rows.
 // ---------------------------------------------------------------------------
-
-/**
- * One skill toggle row. Sourced from the customer's persona skill
- * list — a skill is "enabled" for this customer iff it appears in
- * persona.skills. Initiation modes are displayed separately from exposure.
- *
- *   skillName       — slug from `operator/skills/<name>/SKILL.md`
- *   enabled         — true when the persona configures the skill
- *                     and its ceiling is not `refused`
- *   trustCeiling    — current ceiling (or null when the persona's
- *                     ceiling does not match the closed vocabulary)
- *
- * @public Consumed by src/components/portal/operator/SkillTogglesSection.astro, a component
- * knip reports unused. Retiring that component is a product decision, not this gate's.
- */
-export interface SkillToggleRow {
-  skillName: string
-  enabled: boolean
-  trustCeiling: TrustCeilingLevel | null
-}

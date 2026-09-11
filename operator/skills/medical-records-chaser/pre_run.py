@@ -145,8 +145,7 @@ class RosterItem:
 
 
 class RosterSource(Protocol):
-    def pull_open_roster_items(self) -> "RosterPull":
-        ...
+    def pull_open_roster_items(self) -> "RosterPull": ...
 
 
 @dataclass(frozen=True)
@@ -229,13 +228,9 @@ def load_chase_config(customer_yaml_path: str | None = None) -> tuple[ChaseConfi
     except (OSError, yaml.YAMLError):
         return ChaseConfig(), _DEFAULT_REFIRE_DAYS
     settings = _find_skill_settings(data)
-    config = ChaseConfig(
-        chase_cadence_days=_pos_int_or_none(settings.get("chase_cadence_days"))
-    )
+    config = ChaseConfig(chase_cadence_days=_pos_int_or_none(settings.get("chase_cadence_days")))
     esc = data.get("escalation") if isinstance(data, dict) else None
-    refire_days = _pos_int(
-        esc.get("refire_days") if isinstance(esc, dict) else None, _DEFAULT_REFIRE_DAYS
-    )
+    refire_days = _pos_int(esc.get("refire_days") if isinstance(esc, dict) else None, _DEFAULT_REFIRE_DAYS)
     return config, refire_days
 
 
@@ -253,9 +248,7 @@ def _load_ledger_module():
     for cand in candidates:
         module_path = cand / "escalation_ledger.py"
         if module_path.is_file():
-            spec = importlib.util.spec_from_file_location(
-                "escalation_ledger_vendored_mrc", module_path
-            )
+            spec = importlib.util.spec_from_file_location("escalation_ledger_vendored_mrc", module_path)
             if spec is None or spec.loader is None:
                 continue
             module = importlib.util.module_from_spec(spec)
@@ -332,9 +325,7 @@ def _seat_sentinel_decision(
     tasks): fire-once + re-fire-window on a stable sentinel (#1899)."""
     key = ledger.item_key("", source_id, label, "")
     state = states.get(key)
-    if not ledger.should_fire(
-        state, today, refire_days=refire_days, ack_snooze_days=refire_days
-    ):
+    if not ledger.should_fire(state, today, refire_days=refire_days, ack_snooze_days=refire_days):
         return WakeDecision(
             wake=False,
             decision_basis=basis_quiet,
@@ -425,9 +416,7 @@ def decide(
             if (
                 not already_surfacing
                 and not hold_state.handed_off
-                and ledger.should_fire(
-                    hold_state, today, refire_days=refire_days, ack_snooze_days=refire_days
-                )
+                and ledger.should_fire(hold_state, today, refire_days=refire_days, ack_snooze_days=refire_days)
             ):
                 plans.append(
                     ItemPlan(
@@ -538,12 +527,7 @@ def _handoff_values(node, key: str, out: list) -> list:
 
 def _is_iso_day(value: str) -> bool:
     """YYYY-MM-DD and nothing else. The register must never learn a non-date."""
-    return (
-        len(value) == 10
-        and value[4] == "-"
-        and value[7] == "-"
-        and value.replace("-", "").isdigit()
-    )
+    return len(value) == 10 and value[4] == "-" and value[7] == "-" and value.replace("-", "").isdigit()
 
 
 def _write_pre_run_handoff(payload: dict) -> None:
@@ -552,9 +536,7 @@ def _write_pre_run_handoff(payload: dict) -> None:
         record = {
             "skill": _HANDOFF_SKILL,
             "started_at": _HANDOFF_STARTED_AT,
-            "dates": [
-                d for d in _handoff_values(payload, "authored_date", []) if _is_iso_day(d)
-            ],
+            "dates": [d for d in _handoff_values(payload, "authored_date", []) if _is_iso_day(d)],
             "matter_ids": _handoff_values(payload, "matter_id", []),
         }
         directory = Path(os.environ.get("HERMES_HOME") or "/opt/data") / ".smd" / "pre_run"
@@ -683,9 +665,7 @@ async def run_once(
         pulled = source.pull_open_roster_items()
         all_items.extend(pulled.items)
         open_task_count += pulled.open_task_count
-        raw_input_blob += json.dumps(
-            [_item_to_dict(i) for i in pulled.items], sort_keys=True
-        ).encode("utf-8")
+        raw_input_blob += json.dumps([_item_to_dict(i) for i in pulled.items], sort_keys=True).encode("utf-8")
 
     decision = decide(
         RosterPull(items=tuple(all_items), open_task_count=open_task_count),
@@ -697,9 +677,7 @@ async def run_once(
         refire_days=refire_days,
     )
     if decision.wake:
-        await _try_write_emitted_wake(
-            audit_writer_factory, decision, skill_name=SKILL_NAME, now=now
-        )
+        await _try_write_emitted_wake(audit_writer_factory, decision, skill_name=SKILL_NAME, now=now)
         return _emit_wake(decision)
 
     writer = audit_writer_factory()
@@ -878,9 +856,7 @@ class SmokeballSubprocessSource:
         self._today = today
 
     def pull_open_roster_items(self) -> RosterPull:
-        connector_python = os.environ.get(
-            "SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT
-        )
+        connector_python = os.environ.get("SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT)
         result = subprocess.run(  # raises on timeout → caller wakes
             # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args — argv[0] is the module-constant connector-venv interpreter, overridable only via SMD_CONNECTOR_VENV_PYTHON from the Machine's own boot env (same trust domain; the test seam). The snippet is a module constant; no request/agent-controlled data reaches argv.
             [connector_python, "-c", _PULL_SNIPPET],
@@ -889,10 +865,7 @@ class SmokeballSubprocessSource:
             timeout=_PULL_TIMEOUT_SECONDS,
         )
         if result.returncode != 0:
-            raise RuntimeError(
-                f"smokeball pull exit {result.returncode}: "
-                f"{(result.stderr or '').strip()[:500]}"
-            )
+            raise RuntimeError(f"smokeball pull exit {result.returncode}: {(result.stderr or '').strip()[:500]}")
         raw = json.loads((result.stdout or "").strip().splitlines()[-1])
         pull, problem = parse_pull(raw, today=self._today)
         if problem:
@@ -995,14 +968,10 @@ class BrokerSuppressedWakeWriter:
 
 
 def _writer_factory():
-    socket_path = os.environ.get("SMD_AUDIT_BROKER_SOCKET") or os.environ.get(
-        "SMD_WORKSPACE_BROKER_SOCKET"
-    )
+    socket_path = os.environ.get("SMD_AUDIT_BROKER_SOCKET") or os.environ.get("SMD_WORKSPACE_BROKER_SOCKET")
     if not socket_path:
         return None
-    return BrokerSuppressedWakeWriter(
-        socket_path, os.environ.get("CUSTOMER_SLUG", "")
-    )
+    return BrokerSuppressedWakeWriter(socket_path, os.environ.get("CUSTOMER_SLUG", ""))
 
 
 def main() -> int:

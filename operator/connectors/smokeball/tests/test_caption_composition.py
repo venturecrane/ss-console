@@ -28,9 +28,7 @@ from smokeball_connector.client import SmokeballClient
 
 
 def _mock_client(handler, captured: list[httpx.Request] | None = None) -> SmokeballClient:
-    client = SmokeballClient(
-        region="us", environment="staging", client_id="cid", client_secret="sec", api_key="apikey"
-    )
+    client = SmokeballClient(region="us", environment="staging", client_id="cid", client_secret="sec", api_key="apikey")
     client._http = httpx.Client(transport=httpx.MockTransport(handler))
     return client
 
@@ -41,9 +39,7 @@ def _contacts_handler(contacts: dict[str, dict], captured: list[httpx.Request] |
             captured.append(request)
         path = request.url.path
         if path.endswith("/oauth2/token"):
-            return httpx.Response(
-                200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"}
-            )
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"})
         if "/contacts/" in path:
             cid = path.rsplit("/", 1)[-1]
             if cid in contacts:
@@ -90,7 +86,11 @@ def test_multidef_appends_et_al_and_resolves_only_first_defendant() -> None:
     captured: list[httpx.Request] = []
     contacts = {"c1": _person("Bell"), "d1": _company("Acme Corp"), "d2": _person("Roe"), "d3": _person("Doe")}
     client = _mock_client(_contacts_handler(contacts, captured), captured)
-    matter = {"clientIds": ["c1"], "otherSideIds": ["d1", "d2", "d3"], "matterType": {"name": "Personal Injury - Plaintiff"}}
+    matter = {
+        "clientIds": ["c1"],
+        "otherSideIds": ["d1", "d2", "d3"],
+        "matterType": {"name": "Personal Injury - Plaintiff"},
+    }
     srv._attach_caption(client, matter)
     assert matter["caption"] == "Bell v. Acme Corp et al."
     assert len(_contact_gets(captured)) == 2  # plaintiff + first defendant only
@@ -98,7 +98,12 @@ def test_multidef_appends_et_al_and_resolves_only_first_defendant() -> None:
 
 def test_lead_no_otherside_yields_no_caption() -> None:
     client = _mock_client(_contacts_handler({"c1": _person("Alvarez")}))
-    matter = {"clientIds": ["c1"], "otherSideIds": [], "matterType": {"name": "Personal Injury - Plaintiff"}, "isLead": True}
+    matter = {
+        "clientIds": ["c1"],
+        "otherSideIds": [],
+        "matterType": {"name": "Personal Injury - Plaintiff"},
+        "isLead": True,
+    }
     srv._attach_caption(client, matter)
     assert "caption" not in matter
 

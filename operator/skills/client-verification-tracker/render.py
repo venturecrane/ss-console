@@ -47,20 +47,14 @@ def canonical_body_sha256(text: str) -> str:
 # (plus its reason qualifier). Anything else renders nothing.
 # ---------------------------------------------------------------------------
 
-_SITUATION_HOLD = (
-    "held for a person; the block recorded on this matter is unresolved"
-)
-_SITUATION_HOLD_STALE = (
-    "the facts an earlier release rested on have changed; a person decides "
-    "before any chase resumes"
-)
+_SITUATION_HOLD = "held for a person; the block recorded on this matter is unresolved"
+_SITUATION_HOLD_STALE = "the facts an earlier release rested on have changed; a person decides before any chase resumes"
 _SITUATION_HANDOFF = (
     "chase attempts reached the authored ceiling; the client chase is stopped "
     "and the open item needs the responsible person"
 )
 _SITUATION_CHASE_UNROUTABLE = (
-    "a client reminder is due, and the reminder's return destination is not "
-    "authored; a person should send it"
+    "a client reminder is due, and the reminder's return destination is not authored; a person should send it"
 )
 _SITUATION_CONFIG = (
     "chase cadence or escalation attempt-count is not authored; the client "
@@ -132,10 +126,7 @@ def render_alert(entries: list[dict], *, today_iso: str) -> tuple[str, str]:
         else:
             lines.append(f"{index}. {_matter_head(entry)}, verification: {phrase}{tail}.")
     lines.append("")
-    lines.append(
-        "This is an internal alert to a person at the firm; no client message "
-        "has been sent."
-    )
+    lines.append("This is an internal alert to a person at the firm; no client message has been sent.")
     subject = f"[Verifications] {len(entries)} need attention, {today_iso}"
     return subject, "\n".join(lines) + "\n"
 
@@ -180,12 +171,7 @@ def render_chase(*, signer_first_name: str, return_link: str) -> str | None:
         return None
     if not (isinstance(return_link, str) and return_link.strip()):
         return None
-    return (
-        _CHASE_TEMPLATE.format(
-            signer_first_name=signer_first_name.strip(), return_link=return_link.strip()
-        )
-        + "\n"
-    )
+    return _CHASE_TEMPLATE.format(signer_first_name=signer_first_name.strip(), return_link=return_link.strip()) + "\n"
 
 
 def authored_return_link(customer_yaml: dict) -> str | None:

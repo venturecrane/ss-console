@@ -16,6 +16,7 @@ Thirteen ledgers priced the model doing all of this at 8% of a run. Whatever
 merged the cluster, the falsifier proves nothing was lost before the stage
 exits 0; a lost citation, paragraph or entry is exit 3, 4 or 5.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,8 +28,8 @@ from .assemble import norm_provider
 from .base import StageRun
 
 JACCARD_ROUTE = 0.8
-NUMBER_ROUTE = 0.5      # number-set Jaccard that marks two paragraphs as the
-NUMBER_SHARED = 3       # same measurements, when they share this many
+NUMBER_ROUTE = 0.5  # number-set Jaccard that marks two paragraphs as the
+NUMBER_SHARED = 3  # same measurements, when they share this many
 NUMBER = re.compile(r"\d+(?:[./:\-]\d+)*")
 WORD = re.compile(r"[a-z0-9]+")
 
@@ -74,7 +75,12 @@ def parse_fragment(text: str, cluster: dict[str, Any], hd: mf.Headings) -> dict[
                 continue
             # A bare Title Case line that is not a heading we know and carries
             # no citation is a heading outside the menu, never prose.
-            if not mf.CITE.search(line) and len(line) < 60 and line[:1].isupper() and not line.endswith((".", ",", ";")):
+            if (
+                not mf.CITE.search(line)
+                and len(line) < 60
+                and line[:1].isupper()
+                and not line.endswith((".", ",", ";"))
+            ):
                 raise RouteError(f"unknown heading {line[:40]!r}")
         buf.append(line)
         if mf.CITE_END.search(line):
@@ -124,10 +130,13 @@ def merge_cluster(cluster: dict[str, Any], hd: mf.Headings) -> tuple[str | None,
                 continue
             seen.add(k)
             by_heading.setdefault(h, []).append((prose, cite, k[0]))
-    for h, plist in by_heading.items():      # containment collapse, same citation only
-        by_heading[h] = [(prose, cite, n) for i, (prose, cite, n) in enumerate(plist)
-                         if not any(j != i and c2 == cite and n != n2 and n in n2 for j, (_, c2, n2) in enumerate(plist))]
-    for h, plist in by_heading.items():      # near-duplicates the code will not adjudicate
+    for h, plist in by_heading.items():  # containment collapse, same citation only
+        by_heading[h] = [
+            (prose, cite, n)
+            for i, (prose, cite, n) in enumerate(plist)
+            if not any(j != i and c2 == cite and n != n2 and n in n2 for j, (_, c2, n2) in enumerate(plist))
+        ]
+    for h, plist in by_heading.items():  # near-duplicates the code will not adjudicate
         for i in range(len(plist)):
             for j in range(i + 1, len(plist)):
                 pa, ca, _ = plist[i]
@@ -137,8 +146,10 @@ def merge_cluster(cluster: dict[str, Any], hd: mf.Headings) -> tuple[str | None,
                 njac = _jaccard(na, nb) if (na or nb) else 1.0
                 conflict = bool(na - nb) and bool(nb - na)
                 if conflict and (jac >= JACCARD_ROUTE or (njac >= NUMBER_ROUTE and len(na & nb) >= NUMBER_SHARED)):
-                    reasons.append(f"{h}: near-duplicate (J={jac:.2f}, numbers J={njac:.2f}) with different "
-                                   f"numbers/dates ({ca} vs {cb})")
+                    reasons.append(
+                        f"{h}: near-duplicate (J={jac:.2f}, numbers J={njac:.2f}) with different "
+                        f"numbers/dates ({ca} vs {cb})"
+                    )
                 elif jac >= JACCARD_ROUTE and ca == cb:
                     reasons.append(f"{h}: same-citation reworded pair (J={jac:.2f}) {ca}")
     if reasons:
@@ -146,8 +157,11 @@ def merge_cluster(cluster: dict[str, Any], hd: mf.Headings) -> tuple[str | None,
     provider = max((f["provider"] for f in frags), key=len)
     headings = sorted(by_heading, key=hd.index)
     first = headings[0]
-    out = [f"{cluster['date'][5:7]}/{cluster['date'][8:10]}/{cluster['date'][:4]}" + (f" {label}" if label else ""),
-           f"{provider} | {first}", ""]
+    out = [
+        f"{cluster['date'][5:7]}/{cluster['date'][8:10]}/{cluster['date'][:4]}" + (f" {label}" if label else ""),
+        f"{provider} | {first}",
+        "",
+    ]
     for h in headings:
         if h != first:
             out += [h, ""]
@@ -183,8 +197,9 @@ def run(sr: StageRun) -> int:
     for r in route:
         sr.log(f"  route #{r['id']} {r['date']} {r['key']}: {'; '.join(r['reasons'])[:140]}")
     (d / "merged_code.md").write_text("\n".join(code[i] for i in sorted(code)), encoding="utf-8")
-    (d / "merge_route.json").write_text(json.dumps({"clusters": n, "code": sorted(code), "routed": route}, indent=1),
-                                        encoding="utf-8")
+    (d / "merge_route.json").write_text(
+        json.dumps({"clusters": n, "code": sorted(code), "routed": route}, indent=1), encoding="utf-8"
+    )
     model: dict[int, str] = {}
     if route:
         blocks = [b for b in mf.CLUSTER_SPLIT.split(src.strip()) if b.strip()]

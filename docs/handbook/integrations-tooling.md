@@ -36,7 +36,7 @@ This is the inventory of external services the platform touches and what each is
 
 | Service | Used for | Grounded in |
 |---|---|---|
-| **Anthropic (Claude)** | The LLM behind the live assessment and assessment-to-quote flow (`src/lib/claude/*`). The Operator plane also runs on Claude via the per-Machine Anthropic key. | `ANTHROPIC_API_KEY` in `wrangler.toml` secrets; `src/lib/claude/*`, `src/lib/llm/models.ts`. Default to the latest, most capable Claude models. |
+| **Anthropic (Claude)** | The LLM behind the live assessment and assessment extraction (`src/lib/claude/*`). The Operator plane also runs on Claude via the per-Machine Anthropic key. | `ANTHROPIC_API_KEY` in `wrangler.toml` secrets; `src/lib/claude/*`, `src/lib/llm/models.ts`. Default to the latest, most capable Claude models. |
 | **ElevenLabs** | Voice. Used by the public assessment voice flow (`@elevenlabs/client`) and in the Operator explainer video pipeline. | `@elevenlabs/client` in `package.json`; `src/lib/claude/assessment-llm.ts`, `src/scripts/assessment-voice.ts`. |
 
 ## Billing, documents, and email

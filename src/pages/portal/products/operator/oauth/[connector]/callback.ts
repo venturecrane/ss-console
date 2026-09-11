@@ -31,8 +31,8 @@
  *
  * Failure modes redirect with the same short reason vocabulary as the
  * admin-side callback: provider_error, missing_params, bad_state,
- * expired_state, reviewer_mismatch, unknown_provider, unknown_connector,
- * exchange_failed, store_failed.
+ * expired_state, reviewer_mismatch, access_revoked, unknown_provider,
+ * unknown_connector, exchange_failed, store_failed.
  *
  * No token material is logged or returned in URLs. Issuer error
  * payloads stay server-side.
@@ -49,6 +49,7 @@ import {
 import { getDefaultTokenStore } from '../../../../../../lib/oauth/store.js'
 import { emitAuditEvent } from '../../../../../../lib/oauth/audit.js'
 import { requirePortalBaseUrl } from '../../../../../../lib/config/app-url.js'
+import { resolveOperatorAccess } from '../../../../../../lib/portal/operator-access.js'
 
 type RedirectFn = (path: string, status?: 300 | 301 | 302 | 303 | 304 | 307 | 308) => Response
 
@@ -199,6 +200,53 @@ function reviewerMatchesClerk(
   return Boolean(authResult && authResult.userId && authResult.userId === reviewer_id)
 }
 
+/**
+ * Two checks on WHO is finishing the consent, in order:
+ *
+ *   1. The signed state's reviewer_id must equal the Clerk user the middleware
+ *      populated on locals. A leaked state is useless without that cookie.
+ *   2. That reviewer must STILL be a principal on the instance, re-resolved at
+ *      callback time with the gate the initiator used. The state proves who
+ *      started the consent, not that they may still finish it; a reviewer
+ *      whose role was removed inside the state's TTL must not be able to store
+ *      a token against the firm (2026-09-10 review, Security LOW 8).
+ *
+ * Returns the rejection Response, or null when both checks pass.
+ */
+async function gateReviewerOrReject(
+  ctx: CallbackCtx,
+  locals: App.Locals,
+  payload: OAuthStatePayload
+): Promise<Response | null> {
+  const { customer_id, provider: providerSlug, reviewer_id } = payload
+  // Portal auth is owned by Clerk -- middleware populated locals.auth().
+  // The auth helper returns `{ userId, sessionId, ... }` when signed in.
+  let clerkAuth: { userId?: string | null } | null = null
+  try {
+    const authFn = locals.auth as undefined | (() => { userId?: string | null })
+    if (typeof authFn === 'function') clerkAuth = authFn()
+  } catch {
+    clerkAuth = null
+  }
+  if (!reviewerMatchesClerk(clerkAuth, reviewer_id)) {
+    return reject(ctx, 'reviewer_mismatch', { customer_id, provider: providerSlug, reviewer_id })
+  }
+
+  const access = await resolveOperatorAccess(env.DB, locals, {
+    allowedRoles: ['principal'],
+    customerSlug: customer_id,
+  })
+  if (access.kind === 'redirect') {
+    return reject(ctx, 'access_revoked', {
+      customer_id,
+      provider: providerSlug,
+      reviewer_id,
+      auditReason: 'access_revoked:reviewer no longer principal on instance at callback',
+    })
+  }
+  return null
+}
+
 export const GET: APIRoute = async ({ request, redirect, locals, params }) => {
   const url = new URL(request.url)
   const ctx: CallbackCtx = {
@@ -238,22 +286,8 @@ export const GET: APIRoute = async ({ request, redirect, locals, params }) => {
     })
   }
 
-  // Portal auth is owned by Clerk -- middleware populated locals.auth().
-  // The auth helper returns `{ userId, sessionId, ... }` when signed in.
-  let clerkAuth: { userId?: string | null } | null = null
-  try {
-    const authFn = locals.auth as undefined | (() => { userId?: string | null })
-    if (typeof authFn === 'function') clerkAuth = authFn()
-  } catch {
-    clerkAuth = null
-  }
-  if (!reviewerMatchesClerk(clerkAuth, reviewer_id)) {
-    return reject(ctx, 'reviewer_mismatch', {
-      customer_id,
-      provider: providerSlug,
-      reviewer_id,
-    })
-  }
+  const reviewerDenial = await gateReviewerOrReject(ctx, locals, stateOrFail.payload)
+  if (reviewerDenial) return reviewerDenial
 
   const tokenOrFail = await exchangeOrReject(ctx, stateOrFail.payload, code)
   if (tokenOrFail instanceof Response) return tokenOrFail

@@ -47,7 +47,7 @@ rec = importlib.util.module_from_spec(_spec)
 sys.modules["reconcile_outcomes"] = rec
 _spec.loader.exec_module(rec)
 
-from adapter.audit_log import ACCEPTED_ACTION_TYPES  # noqa: E402
+from adapter.audit_log import ACCEPTED_ACTION_TYPES  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 CONTRACT = rec.load_contract()
 
@@ -244,9 +244,7 @@ def test_ss2136_a_claim_backed_by_a_real_run_passes():
     """The counterfactual: the same claim, with the escalation the job exists to
     produce. No finding."""
     escalator = [c for c in SS2136["claims"] if c["routine"] == "deadline-miss-escalator"]
-    rows = SS2136["rows"] + [
-        _row("2026-08-01T21:41:02.000Z", "ESCALATION_FIRED", skill="deadline-miss-escalator")
-    ]
+    rows = SS2136["rows"] + [_row("2026-08-01T21:41:02.000Z", "ESCALATION_FIRED", skill="deadline-miss-escalator")]
     obligations = _analyze(rows, claims=escalator)
     assert _findings(obligations) == []
     assert obligations[-1].closed_by == "escalated"
@@ -443,6 +441,7 @@ def test_the_series_marker_is_constant_across_different_finding_sets():
             ]
         )
     )
+
     def marker_line(report):
         hits = [ln for ln in rec.render([report]).split("\n") if ln.startswith("reconcile-series:")]
         assert len(hits) == 1, f"expected exactly one marker line, got {hits}"
@@ -559,9 +558,7 @@ def test_a_clean_run_still_emits_the_marker_so_the_issue_can_be_updated():
 # pins its own workflow the same way.
 # ----------------------------------------------------------------------
 
-_WORKFLOW = (
-    Path(__file__).resolve().parents[3] / ".github" / "workflows" / "terminal-state-reconcile.yml"
-)
+_WORKFLOW = Path(__file__).resolve().parents[3] / ".github" / "workflows" / "terminal-state-reconcile.yml"
 
 
 def test_the_workflow_greps_the_marker_the_renderer_actually_emits():
@@ -626,9 +623,7 @@ def test_a_live_seat_that_fails_to_read_is_still_held():
     """The falsifier. If everything became 'absent' the warning could never fire
     and a genuinely dark seat would go silent -- the exact failure the HOLD
     surface exists to prevent."""
-    report = rec.reconcile_seat(
-        CONTRACT, "pilot-smokeball", now=AFTER, client_factory=_boom(TimeoutError("timed out"))
-    )
+    report = rec.reconcile_seat(CONTRACT, "pilot-smokeball", now=AFTER, client_factory=_boom(TimeoutError("timed out")))
     assert report.held, "a reachable-but-failing seat is held"
     assert not report.absent
 
@@ -655,7 +650,7 @@ def test_absent_seats_are_named_in_the_report_not_filtered_away():
 # mistaken for them.
 # ---------------------------------------------------------------------------
 
-from recipient_policy import sender_key as _sk  # noqa: E402
+from recipient_policy import sender_key as _sk  # noqa: E402 - mid-module import beside the tests that use it; the shim at the top puts lib on the path
 
 _FIRM = "christa@example-firm.test"
 _SMD = "operator@smd.services"
@@ -749,9 +744,11 @@ def test_a_sibling_key_is_not_adopted_across_a_different_message():
 def test_the_report_line_and_header_carry_the_class_and_never_an_address():
     report = rec.SeatReport(slug="ashton-price")
     report.obligations = rec.analyze(
-        CONTRACT, "ashton-price",
+        CONTRACT,
+        "ashton-price",
         [_silent_inbound(_FIRM), _silent_inbound(_SMD, ts="2026-08-19T07:00:00Z")],
-        now=_NOW, roster=_ROSTER,
+        now=_NOW,
+        roster=_ROSTER,
     )
     out = rec.render([report])
     assert "silent=2 (firm-rostered=1 smd-operator=1)" in out

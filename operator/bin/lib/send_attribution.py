@@ -12,7 +12,7 @@ message to wake by TIME alone. Two live consequences:
 * B3 -- the broker never wrote ``skill_name`` on its rows (the column existed,
   the value was NULL on every CONFIRM row), so ``declares.get("")`` was None and
   the primary check graded nothing, silently. Now the broker writes the column
-  (``_CALLER_AUDIT_KEYS``) from the overlay's cron-resolved routine, and this
+  (``transmit_verbs._CALLER_AUDIT_KEYS``) from the overlay's cron-resolved routine, and this
   module attributes SKILL-FIRST when the column is set and HASH-SECOND when it
   is not: an unlabelled dispatch whose ``rendered_body_sha256`` sits in a
   hash-verified wake's stamps IS that wake's send -- a sha256 over a rendered
@@ -134,9 +134,7 @@ def _wakes_for_hash(
     for wake in wakes:
         if not _hash_verified(wake, declares) or not _in_window(wake, dispatch, window_s):
             continue
-        if dispatch.rendered_body_sha256 in wake.hashes_full or (
-            dispatch.rendered_body_sha256 in wake.hashes_skeleton
-        ):
+        if dispatch.rendered_body_sha256 in wake.hashes_full or (dispatch.rendered_body_sha256 in wake.hashes_skeleton):
             yield wake
 
 
@@ -269,8 +267,7 @@ def claim_dispatch_stamp(
         if not _in_window(wake, stamp, window_s):
             continue
         by_hash = not stamp.skill_name and (
-            stamp.rendered_body_sha256 in wake.hashes_full
-            or stamp.rendered_body_sha256 in wake.hashes_skeleton
+            stamp.rendered_body_sha256 in wake.hashes_full or stamp.rendered_body_sha256 in wake.hashes_skeleton
         )
         if stamp.skill_name == wake.skill_name or by_hash:
             stamp.plain_consumed = True
@@ -324,12 +321,8 @@ def attribution_counts(verdicts: list) -> dict[str, int]:
     column, ``attributed_by_skill > 0`` and ``attributed_by_hash == 0`` after.
     """
     return {
-        "attributed_by_skill": sum(
-            1 for v in verdicts if getattr(v, "attribution", "") == ATTRIBUTED_BY_SKILL
-        ),
-        "attributed_by_hash": sum(
-            1 for v in verdicts if getattr(v, "attribution", "") == ATTRIBUTED_BY_HASH
-        ),
+        "attributed_by_skill": sum(1 for v in verdicts if getattr(v, "attribution", "") == ATTRIBUTED_BY_SKILL),
+        "attributed_by_hash": sum(1 for v in verdicts if getattr(v, "attribution", "") == ATTRIBUTED_BY_HASH),
     }
 
 

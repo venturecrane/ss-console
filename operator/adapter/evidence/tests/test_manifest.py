@@ -7,12 +7,11 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
 
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[3]))
 
-from adapter.evidence.manifest import (  # noqa: E402
+from adapter.evidence.manifest import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     PACKET_VERSION,
     SIGNER_EMAIL,
     SIGNER_NAME,
@@ -57,9 +56,7 @@ def test_manifest_to_dict_carries_required_fields():
 
 
 def test_manifest_file_hashes_sorted_for_determinism():
-    m = build_manifest(
-        **_base_kwargs(file_hashes={"z.txt": "z", "a.txt": "a", "m.txt": "m"})
-    )
+    m = build_manifest(**_base_kwargs(file_hashes={"z.txt": "z", "a.txt": "a", "m.txt": "m"}))
     body = m.to_dict()
     assert list(body["file_hashes"].keys()) == ["a.txt", "m.txt", "z.txt"]
 
