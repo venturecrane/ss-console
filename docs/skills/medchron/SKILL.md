@@ -94,8 +94,8 @@ protects nothing.
 
 - **(a)** `project.py` returns a verdict of **AT RISK** or **OVER CAP**, or any
   stage exits with `LIMIT REFUSED:` / `CAP REFUSED:` / `PROJECT REFUSED:`. These
-  are the mechanism, not a number you carry in your head: the cap, the month's
-  page allowance, the single-matter page threshold, and the month's cost budget
+  are the mechanism, not a number you carry in your head: the cap, the cycle's
+  page allowance, and the cycle's cost budget
   are enforced by `ledger.py` and refuse the run at exit 3 before money moves.
   Do not hand-compute a projection and do not compare a figure to a remembered
   limit — run the checkpoint and relay its verdict. Past the allowance the
@@ -365,8 +365,7 @@ reduced and long before anything is paid:
 python3 project.py post-extract <slug>
 ```
 
-It prints the matter's page count against the single-matter page threshold, the
-month's pages against the allowance, and a cost range for what remains. Every
+It prints the matter's page count, the cycle's pages against the allowance, and a cost range for what remains. Every
 figure comes from this matter's own artifacts and the rate cards in
 `calibration.jsonl`. If a limit is crossed it says so and exits non-zero — that
 is rule (a), and the run stops there having spent nothing.

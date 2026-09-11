@@ -61,7 +61,7 @@ from __future__ import annotations
 
 import enum
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Mapping, Optional, Protocol, Sequence
 
 log = logging.getLogger("aie.cost_rollup")
@@ -144,23 +144,17 @@ def _validate_year_month(year_month: str) -> tuple[int, int]:
     if not isinstance(year_month, str):
         raise ValueError(f"year_month must be str, got {type(year_month).__name__}")
     if len(year_month) != 7 or year_month[4] != "-":
-        raise ValueError(
-            f"year_month must be 'YYYY-MM' (got {year_month!r})"
-        )
+        raise ValueError(f"year_month must be 'YYYY-MM' (got {year_month!r})")
     try:
         year = int(year_month[:4])
         month = int(year_month[5:7])
     except ValueError as e:
-        raise ValueError(
-            f"year_month must be 'YYYY-MM' (got {year_month!r})"
-        ) from e
+        raise ValueError(f"year_month must be 'YYYY-MM' (got {year_month!r})") from e
     if not (1 <= month <= 12):
         raise ValueError(f"month must be 1..12 (got {month} in {year_month!r})")
     if year < 2026 or year > 2100:
         # Defensive bound; cost_telemetry only exists post-launch.
-        raise ValueError(
-            f"year must be 2026..2100 (got {year} in {year_month!r})"
-        )
+        raise ValueError(f"year must be 2026..2100 (got {year} in {year_month!r})")
     return year, month
 
 
@@ -236,9 +230,7 @@ class MonthlyRollup:
 class RowReader(Protocol):
     """Async row reader. Returns a list of (driver, total_cents) tuples."""
 
-    async def fetch_rows(
-        self, sql: str, params: list
-    ) -> Sequence[tuple]: ...
+    async def fetch_rows(self, sql: str, params: list) -> Sequence[tuple]: ...
 
 
 # ---------------------------------------------------------------------------
@@ -376,9 +368,7 @@ class SqliteRowReader:
     def __init__(self, connection) -> None:
         self._conn = connection
 
-    async def fetch_rows(
-        self, sql: str, params: list
-    ) -> Sequence[tuple]:
+    async def fetch_rows(self, sql: str, params: list) -> Sequence[tuple]:
         cur = self._conn.cursor()
         cur.execute(sql, params)
         return cur.fetchall()

@@ -21,9 +21,7 @@ from pathlib import Path
 import pytest
 
 _BIN = Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location(
-    "killtest_msgraph_send", _BIN / "killtest-msgraph-send.py"
-)
+_spec = importlib.util.spec_from_file_location("killtest_msgraph_send", _BIN / "killtest-msgraph-send.py")
 kill = importlib.util.module_from_spec(_spec)
 sys.modules["killtest_msgraph_send"] = kill
 _spec.loader.exec_module(kill)
@@ -92,9 +90,7 @@ def test_the_subject_carries_the_marker_and_a_creation_stamp():
 def test_the_message_is_addressed_to_smd_and_never_a_client():
     """A kill test that reaches a client is not a test."""
     payload = kill.killtest_message("s")
-    recipients = [
-        r["emailAddress"]["address"] for r in payload["message"]["toRecipients"]
-    ]
+    recipients = [r["emailAddress"]["address"] for r in payload["message"]["toRecipients"]]
     assert recipients == ["team@smd.services"]
 
 
@@ -233,10 +229,7 @@ def test_plant_builds_the_documented_graph_create_request():
     )
     method, url, body = http.requests[-1]
     assert method == "POST"
-    assert url == (
-        "https://graph.microsoft.com/v1.0/users/"
-        f"{_STAGING_MAILBOX}/mailFolders/sentitems/messages"
-    )
+    assert url == (f"https://graph.microsoft.com/v1.0/users/{_STAGING_MAILBOX}/mailFolders/sentitems/messages")
     # Every property the documented create needs, and no envelope around them:
     # this is a message resource posted to a folder, not a sendMail payload.
     assert set(body) == {
@@ -263,9 +256,7 @@ def test_the_planted_item_carries_a_sent_time():
     stops at the --days boundary (reconcile-sends.py:446, :454), so an item with
     no sent time sorts past every window and is never reached -- the plant would
     be invisible and the clean run would be misread as the control working."""
-    stamped = kill.planted_message(
-        "s", _STAGING_MAILBOX, datetime(2026, 8, 21, 14, 30, 5, tzinfo=timezone.utc)
-    )
+    stamped = kill.planted_message("s", _STAGING_MAILBOX, datetime(2026, 8, 21, 14, 30, 5, tzinfo=timezone.utc))
     assert stamped["sentDateTime"] == "2026-08-21T14:30:05Z"
 
 
@@ -278,9 +269,7 @@ def test_the_planted_item_is_addressed_to_the_seats_own_mailbox():
 
 
 def test_the_planted_subject_says_which_mode_made_it():
-    subject = kill.killtest_subject(
-        datetime(2026, 8, 21, 14, 30, tzinfo=timezone.utc), mode=kill.MODE_PLANT
-    )
+    subject = kill.killtest_subject(datetime(2026, 8, 21, 14, 30, tzinfo=timezone.utc), mode=kill.MODE_PLANT)
     assert subject.startswith("[UNAUDITED-KILLTEST-2258] 2026-08-21T14:30Z mode=plant")
 
 
@@ -353,9 +342,7 @@ def test_plant_never_asks_for_the_send_credential(monkeypatch, authored_staging)
 
     monkeypatch.setattr(kill, "send_credential", explode)
     monkeypatch.setattr(kill, "mint_token", lambda *_a, **_k: "tok")
-    monkeypatch.setattr(
-        kill, "plant", lambda *_a, **_k: {"id": "i", "internetMessageId": "<m>"}
-    )
+    monkeypatch.setattr(kill, "plant", lambda *_a, **_k: {"id": "i", "internetMessageId": "<m>"})
     _clear_graph_env(monkeypatch)
     monkeypatch.setenv("MSGRAPH_CLIENT_SECRET", "shared-secret")
     assert kill.main(["--seat", "smd-staging", "--mode", "plant", "--confirm"]) == 0

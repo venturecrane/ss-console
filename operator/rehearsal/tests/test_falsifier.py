@@ -21,9 +21,9 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from rehearsal import registry  # noqa: E402 -- path injected above
-from rehearsal.report import Run  # noqa: E402
-from rehearsal.scoring import (  # noqa: E402
+from rehearsal import registry
+from rehearsal.report import Run
+from rehearsal.scoring import (
     FAIL,
     PASS,
     SKIPPED,
@@ -70,9 +70,7 @@ def test_a_deliberately_broken_scenario_scores_fail() -> None:
 def test_the_same_scenario_passes_when_the_row_is_there() -> None:
     """The other direction, so the FAIL above is not simply a scorer that always fails."""
     observed = {
-        "only": LegObservation(
-            audit_rows=[{"action_type": "REPLY_SENT", "metadata": "{}"}], reply_observed=True
-        )
+        "only": LegObservation(audit_rows=[{"action_type": "REPLY_SENT", "metadata": "{}"}], reply_observed=True)
     }
     assert score_scenario(BROKEN_EXPECTS_A_ROW_THAT_NEVER_COMES, observed).outcome == PASS
 
@@ -458,9 +456,7 @@ def test_a_non_admins_rule_actually_committing_still_fails() -> None:
 def test_unauthored_sender_fails_when_the_capability_works_for_nobody() -> None:
     """Refusing everyone is not a gate. It is an outage that looks like a gate."""
     scenario = _scenario("unauthored-sender-refusal")
-    quiet = LegObservation(
-        audit_rows=[{"action_type": "INBOUND_RECEIVED", "metadata": "{}"}], reply_observed=True
-    )
+    quiet = LegObservation(audit_rows=[{"action_type": "INBOUND_RECEIVED", "metadata": "{}"}], reply_observed=True)
     result = score_scenario(scenario, {"unauthored_sender": quiet, "authored_admin": quiet})
     assert result.outcome == FAIL
     assert "authored_admin" in result.reason
@@ -506,7 +502,13 @@ def test_a_leg_with_no_expectation_is_refused_at_load() -> None:
         "hostile_act": "x",
         "falsifier": "x",
         "requires": [],
-        "legs": [{"id": "a", "drive": {"kind": "email_probe", "as": "ss-probe-admin@agentmail.to", "body": "b"}, "expect": []}],
+        "legs": [
+            {
+                "id": "a",
+                "drive": {"kind": "email_probe", "as": "ss-probe-admin@agentmail.to", "body": "b"},
+                "expect": [],
+            }
+        ],
     }
     with pytest.raises(registry.SchemaError) as excinfo:
         registry.validate(scenario, source="t")
@@ -541,9 +543,7 @@ def test_an_action_type_outside_the_audit_vocabulary_is_refused() -> None:
 def test_a_run_id_carries_its_verdict_and_changes_with_the_outcome() -> None:
     scenario = BROKEN_EXPECTS_A_ROW_THAT_NEVER_COMES
     green = Run(seat="pilot-smokeball", overlay_ref="abcdef1234", started_at="20260817T120000Z")
-    green.results = [
-        score_scenario(scenario, {"only": LegObservation(audit_rows=[{"action_type": "REPLY_SENT"}])})
-    ]
+    green.results = [score_scenario(scenario, {"only": LegObservation(audit_rows=[{"action_type": "REPLY_SENT"}])})]
     red = Run(seat="pilot-smokeball", overlay_ref="abcdef1234", started_at="20260817T120000Z")
     red.results = [score_scenario(scenario, {"only": LegObservation(audit_rows=[])})]
     assert green.is_green and green.run_id.endswith("-green")
@@ -553,11 +553,7 @@ def test_a_run_id_carries_its_verdict_and_changes_with_the_outcome() -> None:
 
 def test_a_run_with_a_skip_is_not_green() -> None:
     run = Run(seat="pilot-smokeball", overlay_ref="abcdef1234", started_at="20260817T120000Z")
-    run.results = [
-        score_scenario(
-            BROKEN_EXPECTS_A_ROW_THAT_NEVER_COMES, {"only": LegObservation(audit_rows=None)}
-        )
-    ]
+    run.results = [score_scenario(BROKEN_EXPECTS_A_ROW_THAT_NEVER_COMES, {"only": LegObservation(audit_rows=None)})]
     assert not run.is_green
     assert run.run_id.endswith("-notgreen")
 

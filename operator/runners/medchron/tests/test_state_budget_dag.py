@@ -82,10 +82,16 @@ def test_budget_reads_incrementally_and_trips_the_cap(tmp_path: Path) -> None:
     pr = _pricing(tmp_path)
     root = tmp_path / "data"
     (root / "example-matter").mkdir(parents=True)
-    ledger = write_ledger(root, "alpha", [
-        {"stage": "compose", "model": "claude-opus-5", "in": 1_000_000, "out": 0},
-    ])
-    b = budget_mod.Budget(pr, cap_usd=8.0, ledgers=[ledger, root / "usage-ledger-orphan.jsonl"], usd_per_million_chars=10.0)
+    ledger = write_ledger(
+        root,
+        "alpha",
+        [
+            {"stage": "compose", "model": "claude-opus-5", "in": 1_000_000, "out": 0},
+        ],
+    )
+    b = budget_mod.Budget(
+        pr, cap_usd=8.0, ledgers=[ledger, root / "usage-ledger-orphan.jsonl"], usd_per_million_chars=10.0
+    )
     assert b.refresh() == pytest.approx(5.0)
     b.check(stage="vision")  # under the cap
     write_ledger(root, "alpha", [{"stage": "audit", "model": "claude-sonnet-5", "in": 2_000_000, "out": 0}])
@@ -138,5 +144,15 @@ def test_dag_encodes_the_runbook_invariants() -> None:
 
 def test_paid_stages_are_the_model_stages() -> None:
     paid = {s.name for s in dag.STAGES if s.paid}
-    assert paid == {"vision", "billing_extract", "map", "repair_truncated", "merge", "filter", "condense",
-                    "summarize", "classify_scanned", "audit"}
+    assert paid == {
+        "vision",
+        "billing_extract",
+        "map",
+        "repair_truncated",
+        "merge",
+        "filter",
+        "condense",
+        "summarize",
+        "classify_scanned",
+        "audit",
+    }

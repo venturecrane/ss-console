@@ -84,9 +84,7 @@ _CASE_CONTENT_SHAPES: tuple[tuple[str, re.Pattern[str], bool], ...] = (
     ("a date", re.compile(r"\b\d{1,2}/\d{1,2}/\d{2,4}\b"), False),
     (
         "a date",
-        re.compile(
-            rf"\b(?:{_MONTHS})[a-z]*\.?\s+\d{{1,2}}(?:st|nd|rd|th)?,?\s+\d{{4}}\b"
-        ),
+        re.compile(rf"\b(?:{_MONTHS})[a-z]*\.?\s+\d{{1,2}}(?:st|nd|rd|th)?,?\s+\d{{4}}\b"),
         False,
     ),
     ("a dollar figure", re.compile(r"\$\s?\d[\d,]*(?:\.\d+)?"), False),
@@ -284,9 +282,7 @@ def _snippet(text: str, line_starts: list[int], line: int) -> str:
     return body
 
 
-def _scan_markers(
-    text: str, line_starts: list[int]
-) -> tuple[list[tuple[int, int]], list[Violation]]:
+def _scan_markers(text: str, line_starts: list[int]) -> tuple[list[tuple[int, int]], list[Violation]]:
     """Find every well-formed ``{{...}}`` span and every way the marker syntax is
     broken. Spans are (start, end) half-open and INCLUDE the delimiters, so a
     digit anywhere between ``{{`` and ``}}`` counts as inside a marker.
@@ -364,9 +360,7 @@ def _in_spans(index: int, spans: list[tuple[int, int]]) -> bool:
     return any(start <= index < end for start, end in spans)
 
 
-def _case_content_violations(
-    text: str, exempt: list[tuple[int, int]], line_starts: list[int]
-) -> list[Violation]:
+def _case_content_violations(text: str, exempt: list[tuple[int, int]], line_starts: list[int]) -> list[Violation]:
     """Case-content SHAPES outside a marker: dates, dollar figures, identifiers,
     and long bare digit runs. Statutory citations and periods are structure and
     pass — see the module docstring.

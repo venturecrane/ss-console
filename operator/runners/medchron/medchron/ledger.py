@@ -14,6 +14,7 @@ printed a figure at a rate card two generations stale is why.
 
 Best-effort by design: a ledger failure must never kill a paid call.
 """
+
 from __future__ import annotations
 
 import json
@@ -48,13 +49,30 @@ def count_pages(messages: list[dict[str, Any]] | None) -> int:
 class Ledger:
     path: Path
 
-    def record(self, stage: str, model: str, usage: Any, *, effort: str | None, cache: bool,
-               batch: bool, pages: int = 0, custom_id: str | None = None,
-               error: str | None = None) -> None:
+    def record(
+        self,
+        stage: str,
+        model: str,
+        usage: Any,
+        *,
+        effort: str | None,
+        cache: bool,
+        batch: bool,
+        pages: int = 0,
+        custom_id: str | None = None,
+        error: str | None = None,
+    ) -> None:
         try:
-            rec: dict[str, Any] = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "stage": stage, "model": model,
-                                   **usage_dict(usage), "effort": effort, "cache": cache, "batch": batch,
-                                   "pages": pages}
+            rec: dict[str, Any] = {
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "stage": stage,
+                "model": model,
+                **usage_dict(usage),
+                "effort": effort,
+                "cache": cache,
+                "batch": batch,
+                "pages": pages,
+            }
             if custom_id is not None:
                 rec["custom_id"] = custom_id
             if error is not None:
@@ -88,9 +106,20 @@ def report(path: Path, pricing: Pricing) -> str:
     by_stage: dict[str, dict[str, Any]] = {}
     unknown = 0
     for row in rows:
-        s = by_stage.setdefault(str(row.get("stage") or "?"), {
-            "models": set(), "calls": 0, "in": 0, "out": 0, "cache_read": 0, "cache_write": 0,
-            "batch": 0, "pages": 0, "dollars": 0.0})
+        s = by_stage.setdefault(
+            str(row.get("stage") or "?"),
+            {
+                "models": set(),
+                "calls": 0,
+                "in": 0,
+                "out": 0,
+                "cache_read": 0,
+                "cache_write": 0,
+                "batch": 0,
+                "pages": 0,
+                "dollars": 0.0,
+            },
+        )
         s["models"].add(str(row.get("model") or "?"))
         s["calls"] += 1
         for k in ("in", "out", "cache_read", "cache_write", "pages"):
@@ -100,26 +129,42 @@ def report(path: Path, pricing: Pricing) -> str:
             s["dollars"] += pricing.price_row(row)
         except BudgetError:
             unknown += 1
-    hdr = (f"{'stage':12s} {'calls':>6s} {'in':>12s} {'out':>10s} {'cache_rd':>10s} {'cache_wr':>10s} "
-           f"{'batch':>6s} {'pages':>6s} {'dollars':>9s}")
+    hdr = (
+        f"{'stage':12s} {'calls':>6s} {'in':>12s} {'out':>10s} {'cache_rd':>10s} {'cache_wr':>10s} "
+        f"{'batch':>6s} {'pages':>6s} {'dollars':>9s}"
+    )
     lines = [f"ledger: {path}", hdr]
     tot = {"calls": 0, "in": 0, "out": 0, "cache_read": 0, "cache_write": 0, "batch": 0, "pages": 0, "dollars": 0.0}
     tokens_by_stage: dict[str, Any] = {}
     dollars_by_stage: dict[str, float] = {}
     for stage in sorted(by_stage):
         s = by_stage[stage]
-        lines.append(f"{stage:12s} {s['calls']:6d} {s['in']:12,d} {s['out']:10,d} {s['cache_read']:10,d} "
-                     f"{s['cache_write']:10,d} {s['batch']:6d} {s['pages']:6d} {s['dollars']:9.2f}")
+        lines.append(
+            f"{stage:12s} {s['calls']:6d} {s['in']:12,d} {s['out']:10,d} {s['cache_read']:10,d} "
+            f"{s['cache_write']:10,d} {s['batch']:6d} {s['pages']:6d} {s['dollars']:9.2f}"
+        )
         for k in tot:
             tot[k] += s[k]
-        tokens_by_stage[stage] = {"model": ",".join(sorted(s["models"])), "calls": s["calls"], "in": s["in"],
-                                  "out": s["out"], "cache_read": s["cache_read"], "cache_write": s["cache_write"],
-                                  "pages": s["pages"]}
+        tokens_by_stage[stage] = {
+            "model": ",".join(sorted(s["models"])),
+            "calls": s["calls"],
+            "in": s["in"],
+            "out": s["out"],
+            "cache_read": s["cache_read"],
+            "cache_write": s["cache_write"],
+            "pages": s["pages"],
+        }
         dollars_by_stage[stage] = round(s["dollars"], 4)
-    lines.append(f"{'TOTAL':12s} {tot['calls']:6d} {tot['in']:12,d} {tot['out']:10,d} {tot['cache_read']:10,d} "
-                 f"{tot['cache_write']:10,d} {tot['batch']:6d} {tot['pages']:6d} {tot['dollars']:9.2f}")
+    lines.append(
+        f"{'TOTAL':12s} {tot['calls']:6d} {tot['in']:12,d} {tot['out']:10,d} {tot['cache_read']:10,d} "
+        f"{tot['cache_write']:10,d} {tot['batch']:6d} {tot['pages']:6d} {tot['dollars']:9.2f}"
+    )
     lines.append(f"unknown-model rows (unpriced): {unknown}")
-    blob = {"rate_card": pricing.source, "tokens_by_stage": tokens_by_stage,
-            "dollars_by_stage": dollars_by_stage, "dollars_total": round(tot["dollars"], 4)}
+    blob = {
+        "rate_card": pricing.source,
+        "tokens_by_stage": tokens_by_stage,
+        "dollars_by_stage": dollars_by_stage,
+        "dollars_total": round(tot["dollars"], 4),
+    }
     lines.append(json.dumps(blob, sort_keys=True))
     return "\n".join(lines)

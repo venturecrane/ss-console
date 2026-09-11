@@ -321,13 +321,13 @@ comes back from `medchron_job_status`, never from the wake.
    pages where the reason gives a page count:
    - `per_job_cap_usd` - the job's own cost cap. A bigger matter than the cap
      was sized for; SMD raises it or the package is split.
-   - `chronology_package_page_allowance_per_month` - the seat's monthly page
-     allowance. Say how many pages the matter holds and how many remain.
-   - `single_matter_page_threshold` - the matter is larger than the firm's
-     single-matter page threshold. Say the page count; this one is a scoping
-     conversation, not a retry.
-   - `monthly_budget_usd` - the month's chronology cost budget. Nothing about
-     this matter is wrong; the month is spent.
+   - `chronology_package_page_allowance_per_month` - the seat's cycle page
+     allowance. Say how many pages the matter holds and how many remain. This
+     is the ONLY page limit: there is no per-matter ceiling, so one matter that
+     consumes the whole cycle is a legitimate use of what the firm bought and
+     is never held for its size alone.
+   - `monthly_budget_usd` - the cycle's chronology cost budget. Nothing about
+     this matter is wrong; the cycle is spent.
 5. **No requester** (a rehearsal submission): record the outcome in the memo,
    create no task, send nothing, stop.
 6. **Never restate a dollar figure from the runner's reason** in a memo or a

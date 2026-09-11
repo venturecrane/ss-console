@@ -34,10 +34,7 @@ def _export(db_path: str) -> list[dict]:
 
 
 def _append_n(writer: LedgerWriter, n: int) -> list[str]:
-    return [
-        writer.append({"action_type": "DRAFT_CREATED", "actor": "agent", "actor_role": "agent"})
-        for _ in range(n)
-    ]
+    return [writer.append({"action_type": "DRAFT_CREATED", "actor": "agent", "actor_role": "agent"}) for _ in range(n)]
 
 
 def test_fresh_ledger_chains_from_genesis(tmp_path):

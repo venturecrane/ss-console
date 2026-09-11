@@ -253,7 +253,11 @@ export async function getGoogleAccessToken(
 
     if (!response.ok) {
       const body = await response.text()
-      console.error(`[integrations] Google token refresh failed: ${response.status} ${body}`)
+      // Status and size only: the upstream body can echo the request (client
+      // id, a token fragment) and the Worker log is not a place for it.
+      console.error(
+        `[integrations] Google token refresh failed: ${response.status} (${body.length} bytes)`
+      )
       await maybeMarkRevoked(db, integration.id, response.status, body)
       return null
     }

@@ -57,6 +57,7 @@ def test_add_file_two_stage_metadata_then_presigned_put() -> None:
     post = next(r for r in captured if r.method == "POST" and r.url.path.endswith("/documents/files"))
     assert post.url.path == "/matters/m-1/documents/files"
     import json as _json
+
     assert _json.loads(post.content) == {"fileName": "Demand Letter.pdf"}
     # the metadata call IS authenticated
     assert post.headers.get("x-api-key") == "apikey"
@@ -77,6 +78,7 @@ def test_add_file_includes_folder_id_when_given() -> None:
     client.add_file("m-1", "x.txt", b"hi", folder_id="folder-7")
     post = next(r for r in captured if r.method == "POST" and r.url.path.endswith("/documents/files"))
     import json as _json
+
     assert _json.loads(post.content) == {"fileName": "x.txt", "folderId": "folder-7"}
 
 

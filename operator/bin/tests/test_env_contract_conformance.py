@@ -55,42 +55,38 @@ def test_required_env_is_declared_required() -> None:
     contract = _contract()
     for var in _bash_array(_ENV_ARRAYS.read_text(encoding="utf-8"), "REQUIRED_ENV"):
         assert var in contract, f"generated REQUIRED_ENV {var} missing from the contract"
-        assert (
-            contract[var].get("requirement") == "required"
-        ), f"{var} is in REQUIRED_ENV but the contract marks it {contract[var].get('requirement')!r}"
+        assert contract[var].get("requirement") == "required", (
+            f"{var} is in REQUIRED_ENV but the contract marks it {contract[var].get('requirement')!r}"
+        )
 
 
 def test_optional_env_not_marked_required() -> None:
     contract = _contract()
     for var in _bash_array(_ENV_ARRAYS.read_text(encoding="utf-8"), "OPTIONAL_ENV"):
         if var in contract:
-            assert (
-                contract[var].get("requirement") == "optional"
-            ), f"{var} is in OPTIONAL_ENV but the contract marks it required"
+            assert contract[var].get("requirement") == "optional", (
+                f"{var} is in OPTIONAL_ENV but the contract marks it required"
+            )
 
 
 def test_contract_bootstrap_strips_are_real() -> None:
     contract = _contract()
     bootstrap_unset = _unset_vars(_BOOTSTRAP.read_text(encoding="utf-8"))
     for var, spec in contract.items():
-        if spec.get("agent_env") == "stripped" and str(spec.get("strip_site", "")).endswith(
-            "bootstrap.sh"
-        ):
-            assert (
-                var in bootstrap_unset
-            ), f"contract says {var} is stripped in bootstrap.sh, but there is no `unset {var}` there"
+        if spec.get("agent_env") == "stripped" and str(spec.get("strip_site", "")).endswith("bootstrap.sh"):
+            assert var in bootstrap_unset, (
+                f"contract says {var} is stripped in bootstrap.sh, but there is no `unset {var}` there"
+            )
 
 
 def test_contract_entrypoint_strips_are_real() -> None:
     contract = _contract()
     entry_unset = _unset_vars(_ENTRYPOINT.read_text(encoding="utf-8"))
     for var, spec in contract.items():
-        if spec.get("agent_env") == "stripped" and str(spec.get("strip_site", "")).endswith(
-            "entrypoint.sh"
-        ):
-            assert (
-                var in entry_unset
-            ), f"contract says {var} is stripped in entrypoint.sh, but there is no `unset {var}` there"
+        if spec.get("agent_env") == "stripped" and str(spec.get("strip_site", "")).endswith("entrypoint.sh"):
+            assert var in entry_unset, (
+                f"contract says {var} is stripped in entrypoint.sh, but there is no `unset {var}` there"
+            )
 
 
 def test_r2_account_wide_strip_is_declared() -> None:
@@ -102,6 +98,6 @@ def test_r2_account_wide_strip_is_declared() -> None:
     bootstrap_unset = _unset_vars(_BOOTSTRAP.read_text(encoding="utf-8"))
     for var in ("R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"):
         assert var in bootstrap_unset, f"expected bootstrap.sh to unset {var}"
-        assert (
-            contract.get(var, {}).get("agent_env") == "stripped"
-        ), f"{var} is unset in bootstrap but not declared stripped in the contract"
+        assert contract.get(var, {}).get("agent_env") == "stripped", (
+            f"{var} is unset in bootstrap but not declared stripped in the contract"
+        )

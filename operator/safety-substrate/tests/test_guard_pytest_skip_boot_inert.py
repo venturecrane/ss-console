@@ -126,8 +126,7 @@ def test_every_discoverable_invariant_has_a_pytestfree_boot_entry():
     """
     by_invariant = _boot_discoverable_files()
     assert by_invariant, (
-        "no test_invariant_*.py files discovered under "
-        f"{_TESTS_DIR} — the boot runner would find nothing to run"
+        f"no test_invariant_*.py files discovered under {_TESTS_DIR} — the boot runner would find nothing to run"
     )
 
     inert: list[str] = []
@@ -167,9 +166,7 @@ def test_classifier_distinguishes_clean_from_pytest_entries():
     assert clean.exists(), f"expected fixture file missing: {clean}"
     assert pytest_only.exists(), f"expected fixture file missing: {pytest_only}"
 
-    assert _is_pytestfree_boot_entry(clean), (
-        "invariant #1's run()-style file should be a valid pytest-free boot entry"
-    )
+    assert _is_pytestfree_boot_entry(clean), "invariant #1's run()-style file should be a valid pytest-free boot entry"
     assert not _is_pytestfree_boot_entry(pytest_only), (
         "test_invariant_7.py imports pytest at module top — it must NOT count "
         "as a runnable boot entry (it is SKIPPED by the boot runner)"
@@ -189,23 +186,18 @@ def test_guard_catches_pytest_only_boot_entry(tmp_path: Path):
     """
     bad = tmp_path / "test_invariant_99_synthetic.py"
     bad.write_text(
-        "import pytest\n\n"
-        "def run():\n"
-        "    return (True, 'this run() is unreachable at boot — import aborts first')\n",
+        "import pytest\n\ndef run():\n    return (True, 'this run() is unreachable at boot — import aborts first')\n",
         encoding="utf-8",
     )
     assert not _is_pytestfree_boot_entry(bad), (
-        "a file that imports pytest at module top must be classified as NOT a "
-        "boot entry, even though it defines run()"
+        "a file that imports pytest at module top must be classified as NOT a boot entry, even though it defines run()"
     )
 
     # And the positive control: the same body without the pytest import IS a
     # valid boot entry.
     good = tmp_path / "test_invariant_99_clean.py"
     good.write_text(
-        "import sys\n\n"
-        "def run():\n"
-        "    return (True, 'reachable at boot')\n",
+        "import sys\n\ndef run():\n    return (True, 'reachable at boot')\n",
         encoding="utf-8",
     )
     assert _is_pytestfree_boot_entry(good)

@@ -140,9 +140,7 @@ def write_failure_note_envelope(
             return {}
         routing_block = esc.get("case_alert_routing") or {}
         recipients = [
-            str(r).strip()
-            for r in (esc.get("red_flag_recipients") or [])
-            if isinstance(r, str) and str(r).strip()
+            str(r).strip() for r in (esc.get("red_flag_recipients") or []) if isinstance(r, str) and str(r).strip()
         ]
         leg = "central"
         if not recipients and isinstance(routing_block, dict):
@@ -185,9 +183,7 @@ def write_failure_note_envelope(
             "failure_note_reason": reason,
         }
         if not _write_envelope(envelope):
-            return write_failure_note_envelope(
-                reason="envelope_write_failed", customer_yaml_path=customer_yaml_path
-            )
+            return write_failure_note_envelope(reason="envelope_write_failed", customer_yaml_path=customer_yaml_path)
         return {
             "render_mode": "slot-templated",
             "dispatch_expected": True,
@@ -276,9 +272,7 @@ def build_and_write(
             # window under its own sentinel so it never daily-spams (#1899).
             return_link_key = ledger.item_key("", RETURN_LINK_SOURCE_ID, _RETURN_LINK_LABEL, "")
             sentinel_state = states.get(return_link_key)
-            if ledger.should_fire(
-                sentinel_state, today, refire_days=refire_days, ack_snooze_days=refire_days
-            ):
+            if ledger.should_fire(sentinel_state, today, refire_days=refire_days, ack_snooze_days=refire_days):
                 entries.append(
                     {
                         "matter_id": "",
@@ -308,11 +302,7 @@ def build_and_write(
         for entry in entries:
             if entry["matter_id"] not in matter_ids:
                 matter_ids.append(entry["matter_id"])
-        esc = (
-            customer_yaml.get("escalation")
-            if isinstance(customer_yaml.get("escalation"), dict)
-            else {}
-        )
+        esc = customer_yaml.get("escalation") if isinstance(customer_yaml.get("escalation"), dict) else {}
         routing_block = esc.get("case_alert_routing")
         mode = routing_block.get("mode") if isinstance(routing_block, dict) else None
         matter_staff: dict[str, dict] = {}
@@ -334,9 +324,7 @@ def build_and_write(
         wake_items: list[dict] = []
         legs: dict[str, int] = {}
         overflow_matters: set[str] = set()
-        for (emails, leg), group in sorted(
-            by_recipients.items(), key=lambda kv: (kv[0][1], kv[0][0])
-        ):
+        for (emails, leg), group in sorted(by_recipients.items(), key=lambda kv: (kv[0][1], kv[0][0])):
             if len(dispatches) >= _MAX_DISPATCHES:
                 # Never a silent drop: an over-cap group's matters land in the
                 # unroutable + memo lists so a person learns the alert did not
@@ -393,8 +381,7 @@ def build_and_write(
                     entry["matter_id"] in undelivered
                     or (
                         result.routed.get(entry["matter_id"]) is not None
-                        and result.routed[entry["matter_id"]].routing_leg
-                        == routing.LEG_FALLBACK
+                        and result.routed[entry["matter_id"]].routing_leg == routing.LEG_FALLBACK
                     )
                 )
             }
@@ -413,11 +400,7 @@ def build_and_write(
                 {
                     "matter_id": m,
                     "matter_number": numbers.get(m, (None, None))[0],
-                    "reason": (
-                        "dispatch_cap_exceeded"
-                        if m in overflow_matters
-                        else "no_usable_recipient"
-                    ),
+                    "reason": ("dispatch_cap_exceeded" if m in overflow_matters else "no_usable_recipient"),
                 }
                 for m in sorted(undelivered)
             ],
@@ -427,15 +410,11 @@ def build_and_write(
             # legitimate in-turn send whose template pre_run cannot pre-key
             # (signer resolution is a turn judgment), and a gate armed with
             # only the failure note would block it.
-            "in_turn": [
-                {"name": "failure_note", "template": render.FAILURE_NOTE, "slots": {}}
-            ],
+            "in_turn": [{"name": "failure_note", "template": render.FAILURE_NOTE, "slots": {}}],
             "in_turn_enforce": False,
         }
         if not _write_envelope(envelope):
-            return write_failure_note_envelope(
-                reason="envelope_write_failed", customer_yaml_path=customer_yaml_path
-            )
+            return write_failure_note_envelope(reason="envelope_write_failed", customer_yaml_path=customer_yaml_path)
         return {
             "render_mode": "slot-templated",
             "body_sha256": wake_hashes,
@@ -449,6 +428,4 @@ def build_and_write(
         sys.stderr.write("[pre_run] dispatch envelope build failed (" + str(exc) + ")\n")
         # The 2026-09-02 case: the turn wakes with work it cannot dispatch and,
         # left undecorated, composes it. Give it a rendered note instead.
-        return write_failure_note_envelope(
-            reason="envelope_build_failed", customer_yaml_path=customer_yaml_path
-        )
+        return write_failure_note_envelope(reason="envelope_build_failed", customer_yaml_path=customer_yaml_path)

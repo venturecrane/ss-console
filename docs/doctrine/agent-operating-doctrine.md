@@ -342,6 +342,41 @@ Two guards on the target. Automated reconcilers file alerts rather than backlog 
 
 It is `primer` rather than `gate` because no hook can tell a deferral from a genuine block. The cost is `low`: the rule removes a step rather than adding one.
 
+### Law 14: The report is a probe
+
+```yaml
+id: report-is-a-probe
+primer_line: "A program's report about the world is a claim: a manifest, a completion, a wired map, or a done flag is proven by reading the world back after acting, never by echoing the statement that ran. Ask what the report would say if the action had matched nothing."
+cost: low
+tier: primer
+enforcement:
+  - .claude/hooks/reflex-primer.sh
+  - docs/doctrine/report-is-a-probe-checklist.md
+  - tests/doctrine-integrity.test.ts
+incidents:
+  - date: 2026-09-10
+    ref: 'decommission observability backend (operator/bin/lib/decommission_backends.py: cleanup() returned fleet_status_row_deleted: True unconditionally after a DELETE whose result set is empty by construction, so the manifest a completion report would cite could not tell a deleted row from a matched-nothing; code review 2026-09-10, Security finding 3)'
+  - date: 2026-09-10
+    ref: 'substrate required check (.github/operator-substrate-paths.txt with operator/bin/tests/test_ci_coverage_conformance.py: the conformance test pinned test FILES, not the fixture modules those tests execute, so operator/tests/test_closeout_seed.py ran a script under operator/fixtures/ that the trigger list did not cover and a fixture-only PR merged reporting "No substrate paths changed"; code review 2026-09-10, top action item 4)'
+  - date: 2026-09-10
+    ref: 'retainer price and rail (src/pages/api/admin/clients/[id]/operator-price.ts:50-51: two non-atomic read-modify-writes with no db.batch(), so a failed second write left the row half-updated while the caller saw one generic error and could not say which half landed; code review 2026-09-10, Architecture finding 8)'
+  - date: 2026-09-10
+    ref: 'decommission --allow-unwired (operator/bin/lib/decommission_cli.py: the flag''s help text said DEV/FIXTURE ONLY and nothing enforced it, so a live run with the flag destroyed every wired backend while printing that it "does NOT fully decommission the customer"; code review 2026-09-10, Security finding 3)'
+  - date: 2026-07-28
+    ref: 'entitlement-control incident (Law 9 lineage: four PRs each reported built, wired, and tested against their own definition of done while a Named Administrator could not perform the act; the report certified the author, not the world)'
+  - date: 2026-07-26
+    ref: 'quinn incident (the gone-means-gone lineage: a persona name was reported removed four times between 2026-07-02 and 2026-07-13, each report honest about the git layer it touched, while the Fly volume kept the slug alive until monitoring paged on it twelve days later)'
+escalation: none pending
+```
+
+Law 12 asks whether an agent's check could have come back red. This law asks the same question of the code the agent ships. A program that acts on the world and then reports on the result has two ways to write that report: from the statement it ran, or from the world after it ran. The first is not a report, it is an echo. It says the DELETE was issued, the flag was passed, the two writes were awaited, and it says those things identically whether the row was deleted, the flag was honoured, or the second write landed. The manifest reads the same in the success case and in the failure case, which is Law 12's broken instrument, built into the artifact and shipped.
+
+The four 2026-09-10 incidents are one shape. Each was new code in a window that also closed six prior findings, written carefully, with tests that passed. What each lacked was the read-back: a SELECT after the DELETE, a walk of the paths the tests actually execute rather than the tests, a batch that either lands both halves or neither, a guard on the flag whose text made a promise. The two older incidents in the lineage are the same shape one level up: a PR's status table is a program's report about the world, and "done" was defined as the artifact rather than the act.
+
+So the rule: anything a program emits that describes the state of the world after it acted (a manifest, a completion record, a wired or unwired map, a `*_deleted` or `*_done` boolean, a "nothing to do" exit) is a claim, and the program earns it by reading the world back. The cheapest test of whether it does is the one in the primer line: ask what the report would say if the action had matched nothing. If the answer is "the same thing", the report is an echo. The checklist at `docs/doctrine/report-is-a-probe-checklist.md` carries the five questions a reviewer or author answers for any such module, and the answer "it does not read back" is a defect, not a note.
+
+It is `primer` rather than `gate` because the failure is a missing read, and no hook can see that a returned dictionary was composed from intent rather than observation. The checklist is the review-time mechanism; the merge gates that already exist for the incidents above (`test_decommission_backends.py` on the counting D1 fake, the conformance test walking executed paths) are the pattern each new instance should add. The cost is `low`: one read after the write, and one question before the review.
+
 ---
 
 ## Mechanisms under review

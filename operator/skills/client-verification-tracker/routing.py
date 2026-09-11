@@ -194,9 +194,7 @@ def resolve_case_alert_routing(
         staff = staff if isinstance(staff, dict) else {}
         responsible = _usable_staff_email(staff.get("responsible"))
         assisting = [
-            email
-            for record in (staff.get("assisting") or [])
-            if (email := _usable_staff_email(record)) is not None
+            email for record in (staff.get("assisting") or []) if (email := _usable_staff_email(record)) is not None
         ]
         # Recipient set (step 3): the responsible attorney always. Assisting
         # staff join only where the skill's own body routes paralegal-class

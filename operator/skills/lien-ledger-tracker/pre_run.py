@@ -205,8 +205,7 @@ class CohortRow:
 
 
 class ObligationSource(Protocol):
-    def pull_obligations(self) -> "ObligationPull":
-        ...
+    def pull_obligations(self) -> "ObligationPull": ...
 
 
 @dataclass(frozen=True)
@@ -327,9 +326,7 @@ def load_closeout_config(customer_yaml_path: str | None = None) -> tuple[Closeou
         register_days=_pos_int_or_none(settings.get("register_days")),
     )
     esc = data.get("escalation") if isinstance(data, dict) else None
-    refire_days = _pos_int(
-        esc.get("refire_days") if isinstance(esc, dict) else None, _DEFAULT_REFIRE_DAYS
-    )
+    refire_days = _pos_int(esc.get("refire_days") if isinstance(esc, dict) else None, _DEFAULT_REFIRE_DAYS)
     return config, refire_days
 
 
@@ -347,9 +344,7 @@ def _load_ledger_module():
     for cand in candidates:
         module_path = cand / "escalation_ledger.py"
         if module_path.is_file():
-            spec = importlib.util.spec_from_file_location(
-                "escalation_ledger_vendored_llt", module_path
-            )
+            spec = importlib.util.spec_from_file_location("escalation_ledger_vendored_llt", module_path)
             if spec is None or spec.loader is None:
                 continue
             module = importlib.util.module_from_spec(spec)
@@ -458,9 +453,7 @@ def _seat_sentinel_decision(
     """Fire-once + re-fire-window on a stable seat sentinel (#1899)."""
     key = ledger.item_key("", source_id, label, "")
     state = states.get(key)
-    if not ledger.should_fire(
-        state, today, refire_days=refire_days, ack_snooze_days=refire_days
-    ):
+    if not ledger.should_fire(state, today, refire_days=refire_days, ack_snooze_days=refire_days):
         return WakeDecision(
             wake=False,
             decision_basis=basis_quiet,
@@ -499,9 +492,7 @@ def _age_days(opened: str, today: date) -> int | None:
         return None
 
 
-def build_register(
-    pull: ObligationPull, config: CloseoutConfig, today: date
-) -> dict:
+def build_register(pull: ObligationPull, config: CloseoutConfig, today: date) -> dict:
     """The standing picture, bounded and honest about its own edges.
 
     Three disciplines, all of them the difference between a register a firm can
@@ -521,9 +512,7 @@ def build_register(
     rows = []
     for row in pull.cohort:
         members = by_matter.get(row.matter_id)
-        outstanding = (
-            round(sum(m.balance for m in members), 2) if members is not None else None
-        )
+        outstanding = round(sum(m.balance for m in members), 2) if members is not None else None
         rows.append(
             {
                 "matter": row.number,
@@ -562,8 +551,7 @@ def build_register(
     )
 
     unavailable = [
-        "quiet time: the matter record carries no last-activity field, so the "
-        "cohort is ranked by age instead",
+        "quiet time: the matter record carries no last-activity field, so the cohort is ranked by age instead",
         "client trust ledger balance: not held in the practice-management system",
     ]
     if config.stall_days is None:
@@ -588,15 +576,9 @@ def build_register(
             "obligations": len(pull.obligations),
             "name_keyed_obligations": pull.name_keyed,
         },
-        "recorded_outstanding_total": round(
-            sum(r["outstanding"] or 0.0 for r in read_rows), 2
-        ),
-        "oldest": sorted(
-            rows, key=lambda r: (r["age_days"] is None, -(r["age_days"] or 0))
-        )[:REGISTER_TOP_N],
-        "largest_recorded_exposure": sorted(
-            read_rows, key=lambda r: -(r["outstanding"] or 0.0)
-        )[:REGISTER_TOP_N],
+        "recorded_outstanding_total": round(sum(r["outstanding"] or 0.0 for r in read_rows), 2),
+        "oldest": sorted(rows, key=lambda r: (r["age_days"] is None, -(r["age_days"] or 0)))[:REGISTER_TOP_N],
+        "largest_recorded_exposure": sorted(read_rows, key=lambda r: -(r["outstanding"] or 0.0))[:REGISTER_TOP_N],
         "providers_by_exposure": providers[:REGISTER_TOP_N],
         "unavailable": unavailable,
     }
@@ -684,9 +666,7 @@ def decide(
             state = states[obligation_key(ledger, obligation)]
             if state.resolved or state.handed_off:
                 continue
-        groups.setdefault(normalize_provider_name(obligation.provider_display), []).append(
-            obligation
-        )
+        groups.setdefault(normalize_provider_name(obligation.provider_display), []).append(obligation)
 
     cadence_days = int(config.chase_cadence_days or 0)
     for group in sorted(groups):
@@ -728,8 +708,7 @@ def decide(
                     attempt=ledger.next_attempt(register_state),
                     last_chased=(
                         register_state.last_raised_date.isoformat()
-                        if register_state is not None
-                        and register_state.last_raised_date is not None
+                        if register_state is not None and register_state.last_raised_date is not None
                         else None
                     ),
                 )
@@ -847,12 +826,7 @@ def _handoff_values(node, key: str, out: list) -> list:
 
 def _is_iso_day(value: str) -> bool:
     """YYYY-MM-DD and nothing else. The register must never learn a non-date."""
-    return (
-        len(value) == 10
-        and value[4] == "-"
-        and value[7] == "-"
-        and value.replace("-", "").isdigit()
-    )
+    return len(value) == 10 and value[4] == "-" and value[7] == "-" and value.replace("-", "").isdigit()
 
 
 def _write_pre_run_handoff(payload: dict) -> None:
@@ -861,9 +835,7 @@ def _write_pre_run_handoff(payload: dict) -> None:
         record = {
             "skill": _HANDOFF_SKILL,
             "started_at": _HANDOFF_STARTED_AT,
-            "dates": [
-                d for d in _handoff_values(payload, "authored_date", []) if _is_iso_day(d)
-            ],
+            "dates": [d for d in _handoff_values(payload, "authored_date", []) if _is_iso_day(d)],
             "matter_ids": _handoff_values(payload, "matter_id", []),
         }
         directory = Path(os.environ.get("HERMES_HOME") or "/opt/data") / ".smd" / "pre_run"
@@ -992,9 +964,9 @@ async def run_once(
         deep += pulled.deep_read
         unreadable += pulled.unreadable
         name_keyed += pulled.name_keyed
-        raw_input_blob += json.dumps(
-            [_obligation_to_dict(o) for o in pulled.obligations], sort_keys=True
-        ).encode("utf-8")
+        raw_input_blob += json.dumps([_obligation_to_dict(o) for o in pulled.obligations], sort_keys=True).encode(
+            "utf-8"
+        )
 
     decision = decide(
         ObligationPull(
@@ -1013,9 +985,7 @@ async def run_once(
         refire_days=refire_days,
     )
     if decision.wake:
-        await _try_write_emitted_wake(
-            audit_writer_factory, decision, skill_name=SKILL_NAME, now=now
-        )
+        await _try_write_emitted_wake(audit_writer_factory, decision, skill_name=SKILL_NAME, now=now)
         return _emit_wake(decision)
 
     writer = audit_writer_factory()
@@ -1237,9 +1207,7 @@ def parse_pull(raw: dict) -> tuple[ObligationPull, str | None]:
                         provider_key=key,
                         provider_display=display,
                         balance=_as_float(provider.get("InvoiceBalance")),
-                        plaintiff_index=(
-                            plaintiff_index if isinstance(plaintiff_index, int) else 0
-                        ),
+                        plaintiff_index=(plaintiff_index if isinstance(plaintiff_index, int) else 0),
                         lien_asserted=str(provider.get("LienAsserted") or "").lower() == "true",
                         id_source=source,
                     )
@@ -1289,9 +1257,7 @@ class SmokeballSubprocessSource:
         self._budget = max(0, int(budget))
 
     def pull_obligations(self) -> ObligationPull:
-        connector_python = os.environ.get(
-            "SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT
-        )
+        connector_python = os.environ.get("SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT)
         env = {
             **os.environ,
             "SMD_SCT_STATUS": self._status,
@@ -1307,10 +1273,7 @@ class SmokeballSubprocessSource:
             env=env,
         )
         if result.returncode != 0:
-            raise RuntimeError(
-                f"smokeball pull exit {result.returncode}: "
-                f"{(result.stderr or '').strip()[:500]}"
-            )
+            raise RuntimeError(f"smokeball pull exit {result.returncode}: {(result.stderr or '').strip()[:500]}")
         raw = json.loads((result.stdout or "").strip().splitlines()[-1])
         pull, problem = parse_pull(raw)
         if problem:
@@ -1413,9 +1376,7 @@ class BrokerSuppressedWakeWriter:
 
 
 def _writer_factory():
-    socket_path = os.environ.get("SMD_AUDIT_BROKER_SOCKET") or os.environ.get(
-        "SMD_WORKSPACE_BROKER_SOCKET"
-    )
+    socket_path = os.environ.get("SMD_AUDIT_BROKER_SOCKET") or os.environ.get("SMD_WORKSPACE_BROKER_SOCKET")
     if not socket_path:
         return None
     return BrokerSuppressedWakeWriter(socket_path, os.environ.get("CUSTOMER_SLUG", ""))

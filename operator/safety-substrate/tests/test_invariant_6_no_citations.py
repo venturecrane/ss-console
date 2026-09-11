@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from citation_filter import contains_citation, scan, refusal_message  # noqa: E402
+from citation_filter import contains_citation, scan, refusal_message
 
 
 # ---------- Adversarial fixtures: each should be REFUSED ----------
@@ -155,13 +155,11 @@ CLEAN_OUTPUTS: list[tuple[str, str]] = [
     # several times a turn. ---
     (
         "versus-ordinary-nouns",
-        "The trade-off here is apples versus oranges, so the comparison does not "
-        "settle anything on its own.",
+        "The trade-off here is apples versus oranges, so the comparison does not settle anything on its own.",
     ),
     (
         "versus-version-numbers",
-        "The template diff is version two versus version three; only the heading "
-        "styles moved.",
+        "The template diff is version two versus version three; only the heading styles moved.",
     ),
 ]
 
@@ -183,8 +181,7 @@ def run() -> tuple[bool, str]:
         if contains_citation(text):
             hits = scan(text)
             failures.append(
-                f"FAIL [{label}]: filter falsely flagged clean output. "
-                f"hits={[(h.pattern, h.match) for h in hits]}"
+                f"FAIL [{label}]: filter falsely flagged clean output. hits={[(h.pattern, h.match) for h in hits]}"
             )
 
     # Verify refusal_message produces non-empty output for adversarial cases

@@ -96,24 +96,13 @@ def test_conformance_every_tool_classified() -> None:
     # Trust-account fund-movement tools are never exposed here.
     assert not any("transaction" in k or "protect" in k for k in runtime_map)
     # Writes carry their classes under the runtime name; reads are reads.
-    assert (
-        runtime_map[runtime_tool_name("smokeball", "create_memo")] == "internal_write"
-    )
-    assert (
-        runtime_map[runtime_tool_name("smokeball", "create_webhook_subscription")]
-        == "internal_write"
-    )
+    assert runtime_map[runtime_tool_name("smokeball", "create_memo")] == "internal_write"
+    assert runtime_map[runtime_tool_name("smokeball", "create_webhook_subscription")] == "internal_write"
     assert runtime_map[runtime_tool_name("smokeball", "add_file")] == "internal_write"
     assert runtime_map[runtime_tool_name("smokeball", "delete_file")] == "destructive"
-    assert (
-        runtime_map[runtime_tool_name("smokeball", "create_event")] == "internal_write"
-    )
-    assert (
-        runtime_map[runtime_tool_name("smokeball", "create_task")] == "internal_write"
-    )
-    assert (
-        runtime_map[runtime_tool_name("smokeball", "create_folder")] == "internal_write"
-    )
+    assert runtime_map[runtime_tool_name("smokeball", "create_event")] == "internal_write"
+    assert runtime_map[runtime_tool_name("smokeball", "create_task")] == "internal_write"
+    assert runtime_map[runtime_tool_name("smokeball", "create_folder")] == "internal_write"
     assert runtime_map[runtime_tool_name("smokeball", "create_matter")] == "commitment"
     assert runtime_map[runtime_tool_name("smokeball", "list_events")] == "read"
     assert runtime_map[runtime_tool_name("smokeball", "get_matter_balances")] == "read"

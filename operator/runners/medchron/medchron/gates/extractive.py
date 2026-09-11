@@ -3,6 +3,7 @@ only, and a page removed never moves a citation onto the wrong paper. The
 strip's remap is verified by content (text and pixels) against the original;
 its falsifier proves the check can fail. Registered probe: a citation whose
 every page is dropped refuses; a one-page offset is detected."""
+
 from __future__ import annotations
 
 from ..stages import strip

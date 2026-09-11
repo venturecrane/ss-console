@@ -84,10 +84,7 @@ def test_one_event_two_date_spellings_is_one_item() -> None:
     spelling hashed to its own item: fire-once counted them separately and every
     per-item ACK code named whichever spelling happened to be in the last raise.
     Same defect family as the label — a key component that is not canonical."""
-    keys = {
-        el.item_key("m-1", "task-1", "task-deadline", spelling)
-        for spelling in _ONE_EVENT_SPELLINGS
-    }
+    keys = {el.item_key("m-1", "task-1", "task-deadline", spelling) for spelling in _ONE_EVENT_SPELLINGS}
     assert len(keys) == 1, f"one event, {len(keys)} identities: {sorted(keys)}"
     # ...and it is the SAME identity the connector side derives, which passes a
     # real ``date`` object read off the Smokeball record.
@@ -170,11 +167,13 @@ def test_read_ledger_skips_corrupt_and_blank_lines(tmp_path: Path) -> None:
         )
     )
     path.write_text(
-        good + "\n"
+        good
+        + "\n"
         + "\n"  # blank
         + "{not json\n"  # corrupt
         + '{"v":1,"ts":"x","skill":"s"}\n'  # missing item_key/event -> skipped
-        + good + "\n",
+        + good
+        + "\n",
         encoding="utf-8",
     )
     events = el.read_ledger(str(path))
@@ -368,9 +367,7 @@ def test_validate_append_matches_ack_by_token() -> None:
 
 def test_validate_append_rejects_unknown_event() -> None:
     with pytest.raises(ValueError):
-        el.validate_append(
-            [], {"event": "boom", "item_key": "k1", "skill": "s", "ts": "x"}, send_witness=_witnessed
-        )
+        el.validate_append([], {"event": "boom", "item_key": "k1", "skill": "s", "ts": "x"}, send_witness=_witnessed)
 
 
 def test_validate_append_requires_item_key_and_skill() -> None:
@@ -401,17 +398,13 @@ def test_validate_append_requires_item_key_and_skill() -> None:
 
 def test_an_unwitnessed_fired_is_refused() -> None:
     with pytest.raises(ValueError, match="dispatched no message"):
-        el.validate_append(
-            [], _ev("fired", ts="2026-08-26T14:02:06.416Z"), send_witness=_unwitnessed
-        )
+        el.validate_append([], _ev("fired", ts="2026-08-26T14:02:06.416Z"), send_witness=_unwitnessed)
 
 
 def test_an_unwitnessed_chased_is_refused_too() -> None:
     """`chased` is a RAISING_EVENTS member: it also claims a person was reached."""
     with pytest.raises(ValueError, match="dispatched no message"):
-        el.validate_append(
-            [], _ev("chased", ts="2026-08-26T14:02:06.416Z"), send_witness=_unwitnessed
-        )
+        el.validate_append([], _ev("chased", ts="2026-08-26T14:02:06.416Z"), send_witness=_unwitnessed)
 
 
 def test_the_refusal_names_the_send_tool_and_says_retrying_will_not_help() -> None:
@@ -420,9 +413,7 @@ def test_the_refusal_names_the_send_tool_and_says_retrying_will_not_help() -> No
     A refusal that reads as transient therefore invites a retry storm — so it must
     say what would change the answer, and that waiting will not."""
     with pytest.raises(ValueError) as excinfo:
-        el.validate_append(
-            [], _ev("fired", ts="2026-08-26T14:02:06.416Z"), send_witness=_unwitnessed
-        )
+        el.validate_append([], _ev("fired", ts="2026-08-26T14:02:06.416Z"), send_witness=_unwitnessed)
     message = str(excinfo.value)
     assert "smd_send_message" in message
     assert "fail identically" in message
@@ -443,9 +434,7 @@ def test_non_raising_events_never_consult_the_witness() -> None:
         _ev("acked", ts="2026-08-01T08:00:00.000Z", token="ACK-ABCDEF", key="k9"),
         send_witness=_recording,
     )
-    el.validate_append(
-        existing, _ev("resolved", ts="2026-08-01T09:00:00.000Z", key="k9"), send_witness=_recording
-    )
+    el.validate_append(existing, _ev("resolved", ts="2026-08-01T09:00:00.000Z", key="k9"), send_witness=_recording)
     assert calls == []
 
 
@@ -534,26 +523,24 @@ def test_schema_version_is_at_the_identity_epoch() -> None:
 
 def test_validate_append_rejects_resolved_without_raise() -> None:
     with pytest.raises(ValueError, match="no prior fired/chased raise"):
-        el.validate_append(
-            [], _ev("resolved", ts="2026-08-27T14:00:00.000Z"), send_witness=_witnessed
-        )
+        el.validate_append([], _ev("resolved", ts="2026-08-27T14:00:00.000Z"), send_witness=_witnessed)
 
 
 def test_validate_append_rejects_handed_off_without_raise() -> None:
     with pytest.raises(ValueError, match="no prior fired/chased raise"):
-        el.validate_append(
-            [], _ev("handed_off", ts="2026-08-27T14:00:00.000Z"), send_witness=_witnessed
-        )
+        el.validate_append([], _ev("handed_off", ts="2026-08-27T14:00:00.000Z"), send_witness=_witnessed)
 
 
 def test_validate_append_accepts_release_with_prior_raise_by_item_key() -> None:
     existing = [_ev("fired", ts="2026-08-24T14:00:00.000Z", key="k9", token=None)]
     el.validate_append(
-        existing, _ev("resolved", ts="2026-08-27T14:00:00.000Z", key="k9", token=None),
+        existing,
+        _ev("resolved", ts="2026-08-27T14:00:00.000Z", key="k9", token=None),
         send_witness=_witnessed,
     )
     el.validate_append(
-        existing, _ev("handed_off", ts="2026-08-27T14:00:00.000Z", key="k9", token=None),
+        existing,
+        _ev("handed_off", ts="2026-08-27T14:00:00.000Z", key="k9", token=None),
         send_witness=_witnessed,
     )
 
@@ -566,7 +553,8 @@ def test_release_against_pre_epoch_raise_only_is_refused() -> None:
     stale["v"] = 1
     with pytest.raises(ValueError, match="ss #2151"):
         el.validate_append(
-            [stale], _ev("resolved", ts="2026-08-27T14:00:00.000Z", key="k-old"),
+            [stale],
+            _ev("resolved", ts="2026-08-27T14:00:00.000Z", key="k-old"),
             send_witness=_witnessed,
         )
 
@@ -577,9 +565,7 @@ def test_release_refusal_is_corrective_and_terminal() -> None:
     (an evasive recompose that swaps the refused kind for an ``acked`` is the
     exact loop the corrective-and-terminal wording exists to prevent)."""
     with pytest.raises(ValueError) as excinfo:
-        el.validate_append(
-            [], _ev("resolved", ts="2026-08-27T14:00:00.000Z"), send_witness=_witnessed
-        )
+        el.validate_append([], _ev("resolved", ts="2026-08-27T14:00:00.000Z"), send_witness=_witnessed)
     message = str(excinfo.value)
     assert "Write nothing" in message
     assert "fail identically" in message
@@ -660,12 +646,14 @@ def test_determination_on_non_resolved_is_rejected() -> None:
 
 
 def test_make_event_carries_determination_only_when_given() -> None:
-    bare = el.make_event(
-        skill="s", matter_id="m", item_key="k", event="resolved", attempt=0
-    )
+    bare = el.make_event(skill="s", matter_id="m", item_key="k", event="resolved", attempt=0)
     assert "determination" not in bare
     carried = el.make_event(
-        skill="s", matter_id="m", item_key="k", event="resolved", attempt=0,
+        skill="s",
+        matter_id="m",
+        item_key="k",
+        event="resolved",
+        attempt=0,
         determination=_DET,
     )
     assert carried["determination"] == _DET

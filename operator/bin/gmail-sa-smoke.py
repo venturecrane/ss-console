@@ -54,7 +54,10 @@ def main() -> int:
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
     except ImportError:
-        print("FAIL: deps missing. Run via: uv run --with google-api-python-client --with google-auth ...", file=sys.stderr)
+        print(
+            "FAIL: deps missing. Run via: uv run --with google-api-python-client --with google-auth ...",
+            file=sys.stderr,
+        )
         return 2
 
     try:
@@ -64,22 +67,25 @@ def main() -> int:
         return 2
 
     # Service-account credentials, delegated to impersonate the target user.
-    creds = service_account.Credentials.from_service_account_info(
-        info, scopes=SCOPES
-    ).with_subject(args.user)
+    creds = service_account.Credentials.from_service_account_info(info, scopes=SCOPES).with_subject(args.user)
 
     try:
         gmail = build("gmail", "v1", credentials=creds, cache_discovery=False)
-        resp = gmail.users().messages().list(
-            userId="me", q="is:unread", maxResults=args.max
-        ).execute()
+        resp = gmail.users().messages().list(userId="me", q="is:unread", maxResults=args.max).execute()
         ids = [m["id"] for m in resp.get("messages", [])]
         print(f"PASS: delegation works. Impersonated {args.user}; {len(ids)} unread message(s):")
         for mid in ids:
-            msg = gmail.users().messages().get(
-                userId="me", id=mid, format="metadata",
-                metadataHeaders=["Subject", "From"],
-            ).execute()
+            msg = (
+                gmail.users()
+                .messages()
+                .get(
+                    userId="me",
+                    id=mid,
+                    format="metadata",
+                    metadataHeaders=["Subject", "From"],
+                )
+                .execute()
+            )
             headers = {h["name"]: h["value"] for h in msg["payload"]["headers"]}
             print(f"  - {headers.get('From', '?')[:40]:40} | {headers.get('Subject', '(no subject)')[:70]}")
         return 0

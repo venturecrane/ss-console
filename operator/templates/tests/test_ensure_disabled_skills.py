@@ -39,14 +39,10 @@ def seed_profile(home: Path) -> Path:
     (skills / "productivity" / "google-workspace").mkdir(parents=True)
     (skills / "productivity" / "notion").mkdir(parents=True)
     (skills / "email" / "himalaya" / "SKILL.md").write_text("himalaya", encoding="utf-8")
-    (skills / "productivity" / "google-workspace" / "SKILL.md").write_text(
-        "google", encoding="utf-8"
-    )
+    (skills / "productivity" / "google-workspace" / "SKILL.md").write_text("google", encoding="utf-8")
     (skills / "productivity" / "notion" / "SKILL.md").write_text("notion", encoding="utf-8")
     (skills / ".bundled_manifest").write_text(
-        "himalaya:abc\n"
-        "google-workspace:def\n"
-        "notion:ghi\n",
+        "himalaya:abc\ngoogle-workspace:def\nnotion:ghi\n",
         encoding="utf-8",
     )
     (profile / ".skills_prompt_snapshot.json").write_text(
@@ -152,9 +148,7 @@ def seed_mismatch_profile(home: Path) -> Path:
     (skills / "productivity" / "notion" / "SKILL.md").write_text(
         "---\nname: notion\ndescription: notes\n---\n\nbody\n", encoding="utf-8"
     )
-    (skills / ".bundled_manifest").write_text(
-        "google-calendar:abc\nnotion:ghi\n", encoding="utf-8"
-    )
+    (skills / ".bundled_manifest").write_text("google-calendar:abc\nnotion:ghi\n", encoding="utf-8")
     (profile / ".skills_prompt_snapshot.json").write_text(
         json.dumps(
             {
@@ -179,12 +173,8 @@ def assert_fully_disabled(profile: Path) -> None:
     assert not (profile / "skills" / "productivity" / "gcal").exists(), (
         "skill DIRECTORY survived — the gateway still loads this prompt"
     )
-    assert (profile / "skills" / "productivity" / "notion").is_dir(), (
-        "an unrelated skill was pruned"
-    )
-    assert (
-        profile / "skills" / ".bundled_manifest"
-    ).read_text(encoding="utf-8") == "notion:ghi\n"
+    assert (profile / "skills" / "productivity" / "notion").is_dir(), "an unrelated skill was pruned"
+    assert (profile / "skills" / ".bundled_manifest").read_text(encoding="utf-8") == "notion:ghi\n"
 
     snapshot = json.loads((profile / ".skills_prompt_snapshot.json").read_text(encoding="utf-8"))
     assert snapshot["manifest"] == {"productivity/notion/SKILL.md": [1, 2]}

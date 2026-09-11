@@ -257,6 +257,13 @@ export default tseslint.config(
       '**/.worktrees/**',
       'coverage/**',
       'scripts/**',
+      // Python virtualenvs. `operator/`'s own test instructions create one
+      // (`uv venv .venv` under operator/), it is gitignored, and site-packages
+      // ships .js assets (matplotlib's web backend) that projectService cannot
+      // resolve — so following the documented Python setup made `npm run
+      // verify` fail with three parsing errors that had nothing to do with the
+      // branch. Added 2026-09-10.
+      '**/.venv/**',
       // Worker vitest configs are excluded from the root tsconfig; projectService
       // cannot resolve them. Each worker has its own tsconfig that covers these.
       'workers/*/vitest.config.ts',

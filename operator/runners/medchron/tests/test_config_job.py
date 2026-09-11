@@ -107,8 +107,8 @@ def test_job_refuses_the_shapes_it_must_not_guess(tmp_path: Path, data_root: Pat
         job_mod.parse(body, path=tmp_path / "job.yaml")
 
 
-# ---- the four routine-11 cost controls (2026-09-09) --------------------------
-COST_KEYS = ("monthly_budget_usd", "single_matter_page_threshold", "usd_per_scanned_page", "usd_per_audit_claim")
+# ---- the routine-11 cost controls (2026-09-09; per-matter line removed 09-10) -
+COST_KEYS = ("monthly_budget_usd", "usd_per_scanned_page", "usd_per_audit_claim")
 
 
 @pytest.mark.parametrize("key", COST_KEYS)
@@ -140,14 +140,19 @@ def test_a_zero_cost_control_is_refused(tmp_path: Path, key: str) -> None:
 def test_the_cost_controls_are_read_back_as_typed_values(firm_config_path: Path) -> None:
     cfg = config_mod.load(str(firm_config_path))
     assert cfg.monthly_budget_usd == 500.0
-    assert cfg.single_matter_page_threshold == 2500
     assert cfg.usd_per_scanned_page == 0.03 and cfg.usd_per_audit_claim == 0.06
 
 
 def test_the_month_state_round_trips_off_the_envelope(tmp_path: Path, data_root: Path) -> None:
     body = yaml.safe_load(job_yaml(data_root))
-    body.update(allowance_pages=15000, allowance_remaining_pages=1200, month_pages_used=13800,
-                month_cents_used=4310, allowance_month="2026-09", allowance_remaining_documents=1200)
+    body.update(
+        allowance_pages=15000,
+        allowance_remaining_pages=1200,
+        month_pages_used=13800,
+        month_cents_used=4310,
+        allowance_month="2026-09",
+        allowance_remaining_documents=1200,
+    )
     job = job_mod.parse(body, path=tmp_path / "job.yaml")
     assert (job.allowance_pages, job.allowance_remaining_pages) == (15000, 1200)
     assert (job.month_pages_used, job.month_cents_used) == (13800, 4310)

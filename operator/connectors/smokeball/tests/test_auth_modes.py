@@ -64,9 +64,7 @@ def test_client_credentials_mint_body_is_unchanged() -> None:
 
 def test_authorization_code_mints_via_refresh_token() -> None:
     captured: list[httpx.Request] = []
-    client = _mock_client(
-        _token_handler(captured), auth_mode="authorization_code", refresh_token="rt-123"
-    )
+    client = _mock_client(_token_handler(captured), auth_mode="authorization_code", refresh_token="rt-123")
     client.auth_status()
     token_req = next(r for r in captured if r.url.path.endswith("/oauth2/token"))
     form = parse_qs(token_req.content.decode())
@@ -153,13 +151,9 @@ def test_auth_status_reports_mode_not_token() -> None:
 
 def test_mint_failure_does_not_echo_grant() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            401, json={"error": "invalid_grant", "secret_echo": "rt-123"}
-        )
+        return httpx.Response(401, json={"error": "invalid_grant", "secret_echo": "rt-123"})
 
-    client = _mock_client(
-        handler, auth_mode="authorization_code", refresh_token="rt-123"
-    )
+    client = _mock_client(handler, auth_mode="authorization_code", refresh_token="rt-123")
     with pytest.raises(SmokeballAuthError) as exc:
         client.auth_status()
     assert "rt-123" not in str(exc.value)
@@ -182,9 +176,7 @@ def test_auth_status_decodes_granted_scopes() -> None:
     jwt = _make_jwt({"scope": "documents/read documents/write matters/read"})
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200, json={"access_token": jwt, "expires_in": 3600, "token_type": "Bearer"}
-        )
+        return httpx.Response(200, json={"access_token": jwt, "expires_in": 3600, "token_type": "Bearer"})
 
     client = _mock_client(handler, auth_mode="authorization_code", refresh_token="rt-1")
     status = client.auth_status()
@@ -207,9 +199,7 @@ def test_mint_logs_granted_scopes_once(capsys) -> None:
     jwt = _make_jwt({"scope": "documents/read documents/write matters/read"})
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200, json={"access_token": jwt, "expires_in": 3600, "token_type": "Bearer"}
-        )
+        return httpx.Response(200, json={"access_token": jwt, "expires_in": 3600, "token_type": "Bearer"})
 
     client = _mock_client(handler, auth_mode="authorization_code", refresh_token="rt-1")
     client._mint_token()

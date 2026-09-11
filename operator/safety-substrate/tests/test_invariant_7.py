@@ -49,10 +49,9 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[1]))  # safety-substrate/ on path
 
-from invariants.invariant_7 import (  # noqa: E402
+from invariants.invariant_7 import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     BindingKind,
     BindingSnapshot,
-    Invariant7Violation,
     collect_snapshot_from_env,
     run as run_module_self_check,
     verify_at_boot,
@@ -287,9 +286,7 @@ def test_fires_on_overlay_runtime_slug_disagreement():
     result = verify_storage_bindings(snap)
     assert not result.passed
     assert any(
-        "disagrees with" in m.reason
-        and "cross-Machine isolation failure mode" in m.reason
-        for m in result.mismatches
+        "disagrees with" in m.reason and "cross-Machine isolation failure mode" in m.reason for m in result.mismatches
     )
 
 

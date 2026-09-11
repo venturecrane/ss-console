@@ -136,8 +136,12 @@ _CUSTOMER_PREFIX: tuple[str, ...] = (
 # every staged name without falling through to CUSTOMER by accident.
 _INFRA_EXACT: frozenset[str] = frozenset(
     {
-        # Shared observability (provision-customer.sh:424-425).
+        # Shared observability (provision-customer.sh, step 6b).
         "SENTRY_DSN",
+        # Per-seat since migration 0114: minted by lib/machine_credential.py at
+        # provisioning, SMD-owned, never a customer's credential. Infra because
+        # the console holds the hash and the seat holds the plaintext; nothing
+        # about it is handed to the customer.
         "MACHINE_HEARTBEAT_KEY",
         # Brave Search web-search connector (provision-customer.sh,
         # native:brave-free block; ADR 0070). BRAVE_SEARCH_API_KEY is SMD's
@@ -188,10 +192,7 @@ def load_contract_custody(path: Path | None = None) -> dict[str, str]:
             raise ValueError(f"{name}: contract entry is not a mapping")
         custody = spec.get("custody")
         if custody not in VALID_CUSTODY:
-            raise ValueError(
-                f"{name}: missing or invalid custody {custody!r} "
-                f"(must be one of {sorted(VALID_CUSTODY)})"
-            )
+            raise ValueError(f"{name}: missing or invalid custody {custody!r} (must be one of {sorted(VALID_CUSTODY)})")
         out[name] = custody
     return out
 
@@ -271,9 +272,7 @@ def placeholder_for(name: str) -> str:
     return f"{PLACEHOLDER_SENTINEL}{name}"
 
 
-def assert_no_real_customer_secret(
-    env: dict[str, str], contract_custody: dict[str, str] | None = None
-) -> None:
+def assert_no_real_customer_secret(env: dict[str, str], contract_custody: dict[str, str] | None = None) -> None:
     """KEYLESS-BUILD GUARD. Raise if any env var that classifies as customer-owned
     holds a value that is NOT an explicit placeholder. This is the fail-closed
     backstop against a keyless build accidentally running with a real customer
@@ -312,8 +311,7 @@ def _main(argv: list[str]) -> int:
             print(str(exc), file=__import__("sys").stderr)
             return 2
         return 0
-    print("usage: secret_custody.py {isolate-names <slug>|classify <name>}",
-          file=__import__("sys").stderr)
+    print("usage: secret_custody.py {isolate-names <slug>|classify <name>}", file=__import__("sys").stderr)
     return 1
 
 

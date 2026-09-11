@@ -2,6 +2,7 @@
 claim has a final verdict and it is SUPPORTED, and no control was wrongly
 supported. Registered probe: a document whose claim is UNSUPPORTED (or never
 audited) fails the gate."""
+
 from __future__ import annotations
 
 from pathlib import Path

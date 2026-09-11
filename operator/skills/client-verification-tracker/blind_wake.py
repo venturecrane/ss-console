@@ -34,6 +34,14 @@ blind-wake behaviour must not diverge, but ``plan_counts`` differs on purpose
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # The skill's own pre_run module, which loads this file beside itself at
+    # runtime; a type-only import so the WakeDecision annotation names a real
+    # class (pyright 2026-09-10: it was an undefined name).
+    from pre_run import WakeDecision
+
 import asyncio
 import sys
 import threading
@@ -159,6 +167,7 @@ def _run_to_completion(coro_factory) -> None:
 # EMITTED_WAKE write -- blind and decided -- lives in one module.
 # ---------------------------------------------------------------------------
 
+
 def _plan_counts(decision: "WakeDecision") -> dict:
     """How many per-item plans the gate handed over.
 
@@ -170,7 +179,6 @@ def _plan_counts(decision: "WakeDecision") -> dict:
     if not decision.plans:
         return {}
     return {"plans_total": len(decision.plans)}
-
 
 
 async def try_write_emitted_wake(
@@ -218,5 +226,3 @@ async def try_write_emitted_wake(
         )
     except Exception:  # noqa: BLE001 — observability never gates the wake
         pass
-
-

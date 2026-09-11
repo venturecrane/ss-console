@@ -147,7 +147,7 @@ from typing import Callable, Deque, Optional, Protocol
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[1]))  # operator/
 
-from adapter.audit_log import (  # noqa: E402
+from adapter.audit_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     ActorRole,
     AuditEvent,
     AuditLogWriter,
@@ -155,7 +155,7 @@ from adapter.audit_log import (  # noqa: E402
 
 # Sibling module from PR #953. Read-only; this module delegates the
 # canonical audit row write to log_decision() and never duplicates it.
-from trust_ceiling_log import (  # noqa: E402
+from trust_ceiling_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     ActionClassName,
     CeilingLevel,
     Decision,
@@ -189,16 +189,13 @@ class CustomerMessage(str, enum.Enum):
     """
 
     APPROVAL_REQUIRED_SEND = (
-        "Your Operator wanted to send a message but it needs your "
-        "approval first. Open the draft to review and send."
+        "Your Operator wanted to send a message but it needs your approval first. Open the draft to review and send."
     )
     APPROVAL_REQUIRED_COMMITMENT = (
-        "Your Operator paused before agreeing to something on your "
-        "behalf. Open the request to review and approve."
+        "Your Operator paused before agreeing to something on your behalf. Open the request to review and approve."
     )
     APPROVAL_REQUIRED_DESTRUCTIVE = (
-        "Your Operator paused before doing something it cannot undo. "
-        "Open the request to review and approve."
+        "Your Operator paused before doing something it cannot undo. Open the request to review and approve."
     )
     DESTRUCTIVE_BLOCKED_AT_DRAFT_CEILING = (
         "Your Operator tried to delete or remove something, but its "
@@ -209,13 +206,9 @@ class CustomerMessage(str, enum.Enum):
         "Your Operator tried to use a skill that is currently off. "
         "Re-enable the skill in Settings if you want it to run."
     )
-    UNKNOWN_ACTION = (
-        "Your Operator tried something the substrate did not "
-        "recognize. We have logged it for review."
-    )
+    UNKNOWN_ACTION = "Your Operator tried something the substrate did not recognize. We have logged it for review."
     GENERIC_REFUSED = (
-        "Your Operator tried an action that was not allowed under "
-        "your current settings. We have logged it for review."
+        "Your Operator tried an action that was not allowed under your current settings. We have logged it for review."
     )
 
 
@@ -405,9 +398,7 @@ class RefusalHandler:
                                MUST abort the pending action.
         """
         if not isinstance(reason, DecisionReason):
-            raise ValueError(
-                f"reason must be a DecisionReason enum, got {type(reason)!r}"
-            )
+            raise ValueError(f"reason must be a DecisionReason enum, got {type(reason)!r}")
 
         # 1. Canonical trust-ceiling-decision row via the sibling module.
         #    log_decision() writes one row tagged `trust_ceiling_decision`
@@ -429,14 +420,10 @@ class RefusalHandler:
         # the same way log_decision did, so the values that land in
         # follow-up metadata stay aligned.
         ceiling_value = (
-            ceiling_level.value
-            if isinstance(ceiling_level, CeilingLevel)
-            else CeilingLevel(ceiling_level).value
+            ceiling_level.value if isinstance(ceiling_level, CeilingLevel) else CeilingLevel(ceiling_level).value
         )
         action_class_value = (
-            action_class.value
-            if isinstance(action_class, ActionClassName)
-            else ActionClassName(action_class).value
+            action_class.value if isinstance(action_class, ActionClassName) else ActionClassName(action_class).value
         )
 
         message = _message_for(reason)

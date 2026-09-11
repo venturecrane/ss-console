@@ -30,6 +30,7 @@ import {
   type OpenAIChatMessage,
 } from '../../../lib/claude/assessment-llm'
 import { jsonResponse } from '../../../lib/api/helpers'
+import { constantTimeEqual } from '../../../lib/auth/constant-time'
 
 function json(status: number, body: unknown): Response {
   return jsonResponse(status, body)
@@ -88,7 +89,9 @@ export const POST: APIRoute = async ({ request }: APIContext) => {
   // would let anyone spend our Anthropic budget.
   if (!expected) return json(503, { error: 'unavailable' })
   const auth = request.headers.get('authorization') ?? ''
-  if (auth !== `Bearer ${expected}`) return json(401, { error: 'unauthorized' })
+  // Constant-time like every other shared-secret check in the tree; this is
+  // the one public endpoint whose compromise spends the Anthropic budget.
+  if (!constantTimeEqual(auth, `Bearer ${expected}`)) return json(401, { error: 'unauthorized' })
 
   if (!env.ANTHROPIC_API_KEY) return json(503, { error: 'unavailable' })
 

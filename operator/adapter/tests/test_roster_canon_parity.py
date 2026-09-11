@@ -56,18 +56,13 @@ def test_fixture_carries_the_cases_that_caught_the_divergence() -> None:
     # returns before _canonicalize_address is ever reached. Without a case here,
     # reverting that check leaves the suite green -- which is exactly what the
     # first run of this fix's falsifier reported.
-    assert any(c["input"].startswith("@") and c["expected"] is None for c in _CASES), (
-        "no refused @domain grant case"
-    )
+    assert any(c["input"].startswith("@") and c["expected"] is None for c in _CASES), "no refused @domain grant case"
     assert any(c["expected"] is not None for c in _CASES), "no acceptance case"
 
 
 @pytest.mark.parametrize("case", _CASES, ids=[c["name"][:60] for c in _CASES])
 def test_canonicalization_matches_the_arbiter(case: dict) -> None:
-    assert (
-        recipient_classifier._canonicalize_roster_entry(case["input"])
-        == case["expected"]
-    )
+    assert recipient_classifier._canonicalize_roster_entry(case["input"]) == case["expected"]
 
 
 def test_nfd_and_nfc_spellings_are_one_address() -> None:

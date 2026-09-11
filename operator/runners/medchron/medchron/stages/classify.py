@@ -18,6 +18,7 @@ the run's own record control (`record_control[-unit].json`, written by
 `decisions.control`). If the model does not call those correctly, its other
 answers are not trusted: controls_ok is recorded and the strip refuses on it.
 """
+
 from __future__ import annotations
 
 import base64
@@ -64,8 +65,10 @@ def resolve_exhibit_files(outdir: Path) -> dict[int, Path]:
 
 
 def page_classes(cfg: Any) -> list[tuple[str, list[re.Pattern]]]:
-    return [(str(c["name"]), [re.compile(str(x), re.I | re.S | re.M) for x in (c.get("patterns") or [])])
-            for c in (cfg.get("nonrecord", "page_classes") or [])]
+    return [
+        (str(c["name"]), [re.compile(str(x), re.I | re.S | re.M) for x in (c.get("patterns") or [])])
+        for c in (cfg.get("nonrecord", "page_classes") or [])
+    ]
 
 
 def classify_text(t: str, classes: list[tuple[str, list[re.Pattern]]]) -> str | None:
@@ -112,7 +115,9 @@ def run_nonrecord(sr: StageRun) -> int:
     cites = cited_pages(md.read_text(encoding="utf-8"))
     paths = resolve_exhibit_files(outdir)
     if paths and not cites:
-        sr.log("the chronology parsed to ZERO exhibit citations; the cited-collision guard would compare against nothing")
+        sr.log(
+            "the chronology parsed to ZERO exhibit citations; the cited-collision guard would compare against nothing"
+        )
         return 1
     classes = page_classes(sr.cfg)
     result: dict[str, Any] = {}
@@ -131,14 +136,23 @@ def run_nonrecord(sr: StageRun) -> int:
                 pairs.append((i, c))
         pages = {p for p, _ in pairs}
         c_hit = sorted(pages & cites.get(ex, set()))
-        result[str(ex)] = {"pages": len(doc), "blocks": [{"class": c, "from": a, "to": b, "n": b - a + 1} for c, a, b in blocks(pairs)],
-                           "drop_pages": sorted(pages), "unknown": unknown, "cited_collision": c_hit}
+        result[str(ex)] = {
+            "pages": len(doc),
+            "blocks": [{"class": c, "from": a, "to": b, "n": b - a + 1} for c, a, b in blocks(pairs)],
+            "drop_pages": sorted(pages),
+            "unknown": unknown,
+            "cited_collision": c_hit,
+        }
         tot, drop, unk, coll = tot + len(doc), drop + len(pages), unk + len(unknown), coll + len(c_hit)
-        sr.log(f"Exhibit {ex}: {len(doc)} pages -> {len(pages)} non-record, {len(unknown)} unclassifiable (scan)"
-               + (f"; !! CITED and marked non-record: {c_hit}" if c_hit else ""))
+        sr.log(
+            f"Exhibit {ex}: {len(doc)} pages -> {len(pages)} non-record, {len(unknown)} unclassifiable (scan)"
+            + (f"; !! CITED and marked non-record: {c_hit}" if c_hit else "")
+        )
         doc.close()
     if tot:
-        sr.log(f"{tot} pages | {drop} non-record ({100 * drop / tot:.1f}%) | {unk} scanned/unclassifiable | {coll} cited-collision")
+        sr.log(
+            f"{tot} pages | {drop} non-record ({100 * drop / tot:.1f}%) | {unk} scanned/unclassifiable | {coll} cited-collision"
+        )
     nonrecord_path(sr).write_text(json.dumps(result, indent=1), encoding="utf-8")
     return 0
 
@@ -177,9 +191,14 @@ def run_scanned(sr: StageRun) -> int:
     ctl_path = sr.job.install_root / "controls" / "controls.json"
     rec_path = d / f"record_control{sfx}.json"
     if not (ctl_path.is_file() and rec_path.is_file()):
-        sr.log(f"controls not authored: need {ctl_path} and {rec_path}; a classifier without its falsifier measures nothing")
+        sr.log(
+            f"controls not authored: need {ctl_path} and {rec_path}; a classifier without its falsifier measures nothing"
+        )
         return 1
-    controls = [(sr.job.install_root / c["pdf"], int(c["page"]), str(c["label"])) for c in json.loads(ctl_path.read_text(encoding="utf-8"))]
+    controls = [
+        (sr.job.install_root / c["pdf"], int(c["page"]), str(c["label"]))
+        for c in json.loads(ctl_path.read_text(encoding="utf-8"))
+    ]
     rc = json.loads(rec_path.read_text(encoding="utf-8"))
     controls.append((paths[int(rc["exhibit"])], int(rc["page"]), "RECORD"))
     sr.log(f"{len(targets)} scanned page(s) to classify, +{len(controls)} control(s)")
@@ -199,17 +218,27 @@ def run_scanned(sr: StageRun) -> int:
         content: list[dict[str, Any]] = []
         for lbl, path, p in labels:
             content.append({"type": "text", "text": f"page {lbl}:"})
-            content.append({"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": _png(get(path), p)}})
-        r = sr.doorway.call("classify", model=model, max_tokens=800, system=system,
-                            messages=[{"role": "user", "content": content}], timeout=300.0,
-                            custom_id=f"classify-{labels[0][0]}")
+            content.append(
+                {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": _png(get(path), p)}}
+            )
+        r = sr.doorway.call(
+            "classify",
+            model=model,
+            max_tokens=800,
+            system=system,
+            messages=[{"role": "user", "content": content}],
+            timeout=300.0,
+            custom_id=f"classify-{labels[0][0]}",
+        )
         for line in r.text.strip().splitlines():
             m = re.match(r"\s*(\S+)\s*=\s*([A-Z]+)", line)
             if m:
                 results[m.group(1)] = m.group(2)
         sr.log(f"  batch of {len(labels)} -> {r.usage.input_tokens} in / {r.usage.output_tokens} out")
 
-    allpages = [(f"Ex{e}p{p}", paths[e], p) for e, p in targets] + [(f"CTL{i}", path, p) for i, (path, p, _) in enumerate(controls)]
+    allpages = [(f"Ex{e}p{p}", paths[e], p) for e, p in targets] + [
+        (f"CTL{i}", path, p) for i, (path, p, _) in enumerate(controls)
+    ]
     batch: list[tuple[str, Path, int]] = []
     for item in allpages:
         batch.append(item)
@@ -232,6 +261,8 @@ def run_scanned(sr: StageRun) -> int:
         lab = results.get(f"Ex{e}p{p}", "?")
         if lab in NONRECORD_LABELS:
             nonrec.setdefault(str(e), []).append((p, lab))
-    (d / f"scanned_labels{sfx}.json").write_text(json.dumps({"labels": results, "nonrecord": nonrec, "controls_ok": ok}, indent=1), encoding="utf-8")
+    (d / f"scanned_labels{sfx}.json").write_text(
+        json.dumps({"labels": results, "nonrecord": nonrec, "controls_ok": ok}, indent=1), encoding="utf-8"
+    )
     sr.log(f"scanned pages that are NOT records: {sum(len(v) for v in nonrec.values())}")
     return 0 if ok else 1

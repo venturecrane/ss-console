@@ -113,14 +113,10 @@ def test_a_budget_miss_is_not_cached():
     matters = data["matters"]
     some_id = next(iter(matters))
     cache: dict = {}
-    status, number = matter_ref.resolve_matter_number(
-        FakeClient(matters), some_id, cache, [0]
-    )
+    status, number = matter_ref.resolve_matter_number(FakeClient(matters), some_id, cache, [0])
     assert status == matter_ref.BUDGET_EXHAUSTED and number is None
     assert some_id not in cache
-    status, number = matter_ref.resolve_matter_number(
-        FakeClient(matters), some_id, cache, [1]
-    )
+    status, number = matter_ref.resolve_matter_number(FakeClient(matters), some_id, cache, [1])
     assert status == "resolved" and number == matters[some_id]["number"]
 
 

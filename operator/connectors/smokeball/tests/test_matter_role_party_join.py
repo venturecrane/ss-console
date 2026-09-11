@@ -29,9 +29,7 @@ NUMBER = "PI-2026-0001"
 
 
 def _mock_client(handler) -> SmokeballClient:
-    client = SmokeballClient(
-        region="us", environment="staging", client_id="cid", client_secret="sec", api_key="apikey"
-    )
+    client = SmokeballClient(region="us", environment="staging", client_id="cid", client_secret="sec", api_key="apikey")
     client._http = httpx.Client(transport=httpx.MockTransport(handler))
     return client
 
@@ -40,9 +38,7 @@ def _handler(contacts: dict[str, dict], matter: dict | None = None):
     def handle(request: httpx.Request) -> httpx.Response:
         path = request.url.path
         if path.endswith("/oauth2/token"):
-            return httpx.Response(
-                200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"}
-            )
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"})
         if "/contacts/" in path:
             cid = path.rsplit("/", 1)[-1]
             if cid in contacts:
@@ -99,9 +95,7 @@ def test_role_records_carry_matter_number_and_party_email() -> None:
 
 
 def test_addresses_are_lowercased_for_recipient_comparison() -> None:
-    client = _mock_client(
-        _handler({"c1": _person("Alvarez", "Alvarez@Example.COM")}, _matter_record())
-    )
+    client = _mock_client(_handler({"c1": _person("Alvarez", "Alvarez@Example.COM")}, _matter_record()))
     resp = {"value": [{"id": "role-1", "contactId": "c1"}]}
     srv._attach_matter_party_join(client, MATTER_ID, resp)
     assert resp["value"][0]["email"] == "alvarez@example.com"
@@ -203,9 +197,7 @@ def test_get_roles_on_matter_returns_the_enriched_payload(monkeypatch) -> None:
     def _roles_response(request: httpx.Request) -> httpx.Response:
         path = request.url.path
         if path.endswith("/oauth2/token"):
-            return httpx.Response(
-                200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"}
-            )
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"})
         if path.endswith("/roles"):
             return httpx.Response(200, json=_roles_envelope())
         if "/contacts/" in path:

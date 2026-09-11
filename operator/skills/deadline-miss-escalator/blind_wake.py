@@ -29,6 +29,14 @@ like ``dispatch_envelope.py`` and ``broker_writer.py``.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # The skill's own pre_run module, which loads this file beside itself at
+    # runtime; a type-only import so the WakeDecision annotation names a real
+    # class (pyright 2026-09-10: it was an undefined name).
+    from pre_run import WakeDecision
+
 import asyncio
 import hashlib
 import json
@@ -100,6 +108,7 @@ def write_row(
 #: suite asserts field for field.
 _MAX_SERIALIZED_PLANS = 50
 
+
 def plan_counts(decision: "WakeDecision") -> dict:
     """The cap's own accounting, computed the one way ``_emit_wake`` computes it.
 
@@ -127,7 +136,6 @@ def plan_counts(decision: "WakeDecision") -> dict:
         admin = decision.digest.get("admin_confirms") or {}
         counts["digest_admin_total"] = int(admin.get("total") or 0)
     return counts
-
 
 
 async def try_write_emitted_wake(
@@ -175,5 +183,3 @@ async def try_write_emitted_wake(
         )
     except Exception:  # noqa: BLE001 — observability never gates the wake
         pass
-
-

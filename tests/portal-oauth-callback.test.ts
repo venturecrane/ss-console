@@ -11,6 +11,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { env as testEnv } from 'cloudflare:workers'
 
 import { issueOAuthState } from '../src/lib/oauth/state'
+
+// The callback re-resolves the reviewer's CURRENT access on the instance before
+// storing a token (2026-09-10). That helper reads D1 through the portal session
+// bridge; here it is a switch the test flips, so the callback's own branches are
+// what is under test. Default: the reviewer is still a principal.
+const accessKind = { value: 'allowed' as 'allowed' | 'redirect' }
+const resolveOperatorAccess = vi.fn(
+  async (
+    _db: unknown,
+    _locals: unknown,
+    options: { allowedRoles: string[]; customerSlug: string }
+  ) =>
+    accessKind.value === 'allowed'
+      ? { kind: 'allowed' as const, options }
+      : { kind: 'redirect' as const, to: '/portal/products/operator' }
+)
+vi.mock('../src/lib/portal/operator-access.js', () => ({
+  resolveOperatorAccess: (
+    db: unknown,
+    locals: unknown,
+    options: { allowedRoles: string[]; customerSlug: string }
+  ) => resolveOperatorAccess(db, locals, options),
+}))
+
 import { GET as portalCallback } from '../src/pages/portal/products/operator/oauth/[connector]/callback'
 
 const SIGNING_KEY_B64 = 'YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE='
@@ -69,11 +93,37 @@ describe('portal oauth callback', () => {
 
   beforeEach(() => {
     applyDefaultEnv()
+    accessKind.value = 'allowed'
+    resolveOperatorAccess.mockClear()
   })
 
   afterEach(() => {
     clearEnv()
     globalThis.fetch = ORIGINAL_FETCH
+  })
+
+  it('redirects with access_revoked when the reviewer is no longer a principal at callback time', async () => {
+    const state = await issueOAuthState({
+      customer_id: 'acme-law',
+      provider: 'microsoft-graph',
+      reviewer_id: 'user_owner',
+    })
+    accessKind.value = 'redirect'
+    // The token endpoint must never be reached: refusal precedes exchange.
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('token exchange must not run for a revoked reviewer')
+    })
+    const url = `${PORTAL_BASE}/portal/products/operator/oauth/microsoft-graph/callback?code=AUTHCODE&state=${encodeURIComponent(state)}`
+    const response = await invoke({ url, connector: 'microsoft-graph', authUserId: 'user_owner' })
+    const location = parseRedirect(response)
+    expect(location.searchParams.get('status')).toBe('failed')
+    expect(location.searchParams.get('reason')).toBe('access_revoked')
+    // Re-resolved with the initiator's own gate: principal on THIS instance.
+    expect(resolveOperatorAccess).toHaveBeenCalledTimes(1)
+    expect(resolveOperatorAccess.mock.calls[0]?.[2]).toEqual({
+      allowedRoles: ['principal'],
+      customerSlug: 'acme-law',
+    })
   })
 
   it('redirects with missing_params when state and code are absent', async () => {

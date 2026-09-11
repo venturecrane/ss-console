@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import Any
 
 from .audit_ledger import _iso_utc
-from .establishment_constants import *  # noqa: F403 — vocabulary and tuning surface
-from .establishment_validation import *  # noqa: F403 — validators and renderers
+from .establishment_constants import *  # vocabulary and tuning surface
+from .establishment_validation import *  # validators and renderers
 from .establishment_constants import (  # noqa: F401 — `import *` skips _names
     _CLASS_SLUG_CHARS,
     _ID_PATTERN,
@@ -52,6 +52,7 @@ from .establishment_validation import (  # noqa: F401 — `import *` skips _name
 from .pending_rule_store import PendingRuleStore
 
 logger = logging.getLogger(__name__)
+
 
 class EstablishmentStore:
     """The broker's half of the establishment spool.
@@ -184,25 +185,15 @@ class EstablishmentStore:
             raise EstablishmentValidationError("text must not be empty")
         text_bytes = text.encode("utf-8")
         if len(text_bytes) > MAX_DOC_TEXT_BYTES:
-            raise EstablishmentValidationError(
-                f"text is {len(text_bytes)} bytes; the ceiling is {MAX_DOC_TEXT_BYTES}"
-            )
+            raise EstablishmentValidationError(f"text is {len(text_bytes)} bytes; the ceiling is {MAX_DOC_TEXT_BYTES}")
 
         source_raw = request.get("source")
         if not isinstance(source_raw, dict):
-            raise EstablishmentValidationError(
-                "source must be an object with connector and document_id"
-            )
+            raise EstablishmentValidationError("source must be an object with connector and document_id")
         source = {
-            "connector": _require_text(
-                source_raw.get("connector"), "source.connector", _MAX_SHORT_TEXT
-            ),
-            "document_id": _require_text(
-                source_raw.get("document_id"), "source.document_id", _MAX_SHORT_TEXT
-            ),
-            "matter_id": _optional_text(
-                source_raw.get("matter_id"), "source.matter_id", _MAX_SHORT_TEXT
-            ),
+            "connector": _require_text(source_raw.get("connector"), "source.connector", _MAX_SHORT_TEXT),
+            "document_id": _require_text(source_raw.get("document_id"), "source.document_id", _MAX_SHORT_TEXT),
+            "matter_id": _optional_text(source_raw.get("matter_id"), "source.matter_id", _MAX_SHORT_TEXT),
         }
 
         staging_id_raw = request.get("staging_id")
@@ -211,9 +202,7 @@ class EstablishmentStore:
             staging_id = secrets.token_hex(12)
             staging_path = self.staging_dir / staging_id
             (staging_path / "docs").mkdir(parents=True)
-            (staging_path / "meta.json").write_text(
-                json.dumps({"created_at": time.time()}), "utf-8"
-            )
+            (staging_path / "meta.json").write_text(json.dumps({"created_at": time.time()}), "utf-8")
         else:
             staging_id, staging_path = self._require_staging(staging_id_raw)
 
@@ -241,9 +230,7 @@ class EstablishmentStore:
             "staged_at": time.time(),
             "text": text,
         }
-        (staging_path / "docs" / f"{doc_id}.json").write_text(
-            json.dumps(record, sort_keys=True), "utf-8"
-        )
+        (staging_path / "docs" / f"{doc_id}.json").write_text(json.dumps(record, sort_keys=True), "utf-8")
         return {
             "ok": True,
             "staging_id": staging_id,
@@ -258,16 +245,13 @@ class EstablishmentStore:
         staging_id = _require_id(value, "staging_id")
         staging_path = self.staging_dir / staging_id
         if not staging_path.is_dir():
-            raise EstablishmentValidationError(
-                "unknown or expired staging_id; stage the documents again"
-            )
+            raise EstablishmentValidationError("unknown or expired staging_id; stage the documents again")
         # Expiry is enforced here by refusal, not only by the sweep: a set the
         # broker cannot remove (root-owned analysis/ inside) lingers until the
         # intake's backstop purge, and lingering must not extend its life.
         if time.time() - self._staging_created_at(staging_path) > STAGING_TTL_SECONDS:
             raise EstablishmentValidationError(
-                "staging set expired "
-                f"({STAGING_TTL_SECONDS // 60}-minute TTL); stage the documents again"
+                f"staging set expired ({STAGING_TTL_SECONDS // 60}-minute TTL); stage the documents again"
             )
         return staging_id, staging_path
 
@@ -293,9 +277,7 @@ class EstablishmentStore:
 
     def _require_pending(self) -> PendingRuleStore:
         if self.pending is None:
-            raise EstablishmentValidationError(
-                "this broker has no rule store configured; nothing was recorded"
-            )
+            raise EstablishmentValidationError("this broker has no rule store configured; nothing was recorded")
         return self.pending
 
     def propose(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -312,8 +294,7 @@ class EstablishmentStore:
         scope = request.get("scope")
         if scope not in PROPOSAL_SCOPES or scope == "act":
             raise EstablishmentValidationError(
-                "scope must be one of ['firm_adjust', 'person']; "
-                f"got {scope!r} (an act is proposed with act_propose)"
+                f"scope must be one of ['firm_adjust', 'person']; got {scope!r} (an act is proposed with act_propose)"
             )
         instructed_by = require_address(request.get("instructed_by"), "instructed_by")
         source_ref = _require_text(request.get("source_ref"), "source_ref", _MAX_SHORT_TEXT)
@@ -326,8 +307,7 @@ class EstablishmentStore:
         subject_raw = request.get("subject")
         if not isinstance(subject_raw, dict):
             raise EstablishmentValidationError(
-                "subject must be an object: {person} for a personal rule, "
-                "{output_class, property} for a firm rule"
+                "subject must be an object: {person} for a personal rule, {output_class, property} for a firm rule"
             )
         if scope == "person":
             if for_admin:
@@ -358,9 +338,7 @@ class EstablishmentStore:
         # no second RULE_PROPOSED, and (the reason this matters now) no second
         # email to an administrator carrying a different tag, only one of which
         # answering would close.
-        existing = pending.find_open_duplicate(
-            instructed_by=instructed_by, scope=scope, text=text
-        )
+        existing = pending.find_open_duplicate(instructed_by=instructed_by, scope=scope, text=text)
         if existing is not None:
             return {
                 "ok": True,
@@ -450,16 +428,12 @@ class EstablishmentStore:
 
         row = pending.get(proposal_id)
         if row is None:
-            raise EstablishmentValidationError(
-                f"no rule was proposed under {proposal_id}; nothing to decline"
-            )
+            raise EstablishmentValidationError(f"no rule was proposed under {proposal_id}; nothing to decline")
         self._refuse_undeclinable(row, proposal_id, declined_by)
         if not pending.decline(proposal_id, declined_by):
             # Lost the race to another decline or to the commit. Whichever won,
             # the answer is the state now on the row, never this call's.
-            raise EstablishmentValidationError(
-                f"rule {proposal_id} was already answered; nothing was changed"
-            )
+            raise EstablishmentValidationError(f"rule {proposal_id} was already answered; nothing was changed")
 
         metadata = {
             "proposal_id": proposal_id,
@@ -496,9 +470,7 @@ class EstablishmentStore:
         }
 
     @staticmethod
-    def _refuse_undeclinable(
-        row: dict[str, Any], proposal_id: str, declined_by: str
-    ) -> None:
+    def _refuse_undeclinable(row: dict[str, Any], proposal_id: str, declined_by: str) -> None:
         """Name the reason a decline cannot land, before the UPDATE tries it.
 
         The UPDATE is the enforcement; this exists so the refusal a person reads
@@ -511,30 +483,21 @@ class EstablishmentStore:
         # landing on a row whose requester is then told the firm refused it.
         if row["kind"] == OPS_REQUEST_KIND:
             raise EstablishmentValidationError(
-                f"{proposal_id} is an operations request; it is answered by SMD "
-                "with ops_resolve, not declined here"
+                f"{proposal_id} is an operations request; it is answered by SMD with ops_resolve, not declined here"
             )
         if row["consumed_at"] is not None:
-            raise EstablishmentValidationError(
-                f"rule {proposal_id} was already committed; it is in effect"
-            )
+            raise EstablishmentValidationError(f"rule {proposal_id} was already committed; it is in effect")
         if row["declined_at"] is not None:
-            raise EstablishmentValidationError(
-                f"rule {proposal_id} was already declined; nothing was changed"
-            )
+            raise EstablishmentValidationError(f"rule {proposal_id} was already declined; nothing was changed")
         if row["lapsed_at"] is not None or row["expires_at"] < time.time():
-            raise EstablishmentValidationError(
-                f"rule {proposal_id} lapsed unanswered; ask for it to be stated again"
-            )
+            raise EstablishmentValidationError(f"rule {proposal_id} lapsed unanswered; ask for it to be stated again")
         if not row["for_admin"]:
             raise EstablishmentValidationError(
-                f"rule {proposal_id} was not waiting on an administrator; "
-                "there is nothing to decline"
+                f"rule {proposal_id} was not waiting on an administrator; there is nothing to decline"
             )
         if row["instructed_by"] == declined_by:
             raise EstablishmentValidationError(
-                "the person who stated a rule cannot decline it; "
-                "leaving it unconfirmed is how they withdraw it"
+                "the person who stated a rule cannot decline it; leaving it unconfirmed is how they withdraw it"
             )
 
     def lapse_notified(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -558,19 +521,13 @@ class EstablishmentStore:
         proposal_id = _require_proposal_id(request.get("proposal_id"))
         row = pending.get(proposal_id)
         if row is None:
-            raise EstablishmentValidationError(
-                f"no rule was proposed under {proposal_id}; nothing to report"
-            )
+            raise EstablishmentValidationError(f"no rule was proposed under {proposal_id}; nothing to report")
         # ss-console#2546 (the operations half): the same verb reports both, so
         # the noun follows the row rather than the code path. A person told
         # "rule 1a2b has no outcome" about a request for a Monday digest is
         # being told about something they never asked for.
         noun = "operations request" if row["kind"] == OPS_REQUEST_KIND else "rule"
-        if (
-            row["declined_at"] is None
-            and row["lapsed_at"] is None
-            and row.get("installed_at") is None
-        ):
+        if row["declined_at"] is None and row["lapsed_at"] is None and row.get("installed_at") is None:
             raise EstablishmentValidationError(
                 f"{noun} {proposal_id} has no outcome to report; it is still open"
                 if row["consumed_at"] is None
@@ -583,8 +540,7 @@ class EstablishmentStore:
             )
         if not pending.mark_outcome_reported(proposal_id):
             raise EstablishmentValidationError(
-                f"the outcome of {noun} {proposal_id} was already reported; "
-                "nothing was changed"
+                f"the outcome of {noun} {proposal_id} was already reported; nothing was changed"
             )
         state = proposal_state(pending.get(proposal_id) or row)
         if state == "lapsed":
@@ -593,11 +549,7 @@ class EstablishmentStore:
             # the firm failed to answer it, SMD did. One pinned type per kind,
             # chosen from the STORED kind so no caller can pick which row it
             # writes.
-            lapsed_type = (
-                OPS_REQUEST_LAPSED_ACTION_TYPE
-                if row["kind"] == OPS_REQUEST_KIND
-                else RULE_LAPSED_ACTION_TYPE
-            )
+            lapsed_type = OPS_REQUEST_LAPSED_ACTION_TYPE if row["kind"] == OPS_REQUEST_KIND else RULE_LAPSED_ACTION_TYPE
             self._ledger.append(
                 {
                     "action_type": lapsed_type,
@@ -656,15 +608,12 @@ class EstablishmentStore:
         # address: this names which of OUR processes holds the row, and it is
         # stored so a live duplicate can be traced to the two senders rather
         # than guessed at.
-        claimed_by = _require_text(
-            request.get("claimed_by"), "claimed_by", _MAX_SHORT_TEXT
-        )
+        claimed_by = _require_text(request.get("claimed_by"), "claimed_by", _MAX_SHORT_TEXT)
 
         row = pending.get(proposal_id)
         if row is None:
             raise EstablishmentValidationError(
-                f"no proposal was recorded under {proposal_id}; "
-                "there is no outcome to claim"
+                f"no proposal was recorded under {proposal_id}; there is no outcome to claim"
             )
         claimed = pending.claim_notify(proposal_id, claimed_by)
         return {
@@ -674,9 +623,7 @@ class EstablishmentStore:
             # Why the claim was refused, for the caller's log. Read off the row
             # AFTER the attempt, so it describes the state that actually beat
             # this caller rather than one read before the race.
-            "reason": (
-                None if claimed else self._claim_refusal(pending.get(proposal_id) or row)
-            ),
+            "reason": (None if claimed else self._claim_refusal(pending.get(proposal_id) or row)),
         }
 
     @staticmethod
@@ -685,11 +632,7 @@ class EstablishmentStore:
         UPDATE is the enforcement, and none of these strings is load-bearing."""
         if row.get("lapse_notified_at") is not None:
             return "the outcome of this proposal has already been reported"
-        if (
-            row.get("declined_at") is None
-            and row.get("lapsed_at") is None
-            and row.get("installed_at") is None
-        ):
+        if row.get("declined_at") is None and row.get("lapsed_at") is None and row.get("installed_at") is None:
             return "this proposal has no outcome to report yet"
         holder = row.get("notify_claimed_by") or "unnamed"
         return f"another observer is sending this outcome ({holder})"
@@ -707,8 +650,7 @@ class EstablishmentStore:
         row = pending.get(proposal_id)
         if row is None:
             raise EstablishmentValidationError(
-                f"no proposal was recorded under {proposal_id}; "
-                "there is no claim to release"
+                f"no proposal was recorded under {proposal_id}; there is no claim to release"
             )
         return {
             "ok": True,
@@ -748,9 +690,7 @@ class EstablishmentStore:
         # they have and write nothing: no second row, no second
         # OPS_REQUEST_RECORDED, and no second email to SMD carrying a different
         # tag, only one of which answering would close.
-        existing = pending.find_open_duplicate(
-            instructed_by=instructed_by, scope="ops", text=text
-        )
+        existing = pending.find_open_duplicate(instructed_by=instructed_by, scope="ops", text=text)
         if existing is not None:
             return {
                 "ok": True,
@@ -759,9 +699,7 @@ class EstablishmentStore:
                 "kind": OPS_REQUEST_KIND,
                 "instructed_by": existing["instructed_by"],
                 "expires_at": existing["expires_at"],
-                "readback": readback_for(
-                    existing["proposal_id"], existing["text"], OPS_REQUEST_KIND
-                ),
+                "readback": readback_for(existing["proposal_id"], existing["text"], OPS_REQUEST_KIND),
             }
 
         row = pending.create(
@@ -833,9 +771,7 @@ class EstablishmentStore:
         proposal_id = _require_proposal_id(request.get("proposal_id"))
         outcome = _require_text(request.get("outcome"), "outcome", _MAX_SHORT_TEXT)
         if outcome not in OPS_OUTCOMES:
-            raise EstablishmentValidationError(
-                f"outcome must be one of {sorted(OPS_OUTCOMES)}; got {outcome!r}"
-            )
+            raise EstablishmentValidationError(f"outcome must be one of {sorted(OPS_OUTCOMES)}; got {outcome!r}")
         resolved_by = require_address(request.get("resolved_by"), "resolved_by")
         source_ref = _require_text(request.get("source_ref"), "source_ref", _MAX_SHORT_TEXT)
         reason = normalize_outcome_reason(request.get("reason"))
@@ -912,9 +848,7 @@ class EstablishmentStore:
                 f"operations request {proposal_id} was already declined; nothing was changed"
             )
         if row["lapsed_at"] is not None or row["expires_at"] < time.time():
-            raise EstablishmentValidationError(
-                f"operations request {proposal_id} lapsed unanswered; ask for it again"
-            )
+            raise EstablishmentValidationError(f"operations request {proposal_id} lapsed unanswered; ask for it again")
 
     def ops_ask_sent(self, request: dict[str, Any]) -> dict[str, Any]:
         """Record that SMD has been asked, once, to answer in words this parses.
@@ -976,8 +910,7 @@ class EstablishmentStore:
             # list every time -- because committing is precisely what took the
             # row out of this branch's answer.
             visible = row is not None and (
-                outcomes_raw
-                or (row["consumed_at"] is None and row["expires_at"] >= time.time())
+                outcomes_raw or (row["consumed_at"] is None and row["expires_at"] >= time.time())
             )
             open_rows = [row] if visible else []
             return {"ok": True, "pending": [self._pending_view(r) for r in open_rows]}
@@ -989,9 +922,7 @@ class EstablishmentStore:
             # cannot become a second way to release a rule.
             return {
                 "ok": True,
-                "pending": [
-                    self._pending_view(r) for r in pending.unreported_outcomes_for(None)
-                ],
+                "pending": [self._pending_view(r) for r in pending.unreported_outcomes_for(None)],
             }
         sender = require_address(request.get("sender"), "sender")
         include_raw = request.get("include_for_admin", False)
@@ -1079,22 +1010,18 @@ class EstablishmentStore:
         already changed keep authorizing acts.
         """
         if self.customer_path is None:
-            raise EstablishmentValidationError(
-                "this broker has no customer.yaml handle; no act can be proposed"
-            )
+            raise EstablishmentValidationError("this broker has no customer.yaml handle; no act can be proposed")
         try:
             import yaml
 
             data = yaml.safe_load(self.customer_path.read_text(encoding="utf-8")) or {}
         except OSError as exc:
             raise EstablishmentValidationError(
-                f"the seat config is not readable ({exc.__class__.__name__}); "
-                "no act can be proposed"
+                f"the seat config is not readable ({exc.__class__.__name__}); no act can be proposed"
             ) from exc
-        except Exception as exc:  # noqa: BLE001 - an unparseable config authorizes nothing
+        except Exception as exc:
             raise EstablishmentValidationError(
-                f"the seat config is not parseable ({exc.__class__.__name__}); "
-                "no act can be proposed"
+                f"the seat config is not parseable ({exc.__class__.__name__}); no act can be proposed"
             ) from exc
         return data if isinstance(data, dict) else {}
 
@@ -1142,9 +1069,7 @@ class EstablishmentStore:
         nothing at all.
         """
         if tool != "mcp_smokeball_create_matter":
-            raise EstablishmentValidationError(
-                f"no authored act payload is defined for {tool!r}"
-            )
+            raise EstablishmentValidationError(f"no authored act payload is defined for {tool!r}")
         data = self._seat_config()
         self._require_act_exposure(data, tool)
         block: Any = data
@@ -1199,8 +1124,7 @@ class EstablishmentStore:
         tool = _require_text(value, "tool", _MAX_SHORT_TEXT)
         if tool not in ACT_TOOLS:
             raise EstablishmentValidationError(
-                f"{tool!r} is not an act this broker can propose; "
-                f"the closed vocabulary is {sorted(ACT_TOOLS)}"
+                f"{tool!r} is not an act this broker can propose; the closed vocabulary is {sorted(ACT_TOOLS)}"
             )
         return tool
 
@@ -1293,9 +1217,7 @@ class EstablishmentStore:
         # copy THIS uid read, or the two are looking at different files.
         supplied_authored = request.get("authored")
         if supplied_authored is not None:
-            if not isinstance(supplied_authored, dict) or {
-                k: v for k, v in supplied_authored.items()
-            } != authored:
+            if not isinstance(supplied_authored, dict) or {k: v for k, v in supplied_authored.items()} != authored:
                 raise EstablishmentValidationError(
                     "the authored block supplied with this proposal disagrees with the "
                     "one the broker read from the seat config; refusing to choose "
@@ -1303,13 +1225,9 @@ class EstablishmentStore:
                 )
 
         text = normalize_rule_text(
-            act_readback_text(
-                tool, authored, contact_name=contact_name, matter_type_name=matter_type_name
-            )
+            act_readback_text(tool, authored, contact_name=contact_name, matter_type_name=matter_type_name)
         )
-        payload_sha256 = _hash_text(
-            json.dumps(authored, sort_keys=True, separators=(",", ":"))
-        )
+        payload_sha256 = _hash_text(json.dumps(authored, sort_keys=True, separators=(",", ":")))
         row = pending.create(
             scope="act",
             subject={"tool": tool, "payload_sha256": payload_sha256},
@@ -1398,13 +1316,9 @@ class EstablishmentStore:
 
         run_id = secrets.token_hex(16)
         if not pending.consume(row["proposal_id"], run_id):
-            raise EstablishmentValidationError(
-                f"act {row['proposal_id']} was already committed; it has been done"
-            )
+            raise EstablishmentValidationError(f"act {row['proposal_id']} was already committed; it has been done")
 
-        payload_sha256 = _hash_text(
-            json.dumps(stored_payload, sort_keys=True, separators=(",", ":"))
-        )
+        payload_sha256 = _hash_text(json.dumps(stored_payload, sort_keys=True, separators=(",", ":")))
         metadata = {
             "proposal_id": row["proposal_id"],
             "run_id": run_id,
@@ -1459,9 +1373,7 @@ class EstablishmentStore:
         unknown_tail = "ask again" if scope == "act" else "state the rule again"
         row = pending.get(proposal_id)
         if row is None:
-            raise EstablishmentValidationError(
-                f"no {noun} was proposed under {proposal_id}; {unknown_tail}"
-            )
+            raise EstablishmentValidationError(f"no {noun} was proposed under {proposal_id}; {unknown_tail}")
         # ss-console#2546 (the operations half). Named FIRST, and by kind rather
         # than by the scope mismatch that would catch it two checks later,
         # because the two refusals read completely differently to the person who
@@ -1484,8 +1396,7 @@ class EstablishmentStore:
         # answered in time" call for different next sentences from them.
         if row["declined_at"] is not None:
             raise EstablishmentValidationError(
-                f"{noun} {proposal_id} was declined by an administrator; "
-                f"it is not in effect"
+                f"{noun} {proposal_id} was declined by an administrator; it is not in effect"
             )
         if row["lapsed_at"] is not None:
             # "Lapsed" is the right word for a rule, which somebody was waiting
@@ -1493,13 +1404,9 @@ class EstablishmentStore:
             # nobody was owed a report about it, so it keeps the sentence it has
             # always had.
             ended = "expired" if scope == "act" else "lapsed unanswered"
-            raise EstablishmentValidationError(
-                f"{noun} {proposal_id} {ended}; {restate}"
-            )
+            raise EstablishmentValidationError(f"{noun} {proposal_id} {ended}; {restate}")
         if row["expires_at"] < time.time():
-            raise EstablishmentValidationError(
-                f"{noun} {proposal_id} expired; {restate}"
-            )
+            raise EstablishmentValidationError(f"{noun} {proposal_id} expired; {restate}")
         if row["scope"] != scope:
             raise EstablishmentValidationError(
                 f"{noun} {proposal_id} was proposed as {row['scope']!r}, "
@@ -1508,9 +1415,7 @@ class EstablishmentStore:
         return row
 
     @staticmethod
-    def _refuse_restated(
-        request: dict[str, Any], row: dict[str, Any], fields: dict[str, Any]
-    ) -> None:
+    def _refuse_restated(request: dict[str, Any], row: dict[str, Any], fields: dict[str, Any]) -> None:
         """A submit may ECHO the proposal's fields; it may not change them.
 
         THE POINT OF THE WHOLE MECHANISM, stated as code: the person answered
@@ -1560,9 +1465,7 @@ class EstablishmentStore:
         """
         scope = request.get("scope") or "firm"
         if scope not in ("firm", "person", "firm_adjust"):
-            raise EstablishmentValidationError(
-                f"scope must be 'firm', 'person', or 'firm_adjust'; got {scope!r}"
-            )
+            raise EstablishmentValidationError(f"scope must be 'firm', 'person', or 'firm_adjust'; got {scope!r}")
         if scope == "firm_adjust":
             return self._submit_firm_adjust(request, secrets.token_hex(16))
         if scope == "person":
@@ -1570,15 +1473,11 @@ class EstablishmentStore:
         staging_id, staging_path = self._require_staging(request.get("staging_id"))
         phase = _require_text(request.get("phase"), "phase", _MAX_SHORT_TEXT)
         if phase not in SUBMIT_PHASES:
-            raise EstablishmentValidationError(
-                f"phase must be one of {sorted(SUBMIT_PHASES)}; got {phase!r}"
-            )
+            raise EstablishmentValidationError(f"phase must be one of {sorted(SUBMIT_PHASES)}; got {phase!r}")
 
         staged = self._load_staged_docs(staging_path)
         if not staged:
-            raise EstablishmentValidationError(
-                "staging set holds no documents; stage the corpus first"
-            )
+            raise EstablishmentValidationError("staging set holds no documents; stage the corpus first")
         # Integrity re-check of the broker's own files (defense in depth — the
         # intake re-verifies too): every staged text must still hash to the
         # digest recorded when it was staged.
@@ -1663,9 +1562,7 @@ class EstablishmentStore:
 
         manifest_raw = request.get("corpus_manifest")
         if not isinstance(manifest_raw, list) or not manifest_raw:
-            raise EstablishmentValidationError(
-                "corpus_manifest must be a non-empty list of {doc_id, sha256}"
-            )
+            raise EstablishmentValidationError("corpus_manifest must be a non-empty list of {doc_id, sha256}")
         if len(manifest_raw) > MAX_DOCS_PER_SET:
             raise EstablishmentValidationError(
                 f"corpus_manifest holds {len(manifest_raw)} entries; the ceiling is {MAX_DOCS_PER_SET}"
@@ -1675,9 +1572,7 @@ class EstablishmentStore:
         selected: list[dict[str, Any]] = []
         for index, entry in enumerate(manifest_raw):
             if not isinstance(entry, dict):
-                raise EstablishmentValidationError(
-                    f"corpus_manifest[{index}] must be an object with doc_id and sha256"
-                )
+                raise EstablishmentValidationError(f"corpus_manifest[{index}] must be an object with doc_id and sha256")
             doc_id = _require_text(entry.get("doc_id"), f"corpus_manifest[{index}].doc_id", 64)
             claimed = _require_text(entry.get("sha256"), f"corpus_manifest[{index}].sha256", 64)
             if doc_id in seen:
@@ -1687,9 +1582,7 @@ class EstablishmentStore:
             seen.add(doc_id)
             doc = staged_by_id.get(doc_id)
             if doc is None:
-                raise EstablishmentValidationError(
-                    f"corpus_manifest names {doc_id}, which is not in this staging set"
-                )
+                raise EstablishmentValidationError(f"corpus_manifest names {doc_id}, which is not in this staging set")
             # The claim must match the broker's OWN hash of the staged bytes —
             # the spec is bound to exactly the corpus the agent staged, and a
             # manifest that disagrees is a refusal, never a repair.
@@ -1699,9 +1592,7 @@ class EstablishmentStore:
                 )
             selected.append(doc)
 
-        instructed_by = _require_text(
-            request.get("instructed_by"), "instructed_by", _MAX_SHORT_TEXT
-        )
+        instructed_by = _require_text(request.get("instructed_by"), "instructed_by", _MAX_SHORT_TEXT)
         source_ref = _require_text(request.get("source_ref"), "source_ref", _MAX_SHORT_TEXT)
 
         doc_summaries = [{"name": d["name"], "sha256": d["sha256"]} for d in selected]
@@ -1718,9 +1609,7 @@ class EstablishmentStore:
             "spec_body": body,
             "spec_sha256": spec_digest,
             "assertions": assertions,
-            "corpus_manifest": [
-                {"doc_id": d["doc_id"], "sha256": d["sha256"]} for d in selected
-            ],
+            "corpus_manifest": [{"doc_id": d["doc_id"], "sha256": d["sha256"]} for d in selected],
             # Provenance for the audit trail, never authorization — the broker
             # cannot verify a claimed instructor (same posture as corrections
             # ``stated_by``); the authorization gate is the admin hook seat-side.
@@ -1795,9 +1684,7 @@ class EstablishmentStore:
             # Lost the race to a concurrent confirmation. Refuse rather than
             # install twice: the firm's sentence rendering twice in its own spec
             # file is a worse outcome than one redundant refusal.
-            raise EstablishmentValidationError(
-                f"rule {row['proposal_id']} was already committed; it is in effect"
-            )
+            raise EstablishmentValidationError(f"rule {row['proposal_id']} was already committed; it is in effect")
 
         adjustment = {
             "id": row["proposal_id"],
@@ -1877,9 +1764,7 @@ class EstablishmentStore:
         """
         for forbidden in ("staging_id", "corpus_manifest", "output_class", "property"):
             if request.get(forbidden) is not None:
-                raise EstablishmentValidationError(
-                    f"{forbidden} must not be supplied on a person-scoped submit"
-                )
+                raise EstablishmentValidationError(f"{forbidden} must not be supplied on a person-scoped submit")
         append_raw = request.get("append", False)
         if not isinstance(append_raw, bool):
             raise EstablishmentValidationError("append must be a boolean")
@@ -1921,9 +1806,7 @@ class EstablishmentStore:
                     f"spec_body is {len(body_bytes)} bytes after LF normalization; the ceiling is {MAX_SPEC_BODY_BYTES}"
                 )
             spec_digest = sha256(body_bytes).hexdigest()
-            instructed_by = _require_text(
-                request.get("instructed_by"), "instructed_by", _MAX_SHORT_TEXT
-            )
+            instructed_by = _require_text(request.get("instructed_by"), "instructed_by", _MAX_SHORT_TEXT)
 
         assertions = self._validate_assertions(request.get("assertions"))
         source_ref = _require_text(request.get("source_ref"), "source_ref", _MAX_SHORT_TEXT)
@@ -1982,9 +1865,7 @@ class EstablishmentStore:
         if value is None:
             return None
         if not isinstance(value, dict):
-            raise EstablishmentValidationError(
-                "assertions must be an object (with an optional 'rules' list)"
-            )
+            raise EstablishmentValidationError("assertions must be an object (with an optional 'rules' list)")
         rules = value.get("rules")
         if rules is not None:
             if not isinstance(rules, list):
@@ -1995,9 +1876,7 @@ class EstablishmentStore:
                 )
             for index, entry in enumerate(rules):
                 if not isinstance(entry, dict):
-                    raise EstablishmentValidationError(
-                        f"assertions.rules[{index}] must be an object"
-                    )
+                    raise EstablishmentValidationError(f"assertions.rules[{index}] must be an object")
         serialized = json.dumps(value, sort_keys=True, separators=(",", ":"))
         if len(serialized.encode("utf-8")) > _MAX_ASSERTIONS_BYTES:
             raise EstablishmentValidationError(
@@ -2028,9 +1907,7 @@ class EstablishmentStore:
                     source_path.rename(target)
                 else:
                     shutil.copyfile(source_path, target)
-            (tmp_dir / "submission.json").write_text(
-                json.dumps(submission, sort_keys=True), "utf-8"
-            )
+            (tmp_dir / "submission.json").write_text(json.dumps(submission, sort_keys=True), "utf-8")
             tmp_dir.rename(self.runs_dir / run_id)
         except OSError:
             shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -2078,13 +1955,9 @@ class EstablishmentStore:
             try:
                 result = json.loads(result_path.read_text("utf-8"))
             except (OSError, ValueError) as exc:
-                raise ValueError(
-                    f"result for run {run_id} is unreadable; the TTL sweep will clear it"
-                ) from exc
+                raise ValueError(f"result for run {run_id} is unreadable; the TTL sweep will clear it") from exc
             if not isinstance(result, dict):
-                raise ValueError(
-                    f"result for run {run_id} is not an object; the TTL sweep will clear it"
-                )
+                raise ValueError(f"result for run {run_id} is not an object; the TTL sweep will clear it")
             self._ledger.append(build_result_row(run_id, result))
             self._stamp_installed(run_id, result)
             # One-shot delete. The results dir is 0770 root:workspace-broker
@@ -2101,7 +1974,5 @@ class EstablishmentStore:
         if (self.runs_dir / run_id).is_dir():
             return {"ok": True, "run_id": run_id, "status": "pending"}
         raise EstablishmentValidationError(
-            "unknown run_id; results are one-shot reads and expire after "
-            f"{RESULT_TTL_SECONDS // 60} minutes"
+            f"unknown run_id; results are one-shot reads and expire after {RESULT_TTL_SECONDS // 60} minutes"
         )
-

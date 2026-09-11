@@ -42,10 +42,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
           cache: 'npm'
@@ -78,16 +78,19 @@ jobs:
       # dedicated runner cost a full billed minute per run for seconds of work.
       # Step names keep the failure signal specific in the UI.
       - name: Require substantive justification on every nosemgrep
-        # Every `// nosemgrep` annotation must be followed by ` — ` or `: ` and
-        # at least 20 characters of justification prose. Without this audit,
-        # the gate degrades over time as agents silently silence findings by
-        # appending a bare `// nosemgrep` comment.
+        # Every `// nosemgrep` or `# nosemgrep` annotation must be followed by
+        # ` — ` or `: ` and at least 20 characters of justification prose.
+        # Without this audit, the gate degrades over time as agents silently
+        # silence findings by appending a bare `nosemgrep` comment. Python is
+        # in scope: Semgrep's audit packs carry Python rules and operator/
+        # holds 52 `# nosemgrep:` suppressions that this gate ignored while it
+        # matched `//` only (2026-09-10 review, Security LOW 6).
         run: |
           set -e
-          bad=$(grep -rnP --include='*.ts' --include='*.js' \
-            '//[[:space:]]*nosemgrep(:[^[:space:]]+)?[[:space:]]*(?:[—:][[:space:]]*.{0,19})?[[:space:]]*$' \
+          bad=$(grep -rnP --include='*.ts' --include='*.js' --include='*.py' \
+            '(//|#)[[:space:]]*nosemgrep(:[^[:space:]]+)?[[:space:]]*(?:[—:][[:space:]]*.{0,19})?[[:space:]]*$' \
             . \
-            --exclude-dir=node_modules --exclude-dir=dist || true)
+            --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.venv || true)
           if [ -n "$bad" ]; then
             echo "nosemgrep annotations require ≥20 chars of justification after ' — ' or ': ':"
             echo "$bad"
@@ -114,7 +117,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -188,7 +191,13 @@ jobs:
       - name: Run Gitleaks
         run: |
           echo "## Secret Detection" >> $GITHUB_STEP_SUMMARY
-          if ./gitleaks detect --source . --verbose --no-git --config .gitleaks.toml 2>&1 | tee gitleaks-output.txt; then
+          # Full history, not the working tree. The checkout above pays for
+          # `fetch-depth: 0` precisely so a secret committed and later removed
+          # is still found; `--no-git` threw that away for three reviews
+          # (2026-08-23, 09-09, 09-10 Security C4) on a repository that is
+          # public. Historical placeholder hits are pinned by fingerprint in
+          # .gitleaksignore, each with a comment saying what it was.
+          if ./gitleaks git --verbose --config .gitleaks.toml . 2>&1 | tee gitleaks-output.txt; then
             echo "No secrets detected." >> $GITHUB_STEP_SUMMARY
           else
             echo "### Secrets Found" >> $GITHUB_STEP_SUMMARY
@@ -207,7 +216,7 @@ jobs:
       # .github/workflows/dependabot-auto-merge.yml when safe).
       image: returntocorp/semgrep:1.157.0
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Diff-aware scanning (--baseline-commit) resolves a merge-base, so
           # it needs full history. The default shallow clone can't reach it.

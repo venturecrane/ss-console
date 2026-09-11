@@ -79,8 +79,7 @@ def changed_files(base: str, head: str) -> list[str] | None:
         return None
     if proc.returncode != 0:
         print(
-            f"::warning::git diff {base}...{head} failed ({proc.stderr.strip()}); "
-            "running the full suite",
+            f"::warning::git diff {base}...{head} failed ({proc.stderr.strip()}); running the full suite",
             file=sys.stderr,
         )
         return None

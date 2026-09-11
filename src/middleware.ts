@@ -6,6 +6,7 @@ import { resolveAdminSessionFromClerk } from './lib/auth/admin-session-shim'
 import { parseSessionToken, validateSession, renewSession } from './lib/auth/session'
 import { captureError, withSentryRequestHandler } from './lib/observability/sentry'
 import { applySecurityHeaders } from './lib/security/response-headers'
+import { classifyCrossSite } from './lib/security/cross-site'
 import {
   PRE_REWRITE_REDIRECTS,
   POST_REWRITE_REDIRECTS,
@@ -236,6 +237,14 @@ async function handleRequest(context: APIContext, next: NextFn): Promise<Respons
 
   const authDenial = enforceAuth(context, pathname)
   if (authDenial) return authDenial
+
+  // After auth, not before: an unauthenticated cross-site POST should read as
+  // the auth failure it is (a redirect or 401), and the CSRF refusal is for the
+  // case the cookie DID come along. See src/lib/security/cross-site.ts.
+  const crossSite = classifyCrossSite(context.request)
+  if (crossSite.crossSite) {
+    return jsonResponse(403, { error: 'cross_site_request', detail: crossSite.reason })
+  }
 
   return await next()
 }

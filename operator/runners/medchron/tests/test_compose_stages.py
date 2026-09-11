@@ -1,6 +1,7 @@
 """map (compose), repair_truncated, assemble and merge in-process, against a
 scripted SDK client. The synthetic map output below is in the house format
 the prompt asks for, so assemble and the merge falsifier read it for real."""
+
 from __future__ import annotations
 
 import json
@@ -16,8 +17,13 @@ from medchron.stages import merge_falsify as mf, repair as repair_stage
 from medchron.stages.base import StageRun
 from medchron_testkit import FIRM_CONFIG, FakeSeat
 
-HEADINGS = ["Patient Complaints & Limitations", "HPI & Prior Medical History", "Medical Diagnoses",
-            "Treatment Recommendations", "All Other Information"]
+HEADINGS = [
+    "Patient Complaints & Limitations",
+    "HPI & Prior Medical History",
+    "Medical Diagnoses",
+    "Treatment Recommendations",
+    "All Other Information",
+]
 
 
 class Usage:
@@ -72,8 +78,16 @@ def _sr(job_dir: Path, firm: Path, data_root: Path, client=None, log: list[str] 
     job = job_mod.load(job_dir)
     cfg = config_mod.load(str(firm))
     lines = log if log is not None else []
-    return StageRun(job=job, cfg=cfg, unit=job.units[0], slug_dir=data_root / "example-matter", decided={},
-                    log=lines.append, seat_factory=lambda: FakeSeat([], [], {}), client_factory=lambda: client)
+    return StageRun(
+        job=job,
+        cfg=cfg,
+        unit=job.units[0],
+        slug_dir=data_root / "example-matter",
+        decided={},
+        log=lines.append,
+        seat_factory=lambda: FakeSeat([], [], {}),
+        client_factory=lambda: client,
+    )
 
 
 def _unit_files(sr: StageRun, texts: dict[str, str]) -> None:
@@ -84,7 +98,9 @@ def _unit_files(sr: StageRun, texts: dict[str, str]) -> None:
         fid = name.replace(" ", "_")
         tp = sr.slug_dir / "text" / f"{fid}.txt"
         tp.write_text(text)
-        rows.append({"id": fid, "name": name, "ext": ".pdf", "folder": "/MEDICAL", "text_path": str(tp), "chars": len(text)})
+        rows.append(
+            {"id": fid, "name": name, "ext": ".pdf", "folder": "/MEDICAL", "text_path": str(tp), "chars": len(text)}
+        )
     (sr.slug_dir / "units" / "alpha.json").write_text(json.dumps(rows))
 
 
@@ -161,7 +177,9 @@ def test_compose_streams_resumes_by_hash_and_records_usage(job_dir: Path, firm_h
     assert compose_stage.run(sr) == 0 and len(client.calls) == 1
 
 
-def test_compose_retries_a_refusal_then_gives_up_and_exits_1(job_dir: Path, firm_headings: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_compose_retries_a_refusal_then_gives_up_and_exits_1(
+    job_dir: Path, firm_headings: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     client = Scripted(lambda p, n: _msg("nope", stop="refusal"))
     log: list[str] = []
     sr = _sr(job_dir, firm_headings, data_root, client, log=log)
@@ -173,9 +191,11 @@ def test_compose_retries_a_refusal_then_gives_up_and_exits_1(job_dir: Path, firm
     assert any("REFUSED after 3 attempts" in line for line in log)
 
 
-def test_compose_splits_an_emptied_chunk_once(job_dir: Path, firm_headings: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_compose_splits_an_emptied_chunk_once(
+    job_dir: Path, firm_headings: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     def reply(p, n):
-        return _msg("x") if n == 1 else _msg(MAP_OUT)          # 1 byte for the whole chunk, then fine per half
+        return _msg("x") if n == 1 else _msg(MAP_OUT)  # 1 byte for the whole chunk, then fine per half
 
     client = Scripted(reply)
     sr = _sr(job_dir, firm_headings, data_root, client)
@@ -190,7 +210,9 @@ def test_compose_splits_an_emptied_chunk_once(job_dir: Path, firm_headings: Path
 
 
 # ---- repair ----------------------------------------------------------------------
-def test_repair_rewrites_a_truncated_chunk_as_parts_and_sets_the_original_aside(job_dir: Path, firm_headings: Path, data_root: Path) -> None:
+def test_repair_rewrites_a_truncated_chunk_as_parts_and_sets_the_original_aside(
+    job_dir: Path, firm_headings: Path, data_root: Path
+) -> None:
     client = Scripted(lambda p, n: _msg(MAP_OUT))
     sr = _sr(job_dir, firm_headings, data_root, client)
     d = sr.slug_dir / "runs" / "alpha"
@@ -209,7 +231,7 @@ def test_repair_rewrites_a_truncated_chunk_as_parts_and_sets_the_original_aside(
 
 def test_repair_escalates_the_split_when_a_part_is_emptied(job_dir: Path, firm_headings: Path, data_root: Path) -> None:
     def reply(p, n):
-        return _msg("x") if n <= 2 else _msg(MAP_OUT)          # both halves empty, thirds fine
+        return _msg("x") if n <= 2 else _msg(MAP_OUT)  # both halves empty, thirds fine
 
     client = Scripted(reply)
     sr = _sr(job_dir, firm_headings, data_root, client)
@@ -231,23 +253,30 @@ def _seed_map(sr: StageRun, text: str = MAP_OUT, name: str = "map-01.md", usage:
     if usage is not None:
         (d / "usage.jsonl").write_text("".join(json.dumps(u) + "\n" for u in usage))
     (sr.slug_dir / "units").mkdir(exist_ok=True)
-    (sr.slug_dir / "units" / "alpha.json").write_text(json.dumps([
-        {"id": "a", "name": "clinic note", "ext": ".pdf"}, {"id": "b", "name": "mri report", "ext": ".pdf"}]))
+    (sr.slug_dir / "units" / "alpha.json").write_text(
+        json.dumps(
+            [{"id": "a", "name": "clinic note", "ext": ".pdf"}, {"id": "b", "name": "mri report", "ext": ".pdf"}]
+        )
+    )
     return d
 
 
-def test_assemble_numbers_exhibits_substitutes_citations_and_keeps_both_page_groups(job_dir: Path, firm_headings: Path, data_root: Path) -> None:
+def test_assemble_numbers_exhibits_substitutes_citations_and_keeps_both_page_groups(
+    job_dir: Path, firm_headings: Path, data_root: Path
+) -> None:
     sr = _sr(job_dir, firm_headings, data_root)
     d = _seed_map(sr, usage=[{"chunk": 1, "stop": "end_turn"}])
     assert assemble_stage.run(sr) == 0
     assert json.loads((d / "exhibit_map.json").read_text()) == {"clinic note.pdf": 1, "mri report.pdf": 2}
     entries = (d / "entries.md").read_text()
     assert "(Exhibit 1 - p. 1)" in entries and "(Exhibit 1 - p. 2)" in entries
-    assert "(Exhibit 2 - p. 1, 3)" in entries          # the second page group is not swallowed
+    assert "(Exhibit 2 - p. 1, 3)" in entries  # the second page group is not swallowed
     assert (d / "clusters.md").read_text() == "" and "none observed" not in (d / "conflicts.md").read_text()
 
 
-def test_assemble_clusters_same_date_same_provider_and_refuses_over_truncation(job_dir: Path, firm_headings: Path, data_root: Path) -> None:
+def test_assemble_clusters_same_date_same_provider_and_refuses_over_truncation(
+    job_dir: Path, firm_headings: Path, data_root: Path
+) -> None:
     sr = _sr(job_dir, firm_headings, data_root)
     second = MAP_OUT.replace("neck pain rated 6 of 10", "headache")
     d = _seed_map(sr, usage=[{"chunk": 1, "stop": "end_turn"}, {"chunk": 2, "stop": "end_turn"}])
@@ -285,8 +314,15 @@ Physical therapy twice weekly. (Exhibit 1 - p. 2)
 """
 
 
-def test_merge_in_code_unions_and_orders_and_the_falsifier_passes(job_dir: Path, firm_headings: Path, data_root: Path) -> None:
-    sr = _sr(job_dir, firm_headings, data_root, client=Scripted(lambda p, n: (_ for _ in ()).throw(AssertionError("no model"))))
+def test_merge_in_code_unions_and_orders_and_the_falsifier_passes(
+    job_dir: Path, firm_headings: Path, data_root: Path
+) -> None:
+    sr = _sr(
+        job_dir,
+        firm_headings,
+        data_root,
+        client=Scripted(lambda p, n: (_ for _ in ()).throw(AssertionError("no model"))),
+    )
     d = sr.slug_dir / "runs" / "alpha"
     d.mkdir(parents=True)
     (d / "clusters.md").write_text(CLUSTER)
@@ -299,19 +335,24 @@ def test_merge_in_code_unions_and_orders_and_the_falsifier_passes(job_dir: Path,
     assert route["code"] == [1] and route["routed"] == []
 
 
-def test_merge_routes_a_disagreement_to_the_model_and_falsifies_its_answer(job_dir: Path, firm_headings: Path, data_root: Path) -> None:
+def test_merge_routes_a_disagreement_to_the_model_and_falsifies_its_answer(
+    job_dir: Path, firm_headings: Path, data_root: Path
+) -> None:
     # fragment 2 restates the complaint under the SAME subsection with a different number
     disagree = CLUSTER.replace(
         "Example Clinic | Medical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n\nTreatment Recommendations\n\n"
         "Physical therapy twice weekly. (Exhibit 1 - p. 2)",
         "Example Clinic | Patient Complaints & Limitations\n\n"
         "The patient reports neck pain rated 8 of 10. (Exhibit 1 - p. 3)\n\nMedical Diagnoses\n\n"
-        "Cervical strain. (Exhibit 1 - p. 2)")
+        "Cervical strain. (Exhibit 1 - p. 2)",
+    )
     assert disagree != CLUSTER
-    good = ("01/02/2026\nExample Clinic | Patient Complaints & Limitations\n\n"
-            "The patient reports neck pain rated 6 of 10. (Exhibit 1 - p. 1)\n\n"
-            "The patient reports neck pain rated 8 of 10. The records differ on this point. (Exhibit 1 - p. 3)\n\n"
-            "Medical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n")
+    good = (
+        "01/02/2026\nExample Clinic | Patient Complaints & Limitations\n\n"
+        "The patient reports neck pain rated 6 of 10. (Exhibit 1 - p. 1)\n\n"
+        "The patient reports neck pain rated 8 of 10. The records differ on this point. (Exhibit 1 - p. 3)\n\n"
+        "Medical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n"
+    )
     client = Scripted(lambda p, n: _msg(good))
     log: list[str] = []
     sr = _sr(job_dir, firm_headings, data_root, client, log=log)
@@ -331,10 +372,12 @@ def test_merge_routes_a_disagreement_to_the_model_and_falsifies_its_answer(job_d
 
 def test_falsifier_exit_codes(firm_headings: Path) -> None:
     hd = mf.Headings.from_config(config_mod.load(str(firm_headings)))
-    merged_ok = ("01/02/2026\nExample Clinic | Patient Complaints & Limitations\n\n"
-                 "The patient reports neck pain rated 6 of 10. (Exhibit 1 - p. 1)\n\nMedical Diagnoses\n\n"
-                 "Cervical strain. (Exhibit 1 - p. 2)\n\nTreatment Recommendations\n\n"
-                 "Physical therapy twice weekly. (Exhibit 1 - p. 2)\n")
+    merged_ok = (
+        "01/02/2026\nExample Clinic | Patient Complaints & Limitations\n\n"
+        "The patient reports neck pain rated 6 of 10. (Exhibit 1 - p. 1)\n\nMedical Diagnoses\n\n"
+        "Cervical strain. (Exhibit 1 - p. 2)\n\nTreatment Recommendations\n\n"
+        "Physical therapy twice weekly. (Exhibit 1 - p. 2)\n"
+    )
     assert mf.check(CLUSTER, merged_ok, hd)[0] == 0
     assert mf.check(CLUSTER, merged_ok.replace("(Exhibit 1 - p. 1)", "(Exhibit 1 - p. 9)"), hd)[0] == 3
     assert mf.check(CLUSTER, merged_ok.replace("Physical therapy twice weekly. (Exhibit 1 - p. 2)\n", ""), hd)[0] == 4

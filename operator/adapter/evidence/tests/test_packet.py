@@ -38,8 +38,8 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[3]))
 
-from adapter.audit_log import AuditLogWriter, SqliteExecutor  # noqa: E402
-from adapter.evidence.packet import (  # noqa: E402
+from adapter.audit_log import AuditLogWriter, SqliteExecutor  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from adapter.evidence.packet import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     EvidencePacketBuilder,
     EvidencePacketError,
     PacketActor,
@@ -180,9 +180,7 @@ def _build_pair(tmp_path: Path):
     conn = _make_db(tmp_path)
     reader = SqliteReadExecutor(conn)
     audit = AuditLogWriter(SqliteExecutor(conn))
-    builder = EvidencePacketBuilder(
-        reader=reader, audit_writer=audit, yaml_loader=json.loads
-    )
+    builder = EvidencePacketBuilder(reader=reader, audit_writer=audit, yaml_loader=json.loads)
     return builder, conn
 
 
@@ -289,7 +287,12 @@ def _request(tmp_path: Path, customer_yaml: Path, **over) -> PacketRequest:
     return PacketRequest(**base)
 
 
-def test_build_emits_targz_with_every_expected_file(tmp_path):
+def test_build_emits_targz_with_every_expected_file(tmp_path, monkeypatch):
+    # The signing key is read from ambient os.environ (signing.py); a developer
+    # shell with the real key staged would sign the packet and add manifest.sig,
+    # turning the expected-file list red for a reason unrelated to the code
+    # (code review 2026-09-10, Testing 4). The signed path has its own test.
+    monkeypatch.delenv("EVIDENCE_PACKET_SIGNING_KEY_B64", raising=False)
     builder, conn = _build_pair(tmp_path)
     _seed_audit_row(
         conn,
@@ -519,21 +522,13 @@ def test_build_is_byte_deterministic_for_same_inputs(tmp_path):
 
     builder_a, _ = _build_pair(dir_a)
     yaml_a = _write_customer_yaml(dir_a, {"customer_name": "Acme"})
-    _run(
-        builder_a.build(
-            _request(dir_a, yaml_a, output_path=out_a)
-        )
-    )
+    _run(builder_a.build(_request(dir_a, yaml_a, output_path=out_a)))
 
     # Fresh shared connection so we don't double-count the
     # chain-of-custody row from the first build.
     builder_b, _ = _build_pair(dir_b)
     yaml_b = _write_customer_yaml(dir_b, {"customer_name": "Acme"})
-    _run(
-        builder_b.build(
-            _request(dir_b, yaml_b, output_path=out_b)
-        )
-    )
+    _run(builder_b.build(_request(dir_b, yaml_b, output_path=out_b)))
 
     # The README, summary PDF, and manifest all quote the manifest
     # sha256 (and the manifest itself carries generated_at). The
@@ -600,9 +595,7 @@ def test_matter_scoped_zero_matches_with_unattributed_rows_refuses_to_build(tmp_
     message = str(exc.value)
     assert "matched 0 audit rows" in message
     assert "2 rows in this period carry no matter attribution" in message
-    assert (
-        "from 2026-04-10T09:00:00.000Z to 2026-04-20T09:00:00.000Z" in message
-    )
+    assert "from 2026-04-10T09:00:00.000Z to 2026-04-20T09:00:00.000Z" in message
     assert "--matter all" in message
     assert "--acknowledge-unattributed-gap" in message
     # No partial artifact left behind.
@@ -669,10 +662,7 @@ def test_matter_scoped_zero_matches_builds_when_gap_is_acknowledged(tmp_path):
     assert 'Read that as "this system cannot answer the question"' in readme
     assert 'NOT as "nothing happened on this matter"' in readme
     assert "1 row in this period carries no matter attribution" in readme
-    assert (
-        "acknowledged this gap before it was written: captain@example.com"
-        in readme
-    )
+    assert "acknowledged this gap before it was written: captain@example.com" in readme
 
     pdf = _member_bytes(result.output_path, "01-summary.pdf")
     assert b"What this package covers, and what it cannot" in pdf
@@ -772,7 +762,7 @@ def test_customer_wide_export_with_no_rows_at_all_is_a_truthful_zero(tmp_path):
 
 
 def test_missing_audit_table_is_not_reported_as_zero_activity(tmp_path):
-    """"No such table" is not "nothing happened". A matter-scoped export
+    """ "No such table" is not "nothing happened". A matter-scoped export
     against a source with no audit_log refuses outright."""
     builder, read_conn, audit_conn = _build_pair_without_audit_table(tmp_path)
     customer_yaml = _write_customer_yaml(tmp_path, {"customer_name": "Acme"})
@@ -859,8 +849,7 @@ def test_prior_export_rows_do_not_count_against_coverage(tmp_path):
     )
     cur = conn.cursor()
     cur.execute(
-        "SELECT COUNT(*) AS n FROM audit_log "
-        "WHERE action_type = 'COMPLIANCE_PACKET_EXPORTED' AND matter_ref IS NULL"
+        "SELECT COUNT(*) AS n FROM audit_log WHERE action_type = 'COMPLIANCE_PACKET_EXPORTED' AND matter_ref IS NULL"
     )
     row = cur.fetchone()
     assert (row["n"] if isinstance(row, dict) else row[0]) == 1
@@ -898,10 +887,7 @@ def test_coverage_is_recorded_on_the_chain_of_custody_row(tmp_path):
     _run(builder.build(_request(tmp_path, customer_yaml, matter="m-1")))
 
     cur = conn.cursor()
-    cur.execute(
-        "SELECT metadata FROM audit_log "
-        "WHERE action_type = 'COMPLIANCE_PACKET_EXPORTED'"
-    )
+    cur.execute("SELECT metadata FROM audit_log WHERE action_type = 'COMPLIANCE_PACKET_EXPORTED'")
     row = cur.fetchone()
     metadata_text = row["metadata"] if isinstance(row, dict) else row[0]
     coverage = json.loads(metadata_text)["coverage"]
@@ -928,9 +914,7 @@ def test_readme_and_pdf_state_the_same_coverage_wording(tmp_path):
     result = _run(builder.build(_request(tmp_path, customer_yaml, matter="m-1")))
 
     readme = _member_bytes(result.output_path, "00-README.md").decode("utf-8")
-    pdf = _member_bytes(result.output_path, "01-summary.pdf").decode(
-        "latin-1", "replace"
-    )
+    pdf = _member_bytes(result.output_path, "01-summary.pdf").decode("latin-1", "replace")
     heading = "What this package covers, and what it cannot"
     assert heading in readme
     assert heading in pdf
@@ -953,10 +937,7 @@ def test_readme_and_pdf_state_the_same_coverage_wording(tmp_path):
 # checked and present, checked and gone (halt), and not checked (disclosed).
 # ---------------------------------------------------------------------------
 
-_CHAIN_SCHEMA_EXTRA = (
-    "ALTER TABLE audit_log ADD COLUMN prev_hash TEXT;"
-    "ALTER TABLE audit_log ADD COLUMN row_hash TEXT;"
-)
+_CHAIN_SCHEMA_EXTRA = "ALTER TABLE audit_log ADD COLUMN prev_hash TEXT;ALTER TABLE audit_log ADD COLUMN row_hash TEXT;"
 
 _PIN_A = "a" * 64
 _PIN_B = "b" * 64
@@ -978,9 +959,7 @@ def _seed_chained_row(conn: sqlite3.Connection, *, id_: str, ts: str, row_hash: 
 
 def test_a_present_pinned_head_is_stated_in_the_readme(tmp_path):
     builder, conn = _build_pair_with_chain_columns(tmp_path)
-    _seed_chained_row(
-        conn, id_="01HZZ00000000000000000P1", ts="2026-04-10T09:00:00.000Z", row_hash=_PIN_A
-    )
+    _seed_chained_row(conn, id_="01HZZ00000000000000000P1", ts="2026-04-10T09:00:00.000Z", row_hash=_PIN_A)
     customer_yaml = _write_customer_yaml(tmp_path, {"customer_name": "Acme"})
 
     result = _run(builder.build(_request(tmp_path, customer_yaml, pinned_head=_PIN_A)))
@@ -1003,9 +982,7 @@ def test_a_missing_pinned_head_halts_the_build(tmp_path):
     Before ss#2500 this built a clean packet asserting a complete record.
     """
     builder, conn = _build_pair_with_chain_columns(tmp_path)
-    _seed_chained_row(
-        conn, id_="01HZZ00000000000000000P2", ts="2026-04-10T09:00:00.000Z", row_hash=_PIN_B
-    )
+    _seed_chained_row(conn, id_="01HZZ00000000000000000P2", ts="2026-04-10T09:00:00.000Z", row_hash=_PIN_B)
     customer_yaml = _write_customer_yaml(tmp_path, {"customer_name": "Acme"})
 
     with pytest.raises(EvidencePacketError) as exc:
@@ -1023,9 +1000,7 @@ def test_the_same_ledger_builds_cleanly_when_the_pin_is_omitted(tmp_path):
     something else about the fixture.
     """
     builder, conn = _build_pair_with_chain_columns(tmp_path)
-    _seed_chained_row(
-        conn, id_="01HZZ00000000000000000P3", ts="2026-04-10T09:00:00.000Z", row_hash=_PIN_B
-    )
+    _seed_chained_row(conn, id_="01HZZ00000000000000000P3", ts="2026-04-10T09:00:00.000Z", row_hash=_PIN_B)
     customer_yaml = _write_customer_yaml(tmp_path, {"customer_name": "Acme"})
 
     result = _run(builder.build(_request(tmp_path, customer_yaml)))
@@ -1047,7 +1022,7 @@ def test_a_malformed_pin_is_refused_before_any_read(tmp_path):
 
 
 def test_a_source_without_chain_columns_halts_rather_than_reporting_a_break(tmp_path):
-    """"Could not look" must never be reported as "looked and it is gone"."""
+    """ "Could not look" must never be reported as "looked and it is gone"."""
     builder, conn = _build_pair(tmp_path)  # no prev_hash / row_hash columns
     _seed_audit_row(
         conn,
@@ -1068,16 +1043,12 @@ def test_the_pin_is_recorded_on_the_chain_of_custody_row(tmp_path):
     """The pin travels INSIDE the chain it attests to, so a later reader can
     take this row's own hash as the next pin without a new mechanism."""
     builder, conn = _build_pair_with_chain_columns(tmp_path)
-    _seed_chained_row(
-        conn, id_="01HZZ00000000000000000P5", ts="2026-04-10T09:00:00.000Z", row_hash=_PIN_A
-    )
+    _seed_chained_row(conn, id_="01HZZ00000000000000000P5", ts="2026-04-10T09:00:00.000Z", row_hash=_PIN_A)
     customer_yaml = _write_customer_yaml(tmp_path, {"customer_name": "Acme"})
 
     _run(builder.build(_request(tmp_path, customer_yaml, pinned_head=_PIN_A)))
 
-    row = conn.execute(
-        "SELECT metadata FROM audit_log WHERE action_type = 'COMPLIANCE_PACKET_EXPORTED'"
-    ).fetchone()
+    row = conn.execute("SELECT metadata FROM audit_log WHERE action_type = 'COMPLIANCE_PACKET_EXPORTED'").fetchone()
     metadata = json.loads(row["metadata"])
     assert metadata["chain_pin"]["pinned_head"] == _PIN_A
     assert metadata["chain_pin"]["present"] is True

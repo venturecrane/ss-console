@@ -35,9 +35,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCENARIO_DIR = Path(__file__).resolve().parent / "scenarios"
 VOCABULARY_PATH = REPO_ROOT / "operator" / "contracts" / "audit-action-vocabulary.json"
 
-REQUIRED_KEYS = frozenset(
-    {"id", "title", "incident_class", "replays", "hostile_act", "falsifier", "requires", "legs"}
-)
+REQUIRED_KEYS = frozenset({"id", "title", "incident_class", "replays", "hostile_act", "falsifier", "requires", "legs"})
 
 #: Capabilities a leg can need before it can be driven. The runner reports a
 #: missing capability as SKIPPED-with-reason; it never substitutes a fake.
@@ -71,8 +69,7 @@ def _validate_expectation(expectation: dict, *, where: str, vocabulary: set[str]
     kind = expectation.get("kind")
     if kind not in EXPECT_KINDS:
         raise SchemaError(
-            f"{where}: expectation kind {kind!r} is not one the scorer evaluates "
-            f"({', '.join(sorted(EXPECT_KINDS))})"
+            f"{where}: expectation kind {kind!r} is not one the scorer evaluates ({', '.join(sorted(EXPECT_KINDS))})"
         )
     if kind in ("audit_row_present", "audit_row_absent"):
         types = expectation.get("action_types") or []
@@ -98,8 +95,7 @@ def _validate_leg(leg: dict, *, where: str, vocabulary: set[str]) -> None:
         raise SchemaError(f"{where}: leg has no drive block")
     if drive.get("kind") not in DRIVERS:
         raise SchemaError(
-            f"{where}: drive.kind={drive.get('kind')!r} is not a registered driver "
-            f"({', '.join(sorted(DRIVERS))})"
+            f"{where}: drive.kind={drive.get('kind')!r} is not a registered driver ({', '.join(sorted(DRIVERS))})"
         )
     if drive.get("kind") == "email_probe" and not (drive.get("as") and drive.get("body")):
         raise SchemaError(f"{where}: an email_probe leg needs both drive.as and drive.body")

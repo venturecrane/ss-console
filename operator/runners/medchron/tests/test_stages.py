@@ -1,5 +1,6 @@
 """The three $0 stages and the seat seam, against a fake seat and real
 documents (a real PDF from pymupdf, a faked Outlook container)."""
+
 from __future__ import annotations
 
 import json
@@ -13,19 +14,23 @@ from medchron.stages import download as download_stage, extract as extract_stage
 from medchron.stages.base import StageRefusal, StageRun
 from medchron_testkit import FakeSeat, doc_row, make_pdf, seed_seat_files
 
-PROSE = ("Patient seen in clinic today for follow up of neck pain after the collision. "
-         "The patient reports that the pain is improving with therapy and has no new complaints. "
-         "Exam is unchanged from the prior visit and the plan is to continue the current care. ") * 6
+PROSE = (
+    "Patient seen in clinic today for follow up of neck pain after the collision. "
+    "The patient reports that the pain is improving with therapy and has no new complaints. "
+    "Exam is unchanged from the prior visit and the plan is to continue the current care. "
+) * 6
 MEDICAL, PHOTOS = "fold-med", "fold-photo"
-FOLDERS = [{"id": MEDICAL, "name": "MEDICAL", "parentId": None, "path": "/MEDICAL"},
-           {"id": PHOTOS, "name": "PHOTOS", "parentId": None, "path": "/PHOTOS"}]
+FOLDERS = [
+    {"id": MEDICAL, "name": "MEDICAL", "parentId": None, "path": "/MEDICAL"},
+    {"id": PHOTOS, "name": "PHOTOS", "parentId": None, "path": "/PHOTOS"},
+]
 
 
 @pytest.fixture
 def corpus() -> dict[str, bytes]:
     return {
-        "f1": make_pdf([PROSE] * 40),   # over MIN_BYTES, so the email copy is a kept kind
-        "f2": make_pdf(["", ""]),            # no text layer -> scan queue
+        "f1": make_pdf([PROSE] * 40),  # over MIN_BYTES, so the email copy is a kept kind
+        "f2": make_pdf(["", ""]),  # no text layer -> scan queue
         "f3": make_pdf([PROSE, PROSE, PROSE]),  # distinct bytes until a test says otherwise
         "f4": b"\x89PNG not really",
         "f5": make_pdf([PROSE]),
@@ -47,17 +52,32 @@ def seat(corpus: dict[str, bytes]) -> FakeSeat:
     return FakeSeat(docs, FOLDERS, corpus)
 
 
-def _sr(job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat, decided: dict | None = None,
-        log: list[str] | None = None) -> StageRun:
+def _sr(
+    job_dir: Path,
+    firm_config_path: Path,
+    data_root: Path,
+    seat: FakeSeat,
+    decided: dict | None = None,
+    log: list[str] | None = None,
+) -> StageRun:
     job = job_mod.load(job_dir)
     cfg = config_mod.load(str(firm_config_path))
     lines = log if log is not None else []
-    return StageRun(job=job, cfg=cfg, unit=job.units[0], slug_dir=data_root / "example-matter",
-                    decided=decided or {}, log=lines.append, seat_factory=lambda: seat)
+    return StageRun(
+        job=job,
+        cfg=cfg,
+        unit=job.units[0],
+        slug_dir=data_root / "example-matter",
+        decided=decided or {},
+        log=lines.append,
+        seat_factory=lambda: seat,
+    )
 
 
 # ---- list_matter --------------------------------------------------------------
-def test_list_matter_writes_the_manifest_and_tree(job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat) -> None:
+def test_list_matter_writes_the_manifest_and_tree(
+    job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
+) -> None:
     sr = _sr(job_dir, firm_config_path, data_root, seat)
     assert listing.run(sr) == 0
     man = json.loads((sr.slug_dir / "manifest.json").read_text())
@@ -72,14 +92,14 @@ def test_list_matter_writes_the_manifest_and_tree(job_dir: Path, firm_config_pat
 def test_download_pulls_the_selection_dedupes_by_content_and_verifies_size(
     job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat, corpus: dict[str, bytes]
 ) -> None:
-    corpus["f3"] = corpus["f1"]                       # a byte-identical second copy
+    corpus["f3"] = corpus["f1"]  # a byte-identical second copy
     seat.docs[2]["size"] = len(corpus["f1"])
     seed_seat_files(data_root, seat)
     sr = _sr(job_dir, firm_config_path, data_root, seat)
     decisions.selection(sr.job, sr.cfg, sr.slug_dir, dry_run=False)
     assert download_stage.run(sr) == 0
     rows = {r["id"]: r for r in map(json.loads, (sr.slug_dir / "raw_manifest.jsonl").read_text().splitlines())}
-    assert set(rows) == {"f1", "f2", "f3", "f5"}   # PHOTOS excluded, .msg not a doc kind, deleted skipped
+    assert set(rows) == {"f1", "f2", "f3", "f5"}  # PHOTOS excluded, .msg not a doc kind, deleted skipped
     assert rows["f3"]["duplicate_of"] == "f1" and rows["f3"]["path"] is None
     assert (sr.slug_dir / "raw" / "f1.pdf").is_file() and not (sr.slug_dir / "raw" / "f3.pdf").exists()
     assert rows["f5"]["folder"] == "/(root)"
@@ -88,7 +108,9 @@ def test_download_pulls_the_selection_dedupes_by_content_and_verifies_size(
     assert download_stage.run(sr) == 0 and seat.mints == []
 
 
-def test_download_exits_1_when_a_target_is_still_not_pulled(job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat) -> None:
+def test_download_exits_1_when_a_target_is_still_not_pulled(
+    job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
+) -> None:
     seat.fail_mint.add("f2")
     seed_seat_files(data_root, seat)
     log: list[str] = []
@@ -101,8 +123,10 @@ def test_download_exits_1_when_a_target_is_still_not_pulled(job_dir: Path, firm_
     assert any("1 of 4 targets are not pulled" in line for line in log)
 
 
-def test_download_size_mismatch_is_a_failed_row_not_a_silent_file(job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat) -> None:
-    seat.docs[0]["size"] = 12345      # the listing lies about f1's size
+def test_download_size_mismatch_is_a_failed_row_not_a_silent_file(
+    job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
+) -> None:
+    seat.docs[0]["size"] = 12345  # the listing lies about f1's size
     seed_seat_files(data_root, seat)
     sr = _sr(job_dir, firm_config_path, data_root, seat)
     decisions.selection(sr.job, sr.cfg, sr.slug_dir, dry_run=False)
@@ -113,14 +137,20 @@ def test_download_size_mismatch_is_a_failed_row_not_a_silent_file(job_dir: Path,
 
 
 # ---- extract ------------------------------------------------------------------
-def test_extract_splits_text_from_scans_and_marks_pages(job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat) -> None:
+def test_extract_splits_text_from_scans_and_marks_pages(
+    job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
+) -> None:
     seed_seat_files(data_root, seat)
     sr = _sr(job_dir, firm_config_path, data_root, seat)
     decisions.selection(sr.job, sr.cfg, sr.slug_dir, dry_run=False)
     download_stage.run(sr)
     assert extract_stage.run(sr) == 0
     rows = {r["id"]: r for r in map(json.loads, (sr.slug_dir / "extracted.jsonl").read_text().splitlines())}
-    assert rows["f1"]["pages"] == 40 and rows["f1"]["chars"] > 10000 and "[p.2]" in Path(rows["f1"]["text_path"]).read_text()
+    assert (
+        rows["f1"]["pages"] == 40
+        and rows["f1"]["chars"] > 10000
+        and "[p.2]" in Path(rows["f1"]["text_path"]).read_text()
+    )
     assert rows["f2"]["scan"] is True and "text_path" not in rows["f2"]
     scans = json.loads((sr.slug_dir / "scan_queue.json").read_text())
     assert [s["id"] for s in scans] == ["f2"]
@@ -151,16 +181,23 @@ class _FakeMessage:
 
 
 def test_index_msg_hashes_everything_and_fold_takes_only_the_decision(
-    job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat, corpus: dict[str, bytes], monkeypatch: pytest.MonkeyPatch
+    job_dir: Path,
+    firm_config_path: Path,
+    data_root: Path,
+    seat: FakeSeat,
+    corpus: dict[str, bytes],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     hidden = make_pdf([PROSE] * 40)
-    _FakeMessage.registry = {"m1.msg": [
-        ("hidden report.pdf", hidden),                 # new to the corpus
-        ("clinic note.pdf", corpus["f1"]),             # already pulled: never folded
-        ("image001.png", b"tiny"),                     # skipped-tiny, still hashed and named
-        ("calendar.ics", b"x" * 30_000),               # skipped-kind
-        ("secure.rpmsg", b"y" * 30_000),               # encrypted: disclosed
-    ]}
+    _FakeMessage.registry = {
+        "m1.msg": [
+            ("hidden report.pdf", hidden),  # new to the corpus
+            ("clinic note.pdf", corpus["f1"]),  # already pulled: never folded
+            ("image001.png", b"tiny"),  # skipped-tiny, still hashed and named
+            ("calendar.ics", b"x" * 30_000),  # skipped-kind
+            ("secure.rpmsg", b"y" * 30_000),  # encrypted: disclosed
+        ]
+    }
     monkeypatch.setitem(__import__("sys").modules, "extract_msg", SimpleNamespace(Message=_FakeMessage))
     seed_seat_files(data_root, seat)
     sr = _sr(job_dir, firm_config_path, data_root, seat)
@@ -185,7 +222,10 @@ def test_index_msg_hashes_everything_and_fold_takes_only_the_decision(
     assert (sr.slug_dir / "raw" / f"msgatt-{new_sha12}.pdf").read_bytes() == hidden
     # extract after fold reads the folded document like any other
     assert extract_stage.run(sr) == 0
-    assert any(r["id"] == f"msgatt-{new_sha12}" for r in map(json.loads, (sr.slug_dir / "extracted.jsonl").read_text().splitlines()))
+    assert any(
+        r["id"] == f"msgatt-{new_sha12}"
+        for r in map(json.loads, (sr.slug_dir / "extracted.jsonl").read_text().splitlines())
+    )
     # folding an attachment the pull already holds is refused
     already = next(a["sha256"][:12] for a in report["attachments"] if a["already_pulled_as"])
     sr.decided["fold"] = [already]
@@ -193,7 +233,9 @@ def test_index_msg_hashes_everything_and_fold_takes_only_the_decision(
         msg_stage.run_fold(sr)
 
 
-def test_fold_refuses_without_a_baseline_and_is_a_noop_with_nothing_new(job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat) -> None:
+def test_fold_refuses_without_a_baseline_and_is_a_noop_with_nothing_new(
+    job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
+) -> None:
     sr = _sr(job_dir, firm_config_path, data_root, seat)
     sr.slug_dir.mkdir(parents=True, exist_ok=True)
     (sr.slug_dir / "msg_attachments.json").write_text(json.dumps({"comparable": False, "attachments": []}))
@@ -221,8 +263,18 @@ def test_client_seat_normalizes_pages_and_walks_the_tree_per_folder() -> None:
             calls.append(path)
             if path.endswith("/files"):
                 if params["Offset"] == 0:
-                    return {"value": [{"id": f"d{i}", "name": f"d{i}.pdf", "sizeBytes": 1, "fileExtension": ".pdf",
-                                       "folder": {"id": "x"}} for i in range(500)]}
+                    return {
+                        "value": [
+                            {
+                                "id": f"d{i}",
+                                "name": f"d{i}.pdf",
+                                "sizeBytes": 1,
+                                "fileExtension": ".pdf",
+                                "folder": {"id": "x"},
+                            }
+                            for i in range(500)
+                        ]
+                    }
                 return {"value": [{"id": "d500", "name": "last.pdf", "sizeBytes": 2, "fileExtension": ".pdf"}]}
             if path.endswith("/folders"):
                 return {"value": [{"folders": [{"id": "a", "name": "A"}]}]}
@@ -234,6 +286,7 @@ def test_client_seat_normalizes_pages_and_walks_the_tree_per_folder() -> None:
             return {"downloadUrl": "https://example.invalid/x", "sizeBytes": 3, "name": "n", "fileExtension": ".pdf"}
 
     import time as _time
+
     s = seat_mod.ClientSeat(Client())
     orig = _time.sleep
     _time.sleep = lambda *_: None

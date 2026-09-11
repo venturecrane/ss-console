@@ -71,7 +71,7 @@ def test_all_day_normalizes_to_midnight_span(capture: _CapturingClient) -> None:
         matter_id="m-1",
         all_day=True,
     )
-    (_, path, body), = capture.calls
+    ((_, path, body),) = capture.calls
     assert path == "/events"
     assert body["startTime"] == "2026-07-27T00:00:00Z"
     assert body["endTime"] == "2026-07-28T00:00:00Z"
@@ -90,7 +90,7 @@ def test_all_day_multi_day_span_kept(capture: _CapturingClient) -> None:
         time_zone="America/Los_Angeles",
         all_day=True,
     )
-    (_, _, body), = capture.calls
+    ((_, _, body),) = capture.calls
     assert body["startTime"] == "2026-10-13T00:00:00Z"
     assert body["endTime"] == "2026-10-17T00:00:00Z"
 
@@ -104,7 +104,7 @@ def test_timed_event_passes_through_untouched(capture: _CapturingClient) -> None
         time_zone="America/Los_Angeles",
         matter_id="m-1",
     )
-    (_, _, body), = capture.calls
+    ((_, _, body),) = capture.calls
     assert body["startTime"] == "2026-08-06T17:00:00Z"
     assert body["endTime"] == "2026-08-06T21:00:00Z"
     assert "allDay" not in body or not body["allDay"]
