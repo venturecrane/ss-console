@@ -4,7 +4,9 @@ section: system
 order: 3
 summary: Where the venture's data lives - a Cloudflare D1 relational store whose source of truth is the migrations directory, with R2 for objects and KV for sessions
 sources:
-  - label: migrations/ (D1 schema source of truth)
+  - label: migrations/ (D1 schema source of truth; the whole directory, so a new migration flags this page in handbook:drift)
+    href: https://github.com/venturecrane/ss-console/tree/main/migrations
+  - label: migrations/0001_create_tables.sql (the original schema and its JSON column contracts)
     href: https://github.com/venturecrane/ss-console/blob/main/migrations/0001_create_tables.sql
   - label: src/lib/db/ (data access layer)
     href: https://github.com/venturecrane/ss-console/tree/main/src/lib/db
@@ -58,7 +60,9 @@ This is the core funnel; the tables chain by foreign key.
 | `milestones` | Per-engagement milestones; a `payment_trigger` flag marks the ones that release a billing milestone. |
 | `engagement_contacts` | Maps contacts to an engagement with a role (`owner`, `decision_maker`, `champion`). |
 | `parking_lot` | Out-of-scope requests captured during an engagement, dispositioned `fold_in` / `follow_on` / `dropped`. The scope-discipline ledger. |
-| `invoices` | Deposit, completion, milestone, assessment, or retainer charges. Carries the Stripe invoice id and hosted URL. |
+| `invoices` | Deposit, completion, milestone, assessment, retainer, or implementation charges. Carries the Stripe invoice id and hosted URL. The Operator stand-up fee is its own `implementation` type (migration 0110) so the portal never titles it as a milestone; the type CHECK was retired with that change, so the vocabulary lives in `src/lib/db/invoices.ts`. |
+| `services` | The commercial spine (migration 0068, ADR 0046): one row per thing a client bought, whether a consulting engagement or an Operator subscription; `engagements` and `subscriptions` point up at it by `service_id`. For the Operator it carries `recurring_price` and, since migration 0113, `payment_method` (`ach`, the default with no fee, or `card`, which adds the 3% processing line the service agreement prices), authored by the Captain on the client hub. |
+| `subscriptions` | One row per Operator or hosted-agent instance a client owns (migration 0089 made this multi-instance per entity and product), linked to its `customer_configs` row by `customer_slug`; carries the Stripe subscription id once the client starts the retainer. |
 | `time_entries` | Hours logged against an engagement (internal; feeds margin, not the client price). |
 | `follow_ups` | Scheduled touchpoints (proposal day-2/5/7 nudges, review requests, safety-net check-ins). |
 
@@ -80,6 +84,10 @@ The `operator_*` tables (and the projection/audit tables around them) are the co
 | `operator_mcp_clerk_bindings` / `operator_mcp_auth_contract` | Clerk-identity bindings and auth contract for the Operator's MCP channel (migrations 0071-0073). |
 | `cost_telemetry` / `captain_time_events` | Operator cost rows, keyed by `customer_slug` (migration 0083, ADR 0062). Written nightly by the `ss-cost-telemetry` worker from the Anthropic usage report; per-seat attribution maps `customer_configs.anthropic_workspace_id` to a seat, with reserved slugs `_org` (reconciliation) and `_unmapped` (unclaimed workspace usage). ADR 0062 superseded the per-customer-D1 placement, which was never provisioned. |
 | `cost_anomaly_alerts` | Nightly spike detections over `cost_telemetry` plus Captain snooze/ack state (migration 0041), written by the `ss-cost-anomaly` worker. |
+| `fleet_status` | One row per seat, keyed by `customer_slug` (migration 0093 re-keyed it from `entity_id` because several seats can share an entity). Written only by `POST /api/internal/heartbeat`, read by the admin roster and the `ss-fleet-alerts` pager. It is everything the seat reports about itself on each tick: liveness, and the alert-driving fields added as each blind spot was found. Migration 0105 added `cron_containment` (crons deliberately off is visible, not mistaken for broken); 0106 `webhook_surface_ok` and `webhook_surface_json` (the expected-tool surface the seat had been reporting and the console had been dropping); 0107 `audit_write_failures`, `audit_head`, `audit_rows` (the ledger reports on itself) and `gateway_loop_ok`, `gateway_loop_age_seconds`, `gateway_supervisor_state`, `gateway_restarts_last_hour` (a wedged event loop no longer reads green); 0112 `sticky_stop_reason` and `sticky_stop_condition` (a stopped seat says why, not just that it stopped). NULL in any of these means the seat could not answer, never zero. |
+| `fleet_alert_state` | The pager's ledger: one open or resolved row per seat and condition, so a condition pages once when it opens and once when it clears rather than every minute. Rebuilt by migration 0107 (the gateway-loop conditions) and 0109 (refused or unsent escalations: the 2026-08-19 incident where a seat's deadline escalator was refused by its own gates for four days and nobody was paged). |
+| `audit_head_history` | The seat's audit-chain head pinned off the Machine per heartbeat (migration 0108). The on-seat verifier can prove a row in the middle of the chain was altered but cannot see rows removed from the end; this table can, because the console keeps every head it was ever told. |
+| `operator_agreement_documents` | The firm's own executed Operator paper (the service agreement and signature copies), readable on its portal Compliance surface (migration 0111). `executed_on` is NOT NULL, so nothing unsigned can be filed here; A&P holds no `engagements` rows, which is why the engagement document library could not carry these. |
 
 Secrets never enter any of these tables; non-secret references (token pointers) are denormalized where the portal needs them, and live values stay in Infisical (see `/admin/playbook/secrets-access`).
 

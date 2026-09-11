@@ -32,6 +32,8 @@ Rough "if you change X, update Y":
 | A client-facing Operator surface | `operator-console.md` |
 | The deploy or secrets flow | `deployment-release.md` / `secrets-access.md` |
 | The repo layout or a new top-level dir | `repository-map.md`, `architecture-map.md`, `docs-map.md` |
+| A route under `src/pages/api` (added, moved, retired, re-gated) | Regenerate `docs/api/README.md` with `npx tsx scripts/api-inventory.ts --write`; `tests/api-inventory.test.ts` blocks merge until the page matches the tree |
+| A migration | `data-model.md` (the page cites `migrations/` as a source, so `npm run handbook:drift` flags it until the page catches up) |
 | A module that emits a manifest, completion, wired map, or done flag | Answer `docs/doctrine/report-is-a-probe-checklist.md` in the PR body (Law 14) |
 
 ## Authoring rules

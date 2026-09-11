@@ -60,3 +60,8 @@ operator/fixtures/law-firm/pi/lien-ledger-tracker/seed/wire/
 # The chronology runner's system prompts are package data the model reads
 # byte-for-byte; rewrapping them changes what the model sees.
 operator/runners/medchron/medchron/prompts/
+# Generated API inventory (scripts/api-inventory.ts). tests/api-inventory.test.ts
+# asserts the committed page is byte-identical to what the generator emits, so
+# the emitter owns the formatting, not prettier. Same rationale as
+# gate-coverage-snapshot.overlay.json above.
+docs/api/README.md

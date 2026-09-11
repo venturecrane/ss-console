@@ -15,9 +15,12 @@
  * expired pattern instead — claim the slot if either no row exists, or if
  * the existing row has already expired.
  *
- * The daily cleanup cron (workers/booking-cleanup/) deletes long-stale
- * holds, but the upsert pattern is what makes the hot path correct under
- * normal operation.
+ * Nothing sweeps expired holds on a schedule: no cleanup worker exists
+ * (a comment here named one for months; it was never built). An expired
+ * row is reclaimed only when the same slot is claimed again, through the
+ * upsert below, or released explicitly by `releaseHold` and the booking
+ * rollback. The upsert pattern is what makes the hot path correct; stale
+ * rows for slots nobody re-requests simply remain.
  */
 
 const HOLD_TTL_MINUTES = 5
