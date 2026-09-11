@@ -12,7 +12,7 @@ message to wake by TIME alone. Two live consequences:
 * B3 -- the broker never wrote ``skill_name`` on its rows (the column existed,
   the value was NULL on every CONFIRM row), so ``declares.get("")`` was None and
   the primary check graded nothing, silently. Now the broker writes the column
-  (``_CALLER_AUDIT_KEYS``) from the overlay's cron-resolved routine, and this
+  (``transmit_verbs._CALLER_AUDIT_KEYS``) from the overlay's cron-resolved routine, and this
   module attributes SKILL-FIRST when the column is set and HASH-SECOND when it
   is not: an unlabelled dispatch whose ``rendered_body_sha256`` sits in a
   hash-verified wake's stamps IS that wake's send -- a sha256 over a rendered

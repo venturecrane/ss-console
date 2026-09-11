@@ -1,8 +1,9 @@
 """The five ``medchron_*`` broker verbs (routine 11, ss#2614).
 
-Kept out of ``server.py`` so that file stays inside its size baseline; the
-dispatcher there names each verb literally (the verb-registry test reads the
-literals) and hands the request here.
+Registered on the verb table in ``verbs.py``, which declares each verb's
+peer classes (the same five rows as the list below) and checks them before
+handing the request here; ``_gate`` below re-checks with this module's own
+message, as defence in depth.
 
 Peer gating, per verb:
 

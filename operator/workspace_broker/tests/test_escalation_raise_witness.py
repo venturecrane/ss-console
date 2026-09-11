@@ -67,7 +67,7 @@ def _dispatch(
     outcome: str = "sent",
     skill_name: str | None = "deadline-miss-escalator",
 ) -> None:
-    """Write an audit row of the shape the broker's own _append_send_row writes.
+    """Write an audit row of the shape the broker's own transmit_verbs.append_send_row writes.
 
     ``skill_name`` sits on its COLUMN, never in metadata -- that is where the
     broker moves it (B3, claims review 2026-09-04) and where the console's

@@ -99,7 +99,7 @@
     "ROUTINE_ENABLED": {
       "side": "overlay",
       "overlayProducer": "plugins/hermes-smd-audit register() -> _drain_routine_changes_to_ledger (hermes-smd-overlay#292)",
-      "reason": "A routine is turned on by an authored customer.yaml cron entry, materialized at boot by bootstrap/cron_materialize.py. That runs in `hermes-smd bootstrap`, which is NOT the gateway, and the broker gates the generic audit_append on peer_pid == SMD_GATEWAY_PID (operator/workspace_broker/server.py:440) -- so bootstrap spools the change to $HERMES_HOME/.smd/routine_changes.jsonl (shared/routine_change_spool.py) and the audit plugin drains it into rows at registration, inside the one process authorized to write the ledger. Emitted on the DELTA only: the materializer recreates every managed job on every boot, so a row per created job would claim a change nobody made at every restart. Actor is `customer.yaml` with actor_role=operator -- the seat sees only the materialized config and must not invent a named person it cannot verify."
+      "reason": "A routine is turned on by an authored customer.yaml cron entry, materialized at boot by bootstrap/cron_materialize.py. That runs in `hermes-smd bootstrap`, which is NOT the gateway, and the broker gates the generic audit_append on the gateway PID (the GATEWAY class on its row in operator/workspace_broker/verbs.py) -- so bootstrap spools the change to $HERMES_HOME/.smd/routine_changes.jsonl (shared/routine_change_spool.py) and the audit plugin drains it into rows at registration, inside the one process authorized to write the ledger. Emitted on the DELTA only: the materializer recreates every managed job on every boot, so a row per created job would claim a change nobody made at every restart. Actor is `customer.yaml` with actor_role=operator -- the seat sees only the materialized config and must not invent a named person it cannot verify."
     },
     "ROUTINE_DISABLED": {
       "side": "overlay",
@@ -279,12 +279,12 @@
     },
     "SUPPRESSED_WAKE": {
       "side": "ss-console",
-      "producerFile": "operator/workspace_broker/server.py",
+      "producerFile": "operator/workspace_broker/audit_verbs.py",
       "note": "Broker-stamped via the uid-gated suppressed_wake_append verb (#1748): skills' pre_run.py (shared empty-seat gate at operator/templates/pre_run_gate.py, plus deadline-miss-escalator's bespoke gate) send the row over the broker socket before printing {wakeAgent:false}. The adapter SuppressedWakeWriter (operator/adapter/audit_log.py) remains the dev/test writer."
     },
     "EMITTED_WAKE": {
       "side": "ss-console",
-      "producerFile": "operator/workspace_broker/server.py",
+      "producerFile": "operator/workspace_broker/audit_verbs.py",
       "note": "The wake half of the cron gate (#2253). Broker-stamped via the uid-gated emitted_wake_append verb; the producers are the pre_run.py scripts, each attempting the row on the real-decision wake path BEFORE printing {wakeAgent:true}. Written best-effort: unlike SUPPRESSED_WAKE, a write failure must NOT change the decision, so a wake is never gated on its own audit row. The adapter SuppressedWakeWriter.write_emitted_wake (operator/adapter/audit_log.py) remains the dev/test writer. 2026-08-20 (#2498) CORRECTION + WIDENING. The prior note named four producers \u2014 deadline-miss-escalator, client-verification-tracker, paid-media-anomaly-watcher, retainer-hours-reconciler \u2014 and two of those were wrong: paid-media-anomaly-watcher and retainer-hours-reconciler have no pre_run.py at all, while lien-ledger-tracker and medical-records-chaser (both of which graduated to bespoke gates after the note was written) do produce. Probed, not assumed: `grep -l emitted_wake_append operator/skills/*/pre_run.py` returns exactly client-verification-tracker, deadline-miss-escalator, lien-ledger-tracker, medical-records-chaser. #2498 also carries the wake half to the SHARED gate template (operator/templates/pre_run_gate.py -> write_emitted_wake_heartbeat), which stamps into the eight skills pinned in operator/tests/test_pre_run_gate.py GATED_SKILLS \u2014 those eight wrote a row on every quiet tick and nothing on the ticks they fired, so the one tick that mattered was the one tick with no row. Producer count is therefore 12, not 4."
     },
     "REPLY_SENT": {
@@ -344,12 +344,12 @@
     },
     "CONFIRM_SEND_DISPATCHED": {
       "side": "ss-console",
-      "producerFile": "operator/workspace_broker/server.py",
+      "producerFile": "operator/workspace_broker/transmit_verbs.py",
       "note": "written by the broker's own _dispatch_transmit (overlay#256 moved it off the plugin; claims review 2026-09-04 B3 corrected this entry, which still named the overlay). The overlay contributes stamps on audit_extra; the row itself is the broker's."
     },
     "CONFIRM_SEND_FAILED": {
       "side": "ss-console",
-      "producerFile": "operator/workspace_broker/server.py",
+      "producerFile": "operator/workspace_broker/transmit_verbs.py",
       "note": "the refusal / transport-error sibling of CONFIRM_SEND_DISPATCHED, written by the same _dispatch_transmit; same producer, same correction."
     },
     "SPEC_GATE_TRIGGERED": {
