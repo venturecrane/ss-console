@@ -92,6 +92,20 @@ class MedchronVerbs:
             resolve_agent_uid=broker._resolve_agent_uid,
         )
 
+    @property
+    def _db(self) -> MedchronLedger:
+        """The ledger, narrowed.
+
+        ``handle`` refuses before any of these methods run when the ledger is
+        absent (a job that cannot be recorded must not be queued), but that
+        guard does not narrow ``self.ledger`` for a type checker across a method
+        call, so every use read as an attribute on ``None``. Raising here keeps
+        the fail-closed behaviour identical if one is ever reached another way.
+        """
+        if self.ledger is None:
+            raise ValueError("medchron ledger not configured on this broker")
+        return self.ledger
+
     # -- gates ---------------------------------------------------------------
     def _is_agent(self, peer_uid: int | None) -> bool:
         agent_uid = self._resolve_agent_uid()
@@ -138,7 +152,7 @@ class MedchronVerbs:
                 return {"ok": True, "authored": False, "invalid": True, "reason": str(exc)}
             return {
                 "ok": True,
-                **self.ledger.allowance(
+                **self._db.allowance(
                     allowance_from_customer_yaml(self.customer_yaml),
                     exclude_job_id=exclude,
                     anchor_day=anchor,
@@ -148,11 +162,11 @@ class MedchronVerbs:
         if action == "medchron_job_status":
             job_id = str(request.get("job_id") or "")
             if job_id:
-                row = self.ledger.read(job_id)
-                return {"ok": True, "job": self.ledger.project(row) if row else None}
-            return {"ok": True, "jobs": [self.ledger.project(r) for r in self.ledger.list_recent(20)]}
+                row = self._db.read(job_id)
+                return {"ok": True, "job": self._db.project(row) if row else None}
+            return {"ok": True, "jobs": [self._db.project(r) for r in self._db.list_recent(20)]}
         if action == "medchron_job_list":
-            return {"ok": True, "jobs": [self.ledger.project(r) for r in self.ledger.list_recent(200)]}
+            return {"ok": True, "jobs": [self._db.project(r) for r in self._db.list_recent(200)]}
         if action == "medchron_job_submit":
             return self._submit(request)
         if action == "medchron_job_record":
@@ -168,7 +182,7 @@ class MedchronVerbs:
             anchor, effective_from = cycle_from_customer_yaml(self.customer_yaml)
         except AnchorInvalid as exc:
             return {"ok": True, "accepted": False, "reason": str(exc)}
-        state = self.ledger.allowance(
+        state = self._db.allowance(
             allowance_from_customer_yaml(self.customer_yaml),
             anchor_day=anchor,
             effective_from=effective_from,
@@ -189,7 +203,7 @@ class MedchronVerbs:
         refusal = self._requester_refusal(envelope)
         if refusal is not None:
             return {"ok": True, "accepted": False, "reason": refusal}
-        twin = self.ledger.active_duplicate(envelope)
+        twin = self._db.active_duplicate(envelope)
         if twin is not None:
             twin_id, twin_state = twin
             where = {
@@ -213,7 +227,7 @@ class MedchronVerbs:
                 f"{state['allowance']:,} pages in {state['month']}); the Operator stops here "
                 "and surfaces the item",
             }
-        job_id = self.ledger.submit(envelope, remaining=state["remaining"])
+        job_id = self._db.submit(envelope, remaining=state["remaining"])
         self._audit(
             AUDIT_TYPE["submitted"],
             {
@@ -292,7 +306,7 @@ class MedchronVerbs:
         if not job_id or state not in STATES or not isinstance(fields, dict):
             raise ValueError("medchron_job_record requires job_id, a known state, and a fields object")
         wake = fields.pop("wake", None)  # audit-only metadata (a lost deliver wake), never a column
-        row = self.ledger.record(job_id, state, fields)
+        row = self._db.record(job_id, state, fields)
         meta = {
             "job_id": job_id,
             "state": state,
@@ -312,4 +326,4 @@ class MedchronVerbs:
                 if isinstance(f, dict)
             ][:50]
         self._audit(AUDIT_TYPE[state], meta, row["matter_id"])
-        return {"ok": True, "job": self.ledger.project(row)}
+        return {"ok": True, "job": self._db.project(row)}

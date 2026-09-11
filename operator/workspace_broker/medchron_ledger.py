@@ -97,6 +97,21 @@ CREATE_SQL = (
 )
 CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_medchron_jobs_created ON medchron_jobs(created_at)"
 
+# The duplicate lookup, with its placeholders written out rather than composed.
+# Composing them from ``TERMINAL`` reads as string-built SQL (ruff S608) even
+# though no caller value reaches the text, and a literal is easier to check by
+# eye anyway. The guard below is what keeps the literal honest: adding a
+# terminal state without widening the SQL would silently start matching
+# finished jobs as duplicates, refusing rebuilds the firm is entitled to.
+_TERMINAL_ORDERED = tuple(sorted(TERMINAL))
+if len(_TERMINAL_ORDERED) != 2:  # pragma: no cover - a wiring error, not a runtime path
+    raise RuntimeError(f"_ACTIVE_TWIN_SQL is written for 2 terminal states, TERMINAL has {len(_TERMINAL_ORDERED)}")
+_ACTIVE_TWIN_SQL = (
+    "SELECT id, state FROM medchron_jobs "
+    "WHERE work_digest = ? AND work_digest IS NOT NULL AND state NOT IN (?, ?) "
+    "ORDER BY created_at DESC LIMIT 1"
+)
+
 # ONE debit rule for pages, documents and cents: a job DEBITS THE MONTH IT WAS
 # CREATED IN whenever it recorded cents, in whatever state it ended. Two halves:
 #
@@ -520,14 +535,9 @@ class MedchronLedger:
         wrong sentence a person then relays to a client.
         """
         want = work_digest(envelope)
-        placeholders = ",".join("?" * len(TERMINAL))
         conn = self._connect()
         try:
-            row = conn.execute(
-                "SELECT id, state FROM medchron_jobs WHERE work_digest = ? AND work_digest IS NOT NULL "
-                f"AND state NOT IN ({placeholders}) ORDER BY created_at DESC LIMIT 1",
-                (want, *sorted(TERMINAL)),
-            ).fetchone()
+            row = conn.execute(_ACTIVE_TWIN_SQL, (want, *_TERMINAL_ORDERED)).fetchone()
             return (str(row["id"]), str(row["state"])) if row is not None else None
         finally:
             conn.close()
