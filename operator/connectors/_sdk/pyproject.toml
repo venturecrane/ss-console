@@ -9,7 +9,7 @@ dependencies = [
     # resolves latest — CI conformance AND the seat image (Dockerfile installs
     # this SDK from source). Migrating to the 2.x layout is its own change;
     # until then the 1.x line is the contract.
-    "mcp>=1.2,<2",
+    "mcp>=1.2,<3",
     "pydantic>=2.6",
 ]
 
