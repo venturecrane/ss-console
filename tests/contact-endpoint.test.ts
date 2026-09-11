@@ -46,7 +46,7 @@ describe('contact: rate limiting', () => {
   it('contact endpoint returns 429 JSON on rate limit block', () => {
     const source = readFileSync(resolve('src/pages/api/contact.ts'), 'utf-8')
     expect(source).toContain('429')
-    expect(source).toContain('Too many requests')
+    expect(source).toContain('rate_limited')
   })
 
   it('rate limit check occurs before JSON parse and validation', () => {

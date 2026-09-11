@@ -34,6 +34,38 @@ from datetime import datetime, timedelta, timezone
 from typing import Protocol, Sequence
 
 
+def _load_skill_helpers():
+    """The shared helpers vendored beside this file (canonical: operator/templates/skill_helpers.py).
+
+    Looked up beside pre_run.py first, then under /opt/data/skills and /app/skills,
+    the two places the seat image and the volume seed put this skill's files.
+    A missing copy is a packaging defect, not a runtime condition to tolerate.
+    """
+    import importlib.util
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    candidates = [_Path(__file__).resolve().parent]
+    for base in ("/opt/data/skills", "/app/skills"):
+        candidates.append(_Path(base) / _SKILL_DIRNAME)
+    for cand in candidates:
+        module_path = cand / "skill_helpers.py"
+        if not module_path.is_file():
+            continue
+        spec = importlib.util.spec_from_file_location("skill_helpers_" + _SKILL_DIRNAME.replace("-", "_"), module_path)
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        _sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        return module
+    raise RuntimeError("skill_helpers.py is missing beside pre_run.py for " + _SKILL_DIRNAME)
+
+
+_SKILL_DIRNAME = "retainer-hours-reconciler"
+_H = _load_skill_helpers()
+
+
 # ---------------------------------------------------------------------------
 # Connector protocol — future Harvest / Toggl / Float adapters implement this.
 # ---------------------------------------------------------------------------
@@ -323,21 +355,8 @@ def _emit_wake(decision: "WakeDecision | None" = None, *, basis: str | None = No
     return 0
 
 
-def _plan_counts(decision: "WakeDecision") -> dict:
-    """The cap's own accounting, computed the one way ``_emit_wake`` computes it.
-
-    Duplicating the slice in the audit path would let the row and the wake line
-    disagree about how much was handed over — a discrepancy nobody would look
-    for, in the one record kept to catch discrepancies.
-    """
-    if not decision.plans:
-        return {}
-    emitted = len(decision.plans[:_MAX_SERIALIZED_PLANS])
-    return {
-        "plans_total": len(decision.plans),
-        "plans_emitted": emitted,
-        "plans_truncated": emitted < len(decision.plans),
-    }
+def _capped_plan_counts(decision: "WakeDecision") -> dict:
+    return _H.plan_counts_capped(decision, _MAX_SERIALIZED_PLANS)
 
 
 async def _try_write_emitted_wake(
@@ -347,49 +366,16 @@ async def _try_write_emitted_wake(
     skill_name: str,
     now: datetime,
 ) -> None:
-    """Best-effort EMITTED_WAKE row for a real-decision wake (#2253).
-
-    The suppress path logged its reasoning and the wake path logged nothing, so
-    the ledger held a record of every tick the gate stayed quiet and no record
-    of the ticks it fired. On 2026-08-10 the sibling escalator woke with its
-    connector down and sent an alert stating a date it could not read; the only
-    way anyone found it was reading the mailbox.
-
-    BEST-EFFORT IS THE CONTRACT, and it inverts the suppress path's on purpose.
-    Below, an audit failure escalates to a wake, because a silent suppress is
-    indistinguishable from a broken gate. Here the wake is already the decision,
-    so every failure — no writer wired, socket down, broker refusal, a writer
-    object too old to have the method — is swallowed. A wake that a failed audit
-    write could suppress or delay would be a gate made of observability.
-
-    It is not free, and the cost is stated rather than assumed away: whatever
-    writer is wired blocks the wake for its own timeout (the sibling skills'
-    broker-socket writer caps at `_HEARTBEAT_TIMEOUT_SECONDS`). Bounded by that
-    writer's ceiling, and never a change of decision.
-
-    The cadence wake (`weekly_mandatory_boundary`) is a real decision and gets a
-    row like any other; only the fail-open paths are excluded, because
-    `no_audit_writer_fail_open` fires when there is no writer to call and
-    `suppress_heartbeat_failed_fail_open` fires when a write just failed.
-    """
-    try:
-        writer = audit_writer_factory()
-        if writer is None:
-            return
-        await writer.write_emitted_wake(
-            skill_name=skill_name,
-            pre_run_inputs=decision.pre_run_inputs_digest,
-            decision_basis=decision.decision_basis,
-            next_scheduled_at=_next_scheduled_at(now),
-            extra_metadata={**decision.extra_metadata, **_plan_counts(decision)},
-        )
-    except Exception:  # noqa: BLE001 — observability never gates the wake
-        pass
+    await _H.try_write_emitted_wake(
+        audit_writer_factory,
+        decision,
+        skill_name=skill_name,
+        next_scheduled_at=_next_scheduled_at(now),
+        plan_counts=_capped_plan_counts,
+    )
 
 
-def _emit_suppress() -> int:
-    print(json.dumps({"wakeAgent": False}))
-    return 0
+_emit_suppress = _H.emit_suppress
 
 
 def _utilization_to_dict(u: ClientUtilization) -> dict:

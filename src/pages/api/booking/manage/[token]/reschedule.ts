@@ -1,4 +1,4 @@
-import { escapeHtml, jsonResponse } from '../../../../../lib/api/helpers'
+import { escapeHtml, jsonResponse, errorResponse } from '../../../../../lib/api/helpers'
 import type { APIContext, APIRoute } from 'astro'
 import { ORG_ID } from '../../../../../lib/constants'
 import { hashManageToken, computeManageTokenExpiry } from '../../../../../lib/booking/tokens'
@@ -244,17 +244,20 @@ interface ParsedSlot {
 function parseSlotParams(body: Record<string, unknown>): ParsedSlot | Response {
   const newSlotStartUtc =
     typeof body.slot_start_utc === 'string' ? body.slot_start_utc.trim() : null
-  if (!newSlotStartUtc) return jsonResponse(400, { error: 'slot_start_utc is required' })
+  if (!newSlotStartUtc)
+    return errorResponse(400, 'validation_failed', 'slot_start_utc is required.')
 
   const newSlotStart = new Date(newSlotStartUtc)
-  if (isNaN(newSlotStart.getTime())) return jsonResponse(400, { error: 'Invalid slot_start_utc' })
+  if (isNaN(newSlotStart.getTime()))
+    return errorResponse(400, 'validation_failed', 'Invalid slot_start_utc.')
 
   const earliest = Date.now() + BOOKING_CONFIG.min_notice_minutes * 60_000
   if (newSlotStart.getTime() < earliest) {
-    return jsonResponse(400, {
-      error: 'slot_unavailable',
-      message: 'This slot is no longer available. Please choose a later time.',
-    })
+    return errorResponse(
+      400,
+      'slot_unavailable',
+      'This slot is no longer available. Please choose a later time.'
+    )
   }
 
   const newSlotEndUtc = new Date(
@@ -275,10 +278,11 @@ async function commitRescheduleAndNotify(
   } catch (err) {
     console.error('[api/booking/manage/reschedule] Google Calendar update failed:', err)
     await releaseHold(env.DB, holdId)
-    return jsonResponse(503, {
-      error: 'calendar_sync_failed',
-      message: 'We could not update the calendar event. Please try again.',
-    })
+    return errorResponse(
+      503,
+      'calendar_sync_failed',
+      'We could not update the calendar event. Please try again.'
+    )
   }
 
   const newManageTokenExpiresAt = computeManageTokenExpiry(
@@ -326,14 +330,13 @@ async function commitRescheduleAndNotify(
 
 async function handlePost({ params, request }: APIContext): Promise<Response> {
   const rawToken = params.token
-  if (!rawToken || typeof rawToken !== 'string')
-    return jsonResponse(400, { error: 'Missing token' })
+  if (!rawToken || typeof rawToken !== 'string') return errorResponse(400, 'missing_token')
 
   let body: Record<string, unknown>
   try {
     body = await request.json()
   } catch {
-    return jsonResponse(400, { error: 'Invalid JSON' })
+    return errorResponse(400, 'invalid_json')
   }
 
   const slotOrError = parseSlotParams(body)
@@ -344,27 +347,29 @@ async function handlePost({ params, request }: APIContext): Promise<Response> {
     const tokenHash = await hashManageToken(rawToken)
     const schedule = await getScheduleByManageToken(env.DB, tokenHash)
 
-    if (!schedule)
-      return jsonResponse(404, { error: 'not_found', message: 'This booking link is not valid.' })
+    if (!schedule) return errorResponse(404, 'not_found', 'This booking link is not valid.')
     if (isManageTokenExpired(schedule)) {
-      return jsonResponse(410, {
-        error: 'expired',
-        message: 'This manage link has expired. Please contact us if you need to make changes.',
-      })
+      return errorResponse(
+        410,
+        'expired',
+        'This manage link has expired. Please contact us if you need to make changes.'
+      )
     }
     if (schedule.cancelled_at) {
-      return jsonResponse(409, {
-        error: 'cancelled',
-        message: 'This booking has been cancelled and cannot be rescheduled.',
-      })
+      return errorResponse(
+        409,
+        'cancelled',
+        'This booking has been cancelled and cannot be rescheduled.'
+      )
     }
 
     const holdResult = await acquireHold(env.DB, ORG_ID, newSlotStartUtc, schedule.guest_email)
     if (!holdResult.acquired) {
-      return jsonResponse(409, {
-        error: 'slot_taken',
-        message: 'This time slot was just taken. Please choose another time.',
-      })
+      return errorResponse(
+        409,
+        'slot_taken',
+        'This time slot was just taken. Please choose another time.'
+      )
     }
 
     return await commitRescheduleAndNotify(
@@ -376,7 +381,7 @@ async function handlePost({ params, request }: APIContext): Promise<Response> {
     )
   } catch (err) {
     console.error('[api/booking/manage/reschedule] Error:', err)
-    return jsonResponse(500, { error: 'Internal server error' })
+    return errorResponse(500, 'internal_error')
   }
 }
 

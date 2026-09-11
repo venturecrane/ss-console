@@ -141,7 +141,8 @@ describe('POST /api/admin/resend-invitation — cross-org regression', () => {
     expect(response.status).toBe(404)
 
     const body: Record<string, unknown> = await response.json()
-    expect(body.error).toBe('Client user not found')
+    expect(body.error).toBe('not_found')
+    expect(body.message).toBe('Client user not found.')
 
     // No magic_link should have been created — the request should have
     // failed at the SELECT predicate before reaching createMagicLink.

@@ -27,7 +27,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
 
   const entityId = params.id
   if (!entityId) {
-    return errorResponse(400, 'Entity ID required')
+    return errorResponse(400, 'validation_failed', 'Entity ID required.')
   }
 
   try {
