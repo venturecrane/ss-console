@@ -12,6 +12,12 @@ import {
   monthTotals,
   parseJobRow,
 } from '../src/lib/admin/medchron-jobs-read'
+import { cycleWindow } from '../src/lib/admin/cycle-window'
+
+/** The calendar-month window for a `YYYY-MM`, which is what these cases mean:
+ * an unanchored seat meters exactly as it always did. The cycle cases live in
+ * tests/cycle-window.test.ts against the shared fixture. */
+const monthOf = (ym: string) => cycleWindow(`${ym}-15T12:00:00.000Z`)
 
 const ACTOR = { actor: 'captain@smd.services', actorRole: 'admin' }
 const noopAudit = { record: async () => {} }
@@ -56,9 +62,12 @@ describe('monthTotals', () => {
       parseJobRow(row({ id: '02', state: 'held', reason: 'seat paused', documents: 99 }))!,
       parseJobRow(row({ id: '03', created_at: '2026-07-02T00:00:00.000Z', documents: 7 }))!,
     ]
-    const m = monthTotals(jobs, '2026-08')
+    const m = monthTotals(jobs, monthOf('2026-08'))
     expect(m).toEqual({
       month: '2026-08',
+      cycleStart: '2026-08-01T00:00:00.000Z',
+      cycleEnd: '2026-09-01T00:00:00.000Z',
+      cycleAnchored: false,
       jobs: 2,
       delivered: 1,
       held: 1,
@@ -87,7 +96,7 @@ describe('monthTotals', () => {
         row({ id: '04', state: 'held', pages: 9000, cents: 0, reason: 'the matter is too big' })
       )!,
     ]
-    const m = monthTotals(jobs, '2026-08')
+    const m = monthTotals(jobs, monthOf('2026-08'))
     expect(m.pagesUsed, 'a held or failed job that spent money still debits the month').toBe(3140)
     expect(m.centsUsed).toBe(2590)
     // A hold at zero cents read nothing and spent nothing: not a debit.
@@ -112,10 +121,10 @@ describe('monthTotals', () => {
         cents: 1500,
       })
     )!
-    expect(monthTotals([spanning], '2026-08').pagesUsed).toBe(420)
-    expect(monthTotals([spanning], '2026-08').centsUsed).toBe(1500)
-    expect(monthTotals([spanning], '2026-09').pagesUsed).toBe(0)
-    expect(monthTotals([spanning], '2026-09').centsUsed).toBe(0)
+    expect(monthTotals([spanning], monthOf('2026-08')).pagesUsed).toBe(420)
+    expect(monthTotals([spanning], monthOf('2026-08')).centsUsed).toBe(1500)
+    expect(monthTotals([spanning], monthOf('2026-09')).pagesUsed).toBe(0)
+    expect(monthTotals([spanning], monthOf('2026-09')).centsUsed).toBe(0)
   })
 })
 
@@ -193,7 +202,7 @@ describe('loadMedchronJobsView', () => {
       'example',
       ACTOR,
       true,
-      '2026-08'
+      monthOf('2026-08')
     )
     expect(result.status).toBe('items')
     if (result.status !== 'items') return

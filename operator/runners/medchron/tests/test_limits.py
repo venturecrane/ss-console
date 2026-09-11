@@ -74,6 +74,24 @@ def test_an_unknown_allowance_is_not_a_zero_allowance() -> None:
     )
 
 
+
+
+def test_the_hold_sentence_names_the_cycle_in_prose_not_a_range() -> None:
+    """The agent relays this sentence to the firm VERBATIM (SKILL.md step 4), so
+    the period has to read as English. Falsifier: put the machine range in
+    `allowance_cycle_label` and the sentence becomes "remain in
+    2026-09-15..2026-10-15's allowance"."""
+    lim = _limits(allowance_remaining_pages=40, allowance_cycle_label="the cycle ending Oct 14")
+    hold = _hold(lim.check_before_first_paid, pages=41, projected_usd=1.0, spent_usd=0.0, stage="vision")
+    assert "40 pages remain in the cycle ending Oct 14's allowance" in hold.reason
+    # The unanchored case is unchanged: YYYY-MM, as every seat had before.
+    lim = _limits(allowance_remaining_pages=40, allowance_month="2026-09")
+    hold = _hold(lim.check_before_first_paid, pages=41, projected_usd=1.0, spent_usd=0.0, stage="vision")
+    assert "40 pages remain in 2026-09's allowance" in hold.reason
+    # And with neither, it never says "month" -- the seat may be on a cycle.
+    lim = _limits(allowance_remaining_pages=40)
+    hold = _hold(lim.check_before_first_paid, pages=41, projected_usd=1.0, spent_usd=0.0, stage="vision")
+    assert "this period's allowance" in hold.reason
 # ---- the two cost limits, before a stage --------------------------------------
 def test_the_budget_counts_the_month_the_run_and_the_projection_together() -> None:
     lim = _limits(monthly_budget_usd=10.0, month_cents_used=600)  # 6.00 already this month

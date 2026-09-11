@@ -1,0 +1,246 @@
+{
+  "_readme": [
+    "The allowance window, agreed across THREE implementations (ss#2618).",
+    "Consumers: operator/workspace_broker/cycle_window.py (seat),",
+    "src/lib/admin/medchron-jobs-read.ts (console), and the laptop pipeline in the",
+    "private engagements repo (tools/medchron/limits.py), which vendors a COPY of",
+    "this file and pins its sha256 the way tests/customer-yaml-parity-contract.ts",
+    "pins the validator parity table.",
+    "",
+    "Expectations here are HAND-AUTHORED from Stripe's documented anchor rule, not",
+    "generated from any implementation. A table generated from the code it checks",
+    "proves only that the code equals itself.",
+    "",
+    "All times UTC. `end` is EXCLUSIVE.",
+    "",
+    "TAGGED VALUES: a settings value of the form {\"__float__\": N} means the",
+    "native float N, not an object. JSON has one number type; YAML has two, and",
+    "the int/float distinction is exactly what one reader accepts and another",
+    "refuses. Each side must materialise the tag before calling its reader."
+  ],
+  "reader": [
+    {
+      "why": "the ordinary case",
+      "settings": {
+        "chronology_package_cycle_anchor_day": 15
+      },
+      "anchor": 15
+    },
+    {
+      "why": "no cycle authored -> calendar month, not an error",
+      "settings": {},
+      "anchor": null
+    },
+    {
+      "why": "a quoted number is the divergence this table exists for: it validates against the open scalar map and projects to D1 as a string",
+      "settings": {
+        "chronology_package_cycle_anchor_day": "15"
+      },
+      "invalid": true
+    },
+    {
+      "why": "a float is not a day of the month \u2014 and the two languages CANNOT agree here. YAML 15.0 is a float in Python (refused) and is indistinguishable from 15 in JS (accepted). That asymmetry is irreducible, so it is declared rather than papered over: the SEAT is the authority and refuses, so no job runs; the console may render a window the seat will not honour, which is what its drift notice is for",
+      "settings": {
+        "chronology_package_cycle_anchor_day": {
+          "__float__": 15
+        }
+      },
+      "asymmetric": {
+        "python": "invalid",
+        "ts": "accepts"
+      }
+    },
+    {
+      "why": "bool is an int in Python; true is not a day",
+      "settings": {
+        "chronology_package_cycle_anchor_day": true
+      },
+      "invalid": true
+    },
+    {
+      "why": "below range",
+      "settings": {
+        "chronology_package_cycle_anchor_day": 0
+      },
+      "invalid": true
+    },
+    {
+      "why": "above range",
+      "settings": {
+        "chronology_package_cycle_anchor_day": 32
+      },
+      "invalid": true
+    },
+    {
+      "why": "negative",
+      "settings": {
+        "chronology_package_cycle_anchor_day": -1
+      },
+      "invalid": true
+    },
+    {
+      "why": "authored null is authored-but-unreadable, not absent",
+      "settings": {
+        "chronology_package_cycle_anchor_day": null
+      },
+      "invalid": true
+    },
+    {
+      "why": "boundary low",
+      "settings": {
+        "chronology_package_cycle_anchor_day": 1
+      },
+      "anchor": 1
+    },
+    {
+      "why": "boundary high",
+      "settings": {
+        "chronology_package_cycle_anchor_day": 31
+      },
+      "anchor": 31
+    }
+  ],
+  "effective_from": [
+    {
+      "why": "absent is fine",
+      "settings": {},
+      "value": null
+    },
+    {
+      "why": "the ordinary case",
+      "settings": {
+        "chronology_package_cycle_effective_from": "2026-09-15"
+      },
+      "value": "2026-09-15"
+    },
+    {
+      "why": "not a date",
+      "settings": {
+        "chronology_package_cycle_effective_from": "September"
+      },
+      "invalid": true
+    },
+    {
+      "why": "unpadded",
+      "settings": {
+        "chronology_package_cycle_effective_from": "2026-9-15"
+      },
+      "invalid": true
+    },
+    {
+      "why": "not a real day",
+      "settings": {
+        "chronology_package_cycle_effective_from": "2026-02-30"
+      },
+      "invalid": true
+    }
+  ],
+  "window": [
+    {
+      "why": "no anchor -> the calendar month, which is today's behaviour and what an unauthored seat keeps",
+      "now": "2026-09-11T12:00:00.000Z",
+      "anchor": null,
+      "start": "2026-09-01T00:00:00.000Z",
+      "end": "2026-10-01T00:00:00.000Z",
+      "label": "2026-09"
+    },
+    {
+      "why": "mid-cycle",
+      "now": "2026-09-20T12:00:00.000Z",
+      "anchor": 15,
+      "start": "2026-09-15T00:00:00.000Z",
+      "end": "2026-10-15T00:00:00.000Z",
+      "label": "the cycle ending Oct 14"
+    },
+    {
+      "why": "before the anchor day -> the window that began last month",
+      "now": "2026-09-14T23:59:59.999Z",
+      "anchor": 15,
+      "start": "2026-08-15T00:00:00.000Z",
+      "end": "2026-09-15T00:00:00.000Z",
+      "label": "the cycle ending Sep 14"
+    },
+    {
+      "why": "exactly on the boundary: the anchor instant belongs to the NEW cycle (half-open)",
+      "now": "2026-09-15T00:00:00.000Z",
+      "anchor": 15,
+      "start": "2026-09-15T00:00:00.000Z",
+      "end": "2026-10-15T00:00:00.000Z",
+      "label": "the cycle ending Oct 14"
+    },
+    {
+      "why": "STRIPE RETURN-TO-ANCHOR, step 1: a 31st anchor in a 28-day month clamps",
+      "now": "2026-02-05T12:00:00.000Z",
+      "anchor": 31,
+      "start": "2026-01-31T00:00:00.000Z",
+      "end": "2026-02-28T00:00:00.000Z",
+      "label": "the cycle ending Feb 27"
+    },
+    {
+      "why": "STRIPE RETURN-TO-ANCHOR, step 2: and then RETURNS to the 31st. Chaining from the previous end would give Mar 28 here, which is the classic wrong answer this vector exists to catch",
+      "now": "2026-03-05T12:00:00.000Z",
+      "anchor": 31,
+      "start": "2026-02-28T00:00:00.000Z",
+      "end": "2026-03-31T00:00:00.000Z",
+      "label": "the cycle ending Mar 30"
+    },
+    {
+      "why": "30-day month clamps a 31st anchor",
+      "now": "2026-04-15T12:00:00.000Z",
+      "anchor": 31,
+      "start": "2026-03-31T00:00:00.000Z",
+      "end": "2026-04-30T00:00:00.000Z",
+      "label": "the cycle ending Apr 29"
+    },
+    {
+      "why": "leap year: a 30th anchor clamps to Feb 29, not Feb 28",
+      "now": "2024-02-10T12:00:00.000Z",
+      "anchor": 30,
+      "start": "2024-01-30T00:00:00.000Z",
+      "end": "2024-02-29T00:00:00.000Z",
+      "label": "the cycle ending Feb 28"
+    },
+    {
+      "why": "non-leap century-adjacent year: Feb 28",
+      "now": "2026-02-10T12:00:00.000Z",
+      "anchor": 30,
+      "start": "2026-01-30T00:00:00.000Z",
+      "end": "2026-02-28T00:00:00.000Z",
+      "label": "the cycle ending Feb 27"
+    },
+    {
+      "why": "year boundary",
+      "now": "2027-01-05T12:00:00.000Z",
+      "anchor": 20,
+      "start": "2026-12-20T00:00:00.000Z",
+      "end": "2027-01-20T00:00:00.000Z",
+      "label": "the cycle ending Jan 19"
+    },
+    {
+      "why": "PHOENIX BOUNDARY. The firm is UTC-7. A job created 2026-09-14 at 23:00 local is 2026-09-15T06:00Z, so it lands in the NEW cycle though it is still the 14th where the firm sits. The cycle turns at UTC midnight; this vector pins that we chose it deliberately",
+      "now": "2026-09-15T06:00:00.000Z",
+      "anchor": 15,
+      "start": "2026-09-15T00:00:00.000Z",
+      "end": "2026-10-15T00:00:00.000Z",
+      "label": "the cycle ending Oct 14"
+    },
+    {
+      "why": "effective_from truncates the FIRST cycle so no already-debited row is re-partitioned into it",
+      "now": "2026-09-20T12:00:00.000Z",
+      "anchor": 15,
+      "effective_from": "2026-09-18",
+      "start": "2026-09-18T00:00:00.000Z",
+      "end": "2026-10-15T00:00:00.000Z",
+      "label": "the cycle ending Oct 14"
+    },
+    {
+      "why": "effective_from in the past is inert once the first cycle has passed",
+      "now": "2026-11-20T12:00:00.000Z",
+      "anchor": 15,
+      "effective_from": "2026-09-18",
+      "start": "2026-11-15T00:00:00.000Z",
+      "end": "2026-12-15T00:00:00.000Z",
+      "label": "the cycle ending Dec 14"
+    }
+  ]
+}

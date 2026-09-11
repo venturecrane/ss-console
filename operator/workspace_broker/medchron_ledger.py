@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
+from .cycle_window import AnchorInvalid, Window, cycle_window, resolve_anchor, resolve_effective_from
 
 STATES = ("submitted", "running", "held", "delivered", "failed")
 TERMINAL = frozenset({"delivered", "failed"})
@@ -103,16 +104,22 @@ CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_medchron_jobs_created ON medc
 #   2026-09-09) let a run that read thousands of pages and spent real money
 #   leave no mark, because it held or failed after the money had moved. A hold
 #   at zero cents is not a debit: nothing was read and nothing was spent.
-# * Keyed on `created_at`, NOT on the month the cents landed in. A month-of-
+# * Keyed on `created_at`, NOT on the period the cents landed in. A period-of-
 #   charge key was tried first and reverted the same day: `month_charged` is not
 #   in PROJECTION, and PROJECTION's shape is pinned by the overlay's
 #   `_MEDCHRON_JOBS_COLUMNS` this release, so the console could never see it.
-#   A job created on the 31st whose cents land on the 1st would then be debited
-#   to the new month on the seat and shown in the old month on the console --
-#   the two surfaces disagreeing about the same month, which is the one thing
-#   this rule exists to prevent. Created-month keying is a figure both surfaces
-#   can compute from a column both surfaces already have. Moving to month-of-
-#   charge is the next OVERLAY_REF bump's business (ADR 0087 amendment).
+#   A job created on the last day of a period whose cents land on the first day
+#   of the next would then be debited to the new period on the seat and shown in
+#   the old one on the console -- the two surfaces disagreeing about the same
+#   period, which is the one thing this rule exists to prevent. Created-time
+#   keying is a figure every surface can compute from a column every surface
+#   already has. Moving to period-of-charge is the next OVERLAY_REF bump's
+#   business (ADR 0087 amendment).
+#
+# Since 2026-09-11 the period is the firm's BILLING CYCLE when one is authored
+# (`cycle_window.py`), and the calendar month when none is. The predicate is a
+# half-open range rather than a `substr(...)` prefix, which also lets it use
+# `idx_medchron_jobs_created` -- the prefix form could not.
 #
 # Both forms are written out in full rather than composed: a query built by
 # concatenation reads as an injection risk to every scanner and every reviewer,
@@ -120,12 +127,12 @@ CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_medchron_jobs_created ON medc
 _DEBITS_SQL = (
     "SELECT COALESCE(SUM(pages), 0) AS pages, COALESCE(SUM(documents), 0) AS documents, "
     "COALESCE(SUM(cents), 0) AS cents FROM medchron_jobs "
-    "WHERE cents > 0 AND substr(created_at, 1, 7) = ?"
+    "WHERE cents > 0 AND created_at >= ? AND created_at < ?"
 )
 _DEBITS_SQL_EXCLUDING = (
     "SELECT COALESCE(SUM(pages), 0) AS pages, COALESCE(SUM(documents), 0) AS documents, "
     "COALESCE(SUM(cents), 0) AS cents FROM medchron_jobs "
-    "WHERE cents > 0 AND substr(created_at, 1, 7) = ? AND id <> ?"
+    "WHERE cents > 0 AND created_at >= ? AND created_at < ? AND id <> ?"
 )
 
 # The console projection (the ``medchron_jobs`` runtime-read kind and the
@@ -150,10 +157,6 @@ class EnvelopeError(ValueError):
 
 def digest(obj: Any) -> str:
     return "sha256:" + hashlib.sha256(json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-
-
-def month_of(ts: str) -> str:
-    return ts[:7]
 
 
 def validate_envelope(req: dict[str, Any]) -> dict[str, Any]:
@@ -235,6 +238,42 @@ def validate_envelope(req: dict[str, Any]) -> dict[str, Any]:
     return env
 
 
+def _medchron_skill_settings(path: str | Path) -> dict[str, Any] | None:
+    """The authored settings map for this skill, or None when the skill is
+    absent or disabled. One walk, so the allowance and the cycle keys can never
+    be read off different skills."""
+    try:
+        import yaml
+
+        doc = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    except Exception:  # noqa: BLE001 - an unreadable seat config is "nothing authored"
+        return None
+    for persona in doc.get("personas") or []:
+        for skill in (persona or {}).get("skills") or []:
+            if not isinstance(skill, dict) or skill.get("name") != SKILL_NAME:
+                continue
+            if skill.get("enabled") is False:
+                return None
+            settings = skill.get("settings")
+            return settings if isinstance(settings, dict) else {}
+    return None
+
+
+def cycle_from_customer_yaml(path: str | Path) -> tuple[int | None, str | None]:
+    """The firm's authored billing-cycle anchor and its effective-from date.
+
+    Raises ``AnchorInvalid`` when either key is present but unreadable. Absent
+    is NOT an error -- it means no cycle is authored and the window is the
+    calendar month, which is what every seat used before 2026-09-11. Invalid is
+    an error, because an authored control the seat cannot honour would
+    otherwise silently meter the firm on a different window than it believes.
+    """
+    settings = _medchron_skill_settings(path)
+    if settings is None:
+        return (None, None)
+    return (resolve_anchor(settings), resolve_effective_from(settings))
+
+
 def allowance_from_customer_yaml(path: str | Path) -> int | None:
     """The firm's authored monthly document allowance, or None when the skill
     is absent, disabled, or carries no such key (fail closed: no allowance, no
@@ -288,53 +327,72 @@ class MedchronLedger:
     # real money against the vendor leave no mark, because it held or failed
     # after the money moved. Held-at-zero jobs are not debits: nothing was read
     # and nothing was spent.
-    def debits(self, month: str, exclude_job_id: str | None = None) -> dict[str, int]:
-        """The month's debited pages, documents and cents, in one read so the
-        three can never disagree about which rows they counted. `month` is a
-        job's CREATED month, which is the same key the console's `monthTotals()`
-        uses, so the two surfaces cannot disagree about the same month."""
+    def debits(self, window: Window, exclude_job_id: str | None = None) -> dict[str, int]:
+        """The window's debited pages, documents and cents, in one read so the
+        three can never disagree about which rows they counted. The window is
+        half-open on a job's CREATED time, and the console and the laptop
+        pipeline compute it from the same fixture-pinned algorithm
+        (`cycle_window.py`), so no two surfaces can disagree about which rows a
+        period holds."""
         conn = self._connect()
         try:
             if exclude_job_id:
-                row = conn.execute(_DEBITS_SQL_EXCLUDING, (month, exclude_job_id)).fetchone()
+                row = conn.execute(_DEBITS_SQL_EXCLUDING, (window.start, window.end, exclude_job_id)).fetchone()
             else:
-                row = conn.execute(_DEBITS_SQL, (month,)).fetchone()
+                row = conn.execute(_DEBITS_SQL, (window.start, window.end)).fetchone()
             return {"pages": int(row["pages"]), "documents": int(row["documents"]), "cents": int(row["cents"])}
         finally:
             conn.close()
 
-    def pages_used(self, month: str, exclude_job_id: str | None = None) -> int:
-        return self.debits(month, exclude_job_id)["pages"]
+    def pages_used(self, window: Window, exclude_job_id: str | None = None) -> int:
+        return self.debits(window, exclude_job_id)["pages"]
 
-    def cents_used(self, month: str, exclude_job_id: str | None = None) -> int:
-        return self.debits(month, exclude_job_id)["cents"]
+    def cents_used(self, window: Window, exclude_job_id: str | None = None) -> int:
+        return self.debits(window, exclude_job_id)["cents"]
 
-    def documents_used(self, month: str, exclude_job_id: str | None = None) -> int:
-        return self.debits(month, exclude_job_id)["documents"]
+    def documents_used(self, window: Window, exclude_job_id: str | None = None) -> int:
+        return self.debits(window, exclude_job_id)["documents"]
 
     def allowance(
-        self, allowance: int | None, now: str | None = None, exclude_job_id: str | None = None
+        self,
+        allowance: int | None,
+        now: str | None = None,
+        exclude_job_id: str | None = None,
+        anchor_day: int | None = None,
+        effective_from: str | None = None,
     ) -> dict[str, Any]:
-        """The month's allowance state, in PAGES.
+        """The cycle's allowance state, in PAGES.
 
         `used`/`remaining` are the allowance's own unit and `unit` says which
         it is, so a caller can never read a page count as a document count.
         The document and cents figures ride alongside for the console and the
         runner's cost limits. `exclude_job_id` leaves one job's own row out,
-        which is what a resume needs so it is not metered against itself. The
-        month is the job's CREATED month on this surface and on the console.
+        which is what a resume needs so it is not metered against itself.
+
+        `anchor_day` is the firm's billing-cycle day; without one the window is
+        the calendar month, which is what an unauthored seat has always used.
+        The anchor arrives as an argument rather than being read here for the
+        same reason the allowance does: `MedchronLedger` has no path to
+        `customer.yaml` (`medchron_verbs` owns that read).
+
+        `month` keeps its key -- the overlay's pinned tool whitelists it by name
+        -- but carries PROSE for a human ("the cycle ending Oct 14"). The machine
+        range rides `cycle_start`/`cycle_end`; never parse `month`.
         """
-        month = month_of(now or _iso_utc())
-        pages = self.pages_used(month, exclude_job_id)
+        window = cycle_window(now or _iso_utc(), anchor_day, effective_from)
+        pages = self.pages_used(window, exclude_job_id)
         extra: dict[str, Any] = {
             "unit": "pages",
             "pages_used": pages,
-            "documents_used": self.documents_used(month, exclude_job_id),
-            "cents_used": self.cents_used(month, exclude_job_id),
+            "documents_used": self.documents_used(window, exclude_job_id),
+            "cents_used": self.cents_used(window, exclude_job_id),
+            "cycle_start": window.start,
+            "cycle_end": window.end,
+            "cycle_anchored": window.anchored,
         }
         if allowance is None:
             return {
-                "month": month,
+                "month": window.label,
                 "allowance": None,
                 "used": pages,
                 "remaining": 0,
@@ -344,7 +402,7 @@ class MedchronLedger:
             }
         remaining = max(0, allowance - pages)
         return {
-            "month": month,
+            "month": window.label,
             "allowance": allowance,
             "used": pages,
             "remaining": remaining,

@@ -30,7 +30,9 @@ from .medchron_ledger import (
     STATES,
     EnvelopeError,
     MedchronLedger,
+    AnchorInvalid,
     allowance_from_customer_yaml,
+    cycle_from_customer_yaml,
     validate_envelope,
 )
 
@@ -119,9 +121,21 @@ class MedchronVerbs:
             raise ValueError("medchron ledger not configured on this broker")
         if action == "medchron_allowance":
             exclude = str(request.get("exclude_job_id") or "") or None
+            try:
+                anchor, effective_from = cycle_from_customer_yaml(self.customer_yaml)
+            except AnchorInvalid as exc:
+                # Authored-but-unreadable is refused, never quietly demoted to
+                # the calendar month: a firm metered on a window it did not
+                # author is the harm, and the key it must fix is named.
+                return {"ok": True, "authored": False, "invalid": True, "reason": str(exc)}
             return {
                 "ok": True,
-                **self.ledger.allowance(allowance_from_customer_yaml(self.customer_yaml), exclude_job_id=exclude),
+                **self.ledger.allowance(
+                    allowance_from_customer_yaml(self.customer_yaml),
+                    exclude_job_id=exclude,
+                    anchor_day=anchor,
+                    effective_from=effective_from,
+                ),
             }
         if action == "medchron_job_status":
             job_id = str(request.get("job_id") or "")
@@ -142,7 +156,15 @@ class MedchronVerbs:
             envelope = validate_envelope(request.get("envelope") or {})
         except EnvelopeError as exc:
             return {"ok": True, "accepted": False, "reason": str(exc)}
-        state = self.ledger.allowance(allowance_from_customer_yaml(self.customer_yaml))
+        try:
+            anchor, effective_from = cycle_from_customer_yaml(self.customer_yaml)
+        except AnchorInvalid as exc:
+            return {"ok": True, "accepted": False, "reason": str(exc)}
+        state = self.ledger.allowance(
+            allowance_from_customer_yaml(self.customer_yaml),
+            anchor_day=anchor,
+            effective_from=effective_from,
+        )
         if not state["authored"]:
             # The key is named because the seat that hits this is usually one
             # whose customer.yaml still carries only the pre-2026-09-09
@@ -150,14 +172,14 @@ class MedchronVerbs:
             return {
                 "ok": True,
                 "accepted": False,
-                "reason": "no monthly page allowance is authored for this seat "
+                "reason": "no page allowance is authored for this seat "
                 f"({ALLOWANCE_KEY}); nothing can be submitted",
             }
         if state["remaining"] <= 0:
             return {
                 "ok": True,
                 "accepted": False,
-                "reason": f"the monthly page allowance is spent ({state['used']:,} of "
+                "reason": f"the page allowance is spent ({state['used']:,} of "
                 f"{state['allowance']:,} pages in {state['month']}); the Operator stops here "
                 "and surfaces the item",
             }

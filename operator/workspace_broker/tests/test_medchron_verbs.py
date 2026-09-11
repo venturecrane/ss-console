@@ -178,7 +178,7 @@ def _deliver(v, job_id, **fields):
     call(v, "medchron_job_record", peer_uid=ROOT, job_id=job_id, state="delivered", fields=fields)
 
 
-def test_allowance_counts_the_months_pages_and_submit_stops_at_the_crossing(verbs):
+def test_allowance_counts_the_cycles_pages_and_submit_stops_at_the_crossing(verbs):
     v, _, _ = verbs
     a = call(v, "medchron_allowance")
     assert (a["allowance"], a["used"], a["remaining"], a["authored"]) == (1000, 0, 1000, True)
@@ -193,14 +193,14 @@ def test_allowance_counts_the_months_pages_and_submit_stops_at_the_crossing(verb
     _deliver(v, r["job_id"], documents=45, pages=450, cents=100)
     r = call(v, "medchron_job_submit", envelope=envelope())
     assert r["accepted"] is False
-    assert "monthly page allowance is spent (1,050 of 1,000 pages in" in r["reason"]
+    assert "page allowance is spent (1,050 of 1,000 pages in" in r["reason"]
 
 
 def test_submit_refuses_when_no_allowance_is_authored(verbs, tmp_path):
     v, _, _ = verbs
     v.customer_yaml = str(tmp_path / "nope.yaml")
     r = call(v, "medchron_job_submit", envelope=envelope())
-    assert r["accepted"] is False and "no monthly page allowance" in r["reason"]
+    assert r["accepted"] is False and "no page allowance" in r["reason"]
 
 
 def test_the_old_document_key_reads_as_unauthored_and_the_refusal_names_the_rename(verbs, tmp_path):
@@ -300,6 +300,68 @@ def test_a_job_debits_the_month_it_was_created_in_not_the_month_its_cents_landed
     assert (august["used"], august["cents_used"]) == (420, 1500)
     assert (september["used"], september["cents_used"]) == (0, 0)
 
+
+
+
+def test_the_cycle_window_decides_which_rows_are_debited(verbs):
+    """The behaviour the whole change exists for: the same ledger row counts or
+    does not, depending on the firm's billing cycle rather than the calendar.
+
+    A job created 2026-09-10 is INSIDE September by the calendar, and OUTSIDE a
+    cycle anchored on the 15th (which runs 08-15 to 09-15 at that moment, and
+    09-15 to 10-15 after it). Falsifier: revert the debit predicate to
+    `substr(created_at,1,7)` and the anchored reads below return 420, because a
+    prefix match cannot express a window that does not start on the 1st.
+    """
+    import sqlite3
+
+    v, _, _ = verbs
+    job = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    conn = sqlite3.connect(v.ledger._db_path)
+    try:
+        conn.execute("UPDATE medchron_jobs SET created_at=? WHERE id=?", ("2026-09-10T12:00:00.000Z", job))
+        conn.commit()
+    finally:
+        conn.close()
+    _deliver(v, job, pages=420, cents=1500)
+
+    now = "2026-09-20T12:00:00.000Z"
+    calendar = v.ledger.allowance(1000, now=now)
+    assert (calendar["used"], calendar["month"]) == (420, "2026-09")
+
+    anchored = v.ledger.allowance(1000, now=now, anchor_day=15)
+    assert anchored["used"] == 0, "a 09-10 row is not in the cycle that began 09-15"
+    assert anchored["month"] == "the cycle ending Oct 14"
+    assert (anchored["cycle_start"], anchored["cycle_end"]) == (
+        "2026-09-15T00:00:00.000Z",
+        "2026-10-15T00:00:00.000Z",
+    )
+
+    # The cycle BEFORE that one does hold it.
+    prior = v.ledger.allowance(1000, now="2026-09-14T12:00:00.000Z", anchor_day=15)
+    assert prior["used"] == 420 and prior["cycle_start"] == "2026-08-15T00:00:00.000Z"
+
+
+def test_an_unreadable_anchor_refuses_and_names_the_key(verbs, tmp_path):
+    """Authored-but-invalid must never be quietly demoted to the calendar month:
+    a firm metered on a window it did not author is the harm."""
+    yaml_path = tmp_path / "customer.yaml"
+    yaml_path.write_text(
+        "personas:\n"
+        "  - skills:\n"
+        "      - name: medical-chronology-maintainer\n"
+        "        settings:\n"
+        "          chronology_package_page_allowance_per_month: 1000\n"
+        "          chronology_package_cycle_anchor_day: '15'\n",
+        encoding="utf-8",
+    )
+    v, _, _ = verbs
+    v.customer_yaml = str(yaml_path)
+    r = call(v, "medchron_job_submit", envelope=envelope())
+    assert r["accepted"] is False
+    assert "chronology_package_cycle_anchor_day" in r["reason"]
+    a = call(v, "medchron_allowance")
+    assert a["invalid"] is True and a["authored"] is False
 
 # -- queue + ledger + audit --------------------------------------------------
 

@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import config as config_mod
+from . import config as config_mod, job as job_mod
 
 logger = logging.getLogger("medchron.daemon")
 
@@ -328,13 +328,7 @@ class Daemon:
         # job was submitted and is stale the moment any other job records cents.
         # This job's own row is excluded so a resume is not metered against the
         # spend it already recorded.
-        state = self.broker.allowance(exclude_job_id=job_id)
-        doc["allowance_pages"] = int(state.get("allowance") or 0)
-        doc["allowance_remaining_pages"] = int(state.get("remaining") or 0)
-        doc["month_pages_used"] = int(state.get("pages_used") or 0)
-        doc["month_cents_used"] = int(state.get("cents_used") or 0)
-        if state.get("month"):
-            doc["allowance_month"] = str(state["month"])
+        job_mod.stamp_period(doc, self.broker.allowance(exclude_job_id=job_id))
         import yaml
 
         (jd / "job.yaml").write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
