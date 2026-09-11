@@ -84,14 +84,23 @@ Http = Callable[[str, str, dict, Optional[dict]], HttpResponse]
 
 def http_request(method: str, url: str, headers: dict, body: Optional[dict]) -> HttpResponse:
     """urllib transport. A non-2xx status comes back as a response, not an
-    exception, so callers decide what 404 means for their step."""
+    exception, so callers decide what 404 means for their step.
+
+    Only ``https://`` is dispatched. ``urlopen`` would happily follow ``file://``
+    or ``ftp://``; every caller today builds its URL from an ``https://``
+    constant, and this check is what makes that a property of the transport
+    rather than a claim about the callers, in a module whose whole purpose is
+    to delete things.
+    """
+    if not url.startswith("https://"):
+        raise ValueError(f"http_request dispatches https:// only, refused {url.split(':', 1)[0]}://")
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=data, method=method, headers=dict(headers))
     if data is not None:
         req.add_header("Content-Type", "application/json")
     try:
         # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-        with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310 - fixed https hosts, method-locked
+        with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310 - scheme checked above: https:// only, so no file:// or ftp:// can reach urlopen
             return HttpResponse(resp.status, _parse(resp.read()))
     except urllib.error.HTTPError as exc:
         return HttpResponse(exc.code, _parse(exc.read()))
@@ -378,9 +387,34 @@ def healthchecks_check_name(slug: str) -> str:
     return f"hermes-{slug}"
 
 
+#: The console D1 tables that hold a row per seat and must be empty for the
+#: slug after decommission. ``machine_credentials`` is the seat's own
+#: control-plane bearer (migration 0114): deleting the row is what revokes the
+#: key, so a retired Machine's copy stops authenticating even if the Fly
+#: destroy is the step that halted.
+CONSOLE_SEAT_TABLES: tuple[str, ...] = (
+    "operator_runtime_summary",
+    "fleet_status",
+    "machine_credentials",
+)
+
+
+def _is_missing_table(exc: Exception, table: str) -> bool:
+    return f"no such table: {table}" in str(exc)
+
+
 @dataclass
 class HealthchecksAndFleetStatusCleanup:
-    """Deletes the seat's healthchecks.io check and its console D1 rows."""
+    """Deletes the seat's healthchecks.io check and its console D1 rows.
+
+    The manifest reports what was OBSERVED, not what was attempted: a
+    ``DELETE`` through ``wrangler d1 execute`` returns an empty result set
+    whether it removed a row or matched nothing, so every table is counted
+    before and after and the count after is what ``*_rows_remaining`` and the
+    ``*_row_deleted`` flags are computed from. That is the negative probe the
+    venture's removal doctrine asks for, done by the pipeline instead of by
+    hand afterwards.
+    """
 
     hc_api_key: Optional[str]
     d1: ConsoleD1
@@ -413,19 +447,53 @@ class HealthchecksAndFleetStatusCleanup:
             raise RuntimeError(f"healthchecks delete {uuid} failed: HTTP {resp.status}")
         return False, None
 
+    def _clear_table(self, table: str, slug: str) -> dict:
+        """Count, delete, count again. Returns the observed numbers for one table.
+
+        ``machine_credentials`` may not exist yet on a D1 whose migrations
+        predate 0114; that is reported as ``table_present: False`` rather than
+        raised, because the absence of the table is itself the observation that
+        there is no credential row to revoke.
+        """
+        try:
+            before = self.d1.count_where_slug(table, slug)
+        except RuntimeError as exc:
+            if table == "machine_credentials" and _is_missing_table(exc, table):
+                return {"table_present": False, "rows_before": 0, "rows_remaining": 0, "rows_deleted": 0}
+            raise
+        # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query — table comes from CONSOLE_SEAT_TABLES; the slug is sql_text's hex blob literal.
+        # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query — not SQLAlchemy; the only interpolations are a module constant and a fixed-alphabet hex literal.
+        self.d1.execute(f"DELETE FROM {table} WHERE customer_slug = {sql_text(slug)}")
+        after = self.d1.count_where_slug(table, slug)
+        return {
+            "table_present": True,
+            "rows_before": before,
+            "rows_remaining": after,
+            "rows_deleted": before - after,
+        }
+
     async def cleanup(self, customer_slug: str) -> dict:
         cancelled, uuid = self._delete_check(customer_slug)
-        slug_sql = sql_text(customer_slug)
-        self.d1.execute(f"DELETE FROM operator_runtime_summary WHERE customer_slug = {slug_sql}")
-        self.d1.execute(f"DELETE FROM fleet_status WHERE customer_slug = {slug_sql}")
-        return {
+        observed = {table: self._clear_table(table, customer_slug) for table in CONSOLE_SEAT_TABLES}
+        manifest: dict = {
             "healthchecks_check_cancelled": cancelled,
             "healthchecks_check_uuid": uuid,
             "healthchecks_configured": bool(self.hc_api_key),
-            "fleet_status_row_deleted": True,
-            "runtime_summary_row_deleted": True,
             "customer_slug": customer_slug,
         }
+        short = {
+            "operator_runtime_summary": "runtime_summary",
+            "fleet_status": "fleet_status",
+            "machine_credentials": "machine_credentials",
+        }
+        for table, obs in observed.items():
+            key = short[table]
+            manifest[f"{key}_rows_deleted"] = obs["rows_deleted"]
+            manifest[f"{key}_rows_remaining"] = obs["rows_remaining"]
+            # True only when the table was read back empty for this slug.
+            manifest[f"{key}_row_deleted"] = obs["table_present"] and obs["rows_remaining"] == 0
+        manifest["machine_credentials_table_present"] = observed["machine_credentials"]["table_present"]
+        return manifest
 
 
 # ---------------------------------------------------------------------------
@@ -438,18 +506,22 @@ BACKEND_REQUIREMENTS: dict[str, str] = {
     "r2_deleter": "CLOUDFLARE_API_TOKEN (or CF_API_TOKEN) + CLOUDFLARE_ACCOUNT_ID (or CF_ACCOUNT_ID)",
     "vectorize_deleter": "CLOUDFLARE_API_TOKEN (wrangler reads it)",
     "agentmail": "AGENTMAIL_API_KEY (the org key, not a seat key)",
-    "fly": "FLY_API_TOKEN, or a logged-in `fly` CLI",
+    "fly": "FLY_API_TOKEN (a staged token; a logged-in `fly` CLI does not count)",
     "observability": "HEALTHCHECKS_API_KEY + CLOUDFLARE_API_TOKEN (wrangler d1)",
 }
 
 
-def _fly_authenticated(env: dict, runner: Runner) -> bool:
-    if env.get("FLY_API_TOKEN"):
-        return True
-    try:
-        return runner(["fly", "auth", "whoami"]).returncode == 0
-    except OSError:
-        return False
+def _fly_authenticated(env: dict) -> bool:
+    """Only a staged ``FLY_API_TOKEN`` arms ``fly apps destroy``.
+
+    A logged-in ``fly`` CLI used to count. It must not: the Captain's shell is
+    logged in most of the time, so the destroyer was armed on every run without
+    anyone staging anything, and the ``--live`` refusal silently stopped
+    covering the one layer that takes the Machine, its volume and its secrets
+    in a single act. The other four backends already require an explicit
+    variable; this makes Fly the same.
+    """
+    return bool(env.get("FLY_API_TOKEN"))
 
 
 def backends_from_env(
@@ -486,7 +558,7 @@ def backends_from_env(
     if agentmail_key:
         kwargs["agentmail"] = AgentMailInboxDeprovisioner(agentmail_key, customers_root, http=http)
         wired["agentmail"] = True
-    if _fly_authenticated(env, runner):
+    if _fly_authenticated(env):
         kwargs["fly"] = FlyAppDestroyer(runner=runner)
         wired["fly"] = True
     hc_key = env.get("HEALTHCHECKS_API_KEY")

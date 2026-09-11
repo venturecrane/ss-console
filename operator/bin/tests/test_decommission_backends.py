@@ -35,6 +35,7 @@ from bin.lib.decommission_backends import (  # noqa: E402
     WranglerVectorizeIndexDeleter,
     backends_from_env,
     customer_r2_prefixes,
+    http_request,
     seat_inbox_address,
 )
 from bin.lib.console_d1 import ConsoleD1  # noqa: E402
@@ -256,8 +257,47 @@ def test_fly_destroy_failure_surfaces():
 # ---------------------------------------------------------------------------
 
 
-def _d1_runner():
-    return _FakeRunner({"npx wrangler d1 execute": (0, json.dumps([{"results": []}]), "")})
+class _CountingD1Runner:
+    """A wrangler stand-in with a per-table row count for the slug.
+
+    ``SELECT COUNT(*)`` answers from the table; ``DELETE`` empties it unless
+    the table is in ``inert`` (a delete that matches nothing, the case the
+    old boolean manifest could not distinguish); a table in ``missing`` fails
+    the way wrangler reports an absent table. Every statement is recorded.
+    """
+
+    def __init__(self, counts: dict, *, inert: set | None = None, missing: set | None = None) -> None:
+        self.counts = dict(counts)
+        self.inert = inert or set()
+        self.missing = missing or set()
+        self.calls: list[list[str]] = []
+
+    @staticmethod
+    def _table(sql: str) -> str:
+        for token in ("FROM ",):
+            if token in sql:
+                return sql.split(token, 1)[1].split()[0]
+        raise AssertionError(f"no table in {sql}")
+
+    def __call__(self, cmd):
+        self.calls.append(list(cmd))
+        sql = cmd[-1]
+        table = self._table(sql)
+        if table in self.missing:
+            return subprocess.CompletedProcess(list(cmd), 1, "", f"D1_ERROR: no such table: {table}")
+        if sql.startswith("SELECT COUNT(*)"):
+            body = json.dumps([{"results": [{"n": self.counts.get(table, 0)}]}])
+            return subprocess.CompletedProcess(list(cmd), 0, body, "")
+        if sql.startswith("DELETE FROM"):
+            if table not in self.inert:
+                self.counts[table] = 0
+            return subprocess.CompletedProcess(list(cmd), 0, json.dumps([{"results": []}]), "")
+        raise AssertionError(f"unexpected statement {sql}")
+
+
+def _d1_runner(**kwargs):
+    counts = {"operator_runtime_summary": 1, "fleet_status": 1, "machine_credentials": 1}
+    return _CountingD1Runner(counts, **kwargs)
 
 
 def test_observability_deletes_the_check_by_uuid_and_both_d1_rows():
@@ -276,11 +316,60 @@ def test_observability_deletes_the_check_by_uuid_and_both_d1_rows():
     assert manifest["healthchecks_check_uuid"] == "u1"
     assert manifest["fleet_status_row_deleted"] is True
     assert manifest["runtime_summary_row_deleted"] is True
+    assert manifest["machine_credentials_row_deleted"] is True
     sqls = [c[-1] for c in runner.calls]
     assert any(s.startswith("DELETE FROM fleet_status WHERE customer_slug = CAST(x'") for s in sqls)
     assert any(s.startswith("DELETE FROM operator_runtime_summary WHERE") for s in sqls)
+    assert any(s.startswith("DELETE FROM machine_credentials WHERE") for s in sqls)
     # The slug travels as a hex CAST, never as a quoted literal.
     assert all("'acme'" not in s for s in sqls)
+
+
+def test_observability_reports_observed_row_counts():
+    """The manifest is a probe: each table is counted before and after, and
+    the numbers reported are what was read back, not what was attempted."""
+    runner = _d1_runner()
+    manifest = _run(HealthchecksAndFleetStatusCleanup(None, ConsoleD1(runner=runner), http=_FakeHttp({})).cleanup("acme"))
+    for key in ("fleet_status", "runtime_summary", "machine_credentials"):
+        assert manifest[f"{key}_rows_deleted"] == 1
+        assert manifest[f"{key}_rows_remaining"] == 0
+        assert manifest[f"{key}_row_deleted"] is True
+    assert manifest["machine_credentials_table_present"] is True
+    sqls = [c[-1] for c in runner.calls]
+    # count, delete, count -- per table, in that order.
+    for table in ("operator_runtime_summary", "fleet_status", "machine_credentials"):
+        mine = [s for s in sqls if f" {table} " in s or s.endswith(table)]
+        kinds = [s.split()[0] for s in mine]
+        assert kinds == ["SELECT", "DELETE", "SELECT"], (table, kinds)
+
+
+def test_observability_reports_a_delete_that_matched_nothing():
+    """A DELETE that removed no row must not be reported as a deletion; the
+    read-back count is what the flag is computed from."""
+    runner = _d1_runner(inert={"fleet_status"})
+    manifest = _run(HealthchecksAndFleetStatusCleanup(None, ConsoleD1(runner=runner), http=_FakeHttp({})).cleanup("acme"))
+    assert manifest["fleet_status_rows_deleted"] == 0
+    assert manifest["fleet_status_rows_remaining"] == 1
+    assert manifest["fleet_status_row_deleted"] is False
+    assert manifest["runtime_summary_row_deleted"] is True
+
+
+def test_observability_tolerates_a_d1_without_machine_credentials():
+    """Before migration 0114 lands the table does not exist; that is an
+    observation (nothing to revoke), reported as such rather than raised."""
+    runner = _d1_runner(missing={"machine_credentials"})
+    manifest = _run(HealthchecksAndFleetStatusCleanup(None, ConsoleD1(runner=runner), http=_FakeHttp({})).cleanup("acme"))
+    assert manifest["machine_credentials_table_present"] is False
+    assert manifest["machine_credentials_row_deleted"] is False
+    assert manifest["machine_credentials_rows_deleted"] == 0
+    assert manifest["fleet_status_row_deleted"] is True
+
+
+def test_observability_raises_when_a_seat_table_is_unreadable():
+    """An unreachable D1 must not read as "nothing left"."""
+    runner = _d1_runner(missing={"fleet_status"})
+    with pytest.raises(RuntimeError, match="no such table: fleet_status"):
+        _run(HealthchecksAndFleetStatusCleanup(None, ConsoleD1(runner=runner), http=_FakeHttp({})).cleanup("acme"))
 
 
 def test_observability_without_healthchecks_key_still_clears_d1():
@@ -291,7 +380,8 @@ def test_observability_without_healthchecks_key_still_clears_d1():
     assert manifest["healthchecks_configured"] is False
     assert manifest["fleet_status_row_deleted"] is True
     assert http.calls == []
-    assert len(runner.calls) == 2
+    # Three tables, each counted, deleted, counted.
+    assert len(runner.calls) == 9
 
 
 def test_observability_absent_check_is_not_an_error():
@@ -299,6 +389,22 @@ def test_observability_absent_check_is_not_an_error():
     manifest = _run(HealthchecksAndFleetStatusCleanup("hc", ConsoleD1(runner=_d1_runner()), http=http).cleanup("acme"))
     assert manifest["healthchecks_check_cancelled"] is False
     assert manifest["healthchecks_check_uuid"] is None
+
+
+def test_count_where_slug_refuses_a_non_identifier_table():
+    with pytest.raises(ValueError):
+        ConsoleD1(runner=_d1_runner()).count_where_slug("fleet_status; DROP", "acme")
+
+
+# ---------------------------------------------------------------------------
+# Transport: https only
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("url", ["file:///etc/passwd", "ftp://example.test/x", "http://api.cloudflare.com/x"])
+def test_http_request_refuses_non_https(url):
+    with pytest.raises(ValueError, match="https:// only"):
+        http_request("GET", url, {}, None)
 
 
 # ---------------------------------------------------------------------------
@@ -345,7 +451,16 @@ def test_backends_from_env_accepts_the_provisioning_scripts_cf_aliases(tmp_path)
     assert wired["observability"] is False
 
 
-def test_backends_from_env_treats_a_logged_in_fly_cli_as_wired(tmp_path):
+def test_backends_from_env_does_not_arm_fly_from_a_logged_in_cli(tmp_path):
+    """The Captain's shell is logged into fly most of the time. That must not
+    arm `fly apps destroy`; only a staged FLY_API_TOKEN does, and the wiring
+    never even asks the CLI."""
     runner = _FakeRunner({"fly auth whoami": (0, "someone@smd.services", "")})
     kwargs, wired = backends_from_env("acme", tmp_path, {}, runner=runner, http=_FakeHttp({}))
+    assert wired["fly"] is False and "fly" not in kwargs
+    assert runner.calls == []
+
+
+def test_backends_from_env_arms_fly_only_from_a_staged_token(tmp_path):
+    kwargs, wired = backends_from_env("acme", tmp_path, {"FLY_API_TOKEN": "f"}, runner=_FakeRunner({}), http=_FakeHttp({}))
     assert wired["fly"] is True and isinstance(kwargs["fly"], FlyAppDestroyer)
