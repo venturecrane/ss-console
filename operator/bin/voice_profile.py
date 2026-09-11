@@ -79,10 +79,21 @@ _WORD = re.compile(r"[A-Za-z0-9']+")
 #: whole stripped line so a sentence mentioning a date is never mistaken for a
 #: date line.
 _ZONE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("date_line", re.compile(r"\A(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\Z")),
+    (
+        "date_line",
+        re.compile(
+            r"\A(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\Z"
+        ),
+    ),
     ("re_line", re.compile(r"\A(\*\*)?(RE|Re|VIA|Our File|Your File|Claim No\.?|File No\.?)\b.*", re.IGNORECASE)),
     ("salutation", re.compile(r"\A(Dear|To|Attn\.?|Attention)\b.*[:,]\s*\Z")),
-    ("signoff", re.compile(r"\A(Very truly yours|Yours|Sincerely|Respectfully|Cordially|Regards|Best regards)\s*[,.]?\s*\Z", re.IGNORECASE)),
+    (
+        "signoff",
+        re.compile(
+            r"\A(Very truly yours|Yours|Sincerely|Respectfully|Cordially|Regards|Best regards)\s*[,.]?\s*\Z",
+            re.IGNORECASE,
+        ),
+    ),
     ("address_line", re.compile(r"\A\d+\s+[A-Z][\w.'-]*(\s+[\w.'-]+)*,?\s*(Suite|Unit|Apt|#)?\s*[\w-]*\Z")),
     ("city_state_zip", re.compile(r"\A[A-Z][\w\s.'-]+,\s*(CA|California|[A-Z]{2})\s+\d{5}(-\d{4})?\Z")),
     ("phone_line", re.compile(r"\A\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\Z")),
@@ -197,7 +208,11 @@ _ABSENCE_PROBES: tuple[tuple[str, str, int], ...] = (
     ("semicolon", r";", 0),
     ("exclamation", r"!", 0),
     ("rhetorical_question", r"\?", 0),
-    ("hyphenated_compound_numeral", r"\b(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)-(?:one|two|three|four|five|six|seven|eight|nine)\b", re.IGNORECASE),
+    (
+        "hyphenated_compound_numeral",
+        r"\b(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)-(?:one|two|three|four|five|six|seven|eight|nine)\b",
+        re.IGNORECASE,
+    ),
     # A CLOSED LIST, not a suffix pattern, and the difference is not pedantry.
     # `\w+'s` matches "your driver's door" — a POSSESSIVE, which every register
     # uses and which says nothing about contraction habits. Measured on this
@@ -211,9 +226,21 @@ _ABSENCE_PROBES: tuple[tuple[str, str, int], ...] = (
         r"(?:'s|'re|'ve|'ll|'d|'m|n't)\b",
         re.IGNORECASE,
     ),
-    ("discourse_connective", r"\b(?:however|moreover|furthermore|additionally|nevertheless|therefore|thus|indeed)\b", re.IGNORECASE),
-    ("legalese_formula", r"\b(?:please be advised|pursuant to|heretofore|aforementioned|enclosed please find|at your earliest convenience|undersigned)\b", re.IGNORECASE),
-    ("intensifier", r"\b(?:horrific|devastating|egregious|tragic|blatant|shocking|obviously|needless to say)\b", re.IGNORECASE),
+    (
+        "discourse_connective",
+        r"\b(?:however|moreover|furthermore|additionally|nevertheless|therefore|thus|indeed)\b",
+        re.IGNORECASE,
+    ),
+    (
+        "legalese_formula",
+        r"\b(?:please be advised|pursuant to|heretofore|aforementioned|enclosed please find|at your earliest convenience|undersigned)\b",
+        re.IGNORECASE,
+    ),
+    (
+        "intensifier",
+        r"\b(?:horrific|devastating|egregious|tragic|blatant|shocking|obviously|needless to say)\b",
+        re.IGNORECASE,
+    ),
 )
 
 
@@ -294,7 +321,9 @@ def profile(corpus: dict[str, str]) -> dict:
         "schema_version": 1,
         "corpus_docs": total,
         "confidence_floor_docs": CONFIDENCE_FLOOR_DOCS,
-        "measurements": {m.key: {**asdict(m), "below_floor": m.below_floor, "rendered": m.render()} for m in measurements},
+        "measurements": {
+            m.key: {**asdict(m), "below_floor": m.below_floor, "rendered": m.render()} for m in measurements
+        },
         "zones": [asdict(z) for z in zones],
     }
 

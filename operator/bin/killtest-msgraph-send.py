@@ -205,9 +205,7 @@ def read_credential(slug: str, config: dict) -> tuple[str, str]:
         or os.environ.get("MSGRAPH_CLIENT_ID")
         or str(config.get("client_id") or "")
     )
-    secret = os.environ.get(f"MSGRAPH_CLIENT_SECRET__{key}") or os.environ.get(
-        "MSGRAPH_CLIENT_SECRET"
-    )
+    secret = os.environ.get(f"MSGRAPH_CLIENT_SECRET__{key}") or os.environ.get("MSGRAPH_CLIENT_SECRET")
     if not client_id:
         raise KillTestRefused(
             f"no READ client id for {slug}: MSGRAPH_CLIENT_ID__{key}, "
@@ -215,8 +213,7 @@ def read_credential(slug: str, config: dict) -> tuple[str, str]:
         )
     if not secret:
         raise KillTestRefused(
-            f"MSGRAPH_CLIENT_SECRET__{key} / MSGRAPH_CLIENT_SECRET are not in "
-            "this environment; run under infisical"
+            f"MSGRAPH_CLIENT_SECRET__{key} / MSGRAPH_CLIENT_SECRET are not in this environment; run under infisical"
         )
     return client_id, secret
 
@@ -261,10 +258,7 @@ def killtest_subject(now: datetime | None = None, mode: str = MODE_SEND) -> str:
     from now the subject is all the baseline file will have to say which ran.
     """
     stamp = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%MZ")
-    return (
-        f"{KILLTEST_MARKER} {stamp} mode={mode} "
-        "deliberate unaudited send, reconciler kill test"
-    )
+    return f"{KILLTEST_MARKER} {stamp} mode={mode} deliberate unaudited send, reconciler kill test"
 
 
 def killtest_message(subject: str) -> dict:
@@ -359,9 +353,7 @@ def plant(mailbox: str, token: str, payload: dict, *, opener=None) -> dict:
         with open_fn(request, timeout=TIMEOUT_S) as response:
             body = response.read()
     except urllib.error.HTTPError as exc:
-        raise KillTestRefused(
-            f"create in {SENT_ITEMS_FOLDER} failed with HTTP {exc.code}"
-        ) from exc
+        raise KillTestRefused(f"create in {SENT_ITEMS_FOLDER} failed with HTTP {exc.code}") from exc
     try:
         created = json.loads(body)
     except ValueError as exc:
@@ -405,8 +397,7 @@ def guard(slug: str) -> str:
     if slug not in SANDBOX_SEATS:
         raise KillTestRefused(
             f"{slug!r} is not a sandbox seat. This script puts a real message "
-            "into a real mailbox and may only do so on: "
-            + ", ".join(f"{k} ({v})" for k, v in SANDBOX_SEATS.items())
+            "into a real mailbox and may only do so on: " + ", ".join(f"{k} ({v})" for k, v in SANDBOX_SEATS.items())
         )
     return SANDBOX_SEATS[slug]
 

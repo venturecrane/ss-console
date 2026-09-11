@@ -57,10 +57,7 @@ def _reached_a_person(meta: dict[str, Any]) -> bool:
     recipients = meta.get("recipients")
     if not isinstance(recipients, list):
         return False
-    return any(
-        isinstance(r, str) and not r.strip().lower().startswith(PROBE_RECIPIENT_PREFIX)
-        for r in recipients
-    )
+    return any(isinstance(r, str) and not r.strip().lower().startswith(PROBE_RECIPIENT_PREFIX) for r in recipients)
 
 
 def dispatched_to_a_person(audit_db_path: str | None, event: dict[str, Any]) -> bool:
@@ -83,9 +80,7 @@ def dispatched_to_a_person(audit_db_path: str | None, event: dict[str, Any]) -> 
     # historical rows instead of testing its own assumption about "now".
     sql, params = _SQL, ()
     if not session_id:
-        cutoff = time.strftime(
-            "%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - UNSESSIONED_WINDOW_SECONDS)
-        )
+        cutoff = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - UNSESSIONED_WINDOW_SECONDS))
         sql, params = _SQL + " AND substr(ts,1,19) >= ?", (cutoff,)
     try:
         conn = sqlite3.connect(f"file:{audit_db_path}?mode=ro", uri=True)

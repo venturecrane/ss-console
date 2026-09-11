@@ -305,8 +305,7 @@ def image_like_pdf() -> bytes:
     objs = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
-        b"/Resources << >> /Contents 4 0 R >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << >> /Contents 4 0 R >>",
         b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream",
     ]
     out = bytearray(b"%PDF-1.4\n")
@@ -318,9 +317,7 @@ def image_like_pdf() -> bytes:
     out += f"xref\n0 {len(objs) + 1}\n".encode() + b"0000000000 65535 f \n"
     for off in offsets:
         out += f"{off:010d} 00000 n \n".encode()
-    out += (
-        f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n"
-    ).encode()
+    out += (f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n").encode()
     return bytes(out)
 
 
@@ -496,9 +493,7 @@ def build_plan(ident: dict[str, str]) -> dict[str, dict]:
             "audience": meta["audience"],
             "cohort": cohort,
             "cohort_status": (
-                "authored"
-                if cohort
-                else "UNAUTHORED on this seat (audience has no cohort; Captain decision #5)"
+                "authored" if cohort else "UNAUTHORED on this seat (audience has no cohort; Captain decision #5)"
             ),
             "expected_classification": "firm_authored",
             "source": f"voice/{name}",
@@ -534,10 +529,7 @@ def check_distribution(dist: dict[str, dict]) -> list[str]:
     for doc_type, exact in TYPE_EXACT.items():
         row = dist.get(doc_type, {"count": 0, "matters": set()})
         if row["count"] != exact:
-            problems.append(
-                f"{doc_type}: {row['count']} docs, need exactly {exact} "
-                f"(the below-threshold falsifier)"
-            )
+            problems.append(f"{doc_type}: {row['count']} docs, need exactly {exact} (the below-threshold falsifier)")
     return problems
 
 
@@ -587,9 +579,7 @@ def save_manifest(m: dict) -> None:
 
 def do_seed(api: Api, plan: dict[str, dict], ident: dict[str, str]) -> None:
     manifest = load_manifest()
-    manifest["created_at"] = manifest.get("created_at") or time.strftime(
-        "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
-    )
+    manifest["created_at"] = manifest.get("created_at") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     manifest["firm_identity"] = {
         "firm_name": ident["firm"],
         "signer_1": ident["signer_1"],
@@ -606,9 +596,7 @@ def do_seed(api: Api, plan: dict[str, dict], ident: dict[str, str]) -> None:
         if key in manifest["contacts"]:
             print(f"contact {key}: exists ({manifest['contacts'][key]})")
             continue
-        created = api.create_async(
-            "/contacts", {**spec, "externalSystemId": f"smd-voice-{key}"}, f"contact {key}"
-        )
+        created = api.create_async("/contacts", {**spec, "externalSystemId": f"smd-voice-{key}"}, f"contact {key}")
         manifest["contacts"][key] = created["id"]
         save_manifest(manifest)
         print(f"contact {key}: created {created['id']}")
@@ -706,9 +694,7 @@ def do_remove(keep_matters: bool, try_delete: bool) -> None:
 
     for key in sorted(manifest.get("documents", {})):
         row = manifest["documents"][key]
-        code, _ = api.call(
-            "DELETE", f"/matters/{row['matter_id']}/documents/files/{row['file_id']}"
-        )
+        code, _ = api.call("DELETE", f"/matters/{row['matter_id']}/documents/files/{row['file_id']}")
         # 404 counts as gone: the goal is absence, not the privilege of causing it.
         if code in (200, 202, 204, 404):
             removal["files_deleted"].append({"key": key, "file_id": row["file_id"], "http": code})
@@ -720,9 +706,7 @@ def do_remove(keep_matters: bool, try_delete: bool) -> None:
     for key in sorted(manifest.get("matters", {})):
         matter_id = manifest["matters"][key]
         if keep_matters:
-            removal["matters_residual"].append(
-                {"key": key, "id": matter_id, "reason": "--keep-matters was passed"}
-            )
+            removal["matters_residual"].append({"key": key, "id": matter_id, "reason": "--keep-matters was passed"})
             continue
         retired, trail = retire_matter(api, matter_id, try_delete)
         if retired:

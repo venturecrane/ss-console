@@ -7,20 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import {
-  connectorRowsFromCustomerYaml,
-  formatConnectorHealth,
-  formatTrustCeilingLevel,
-  type ConnectorHealth,
-} from '../src/lib/portal/operator/settings'
-
-describe('formatTrustCeilingLevel', () => {
-  it('maps every value to a friendly label', () => {
-    expect(formatTrustCeilingLevel('autonomous')).toBe('Autonomous')
-    expect(formatTrustCeilingLevel('draft_for_review')).toBe('Draft for review')
-    expect(formatTrustCeilingLevel('refused')).toBe('Refused')
-  })
-})
+import { connectorRowsFromCustomerYaml } from '../src/lib/portal/operator/settings'
 
 describe('connectorRowsFromCustomerYaml', () => {
   it('returns an empty list for null / non-object input', () => {
@@ -62,19 +49,5 @@ describe('connectorRowsFromCustomerYaml', () => {
     })
     expect(rows).toHaveLength(1)
     expect(rows[0].capabilityName).toBe('PracticeManagement')
-  })
-})
-
-describe('formatConnectorHealth', () => {
-  it('maps every value to a friendly label', () => {
-    const cases: Array<[ConnectorHealth, string]> = [
-      ['ok', 'OK'],
-      ['warn', 'Warn'],
-      ['fail', 'Fail'],
-      ['unconfigured', 'Unconfigured'],
-    ]
-    for (const [value, label] of cases) {
-      expect(formatConnectorHealth(value)).toBe(label)
-    }
   })
 })

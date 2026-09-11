@@ -10,6 +10,7 @@ and `from tests.conftest import ...` shadows. pytest puts this directory on
 sys.path (no __init__.py, prepend import mode), so `import medchron_testkit`
 resolves the same way in CI and on a laptop.
 """
+
 from __future__ import annotations
 
 import json
@@ -17,7 +18,7 @@ from pathlib import Path
 
 # The synthetic firm config lives in the package so the seat probes can run
 # without the firm's private tables (ss#2614); the tests reuse it verbatim.
-from medchron.probes import SYNTHETIC_FIRM as FIRM_CONFIG  # noqa: E402
+from medchron.probes import SYNTHETIC_FIRM as FIRM_CONFIG  # noqa: F401 - after the path shim; re-exported to test_decisions_driver, which imports it from here
 
 PRICING = {
     "_meta": {
@@ -33,18 +34,37 @@ PRICING = {
 }
 
 
-def job_yaml(data_root: Path, *, joint: bool = False, cap: float | None = None,
-             install_root: Path | None = None) -> str:
+def job_yaml(
+    data_root: Path, *, joint: bool = False, cap: float | None = None, install_root: Path | None = None
+) -> str:
     units = [
-        {"unit": "alpha", "client_name": "Alpha Example", "name_token": "Alpha", "surname": "Example",
-         "dob": "01/01/1970", **({"folder_prefix": "/Alpha_Example"} if joint else {})}
+        {
+            "unit": "alpha",
+            "client_name": "Alpha Example",
+            "name_token": "Alpha",
+            "surname": "Example",
+            "dob": "01/01/1970",
+            **({"folder_prefix": "/Alpha_Example"} if joint else {}),
+        }
     ]
     if joint:
-        units.append({"unit": "beta", "client_name": "Beta Example", "name_token": "Beta", "surname": "Example",
-                      "dob": "02/02/1980", "folder_prefix": "/Beta_Example"})
+        units.append(
+            {
+                "unit": "beta",
+                "client_name": "Beta Example",
+                "name_token": "Beta",
+                "surname": "Example",
+                "dob": "02/02/1980",
+                "folder_prefix": "/Beta_Example",
+            }
+        )
     body = {
         "slug": "example-matter",
-        "matter": {"number": "2099-EX-0001", "id": "00000000-0000-4000-8000-000000000001", "title": "Example v. Example"},
+        "matter": {
+            "number": "2099-EX-0001",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "title": "Example v. Example",
+        },
         "units": units,
         "incident": {"date": "2026-01-15", "source": "matter_layout"},
         "injuries": "example injury",
@@ -59,6 +79,7 @@ def job_yaml(data_root: Path, *, joint: bool = False, cap: float | None = None,
     import yaml
 
     return yaml.safe_dump(body, sort_keys=False)
+
 
 def seed_folders(data_root: Path, tops: list[str]) -> None:
     folders = [{"id": f"id-{i}", "name": t, "parentId": None, "path": f"/{t}"} for i, t in enumerate(tops)]
@@ -86,8 +107,6 @@ def write_ledger(data_root: Path, unit: str, rows: list[dict]) -> Path:
     return p
 
 
-
-
 # ---- a seat that never touches a tenant ----------------------------------------
 class FakeSeat:
     """Implements medchron.seat.Seat over dicts. `docs` are manifest rows
@@ -96,8 +115,9 @@ class FakeSeat:
     https URL that encodes the id; fetch writes the blob and honours the
     advertised size, exactly as the real backends do."""
 
-    def __init__(self, docs: list[dict], folders: list[dict], blobs: dict[str, bytes],
-                 fail_mint: set[str] | None = None) -> None:
+    def __init__(
+        self, docs: list[dict], folders: list[dict], blobs: dict[str, bytes], fail_mint: set[str] | None = None
+    ) -> None:
         self.docs, self.folders, self.blobs = docs, folders, blobs
         self.fail_mint = fail_mint or set()
         self.mints: list[list[str]] = []
@@ -123,8 +143,18 @@ class FakeSeat:
         if self.crash_after is not None and len(self.sent) >= self.crash_after:
             raise RuntimeError("connection dropped mid-upload")
         self.sent.append({"folderId": folder_id, "name": name, "size": len(data)})
-        self._pending.append((self._lists + self.lag, {"id": f"up-{len(self.sent)}", "name": name, "size": len(data),
-                                                       "ext": name.rsplit(".", 1)[-1], "folderId": folder_id}))
+        self._pending.append(
+            (
+                self._lists + self.lag,
+                {
+                    "id": f"up-{len(self.sent)}",
+                    "name": name,
+                    "size": len(data),
+                    "ext": name.rsplit(".", 1)[-1],
+                    "folderId": folder_id,
+                },
+            )
+        )
         return {"fileId": None}
 
     def _materialize(self) -> None:
@@ -182,8 +212,16 @@ def doc_row(fid: str, name: str, folder_id: str | None, size: int, ext: str | No
     if ext is None and "." in name:
         name, suffix = name.rsplit(".", 1)
         ext = "." + suffix
-    return {"id": fid, "name": name, "size": size, "ext": ext or "", "folderId": folder_id, "created": None,
-            "modified": None, "deleted": False}
+    return {
+        "id": fid,
+        "name": name,
+        "size": size,
+        "ext": ext or "",
+        "folderId": folder_id,
+        "created": None,
+        "modified": None,
+        "deleted": False,
+    }
 
 
 def seed_seat_files(data_root: Path, seat: "FakeSeat") -> None:

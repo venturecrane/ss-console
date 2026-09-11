@@ -13,6 +13,7 @@ never fuzzily applied; a repair whose citation set changed or that grew past
 failing is DROPPED (removal is always safe under the extractive invariant)
 and logged for review.
 """
+
 from __future__ import annotations
 
 import re
@@ -57,7 +58,9 @@ def widen_cite(old_cite: str, widened: list[int]) -> str:
     """Rewrite the page span inside a citation, preserving a trailing
     'machine transcription' marker (page lists may contain commas)."""
     if "p." in old_cite:
-        return re.sub(r"p\.\s*(?:[^,)]|,(?!\s*machine))*(?=\)|,\s*machine)", f"p. {compress(widened)}", old_cite, count=1)
+        return re.sub(
+            r"p\.\s*(?:[^,)]|,(?!\s*machine))*(?=\)|,\s*machine)", f"p. {compress(widened)}", old_cite, count=1
+        )
     return old_cite[:-1] + f" - p. {compress(widened)})"
 
 
@@ -69,8 +72,15 @@ def replace_in(text: str, anchor: str, replacement: str) -> tuple[str, bool]:
     return text.replace(anchor, replacement, 1), True
 
 
-def run(doorway: llm.Doorway, model: str, paths: AuditPaths, log: Callable[[str], None], *,
-        drop_residual: bool = False, pause: float = 0.2) -> bool:
+def run(
+    doorway: llm.Doorway,
+    model: str,
+    paths: AuditPaths,
+    log: Callable[[str], None],
+    *,
+    drop_residual: bool = False,
+    pause: float = 0.2,
+) -> bool:
     """False when the claim count fails to reconcile after the edits."""
     doc_path = paths.doc
     entries_path = paths.slug_dir / "runs" / paths.unit / "entries_scoped_final.md"
@@ -86,8 +96,10 @@ def run(doorway: llm.Doorway, model: str, paths: AuditPaths, log: Callable[[str]
     # Anything not finally SUPPORTED is failing; enumerating failure verdicts
     # once left an unlisted one neither repaired nor dropped.
     failing = [r for r in latest.values() if r["verdict"] not in ("SUPPORTED", "SUPPORTED_WIDENED")]
-    log(f"{paths.unit}: {len(latest)}/{n_orig} live claims with verdicts; cite-fix {len(cite_fix)}, "
-        f"{'DROP' if drop_residual else 'repair'} {len(failing)}")
+    log(
+        f"{paths.unit}: {len(latest)}/{n_orig} live claims with verdicts; cite-fix {len(cite_fix)}, "
+        f"{'DROP' if drop_residual else 'repair'} {len(failing)}"
+    )
     edits_log = paths.out / "repair-edits.jsonl"
     fixed = repaired = dropped = rejected = skipped = 0
 
@@ -111,7 +123,11 @@ def run(doorway: llm.Doorway, model: str, paths: AuditPaths, log: Callable[[str]
         widened = r.get("widened") or []
         anchor = locate(c)
         if not widened or anchor is None:
-            logrow(key=r["key"], action="cite-fix", result="SKIP: " + ("no widened pages recorded" if not widened else "anchor not found"))
+            logrow(
+                key=r["key"],
+                action="cite-fix",
+                result="SKIP: " + ("no widened pages recorded" if not widened else "anchor not found"),
+            )
             skipped += 1
             continue
         new_cite = widen_cite(c["cite"], widened)
@@ -136,10 +152,22 @@ def run(doorway: llm.Doorway, model: str, paths: AuditPaths, log: Callable[[str]
             problems = problems or [f"cited pages {r.get('bad_pages')} do not exist in that exhibit"]
         if not problems:
             problems = [r.get("note") or "assertion not found on cited pages"]
-        payload = "CLAIM:\n" + c["claim"] + "\n\nASSERTIONS NOT FOUND ON THE CITED PAGES:\n" + "\n".join(f"- {p}" for p in problems)
+        payload = (
+            "CLAIM:\n"
+            + c["claim"]
+            + "\n\nASSERTIONS NOT FOUND ON THE CITED PAGES:\n"
+            + "\n".join(f"- {p}" for p in problems)
+        )
         try:
-            new = doorway.call("repair", model=model, max_tokens=2000, system=SYSTEM, timeout=180.0,
-                               messages=[{"role": "user", "content": payload}], custom_id=f"repair-{r['key']}").text.strip()
+            new = doorway.call(
+                "repair",
+                model=model,
+                max_tokens=2000,
+                system=SYSTEM,
+                timeout=180.0,
+                messages=[{"role": "user", "content": payload}],
+                custom_id=f"repair-{r['key']}",
+            ).text.strip()
         except Exception as exc:  # noqa: BLE001 - one claim's failure is one log row
             logrow(key=r["key"], action="repair", result=f"ERROR: {str(exc)[:150]}")
             skipped += 1
@@ -172,5 +200,7 @@ def run(doorway: llm.Doorway, model: str, paths: AuditPaths, log: Callable[[str]
     n_new = len(CL.extract_claims(body, pdfs))
     ok = n_new == n_orig - dropped
     log(f"APPLIED: cite-fix {fixed}, repaired {repaired}, dropped {dropped}, rejected {rejected}, skipped {skipped}")
-    log(f"claims before {n_orig}, after {n_new} (expected {n_orig - dropped}) -> {'RECONCILES' if ok else '!! MISMATCH'}")
+    log(
+        f"claims before {n_orig}, after {n_new} (expected {n_orig - dropped}) -> {'RECONCILES' if ok else '!! MISMATCH'}"
+    )
     return ok

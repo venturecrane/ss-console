@@ -5,6 +5,7 @@ import { handleResendEvent, type ResendWebhookPayload } from '../../../lib/webho
 import { handleBookingEmailDeliveryFailure } from '../../../lib/webhooks/booking-email-failure'
 import { errorResponse, jsonResponse } from '../../../lib/api/helpers'
 import { captureError } from '../../../lib/observability/sentry'
+import { constantTimeEqual } from '../../../lib/auth/constant-time'
 
 /**
  * POST /api/webhooks/resend
@@ -222,26 +223,12 @@ async function verifySvixSignature(
   for (const candidate of candidates) {
     const [version, sig] = candidate.split(',', 2)
     if (version !== 'v1' || !sig) continue
-    if (constantTimeEquals(expectedSignature, sig)) {
+    if (constantTimeEqual(expectedSignature, sig)) {
       return true
     }
   }
 
   return false
-}
-
-/**
- * Constant-time string comparison. Returns false immediately on length
- * mismatch — that is acceptable here because the expected signature is
- * a fixed 44-character base64 of a 32-byte HMAC-SHA256 digest.
- */
-function constantTimeEquals(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let mismatch = 0
-  for (let i = 0; i < a.length; i++) {
-    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  }
-  return mismatch === 0
 }
 
 /**

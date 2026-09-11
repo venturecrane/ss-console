@@ -44,18 +44,14 @@ def _uid_map(mapping: dict[int, int]):
 
 def test_clean_agent_process_passes(tmp_path):
     _mkproc(tmp_path, 100, {"PATH": "/usr/bin", "R2_ENDPOINT_URL": "https://x"})
-    count, offenders = probe.scan(
-        str(tmp_path), _AGENT_UID, _KEYS, uid_of=_uid_map({100: _AGENT_UID})
-    )
+    count, offenders = probe.scan(str(tmp_path), _AGENT_UID, _KEYS, uid_of=_uid_map({100: _AGENT_UID}))
     assert count == 1
     assert offenders == []
 
 
 def test_agent_process_holding_account_key_is_flagged(tmp_path):
     _mkproc(tmp_path, 100, {"R2_ACCESS_KEY_ID": _FAKE_VALUE}, comm="hermes")
-    count, offenders = probe.scan(
-        str(tmp_path), _AGENT_UID, _KEYS, uid_of=_uid_map({100: _AGENT_UID})
-    )
+    count, offenders = probe.scan(str(tmp_path), _AGENT_UID, _KEYS, uid_of=_uid_map({100: _AGENT_UID}))
     assert count == 1
     assert len(offenders) == 1
     assert "100" in offenders[0]
@@ -64,9 +60,7 @@ def test_agent_process_holding_account_key_is_flagged(tmp_path):
 
 def test_offender_string_never_contains_the_value(tmp_path):
     _mkproc(tmp_path, 100, {"R2_ACCESS_KEY_ID": _FAKE_VALUE, "R2_SECRET_ACCESS_KEY": _FAKE_VALUE})
-    _, offenders = probe.scan(
-        str(tmp_path), _AGENT_UID, _KEYS, uid_of=_uid_map({100: _AGENT_UID})
-    )
+    _, offenders = probe.scan(str(tmp_path), _AGENT_UID, _KEYS, uid_of=_uid_map({100: _AGENT_UID}))
     assert offenders
     for line in offenders:
         assert _FAKE_VALUE not in line
@@ -76,9 +70,7 @@ def test_root_process_with_the_key_is_excluded(tmp_path):
     # PID 1 (root) legitimately keeps the key (entrypoint + config applier).
     _mkproc(tmp_path, 1, {"R2_ACCESS_KEY_ID": _FAKE_VALUE}, comm="entrypoint")
     _mkproc(tmp_path, 100, {"PATH": "/usr/bin"}, comm="hermes")
-    count, offenders = probe.scan(
-        str(tmp_path), _AGENT_UID, _KEYS, uid_of=_uid_map({1: _ROOT_UID, 100: _AGENT_UID})
-    )
+    count, offenders = probe.scan(str(tmp_path), _AGENT_UID, _KEYS, uid_of=_uid_map({1: _ROOT_UID, 100: _AGENT_UID}))
     assert count == 1  # only the agent process is scanned
     assert offenders == []
 
@@ -89,9 +81,7 @@ def test_sibling_child_leak_is_caught(tmp_path):
     # sibling-leak bootstrap.sh closes with `env -u`.
     _mkproc(tmp_path, 100, {"PATH": "/usr/bin"}, comm="hermes")
     _mkproc(tmp_path, 101, {"R2_ACCESS_KEY_ID": _FAKE_VALUE}, comm="bash")
-    count, offenders = probe.scan(
-        str(tmp_path), _AGENT_UID, _KEYS, uid_of=_uid_map({100: _AGENT_UID, 101: _AGENT_UID})
-    )
+    count, offenders = probe.scan(str(tmp_path), _AGENT_UID, _KEYS, uid_of=_uid_map({100: _AGENT_UID, 101: _AGENT_UID}))
     assert count == 2
     assert len(offenders) == 1
     assert "101" in offenders[0]
@@ -101,9 +91,7 @@ def test_no_agent_process_is_not_a_silent_pass(tmp_path):
     # Only root processes exist -> scan finds zero agent procs. main() must turn
     # that into a loud failure (exit 3), never a vacuous 0.
     _mkproc(tmp_path, 1, {"R2_ACCESS_KEY_ID": _FAKE_VALUE}, comm="entrypoint")
-    count, offenders = probe.scan(
-        str(tmp_path), _AGENT_UID, _KEYS, uid_of=_uid_map({1: _ROOT_UID})
-    )
+    count, offenders = probe.scan(str(tmp_path), _AGENT_UID, _KEYS, uid_of=_uid_map({1: _ROOT_UID}))
     assert count == 0
     assert offenders == []
 

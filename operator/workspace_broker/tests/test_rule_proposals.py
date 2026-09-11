@@ -98,19 +98,14 @@ def _rows(broker: Broker, action_type: str) -> list[dict]:
     conn.row_factory = sqlite3.Row
     try:
         return [
-            dict(r)
-            for r in conn.execute(
-                "SELECT * FROM audit_log WHERE action_type=? ORDER BY id", (action_type,)
-            )
+            dict(r) for r in conn.execute("SELECT * FROM audit_log WHERE action_type=? ORDER BY id", (action_type,))
         ]
     finally:
         conn.close()
 
 
 def _submission(broker: Broker, run_id: str) -> dict:
-    return json.loads(
-        (broker.establishment.runs_dir / run_id / "submission.json").read_text("utf-8")
-    )
+    return json.loads((broker.establishment.runs_dir / run_id / "submission.json").read_text("utf-8"))
 
 
 # ---------------------------------------------------------------------------
@@ -230,9 +225,7 @@ def test_for_admin_rules_surface_only_when_the_caller_asks(tmp_path):
     broker = _broker(tmp_path)
     theirs = _propose(broker, instructed_by=PARALEGAL, for_admin=True)
     assert _call(broker, action="establish_pending", sender=ADMIN)["pending"] == []
-    with_admin = _call(
-        broker, action="establish_pending", sender=ADMIN, include_for_admin=True
-    )
+    with_admin = _call(broker, action="establish_pending", sender=ADMIN, include_for_admin=True)
     assert [p["proposal_id"] for p in with_admin["pending"]] == [theirs["proposal_id"]]
     assert with_admin["pending"][0]["for_admin"] is True
     assert with_admin["pending"][0]["instructed_by"] == PARALEGAL
@@ -242,9 +235,7 @@ def test_pending_by_id_returns_that_row_and_writes_no_audit_row(tmp_path):
     broker = _broker(tmp_path)
     proposed = _propose(broker)
     before = len(_rows(broker, RULE_PROPOSED_ACTION_TYPE))
-    result = _call(
-        broker, action="establish_pending", proposal_id=proposed["proposal_id"]
-    )
+    result = _call(broker, action="establish_pending", proposal_id=proposed["proposal_id"])
     assert [p["proposal_id"] for p in result["pending"]] == [proposed["proposal_id"]]
     assert len(_rows(broker, RULE_PROPOSED_ACTION_TYPE)) == before
 
@@ -439,16 +430,14 @@ def _age_out(broker: Broker, proposal_id: str) -> None:
 
 
 def test_an_expired_proposal_refuses_by_name_and_never_claims_effect(tmp_path):
-    """"That rule expired, state it again" and "that rule is in effect" are
+    """ "That rule expired, state it again" and "that rule is in effect" are
     different sentences, and a person who confirmed a rule is owed the true one."""
     broker = _broker(tmp_path)
     proposed = _propose(broker)
     _age_out(broker, proposed["proposal_id"])
     # Read the row directly: the sweep on the next verb would remove it first.
     with pytest.raises(EstablishmentValidationError, match="expired; state it again"):
-        broker.establishment._claim_proposal(
-            {"proposal_id": proposed["proposal_id"]}, "firm_adjust"
-        )
+        broker.establishment._claim_proposal({"proposal_id": proposed["proposal_id"]}, "firm_adjust")
 
 
 def test_an_expired_proposal_is_swept_into_a_lapse_and_never_commits(tmp_path):
@@ -651,7 +640,9 @@ self_initiation:
       matter_type_id: '{ACT_TYPE_ID}'
 """
 
-AUTHORED_YAML = AUTHORED_EXPOSURE + f"""\
+AUTHORED_YAML = (
+    AUTHORED_EXPOSURE
+    + f"""\
 self_initiation:
   sequence:
     - operator-self-test
@@ -663,6 +654,7 @@ self_initiation:
       client_contact_id: '{ACT_CONTACT_ID}'
       matter_type_id: '{ACT_TYPE_ID}'
 """
+)
 
 AUTHORED_PAYLOAD = {
     "description": ACT_DESCRIPTION,
@@ -864,8 +856,7 @@ def test_an_authored_block_missing_a_field_the_readback_names_is_refused(tmp_pat
     broker = _act_broker(
         tmp_path,
         customer_yaml=(
-            AUTHORED_EXPOSURE
-            + "self_initiation:\n"
+            AUTHORED_EXPOSURE + "self_initiation:\n"
             "  document_library:\n"
             "    operator_matter:\n"
             f"      number: '{ACT_NUMBER}'\n"
@@ -1089,10 +1080,13 @@ def test_ensure_schema_is_idempotent_over_an_already_migrated_table(tmp_path):
 # payload keys and required the names top-level, so every live proposal would
 # have been refused. These pin the contract from the hook's side.
 
-AUTHORED_YAML_WITH_NAMES = AUTHORED_YAML + f"""\
+AUTHORED_YAML_WITH_NAMES = (
+    AUTHORED_YAML
+    + f"""\
       client_contact_name: '{CONTACT_NAME}'
       matter_type_name: '{TYPE_NAME}'
 """
+)
 
 HOOK_PAYLOAD = {
     **AUTHORED_PAYLOAD,

@@ -265,9 +265,7 @@ def _attach_captions_to_list(client: Any, resp: Any) -> None:
         _attach_caption(client, item, cache=cache, budget=budget)
 
 
-def _contact_listing_is_complete(
-    resp: dict, *, offset: int, limit: int, narrowed: bool
-) -> bool:
+def _contact_listing_is_complete(resp: dict, *, offset: int, limit: int, narrowed: bool) -> bool:
     """Is a contact-filtered ``list_matters`` response provably the WHOLE set of
     matters this contact is a party to? (ss#2264, the contact axis.)
 
@@ -638,9 +636,7 @@ def _verify_matter_reference(client: Any, matter_id: str, *fields: str | None) -
     """
     if not matter_id:
         return
-    cited_numbers = {
-        n for f in fields if isinstance(f, str) for n in _MATTER_NUMBER_RE.findall(f)
-    }
+    cited_numbers = {n for f in fields if isinstance(f, str) for n in _MATTER_NUMBER_RE.findall(f)}
     if not cited_numbers:
         return  # nothing claims a matter; nothing to verify, and no read to spend
     ref = _resolve_matter_ref(client, matter_id, {}, None)
@@ -649,12 +645,12 @@ def _verify_matter_reference(client: Any, matter_id: str, *fields: str | None) -
         return  # cannot verify; do not obstruct
     for cited in sorted(cited_numbers):
         if cited != true_number:
-                raise MatterReferenceMismatch(
-                    f"refusing write to {true_number}: text cites matter {cited}. "
-                    f"A memo, task, or event naming a matter other than the one it is "
-                    f"filed on is how one matter's facts reach another matter's record. "
-                    f"Re-read the matter and cite the matterNumber the read returned."
-                )
+            raise MatterReferenceMismatch(
+                f"refusing write to {true_number}: text cites matter {cited}. "
+                f"A memo, task, or event naming a matter other than the one it is "
+                f"filed on is how one matter's facts reach another matter's record. "
+                f"Re-read the matter and cite the matterNumber the read returned."
+            )
 
 
 def _stamp(text: str | None) -> str | None:
@@ -669,9 +665,7 @@ def _stamp(text: str | None) -> str | None:
     return text if text.lstrip().startswith(_PROVENANCE_MARK) else f"{_PROVENANCE_MARK} {text}"
 
 
-def _attach_matter_refs_to_list(
-    client: Any, resp: Any, *, matter_id: str | None = None
-) -> None:
+def _attach_matter_refs_to_list(client: Any, resp: Any, *, matter_id: str | None = None) -> None:
     """Best-effort matter-ref enrichment over a list response, bounded to
     ``_MATTER_REF_MAX_LOOKUPS`` distinct matter lookups (shared cache, so a
     single-matter listing costs one GET no matter how many rows it holds — the
@@ -698,9 +692,7 @@ def _attach_matter_refs_to_list(
     for item in items:
         _attach_matter_ref(client, item, cache=cache, budget=budget, matter_id=matter_id)
     if envelope is not None and matter_id:
-        _attach_matter_ref(
-            client, envelope, cache=cache, budget=None, matter_id=matter_id
-        )
+        _attach_matter_ref(client, envelope, cache=cache, budget=None, matter_id=matter_id)
 
 
 # ---- Auth -----------------------------------------------------------------
@@ -769,9 +761,7 @@ def list_matters(
             resp,
             offset=offset,
             limit=limit,
-            narrowed=any(
-                f is not None for f in (status, is_lead, matter_type_id, search, updated_since)
-            ),
+            narrowed=any(f is not None for f in (status, is_lead, matter_type_id, search, updated_since)),
         )
     return resp
 
@@ -1235,9 +1225,7 @@ def get_file(matter_id: str, file_id: str) -> Any:
 
 
 @server.tool()
-def read_document(
-    matter_id: str, file_id: str, max_chars: int = 40000, offset: int = 0
-) -> Any:
+def read_document(matter_id: str, file_id: str, max_chars: int = 40000, offset: int = 0) -> Any:
     """Return a matter document's extracted TEXT (PDF, DOCX, or plain text) so
     document-reading skills — served-discovery capture, deficiency review,
     separate-statement assembly, document review — can actually read matter
@@ -1332,15 +1320,11 @@ def get_download_url(matter_id: str, file_id: str) -> Any:
 @server.tool()
 def list_folders(matter_id: str, limit: int = 500, offset: int = 0) -> Any:
     """List the document folders on a matter."""
-    return _get_client().get(
-        f"/matters/{matter_id}/documents/folders", Limit=limit, Offset=offset
-    )
+    return _get_client().get(f"/matters/{matter_id}/documents/folders", Limit=limit, Offset=offset)
 
 
 @server.tool()
-def create_folder(
-    matter_id: str, name: str, parent_folder_id: str | None = None
-) -> Any:
+def create_folder(matter_id: str, name: str, parent_folder_id: str | None = None) -> Any:
     """Create a document folder on a matter — e.g. a ``Discovery/[set]`` folder the
     Operator stages served requests + supporting docs into for BriefPoint/CoCounsel
     to draw from. ``parent_folder_id`` nests it (matter root if omitted). Classified
@@ -1379,9 +1363,7 @@ def _require_arg(value: Any, name: str) -> str:
 
 
 @server.tool()
-def create_matter(
-    description: str, matter_type_id: str, client_contact_id: str, number: str
-) -> Any:
+def create_matter(description: str, matter_type_id: str, client_contact_id: str, number: str) -> Any:
     """Create the Operator's OWN internal matter, and only that.
 
     Classified COMMITMENT at the overlay: it changes the firm's system of
@@ -1542,9 +1524,7 @@ def delete_file(matter_id: str, file_id: str) -> Any:
 
 
 @server.tool()
-def file_attachment_to_matter(
-    matter_id: str, download_url: str, file_name: str, folder_id: str | None = None
-) -> Any:
+def file_attachment_to_matter(matter_id: str, download_url: str, file_name: str, folder_id: str | None = None) -> Any:
     """File an email attachment to a matter from its vendor-minted, time-limited
     ``download_url`` (the AgentMail attachment contract) — the mechanical
     cross-connector transfer the served-discovery email path needs (#1744): the
@@ -1575,9 +1555,7 @@ def _render_with_format(markdown: str, document_class: str | None) -> tuple[byte
     if not document_class:
         return render_markdown_to_docx(markdown), None, None
     if document_class not in DOCUMENT_CLASSES:
-        return b"", None, (
-            f"unknown document_class {document_class!r}; one of: {', '.join(DOCUMENT_CLASSES)}"
-        )
+        return b"", None, (f"unknown document_class {document_class!r}; one of: {', '.join(DOCUMENT_CLASSES)}")
     report = FormatReport(document_class=document_class)
     cfg = load_library_config()
     report.template_expected = cfg.authored
@@ -2031,9 +2009,7 @@ def create_memo(matter_id: str, text: str) -> Any:
     See the write-side verification block."""
     client = _get_client()
     _verify_matter_reference(client, matter_id, text)
-    return client.request(
-        "POST", f"/matters/{matter_id}/memos", json={"text": _stamp(text)}
-    )
+    return client.request("POST", f"/matters/{matter_id}/memos", json={"text": _stamp(text)})
 
 
 # ---- Trust / bank accounts (READS ONLY — fund movement is hard-banned) -----
@@ -2074,9 +2050,7 @@ def get_fees(matter_id: str, limit: int = 500, offset: int = 0) -> Any:
 
 
 @server.tool()
-def get_expenses(
-    matter_id: str, updated_since: str | None = None, limit: int = 500, offset: int = 0
-) -> Any:
+def get_expenses(matter_id: str, updated_since: str | None = None, limit: int = 500, offset: int = 0) -> Any:
     """List expense entries on a matter (AR, not trust)."""
     return _get_client().get(
         f"/matters/{matter_id}/expenses",

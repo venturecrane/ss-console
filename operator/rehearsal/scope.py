@@ -193,9 +193,7 @@ def assert_scenario_in_scope(scenario: dict, *, source: str) -> None:
                 # mailbox we own, so the reserved-domain relaxation never applies
                 # here. A `no_send_to` naming an inbox nobody reads would be an
                 # expectation that can never fail.
-                assert_address_drivable(
-                    str(named), where=f"{where} expect.{expectation.get('kind')}.address"
-                )
+                assert_address_drivable(str(named), where=f"{where} expect.{expectation.get('kind')}.address")
             assert_text_names_no_foreign_address(
                 str(expectation.get("metadata_contains") or ""),
                 where=f"{where} expect.{expectation.get('kind')}.metadata_contains",

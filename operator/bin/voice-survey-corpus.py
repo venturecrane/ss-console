@@ -119,9 +119,7 @@ def _load_sibling(file_name: str, module_name: str) -> Any:
     existing = sys.modules.get(module_name)
     if existing is not None:
         return existing
-    spec = importlib.util.spec_from_file_location(
-        module_name, _OPERATOR / "bin" / file_name
-    )
+    spec = importlib.util.spec_from_file_location(module_name, _OPERATOR / "bin" / file_name)
     if not spec or not spec.loader:  # pragma: no cover - packaging accident
         raise ImportError(f"cannot load {file_name}")
     module = importlib.util.module_from_spec(spec)
@@ -192,11 +190,7 @@ class Budget:
             "reads_used": self.reads_used,
             "reads_budget_exhausted": self.reads_used >= self.max_reads,
             "unread_candidates": self.unread_candidates,
-            "complete": (
-                not self.matters_truncated
-                and not self.docs_truncated
-                and not self.unread_candidates
-            ),
+            "complete": (not self.matters_truncated and not self.docs_truncated and not self.unread_candidates),
         }
 
 
@@ -233,11 +227,39 @@ def _paged(client: Any, path: str, *, cap: int, **params: Any) -> tuple[list[dic
 # cannot match on the shared "LLP".
 _GENERIC_FIRM_TOKENS = frozenset(
     {
-        "llp", "llc", "lp", "pc", "plc", "pllc", "apc", "inc", "incorporated",
-        "co", "company", "corp", "corporation", "law", "laws", "lawyer",
-        "lawyers", "office", "offices", "attorney", "attorneys", "at", "and",
-        "the", "of", "group", "firm", "legal", "associates", "partners",
-        "professional", "a", "plc",
+        "llp",
+        "llc",
+        "lp",
+        "pc",
+        "plc",
+        "pllc",
+        "apc",
+        "inc",
+        "incorporated",
+        "co",
+        "company",
+        "corp",
+        "corporation",
+        "law",
+        "laws",
+        "lawyer",
+        "lawyers",
+        "office",
+        "offices",
+        "attorney",
+        "attorneys",
+        "at",
+        "and",
+        "the",
+        "of",
+        "group",
+        "firm",
+        "legal",
+        "associates",
+        "partners",
+        "professional",
+        "a",
+        "plc",
     }
 )
 
@@ -286,9 +308,7 @@ class Roster:
                 if len(parts) >= 2:
                     first, last = parts[0], parts[-1]
             if first and last:
-                people.append(
-                    {"full": f"{first} {last}", "first": first, "last": last}
-                )
+                people.append({"full": f"{first} {last}", "first": first, "last": last})
         return cls(people)
 
     def match(self, text: str) -> str | None:
@@ -333,13 +353,8 @@ class Windows:
 
 # A letterhead stops where the letter proper starts. Everything at or after the
 # first of these belongs to the letter, not to whoever printed the paper.
-_ZONE_STOP_RE = re.compile(
-    r"^\s*\**\s*(via\s|re\s*:|attn\b|dear\b|to whom|personal and confidential\b)", re.I
-)
-_MONTHS = (
-    "january|february|march|april|may|june|july|august|september|october|"
-    "november|december"
-)
+_ZONE_STOP_RE = re.compile(r"^\s*\**\s*(via\s|re\s*:|attn\b|dear\b|to whom|personal and confidential\b)", re.I)
+_MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december"
 _DATE_LINE_RE = re.compile(
     rf"^\s*\**\s*(?:({_MONTHS})\s+\d{{1,2}},\s*\d{{4}}|\d{{1,2}}/\d{{1,2}}/\d{{2,4}})"
     r"\s*\**\s*$",
@@ -465,23 +480,17 @@ class Authorship:
 def _foreign_letterhead(zone: str, tokens: list[str]) -> str | None:
     """An organization heading the paper that is demonstrably not us."""
     lines = [ln for ln in zone.splitlines() if ln.strip()][:3]
-    if not any(
-        _ORG_LINE_RE.search(ln) and not _CAPTION_PARTY_RE.search(ln) for ln in lines
-    ):
+    if not any(_ORG_LINE_RE.search(ln) and not _CAPTION_PARTY_RE.search(ln) for ln in lines):
         return None
     if zone_names_firm(zone, tokens):
         return None
-    looks_like_letterhead = bool(_CONTACT_LINE_RE.search(zone)) or bool(
-        _THIRD_PARTY_PAPER_RE.search(zone)
-    )
+    looks_like_letterhead = bool(_CONTACT_LINE_RE.search(zone)) or bool(_THIRD_PARTY_PAPER_RE.search(zone))
     if not looks_like_letterhead:
         return None
     return lines[0]
 
 
-def classify_authorship(
-    windows: Windows | None, *, firm_name: str, roster: Roster
-) -> Authorship:
+def classify_authorship(windows: Windows | None, *, firm_name: str, roster: Roster) -> Authorship:
     """Decide who wrote a document from its head and tail windows.
 
     Order is the whole design. Positive letterhead first (cheapest and
@@ -509,9 +518,7 @@ def classify_authorship(
         for signer in pos_signers:
             hit = roster.match(signer)
             if hit:
-                return Authorship(
-                    True, f"proof of service declared by staff-roster member {hit}"
-                )
+                return Authorship(True, f"proof of service declared by staff-roster member {hit}")
 
     # 2. Received paper, strongest markers first.
     if _COURT_ISSUED_RE.search(head):
@@ -520,16 +527,13 @@ def classify_authorship(
         who = pos_signers[0] if pos_signers else "an unnamed declarant"
         return Authorship(
             False,
-            f"litigation caption served under a proof of service declared by {who}, "
-            "who is not on the staff roster",
+            f"litigation caption served under a proof of service declared by {who}, who is not on the staff roster",
         )
     foreign = _foreign_letterhead(lh, tokens)
     if foreign:
         return Authorship(False, f"another organization's letterhead: {foreign!r}")
     if _THIRD_PARTY_PAPER_RE.search(lh):
-        return Authorship(
-            False, "carrier / medical / lien paper markers in the letterhead zone"
-        )
+        return Authorship(False, "carrier / medical / lien paper markers in the letterhead zone")
 
     # 3. Ours, on paper whose letterhead did not survive extraction.
     signer = roster.match(tail)
@@ -545,9 +549,7 @@ def classify_authorship(
             "matching proof-of-service declarant — side of the caption not "
             "determinable from content",
         )
-    return Authorship(
-        UNKNOWN, "no letterhead, roster signature, or received-paper marker found"
-    )
+    return Authorship(UNKNOWN, "no letterhead, roster signature, or received-paper marker found")
 
 
 # ---------------------------------------------------------------------------
@@ -559,9 +561,7 @@ _ADJUSTER_TITLE_RE = re.compile(
     r"\badjuster\b|\bclaims unit\b",
     re.I,
 )
-_CARRIER_ORG_RE = re.compile(
-    r"\b(insurance|casualty|mutual|indemnity|assurance|underwriters)\b", re.I
-)
+_CARRIER_ORG_RE = re.compile(r"\b(insurance|casualty|mutual|indemnity|assurance|underwriters)\b", re.I)
 _COUNSEL_RE = re.compile(
     r"\besq\b\.?|attorneys? for (defendant|plaintiff|respondent)|dear counsel|"
     r"counsel of record|law offices?\b|\bll[pc]\b|\bapc\b",
@@ -574,9 +574,7 @@ _NEUTRAL_RE = re.compile(
 )
 _CLAIM_NO_RE = re.compile(r"claim\s*(no\.?|number|#)\s*[:.]?\s*\S", re.I)
 _CLIENT_SALUTATION_RE = re.compile(r"^\s*\**\s*dear\s+[A-Z][\w'\-]*\s*[,:]", re.I | re.M)
-_CLIENT_RE_LINE_RE = re.compile(
-    r"re\s*:.*\byour (case|claim|matter|settlement)\b|our client\s*:", re.I
-)
+_CLIENT_RE_LINE_RE = re.compile(r"re\s*:.*\byour (case|claim|matter|settlement)\b|our client\s*:", re.I)
 
 
 def propose_audience(windows: Windows, *, firm_name: str) -> tuple[str | None, str]:
@@ -609,9 +607,7 @@ def propose_audience(windows: Windows, *, firm_name: str) -> tuple[str | None, s
     return None, "no audience signal in the recipient block"
 
 
-def map_cohort(
-    proposed: str | None, reason: str, vocabulary: frozenset[str]
-) -> tuple[str | None, str]:
+def map_cohort(proposed: str | None, reason: str, vocabulary: frozenset[str]) -> tuple[str | None, str]:
     """Map a proposed audience into the SEAT's authored cohort vocabulary.
 
     An unmapped proposal is left null with its reason rather than coerced into
@@ -817,7 +813,7 @@ def read_windows(client: Any, cand: dict) -> tuple[Windows | None, str]:
         )
     except UnsupportedDocumentError as exc:
         return None, f"no text layer ({exc})"
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - any extraction-library failure is recorded per document as "extraction failed" so the survey continues
         return None, f"extraction failed: {exc}"
     if not text.strip():
         return None, "no text layer"
@@ -903,9 +899,7 @@ def survey(
                     "file": cand["file_name"],
                     "file_id": cand["file_id"],
                     "matter_id": cand["matter_id"],
-                    "reason": (
-                        auth.evidence if auth.firm_authored is not True else why
-                    ),
+                    "reason": (auth.evidence if auth.firm_authored is not True else why),
                 }
             )
 
@@ -929,15 +923,11 @@ def survey(
             "firm_authored": sum(1 for r in rows if r["firm_authored"] is True),
             "received": sum(1 for r in rows if r["firm_authored"] is False),
             "unreadable": unreadable,
-            "inconclusive": sum(
-                1 for r in rows if r["firm_authored"] == UNKNOWN
-            ) - unreadable,
+            "inconclusive": sum(1 for r in rows if r["firm_authored"] == UNKNOWN) - unreadable,
         },
         "budgets": budget.as_report(),
         "documents": rows,
-        "cohort_proposal": [
-            {"cohort": c, "count": n} for c, n in sorted(cohort_counts.items())
-        ],
+        "cohort_proposal": [{"cohort": c, "count": n} for c, n in sorted(cohort_counts.items())],
         "doc_types": rank_doc_types(rows),
         "excluded": excluded,
     }
@@ -1015,9 +1005,7 @@ def _summarize(report: dict, entries: list[dict]) -> str:
         if b["matters_truncated"]:
             lines.append(f"  matters capped at {b['limits']['max_matters']}")
         if b["docs_truncated_by_matter"]:
-            lines.append(
-                f"  documents capped on {len(b['docs_truncated_by_matter'])} matter(s)"
-            )
+            lines.append(f"  documents capped on {len(b['docs_truncated_by_matter'])} matter(s)")
         if b["unread_candidates"]:
             lines.append(
                 f"  {len(b['unread_candidates'])} candidate(s) never read "
@@ -1027,9 +1015,7 @@ def _summarize(report: dict, entries: list[dict]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(
-        description="Survey a Smokeball tenant for the firm's own authored letters."
-    )
+    p = argparse.ArgumentParser(description="Survey a Smokeball tenant for the firm's own authored letters.")
     p.add_argument(
         "--firm-name",
         required=True,
@@ -1044,8 +1030,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--max-reads", type=int, default=DEFAULT_MAX_READS)
     p.add_argument(
         "--generated-at",
-        help="ISO timestamp stamped into the report (default: now, UTC). "
-        "Passing it makes a run reproducible.",
+        help="ISO timestamp stamped into the report (default: now, UTC). Passing it makes a run reproducible.",
     )
     args = p.parse_args(argv)
 

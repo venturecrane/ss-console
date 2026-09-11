@@ -94,10 +94,7 @@ USER_AGENT = "smd-rehearse-card/1.0"
 
 # The seat mailbox's own outbound folder, newest first. The space in $orderby is
 # written %20 because urllib refuses a literal space in a URL.
-SENT_ITEMS_QUERY = (
-    "?$top=10&$orderby=sentDateTime%20desc"
-    "&$select=id,subject,sentDateTime,toRecipients,body"
-)
+SENT_ITEMS_QUERY = "?$top=10&$orderby=sentDateTime%20desc&$select=id,subject,sentDateTime,toRecipients,body"
 
 # Ask Graph for a plain-text body so the transcript holds words rather than HTML.
 TEXT_BODY_PREFER = {"Prefer": 'outlook.body-content-type="text"'}
@@ -216,7 +213,10 @@ def strip_quote_trail(body: str) -> str:
 
 def ask(sender: str, seat: str, subject: str, text: str, key: str, timeout: int) -> str | None:
     st, _ = api(
-        "POST", f"/inboxes/{urllib.parse.quote(sender)}/messages/send", key, {"to": [seat], "subject": subject, "text": text}
+        "POST",
+        f"/inboxes/{urllib.parse.quote(sender)}/messages/send",
+        key,
+        {"to": [seat], "subject": subject, "text": text},
     )
     if st != 200:
         return None

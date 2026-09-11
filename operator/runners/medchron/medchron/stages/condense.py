@@ -16,6 +16,7 @@ entries_condensed.md is written unconditionally, byte for byte the source
 when nothing condensed: a stale file from an earlier run once carried old
 exhibit numbering into every stage after it.
 """
+
 from __future__ import annotations
 
 import re
@@ -30,8 +31,11 @@ SERIAL_PROVIDER = re.compile(r"(?i)physical therapy|chiropractic|\bPT\b|neurofee
 MAJOR_HEADER = re.compile(
     r"(?i)\b(emergency|\bED\b|admission|admitted|initial evaluation|initial consultation|consultation|imaging|"
     r"radiology|MRI|CT\b|x-?ray|EEG|qEEG|surgery|surgical|operative|procedure|injection|nerve block|ambulance|"
-    r"hospital|neuropsych|discharge)\b")
-MAJOR_BODY = re.compile(r"(?i)\b(initial evaluation|new patient|re-?evaluation|discharge summary|impression:|operative report|admitted to)\b")
+    r"hospital|neuropsych|discharge)\b"
+)
+MAJOR_BODY = re.compile(
+    r"(?i)\b(initial evaluation|new patient|re-?evaluation|discharge summary|impression:|operative report|admitted to)\b"
+)
 MIN_WORDS = 90
 PAUSE_SECONDS = 0.4
 
@@ -80,16 +84,24 @@ def condense(sr: StageRun, src: str, incident: str, pause: float = PAUSE_SECONDS
     routine = [i for i, e in enumerate(entries) if is_routine(e) and len(e.split()) > MIN_WORDS]
     before_n = len(routine)
     routine = [i for i in routine if iso_of(entries[i]) >= incident]
-    sr.log(f"{sr.unit.unit}: {len(entries)} entries, {len(routine)} routine and long enough to condense, "
-           f"{before_n - len(routine)} pre-incident routine skipped")
+    sr.log(
+        f"{sr.unit.unit}: {len(entries)} entries, {len(routine)} routine and long enough to condense, "
+        f"{before_n - len(routine)} pre-incident routine skipped"
+    )
     out = list(entries)
     model, system = llm.model_for(sr.cfg, "mechanical"), prompts.load("condense-system", sr.cfg)
     kept_long = condensed = failed = 0
     for n, i in enumerate(routine, 1):
         orig = entries[i]
         try:
-            r = sr.doorway.call("condense", model=model, system=system, messages=[{"role": "user", "content": orig}],
-                                max_tokens=2000, custom_id=f"condense-{i}")
+            r = sr.doorway.call(
+                "condense",
+                model=model,
+                system=system,
+                messages=[{"role": "user", "content": orig}],
+                max_tokens=2000,
+                custom_id=f"condense-{i}",
+            )
             new = r.text.strip()
         except Exception as exc:  # noqa: BLE001 - one entry keeps its long form
             sr.log(f"  [{n}] error: {str(exc)[:90]}")
@@ -106,9 +118,16 @@ def condense(sr: StageRun, src: str, incident: str, pause: float = PAUSE_SECONDS
             time.sleep(pause)
     body = "\n\n".join(([preamble] if preamble else []) + out) if condensed else src
     lens = sorted(len(e.split()) for e in out)
-    stats = {"entries": len(entries), "routine": len(routine), "condensed": condensed, "kept_long": kept_long,
-             "failed": failed, "words_before": sum(len(e.split()) for e in entries), "words_after": sum(lens),
-             "lens": lens}
+    stats = {
+        "entries": len(entries),
+        "routine": len(routine),
+        "condensed": condensed,
+        "kept_long": kept_long,
+        "failed": failed,
+        "words_before": sum(len(e.split()) for e in entries),
+        "words_after": sum(lens),
+        "lens": lens,
+    }
     return body, stats
 
 
@@ -122,8 +141,10 @@ def run(sr: StageRun) -> int:
     (d / "entries_condensed.md").write_text(body, encoding="utf-8")
     sr.log(f"condensed {s['condensed']}, kept long {s['kept_long']}, failed {s['failed']}")
     if s["words_before"] and s["lens"]:
-        sr.log(f"words {s['words_before']} -> {s['words_after']} ({s['words_after'] / s['words_before'] * 100:.0f}%); "
-               f"words/entry median {s['lens'][len(s['lens']) // 2]}, max {s['lens'][-1]}")
+        sr.log(
+            f"words {s['words_before']} -> {s['words_after']} ({s['words_after'] / s['words_before'] * 100:.0f}%); "
+            f"words/entry median {s['lens'][len(s['lens']) // 2]}, max {s['lens'][-1]}"
+        )
     else:
         sr.log("no dated entries in the source; entries_condensed.md is a verbatim copy")
     return 0

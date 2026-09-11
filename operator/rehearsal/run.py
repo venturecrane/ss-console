@@ -65,8 +65,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from rehearsal import drivers, registry, report, scope  # noqa: E402 -- path injected above
-from rehearsal.scoring import FAIL, PASS, SKIPPED, LegObservation, score_scenario  # noqa: E402
+from rehearsal import drivers, registry, report, scope
+from rehearsal.scoring import FAIL, PASS, SKIPPED, LegObservation, score_scenario
 
 DOCKERFILE = Path(__file__).resolve().parents[2] / "operator" / "templates" / "Dockerfile"
 
@@ -83,7 +83,7 @@ def pinned_overlay_ref() -> str:
     except OSError:
         return "unknown"
     match = re.search(r"^ARG\s+OVERLAY_REF=([^\s#]+)", text, re.MULTILINE)
-    return match.group(1).strip('"\'') if match else "unknown"
+    return match.group(1).strip("\"'") if match else "unknown"
 
 
 def make_seam_client(slug: str):
@@ -229,16 +229,12 @@ def run_suite(args: argparse.Namespace) -> int:
         run.results.append(result)
         print(f"   {result.outcome}: {' '.join(str(result.reason).split())[:160]}")
 
-    json_path, markdown_path = report.write(
-        run, {s["id"]: s for s in scenarios}, Path(args.out) if args.out else None
-    )
+    json_path, markdown_path = report.write(run, {s["id"]: s for s in scenarios}, Path(args.out) if args.out else None)
     counts = run.counts
     print(f"\nrun id: {run.run_id}")
     print(f"report: {markdown_path}")
     print(f"json:   {json_path}")
-    print(
-        f"{counts.get(PASS, 0)} pass / {counts.get(FAIL, 0)} fail / {counts.get(SKIPPED, 0)} skipped"
-    )
+    print(f"{counts.get(PASS, 0)} pass / {counts.get(FAIL, 0)} fail / {counts.get(SKIPPED, 0)} skipped")
     if run.is_green:
         print("GREEN. This id may be cited by an OVERLAY_REF bump PR.")
         return EXIT_GREEN

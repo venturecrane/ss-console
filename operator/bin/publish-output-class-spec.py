@@ -105,11 +105,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     doc = {
         "schema_version": 1,
         "customer": args.slug,
-        "classes": {
-            args.output_class: {
-                args.property: {"body": body, "sha256": hashlib.sha256(encoded).hexdigest()}
-            }
-        },
+        "classes": {args.output_class: {args.property: {"body": body, "sha256": hashlib.sha256(encoded).hexdigest()}}},
     }
     raw = json.dumps(doc).encode()
 

@@ -112,9 +112,7 @@ def _inbox_exists(inbox_id: str, api_key: str) -> bool:
     with urllib.request.urlopen(request, timeout=30) as response:
         listing = json.loads(response.read().decode())
     found = {
-        str(entry.get("inbox_id", "")).lower()
-        for entry in (listing.get("inboxes") or [])
-        if isinstance(entry, dict)
+        str(entry.get("inbox_id", "")).lower() for entry in (listing.get("inboxes") or []) if isinstance(entry, dict)
     }
     return inbox_id.lower() in found
 

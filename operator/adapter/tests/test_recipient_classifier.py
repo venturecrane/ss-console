@@ -16,9 +16,9 @@ from pathlib import Path
 # operator/ root, so `adapter.*` imports resolve.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-import pytest  # noqa: E402
+import pytest
 
-from adapter.recipient_classifier import (  # noqa: E402
+from adapter.recipient_classifier import (
     ACTION_CLASS_EXTERNAL_SEND,
     ACTION_CLASS_EXTERNAL_SEND_CLIENT,
     ACTION_CLASS_EXTERNAL_SEND_INTERNAL,
@@ -40,6 +40,7 @@ TYPED = [("jane@gmail.com", "client"), ("records@radiology.com", "records_vendor
 
 # ---- core behaviour -------------------------------------------------------
 
+
 def test_exact_address_match_is_internal():
     assert classify_recipient("scott@smd.services", ROSTER) is RecipientClass.INTERNAL
 
@@ -59,6 +60,7 @@ def test_case_insensitive_match():
 
 
 # ---- SPOOF vectors (load-bearing) -----------------------------------------
+
 
 def test_plus_tag_is_not_widened_for_full_address_entry():
     # scott+anything@ must NOT match the full-address roster entry scott@.
@@ -86,10 +88,7 @@ def test_display_name_form_is_unknown_not_parsed():
 
 
 def test_address_list_in_one_string_is_unknown():
-    assert (
-        classify_recipient("scott@smd.services, evil@x.com", ROSTER)
-        is RecipientClass.UNKNOWN
-    )
+    assert classify_recipient("scott@smd.services, evil@x.com", ROSTER) is RecipientClass.UNKNOWN
 
 
 def test_garbage_and_empty_are_unknown():
@@ -105,22 +104,18 @@ def test_homoglyph_domain_does_not_match_ascii_roster():
 
 # ---- tainted provenance ---------------------------------------------------
 
+
 def test_tainted_recipient_matching_roster_is_outside_never_internal():
     # An injected "send to scott@smd.services" must not ride the roster to autonomous.
-    assert (
-        classify_recipient("scott@smd.services", ROSTER, from_tainted=True)
-        is RecipientClass.OUTSIDE
-    )
+    assert classify_recipient("scott@smd.services", ROSTER, from_tainted=True) is RecipientClass.OUTSIDE
 
 
 def test_tainted_unresolvable_is_still_unknown():
-    assert (
-        classify_recipient("garbage", ROSTER, from_tainted=True)
-        is RecipientClass.UNKNOWN
-    )
+    assert classify_recipient("garbage", ROSTER, from_tainted=True) is RecipientClass.UNKNOWN
 
 
 # ---- multi-recipient aggregation (most-restrictive wins) -------------------
+
 
 def test_all_internal_recipients_aggregate_internal():
     rs = ["scott@smd.services", "amara@firm.example"]
@@ -158,6 +153,7 @@ def test_malformed_roster_entry_never_widens_a_match():
 
 # ---- the fail-closed router (UNKNOWN → hard error, never a draft) ----------
 
+
 def test_router_internal_maps_to_external_send_internal():
     assert send_action_class(RecipientClass.INTERNAL) == ACTION_CLASS_EXTERNAL_SEND_INTERNAL
 
@@ -177,10 +173,7 @@ def test_router_unknown_is_a_hard_error_not_a_draft():
 
 def test_typed_client_and_vendor_resolve_by_class():
     assert classify_recipients_typed(["jane@gmail.com"], ROSTER, TYPED) is RecipientClass.CLIENT
-    assert (
-        classify_recipients_typed(["records@radiology.com"], ROSTER, TYPED)
-        is RecipientClass.VENDOR
-    )
+    assert classify_recipients_typed(["records@radiology.com"], ROSTER, TYPED) is RecipientClass.VENDOR
 
 
 def test_typed_internal_outranks_typed_class():
@@ -191,9 +184,7 @@ def test_typed_internal_outranks_typed_class():
 
 
 def test_typed_unrostered_is_outside():
-    assert (
-        classify_recipients_typed(["opposing@counsel.com"], ROSTER, TYPED) is RecipientClass.OUTSIDE
-    )
+    assert classify_recipients_typed(["opposing@counsel.com"], ROSTER, TYPED) is RecipientClass.OUTSIDE
 
 
 def test_typed_public_domain_exact_matches_but_grant_would_not():
@@ -220,10 +211,7 @@ def test_typed_empty_roster_is_outside():
 
 
 def test_typed_tainted_recipient_is_outside_never_typed():
-    assert (
-        classify_recipients_typed(["jane@gmail.com"], ROSTER, TYPED, from_tainted=True)
-        is RecipientClass.OUTSIDE
-    )
+    assert classify_recipients_typed(["jane@gmail.com"], ROSTER, TYPED, from_tainted=True) is RecipientClass.OUTSIDE
 
 
 def test_typed_empty_recipient_list_is_unknown():

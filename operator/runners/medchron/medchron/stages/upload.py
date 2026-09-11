@@ -14,6 +14,7 @@ only confirmation is the folder read back with every name at its byte count,
 retried across the vendor's index lag; a short read-back after the retries is
 exit 2 (held: the files may still be materializing).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -61,8 +62,10 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
     else:
         existing = _folder_by_name(seat, matter_id, folder_name)
         if existing:
-            sr.log(f"a folder named '{folder_name}' already exists on the matter (id {existing.get('id')}) and this "
-                   f"run did not create it; refusing to write into it")
+            sr.log(
+                f"a folder named '{folder_name}' already exists on the matter (id {existing.get('id')}) and this "
+                f"run did not create it; refusing to write into it"
+            )
             return 1
         created = seat.create_folder(matter_id, folder_name)
         folder_id = str(created.get("id") or created.get("folderId") or "")
@@ -105,8 +108,15 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
             time.sleep(pause)
     else:
         short = [n for n, b in expected.items() if _files_in(seat, matter_id, folder_id).get(n) != b]
-    delivery["files"] = [{"name": m["name"], "sha256": m["sha256"], "bytes": m["bytes"],
-                          "confirmed": present.get(m["name"]) == m["bytes"]} for m in manifest]
+    delivery["files"] = [
+        {
+            "name": m["name"],
+            "sha256": m["sha256"],
+            "bytes": m["bytes"],
+            "confirmed": present.get(m["name"]) == m["bytes"],
+        }
+        for m in manifest
+    ]
     delivery_path.write_text(json.dumps(delivery, indent=1), encoding="utf-8")
     if short:
         sr.log(f"read-back short after {tries} tries: {', '.join(short)}")

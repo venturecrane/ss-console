@@ -65,13 +65,12 @@ import gzip
 import hashlib
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
@@ -81,7 +80,7 @@ _REPO = _HERE.parents[2]
 sys.path.insert(0, str(_OPERATOR))
 sys.path.insert(0, str(_OPERATOR / "workspace_broker"))
 
-from bin.lib.chain_pin import (  # noqa: E402
+from bin.lib.chain_pin import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     PIN_ABSENT,
     PIN_MALFORMED,
     PIN_NOT_SUPPLIED,
@@ -91,34 +90,30 @@ from bin.lib.chain_pin import (  # noqa: E402
 #: The wrangler-backed D1 client moved verbatim to bin/lib/console_d1.py when
 #: the cron-slot watchdog became its second consumer (same behavior, one
 #: client). Re-exported here so tests and callers read unchanged.
-from bin.lib.r2_lock_probe import (  # noqa: E402
-    ARCHIVE_PREFIX,
-    LOCK_MIN_SECONDS,  # noqa: F401 — re-export (tests pin the commitment)
-    LockFetcher,  # noqa: F401 — re-export
-    bucket_lock_url,  # noqa: F401 — re-export
-    evaluate_lock_payload,  # noqa: F401 — re-export
+from bin.lib.r2_lock_probe import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+    LOCK_MIN_SECONDS,  # noqa: F401 — re-export: tests and callers read it from this module (tests pin the commitment)
+    LockFetcher,  # noqa: F401 — re-export: tests and callers read it from this module
+    bucket_lock_url,  # noqa: F401 — re-export: tests and callers read it from this module
+    evaluate_lock_payload,  # noqa: F401 — re-export: tests and callers read it from this module
     probe_bucket_lock,
 )
-from bin.lib.chain_rehearsal import (  # noqa: E402
-    EXIT_REHEARSAL_FAILED,  # noqa: F401 — re-export (tests pin the codes)
-    EXIT_REHEARSAL_OK,
-    REHEARSAL_HEAD,
+from bin.lib.chain_rehearsal import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+    EXIT_REHEARSAL_FAILED,  # noqa: F401 — re-export: tests and callers read it from this module (tests pin the codes)
     rehearse_mismatch as _rehearse_mismatch,
 )
-from bin.lib.console_d1 import (  # noqa: E402
-    ALERT_DRIVER_PREFIX,  # noqa: F401 — re-export
-    REHEARSAL_DRIVER_PREFIX,
+from bin.lib.console_d1 import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+    ALERT_DRIVER_PREFIX,
     DEFAULT_DB,
     ConsoleD1,
-    Runner,  # noqa: F401 — re-export
-    first_result_set,  # noqa: F401 — re-export (tests pin the envelope parse)
-    sql_int,  # noqa: F401 — re-export (tests pin the literal forms)
-    sql_text,  # noqa: F401 — re-export
-    utc_date,  # noqa: F401 — re-export
+    Runner,  # noqa: F401 — re-export: tests and callers read it from this module
+    first_result_set,  # noqa: F401 — re-export: tests and callers read it from this module (tests pin the envelope parse)
+    sql_int,  # noqa: F401 — re-export: tests and callers read it from this module (tests pin the literal forms)
+    sql_text,  # noqa: F401 — re-export: tests and callers read it from this module
+    utc_date,  # noqa: F401 — re-export: tests and callers read it from this module
     utc_now,
 )
-from bin.lib.seam_pull import seam_client_from_env  # noqa: E402
-from chain import verify_chain  # noqa: E402
+from bin.lib.seam_pull import seam_client_from_env  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from chain import verify_chain  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 EXIT_CLEAN = 0
 EXIT_FINDING = 1
@@ -258,9 +253,7 @@ def authored_seats(repo_root: Path) -> list[str]:
     if not base.is_dir():
         return []
     return sorted(
-        d.name
-        for d in base.iterdir()
-        if d.is_dir() and not d.name.startswith("_") and (d / "customer.yaml").exists()
+        d.name for d in base.iterdir() if d.is_dir() and not d.name.startswith("_") and (d / "customer.yaml").exists()
     )
 
 
@@ -334,7 +327,7 @@ def cloudflare_token_id(token: str) -> str:
         method="GET",
     )
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected — constant https URL, no interpolation.
-    with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310 — constant https URL
+    with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310 — constant https URL built from the bucket name; no caller supplies a scheme
         payload = json.loads(resp.read().decode("utf-8"))
     token_id = (payload.get("result") or {}).get("id")
     if not payload.get("success") or not token_id:
@@ -437,10 +430,6 @@ def archive_export(
     return ArchiveResult(key=key, sha256=hashlib.sha256(blob).hexdigest(), bytes_written=len(blob))
 
 
-
-
-
-
 def _hold(slug: str, message: str) -> SeatOutcome:
     return SeatOutcome(slug, HOLD, f"{slug}: {message}", {"slug": slug})
 
@@ -456,7 +445,7 @@ def process_seat(slug: str, console: ConsoleD1, *, bucket: str, archive: bool) -
 
     try:
         pin = console.newest_pin(slug)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - any failure reading the pinned head from D1 is a HOLD, never a silent pass; the watch exists to be loud
         return _hold(slug, f"the pinned head could not be read from D1 ({exc}).")
 
     outcome = evaluate_export(slug, rows, pin)
@@ -465,7 +454,7 @@ def process_seat(slug: str, console: ConsoleD1, *, bucket: str, archive: bool) -
 
     try:
         result = archive_export(slug, rows, bucket=bucket, head=outcome.details.get("head"))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - a failed archive copy is a hold on its own, but must not downgrade a finding already found (see below)
         # The copy is half the issue, so failing to write it is a hold on its
         # own. It must not DOWNGRADE a finding that was already found, though:
         # a truncated ledger stays the headline and carries the note.
@@ -538,7 +527,7 @@ def emit_alert(
             details=outcome.details,
             driver_prefix=driver_prefix,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - the alert write is reported to the caller as a sentence; a raise here would mask the finding it was writing
         return f"{outcome.slug}: the alert row could not be written ({exc})."
     return None
 
@@ -574,8 +563,7 @@ def write_step_summary(outcomes: Sequence[SeatOutcome], lock_note: str) -> None:
         verdict = o.details.get("chain_verdict")
         state = f"{o.state} (chain {verdict['state']})" if verdict else o.state
         lines.append(
-            f"| {o.slug} | {state} | {o.details.get('archive_key', '-')} | "
-            f"{o.details.get('archive_sha256', '-')} |"
+            f"| {o.slug} | {state} | {o.details.get('archive_key', '-')} | {o.details.get('archive_sha256', '-')} |"
         )
     lines += ["", lock_note, ""]
     with open(path, "a", encoding="utf-8") as fp:
@@ -646,7 +634,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             return EXIT_HOLD
         try:
             provisioned = console.provisioned_slugs()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 - an unreadable roster is a HOLD: the watch must say it measured nothing rather than crash
             print(f"HOLD: the seat roster could not be read from D1 ({exc}).")
             return EXIT_HOLD
         roster = partition_seats(authored, provisioned)
@@ -664,9 +652,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             "Off-box copy skipped (--no-archive); no lock probe was run.",
         )
 
-    outcomes = [
-        process_seat(s, console, bucket=args.bucket, archive=archive) for s in roster.probed
-    ]
+    outcomes = [process_seat(s, console, bucket=args.bucket, archive=archive) for s in roster.probed]
     outcomes += roster_notices(roster)
 
     alert_holds: list[str] = []

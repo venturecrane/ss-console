@@ -217,16 +217,13 @@ def _load_key(raw: str):
         pem = base64.b64decode(raw, validate=True)
     except Exception as exc:
         raise EvidenceSigningError(
-            f"{SIGNING_KEY_ENV} is not valid base64; expected base64 of a "
-            "PKCS#8 PEM Ed25519 private key."
+            f"{SIGNING_KEY_ENV} is not valid base64; expected base64 of a PKCS#8 PEM Ed25519 private key."
         ) from exc
 
     try:
         key = serialization.load_pem_private_key(pem, password=None)
     except Exception as exc:
-        raise EvidenceSigningError(
-            f"{SIGNING_KEY_ENV} did not decode to a usable PEM private key."
-        ) from exc
+        raise EvidenceSigningError(f"{SIGNING_KEY_ENV} did not decode to a usable PEM private key.") from exc
 
     if not isinstance(key, Ed25519PrivateKey):
         raise EvidenceSigningError(
@@ -242,8 +239,6 @@ def _load_key(raw: str):
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
     except Exception as exc:  # pragma: no cover - defensive
-        raise EvidenceSigningError(
-            f"could not derive the public key for {SIGNING_KEY_ENV}: {exc}"
-        ) from exc
+        raise EvidenceSigningError(f"could not derive the public key for {SIGNING_KEY_ENV}: {exc}") from exc
 
     return key, public_der

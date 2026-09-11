@@ -115,7 +115,7 @@ def seat_secret_names(app: str) -> set[str] | None:
         return None
     try:
         return {row["name"] for row in json.loads(out) if isinstance(row, dict) and "name" in row}
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - flyctl JSON of an unexpected shape reads as UNKNOWN, which is the readiness report's honest answer
         return None
 
 
@@ -215,9 +215,7 @@ def check_currency(rep: Report, app: str, no_seat: bool) -> None:
     land on a stale seat. Reported here so it is visible BEFORE connect day
     rather than as a bare non-zero exit from the connect script.
     """
-    code, out = _run(
-        ["git", "-C", str(REPO_ROOT), "show", "origin/main:operator/contracts/overlay-pairs.json"]
-    )
+    code, out = _run(["git", "-C", str(REPO_ROOT), "show", "origin/main:operator/contracts/overlay-pairs.json"])
     expected = ""
     if code == 0:
         m = re.search(r'"overlayRef"\s*:\s*"([0-9a-f]{40})"', out)
@@ -250,7 +248,7 @@ def check_currency(rep: Report, app: str, no_seat: bool) -> None:
             "-a",
             app,
             "-C",
-            "sh -c 'GPID=$(pgrep -f \"hermes.*gateway run\" | head -1); [ -n \"$GPID\" ] || exit 1; "
+            'sh -c \'GPID=$(pgrep -f "hermes.*gateway run" | head -1); [ -n "$GPID" ] || exit 1; '
             'tr "\\0" "\\n" < /proc/$GPID/environ | grep ^SMD_OVERLAY_REF= | cut -d= -f2\'',
         ],
         timeout=120,
@@ -261,8 +259,7 @@ def check_currency(rep: Report, app: str, no_seat: bool) -> None:
             "currency",
             "seat runs origin/main's pinned overlay",
             UNKNOWN,
-            f"no gateway to read SMD_OVERLAY_REF from (machine stopped or gateway down); "
-            f"pin is {expected[:12]}",
+            f"no gateway to read SMD_OVERLAY_REF from (machine stopped or gateway down); pin is {expected[:12]}",
             "a running gateway whose ref differs from the pin",
         )
         return
@@ -297,7 +294,7 @@ def check_machine(rep: Report, app: str, no_seat: bool) -> None:
     try:
         machines = json.loads(out)
         states = [m.get("state", "?") for m in machines] or ["(none)"]
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - an unparseable machine list reads as UNKNOWN; the readiness report reports, it does not crash
         rep.add("machine", "machine state", UNKNOWN, "unparseable machine list", "a parseable list")
         return
     started = any(s == "started" for s in states)
@@ -435,8 +432,7 @@ def check_initiation_card(rep: Report, slug: str, cfg: dict) -> None:
         "card",
         "initiation-card commands rehearsed",
         PASS if green == total and total else FAIL,
-        f"{green}/{total} green — the card's own rule is that a pending command is "
-        f"not spoken at the firm",
+        f"{green}/{total} green — the card's own rule is that a pending command is not spoken at the firm",
         "a command marked green without a rehearsal record",
     )
     if unbound:
@@ -486,12 +482,7 @@ def coverage_rows(slug: str, cfg: dict) -> list[dict]:
         named = list(row.get("skills") or [])
         bound = [n for n in named if n in skills and skills[n].get("enabled")]
         unbound = [n for n in named if n not in bound]
-        init = {
-            k
-            for n in bound
-            for k, v in (skills[n].get("initiation") or {}).items()
-            if v
-        }
+        init = {k for n in bound for k, v in (skills[n].get("initiation") or {}).items() if v}
         # Can a real person or event actually make this routine run today?
         # `runnable` is an explicit boolean, not something a caller infers from
         # the prose: counting on a string prefix silently missed the

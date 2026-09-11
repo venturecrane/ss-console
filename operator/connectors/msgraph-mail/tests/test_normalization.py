@@ -81,9 +81,7 @@ def test_provider_refs_and_identity_populated() -> None:
 
 # ---- fail-safe: missing fields degrade, never invent ----------------------
 def test_missing_fields_degrade_to_empty_never_invented() -> None:
-    dto = normalize_message(
-        {"id": "only-id"}, mailbox="operator@example.com"
-    )
+    dto = normalize_message({"id": "only-id"}, mailbox="operator@example.com")
     assert dto["from_addr"] == ""  # no sender -> empty, not a guess
     assert dto["to"] == []
     assert dto["cc"] == []
@@ -136,6 +134,4 @@ def test_get_message_hits_pinned_mailbox_path() -> None:
     client = _mock_client(handler)
     client.get_message("AAMkAGm-id")
     api_req = next(r for r in captured if "messages" in r.url.path)
-    assert api_req.url.path == (
-        "/v1.0/users/operator@example.com/messages/AAMkAGm-id"
-    )
+    assert api_req.url.path == ("/v1.0/users/operator@example.com/messages/AAMkAGm-id")

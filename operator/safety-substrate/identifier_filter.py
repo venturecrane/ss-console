@@ -706,7 +706,7 @@ def run() -> tuple[bool, str]:
     ``tests/test_identifier_filter.py``."""
     try:
         return _self_check()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 - boot self-check: any raise is a FAIL line for the substrate runner, never a crash before the gateway starts
         return (False, f"FAIL: identifier filter self-check raised {type(e).__name__}: {e}")
 
 

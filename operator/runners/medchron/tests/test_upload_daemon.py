@@ -1,6 +1,7 @@
 """The upload stage (idempotent through the recorded folder id) and the
 on-Machine daemon (queue, one at a time, quarantine, pause-once, resume,
 wipe, heartbeat)."""
+
 from __future__ import annotations
 
 import json
@@ -21,6 +22,7 @@ from medchron_testkit import FIRM_CONFIG, FakeSeat
 
 # ---- upload ------------------------------------------------------------------
 
+
 def _upload_sr(job_dir: Path, firm: Path, data_root: Path, seat: FakeSeat, log: list[str]) -> StageRun:
     job = job_mod.load(job_dir)
     cfg = config_mod.load(str(firm))
@@ -28,22 +30,39 @@ def _upload_sr(job_dir: Path, firm: Path, data_root: Path, seat: FakeSeat, log: 
     out = sd / "out" / "alpha"
     out.mkdir(parents=True, exist_ok=True)
     rows = []
-    for name, body in (("Alpha Example - Medical Chronology 08-29-26.docx", b"docx-bytes"),
-                       ("Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf", b"%PDF-1")):
+    for name, body in (
+        ("Alpha Example - Medical Chronology 08-29-26.docx", b"docx-bytes"),
+        ("Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf", b"%PDF-1"),
+    ):
         (out / name).write_bytes(body)
         import hashlib
 
-        rows.append({"name": name, "folder": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26", "local_path": str(out / name),
-                     "sha256": hashlib.sha256(body).hexdigest(), "bytes": len(body)})
+        rows.append(
+            {
+                "name": name,
+                "folder": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26",
+                "local_path": str(out / name),
+                "sha256": hashlib.sha256(body).hexdigest(),
+                "bytes": len(body),
+            }
+        )
     (out / "upload_manifest.json").write_text(json.dumps(rows))
     (sd / "runs" / "alpha").mkdir(parents=True, exist_ok=True)
-    return StageRun(job=job, cfg=cfg, unit=job.units[0], slug_dir=sd, decided={}, log=log.append,
-                    seat_factory=lambda: seat, date_stamp="08-29-26")
+    return StageRun(
+        job=job,
+        cfg=cfg,
+        unit=job.units[0],
+        slug_dir=sd,
+        decided={},
+        log=log.append,
+        seat_factory=lambda: seat,
+        date_stamp="08-29-26",
+    )
 
 
 def test_upload_creates_the_folder_records_it_first_and_reads_back(job_dir, firm_config_path, data_root):
     seat = FakeSeat([], [], {})
-    seat.lag = 2                                            # the vendor's index lag: two lists before it shows
+    seat.lag = 2  # the vendor's index lag: two lists before it shows
     log: list[str] = []
     sr = _upload_sr(job_dir, firm_config_path, data_root, seat, log)
     assert upload.run(sr, pause=0, tries=5) == 0
@@ -55,8 +74,9 @@ def test_upload_creates_the_folder_records_it_first_and_reads_back(job_dir, firm
 
 
 def test_upload_refuses_a_folder_it_did_not_create(job_dir, firm_config_path, data_root):
-    seat = FakeSeat([], [{"id": "theirs", "name": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26", "parentId": None,
-                          "path": "x"}], {})
+    seat = FakeSeat(
+        [], [{"id": "theirs", "name": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26", "parentId": None, "path": "x"}], {}
+    )
     log: list[str] = []
     sr = _upload_sr(job_dir, firm_config_path, data_root, seat, log)
     assert upload.run(sr, pause=0, tries=2) == 1
@@ -65,13 +85,13 @@ def test_upload_refuses_a_folder_it_did_not_create(job_dir, firm_config_path, da
 
 def test_upload_resumes_after_a_crash_between_create_and_add(job_dir, firm_config_path, data_root):
     seat = FakeSeat([], [], {})
-    seat.crash_after = 1                                    # the second add_file dies
+    seat.crash_after = 1  # the second add_file dies
     log: list[str] = []
     sr = _upload_sr(job_dir, firm_config_path, data_root, seat, log)
     with pytest.raises(RuntimeError):
         upload.run(sr, pause=0, tries=2)
     d = json.loads((sr.slug_dir / "runs" / "alpha" / "delivery.json").read_text())
-    assert d["folder_id"] == "folder-1"                     # recorded before the first add_file
+    assert d["folder_id"] == "folder-1"  # recorded before the first add_file
     seat.crash_after = None
     assert upload.run(sr, pause=0, tries=3) == 0
     assert len(seat.created) == 1 and [s["name"][:9] for s in seat.sent] == ["Alpha Exa", "Exhibit 1"]
@@ -98,6 +118,7 @@ def test_upload_refuses_when_local_bytes_changed_since_the_manifest(job_dir, fir
 
 # ---- daemon -------------------------------------------------------------------
 
+
 class FakeBroker:
     def __init__(self) -> None:
         self.rows: dict[str, dict] = {}
@@ -106,9 +127,18 @@ class FakeBroker:
         # The month's state the daemon re-reads before every run. `month` is a
         # dict the test can mutate between ticks, which is how "fresh, not the
         # envelope's stale copy" is made observable.
-        self.month = {"month": "2026-09", "allowance": 40, "used": 0, "remaining": 40, "authored": True,
-                      "unit": "pages", "pages_used": 0, "pages_remaining": 40, "documents_used": 0,
-                      "cents_used": 0}
+        self.month = {
+            "month": "2026-09",
+            "allowance": 40,
+            "used": 0,
+            "remaining": 40,
+            "authored": True,
+            "unit": "pages",
+            "pages_used": 0,
+            "pages_remaining": 40,
+            "documents_used": 0,
+            "cents_used": 0,
+        }
         self.allowance_calls: list[str | None] = []
 
     def status(self, job_id):
@@ -165,17 +195,35 @@ BROKER_SUBMIT_ENVELOPE = {
     "matter": {"id": "m-1", "number": "2026-PI-102", "title": "Example v. Example"},
     "requested_by": "admin@example.test",
     "submitted_at": "2026-09-09T17:11:01.062Z",
-    "units": [{"client_name": "Alpha Example", "dob": "01/02/1980", "name_token": "Example",
-               "surname": "Example", "unit": "alpha"}],
+    "units": [
+        {
+            "client_name": "Alpha Example",
+            "dob": "01/02/1980",
+            "name_token": "Example",
+            "surname": "Example",
+            "unit": "alpha",
+        }
+    ],
 }
 
 
 def _envelope(job_id: str) -> dict:
-    return {"job_id": job_id, "matter": {"id": "m-1", "number": "2026-PI-102", "title": ""},
-            "units": [{"unit": "alpha", "client_name": "Alpha Example", "name_token": "Example", "surname": "Example",
-                       "dob": "01/02/1980"}],
-            "incident": {"date": "2026-01-15", "source": "administrator_request"},
-            "allowance_remaining_documents": 100, "cap_usd": 25}
+    return {
+        "job_id": job_id,
+        "matter": {"id": "m-1", "number": "2026-PI-102", "title": ""},
+        "units": [
+            {
+                "unit": "alpha",
+                "client_name": "Alpha Example",
+                "name_token": "Example",
+                "surname": "Example",
+                "dob": "01/02/1980",
+            }
+        ],
+        "incident": {"date": "2026-01-15", "source": "administrator_request"},
+        "allowance_remaining_documents": 100,
+        "cap_usd": 25,
+    }
 
 
 def _firm_yaml(tmp_path: Path) -> Path:
@@ -195,9 +243,17 @@ def _daemon(tmp_path: Path, script: str = OK_RUNNER, **kw) -> tuple[Daemon, Fake
     broker = FakeBroker()
     now = {"t": 1_000_000.0}
     kw.setdefault("firm_config", str(_firm_yaml(tmp_path)))
-    d = Daemon(run_dir=run_dir, broker=broker, runner_cmd=_fake_runner(tmp_path, script), customer_slug="example",
-               sticky_db=str(tmp_path / "sticky.db"), cgroup_root=tmp_path / "cgroup", child_uid=None,
-               clock=lambda: now["t"], **kw)
+    d = Daemon(
+        run_dir=run_dir,
+        broker=broker,
+        runner_cmd=_fake_runner(tmp_path, script),
+        customer_slug="example",
+        sticky_db=str(tmp_path / "sticky.db"),
+        cgroup_root=tmp_path / "cgroup",
+        child_uid=None,
+        clock=lambda: now["t"],
+        **kw,
+    )
     d._now = now  # type: ignore[attr-defined]
     return d, broker
 
@@ -246,7 +302,7 @@ def test_daemon_holds_once_at_hard_stop_and_releases(tmp_path):
     conn.commit()
     _submit(d, broker, "01A")
     assert d.tick() == "paused" and d.tick() == "paused"
-    assert [(j, s) for j, s, _ in broker.records] == [("01A", "held")]     # once
+    assert [(j, s) for j, s, _ in broker.records] == [("01A", "held")]  # once
     conn.execute("UPDATE sticky_stop_state SET level='OK'")
     conn.commit()
     conn.close()
@@ -273,7 +329,7 @@ def test_daemon_resumes_a_job_after_a_crash(tmp_path):
     jd = d.jobs / "01A"
     jd.mkdir(parents=True)
     (jd / "crash-once").write_text("")
-    assert d.tick() == "failed"                              # exit 137, no verdict
+    assert d.tick() == "failed"  # exit 137, no verdict
     assert broker.records[-1][1] == "failed" and "exited 137" in broker.records[-1][2]["reason"]
     # A kill mid-run leaves no terminal record at all: the daemon restarts and finds the claimed job.
     d2, broker2 = _daemon(tmp_path)
@@ -311,7 +367,7 @@ print(json.dumps([{"unit": "alpha", "outcome": "refused", "reason": "cap", "doll
     d, broker = _daemon(tmp_path, script)
     _submit(d, broker, "01A")
     broker.down = True
-    assert d.tick() is None and not broker.records                       # cannot even claim
+    assert d.tick() is None and not broker.records  # cannot even claim
     broker.down = False
     assert d.tick() == "held"
     assert broker.records[-1][1] == "held" and broker.records[-1][2]["reason"] == "refused: cap"
@@ -357,14 +413,25 @@ def test_cli_json_stdout_is_only_the_verdict(job_dir, firm_config_path, pricing_
     from medchron.__main__ import main
 
     monkeypatch.delenv("MEDCHRON_PIPELINE_DIR", raising=False)
-    code = main(["run", str(job_dir), "--dry-run", "--json",
-                 "--firm-config", str(firm_config_path), "--pricing", str(pricing_path)])
+    code = main(
+        [
+            "run",
+            str(job_dir),
+            "--dry-run",
+            "--json",
+            "--firm-config",
+            str(firm_config_path),
+            "--pricing",
+            str(pricing_path),
+        ]
+    )
     captured = capsys.readouterr()
     outcomes = json.loads(captured.out)
     assert code == 0 and isinstance(outcomes, list) and outcomes[0]["outcome"] == "dry_run"
 
 
 # ---- the deliver wake (ss#2616) -----------------------------------------------
+
 
 class _FakeGate:
     """A local HTTP gate the daemon POSTs its wake to."""
@@ -380,8 +447,9 @@ class _FakeGate:
         class H(http.server.BaseHTTPRequestHandler):
             def do_POST(self):
                 raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-                outer.requests.append({"path": self.path, "auth": self.headers.get("Authorization"),
-                                       "body": json.loads(raw)})
+                outer.requests.append(
+                    {"path": self.path, "auth": self.headers.get("Authorization"), "body": json.loads(raw)}
+                )
                 self.send_response(outer.status)
                 self.send_header("Content-Length", str(len(outer.body)))
                 self.end_headers()
@@ -410,7 +478,7 @@ def test_a_delivered_job_wakes_the_agent_with_authored_fields_only(tmp_path):
     d, broker = _wake_daemon(tmp_path, gate.url)
     _submit(d, broker, "01A")
     assert d.tick() == "delivered"
-    d.tick()                                                     # the wake dispatches on the next tick
+    d.tick()  # the wake dispatches on the next tick
     gate.close()
     assert len(gate.requests) == 1
     req = gate.requests[0]
@@ -462,7 +530,7 @@ print(json.dumps([{"unit": "alpha", "outcome": "held", "stage": "decide_orphans"
 
 
 def test_a_held_job_wakes_with_the_stage_and_never_the_reason(tmp_path):
-    d, broker = _wake_daemon(tmp_path, "http://127.0.0.1:1", script=HELD_RUNNER)   # nothing listens
+    d, broker = _wake_daemon(tmp_path, "http://127.0.0.1:1", script=HELD_RUNNER)  # nothing listens
     _submit(d, broker, "01B")
     assert d.tick() == "held"
     # The ledger keeps the full reason for a person reading their own tenant.
@@ -540,8 +608,8 @@ LIMIT_HELD_RUNNER = """
 import json
 print(json.dumps([{"unit": "alpha", "outcome": "held", "stage": "vision", "dollars": 0.0, "pages": 3312,
                    "documents": 0,
-                   "reason": "single_matter_page_threshold: the matter's file is 3,312 pages, above the "
-                             "firm's single-matter page threshold; the package was not started"}]))
+                   "reason": "chronology_package_page_allowance_per_month: the matter's file is 3,312 pages "
+                             "and 500 pages remain in this cycle's allowance; the package was not started"}]))
 """
 
 
@@ -554,7 +622,7 @@ def test_a_limit_hold_is_recorded_as_a_hold_and_never_prefixed_refused(tmp_path)
     assert d.tick() == "held"
     job_id, state, fields = broker.records[-1]
     assert state == "held" and fields["pages"] == 3312
-    assert fields["reason"].startswith("single_matter_page_threshold: ")
+    assert fields["reason"].startswith("chronology_package_page_allowance_per_month: ")
     assert not fields["reason"].startswith("refused: ")
     assert "Held at: vision." in d._daemon_state("01A")["wake"]["task"]
 

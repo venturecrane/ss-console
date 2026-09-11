@@ -1,5 +1,6 @@
 """CLI: `medchron run <job_dir> [--from STAGE] [--dry-run] [--firm-config PATH]
 [--pricing PATH] [--json]`, `medchron dag`, `medchron validate-config PATH`."""
+
 from __future__ import annotations
 
 import argparse
@@ -15,14 +16,19 @@ def _cmd_run(args: argparse.Namespace) -> int:
         # verdict and nothing else (the daemon parses it; live-caught
         # 2026-08-31 when interleaved [run] lines made the report unreadable
         # and a real refusal recorded as "exited 4 without a verdict").
-        d = driver_mod.Driver(Path(args.job_dir), firm_config=args.firm_config, pricing=args.pricing,
-                              dry_run=args.dry_run, start=args.start,
-                              log=lambda m: print(m, file=sys.stderr))
+        d = driver_mod.Driver(
+            Path(args.job_dir),
+            firm_config=args.firm_config,
+            pricing=args.pricing,
+            dry_run=args.dry_run,
+            start=args.start,
+            log=lambda m: print(m, file=sys.stderr),
+        )
         outcomes = d.run()
     except (driver_mod.DriverError, config_mod.ConfigError) as exc:
         print(f"medchron: {exc}", file=sys.stderr)
         return 2
-    except Exception as exc:  # the envelope or budget refused; still a sentence, never a trace
+    except Exception as exc:  # noqa: BLE001 - the envelope or budget refused; the CLI prints a sentence, never a trace
         print(f"medchron: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
     print(driver_mod.to_json(outcomes) if args.json else driver_mod.report(outcomes))

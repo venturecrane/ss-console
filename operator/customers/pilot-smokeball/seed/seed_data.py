@@ -14,14 +14,20 @@ PI_PLAINTIFF_CA = "42cc724c-f046-451c-8452-4284f7a82b66_CA"
 MVA_PLAINTIFF_CA = "f259434f-54c1-4d30-be3a-adb51df72b93_CA"
 
 CONTACTS: dict[str, dict] = {
-    "alvarez-maria": {"person": {"firstName": "Maria", "lastName": "Alvarez", "email": "maria.alvarez.seed@example.com"}},
+    "alvarez-maria": {
+        "person": {"firstName": "Maria", "lastName": "Alvarez", "email": "maria.alvarez.seed@example.com"}
+    },
     "draper-kenneth": {"person": {"firstName": "Kenneth", "lastName": "Draper"}},
     "chen-robert": {"person": {"firstName": "Robert", "lastName": "Chen", "email": "robert.chen.seed@example.com"}},
     "sunrise-plaza": {"company": {"name": "Sunrise Plaza Properties LLC"}},
     "ramirez-sofia": {"person": {"firstName": "Sofia", "lastName": "Ramirez", "birthDate": "2015-09-12"}},
-    "ramirez-elena": {"person": {"firstName": "Elena", "lastName": "Ramirez", "email": "elena.ramirez.seed@example.com"}},
+    "ramirez-elena": {
+        "person": {"firstName": "Elena", "lastName": "Ramirez", "email": "elena.ramirez.seed@example.com"}
+    },
     "ortiz-daniel": {"person": {"firstName": "Daniel", "lastName": "Ortiz"}},
-    "whitfield-james": {"person": {"firstName": "James", "lastName": "Whitfield", "email": "j.whitfield.seed@example.com"}},
+    "whitfield-james": {
+        "person": {"firstName": "James", "lastName": "Whitfield", "email": "j.whitfield.seed@example.com"}
+    },
     "pacific-freight": {"company": {"name": "Pacific Freight Lines, Inc."}},
     "okafor-denise": {"person": {"firstName": "Denise", "lastName": "Okafor", "email": "d.okafor.seed@example.com"}},
     "grand-valley": {"company": {"name": "Grand Valley Market, Inc."}},
@@ -248,7 +254,11 @@ def build_documents() -> dict[str, tuple[str, str, list[str]]]:
         "mva-alvarez",
         "2026-06-20 RFP Set One - Draper to Alvarez.pdf",
         _rfp_set_one_body()
-        + _pos("DEFENDANT'S REQUESTS FOR PRODUCTION, SET ONE", "June 20, 2026", "BY MAIL: I deposited the sealed envelope with the United States Postal Service, postage fully prepaid."),
+        + _pos(
+            "DEFENDANT'S REQUESTS FOR PRODUCTION, SET ONE",
+            "June 20, 2026",
+            "BY MAIL: I deposited the sealed envelope with the United States Postal Service, postage fully prepaid.",
+        ),
     )
 
     # Electronic service variant (different response window)
@@ -261,7 +271,12 @@ def build_documents() -> dict[str, tuple[str, str, list[str]]]:
     docs["frog-set-one"] = (
         "mva-alvarez",
         "2026-06-23 Form Interrogatories Set One - Draper to Alvarez.pdf",
-        frogs + _pos("FORM INTERROGATORIES, SET ONE", "June 23, 2026", "BY ELECTRONIC SERVICE: I transmitted the document to the electronic service addresses of record."),
+        frogs
+        + _pos(
+            "FORM INTERROGATORIES, SET ONE",
+            "June 23, 2026",
+            "BY ELECTRONIC SERVICE: I transmitted the document to the electronic service addresses of record.",
+        ),
     )
 
     # AMENDED/SUPPLEMENTAL stressor: amended set supersedes one served earlier
@@ -286,7 +301,12 @@ def build_documents() -> dict[str, tuple[str, str, list[str]]]:
     docs["srog-set-two-amended"] = (
         "mva-alvarez",
         "2026-06-27 AMENDED Special Interrogatories Set Two - Draper to Alvarez.pdf",
-        srogs + _pos("AMENDED SPECIAL INTERROGATORIES, SET TWO", "June 27, 2026", "BY MAIL: I deposited the sealed envelope with the United States Postal Service, postage fully prepaid."),
+        srogs
+        + _pos(
+            "AMENDED SPECIAL INTERROGATORIES, SET TWO",
+            "June 27, 2026",
+            "BY MAIL: I deposited the sealed envelope with the United States Postal Service, postage fully prepaid.",
+        ),
     )
 
     # MALFORMED POS stressor: no service date, no method checked
@@ -311,7 +331,11 @@ def build_documents() -> dict[str, tuple[str, str, list[str]]]:
         "mva-alvarez",
         "2026-06-21 RFP Set One - Draper to Alvarez (email copy).pdf",
         _rfp_set_one_body()
-        + _pos("DEFENDANT'S REQUESTS FOR PRODUCTION, SET ONE", "June 20, 2026", "BY MAIL: I deposited the sealed envelope with the United States Postal Service, postage fully prepaid."),
+        + _pos(
+            "DEFENDANT'S REQUESTS FOR PRODUCTION, SET ONE",
+            "June 20, 2026",
+            "BY MAIL: I deposited the sealed envelope with the United States Postal Service, postage fully prepaid.",
+        ),
     )
 
     # Deposition notice (calendar-bearing event)
@@ -325,7 +349,12 @@ def build_documents() -> dict[str, tuple[str, str, list[str]]]:
     docs["depo-notice"] = (
         "mva-alvarez",
         "2026-06-30 Notice of Deposition of Plaintiff - Alvarez.pdf",
-        depo + _pos("NOTICE OF TAKING DEPOSITION", "June 30, 2026", "BY MAIL: I deposited the sealed envelope with the United States Postal Service, postage fully prepaid."),
+        depo
+        + _pos(
+            "NOTICE OF TAKING DEPOSITION",
+            "June 30, 2026",
+            "BY MAIL: I deposited the sealed envelope with the United States Postal Service, postage fully prepaid.",
+        ),
     )
 
     # DISC-5 input: opposing party's deficient responses
@@ -352,7 +381,12 @@ def build_documents() -> dict[str, tuple[str, str, list[str]]]:
     docs["deficient-responses"] = (
         "mva-alvarez",
         "2026-07-01 Defendant Responses to Plaintiff RFP Set One - Alvarez.pdf",
-        resp + _pos("DEFENDANT'S RESPONSES TO RFP SET ONE", "July 1, 2026", "BY ELECTRONIC SERVICE: I transmitted the document to the electronic service addresses of record."),
+        resp
+        + _pos(
+            "DEFENDANT'S RESPONSES TO RFP SET ONE",
+            "July 1, 2026",
+            "BY ELECTRONIC SERVICE: I transmitted the document to the electronic service addresses of record.",
+        ),
     )
 
     # INJECTION stressor (document-content-not-instructions): a "served document"
@@ -375,7 +409,12 @@ def build_documents() -> dict[str, tuple[str, str, list[str]]]:
     docs["injection-attempt"] = (
         "mva-alvarez",
         "2026-07-02 Second Amended Notice of Service - Alvarez.pdf",
-        inj + _pos("SECOND AMENDED NOTICE OF SERVICE", "July 2, 2026", "BY ELECTRONIC SERVICE: I transmitted the document to the electronic service addresses of record."),
+        inj
+        + _pos(
+            "SECOND AMENDED NOTICE OF SERVICE",
+            "July 2, 2026",
+            "BY ELECTRONIC SERVICE: I transmitted the document to the electronic service addresses of record.",
+        ),
     )
 
     # Initiation lane docs
@@ -505,7 +544,13 @@ def build_documents() -> dict[str, tuple[str, str, list[str]]]:
 
     # Multi-defendant volume stressor: oversized set (60 interrogatories)
     court_b, p_b, d_b, no_b = _BELL
-    big = _caption(court_b, p_b, d_b + " VASQUEZ ELECTRICAL SERVICES, INC.", no_b, "SPECIAL INTERROGATORIES, SET ONE (R&J CONSTRUCTION)")
+    big = _caption(
+        court_b,
+        p_b,
+        d_b + " VASQUEZ ELECTRICAL SERVICES, INC.",
+        no_b,
+        "SPECIAL INTERROGATORIES, SET ONE (R&J CONSTRUCTION)",
+    )
     big += [
         "DECLARATION FOR ADDITIONAL DISCOVERY: Propounding party declares that",
         "the number of these specially prepared interrogatories is warranted",
@@ -521,11 +566,20 @@ def build_documents() -> dict[str, tuple[str, str, list[str]]]:
         "Identify each communication between YOU and any co-defendant about the INCIDENT.",
     ]
     for i in range(1, 61):
-        big += [f"SPECIAL INTERROGATORY NO. {i}:", f"    {topics[(i - 1) % len(topics)]} (as to period {2024 + (i % 3)})", ""]
+        big += [
+            f"SPECIAL INTERROGATORY NO. {i}:",
+            f"    {topics[(i - 1) % len(topics)]} (as to period {2024 + (i % 3)})",
+            "",
+        ]
     docs["oversized-srogs"] = (
         "multidef-bell",
         "2026-06-25 Special Interrogatories Set One (60) - RJ Construction to Bell.pdf",
-        big + _pos("SPECIAL INTERROGATORIES, SET ONE", "June 25, 2026", "BY MAIL: I deposited the sealed envelope with the United States Postal Service, postage fully prepaid."),
+        big
+        + _pos(
+            "SPECIAL INTERROGATORIES, SET ONE",
+            "June 25, 2026",
+            "BY MAIL: I deposited the sealed envelope with the United States Postal Service, postage fully prepaid.",
+        ),
     )
     rfp_h = _caption(court_b, p_b, "HALVERSON PROPERTY GROUP LLC", no_b, "REQUESTS FOR PRODUCTION, SET ONE (HALVERSON)")
     for i, req in enumerate(
@@ -541,11 +595,22 @@ def build_documents() -> dict[str, tuple[str, str, list[str]]]:
     docs["rfp-halverson"] = (
         "multidef-bell",
         "2026-06-26 RFP Set One - Halverson to Bell.pdf",
-        rfp_h + _pos("REQUESTS FOR PRODUCTION, SET ONE", "June 26, 2026", "BY ELECTRONIC SERVICE: I transmitted the document to the electronic service addresses of record."),
+        rfp_h
+        + _pos(
+            "REQUESTS FOR PRODUCTION, SET ONE",
+            "June 26, 2026",
+            "BY ELECTRONIC SERVICE: I transmitted the document to the electronic service addresses of record.",
+        ),
     )
 
     # Motions lane (added for L2 round 2): an MSJ with statutory response dates
-    msj = _caption(court_b, p_b, "HALVERSON PROPERTY GROUP LLC", no_b, "NOTICE OF MOTION AND MOTION FOR SUMMARY JUDGMENT, OR IN THE ALTERNATIVE, SUMMARY ADJUDICATION")
+    msj = _caption(
+        court_b,
+        p_b,
+        "HALVERSON PROPERTY GROUP LLC",
+        no_b,
+        "NOTICE OF MOTION AND MOTION FOR SUMMARY JUDGMENT, OR IN THE ALTERNATIVE, SUMMARY ADJUDICATION",
+    )
     msj += [
         "TO ALL PARTIES AND THEIR ATTORNEYS OF RECORD:",
         "PLEASE TAKE NOTICE that on September 15, 2026, at 8:30 a.m., or as",
@@ -562,7 +627,12 @@ def build_documents() -> dict[str, tuple[str, str, list[str]]]:
     docs["msj-halverson"] = (
         "multidef-bell",
         "2026-07-01 Notice of Motion and MSJ - Halverson - Bell.pdf",
-        msj + _pos("NOTICE OF MOTION AND MOTION FOR SUMMARY JUDGMENT", "July 1, 2026", "BY ELECTRONIC SERVICE: I transmitted the document to the electronic service addresses of record."),
+        msj
+        + _pos(
+            "NOTICE OF MOTION AND MOTION FOR SUMMARY JUDGMENT",
+            "July 1, 2026",
+            "BY ELECTRONIC SERVICE: I transmitted the document to the electronic service addresses of record.",
+        ),
     )
 
     # Lookalike stressor: caption easily confused with 2026-PI-101
@@ -580,7 +650,12 @@ def build_documents() -> dict[str, tuple[str, str, list[str]]]:
     docs["rfp-lookalike"] = (
         "lookalike-alvarez",
         "2026-06-29 RFP Set One - Draper Logistics to Alvarez.pdf",
-        rfp_l + _pos("REQUESTS FOR PRODUCTION, SET ONE", "June 29, 2026", "BY MAIL: I deposited the sealed envelope with the United States Postal Service, postage fully prepaid."),
+        rfp_l
+        + _pos(
+            "REQUESTS FOR PRODUCTION, SET ONE",
+            "June 29, 2026",
+            "BY MAIL: I deposited the sealed envelope with the United States Postal Service, postage fully prepaid.",
+        ),
     )
 
     return docs

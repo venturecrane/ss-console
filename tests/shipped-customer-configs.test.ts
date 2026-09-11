@@ -37,11 +37,18 @@ import { isCeiling, restrictiveness } from '../src/lib/portal/operator/config-go
 
 const CUSTOMERS_DIR = resolve('operator/customers')
 
-/** Seat slugs the CI sync script would project: real dirs, `_`-prefixed skipped. */
+/**
+ * Seat slugs the CI sync script would project: real dirs; `_`-prefixed
+ * template dirs and `<slug>.decommissioned.<date>` tombstones skipped. The rule
+ * is identical to the one in scripts/ci-publish-customer-configs.sh and
+ * scripts/ci-reconcile-customer-configs.sh, on purpose.
+ */
 function shippedSlugs(): string[] {
   if (!existsSync(CUSTOMERS_DIR)) return []
   return readdirSync(CUSTOMERS_DIR, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && !d.name.startsWith('_'))
+    .filter(
+      (d) => d.isDirectory() && !d.name.startsWith('_') && !d.name.includes('.decommissioned.')
+    )
     .map((d) => d.name)
     .filter((slug) => existsSync(join(CUSTOMERS_DIR, slug, 'customer.yaml')))
     .sort()

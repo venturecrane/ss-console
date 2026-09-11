@@ -57,9 +57,9 @@ import yaml
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
 
-import console_d1  # noqa: E402 -- path injected above
-import cron_slots  # noqa: E402 -- path injected above
-import seam_pull  # noqa: E402 -- path injected above
+import console_d1
+import cron_slots
+import seam_pull
 
 EXIT_CLEAN = 0
 EXIT_FINDING = 1
@@ -90,10 +90,7 @@ def seat_slugs() -> list[str]:
     return sorted(
         d.name
         for d in customers_dir().iterdir()
-        if d.is_dir()
-        and not d.name.startswith("_")
-        and not d.name.startswith(".")
-        and (d / "customer.yaml").exists()
+        if d.is_dir() and not d.name.startswith("_") and not d.name.startswith(".") and (d / "customer.yaml").exists()
     )
 
 
@@ -101,9 +98,7 @@ def _load_outcomes_module():
     """reconcile-outcomes, spec-loaded (dashed filename): its analyze() is the
     single owner of obligation grading, imported rather than re-implemented so
     the two controls can never disagree about what `silent` means."""
-    spec = importlib.util.spec_from_file_location(
-        "reconcile_outcomes", _bin_dir() / "reconcile-outcomes.py"
-    )
+    spec = importlib.util.spec_from_file_location("reconcile_outcomes", _bin_dir() / "reconcile-outcomes.py")
     module = importlib.util.module_from_spec(spec)
     sys.modules["reconcile_outcomes"] = module
     spec.loader.exec_module(module)
@@ -225,9 +220,7 @@ def reconcile_seat(
     report.pending = len(slots) - len(gradable)
     report.verdicts = cron_slots.match_slots(gradable, rows, tolerance_s=SLOT_TOLERANCE_S)
     if boot_info:
-        window = cron_slots.boot_window(
-            boot_info.get("last_heartbeat_ts"), boot_info.get("process_uptime_seconds")
-        )
+        window = cron_slots.boot_window(boot_info.get("last_heartbeat_ts"), boot_info.get("process_uptime_seconds"))
         cron_slots.apply_boot_suppression(report.verdicts, window)
     annotate_outcomes(report, rows, outcomes, now)
     return report
@@ -365,8 +358,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     offline_rows: Optional[list[dict]] = None
     if args.rows:
         if len(slugs) != 1:
-            print("HOLD: --rows needs exactly one --slug (an extract belongs to one seat)",
-                  file=sys.stderr)
+            print("HOLD: --rows needs exactly one --slug (an extract belongs to one seat)", file=sys.stderr)
             return EXIT_HOLD
         try:
             offline_rows = _load_rows(args.rows)
@@ -388,8 +380,11 @@ def main(argv: Optional[list[str]] = None) -> int:
             boot_rows = d1.fleet_boot_rows()
             provisioned = set(boot_rows)
         except Exception as exc:  # noqa: BLE001 -- D1 unreachable => nothing evaluable
-            print(f"HOLD: fleet_status read failed ({exc}); no seat can be partitioned "
-                  "or boot-suppressed, so nothing was evaluated", file=sys.stderr)
+            print(
+                f"HOLD: fleet_status read failed ({exc}); no seat can be partitioned "
+                "or boot-suppressed, so nothing was evaluated",
+                file=sys.stderr,
+            )
             return EXIT_HOLD
 
     reports: list[SeatWakeReport] = []

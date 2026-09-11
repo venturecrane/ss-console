@@ -7,6 +7,7 @@ three ways (required env, optional env with a silent pre-incident defect, and
 argv); the driver supplies it uniformly from here, with its source recorded so
 the limitations section can say where the date came from.
 """
+
 from __future__ import annotations
 
 import re
@@ -28,11 +29,11 @@ class JobError(ValueError):
 
 @dataclass(frozen=True)
 class Unit:
-    unit: str                # the slug the pipeline uses for this client
-    client_name: str         # rendered into the document title and folder name
-    name_token: str          # matches folder/file names
+    unit: str  # the slug the pipeline uses for this client
+    client_name: str  # rendered into the document title and folder name
+    name_token: str  # matches folder/file names
     surname: str
-    dob: str                 # MM/DD/YYYY, the identity check's anchor
+    dob: str  # MM/DD/YYYY, the identity check's anchor
     folder_prefix: str | None = None  # joint matters: this client's folder
 
 
@@ -44,10 +45,10 @@ class Job:
     matter_id: str
     matter_title: str
     units: list[Unit]
-    incident_date: str       # YYYY-MM-DD
-    incident_source: str     # one of INCIDENT_SOURCES
-    injuries: str            # the plain-words injury list the filter stage reads
-    cap_usd: float | None    # None -> firm default
+    incident_date: str  # YYYY-MM-DD
+    incident_source: str  # one of INCIDENT_SOURCES
+    injuries: str  # the plain-words injury list the filter stage reads
+    cap_usd: float | None  # None -> firm default
     data_root: Path
     # Where the install-level artifacts live: the scanned-page classifier's
     # authored control pages (`controls/controls.json` + PDFs) and the vendored

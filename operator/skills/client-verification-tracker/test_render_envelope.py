@@ -28,18 +28,14 @@ pre_run = _load("pre_run.py", "cvt_pre_run_under_test")
 
 
 def test_canonical_hash_matches_arbiter_vectors():
-    vectors = json.loads(
-        (OPERATOR_DIR / "contracts" / "fixtures" / "body-canon-vectors.json").read_text()
-    )["vectors"]
+    vectors = json.loads((OPERATOR_DIR / "contracts" / "fixtures" / "body-canon-vectors.json").read_text())["vectors"]
     for vector in vectors:
         assert render.canonical_body_sha256(vector["input"]) == vector["sha256"], vector["name"]
 
 
 def test_situation_map_is_closed():
     assert render.situation_line({"action": "surface_hold"})
-    assert "have changed" in render.situation_line(
-        {"action": "surface_hold", "reason": "determination_stale"}
-    )
+    assert "have changed" in render.situation_line({"action": "surface_hold", "reason": "determination_stale"})
     assert "ceiling" in render.situation_line({"action": "handoff"})
     assert "not authored" in render.situation_line({"action": "surface_config_missing"})
     assert "return destination" in render.situation_line({"action": "chase"})
@@ -145,12 +141,7 @@ def test_authored_return_link_reads_skill_settings_only():
     }
     assert render.authored_return_link(data) == "https://portal.example/verify"
     assert render.authored_return_link({}) is None
-    assert (
-        render.authored_return_link(
-            {"personas": [{"skills": [{"name": "client-verification-tracker"}]}]}
-        )
-        is None
-    )
+    assert render.authored_return_link({"personas": [{"skills": [{"name": "client-verification-tracker"}]}]}) is None
 
 
 def _plan(**overrides):
@@ -191,9 +182,7 @@ def test_envelope_hold_surface_dispatch(tmp_path, monkeypatch):
     )
     assert meta["dispatch_expected"] is True
     assert meta["render_mode"] == "slot-templated"
-    written = json.loads(
-        (tmp_path / ".smd" / "pre_run" / "client-verification-tracker.dispatch.json").read_text()
-    )
+    written = json.loads((tmp_path / ".smd" / "pre_run" / "client-verification-tracker.dispatch.json").read_text())
     [dispatch] = written["dispatches"]
     assert dispatch["recipients"] == ["ops@firm.example"]
     assert "matter 2026-PI-104" in dispatch["full_body"]
@@ -227,9 +216,7 @@ def test_envelope_degraded_chase_collapses_to_one_throttled_line(tmp_path, monke
         customer_yaml_path=_yaml(tmp_path),
     )
     assert meta["chase_degraded_return_link_unauthored"] == 2
-    written = json.loads(
-        (tmp_path / ".smd" / "pre_run" / "client-verification-tracker.dispatch.json").read_text()
-    )
+    written = json.loads((tmp_path / ".smd" / "pre_run" / "client-verification-tracker.dispatch.json").read_text())
     [dispatch] = written["dispatches"]
     # ONE seat-level line, not one per chase; keyed on the sentinel.
     assert dispatch["full_body"].count("return destination") == 1
@@ -257,9 +244,7 @@ def test_envelope_matter_staff_uses_the_shared_staff_pull(tmp_path, monkeypatch)
         "    fallback_recipients:\n      - fallback@firm.example\n"
         "scope:\n  inbound_allow_from:\n    - '@firm.example'\n"
     )
-    staff = {
-        "m-1": {"responsible": {"email": "amy@firm.example", "enabled": True}, "assisting": []}
-    }
+    staff = {"m-1": {"responsible": {"email": "amy@firm.example", "enabled": True}, "assisting": []}}
     pulled: list[list[str]] = []
 
     def fake_pull(ids, budget):
@@ -279,9 +264,7 @@ def test_envelope_matter_staff_uses_the_shared_staff_pull(tmp_path, monkeypatch)
     )
     assert pulled == [["m-1"]]
     assert meta["routing_legs"] == {"matter_staff_responsible": 1}
-    written = json.loads(
-        (tmp_path / ".smd" / "pre_run" / "client-verification-tracker.dispatch.json").read_text()
-    )
+    written = json.loads((tmp_path / ".smd" / "pre_run" / "client-verification-tracker.dispatch.json").read_text())
     [dispatch] = written["dispatches"]
     assert dispatch["recipients"] == ["amy@firm.example"]
     assert written["memo_matters"] == []  # a staffed matter is NOT "unassigned"
@@ -302,9 +285,7 @@ def test_unknown_matter_never_reaches_memo_or_unroutable(tmp_path, monkeypatch):
         customer_yaml_path=_yaml(tmp_path),
     )
     assert meta["dispatch_count"] == 1
-    written = json.loads(
-        (tmp_path / ".smd" / "pre_run" / "client-verification-tracker.dispatch.json").read_text()
-    )
+    written = json.loads((tmp_path / ".smd" / "pre_run" / "client-verification-tracker.dispatch.json").read_text())
     assert written["memo_matters"] == []
     assert written["unroutable"] == []
 

@@ -170,14 +170,10 @@ wait
     def start(self, extra_env_lines: str = "") -> None:
         path = self.root / "harness.sh"
         # The dump gate greps the installed Hermes source; point it at the fake.
-        text = self.script(extra_env_lines).replace(
-            "/opt/hermes/gateway/run.py", str(self.hermes_run_py)
-        )
+        text = self.script(extra_env_lines).replace("/opt/hermes/gateway/run.py", str(self.hermes_run_py))
         path.write_text(text)
         path.chmod(0o755)
-        self.proc = subprocess.Popen(
-            ["bash", str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
-        )
+        self.proc = subprocess.Popen(["bash", str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
 
     def stop(self) -> None:
         if self.proc and self.proc.poll() is None:
@@ -329,7 +325,7 @@ def test_profile_comes_from_argv_not_from_mtime(harness):
 
 
 def test_is_inert_and_loud_when_argv_does_not_name_hermes(harness):
-    """"Cannot evaluate" must never read as "healthy".
+    """ "Cannot evaluate" must never read as "healthy".
 
     Only AFTER the startup grace, now. Inside it the same argv means "bootstrap
     has not exec'd the gateway yet", which is every boot's first minutes — see
@@ -362,8 +358,7 @@ def test_the_real_live_cmdline_bytes_resolve_the_profile(harness):
     pid_dir = harness.proc_dir / GATEWAY_PID
     pid_dir.mkdir(parents=True, exist_ok=True)
     (pid_dir / "cmdline").write_bytes(
-        b"/opt/hermes/.venv/bin/python\0/opt/hermes/.venv/bin/hermes\0"
-        b"-p\0operator\0gateway\0run\0"
+        b"/opt/hermes/.venv/bin/python\0/opt/hermes/.venv/bin/hermes\0-p\0operator\0gateway\0run\0"
     )
     harness.write_heartbeat("operator", age_seconds=0)
     harness.start()
@@ -512,7 +507,6 @@ def test_skips_the_dump_when_the_pin_registers_no_sigusr2_handler(harness):
     harness.wait_for_log(r"ARMED")
     harness.wait_for_log(r"registers no SIGUSR2 faulthandler; skipping the stack dump")
     assert "-USR2" not in harness.kill_text()
-
 
 
 def test_state_tick_and_ledger_are_world_readable_for_the_gate(harness):

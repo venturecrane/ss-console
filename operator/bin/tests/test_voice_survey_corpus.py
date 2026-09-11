@@ -40,9 +40,7 @@ _HERE = Path(__file__).resolve()
 _OPERATOR = _HERE.parents[2]
 sys.path.insert(0, str(_OPERATOR))
 
-_spec = importlib.util.spec_from_file_location(
-    "voice_survey_corpus", _OPERATOR / "bin" / "voice-survey-corpus.py"
-)
+_spec = importlib.util.spec_from_file_location("voice_survey_corpus", _OPERATOR / "bin" / "voice-survey-corpus.py")
 assert _spec and _spec.loader
 vsc = importlib.util.module_from_spec(_spec)
 # Register before exec: @dataclass resolves its class's module out of
@@ -266,23 +264,80 @@ MATTERS = {
 }
 
 DOCS = [
-    _doc("m-1", MATTERS["m-1"], "f-1", "2026-03-03 Demand - Duarte.pdf", DEMAND,
-         ownerId="S2S_hermes", isUploaded=False, dateCreated="2026-03-03T09:00:00Z"),
-    _doc("m-1", MATTERS["m-1"], "f-2", "2026-07-01 Mediation Brief - Nakashima.pdf",
-         MEDIATION_BRIEF, ownerId="u-77", isUploaded=True),
-    _doc("m-2", MATTERS["m-2"], "f-3", "2026-06-08 Client status - Nakashima.pdf",
-         CLIENT_STATUS, ownerId="u-77", isUploaded=False),
-    _doc("m-2", MATTERS["m-2"], "f-4", "2026-06-20 RFP Set One - Draper to Alvarez.pdf",
-         SERVED_DISCOVERY, ownerId="u-12", isUploaded=True),
-    _doc("m-3", MATTERS["m-3"], "f-5", "2026-06-12 Letter from Trammell & Voss.pdf",
-         CC_TRAP, ownerId="u-12", isUploaded=True),
-    _doc("m-3", MATTERS["m-3"], "f-6", "2026-06-12 Client status - Boyle.pdf",
-         CLIENT_STATUS_NO_LETTERHEAD, ownerId="u-77", isUploaded=False),
-    _doc("m-4", MATTERS["m-4"], "f-7", "2026-06-26 Settlement Offer - carrier.pdf",
-         CARRIER_OFFER, ownerId="u-12", isUploaded=True),
+    _doc(
+        "m-1",
+        MATTERS["m-1"],
+        "f-1",
+        "2026-03-03 Demand - Duarte.pdf",
+        DEMAND,
+        ownerId="S2S_hermes",
+        isUploaded=False,
+        dateCreated="2026-03-03T09:00:00Z",
+    ),
+    _doc(
+        "m-1",
+        MATTERS["m-1"],
+        "f-2",
+        "2026-07-01 Mediation Brief - Nakashima.pdf",
+        MEDIATION_BRIEF,
+        ownerId="u-77",
+        isUploaded=True,
+    ),
+    _doc(
+        "m-2",
+        MATTERS["m-2"],
+        "f-3",
+        "2026-06-08 Client status - Nakashima.pdf",
+        CLIENT_STATUS,
+        ownerId="u-77",
+        isUploaded=False,
+    ),
+    _doc(
+        "m-2",
+        MATTERS["m-2"],
+        "f-4",
+        "2026-06-20 RFP Set One - Draper to Alvarez.pdf",
+        SERVED_DISCOVERY,
+        ownerId="u-12",
+        isUploaded=True,
+    ),
+    _doc(
+        "m-3",
+        MATTERS["m-3"],
+        "f-5",
+        "2026-06-12 Letter from Trammell & Voss.pdf",
+        CC_TRAP,
+        ownerId="u-12",
+        isUploaded=True,
+    ),
+    _doc(
+        "m-3",
+        MATTERS["m-3"],
+        "f-6",
+        "2026-06-12 Client status - Boyle.pdf",
+        CLIENT_STATUS_NO_LETTERHEAD,
+        ownerId="u-77",
+        isUploaded=False,
+    ),
+    _doc(
+        "m-4",
+        MATTERS["m-4"],
+        "f-7",
+        "2026-06-26 Settlement Offer - carrier.pdf",
+        CARRIER_OFFER,
+        ownerId="u-12",
+        isUploaded=True,
+    ),
     # Image-only scan: extracts to nothing.
-    _doc("m-4", MATTERS["m-4"], "f-8", "2026-06-10 Medical Records (scan).pdf",
-         "   \n  ", ownerId="u-12", isUploaded=True),
+    _doc(
+        "m-4",
+        MATTERS["m-4"],
+        "f-8",
+        "2026-06-10 Medical Records (scan).pdf",
+        "   \n  ",
+        ownerId="u-12",
+        isUploaded=True,
+    ),
 ]
 
 
@@ -291,9 +346,7 @@ class FakeClient:
 
     def __init__(self, docs=DOCS, matters=None, staff=STAFF):
         self._docs = docs
-        self._matters = matters or [
-            {"id": mid, "name": name} for mid, name in MATTERS.items()
-        ]
+        self._matters = matters or [{"id": mid, "name": name} for mid, name in MATTERS.items()]
         self._staff = staff
         self.downloaded: list[tuple[str, str]] = []
 
@@ -460,9 +513,7 @@ def test_no_text_layer_is_unknown_and_never_received(report_and_entries):
 
 def test_a_document_with_no_signal_at_all_is_unknown():
     windows = vsc.Windows.of("June 1, 2026\n\nA note with no letterhead and no name.\n")
-    got = vsc.classify_authorship(
-        windows, firm_name=FIRM, roster=vsc.Roster.from_items(STAFF)
-    )
+    got = vsc.classify_authorship(windows, firm_name=FIRM, roster=vsc.Roster.from_items(STAFF))
     assert got.firm_authored == vsc.UNKNOWN
 
 
@@ -470,9 +521,7 @@ def test_litigation_caption_without_a_firm_signal_is_unknown_not_received():
     """Which side of a caption we are on is not determinable from content, so
     the honest answer is `unknown` — not a received row we cannot support."""
     caption_only = SERVED_DISCOVERY.split("PROOF OF SERVICE")[0]
-    got = vsc.classify_authorship(
-        vsc.Windows.of(caption_only), firm_name=FIRM, roster=vsc.Roster.from_items(STAFF)
-    )
+    got = vsc.classify_authorship(vsc.Windows.of(caption_only), firm_name=FIRM, roster=vsc.Roster.from_items(STAFF))
     assert got.firm_authored == vsc.UNKNOWN
     assert "caption" in got.evidence
 
@@ -504,15 +553,11 @@ def test_advisory_signals_are_recorded(report_and_entries):
 def test_flipping_owner_and_upload_flags_changes_no_classification():
     """ownerId identifies the creating user or app, not the author. If it ever
     moves a verdict, the module docstring is lying."""
-    flipped = [
-        {**d, "ownerId": "someone-else", "isUploaded": not d.get("isUploaded")}
-        for d in DOCS
-    ]
+    flipped = [{**d, "ownerId": "someone-else", "isUploaded": not d.get("isUploaded")} for d in DOCS]
     base, _ = vsc.survey(FakeClient(), firm_name=FIRM, vocabulary=VOCAB)
     other, _ = vsc.survey(FakeClient(docs=flipped), firm_name=FIRM, vocabulary=VOCAB)
-    verdicts = lambda rep: {  # noqa: E731
-        r["file_id"]: (r["firm_authored"], r["cohort_proposal"], r["doc_type"])
-        for r in rep["documents"]
+    verdicts = lambda rep: {  # noqa: E731 - test-local shorthand over a report shape; a def adds only a name
+        r["file_id"]: (r["firm_authored"], r["cohort_proposal"], r["doc_type"]) for r in rep["documents"]
     }
     assert verdicts(base) == verdicts(other)
 
@@ -579,10 +624,8 @@ def test_an_unrecognized_shape_is_unclassified_and_never_ranked():
     windows = vsc.Windows.of("A one-line internal note about the parking validation.")
     assert vsc.classify_doc_type(windows) == vsc.UNCLASSIFIED
     rows = [
-        {"firm_authored": True, "doc_type": vsc.UNCLASSIFIED, "matter_id": "m-1",
-         "file_name": "a"},
-        {"firm_authored": True, "doc_type": vsc.UNCLASSIFIED, "matter_id": "m-2",
-         "file_name": "b"},
+        {"firm_authored": True, "doc_type": vsc.UNCLASSIFIED, "matter_id": "m-1", "file_name": "a"},
+        {"firm_authored": True, "doc_type": vsc.UNCLASSIFIED, "matter_id": "m-2", "file_name": "b"},
     ]
     assert vsc.rank_doc_types(rows) == []
 
@@ -637,7 +680,7 @@ def test_everything_not_projected_is_excluded_with_a_reason(report_and_entries):
 def test_rendered_manifest_is_what_the_fetch_bridge_parses(tmp_path: Path, report_and_entries):
     """The end of this script is the start of voice-fetch-corpus.py: its REAL
     manifest loader must accept what we emit, resolved by id."""
-    yaml = pytest.importorskip("yaml")  # noqa: F841
+    yaml = pytest.importorskip("yaml")
     _, entries = report_and_entries
     dest = tmp_path / "exemplars.yaml"
     vsc.write_manifest(entries, str(dest), firm_name=FIRM, generated_at="2026-08-10T00:00:00+00:00")

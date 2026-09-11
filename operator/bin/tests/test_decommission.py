@@ -30,7 +30,6 @@ import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 import pytest
 
@@ -38,13 +37,12 @@ _HERE = Path(__file__).resolve()
 # operator/ on sys.path so `from adapter.audit_log import ...` resolves.
 sys.path.insert(0, str(_HERE.parents[2]))
 
-from adapter.audit_log import (  # noqa: E402
+from adapter.audit_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     ACCEPTED_ACTION_TYPES,
-    AuditEvent,
     AuditLogWriter,
     SqliteExecutor,
 )
-from bin.lib.decommission import (  # noqa: E402
+from bin.lib.decommission import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     DecommissionPipeline,
     DecommissionStepFailed,
     FilesystemTombstoner,
@@ -186,9 +184,14 @@ def test_dry_run_returns_planned_steps_and_does_nothing(tmp_path):
     plan = _run(pipeline.plan())
 
     assert [r.name for r in plan] == [
-        "01_drain", "02_preserve_machine_data", "03_r2_namespace",
-        "04_vectorize_indexes", "05_agentmail", "06_fly_machine",
-        "07_compliance_archive", "08_tombstone",
+        "01_drain",
+        "02_preserve_machine_data",
+        "03_r2_namespace",
+        "04_vectorize_indexes",
+        "05_agentmail",
+        "06_fly_machine",
+        "07_compliance_archive",
+        "08_tombstone",
         "09_observability_cleanup",
     ]
     for r in plan:
@@ -234,9 +237,7 @@ def test_live_runs_full_sequence_and_writes_audit_trail(tmp_path):
     archive = list((tmp_path / "archive" / "smd").glob("compliance-packet-manifest-*.json"))
     assert len(archive) == 1
     # Audit rows: begin/end per step + DECOMMISSION_FINAL.
-    rows = conn.execute(
-        "SELECT action_type FROM audit_log ORDER BY id"
-    ).fetchall()
+    rows = conn.execute("SELECT action_type FROM audit_log ORDER BY id").fetchall()
     action_types = [r[0] for r in rows]
     # Pipeline boundaries + per-step lifecycle rows (2026-06-12 review:
     # steps no longer reuse INITIATED/DRAIN_COMPLETE).
@@ -463,7 +464,25 @@ def test_unwired_backends_empty_when_all_wired(tmp_path):
     assert pipeline.unwired_destructive_backends() == []
 
 
-def test_cli_live_refuses_when_backends_unwired(tmp_path):
+@pytest.fixture
+def _no_ambient_backends(monkeypatch):
+    """The CLI wires real backends from the environment. A unit test must see
+    NONE of them, whatever the developer's shell holds (a logged-in `fly` CLI
+    is enough to wire the Fly destroyer), so the wiring hook is replaced with
+    one that reports everything unwired."""
+    from bin.lib import decommission_cli
+
+    monkeypatch.setattr(
+        decommission_cli,
+        "backends_from_env",
+        lambda slug, root: ({}, {n: False for n in decommission_cli.BACKEND_REQUIREMENTS}),
+    )
+    # Same discipline for the seam preserver: a shell with the runtime-read
+    # env staged would otherwise make this unit test dial a real Machine.
+    monkeypatch.setattr(decommission_cli, "seam_client_from_env", lambda slug: None)
+
+
+def test_cli_live_refuses_when_backends_unwired(tmp_path, _no_ambient_backends):
     from bin.lib.decommission_cli import main
 
     customers_root = _copy_fixture(tmp_path)
@@ -471,6 +490,8 @@ def test_cli_live_refuses_when_backends_unwired(tmp_path):
         [
             "smd",
             "--live",
+            "--confirm-slug",
+            "smd",
             "--customers-root",
             str(customers_root),
             "--archive-root",
@@ -485,7 +506,7 @@ def test_cli_live_refuses_when_backends_unwired(tmp_path):
     assert not list(customers_root.glob("smd.decommissioned.*"))
 
 
-def test_cli_live_allow_unwired_runs_and_tombstones(tmp_path):
+def test_cli_live_allow_unwired_runs_and_tombstones(tmp_path, _no_ambient_backends):
     from bin.lib.decommission_cli import main
 
     customers_root = _copy_fixture(tmp_path)
@@ -493,6 +514,8 @@ def test_cli_live_allow_unwired_runs_and_tombstones(tmp_path):
         [
             "smd",
             "--live",
+            "--confirm-slug",
+            "smd",
             "--allow-unwired",
             "--customers-root",
             str(customers_root),
@@ -506,6 +529,89 @@ def test_cli_live_allow_unwired_runs_and_tombstones(tmp_path):
     # With the explicit override the flow proceeds and tombstones.
     assert not (customers_root / "smd").exists()
     assert len(list(customers_root.glob("smd.decommissioned.*"))) == 1
+
+
+def _untouched(customers_root: Path) -> bool:
+    return (customers_root / "smd" / "customer.yaml").exists() and not list(customers_root.glob("smd.decommissioned.*"))
+
+
+@pytest.mark.parametrize("confirm", [None, "sdm", "SMD"])
+def test_cli_live_requires_confirm_slug(tmp_path, _no_ambient_backends, confirm):
+    """A live run is typed twice. Missing or wrong, it exits 2 before any
+    backend is consulted and before the local audit writer opens."""
+    from bin.lib.decommission_cli import main
+
+    customers_root = _copy_fixture(tmp_path)
+    argv = ["smd", "--live", "--allow-unwired", "--customers-root", str(customers_root)]
+    if confirm is not None:
+        argv += ["--confirm-slug", confirm]
+    argv += ["--archive-root", str(tmp_path / "archive"), "--audit-db", str(tmp_path / "audit.sqlite")]
+    rc = main(argv)
+    assert rc == 2
+    assert _untouched(customers_root)
+    assert not (tmp_path / "audit.sqlite").exists()
+
+
+def test_cli_allow_unwired_refused_without_fixture_root(tmp_path, _no_ambient_backends, monkeypatch):
+    """--allow-unwired skips only the UNWIRED backends; the wired ones still
+    run. So it is refused (exit 5) unless the caller named a customers root
+    outside the repo's real operator/customers."""
+    from bin.lib import decommission_cli
+    from bin.lib.decommission_cli import main
+
+    # Make the "real" root point at this test's fixture copy so the test
+    # never has to touch the repo's actual customers directory.
+    real_root = _copy_fixture(tmp_path)
+    monkeypatch.setattr(decommission_cli, "_default_customers_root", lambda: real_root)
+    common = [
+        "--archive-root",
+        str(tmp_path / "archive"),
+        "--audit-db",
+        str(tmp_path / "audit.sqlite"),
+    ]
+
+    # No --customers-root at all: the default is the real root.
+    rc = main(["smd", "--live", "--confirm-slug", "smd", "--allow-unwired", *common])
+    assert rc == 5
+    assert _untouched(real_root)
+
+    # An explicit --customers-root that IS the real root (or a path under it).
+    rc = main(
+        ["smd", "--live", "--confirm-slug", "smd", "--allow-unwired", "--customers-root", str(real_root), *common]
+    )
+    assert rc == 5
+    assert _untouched(real_root)
+
+    # A fixture root elsewhere is the one shape the flag is for.
+    fixture_root = tmp_path / "elsewhere"
+    fixture_root.mkdir()
+    shutil.copytree(real_root / "smd", fixture_root / "smd")
+    rc = main(
+        ["smd", "--live", "--confirm-slug", "smd", "--allow-unwired", "--customers-root", str(fixture_root), *common]
+    )
+    assert rc == 0
+    assert _untouched(real_root)
+    assert not (fixture_root / "smd").exists()
+
+
+def test_cli_dry_run_ignores_confirm_slug(tmp_path, _no_ambient_backends):
+    from bin.lib.decommission_cli import main
+
+    customers_root = _copy_fixture(tmp_path)
+    rc = main(
+        [
+            "smd",
+            "--dry-run",
+            "--customers-root",
+            str(customers_root),
+            "--archive-root",
+            str(tmp_path / "archive"),
+            "--audit-db",
+            str(tmp_path / "audit.sqlite"),
+        ]
+    )
+    assert rc == 0
+    assert _untouched(customers_root)
 
 
 # ---------------------------------------------------------------------------
@@ -575,7 +681,7 @@ def test_compliance_archiver_writes_manifest(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-from bin.lib.decommission import (  # noqa: E402
+from bin.lib.decommission import (  # noqa: E402 - the package import follows the fixture prelude the module builds above
     InMemoryAuditLogPreserver,
     VERTICAL_AUDIT_LOG_DAYS_DEFAULTS,
     resolve_audit_log_days,
@@ -682,10 +788,7 @@ def test_step_2_runs_audit_log_preservation_before_memory_voice(tmp_path):
     assert Path(preserved["archive_path"]).exists()
     # Carve-out emits its own audit row distinct from the canonical
     # memory + voice cleanup row.
-    rows = conn.execute(
-        "SELECT metadata FROM audit_log "
-        "WHERE action_type = 'DECOMMISSION_STEP_COMPLETE'"
-    ).fetchall()
+    rows = conn.execute("SELECT metadata FROM audit_log WHERE action_type = 'DECOMMISSION_STEP_COMPLETE'").fetchall()
     carve_out = [r[0] for r in rows if "audit_log_preserved" in (r[0] or "")]
     assert carve_out, "expected at least one audit row tagged with audit_log_preserved"
     # The carve-out row records the resolved retention window + deadline.

@@ -38,20 +38,21 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from workspace_broker.msgraph_auth import (  # noqa: E402
+from workspace_broker.transmit_verbs import dispatch_transmit
+from workspace_broker.msgraph_auth import (
     load_credential,
     materialize_credential,
     seat_mailbox,
 )
-from workspace_broker.msgraph_ops import (  # noqa: E402
+from workspace_broker.msgraph_ops import (
     AUDIT_ROW_HEADER,
     MsGraphOps,
     _audit_header_of,
     MsGraphRefused,
     MsGraphTransportError,
 )
-from workspace_broker.recipient_policy import sender_key  # noqa: E402
-from workspace_broker.server import Broker  # noqa: E402
+from workspace_broker.recipient_policy import sender_key
+from workspace_broker.server import Broker
 
 GATEWAY_PID = 42
 AGENT_UID = 1000
@@ -170,7 +171,7 @@ class FakeGraph:
         self.transmitted_headers: list[list[dict]] = []
         self.sent_items_reads = 0
 
-    def __call__(self, request, timeout=None):  # noqa: ANN001 - urllib signature
+    def __call__(self, request, timeout=None):
         url = request.full_url
         raw = request.data
         body: dict | None = None
@@ -185,9 +186,7 @@ class FakeGraph:
             # in the Authorization header rather than invisibly "working".
             form = urllib.parse.parse_qs((raw or b"").decode())
             client_id = (form.get("client_id") or ["?"])[0]
-            return _Response(
-                json.dumps({"access_token": f"tok-{client_id}", "expires_in": 3600})
-            )
+            return _Response(json.dumps({"access_token": f"tok-{client_id}", "expires_in": 3600}))
         self.auths.append((url, request.get_header("Authorization") or ""))
         if request.method == "GET" and "/mailFolders/sentitems/messages" in url:
             return self._sent_items()
@@ -216,9 +215,7 @@ class FakeGraph:
     def _sent_items(self) -> _Response:
         self.sent_items_reads += 1
         if self._sent_items_status is not None:
-            raise urllib.error.HTTPError(
-                "sentitems", self._sent_items_status, "nope", {}, None
-            )  # type: ignore[arg-type]
+            raise urllib.error.HTTPError("sentitems", self._sent_items_status, "nope", {}, None)  # type: ignore[arg-type]
         if self.sent_items_reads <= self._sent_items_misses:
             return _Response(json.dumps({"value": []}))
         headers = self.transmitted_headers[-1] if self.transmitted_headers else []
@@ -276,15 +273,11 @@ def _seat(tmp_path: Path, yaml_text: str = STAGING_YAML) -> tuple[Path, Path, Pa
     customer = tmp_path / "customer.yaml"
     customer.write_text(yaml_text)
     credential = tmp_path / "msgraph.json"
-    credential.write_text(
-        json.dumps({"tenant_id": "tid", "client_id": "cid-send", "client_secret": "shh"})
-    )
+    credential.write_text(json.dumps({"tenant_id": "tid", "client_id": "cid-send", "client_secret": "shh"}))
     # The two-app fence's second file: the READ app's credential, distinct
     # client_id so token routing is observable (overlay#280).
     read_credential = tmp_path / "msgraph-read.json"
-    read_credential.write_text(
-        json.dumps({"tenant_id": "tid", "client_id": "cid-read", "client_secret": "shh2"})
-    )
+    read_credential.write_text(json.dumps({"tenant_id": "tid", "client_id": "cid-read", "client_secret": "shh2"}))
     return customer, credential, read_credential
 
 
@@ -541,9 +534,7 @@ def test_reply_uses_the_fetched_sender_not_a_supplied_one(tmp_path: Path) -> Non
     http = FakeGraph(source_from=UNAUTHORED)
     ops = _ops(tmp_path, http)
     with pytest.raises(MsGraphRefused):
-        ops.reply(
-            {"message_id": "AAMk123", "comment": "sure", "from": "scott@smd.services"}
-        )
+        ops.reply({"message_id": "AAMk123", "comment": "sure", "from": "scott@smd.services"})
 
 
 def test_reply_refuses_when_the_sender_cannot_be_determined(tmp_path: Path) -> None:
@@ -794,9 +785,7 @@ def test_a_materialized_credential_is_0600(tmp_path: Path, monkeypatch) -> None:
     assert load_credential(target)["client_secret"] == "shh"
 
 
-@pytest.mark.parametrize(
-    "content", ["", "not json", "[]", json.dumps({"tenant_id": "t", "client_id": "c"})]
-)
+@pytest.mark.parametrize("content", ["", "not json", "[]", json.dumps({"tenant_id": "t", "client_id": "c"})])
 def test_an_unusable_credential_file_reads_as_absent(tmp_path: Path, content: str) -> None:
     """Every failure mode collapses to "no credential", so a truncated or partial
     file refuses rather than half-attempting a send with a partial value."""
@@ -818,7 +807,7 @@ def test_the_client_secret_never_appears_in_a_token_error(tmp_path: Path) -> Non
     of those parameters is the secret. Status only, never the body."""
     import urllib.error
 
-    def _reject(request, timeout=None):  # noqa: ANN001
+    def _reject(request, timeout=None):
         raise urllib.error.HTTPError(request.full_url, 401, "Unauthorized", {}, None)
 
     customer, credential, _read = _seat(tmp_path)
@@ -911,7 +900,7 @@ def test_a_transport_failure_is_not_recorded_as_a_refusal(tmp_path: Path) -> Non
     ledger's own language, and the reconciler reads this field."""
     import urllib.error
 
-    def _boom(request, timeout=None):  # noqa: ANN001
+    def _boom(request, timeout=None):
         if request.full_url.endswith("/token"):
             return _Response(json.dumps({"access_token": "tok", "expires_in": 3600}))
         raise urllib.error.HTTPError(request.full_url, 503, "nope", {}, None)
@@ -989,7 +978,7 @@ def test_the_reply_verb_writes_its_own_row(tmp_path: Path) -> None:
 
 
 def test_the_send_row_carries_the_session_and_the_matter(tmp_path: Path) -> None:
-    """FALSIFIER: drop the two kwargs from the _append_send_row call and both
+    """FALSIFIER: drop the two kwargs from the append_send_row call and both
     assertions fail while every other row assertion in this file stays green,
     which is exactly how the gap survived."""
     broker = _broker(tmp_path, FakeGraph())
@@ -1048,7 +1037,7 @@ def test_a_caller_that_sends_no_joins_writes_the_row_it_writes_today(tmp_path: P
 
 
 def test_audit_extra_rides_the_msgraph_row_through_the_same_allowlist(tmp_path: Path) -> None:
-    """The Graph channel shares ``_dispatch_transmit`` with AgentMail ON PURPOSE
+    """The Graph channel shares ``transmit_verbs.dispatch_transmit`` with AgentMail ON PURPOSE
     (one audit writer, no forked copy to drift), but until this test nothing
     on the paying seat's channel proved the caller stamps arrive here at all.
     Same closed allowlist, same column placement: the body stamps land in
@@ -1186,9 +1175,7 @@ def test_the_sender_key_matches_the_overlay_recipe(tmp_path: Path) -> None:
     """
     import hashlib
 
-    assert sender_key("scott@smd.services") == hashlib.sha256(
-        b"scott@smd.services"
-    ).hexdigest()
+    assert sender_key("scott@smd.services") == hashlib.sha256(b"scott@smd.services").hexdigest()
     assert sender_key("  Scott@SMD.Services  ") == sender_key("scott@smd.services")
     assert sender_key("Scott Durgan <scott@smd.services>") == sender_key("scott@smd.services")
     assert sender_key("") is None
@@ -1222,20 +1209,12 @@ def test_the_header_is_recognised_whatever_case_it_comes_back_in(wire_name: str)
     Asserted over the helper rather than through a send, because the fake mailbox
     can only replay ONE casing and a test that pins that casing pins the fixture
     rather than the property."""
-    assert (
-        _audit_header_of({"internetMessageHeaders": [{"name": wire_name, "value": "01ABC"}]})
-        == "01ABC"
-    )
+    assert _audit_header_of({"internetMessageHeaders": [{"name": wire_name, "value": "01ABC"}]}) == "01ABC"
 
 
 def test_a_foreign_header_is_not_read_as_the_audit_one() -> None:
     """The other half: case-insensitive must not mean loose."""
-    assert (
-        _audit_header_of(
-            {"internetMessageHeaders": [{"name": "x-ms-exchange-crosstenant", "value": "01ABC"}]}
-        )
-        == ""
-    )
+    assert _audit_header_of({"internetMessageHeaders": [{"name": "x-ms-exchange-crosstenant", "value": "01ABC"}]}) == ""
 
 
 def test_every_send_carries_an_audit_header(tmp_path: Path) -> None:
@@ -1243,9 +1222,7 @@ def test_every_send_carries_an_audit_header(tmp_path: Path) -> None:
     ops = _ops(tmp_path, http)
     result = ops.send({"to": ["scott@smd.services"], "body_text": "x"})
     _m, _u, body = http.graph_posts()[0]
-    assert body["message"]["internetMessageHeaders"] == [
-        {"name": AUDIT_ROW_HEADER, "value": result["audit_row_token"]}
-    ]
+    assert body["message"]["internetMessageHeaders"] == [{"name": AUDIT_ROW_HEADER, "value": result["audit_row_token"]}]
 
 
 def test_the_header_value_is_the_token_written_onto_the_row(tmp_path: Path) -> None:
@@ -1401,7 +1378,7 @@ def test_a_non_400_reply_failure_still_propagates(tmp_path: Path) -> None:
     original = http._record_transmit
     attempts: list[str] = []
 
-    def explode(url, body):  # noqa: ANN001 - test double
+    def explode(url, body):
         # ONCE, not always. A double that failed every attempt would let a
         # "retry everything" implementation pass this test by failing its retry
         # too — the mutation would be invisible behind the double.
@@ -1506,11 +1483,11 @@ def test_an_agentmail_shaped_result_writes_exactly_the_row_it_writes_today(
     reasoned about, because "AgentMail is unaffected" is the kind of claim that
     is true right up until someone copies a result wholesale."""
     broker = _broker(tmp_path, FakeGraph())
-    broker._dispatch_transmit(
+    dispatch_transmit(
+        broker,
         "agentmail_send",
         {"payload": {"to": ["scott@smd.services"], "text": "hi"}},
-        send=lambda _p: {"message_id": "<am-1>", "recipients": ["scott@smd.services"],
-                         "inbox_id": "seat@agentmail.to"},
+        send=lambda _p: {"message_id": "<am-1>", "recipients": ["scott@smd.services"], "inbox_id": "seat@agentmail.to"},
         reply=lambda _p: {},
         refused=MsGraphRefused,
         transport=MsGraphTransportError,

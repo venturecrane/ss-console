@@ -4,6 +4,7 @@ truncates or fails (the earlier version retried the identical batch, which
 could only truncate again, then gave up, and 34 merged clusters were silently
 missing from the document). Paid (mechanical tier).
 """
+
 from __future__ import annotations
 
 import time
@@ -18,17 +19,27 @@ MAX_TOKENS = 32_000
 MAX_DEPTH = 4
 
 
-def _run_batch(sr: StageRun, d: Path, model: str, system: str, text: str, label: str, hd: mf.Headings,
-               depth: int = 0) -> list[str] | None:
+def _run_batch(
+    sr: StageRun, d: Path, model: str, system: str, text: str, label: str, hd: mf.Headings, depth: int = 0
+) -> list[str] | None:
     r = None
     try:
-        r = sr.doorway.call("merge", model=model, system=system, messages=[{"role": "user", "content": text}],
-                            max_tokens=MAX_TOKENS, stream=True, custom_id=f"merge{label}")
-    except Exception as exc:  # noqa: BLE001
+        r = sr.doorway.call(
+            "merge",
+            model=model,
+            system=system,
+            messages=[{"role": "user", "content": text}],
+            max_tokens=MAX_TOKENS,
+            stream=True,
+            custom_id=f"merge{label}",
+        )
+    except Exception as exc:  # noqa: BLE001 - a doorway failure on one batch is logged; the stage falls back to splitting the batch below
         sr.log(f"  merge {label} failed: {str(exc)[:110]}")
     if r is not None:
-        append_jsonl(d / "usage.jsonl", {"chunk": f"merge{label}", "in": r.usage.input_tokens,
-                                         "out": r.usage.output_tokens, "stop": r.stop_reason})
+        append_jsonl(
+            d / "usage.jsonl",
+            {"chunk": f"merge{label}", "in": r.usage.input_tokens, "out": r.usage.output_tokens, "stop": r.stop_reason},
+        )
         if r.stop_reason != "max_tokens":
             rc, rep = mf.check(text, r.text, hd)
             if rc == 0:

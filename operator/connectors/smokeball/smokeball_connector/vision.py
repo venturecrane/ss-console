@@ -261,9 +261,7 @@ def transcribe_pdf(blob: bytes, *, pages: int) -> VisionOutcome:
         # transcription, and caching one would put it in front of an attorney
         # as if it were the record.
         return VisionOutcome(reason=REASON_INCOMPLETE)
-    return VisionOutcome(
-        text=_compose(transcripts), pages_read=len(transcripts), stop_reason="end_turn"
-    )
+    return VisionOutcome(text=_compose(transcripts), pages_read=len(transcripts), stop_reason="end_turn")
 
 
 def _transcribe_page(page_pdf: bytes) -> tuple[str, str | None, str | None]:
@@ -358,7 +356,7 @@ def _stream(body: bytes, headers: dict[str, str]) -> tuple[str, str | None]:
                         stop_reason = str(delta.get("stop_reason"))
     except _StreamFailed:
         raise
-    except Exception as exc:  # noqa: BLE001 — any transport fault is an api_error
+    except Exception as exc:
         raise _StreamFailed(exc.__class__.__name__) from exc
     finally:
         close = getattr(client, "close", None)
