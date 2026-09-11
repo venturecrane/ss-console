@@ -21,6 +21,7 @@ What it holds itself to:
   cgroup controller was present; boot smoke reads it). No Sentry here or in
   the child: exception locals carry the envelope.
 """
+
 from __future__ import annotations
 
 import json
@@ -58,9 +59,20 @@ WAKE_SECRET_ENV = "WEBHOOK_SECRET_MCP"
 WAKE_MAX_ATTEMPTS = 5
 CHILD_UID_NAME = "medchron"
 CGROUP_ROOT = Path("/sys/fs/cgroup")
-CHILD_ENV_PASS = ("ANTHROPIC_API_KEY", "SMOKEBALL_REGION", "SMOKEBALL_ENVIRONMENT", "SMOKEBALL_CLIENT_ID",
-                  "SMOKEBALL_CLIENT_SECRET", "SMOKEBALL_API_KEY", "SMOKEBALL_AUTH_MODE", "SMOKEBALL_ACCOUNT_ID",
-                  "SMOKEBALL_REFRESH_TOKEN_FILE", "MEDCHRON_FIRM_CONFIG", "MEDCHRON_PRICING_JSON", "CUSTOMER_SLUG")
+CHILD_ENV_PASS = (
+    "ANTHROPIC_API_KEY",
+    "SMOKEBALL_REGION",
+    "SMOKEBALL_ENVIRONMENT",
+    "SMOKEBALL_CLIENT_ID",
+    "SMOKEBALL_CLIENT_SECRET",
+    "SMOKEBALL_API_KEY",
+    "SMOKEBALL_AUTH_MODE",
+    "SMOKEBALL_ACCOUNT_ID",
+    "SMOKEBALL_REFRESH_TOKEN_FILE",
+    "MEDCHRON_FIRM_CONFIG",
+    "MEDCHRON_PRICING_JSON",
+    "CUSTOMER_SLUG",
+)
 TERMINAL = frozenset({"delivered", "failed"})
 
 
@@ -150,8 +162,18 @@ def memory_cap_mode(cgroup_root: Path = CGROUP_ROOT) -> str:
 
 
 def default_runner_cmd() -> list[str]:
-    return ["setpriv", f"--reuid={CHILD_UID_NAME}", f"--regid={CHILD_UID_NAME}", "--init-groups", "--no-new-privs",
-            "nice", "-n", "10", RUNNER_BIN, "run"]
+    return [
+        "setpriv",
+        f"--reuid={CHILD_UID_NAME}",
+        f"--regid={CHILD_UID_NAME}",
+        "--init-groups",
+        "--no-new-privs",
+        "nice",
+        "-n",
+        "10",
+        RUNNER_BIN,
+        "run",
+    ]
 
 
 @dataclass
@@ -190,10 +212,17 @@ class Daemon:
     # -- liveness ------------------------------------------------------------
     def heartbeat(self, *, running: str | None) -> None:
         cap = memory_cap_mode(self.cgroup_root)
-        payload = {"pid": os.getpid(), "started_at": self.started_at, "last_poll_at": self.clock(),
-                   "jobs_run": self.jobs_run, "running": running, "memory_cap": cap,
-                   "queued": len(self._queued()), "wakes_pending": len(self._wakes_pending()),
-                   "wakes_failed": self.wakes_failed}
+        payload = {
+            "pid": os.getpid(),
+            "started_at": self.started_at,
+            "last_poll_at": self.clock(),
+            "jobs_run": self.jobs_run,
+            "running": running,
+            "memory_cap": cap,
+            "queued": len(self._queued()),
+            "wakes_pending": len(self._wakes_pending()),
+            "wakes_failed": self.wakes_failed,
+        }
         tmp = self.run_dir / ".heartbeat.tmp"
         try:
             tmp.write_text(json.dumps(payload), encoding="utf-8")
@@ -283,8 +312,15 @@ class Daemon:
             # a job that resolved controls there refused forever (2026-09-04).
             "install_root": str(self.run_dir),
         }
-        for key in ("injuries", "cap_usd", "allowance_remaining_documents", "allowance_remaining_pages",
-                    "selection", "requested_by", "request_ref"):
+        for key in (
+            "injuries",
+            "cap_usd",
+            "allowance_remaining_documents",
+            "allowance_remaining_pages",
+            "selection",
+            "requested_by",
+            "request_ref",
+        ):
             if env.get(key) is not None:
                 doc[key] = env[key]
         # The month's state is read FRESH here, on every run and every resume,
@@ -319,7 +355,8 @@ class Daemon:
             os.chown(p, pw.pw_uid, pw.pw_gid)
         # The child owns its job dir outright; nobody else needs a mode bit
         # (root reads regardless, and the broker never traverses jobs/).
-        os.chmod(path, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions - owner-only; the rule fires on any chmod, and 0700 is the tightest mode that lets the child write its own workdir.
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions - owner-only; the rule fires on any chmod, and 0700 is the tightest mode that lets the child write its own workdir.
+        os.chmod(path, 0o700)
 
     def _cgroup_preexec(self) -> Callable[[], None] | None:
         mode = memory_cap_mode(self.cgroup_root)
@@ -375,9 +412,15 @@ class Daemon:
         log = (jd / "daemon.log").open("a", encoding="utf-8")
         pidfile = self.run_dir / "child.pid"
         try:
-            proc = subprocess.Popen([*self.runner_cmd, str(jd), "--json"], cwd=str(jd), env=env,
-                                    stdout=subprocess.PIPE, stderr=log, text=True,
-                                    preexec_fn=self._cgroup_preexec())
+            proc = subprocess.Popen(
+                [*self.runner_cmd, str(jd), "--json"],
+                cwd=str(jd),
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=log,
+                text=True,
+                preexec_fn=self._cgroup_preexec(),
+            )
             pidfile.write_text(str(proc.pid))
             out, _ = proc.communicate()
             code = proc.returncode
@@ -425,8 +468,10 @@ class Daemon:
         finished = self.clock() if state in TERMINAL or state == "held" else None
         self._write_state(job_id, state=state, finished_at=finished, reason=fields.get("reason"))
         if finished is not None:
-            self._write_state(job_id, wake={"pending": True, "attempts": 0,
-                                            "task": self._compose_wake(job_id, state, fields, stage=stage)})
+            self._write_state(
+                job_id,
+                wake={"pending": True, "attempts": 0, "task": self._compose_wake(job_id, state, fields, stage=stage)},
+            )
         return state
 
     # -- the deliver wake (ss#2616) --------------------------------------------
@@ -468,8 +513,9 @@ class Daemon:
     def _wakes_pending(self) -> list[str]:
         if not self.jobs.is_dir():
             return []
-        return [d.name for d in sorted(self.jobs.iterdir())
-                if (self._daemon_state(d.name).get("wake") or {}).get("pending")]
+        return [
+            d.name for d in sorted(self.jobs.iterdir()) if (self._daemon_state(d.name).get("wake") or {}).get("pending")
+        ]
 
     def dispatch_wakes(self) -> None:
         """At-most-once with a loud loss: consumed on a 2xx answer AND on a
@@ -494,9 +540,12 @@ class Daemon:
                 try:
                     conn.connect()
                     sent = True
-                    conn.request("POST", "/webhooks/handoff", body=body,
-                                 headers={"Content-Type": "application/json",
-                                          "Authorization": f"Bearer {self.wake_secret}"})
+                    conn.request(
+                        "POST",
+                        "/webhooks/handoff",
+                        body=body,
+                        headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.wake_secret}"},
+                    )
                     resp = conn.getresponse()
                     raw = resp.read()
                     if 200 <= resp.status < 300:
@@ -517,8 +566,9 @@ class Daemon:
                 logger.info("seat paused; wake for %s stays pending without consuming an attempt", job_id)
                 continue
             wake["attempts"] = int(wake.get("attempts", 0)) + 1
-            logger.warning("wake for %s failed (%s), attempt %d/%d", job_id, outcome, wake["attempts"],
-                           WAKE_MAX_ATTEMPTS)
+            logger.warning(
+                "wake for %s failed (%s), attempt %d/%d", job_id, outcome, wake["attempts"], WAKE_MAX_ATTEMPTS
+            )
             if wake["attempts"] >= WAKE_MAX_ATTEMPTS:
                 wake.update(pending=False, outcome=f"failed: {outcome}")
                 self.wakes_failed += 1
@@ -573,7 +623,7 @@ class Daemon:
         while not stop():
             try:
                 self.tick()
-            except Exception:  # noqa: BLE001 - the loop outlives any single tick
+            except Exception:
                 logger.exception("tick failed")
             slept = 0.0
             while slept < poll_seconds and not stop():
@@ -590,16 +640,22 @@ def _require(name: str) -> str:
 
 def build() -> Daemon:
     run_dir = Path(os.environ.get(RUN_DIR_ENV) or DEFAULT_RUN_DIR)
-    return Daemon(run_dir=run_dir, broker=BrokerClient(_require(SOCKET_ENV)), runner_cmd=default_runner_cmd(),
-                  customer_slug=_require("CUSTOMER_SLUG"),
-                  sticky_db=os.environ.get(STICKY_DB_ENV) or DEFAULT_STICKY_DB,
-                  memory_max=int(os.environ.get(MEMORY_MAX_ENV) or DEFAULT_MEMORY_MAX),
-                  wipe_hours=float(os.environ.get(WIPE_HOURS_ENV) or DEFAULT_WIPE_HOURS), child_uid=CHILD_UID_NAME)
+    return Daemon(
+        run_dir=run_dir,
+        broker=BrokerClient(_require(SOCKET_ENV)),
+        runner_cmd=default_runner_cmd(),
+        customer_slug=_require("CUSTOMER_SLUG"),
+        sticky_db=os.environ.get(STICKY_DB_ENV) or DEFAULT_STICKY_DB,
+        memory_max=int(os.environ.get(MEMORY_MAX_ENV) or DEFAULT_MEMORY_MAX),
+        wipe_hours=float(os.environ.get(WIPE_HOURS_ENV) or DEFAULT_WIPE_HOURS),
+        child_uid=CHILD_UID_NAME,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
-    logging.basicConfig(level=os.environ.get("SMD_MEDCHRON_LOG_LEVEL", "INFO"),
-                        format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    logging.basicConfig(
+        level=os.environ.get("SMD_MEDCHRON_LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s"
+    )
     stopped = {"flag": False}
 
     def _stop(*_: Any) -> None:
@@ -613,8 +669,9 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("medchron daemon not started: %s", exc)
         return 2
     if memory_cap_mode(d.cgroup_root) == "none":
-        logger.error("no cgroup memory controller at %s; jobs will run UNCAPPED (boot smoke fails on this)",
-                     d.cgroup_root)
+        logger.error(
+            "no cgroup memory controller at %s; jobs will run UNCAPPED (boot smoke fails on this)", d.cgroup_root
+        )
     poll = float(os.environ.get(POLL_ENV) or 5)
     logger.info("medchron daemon up: run_dir=%s poll=%ss", d.run_dir, poll)
     d.run_forever(stop=lambda: stopped["flag"], poll_seconds=poll)

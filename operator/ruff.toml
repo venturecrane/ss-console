@@ -1,51 +1,64 @@
 # Ruff configuration for the Python operator tree.
 #
-# WHY THIS EXISTS. Before this file, `operator/` carried 261 `# noqa`
-# annotations across 121 files naming 12 distinct rule codes — and no ruff,
-# flake8, bandit, mypy or black configuration existed anywhere in the
-# repository. Every one of those suppressions was inert. People had written
-# careful justifications ("fixed argv, no shell, paths we wrote" at
-# connectors/smokeball/smokeball_connector/record_check.py:246, "https enforced
-# at construction" at bin/lib/seam_pull.py:129) for a linter that never ran.
-# This file is the missing half.
+# WHY THIS EXISTS. Before this file (2026-08-24), `operator/` carried 261
+# `# noqa` annotations for a linter that never ran; every one was inert.
+# This file is the missing half, and it is A GATE, NOT A BASELINE: every rule
+# selected below reports zero violations across the tree, so it blocks new
+# violations outright rather than freezing a debt pile.
 #
-# THIS IS A GATE, NOT A BASELINE. The selection below is exactly the set that
-# reports ZERO violations across the whole tree today, so it blocks new
-# violations outright rather than freezing a debt pile. That is a deliberate
-# trade: a narrow rule set that actually fails is worth more than a broad one
-# carrying an allowlist that quietly grows. The selected codes activate 106 of
-# the existing suppressions (102 × E402, 2 × E731, 2 × S102).
+# 2026-09-10 (code review, Code Quality 6). Three rules were added and the
+# suppression pile was made honest in the same change:
+#   * BLE001 and F401 are enabled. The 210 BLE001 and 28 F401 suppressions
+#     that already existed now mean something; the 11 uncovered blind-excepts
+#     and 47 unused imports were fixed at the site.
+#   * RUF100 (unused-noqa) is enabled, so a `# noqa` naming a rule ruff does
+#     not enable is a lint error, not prose. 88 inert annotations left the
+#     tree; the ~25 that named ANN001, SLF001, F403, F841, ARG002 are gone.
+#   * bin/noqa-reasons.py (run in operator-substrate.yml) requires every
+#     surviving suppression to carry ` - ` and a reason of 20+ characters.
+#     Do NOT add a blanket `# noqa` to widen this selection: that trades a real
+#     gate for the appearance of one, which is the failure this file exists
+#     to end.
 #
-# WHAT IS NOT SELECTED, AND WHY. Each of these fires today, so selecting it
-# would require either mass edits inside a refactor PR or an allowlist that
-# defeats the point. Counts measured 2026-08-24 with
-# `ruff check --select <code> --statistics`, reported as ALL / NON-TEST:
+# WHAT IS STILL NOT SELECTED, AND WHY (counts as ALL / NON-TEST, 2026-08-24
+# unless noted). Each fires today, so selecting it needs a reason at every
+# uncovered site, not an allowlist:
 #
 #   S101   4889 / —     assert. Correct in pytest; would need a test-file carve-out.
-#   E501   2119 / —     line-too-long. No Python line-length convention exists in
-#                       this repo; picking one is a formatter decision, not this PR's.
-#   ANN001 1287 / —     missing arg annotations. 62% of defs are annotated already
-#                       (2955/4732), so this is a real project, not a sweep.
+#   E501   2119 / —     line-too-long. `ruff format` at line-length 120 now runs
+#                       (wave 2b); selecting E501 is the follow-up once the
+#                       long string literals it would flag are decided.
+#   ANN001 1287 / —     missing arg annotations. pyright (pyproject.toml,
+#                       ratcheted) is the type gate now.
 #   SLF001  166 / 9     private-member-access.
 #   S106     62 / 0     hardcoded-password-func-arg — every hit is in a test.
 #   ARG002   36 / 5     unused method argument.
-#   F        34 / 18    mostly F401 unused-import; auto-fixable, but 18 non-test
-#                       edits across unrelated files is scope creep in a refactor PR.
-#   S310     30 / 30    suspicious-url-open. 5 sites already carry a noqa.
-#   S603     29 / 19    subprocess-without-shell. 1 site already carries a noqa.
+#   S310     30 / 25    suspicious-url-open.      } listed under `external`
+#   S603     29 / 18    subprocess-without-shell. } below so their existing,
+#   S608     11 / 8     hardcoded-sql-expression. } reasoned noqa survive.
 #   S105     21 / 13    hardcoded-password-string.
 #   S110     14 / 14    try-except-pass.
-#   S608     11 / 10    hardcoded-sql-expression. 2 sites already carry a noqa.
 #   S103      6 / 1     bad-file-permissions.
-#   BLE001    5 / 5     blind-except. 136 sites already carry a noqa — the
-#                       suppressions are doing their job; only 5 are uncovered.
 #
-# Widening this selection is tracked separately. BLE001 (5 sites) and S607
-# (1 non-test site) are the cheapest next steps; F401 is the highest value per
-# edit. Do NOT widen it by adding blanket `# noqa` — that trades a real gate for
-# the appearance of one, which is the failure this file was written to end.
+# CI pins ruff 0.15.17 (operator-substrate.yml). Check locally with the same
+# version (`uvx ruff@0.15.17 check .`): RUF100 follows each version's BLE001
+# exemptions, so a different local version can disagree with the gate at a
+# handful of logged handlers.
+#
+# Complexity (C901) and function length are NOT ruff-selected either: they are
+# ratcheted per function by bin/tests/test_function_size_ratchet.py from
+# contracts/operator-function-size.json, the same shape as the module-size
+# ratchet, so the 32 + 51 existing entries can only shrink.
 
 target-version = "py311"
+
+# One line length, one formatter (2026-09-10 review, Code Quality 7: no
+# Python line-length convention existed; `ruff check --select E501` reported
+# 4,346 lines at 88 and 380 at 120, so 120 is the width the tree already
+# writes to). `ruff format --check` runs in operator-substrate.yml; a file
+# that is not formatted is a red check, the same way prettier gates the
+# TypeScript half.
+line-length = 120
 
 # Vendored virtualenvs and caches are not our source.
 extend-exclude = [
@@ -56,9 +69,48 @@ extend-exclude = [
 ]
 
 [lint]
+# Rules ruff does NOT enable here but whose `# noqa` annotations are kept on
+# purpose: the nine S310 / S603 / S608 suppressions carry the tree's written
+# security reasoning (why a URL open, a subprocess, or an inlined SQL literal is
+# safe at that site). RUF100 would otherwise delete them as inert. Listing them
+# here keeps them, and the noqa-reasons gate (bin/noqa-reasons.py) still
+# requires each to carry its reason. Enabling the three rules outright is the
+# follow-up; it needs a reason at every uncovered site (S310 25, S603 18, S608 8
+# on 2026-09-10), not a blanket noqa.
+external = ["S310", "S603", "S608"]
+
 select = [
-    "E4", # import placement — activates the 102 existing E402 suppressions
-    "E7", # statement-level pycodestyle, incl. E731 lambda-assignment (2 suppressions)
+    "E4", # import placement — activates the E402 suppressions on the sys.path shims
+    "E7", # statement-level pycodestyle, incl. E731 lambda-assignment
     "E9", # syntax and IO errors ruff cannot parse past
     "S102", # exec-builtin — activates the 2 existing suppressions
+    # 2026-09-10 (code review, Code Quality 6): the three rules that turn the
+    # suppression pile from prose into a gate.
+    "BLE001", # blind-except: 210 suppressions already existed for a rule that never ran
+    "F401", # unused-import: highest value per edit; 28 suppressions were already in place
+    "RUF100", # unused-noqa: a `# noqa` naming a rule ruff does not enable is deleted, not kept
 ]
+
+[format]
+# The ten overlay twins (contracts/overlay-pairs.json adapterPath) are
+# byte-identical mirrors of overlay runtime files, and the five skill copies
+# of escalation_ledger.py are byte-identical to that twin
+# (tests/test_escalation_ledger_sync.py). Formatting them is a PAIRED
+# cross-repo change (ss-console first, then the overlay, then the pin bump),
+# not a one-repo chore, so the formatter skips them until that pair ships.
+exclude = [
+    "adapter/voice/transform.py",
+    "adapter/audit_log.py",
+    "adapter/namespace_assertion.py",
+    "adapter/d1_env.py",
+    "workspace_broker/chain.py",
+    "safety-substrate/citation_filter.py",
+    "safety-substrate/identifier_filter.py",
+    "adapter/recipient_classifier.py",
+    "workspace_broker/escalation_ledger.py",
+    "safety-substrate/sticky_stop.py",
+    "skills/*/escalation_ledger.py",
+]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = false

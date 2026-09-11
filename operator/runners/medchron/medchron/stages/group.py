@@ -16,6 +16,7 @@ first, against the original string, because a department-first record name
 ("Internal Medicine, Example Health System Fairfield") otherwise loses its brand
 to the trailing-bare-name rule and draws a lane per department.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,9 +28,26 @@ from .base import StageRun, read_json
 
 # Generic filing-convention folder names: a document kind, never a provider.
 # An open set; the undated-lane presumption below is the structural backstop.
-KIND_FOLDERS = {"MEDICAL", "RECORDS", "BILLS", "INVOICES", "REFERRALS", "REPORTS", "BILLING", "AUTHS",
-                "CORRESPONDENCE", "MISC", "OTHER", "(EMAIL ATTACHMENT)", "EMAILS", "EMAILS ALL", "PHOTOS", "MEDIA",
-                "PLEADINGS", "DISCOVERY"}
+KIND_FOLDERS = {
+    "MEDICAL",
+    "RECORDS",
+    "BILLS",
+    "INVOICES",
+    "REFERRALS",
+    "REPORTS",
+    "BILLING",
+    "AUTHS",
+    "CORRESPONDENCE",
+    "MISC",
+    "OTHER",
+    "(EMAIL ATTACHMENT)",
+    "EMAILS",
+    "EMAILS ALL",
+    "PHOTOS",
+    "MEDIA",
+    "PLEADINGS",
+    "DISCOVERY",
+}
 CRED = r"M\.?D|D\.?O|D\.?C|P\.?T|N\.?P|PA-?C|LCSW|Au\.?D|R\.?N|M\.?A|D\.?P\.?M|O\.?D|Ph\.?D"
 CLINICIAN = re.compile(rf"\s*\([^()]*?\b(?:{CRED})\b[^()]*\)", re.I)
 # The name atom takes a star, not a plus: a middle initial otherwise fails the
@@ -43,7 +61,8 @@ BARE_NAME = re.compile(rf"^\s*{NAME}\s*$")
 FACILITY_WORD = re.compile(
     r"(?i)\b(department|dept|center|centre|clinic|hospital|medicine|medical|imaging|radiology|lab|laboratory|"
     r"therapy|surgery|surgical|health|orthoped|neurolog|chiropractic|emergency|urgent|care|associates|group|"
-    r"institute|services|pharmacy|periop|oncology|cancer)\b")
+    r"institute|services|pharmacy|periop|oncology|cancer)\b"
+)
 CORP = re.compile(r"(?i)^(inc|llc|l\.l\.c|pc|p\.c|apc|a\.p\.c|corp|ltd|co)\.?$")
 INDEX_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 MAP_FILE = re.compile(r"map-\d+(-\d+)?\.md$")
@@ -51,8 +70,9 @@ MAP_FILE = re.compile(r"map-\d+(-\d+)?\.md$")
 
 class Canon:
     def __init__(self, cfg: Any) -> None:
-        self.aliases = [(re.compile(str(a["match"]), re.I), str(a["label"]))
-                        for a in (cfg.get("providers", "aliases") or [])]
+        self.aliases = [
+            (re.compile(str(a["match"]), re.I), str(a["label"])) for a in (cfg.get("providers", "aliases") or [])
+        ]
         self.unresolved = str(cfg.get("providers", "unresolved_label") or "(unattributed - resolve before exhibits)")
         self.suffix = re.compile(str(cfg.get("folders", "status_suffix_regex") or r"(?!x)x"))
 
@@ -120,7 +140,7 @@ def _folder_provider(f: dict[str, Any], canon: Canon, unit_prefixes: list[str]) 
     for s in reversed(segs):
         if s.upper() in KIND_FOLDERS or any(s.startswith(p.strip("/")) for p in unit_prefixes if p):
             continue
-        if re.fullmatch(r"[\d\s.,/-]+", s):      # a policy-limit notation, never a provider
+        if re.fullmatch(r"[\d\s.,/-]+", s):  # a policy-limit notation, never a provider
             continue
         return canon(s)
     # A matter-root file has no folder to speak for it: a brand in the NAME is
@@ -154,8 +174,15 @@ def run(sr: StageRun) -> int:
     out = []
     for prov, g in groups.items():
         ds = sorted(set(g["dates"]))
-        out.append({"provider": prov, "file_ids": g["file_ids"], "first": ds[0] if ds else "9999-99-99",
-                    "last": ds[-1] if ds else "", "dated_files": len(ds)})
+        out.append(
+            {
+                "provider": prov,
+                "file_ids": g["file_ids"],
+                "first": ds[0] if ds else "9999-99-99",
+                "last": ds[-1] if ds else "",
+                "dated_files": len(ds),
+            }
+        )
     out.sort(key=lambda x: x["first"])
     # An undated lane is PRESUMED not to be an exhibit (lien paperwork, vendor
     # invoices, transport folders). Presumed, not proven: build_exhibits
@@ -166,8 +193,10 @@ def run(sr: StageRun) -> int:
     (d / "groups" / f"{sr.unit.unit}.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
     for g in out:
         span = g["first"] if g["first"] != "9999-99-99" else "(no dated entries)"
-        sr.log(f"{g['provider'][:44]:44s} {len(g['file_ids']):3d} files  {span} .. {g['last']}"
-               + ("" if g["exhibit"] else "  [NOT AN EXHIBIT]"))
+        sr.log(
+            f"{g['provider'][:44]:44s} {len(g['file_ids']):3d} files  {span} .. {g['last']}"
+            + ("" if g["exhibit"] else "  [NOT AN EXHIBIT]")
+        )
     sentinel = sum(len(g["file_ids"]) for g in out if g["provider"] == canon.unresolved)
     if sentinel:
         sr.log(f"{sentinel} file(s) in the sentinel lane: a filename is not a provider; resolve before exhibits")

@@ -39,12 +39,7 @@ def _values(node, key: str, out: list) -> list:
 
 
 def _is_iso_day(value: str) -> bool:
-    return (
-        len(value) == 10
-        and value[4] == "-"
-        and value[7] == "-"
-        and value.replace("-", "").isdigit()
-    )
+    return len(value) == 10 and value[4] == "-" and value[7] == "-" and value.replace("-", "").isdigit()
 
 
 def _records(node, out: dict) -> dict:
@@ -89,9 +84,7 @@ def write_pre_run_handoff(payload: dict, *, skill: str, started_at: str) -> None
             "started_at": started_at,
             "dates": days,
             "matter_ids": _values(payload, "matter_id", []),
-            "records": [
-                {"matterNumber": number, "dates": dates} for number, dates in grouped.items()
-            ],
+            "records": [{"matterNumber": number, "dates": dates} for number, dates in grouped.items()],
         }
         directory = Path(os.environ.get("HERMES_HOME") or "/opt/data") / ".smd" / "pre_run"
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)

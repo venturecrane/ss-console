@@ -37,6 +37,7 @@ Usage:
   ensure-disabled-skills.py [--check] CUSTOMER_YAML [HERMES_HOME]
   (HERMES_HOME defaults to $HERMES_HOME or /opt/data.)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -213,9 +214,7 @@ def _prune_snapshot(path: Path, disabled: set[str], check: bool) -> int:
 
     manifest = data.get("manifest")
     if isinstance(manifest, dict):
-        remove_keys = [
-            key for key in manifest if _skill_name_from_manifest_path(str(key)) in disabled
-        ]
+        remove_keys = [key for key in manifest if _skill_name_from_manifest_path(str(key)) in disabled]
         removed += len(remove_keys)
         if not check:
             for key in remove_keys:
@@ -294,9 +293,7 @@ def residual_artifacts(profile_dir: Path, disabled: set[str]) -> list[str]:
         if isinstance(entries, list):
             for entry in entries:
                 if _is_disabled_skill_entry(entry, disabled):
-                    residue.append(
-                        f"{snapshot_path} skills entry {sorted(_entry_names(entry))}"
-                    )
+                    residue.append(f"{snapshot_path} skills entry {sorted(_entry_names(entry))}")
 
     return residue
 
@@ -320,9 +317,7 @@ def enforce_profile(profile_dir: Path, disabled: set[str], check: bool) -> int:
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(
-        description="Remove customer-disabled bundled skills from Hermes profiles."
-    )
+    parser = argparse.ArgumentParser(description="Remove customer-disabled bundled skills from Hermes profiles.")
     parser.add_argument("--check", action="store_true", help="verify only")
     parser.add_argument("customer_yaml", help="path to customer.yaml")
     parser.add_argument(
@@ -363,8 +358,7 @@ def main(argv: list[str]) -> int:
         touched += removed
         if args.check and removed:
             print(
-                f"[{tag}] CHECK FAILED: {profile_dir} still exposes disabled skills: "
-                f"{', '.join(sorted(aliases))}",
+                f"[{tag}] CHECK FAILED: {profile_dir} still exposes disabled skills: {', '.join(sorted(aliases))}",
                 file=sys.stderr,
             )
             failures += 1
@@ -387,8 +381,7 @@ def main(argv: list[str]) -> int:
             residue = residual_artifacts(profile_dir, aliases)
             if residue:
                 print(
-                    f"[{tag}] {slug}: {len(residue)} artifact(s) survived the first pass; "
-                    f"reconverging once",
+                    f"[{tag}] {slug}: {len(residue)} artifact(s) survived the first pass; reconverging once",
                     file=sys.stderr,
                 )
                 enforce_profile(profile_dir, disabled, check=False)

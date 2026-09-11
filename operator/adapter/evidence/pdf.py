@@ -25,7 +25,6 @@ change.
 from __future__ import annotations
 
 import io
-import re
 import textwrap
 from dataclasses import dataclass
 from typing import Iterable, List, Optional, Sequence
@@ -34,7 +33,7 @@ from typing import Iterable, List, Optional, Sequence
 # Layout constants — Letter, 1-inch margins, 12pt body, 16pt headings.
 # ---------------------------------------------------------------------------
 
-PAGE_WIDTH = 612.0   # 8.5in * 72pt
+PAGE_WIDTH = 612.0  # 8.5in * 72pt
 PAGE_HEIGHT = 792.0  # 11in  * 72pt
 MARGIN_LEFT = 72.0
 MARGIN_RIGHT = 72.0
@@ -49,7 +48,7 @@ LINE_HEIGHT = 14.0
 HEADING_LINE_HEIGHT = 22.0
 PARAGRAPH_GAP = 6.0
 SECTION_GAP = 16.0
-WRAP_WIDTH = 88   # chars before wrap at body size + margins
+WRAP_WIDTH = 88  # chars before wrap at body size + margins
 
 
 def _pdf_escape(text: str) -> str:
@@ -66,7 +65,7 @@ def _pdf_escape(text: str) -> str:
 
 @dataclass
 class _Block:
-    kind: str          # 'heading' | 'paragraph' | 'bullet' | 'spacer' | 'monospace'
+    kind: str  # 'heading' | 'paragraph' | 'bullet' | 'spacer' | 'monospace'
     text: str = ""
 
 
@@ -193,23 +192,15 @@ def _serialize_pdf(pages: Sequence[Sequence[tuple[str, str, float]]]) -> bytes:
     # Object 2: pages (placeholder; written after we know all page kids)
     _add(b"")
     # Object 3: font Helvetica
-    _add(
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica "
-        b"/Encoding /WinAnsiEncoding >>"
-    )
+    _add(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>")
     # Object 4: font Helvetica-Bold
-    _add(
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold "
-        b"/Encoding /WinAnsiEncoding >>"
-    )
+    _add(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>")
 
     page_ids: List[int] = []
     for page_items in pages:
         content_stream = _build_content_stream(page_items)
         content_obj_id = _add(
-            f"<< /Length {len(content_stream)} >>\nstream\n".encode("ascii")
-            + content_stream
-            + b"\nendstream"
+            f"<< /Length {len(content_stream)} >>\nstream\n".encode("ascii") + content_stream + b"\nendstream"
         )
         page_obj_id = _add(
             (
@@ -223,9 +214,7 @@ def _serialize_pdf(pages: Sequence[Sequence[tuple[str, str, float]]]) -> bytes:
 
     # Now rewrite object 2 with the real /Kids list.
     kids = " ".join(f"{pid} 0 R" for pid in page_ids)
-    objects[1] = (
-        f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>".encode("ascii")
-    )
+    objects[1] = f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>".encode("ascii")
 
     buf = io.BytesIO()
     buf.write(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
@@ -241,15 +230,7 @@ def _serialize_pdf(pages: Sequence[Sequence[tuple[str, str, float]]]) -> bytes:
     buf.write(b"0000000000 65535 f \n")
     for offset in offsets[1:]:
         buf.write(f"{offset:010d} 00000 n \n".encode("ascii"))
-    buf.write(
-        (
-            "trailer\n"
-            f"<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
-            "startxref\n"
-            f"{xref_pos}\n"
-            "%%EOF\n"
-        ).encode("ascii")
-    )
+    buf.write((f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n").encode("ascii"))
     return buf.getvalue()
 
 

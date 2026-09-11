@@ -10,6 +10,7 @@ to pdftoppm, an undeclared system dependency); the target is 1600 px on the
 long side (about 145 dpi on a letter page), stepping down to 1100 when the
 encoded image would exceed the API's per-image limit.
 """
+
 from __future__ import annotations
 
 import base64
@@ -54,5 +55,11 @@ def render(pdf: Path, page: int, pages_dir: Path, tag: str) -> Path | None:
 
 
 def img_block(path: Path) -> dict:
-    return {"type": "image", "source": {"type": "base64", "media_type": "image/png",
-                                        "data": base64.standard_b64encode(path.read_bytes()).decode()}}
+    return {
+        "type": "image",
+        "source": {
+            "type": "base64",
+            "media_type": "image/png",
+            "data": base64.standard_b64encode(path.read_bytes()).decode(),
+        },
+    }

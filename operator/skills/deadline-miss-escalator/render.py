@@ -214,9 +214,7 @@ def render_digest(
     if isinstance(elsewhere, dict) and elsewhere.get("matters"):
         total = int(elsewhere.get("total") or 0)
         matter_count = int(elsewhere.get("matter_count") or 0)
-        lines.append(
-            f"## Under active escalation elsewhere ({total} across {matter_count} matters)"
-        )
+        lines.append(f"## Under active escalation elsewhere ({total} across {matter_count} matters)")
         lines.append("")
         lines.append("Already raised, shown so it is not double-counted. No action here.")
         lines.append("")
@@ -224,10 +222,7 @@ def render_digest(
             count = int(group.get("count") or 0)
             raised = _day_of(group.get("last_raised"))
             tail = f" (last raised {raised})" if raised else ""
-            lines.append(
-                f"- {_matter_head(group)}: "
-                f"{_plural(count, 'item')} under active escalation{tail}."
-            )
+            lines.append(f"- {_matter_head(group)}: {_plural(count, 'item')} under active escalation{tail}.")
         lines.append("")
 
     clearance = digest.get("awaiting_clearance") or []
@@ -235,8 +230,7 @@ def render_digest(
         lines.append(f"## Awaiting clearance ({len(clearance)})")
         lines.append("")
         lines.append(
-            "Held matters with an approaching date. Surfaced for a person to "
-            "clear; never a client-facing step."
+            "Held matters with an approaching date. Surfaced for a person to clear; never a client-facing step."
         )
         lines.append("")
         for item in clearance:
@@ -307,8 +301,7 @@ def render_skeleton(digest: dict) -> str:
         "the tracker view for the items; the next run will retry the full "
         "digest.",
         "",
-        "This is an internal alert to a person at the firm; no client message "
-        "has been sent.",
+        "This is an internal alert to a person at the firm; no client message has been sent.",
     ]
     return "\n".join(lines) + "\n"
 

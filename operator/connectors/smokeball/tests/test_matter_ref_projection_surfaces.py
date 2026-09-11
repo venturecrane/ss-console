@@ -49,9 +49,7 @@ _RTF = "{\\rtf1\\ansi\\ansicpg1252\\deff0 \\fs17 Scope-fix verification memo.\\p
 
 
 def _mock_client(handler) -> SmokeballClient:
-    client = SmokeballClient(
-        region="us", environment="staging", client_id="cid", client_secret="sec", api_key="apikey"
-    )
+    client = SmokeballClient(region="us", environment="staging", client_id="cid", client_secret="sec", api_key="apikey")
     client._http = httpx.Client(transport=httpx.MockTransport(handler))
     return client
 
@@ -70,9 +68,7 @@ def _handler(
             captured.append(request)
         path = request.url.path
         if path.endswith("/oauth2/token"):
-            return httpx.Response(
-                200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"}
-            )
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"})
         if path in payloads:
             return httpx.Response(200, json=payloads[path])
         if "/matters/" in path and path.count("/") == 2:
@@ -204,7 +200,7 @@ def test_file_list_projects_from_the_request_path(install) -> None:
 
 
 def test_empty_file_listing_still_carries_the_number(install) -> None:
-    """"Nothing on file for <number>" is a sentence a skill has to write, and the
+    """ "Nothing on file for <number>" is a sentence a skill has to write, and the
     number in it has to come from somewhere. The envelope carries it, so an empty
     listing is not the moment the model reaches into its memory."""
     install(
@@ -284,9 +280,7 @@ def test_a_failing_matter_read_never_breaks_the_document_surface(install) -> Non
     def boom(request: httpx.Request) -> httpx.Response:
         path = request.url.path
         if path.endswith("/oauth2/token"):
-            return httpx.Response(
-                200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"}
-            )
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"})
         if path == f"/matters/{M1}/documents/files":
             return httpx.Response(200, json={"value": [_file("file-7", "RFP Set One")]})
         return httpx.Response(500, json={"error": "upstream exploded"})

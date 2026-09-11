@@ -59,11 +59,19 @@ describe('medical-chronology-maintainer: the allowance unit', () => {
     expect(figures, `the reply guidance models a dollar figure: ${figures.join(', ')}`).toEqual([])
   })
 
+  it('names no per-matter page ceiling: the cycle allowance is the only page limit', () => {
+    // Removed 2026-09-10 (Captain). The firm buys a cycle allowance and spends
+    // it as it likes, so a matter is never held for its size alone. If this
+    // string returns to the skill body, the Operator would explain a hold the
+    // runner can no longer produce -- and the firm would be told its own
+    // allowance is unusable in one piece.
+    expect(body).not.toContain('single_matter_page_threshold')
+  })
+
   it('names each limit by the setting a hold reason carries', () => {
     for (const setting of [
       'per_job_cap_usd',
       'chronology_package_page_allowance_per_month',
-      'single_matter_page_threshold',
       'monthly_budget_usd',
     ]) {
       expect(body, `a hold naming ${setting} must be explainable from the skill body`).toContain(

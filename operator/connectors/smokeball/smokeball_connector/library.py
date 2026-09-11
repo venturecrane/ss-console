@@ -323,7 +323,7 @@ def _walk_folders(nodes: Any) -> list[dict[str, Any]]:
 def find_folder_id(client: Any, matter_id: str, folder_name: str) -> str | None:
     try:
         resp = client.get(f"/matters/{matter_id}/documents/folders", Limit=500, Offset=0)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - any transport or auth failure listing folders reads as "no such folder"; the caller falls back to the root
         return None
     want = _norm(folder_name)
     for f in _walk_folders(_listing(resp)):
@@ -338,7 +338,7 @@ def list_matter_files(client: Any, matter_id: str) -> list[dict[str, Any]]:
     while True:
         try:
             resp = client.get(f"/matters/{matter_id}/documents/files", Limit=500, Offset=offset)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 - a page fetch failing ends the listing with what was already read; the caller treats the list as partial
             break
         items = _listing(resp)
         files.extend(items)
@@ -408,7 +408,9 @@ def resolve_template(client: Any, cfg: LibraryConfig, document_class: str) -> Re
     because silently rendering on the starter when the firm's file exists would
     misreport the format."""
     if not cfg.authored:
-        return NotResolved(f"document library location not authored ({cfg.source or 'self_initiation.document_library'})")
+        return NotResolved(
+            f"document library location not authored ({cfg.source or 'self_initiation.document_library'})"
+        )
     matter_id = find_matter_id(client, cfg.matter_number or "")
     if not matter_id:
         return NotResolved(f"library matter {cfg.matter_number!r} not found")
@@ -420,14 +422,22 @@ def resolve_template(client: Any, cfg: LibraryConfig, document_class: str) -> Re
         if in_folder:
             candidates = in_folder
     if not candidates:
-        where = f"folder {cfg.folder_name!r}" if folder_id else f"matter {cfg.matter_number!r} (folder {cfg.folder_name!r} not found)"
-        return NotResolved(f"no file named {cfg.template_name(document_class)!r} in {where}", matter_id=matter_id, folder_id=folder_id)
+        where = (
+            f"folder {cfg.folder_name!r}"
+            if folder_id
+            else f"matter {cfg.matter_number!r} (folder {cfg.folder_name!r} not found)"
+        )
+        return NotResolved(
+            f"no file named {cfg.template_name(document_class)!r} in {where}", matter_id=matter_id, folder_id=folder_id
+        )
     # Newest wins when a firm re-uploads under the same name.
     candidates.sort(key=lambda e: str(e.get("dateCreated") or e.get("createdDate") or ""), reverse=True)
     chosen = candidates[0]
     file_id = str(chosen.get("id") or chosen.get("fileId"))
     _meta, blob = client.download_file(matter_id, file_id)
-    return ResolvedTemplate(bytes=blob, name=str(chosen.get("name")), file_id=file_id, matter_id=matter_id, folder_id=folder_id)
+    return ResolvedTemplate(
+        bytes=blob, name=str(chosen.get("name")), file_id=file_id, matter_id=matter_id, folder_id=folder_id
+    )
 
 
 def is_library_file(entry: dict[str, Any], cfg: LibraryConfig, library_folder_id: str | None) -> bool:

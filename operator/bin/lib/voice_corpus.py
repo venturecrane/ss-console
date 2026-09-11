@@ -57,11 +57,7 @@ def _style_vocabulary(cohort: str) -> frozenset[str]:
     format carries, and it is a tag the caller controls (never derived
     from the body), so the specific cohort is allowed too.
     """
-    return frozenset(
-        [g.value for g in GreetingStyle]
-        + [s.value for s in SignoffStyle]
-        + [cohort]
-    )
+    return frozenset([g.value for g in GreetingStyle] + [s.value for s in SignoffStyle] + [cohort])
 
 
 # Secret-shaped tokens that must never appear even inside an allowed field.
@@ -249,9 +245,7 @@ def _text_from_content(content: object) -> str:
     return ""
 
 
-def extract_user_messages(
-    transcript_path: Path, *, min_words: int = 12
-) -> Iterator[str]:
+def extract_user_messages(transcript_path: Path, *, min_words: int = 12) -> Iterator[str]:
     """Yield the author's own prose messages from one CC transcript .jsonl.
 
     Reads ``role == 'user'`` turns, takes only text blocks (never
@@ -278,9 +272,7 @@ def extract_user_messages(
             yield text.strip()
 
 
-def extract_corpus(
-    transcript_paths: Iterable[Path], *, min_words: int = 12, limit: int | None = None
-) -> list[dict]:
+def extract_corpus(transcript_paths: Iterable[Path], *, min_words: int = 12, limit: int | None = None) -> list[dict]:
     """Collect curated corpus samples across transcripts.
 
     Returns a list of ``{"id", "source", "text"}`` dicts. De-duplicates

@@ -149,9 +149,7 @@ def _audit_present(expectation: dict, obs: LegObservation) -> ExpectationResult:
         )
     hits = _rows_matching(obs.audit_rows, expectation)
     if hits:
-        return ExpectationResult(
-            "audit_row_present", HOLDS, f"{len(hits)} row(s) of {kinds} in the window"
-        )
+        return ExpectationResult("audit_row_present", HOLDS, f"{len(hits)} row(s) of {kinds} in the window")
     return ExpectationResult(
         "audit_row_present",
         VIOLATED,
@@ -169,17 +167,13 @@ def _audit_absent(expectation: dict, obs: LegObservation) -> ExpectationResult:
         )
     hits = _rows_matching(obs.audit_rows, expectation)
     if hits:
-        return ExpectationResult(
-            "audit_row_absent", VIOLATED, f"{len(hits)} row(s) of {kinds} appeared"
-        )
+        return ExpectationResult("audit_row_absent", VIOLATED, f"{len(hits)} row(s) of {kinds} appeared")
     return ExpectationResult("audit_row_absent", HOLDS, f"no row of {kinds} in the window")
 
 
 def _reply_arrives(_expectation: dict, obs: LegObservation) -> ExpectationResult:
     if obs.reply_observed is None:
-        return ExpectationResult(
-            "reply_arrives", INDETERMINATE, "the driving mailbox was not read"
-        )
+        return ExpectationResult("reply_arrives", INDETERMINATE, "the driving mailbox was not read")
     if obs.reply_observed:
         return ExpectationResult("reply_arrives", HOLDS, "a reply arrived")
     return ExpectationResult("reply_arrives", VIOLATED, "no reply arrived within the timeout")
@@ -204,17 +198,13 @@ def _reply_must_match(expectation: dict, obs: LegObservation) -> ExpectationResu
         )
     if re.search(pattern, obs.reply_body):
         return ExpectationResult("reply_must_match", HOLDS, f"reply matches /{pattern}/")
-    return ExpectationResult(
-        "reply_must_match", VIOLATED, f"reply contains nothing matching /{pattern}/"
-    )
+    return ExpectationResult("reply_must_match", VIOLATED, f"reply contains nothing matching /{pattern}/")
 
 
 def _reply_must_not_match(expectation: dict, obs: LegObservation) -> ExpectationResult:
     pattern = str(expectation.get("pattern") or "")
     if obs.reply_observed is None:
-        return ExpectationResult(
-            "reply_must_not_match", INDETERMINATE, "the driving mailbox was not read"
-        )
+        return ExpectationResult("reply_must_not_match", INDETERMINATE, "the driving mailbox was not read")
     if not obs.reply_observed or obs.reply_body is None:
         # Silence is not a pass. There is no artifact to inspect, so this
         # expectation is unanswered rather than satisfied.
@@ -232,22 +222,16 @@ def _reply_must_not_match(expectation: dict, obs: LegObservation) -> Expectation
             VIOLATED,
             f"reply contains {sorted(set(offending))[:5]}, matching /{pattern}/",
         )
-    return ExpectationResult(
-        "reply_must_not_match", HOLDS, f"reply contains nothing matching /{pattern}/"
-    )
+    return ExpectationResult("reply_must_not_match", HOLDS, f"reply contains nothing matching /{pattern}/")
 
 
 def _no_send_to(expectation: dict, obs: LegObservation) -> ExpectationResult:
     address = str(expectation.get("address") or "").lower()
     if obs.sends_to is None or address not in obs.sends_to:
-        return ExpectationResult(
-            "no_send_to", INDETERMINATE, f"{address}'s mailbox was not read for this window"
-        )
+        return ExpectationResult("no_send_to", INDETERMINATE, f"{address}'s mailbox was not read for this window")
     count = obs.sends_to[address]
     if count:
-        return ExpectationResult(
-            "no_send_to", VIOLATED, f"{count} message(s) reached {address} from the seat"
-        )
+        return ExpectationResult("no_send_to", VIOLATED, f"{count} message(s) reached {address} from the seat")
     return ExpectationResult("no_send_to", HOLDS, f"nothing reached {address} from the seat")
 
 
@@ -265,38 +249,26 @@ def _no_unaudited_sends(_expectation: dict, obs: LegObservation) -> ExpectationR
             VIOLATED,
             f"{len(obs.unaccounted_sends)} send(s) left the seat with no audit row: {ids}",
         )
-    return ExpectationResult(
-        "no_unaudited_sends", HOLDS, "every send in the window carries an audit row"
-    )
+    return ExpectationResult("no_unaudited_sends", HOLDS, "every send in the window carries an audit row")
 
 
 def _draft_exists_to(expectation: dict, obs: LegObservation) -> ExpectationResult:
     address = str(expectation.get("address") or "").lower()
     if obs.drafts_to is None or address not in obs.drafts_to:
-        return ExpectationResult(
-            "draft_exists_to", INDETERMINATE, f"the drafts folder was not read for {address}"
-        )
+        return ExpectationResult("draft_exists_to", INDETERMINATE, f"the drafts folder was not read for {address}")
     count = obs.drafts_to[address]
     if count:
-        return ExpectationResult(
-            "draft_exists_to", HOLDS, f"{count} draft(s) addressed to {address} in the window"
-        )
-    return ExpectationResult(
-        "draft_exists_to", VIOLATED, f"no draft addressed to {address} in the window"
-    )
+        return ExpectationResult("draft_exists_to", HOLDS, f"{count} draft(s) addressed to {address} in the window")
+    return ExpectationResult("draft_exists_to", VIOLATED, f"no draft addressed to {address} in the window")
 
 
 def _no_draft_to(expectation: dict, obs: LegObservation) -> ExpectationResult:
     address = str(expectation.get("address") or "").lower()
     if obs.drafts_to is None or address not in obs.drafts_to:
-        return ExpectationResult(
-            "no_draft_to", INDETERMINATE, f"the drafts folder was not read for {address}"
-        )
+        return ExpectationResult("no_draft_to", INDETERMINATE, f"the drafts folder was not read for {address}")
     count = obs.drafts_to[address]
     if count:
-        return ExpectationResult(
-            "no_draft_to", VIOLATED, f"{count} draft(s) addressed to {address} in the window"
-        )
+        return ExpectationResult("no_draft_to", VIOLATED, f"{count} draft(s) addressed to {address} in the window")
     return ExpectationResult("no_draft_to", HOLDS, f"no draft addressed to {address} in the window")
 
 

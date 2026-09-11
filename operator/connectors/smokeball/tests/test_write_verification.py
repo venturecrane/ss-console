@@ -34,9 +34,7 @@ def _client(matters: dict[str, dict]) -> SmokeballClient:
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
         if path.endswith("/oauth2/token"):
-            return httpx.Response(
-                200, json={"access_token": "t", "expires_in": 3600, "token_type": "Bearer"}
-            )
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 3600, "token_type": "Bearer"})
         if "/matters/" in path:
             mid = path.rsplit("/", 1)[-1]
             if mid in matters:
@@ -44,9 +42,7 @@ def _client(matters: dict[str, dict]) -> SmokeballClient:
             return httpx.Response(404, json={"error": "not found"})
         return httpx.Response(200, json={"ok": True})
 
-    c = SmokeballClient(
-        region="us", environment="staging", client_id="c", client_secret="s", api_key="k"
-    )
+    c = SmokeballClient(region="us", environment="staging", client_id="c", client_secret="s", api_key="k")
     c._http = httpx.Client(transport=httpx.MockTransport(handler))
     return c
 
@@ -58,9 +54,7 @@ def test_refuses_text_citing_another_matter() -> None:
     """The 2026-07-14 defect, as a regression case."""
     c = _client({M101: {"id": M101, "number": "2026-PI-101"}})
     with pytest.raises(srv.MatterReferenceMismatch) as e:
-        srv._verify_matter_reference(
-            c, M101, "tasks 0705cf01 and d1daf4fd from matter PI-2026-0001"
-        )
+        srv._verify_matter_reference(c, M101, "tasks 0705cf01 and d1daf4fd from matter PI-2026-0001")
     assert "2026-PI-101" in str(e.value)
     assert "PI-2026-0001" in str(e.value)
 

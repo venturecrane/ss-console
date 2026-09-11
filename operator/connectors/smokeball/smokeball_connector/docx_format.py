@@ -209,7 +209,9 @@ class _Writer:
             self.report.styles_delegated.pop(style_name, None)
             return self.doc.add_paragraph(), False
 
-    def _runs(self, para, runs: tuple[g.Run, ...], *, caps: bool = False, bold: bool = False, underline: bool = False) -> None:
+    def _runs(
+        self, para, runs: tuple[g.Run, ...], *, caps: bool = False, bold: bool = False, underline: bool = False
+    ) -> None:
         for r in runs:
             run = para.add_run(r.text)
             if r.marker:
@@ -401,7 +403,10 @@ class _Writer:
 def _footer_has_field(footer) -> bool:
     from docx.oxml.ns import qn
 
-    return footer._element.find(f".//{qn('w:fldChar')}") is not None or footer._element.find(f".//{qn('w:fldSimple')}") is not None
+    return (
+        footer._element.find(f".//{qn('w:fldChar')}") is not None
+        or footer._element.find(f".//{qn('w:fldSimple')}") is not None
+    )
 
 
 def _set_table_borders(table, *, inside_vertical_only: bool) -> None:

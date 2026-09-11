@@ -26,7 +26,7 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[2]))  # operator/ on sys.path
 
-from bin.lib.voice_corpus import (  # noqa: E402
+from bin.lib.voice_corpus import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     VoiceLeakError,
     assert_style_only,
     build_sample,
@@ -36,8 +36,7 @@ from bin.lib.voice_corpus import (  # noqa: E402
 
 # A terse, declarative message in the author's register — no greeting/signoff.
 _SCOTT_STYLE = (
-    "Stop. Verify the secret values, not just the keys. "
-    "We ship through PRs. Never push to main. Figure it out."
+    "Stop. Verify the secret values, not just the keys. We ship through PRs. Never push to main. Figure it out."
 )
 
 
@@ -126,9 +125,19 @@ def test_extract_user_messages_filters_noise(tmp_path):
         transcript,
         [
             # keep: real prose, role=user, string content
-            {"message": {"role": "user", "content": "Let's reverse course and fix this. Figure it out, please, and ship it cleanly."}},
+            {
+                "message": {
+                    "role": "user",
+                    "content": "Let's reverse course and fix this. Figure it out, please, and ship it cleanly.",
+                }
+            },
             # drop: system-reminder noise
-            {"message": {"role": "user", "content": "<system-reminder>do x</system-reminder> blah blah blah more words here"}},
+            {
+                "message": {
+                    "role": "user",
+                    "content": "<system-reminder>do x</system-reminder> blah blah blah more words here",
+                }
+            },
             # drop: assistant turn
             {"message": {"role": "assistant", "content": "Sure, I will do that for you right away sir."}},
             # drop: tool_result block (list content, non-text)
@@ -138,7 +147,17 @@ def test_extract_user_messages_filters_noise(tmp_path):
             # drop: too short
             {"message": {"role": "user", "content": "yes do it"}},
             # keep: text block in a list
-            {"message": {"role": "user", "content": [{"type": "text", "text": "Many features of the harness must be configurable, including the send threshold."}]}},
+            {
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Many features of the harness must be configurable, including the send threshold.",
+                        }
+                    ],
+                }
+            },
         ],
     )
     msgs = list(extract_user_messages(transcript, min_words=5))
@@ -156,13 +175,38 @@ def test_extract_user_messages_rejects_agent_prompts_and_markdown(tmp_path):
         transcript,
         [
             # drop: second-person agent role prompts (skill-authored, pasted)
-            {"message": {"role": "user", "content": "You are Claude Code, an interactive agent that helps with software engineering tasks."}},
-            {"message": {"role": "user", "content": "Your task is to review the diff and report every correctness bug you can find."}},
-            {"message": {"role": "user", "content": "Output only the final answer as a single JSON object with no other commentary."}},
+            {
+                "message": {
+                    "role": "user",
+                    "content": "You are Claude Code, an interactive agent that helps with software engineering tasks.",
+                }
+            },
+            {
+                "message": {
+                    "role": "user",
+                    "content": "Your task is to review the diff and report every correctness bug you can find.",
+                }
+            },
+            {
+                "message": {
+                    "role": "user",
+                    "content": "Output only the final answer as a single JSON object with no other commentary.",
+                }
+            },
             # drop: pasted markdown doc / skill definition header
-            {"message": {"role": "user", "content": "# /ship - Ship to Production\n\nCommit, push, PR, CI, merge, and confirm deployment all in one shot."}},
+            {
+                "message": {
+                    "role": "user",
+                    "content": "# /ship - Ship to Production\n\nCommit, push, PR, CI, merge, and confirm deployment all in one shot.",
+                }
+            },
             # keep: the author's own terse first-person prose
-            {"message": {"role": "user", "content": "Stop guessing. Verify the secret values, then ship it cleanly through a PR."}},
+            {
+                "message": {
+                    "role": "user",
+                    "content": "Stop guessing. Verify the secret values, then ship it cleanly through a PR.",
+                }
+            },
         ],
     )
     msgs = list(extract_user_messages(transcript, min_words=5))
@@ -175,9 +219,22 @@ def test_extract_user_messages_rejects_agent_prompts_and_markdown(tmp_path):
 def test_extract_corpus_dedupes_and_limits(tmp_path):
     t1 = tmp_path / "a.jsonl"
     t2 = tmp_path / "b.jsonl"
-    dup = {"message": {"role": "user", "content": "This exact sentence repeats across two different transcripts verbatim."}}
+    dup = {
+        "message": {"role": "user", "content": "This exact sentence repeats across two different transcripts verbatim."}
+    }
     _write_transcript(t1, [dup])
-    _write_transcript(t2, [dup, {"message": {"role": "user", "content": "A second distinct message with enough words to pass the prose filter cleanly."}}])
+    _write_transcript(
+        t2,
+        [
+            dup,
+            {
+                "message": {
+                    "role": "user",
+                    "content": "A second distinct message with enough words to pass the prose filter cleanly.",
+                }
+            },
+        ],
+    )
     corpus = extract_corpus([t1, t2], min_words=5)
     texts = [c["text"] for c in corpus]
     assert len(texts) == 2  # the duplicate is collapsed
@@ -189,7 +246,14 @@ def test_extract_corpus_malformed_lines_are_skipped(tmp_path):
     transcript = tmp_path / "bad.jsonl"
     transcript.write_text(
         "not json\n"
-        + json.dumps({"message": {"role": "user", "content": "A perfectly good prose message with sufficient length to be kept."}})
+        + json.dumps(
+            {
+                "message": {
+                    "role": "user",
+                    "content": "A perfectly good prose message with sufficient length to be kept.",
+                }
+            }
+        )
         + "\n{also not json",
         encoding="utf-8",
     )

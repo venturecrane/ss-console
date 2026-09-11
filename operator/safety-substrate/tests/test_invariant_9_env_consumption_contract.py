@@ -48,8 +48,7 @@ def run() -> tuple[bool, str]:
     if path is None:
         return (
             False,
-            "FAIL: env-consumption contract not found "
-            "(expected /app/contracts/env-consumption.yaml)",
+            "FAIL: env-consumption contract not found (expected /app/contracts/env-consumption.yaml)",
         )
     try:
         import yaml
@@ -88,14 +87,10 @@ def run() -> tuple[bool, str]:
             violations.append(f"{name}: agent_env:stripped but no strip_site named")
         # off-machine stages never have an agent env
         if stage in _OFF_MACHINE and agent_env != "n/a":
-            violations.append(
-                f"{name}: stage:{stage} must have agent_env:n/a, got {agent_env!r}"
-            )
+            violations.append(f"{name}: stage:{stage} must have agent_env:n/a, got {agent_env!r}")
         # on-machine stages must declare held|stripped, not n/a
         if stage not in _OFF_MACHINE and stage in _VALID_STAGES and agent_env == "n/a":
-            violations.append(
-                f"{name}: on-machine stage:{stage} must be held or stripped, not n/a"
-            )
+            violations.append(f"{name}: on-machine stage:{stage} must be held or stripped, not n/a")
 
     if violations:
         return (
@@ -104,8 +99,7 @@ def run() -> tuple[bool, str]:
         )
     return (
         True,
-        f"PASS: env-consumption contract consistent ({len(vars_)} vars; "
-        "no agent-needed var is stripped)",
+        f"PASS: env-consumption contract consistent ({len(vars_)} vars; no agent-needed var is stripped)",
     )
 
 

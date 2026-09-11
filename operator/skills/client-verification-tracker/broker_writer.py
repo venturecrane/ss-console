@@ -125,9 +125,7 @@ class BrokerSuppressedWakeWriter:
 
 def writer_factory():
     """The live writer, or None when no broker socket is wired (dev mode)."""
-    socket_path = os.environ.get("SMD_AUDIT_BROKER_SOCKET") or os.environ.get(
-        "SMD_WORKSPACE_BROKER_SOCKET"
-    )
+    socket_path = os.environ.get("SMD_AUDIT_BROKER_SOCKET") or os.environ.get("SMD_WORKSPACE_BROKER_SOCKET")
     if not socket_path:
         return None  # run_once treats None as "no writer wired" -> wake
     return BrokerSuppressedWakeWriter(socket_path, os.environ.get("CUSTOMER_SLUG", ""))

@@ -15,6 +15,7 @@ parse is halved and retried, a single dense page gets a larger budget and
 then a totals-only read, and a page that still fails is a hard gap: the run
 exits 1 rather than report a complete total over missing money.
 """
+
 from __future__ import annotations
 
 import concurrent.futures as cf
@@ -77,15 +78,23 @@ def render_doc(path: str) -> tuple[dict[int, str], int]:
 
     doc = pymupdf.open(path)
     n = len(doc)
-    imgs = {p: base64.standard_b64encode(doc[p - 1].get_pixmap(dpi=RENDER_DPI).tobytes("png")).decode()
-            for p in range(1, n + 1)}
+    imgs = {
+        p: base64.standard_b64encode(doc[p - 1].get_pixmap(dpi=RENDER_DPI).tobytes("png")).decode()
+        for p in range(1, n + 1)
+    }
     doc.close()
     return imgs, n
 
 
 def range_messages(imgs: dict[int, str], name: str, start: int, end: int, totals_only: bool = False) -> list[dict]:
-    content: list[dict[str, Any]] = [{"type": "text", "text": f"Document: {name}\nPages {start}-{end} follow. "
-                                      + SCHEMA_NOTE + (TOTALS_ONLY if totals_only else "")}]
+    content: list[dict[str, Any]] = [
+        {
+            "type": "text",
+            "text": f"Document: {name}\nPages {start}-{end} follow. "
+            + SCHEMA_NOTE
+            + (TOTALS_ONLY if totals_only else ""),
+        }
+    ]
     for p in range(start, end + 1):
         content.append({"type": "text", "text": f"--- page {p} ---"})
         content.append({"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": imgs[p]}})
@@ -121,15 +130,27 @@ class _Reader:
     def __init__(self, sr: StageRun, model: str) -> None:
         self.sr, self.model = sr, model
 
-    def one_call(self, imgs: dict[int, str], name: str, start: int, end: int, cap: int = FIRST_CAP,
-                 totals_only: bool = False) -> tuple[dict[str, Any] | None, list[int]]:
-        r = self.sr.doorway.call("billing", model=self.model, max_tokens=cap, effort="",
-                                 messages=range_messages(imgs, name, start, end, totals_only), cache_blocks=(),
-                                 timeout=600.0)
+    def one_call(
+        self, imgs: dict[int, str], name: str, start: int, end: int, cap: int = FIRST_CAP, totals_only: bool = False
+    ) -> tuple[dict[str, Any] | None, list[int]]:
+        r = self.sr.doorway.call(
+            "billing",
+            model=self.model,
+            max_tokens=cap,
+            effort="",
+            messages=range_messages(imgs, name, start, end, totals_only),
+            cache_blocks=(),
+            timeout=600.0,
+        )
         return parse(r), usage_of(r)
 
-    def read_doc(self, name: str, imgs: dict[int, str], n: int,
-                 first: dict[tuple[int, int], tuple[dict | None, list | None]] | None = None) -> dict[str, Any]:
+    def read_doc(
+        self,
+        name: str,
+        imgs: dict[int, str],
+        n: int,
+        first: dict[tuple[int, int], tuple[dict | None, list | None]] | None = None,
+    ) -> dict[str, Any]:
         first = first or {}
         out: dict[str, Any] = {"file": name, "pages": n, "chunks": [], "usage": [], "failures": []}
         lock = threading.Lock()
@@ -164,7 +185,7 @@ class _Reader:
 
         ranges = first_ranges(n)
         if first:
-            for rng in ranges:            # the batch answered the first level; failures recurse serially
+            for rng in ranges:  # the batch answered the first level; failures recurse serially
                 out["chunks"].extend(work(rng))
         else:
             with cf.ThreadPoolExecutor(max_workers=WORKERS) as ex:
@@ -178,8 +199,13 @@ class _Reader:
         for i, t, imgs, n in group:
             first[i] = {}
             for s, e in first_ranges(n):
-                items.append(llm.Item(custom_id=range_id(i, t["name"], s, e), messages=range_messages(imgs, t["name"], s, e),
-                                      meta={"idx": i, "name": t["name"], "range": (s, e)}))
+                items.append(
+                    llm.Item(
+                        custom_id=range_id(i, t["name"], s, e),
+                        messages=range_messages(imgs, t["name"], s, e),
+                        meta={"idx": i, "name": t["name"], "range": (s, e)},
+                    )
+                )
 
         def on_result(item: llm.Item, r: llm.Result | None, err: str | None) -> None:
             i, name, rng = item.meta["idx"], item.meta["name"], item.meta["range"]
@@ -189,8 +215,16 @@ class _Reader:
                 return
             first[i][rng] = (parse(r), usage_of(r))
 
-        s = self.sr.doorway.batch_call("billing", items, on_result, model=self.model, max_tokens=FIRST_CAP, effort="",
-                                       cache_blocks=(), batch_dir=batch_dir)
+        s = self.sr.doorway.batch_call(
+            "billing",
+            items,
+            on_result,
+            model=self.model,
+            max_tokens=FIRST_CAP,
+            effort="",
+            cache_blocks=(),
+            batch_dir=batch_dir,
+        )
         for cid in s.timed_out:
             it = next(x for x in items if x.custom_id == cid)
             first[it.meta["idx"]][it.meta["range"]] = (None, None)
@@ -215,7 +249,9 @@ def run(sr: StageRun) -> int:
         append_jsonl(outp, rec)
         a, b = sum(u[0] for u in rec["usage"]), sum(u[1] for u in rec["usage"])
         tin, tout, hard = tin + a, tout + b, hard + len(rec["failures"])
-        sr.log(f"        {a:,} in / {b:,} out" + (f"   !! {len(rec['failures'])} PAGE(S) LOST" if rec["failures"] else ""))
+        sr.log(
+            f"        {a:,} in / {b:,} out" + (f"   !! {len(rec['failures'])} PAGE(S) LOST" if rec["failures"] else "")
+        )
 
     pending = []
     for i, t in enumerate(todo or [], 1):
@@ -245,7 +281,9 @@ def run(sr: StageRun) -> int:
         if group:
             groups.append(group)
         for group in groups:
-            sr.log(f"batch: {len(group)} document(s), {sum(len(first_ranges(n)) for _, _, _, n in group)} first-level range(s)")
+            sr.log(
+                f"batch: {len(group)} document(s), {sum(len(first_ranges(n)) for _, _, _, n in group)} first-level range(s)"
+            )
             first = reader.batch_group(group, d / "batch")
             for i, t, imgs, n in group:
                 sr.log(f"[{i}/{len(todo)}] {n:>3}pp  {t['name'][:56]}")

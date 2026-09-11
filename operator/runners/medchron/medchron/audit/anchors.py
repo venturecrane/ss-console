@@ -10,15 +10,32 @@ matches "April 3, 2021" on the page: date, num (with a clinical unit, and
 blood pressures), drug (suffix rule plus the allowlist beside this file),
 proper (capitalised tokens of five or more letters minus a stoplist).
 """
+
 from __future__ import annotations
 
 import re
 from importlib import resources
 from typing import Any
 
-MONTHS = {m: i + 1 for i, m in enumerate(
-    ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november",
-     "december"])}
+MONTHS = {
+    m: i + 1
+    for i, m in enumerate(
+        [
+            "january",
+            "february",
+            "march",
+            "april",
+            "may",
+            "june",
+            "july",
+            "august",
+            "september",
+            "october",
+            "november",
+            "december",
+        ]
+    )
+}
 for _m, _i in list(MONTHS.items()):
     MONTHS[_m[:3]] = _i
 MONTHS["sept"] = 9
@@ -29,31 +46,159 @@ DATE_PATTERNS = [
     re.compile(r"\b(" + _MON + r")\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b", re.I),
     re.compile(r"\b(\d{1,2})\s+(" + _MON + r")\s+(\d{4})\b", re.I),
 ]
-UNITS = (r"mg|mcg|ug|g|kg|lbs?|oz|ml|mL|cc|l|bpm|mmhg|%|cm|mm|in|ft|units?|meq|iu|f|c|degrees|min|mins|hrs?|hours?|"
-         r"days?|weeks?|months?|years?|yo|y/o|tabs?|tablets?|caps?|puffs?|drops?|mg/dl|mg/kg|ng/ml|mcg/ml|u|sec|"
-         r"seconds?|rpm|/min|x")
+UNITS = (
+    r"mg|mcg|ug|g|kg|lbs?|oz|ml|mL|cc|l|bpm|mmhg|%|cm|mm|in|ft|units?|meq|iu|f|c|degrees|min|mins|hrs?|hours?|"
+    r"days?|weeks?|months?|years?|yo|y/o|tabs?|tablets?|caps?|puffs?|drops?|mg/dl|mg/kg|ng/ml|mcg/ml|u|sec|"
+    r"seconds?|rpm|/min|x"
+)
 NUM_UNIT = re.compile(r"\b(\d+(?:\.\d+)?)\s?(" + UNITS + r")\b", re.I)
 BP = re.compile(r"(?<![\d/])(\d{2,3})\s?/\s?(\d{2,3})(?![\d/])")
 DRUG_SUFFIX = re.compile(
     r"\b[a-z]{3,}(?:pril|sartan|statin|olol|dipine|azole|mycin|cillin|cycline|floxacin|profen|codone|morphone|"
     r"oxetine|tidine|prazole|tadine|zepam|zolam|pam|lam|mab|vir|done|pin|sone|nisone|caine|tinib|parin|afil|"
-    r"triptan|gliptin|glitazone|semide|thiazide)\b", re.I)
+    r"triptan|gliptin|glitazone|semide|thiazide)\b",
+    re.I,
+)
 PROPER = re.compile(r"\b[A-Z][a-z]{4,}(?:-[A-Z][a-z]+)?\b")
 STOPLIST = {
-    "patient", "exhibit", "medical", "records", "record", "doctor", "there", "these", "those", "their", "which",
-    "where", "while", "after", "before", "during", "under", "about", "again", "against", "between", "through",
-    "without", "within", "would", "could", "should", "noted", "notes", "report", "reports", "reported", "history",
-    "present", "presented", "physical", "examination", "assessment", "diagnosis", "diagnoses", "treatment", "plan",
-    "follow", "visit", "visits", "encounter", "right", "left", "bilateral", "chief", "complaint", "review",
-    "systems", "normal", "abnormal", "negative", "positive", "denies", "denied", "continued", "continue", "ordered",
-    "referred", "referral", "provider", "office", "clinic", "hospital", "center", "imaging", "emergency",
-    "department", "discharge", "discharged", "admitted", "prescribed", "prescription", "medication", "medications",
-    "surgery", "surgical", "procedure", "results", "result", "findings", "impression", "shows", "showed", "states",
-    "stated", "because", "however", "further", "additional", "including", "monday", "tuesday", "wednesday",
-    "thursday", "friday", "saturday", "sunday", "january", "february", "march", "april", "august", "september",
-    "october", "november", "december", "machine", "transcription", "chronology", "entry", "claim", "pages",
-    "unknown", "other", "every", "first", "second", "third", "since", "until", "today", "later", "earlier", "still",
-    "being", "having", "reviewed", "recorded", "documented", "documentation", "letter", "signed", "orders",
+    "patient",
+    "exhibit",
+    "medical",
+    "records",
+    "record",
+    "doctor",
+    "there",
+    "these",
+    "those",
+    "their",
+    "which",
+    "where",
+    "while",
+    "after",
+    "before",
+    "during",
+    "under",
+    "about",
+    "again",
+    "against",
+    "between",
+    "through",
+    "without",
+    "within",
+    "would",
+    "could",
+    "should",
+    "noted",
+    "notes",
+    "report",
+    "reports",
+    "reported",
+    "history",
+    "present",
+    "presented",
+    "physical",
+    "examination",
+    "assessment",
+    "diagnosis",
+    "diagnoses",
+    "treatment",
+    "plan",
+    "follow",
+    "visit",
+    "visits",
+    "encounter",
+    "right",
+    "left",
+    "bilateral",
+    "chief",
+    "complaint",
+    "review",
+    "systems",
+    "normal",
+    "abnormal",
+    "negative",
+    "positive",
+    "denies",
+    "denied",
+    "continued",
+    "continue",
+    "ordered",
+    "referred",
+    "referral",
+    "provider",
+    "office",
+    "clinic",
+    "hospital",
+    "center",
+    "imaging",
+    "emergency",
+    "department",
+    "discharge",
+    "discharged",
+    "admitted",
+    "prescribed",
+    "prescription",
+    "medication",
+    "medications",
+    "surgery",
+    "surgical",
+    "procedure",
+    "results",
+    "result",
+    "findings",
+    "impression",
+    "shows",
+    "showed",
+    "states",
+    "stated",
+    "because",
+    "however",
+    "further",
+    "additional",
+    "including",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+    "january",
+    "february",
+    "march",
+    "april",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+    "machine",
+    "transcription",
+    "chronology",
+    "entry",
+    "claim",
+    "pages",
+    "unknown",
+    "other",
+    "every",
+    "first",
+    "second",
+    "third",
+    "since",
+    "until",
+    "today",
+    "later",
+    "earlier",
+    "still",
+    "being",
+    "having",
+    "reviewed",
+    "recorded",
+    "documented",
+    "documentation",
+    "letter",
+    "signed",
+    "orders",
 }
 
 
@@ -139,8 +284,12 @@ def find_anchors(claim: str) -> list[str]:
 
 
 def page_features(text: str) -> dict[str, set[str]]:
-    return {"date": dates(text), "num": numbers(text), "drug": drugs(text),
-            "proper": propers(text) | {w.lower() for w in re.findall(r"\b[A-Z]{5,}\b", text)}}
+    return {
+        "date": dates(text),
+        "num": numbers(text),
+        "drug": drugs(text),
+        "proper": propers(text) | {w.lower() for w in re.findall(r"\b[A-Z]{5,}\b", text)},
+    }
 
 
 def found_on(anchors: list[str], text: str, feats: dict[str, set[str]] | None = None) -> list[str]:
@@ -156,8 +305,9 @@ def score_pages(anchors: list[str], page_texts: dict[int, str]) -> dict[int, tup
     return out
 
 
-def choose_window(cited: list[int], npages: int, index: Any, exhibit: int, anchors: list[str] = (),
-                  cap: int = 12) -> list[int] | None:
+def choose_window(
+    cited: list[int], npages: int, index: Any, exhibit: int, anchors: list[str] = (), cap: int = 12
+) -> list[int] | None:
     """Pages to send for one claim, or None when the claim cannot go text:
     every cited page must be text-eligible; the window is the cited pages,
     each eligible neighbour one page either side (the image path widens
@@ -189,8 +339,14 @@ def choose_window(cited: list[int], npages: int, index: Any, exhibit: int, ancho
     return win
 
 
-def build_clusters(windows: list[tuple[str, list[int]]], cap: int = 12, floor: int = 3, index: Any = None,
-                   exhibit: int | None = None, npages: int = 0) -> list[tuple[list[int], list[str]]]:
+def build_clusters(
+    windows: list[tuple[str, list[int]]],
+    cap: int = 12,
+    floor: int = 3,
+    index: Any = None,
+    exhibit: int | None = None,
+    npages: int = 0,
+) -> list[tuple[list[int], list[str]]]:
     """Group per-claim windows on one exhibit into cache units: overlapping
     or touching windows join while the union stays within `cap`; a cluster
     under `floor` pages is padded with CONTIGUOUS eligible neighbours."""

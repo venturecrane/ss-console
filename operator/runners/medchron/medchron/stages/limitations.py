@@ -13,6 +13,7 @@ run authored from measured facts (`text_duplicates.json`, `file_observations.jso
 their shapes are pinned, and a file whose rows all fail the shape warns
 loudly rather than rendering an empty disclosure.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -30,7 +31,9 @@ def _scope_lines(d: Path, byid: dict, ok: list, folded: list) -> list[str]:
     n_file = len(ok) - len(folded)
     line = f"This chronology was prepared from {_plural(n_file, 'document')} in the matter file"
     if folded:
-        line += f", together with {_plural(len(folded), 'record')} that existed only as attachments to email in the matter"
+        line += (
+            f", together with {_plural(len(folded), 'record')} that existed only as attachments to email in the matter"
+        )
     pages = sum(int(e.get("pages") or 0) for e in read_jsonl(d / "extracted.jsonl"))
     if pages:
         line += f", totalling approximately {pages:,} pages"
@@ -48,44 +51,66 @@ def _scope_lines(d: Path, byid: dict, ok: list, folded: list) -> list[str]:
             if m.get("deleted") or m.get("id") in byid:
                 continue
             fid = m.get("folderId")
-            f = fpath[fid] if fid and fid in fpath else ("/(folder not listed in the matter file)" if fid else "/(no folder)")
+            f = (
+                fpath[fid]
+                if fid and fid in fpath
+                else ("/(folder not listed in the matter file)" if fid else "/(no folder)")
+            )
             top = ("/" + f.lstrip("/").split("/", 1)[0]) if f.startswith("/") and not f.startswith("/(") else f
             fld[top] = fld.get(top, 0) + 1
-        skipped = sorted((f, n) for f, n in fld.items() if not any(f.startswith(px) or px.startswith(f) for px in prefixes))
+        skipped = sorted(
+            (f, n) for f, n in fld.items() if not any(f.startswith(px) or px.startswith(f) for px in prefixes)
+        )
         if skipped:
-            o += ["", "Folders in the matter file outside the scope of this review, with the number of "
-                      "documents in each:\n"]
+            o += [
+                "",
+                "Folders in the matter file outside the scope of this review, with the number of documents in each:\n",
+            ]
             o += [f"* {f} ({_plural(n, 'document')})" for f, n in skipped]
     return o
 
 
 def _unread_lines(d: Path, failed: list, log: Callable[[str], None]) -> list[str]:
     o: list[str] = []
-    unread = [(r.get("name", "?"), r.get("folder", ""), str(r.get("error") or "could not be retrieved")[:90]) for r in failed]
+    unread = [
+        (r.get("name", "?"), r.get("folder", ""), str(r.get("error") or "could not be retrieved")[:90]) for r in failed
+    ]
     m = read_json(d / "msg_attachments.json", {}) or {}
     if m.get("emails_opened"):
-        line = (f"Email in the matter file was reviewed: {m['emails_opened']} messages were opened and their attachments "
-                f"extracted. {m.get('distinct_attachments') or 0} distinct attachments were found, of which "
-                f"{m.get('already_pulled') or 0} were copies of documents already in the reviewed set and "
-                f"{m.get('new_to_the_corpus') or 0} were new to it and were read.")
+        line = (
+            f"Email in the matter file was reviewed: {m['emails_opened']} messages were opened and their attachments "
+            f"extracted. {m.get('distinct_attachments') or 0} distinct attachments were found, of which "
+            f"{m.get('already_pulled') or 0} were copies of documents already in the reviewed set and "
+            f"{m.get('new_to_the_corpus') or 0} were new to it and were read."
+        )
         enc = m.get("encrypted") or []
         if enc:
             line += f" {_plural(len(enc), 'attachment')} could not be opened (listed below)."
         o += ["", line]
     for e in m.get("encrypted") or []:
-        unread.append((e.get("attachment", "?"), str(e.get("email", ""))[:60],
-                       "encrypted by the sender (Microsoft RMS); opening it requires the recipient's credentials"))
+        unread.append(
+            (
+                e.get("attachment", "?"),
+                str(e.get("email", ""))[:60],
+                "encrypted by the sender (Microsoft RMS); opening it requires the recipient's credentials",
+            )
+        )
     if unread:
         o += ["", "The following documents could not be read, and nothing from them appears in this chronology:\n"]
         o += [f'* "{name}"{f" ({where})" if where else ""} - {why}' for name, where, why in sorted(unread)]
     ill = [r for r in read_jsonl(d / "ocr_results.jsonl") if (r.get("illegible_marks") or 0) > 0]
     if ill:
         total = sum(r["illegible_marks"] for r in ill)
-        o += ["", f"The following documents were scanned images and were transcribed for this chronology. Transcription "
-                  f"left {_plural(total, 'passage')} unreadable, marked as illegible in the source; entries drawn from "
-                  f"these documents are otherwise complete:\n"]
-        o += [f'* "{r.get("name", "?")}" - {_plural(r["illegible_marks"], "passage")}'
-              for r in sorted(ill, key=lambda x: -x["illegible_marks"])]
+        o += [
+            "",
+            f"The following documents were scanned images and were transcribed for this chronology. Transcription "
+            f"left {_plural(total, 'passage')} unreadable, marked as illegible in the source; entries drawn from "
+            f"these documents are otherwise complete:\n",
+        ]
+        o += [
+            f'* "{r.get("name", "?")}" - {_plural(r["illegible_marks"], "passage")}'
+            for r in sorted(ill, key=lambda x: -x["illegible_marks"])
+        ]
     return o
 
 
@@ -96,30 +121,49 @@ def _duplicate_lines(d: Path, byid: dict, dupes: list, unit: str | None, log: Ca
         for r in dupes:
             keep = byid.get(r["duplicate_of"]) or {}
             rows.append((r.get("name", "?"), r.get("folder", ""), keep.get("name", "?"), keep.get("folder", "")))
-        o += ["", "The following documents in the matter file are byte-identical copies of documents already reflected "
-                  "above. One copy was processed; nothing was removed from the matter file:\n"]
-        o += [f'* "{name}" ({fold}) is an exact copy of "{kname}" ({kfold})' for name, fold, kname, kfold in sorted(rows)]
+        o += [
+            "",
+            "The following documents in the matter file are byte-identical copies of documents already reflected "
+            "above. One copy was processed; nothing was removed from the matter file:\n",
+        ]
+        o += [
+            f'* "{name}" ({fold}) is an exact copy of "{kname}" ({kfold})' for name, fold, kname, kfold in sorted(rows)
+        ]
     tdupes = read_json(d / "text_duplicates.json", None)
     if tdupes is not None:
         raw_n = len(tdupes) if isinstance(tdupes, list) else 0
-        rows_t = [t for t in (tdupes if isinstance(tdupes, list) else []) if isinstance(t, dict) and t.get("kept") and t.get("dropped")]
+        rows_t = [
+            t
+            for t in (tdupes if isinstance(tdupes, list) else [])
+            if isinstance(t, dict) and t.get("kept") and t.get("dropped")
+        ]
         if raw_n and not rows_t:
-            log("WARNING: text_duplicates.json rows carry no kept+dropped; schema drift, disclosure would be silently empty")
+            log(
+                "WARNING: text_duplicates.json rows carry no kept+dropped; schema drift, disclosure would be silently empty"
+            )
         if unit is not None:
             rows_t = [t for t in rows_t if not t.get("unit") or t["unit"] == unit]
         if rows_t:
-            o += ["", "The following documents contain identical text although the files themselves differ (separate scans "
-                      "of one document). One copy was processed; nothing was removed from the matter file. Where the two "
-                      "filenames claim different date ranges, the content is identical and one name misdescribes its "
-                      "contents:\n"]
-            o += [f'* "{t.get("dropped", "?")}" contains the same text as "{t.get("kept", "?")}"'
-                  + (f' ({t["chars"]:,} characters)' if t.get("chars") else "") for t in sorted(rows_t, key=lambda x: x.get("kept", ""))]
+            o += [
+                "",
+                "The following documents contain identical text although the files themselves differ (separate scans "
+                "of one document). One copy was processed; nothing was removed from the matter file. Where the two "
+                "filenames claim different date ranges, the content is identical and one name misdescribes its "
+                "contents:\n",
+            ]
+            o += [
+                f'* "{t.get("dropped", "?")}" contains the same text as "{t.get("kept", "?")}"'
+                + (f" ({t['chars']:,} characters)" if t.get("chars") else "")
+                for t in sorted(rows_t, key=lambda x: x.get("kept", ""))
+            ]
     obs = read_json(d / "file_observations.json", None)
     if obs is not None:
         raw_n = len(obs) if isinstance(obs, list) else 0
         rows_o = [x for x in (obs if isinstance(obs, list) else []) if isinstance(x, dict) and x.get("text")]
         if raw_n and not rows_o:
-            log("WARNING: file_observations.json rows carry no 'text'; schema drift, observations would be silently empty")
+            log(
+                "WARNING: file_observations.json rows carry no 'text'; schema drift, observations would be silently empty"
+            )
         if unit is not None:
             rows_o = [x for x in rows_o if not x.get("unit") or x["unit"] == unit]
         if rows_o:
@@ -140,6 +184,8 @@ def section(slug_dir: Path, unit: str | None, log: Callable[[str], None]) -> lis
     o += _unread_lines(slug_dir, failed, log)
     o += _duplicate_lines(slug_dir, byid, dupes, unit, log)
     if len(o) == 2:
-        o.append("All documents in the reviewed folders were retrieved and read in full. No document was unreadable, "
-                 "encrypted, or excluded.")
+        o.append(
+            "All documents in the reviewed folders were retrieved and read in full. No document was unreadable, "
+            "encrypted, or excluded."
+        )
     return o

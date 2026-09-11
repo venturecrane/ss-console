@@ -246,9 +246,7 @@ def test_a_matter_with_the_same_description_for_a_different_client_does_not_bloc
 # ---- arguments -----------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "field", ["description", "matter_type_id", "client_contact_id", "number"]
-)
+@pytest.mark.parametrize("field", ["description", "matter_type_id", "client_contact_id", "number"])
 def test_every_argument_is_required(monkeypatch, field: str) -> None:
     """``number`` included, and that is the deliberate difference from the
     vendor's optional field: it is the key this seat's library resolves on and

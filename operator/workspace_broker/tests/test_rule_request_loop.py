@@ -123,10 +123,7 @@ def _rows(broker: Broker, action_type: str) -> list[dict]:
     conn.row_factory = sqlite3.Row
     try:
         return [
-            dict(r)
-            for r in conn.execute(
-                "SELECT * FROM audit_log WHERE action_type=? ORDER BY id", (action_type,)
-            )
+            dict(r) for r in conn.execute("SELECT * FROM audit_log WHERE action_type=? ORDER BY id", (action_type,))
         ]
     finally:
         conn.close()
@@ -439,9 +436,7 @@ def test_a_declined_rule_is_no_longer_offered_for_confirmation(tmp_path):
     proposed = _propose(broker)
     _decline(broker, proposed["proposal_id"])
 
-    result = _call(
-        broker, action="establish_pending", sender=OTHER_ADMIN, include_for_admin=True
-    )
+    result = _call(broker, action="establish_pending", sender=OTHER_ADMIN, include_for_admin=True)
     assert [p["proposal_id"] for p in result["pending"]] == []
 
 
@@ -467,9 +462,7 @@ def test_the_requester_is_shown_a_decline_and_a_lapse_when_asked(tmp_path):
     _age_out(broker, lapsed["proposal_id"])
     broker.establishment.sweep()
 
-    result = _call(
-        broker, action="establish_pending", sender=PARALEGAL, include_outcomes=True
-    )
+    result = _call(broker, action="establish_pending", sender=PARALEGAL, include_outcomes=True)
     by_id = {p["proposal_id"]: p for p in result["pending"]}
     assert by_id[declined["proposal_id"]]["state"] == "declined"
     assert by_id[declined["proposal_id"]]["declined_by"] == ADMIN
@@ -489,9 +482,7 @@ def test_outcomes_are_opt_in_so_an_older_seat_sees_only_confirmable_rows(tmp_pat
     default_view = _call(broker, action="establish_pending", sender=PARALEGAL)
     assert default_view["pending"] == []
 
-    asked = _call(
-        broker, action="establish_pending", sender=PARALEGAL, include_outcomes=True
-    )
+    asked = _call(broker, action="establish_pending", sender=PARALEGAL, include_outcomes=True)
     assert [p["proposal_id"] for p in asked["pending"]] == [declined["proposal_id"]]
 
 
@@ -560,9 +551,7 @@ def test_a_senderless_listing_without_the_flag_is_still_refused(tmp_path):
 def test_include_outcomes_must_be_a_boolean(tmp_path):
     broker = _broker(tmp_path)
     with pytest.raises(EstablishmentValidationError, match="include_outcomes"):
-        _call(
-            broker, action="establish_pending", sender=PARALEGAL, include_outcomes="yes"
-        )
+        _call(broker, action="establish_pending", sender=PARALEGAL, include_outcomes="yes")
 
 
 # ---------------------------------------------------------------------------
@@ -576,9 +565,7 @@ def test_reporting_a_lapse_marks_it_and_writes_one_row(tmp_path):
     _age_out(broker, proposed["proposal_id"])
     broker.establishment.sweep()
 
-    result = _call(
-        broker, action="establish_lapse_notified", proposal_id=proposed["proposal_id"]
-    )
+    result = _call(broker, action="establish_lapse_notified", proposal_id=proposed["proposal_id"])
     assert result["state"] == "lapsed"
 
     rows = _rows(broker, RULE_LAPSED_ACTION_TYPE)
@@ -596,9 +583,7 @@ def test_a_reported_outcome_leaves_the_requesters_list(tmp_path):
     broker.establishment.sweep()
     _call(broker, action="establish_lapse_notified", proposal_id=proposed["proposal_id"])
 
-    result = _call(
-        broker, action="establish_pending", sender=PARALEGAL, include_outcomes=True
-    )
+    result = _call(broker, action="establish_pending", sender=PARALEGAL, include_outcomes=True)
     assert result["pending"] == []
 
 
@@ -612,9 +597,7 @@ def test_an_outcome_is_reported_exactly_once(tmp_path):
     _call(broker, action="establish_lapse_notified", proposal_id=proposed["proposal_id"])
 
     with pytest.raises(EstablishmentValidationError, match="already reported"):
-        _call(
-            broker, action="establish_lapse_notified", proposal_id=proposed["proposal_id"]
-        )
+        _call(broker, action="establish_lapse_notified", proposal_id=proposed["proposal_id"])
     assert len(_rows(broker, RULE_LAPSED_ACTION_TYPE)) == 1
 
 
@@ -628,9 +611,7 @@ def test_reporting_a_decline_writes_no_lapse_row(tmp_path):
     proposed = _propose(broker)
     _decline(broker, proposed["proposal_id"])
 
-    result = _call(
-        broker, action="establish_lapse_notified", proposal_id=proposed["proposal_id"]
-    )
+    result = _call(broker, action="establish_lapse_notified", proposal_id=proposed["proposal_id"])
     assert result["state"] == "declined"
     assert _rows(broker, RULE_LAPSED_ACTION_TYPE) == []
     assert len(_rows(broker, RULE_DECLINED_ACTION_TYPE)) == 1
@@ -641,9 +622,7 @@ def test_an_open_rule_has_no_outcome_to_report(tmp_path):
     broker = _broker(tmp_path)
     proposed = _propose(broker)
     with pytest.raises(EstablishmentValidationError, match="still open"):
-        _call(
-            broker, action="establish_lapse_notified", proposal_id=proposed["proposal_id"]
-        )
+        _call(broker, action="establish_lapse_notified", proposal_id=proposed["proposal_id"])
     assert _rows(broker, RULE_LAPSED_ACTION_TYPE) == []
 
 
@@ -1362,14 +1341,9 @@ def test_a_long_reason_is_quoted_up_to_the_ceiling_rather_than_refused(tmp_path)
     broker = _broker(tmp_path)
     recorded = _ops_propose(broker)
 
-    answered = _ops_resolve(
-        broker, recorded["proposal_id"], "declined", reason="x" * 400
-    )
+    answered = _ops_resolve(broker, recorded["proposal_id"], "declined", reason="x" * 400)
     assert len(answered["reason"]) == MAX_OUTCOME_REASON
-    assert (
-        broker.establishment.pending.get(recorded["proposal_id"])["outcome_reason"]
-        == "x" * MAX_OUTCOME_REASON
-    )
+    assert broker.establishment.pending.get(recorded["proposal_id"])["outcome_reason"] == "x" * MAX_OUTCOME_REASON
 
 
 def test_an_empty_reason_reads_as_no_reason(tmp_path):
@@ -1377,9 +1351,7 @@ def test_an_empty_reason_reads_as_no_reason(tmp_path):
     recorded = _ops_propose(broker)
     answered = _ops_resolve(broker, recorded["proposal_id"], "declined", reason="   ")
     assert answered["reason"] is None
-    assert json.loads(_rows(broker, OPS_REQUEST_RESOLVED_ACTION_TYPE)[0]["metadata"])[
-        "has_reason"
-    ] is False
+    assert json.loads(_rows(broker, OPS_REQUEST_RESOLVED_ACTION_TYPE)[0]["metadata"])["has_reason"] is False
 
 
 # --- the one follow-up ask --------------------------------------------------
@@ -1392,9 +1364,7 @@ def test_smd_is_asked_once_for_an_answer_the_parser_reads(tmp_path):
     broker = _broker(tmp_path)
     recorded = _ops_propose(broker)
 
-    assert _call(
-        broker, action="ops_ask_sent", proposal_id=recorded["proposal_id"]
-    )["ask_sent"] is True
+    assert _call(broker, action="ops_ask_sent", proposal_id=recorded["proposal_id"])["ask_sent"] is True
 
     with pytest.raises(EstablishmentValidationError, match="already been asked once"):
         _call(broker, action="ops_ask_sent", proposal_id=recorded["proposal_id"])
@@ -1443,9 +1413,7 @@ def test_an_unanswered_request_lapses_and_reports_its_own_type(tmp_path):
     assert row is not None, "a deleted row is a person who never hears back"
     assert row["lapsed_at"] is not None
 
-    reported = _call(
-        broker, action="establish_lapse_notified", proposal_id=recorded["proposal_id"]
-    )
+    reported = _call(broker, action="establish_lapse_notified", proposal_id=recorded["proposal_id"])
     assert reported["state"] == "lapsed"
 
     lapsed = _rows(broker, OPS_REQUEST_LAPSED_ACTION_TYPE)
@@ -1478,9 +1446,7 @@ def test_the_pending_view_carries_who_answered_and_what_they_wrote(tmp_path):
     needs has to survive the round trip."""
     broker = _broker(tmp_path)
     recorded = _ops_propose(broker)
-    _ops_resolve(
-        broker, recorded["proposal_id"], "declined", reason="not in this package"
-    )
+    _ops_resolve(broker, recorded["proposal_id"], "declined", reason="not in this package")
 
     view = _call(
         broker,
@@ -1578,9 +1544,7 @@ def _claim(broker: Broker, proposal_id: str, claimed_by: str = "gateway"):
 
 
 def _release(broker: Broker, proposal_id: str):
-    return _call(
-        broker, action="establish_notify_release", proposal_id=proposal_id
-    )
+    return _call(broker, action="establish_notify_release", proposal_id=proposal_id)
 
 
 def _lapsed_row(broker: Broker) -> str:
@@ -1638,9 +1602,7 @@ def test_the_winner_of_the_claim_can_still_mark_the_row_reported(tmp_path):
     proposal_id = _lapsed_row(broker)
     assert _claim(broker, proposal_id)["claimed"] is True
 
-    result = _call(
-        broker, action="establish_lapse_notified", proposal_id=proposal_id
-    )
+    result = _call(broker, action="establish_lapse_notified", proposal_id=proposal_id)
     assert result["state"] == "lapsed"
     assert len(_rows(broker, RULE_LAPSED_ACTION_TYPE)) == 1
 
@@ -1798,9 +1760,7 @@ def test_a_claim_must_name_its_claimant(tmp_path):
     broker = _broker(tmp_path)
     proposal_id = _lapsed_row(broker)
     with pytest.raises(EstablishmentValidationError, match="claimed_by"):
-        _call(
-            broker, action="establish_notify_claim", proposal_id=proposal_id
-        )
+        _call(broker, action="establish_notify_claim", proposal_id=proposal_id)
 
 
 def test_an_unknown_proposal_cannot_be_claimed_or_released(tmp_path):
@@ -1823,9 +1783,7 @@ def test_the_requesters_own_list_still_shows_a_row_another_process_is_sending(tm
     proposal_id = _lapsed_row(broker)
     assert _claim(broker, proposal_id)["claimed"] is True
 
-    result = _call(
-        broker, action="establish_pending", sender=PARALEGAL, include_outcomes=True
-    )
+    result = _call(broker, action="establish_pending", sender=PARALEGAL, include_outcomes=True)
     assert [row["proposal_id"] for row in result["pending"]] == [proposal_id]
     # And that turn cannot send, which is the property that makes the above safe.
     assert _claim(broker, proposal_id, "attributed-turn")["claimed"] is False

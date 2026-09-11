@@ -1,13 +1,13 @@
 """The citation audit in-process: claims, anchors, the page index, renders,
 verdicts through the doorway, one round with controls, the coverage gate,
 the repair, and the loop end to end. Scripted client, real PDFs."""
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
 from types import SimpleNamespace as NS
 
-import pytest
 
 from medchron import config as config_mod, job as job_mod
 from medchron.audit import anchors as AN, claims as CL, coverage, diag, page_text, render, repair, verify as VF
@@ -16,8 +16,10 @@ from medchron.stages import audit_loop
 from medchron.stages.base import StageRun
 from medchron_testkit import FakeSeat, make_pdf
 
-PROSE = ("Patient seen on 01/02/2026 for neck pain after the collision. Blood pressure 120/80. "
-         "Ibuprofen 400 mg prescribed. Riverside Imaging ordered an MRI. ") * 4
+PROSE = (
+    "Patient seen on 01/02/2026 for neck pain after the collision. Blood pressure 120/80. "
+    "Ibuprofen 400 mg prescribed. Riverside Imaging ordered an MRI. "
+) * 4
 
 
 class Usage:
@@ -49,13 +51,25 @@ def _sr(job_dir: Path, firm_config_path: Path, data_root: Path, client, log: lis
     job = job_mod.load(job_dir)
     cfg = config_mod.load(str(firm_config_path))
     lines = log if log is not None else []
-    return StageRun(job=job, cfg=cfg, unit=job.units[0], slug_dir=data_root / "example-matter", decided={},
-                    log=lines.append, seat_factory=lambda: FakeSeat([], [], {}), client_factory=lambda: client)
+    return StageRun(
+        job=job,
+        cfg=cfg,
+        unit=job.units[0],
+        slug_dir=data_root / "example-matter",
+        decided={},
+        log=lines.append,
+        seat_factory=lambda: FakeSeat([], [], {}),
+        client_factory=lambda: client,
+    )
 
 
 SUPPORTED = {"verdict": "SUPPORTED", "unsupported_assertions": [], "contradictions": [], "note": "the page says so"}
-UNSUPPORTED = {"verdict": "UNSUPPORTED", "unsupported_assertions": ["blood pressure 120/80"], "contradictions": [],
-               "note": "no vitals on the page"}
+UNSUPPORTED = {
+    "verdict": "UNSUPPORTED",
+    "unsupported_assertions": ["blood pressure 120/80"],
+    "contradictions": [],
+    "note": "no vitals on the page",
+}
 
 
 def _is_control(params: dict) -> bool:
@@ -105,7 +119,10 @@ def test_anchors_find_dates_numbers_drugs_and_propers() -> None:
     found = AN.find_anchors("On April 3, 2021 the patient took ibuprofen 400 mg; BP 120/80 at Riverside Imaging.")
     assert "date:2021-04-03" in found and "num:400mg" in found and "num:120/80" in found
     assert "drug:ibuprofen" in found and "proper:riverside" in found and "proper:imaging" not in found
-    assert AN.found_on(["date:2021-04-03", "num:400mg"], "Visit 04/03/2021, ibuprofen 400 mg") == ["date:2021-04-03", "num:400mg"]
+    assert AN.found_on(["date:2021-04-03", "num:400mg"], "Visit 04/03/2021, ibuprofen 400 mg") == [
+        "date:2021-04-03",
+        "num:400mg",
+    ]
 
 
 # ---- render and the page index --------------------------------------------------------
@@ -114,7 +131,10 @@ def test_render_is_cached_and_capped(tmp_path: Path) -> None:
     pdf.write_bytes(make_pdf([PROSE, ""]))
     out = render.render(pdf, 1, tmp_path / "pages", "ex1")
     assert out is not None and out.stat().st_size > 1024 and out.name == "ex1_p1.png"
-    assert render.render(pdf, 1, tmp_path / "pages", "ex1") == out and render.render(pdf, 3, tmp_path / "pages", "ex1") is None
+    assert (
+        render.render(pdf, 1, tmp_path / "pages", "ex1") == out
+        and render.render(pdf, 3, tmp_path / "pages", "ex1") is None
+    )
     assert render.img_block(out)["source"]["media_type"] == "image/png"
 
 
@@ -129,14 +149,27 @@ def _exhibit_set(sr: StageRun, pages: list[str]) -> Path:
     data = make_pdf(pages)
     (out / "Exhibit 1 - Example Clinic - 01-02-2026 (Medical Records).pdf").write_bytes(data)
     (d / "units" / "alpha.json").write_text(json.dumps([{"id": "f1", "name": "clinic note", "ext": ".pdf"}]))
-    (d / "extracted.jsonl").write_text(json.dumps({"id": "f1", "name": "clinic note", "pages": len(pages), "chars": 100}) + "\n")
+    (d / "extracted.jsonl").write_text(
+        json.dumps({"id": "f1", "name": "clinic note", "pages": len(pages), "chars": 100}) + "\n"
+    )
     (d / "text" / "f1.txt").write_text("".join(f"[p.{i}]\n{t}\n" for i, t in enumerate(pages, 1)))
-    (out / "page_map.json").write_text(json.dumps([{"exhibit": 1, "total_pages": len(pages), "files": [
-        {"file": "clinic note.pdf", "old_exhibit": 1, "start_page": 1, "pages": len(pages)}]}]))
+    (out / "page_map.json").write_text(
+        json.dumps(
+            [
+                {
+                    "exhibit": 1,
+                    "total_pages": len(pages),
+                    "files": [{"file": "clinic note.pdf", "old_exhibit": 1, "start_page": 1, "pages": len(pages)}],
+                }
+            ]
+        )
+    )
     return out
 
 
-def test_page_index_calls_a_native_text_page_eligible_and_a_blank_one_not(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+def test_page_index_calls_a_native_text_page_eligible_and_a_blank_one_not(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
     sr = _sr(job_dir, firm_config_path, data_root, None)
     _exhibit_set(sr, [PROSE, ""])
     ix = page_text.PageIndex(sr.slug_dir, "alpha")
@@ -160,10 +193,14 @@ def test_verify_parses_the_tool_result_and_never_assumes_its_shape() -> None:
 def _write_doc(sr: StageRun, body_entries: str) -> None:
     rd = sr.slug_dir / "runs" / "alpha"
     rd.mkdir(parents=True, exist_ok=True)
-    (rd / "final-chronology.md").write_text("# Chronology\n## Medical Chronology\n\n" + body_entries + "\n## Exhibit List\n")
+    (rd / "final-chronology.md").write_text(
+        "# Chronology\n## Medical Chronology\n\n" + body_entries + "\n## Exhibit List\n"
+    )
 
 
-def test_round_records_verdicts_controls_and_out_of_range(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+def test_round_records_verdicts_controls_and_out_of_range(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
     def reply(p, n):
         return tool_msg(UNSUPPORTED if _is_control(p) else SUPPORTED)
 
@@ -172,13 +209,15 @@ def test_round_records_verdicts_controls_and_out_of_range(job_dir: Path, firm_co
     sr = _sr(job_dir, firm_config_path, data_root, client, log=log)
     out = _exhibit_set(sr, [PROSE, PROSE])
     (out / "Exhibit 2 - Riverside Imaging - 01-09-2026 (Medical Records).pdf").write_bytes(make_pdf([PROSE]))
-    entries = "\n\n".join(f"01/0{i}/2026\nExample Clinic | Medical Diagnoses\n\nA supported claim number {i} about the neck. (Exhibit 1 - p. 1)"
-                          for i in range(1, 9))
+    entries = "\n\n".join(
+        f"01/0{i}/2026\nExample Clinic | Medical Diagnoses\n\nA supported claim number {i} about the neck. (Exhibit 1 - p. 1)"
+        for i in range(1, 9)
+    )
     entries += "\n\n01/09/2026\nExample Clinic | Medical Diagnoses\n\nA claim citing a page that does not exist. (Exhibit 1 - p. 7)"
     _write_doc(sr, entries)
     paths = AuditPaths(sr.slug_dir, "alpha")
     rc = Round(sr.doorway, "claude-sonnet-5", paths, log.append, mode="image", workers=2).execute()
-    assert rc == 1                                          # the out-of-range claim is a problem
+    assert rc == 1  # the out-of-range claim is a problem
     rows = CL.read_rows(paths.results)
     real = [r for r in rows if r["kind"] == "real"]
     assert len(real) == 9 and sum(1 for r in real if r["verdict"] == "SUPPORTED") == 8
@@ -200,16 +239,24 @@ def test_round_records_verdicts_controls_and_out_of_range(job_dir: Path, firm_co
 def test_double_sweep_guard_refuses_orphaned_keys(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
     sr = _sr(job_dir, firm_config_path, data_root, Scripted(lambda p, n: tool_msg(SUPPORTED)))
     _exhibit_set(sr, [PROSE])
-    _write_doc(sr, "01/02/2026\nExample Clinic | Medical Diagnoses\n\nA claim about the neck that is long enough. (Exhibit 1 - p. 1)")
+    _write_doc(
+        sr,
+        "01/02/2026\nExample Clinic | Medical Diagnoses\n\nA claim about the neck that is long enough. (Exhibit 1 - p. 1)",
+    )
     paths = AuditPaths(sr.slug_dir, "alpha")
     body = CL.body_of(paths.doc.read_text())
-    CL.append_row(paths.results, {"key": "deadbeefdeadbeef", "kind": "real", "doc_sha": CL.doc_sha_of(body), "verdict": "SUPPORTED"})
+    CL.append_row(
+        paths.results,
+        {"key": "deadbeefdeadbeef", "kind": "real", "doc_sha": CL.doc_sha_of(body), "verdict": "SUPPORTED"},
+    )
     assert Round(sr.doorway, "claude-sonnet-5", paths, lambda *_: None).execute() == 3
     assert Round(sr.doorway, "claude-sonnet-5", paths, lambda *_: None, force=True).execute() == 0
 
 
 # ---- text mode ------------------------------------------------------------------------------
-def test_text_mode_audits_native_pages_against_a_cached_window(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+def test_text_mode_audits_native_pages_against_a_cached_window(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
     def reply(p, n):
         tools = p.get("tools") or []
         if tools and "supporting_pages" in tools[0]["input_schema"]["properties"]:
@@ -220,7 +267,10 @@ def test_text_mode_audits_native_pages_against_a_cached_window(job_dir: Path, fi
     log: list[str] = []
     sr = _sr(job_dir, firm_config_path, data_root, client, log=log)
     _exhibit_set(sr, [PROSE, PROSE, PROSE])
-    _write_doc(sr, "01/02/2026\nExample Clinic | Medical Diagnoses\n\nBlood pressure 120/80 and ibuprofen 400 mg on 01/02/2026. (Exhibit 1 - p. 1)")
+    _write_doc(
+        sr,
+        "01/02/2026\nExample Clinic | Medical Diagnoses\n\nBlood pressure 120/80 and ibuprofen 400 mg on 01/02/2026. (Exhibit 1 - p. 1)",
+    )
     paths = AuditPaths(sr.slug_dir, "alpha")
     assert Round(sr.doorway, "claude-sonnet-5", paths, log.append, mode="text", workers=1).execute() == 0
     row = [r for r in CL.read_rows(paths.results) if r["kind"] == "real"][0]
@@ -228,7 +278,10 @@ def test_text_mode_audits_native_pages_against_a_cached_window(job_dir: Path, fi
     assert row["mode"] == "text" and row["window"] == [1, 2, 3] and row["text_then_image"] is False
     assert "num:120/80" in row["anchors"] and "num:120/80" in row["anchors_found"]
     p = client.calls[0]
-    assert p["messages"][0]["content"][0].get("cache_control") and "===== Exhibit 1 p.1 =====" in p["messages"][0]["content"][0]["text"]
+    assert (
+        p["messages"][0]["content"][0].get("cache_control")
+        and "===== Exhibit 1 p.1 =====" in p["messages"][0]["content"][0]["text"]
+    )
     assert p["system"] and p["tool_choice"]["name"] == "record_verdict"
 
 
@@ -236,7 +289,10 @@ def test_text_mode_audits_native_pages_against_a_cached_window(job_dir: Path, fi
 def test_repair_helpers() -> None:
     assert repair.compress([1, 2, 3, 7]) == "1-3, 7"
     assert repair.widen_cite("(Exhibit 3 - p. 4)", [3, 4, 5]) == "(Exhibit 3 - p. 3-5)"
-    assert repair.widen_cite("(Exhibit 3 - p. 9, 14, machine transcription)", [9, 10]) == "(Exhibit 3 - p. 9-10, machine transcription)"
+    assert (
+        repair.widen_cite("(Exhibit 3 - p. 9, 14, machine transcription)", [9, 10])
+        == "(Exhibit 3 - p. 9-10, machine transcription)"
+    )
     assert repair.widen_cite("(Exhibit 3)", [2]) == "(Exhibit 3 - p. 2)"
     assert repair.replace_in("a\nb\n", "a", "") == ("b\n", True) and repair.replace_in("x", "q", "y") == ("x", False)
 
@@ -260,9 +316,11 @@ def test_loop_repairs_then_passes_the_gate(job_dir: Path, firm_config_path: Path
     log: list[str] = []
     sr = _sr(job_dir, firm_config_path, data_root, client, log=log)
     _exhibit_set(sr, [PROSE, PROSE])
-    entries = ("01/02/2026\nExample Clinic | Medical Diagnoses\n\n"
-               "The patient reports neck pain rated 6 of 10 since the incident. (Exhibit 1 - p. 1)\n\n"
-               "Blood pressure was recorded as 120/80 at this visit. (Exhibit 1 - p. 2)")
+    entries = (
+        "01/02/2026\nExample Clinic | Medical Diagnoses\n\n"
+        "The patient reports neck pain rated 6 of 10 since the incident. (Exhibit 1 - p. 1)\n\n"
+        "Blood pressure was recorded as 120/80 at this visit. (Exhibit 1 - p. 2)"
+    )
     rd = sr.slug_dir / "runs" / "alpha"
     _write_doc(sr, entries)
     (rd / "entries_scoped_final.md").write_text(entries)
@@ -277,7 +335,9 @@ def test_loop_repairs_then_passes_the_gate(job_dir: Path, firm_config_path: Path
     assert any("GATE PASS" in line for line in log)
 
 
-def test_loop_drops_residual_at_the_cap_and_holds_on_a_never_supported_claim(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+def test_loop_drops_residual_at_the_cap_and_holds_on_a_never_supported_claim(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
     def reply(p, n):
         if p.get("system") and "correct one sentence-group" in p["system"][0]["text"]:
             return text_msg("Still says 120/80 which the page does not. (Exhibit 1 - p. 2)")
@@ -287,11 +347,13 @@ def test_loop_drops_residual_at_the_cap_and_holds_on_a_never_supported_claim(job
 
     sr = _sr(job_dir, firm_config_path, data_root, Scripted(reply))
     _exhibit_set(sr, [PROSE, PROSE])
-    entries = ("01/02/2026\nExample Clinic | Medical Diagnoses\n\n"
-               "The patient reports neck pain rated 6 of 10 since the incident. (Exhibit 1 - p. 1)\n\n"
-               "Blood pressure was recorded as 120/80 at this visit. (Exhibit 1 - p. 2)")
+    entries = (
+        "01/02/2026\nExample Clinic | Medical Diagnoses\n\n"
+        "The patient reports neck pain rated 6 of 10 since the incident. (Exhibit 1 - p. 1)\n\n"
+        "Blood pressure was recorded as 120/80 at this visit. (Exhibit 1 - p. 2)"
+    )
     _write_doc(sr, entries)
-    assert audit_loop.run(sr) == 0            # residual dropped at the cap; the survivor passes the gate
+    assert audit_loop.run(sr) == 0  # residual dropped at the cap; the survivor passes the gate
     doc = (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
     assert "120/80" not in doc and "neck pain rated 6 of 10" in doc
     edits = CL.read_rows(sr.slug_dir / "out" / "alpha" / "repair-edits.jsonl")
@@ -307,9 +369,18 @@ def test_diag_page_remap_and_rekey(job_dir: Path, firm_config_path: Path, data_r
     remap = diag.page_remap(sr.slug_dir, "alpha")
     assert remap == {1: {1: 1, 3: 2}}
     assert diag.remap_pages([3], remap, 1) == [2] and diag.remap_pages([2], remap, 1) is None
-    old = {"key": CL.claim_key(1, "3", "same words"), "kind": "real", "exhibit": 1, "page_spec": "3", "pages": [3],
-           "claim": "same words", "verdict": "SUPPORTED"}
-    live = [{"key": CL.claim_key(1, "2", "same words"), "exhibit": 1, "page_spec": "2", "pages": [2], "claim": "same words"}]
+    old = {
+        "key": CL.claim_key(1, "3", "same words"),
+        "kind": "real",
+        "exhibit": 1,
+        "page_spec": "3",
+        "pages": [3],
+        "claim": "same words",
+        "verdict": "SUPPORTED",
+    }
+    live = [
+        {"key": CL.claim_key(1, "2", "same words"), "exhibit": 1, "page_spec": "2", "pages": [2], "claim": "same words"}
+    ]
     results = sr.slug_dir / "out" / "alpha" / "audit-results.jsonl"
     CL.append_row(results, old)
     assert diag.rekey_rows(results, CL.read_rows(results), live, remap, doc_sha="abc") == 1

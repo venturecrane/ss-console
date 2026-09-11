@@ -94,9 +94,7 @@ def _skill_name() -> str:
 
 def probe_open_matter_count() -> int | None:
     """Return the open-matter count, or None when it cannot be determined."""
-    connector_python = os.environ.get(
-        "SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT
-    )
+    connector_python = os.environ.get("SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT)
     if not Path(connector_python).exists():
         sys.stderr.write(f"[pre_run] connector python missing: {connector_python}\n")
         return None
@@ -115,10 +113,7 @@ def probe_open_matter_count() -> int | None:
         sys.stderr.write(f"[pre_run] smokeball probe failed: {exc}\n")
         return None
     if result.returncode != 0:
-        sys.stderr.write(
-            f"[pre_run] smokeball probe exit {result.returncode}: "
-            f"{(result.stderr or '').strip()[:500]}\n"
-        )
+        sys.stderr.write(f"[pre_run] smokeball probe exit {result.returncode}: {(result.stderr or '').strip()[:500]}\n")
         return None
     try:
         payload = json.loads((result.stdout or "").strip().splitlines()[-1])
@@ -138,9 +133,7 @@ def _append_wake_row(*, verb: str, action_type: str, skill_name: str, basis: str
     the wake row must carry the same fields or a reader cannot diff them, and
     two near-identical functions is exactly how that drifts.
     """
-    socket_path = os.environ.get("SMD_AUDIT_BROKER_SOCKET") or os.environ.get(
-        "SMD_WORKSPACE_BROKER_SOCKET"
-    )
+    socket_path = os.environ.get("SMD_AUDIT_BROKER_SOCKET") or os.environ.get("SMD_WORKSPACE_BROKER_SOCKET")
     if not socket_path:
         sys.stderr.write("[pre_run] no broker socket in env; cannot heartbeat\n")
         return False
@@ -224,9 +217,7 @@ def decide_and_emit(count: int | None, skill_name: str) -> int:
         # not probe both wake, and only one of them is healthy.
         write_emitted_wake_heartbeat(
             skill_name,
-            "probe_unavailable:open_matter_count_unknown"
-            if count is None
-            else "hydrated_seat:open_matters_present",
+            "probe_unavailable:open_matter_count_unknown" if count is None else "hydrated_seat:open_matters_present",
         )
         return _emit(wake=True)
     if not write_suppressed_wake_heartbeat(skill_name):

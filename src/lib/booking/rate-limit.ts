@@ -22,6 +22,8 @@
  *     one extra request slips through.
  */
 
+import { captureError } from '../observability/sentry'
+
 const WINDOW_SECONDS = 60 * 60 // 1 hour
 const DEFAULT_LIMIT = 10
 
@@ -37,7 +39,13 @@ export interface RateLimitResult {
  * Check + increment the rate limit bucket for the given key (typically
  * `<endpoint>:<ip>`). Returns whether the request should be allowed.
  *
- * If `kv` is undefined (dev mode without KV binding), allows the request.
+ * If `kv` is undefined the limiter FAILS CLOSED: the request is refused and
+ * the misconfiguration is reported through Sentry. `BOOKING_CACHE` is bound in
+ * wrangler.toml for every deployed environment, so in production this branch
+ * never runs; it exists so that a binding silently dropped from the config
+ * cannot turn every rate-limited public endpoint into an unlimited one
+ * (2026-09-09 review, Security LOW "booking limiter allows when KV undefined").
+ * A refused request is visible on the next probe; an unbounded one is not.
  */
 async function checkAndIncrementRateLimit(
   kv: KVNamespace | undefined,
@@ -46,8 +54,11 @@ async function checkAndIncrementRateLimit(
   windowSeconds: number = WINDOW_SECONDS
 ): Promise<RateLimitResult> {
   if (!kv) {
-    // Dev mode — allow
-    return { allowed: true, count: 0, limit }
+    captureError(
+      new Error(`rate limiter has no KV binding (bucket ${bucketKey}); refusing`),
+      'booking.rate-limit'
+    )
+    return { allowed: false, count: 0, limit }
   }
 
   const windowId = Math.floor(Date.now() / 1000 / windowSeconds)

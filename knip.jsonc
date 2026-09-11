@@ -44,8 +44,11 @@
         "src/lib/seo/sitemap-filter.mjs!",
 
         // Claude Code harness hooks: wired by .claude/settings.json and run by
-        // the harness as subprocesses.
+        // the harness as subprocesses. The lib/ modules are invoked by the bash
+        // hooks (reflex-primer.sh, session-peers.sh) through `node`, an edge
+        // knip cannot follow, so they are entries too.
         ".claude/hooks/*.mjs!",
+        ".claude/hooks/lib/*.mjs!",
 
         // Node-side operator tooling. `cli.ts` is the runtime door; `index.ts`
         // is the documented public surface of each module (see the file header
@@ -65,6 +68,13 @@
         // script, not a static import from a test.
         "tests/_stubs/*.ts",
         "tests/fixtures/*.ts",
+
+        // The ADR 0069 facet registry: a closed set whose only consumers are
+        // the two exhaustiveness guards that import it
+        // (tests/operator-facet-legibility.test.ts, operator-shared-viewer).
+        // A dev entry (no `!`): production mode neither counts it as an
+        // importer nor reports it as an unused file.
+        "src/lib/portal/operator/facet-registry.ts",
       ],
       "project": [
         "src/**/*.{ts,tsx,astro,mjs,css}!",

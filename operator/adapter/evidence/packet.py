@@ -97,7 +97,6 @@ import json
 import logging
 import re
 import tarfile
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -131,15 +130,13 @@ _SECRET_KEY_PATTERN = re.compile(
     r"refresh_token|access_token|private_key)$"
 )
 _OAUTH_KEY_PATTERN = re.compile(r"(?i)^oauth_scopes$")
-_RECIPIENT_KEY_PATTERN = re.compile(
-    r"(?i)^(failure_recipients|red_flag_recipients|notification_recipients)$"
-)
+_RECIPIENT_KEY_PATTERN = re.compile(r"(?i)^(failure_recipients|red_flag_recipients|notification_recipients)$")
 
 # Pre-export validator: a redacted file must NOT contain these patterns.
 _SECRET_VALUE_PATTERNS = [
-    re.compile(r"sk-[A-Za-z0-9]{20,}"),       # OpenAI / Anthropic style secret
-    re.compile(r"AKIA[0-9A-Z]{16}"),          # AWS access key
-    re.compile(r"AIza[0-9A-Za-z_-]{35}"),     # Google API key
+    re.compile(r"sk-[A-Za-z0-9]{20,}"),  # OpenAI / Anthropic style secret
+    re.compile(r"AKIA[0-9A-Z]{16}"),  # AWS access key
+    re.compile(r"AIza[0-9A-Za-z_-]{35}"),  # Google API key
     re.compile(r"xox[abposr]-[A-Za-z0-9-]{10,}"),  # Slack token
     re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
     re.compile(r"ghp_[A-Za-z0-9]{20,}"),
@@ -202,24 +199,15 @@ class PacketRequest:
         if not self.customer_slug:
             raise EvidencePacketError("customer_slug must be non-empty")
         if not self.matter:
-            raise EvidencePacketError(
-                "matter must be a specific id or 'all'; never empty"
-            )
+            raise EvidencePacketError("matter must be a specific id or 'all'; never empty")
         if not _is_iso8601(self.period_start) or not _is_iso8601(self.period_end):
-            raise EvidencePacketError(
-                "period_start / period_end must be ISO 8601 strings"
-            )
+            raise EvidencePacketError("period_start / period_end must be ISO 8601 strings")
         if self.period_end < self.period_start:
             raise EvidencePacketError("period_end must be >= period_start")
         if not isinstance(self.actor_role, PacketActor):
-            raise EvidencePacketError(
-                "actor_role must be a PacketActor (captain | compliance)"
-            )
+            raise EvidencePacketError("actor_role must be a PacketActor (captain | compliance)")
         if self.actor_role.value not in REQUIRED_ACTOR_ROLES:
-            raise EvidencePacketError(
-                f"actor_role {self.actor_role.value!r} not in "
-                f"{sorted(REQUIRED_ACTOR_ROLES)}"
-            )
+            raise EvidencePacketError(f"actor_role {self.actor_role.value!r} not in {sorted(REQUIRED_ACTOR_ROLES)}")
         if self.pinned_head is not None and not _CHAIN_HEAD_RE.match(self.pinned_head):
             # Refused here rather than reported as a missing head later. A
             # malformed pin can never match any row, so carrying it forward
@@ -245,9 +233,7 @@ class EvidencePacketResult:
     # ss#2500. Present even when no pin was supplied, carrying checked=False, so
     # a caller reading the result cannot mistake "not asked" for "asked and fine".
     chain_pin: "ChainPin" = field(
-        default_factory=lambda: ChainPin(
-            pinned_head=None, present=False, chain_readable=True, source=CHAIN_PIN_SOURCE
-        )
+        default_factory=lambda: ChainPin(pinned_head=None, present=False, chain_readable=True, source=CHAIN_PIN_SOURCE)
     )
 
 
@@ -342,13 +328,12 @@ class ChainPin:
 
 #: Where a pin comes from, stated in the packet so a reader can go and check it.
 CHAIN_PIN_SOURCE = (
-    "the audit_head_history table on the SMD control plane, appended from every "
-    "heartbeat the Operator sends"
+    "the audit_head_history table on the SMD control plane, appended from every heartbeat the Operator sends"
 )
 
 
 def _rows_phrase(count: int) -> str:
-    """"1 row" / "4130 rows". The packet is read by lawyers; "1 rows"
+    """ "1 row" / "4130 rows". The packet is read by lawyers; "1 rows"
     in a compliance artifact undercuts everything around it."""
     return "1 row" if count == 1 else f"{count} rows"
 
@@ -471,10 +456,7 @@ class AuditCoverage:
                     "they may concern other clients. Request the customer-wide "
                     "export if they need to be enumerated."
                 )
-                lines.append(
-                    "Read the counts in this packet as a floor for this matter, "
-                    "not as a complete tally."
-                )
+                lines.append("Read the counts in this packet as a floor for this matter, not as a complete tally.")
             else:
                 lines.append(
                     "Every audit row in this period carries a matter "
@@ -567,9 +549,7 @@ def _row_factory(cursor, row):
 # ---------------------------------------------------------------------------
 
 
-_ISO_8601_RE = re.compile(
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z?$"
-)
+_ISO_8601_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z?$")
 
 
 def _is_iso8601(value: str) -> bool:
@@ -612,12 +592,7 @@ def redact_customer_yaml(parsed: Any) -> Any:
                 out[key] = "<redacted>"
                 continue
             if isinstance(key, str) and _OAUTH_KEY_PATTERN.match(key):
-                count = (
-                    len(value)
-                    if isinstance(value, (list, tuple, set))
-                    else 1 if value
-                    else 0
-                )
+                count = len(value) if isinstance(value, (list, tuple, set)) else 1 if value else 0
                 out[key] = f"<{count} scopes redacted>"
                 continue
             if isinstance(key, str) and _RECIPIENT_KEY_PATTERN.match(key):
@@ -675,18 +650,10 @@ async def _fetch_audit_log(
     matter: str,
 ) -> List[dict]:
     if matter == "all":
-        sql = (
-            "SELECT * FROM audit_log "
-            "WHERE ts >= ? AND ts <= ? "
-            "ORDER BY ts ASC, id ASC"
-        )
+        sql = "SELECT * FROM audit_log WHERE ts >= ? AND ts <= ? ORDER BY ts ASC, id ASC"
         params: list = [period_start, period_end]
     else:
-        sql = (
-            "SELECT * FROM audit_log "
-            "WHERE ts >= ? AND ts <= ? AND matter_ref = ? "
-            "ORDER BY ts ASC, id ASC"
-        )
+        sql = "SELECT * FROM audit_log WHERE ts >= ? AND ts <= ? AND matter_ref = ? ORDER BY ts ASC, id ASC"
         params = [period_start, period_end, matter]
     return await _fetch_safe(reader, sql, params)
 
@@ -711,10 +678,8 @@ async def _fetch_chain_pin(
     if pinned_head is None:
         return ChainPin(None, present=False, chain_readable=True, source=CHAIN_PIN_SOURCE)
     try:
-        rows = await reader.fetch_all(
-            "SELECT row_hash FROM audit_log WHERE row_hash = ? LIMIT 1", [pinned_head]
-        )
-    except Exception as exc:  # noqa: BLE001
+        rows = await reader.fetch_all("SELECT row_hash FROM audit_log WHERE row_hash = ? LIMIT 1", [pinned_head])
+    except Exception as exc:
         # Two ways the question cannot be asked, and neither is an answer: no
         # audit_log table, and an audit_log without the chain columns (a
         # snapshot written before they were preserved). Anything else re-raises
@@ -722,13 +687,9 @@ async def _fetch_chain_pin(
         msg = str(exc).lower()
         if "no such table" in msg or "no such column" in msg or "does not exist" in msg:
             log.warning("chain pin lookup skipped (chain columns unreadable): %s", exc)
-            return ChainPin(
-                pinned_head, present=False, chain_readable=False, source=CHAIN_PIN_SOURCE
-            )
+            return ChainPin(pinned_head, present=False, chain_readable=False, source=CHAIN_PIN_SOURCE)
         raise
-    return ChainPin(
-        pinned_head, present=len(rows) > 0, chain_readable=True, source=CHAIN_PIN_SOURCE
-    )
+    return ChainPin(pinned_head, present=len(rows) > 0, chain_readable=True, source=CHAIN_PIN_SOURCE)
 
 
 def _chain_pin_refusal_message(pin: ChainPin) -> str:
@@ -821,10 +782,7 @@ async def _fetch_audit_coverage(
 def _coverage_refusal_message(coverage: AuditCoverage) -> str:
     """The error an operator sees instead of a silently empty packet."""
     if not coverage.table_present:
-        cause = (
-            "the export source read for this packet has no audit_log table, so "
-            "no activity can be reported at all."
-        )
+        cause = "the export source read for this packet has no audit_log table, so no activity can be reported at all."
     else:
         cause = (
             f"{_rows_phrase(coverage.rows_unattributed)} in this period "
@@ -845,9 +803,7 @@ def _coverage_refusal_message(coverage: AuditCoverage) -> str:
     )
 
 
-async def _fetch_boot_checks(
-    reader: ReadExecutor, *, period_start: str, period_end: str
-) -> List[dict]:
+async def _fetch_boot_checks(reader: ReadExecutor, *, period_start: str, period_end: str) -> List[dict]:
     sql = (
         "SELECT id, ts, invariant_num, passed, failure_detail "
         "FROM invariant_boot_checks "
@@ -893,9 +849,7 @@ async def _fetch_memory_snapshot(reader: ReadExecutor) -> dict:
     # (bin/lib/seam_pull.py) before decommission. SELECT * because the table
     # schema is owned by the overlay's memory-mirror plugin; absent table →
     # honest empty via _fetch_safe.
-    observations = await _fetch_safe(
-        reader, "SELECT * FROM persona_observations ORDER BY rowid ASC"
-    )
+    observations = await _fetch_safe(reader, "SELECT * FROM persona_observations ORDER BY rowid ASC")
 
     return {
         "memory_rules": rules,
@@ -912,9 +866,7 @@ async def _fetch_memory_snapshot(reader: ReadExecutor) -> dict:
     }
 
 
-async def _fetch_skill_catalog(
-    reader: ReadExecutor, *, period_start: str, period_end: str
-) -> List[dict]:
+async def _fetch_skill_catalog(reader: ReadExecutor, *, period_start: str, period_end: str) -> List[dict]:
     sql = (
         "SELECT skill_name, trust_ceiling, content_hash, activated_at, "
         "last_run_at, run_count, operator_may_approve, config "
@@ -926,9 +878,7 @@ async def _fetch_skill_catalog(
     return rows
 
 
-async def _fetch_safe(
-    reader: ReadExecutor, sql: str, params: Optional[Sequence[Any]] = None
-) -> List[dict]:
+async def _fetch_safe(reader: ReadExecutor, sql: str, params: Optional[Sequence[Any]] = None) -> List[dict]:
     """Run a SELECT; return [] on table-missing errors.
 
     Production D1 will have every migration applied; tests may construct
@@ -951,7 +901,7 @@ async def _fetch_optional(
     """
     try:
         return await reader.fetch_all(sql, list(params or []))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         msg = str(exc).lower()
         if "no such table" in msg or "does not exist" in msg:
             log.warning("evidence read skipped (table absent): %s", exc)
@@ -985,10 +935,7 @@ def _render_yaml(data: Any) -> bytes:
     JSON is a valid YAML 1.2 subset, which is enough for the packet's
     audit purpose.
     """
-    return (
-        json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False, default=str)
-        + "\n"
-    ).encode("utf-8")
+    return (json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False, default=str) + "\n").encode("utf-8")
 
 
 def _readme_text(
@@ -1053,14 +1000,8 @@ def _readme_text(
         "- `07-skill-catalog.json` -- the skills active during the period\n"
         "- `09-boot-checks.csv` -- the substrate's invariant boot-check log\n"
         "- `manifest.json` -- file hashes plus the signature block\n"
-        + (
-            "- `manifest.sig` -- detached Ed25519 signature over "
-            "`manifest.json`\n\n"
-            if signed
-            else "\n"
-        )
-        +
-        "## What this package does NOT contain\n\n"
+        + ("- `manifest.sig` -- detached Ed25519 signature over `manifest.json`\n\n" if signed else "\n")
+        + "## What this package does NOT contain\n\n"
         "Substantive content of drafts, sent messages, or memory payloads "
         "is not in this packet. Those bodies live in per-customer R2 "
         "storage keyed by SHA-256 digest; the audit log records every "
@@ -1211,8 +1152,7 @@ def _readme_text(
                 "compare it to its entry in `manifest.json`.\n\n"
             )
         )
-        +
-        "## Questions\n\n"
+        + "## Questions\n\n"
         f"Contact: {signer_email}\n"
     )
     return body.encode("utf-8")
@@ -1231,6 +1171,7 @@ def _compute_counts(
     memory_snapshot: Mapping[str, Any],
 ) -> dict:
     """Tally the headline numbers the summary PDF reports."""
+
     def _count(action_type: str) -> int:
         return sum(1 for r in audit_rows if r.get("action_type") == action_type)
 
@@ -1240,23 +1181,15 @@ def _compute_counts(
         "drafts_approved": _count("DRAFT_APPROVED"),
         "drafts_rejected": _count("DRAFT_REJECTED"),
         "memory_rule_events": (
-            _count("MEMORY_RULE_ADDED")
-            + _count("MEMORY_RULE_EDITED")
-            + _count("MEMORY_RULE_DELETED")
+            _count("MEMORY_RULE_ADDED") + _count("MEMORY_RULE_EDITED") + _count("MEMORY_RULE_DELETED")
         ),
-        "skills_enabled": sum(
-            1 for r in skill_rows if (r.get("trust_ceiling") or "").lower() != "refused"
-        ),
+        "skills_enabled": sum(1 for r in skill_rows if (r.get("trust_ceiling") or "").lower() != "refused"),
         "boot_checks": len(boot_check_rows),
-        "invariant_violations": (
-            _count("INVARIANT_VIOLATION") + _count("INVARIANT_BOOT_CHECK_FAILED")
-        ),
+        "invariant_violations": (_count("INVARIANT_VIOLATION") + _count("INVARIANT_BOOT_CHECK_FAILED")),
         "escalations": _count("ESCALATION_FIRED"),
         "memory_rules_in_snapshot": len(memory_snapshot.get("memory_rules", [])),
         "person_mappings_in_snapshot": len(memory_snapshot.get("person_mappings", [])),
-        "voice_samples_metadata_rows": len(
-            memory_snapshot.get("voice_samples_metadata", [])
-        ),
+        "voice_samples_metadata_rows": len(memory_snapshot.get("voice_samples_metadata", [])),
     }
 
 
@@ -1469,9 +1402,7 @@ class EvidencePacketBuilder:
         # artifact. It is deliberately NOT in file_hashes: it cannot hash
         # itself. Trust order: manifest.sig -> manifest.json -> everything else.
         if signer is not None:
-            entries.append(
-                (DETACHED_SIGNATURE_FILENAME, signer.sign(manifest_bytes))
-            )
+            entries.append((DETACHED_SIGNATURE_FILENAME, signer.sign(manifest_bytes)))
 
         bytes_written = self._write_targz(request.output_path, entries)
 
@@ -1503,8 +1434,7 @@ class EvidencePacketBuilder:
     def _load_customer_yaml(self, path: Path) -> bytes:
         if not path.exists():
             raise EvidencePacketError(
-                f"customer.yaml not found at {path}; refusing to fabricate a "
-                "placeholder. Provide a real customer.yaml."
+                f"customer.yaml not found at {path}; refusing to fabricate a placeholder. Provide a real customer.yaml."
             )
         return path.read_bytes()
 
@@ -1536,9 +1466,7 @@ class EvidencePacketBuilder:
                     return value.strip()
         return fallback_slug
 
-    def _write_targz(
-        self, output_path: Path, entries: Sequence[Tuple[str, bytes]]
-    ) -> int:
+    def _write_targz(self, output_path: Path, entries: Sequence[Tuple[str, bytes]]) -> int:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
         with tarfile.open(tmp_path, "w:gz", format=tarfile.PAX_FORMAT) as tar:
@@ -1623,7 +1551,7 @@ class EvidencePacketBuilder:
         )
         try:
             await self.audit_writer.write(event)  # type: ignore[attr-defined]
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             # If chain-of-custody fails, the packet that exists on disk
             # is unprovable. Surface the failure rather than swallow it.
             raise EvidencePacketError(

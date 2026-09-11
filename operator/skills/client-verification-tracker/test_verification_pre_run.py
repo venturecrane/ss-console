@@ -37,7 +37,7 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[2]))
 
-from adapter.audit_log import AuditLogWriter, SuppressedWakeWriter  # noqa: E402
+from adapter.audit_log import AuditLogWriter, SuppressedWakeWriter  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 _PRE_RUN_PATH = _HERE.parent / "pre_run.py"
 _spec = importlib.util.spec_from_file_location("cvt_pre_run", _PRE_RUN_PATH)
@@ -690,10 +690,7 @@ def test_snapshot_hash_moves_when_a_role_fact_moves():
     mutated["roles"][0]["contactId"] = "00000000-0000-0000-0000-000000000000"
     mutated["roles"][0]["contact"]["id"] = "00000000-0000-0000-0000-000000000000"
     assert (
-        _role_snapshot.role_snapshot_hash(
-            _role_snapshot.role_snapshot_projection(fixture["matter"], mutated)
-        )
-        != base
+        _role_snapshot.role_snapshot_hash(_role_snapshot.role_snapshot_projection(fixture["matter"], mutated)) != base
     )
 
 
@@ -708,10 +705,7 @@ def test_snapshot_hash_moves_when_a_structural_slot_appears():
     mutated = json.loads(json.dumps(fixture["matter"]))
     plaintiff = mutated["items"]["Plaintiff"][0]
     del plaintiff["subItems"]["Minor"]  # the structural slot disappears
-    assert (
-        _role_snapshot.role_snapshot_hash(_role_snapshot.role_snapshot_projection(mutated, fixture["roles"]))
-        != base
-    )
+    assert _role_snapshot.role_snapshot_hash(_role_snapshot.role_snapshot_projection(mutated, fixture["roles"])) != base
 
 
 def test_snapshot_hash_ignores_volatile_fields():
@@ -726,10 +720,7 @@ def test_snapshot_hash_ignores_volatile_fields():
     mutated["href"] = "https://elsewhere.example/matters/x"
     mutated["description"] = "edited"
     mutated["status"] = "Closed"
-    assert (
-        _role_snapshot.role_snapshot_hash(_role_snapshot.role_snapshot_projection(mutated, fixture["roles"]))
-        == base
-    )
+    assert _role_snapshot.role_snapshot_hash(_role_snapshot.role_snapshot_projection(mutated, fixture["roles"])) == base
 
 
 def test_run_once_pulls_hashes_only_for_hold_bearing_matters():
@@ -1009,9 +1000,7 @@ def test_run_once_wake_emits_handoff_and_config_plans():
     """Every plan action serializes, not just chase: the ceiling hand-off and
     the config-missing surface reach the agent the same way (#2226)."""
     item = _item()
-    events = [
-        _chased_event(item, ts="2026-07-01T09:00:00.000Z", attempt=n) for n in (1, 2, 3)
-    ]
+    events = [_chased_event(item, ts="2026-07-01T09:00:00.000Z", attempt=n) for n in (1, 2, 3)]
     executor = FakeExecutor()
     code, out = _capture_stdout(
         run_once(
@@ -1416,9 +1405,7 @@ def test_blind_wake_dispatches_the_authored_failure_note(tmp_path, monkeypatch):
 
 
 def test_blind_wake_falls_back_to_authored_fallback_recipients(tmp_path, monkeypatch):
-    envelope_path = _authored_seat(
-        tmp_path, monkeypatch, red_flag=(), fallback=("ops@smd.services",)
-    )
+    envelope_path = _authored_seat(tmp_path, monkeypatch, red_flag=(), fallback=("ops@smd.services",))
     _blind(monkeypatch, "pre_run_crashed_fail_open", _FakeWakeWriter())
     d = json.loads(envelope_path.read_text(encoding="utf-8"))["dispatches"][0]
     assert d["recipients"] == ["ops@smd.services"]
@@ -1512,9 +1499,7 @@ def test_envelope_build_fault_writes_the_failure_note(tmp_path, monkeypatch):
     )
     assert out.get("dispatch_variant") == "failure_note"
     assert out["dispatch_expected"] is True
-    assert json.loads(envelope_path.read_text(encoding="utf-8"))["failure_note_reason"] == (
-        "envelope_build_failed"
-    )
+    assert json.loads(envelope_path.read_text(encoding="utf-8"))["failure_note_reason"] == ("envelope_build_failed")
 
 
 def test_a_clean_run_with_nothing_to_say_sends_no_failure_note(tmp_path, monkeypatch):
@@ -1547,16 +1532,12 @@ def test_a_clean_run_with_nothing_to_say_sends_no_failure_note(tmp_path, monkeyp
 # CI has none, same honest limitation as tests/heartbeat-field-parity.test.ts.
 # ---------------------------------------------------------------------------
 
-_OVERLAY_DIR = Path(
-    os.environ.get("SS_OVERLAY_DIR") or (Path.home() / "dev" / "hermes-smd-overlay")
-)
+_OVERLAY_DIR = Path(os.environ.get("SS_OVERLAY_DIR") or (Path.home() / "dev" / "hermes-smd-overlay"))
 _OVERLAY_AVAILABLE = (_OVERLAY_DIR / ".git").exists()
 
 
 def _pinned_overlay_ref() -> str:
-    dockerfile = (_PRE_RUN_PATH.parents[2] / "templates" / "Dockerfile").read_text(
-        encoding="utf-8"
-    )
+    dockerfile = (_PRE_RUN_PATH.parents[2] / "templates" / "Dockerfile").read_text(encoding="utf-8")
     m = re.search(r'ARG OVERLAY_REF="([0-9a-f]{40})"', dockerfile)
     assert m, "no ARG OVERLAY_REF in operator/templates/Dockerfile"
     return m.group(1)
@@ -1589,9 +1570,7 @@ def test_failure_note_envelope_passes_the_pinned_dispatchers_validator(tmp_path,
     # the envelope supplies each one. It catches the drift that actually
     # bites -- the dispatcher starting to require a field we do not write --
     # and it does NOT prove value-level acceptance.
-    func = re.search(
-        r"^def _valid_dispatch\(entry: object\) -> bool:\n(?:[ \t].*\n|\n)+", source, re.M
-    )
+    func = re.search(r"^def _valid_dispatch\(entry: object\) -> bool:\n(?:[ \t].*\n|\n)+", source, re.M)
     assert func, "could not lift _valid_dispatch out of the pinned dispatcher"
     required = set(re.findall(r'entry\.get\("(\w+)"', func.group(0)))
     # A regex that silently matched nothing would make every assertion below
@@ -1602,8 +1581,7 @@ def test_failure_note_envelope_passes_the_pinned_dispatchers_validator(tmp_path,
         missing = [k for k in required if k not in entry]
         assert missing == [], (
             "the pinned dispatcher reads %s and the failure-note envelope omits %s; "
-            "it would be refused whole and the turn would compose the gap"
-            % (sorted(required), missing)
+            "it would be refused whole and the turn would compose the gap" % (sorted(required), missing)
         )
         assert isinstance(entry["recipients"], list) and entry["recipients"]
         assert isinstance(entry["subject"], str) and entry["subject"].strip()

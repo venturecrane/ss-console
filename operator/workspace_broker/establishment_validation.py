@@ -13,12 +13,11 @@ from __future__ import annotations
 
 import json
 import re
-import secrets
 import sqlite3
 from hashlib import sha256
 from typing import Any
 
-from .establishment_constants import *  # noqa: F403 — vocabulary and tuning surface
+from .establishment_constants import *  # vocabulary and tuning surface
 from .establishment_constants import (  # noqa: F401 — `import *` skips _names
     _CLASS_SLUG_CHARS,
     _ID_PATTERN,
@@ -33,6 +32,7 @@ from .establishment_constants import (  # noqa: F401 — `import *` skips _names
     _PROPOSAL_ID_PATTERN,
 )
 
+
 def ttl_for_kind(kind: str) -> int:
     """How long a row of this kind stays answerable.
 
@@ -44,11 +44,7 @@ def ttl_for_kind(kind: str) -> int:
     than by analogy: it is emailed to a person at SMD who may be with a client
     all day, and a request that dies overnight is a request the firm never had.
     """
-    return (
-        RULE_TTL_SECONDS
-        if kind in ("rule", OPS_REQUEST_KIND)
-        else PROPOSAL_TTL_SECONDS
-    )
+    return RULE_TTL_SECONDS if kind in ("rule", OPS_REQUEST_KIND) else PROPOSAL_TTL_SECONDS
 
 
 class EstablishmentValidationError(ValueError):
@@ -62,9 +58,7 @@ def _require_text(value: Any, field: str, limit: int) -> str:
     if not text:
         raise EstablishmentValidationError(f"{field} must not be empty")
     if len(text) > limit:
-        raise EstablishmentValidationError(
-            f"{field} is {len(text)} characters; the ceiling is {limit}"
-        )
+        raise EstablishmentValidationError(f"{field} is {len(text)} characters; the ceiling is {limit}")
     return text
 
 
@@ -77,36 +71,28 @@ def _optional_text(value: Any, field: str, limit: int) -> str | None:
 def _require_class_slug(value: Any) -> str:
     slug = _require_text(value, "output_class", _MAX_CLASS_SLUG)
     if not set(slug) <= _CLASS_SLUG_CHARS:
-        raise EstablishmentValidationError(
-            "output_class must match [a-z0-9_-]; refusing to rewrite it"
-        )
+        raise EstablishmentValidationError("output_class must match [a-z0-9_-]; refusing to rewrite it")
     return slug
 
 
 def _require_property(value: Any) -> str:
     prop = _require_text(value, "property", _MAX_SHORT_TEXT)
     if prop not in SPEC_PROPERTIES:
-        raise EstablishmentValidationError(
-            f"property must be one of {sorted(SPEC_PROPERTIES)}; got {prop!r}"
-        )
+        raise EstablishmentValidationError(f"property must be one of {sorted(SPEC_PROPERTIES)}; got {prop!r}")
     return prop
 
 
 def _require_id(value: Any, field: str) -> str:
     ident = _require_text(value, field, 64)
     if not _ID_PATTERN.match(ident):
-        raise EstablishmentValidationError(
-            f"{field} must match [a-z0-9][a-z0-9_-]{{7,63}}; refusing to rewrite it"
-        )
+        raise EstablishmentValidationError(f"{field} must match [a-z0-9][a-z0-9_-]{{7,63}}; refusing to rewrite it")
     return ident
 
 
 def _require_proposal_id(value: Any, field: str = "proposal_id") -> str:
     ident = _require_text(value, field, 64)
     if not _PROPOSAL_ID_PATTERN.match(ident):
-        raise EstablishmentValidationError(
-            f"{field} must be eight lowercase hex characters; refusing to rewrite it"
-        )
+        raise EstablishmentValidationError(f"{field} must be eight lowercase hex characters; refusing to rewrite it")
     return ident
 
 
@@ -122,9 +108,7 @@ def require_address(value: Any, field: str) -> str:
     address = raw.strip().lower()
     local, sep, domain = address.partition("@")
     if not local or sep != "@" or "@" in domain or "." not in domain:
-        raise EstablishmentValidationError(
-            f"{field} must be a single person email address (local@domain)"
-        )
+        raise EstablishmentValidationError(f"{field} must be a single person email address (local@domain)")
     return address
 
 
@@ -237,15 +221,12 @@ def _require_display_name(value: Any, field: str) -> str:
         raise EstablishmentValidationError(f"{field} must be a single line")
     if "[" in name or "]" in name:
         raise EstablishmentValidationError(
-            f"{field} must not contain a square bracket; the readback tag is what "
-            "binds a confirmation to one proposal"
+            f"{field} must not contain a square bracket; the readback tag is what binds a confirmation to one proposal"
         )
     return name
 
 
-def act_readback_text(
-    tool: str, payload: dict[str, Any], *, contact_name: str, matter_type_name: str
-) -> str:
+def act_readback_text(tool: str, payload: dict[str, Any], *, contact_name: str, matter_type_name: str) -> str:
     """The act, as one sentence a person can answer, rendered broker-side.
 
     Rendered from the STORED payload and the resolved names, never from caller
@@ -257,7 +238,7 @@ def act_readback_text(
         raise EstablishmentValidationError(f"no readback is defined for {tool!r}")
     return (
         f'Create Smokeball matter "{payload["description"]}" '
-        f'(number {payload["number"]}; client: {contact_name}; type: {matter_type_name}). '
+        f"(number {payload['number']}; client: {contact_name}; type: {matter_type_name}). "
         'Reply "yes, create it" to proceed.'
     )
 
@@ -280,9 +261,7 @@ def safe_slug(name: Any) -> str:
             out.append("-")
     slug = "".join(out).strip("-._")[:_MAX_NAME_SLUG]
     if not slug:
-        raise EstablishmentValidationError(
-            "name derives to an empty slug; provide a name with [a-z0-9._-] content"
-        )
+        raise EstablishmentValidationError("name derives to an empty slug; provide a name with [a-z0-9._-] content")
     return slug
 
 
@@ -365,9 +344,7 @@ def build_result_row(run_id: str, result: dict[str, Any]) -> dict[str, Any]:
             raw_docs = entry.get("documents")
             documents = []
             if isinstance(raw_docs, list):
-                documents = [
-                    d[:_MAX_SHORT_TEXT] for d in raw_docs[:MAX_DOCS_PER_SET] if isinstance(d, str)
-                ]
+                documents = [d[:_MAX_SHORT_TEXT] for d in raw_docs[:MAX_DOCS_PER_SET] if isinstance(d, str)]
             demotions.append({"rule_id": rule_id, "documents": documents})
 
     metadata = {
@@ -387,4 +364,3 @@ def build_result_row(run_id: str, result: dict[str, Any]) -> dict[str, Any]:
         "actor_role": "agent",
         "metadata": json.dumps(metadata, sort_keys=True, separators=(",", ":")),
     }
-

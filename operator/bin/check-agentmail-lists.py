@@ -58,7 +58,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -97,9 +96,7 @@ class ListsForbidden(ListsError):
 
 
 def _get(path: str, api_key: str, *, opener=None) -> dict:
-    request = urllib.request.Request(
-        AGENTMAIL_API_BASE + path, headers={"Authorization": f"Bearer {api_key}"}
-    )
+    request = urllib.request.Request(AGENTMAIL_API_BASE + path, headers={"Authorization": f"Bearer {api_key}"})
     open_fn = opener or urllib.request.urlopen
     try:
         with open_fn(request, timeout=_HTTP_TIMEOUT_S) as response:
@@ -144,15 +141,9 @@ def _entries_of(payload: dict, path: str) -> list[str]:
     raise ListsError(f"{path}: no recognizable entries key in payload")
 
 
-def fetch_list(
-    api_key: str, direction: str, kind: str, *, inbox: Optional[str] = None, opener=None
-) -> list[str]:
+def fetch_list(api_key: str, direction: str, kind: str, *, inbox: Optional[str] = None, opener=None) -> list[str]:
     """One scope's list, drained across pages."""
-    base = (
-        f"/inboxes/{urllib.parse.quote(inbox)}/lists/{direction}/{kind}"
-        if inbox
-        else f"/lists/{direction}/{kind}"
-    )
+    base = f"/inboxes/{urllib.parse.quote(inbox)}/lists/{direction}/{kind}" if inbox else f"/lists/{direction}/{kind}"
     entries: list[str] = []
     token: Optional[str] = None
     while True:
@@ -236,9 +227,7 @@ def agentmail_seats() -> list[str]:
 
 def load_config(slug: str) -> Optional[dict]:
     try:
-        parsed = yaml.safe_load(
-            (_customers_dir() / slug / "customer.yaml").read_text(encoding="utf-8")
-        )
+        parsed = yaml.safe_load((_customers_dir() / slug / "customer.yaml").read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError):
         return None
     return parsed if isinstance(parsed, dict) else None
@@ -300,13 +289,11 @@ def grade_seat(
             for entry in block:
                 if _matches(entry, recipient):
                     report.findings.append(
-                        ListsFinding(scope=scope_name, kind="send_block_match",
-                                     entry=entry, recipient=recipient)
+                        ListsFinding(scope=scope_name, kind="send_block_match", entry=entry, recipient=recipient)
                     )
             if allow and not any(_matches(entry, recipient) for entry in allow):
                 report.findings.append(
-                    ListsFinding(scope=scope_name, kind="send_allow_omission",
-                                 entry=recipient, recipient=recipient)
+                    ListsFinding(scope=scope_name, kind="send_allow_omission", entry=recipient, recipient=recipient)
                 )
     return report
 
@@ -353,8 +340,7 @@ def render(reports: list[SeatListsReport], *, org_note: Optional[str] = None) ->
             continue
         verdict = "FIND" if report.is_finding else "ok  "
         lines.append(
-            f"{verdict}  {report.inbox} [{report.slug}] rostered={report.rostered} "
-            f"list-findings={len(report.findings)}"
+            f"{verdict}  {report.inbox} [{report.slug}] rostered={report.rostered} list-findings={len(report.findings)}"
         )
         for finding in report.findings:
             if finding.kind == "send_block_match":
@@ -430,9 +416,7 @@ def check_seat(slug: str, shared_key: str, org_lists, *, opener=None) -> SeatLis
         if seat_key:
             report.held = f"{exc} (under the per-seat key {seat_env})"
         else:
-            report.skipped = (
-                f"inbox lists unreadable with the shared key; set {seat_env} to close"
-            )
+            report.skipped = f"inbox lists unreadable with the shared key; set {seat_env} to close"
         return report
     except ListsError as exc:
         report = SeatListsReport(slug=slug, inbox=inbox, rostered=len(rostered))

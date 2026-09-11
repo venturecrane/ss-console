@@ -7,6 +7,7 @@ is written to the firm's system (the delivery itself is slice 6/7). The
 worksheet is optional (built only when the unit had billing documents); the
 chronology and the exhibits are required, and a missing one is exit 1.
 """
+
 from __future__ import annotations
 
 import fnmatch
@@ -22,8 +23,10 @@ from .base import StageRun
 def deliverable_names(out: Path, doc: str, worksheet_glob: str) -> list[str]:
     names = sorted(p.name for p in out.iterdir())
     worksheets = [f for f in names if fnmatch.fnmatch(f, worksheet_glob)]
-    exhibits = sorted((f for f in names if f.startswith("Exhibit ") and f.endswith(".pdf")),
-                      key=lambda n: int(re.match(r"Exhibit (\d+)", n).group(1)))
+    exhibits = sorted(
+        (f for f in names if f.startswith("Exhibit ") and f.endswith(".pdf")),
+        key=lambda n: int(re.match(r"Exhibit (\d+)", n).group(1)),
+    )
     return [doc] + worksheets + exhibits
 
 
@@ -42,8 +45,15 @@ def run(sr: StageRun) -> int:
             sr.log(f"missing deliverable: {fname}")
             return 1
         data = p.read_bytes()
-        manifest.append({"name": fname, "folder": folder, "local_path": str(p), "sha256": hashlib.sha256(data).hexdigest(),
-                         "bytes": len(data)})
+        manifest.append(
+            {
+                "name": fname,
+                "folder": folder,
+                "local_path": str(p),
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "bytes": len(data),
+            }
+        )
     (out / "upload_manifest.json").write_text(json.dumps(manifest, indent=1), encoding="utf-8")
     total = sum(m["bytes"] for m in manifest)
     sr.log(f"{len(manifest)} file(s), {total / 1048576:.1f} MB total, into '{folder}'")

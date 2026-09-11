@@ -296,8 +296,7 @@ def _run_checked(
 
         def _lines(severity: str) -> list[str]:
             return [
-                f"[{f.get('gate')}] {f.get('message')}"
-                + (f" — {f.get('detail')}" if f.get("detail") else "")
+                f"[{f.get('gate')}] {f.get('message')}" + (f" — {f.get('detail')}" if f.get("detail") else "")
                 for f in findings
                 if f.get("severity") == severity
             ]

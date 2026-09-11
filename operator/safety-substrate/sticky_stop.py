@@ -21,7 +21,8 @@ Design rules:
   state autonomously; only Captain-initiated clear() resets to OK. WARN and
   SOFT_STOP were removed 2026-09-02 (Captain decision) after five days of a
   pilot seat sitting latched at SOFT_STOP while it restricted nothing and
-  paged nobody. See StickyStopLevel. The HARD_STOP thresholds did not move.
+  paged nobody. See StickyStopLevel for the full reasoning. The HARD_STOP
+  thresholds did not move.
 
 * Conditions are read from customer.yaml `safety.sticky_stop` if present;
   module-level DEFAULT_CONDITIONS apply otherwise. The defaults are
@@ -51,7 +52,9 @@ Design rules:
   existing closed-set vocabulary (ACCEPTED_ACTION_TYPES):
 
     - HARD_STOP entry     -> action_type=AGENT_STOPPED
-    - a recorded overrun  -> action_type=INVARIANT_VIOLATION (no state change)
+    - a recorded overrun  -> action_type=INVARIANT_VIOLATION (no state change;
+                             today only the time budget, which has no
+                             HARD_STOP threshold of its own)
     - clear()             -> action_type=AGENT_RESUMED
 
   The transition detail (from_state, to_state, condition_triggered,
@@ -99,12 +102,11 @@ and the machine compares against the configured budget.
 from __future__ import annotations
 
 import enum
-import json
 import logging
 import sqlite3
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Protocol
+from typing import Protocol
 
 log = logging.getLogger("aie.sticky_stop")
 
@@ -131,7 +133,7 @@ class StickyStopAuditRecord:
     actor: str
     actor_role: str  # "agent" | "captain"
     metadata: dict = field(default_factory=dict)
-    skill_name: Optional[str] = None
+    skill_name: str | None = None
 
 
 class StickyStopAuditSink(Protocol):
@@ -269,16 +271,16 @@ class StickyStopState:
     persona: str
     level: StickyStopLevel
     updated_at: str  # ISO 8601 UTC
-    reason: Optional[str] = None
-    condition: Optional[StickyStopCondition] = None
+    reason: str | None = None
+    condition: StickyStopCondition | None = None
     # Rolling counters used by record_* methods. Carried in the row so the
     # state machine survives restarts without losing failure history.
     consecutive_tool_failures: int = 0
-    tool_failure_window_started_at: Optional[str] = None
+    tool_failure_window_started_at: str | None = None
     refusal_count: int = 0
-    refusal_window_started_at: Optional[str] = None
+    refusal_window_started_at: str | None = None
     cost_cents_today: int = 0
-    cost_date: Optional[str] = None  # YYYY-MM-DD; resets cost_cents_today
+    cost_date: str | None = None  # YYYY-MM-DD; resets cost_cents_today
 
     def __post_init__(self) -> None:
         if not self.customer:
@@ -313,7 +315,7 @@ class StickyStopStore(Protocol):
     coordination is not provided because each customer Machine is single-tenant.
     """
 
-    async def get(self, customer: str, persona: str) -> Optional[StickyStopState]: ...
+    async def get(self, customer: str, persona: str) -> StickyStopState | None: ...
 
     async def put(self, state: StickyStopState) -> None: ...
 
@@ -360,7 +362,7 @@ class SqliteStickyStopStore:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._conn = connection
 
-    async def get(self, customer: str, persona: str) -> Optional[StickyStopState]:
+    async def get(self, customer: str, persona: str) -> StickyStopState | None:
         cur = self._conn.cursor()
         row = cur.execute(_SQLITE_SELECT, (customer, persona)).fetchone()
         if row is None:
@@ -448,7 +450,7 @@ class _Decision:
 
     next_state: StickyStopState
     transitioned: bool
-    condition: Optional[StickyStopCondition]
+    condition: StickyStopCondition | None
 
 
 class StickyStopMachine:
@@ -478,7 +480,7 @@ class StickyStopMachine:
         store: StickyStopStore,
         audit_writer: StickyStopAuditSink,
         thresholds: StickyStopThresholds = DEFAULT_THRESHOLDS,
-        clock: Optional[callable] = None,
+        clock: callable | None = None,
     ) -> None:
         self._store = store
         self._audit = audit_writer
@@ -510,7 +512,7 @@ class StickyStopMachine:
         *,
         customer: str,
         persona: str,
-        skill_name: Optional[str] = None,
+        skill_name: str | None = None,
     ) -> StickyStopState:
         """Record a tool-call failure. May transition to WARN, SOFT_STOP, or
         HARD_STOP depending on consecutive-failure thresholds.
@@ -587,7 +589,7 @@ class StickyStopMachine:
         *,
         customer: str,
         persona: str,
-        skill_name: Optional[str] = None,
+        skill_name: str | None = None,
     ) -> StickyStopState:
         """Record a trust-ceiling refusal. Tracks refusal-cascade counts
         within the configured window.
@@ -743,9 +745,14 @@ class StickyStopMachine:
     ) -> StickyStopState:
         """Call from the dispatch path before invoking any skill.
 
-        Raises StickyStopError if the current level is HARD_STOP. Returns
-        the current state otherwise so the caller can pin trust_ceiling to
-        draft_for_review when SOFT_STOP is active.
+        Raises StickyStopError if the current level is HARD_STOP; returns the
+        current state otherwise.
+
+        It used to say the caller could "pin trust_ceiling to draft_for_review
+        when SOFT_STOP is active". No caller ever did, which is exactly why
+        SOFT_STOP was removed: a state whose enforcement lives only in a
+        docstring is not a safety state. Per-call restriction is the trust
+        ceiling's job (plugins/hermes-smd-trust), authored per skill.
         """
         state = await self.get_state(customer, persona)
         if state.level == StickyStopLevel.HARD_STOP:
@@ -845,17 +852,13 @@ class StickyStopMachine:
         # pre-collapse overlay can be latched at WARN or SOFT_STOP, and those
         # never restricted anything, so they rank as OK. Indexing would raise
         # here and a raise on the metering path is how a seat stops metering.
-        return (
-            proposed
-            if _LEVEL_ORDER[proposed] > _LEVEL_ORDER.get(current, 0)
-            else current
-        )
+        return proposed if _LEVEL_ORDER[proposed] > _LEVEL_ORDER.get(current, 0) else current
 
     def _tick_window(
         self,
         *,
         count: int,
-        window_started_at: Optional[str],
+        window_started_at: str | None,
         now: datetime,
         window_seconds: int,
     ) -> tuple[int, str]:
@@ -880,7 +883,7 @@ class StickyStopMachine:
         next_state: StickyStopState,
         condition: StickyStopCondition,
         transitioned: bool,
-        skill_name: Optional[str],
+        skill_name: str | None,
         extra_metadata: dict,
         observation: bool = False,
     ) -> StickyStopState:
@@ -888,9 +891,18 @@ class StickyStopMachine:
         if not transitioned and not observation:
             return next_state
 
+        # `observation` is a meter firing WITHOUT a state change: the substrate
+        # noticed something worth recording that it has deliberately chosen not
+        # to act on (today, only a time-budget overrun -- see
+        # record_runtime_seconds). Before the two-state collapse this evidence
+        # arrived as a real OK -> SOFT_STOP transition; dropping the row with
+        # the state would have deleted the only proof the budget was ever
+        # exceeded, which is exactly the evidence a later decision to enforce
+        # it would need.
+        #
         # Pick the action_type that best fits the audit-log closed-set
         # vocabulary (ACCEPTED_ACTION_TYPES). HARD_STOP -> AGENT_STOPPED;
-        # WARN / SOFT_STOP -> INVARIANT_VIOLATION (the substrate noticed
+        # everything else -> INVARIANT_VIOLATION (the substrate noticed
         # something wrong before it became unsafe).
         if next_state.level == StickyStopLevel.HARD_STOP and not observation:
             action_type = "AGENT_STOPPED"

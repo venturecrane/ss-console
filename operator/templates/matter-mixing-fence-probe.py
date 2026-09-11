@@ -69,7 +69,7 @@ def fail(message: str) -> None:
 def main() -> None:
     try:
         from shared import matter_binding, matter_gate
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - an import failure of any kind means the fence is absent; fail() reports it and stops the boot
         fail(f"cannot import the fence at all ({exc!r}) — the overlay pin predates ss#2167")
 
     mode = matter_gate.multi_matter_mode()
@@ -84,9 +84,7 @@ def main() -> None:
     matter_binding.drop(SESSION)
 
     # The session reads matter A's memos.
-    matter_binding.record_from_read(
-        SESSION, "{}", tool_name=MEMOS, args={"matter_id": MATTER_A}
-    )
+    matter_binding.record_from_read(SESSION, "{}", tool_name=MEMOS, args={"matter_id": MATTER_A})
 
     held = matter_binding.membership_for(SESSION).content_read_matters()
     if MATTER_A not in held:
@@ -131,7 +129,7 @@ def main() -> None:
     matter_binding.drop(SESSION)
     try:
         from shared.mcp_tool_names import canonical_tool_name
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - an import failure of any kind means the canonicalizer is absent; fail() reports it and stops the boot
         fail(f"cannot import the tool-name canonicalizer ({exc!r}) — overlay predates ss#2444")
 
     wire_memos = "mcp__smokeball__get_memos_on_matter"

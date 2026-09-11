@@ -246,7 +246,9 @@ def _keying_matter(m: dict, providers: dict) -> list[str]:
         if notes:
             rows += notes + [""]
         if pl.get("settlement_amount"):
-            rows.append(f"Settlement amount: {_money(pl['settlement_amount'])}   Firm fee: {_money(pl.get('firm_fee', 0) or 0)}")
+            rows.append(
+                f"Settlement amount: {_money(pl['settlement_amount'])}   Firm fee: {_money(pl.get('firm_fee', 0) or 0)}"
+            )
             rows.append("")
     return rows
 

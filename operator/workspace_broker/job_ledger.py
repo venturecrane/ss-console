@@ -42,7 +42,7 @@ import sqlite3
 import time
 from datetime import UTC, datetime, timedelta
 
-from .audit_ledger import _encode_crockford, _iso_utc, _ulid  # format in lockstep
+from .audit_ledger import _encode_crockford, _iso_utc  # format in lockstep
 
 
 def _mint_id_and_stamp() -> tuple[str, str]:
@@ -71,6 +71,7 @@ def _mint_id_and_stamp() -> tuple[str, str]:
     stamp = dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}Z"
     return job_id, stamp
 
+
 logger = logging.getLogger(__name__)
 
 # A lease older than this (relative to the broker's clock) is reclaimable. The
@@ -93,6 +94,7 @@ def now_and_lease_cutoff(ttl_seconds: int = LEASE_TTL_SECONDS) -> tuple[str, str
     now = datetime.now(UTC)
     return _fmt_iso(now), _fmt_iso(now - timedelta(seconds=ttl_seconds))
 
+
 # Terminal statuses never re-claimed by the boot-sweep or a claim attempt.
 TERMINAL_STATUSES: frozenset[str] = frozenset({"delivered", "done", "needs_review", "cancelled"})
 # Non-terminal statuses the boot-sweep / claim path may pick up.
@@ -113,9 +115,7 @@ _CREATE_COLUMNS: tuple[str, ...] = (
 )
 # Fields an epoch-fenced ``record`` may mutate. Deliberately NOT lease_*,
 # budget_cents, attempts, or the immutable identity columns.
-_RECORD_COLUMNS: frozenset[str] = frozenset(
-    {"status", "current_tip_session_id", "spent_cents", "result_ref", "error"}
-)
+_RECORD_COLUMNS: frozenset[str] = frozenset({"status", "current_tip_session_id", "spent_cents", "result_ref", "error"})
 
 CREATE_JOBS_SQL = (
     "CREATE TABLE IF NOT EXISTS jobs ("
@@ -163,10 +163,27 @@ CREATE_INDEX_SQL: tuple[str, ...] = (
 )
 
 _ALL_JOB_COLUMNS: tuple[str, ...] = (
-    "id", "created_at", "updated_at", "customer_slug", "persona_id", "model",
-    "brief", "brief_digest", "status", "root_session_id", "current_tip_session_id",
-    "deliver_to", "lease_owner", "lease_epoch", "lease_ts", "attempts",
-    "budget_cents", "spent_cents", "cancel_requested", "result_ref", "error",
+    "id",
+    "created_at",
+    "updated_at",
+    "customer_slug",
+    "persona_id",
+    "model",
+    "brief",
+    "brief_digest",
+    "status",
+    "root_session_id",
+    "current_tip_session_id",
+    "deliver_to",
+    "lease_owner",
+    "lease_epoch",
+    "lease_ts",
+    "attempts",
+    "budget_cents",
+    "spent_cents",
+    "cancel_requested",
+    "result_ref",
+    "error",
 )
 
 
@@ -207,7 +224,6 @@ class JobLedgerWriter:
 
     # -- intake ------------------------------------------------------------
 
-
     def create(self, row: dict) -> str:
         """Create a queued job from caller-supplied create columns. Returns the
         broker-stamped ULID. Identity/lease/cost-progress columns are owned by
@@ -224,10 +240,7 @@ class JobLedgerWriter:
         job_id, now = _mint_id_and_stamp()
         cols = ("id", "created_at", "updated_at", *_CREATE_COLUMNS)
         vals = [job_id, now, now, *(row.get(c) for c in _CREATE_COLUMNS)]
-        sql = (
-            "INSERT INTO jobs (" + ", ".join(cols) + ") "
-            "VALUES (" + ", ".join("?" for _ in cols) + ")"
-        )
+        sql = "INSERT INTO jobs (" + ", ".join(cols) + ") VALUES (" + ", ".join("?" for _ in cols) + ")"
         conn = self._connect()
         try:
             conn.execute(sql, vals)
@@ -255,9 +268,7 @@ class JobLedgerWriter:
         try:
             # Tiebreak on id (a ULID) so jobs created in the same millisecond
             # have a stable, deterministic newest-first order on the seam.
-            rows = conn.execute(
-                "SELECT * FROM jobs ORDER BY created_at DESC, id DESC"
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM jobs ORDER BY created_at DESC, id DESC").fetchall()
             return [dict(r) for r in rows]
         finally:
             conn.close()
@@ -302,9 +313,7 @@ class JobLedgerWriter:
             if cur.rowcount != 1:
                 conn.rollback()
                 return None
-            epoch = conn.execute(
-                "SELECT lease_epoch FROM jobs WHERE id=?", (job_id,)
-            ).fetchone()[0]
+            epoch = conn.execute("SELECT lease_epoch FROM jobs WHERE id=?", (job_id,)).fetchone()[0]
             conn.commit()
             return int(epoch)
         finally:
@@ -341,9 +350,7 @@ class JobLedgerWriter:
         vals = [*fields.values(), now, job_id, lease_epoch]
         conn = self._connect()
         try:
-            cur = conn.execute(
-                f"UPDATE jobs SET {assignments} WHERE id=? AND lease_epoch=?", vals
-            )
+            cur = conn.execute(f"UPDATE jobs SET {assignments} WHERE id=? AND lease_epoch=?", vals)
             conn.commit()
             return cur.rowcount == 1
         finally:
@@ -360,8 +367,7 @@ class JobLedgerWriter:
         conn = self._connect()
         try:
             cur = conn.execute(
-                "UPDATE jobs SET cancel_requested=1, updated_at=? "
-                f"WHERE id=? AND status IN ({placeholders})",
+                f"UPDATE jobs SET cancel_requested=1, updated_at=? WHERE id=? AND status IN ({placeholders})",
                 (now, job_id, *CLAIMABLE_STATUSES),
             )
             conn.commit()

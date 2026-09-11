@@ -49,9 +49,7 @@ ENTITY_1 = "e1a4c0d2-7b31-4a90-9c55-2f8d61b0a331"
 
 
 def _obligation(matter: str, key: str, display: str, balance: float, **kw) -> object:
-    return gate.Obligation(
-        matter_id=matter, provider_key=key, provider_display=display, balance=balance, **kw
-    )
+    return gate.Obligation(matter_id=matter, provider_key=key, provider_display=display, balance=balance, **kw)
 
 
 def _pull(obligations, *, cohort=10, deep=10, unreadable=0, name_keyed=0, rows=()):
@@ -67,23 +65,38 @@ def _pull(obligations, *, cohort=10, deep=10, unreadable=0, name_keyed=0, rows=(
 
 def _row(matter, number, opened, client="A Client", responsible="R. Attorney"):
     return gate.CohortRow(
-        matter_id=matter, number=number, title=f"{number} - {client}",
-        clients=client, responsible=responsible, opened=opened,
+        matter_id=matter,
+        number=number,
+        title=f"{number} - {client}",
+        clients=client,
+        responsible=responsible,
+        opened=opened,
     )
 
 
 def _decide(pull, events=(), config=AUTHORED, today=TODAY, refire=3):
     return gate.decide(
-        pull, config, ledger, list(events),
-        raw_inputs_for_digest=b"x", today=today, refire_days=refire,
+        pull,
+        config,
+        ledger,
+        list(events),
+        raw_inputs_for_digest=b"x",
+        today=today,
+        refire_days=refire,
     )
 
 
 def _event(matter_id, source_id, label, event, ts, attempt=1):
     return {
-        "v": 2, "ts": ts, "skill": gate.SKILL_NAME, "matter_id": matter_id,
+        "v": 2,
+        "ts": ts,
+        "skill": gate.SKILL_NAME,
+        "matter_id": matter_id,
         "item_key": ledger.item_key(matter_id, source_id, label, None),
-        "event": event, "attempt": attempt, "token": None, "id": f"id-{ts}",
+        "event": event,
+        "attempt": attempt,
+        "token": None,
+        "id": f"id-{ts}",
     }
 
 
@@ -106,9 +119,7 @@ def test_a_partially_authored_config_is_still_unauthored():
 def test_unauthored_stall_days_does_not_stop_the_chase():
     """stall_days degrades; it is not in the fail-closed class."""
     config = gate.CloseoutConfig(trigger_status="Pending", chase_cadence_days=14)
-    decision = _decide(
-        _pull([_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 1200.0)]), config=config
-    )
+    decision = _decide(_pull([_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 1200.0)]), config=config)
     assert decision.wake is True
     assert decision.decision_basis == "closeout_chase_due"
     assert decision.extra_metadata["stall_days_authored"] is False
@@ -119,8 +130,14 @@ def test_a_status_that_is_not_a_plain_token_is_treated_as_unauthored(tmp_path):
     yaml = pytest.importorskip("yaml")
     doc = {
         "personas": [
-            {"skills": [{"name": gate.SKILL_NAME, "settings": {
-                "trigger_status": "Pending; rm -rf /", "chase_cadence_days": 14}}]}
+            {
+                "skills": [
+                    {
+                        "name": gate.SKILL_NAME,
+                        "settings": {"trigger_status": "Pending; rm -rf /", "chase_cadence_days": 14},
+                    }
+                ]
+            }
         ]
     }
     path = tmp_path / "customer.yaml"
@@ -135,15 +152,20 @@ def test_authored_config_round_trips_from_the_seat_file(tmp_path):
     doc = {
         "escalation": {"refire_days": 5},
         "personas": [
-            {"skills": [{"name": gate.SKILL_NAME, "settings": {
-                "trigger_status": "Pending", "chase_cadence_days": 14, "stall_days": 60}}]}
+            {
+                "skills": [
+                    {
+                        "name": gate.SKILL_NAME,
+                        "settings": {"trigger_status": "Pending", "chase_cadence_days": 14, "stall_days": 60},
+                    }
+                ]
+            }
         ],
     }
     path = tmp_path / "customer.yaml"
     path.write_text(yaml.safe_dump(doc), encoding="utf-8")
     config, refire = gate.load_closeout_config(str(path))
-    assert (config.trigger_status, config.chase_cadence_days, config.stall_days) == (
-        "Pending", 14, 60)
+    assert (config.trigger_status, config.chase_cadence_days, config.stall_days) == ("Pending", 14, 60)
     assert config.authored is True
     assert refire == 5
 
@@ -153,10 +175,14 @@ def test_authored_config_round_trips_from_the_seat_file(tmp_path):
 
 def test_one_payer_across_two_matters_is_one_chase_naming_both():
     """The whole point: a payer on N matters gets one message, not N."""
-    decision = _decide(_pull([
-        _obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 21400.0),
-        _obligation(MATTER_B, ENTITY_1, "Valley Health Plan", 8900.0),
-    ]))
+    decision = _decide(
+        _pull(
+            [
+                _obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 21400.0),
+                _obligation(MATTER_B, ENTITY_1, "Valley Health Plan", 8900.0),
+            ]
+        )
+    )
     chases = [p for p in decision.plans if p.action == gate.ACTION_CHASE_PROVIDER]
     assert len(chases) == 1
     assert chases[0].matters == (MATTER_A, MATTER_B)
@@ -166,19 +192,27 @@ def test_one_payer_across_two_matters_is_one_chase_naming_both():
 def test_a_misspelled_payer_still_groups_with_its_correct_spelling():
     """Grouping is looser than identity on purpose: a typo is a separate contact
     record, so grouping falls back to the normalized name."""
-    decision = _decide(_pull([
-        _obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0),
-        _obligation(MATTER_B, "9f77b512", "Valley Health Plan, Inc.", 200.0),
-    ]))
+    decision = _decide(
+        _pull(
+            [
+                _obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0),
+                _obligation(MATTER_B, "9f77b512", "Valley Health Plan, Inc.", 200.0),
+            ]
+        )
+    )
     chases = [p for p in decision.plans if p.action == gate.ACTION_CHASE_PROVIDER]
     assert len(chases) == 1, "corporate suffix and punctuation must not split the group"
 
 
 def test_near_named_but_distinct_providers_do_not_group():
-    decision = _decide(_pull([
-        _obligation(MATTER_A, "id-a", "Sierra Imaging", 100.0),
-        _obligation(MATTER_B, "id-b", "Open Sierra Imaging", 200.0),
-    ]))
+    decision = _decide(
+        _pull(
+            [
+                _obligation(MATTER_A, "id-a", "Sierra Imaging", 100.0),
+                _obligation(MATTER_B, "id-b", "Open Sierra Imaging", 200.0),
+            ]
+        )
+    )
     chases = [p for p in decision.plans if p.action == gate.ACTION_CHASE_PROVIDER]
     assert len(chases) == 2, "two different businesses must not be merged into one chase"
 
@@ -238,10 +272,15 @@ def test_sentinel_namespaces_do_not_collide_with_a_sibling_skill():
 def test_a_held_matter_never_joins_a_chase_group():
     """Fencing is unconditional; re-surfacing the hold is on the window."""
     events = [_event(MATTER_A, gate.HOLD_SOURCE_ID, "sct-chase-hold", "fired", "2026-08-18T00:00:00Z")]
-    decision = _decide(_pull([
-        _obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0),
-        _obligation(MATTER_B, ENTITY_1, "Valley Health Plan", 200.0),
-    ]), events=events)
+    decision = _decide(
+        _pull(
+            [
+                _obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0),
+                _obligation(MATTER_B, ENTITY_1, "Valley Health Plan", 200.0),
+            ]
+        ),
+        events=events,
+    )
     chases = [p for p in decision.plans if p.action == gate.ACTION_CHASE_PROVIDER]
     assert len(chases) == 1
     assert chases[0].matters == (MATTER_B,), "the held matter is fenced out of the group"
@@ -254,9 +293,7 @@ def test_a_held_matter_never_joins_a_chase_group():
 def test_a_stale_hold_re_surfaces_once_its_window_has_passed():
     """A held matter must not go permanently dark on one missed notice (#1899)."""
     events = [_event(MATTER_A, gate.HOLD_SOURCE_ID, "sct-chase-hold", "fired", "2026-08-01T00:00:00Z")]
-    decision = _decide(
-        _pull([_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)]), events=events
-    )
+    decision = _decide(_pull([_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)]), events=events)
     holds = [p for p in decision.plans if p.action == gate.ACTION_SURFACE_HOLD]
     assert len(holds) == 1
     assert holds[0].matter_id == MATTER_A
@@ -268,9 +305,7 @@ def test_a_resolved_hold_stops_fencing():
         _event(MATTER_A, gate.HOLD_SOURCE_ID, "sct-chase-hold", "fired", "2026-08-01T00:00:00Z"),
         _event(MATTER_A, gate.HOLD_SOURCE_ID, "sct-chase-hold", "resolved", "2026-08-02T00:00:00Z"),
     ]
-    decision = _decide(
-        _pull([_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)]), events=events
-    )
+    decision = _decide(_pull([_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)]), events=events)
     chases = [p for p in decision.plans if p.action == gate.ACTION_CHASE_PROVIDER]
     assert len(chases) == 1 and chases[0].matters == (MATTER_A,)
 
@@ -279,20 +314,30 @@ def test_a_resolved_hold_stops_fencing():
 
 
 def test_a_chase_inside_the_cadence_window_does_not_re_fire():
-    events = [_event("", gate.PROVIDER_SOURCE_PREFIX + "valley health plan",
-                     "sct-provider-chase", "chased", "2026-08-18T00:00:00Z")]
-    decision = _decide(
-        _pull([_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)]), events=events
-    )
+    events = [
+        _event(
+            "",
+            gate.PROVIDER_SOURCE_PREFIX + "valley health plan",
+            "sct-provider-chase",
+            "chased",
+            "2026-08-18T00:00:00Z",
+        )
+    ]
+    decision = _decide(_pull([_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)]), events=events)
     assert decision.wake is False
 
 
 def test_a_chase_past_the_cadence_window_carries_its_attempt_and_last_chased():
-    events = [_event("", gate.PROVIDER_SOURCE_PREFIX + "valley health plan",
-                     "sct-provider-chase", "chased", "2026-07-01T00:00:00Z")]
-    decision = _decide(
-        _pull([_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)]), events=events
-    )
+    events = [
+        _event(
+            "",
+            gate.PROVIDER_SOURCE_PREFIX + "valley health plan",
+            "sct-provider-chase",
+            "chased",
+            "2026-07-01T00:00:00Z",
+        )
+    ]
+    decision = _decide(_pull([_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)]), events=events)
     chase = next(p for p in decision.plans if p.action == gate.ACTION_CHASE_PROVIDER)
     assert chase.attempt == 2
     assert chase.last_chased == "2026-07-01"
@@ -301,14 +346,16 @@ def test_a_chase_past_the_cadence_window_carries_its_attempt_and_last_chased():
 def test_a_stall_raise_does_not_inflate_the_chase_attempt_count():
     """Stalls live on their own matter-level sentinel for exactly this reason."""
     events = [
-        _event("", gate.PROVIDER_SOURCE_PREFIX + "valley health plan",
-               "sct-provider-chase", "chased", "2026-07-01T00:00:00Z"),
-        _event(MATTER_A, gate.STALL_SOURCE_PREFIX + MATTER_A, "sct-stall",
-               "fired", "2026-07-15T00:00:00Z"),
+        _event(
+            "",
+            gate.PROVIDER_SOURCE_PREFIX + "valley health plan",
+            "sct-provider-chase",
+            "chased",
+            "2026-07-01T00:00:00Z",
+        ),
+        _event(MATTER_A, gate.STALL_SOURCE_PREFIX + MATTER_A, "sct-stall", "fired", "2026-07-15T00:00:00Z"),
     ]
-    decision = _decide(
-        _pull([_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)]), events=events
-    )
+    decision = _decide(_pull([_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)]), events=events)
     chase = next(p for p in decision.plans if p.action == gate.ACTION_CHASE_PROVIDER)
     assert chase.attempt == 2, "the stall must not be counted as a chase"
 
@@ -317,10 +364,15 @@ def test_a_stall_raise_does_not_inflate_the_chase_attempt_count():
 
 
 def test_every_decision_reports_what_it_actually_looked_at():
-    decision = _decide(_pull(
-        [_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)],
-        cohort=165, deep=12, unreadable=1, name_keyed=2,
-    ))
+    decision = _decide(
+        _pull(
+            [_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)],
+            cohort=165,
+            deep=12,
+            unreadable=1,
+            name_keyed=2,
+        )
+    )
     meta = decision.extra_metadata
     assert meta["cohort_size"] == 165 and meta["deep_read"] == 12
     assert meta["unreadable"] == 1 and meta["name_keyed_obligations"] == 2
@@ -346,8 +398,7 @@ def _wire(number: str):
 
 
 def _parse(number: str, cohort=6):
-    raw = {"cohort": [{"id": f"m-{i}"} for i in range(cohort)],
-           "layouts": {number: _wire(number)}, "layoutErrors": {}}
+    raw = {"cohort": [{"id": f"m-{i}"} for i in range(cohort)], "layouts": {number: _wire(number)}, "layoutErrors": {}}
     pull, problem = gate.parse_pull(raw)
     assert problem is None, problem
     return pull
@@ -400,9 +451,7 @@ def test_a_provider_row_with_no_entity_id_falls_back_and_says_so():
             {"key": "Providers[0]/InvoiceBalance", "value": "500.00"},
         ],
     }
-    pull, problem = gate.parse_pull(
-        {"cohort": [{"id": "m-1"}], "layouts": {MATTER_A: [item]}, "layoutErrors": {}}
-    )
+    pull, problem = gate.parse_pull({"cohort": [{"id": "m-1"}], "layouts": {MATTER_A: [item]}, "layoutErrors": {}})
     assert problem is None
     assert pull.name_keyed == 1
     assert pull.obligations[0].id_source == "display_name"
@@ -435,9 +484,7 @@ def test_targeting_rejects_a_matter_id_that_is_not_id_shaped():
 # ------------------------------------------------------------------- register
 
 
-REGISTERED = gate.CloseoutConfig(
-    trigger_status="Pending", chase_cadence_days=14, stall_days=60, register_days=7
-)
+REGISTERED = gate.CloseoutConfig(trigger_status="Pending", chase_cadence_days=14, stall_days=60, register_days=7)
 
 
 def _register(obligations, rows, config=REGISTERED, cohort=None):
@@ -465,10 +512,13 @@ def test_a_read_matter_with_nothing_owed_shows_a_real_zero():
 
 
 def test_the_cohort_is_ranked_oldest_first_and_says_so():
-    reg = _register([], [
-        _row(MATTER_A, "new", "2024-01-01"),
-        _row(MATTER_B, "old", "2007-06-11"),
-    ])
+    reg = _register(
+        [],
+        [
+            _row(MATTER_A, "new", "2024-01-01"),
+            _row(MATTER_B, "old", "2007-06-11"),
+        ],
+    )
     assert [r["matter"] for r in reg["oldest"]] == ["old", "new"]
     assert "oldest opened first" in reg["ranking_rule"]
 
@@ -506,11 +556,14 @@ def test_an_unauthored_register_cadence_is_declared_and_the_register_still_appea
 
 
 def test_providers_are_ranked_by_exposure_across_matters():
-    reg = _register([
-        _obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 21400.0),
-        _obligation(MATTER_B, ENTITY_1, "Valley Health Plan", 8900.0),
-        _obligation(MATTER_A, "id-c", "Cedar Ridge Orthopedics", 18400.0),
-    ], [_row(MATTER_A, "a", "2021-01-01"), _row(MATTER_B, "b", "2022-01-01")])
+    reg = _register(
+        [
+            _obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 21400.0),
+            _obligation(MATTER_B, ENTITY_1, "Valley Health Plan", 8900.0),
+            _obligation(MATTER_A, "id-c", "Cedar Ridge Orthopedics", 18400.0),
+        ],
+        [_row(MATTER_A, "a", "2021-01-01"), _row(MATTER_B, "b", "2022-01-01")],
+    )
     top = reg["providers_by_exposure"][0]
     assert top["provider"] == "Valley Health Plan"
     assert top["matters"] == 2 and top["outstanding"] == 30300.0
@@ -558,8 +611,10 @@ def test_without_an_authored_cadence_there_is_no_periodic_register_wake():
 
 def test_a_waking_decision_carries_the_register_payload():
     decision = _decide(
-        _pull([_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)],
-              rows=[_row(MATTER_A, "2026-SC-201", "2021-03-15")]),
+        _pull(
+            [_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)],
+            rows=[_row(MATTER_A, "2026-SC-201", "2021-03-15")],
+        ),
         config=REGISTERED,
     )
     assert decision.wake is True
@@ -576,14 +631,22 @@ def test_names_are_taken_from_the_record_never_composed():
 def test_the_register_reads_the_committed_wire_fixtures_end_to_end():
     raw = {
         "cohort": [
-            {"id": "m-201", "number": "2026-SC-201", "title": "t",
-             "clients": [{"displayName": "Dean Halverson"}],
-             "personResponsible": [{"displayName": "R. Attorney"}],
-             "openedDate": "2021-03-15"},
-            {"id": "m-202", "number": "2026-SC-202", "title": "t",
-             "clients": [{"displayName": "Adaeze Okonkwo"}],
-             "personResponsible": [{"displayName": "R. Attorney"}],
-             "openedDate": "2007-06-11"},
+            {
+                "id": "m-201",
+                "number": "2026-SC-201",
+                "title": "t",
+                "clients": [{"displayName": "Dean Halverson"}],
+                "personResponsible": [{"displayName": "R. Attorney"}],
+                "openedDate": "2021-03-15",
+            },
+            {
+                "id": "m-202",
+                "number": "2026-SC-202",
+                "title": "t",
+                "clients": [{"displayName": "Adaeze Okonkwo"}],
+                "personResponsible": [{"displayName": "R. Attorney"}],
+                "openedDate": "2007-06-11",
+            },
         ],
         "layouts": {"m-201": _wire("2026-SC-201")},
         "layoutErrors": {},
@@ -592,8 +655,12 @@ def test_the_register_reads_the_committed_wire_fixtures_end_to_end():
     assert problem is None
     reg = gate.build_register(pull, REGISTERED, TODAY)
     assert reg["coverage"] == {
-        "matters_at_status": 2, "detail_read": 1, "detail_not_read": 1,
-        "unreadable": 0, "obligations": 4, "name_keyed_obligations": 0,
+        "matters_at_status": 2,
+        "detail_read": 1,
+        "detail_not_read": 1,
+        "unreadable": 0,
+        "obligations": 4,
+        "name_keyed_obligations": 0,
     }
     oldest = reg["oldest"][0]
     assert oldest["matter"] == "2026-SC-202" and oldest["detail"] == "not read"
@@ -625,7 +692,8 @@ def test_a_hold_only_wake_says_so_in_its_basis():
     config = gate.CloseoutConfig(trigger_status="Pending", chase_cadence_days=14, stall_days=60)
     decision = _decide(
         _pull([_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)]),
-        events=events, config=config,
+        events=events,
+        config=config,
     )
     assert decision.decision_basis == "closeout_hold_surface_due"
     assert decision.extra_metadata["hold_surface_due"] == 1
@@ -646,10 +714,16 @@ def test_a_chase_takes_precedence_in_the_basis():
 def test_every_plan_action_is_counted_by_itself():
     """No count is derived by subtracting another from the total."""
     events = [_event(MATTER_B, gate.HOLD_SOURCE_ID, "sct-chase-hold", "fired", "2026-08-01T00:00:00Z")]
-    decision = _decide(_pull([
-        _obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0),
-        _obligation(MATTER_B, "id-b", "Cedar Ridge Orthopedics", 200.0),
-    ]), events=events, config=REGISTERED)
+    decision = _decide(
+        _pull(
+            [
+                _obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0),
+                _obligation(MATTER_B, "id-b", "Cedar Ridge Orthopedics", 200.0),
+            ]
+        ),
+        events=events,
+        config=REGISTERED,
+    )
     meta = decision.extra_metadata
     counted = meta["provider_chases_due"] + meta["hold_surface_due"] + meta["register_due"]
     assert counted == len(decision.plans), "every plan is accounted for by its own action"
@@ -696,9 +770,7 @@ def _wake_stdout(capsys) -> str:
     the projection works.
     """
     events = [_event(MATTER_A, gate.HOLD_SOURCE_ID, "sct-chase-hold", "fired", "2026-08-01T00:00:00Z")]
-    decision = _decide(
-        _pull([_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)]), events=events
-    )
+    decision = _decide(_pull([_obligation(MATTER_A, ENTITY_1, "Valley Health Plan", 100.0)]), events=events)
     assert decision.wake is True
     assert gate._emit_wake(decision) == 0
     return capsys.readouterr().out.strip()
@@ -708,9 +780,7 @@ def _handoff_path(home) -> pathlib.Path:
     return pathlib.Path(home) / ".smd" / "pre_run" / "lien-ledger-tracker.json"
 
 
-def test_the_wake_writes_a_handoff_projecting_what_it_emitted(
-    tmp_path, monkeypatch, capsys
-) -> None:
+def test_the_wake_writes_a_handoff_projecting_what_it_emitted(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     payload = json.loads(_wake_stdout(capsys))
     record = json.loads(_handoff_path(tmp_path).read_text(encoding="utf-8"))
@@ -729,9 +799,7 @@ def test_the_handoff_carries_nothing_but_the_projection(tmp_path, monkeypatch, c
     datetime.fromisoformat(record["started_at"].replace("Z", "+00:00"))
 
 
-def test_a_handoff_write_failure_leaves_stdout_byte_identical(
-    tmp_path, monkeypatch, capsys
-) -> None:
+def test_a_handoff_write_failure_leaves_stdout_byte_identical(tmp_path, monkeypatch, capsys) -> None:
     """HERMES_HOME is a FILE, so the write fails for any uid. A read-only
     directory would still be writable by root, and CI containers run as root."""
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))

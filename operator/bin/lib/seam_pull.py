@@ -213,11 +213,19 @@ def _write_memory_snapshot(conn: sqlite3.Connection, table: str, rows: list[dict
     if not rows:
         return
     keys = [k for k in rows[0].keys() if k != "_rowid"]
+    # The column names are served by the seat and interpolated into DDL. A
+    # quoted identifier is safe against everything except a quote in the name,
+    # and a name that is not a Python identifier is not a column this schema
+    # ever served (2026-09-09 review, Security LOW 6). Refuse rather than quote
+    # around it: a hostile seat gets a clear error, not a table it named.
+    bad = [k for k in keys if not k.isidentifier()]
+    if bad:
+        raise ValueError(f"memory export {table!r} served non-identifier column names: {bad!r}")
     col_defs = ", ".join(f'"{k}"' for k in keys)
     placeholders = ", ".join("?" for _ in keys)
-    conn.execute(f'CREATE TABLE IF NOT EXISTS "{table}" ({col_defs})')  # noqa: S608 — table from MEMORY_EXPORT_TABLES
+    conn.execute(f'CREATE TABLE IF NOT EXISTS "{table}" ({col_defs})')  # noqa: S608 - same statement shape as the line above: table from MEMORY_EXPORT_TABLES, values bound — table from MEMORY_EXPORT_TABLES, columns isidentifier-checked above
     conn.executemany(
-        f'INSERT INTO "{table}" ({col_defs}) VALUES ({placeholders})',  # noqa: S608
+        f'INSERT INTO "{table}" ({col_defs}) VALUES ({placeholders})',  # noqa: S608 - same statement shape as the line above: table from MEMORY_EXPORT_TABLES, values bound — same table and column set as the CREATE above; values are bound
         [tuple(row.get(k) for k in keys) for row in rows],
     )
     conn.commit()

@@ -35,9 +35,7 @@ ledger = _load("escalation_ledger.py", "escalator_ledger_under_test")
 
 
 def test_canonical_hash_matches_arbiter_vectors():
-    vectors = json.loads(
-        (OPERATOR_DIR / "contracts" / "fixtures" / "body-canon-vectors.json").read_text()
-    )["vectors"]
+    vectors = json.loads((OPERATOR_DIR / "contracts" / "fixtures" / "body-canon-vectors.json").read_text())["vectors"]
     assert vectors, "arbiter fixture is empty"
     names = {v["name"] for v in vectors}
     assert "trailing_newline" in names  # the REQUIRED vector
@@ -170,9 +168,7 @@ def test_matter_number_absences_render_exact_phrases_never_guid():
 
 
 def test_consequence_map_is_closed():
-    assert render.consequence_line({"priority_marker": "CRITICAL"}) == (
-        "the task is marked CRITICAL in Smokeball"
-    )
+    assert render.consequence_line({"priority_marker": "CRITICAL"}) == ("the task is marked CRITICAL in Smokeball")
     assert render.consequence_line({"label": "court-date"}) == "a court date the firm authored"
     # Unknown signal renders nothing — never a sentinel, never invented urgency.
     assert render.consequence_line({"label": "task-deadline"}) is None
@@ -294,9 +290,7 @@ def test_fail_closed_floor_no_fallback_authored():
 def test_unknown_matter_routes_central_and_never_a_staff_leg():
     """The sentinel names no real matter: no staff resolution, no memo target.
     It delivers to the central triage recipients (else fallback)."""
-    result = routing.resolve_case_alert_routing(
-        _yaml_matter_staff(), {}, ["unknown-matter"]
-    )
+    result = routing.resolve_case_alert_routing(_yaml_matter_staff(), {}, ["unknown-matter"])
     assert result.routed["unknown-matter"].emails == ("ops@firm.example",)
     assert result.routed["unknown-matter"].routing_leg == "central"
     no_red_flag = _yaml_matter_staff()
@@ -349,9 +343,7 @@ def test_build_and_write_envelope_shape(tmp_path, monkeypatch):
     )
     deadlines = [_mk_deadline(pre_run, "m-1", "t-1")]
     today = date(2026, 8, 31)
-    digest = pre_run.project_digest(
-        deadlines, pre_run.EscalationWindows(), ledger, today=today
-    )
+    digest = pre_run.project_digest(deadlines, pre_run.EscalationWindows(), ledger, today=today)
     meta = envelope.build_and_write(
         digest=digest,
         deadlines=deadlines,
@@ -365,9 +357,7 @@ def test_build_and_write_envelope_shape(tmp_path, monkeypatch):
     assert meta["dispatch_expected"] is True
     assert meta["render_mode"] == "templated"
     assert meta["dispatch_count"] == 1
-    written = json.loads(
-        (tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.dispatch.json").read_text()
-    )
+    written = json.loads((tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.dispatch.json").read_text())
     assert written["skill"] == "deadline-miss-escalator"
     assert written["render_mode"] == "templated"
     [dispatch] = written["dispatches"]
@@ -375,9 +365,7 @@ def test_build_and_write_envelope_shape(tmp_path, monkeypatch):
     assert dispatch["routing_leg"] == "central"
     # The stamps ARE the canonical hash of the bodies (the hash-join contract).
     assert dispatch["body_sha256_full"] == render.canonical_body_sha256(dispatch["full_body"])
-    assert dispatch["body_sha256_skeleton"] == render.canonical_body_sha256(
-        dispatch["skeleton_body"]
-    )
+    assert dispatch["body_sha256_skeleton"] == render.canonical_body_sha256(dispatch["skeleton_body"])
     assert meta["body_sha256"] == [
         {
             "body_sha256_full": dispatch["body_sha256_full"],
@@ -414,9 +402,7 @@ def test_matter_staff_split_one_dispatch_per_recipient_set(tmp_path, monkeypatch
     ]
     today = date(2026, 8, 31)
     digest = pre_run.project_digest(deadlines, pre_run.EscalationWindows(), ledger, today=today)
-    staff = {
-        "m-1": {"responsible": {"email": "amy@firm.example", "enabled": True}, "assisting": []}
-    }
+    staff = {"m-1": {"responsible": {"email": "amy@firm.example", "enabled": True}, "assisting": []}}
     meta = envelope.build_and_write(
         digest=digest,
         deadlines=deadlines,
@@ -428,9 +414,7 @@ def test_matter_staff_split_one_dispatch_per_recipient_set(tmp_path, monkeypatch
         staff_pull=lambda ids, budget: staff,
     )
     assert meta["dispatch_count"] == 2
-    written = json.loads(
-        (tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.dispatch.json").read_text()
-    )
+    written = json.loads((tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.dispatch.json").read_text())
     by_leg = {d["routing_leg"]: d for d in written["dispatches"]}
     assert by_leg["matter_staff_responsible"]["recipients"] == ["amy@firm.example"]
     assert "2026-PI-101" in by_leg["matter_staff_responsible"]["full_body"]
@@ -480,9 +464,7 @@ def test_unknown_matter_never_reaches_memo_or_unroutable_lists(tmp_path, monkeyp
         staff_pull=lambda ids, budget: {},
     )
     assert meta["dispatch_count"] == 1
-    written = json.loads(
-        (tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.dispatch.json").read_text()
-    )
+    written = json.loads((tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.dispatch.json").read_text())
     [dispatch] = written["dispatches"]
     assert dispatch["routing_leg"] == "central"  # sentinel -> central triage
     assert written["memo_matters"] == []
@@ -524,9 +506,7 @@ def test_dispatch_cap_overflow_is_loud_not_silent(tmp_path, monkeypatch):
         staff_pull=lambda ids, budget: staff,
     )
     assert meta["dispatch_count"] == 1
-    written = json.loads(
-        (tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.dispatch.json").read_text()
-    )
+    written = json.loads((tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.dispatch.json").read_text())
     overflow = [u for u in written["unroutable"] if u["reason"] == "dispatch_cap_exceeded"]
     assert len(overflow) == 1
     assert overflow[0]["matter_id"] in written["memo_matters"]

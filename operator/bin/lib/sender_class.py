@@ -24,7 +24,7 @@ sys.path.insert(
     ),
 )
 
-from recipient_policy import sender_key as _sender_key  # noqa: E402 -- the ONE derivation (ss#2497)
+from recipient_policy import sender_key as _sender_key
 
 CUSTOMERS_DIR = Path(__file__).resolve().parents[2] / "customers"
 

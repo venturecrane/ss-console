@@ -64,9 +64,7 @@ def test_structural_conformance_passes_with_surprise_expected() -> None:
 
 
 def test_positive_binding_record_is_internal_write_under_runtime_name() -> None:
-    runtime_map = conformance.run_all(
-        server, _manifest(), expected_unclassified=("surprise",)
-    )
+    runtime_map = conformance.run_all(server, _manifest(), expected_unclassified=("surprise",))
     key = runtime_tool_name("reference", "record")
     assert key == "mcp_reference_record"
     assert runtime_map[key] == "internal_write"

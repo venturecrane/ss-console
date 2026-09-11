@@ -23,9 +23,7 @@ from smokeball_connector.record_check import RecordCheckResult, run_record_check
 
 # The real checker, from this repo. Present in a checkout and on a seat; the
 # module's env override is what points production at the seat copy.
-_REAL_CHECKER = (
-    Path(__file__).resolve().parents[3] / "templates" / "drafting" / "drafting_gate_check.py"
-)
+_REAL_CHECKER = Path(__file__).resolve().parents[3] / "templates" / "drafting" / "drafting_gate_check.py"
 
 _SOURCE = (
     "BILLING SUMMARY BY PROVIDER\n\n"
@@ -38,7 +36,7 @@ _SOURCE = (
 _CLEAN_DRAFT = (
     "# DEMAND LETTER DRAFT\n\n"
     "The MRI billed $3,150.00 per the billing summary on the matter.\n\n"
-    '{{ATTORNEY: decision reserved - the demand figure}}\n'
+    "{{ATTORNEY: decision reserved - the demand figure}}\n"
 )
 
 _FABRICATED_QUOTE_DRAFT = (
@@ -229,10 +227,7 @@ def test_held_out_documents_are_passed_to_the_privilege_gate() -> None:
     exists to catch.
     """
     privileged = 'Attorney work product: "our exposure on causation is the weak point".\n'
-    draft = (
-        "# DEMAND LETTER DRAFT\n\n"
-        'Counsel notes "our exposure on causation is the weak point" in the file.\n'
-    )
+    draft = '# DEMAND LETTER DRAFT\n\nCounsel notes "our exposure on causation is the weak point" in the file.\n'
     result = run_record_check(
         draft,
         [("Billing Summary", _SOURCE), ("Attorney Notes", privileged)],
@@ -256,13 +251,8 @@ def test_the_held_out_list_is_what_makes_gate_1_fire() -> None:
     boundary to cross. If this also produced a [1] finding, the previous test
     would be proving nothing about the held-out wiring."""
     privileged = 'Attorney work product: "our exposure on causation is the weak point".\n'
-    draft = (
-        "# DEMAND LETTER DRAFT\n\n"
-        'Counsel notes "our exposure on causation is the weak point" in the file.\n'
-    )
-    result = run_record_check(
-        draft, [("Billing Summary", _SOURCE), ("Attorney Notes", privileged)]
-    )
+    draft = '# DEMAND LETTER DRAFT\n\nCounsel notes "our exposure on causation is the weak point" in the file.\n'
+    result = run_record_check(draft, [("Billing Summary", _SOURCE), ("Attorney Notes", privileged)])
     assert not any(r.startswith("[1]") for r in result.refusals), (
         "gate 1 fired without a held-out list, so the list is not what drives it"
     )

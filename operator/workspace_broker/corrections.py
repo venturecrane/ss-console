@@ -83,9 +83,7 @@ def _require_text(value: Any, field: str, limit: int) -> str:
     if not text:
         raise CorrectionValidationError(f"{field} must not be empty")
     if len(text) > limit:
-        raise CorrectionValidationError(
-            f"{field} is {len(text)} characters; the ceiling is {limit}"
-        )
+        raise CorrectionValidationError(f"{field} is {len(text)} characters; the ceiling is {limit}")
     return text
 
 
@@ -98,18 +96,14 @@ def _optional_text(value: Any, field: str, limit: int) -> str | None:
 def _require_class_slug(value: Any) -> str:
     slug = _require_text(value, "output_class", _MAX_CLASS_SLUG)
     if not set(slug) <= _CLASS_SLUG_CHARS:
-        raise CorrectionValidationError(
-            "output_class must match [a-z0-9_-]; refusing to rewrite it"
-        )
+        raise CorrectionValidationError("output_class must match [a-z0-9_-]; refusing to rewrite it")
     return slug
 
 
 def _require_property(value: Any) -> str:
     prop = _require_text(value, "spec_property", _MAX_SHORT_TEXT)
     if prop not in SPEC_PROPERTIES:
-        raise CorrectionValidationError(
-            f"spec_property must be one of {sorted(SPEC_PROPERTIES)}; got {prop!r}"
-        )
+        raise CorrectionValidationError(f"spec_property must be one of {sorted(SPEC_PROPERTIES)}; got {prop!r}")
     return prop
 
 
@@ -134,9 +128,7 @@ def build_correction_row(proposal: Any) -> dict[str, Any]:
             ceiling, or outside its allowed set.
     """
     if not isinstance(proposal, dict):
-        raise CorrectionValidationError(
-            "correction_propose requires a 'proposal' object"
-        )
+        raise CorrectionValidationError("correction_propose requires a 'proposal' object")
 
     metadata = {
         # Stamped here, never read from the wire. See the module header.
