@@ -16,7 +16,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-cd "${REPO_ROOT}"
+cd "${REPO_ROOT}" || exit 1
 
 PY="${REPO_ROOT}/operator/.venv/bin/python"
 SEAT_MODULE="operator/workspace_broker/cycle_window.py"
@@ -30,15 +30,13 @@ fail() { echo "MUTATION CHECK FAILED: $*" >&2; exit 1; }
 # ---- 0. the instrument itself -------------------------------------------------
 # The 2026-09-10 trap: assert every module the suites import resolves INSIDE this
 # worktree before trusting a single result below.
-for mod in medchron; do
-  where="$("${PY}" -c "import ${mod}; print(${mod}.__file__)" 2>/dev/null)" \
-    || fail "cannot import ${mod}"
-  case "${where}" in
-    "${REPO_ROOT}"/*) : ;;
-    *) fail "${mod} resolves to ${where}, OUTSIDE this worktree — the suites would
-       pass against a stale snapshot. Reinstall editable: uv pip install -e ./runners/medchron" ;;
-  esac
-done
+where="$("${PY}" -c 'import medchron; print(medchron.__file__)' 2>/dev/null)" \
+  || fail "cannot import medchron"
+case "${where}" in
+  "${REPO_ROOT}"/*) : ;;
+  *) fail "medchron resolves to ${where}, OUTSIDE this worktree — the suites would
+     pass against a stale snapshot. Reinstall editable: uv pip install -e ./runners/medchron" ;;
+esac
 echo "ok  instrument: medchron imports from this worktree"
 
 # Restore from a SNAPSHOT, not from git: these files may be uncommitted on the
