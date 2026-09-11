@@ -84,7 +84,7 @@ SEND_PERMISSIONS = {
 
 
 def _post(path: str, body: dict, api_key: str) -> dict:
-    request = urllib.request.Request(
+    request = urllib.request.Request(  # noqa: S310 - API_BASE is an https constant; the path is a module literal
         API_BASE + path,
         data=json.dumps(body).encode(),
         method="POST",
@@ -96,7 +96,7 @@ def _post(path: str, body: dict, api_key: str) -> dict:
     )
     try:
         # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310 - the request above targets the https API_BASE constant
             return json.loads(response.read().decode())
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode()[:400]
@@ -104,12 +104,12 @@ def _post(path: str, body: dict, api_key: str) -> dict:
 
 
 def _inbox_exists(inbox_id: str, api_key: str) -> bool:
-    request = urllib.request.Request(
+    request = urllib.request.Request(  # noqa: S310 - API_BASE is an https constant; the path is a module literal
         API_BASE + "/inboxes",
         headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
     )
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-    with urllib.request.urlopen(request, timeout=30) as response:
+    with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310 - the request above targets the https API_BASE constant
         listing = json.loads(response.read().decode())
     found = {
         str(entry.get("inbox_id", "")).lower() for entry in (listing.get("inboxes") or []) if isinstance(entry, dict)

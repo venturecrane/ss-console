@@ -313,7 +313,7 @@ def pull_matter_staff(matter_ids: Sequence[str], budget: int) -> dict[str, dict]
         return {}
     connector_python = os.environ.get("SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT)
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603 - connector-venv interpreter and a module-constant snippet, no shell; the ids ride stdin
             # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args — argv[0] is the module-constant connector-venv interpreter, overridable only via SMD_CONNECTOR_VENV_PYTHON from the Machine's own boot env (same trust domain; the test seam — the pre_run pulls carry the identical justification). The snippet is a module constant; the matter ids ride STDIN, never argv.
             [connector_python, "-c", _STAFF_PULL_SNIPPET],
             input=json.dumps(ids),

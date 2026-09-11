@@ -100,7 +100,7 @@ def count_sql(slug: str) -> str:
     """The row-count probe the caller runs after the upsert (0 = not projected)."""
     if not SLUG_RE.match(slug):
         raise ValueError(f"invalid slug {slug!r}")
-    return f"SELECT COUNT(*) AS n FROM machine_credentials WHERE customer_slug = '{slug}';"
+    return f"SELECT COUNT(*) AS n FROM machine_credentials WHERE customer_slug = '{slug}';"  # noqa: S608 - SLUG_RE admits only [a-z0-9-], so no quote or comment can reach the literal
 
 
 def main(argv: list[str] | None = None) -> int:

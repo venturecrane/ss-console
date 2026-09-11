@@ -99,7 +99,7 @@ def probe_open_matter_count() -> int | None:
         sys.stderr.write(f"[pre_run] connector python missing: {connector_python}\n")
         return None
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603 - connector-venv interpreter and a module-constant snippet; no shell
             # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args — argv[0] is the module-constant connector-venv interpreter, overridable only via SMD_CONNECTOR_VENV_PYTHON, which comes from the Machine's own boot env (same trust domain as this file; the test seam). The snippet argument is a module constant; no request/agent-controlled data reaches argv.
             [connector_python, "-c", _PROBE_SNIPPET],
             capture_output=True,

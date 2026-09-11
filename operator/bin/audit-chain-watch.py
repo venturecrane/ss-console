@@ -344,7 +344,7 @@ class ArchiveResult:
 
 def _aws_upload(local: Path, destination: str) -> None:
     key_id, secret, endpoint = r2_credentials()
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: S603 - literal aws argv, no shell; local is a file this module wrote, endpoint comes from the operator env
         [
             "aws",
             "s3",

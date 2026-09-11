@@ -93,7 +93,7 @@ def _pipeline_sha(pipeline: Path) -> str:
     """The git sha of the pipeline checkout when available, else a content sha
     over its scripts, so the state file names the code the run was made with."""
     try:
-        out = subprocess.run(
+        out = subprocess.run(  # noqa: S603 - literal git argv, no shell; pipeline is the configured checkout path
             ["git", "-C", str(pipeline), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10, check=False
         )
         if out.returncode == 0 and out.stdout.strip():
@@ -399,7 +399,7 @@ class Driver:
         )
         st.start(stage.name, input_sha=_stage_input_sha(self.slug_dir, stage))
         self.log(f"[run] {stage.name}: {' '.join(cmd[1:])}")
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603 - argv is the stage script under bash or the configured interpreter, no shell
             cmd,
             cwd=self.slug_dir,
             env=_env_block(self.job, self.cfg, unit),

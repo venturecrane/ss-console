@@ -92,7 +92,7 @@ class Report:
 
 def _run(cmd: list[str], timeout: int = 60) -> tuple[int, str]:
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)  # noqa: S603 - list argv, no shell; every cmd is a literal probe built in this module
         return p.returncode, (p.stdout or "") + (p.stderr or "")
     except Exception as exc:  # noqa: BLE001 — a probe failure is UNKNOWN, never PASS
         return 127, str(exc)

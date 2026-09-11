@@ -88,7 +88,7 @@ def _agentmail(method: str, path: str, body: dict | None = None) -> tuple[int, d
     if not key:
         sys.exit("missing AGENTMAIL_API_KEY (run under infisical)")
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(
+    req = urllib.request.Request(  # noqa: S310 - AGENTMAIL_HOST is an https constant; the path is built in this module
         f"{AGENTMAIL_HOST}{path}",
         data=data,
         method=method,
@@ -99,7 +99,7 @@ def _agentmail(method: str, path: str, body: dict | None = None) -> tuple[int, d
     )
     try:
         # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected — scheme+host are the module-constant AGENTMAIL_HOST (https://); paths are module-authored literals plus url-encoded inbox addresses.
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310 - the request above targets the https AGENTMAIL_HOST constant
             raw = r.read()
             return r.status, (json.loads(raw) if raw else None)
     except urllib.error.HTTPError as e:
@@ -214,9 +214,12 @@ def cmd_read_doc_sha(args: argparse.Namespace) -> None:
     # The whole body is read in one pass, which IS reading the document to
     # completion: read_document's paging is over the EXTRACTED text, and the
     # extraction here runs over the full blob, so there is no tail to miss.
-    req = urllib.request.Request(info["downloadUrl"])
+    download_url = str(info["downloadUrl"])
+    if not download_url.startswith("https://"):
+        sys.exit(f"download {code}: refusing a non-https downloadUrl for file {args.file!r}")
+    req = urllib.request.Request(download_url)  # noqa: S310 - the presigned URL is https-checked on the line above
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected — the URL is a Smokeball-minted presigned download URL returned by the API call above, never caller input.
-    with urllib.request.urlopen(req, timeout=120) as r:
+    with urllib.request.urlopen(req, timeout=120) as r:  # noqa: S310 - the presigned URL is https-checked above; no caller supplies it
         blob = r.read()
 
     try:

@@ -172,7 +172,7 @@ def test_render_is_deterministic():
     """Re-rendering must not change a committed byte, or review cannot trust the diff."""
     before = {p.name: p.read_bytes() for p in sorted(WIRE_DIR.glob("*.json"))}
     sheet = (SEED_DIR / "KEYING-SHEET.md").read_bytes()
-    subprocess.run([sys.executable, str(RENDERER)], check=True, capture_output=True)
+    subprocess.run([sys.executable, str(RENDERER)], check=True, capture_output=True)  # noqa: S603 - test re-runs the seed renderer under sys.executable with no arguments
     after = {p.name: p.read_bytes() for p in sorted(WIRE_DIR.glob("*.json"))}
     assert after == before, "rendered payloads drifted; commit the re-render"
     assert (SEED_DIR / "KEYING-SHEET.md").read_bytes() == sheet
