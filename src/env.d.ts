@@ -148,14 +148,14 @@ declare namespace Cloudflare {
      * Microsoft Graph OAuth 2.0 client ID and secret. Used by the
      * Operator OAuth callback (issue #879) to exchange authorization
      * codes for tokens during connector consent flows. Issued by an
-     * Azure AD app registration whose redirect URI list includes
-     * `${ADMIN_BASE_URL}/api/oauth/callback`.
+     * Azure AD app registration whose redirect URI list includes the
+     * portal callback (`${PORTAL_BASE_URL}/operator/oauth/<connector>/callback`).
      */
     MICROSOFT_GRAPH_CLIENT_ID?: string
     MICROSOFT_GRAPH_CLIENT_SECRET?: string
     /**
      * HMAC-SHA256 signing key for stateless OAuth state parameters used
-     * by /api/oauth/callback (issue #879, Operator connector consent).
+     * by the portal OAuth callback (issue #879, Operator connector consent).
      * 32 random bytes, base64-encoded. Generate with
      * `openssl rand -base64 32`. Rotation: bump the secret in Workers
      * env; in-flight states issued under the old key fail validation at

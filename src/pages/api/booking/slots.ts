@@ -9,16 +9,28 @@ import {
 } from '../../../lib/booking/availability'
 import type { SlotRange } from '../../../lib/booking/availability'
 import { getIntegration, getGoogleAccessToken } from '../../../lib/db/integrations'
+import { rateLimitByIp } from '../../../lib/booking/rate-limit'
 import { env } from 'cloudflare:workers'
 
 const FALLBACK_EMAIL = 'team@smd.services'
 
 /**
+ * Per-IP ceiling on availability reads, per hour. Generous, because a booking
+ * page polls this as the visitor changes timezone or reloads, and shared-NAT
+ * offices share one address; tight enough that a scraper hammering the
+ * Google freeBusy call behind it (every request is one upstream call) is
+ * held at the edge rather than billed upstream. Added 2026-09-11: this was
+ * the one public booking route with no limiter, contrary to the 2026-09-09
+ * review's reading of the booking surface.
+ */
+const SLOTS_PER_IP_PER_HOUR = 120
+
+/**
  * GET /api/booking/slots
  *
  * Public endpoint — returns available booking slots for the configured lookahead window.
- * No rate limiting (public availability is uninteresting to scrape and
- * rate-limiting punishes legitimate users behind shared NAT).
+ * Rate-limited per IP (SLOTS_PER_IP_PER_HOUR) with the same 429 shape the
+ * other booking routes return.
  *
  * Query params:
  *   - tz (optional): viewer timezone for labels. Defaults to consultant tz.
@@ -29,8 +41,22 @@ const FALLBACK_EMAIL = 'team@smd.services'
  * If the Google Calendar integration is not connected, returns 503 with a
  * fallback payload directing users to email directly.
  */
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ url, request }) => {
   const viewerTz = url.searchParams.get('tz') || BOOKING_CONFIG.consultant.timezone
+
+  const clientIp = request.headers.get('cf-connecting-ip') ?? undefined
+  const rateLimitResult = await rateLimitByIp(
+    env.BOOKING_CACHE,
+    'slots',
+    clientIp,
+    SLOTS_PER_IP_PER_HOUR
+  )
+  if (!rateLimitResult.allowed) {
+    return jsonResponse(429, {
+      error: 'rate_limited',
+      message: 'Too many booking attempts. Please try again later.',
+    })
+  }
 
   try {
     // 1. Get active Google Calendar integration
