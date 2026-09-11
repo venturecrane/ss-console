@@ -67,7 +67,7 @@ def changed_files(base: str, head: str) -> list[str] | None:
     diff cannot be computed (unknown sha, shallow clone), so the caller can
     fail closed rather than guess."""
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603 - literal git argv, no shell; base and head are the shas CI passed in
             ["git", "diff", "--name-only", f"{base}...{head}"],
             cwd=REPO_ROOT,
             capture_output=True,

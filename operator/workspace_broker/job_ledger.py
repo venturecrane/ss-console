@@ -240,7 +240,7 @@ class JobLedgerWriter:
         job_id, now = _mint_id_and_stamp()
         cols = ("id", "created_at", "updated_at", *_CREATE_COLUMNS)
         vals = [job_id, now, now, *(row.get(c) for c in _CREATE_COLUMNS)]
-        sql = "INSERT INTO jobs (" + ", ".join(cols) + ") VALUES (" + ", ".join("?" for _ in cols) + ")"
+        sql = "INSERT INTO jobs (" + ", ".join(cols) + ") VALUES (" + ", ".join("?" for _ in cols) + ")"  # noqa: S608 - cols is a tuple of _CREATE_COLUMNS constants, checked above; values are bound
         conn = self._connect()
         try:
             conn.execute(sql, vals)
@@ -282,7 +282,7 @@ class JobLedgerWriter:
         conn = self._connect()
         try:
             rows = conn.execute(
-                f"SELECT * FROM jobs WHERE status IN ({placeholders}) "
+                f"SELECT * FROM jobs WHERE status IN ({placeholders}) "  # noqa: S608 - placeholders is one '?' per CLAIMABLE_STATUSES entry; every value is bound
                 "AND (lease_ts IS NULL OR lease_ts < ?) ORDER BY updated_at ASC",
                 (*CLAIMABLE_STATUSES, lease_expiry_cutoff),
             ).fetchall()
@@ -304,7 +304,7 @@ class JobLedgerWriter:
         conn = self._connect()
         try:
             cur = conn.execute(
-                "UPDATE jobs SET lease_owner=?, lease_epoch=lease_epoch+1, "
+                "UPDATE jobs SET lease_owner=?, lease_epoch=lease_epoch+1, "  # noqa: S608 - the only interpolation is a '?' per CLAIMABLE_STATUSES entry; values are bound
                 "lease_ts=?, attempts=attempts+1, status='running', updated_at=? "
                 f"WHERE id=? AND status IN ({placeholders}) "
                 "AND (lease_ts IS NULL OR lease_ts < ?)",
@@ -350,7 +350,7 @@ class JobLedgerWriter:
         vals = [*fields.values(), now, job_id, lease_epoch]
         conn = self._connect()
         try:
-            cur = conn.execute(f"UPDATE jobs SET {assignments} WHERE id=? AND lease_epoch=?", vals)
+            cur = conn.execute(f"UPDATE jobs SET {assignments} WHERE id=? AND lease_epoch=?", vals)  # noqa: S608 - fields is a subset of _RECORD_COLUMNS, checked above; values are bound
             conn.commit()
             return cur.rowcount == 1
         finally:
@@ -367,7 +367,7 @@ class JobLedgerWriter:
         conn = self._connect()
         try:
             cur = conn.execute(
-                f"UPDATE jobs SET cancel_requested=1, updated_at=? WHERE id=? AND status IN ({placeholders})",
+                f"UPDATE jobs SET cancel_requested=1, updated_at=? WHERE id=? AND status IN ({placeholders})",  # noqa: S608 - placeholders is one '?' per CLAIMABLE_STATUSES entry; every value is bound
                 (now, job_id, *CLAIMABLE_STATUSES),
             )
             conn.commit()

@@ -99,7 +99,7 @@ def function_lengths(path: Path, rel: str) -> dict[str, int]:
 
 def ruff_complexities(root: Path, ruff: str = "ruff") -> dict[str, int]:
     """`{ "rel/path.py::name": complexity }` for every def over the ceiling, from ruff."""
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: S603 - list argv, no shell; ruff is the tool the caller names, the rest are literals
         [
             ruff,
             "check",

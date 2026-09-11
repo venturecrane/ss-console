@@ -69,7 +69,7 @@ def _fetch_overlay(repo: str, ref: str, dest: Path) -> None:
     """
 
     def run(*args: str) -> None:
-        subprocess.run(args, cwd=dest, check=True, capture_output=True, text=True)
+        subprocess.run(args, cwd=dest, check=True, capture_output=True, text=True)  # noqa: S603 - literal git argv, no shell; repo and ref come from overlay-pairs.json
 
     run("git", "init", "-q")
     run("git", "remote", "add", "origin", repo)

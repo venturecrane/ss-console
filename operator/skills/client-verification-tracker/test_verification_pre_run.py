@@ -1552,7 +1552,7 @@ def test_failure_note_envelope_passes_the_pinned_dispatchers_validator(tmp_path,
     # `git show <ref>:path`, never the working tree: overlay checkouts sit on
     # dirty feature branches far from the pin, and the pin is what seats run.
     clean_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    source = subprocess.run(
+    source = subprocess.run(  # noqa: S603 - literal git show argv in a test against the pinned overlay ref
         ["git", "show", "%s:shared/prerendered_dispatch.py" % _pinned_overlay_ref()],
         cwd=str(_OVERLAY_DIR),
         capture_output=True,

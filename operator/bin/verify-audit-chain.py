@@ -53,7 +53,7 @@ def rows_from_sqlite(path: str) -> list[dict]:
     conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     try:
         cols = [*CHAIN_COLUMNS, "prev_hash", "row_hash"]
-        cur = conn.execute(f"SELECT {', '.join(cols)} FROM audit_log ORDER BY rowid")
+        cur = conn.execute(f"SELECT {', '.join(cols)} FROM audit_log ORDER BY rowid")  # noqa: S608 - column names are the CHAIN_COLUMNS constant plus two literals; no input reaches the text
         return [dict(zip(cols, r)) for r in cur.fetchall()]
     finally:
         conn.close()

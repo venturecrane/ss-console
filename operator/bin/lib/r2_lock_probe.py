@@ -43,7 +43,7 @@ def _cf_get_lock(url: str) -> dict:
     token = os.environ.get("CLOUDFLARE_API_TOKEN")
     if not token:
         raise RuntimeError("CLOUDFLARE_API_TOKEN is unset, so the bucket lock cannot be read")
-    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"}, method="GET")
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"}, method="GET")  # noqa: S310 - bucket_lock_url is the only builder: https constant host, charset-gated segments
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected — bucket_lock_url is the only builder and it gates both interpolated segments on a fixed charset.
     with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310 — https, charset-gated
         return json.loads(resp.read().decode("utf-8"))

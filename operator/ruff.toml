@@ -20,6 +20,16 @@
 #     gate for the appearance of one, which is the failure this file exists
 #     to end.
 #
+# 2026-09-11 (review 09-10, wave 8.1). S310, S603 and S608 are selected. They
+# had sat under `external`, which kept nine reasoned suppressions alive while
+# 94 sites (S310 33, S603 44, S608 17) went unread by any gate. Each site now
+# carries a reason written from that site, and the ones that were not safe
+# by construction were made so first: the broker's AgentMail and Graph
+# transports and the reconciler's Graph reader refuse a non-https base at
+# construction, the three token mints url-quote the tenant id, the presigned
+# Smokeball download is https-checked, and the reconciler's Graph GET refuses
+# a URL off the Graph base (the one place Graph, not this tree, writes the URL).
+#
 # WHAT IS STILL NOT SELECTED, AND WHY (counts as ALL / NON-TEST, 2026-08-24
 # unless noted). Each fires today, so selecting it needs a reason at every
 # uncovered site, not an allowlist:
@@ -33,9 +43,6 @@
 #   SLF001  166 / 9     private-member-access.
 #   S106     62 / 0     hardcoded-password-func-arg — every hit is in a test.
 #   ARG002   36 / 5     unused method argument.
-#   S310     30 / 25    suspicious-url-open.      } listed under `external`
-#   S603     29 / 18    subprocess-without-shell. } below so their existing,
-#   S608     11 / 8     hardcoded-sql-expression. } reasoned noqa survive.
 #   S105     21 / 13    hardcoded-password-string.
 #   S110     14 / 14    try-except-pass.
 #   S103      6 / 1     bad-file-permissions.
@@ -69,16 +76,9 @@ extend-exclude = [
 ]
 
 [lint]
-# Rules ruff does NOT enable here but whose `# noqa` annotations are kept on
-# purpose: the nine S310 / S603 / S608 suppressions carry the tree's written
-# security reasoning (why a URL open, a subprocess, or an inlined SQL literal is
-# safe at that site). RUF100 would otherwise delete them as inert. Listing them
-# here keeps them, and the noqa-reasons gate (bin/noqa-reasons.py) still
-# requires each to carry its reason. Enabling the three rules outright is the
-# follow-up; it needs a reason at every uncovered site (S310 25, S603 18, S608 8
-# on 2026-09-10), not a blanket noqa.
-external = ["S310", "S603", "S608"]
-
+# No `external` list. Every rule whose `# noqa` appears in the tree is selected,
+# so RUF100 deletes a suppression the moment its rule stops firing, and the
+# noqa-reasons gate (bin/noqa-reasons.py) requires the ones that fire to say why.
 select = [
     "E4", # import placement — activates the E402 suppressions on the sys.path shims
     "E7", # statement-level pycodestyle, incl. E731 lambda-assignment
@@ -89,6 +89,11 @@ select = [
     "BLE001", # blind-except: 210 suppressions already existed for a rule that never ran
     "F401", # unused-import: highest value per edit; 28 suppressions were already in place
     "RUF100", # unused-noqa: a `# noqa` naming a rule ruff does not enable is deleted, not kept
+    # 2026-09-11 (review 09-10, wave 8.1): the three security rules that had been
+    # declared `external`. Every site carries a reason or was made safe by construction.
+    "S310", # suspicious-url-open: urlopen follows file:// and ftp://; each site names its https constant or check
+    "S603", # subprocess-without-shell: each site names where its argv comes from
+    "S608", # hardcoded-sql-expression: each site names the constant, identifier check, or hex literal it inlines
 ]
 
 [format]

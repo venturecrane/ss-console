@@ -802,6 +802,16 @@ def test_a_missing_credential_refuses_at_send_time(tmp_path: Path) -> None:
         ops.send({"to": ["scott@smd.services"], "body_text": "x"})
 
 
+def test_a_non_https_graph_base_or_token_host_is_refused_at_construction(tmp_path: Path) -> None:
+    """urllib follows file:// and ftp://. A transport that carries the client
+    secret refuses every other scheme before it can be handed a request."""
+    customer, credential, _read = _seat(tmp_path)
+    with pytest.raises(ValueError):
+        MsGraphOps(credential, customer, graph_base="http://graph.example", opener=FakeGraph())
+    with pytest.raises(ValueError):
+        MsGraphOps(credential, customer, token_host="file:///etc", opener=FakeGraph())
+
+
 def test_the_client_secret_never_appears_in_a_token_error(tmp_path: Path) -> None:
     """The token endpoint echoes request parameters in its error bodies, and one
     of those parameters is the secret. Status only, never the body."""

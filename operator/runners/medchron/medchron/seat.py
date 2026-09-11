@@ -255,7 +255,7 @@ class SshSeat:
         b64 = base64.b64encode(_SEAT_SCRIPT.encode()).decode()
         argv_json = ",".join(json.dumps(a) for a in argv)
         code = f'import base64,sys;sys.argv=["seat",{argv_json}];exec(base64.b64decode("{b64}").decode())'
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603 - argv is the seat-probe script, the slug, and a base64-wrapped module snippet; no shell
             [self.probe, self.customer_slug, SEAT_PYTHON, "-c", code],
             capture_output=True,
             text=True,

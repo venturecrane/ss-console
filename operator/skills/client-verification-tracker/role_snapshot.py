@@ -184,7 +184,7 @@ def pull_role_snapshot_hash(matter_id: str) -> str | None:
         return None
     connector_python = os.environ.get("SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT)
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603 - connector-venv interpreter, a module-constant snippet, and an id-safe matter id; no shell
             # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args — argv[0] is the module-constant connector-venv interpreter (SMD_CONNECTOR_VENV_PYTHON is the Machine's own boot env, same trust domain / test seam); the snippet is a module constant; the matter id is a connector-read id constrained above to id-safe characters.
             [connector_python, "-c", _SNAPSHOT_PULL_SNIPPET, str(matter_id)],
             capture_output=True,

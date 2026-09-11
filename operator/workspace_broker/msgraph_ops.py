@@ -271,6 +271,11 @@ class MsGraphOps:
         self._credential_path = credential_path
         self._read_credential_path = read_credential_path
         self._customer_path = customer_path
+        for label, value in (("graph_base", graph_base), ("token_host", token_host)):
+            if not value.startswith("https://"):
+                # urllib follows file:// and ftp://; a transport that carries a
+                # client secret refuses every other scheme at construction.
+                raise ValueError(f"MsGraphOps {label} must be https://")
         self._graph_base = graph_base.rstrip("/")
         self._token_host = token_host.rstrip("/")
         self._opener = opener
@@ -316,8 +321,9 @@ class MsGraphOps:
                 "scope": GRAPH_SCOPE,
             }
         ).encode()
-        url = f"{self._token_host}/{credential['tenant_id']}/oauth2/v2.0/token"
-        request = urllib.request.Request(
+        tenant = urllib.parse.quote(str(credential["tenant_id"]), safe="")
+        url = f"{self._token_host}/{tenant}/oauth2/v2.0/token"
+        request = urllib.request.Request(  # noqa: S310 - token_host is https-checked at construction; the tenant id is url-quoted
             url,
             data=data,
             method="POST",
@@ -360,7 +366,7 @@ class MsGraphOps:
         role: str = "send",
     ) -> dict[str, Any]:
         data = json.dumps(body).encode() if body is not None else None
-        request = urllib.request.Request(
+        request = urllib.request.Request(  # noqa: S310 - graph_base is https-checked at construction; the path is built in this module
             self._graph_base + path,
             data=data,
             method=method,

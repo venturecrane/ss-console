@@ -68,7 +68,7 @@ Runner = Callable[[Sequence[str]], "subprocess.CompletedProcess[str]"]
 
 
 def run_subprocess(cmd: Sequence[str]) -> "subprocess.CompletedProcess[str]":
-    return subprocess.run(list(cmd), capture_output=True, text=True, check=False)
+    return subprocess.run(list(cmd), capture_output=True, text=True, check=False)  # noqa: S603 - list argv, no shell; callers pass flyctl and wrangler commands built in this module
 
 
 class HttpResponse:
@@ -95,7 +95,7 @@ def http_request(method: str, url: str, headers: dict, body: Optional[dict]) -> 
     if not url.startswith("https://"):
         raise ValueError(f"http_request dispatches https:// only, refused {url.split(':', 1)[0]}://")
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(url, data=data, method=method, headers=dict(headers))
+    req = urllib.request.Request(url, data=data, method=method, headers=dict(headers))  # noqa: S310 - the https:// check three lines above refuses every other scheme
     if data is not None:
         req.add_header("Content-Type", "application/json")
     try:
@@ -456,7 +456,7 @@ class HealthchecksAndFleetStatusCleanup:
             raise
         # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query — table comes from CONSOLE_SEAT_TABLES; the slug is sql_text's hex blob literal.
         # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query — not SQLAlchemy; the only interpolations are a module constant and a fixed-alphabet hex literal.
-        self.d1.execute(f"DELETE FROM {table} WHERE customer_slug = {sql_text(slug)}")
+        self.d1.execute(f"DELETE FROM {table} WHERE customer_slug = {sql_text(slug)}")  # noqa: S608 - table is a CONSOLE_SEAT_TABLES constant; the slug is sql_text's hex blob literal
         after = self.d1.count_where_slug(table, slug)
         return {
             "table_present": True,
