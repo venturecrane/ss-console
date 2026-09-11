@@ -215,6 +215,8 @@ interface FakeState {
   sink?: FakeSinkRow[]
   /** Set to make the sink SELECT throw, to prove the pager survives it. */
   sinkQueryThrows?: boolean
+  /** edge_poll_state counters by target (wave 8.2). Absent = never probed. */
+  edge?: Map<string, { consecutive_failures: number; consecutive_successes: number }>
 }
 
 function sinkRow(over: Partial<FakeSinkRow> = {}): FakeSinkRow {
@@ -236,6 +238,8 @@ function computeStaleHolds(state: FakeState): StaleHold[] {
   const out: StaleHold[] = []
   for (const [key, status] of state.alertState) {
     if (status !== 'open') continue
+    // Wave 8.2: the SQL excludes edge_down by its bound constant; mirrored here.
+    if (key.endsWith(':edge_down')) continue
     // Prefix conditions carry their own ':', so rejoin everything after the slug.
     const [slug, ...conditionParts] = key.split(':')
     const condition = conditionParts.join(':')
@@ -319,6 +323,9 @@ function makeEnv(state: FakeState, withResend = true, extra: Partial<Env> = {}):
               return Promise.resolve({ results })
             },
             first() {
+              if (sql.includes('FROM edge_poll_state')) {
+                return Promise.resolve(state.edge?.get(String(args[0])) ?? null)
+              }
               if (!sql.includes('FROM fleet_alert_state')) {
                 throw new Error(`unexpected first(): ${sql}`)
               }
@@ -336,6 +343,13 @@ function makeEnv(state: FakeState, withResend = true, extra: Partial<Env> = {}):
                 const target = (state.sink ?? []).find((r) => r.rowid === Number(args[0]))
                 if (target) target.notified_at = '2026-07-25T00:00:00Z'
                 state.writes.push(`notify:${args[0]}`)
+              } else if (sql.includes('INSERT INTO edge_poll_state')) {
+                state.edge ??= new Map()
+                state.edge.set(String(args[0]), {
+                  consecutive_failures: Number(args[2]),
+                  consecutive_successes: Number(args[3]),
+                })
+                state.writes.push(`edge:${args[0]}:${args[2]}/${args[3]}`)
               } else {
                 throw new Error(`unexpected run(): ${sql}`)
               }
@@ -1492,5 +1506,104 @@ describe('gateway loop + supervisor (ss#2488 part 2)', () => {
     expect(conditionLabel('gateway_loop_wedged')).toMatch(/wedged/i)
     expect(conditionLabel('gateway_supervisor_refusing')).toMatch(/human/i)
     expect(conditionLabel('gateway_supervisor_inert')).toMatch(/cannot act/i)
+  })
+})
+
+describe('edge poll through runOnce (wave 8.2)', () => {
+  const HEALTH = 'https://smd.services/api/health'
+
+  /** Route the stubbed fetch: the health URL answers from `answers` in order (then ok), everything else is Resend. */
+  function stubEdge(answers: Array<'ok' | 'down'>): ReturnType<typeof vi.fn> {
+    const queue = [...answers]
+    const mock = vi.fn().mockImplementation(async (input: string) => {
+      if (String(input) === HEALTH) {
+        const next = queue.shift() ?? 'ok'
+        return next === 'ok'
+          ? new Response(JSON.stringify({ status: 'ok' }), { status: 200 })
+          : new Response(JSON.stringify({ status: 'error' }), { status: 503 })
+      }
+      return new Response(JSON.stringify({ id: 'resend-alert-1' }), { status: 200 })
+    })
+    vi.stubGlobal('fetch', mock)
+    return mock
+  }
+
+  const edgeEnv = (state: FakeState) =>
+    makeEnv(state, true, { EDGE_POLL_TARGETS: `smd.services=${HEALTH}` })
+
+  it('three failed ticks page once, on the third; two good ticks recover once, on the second', async () => {
+    const fetchMock = stubEdge(['down', 'down', 'down', 'down', 'ok', 'ok'])
+    const state: FakeState = { fleet: [], alertState: new Map(), writes: [] }
+    const kinds: string[] = []
+    for (let tick = 0; tick < 6; tick++) {
+      const summary = await runOnce(edgeEnv(state), NOW + tick * 120_000)
+      kinds.push(
+        summary.transitions.map((t) => `${t.kind}:${t.customer_slug}:${t.condition}`).join(',') ||
+          '-'
+      )
+    }
+    expect(kinds).toEqual([
+      '-',
+      '-',
+      'opened:smd.services:edge_down',
+      '-',
+      '-',
+      'resolved:smd.services:edge_down',
+    ])
+    const resendCalls = fetchMock.mock.calls.filter(
+      ([url]) => String(url) === 'https://api.resend.com/emails'
+    )
+    expect(resendCalls).toHaveLength(2)
+    const opened = JSON.parse(String(resendCalls[0]?.[1]?.body))
+    expect(opened.subject).toBe(
+      '[SMD Ops] ALERT smd.services: Web edge not answering /api/health from outside'
+    )
+    expect(opened.html).toContain('<li>Host: smd.services</li>')
+    expect(opened.html).toContain('3 consecutive failed probes of https://smd.services/api/health')
+    expect(state.alertState.get('smd.services:edge_down')).toBe('resolved')
+  })
+
+  it('a single bad sample while green, or a single good one while down, changes nothing', async () => {
+    stubEdge(['down', 'ok', 'down', 'ok'])
+    const flapping: FakeState = { fleet: [], alertState: new Map(), writes: [] }
+    for (let tick = 0; tick < 4; tick++) {
+      const summary = await runOnce(edgeEnv(flapping), NOW + tick * 120_000)
+      expect(summary.transitions).toEqual([])
+    }
+    // The other direction: an open alert survives one good probe (the stub's
+    // queue is spent, so this probe answers ok).
+    const down: FakeState = {
+      fleet: [],
+      alertState: new Map([['smd.services:edge_down', 'open']]),
+      writes: [],
+      edge: new Map([['smd.services', { consecutive_failures: 7, consecutive_successes: 0 }]]),
+    }
+    const summary = await runOnce(edgeEnv(down), NOW)
+    expect(summary.transitions).toEqual([])
+    expect(summary.edge_polls[0]).toMatchObject({
+      ok: true,
+      verdict: 'hold',
+      consecutive_successes: 1,
+    })
+    expect(down.alertState.get('smd.services:edge_down')).toBe('open')
+  })
+
+  it('an open edge_down row is never listed as a stranded seat', async () => {
+    stubEdge(['ok'])
+    const state: FakeState = {
+      fleet: [],
+      alertState: new Map([['smd.services:edge_down', 'open']]),
+      writes: [],
+    }
+    const summary = await runOnce(edgeEnv(state), NOW)
+    expect(summary.stale_holds).toEqual([])
+  })
+
+  it('no targets configured: the summary carries an empty edge_polls and nothing is fetched but Resend', async () => {
+    const fetchMock = stubResend()
+    const state: FakeState = { fleet: [row({})], alertState: new Map(), writes: [] }
+    const summary = await runOnce(makeEnv(state), NOW)
+    expect(summary.edge_polls).toEqual([])
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

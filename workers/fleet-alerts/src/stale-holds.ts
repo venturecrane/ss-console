@@ -32,6 +32,7 @@
 import {
   CONNECTOR_DOWN_PREFIX,
   CONNECTOR_TOKEN_EXPIRING_PREFIX,
+  EDGE_DOWN_CONDITION,
   SPEC_CONTROL_BROKEN_PREFIX,
   WEBHOOK_SURFACE_MISSING_PREFIX,
 } from './conditions'
@@ -100,6 +101,12 @@ export const STALE_HOLDS_SQL = `SELECT s.customer_slug AS customer_slug, s.condi
             -- filter above already excludes it. A clause of its own would be
             -- dead code that reads as coverage. See ./send-refused.
           )
+          -- Wave 8.2: edge_down is keyed by the probe TARGET, which has no
+          -- fleet_status row by construction, so the f.customer_slug IS NULL
+          -- clause above would report every open edge alert as a stranded
+          -- seat. Its counters live in edge_poll_state and it resolves on
+          -- its own; it is excluded here by the bound constant, not a literal.
+          AND s.condition <> ?
         ORDER BY s.customer_slug ASC, s.condition ASC`
 
 /**
@@ -114,6 +121,7 @@ export const STALE_HOLDS_BINDINGS: readonly string[] = [
   CONNECTOR_TOKEN_EXPIRING_PREFIX,
   SPEC_CONTROL_BROKEN_PREFIX,
   WEBHOOK_SURFACE_MISSING_PREFIX,
+  EDGE_DOWN_CONDITION,
 ]
 
 export async function getStaleHolds(db: D1Database): Promise<StaleHold[]> {
