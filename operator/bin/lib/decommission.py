@@ -36,11 +36,16 @@ Design notes
   :class:`adapter.audit_log.AuditLogWriter`; on failure it writes a third
   ``failed`` row before raising :class:`DecommissionStepFailed`.
 
-* **External services behind Protocols.** AgentMail and Fly
-  Machine are not wired yet. Each is stubbed behind a
-  ``Protocol`` plus a :class:`NoOpStub` implementation that logs
-  "skipped (no client wired)" and returns a manifest with
-  ``skipped=True``. Production wiring is a constructor swap.
+* **External services behind Protocols.** Every destructive service
+  (R2, Vectorize, AgentMail, Fly, observability) is a ``Protocol`` with a
+  real implementation in ``bin/lib/decommission_backends.py`` (#2735) and
+  a :class:`NoOpStub` that the pipeline defaults to. The CLI wires each
+  real backend from a staged credential (``backends_from_env``); Fly arms
+  only from ``FLY_API_TOKEN``, never from a logged-in ``fly`` CLI. A
+  backend whose credential is absent stays the stub, which logs
+  "skipped (no client wired)" and returns ``skipped=True``, and the
+  ``--live`` gate refuses (exit 5) rather than report a clean
+  decommission over a skipped deletion.
 
 * **Dry-run mode is non-destructive.** Each step exposes a ``plan(...)``
   method that returns the manifest of what *would* happen without
@@ -153,12 +158,15 @@ class StepResult:
 
 
 # ---------------------------------------------------------------------------
-# Stubbed external services (AgentMail, Fly)
+# External services (AgentMail, Fly): Protocols and their NoOpStubs
 #
-# Each Protocol has a NoOpStub that the CLI defaults to. Production
-# wiring is a constructor swap with a real client. The stubs return
-# manifests that look like real ones so the audit trail stays the same
-# shape across stub vs live transitions.
+# The real implementations live in bin/lib/decommission_backends.py
+# (AgentMailInboxDeprovisioner, FlyAppDestroyer; #2735) and are injected by
+# the CLI when their credential is staged (AGENTMAIL_API_KEY; FLY_API_TOKEN,
+# a logged-in fly CLI does not count). The NoOpStub is the default the
+# pipeline falls back to, and unwired_destructive_backends() reports it so a
+# --live run refuses. The stubs return manifests that look like real ones so
+# the audit trail stays the same shape across stub vs live transitions.
 # ---------------------------------------------------------------------------
 
 
