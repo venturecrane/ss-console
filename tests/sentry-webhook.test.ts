@@ -48,20 +48,20 @@ describe('sentry webhook replay window', () => {
   it('refuses a validly signed body with no timestamp header', async () => {
     const res = await post({})
     expect(res.status).toBe(401)
-    expect(await res.json()).toEqual({ error: 'invalid_timestamp' })
+    expect(await res.json()).toMatchObject({ error: 'invalid_timestamp' })
   })
 
   it('refuses a validly signed body with a non-numeric timestamp', async () => {
     const res = await post({ 'sentry-hook-timestamp': 'abc' })
     expect(res.status).toBe(401)
-    expect(await res.json()).toEqual({ error: 'invalid_timestamp' })
+    expect(await res.json()).toMatchObject({ error: 'invalid_timestamp' })
   })
 
   it('refuses a validly signed body older than the window', async () => {
     const old = String(Math.floor(Date.now() / 1000) - 3600)
     const res = await post({ 'sentry-hook-timestamp': old })
     expect(res.status).toBe(401)
-    expect(await res.json()).toEqual({ error: 'stale' })
+    expect(await res.json()).toMatchObject({ error: 'stale' })
   })
 
   it('accepts a fresh timestamp and proceeds to payload validation', async () => {
@@ -70,6 +70,6 @@ describe('sentry webhook replay window', () => {
     // Past the replay gate: the fixture body has no tenant tag, which is the
     // next check's refusal, and proves the timestamp was accepted.
     expect(res.status).toBe(400)
-    expect(await res.json()).toEqual({ error: 'missing_tenant_tag' })
+    expect(await res.json()).toMatchObject({ error: 'missing_tenant_tag' })
   })
 })

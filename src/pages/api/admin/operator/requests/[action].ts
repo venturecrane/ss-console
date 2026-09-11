@@ -17,7 +17,7 @@
  * by middleware on /api/admin/* and re-checked here.
  */
 
-import { jsonResponse } from '../../../../../lib/api/helpers'
+import { jsonResponse, errorResponse } from '../../../../../lib/api/helpers'
 import type { APIContext, APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 import { updateChangeRequestStatus } from '../../../../../lib/portal/operator/change-request'
@@ -53,18 +53,18 @@ async function handlePost(ctx: APIContext): Promise<Response> {
 
   const status = actionToStatus(ctx.params.action ?? '')
   if (status === null) {
-    return jsonResponse(404, { error: `unknown action: ${ctx.params.action}` })
+    return errorResponse(404, 'not_found', `unknown action: ${ctx.params.action}`)
   }
 
   let body: unknown
   try {
     body = await ctx.request.json()
   } catch {
-    return jsonResponse(400, { error: 'invalid JSON body' })
+    return errorResponse(400, 'invalid_json')
   }
 
   const parsed = parseBody(body)
-  if ('error' in parsed) return jsonResponse(400, { error: parsed.error })
+  if ('error' in parsed) return errorResponse(400, 'validation_failed', parsed.error)
 
   const updated = await updateChangeRequestStatus(env.DB, {
     id: parsed.id,
@@ -72,7 +72,7 @@ async function handlePost(ctx: APIContext): Promise<Response> {
     resolved_by_email: session.email,
     resolution_note: parsed.resolution_note,
   })
-  if (!updated) return jsonResponse(404, { error: 'change request not found' })
+  if (!updated) return errorResponse(404, 'not_found', 'change request not found.')
   return jsonResponse(200, { ok: true, id: parsed.id, status })
 }
 

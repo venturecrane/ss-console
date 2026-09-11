@@ -36,7 +36,7 @@
  * naturally. We don't try to be clever here.
  */
 
-import { jsonResponse } from '../../../lib/api/helpers'
+import { jsonResponse, errorResponse } from '../../../lib/api/helpers'
 import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 
@@ -51,24 +51,24 @@ export const POST: APIRoute = async ({ request }) => {
   const expected = env.HEALTHCHECKS_WEBHOOK_SECRET
   if (!expected) {
     console.error('[webhook/healthchecks] HEALTHCHECKS_WEBHOOK_SECRET not configured')
-    return jsonResponse(500, { error: 'server_misconfigured' })
+    return errorResponse(500, 'server_misconfigured')
   }
 
   if (!bearerMatches(request, expected)) {
-    return jsonResponse(401, { error: 'unauthorized' })
+    return errorResponse(401, 'unauthorized')
   }
 
   let payload: HealthchecksWebhookPayload
   try {
     payload = await request.json<HealthchecksWebhookPayload>()
   } catch {
-    return jsonResponse(400, { error: 'invalid_json' })
+    return errorResponse(400, 'invalid_json')
   }
 
   const tenant = payload.tenant?.trim()
   const status = payload.status
   if (!tenant || (status !== 'up' && status !== 'down')) {
-    return jsonResponse(400, { error: 'missing_tenant_or_status' })
+    return errorResponse(400, 'missing_tenant_or_status')
   }
 
   const entityRow = await env.DB.prepare(
@@ -77,7 +77,7 @@ export const POST: APIRoute = async ({ request }) => {
     .bind(tenant)
     .first<{ entity_id: string }>()
   if (!entityRow) {
-    return jsonResponse(404, { error: 'unknown_tenant' })
+    return errorResponse(404, 'unknown_tenant')
   }
 
   const summary =

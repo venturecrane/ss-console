@@ -47,16 +47,16 @@ function getContentType(key: string): string {
 export const GET: APIRoute = async ({ locals, params }) => {
   const key = params.key
   if (!key) {
-    return errorResponse(400, 'Document key required')
+    return errorResponse(400, 'validation_failed', 'Document key required.')
   }
 
   // Resolve client entity via Clerk identity bridge
   const portalData = await getPortalClient(env.DB, locals)
   if (!portalData) {
-    return errorResponse(401, 'Unauthorized')
+    return errorResponse(401, 'unauthorized')
   }
   if (!portalData.client) {
-    return errorResponse(403, 'Forbidden')
+    return errorResponse(403, 'forbidden', 'Forbidden.')
   }
 
   // Path traversal protection: key must be scoped to this org.
@@ -66,12 +66,12 @@ export const GET: APIRoute = async ({ locals, params }) => {
   const orgPrefix = `${portalData.user.org_id}/`
   const orgsScopedPrefix = `orgs/${portalData.user.org_id}/`
   if (!key.startsWith(orgPrefix) && !key.startsWith(orgsScopedPrefix)) {
-    return errorResponse(403, 'Forbidden')
+    return errorResponse(403, 'forbidden', 'Forbidden.')
   }
 
   // Reject path traversal attempts
   if (key.includes('..') || key.includes('//')) {
-    return errorResponse(403, 'Forbidden')
+    return errorResponse(403, 'forbidden', 'Forbidden.')
   }
 
   // Executed Operator agreements: authorized by their own row, not by prefix
@@ -87,7 +87,7 @@ export const GET: APIRoute = async ({ locals, params }) => {
     return streamKey(key)
   }
   if (agreement.kind === 'forbidden') {
-    return errorResponse(403, 'Forbidden')
+    return errorResponse(403, 'forbidden', 'Forbidden.')
   }
 
   // Verify the key belongs to this client's engagement
@@ -106,7 +106,7 @@ export const GET: APIRoute = async ({ locals, params }) => {
   )
 
   if (!isEngagementDoc && !isQuoteDoc) {
-    return errorResponse(403, 'Forbidden')
+    return errorResponse(403, 'forbidden', 'Forbidden.')
   }
 
   return streamKey(key)
@@ -117,7 +117,7 @@ export const GET: APIRoute = async ({ locals, params }) => {
 async function streamKey(key: string): Promise<Response> {
   const object = await streamDocument(env.STORAGE, key)
   if (!object) {
-    return errorResponse(404, 'Not found')
+    return errorResponse(404, 'not_found', 'Not found.')
   }
 
   const contentType = getContentType(key)

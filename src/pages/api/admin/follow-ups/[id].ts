@@ -73,7 +73,7 @@ async function handlePost({ request, locals, redirect, params }: APIContext): Pr
 
   const followUpId = params.id
   if (!followUpId) {
-    return errorResponse(400, 'Follow-up ID required')
+    return errorResponse(400, 'validation_failed', 'Follow-up ID required.')
   }
 
   try {

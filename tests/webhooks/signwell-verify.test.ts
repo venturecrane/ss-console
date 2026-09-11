@@ -136,7 +136,7 @@ describe('POST /api/webhooks/signwell — HMAC verification', () => {
     const res = await POST(buildContext(payload))
     expect(res.status).toBe(401)
     const json = await parseJson<{ error: string }>(res)
-    expect(json.error).toBe('Invalid signature')
+    expect(json.error).toBe('invalid_signature')
   })
 
   it('rejects a payload signed with the wrong secret', async () => {
@@ -144,7 +144,7 @@ describe('POST /api/webhooks/signwell — HMAC verification', () => {
     const res = await POST(buildContext(payload))
     expect(res.status).toBe(401)
     const json = await parseJson<{ error: string }>(res)
-    expect(json.error).toBe('Invalid signature')
+    expect(json.error).toBe('invalid_signature')
   })
 
   it('rejects a payload missing the hash field', async () => {
@@ -152,7 +152,7 @@ describe('POST /api/webhooks/signwell — HMAC verification', () => {
     const res = await POST(buildContext(payload))
     expect(res.status).toBe(400)
     const json = await parseJson<{ error: string }>(res)
-    expect(json.error).toBe('Missing event fields')
+    expect(json.error).toBe('validation_failed')
   })
 
   it('rejects a stale payload (timestamp older than 5 minutes)', async () => {
@@ -163,7 +163,7 @@ describe('POST /api/webhooks/signwell — HMAC verification', () => {
     const res = await POST(buildContext(payload))
     expect(res.status).toBe(401)
     const json = await parseJson<{ error: string }>(res)
-    expect(json.error).toBe('Stale webhook')
+    expect(json.error).toBe('stale')
   })
 
   it('returns 500 when the webhook secret is not configured (defense in depth)', async () => {
@@ -185,6 +185,6 @@ describe('POST /api/webhooks/signwell — HMAC verification', () => {
 
     expect(res.status).toBe(400)
     const json = await parseJson<{ error: string }>(res)
-    expect(json.error).toBe('Malformed event payload')
+    expect(json.error).toBe('validation_failed')
   })
 })

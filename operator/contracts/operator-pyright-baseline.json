@@ -1,6 +1,6 @@
 {
   "_comment": "pyright errors per file at adoption, generated and enforced by bin/pyright-ratchet.py. Do not hand-edit. Regenerate with `pyright --outputjson > r.json; python3 bin/pyright-ratchet.py r.json --update`. A file leaves this list by reaching zero; no count may grow.",
-  "total": 110,
+  "total": 109,
   "files": {
     "adapter/voice/transform.py": 3,
     "bin/control-probes.py": 5,
@@ -44,7 +44,6 @@
     "skills/medical-records-chaser/pre_run.py": 1,
     "templates/drafting/drafting_gate_check.py": 14,
     "templates/r2-account-key-strip-probe.py": 1,
-    "workspace_broker/establishment_store.py": 1,
     "workspace_broker/medchron_verbs.py": 4,
     "workspace_broker/transmit_verbs.py": 3,
     "workspace_broker/verbs.py": 1

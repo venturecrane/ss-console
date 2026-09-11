@@ -269,7 +269,7 @@ async function handlePost({ request, locals, redirect, params }: APIContext): Pr
 
   const quoteId = params.id
   if (!quoteId) {
-    return errorResponse(400, 'Quote ID required')
+    return errorResponse(400, 'validation_failed', 'Quote ID required.')
   }
 
   try {

@@ -23,7 +23,7 @@ export const POST: APIRoute = async ({ request, locals, redirect, params }) => {
 
   const contactId = params.id
   if (!contactId) {
-    return errorResponse(400, 'Contact ID required')
+    return errorResponse(400, 'validation_failed', 'Contact ID required.')
   }
 
   try {

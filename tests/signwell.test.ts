@@ -227,7 +227,7 @@ describe('signwell: webhook route', () => {
     const code = source()
     // Reject branches go through the errorResponse(status, message) helper
     // since the #833 hardening pass; assert on the helper call shape.
-    expect(code).toContain("errorResponse(401, 'Invalid signature')")
+    expect(code).toContain("errorResponse(401, 'invalid_signature')")
   })
 
   it('checks for SIGNWELL_WEBHOOK_SECRET configuration', () => {

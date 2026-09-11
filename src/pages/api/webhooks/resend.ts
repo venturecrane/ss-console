@@ -72,10 +72,6 @@ const ResendWebhookPayloadSchema = z
   })
   .catchall(z.unknown())
 
-function jsonErr(status: number, message: string): Response {
-  return errorResponse(status, message)
-}
-
 async function verifySvixHeaders(
   request: Request,
   rawBody: string,
@@ -86,16 +82,16 @@ async function verifySvixHeaders(
   const svixSignature = request.headers.get('svix-signature')
 
   if (!svixId || !svixTimestamp || !svixSignature) {
-    return jsonErr(400, 'Missing svix headers')
+    return errorResponse(400, 'missing_signature', 'Missing svix headers.')
   }
 
   const tsSeconds = parseInt(svixTimestamp, 10)
-  if (!Number.isFinite(tsSeconds)) return jsonErr(400, 'Invalid timestamp')
+  if (!Number.isFinite(tsSeconds)) return errorResponse(400, 'invalid_timestamp')
 
   const nowSeconds = Math.floor(Date.now() / 1000)
   if (Math.abs(nowSeconds - tsSeconds) > MAX_WEBHOOK_AGE_SECONDS) {
     console.error(`[webhook/resend] Stale webhook: ts=${tsSeconds}, now=${nowSeconds}`)
-    return jsonErr(401, 'Stale webhook')
+    return errorResponse(401, 'stale', 'Stale webhook.')
   }
 
   const isValid = await verifySvixSignature(
@@ -107,7 +103,7 @@ async function verifySvixHeaders(
   )
   if (!isValid) {
     console.error('[webhook/resend] Invalid signature')
-    return jsonErr(401, 'Invalid signature')
+    return errorResponse(401, 'invalid_signature')
   }
 
   return { svixId }
@@ -117,7 +113,7 @@ async function handlePost({ request }: APIContext): Promise<Response> {
   const webhookSecret = env.RESEND_WEBHOOK_SECRET
   if (!webhookSecret) {
     console.error('[webhook/resend] RESEND_WEBHOOK_SECRET not configured')
-    return jsonErr(500, 'Server misconfigured')
+    return errorResponse(500, 'server_misconfigured')
   }
 
   // Read the raw body BEFORE parsing — Svix signs the exact bytes.
@@ -130,11 +126,12 @@ async function handlePost({ request }: APIContext): Promise<Response> {
   try {
     rawPayload = JSON.parse(rawBody) as unknown
   } catch {
-    return jsonErr(400, 'Invalid JSON')
+    return errorResponse(400, 'invalid_json')
   }
 
   const payloadResult = ResendWebhookPayloadSchema.safeParse(rawPayload)
-  if (!payloadResult.success) return jsonErr(400, 'Malformed event payload')
+  if (!payloadResult.success)
+    return errorResponse(400, 'validation_failed', 'Malformed event payload.')
   const payload: ResendWebhookPayload = payloadResult.data
 
   try {
@@ -161,7 +158,7 @@ async function handlePost({ request }: APIContext): Promise<Response> {
     console.error('[webhook/resend] handler failed:', err)
     captureError(err, 'webhook.resend')
     // 500 → Svix retries with backoff.
-    return jsonErr(500, 'Internal error')
+    return errorResponse(500, 'internal_error')
   }
 }
 

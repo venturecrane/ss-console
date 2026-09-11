@@ -4,7 +4,13 @@ import { ORG_ID } from '../../../lib/constants'
 import { rateLimitByIp } from '../../../lib/booking/rate-limit'
 import { processIntakeSubmission } from '../../../lib/booking/intake-core'
 import { ALLOWED_INTERESTS, interestLabel } from '../../../lib/booking/config'
-import { trimString, isValidEmail, escapeHtml, jsonResponse } from '../../../lib/api/helpers'
+import {
+  trimString,
+  isValidEmail,
+  escapeHtml,
+  jsonResponse,
+  errorResponse,
+} from '../../../lib/api/helpers'
 import { sendEmail } from '../../../lib/email/resend'
 import { buildAdminUrl } from '../../../lib/config/app-url'
 import {
@@ -68,18 +74,17 @@ function validateSendBody(body: Record<string, unknown>): ValidatedSendBody | Re
   if (!messageRaw) fieldErrors.message = 'Tell us a bit about the business.'
 
   if (Object.keys(fieldErrors).length > 0) {
-    return jsonResponse(400, {
-      error: 'validation_failed',
-      message: 'Some required fields are missing.',
+    return errorResponse(400, 'validation_failed', 'Some required fields are missing.', {
       field_errors: fieldErrors,
     })
   }
 
   if (messageRaw.length > MAX_MESSAGE_CHARS) {
-    return jsonResponse(400, {
-      error: 'validation_failed',
-      message: `Your message is too long (max ${MAX_MESSAGE_CHARS} characters).`,
-    })
+    return errorResponse(
+      400,
+      'validation_failed',
+      `Your message is too long (max ${MAX_MESSAGE_CHARS} characters).`
+    )
   }
 
   const interestRaw = trimString(body.interest)
@@ -101,7 +106,7 @@ async function handlePost({ request, clientAddress, locals }: APIContext): Promi
   try {
     body = await request.json()
   } catch {
-    return jsonResponse(400, { error: 'Invalid JSON' })
+    return errorResponse(400, 'invalid_json')
   }
 
   const renderedAt = typeof body.rendered_at === 'number' ? body.rendered_at : NaN
@@ -116,7 +121,7 @@ async function handlePost({ request, clientAddress, locals }: APIContext): Promi
     RATE_LIMIT_PER_HOUR
   )
   if (!rateResult.allowed) {
-    return jsonResponse(429, { error: 'Too many submissions. Please try again later.' })
+    return errorResponse(429, 'rate_limited')
   }
 
   const validated = validateSendBody(body)
@@ -145,7 +150,7 @@ async function handlePost({ request, clientAddress, locals }: APIContext): Promi
     )
   } catch (err) {
     console.error('[api/intake/send] processIntakeSubmission failed:', err)
-    return jsonResponse(500, { error: 'Internal server error' })
+    return errorResponse(500, 'internal_error')
   }
 
   // Meta CAPI Lead event (ADR 0066 gate 2, #1723) — server half of the

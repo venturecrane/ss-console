@@ -337,7 +337,7 @@ describe('middleware runtime: behavior', () => {
     it('returns 401 JSON for an unauthenticated admin API request', async () => {
       const { res } = await invoke({ url: 'https://admin.smd.services/api/admin/entities' })
       expect(res.status).toBe(401)
-      expect(await res.json()).toEqual({ error: 'Unauthorized' })
+      expect(await res.json()).toEqual({ error: 'unauthorized', message: 'Unauthorized.' })
     })
 
     it('gates /api/admin/fleet/health like every other admin route (carve-out ripped 2026-07-24)', async () => {
@@ -372,7 +372,7 @@ describe('middleware runtime: behavior', () => {
         auth: { userId: NONADMIN_CLERK_ID },
       })
       expect(res.status).toBe(403)
-      expect(await res.json()).toEqual({ error: 'Forbidden' })
+      expect(await res.json()).toEqual({ error: 'forbidden', message: 'Forbidden.' })
     })
 
     it('allows a Clerk-authenticated admin (role=admin in D1) through to next()', async () => {
@@ -397,7 +397,7 @@ describe('middleware runtime: behavior', () => {
     it('returns 401 JSON for an unauthenticated portal API request', async () => {
       const { res } = await invoke({ url: 'https://portal.smd.services/api/portal/quotes' })
       expect(res.status).toBe(401)
-      expect(await res.json()).toEqual({ error: 'Unauthorized' })
+      expect(await res.json()).toEqual({ error: 'unauthorized', message: 'Unauthorized.' })
     })
 
     it('allows a Clerk-authenticated user through (primary portal path)', async () => {
