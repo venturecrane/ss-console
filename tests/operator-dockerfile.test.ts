@@ -1455,3 +1455,106 @@ describe('Operator Machine profile guards', () => {
     ).toBe(true)
   })
 })
+
+/**
+ * The seat image's third-party Python is pinned and hash-checked (2026-09-10
+ * code review, Dependencies HIGH, third review running). Every `uv pip install`
+ * in the Dockerfile must be one of exactly three shapes:
+ *
+ *   1. a hash-locked requirements file under operator/requirements/, installed
+ *      with --require-hashes (third-party packages);
+ *   2. `--no-deps` over local paths only (our own packages, whose dependencies
+ *      shape 1 already pinned; a path cannot carry a hash);
+ *   3. the Hermes overlay from git at the OVERLAY_REF SHA, into the Hermes venv
+ *      that `uv sync --frozen` already populated from Hermes' own lock. Its
+ *      transitive dependencies resolve against that frozen venv; pinning them
+ *      separately would mean a second resolver rewriting versions the Hermes
+ *      lock chose, so this one stays as the documented exception.
+ *
+ * A bare package name on an install line is what this guards against: it is
+ * how the broker venv shipped three unversioned packages for three months.
+ */
+describe('Operator Machine Python is pinned and hash-checked', () => {
+  // Join backslash-continued lines so a multi-line RUN reads as one command,
+  // then split on newlines, `&&` and `;` so each `uv pip install` is judged
+  // on its own.
+  const commands = DOCKERFILE_CODE.replace(/\\\n/g, ' ')
+    .split(/\n|&&|;/)
+    .map((c) => c.trim().replace(/^RUN\s+/, ''))
+    .filter((c) => /^uv pip install\b/.test(c))
+
+  /** The package operands of an install line: every token that is not a flag or a flag's value. */
+  function operands(cmd: string): string[] {
+    const tokens = cmd
+      .replace(/^uv pip install\b/, '')
+      .trim()
+      .split(/\s+/)
+    const out: string[] = []
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i]
+      if (!t) continue
+      if (t === '--python' || t === '-p' || t === '-r' || t === '-e') {
+        i++ // the flag's value
+        if (t === '-e') out.push(`-e ${tokens[i]}`)
+        continue
+      }
+      if (t.startsWith('-')) continue
+      out.push(t)
+    }
+    return out
+  }
+
+  it('finds the install lines it is judging (the check can fail)', () => {
+    expect(commands.length).toBeGreaterThanOrEqual(6)
+  })
+
+  it('every uv pip install is a hashed requirements file, a --no-deps local install, or the pinned overlay', () => {
+    const offenders: string[] = []
+    for (const cmd of commands) {
+      const hashed =
+        /--require-hashes/.test(cmd) &&
+        /-r\s+("?\/app\/requirements\/[^\s"]+\.txt"?|"\$reqs")/.test(cmd) &&
+        operands(cmd).length === 0
+      const localOnly =
+        /--no-deps/.test(cmd) &&
+        operands(cmd).length > 0 &&
+        operands(cmd).every((t) => /^(\/app\/|"\$cdir"|-e "\.")/.test(t))
+      const overlay =
+        /git\+\$\{OVERLAY_REPO\}@\$\{OVERLAY_REF\}/.test(cmd) && operands(cmd).length === 1
+      if (!hashed && !localOnly && !overlay) offenders.push(cmd)
+    }
+    expect(offenders, 'an install line names a package without a hash-locked file').toEqual([])
+  })
+
+  it('the classifier refuses a bare package name (the check can fail)', () => {
+    const bare = 'uv pip install --python /opt/x/.venv/bin/python google-auth pyyaml'
+    expect(operands(bare)).toEqual(['google-auth', 'pyyaml'])
+    expect(/--require-hashes/.test(bare) || /--no-deps/.test(bare)).toBe(false)
+  })
+
+  it('every requirements file the Dockerfile installs from exists, is hashed, and carries no ranges', () => {
+    const referenced = new Set<string>()
+    for (const m of DOCKERFILE_CODE.matchAll(/\/app\/requirements\/([a-z0-9_.-]+\.txt)/g)) {
+      referenced.add(m[1])
+    }
+    // The connector loop references its file by name at build time.
+    for (const dir of ['smokeball', 'msgraph-mail', '_reference'])
+      referenced.add(`connector-${dir}.txt`)
+    expect(referenced.size).toBeGreaterThanOrEqual(3)
+    for (const file of referenced) {
+      const text = readFileSync(resolve('operator/requirements', file), 'utf8')
+      expect(/^[a-z0-9][a-z0-9._-]*==/m.test(text), `${file} pins nothing`).toBe(true)
+      expect(/--hash=sha256:/.test(text), `${file} carries no hashes`).toBe(true)
+      expect(/^[a-z0-9][a-z0-9._-]*\s*(>=|<=|~=|<|>)/m.test(text), `${file} carries a range`).toBe(
+        false
+      )
+    }
+  })
+
+  it('the requirements directory is copied into the image before any venv installs from it', () => {
+    const copyAt = DOCKERFILE_CODE.indexOf('COPY operator/requirements/ /app/requirements/')
+    const firstUse = DOCKERFILE_CODE.indexOf('/app/requirements/')
+    expect(copyAt).toBeGreaterThan(-1)
+    expect(copyAt).toBeLessThanOrEqual(firstUse)
+  })
+})

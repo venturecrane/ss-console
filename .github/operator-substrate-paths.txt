@@ -33,6 +33,10 @@ operator/contracts/**
 # must run the guard's tests, not only a change to the tests themselves.
 operator/rehearsal/**
 operator/templates/**
+# 2026-09-11: the hash-locked Python the seat image installs from. A pin bump
+# must run bin/tests/test_requirements_pins.py, which checks every declared
+# dependency is pinned and every pin is hashed.
+operator/requirements/**
 operator/skills/**
 operator/verticals/**
 operator/migrations/**
