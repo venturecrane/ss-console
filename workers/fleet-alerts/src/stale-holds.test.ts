@@ -26,6 +26,7 @@ import {
   CONDITION_PREFIXES,
 } from './conditions'
 import { STALE_HOLDS_SQL, STALE_HOLDS_BINDINGS } from './stale-holds'
+import { EDGE_DOWN_CONDITION } from './conditions'
 
 interface StatusSeed {
   customer_slug: string
@@ -299,5 +300,26 @@ describe('stale-holds SQL (executed against real SQLite)', () => {
         expect(rows).toHaveLength(1)
       })
     }
+  })
+})
+
+describe('edge_down is never a stranded seat (wave 8.2)', () => {
+  // The probe target has no fleet_status row by construction, so without the
+  // exclusion the `f.customer_slug IS NULL` clause reports every open edge
+  // alert as an orphaned seat. Bound by the constant, like the prefixes.
+  it('an open edge_down row with no fleet_status row is not listed', () => {
+    const rows = runQuery([{ customer_slug: 'smd.services', condition: EDGE_DOWN_CONDITION }], [])
+    expect(rows).toEqual([])
+  })
+
+  it('the exclusion is narrow: a real orphaned seat next to it is still listed', () => {
+    const rows = runQuery(
+      [
+        { customer_slug: 'smd.services', condition: EDGE_DOWN_CONDITION },
+        { customer_slug: 'pilot-smokeball', condition: 'heartbeat_red' },
+      ],
+      []
+    )
+    expect(rows).toEqual([{ customer_slug: 'pilot-smokeball', condition: 'heartbeat_red' }])
   })
 })

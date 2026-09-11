@@ -31,6 +31,13 @@ export const SPEC_CONTROL_BROKEN_PREFIX = 'spec_control_broken:'
 export const WEBHOOK_SURFACE_MISSING_PREFIX = 'webhook_surface_missing:'
 
 /**
+ * The web Worker's own edge failing its outside-in probe (review 2026-09-10,
+ * wave 8.2). Not prefixed: the target rides in `customer_slug`, because there
+ * is no seat behind this alert. stale-holds.ts excludes it by this constant.
+ */
+export const EDGE_DOWN_CONDITION = 'edge_down'
+
+/**
  * Every prefixed class, for the guard test that asserts no caller has
  * reintroduced a hardcoded offset.
  *
@@ -77,6 +84,7 @@ const CONDITION_LABEL: Record<string, string> = {
   gateway_restarted: 'Seat supervisor restarted the gateway',
   gateway_supervisor_refusing: 'Seat supervisor STOPPED restarting (budget spent, needs a human)',
   gateway_supervisor_inert: 'Seat supervisor cannot act (wedge would not self-recover)',
+  edge_down: 'Web edge not answering /api/health from outside',
   send_refused:
     "a routine's outbound send was refused by a gate, or a wake with needs-you items sent nothing",
 }
