@@ -12,7 +12,7 @@ Edit the canonical, restamp the copy, never edit a copy.
 
 from __future__ import annotations
 
-from tests.vendored_sync import OPERATOR_ROOT, assert_byte_identical, discover_copies
+from vendored_sync import OPERATOR_ROOT, assert_byte_identical, discover_copies
 
 _CANONICAL = OPERATOR_ROOT / "skills" / "deadline-miss-escalator" / "routing.py"
 

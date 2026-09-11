@@ -18,7 +18,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from tests.vendored_sync import assert_byte_identical, discover_copies
+from vendored_sync import assert_byte_identical, discover_copies
 
 _OPERATOR_ROOT = Path(__file__).resolve().parents[1]
 _CANONICAL = _OPERATOR_ROOT / "workspace_broker" / "escalation_ledger.py"

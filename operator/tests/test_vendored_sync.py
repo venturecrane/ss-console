@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.vendored_sync import assert_byte_identical, discover_copies, discover_stamps, function_body_hashes
+from vendored_sync import assert_byte_identical, discover_copies, discover_stamps, function_body_hashes
 
 _TEMPLATE = '''"""A template."""
 

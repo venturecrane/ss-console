@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.vendored_sync import assert_byte_identical, discover_stamps
+from vendored_sync import assert_byte_identical, discover_stamps
 
 _OPERATOR_ROOT = Path(__file__).resolve().parents[1]
 _TEMPLATE = _OPERATOR_ROOT / "templates" / "pre_run_gate.py"

@@ -17,7 +17,7 @@ Run::
 
 from __future__ import annotations
 
-from tests.vendored_sync import OPERATOR_ROOT, assert_byte_identical, discover_copies
+from vendored_sync import OPERATOR_ROOT, assert_byte_identical, discover_copies
 
 _CANONICAL = OPERATOR_ROOT / "skills" / "deadline-miss-escalator" / "broker_writer.py"
 
