@@ -117,6 +117,20 @@ the signals fire but that every doctrine line still reaches stdout and the exit
 code is still zero on every failure path. This is Law 10 in
 `docs/doctrine/agent-operating-doctrine.md`.
 
+The same discipline applies to the code we ship, not only to what an agent reads.
+A program that acts on the world and then reports on the result has two ways to
+write that report: from the statement it ran, or from the world after it ran.
+The 2026-09-10 code review found four new defects in one window that were all
+the first kind: a decommission manifest that said a row was deleted whether or
+not it was, a required check whose conformance test covered the test files but
+not the fixtures those tests execute, a pricing route that wrote two halves and
+could not say which landed, and a flag whose help text said "dev only" while
+nothing enforced it. So any module that emits a manifest, a completion record, a
+wired map, or a done flag reads the world back after acting, and the review asks
+what the report would say if the action had matched nothing. This is Law 14 in
+the same registry; the five questions a reviewer answers are in
+`docs/doctrine/report-is-a-probe-checklist.md`.
+
 ## The portable coding standards
 
 Every change is written to the enterprise coding standards (global
