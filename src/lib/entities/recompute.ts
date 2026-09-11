@@ -14,6 +14,8 @@
  * remains LLM-derived (async/on-demand).
  */
 
+import { isRecord } from '../api/helpers'
+
 interface Accumulators {
   vertical: string | null
   area: string | null
@@ -50,12 +52,14 @@ export async function recomputeDeterministicCache(
   for (const entry of entries.results) {
     if (!entry.metadata) continue
 
-    let meta: Record<string, unknown>
+    let parsed: unknown
     try {
-      meta = JSON.parse(entry.metadata)
+      parsed = JSON.parse(entry.metadata)
     } catch {
       continue
     }
+    if (!isRecord(parsed)) continue
+    const meta: Record<string, unknown> = parsed
 
     const updated = applyMetaToAccumulators(meta, { vertical, area })
     vertical = updated.vertical

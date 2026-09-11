@@ -30,17 +30,13 @@ function settingsUrl(instance: string | null): string {
   return instance ? `${OPERATOR_LANDING}/${instance}/settings` : OPERATOR_LANDING
 }
 
-function redirectWithStatus(instance: string | null, status: string): Response {
+function redirectToSettings(instance: string | null, status: string): Response {
   const base = settingsUrl(instance)
   const sep = base.includes('?') ? '&' : '?'
   return new Response(null, {
     status: 303,
     headers: { Location: `${base}${sep}status=${encodeURIComponent(status)}` },
   })
-}
-
-function jsonError(status: number, message: string): Response {
-  return errorResponse(status, message)
 }
 
 export const POST: APIRoute = async ({ locals, request }) => {
@@ -53,7 +49,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     customerSlug: instance ?? '',
   })
   if (access.kind === 'redirect') {
-    return jsonError(403, 'Forbidden')
+    return errorResponse(403, 'Forbidden')
   }
 
   const skillName = formData.get('skillName')
@@ -61,10 +57,10 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const personaSlug = formData.get('personaSlug')
 
   if (typeof skillName !== 'string' || skillName === '') {
-    return redirectWithStatus(instance, 'invalid_skill')
+    return redirectToSettings(instance, 'invalid_skill')
   }
   if (nextEnabled !== 'true' && nextEnabled !== 'false') {
-    return redirectWithStatus(instance, 'invalid_state')
+    return redirectToSettings(instance, 'invalid_state')
   }
 
   await applySkillToggle(env.DB, {
@@ -76,5 +72,5 @@ export const POST: APIRoute = async ({ locals, request }) => {
     next_enabled: nextEnabled === 'true',
   })
 
-  return redirectWithStatus(instance, 'saved')
+  return redirectToSettings(instance, 'saved')
 }

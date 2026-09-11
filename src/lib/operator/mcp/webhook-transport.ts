@@ -13,6 +13,7 @@
  */
 
 import { deriveRuntimeReadKey } from '../runtime-read-transport'
+import { machineBaseUrl } from '../machine-url'
 import { resolveCustomerFlyApp } from '../fly-app-registry'
 
 export interface MachineWebhookEnv {
@@ -46,10 +47,6 @@ export interface HandoffEnvelope {
 
 export interface MachineWebhookTransport {
   send(customerSlug: string, envelope: HandoffEnvelope): Promise<void>
-}
-
-function machineBaseUrl(template: string, app: string): string {
-  return template.includes('{app}') ? template.replace('{app}', app) : `https://${app}.fly.dev`
 }
 
 /**

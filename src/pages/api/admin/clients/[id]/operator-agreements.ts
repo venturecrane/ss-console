@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro'
+import { captureError } from '../../../../../lib/observability/sentry'
 import { env } from 'cloudflare:workers'
 import { requireAdminSession } from '../../../../../lib/auth/admin-session'
 import { getEntity } from '../../../../../lib/db/entities'
@@ -78,6 +79,7 @@ async function removeDocument(orgId: string, entityId: string, form: FormData): 
     await env.STORAGE.delete(removed.storage_key)
   } catch (err) {
     console.error('[admin/operator-agreements] R2 delete failed:', err)
+    captureError(err, 'admin.operator-agreements.r2-delete')
   }
   return back(entityId, 'removed')
 }
@@ -148,6 +150,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
     return await recordDocument(session.orgId, entityId, session.userId, fields)
   } catch (err) {
     console.error('[admin/operator-agreements] request failed:', err)
+    captureError(err, 'admin.operator-agreements')
     return back(entityId, 'failed')
   }
 }

@@ -123,6 +123,8 @@ export interface CreateServiceData {
   cadence: ServiceCadence
   quote_id?: string | null
   recurring_price?: number | null
+  /** The retainer rail (migration 0113); the column default `ach` when omitted. */
+  payment_method?: OperatorPaymentMethod
   status?: ServiceStatus
   started_at?: string | null
 }
@@ -143,8 +145,8 @@ export async function createService(
 
   await db
     .prepare(
-      `INSERT INTO services (id, org_id, entity_id, quote_id, type, cadence, status, recurring_price, started_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO services (id, org_id, entity_id, quote_id, type, cadence, status, recurring_price, payment_method, started_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       id,
@@ -155,6 +157,7 @@ export async function createService(
       data.cadence,
       status,
       data.recurring_price ?? null,
+      data.payment_method ?? 'ach',
       data.started_at ?? null,
       now,
       now
@@ -227,61 +230,56 @@ export async function getOperatorServiceForEntity(
 }
 
 /**
- * Author the operator's monthly recurring price (ADR 0046). This is the operator's
- * forward writer for the COMMERCIAL record (the service) — deliberately NOT the
- * delivery/provisioning record (`subscriptions`), which gates portal access and is
- * owned by the provisioning path. Upserts `recurring_price` on the entity's single
- * operator service: updates it if present, creates an `active` operator service if
- * not. Pass `price = null` to clear the price (back to unpriced). Idempotent.
+ * Author the operator's monthly recurring price and the rail it is collected
+ * by, together, in ONE statement (ADR 0046; migration 0113; code review
+ * 2026-09-10, Architecture 8).
+ *
+ * This is the operator's forward writer for the COMMERCIAL record (the
+ * service), deliberately NOT the delivery/provisioning record
+ * (`subscriptions`), which gates portal access and is owned by the
+ * provisioning path. Upserts on the entity's single operator service: updates
+ * it if present, creates an `active` operator service if not (`started_at`
+ * stamps the revenue line's start). `price = null` clears the price back to
+ * unpriced. Idempotent.
+ *
+ * Why one statement: the client-hub form posts both fields at once. Written
+ * as two read-modify-writes (the shape until 2026-09-10), a failure between
+ * them left the row with the new price and the old rail, and the rail is what
+ * decides whether the 3% card fee line is added to checkout and to every
+ * monthly invoice. A single UPDATE, or for a client with no operator service
+ * yet a single INSERT, cannot half-land.
+ *
+ * `method = null` means the form did not carry a rail: the price is written
+ * and the rail is left exactly as it was (COALESCE keeps the column; a new
+ * row takes the column default, `ach`).
  */
-export async function setOperatorPrice(
+export async function setOperatorPriceAndPaymentMethod(
   db: D1Database,
   orgId: string,
   entityId: string,
-  price: number | null
+  price: number | null,
+  method: OperatorPaymentMethod | null
 ): Promise<Service> {
   const existing = await getOperatorServiceForEntity(db, orgId, entityId)
-  if (existing) {
-    await db
-      .prepare(
-        `UPDATE services SET recurring_price = ?, updated_at = ? WHERE id = ? AND org_id = ?`
-      )
-      .bind(price, new Date().toISOString(), existing.id, orgId)
-      .run()
-    const updated = await getService(db, orgId, existing.id)
-    if (!updated) throw new Error(`Failed to update operator service ${existing.id}`)
-    return updated
+  const now = new Date().toISOString()
+  if (!existing) {
+    return createService(db, orgId, {
+      entity_id: entityId,
+      type: 'operator',
+      cadence: 'recurring',
+      status: 'active',
+      recurring_price: price,
+      ...(method ? { payment_method: method } : {}),
+      started_at: now,
+    })
   }
-  // No operator service yet — create the commercial record, born active (we are
-  // pricing a real operator). started_at stamps the revenue line's start.
-  return createService(db, orgId, {
-    entity_id: entityId,
-    type: 'operator',
-    cadence: 'recurring',
-    status: 'active',
-    recurring_price: price,
-    started_at: new Date().toISOString(),
-  })
-}
-
-/**
- * Author the rail the retainer is collected by (migration 0113). Same
- * forward writer as the price: the commercial record only, never the
- * provisioning row. Creates the operator service (unpriced) if none exists,
- * so a rail authored before a price is not lost.
- */
-export async function setOperatorPaymentMethod(
-  db: D1Database,
-  orgId: string,
-  entityId: string,
-  method: OperatorPaymentMethod
-): Promise<Service> {
-  const existing =
-    (await getOperatorServiceForEntity(db, orgId, entityId)) ??
-    (await setOperatorPrice(db, orgId, entityId, null))
   await db
-    .prepare(`UPDATE services SET payment_method = ?, updated_at = ? WHERE id = ? AND org_id = ?`)
-    .bind(method, new Date().toISOString(), existing.id, orgId)
+    .prepare(
+      `UPDATE services
+          SET recurring_price = ?, payment_method = COALESCE(?, payment_method), updated_at = ?
+        WHERE id = ? AND org_id = ?`
+    )
+    .bind(price, method, now, existing.id, orgId)
     .run()
   const updated = await getService(db, orgId, existing.id)
   if (!updated) throw new Error(`Failed to update operator service ${existing.id}`)

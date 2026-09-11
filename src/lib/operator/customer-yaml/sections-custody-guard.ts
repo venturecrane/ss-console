@@ -61,8 +61,11 @@ export function checkCustodyExceptions(
     return null
   }
   const out: CustodyExceptionAdapter[] = []
-  for (let i = 0; i < raw.length; i++) {
-    const entry = raw[i]
+  // Array.isArray narrows `unknown` to `any[]`; name the elements unknown so
+  // each one is proven eligible below rather than assumed.
+  const entries: unknown[] = raw
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]
     if (
       typeof entry !== 'string' ||
       !(CUSTODY_EXCEPTION_ELIGIBLE as readonly string[]).includes(entry)

@@ -11,6 +11,7 @@
  */
 
 import { connectorRowsFromCustomerYaml, type ConnectorStatusRow } from './settings'
+import { isRecord } from '../../api/helpers'
 import {
   resolveCredentialCustody,
   smdCanReachSecret,
@@ -34,10 +35,6 @@ export interface ConnectionRow extends ConnectorStatusRow {
   custody: CredentialCustody
   /** True when SMD staff may reach/rotate the secret (delegated only). */
   smdReachable: boolean
-}
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
 /**

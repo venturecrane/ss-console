@@ -150,8 +150,8 @@ describe('advanced settings: no success state for a write that did not happen', 
     // It authorizes, merges, validates and records — and writes nothing,
     // because customer.yaml is git-authoritative. `applied` was a success
     // state for a write that never happened.
-    expect(endpoint).toContain(`redirectWithStatus(auth.customerSlug, 'submitted')`)
-    expect(endpoint).not.toMatch(/redirectWithStatus\([^)]*'applied'\)/)
+    expect(endpoint).toContain(`redirectToAdvancedSettings(auth.customerSlug, 'submitted')`)
+    expect(endpoint).not.toMatch(/redirectToAdvancedSettings\([^)]*'applied'\)/)
   })
 
   it('the durable ledger and the client are told the same word', () => {

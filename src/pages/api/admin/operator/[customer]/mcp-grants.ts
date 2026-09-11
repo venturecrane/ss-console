@@ -31,7 +31,7 @@ import {
 } from '../../../../../lib/operator/mcp/grant-store'
 import { requireAdminSession } from '../../../../../lib/auth/admin-session'
 
-function redirectWithStatus(slug: string, status: string): Response {
+function redirectToConnectors(slug: string, status: string): Response {
   const target = `/admin/operator/${encodeURIComponent(slug)}/connectors?status=${encodeURIComponent(status)}`
   return new Response(null, { status: 303, headers: { Location: target } })
 }
@@ -83,10 +83,10 @@ async function handlePost(ctx: APIContext): Promise<Response> {
 
   const slug = ctx.params.customer ?? ''
   const entityId = await resolveEntityIdBySlug(env.DB, slug)
-  if (!entityId) return redirectWithStatus(slug, 'not_found')
+  if (!entityId) return redirectToConnectors(slug, 'not_found')
 
   const result = parseForm(await ctx.request.formData())
-  if ('error' in result) return redirectWithStatus(slug, result.error)
+  if ('error' in result) return redirectToConnectors(slug, result.error)
   const parsed = result.parsed
 
   const auditCtx = { entityId, actor: session.email, reason: parsed.reason }
@@ -103,7 +103,7 @@ async function handlePost(ctx: APIContext): Promise<Response> {
       },
       auditCtx
     )
-    return redirectWithStatus(slug, 'grant_issued')
+    return redirectToConnectors(slug, 'grant_issued')
   }
 
   const { changed } = await revokeGrant(
@@ -111,7 +111,7 @@ async function handlePost(ctx: APIContext): Promise<Response> {
     { customerSlug: slug, clerkUserId: parsed.clerkUserId },
     auditCtx
   )
-  return redirectWithStatus(slug, changed ? 'grant_revoked' : 'grant_not_found')
+  return redirectToConnectors(slug, changed ? 'grant_revoked' : 'grant_not_found')
 }
 
 export const POST: APIRoute = (ctx) => handlePost(ctx)
