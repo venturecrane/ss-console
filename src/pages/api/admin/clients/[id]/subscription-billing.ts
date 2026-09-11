@@ -1,4 +1,5 @@
 import type { APIContext, APIRoute } from 'astro'
+import { captureError } from '../../../../../lib/observability/sentry'
 import { env } from 'cloudflare:workers'
 import { requireAdminSession } from '../../../../../lib/auth/admin-session'
 import {
@@ -87,6 +88,7 @@ async function handlePost({ request, locals, params, redirect }: APIContext): Pr
     return back(await handleAttachedAction(action, sub.id, sub.stripe_subscription_id))
   } catch (err) {
     console.error('[api/admin/clients/subscription-billing] error:', err)
+    captureError(err, 'admin.subscription-billing')
     return back('error=billing_server')
   }
 }

@@ -251,7 +251,12 @@ function checkTriggerExclude(
   for (const key of ['matters', 'actors'] as const) {
     const val = raw[key]
     if (val === undefined || val === null) continue
-    if (!Array.isArray(val) || !val.every((v) => typeof v === 'string' && GUID_RE.test(v))) {
+    const values: unknown[] | null = Array.isArray(val) ? val : null
+    const guids =
+      values && values.every((v): v is string => typeof v === 'string' && GUID_RE.test(v))
+        ? values
+        : null
+    if (!guids) {
       errors.push({
         code: 'TypeMismatch',
         path: `${path}.${key}`,
@@ -259,7 +264,7 @@ function checkTriggerExclude(
       })
       return undefined
     }
-    lists[key] = val
+    lists[key] = guids
   }
   if (lists.matters.length === 0 && lists.actors.length === 0) {
     errors.push({

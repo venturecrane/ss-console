@@ -127,7 +127,7 @@ Hosts: admin routes are served on admin.smd.services, portal routes on portal.sm
 | Path | Methods | Gate | Purpose | File |
 |---|---|---|---|---|
 | `/api/auth/google/callback` | GET | single-use OAuth state nonce | Google OAuth callback. | `src/pages/api/auth/google/callback.ts` |
-| `/api/auth/google/connect` | GET | locals.session required | Initiates the Google OAuth consent flow. | `src/pages/api/auth/google/connect.ts` |
+| `/api/auth/google/connect` | GET | admin session (resolved in-route via Clerk) | Initiates the Google OAuth consent flow. | `src/pages/api/auth/google/connect.ts` |
 | `/api/auth/magic-link` | POST | public, IP rate-limited | Generates a magic link for the given email and sends it via Resend. | `src/pages/api/auth/magic-link.ts` |
 
 ## OAuth (1)

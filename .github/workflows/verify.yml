@@ -96,3 +96,9 @@ jobs:
 
       - name: Build Cost Telemetry Worker
         run: cd workers/cost-telemetry && npm ci && npx wrangler deploy --dry-run --outdir=dist
+
+      # The fleet-alerts worker is the heartbeat-red / HARD_STOP pager; its
+      # wrangler config was the one deployed with no build gate (code review
+      # 2026-09-10, Architecture 12).
+      - name: Build Fleet Alerts Worker
+        run: cd workers/fleet-alerts && npm ci && npx wrangler deploy --dry-run --outdir=dist
