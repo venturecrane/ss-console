@@ -1,6 +1,6 @@
 # Inbound Trust Boundary — Spec
 
-_ADR 0027. The contract both the ss-console runtime (`operator/adapter/inbound_envelope.py`) and the overlay (`hermes-smd-inbound`, `hermes-smd-webhook-router`) pin to. Authored 2026-05-29._
+_ADR 0027. The contract the overlay implements: `shared/inbound.py` in venturecrane/hermes-smd-overlay is the envelope, applied by `hermes-smd-inbound` and `hermes-smd-webhook-router`; ss-console consumes the `INBOUND_RECEIVED` audit rows it produces. Authored 2026-05-29. The ss-console copy of the envelope module (`operator/adapter/inbound_envelope.py`) was retired 2026-09-11: nothing in this repo imported it, and the overlay's module had grown past it (taint, pending queue, origin)._
 
 ## Purpose
 
@@ -15,7 +15,7 @@ Untrusted external content (email bodies, webhook payloads, connector/MCP result
 
 ## The envelope
 
-`InboundEnvelope` (frozen dataclass; Python source of truth in `operator/adapter/inbound_envelope.py`):
+`InboundEnvelope` (frozen dataclass; Python source of truth in the overlay's `shared/inbound.py`):
 
 | field                 | meaning                                                                                  |
 | --------------------- | ---------------------------------------------------------------------------------------- |
@@ -52,7 +52,7 @@ One `INBOUND_RECEIVED` row (`operator/adapter/audit_log.py` / `d1-schema.md`) pe
 
 ## CI corpus
 
-The boundary's CODE behavior is asserted deterministically (no live model) against injection fixtures, in `operator/adapter/tests/test_inbound_envelope.py`, run by `operator-substrate.yml`:
+The boundary's CODE behavior is asserted deterministically (no live model). Items 1 to 3 are the overlay's (`tests/test_inbound.py`, `tests/test_inbound_fence_completeness.py`); item 4 is this repo's `operator/adapter/tests/test_trust_gate_injection.py`, run by `operator-substrate.yml`. The ten-file injection corpus at `operator/adapter/tests/fixtures/inbound-injection/` was item 2's input until 2026-09-11 and is not exercised by any test until it is ported to the overlay beside the fence it tests:
 
 1. the whole untrusted body lands inside the nonce fence;
 2. each fixture's injection payload sits only inside the fence (no instruction-position leak);

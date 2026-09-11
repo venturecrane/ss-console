@@ -1,0 +1,8 @@
+{
+  "_comment": "Logical-line census of non-test operator/**/*.sh scripts over the ceiling. Generated and enforced by tests/operator-module-size.test.ts (the shell half); do not hand-edit. Regenerate with UPDATE_OPERATOR_MODULE_SIZE_BASELINE=1 npx vitest run tests/operator-module-size.test.ts. A script leaves this file by getting smaller; nothing may enter it by getting bigger.",
+  "ceiling": 500,
+  "scripts": {
+    "operator/bin/provision-customer.sh": 633,
+    "operator/templates/entrypoint.sh": 619
+  }
+}

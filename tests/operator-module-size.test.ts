@@ -3,7 +3,8 @@ import { readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs'
 import { resolve, join, relative } from 'node:path'
 
 /**
- * Module-size ratchet for the Python operator tree.
+ * Module-size ratchet for the Python operator tree, and (since 2026-09-11,
+ * second half of this file) for its shell scripts.
  *
  * WHY THIS LIVES IN THE TYPESCRIPT SUITE AND NOT IN RUFF. Two reasons, both
  * probed rather than assumed:
@@ -79,18 +80,22 @@ function isTestFile(relPath: string): boolean {
   return relPath.split('/').includes('tests')
 }
 
-function walkPythonFiles(dir: string, acc: string[] = []): string[] {
+function walkFiles(dir: string, suffix: string, acc: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     if (SKIP_DIRS.has(entry)) continue
     const full = join(dir, entry)
     const st = statSync(full)
     if (st.isDirectory()) {
-      walkPythonFiles(full, acc)
-    } else if (entry.endsWith('.py')) {
+      walkFiles(full, suffix, acc)
+    } else if (entry.endsWith(suffix)) {
       acc.push(full)
     }
   }
   return acc
+}
+
+function walkPythonFiles(dir: string): string[] {
+  return walkFiles(dir, '.py')
 }
 
 /**
@@ -172,6 +177,94 @@ function measureTree(): Record<string, number> {
 }
 
 const REGENERATE = process.env.UPDATE_OPERATOR_MODULE_SIZE_BASELINE === '1'
+
+// ---------------------------------------------------------------------------
+// Shell scripts: the same ratchet, its own counter and its own baseline.
+//
+// WHY. The 2026-09-10 review (Architecture 6) found the four largest files
+// under operator/ that no ceiling could see were shell: provision-customer.sh
+// (1,410 raw lines), entrypoint.sh (1,309), bootstrap.sh (917) and
+// boot-smoke-test.sh (577). ShellCheck has no file-length rule any more than
+// ruff does, so the ceiling lives here, beside the Python one, counted the
+// same way: blanks and comment-only lines excluded. Heredoc bodies are not
+// modelled, for the reason the Python counter gives about its own string
+// bodies: one counter produces and checks the baseline, so only
+// self-consistency matters.
+//
+// SEPARATE BASELINE, SAME RULES. A script that grows fails; one that shrinks
+// fails until regenerated; one not in the baseline fails the moment it
+// crosses the ceiling. Regenerate with the same variable as the Python half.
+// ---------------------------------------------------------------------------
+
+const SHELL_BASELINE_FILE = join(OPERATOR_DIR, 'contracts', 'operator-shell-size.json')
+
+interface ShellBaseline {
+  _comment: string
+  ceiling: number
+  scripts: Record<string, number>
+}
+
+export function countShellLogicalLines(source: string): number {
+  let count = 0
+  for (const line of source.split('\n')) {
+    const trimmed = line.trim()
+    if (trimmed === '') continue
+    if (trimmed.startsWith('#')) continue
+    count += 1
+  }
+  return count
+}
+
+function loadShellBaseline(): ShellBaseline {
+  return JSON.parse(readFileSync(SHELL_BASELINE_FILE, 'utf8')) as ShellBaseline
+}
+
+function measureShellTree(): Record<string, number> {
+  const measured: Record<string, number> = {}
+  for (const abs of walkFiles(OPERATOR_DIR, '.sh')) {
+    const rel = relative(REPO_ROOT, abs)
+    if (isTestFile(rel)) continue
+    const lines = countShellLogicalLines(readFileSync(abs, 'utf8'))
+    if (lines > CEILING) measured[rel] = lines
+  }
+  return measured
+}
+
+/**
+ * The only-tightening comparison, shared by any ratchet of this shape: over
+ * the ceiling and unrecorded fails, growth fails, and shrinkage fails until
+ * the baseline is regenerated so the recorded number tracks reality downward.
+ */
+function ratchetProblems(
+  measured: Record<string, number>,
+  recorded: Record<string, number>,
+  regenerateHint: string
+): string[] {
+  const problems: string[] = []
+  for (const [path, lines] of Object.entries(measured)) {
+    const was = recorded[path]
+    if (was === undefined) {
+      problems.push(
+        `${path}: ${lines} logical lines, over the ${CEILING} ceiling and not in the baseline. ` +
+          `Split it, or if this is a deliberate carry-over, regenerate the baseline and say why in the PR.`
+      )
+    } else if (lines > was) {
+      problems.push(
+        `${path}: grew ${was} -> ${lines} logical lines. The ratchet only tightens: ` +
+          `split the script rather than raising its baseline.`
+      )
+    }
+  }
+  for (const [path, was] of Object.entries(recorded)) {
+    const now = measured[path]
+    if (now === undefined) {
+      problems.push(`${path}: no longer over the ceiling (was ${was}). ${regenerateHint}`)
+    } else if (now < was) {
+      problems.push(`${path}: shrank ${was} -> ${now} logical lines. ${regenerateHint}`)
+    }
+  }
+  return problems
+}
 
 describe('operator module-size ratchet', () => {
   it('the counter can distinguish code from comments and docstrings', () => {
@@ -292,6 +385,62 @@ describe('operator module-size ratchet', () => {
       }
     }
 
+    expect(problems, problems.join('\n')).toEqual([])
+  })
+})
+
+describe('operator shell-script size ratchet', () => {
+  it('the shell counter excludes blanks and comment-only lines and nothing else', () => {
+    // Law 12, same as the Python counter: prove the instrument discriminates
+    // before trusting the numbers it reports.
+    const sample = [
+      '#!/usr/bin/env bash', // shebang is a comment line
+      'set -euo pipefail', //   counts (1)
+      '', //                    blank
+      '# a comment', //         comment only
+      '  # indented comment', // comment only
+      'echo "x" # trailing', // counts (2): code outside the comment
+      'if [ -n "$X" ]; then', // counts (3)
+      '  exit 1', //            counts (4)
+      'fi', //                  counts (5)
+    ].join('\n')
+    expect(countShellLogicalLines(sample)).toBe(5)
+    expect(countShellLogicalLines('')).toBe(0)
+    expect(countShellLogicalLines('# only a comment')).toBe(0)
+  })
+
+  it('shell baseline is well-formed and matches the enforced ceiling', () => {
+    const baseline = loadShellBaseline()
+    expect(baseline.ceiling).toBe(CEILING)
+    for (const [path, lines] of Object.entries(baseline.scripts)) {
+      expect(lines, `${path} baselined below the ceiling`).toBeGreaterThan(CEILING)
+    }
+  })
+
+  it('no operator shell script has grown past its baseline, and no new script is over the ceiling', () => {
+    const measured = measureShellTree()
+
+    if (REGENERATE) {
+      const scripts: Record<string, number> = {}
+      for (const key of Object.keys(measured).sort()) scripts[key] = measured[key]
+      const next: ShellBaseline = {
+        _comment:
+          'Logical-line census of non-test operator/**/*.sh scripts over the ceiling. ' +
+          'Generated and enforced by tests/operator-module-size.test.ts (the shell half); do not hand-edit. ' +
+          'Regenerate with UPDATE_OPERATOR_MODULE_SIZE_BASELINE=1 npx vitest run tests/operator-module-size.test.ts. ' +
+          'A script leaves this file by getting smaller; nothing may enter it by getting bigger.',
+        ceiling: CEILING,
+        scripts,
+      }
+      writeFileSync(SHELL_BASELINE_FILE, JSON.stringify(next, null, 2) + '\n', 'utf8')
+      return
+    }
+
+    const problems = ratchetProblems(
+      measured,
+      loadShellBaseline().scripts,
+      'Regenerate the baseline with UPDATE_OPERATOR_MODULE_SIZE_BASELINE=1 so the ratchet keeps its new, tighter position.'
+    )
     expect(problems, problems.join('\n')).toEqual([])
   })
 })
