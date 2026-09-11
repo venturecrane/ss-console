@@ -82,5 +82,7 @@ export async function consumeOAuthState(db: D1Database, state: string): Promise<
 }
 
 // ---------------------------------------------------------------------------
-// Cleanup (optional — called by booking-cleanup cron)
+// Expiry. No scheduled cleanup exists (a comment here named a cleanup worker
+// that was never built). An expired or consumed state row is refused by
+// consumeOAuthState's WHERE clause and otherwise stays in the table.
 // ---------------------------------------------------------------------------
