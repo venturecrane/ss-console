@@ -20,6 +20,7 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types'
+import { isRecord } from '../../api/helpers'
 import { getProductSubscription } from '../product-access'
 import { getCustomerConfig } from '../customer-config'
 
@@ -68,10 +69,6 @@ export async function loadAccountState(db: D1Database, entityId: string): Promis
       : null,
     escalation: parseEscalation(config?.escalation),
   }
-}
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
 /** Keep only non-empty string entries — never a fabricated or blank contact. */

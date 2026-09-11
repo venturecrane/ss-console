@@ -1,4 +1,4 @@
-import { jsonResponse } from '../../../../../lib/api/helpers'
+import { escapeHtml, jsonResponse } from '../../../../../lib/api/helpers'
 import type { APIContext, APIRoute } from 'astro'
 import { ORG_ID } from '../../../../../lib/constants'
 import { hashManageToken, computeManageTokenExpiry } from '../../../../../lib/booking/tokens'
@@ -42,14 +42,6 @@ const NOTIFY_EMAIL = 'team@smd.services'
  *   4. Update schedule + assessment in DB
  *   5. Release hold, send emails
  */
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
 
 type Schedule = NonNullable<Awaited<ReturnType<typeof getScheduleByManageToken>>>
 

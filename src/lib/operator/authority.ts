@@ -23,6 +23,8 @@
  *      change, never a default.
  */
 
+import { isRecord } from '../api/helpers'
+
 /**
  * The per-client preset applied to every switchable domain that has no
  * explicit override.
@@ -183,8 +185,4 @@ export function parseAuthorityPosture(raw: unknown): AuthorityPosture {
     }
   }
   return { default: def, overrides }
-}
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
 }

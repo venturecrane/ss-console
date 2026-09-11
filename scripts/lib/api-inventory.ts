@@ -71,6 +71,13 @@ const GATE_RULES: ReadonlyArray<{ label: string; test: (src: string, path: strin
     test: (s) => /\b410\b/.test(s) && !/\b(2\d\d)\b/.test(s.replace(/\b410\b/g, '')),
   },
   { label: 'admin session', test: (s) => /requireAdminSession\(/.test(s) },
+  // Routes outside /admin and /api/admin, where the middleware never runs the
+  // Clerk-to-admin shim, resolve the admin identity themselves through the
+  // same shim (2026-09-10; /api/auth/google/connect was unreachable before).
+  {
+    label: 'admin session (resolved in-route via Clerk)',
+    test: (s) => /resolveAdminSessionForRoute\(/.test(s),
+  },
   { label: 'Machine bearer (per-seat credential)', test: (s) => /verifyMachineRequest\(/.test(s) },
   {
     label: 'portal client, tenant-bound',

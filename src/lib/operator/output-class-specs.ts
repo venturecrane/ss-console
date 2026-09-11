@@ -51,6 +51,7 @@
  */
 
 import { assertionsApplyTo, parseAssertions, type Assertions } from './format-assertions'
+import { isRecord } from '../api/helpers'
 
 /** Schema version of the vault document. Must match the applier's constant. */
 export const SPEC_SCHEMA_VERSION = 1
@@ -257,10 +258,6 @@ function parseClassEntry(
     parsed[prop] = stored
   }
   return parsed
-}
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
 // ---------------------------------------------------------------------------

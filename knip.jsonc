@@ -43,6 +43,15 @@
         "scripts/*.{ts,mjs}!",
         "src/lib/seo/sitemap-filter.mjs!",
 
+        // The Astro build config imports two production dependencies (the
+        // Cloudflare adapter, the sitemap integration) that nothing under
+        // src/ imports. In production mode the plugin-detected config is not
+        // a production entry, so `npm run deadcode` printed both as unused on
+        // every run, and a warning list whose only entries are known-false
+        // trains the reader to skip it (code review 2026-09-10, Code Quality
+        // 8). Declaring the config a production entry is the fix.
+        "astro.config.mjs!",
+
         // Claude Code harness hooks: wired by .claude/settings.json and run by
         // the harness as subprocesses. The lib/ modules are invoked by the bash
         // hooks (reflex-primer.sh, session-peers.sh) through `node`, an edge

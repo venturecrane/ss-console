@@ -37,7 +37,7 @@ import {
 
 const OPERATOR_LANDING = '/portal/products/operator'
 
-function redirectWithStatus(instance: string, status: string): Response {
+function redirectToSettings(instance: string, status: string): Response {
   return new Response(null, {
     status: 303,
     headers: {
@@ -62,7 +62,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     'trust',
     clientRolePermits(access.roles, 'trust')
   )
-  if (mode !== 'operable') return redirectWithStatus(instance, 'entitlement_not_operable')
+  if (mode !== 'operable') return redirectToSettings(instance, 'entitlement_not_operable')
 
   const formData = await request.formData()
   const field = (name: string): string => {
@@ -73,12 +73,12 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   const targetTier = field('targetTier')
   const reason = field('reason')
   if (routine === '' || targetTier === '') {
-    return redirectWithStatus(instance, 'entitlement_invalid_request')
+    return redirectToSettings(instance, 'entitlement_invalid_request')
   }
-  if (reason === '') return redirectWithStatus(instance, 'entitlement_reason_required')
+  if (reason === '') return redirectToSettings(instance, 'entitlement_reason_required')
 
   const resolved = resolveGridAndExposure(config)
-  if (!resolved) return redirectWithStatus(instance, 'entitlement_config_unreadable')
+  if (!resolved) return redirectToSettings(instance, 'entitlement_config_unreadable')
 
   // Overlay the Machine's LIVE overrides onto the projected authored exposure
   // before compiling: the projection is the authored baseline, but the tier
@@ -98,7 +98,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     resolved.live.personaSlug
   )
   if (read.status === 'persona_mismatch') {
-    return redirectWithStatus(instance, 'entitlement_config_unreadable')
+    return redirectToSettings(instance, 'entitlement_config_unreadable')
   }
   if (read.status === 'ok') {
     resolved.live = {
@@ -126,7 +126,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     }
   )
 
-  return redirectWithStatus(instance, statusFor(outcome))
+  return redirectToSettings(instance, statusFor(outcome))
 }
 
 /**

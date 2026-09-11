@@ -23,6 +23,7 @@
  */
 
 import type { MachineRuntimeTransport, RuntimeReadAudit, RuntimeReadQuery } from './runtime-read'
+import { machineBaseUrl } from './machine-url'
 import { RuntimeReadUnauthorizedError } from './runtime-read'
 import { resolveCustomerFlyApp } from './fly-app-registry'
 
@@ -80,11 +81,6 @@ export async function deriveRuntimeReadKey(master: string, customerSlug: string)
   )
   const sig = await crypto.subtle.sign('HMAC', key, enc.encode(customerSlug))
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-/** Build the per-customer Machine base URL from the host template + Fly app. */
-function machineBaseUrl(template: string, app: string): string {
-  return template.includes('{app}') ? template.replace('{app}', app) : `https://${app}.fly.dev`
 }
 
 /** Append the read query params the Machine endpoint understands. */
