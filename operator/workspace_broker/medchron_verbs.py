@@ -172,8 +172,7 @@ class MedchronVerbs:
             return {
                 "ok": True,
                 "accepted": False,
-                "reason": "no page allowance is authored for this seat "
-                f"({ALLOWANCE_KEY}); nothing can be submitted",
+                "reason": f"no page allowance is authored for this seat ({ALLOWANCE_KEY}); nothing can be submitted",
             }
         if state["remaining"] <= 0:
             return {

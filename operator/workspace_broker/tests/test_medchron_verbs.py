@@ -301,8 +301,6 @@ def test_a_job_debits_the_month_it_was_created_in_not_the_month_its_cents_landed
     assert (september["used"], september["cents_used"]) == (0, 0)
 
 
-
-
 def test_the_cycle_window_decides_which_rows_are_debited(verbs):
     """The behaviour the whole change exists for: the same ledger row counts or
     does not, depending on the firm's billing cycle rather than the calendar.
@@ -362,6 +360,7 @@ def test_an_unreadable_anchor_refuses_and_names_the_key(verbs, tmp_path):
     assert "chronology_package_cycle_anchor_day" in r["reason"]
     a = call(v, "medchron_allowance")
     assert a["invalid"] is True and a["authored"] is False
+
 
 # -- queue + ledger + audit --------------------------------------------------
 

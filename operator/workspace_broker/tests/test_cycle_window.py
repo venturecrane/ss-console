@@ -49,6 +49,7 @@ FIXTURE_PATH = Path(__file__).resolve().parents[2] / "contracts" / "cycle_window
 # Precedent: PINNED_CONTENT_SHA256 in tests/customer-yaml-parity-contract.test.ts.
 PINNED_CONTENT_SHA256 = "f7c10e5a2d0481b7720f8efbbdd1b17b4a9baa61898631ed2718a1d52f8ff2dd"
 
+
 def _materialise(value):
     """`{"__float__": N}` means the native float N. JSON has one number type and
     YAML has two, and that distinction is exactly what one reader accepts and
