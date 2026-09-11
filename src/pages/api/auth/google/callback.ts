@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro'
 import { consumeOAuthState } from '../../../../lib/db/oauth-states.js'
 import { upsertIntegration } from '../../../../lib/db/integrations.js'
 import { exchangeAuthCode } from '../../../../lib/booking/google-calendar.js'
-import { encrypt } from '../../../../lib/booking/encryption.js'
+import { encrypt } from '../../../../lib/security/encryption.js'
 import { requireAdminBaseUrl } from '../../../../lib/config/app-url.js'
 import { env } from 'cloudflare:workers'
 

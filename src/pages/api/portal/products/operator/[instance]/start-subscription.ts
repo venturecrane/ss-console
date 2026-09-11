@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro'
+import { captureError } from '../../../../../../lib/observability/sentry'
 import { env } from 'cloudflare:workers'
 import { resolveOperatorAccess } from '../../../../../../lib/portal/operator-access'
 import {
@@ -71,6 +72,7 @@ export const POST: APIRoute = async ({ params, locals }) => {
     return new Response(null, { status: 303, headers: { Location: session.url } })
   } catch (err) {
     console.error('[operator/start-subscription] checkout creation failed:', err)
+    captureError(err, 'portal.start-subscription')
     return back('failed')
   }
 }

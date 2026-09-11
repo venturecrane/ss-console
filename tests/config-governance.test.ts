@@ -19,15 +19,17 @@ import { resolve } from 'path'
 import type { D1Database } from '@cloudflare/workers-types'
 import {
   restrictiveness,
-  changeDirection,
-  checkFloor,
   getVerticalFloor,
-  VERTICAL_FLOORS,
-  verticalFloorActionClasses,
   applyExposureChange,
   applySkillToggle,
   isCeiling,
 } from '../src/lib/portal/operator/config-governance'
+import {
+  changeDirection,
+  checkFloor,
+  VERTICAL_FLOORS,
+  verticalFloorActionClasses,
+} from '../src/lib/operator/vertical-floors'
 import { ACCEPTED_ACTION_CLASSES } from '../src/lib/operator/customer-yaml/types'
 import type { ActionClass } from '../src/lib/operator/customer-yaml/types'
 import type {

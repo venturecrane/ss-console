@@ -1,7 +1,9 @@
 /**
  * OAuth audit event emission.
  *
- * Every invocation of /api/oauth/callback emits an audit event:
+ * Every invocation of the portal OAuth callback
+ * (src/pages/portal/products/operator/oauth/[connector]/callback.ts)
+ * emits an audit event:
  *
  *   - `oauth-callback.token-issued`  — state validated, token exchanged
  *     and accepted by the store.

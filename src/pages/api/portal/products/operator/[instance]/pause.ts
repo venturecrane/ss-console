@@ -41,7 +41,7 @@ import {
 
 const OPERATOR_LANDING = '/portal/products/operator'
 
-function redirectWithStatus(instance: string, status: string): Response {
+function redirectToSettings(instance: string, status: string): Response {
   return new Response(null, {
     status: 303,
     headers: {
@@ -72,7 +72,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     clientRolePermits(access.roles, 'runtime')
   )
   if (mode !== 'operable') {
-    return redirectWithStatus(instance, 'pause_not_operable')
+    return redirectToSettings(instance, 'pause_not_operable')
   }
 
   const formData = await request.formData()
@@ -81,8 +81,8 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   const action: PauseAction | null =
     actionRaw === 'pause' || actionRaw === 'resume' ? actionRaw : null
   const reason = typeof reasonRaw === 'string' ? reasonRaw.trim() : ''
-  if (action === null) return redirectWithStatus(instance, 'pause_invalid_action')
-  if (reason === '') return redirectWithStatus(instance, 'pause_reason_required')
+  if (action === null) return redirectToSettings(instance, 'pause_invalid_action')
+  if (reason === '') return redirectToSettings(instance, 'pause_reason_required')
 
   // Machine first, record second: never log a pause the Machine didn't take.
   let gateLevel: string
@@ -101,7 +101,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       gateLevel = result.level
     }
   } catch {
-    return redirectWithStatus(instance, 'pause_gate_unreachable')
+    return redirectToSettings(instance, 'pause_gate_unreachable')
   }
 
   await recordPauseEvent(env.DB, {
@@ -116,5 +116,5 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     gate_level: gateLevel,
   })
 
-  return redirectWithStatus(instance, action === 'pause' ? 'paused' : 'resumed')
+  return redirectToSettings(instance, action === 'pause' ? 'paused' : 'resumed')
 }

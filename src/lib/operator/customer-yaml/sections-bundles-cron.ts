@@ -143,8 +143,11 @@ function checkBundleSkills(
   const enabledNames = new Set(skills.filter((s) => s.enabled).map((s) => s.name))
   const out: string[] = []
   let ok = true
-  for (let i = 0; i < raw.length; i++) {
-    const entry = raw[i]
+  // Array.isArray narrows `unknown` to `any[]`; name the elements unknown so
+  // each one is proven a string below rather than assumed.
+  const entries: unknown[] = raw
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]
     if (typeof entry !== 'string' || entry.length === 0) {
       errors.push({
         code: 'TypeMismatch',

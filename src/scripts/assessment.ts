@@ -7,6 +7,8 @@
  * each turn — no persistence yet (dogfood preview).
  */
 
+import { escapeHtml } from '../lib/api/helpers'
+
 interface Turn {
   speaker: 'owner' | 'operator'
   text: string
@@ -40,14 +42,6 @@ function boolField(value: unknown, key: string): boolean {
   return (
     typeof value === 'object' && value !== null && (value as Record<string, unknown>)[key] === true
   )
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
 }
 
 function inline(s: string): string {

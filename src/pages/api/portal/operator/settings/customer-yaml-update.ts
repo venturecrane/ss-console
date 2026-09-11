@@ -91,7 +91,7 @@ const OPERATOR_ROOT = '/portal/products/operator'
 
 /** The instance's advanced-config page (multi-operator). A null instance (a
  *  pre-resolution failure) falls back to the bare operator root. */
-function redirectWithStatus(instance: string | null, status: string): Response {
+function redirectToAdvancedSettings(instance: string | null, status: string): Response {
   const base = instance ? `${OPERATOR_ROOT}/${instance}/settings/advanced` : OPERATOR_ROOT
   const target = `${base}?status=${encodeURIComponent(status)}`
   return new Response(null, { status: 303, headers: { Location: target } })
@@ -256,7 +256,7 @@ type AuthCtx = AdvancedSettingsAuth
 
 async function authorize(locals: App.Locals, instance: string): Promise<Response | AuthCtx> {
   const auth = await authorizeAdvancedSettings(env.DB, locals, instance)
-  if (auth === null) return redirectWithStatus(instance, 'forbidden')
+  if (auth === null) return redirectToAdvancedSettings(instance, 'forbidden')
   return auth
 }
 
@@ -264,16 +264,16 @@ async function resolveCurrentYaml(
   customerSlug: string
 ): Promise<Response | { current: CustomerYaml; editable: EditableCustomerConfig }> {
   const row = await getCustomerConfigBySlug(env.DB, customerSlug)
-  if (row === null) return redirectWithStatus(customerSlug, 'no_config')
+  if (row === null) return redirectToAdvancedSettings(customerSlug, 'no_config')
   const resolved = resolveEditableConfigFromRow(row)
-  if ('error' in resolved) return redirectWithStatus(customerSlug, 'internal_error')
+  if ('error' in resolved) return redirectToAdvancedSettings(customerSlug, 'internal_error')
 
   // Re-validate to produce a CustomerYaml for the merger (resolved.editable
   // is the editor-projection, not the full YAML the merger needs as
   // `current`). Same reconstruction the resolver ran — one implementation,
   // imported, not a second copy that drifts from it.
   const yamlResult = validate(reconstructFromProjection(row))
-  if (!yamlResult.ok) return redirectWithStatus(customerSlug, 'internal_error')
+  if (!yamlResult.ok) return redirectToAdvancedSettings(customerSlug, 'internal_error')
 
   return { current: yamlResult.value, editable: resolved.editable }
 }
@@ -359,7 +359,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       auth,
       errors: result.errors,
     })
-    return redirectWithStatus(auth.customerSlug, 'invalid')
+    return redirectToAdvancedSettings(auth.customerSlug, 'invalid')
   }
 
   const after = projectEditableConfig(result.value).editable
@@ -372,5 +372,5 @@ export const POST: APIRoute = async ({ request, locals }) => {
   })
   // `submitted`, not `applied`. Nothing was written; see the Git write-back
   // note in the header.
-  return redirectWithStatus(auth.customerSlug, 'submitted')
+  return redirectToAdvancedSettings(auth.customerSlug, 'submitted')
 }

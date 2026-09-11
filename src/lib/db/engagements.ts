@@ -5,7 +5,6 @@
  * Primary keys use crypto.randomUUID() (ULID-like uniqueness for D1).
  */
 
-import { scheduleEngagementCadence } from '../follow-ups/scheduler'
 import { transitionStage } from './entities'
 import { getDefaultOriginatingSignalId } from './signal-attribution'
 
@@ -338,11 +337,31 @@ export async function updateEngagement(
  * When transitioning to handoff, auto-sets handoff_date to now and
  * safety_net_end to handoff_date + 14 days.
  */
+/**
+ * What the data layer needs from the layer above it when an engagement
+ * enters handoff. The follow-up cadence (referral ask, review request,
+ * safety-net check-in, 30-day feedback) is follow-ups policy, not engagement
+ * data, so the caller that owns that policy passes it in; this module never
+ * imports upward into `src/lib/follow-ups/`. The parameter is required, not
+ * optional, so a caller cannot forget it: a handoff with no cadence is the
+ * regression this shape exists to make impossible.
+ */
+export interface EngagementTransitionDeps {
+  scheduleHandoffCadence: (
+    db: D1Database,
+    orgId: string,
+    engagementId: string,
+    entityId: string,
+    handoffDateIso: string
+  ) => Promise<void>
+}
+
 export async function updateEngagementStatus(
   db: D1Database,
   orgId: string,
   engagementId: string,
-  newStatus: EngagementStatus
+  newStatus: EngagementStatus,
+  deps: EngagementTransitionDeps
 ): Promise<Engagement | null> {
   const existing = await getEngagement(db, orgId, engagementId)
   if (!existing) {
@@ -374,7 +393,7 @@ export async function updateEngagementStatus(
     params.push(safetyNetEnd.toISOString())
 
     // Schedule handoff follow-up cadence (referral_ask, review_request, safety_net_checkin, feedback_30day)
-    await scheduleEngagementCadence(
+    await deps.scheduleHandoffCadence(
       db,
       orgId,
       engagementId,

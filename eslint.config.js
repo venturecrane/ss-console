@@ -175,7 +175,7 @@ export default tseslint.config(
   // cannot import the shared helper) are exempt; helpers.ts itself is ignored.
   {
     files: ['src/**/*.ts', 'src/**/*.tsx'],
-    ignores: ['src/lib/api/helpers.ts'],
+    ignores: ['src/lib/api/helpers.ts', 'src/lib/operator/machine-url.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',
@@ -184,6 +184,28 @@ export default tseslint.config(
             "FunctionDeclaration[id.name='jsonResponse'], VariableDeclarator[id.name='jsonResponse']",
           message:
             'Import jsonResponse from src/lib/api/helpers instead of re-declaring it — local copies drift (several inverted the canonical (status, data) arg order).',
+        },
+        // The 2026-09-10 review found byte-identical private copies of these
+        // in up to eight files each. One home per helper: helpers.ts for the
+        // small guards, machine-url.ts for the function that addresses the
+        // live Machine. jsonError was seven one-line aliases of errorResponse.
+        {
+          selector:
+            'FunctionDeclaration[id.name=/^(escapeHtml|trimString|isRecord|isValidEmail)$/], VariableDeclarator[id.name=/^(escapeHtml|trimString|isRecord|isValidEmail)$/]',
+          message:
+            'Import this helper from src/lib/api/helpers instead of re-declaring it — the 2026-09-10 review found up to eight byte-identical private copies per helper.',
+        },
+        {
+          selector:
+            "FunctionDeclaration[id.name='machineBaseUrl'], VariableDeclarator[id.name='machineBaseUrl']",
+          message:
+            'Import machineBaseUrl from src/lib/operator/machine-url — it addresses the live Operator Machine and had five identical copies (2026-09-10 review).',
+        },
+        {
+          selector:
+            "FunctionDeclaration[id.name='jsonError'], VariableDeclarator[id.name='jsonError']",
+          message:
+            'Call errorResponse(status, message) from src/lib/api/helpers directly — jsonError was a one-line alias of it in seven files (2026-09-10 review).',
         },
       ],
     },
@@ -202,6 +224,24 @@ export default tseslint.config(
             "FunctionDeclaration[id.name='jsonResponse'], VariableDeclarator[id.name='jsonResponse']",
           message:
             'Import jsonResponse from src/lib/api/helpers instead of re-declaring it — local copies drift (several inverted the canonical (status, data) arg order).',
+        },
+        {
+          selector:
+            'FunctionDeclaration[id.name=/^(escapeHtml|trimString|isRecord|isValidEmail)$/], VariableDeclarator[id.name=/^(escapeHtml|trimString|isRecord|isValidEmail)$/]',
+          message:
+            'Import this helper from src/lib/api/helpers instead of re-declaring it — the 2026-09-10 review found up to eight byte-identical private copies per helper.',
+        },
+        {
+          selector:
+            "FunctionDeclaration[id.name='machineBaseUrl'], VariableDeclarator[id.name='machineBaseUrl']",
+          message:
+            'Import machineBaseUrl from src/lib/operator/machine-url — it addresses the live Operator Machine and had five identical copies (2026-09-10 review).',
+        },
+        {
+          selector:
+            "FunctionDeclaration[id.name='jsonError'], VariableDeclarator[id.name='jsonError']",
+          message:
+            'Call errorResponse(status, message) from src/lib/api/helpers directly — jsonError was a one-line alias of it in seven files (2026-09-10 review).',
         },
         {
           selector:
