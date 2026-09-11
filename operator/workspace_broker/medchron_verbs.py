@@ -22,6 +22,7 @@ never the envelope, never a name.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from .cycle_window import AnchorInvalid
@@ -31,10 +32,17 @@ from .medchron_ledger import (
     STATES,
     EnvelopeError,
     MedchronLedger,
+    admins_from_customer_yaml,
     allowance_from_customer_yaml,
     cycle_from_customer_yaml,
     validate_envelope,
 )
+
+#: Addresses inside a free-text ``requested_by`` ("Christa Barrera
+#: <christa@example.com>", "christa@example.com", "Christa, Firm LLP"). The
+#: field is prose composed by the agent from the asking message, so the address
+#: is extracted rather than assumed to be the whole value.
+_EMAIL_RE = re.compile(r"[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}")
 
 VERBS = ("medchron_job_submit", "medchron_job_status", "medchron_allowance", "medchron_job_list", "medchron_job_record")
 
@@ -174,6 +182,29 @@ class MedchronVerbs:
                 "accepted": False,
                 "reason": f"no page allowance is authored for this seat ({ALLOWANCE_KEY}); nothing can be submitted",
             }
+        # Order is deliberate. The two checks above say "this seat cannot do
+        # this at all", which is ours or the firm's to fix and is worth naming
+        # before anything about the requester. These two say "not you" and "not
+        # twice". None of the four spends anything.
+        refusal = self._requester_refusal(envelope)
+        if refusal is not None:
+            return {"ok": True, "accepted": False, "reason": refusal}
+        twin = self.ledger.active_duplicate(envelope)
+        if twin is not None:
+            twin_id, twin_state = twin
+            where = {
+                "submitted": f"already queued as job {twin_id} and has not started yet",
+                "running": f"already running as job {twin_id}",
+                "held": f"already submitted as job {twin_id}, which is HELD and waiting on a decision",
+            }.get(twin_state, f"already submitted as job {twin_id} (state {twin_state})")
+            return {
+                "ok": True,
+                "accepted": False,
+                "reason": f"this chronology package is {where}; nothing new was queued and the "
+                "allowance was not charged twice",
+                "job_id": twin_id,
+                "job_state": twin_state,
+            }
         if state["remaining"] <= 0:
             return {
                 "ok": True,
@@ -207,6 +238,52 @@ class MedchronVerbs:
             # key by name (ADR 0087 amendment).
             "allowance_remaining_documents": state["remaining"],
         }
+
+    def _requester_refusal(self, envelope: dict[str, Any]) -> str | None:
+        """None when a Named Administrator asked for this; a prose reason otherwise.
+
+        WHY THIS IS HERE AND NOT ONLY IN THE SKILL BODY. The seat's initiation
+        authority reaches the agent as a ``pre_llm_call`` prompt injection, not
+        as a gate -- the overlay's initiation plugin says so in its own words,
+        because there is no runtime skill identity at any tool boundary. For the
+        self-test that is proportionate: the worst case is a wasted turn. This
+        verb spends the firm's authored page allowance under a signed
+        agreement, so the authorization has to hold against a model that did not
+        follow the sentence, and that means checking it here.
+
+        This is a check on a field the agent supplies, so it is defence in
+        depth, not proof of identity: an agent that writes someone else's
+        address still passes. What it buys is that the common failure -- a
+        non-administrator's request carried faithfully into ``requested_by`` --
+        refuses instead of billing, and the audit row carries the address that
+        was claimed.
+        """
+        claimed = str(envelope.get("requested_by") or "").strip().lower()
+        admins = admins_from_customer_yaml(self.customer_yaml)
+        if admins is None:
+            return (
+                "the seat's administrator list (scope.admins) could not be read, so who may "
+                "request a chronology package cannot be established; nothing was queued"
+            )
+        if not admins:
+            return (
+                "no Named Administrator is authored for this seat (scope.admins is empty), so "
+                "no one may request a chronology package yet; nothing was queued"
+            )
+        found = _EMAIL_RE.findall(claimed)
+        if not found:
+            return (
+                "requested_by must carry the requesting administrator's email address; "
+                "a chronology package spends the firm's page allowance and the broker will not "
+                "queue one it cannot attribute"
+            )
+        if not any(addr in admins for addr in found):
+            return (
+                "a chronology package may only be requested by one of the firm's Named "
+                "Administrators, and the requester on this submission is not one of them; "
+                "nothing was queued"
+            )
+        return None
 
     def _record(self, request: dict[str, Any]) -> dict[str, Any]:
         job_id = str(request.get("job_id") or "")
