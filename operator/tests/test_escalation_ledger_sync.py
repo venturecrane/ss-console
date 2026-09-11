@@ -18,6 +18,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from tests.vendored_sync import assert_byte_identical, discover_copies
+
 _OPERATOR_ROOT = Path(__file__).resolve().parents[1]
 _CANONICAL = _OPERATOR_ROOT / "workspace_broker" / "escalation_ledger.py"
 _PAIRS_MANIFEST = _OPERATOR_ROOT / "contracts" / "overlay-pairs.json"
@@ -25,14 +27,14 @@ _PAIRS_MANIFEST = _OPERATOR_ROOT / "contracts" / "overlay-pairs.json"
 _CANONICAL_REL = "operator/workspace_broker/escalation_ledger.py"
 _OVERLAY_REL = "shared/escalation_ledger.py"
 
-# Every skill that imports the shared ledger carries a vendored copy.
-VENDORED_SKILLS = (
-    "deadline-miss-escalator",
-    "daily-needs-you-digest",
-    "client-verification-tracker",
-    "medical-records-chaser",
-    "lien-ledger-tracker",
-)
+# Every skill that imports the shared ledger carries a vendored copy. The
+# copies are discovered by glob (skills/*/escalation_ledger.py), so a sixth
+# skill that vendors the module is under the gate the moment its copy exists;
+# until 2026-09-11 this was a hand-maintained tuple (code review 2026-09-10,
+# Architecture 5). Five copies as of 2026-09-11: deadline-miss-escalator,
+# daily-needs-you-digest, client-verification-tracker, medical-records-chaser,
+# lien-ledger-tracker. A skill dropping its copy lowers the floor on purpose.
+_FLOOR = 5
 
 
 def _escalation_pair() -> dict:
@@ -51,18 +53,11 @@ def test_canonical_exists() -> None:
 
 
 def test_vendored_copies_are_byte_identical() -> None:
-    canonical = _CANONICAL.read_bytes()
-    missing, drifted = [], []
-    for skill in VENDORED_SKILLS:
-        copy = _OPERATOR_ROOT / "skills" / skill / "escalation_ledger.py"
-        if not copy.is_file():
-            missing.append(skill)
-        elif copy.read_bytes() != canonical:
-            drifted.append(skill)
-    assert not missing, f"missing escalation_ledger.py copy: {missing}"
-    assert not drifted, (
-        f"escalation_ledger.py drifted from workspace_broker/escalation_ledger.py: "
-        f"{drifted} — edit the canonical and restamp, never the copy"
+    assert_byte_identical(
+        _CANONICAL,
+        discover_copies("escalation_ledger.py"),
+        floor=_FLOOR,
+        restamp_hint="Edit workspace_broker/escalation_ledger.py and restamp, never the copy.",
     )
 
 
