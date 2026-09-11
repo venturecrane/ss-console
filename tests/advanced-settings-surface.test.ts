@@ -183,8 +183,16 @@ describe('advanced settings: the surface is reachable (#1966)', () => {
     'utf8'
   )
 
+  // The link list is authored in settings-page.ts since 2026-09-11; the page
+  // calls settingsLinks(operatorBase) into its SETTINGS_LINKS constant.
+  const linkModule = readFileSync(
+    join(REPO_ROOT, 'src/lib/portal/operator/settings-page.ts'),
+    'utf8'
+  )
+
   it('Advanced is listed in SETTINGS_LINKS', () => {
-    const links = settings.slice(settings.indexOf('const SETTINGS_LINKS'))
+    expect(settings).toContain('const SETTINGS_LINKS = settingsLinks(operatorBase)')
+    const links = linkModule.slice(linkModule.indexOf('export function settingsLinks'))
     expect(links).toContain('/settings/advanced')
     expect(links).toContain(`label: 'Advanced'`)
   })
