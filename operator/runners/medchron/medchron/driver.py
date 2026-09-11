@@ -230,6 +230,7 @@ class Driver:
             month_cents_used=job.month_cents_used,
             allowance_remaining_pages=job.allowance_remaining_pages,
             allowance_month=job.allowance_month,
+            allowance_cycle_label=job.allowance_cycle_label,
         )
 
     def _projection(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> float:

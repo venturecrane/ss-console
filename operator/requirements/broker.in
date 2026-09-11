@@ -1,0 +1,8 @@
+# The workspace broker venv (operator/templates/Dockerfile, "Workspace
+# capability broker"). Google libraries and credentials live here and nowhere
+# else on the seat; the Hermes venv deliberately has neither. Compiled to
+# broker.txt by compile.sh; the Dockerfile installs from broker.txt with
+# --require-hashes. Add a package here, run compile.sh, commit both.
+google-api-python-client
+google-auth
+pyyaml

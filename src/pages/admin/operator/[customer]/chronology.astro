@@ -4,6 +4,7 @@ import { resolveEntityIdBySlug } from '../../../../lib/admin/operator-overview'
 import {
   loadMedchronJobsView,
   loadAuthoredPageAllowance,
+  loadCycleWindow,
   formatCents,
   type MedchronJobsReadResult,
 } from '../../../../lib/admin/medchron-jobs-read'
@@ -12,6 +13,7 @@ import {
   createMachineRuntimeTransport,
   createRuntimeReadAudit,
 } from '../../../../lib/operator/runtime-read-transport'
+import type { CycleWindow } from '../../../../lib/admin/cycle-window'
 import { env } from 'cloudflare:workers'
 
 /**
@@ -40,8 +42,18 @@ const configured = isRuntimeReadConfigured(env)
 // parse) means the tile shows the numerator alone: an invented denominator
 // would misreport how much of the month's allowance is left.
 let allowancePages: number | null = null
+// The window the totals are counted over. Read from the SAME projection row as
+// the allowance, so the numerator and the denominator can never come off
+// different config. `cycleInvalid` is the case the page must not hide: an
+// authored-but-unreadable anchor makes the SEAT refuse outright, so the seat and
+// this page are not agreeing and saying nothing would be the lie.
+let cycle: CycleWindow | null = null
+let cycleInvalid: string | null = null
 if (!notFound) {
   allowancePages = await loadAuthoredPageAllowance(env.DB, slug)
+  const loaded = await loadCycleWindow(env.DB, slug)
+  cycle = loaded.window
+  cycleInvalid = loaded.invalid
 }
 
 let result: MedchronJobsReadResult = { status: 'not_enabled' }
@@ -53,7 +65,8 @@ if (!notFound) {
     },
     slug,
     { actor: session.email, actorRole: session.role },
-    configured
+    configured,
+    cycle ?? undefined
   )
 }
 
@@ -132,9 +145,33 @@ const statePill: Record<string, string> = {
             </div>
           ) : (
             <>
+              {cycleInvalid !== null && (
+                <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card mb-card">
+                  <p class="text-sm text-[color:var(--ss-color-text-primary)]">
+                    This seat authors a billing cycle that cannot be read, so the seat refuses every
+                    chronology job and the totals below are counted over the calendar month instead.
+                    The two do not agree until it is fixed.
+                  </p>
+                  <p class="text-sm text-[color:var(--ss-color-text-secondary)] mt-2">
+                    {cycleInvalid}
+                  </p>
+                </div>
+              )}
+              {cycle !== null && (
+                <p class="text-sm text-[color:var(--ss-color-text-secondary)] mb-card">
+                  {cycle.anchored
+                    ? `Counted over ${cycle.start.slice(0, 10)} to ${cycle.end.slice(0, 10)}, the firm's billing cycle.`
+                    : `Counted over the calendar month ${cycle.start.slice(0, 7)}. No billing cycle is authored on this seat, so the allowance resets on the 1st rather than on the firm's payment date.`}
+                </p>
+              )}
               <section class="grid grid-cols-1 md:grid-cols-4 gap-card">
                 {[
-                  { label: `Jobs in ${result.month.month}`, value: String(result.month.jobs) },
+                  {
+                    label: result.month.cycleAnchored
+                      ? `Jobs in ${result.month.month}`
+                      : `Jobs in ${result.month.month} (calendar month)`,
+                    value: String(result.month.jobs),
+                  },
                   {
                     label: 'Delivered / held',
                     value: `${result.month.delivered} / ${result.month.held}`,
@@ -147,7 +184,7 @@ const statePill: Record<string, string> = {
                         : `${result.month.pagesUsed.toLocaleString('en-US')} / ${allowancePages.toLocaleString('en-US')}`,
                   },
                   {
-                    label: 'Runner spend (month, all jobs)',
+                    label: 'Runner spend (this period, all jobs)',
                     value: formatCents(result.month.centsUsed),
                   },
                 ].map((tile) => (
@@ -208,12 +245,12 @@ const statePill: Record<string, string> = {
                   </table>
                 </div>
                 <p class="text-xs text-[color:var(--ss-color-text-muted)] mt-3">
-                  Pages and spend above count every job that recorded a cost this month, whatever
-                  state it ended in, which is the same rule the seat meters the allowance by. Spend
-                  is the runner's own ledger, priced from the seat's pricing table. The nightly cost
-                  plane books the same tokens to this customer's workspace on the costs page; the
-                  two are separate lanes and are never added together. The monthly cost budget and
-                  the per-job cap are seat posture and are not shown here.
+                  Pages and spend above count every job that recorded a cost in this period,
+                  whatever state it ended in, which is the same rule the seat meters the allowance
+                  by. Spend is the runner's own ledger, priced from the seat's pricing table. The
+                  nightly cost plane books the same tokens to this customer's workspace on the costs
+                  page; the two are separate lanes and are never added together. The monthly cost
+                  budget and the per-job cap are seat posture and are not shown here.
                 </p>
               </div>
             </>
