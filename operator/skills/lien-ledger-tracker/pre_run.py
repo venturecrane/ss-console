@@ -121,6 +121,38 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Protocol, Sequence
 
+
+def _load_skill_helpers():
+    """The shared helpers vendored beside this file (canonical: operator/templates/skill_helpers.py).
+
+    Looked up beside pre_run.py first, then under /opt/data/skills and /app/skills,
+    the two places the seat image and the volume seed put this skill's files.
+    A missing copy is a packaging defect, not a runtime condition to tolerate.
+    """
+    import importlib.util
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    candidates = [_Path(__file__).resolve().parent]
+    for base in ("/opt/data/skills", "/app/skills"):
+        candidates.append(_Path(base) / _SKILL_DIRNAME)
+    for cand in candidates:
+        module_path = cand / "skill_helpers.py"
+        if not module_path.is_file():
+            continue
+        spec = importlib.util.spec_from_file_location("skill_helpers_" + _SKILL_DIRNAME.replace("-", "_"), module_path)
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        _sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        return module
+    raise RuntimeError("skill_helpers.py is missing beside pre_run.py for " + _SKILL_DIRNAME)
+
+
+_SKILL_DIRNAME = "lien-ledger-tracker"
+_H = _load_skill_helpers()
+
 SKILL_NAME = "lien-ledger-tracker"
 
 # Seat-level sentinels, namespaced __sct_* (settlement closeout). item_key
@@ -258,20 +290,10 @@ _DEFAULT_REFIRE_DAYS = 3
 _STATUS_RE = re.compile(r"^[A-Za-z][A-Za-z0-9 _-]{0,63}$")
 
 
-def _pos_int_or_none(value):
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int) and value > 0:
-        return value
-    return None
+_pos_int_or_none = _H.pos_int_or_none
 
 
-def _pos_int(value, fallback: int) -> int:
-    if isinstance(value, bool):
-        return fallback
-    if isinstance(value, int) and value > 0:
-        return value
-    return fallback
+_pos_int = _H.pos_int
 
 
 def _status_or_none(value):
@@ -284,23 +306,7 @@ def _status_or_none(value):
 
 
 def _find_skill_settings(data) -> dict:
-    if not isinstance(data, dict):
-        return {}
-    personas = data.get("personas")
-    if not isinstance(personas, list):
-        return {}
-    for persona in personas:
-        if not isinstance(persona, dict):
-            continue
-        skills = persona.get("skills")
-        if not isinstance(skills, list):
-            continue
-        for entry in skills:
-            if not isinstance(entry, dict) or entry.get("name") != SKILL_NAME:
-                continue
-            settings = entry.get("settings")
-            return settings if isinstance(settings, dict) else {}
-    return {}
+    return _H.find_skill_settings(data, SKILL_NAME)
 
 
 def load_closeout_config(customer_yaml_path: str | None = None) -> tuple[CloseoutConfig, int]:
@@ -424,10 +430,7 @@ class WakeDecision:
     register: dict | None = None
 
 
-def _hold_active(hold_state) -> bool:
-    if hold_state is None or hold_state.attempts == 0:
-        return False
-    return not hold_state.resolved
+_hold_active = _H.hold_active
 
 
 def _chase_due(state, today: date, *, cadence_days: int) -> bool:
@@ -810,52 +813,14 @@ _HANDOFF_SKILL = "lien-ledger-tracker"
 _HANDOFF_STARTED_AT = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _handoff_values(node, key: str, out: list) -> list:
-    """Every ``key`` string in a nested payload, deduped, first-seen order."""
-    if isinstance(node, dict):
-        value = node.get(key)
-        if isinstance(value, str) and value and value not in out:
-            out.append(value)
-        for child in node.values():
-            _handoff_values(child, key, out)
-    elif isinstance(node, list):
-        for child in node:
-            _handoff_values(child, key, out)
-    return out
+_handoff_values = _H.handoff_values
 
 
-def _is_iso_day(value: str) -> bool:
-    """YYYY-MM-DD and nothing else. The register must never learn a non-date."""
-    return len(value) == 10 and value[4] == "-" and value[7] == "-" and value.replace("-", "").isdigit()
+_is_iso_day = _H.is_iso_day
 
 
 def _write_pre_run_handoff(payload: dict) -> None:
-    """Project the emitted payload down to dates + matter ids and hand it off."""
-    try:
-        record = {
-            "skill": _HANDOFF_SKILL,
-            "started_at": _HANDOFF_STARTED_AT,
-            "dates": [d for d in _handoff_values(payload, "authored_date", []) if _is_iso_day(d)],
-            "matter_ids": _handoff_values(payload, "matter_id", []),
-        }
-        directory = Path(os.environ.get("HERMES_HOME") or "/opt/data") / ".smd" / "pre_run"
-        # Modes are set AT CREATION, never by a follow-up chmod: umask can only
-        # remove bits, so the result is at most 0700/0600 and there is no window
-        # in which the file is readable by anyone else. It names the matters the
-        # firm is working on. An already-existing directory keeps whatever mode
-        # it has; the file's own 0600 is the load-bearing half.
-        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-        tmp = directory / ("." + _HANDOFF_SKILL + ".json.tmp")
-        # O_EXCL so the open cannot follow a pre-planted symlink, preceded by an
-        # unlink so a temp file left by a crashed run cannot wedge the writer
-        # for good. missing_ok: there is usually nothing to remove.
-        tmp.unlink(missing_ok=True)
-        handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(handle, "w", encoding="utf-8") as fh:
-            json.dump(record, fh)
-        os.replace(tmp, directory / (_HANDOFF_SKILL + ".json"))
-    except Exception as exc:  # noqa: BLE001 -- never change stdout or the wake
-        sys.stderr.write("[pre_run] handoff write failed (" + str(exc) + ")\n")
+    _H.write_pre_run_handoff(payload, _HANDOFF_SKILL, _HANDOFF_STARTED_AT)
 
 
 def _emit_wake(decision: "WakeDecision | None" = None, *, basis: str | None = None) -> int:
@@ -878,12 +843,6 @@ def _emit_wake(decision: "WakeDecision | None" = None, *, basis: str | None = No
     return 0
 
 
-def _plan_counts(decision: "WakeDecision") -> dict:
-    if not decision.plans:
-        return {}
-    return {"plans_total": len(decision.plans)}
-
-
 async def _try_write_emitted_wake(
     audit_writer_factory,
     decision: "WakeDecision",
@@ -891,26 +850,16 @@ async def _try_write_emitted_wake(
     skill_name: str,
     now: datetime,
 ) -> None:
-    """Best-effort EMITTED_WAKE row (#2253) — an audit failure never gates a
-    wake. The suppress path is deliberately the other way round."""
-    try:
-        writer = audit_writer_factory()
-        if writer is None:
-            return
-        await writer.write_emitted_wake(
-            skill_name=skill_name,
-            pre_run_inputs=decision.pre_run_inputs_digest,
-            decision_basis=decision.decision_basis,
-            next_scheduled_at=_next_scheduled_at(now),
-            extra_metadata={**decision.extra_metadata, **_plan_counts(decision)},
-        )
-    except Exception:  # noqa: BLE001 — observability never gates the wake
-        pass
+    await _H.try_write_emitted_wake(
+        audit_writer_factory,
+        decision,
+        skill_name=skill_name,
+        next_scheduled_at=_next_scheduled_at(now),
+        plan_counts=_H.plan_counts_total,
+    )
 
 
-def _emit_suppress() -> int:
-    print(json.dumps({"wakeAgent": False}))
-    return 0
+_emit_suppress = _H.emit_suppress
 
 
 def _obligation_to_dict(obligation: Obligation) -> dict:
@@ -1376,10 +1325,7 @@ class BrokerSuppressedWakeWriter:
 
 
 def _writer_factory():
-    socket_path = os.environ.get("SMD_AUDIT_BROKER_SOCKET") or os.environ.get("SMD_WORKSPACE_BROKER_SOCKET")
-    if not socket_path:
-        return None
-    return BrokerSuppressedWakeWriter(socket_path, os.environ.get("CUSTOMER_SLUG", ""))
+    return _H.writer_factory(BrokerSuppressedWakeWriter)
 
 
 def main() -> int:
