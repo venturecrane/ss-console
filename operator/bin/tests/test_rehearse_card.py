@@ -248,7 +248,7 @@ def test_slug_suffix_matches_the_provisioner_by_running_it() -> None:
     assert found, "provision-customer.sh no longer derives the per-seat suffix as expected"
     pipeline = found.group(0).replace("\\", "")
     for slug in ("ashton-price", "pilot-smokeball", "a-b-c", "acme"):
-        shell = subprocess.run(
+        shell = subprocess.run(  # noqa: S603 - the test runs the provisioner's own tr pipeline over four literal slugs
             ["sh", "-c", f"printf '%s' '{slug}' | {pipeline}"],
             capture_output=True,
             text=True,

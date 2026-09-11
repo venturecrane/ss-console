@@ -39,6 +39,14 @@
  *                     (ledger unreadable / tool→server mapping gone):
  *                     nothing is being counted, which must page rather than
  *                     silently disabling the whole connector alert class.
+ *   edge_down       — the web Worker itself, probed from OUTSIDE (review
+ *                     2026-09-10, wave 8.2). Every condition above is read
+ *                     out of fleet_status, which the seats write INTO the
+ *                     web Worker; a dead edge freezes that table and the
+ *                     pager sees nothing. ./edge-poll GETs /api/health each
+ *                     tick and counts consecutive failures in
+ *                     edge_poll_state (migration 0115): N failures open,
+ *                     M successes close, anything between is a hold.
  *
  * Edge-triggered via `fleet_alert_state` (migrations 0086/0093): one open alert
  * per (customer, condition) until recovery, one recovery notice on the green
@@ -60,7 +68,8 @@
  * verification, plus GET /health.
  */
 
-import { CONNECTOR_DOWN_PREFIX } from './conditions'
+import { CONNECTOR_DOWN_PREFIX, EDGE_DOWN_CONDITION } from './conditions'
+import { runEdgePolls, type EdgePollResult } from './edge-poll'
 import { escapeHtml } from './html'
 import { notifySinkAlerts, type SinkNotification } from './sink-notify'
 import { notifySendRefusals, type SendRefusedNotification } from './send-refused'
@@ -120,6 +129,19 @@ export interface Env {
   SMOKEBALL_REFRESH_TOKEN_LIFETIME_DAYS?: string
   /** Days of warning before the recorded lifetime. Default 5. */
   TOKEN_EXPIRY_WARN_DAYS?: string
+  /**
+   * Outside-in probe targets (wave 8.2): comma-separated `name=https-url`
+   * entries, GET every tick from this Worker's own network position. Unset
+   * or empty polls nothing. Only smd.services carries /api/health (the admin
+   * and portal hosts answer it with their auth redirect). See ./edge-poll.
+   */
+  EDGE_POLL_TARGETS?: string
+  /** Consecutive failed probes before edge_down opens. Default 3, floor 1. */
+  EDGE_POLL_FAIL_THRESHOLD?: string
+  /** Consecutive good probes before edge_down resolves. Default 2, floor 1. */
+  EDGE_POLL_RECOVER_THRESHOLD?: string
+  /** Per-probe deadline in milliseconds. Default 10000, clamped to 1000..30000. */
+  EDGE_POLL_TIMEOUT_MS?: string
   FLEET_ALERTS_BEARER?: string
   ADMIN_BASE_URL?: string
   /**
@@ -147,6 +169,8 @@ export type FleetCondition =
   // ss#2547. The one EVENT-shaped member of this union: it never goes `open`
   // and never resolves, it only carries a marker. See ./send-refused.
   | 'send_refused'
+  // Wave 8.2. Keyed by the probe TARGET in customer_slug, not a seat.
+  | 'edge_down'
   | `connector_down:${string}`
   | `connector_token_expiring:${string}`
   | `spec_control_broken:${string}`
@@ -198,6 +222,8 @@ export interface RunSummary {
   stale_holds: StaleHold[]
   sink_notifications: SinkNotification[]
   send_refusals: SendRefusedNotification[]
+  /** One entry per configured edge target: what the probe saw and the counted run. */
+  edge_polls: EdgePollResult[]
 }
 
 const DEFAULT_RED_SECONDS = 300
@@ -528,7 +554,8 @@ async function sendTransitionEmail(
   // which is arbitrary text from a customer Machine.
   const html =
     `<p><strong>${kind === 'opened' ? 'ALERT' : 'RECOVERED'}</strong>: ${escapeHtml(label)}</p>` +
-    `<ul><li>Seat: ${escapeHtml(s.customer_slug)}</li><li>Detail: ${escapeHtml(s.detail)}</li>` +
+    `<ul><li>${s.condition === EDGE_DOWN_CONDITION ? 'Host' : 'Seat'}: ${escapeHtml(s.customer_slug)}</li>` +
+    `<li>Detail: ${escapeHtml(s.detail)}</li>` +
     `<li>Severity: SEV1 per ADR 0064 - work begins on detection</li></ul>` +
     `<p><a href="${dashboard}">Fleet dashboard</a>. No automatic action was taken (ADR 0064/0065).</p>`
   try {
@@ -646,6 +673,20 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
     }
   }
 
+  // Wave 8.2: the outside-in probe of the web Worker. After the seats and
+  // independently fail-soft, so a probe problem can never suppress the seat
+  // pager and a seat problem can never suppress the edge pager. The counted
+  // runs go through the same open-once / recover-once machinery.
+  const edge = await runEdgePolls(env, nowMs)
+  for (const s of edge.conditions) {
+    try {
+      const t = await processTransition(env, s)
+      if (t) transitions.push(t)
+    } catch (err) {
+      console.error('[fleet-alerts] edge transition failed:', s.customer_slug, err)
+    }
+  }
+
   const staleHolds = await getStaleHolds(env.DB)
 
   // Alert-sink delivery. Runs after condition evaluation and is independently
@@ -665,6 +706,7 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
     stale_holds: staleHolds,
     sink_notifications: sinkNotifications,
     send_refusals: sendRefusals,
+    edge_polls: edge.polls,
   }
   if (transitions.length > 0) {
     console.log(`[fleet-alerts] transitions: ${JSON.stringify(transitions)}`)
@@ -674,6 +716,9 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
   }
   if (sendRefusals.length > 0) {
     console.log(`[fleet-alerts] send refusals: ${JSON.stringify(sendRefusals)}`)
+  }
+  if (edge.polls.some((p) => !p.ok)) {
+    console.log(`[fleet-alerts] edge polls: ${JSON.stringify(edge.polls)}`)
   }
 
   // Watch the watcher: only reached when the run completed without throwing.

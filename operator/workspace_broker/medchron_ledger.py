@@ -600,7 +600,7 @@ class MedchronLedger:
                 sets.append("delivery_json=?")
                 vals.append(json.dumps(fields["delivery"], sort_keys=True))
             vals.append(job_id)
-            conn.execute(f"UPDATE medchron_jobs SET {', '.join(sets)} WHERE id=?", vals)
+            conn.execute(f"UPDATE medchron_jobs SET {', '.join(sets)} WHERE id=?", vals)  # noqa: S608 - sets holds only the literal 'col=?' fragments built above; values are bound
             conn.commit()
             row = conn.execute("SELECT * FROM medchron_jobs WHERE id=?", (job_id,)).fetchone()
             return dict(row)

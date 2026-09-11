@@ -276,7 +276,7 @@ def _parse_ts(value) -> datetime:
 
 
 def _agentmail_get(path: str, api_key: str, *, opener=None) -> dict:
-    request = urllib.request.Request(AGENTMAIL_API_BASE + path, headers={"Authorization": f"Bearer {api_key}"})
+    request = urllib.request.Request(AGENTMAIL_API_BASE + path, headers={"Authorization": f"Bearer {api_key}"})  # noqa: S310 - AGENTMAIL_API_BASE is an https constant; the path is built in this module
     open_fn = opener or urllib.request.urlopen
     try:
         with open_fn(request, timeout=_HTTP_TIMEOUT_S) as response:

@@ -192,7 +192,7 @@ def test_a_malformed_pin_is_an_instrument_failure_not_a_finding(full_chain):
 def _run_verifier(tmp_path: Path, rows: list[dict], *args: str) -> subprocess.CompletedProcess:
     payload = tmp_path / "export.json"
     payload.write_text(json.dumps({"entries": rows}))
-    return subprocess.run(
+    return subprocess.run(  # noqa: S603 - test drives the verifier under sys.executable with a tmp_path payload
         [sys.executable, str(_VERIFIER), "--json", str(payload), *args],
         capture_output=True,
         text=True,

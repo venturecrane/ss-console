@@ -67,7 +67,7 @@ def seed_profile(home: Path) -> Path:
 
 
 def run_script(customer_yaml: Path, home: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    return subprocess.run(  # noqa: S603 - test runs the script under sys.executable with tmp_path arguments
         [sys.executable, str(SCRIPT), *args, str(customer_yaml), str(home)],
         check=False,
         text=True,

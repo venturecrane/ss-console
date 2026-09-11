@@ -766,7 +766,7 @@ class SmokeballSubprocessSource:
 
     def pull_open_roster_items(self) -> RosterPull:
         connector_python = os.environ.get("SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT)
-        result = subprocess.run(  # raises on timeout → caller wakes
+        result = subprocess.run(  # noqa: S603 - connector-venv interpreter and a module-constant snippet, no shell; raises on timeout so the caller wakes
             # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args — argv[0] is the module-constant connector-venv interpreter, overridable only via SMD_CONNECTOR_VENV_PYTHON from the Machine's own boot env (same trust domain; the test seam). The snippet is a module constant; no request/agent-controlled data reaches argv.
             [connector_python, "-c", _PULL_SNIPPET],
             capture_output=True,

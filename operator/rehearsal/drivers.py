@@ -107,7 +107,7 @@ def _agentmail(method: str, path: str, key: str, body: dict | None = None) -> tu
     headers = {"Authorization": f"Bearer {key}", "Accept": "application/json"}
     if data:
         headers["Content-Type"] = "application/json"
-    request = urllib.request.Request(AGENTMAIL_API_BASE + path, data=data, method=method, headers=headers)
+    request = urllib.request.Request(AGENTMAIL_API_BASE + path, data=data, method=method, headers=headers)  # noqa: S310 - AGENTMAIL_API_BASE is an https constant; the path is built in this module
     try:
         # The host is the module constant AGENTMAIL_API_BASE and every path
         # segment is built here; no caller supplies a scheme or host. Same

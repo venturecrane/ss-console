@@ -70,6 +70,27 @@ CONNECTOR_DOWN_RUN_AGE_SECONDS = "300"
 SMOKEBALL_REFRESH_TOKEN_LIFETIME_DAYS = "180"
 TOKEN_EXPIRY_WARN_DAYS = "5"
 ADMIN_BASE_URL = "https://admin.smd.services"
+# Wave 8.2 (review 09-10): the outside-in probe. Every other condition is read
+# out of fleet_status, which the seats write INTO the web Worker; a dead web
+# Worker freezes that table and the pager sees nothing. So the pager also GETs
+# /api/health from outside every tick. Comma-separated name=https-url entries;
+# the name is the alert's customer_slug. Only smd.services carries the route:
+# admin. and portal. rewrite /api/health under their own prefix and answer with
+# the auth redirect (HTTP 302, probed 2026-09-11), and all three ride the same
+# Worker anyway. Counters live in edge_poll_state (migration 0115); the
+# open/recovered row is the usual fleet_alert_state row. See src/edge-poll.ts.
+# 2026-09-11 alert-path proof: the second entry is a deliberate 404 on the
+# marketing host (not a client surface). It opens one edge_down alert for
+# `probe` on the third tick after this deploys; the follow-up PR removes it and
+# the recovery notice proves the other half. Real monitoring keeps running.
+EDGE_POLL_TARGETS = "smd.services=https://smd.services/api/health,probe=https://smd.services/api/health-probe-does-not-exist"
+# Consecutive failed probes before edge_down opens (3 ticks is about 6 minutes),
+# consecutive good probes before it resolves, and the per-probe deadline. A
+# single sample in either direction changes nothing, so a flapping edge pages
+# once and recovers once.
+EDGE_POLL_FAIL_THRESHOLD = "3"
+EDGE_POLL_RECOVER_THRESHOLD = "2"
+EDGE_POLL_TIMEOUT_MS = "10000"
 
 # Secret (optional), staged via `wrangler secret put ALERTER_HEALTHCHECKS_PING_URL`:
 # the alerter's own healthchecks.io check, pinged at the end of every successful

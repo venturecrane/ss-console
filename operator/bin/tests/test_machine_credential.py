@@ -78,7 +78,7 @@ def test_prev_ttl_is_honoured_and_bounded() -> None:
 
 def test_cli_writes_sql_to_the_file_and_only_the_plaintext_to_stdout(tmp_path: Path) -> None:
     out = tmp_path / "mint.sql"
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: S603 - test runs the minter under sys.executable with a tmp_path sql-out
         [sys.executable, str(MODULE), "--slug", "seat-a", "--sql-out", str(out)],
         capture_output=True,
         text=True,
@@ -94,7 +94,7 @@ def test_cli_writes_sql_to_the_file_and_only_the_plaintext_to_stdout(tmp_path: P
 
 def test_cli_refuses_a_bad_slug_without_writing(tmp_path: Path) -> None:
     out = tmp_path / "mint.sql"
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: S603 - test runs the minter under sys.executable with a bad slug on purpose
         [sys.executable, str(MODULE), "--slug", "Bad Slug", "--sql-out", str(out)],
         capture_output=True,
         text=True,

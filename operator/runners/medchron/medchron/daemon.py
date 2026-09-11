@@ -406,7 +406,7 @@ class Daemon:
         log = (jd / "daemon.log").open("a", encoding="utf-8")
         pidfile = self.run_dir / "child.pid"
         try:
-            proc = subprocess.Popen(
+            proc = subprocess.Popen(  # noqa: S603 - argv is the configured runner command plus the job dir, no shell; the env is filtered
                 [*self.runner_cmd, str(jd), "--json"],
                 cwd=str(jd),
                 env=env,

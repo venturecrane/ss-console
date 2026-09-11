@@ -149,8 +149,9 @@ def graph_token(seat: MsGraphSeat, secret: str, *, opener=None) -> str:
             "scope": GRAPH_SCOPE,
         }
     ).encode()
-    request = urllib.request.Request(
-        f"{GRAPH_TOKEN_HOST}/{seat.tenant_id}/oauth2/v2.0/token",
+    tenant = urllib.parse.quote(seat.tenant_id, safe="")
+    request = urllib.request.Request(  # noqa: S310 - GRAPH_TOKEN_HOST is an https constant; the tenant id is url-quoted, so it cannot leave its path segment
+        f"{GRAPH_TOKEN_HOST}/{tenant}/oauth2/v2.0/token",
         data=data,
         method="POST",
         headers={"Content-Type": "application/x-www-form-urlencoded"},
@@ -179,7 +180,11 @@ def _graph_get(url: str, token: str, *, opener=None) -> dict:
     touches. GET is the only method built here, so a future edit that wanted to
     mutate would have to add the capability rather than pass a flag.
     """
-    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    if not url.startswith(GRAPH_API_BASE + "/"):
+        # A page's @odata.nextLink is the one URL here that Graph, not this
+        # module, wrote. The bearer goes to graph.microsoft.com and nowhere else.
+        raise ReconcileError("msgraph GET refused a URL off the Graph base")
+    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})  # noqa: S310 - url is checked above to sit under the https GRAPH_API_BASE constant
     open_fn = opener or urllib.request.urlopen
     try:
         with open_fn(request, timeout=_HTTP_TIMEOUT_S) as response:

@@ -570,7 +570,7 @@ class PendingRuleStore:
         conn = self._connect()
         try:
             cursor = conn.execute(
-                f"UPDATE pending_rules SET {assignment}, resolved_by=?, outcome_reason=? "
+                f"UPDATE pending_rules SET {assignment}, resolved_by=?, outcome_reason=? "  # noqa: S608 - assignment is one of three literal fragments chosen above; values are bound
                 "WHERE proposal_id=? AND kind='ops_request' AND consumed_at IS NULL "
                 "AND declined_at IS NULL AND lapsed_at IS NULL",
                 (*stamps, resolved_by, reason, proposal_id),

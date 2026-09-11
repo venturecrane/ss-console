@@ -356,7 +356,7 @@ LOCAL_PROBES: dict[str, Callable[[dict, ProbeContext], tuple[bool, str]]] = {
 
 
 def run_seat_command(slug: str, argv: list[str]) -> tuple[int, str]:
-    proc = subprocess.run([str(SEAT_PROBE), slug, *argv], capture_output=True, text=True, timeout=180)
+    proc = subprocess.run([str(SEAT_PROBE), slug, *argv], capture_output=True, text=True, timeout=180)  # noqa: S603 - argv list under the repo's seat-probe script, no shell; argv is the probe spec's literal
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
 

@@ -829,6 +829,22 @@ def test_a_truncated_scan_raises_rather_than_reporting_clean(tmp_path):
         rec.list_sent_msgraph(_MSG_SEAT, "tok", opener=FakeGraph(endless))
 
 
+def test_a_next_link_off_the_graph_base_is_refused_before_the_bearer_is_sent(tmp_path):
+    """The page's @odata.nextLink is the one URL here that Graph, not this
+    module, writes. A link that leaves graph.microsoft.com would carry the
+    bearer with it, so the reader refuses it before urlopen: exactly one
+    request goes out, and the scan holds rather than reporting clean."""
+    http = FakeGraph(
+        [
+            {"value": [], "@odata.nextLink": "https://attacker.example/v1.0/next"},
+            {"value": []},
+        ]
+    )
+    with pytest.raises(rec.ReconcileError):
+        rec.list_sent_msgraph(_MSG_SEAT, "tok", opener=http)
+    assert len(http.requests) == 1
+
+
 def test_a_token_failure_holds_and_never_echoes_the_secret(tmp_path):
     """The token endpoint echoes request parameters back in its error bodies, and
     one of those parameters is the client secret."""

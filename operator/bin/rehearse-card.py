@@ -190,14 +190,14 @@ def api(method: str, path: str, key: str, body: dict | None = None) -> tuple[int
     headers = {"Authorization": f"Bearer {key}", "Accept": "application/json"}
     if data:
         headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(API_BASE + path, data=data, method=method, headers=headers)
+    req = urllib.request.Request(API_BASE + path, data=data, method=method, headers=headers)  # noqa: S310 - API_BASE is an https constant; the path is built in this module
     try:
         # The URL is always the constant API_BASE (https://api.agentmail.to/v0)
         # concatenated with a path this module builds; no caller supplies a
         # scheme or host, so the file:// concern the rule guards does not arise.
         # Same suppression and reasoning as operator/bin/mint-agentmail-keys.py.
         # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-        with urllib.request.urlopen(req, timeout=45) as r:
+        with urllib.request.urlopen(req, timeout=45) as r:  # noqa: S310 - the request above targets the https API_BASE constant
             return r.status, json.loads(r.read().decode() or "{}")
     except urllib.error.HTTPError as e:
         return e.code, {"raw": e.read().decode()[:400]}
@@ -290,7 +290,7 @@ def _open(req: urllib.request.Request, timeout: int = 45) -> tuple[int, str]:
         # file:// concern the rule guards does not arise. Same suppression and
         # reasoning as `api` above.
         # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 - every req comes from this module's three builders, each on an https constant
             return r.status, r.read().decode()
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode()[:400]
@@ -306,7 +306,7 @@ def graph_token(tenant_id: str, client_id: str, client_secret: str) -> tuple[str
             "grant_type": "client_credentials",
         }
     ).encode()
-    req = urllib.request.Request(
+    req = urllib.request.Request(  # noqa: S310 - TOKEN_HOST is an https constant; the tenant id is url-quoted
         f"{TOKEN_HOST}/{urllib.parse.quote(tenant_id)}/oauth2/v2.0/token",
         data=body,
         method="POST",
@@ -356,7 +356,7 @@ class GraphToken:
 
 
 def graph_get(path: str, token: str, headers: dict | None = None) -> tuple[int, dict]:
-    req = urllib.request.Request(
+    req = urllib.request.Request(  # noqa: S310 - GRAPH_BASE is an https constant; the path is built in this module
         GRAPH_BASE + path,
         method="GET",
         headers={
@@ -382,7 +382,7 @@ def resend_send(sender: str, seat: str, subject: str, text: str, key: str) -> tu
     refuses; smd.services is. A non-2xx is returned, never swallowed, so the
     caller can record a refusal rather than invent silence.
     """
-    req = urllib.request.Request(
+    req = urllib.request.Request(  # noqa: S310 - RESEND_URL is an https constant; nothing else reaches the URL
         RESEND_URL,
         data=json.dumps({"from": sender, "to": [seat], "subject": subject, "text": text}).encode(),
         method="POST",

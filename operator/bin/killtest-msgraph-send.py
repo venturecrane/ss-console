@@ -227,8 +227,9 @@ def mint_token(tenant_id: str, client_id: str, secret: str, *, opener=None) -> s
             "scope": GRAPH_SCOPE,
         }
     ).encode()
-    request = urllib.request.Request(
-        f"{GRAPH_TOKEN_HOST}/{tenant_id}/oauth2/v2.0/token",
+    tenant = urllib.parse.quote(tenant_id, safe="")
+    request = urllib.request.Request(  # noqa: S310 - GRAPH_TOKEN_HOST is an https constant; the tenant id is url-quoted, so it cannot leave its path segment
+        f"{GRAPH_TOKEN_HOST}/{tenant}/oauth2/v2.0/token",
         data=data,
         method="POST",
         headers={"Content-Type": "application/x-www-form-urlencoded"},
@@ -342,7 +343,7 @@ def plant(mailbox: str, token: str, payload: dict, *, opener=None) -> dict:
     and delete -- and a plant nobody can name is an unexplained item in a mailbox
     dressed up as a passing test.
     """
-    request = urllib.request.Request(
+    request = urllib.request.Request(  # noqa: S310 - GRAPH_API_BASE is an https constant; the path is this module's literal plus the configured mailbox
         f"{GRAPH_API_BASE}/users/{mailbox}/mailFolders/{SENT_ITEMS_FOLDER}/messages",
         data=json.dumps(payload).encode(),
         method="POST",
@@ -367,7 +368,7 @@ def plant(mailbox: str, token: str, payload: dict, *, opener=None) -> dict:
 
 
 def transmit(mailbox: str, token: str, payload: dict, *, opener=None) -> None:
-    request = urllib.request.Request(
+    request = urllib.request.Request(  # noqa: S310 - GRAPH_API_BASE is an https constant; the path is this module's literal plus the configured mailbox
         f"{GRAPH_API_BASE}/users/{mailbox}/sendMail",
         data=json.dumps(payload).encode(),
         method="POST",
