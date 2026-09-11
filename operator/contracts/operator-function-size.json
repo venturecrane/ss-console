@@ -54,10 +54,10 @@
     "templates/drafting/drafting_gate_check.py::gate_question_pairing": 91,
     "templates/drafting/drafting_gate_check.py::gate_sprog_lint": 88,
     "workspace_broker/escalation_ledger.py::validate_append": 99,
+    "workspace_broker/establishment_acts.py::ActProposals.act_propose": 87,
+    "workspace_broker/establishment_rules.py::RuleProposals.propose": 83,
     "workspace_broker/establishment_store.py::EstablishmentStore._submit_install": 94,
-    "workspace_broker/establishment_store.py::EstablishmentStore._submit_person": 85,
-    "workspace_broker/establishment_store.py::EstablishmentStore.act_propose": 87,
-    "workspace_broker/establishment_store.py::EstablishmentStore.propose": 83
+    "workspace_broker/establishment_store.py::EstablishmentStore._submit_person": 85
   },
   "complexity": {
     "adapter/trust_ceiling.py::enforce": 20,

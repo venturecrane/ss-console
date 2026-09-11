@@ -18,6 +18,6 @@
     "operator/skills/lien-ledger-tracker/pre_run.py": 930,
     "operator/skills/medical-records-chaser/pre_run.py": 661,
     "operator/templates/drafting/drafting_gate_check.py": 1135,
-    "operator/workspace_broker/establishment_store.py": 1286
+    "operator/workspace_broker/establishment_store.py": 598
   }
 }

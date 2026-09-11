@@ -92,7 +92,19 @@ from __future__ import annotations
 #   establishment_constants.py   audit action types, sizes, TTLs, DDL
 #   establishment_validation.py  pure validators, normalizers, read-back text
 #   pending_rule_store.py        PendingRuleStore — the proposals table
-#   establishment_store.py       EstablishmentStore — the spool and its lifecycle
+#   establishment_store.py       EstablishmentStore — the spool, and the facade
+#                                every lifecycle verb is called on
+#
+# Split again 2026-09-11 (code review 2026-09-10, Architecture 3), one module
+# per proposal lifecycle, each a collaborator acting on the store's state:
+#
+#   establishment_lifecycle.py   ProposalLifecycle base, claim_proposal, refuse_restated
+#   establishment_rules.py       RuleProposals: propose / decline / lapse_notified / pending_rules
+#   establishment_notify.py      OutcomeNotifications: notify_claim / notify_release
+#   establishment_ops.py         OpsRequests: ops_propose / ops_resolve / ops_ask_sent
+#   establishment_acts.py        ActProposals: act_propose / act_commit
+#
+# Those five are internals of the store and are not re-exported here.
 #
 # Everything those modules expose is re-exported here, so every existing import
 # keeps working untouched: `from .establishment import EstablishmentStore` in
