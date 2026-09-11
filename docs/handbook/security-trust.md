@@ -20,6 +20,8 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/.github/workflows/audit-chain-verify.yml
   - label: operator/adapter/evidence/packet.py
     href: https://github.com/venturecrane/ss-console/blob/main/operator/adapter/evidence/packet.py
+  - label: operator/adapter/evidence/packet_render.py
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/adapter/evidence/packet_render.py
   - label: src/lib/portal/operator/object-audit-record.ts
     href: https://github.com/venturecrane/ss-console/blob/main/src/lib/portal/operator/object-audit-record.ts
 ---
@@ -106,6 +108,6 @@ The coverage is stated rather than implied, for the same reason: today these fie
 
 Nothing is normalized or canonicalized before hashing. A recipe that first massages the bytes is a recipe someone can argue with, and a mail system that re-encoded the body on the way in should show up as a mismatch rather than be smoothed away. The packet says so in those words: whether the hashes match is a fact about the firm's mail system, not a promise from us. Whether Graph embeds our bytes unchanged inside its own wrapper is Microsoft's behavior and is not probed anywhere in this repo, which is what the live check on the pilot sandbox is for.
 
-Both columns ride the per-matter audit export (`src/lib/portal/operator/object-audit-record.ts`), and the worked `openssl` and `grep` commands are printed in the evidence packet's own README (`operator/adapter/evidence/packet.py`), where the reader who needs them already is.
+Both columns ride the per-matter audit export (`src/lib/portal/operator/object-audit-record.ts`), and the worked `openssl` and `grep` commands are printed in the evidence packet's own README (`operator/adapter/evidence/packet_render.py`), where the reader who needs them already is.
 
 The controls themselves - the action-class ceilings, the capability broker, the inbound-content taint gate, and the fail-closed default - are owned and explained in `/admin/playbook/autonomy-governance`. The secrets and credential-custody side (Infisical, per-customer OAuth tokens, the broker-only secret materialization) is owned by `/admin/playbook/secrets-access`. This page does not duplicate them; it points to them so the two halves of trust read as one map.

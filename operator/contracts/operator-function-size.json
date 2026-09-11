@@ -3,9 +3,9 @@
   "length_ceiling": 75,
   "complexity_ceiling": 15,
   "length": {
-    "adapter/evidence/packet.py::AuditCoverage.narrative_lines": 76,
     "adapter/evidence/packet.py::EvidencePacketBuilder.build": 170,
-    "adapter/evidence/packet.py::_readme_text": 197,
+    "adapter/evidence/packet_render.py::_readme_text": 197,
+    "adapter/evidence/packet_sources.py::AuditCoverage.narrative_lines": 76,
     "adapter/evidence/pdf.py::render_summary_pdf": 142,
     "adapter/trust_ceiling.py::enforce": 130,
     "adapter/voice/transform.py::DraftTransformer.transform": 94,
