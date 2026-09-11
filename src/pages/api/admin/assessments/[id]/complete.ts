@@ -129,7 +129,7 @@ async function handlePost({ request, locals, redirect, params }: APIContext): Pr
 
   const assessmentId = params.id
   if (!assessmentId) {
-    return errorResponse(400, 'Assessment ID required')
+    return errorResponse(400, 'validation_failed', 'Assessment ID required.')
   }
 
   try {

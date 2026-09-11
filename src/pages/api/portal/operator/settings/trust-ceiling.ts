@@ -8,4 +8,5 @@ import { errorResponse } from '../../../../../lib/api/helpers'
  * This legacy endpoint no longer records changes because doing so would create
  * audit rows the runtime cannot enforce.
  */
-export const POST: APIRoute = () => errorResponse(410, 'Scalar trust ceiling is retired')
+export const POST: APIRoute = () =>
+  errorResponse(410, 'gone', 'The scalar trust ceiling is retired.')

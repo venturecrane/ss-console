@@ -88,7 +88,7 @@ function installPhotoBucket(object: unknown): void {
   })
 }
 
-async function readJson(res: Response): Promise<{ error: string }> {
+async function readJson(res: Response): Promise<{ error: string; message: string }> {
   return await res.json()
 }
 
@@ -128,7 +128,7 @@ describe('GET /api/portal/consultants/photo/[...key]', () => {
     const res = await GET(buildContext(PHOTO_KEY))
 
     expect(res.status).toBe(401)
-    expect(await readJson(res)).toEqual({ error: 'Unauthorized' })
+    expect(await readJson(res)).toEqual({ error: 'unauthorized', message: 'Unauthorized.' })
     expect(listEngagements).not.toHaveBeenCalled()
   })
 
@@ -138,7 +138,7 @@ describe('GET /api/portal/consultants/photo/[...key]', () => {
     const res = await GET(buildContext(PHOTO_KEY))
 
     expect(res.status).toBe(403)
-    expect(await readJson(res)).toEqual({ error: 'Forbidden' })
+    expect(await readJson(res)).toEqual({ error: 'forbidden', message: 'Forbidden.' })
     expect(listEngagements).not.toHaveBeenCalled()
   })
 
@@ -149,7 +149,7 @@ describe('GET /api/portal/consultants/photo/[...key]', () => {
     const res = await GET(buildContext(PHOTO_KEY))
 
     expect(res.status).toBe(403)
-    expect(await readJson(res)).toEqual({ error: 'Forbidden' })
+    expect(await readJson(res)).toEqual({ error: 'forbidden', message: 'Forbidden.' })
     expect(testEnv.CONSULTANT_PHOTOS.get).not.toHaveBeenCalled()
   })
 
@@ -161,7 +161,7 @@ describe('GET /api/portal/consultants/photo/[...key]', () => {
     const res = await GET(buildContext(PHOTO_KEY))
 
     expect(res.status).toBe(404)
-    expect(await readJson(res)).toEqual({ error: 'Not found' })
+    expect(await readJson(res)).toEqual({ error: 'not_found', message: 'Not found.' })
     expect(testEnv.CONSULTANT_PHOTOS.get).toHaveBeenCalledWith(PHOTO_KEY)
   })
 })

@@ -14,7 +14,7 @@
  * explicit role check here for defense in depth).
  */
 
-import { jsonResponse } from '../../../../../../lib/api/helpers'
+import { jsonResponse, errorResponse } from '../../../../../../lib/api/helpers'
 import type { APIContext, APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 import { acknowledgeAlert, snoozeAlert } from '../../../../../../lib/admin/cost-anomaly'
@@ -56,19 +56,19 @@ async function handlePost(ctx: APIContext): Promise<Response> {
 
   const action = ctx.params.action
   if (action !== 'snooze' && action !== 'acknowledge') {
-    return jsonResponse(404, { error: `unknown action: ${action}` })
+    return errorResponse(404, 'not_found', `unknown action: ${action}`)
   }
 
   let body: unknown
   try {
     body = await ctx.request.json()
   } catch {
-    return jsonResponse(400, { error: 'invalid JSON body' })
+    return errorResponse(400, 'invalid_json')
   }
 
   const parsed = parseIdentity(body)
   if ('error' in parsed) {
-    return jsonResponse(400, { error: parsed.error })
+    return errorResponse(400, 'validation_failed', parsed.error)
   }
 
   if (action === 'snooze') {
@@ -79,9 +79,11 @@ async function handlePost(ctx: APIContext): Promise<Response> {
     } else if (typeof snoozed_until === 'string' && ISO_RE.test(snoozed_until)) {
       snoozedIso = snoozed_until
     } else {
-      return jsonResponse(400, {
-        error: 'snoozed_until must be ISO 8601 UTC (e.g. 2026-05-30T00:00:00Z) or null',
-      })
+      return errorResponse(
+        400,
+        'validation_failed',
+        'snoozed_until must be ISO 8601 UTC (e.g. 2026-05-30T00:00:00Z) or null.'
+      )
     }
     await snoozeAlert(env.DB, parsed, snoozedIso)
     return jsonResponse(200, { ok: true, action: 'snooze', snoozed_until: snoozedIso })

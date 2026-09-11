@@ -13,15 +13,11 @@ import type { APIContext, APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 import { draftFindings, type Turn } from '../../../lib/claude/assessment'
 import { rateLimitByIp } from '../../../lib/booking/rate-limit'
-import { jsonResponse } from '../../../lib/api/helpers'
+import { jsonResponse, errorResponse } from '../../../lib/api/helpers'
 
 const RATE_LIMIT_PER_HOUR = 40
 const MAX_TURNS = 60
 const MAX_TURN_CHARS = 4000
-
-function json(status: number, body: unknown): Response {
-  return jsonResponse(status, body)
-}
 
 function parseTurns(body: unknown): Turn[] | null {
   if (typeof body !== 'object' || body === null) return null
@@ -46,24 +42,25 @@ export const POST: APIRoute = async ({ request, clientAddress }: APIContext) => 
     clientAddress,
     RATE_LIMIT_PER_HOUR
   )
-  if (!rate.allowed) return json(429, { error: 'Too many requests. Please slow down.' })
+  if (!rate.allowed) return errorResponse(429, 'rate_limited')
 
-  if (!env.ANTHROPIC_API_KEY) return json(503, { error: 'Findings are temporarily unavailable.' })
+  if (!env.ANTHROPIC_API_KEY)
+    return errorResponse(503, 'unavailable', 'Findings are temporarily unavailable.')
 
   let body: unknown
   try {
     body = await request.json()
   } catch {
-    return json(400, { error: 'Invalid JSON.' })
+    return errorResponse(400, 'invalid_json')
   }
 
   const turns = parseTurns(body)
-  if (turns === null) return json(400, { error: 'Invalid request.' })
+  if (turns === null) return errorResponse(400, 'validation_failed', 'Invalid request.')
 
   try {
     const findings = await draftFindings(env.ANTHROPIC_API_KEY, turns)
-    return json(200, { findings })
+    return jsonResponse(200, { findings })
   } catch {
-    return json(502, { error: 'The findings could not be drafted. Please try again.' })
+    return errorResponse(502, 'unavailable', 'The findings could not be drafted. Please try again.')
   }
 }

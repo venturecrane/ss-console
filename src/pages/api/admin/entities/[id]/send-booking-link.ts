@@ -1,4 +1,4 @@
-import { jsonResponse } from '../../../../../lib/api/helpers'
+import { jsonResponse, errorResponse } from '../../../../../lib/api/helpers'
 import type { APIContext, APIRoute } from 'astro'
 import { getEntity, transitionStage } from '../../../../../lib/db/entities'
 import { createMeetingWithLegacyAssessment } from '../../../../../lib/db/meetings'
@@ -133,7 +133,7 @@ async function parseRequestBody(request: Request): Promise<Record<string, unknow
     for (const [k, v] of fd.entries()) result[k] = v
     return result
   } catch {
-    return jsonResponse(400, { error: 'invalid_body' })
+    return errorResponse(400, 'invalid_body')
   }
 }
 
@@ -172,8 +172,7 @@ async function provisionMeetingAndToken(args: ProvisionArgs): Promise<ProvisionR
     await transitionStage(env.DB, orgId, entityId, 'meetings', 'Booking link sent to prospect.')
   } catch (err) {
     console.error('[api/admin/entities/send-booking-link] stage transition failed:', err)
-    return jsonResponse(500, {
-      error: 'stage_transition_failed',
+    return errorResponse(500, 'stage_transition_failed', undefined, {
       message: err instanceof Error ? err.message : 'Stage transition failed.',
     })
   }
@@ -189,10 +188,7 @@ async function provisionMeetingAndToken(args: ProvisionArgs): Promise<ProvisionR
     })
   } catch (err) {
     console.error('[api/admin/entities/send-booking-link] signing failed:', err)
-    return jsonResponse(500, {
-      error: 'signing_failed',
-      message: 'Server is not configured to issue booking links.',
-    })
+    return errorResponse(500, 'signing_failed', 'Server is not configured to issue booking links.')
   }
 
   let appBaseUrl: string
@@ -260,12 +256,13 @@ async function resolveEntityAndContacts(
   entityId: string
 ): Promise<EntityContactResult | Response> {
   const entity = await getEntity(env.DB, orgId, entityId)
-  if (!entity) return jsonResponse(404, { error: 'entity_not_found' })
+  if (!entity) return errorResponse(404, 'entity_not_found')
   if (entity.stage !== 'prospect') {
-    return jsonResponse(409, {
-      error: 'invalid_stage',
-      message: `Entity must be in the 'prospect' stage; current stage is '${entity.stage}'.`,
-    })
+    return errorResponse(
+      409,
+      'invalid_stage',
+      `Entity must be in the 'prospect' stage; current stage is '${entity.stage}'.`
+    )
   }
   const contacts = await listContacts(env.DB, orgId, entityId)
   const primaryContact = contacts.find((c) => c.email) ?? contacts[0] ?? null
@@ -359,7 +356,7 @@ async function handlePost({ params, request, locals }: APIContext): Promise<Resp
   if (!auth.ok) return auth.response
   const { session } = auth
   const entityId = params.id
-  if (!entityId) return jsonResponse(400, { error: 'missing_entity_id' })
+  if (!entityId) return errorResponse(400, 'missing_entity_id')
 
   const bodyOrError = await parseRequestBody(request)
   if (bodyOrError instanceof Response) return bodyOrError
@@ -427,8 +424,7 @@ async function handlePost({ params, request, locals }: APIContext): Promise<Resp
     })
   } catch (err) {
     console.error('[api/admin/entities/send-booking-link] Error:', err)
-    return jsonResponse(500, {
-      error: 'server',
+    return errorResponse(500, 'internal_error', undefined, {
       message: err instanceof Error ? err.message : 'server',
     })
   }

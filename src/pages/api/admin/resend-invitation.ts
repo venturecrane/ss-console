@@ -54,7 +54,7 @@ async function maybeUpdateEmail(
   // disappeared between the SELECT and UPDATE (or somehow slipped org
   // scoping) — fail closed rather than send an invitation we can't trust.
   if (!updateResult.meta || updateResult.meta.changes === 0) {
-    return errorResponse(404, 'Client user not found')
+    return errorResponse(404, 'not_found', 'Client user not found.')
   }
 
   return normalizedEmail
@@ -72,7 +72,7 @@ async function handlePost({ request, locals }: APIContext): Promise<Response> {
     const { userId, email: newEmail } = body
 
     if (!userId || typeof userId !== 'string') {
-      return errorResponse(400, 'userId is required')
+      return errorResponse(400, 'validation_failed', 'userId is required.')
     }
 
     // Look up the client user — scoped to the admin's org to prevent
@@ -84,7 +84,7 @@ async function handlePost({ request, locals }: APIContext): Promise<Response> {
       .first<UserRow>()
 
     if (!user) {
-      return errorResponse(404, 'Client user not found')
+      return errorResponse(404, 'not_found', 'Client user not found.')
     }
 
     // If a new email is provided, update the user's email (OQ-010 bounce recovery)
@@ -118,7 +118,7 @@ async function handlePost({ request, locals }: APIContext): Promise<Response> {
 
     if (!result.success) {
       console.error(`[resend-invitation] Failed to send to ${targetEmail}: ${result.error}`)
-      return errorResponse(502, 'Failed to send email')
+      return errorResponse(502, 'unavailable', 'The email could not be sent.')
     }
 
     return jsonResponse(200, {
@@ -128,7 +128,7 @@ async function handlePost({ request, locals }: APIContext): Promise<Response> {
     })
   } catch (err) {
     console.error('[resend-invitation] Error:', err)
-    return errorResponse(500, 'Internal server error')
+    return errorResponse(500, 'internal_error')
   }
 }
 

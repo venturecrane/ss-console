@@ -140,12 +140,12 @@ async function handlePost({ request }: APIContext): Promise<Response> {
   try {
     body = await request.json()
   } catch {
-    return errorResponse(400, 'Invalid JSON')
+    return errorResponse(400, 'invalid_json')
   }
 
   const rawEvents = Array.isArray(body.events) ? body.events : null
   if (!rawEvents || rawEvents.length === 0) {
-    return errorResponse(400, 'events array required')
+    return errorResponse(400, 'validation_failed', 'events array required.')
   }
 
   const { sessionId, needSetCookie } = resolveSessionId(request, body)
@@ -196,7 +196,7 @@ async function handlePost({ request }: APIContext): Promise<Response> {
     await persistEventRows(rows, eventCtx)
   } catch (err) {
     console.error('[api/events] D1 insert failed:', err)
-    return errorResponse(500, 'Failed to persist events')
+    return errorResponse(500, 'internal_error', 'The events could not be recorded.')
   }
 
   return buildResponse(204, cookieSidOrNull, request)

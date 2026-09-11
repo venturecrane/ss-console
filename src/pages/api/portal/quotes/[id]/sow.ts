@@ -17,16 +17,16 @@ import { errorResponse } from '../../../../../lib/api/helpers'
 export const GET: APIRoute = async ({ locals, params }) => {
   const quoteId = params.id
   if (!quoteId) {
-    return errorResponse(400, 'Quote ID required')
+    return errorResponse(400, 'validation_failed', 'Quote ID required.')
   }
 
   // Resolve client via Clerk identity bridge
   const portalData = await getPortalClient(env.DB, locals)
   if (!portalData) {
-    return errorResponse(401, 'Unauthorized')
+    return errorResponse(401, 'unauthorized')
   }
   if (!portalData.client) {
-    return errorResponse(403, 'Client not found')
+    return errorResponse(403, 'not_found', 'Client not found.')
   }
 
   // Get quote scoped to this client
@@ -37,21 +37,21 @@ export const GET: APIRoute = async ({ locals, params }) => {
     quoteId
   )
   if (!quote) {
-    return errorResponse(404, 'Quote not found')
+    return errorResponse(404, 'not_found', 'Quote not found.')
   }
 
   const sowState = await getSOWStateForQuote(env.DB, portalData.user.org_id, quote.id)
   const revision = sowState.downloadableRevision
 
   if (!revision) {
-    return errorResponse(404, 'SOW not available')
+    return errorResponse(404, 'not_found', 'SOW not available.')
   }
 
   // Stream PDF from R2
   const key = revision.signed_storage_key ?? revision.unsigned_storage_key
   const object = await getPdf(env.STORAGE, key)
   if (!object) {
-    return errorResponse(404, 'SOW file not found in storage')
+    return errorResponse(404, 'not_found', 'SOW file not found in storage.')
   }
 
   return new Response(object.body, {

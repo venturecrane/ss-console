@@ -27,7 +27,7 @@
  * is rejected (400) rather than misattributed.
  */
 
-import { jsonResponse } from '../../../lib/api/helpers'
+import { jsonResponse, errorResponse } from '../../../lib/api/helpers'
 import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 
@@ -45,7 +45,7 @@ export const POST: APIRoute = async ({ request }) => {
   const secret = env.SENTRY_WEBHOOK_SECRET
   if (!secret) {
     console.error('[webhook/sentry] SENTRY_WEBHOOK_SECRET not configured')
-    return jsonResponse(500, { error: 'server_misconfigured' })
+    return errorResponse(500, 'server_misconfigured')
   }
 
   const rawBody = await request.text()
@@ -53,12 +53,12 @@ export const POST: APIRoute = async ({ request }) => {
   const timestampHeader = request.headers.get('sentry-hook-timestamp') ?? ''
 
   if (!signatureHeader) {
-    return jsonResponse(401, { error: 'missing_signature' })
+    return errorResponse(401, 'missing_signature')
   }
 
   if (!(await verifyHmac(rawBody, signatureHeader, secret))) {
     console.error('[webhook/sentry] invalid signature')
-    return jsonResponse(401, { error: 'invalid_signature' })
+    return errorResponse(401, 'invalid_signature')
   }
 
   // The timestamp is the replay window. It is not bound into the HMAC (Sentry
@@ -68,25 +68,25 @@ export const POST: APIRoute = async ({ request }) => {
   const timestampSec = Number(timestampHeader)
   if (timestampHeader.trim() === '' || !Number.isFinite(timestampSec)) {
     console.error('[webhook/sentry] missing or non-numeric timestamp header')
-    return jsonResponse(401, { error: 'invalid_timestamp' })
+    return errorResponse(401, 'invalid_timestamp')
   }
   const ageSec = Math.floor(Date.now() / 1000) - timestampSec
   if (ageSec > MAX_WEBHOOK_AGE_SECONDS) {
     console.error(`[webhook/sentry] stale webhook (age ${ageSec}s)`)
-    return jsonResponse(401, { error: 'stale' })
+    return errorResponse(401, 'stale')
   }
 
   let payload: SentryWebhookPayload
   try {
     payload = JSON.parse(rawBody) as SentryWebhookPayload
   } catch {
-    return jsonResponse(400, { error: 'invalid_json' })
+    return errorResponse(400, 'invalid_json')
   }
 
   const tenant = extractTenantTag(payload)
   if (!tenant) {
     console.warn('[webhook/sentry] payload missing tenant tag; rejected')
-    return jsonResponse(400, { error: 'missing_tenant_tag' })
+    return errorResponse(400, 'missing_tenant_tag')
   }
 
   const entityRow = await env.DB.prepare(
@@ -96,7 +96,7 @@ export const POST: APIRoute = async ({ request }) => {
     .first<{ entity_id: string }>()
   if (!entityRow) {
     console.warn(`[webhook/sentry] tenant ${tenant} not found in customer_configs`)
-    return jsonResponse(404, { error: 'unknown_tenant' })
+    return errorResponse(404, 'unknown_tenant')
   }
 
   const summary = buildSummary(payload)

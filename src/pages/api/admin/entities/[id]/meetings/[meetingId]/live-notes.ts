@@ -1,4 +1,4 @@
-import { jsonResponse } from '../../../../../../../lib/api/helpers'
+import { jsonResponse, errorResponse } from '../../../../../../../lib/api/helpers'
 import type { APIRoute } from 'astro'
 import { getMeeting, updateMeeting } from '../../../../../../../lib/db/meetings'
 import { env } from 'cloudflare:workers'
@@ -20,7 +20,7 @@ export const PUT: APIRoute = async ({ request, locals, params }) => {
   const entityId = params.id
   const meetingId = params.meetingId
   if (!entityId || !meetingId) {
-    return jsonResponse(400, { error: 'Entity ID and meeting ID required' })
+    return errorResponse(400, 'validation_failed', 'Entity ID and meeting ID required.')
   }
 
   try {
@@ -28,15 +28,15 @@ export const PUT: APIRoute = async ({ request, locals, params }) => {
     const liveNotes = body.live_notes
 
     if (typeof liveNotes !== 'string') {
-      return jsonResponse(400, { error: 'live_notes must be a string' })
+      return errorResponse(400, 'validation_failed', 'live_notes must be a string.')
     }
 
     const existing = await getMeeting(env.DB, session.orgId, meetingId)
     if (!existing) {
-      return jsonResponse(404, { error: 'Meeting not found' })
+      return errorResponse(404, 'not_found', 'Meeting not found.')
     }
     if (existing.entity_id !== entityId) {
-      return jsonResponse(404, { error: 'Meeting does not belong to this entity' })
+      return errorResponse(404, 'forbidden', 'Meeting does not belong to this entity.')
     }
 
     await updateMeeting(env.DB, session.orgId, meetingId, {
@@ -46,6 +46,6 @@ export const PUT: APIRoute = async ({ request, locals, params }) => {
     return jsonResponse(200, { ok: true })
   } catch (err) {
     console.error('[api/admin/entities/[id]/meetings/[meetingId]/live-notes] Error:', err)
-    return jsonResponse(500, { error: 'Internal server error' })
+    return errorResponse(500, 'internal_error')
   }
 }

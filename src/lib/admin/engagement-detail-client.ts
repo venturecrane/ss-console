@@ -89,8 +89,8 @@ async function handlePhotoUpload(ctx: PhotoCtx): Promise<void> {
       body: form,
     })
     if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string }
-      throw new Error(data.error || res.statusText)
+      const data = (await res.json().catch(() => ({}))) as { message?: string }
+      throw new Error(data.message || res.statusText)
     }
     setPhotoStatus(ctx.statusEl, 'Photo uploaded. Reloading...', false)
     window.setTimeout(() => location.reload(), 500)
@@ -110,8 +110,8 @@ async function handlePhotoRemove(ctx: PhotoCtx): Promise<void> {
       method: 'DELETE',
     })
     if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string }
-      throw new Error(data.error || res.statusText)
+      const data = (await res.json().catch(() => ({}))) as { message?: string }
+      throw new Error(data.message || res.statusText)
     }
     setPhotoStatus(ctx.statusEl, 'Photo removed. Reloading...', false)
     window.setTimeout(() => location.reload(), 500)
@@ -169,7 +169,7 @@ function setupDeliverablesUpload(engagementId: string): void {
         })
         uploadStatusEl.textContent = res.ok
           ? `Uploaded ${file.name}`
-          : `Failed: ${((await res.json().catch(() => ({}))) as { error?: string }).error || res.statusText}`
+          : `Failed: ${((await res.json().catch(() => ({}))) as { message?: string }).message || res.statusText}`
       } catch (err) {
         uploadStatusEl.textContent =
           err instanceof Error ? `Error: ${err.message}` : 'Error: Upload failed'
