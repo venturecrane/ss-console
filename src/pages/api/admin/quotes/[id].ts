@@ -1,11 +1,6 @@
 import type { APIContext, APIRoute } from 'astro'
-import {
-  getQuote,
-  updateQuote,
-  updateQuoteStatus,
-  parseDeliverables,
-  parseLineItems,
-} from '../../../../lib/db/quotes'
+import { getQuote, updateQuote, updateQuoteStatus } from '../../../../lib/db/quotes'
+import { parseDeliverables, parseLineItems } from '../../../../lib/db/quote-content'
 import type { LineItem, DeliverableRow } from '../../../../lib/db/quotes'
 import { getEntity } from '../../../../lib/db/entities'
 import { listContacts } from '../../../../lib/db/contacts'

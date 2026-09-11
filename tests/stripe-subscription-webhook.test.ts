@@ -14,9 +14,9 @@ import {
   handleRetainerInvoiceFinalized,
   handleRetainerInvoicePaid,
   handleRetainerInvoicePaymentFailed,
-  handleSubscriptionLifecycle,
   type RetainerInvoicePayload,
 } from '../src/lib/webhooks/stripe-subscription-handler'
+import { handleSubscriptionLifecycle } from '../src/lib/webhooks/stripe-subscription-lifecycle'
 
 // ---------------------------------------------------------------------------
 // Fakes

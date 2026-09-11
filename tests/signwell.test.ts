@@ -120,9 +120,14 @@ describe('signwell: API client', () => {
 // not exercise: error paths, artifact-key/outbox details, and the send flow.
 
 describe('signwell: sow lifecycle service', () => {
-  // Finalization logic was extracted to service-finalize.ts (keeping service.ts under 500 lines).
-  // Some tests check service.ts (send flow), others check service-finalize.ts (finalize flow).
-  const source = () => readFileSync(resolve('src/lib/sow/service-finalize.ts'), 'utf-8')
+  // Finalization logic was extracted to service-finalize.ts (keeping service.ts under 500 lines),
+  // and on 2026-09-11 the outbox jobs and the unknown-document acknowledgement moved on to
+  // outbox-jobs.ts. Some tests check service.ts (send flow), others check the finalize flow,
+  // which now spans both files.
+  const source = () =>
+    ['service-finalize.ts', 'outbox-jobs.ts']
+      .map((file) => readFileSync(resolve('src/lib/sow', file), 'utf-8'))
+      .join('\n')
   const serviceSource = () => readFileSync(resolve('src/lib/sow/service.ts'), 'utf-8')
 
   it('acknowledges unknown provider request ids as non-retryable', () => {

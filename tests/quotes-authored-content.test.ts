@@ -28,16 +28,13 @@ import { existsSync, readFileSync } from 'fs'
 import type { D1Database } from '@cloudflare/workers-types'
 
 import { createEntity, type EntityStage } from '../src/lib/db/entities'
+import { createQuote, getQuote, updateQuote, updateQuoteStatus } from '../src/lib/db/quotes'
 import {
-  createQuote,
-  getQuote,
-  updateQuote,
-  updateQuoteStatus,
   parseSchedule,
   parseDeliverables,
   parseLineItems,
   getMissingAuthoredContent,
-} from '../src/lib/db/quotes'
+} from '../src/lib/db/quote-content'
 import type { Quote } from '../src/lib/db/quotes'
 
 const migrationsDir = resolve(process.cwd(), 'migrations')

@@ -2,6 +2,26 @@ import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 
+// The template is three modules since 2026-09-11 (review 2026-09-10,
+// Architecture 3): the shared base (props, exclusions, styles, footer), the
+// page-2/page-3 module, and the template itself. The assertions below are
+// about the SOW's authored content wherever it lives, so they read all three.
+const sowTemplateModules = () =>
+  ['sow-template-base.tsx', 'sow-template-pages.tsx', 'sow-template.tsx'].map((file) =>
+    readFileSync(resolve('src/lib/pdf', file), 'utf-8')
+  )
+const sowTemplateSource = () => sowTemplateModules().join('\n')
+
+// Text a reader of the PDF sees: what sits between a closing '>' and the next
+// '<'. Extracted per module, because across the concatenation a module's
+// header comment would sit between the previous module's last tag and the
+// next '<' and read as rendered text.
+const renderedText = () =>
+  sowTemplateModules()
+    .flatMap((code) => code.match(/>([^<]+)</g) || [])
+    .join(' ')
+    .toLowerCase()
+
 describe('sow-template: template file', () => {
   it('sow-template.tsx exists', () => {
     expect(existsSync(resolve('src/lib/pdf/sow-template.tsx'))).toBe(true)
@@ -13,7 +33,7 @@ describe('sow-template: template file', () => {
 })
 
 describe('sow-template: props interface', () => {
-  const source = () => readFileSync(resolve('src/lib/pdf/sow-template.tsx'), 'utf-8')
+  const source = () => sowTemplateSource()
 
   it('exports SOWTemplateProps interface', () => {
     expect(source()).toContain('export interface SOWTemplateProps')
@@ -69,7 +89,7 @@ describe('sow-template: props interface', () => {
 })
 
 describe('sow-template: conditional payment term rendering', () => {
-  const source = () => readFileSync(resolve('src/lib/pdf/sow-template.tsx'), 'utf-8')
+  const source = () => sowTemplateSource()
 
   it('renders two-part payment schedule (default)', () => {
     const code = source()
@@ -86,7 +106,7 @@ describe('sow-template: conditional payment term rendering', () => {
 })
 
 describe('sow-template: no hourly rates in output (Decision #16)', () => {
-  const source = () => readFileSync(resolve('src/lib/pdf/sow-template.tsx'), 'utf-8')
+  const source = () => sowTemplateSource()
 
   it('scope table has no hours column', () => {
     const code = source()
@@ -104,10 +124,9 @@ describe('sow-template: no hourly rates in output (Decision #16)', () => {
     expect(code).not.toContain('props.rate')
     // The word "hourly" appears in a comment about business rules — that is fine.
     // It must NOT appear inside JSX template text (between > and <).
-    const jsxTexts = code.match(/>([^<]+)</g) || []
-    const renderedText = jsxTexts.join(' ').toLowerCase()
-    expect(renderedText).not.toContain('hourly')
-    expect(renderedText).not.toContain('/hr')
+    const text = renderedText()
+    expect(text).not.toContain('hourly')
+    expect(text).not.toContain('/hr')
   })
 
   it('project investment shows total price only', () => {
@@ -125,7 +144,7 @@ describe('sow-template: no hourly rates in output (Decision #16)', () => {
 })
 
 describe('sow-template: exclusions list (Decision #10)', () => {
-  const source = () => readFileSync(resolve('src/lib/pdf/sow-template.tsx'), 'utf-8')
+  const source = () => sowTemplateSource()
 
   it('exports EXCLUSIONS constant', () => {
     expect(source()).toContain('export const EXCLUSIONS')
@@ -149,7 +168,7 @@ describe('sow-template: exclusions list (Decision #10)', () => {
 })
 
 describe('sow-template: voice compliance (Decision #20)', () => {
-  const source = () => readFileSync(resolve('src/lib/pdf/sow-template.tsx'), 'utf-8')
+  const source = () => sowTemplateSource()
 
   it('uses "we" voice in terms section', () => {
     const code = source()
@@ -161,17 +180,15 @@ describe('sow-template: voice compliance (Decision #20)', () => {
   })
 
   it('does not use "I" or "the consultant" anywhere', () => {
-    const code = source()
     // Check static text content (not JS variable names)
-    const staticTexts = code.match(/>([^<]+)</g) || []
-    const allText = staticTexts.join(' ').toLowerCase()
+    const allText = renderedText()
     expect(allText).not.toContain(' i ')
     expect(allText).not.toContain('the consultant')
   })
 })
 
 describe('sow-template: what is included section', () => {
-  const source = () => readFileSync(resolve('src/lib/pdf/sow-template.tsx'), 'utf-8')
+  const source = () => sowTemplateSource()
 
   it('includes problem diagnosis', () => {
     expect(source()).toContain('problem diagnosis')
@@ -195,7 +212,7 @@ describe('sow-template: what is included section', () => {
 })
 
 describe('sow-template: deliverable count validation', () => {
-  const source = () => readFileSync(resolve('src/lib/pdf/sow-template.tsx'), 'utf-8')
+  const source = () => sowTemplateSource()
 
   it('enforces maximum 8 deliverable items', () => {
     const code = source()
@@ -210,7 +227,7 @@ describe('sow-template: deliverable count validation', () => {
 })
 
 describe('sow-template: terms compliance', () => {
-  const source = () => readFileSync(resolve('src/lib/pdf/sow-template.tsx'), 'utf-8')
+  const source = () => sowTemplateSource()
 
   it('includes 5-day validity term (Decision #18)', () => {
     expect(source()).toContain('5 business days')
@@ -251,7 +268,7 @@ describe('sow-template: render wrapper', () => {
 })
 
 describe('sow-template: signature block', () => {
-  const source = () => readFileSync(resolve('src/lib/pdf/sow-template.tsx'), 'utf-8')
+  const source = () => sowTemplateSource()
 
   it('includes client acceptance section', () => {
     expect(source()).toContain('CLIENT ACCEPTANCE')
@@ -272,7 +289,7 @@ describe('sow-template: signature block', () => {
 })
 
 describe('sow-template: 3-page structure', () => {
-  const source = () => readFileSync(resolve('src/lib/pdf/sow-template.tsx'), 'utf-8')
+  const source = () => sowTemplateSource()
 
   it('has 3 pages (dedicated signing page)', () => {
     const code = source()

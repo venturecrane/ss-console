@@ -57,7 +57,7 @@ import {
   detachStripeSubscription,
 } from '../db/subscriptions'
 import { OPERATOR_CHECKOUT_PRODUCT_SLUG, cancelOperatorSubscription } from '../stripe/subscriptions'
-import { alertTeam } from './stripe-subscription-handler'
+import { alertTeam } from './stripe-subscription-shared'
 
 function ok(): Response {
   return new Response(JSON.stringify({ ok: true }), {
