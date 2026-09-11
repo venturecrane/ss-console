@@ -1,381 +1,510 @@
-import { describe, it, expect } from 'vitest'
+/**
+ * Behavioural tests for invoicing: the two admin routes, the two client
+ * emails, and the portal's billing card.
+ *
+ * The data layer, the Stripe client, and the Stripe and SignWell webhooks
+ * already had behavioural suites (src/lib/db/invoices.test.ts,
+ * src/lib/stripe/client.test.ts, src/lib/webhooks/stripe-handler.test.ts,
+ * tests/webhooks/stripe-verify.test.ts, src/lib/webhooks/signwell-handler.test.ts).
+ * Until 2026-09-11 the rest of this file still matched source text (review
+ * 2026-09-10, Testing 3). The routes now run against a migrated D1 with the
+ * Stripe client and the email transport as the only fakes. The policy guards
+ * over the Astro billing pages are kept at the end, each with its reason.
+ */
+
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
+import type { D1Database } from '@cloudflare/workers-types'
+import {
+  createInvoice,
+  getInvoice,
+  listInvoices,
+  listLineItemsForInvoice,
+} from '../src/lib/db/invoices'
+import { createContact } from '../src/lib/db/contacts'
+import { CARD_FEE_LINE_DESCRIPTION } from '../src/lib/pricing/card-fee'
+import { invoiceSentEmailHtml, paymentConfirmationEmailHtml } from '../src/lib/email/templates'
+import { BRAND_NAME } from '../src/lib/config/brand'
+import { loadHomeCards } from '../src/lib/portal/home-cards'
+import { formatShortDate } from '../src/lib/portal/formatters'
+import { resolvePortalOfferings } from '../src/lib/portal/offerings'
+import {
+  adminSession,
+  bindEnv,
+  formRequest,
+  locationOf,
+  locationQuery,
+  migratedDb,
+  routeContext,
+  seedEngagement,
+  seedEntity,
+  seedOrg,
+} from './_stubs/behavioural'
 
-// NOTE (2026-06-12, code-review Wave 5): the source-mirror describe blocks
-// that previously lived here ('invoices: data layer', 'invoices: stripe
-// client', 'invoices: stripe webhook handler', 'invoices: stripe webhook
-// route', and 'invoices: signwell handler creates deposit invoice') were
-// readFileSync + toContain assertions that passed even if every function
-// were a stub. They are replaced by behavioral tests against a real D1:
-//   - src/lib/db/invoices.test.ts          (DAL: scoping, state machine, updates)
-//   - src/lib/stripe/client.test.ts        (mocked-fetch request/response shapes)
-//   - src/lib/webhooks/stripe-handler.test.ts (two-phase paid batch + route dispatch)
-//   - tests/webhooks/stripe-verify.test.ts (webhook signature verification)
-//   - src/lib/webhooks/signwell-handler.test.ts (deposit invoice creation at signing)
-// The blocks kept below guard rendered surfaces (.astro contracts) and
-// configuration that the behavioral suites do not exercise.
+const stripe = {
+  createStripeInvoice: vi.fn(),
+  finalizeStripeInvoice: vi.fn(),
+  sendStripeInvoice: vi.fn(),
+  voidStripeInvoice: vi.fn(),
+}
+vi.mock('../src/lib/stripe/client', () => ({
+  createStripeInvoice: (...args: unknown[]) => stripe.createStripeInvoice(...args),
+  finalizeStripeInvoice: (...args: unknown[]) => stripe.finalizeStripeInvoice(...args),
+  sendStripeInvoice: (...args: unknown[]) => stripe.sendStripeInvoice(...args),
+  voidStripeInvoice: (...args: unknown[]) => stripe.voidStripeInvoice(...args),
+}))
+const sendEmail = vi.fn()
+vi.mock('../src/lib/email/resend', () => ({
+  sendEmail: (...args: unknown[]) => sendEmail(...args),
+}))
 
-describe('invoices: stripe types', () => {
-  const source = () => readFileSync(resolve('src/lib/stripe/types.ts'), 'utf-8')
+// Import AFTER the mocks so the routes bind the mocked modules.
+import { POST as createRoute } from '../src/pages/api/admin/invoices/index'
+import { POST as actionRoute } from '../src/pages/api/admin/invoices/[id]'
 
-  it('types.ts exists', () => {
-    expect(existsSync(resolve('src/lib/stripe/types.ts'))).toBe(true)
+const ORG = 'org-a'
+const ENT = 'ent-a'
+const ENG = 'eng-a'
+
+async function seedAll(db: D1Database) {
+  await seedOrg(db, ORG)
+  await seedEntity(db, { id: ENT, orgId: ORG, stage: 'engaged', name: 'Alpha Plumbing' })
+  await seedEngagement(db, { id: ENG, orgId: ORG, entityId: ENT, status: 'scheduled' })
+}
+
+describe('POST /api/admin/invoices', () => {
+  let db: D1Database
+
+  const call = (
+    fields: Record<string, string>,
+    session: ReturnType<typeof adminSession> | null = adminSession(ORG)
+  ) =>
+    createRoute(
+      routeContext({
+        request: formRequest('http://test.local/api/admin/invoices', fields),
+        session,
+      }) as unknown as Parameters<typeof createRoute>[0]
+    )
+
+  beforeEach(async () => {
+    db = await migratedDb()
+    await seedAll(db)
+    bindEnv({ DB: db })
   })
 
-  it('exports StripeInvoiceLineItem type', () => {
-    expect(source()).toContain('export interface StripeInvoiceLineItem')
+  it('answers 401 with no session; names a missing field, an unknown type, and a non-positive amount', async () => {
+    expect((await call({ client_id: ENT, type: 'deposit', amount: '100' }, null)).status).toBe(401)
+    expect(locationOf(await call({ client_id: ENT, type: 'deposit' }))).toBe(
+      '/admin/entities?error=missing'
+    )
+    expect(
+      locationQuery(await call({ client_id: ENT, type: 'tip', amount: '100' })).get('error')
+    ).toBe('invalid_type')
+    expect(
+      locationQuery(await call({ client_id: ENT, type: 'deposit', amount: '0' })).get('error')
+    ).toBe('invalid_amount')
+    expect(await listInvoices(db, ORG, {})).toEqual([])
   })
 
-  it('exports StripeCreateInvoiceParams type', () => {
-    expect(source()).toContain('export interface StripeCreateInvoiceParams')
+  it('creates a bare draft when no line is authored, and returns to the caller page', async () => {
+    const res = await call({
+      client_id: ENT,
+      type: 'deposit',
+      amount: '100',
+      engagement_id: ENG,
+      due_date: '2026-10-01',
+      redirect_url: `/admin/entities/${ENT}`,
+    })
+    expect(locationOf(res)).toBe(`/admin/entities/${ENT}?created=1`)
+    const [invoice] = await listInvoices(db, ORG, {})
+    expect(invoice).toMatchObject({
+      entity_id: ENT,
+      engagement_id: ENG,
+      type: 'deposit',
+      amount: 100,
+      status: 'draft',
+      due_date: '2026-10-01',
+    })
+    expect(await listLineItemsForInvoice(db, invoice.id)).toEqual([])
   })
 
-  it('exports StripeInvoice type', () => {
-    expect(source()).toContain('export interface StripeInvoice')
-  })
+  it('an authored line becomes one line item for the full amount; card payment adds the 3% fee line and grows the total', async () => {
+    await call({ client_id: ENT, type: 'milestone', amount: '100', line_item: 'Intake redesign' })
+    const [ach] = await listInvoices(db, ORG, {})
+    expect(ach.amount).toBe(100)
+    expect(
+      (await listLineItemsForInvoice(db, ach.id)).map((l) => [l.description, l.amount_cents])
+    ).toEqual([['Intake redesign', 10000]])
 
-  it('exports StripeWebhookEvent type', () => {
-    expect(source()).toContain('export interface StripeWebhookEvent')
-  })
-
-  it('exports StripeInvoiceResult type', () => {
-    expect(source()).toContain('export interface StripeInvoiceResult')
-  })
-
-  it('StripeCreateInvoiceParams includes customer_email', () => {
-    expect(source()).toContain('customer_email')
-  })
-
-  it('StripeCreateInvoiceParams includes line_items', () => {
-    expect(source()).toContain('line_items')
-  })
-
-  it('StripeCreateInvoiceParams includes collection_method', () => {
-    expect(source()).toContain('collection_method')
-  })
-
-  it('StripeCreateInvoiceParams supports payment_method_types', () => {
-    expect(source()).toContain('payment_method_types')
-  })
-
-  it('StripeInvoice includes hosted_invoice_url', () => {
-    expect(source()).toContain('hosted_invoice_url')
-  })
-
-  it('StripeWebhookEvent includes data.object (StripeInvoice)', () => {
-    const code = source()
-    expect(code).toContain('data:')
-    expect(code).toContain('object: StripeInvoice')
+    await call({
+      client_id: ENT,
+      type: 'milestone',
+      amount: '100',
+      line_item: 'Intake redesign',
+      card_payment: 'on',
+    })
+    const card = (await listInvoices(db, ORG, {})).find((i) => i.id !== ach.id)!
+    expect(card.amount).toBe(103)
+    expect(
+      (await listLineItemsForInvoice(db, card.id)).map((l) => [l.description, l.amount_cents])
+    ).toEqual([
+      ['Intake redesign', 10000],
+      [CARD_FEE_LINE_DESCRIPTION, 300],
+    ])
   })
 })
 
-describe('invoices: portal view', () => {
-  const source = () => readFileSync(resolve('src/pages/portal/billing/index.astro'), 'utf-8')
+describe('POST /api/admin/invoices/[id]', () => {
+  let db: D1Database
 
-  it('portal invoice page exists', () => {
-    expect(existsSync(resolve('src/pages/portal/billing/index.astro'))).toBe(true)
+  const call = (
+    id: string,
+    fields: Record<string, string>,
+    session: ReturnType<typeof adminSession> | null = adminSession(ORG)
+  ) =>
+    actionRoute(
+      routeContext({
+        request: formRequest(`http://test.local/api/admin/invoices/${id}`, fields),
+        params: { id },
+        session,
+      }) as unknown as Parameters<typeof actionRoute>[0]
+    )
+
+  const draftWithLine = (over: Partial<Parameters<typeof createInvoice>[2]> = {}) =>
+    createInvoice(db, ORG, {
+      entity_id: ENT,
+      engagement_id: ENG,
+      type: 'deposit',
+      amount: 100,
+      line_items: [{ description: 'Deposit', amount_cents: 10000 }],
+      ...over,
+    })
+
+  beforeEach(async () => {
+    for (const fn of Object.values(stripe)) fn.mockReset()
+    sendEmail.mockReset()
+    sendEmail.mockResolvedValue({ success: true, id: 'email-1' })
+    stripe.createStripeInvoice.mockResolvedValue({ id: 'in_new', hosted_invoice_url: null })
+    stripe.finalizeStripeInvoice.mockResolvedValue({
+      id: 'in_new',
+      hosted_invoice_url: 'https://pay.stripe/new',
+    })
+    stripe.sendStripeInvoice.mockResolvedValue({
+      id: 'in_new',
+      hosted_invoice_url: 'https://pay.stripe/new',
+    })
+    stripe.voidStripeInvoice.mockResolvedValue(undefined)
+
+    db = await migratedDb()
+    await seedAll(db)
+    await createContact(db, ORG, ENT, { name: 'Dana', email: 'dana@example.com' })
+    bindEnv({
+      DB: db,
+      STRIPE_API_KEY: 'sk_test',
+      RESEND_API_KEY: 're_test',
+      APP_BASE_URL: 'https://smd.services',
+      PORTAL_BASE_URL: 'https://portal.smd.services',
+    })
   })
 
-  it('uses listInvoicesForEntity for entity-scoped access', () => {
-    expect(source()).toContain('listInvoicesForEntity')
+  it('answers 401 with no session, not_found for an unknown invoice, and error=missing for no action', async () => {
+    const invoice = await draftWithLine()
+    expect((await call(invoice.id, { action: 'send' }, null)).status).toBe(401)
+    expect(locationOf(await call('nope', { action: 'send' }))).toBe(
+      '/admin/entities?error=not_found'
+    )
+    expect(locationQuery(await call(invoice.id, {})).get('error')).toBe('missing')
+    expect(stripe.createStripeInvoice).not.toHaveBeenCalled()
   })
 
-  it('resolves entity via getPortalClient (Clerk-aware signature)', () => {
-    // After PR #906 the portal session resolver takes Astro.locals
-    // (which carries Clerk's locals.auth() and locals.currentUser())
-    // instead of (userId, orgId). Magic-link's session.userId is gone
-    // from portal pages.
-    const code = source()
-    expect(code).toContain('getPortalClient(env.DB, Astro.locals)')
+  it('send: creates the Stripe invoice from the authored lines as ACH, sends it, records the ids, and emails the client', async () => {
+    const invoice = await draftWithLine()
+    const res = await call(invoice.id, { action: 'send', redirect_url: '/admin/billing' })
+    expect(locationOf(res)).toBe('/admin/billing?saved=1')
+
+    expect(stripe.createStripeInvoice).toHaveBeenCalledTimes(1)
+    const [apiKey, params] = stripe.createStripeInvoice.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ]
+    expect(apiKey).toBe('sk_test')
+    expect(params).toMatchObject({
+      customer_email: 'dana@example.com',
+      line_items: [{ amount: 10000, currency: 'usd', description: 'Deposit', quantity: 1 }],
+      days_until_due: 30,
+      collection_method: 'send_invoice',
+      metadata: { invoice_id: invoice.id, org_id: ORG, type: 'deposit' },
+      payment_settings: { payment_method_types: ['us_bank_account'] },
+    })
+    expect(stripe.sendStripeInvoice).toHaveBeenCalledWith('sk_test', 'in_new')
+    expect(stripe.finalizeStripeInvoice).not.toHaveBeenCalled()
+
+    expect(await getInvoice(db, ORG, invoice.id)).toMatchObject({
+      status: 'sent',
+      stripe_invoice_id: 'in_new',
+      stripe_hosted_url: 'https://pay.stripe/new',
+    })
+    expect(sendEmail).toHaveBeenCalledTimes(1)
+    const [, email] = sendEmail.mock.calls[0] as [string, { to: string; html: string }]
+    expect(email.to).toBe('dana@example.com')
+    expect(email.html).toContain('$100.00')
+    expect(email.html).toContain('https://portal.smd.services/portal/billing')
   })
 
-  it('passes amount to PortalListItem as cents', () => {
-    // After R7 registry: the page defers rendering to PortalListItem +
-    // MoneyDisplay. `inv.amount` is dollars; the page converts to cents.
-    const code = source()
-    expect(code).toContain('amountCents={Math.round(inv.amount * 100)}')
+  it('present: finalizes without sending and emails no one; a card invoice offers card only', async () => {
+    const invoice = await draftWithLine({
+      amount: 103,
+      line_items: [
+        { description: 'Deposit', amount_cents: 10000 },
+        { description: CARD_FEE_LINE_DESCRIPTION, amount_cents: 300 },
+      ],
+    })
+    const res = await call(invoice.id, { action: 'present' })
+    expect(locationQuery(res).get('saved')).toBe('1')
+    expect(stripe.finalizeStripeInvoice).toHaveBeenCalledWith('sk_test', 'in_new')
+    expect(stripe.sendStripeInvoice).not.toHaveBeenCalled()
+    expect(sendEmail).not.toHaveBeenCalled()
+    const [, params] = stripe.createStripeInvoice.mock.calls[0] as [string, Record<string, unknown>]
+    expect(params.payment_settings).toEqual({ payment_method_types: ['card'] })
+    expect((await getInvoice(db, ORG, invoice.id))?.status).toBe('sent')
   })
 
-  it('resolves status tone + stamp label via shared helpers (R7 registry)', () => {
-    const code = source()
-    expect(code).toContain('resolveInvoiceTone')
-    // Post-Plainspoken (2026-04-23, PR B) the pill renders the stamp
-    // vocabulary via `resolveInvoiceStampLabel`. The descriptive-label
-    // resolver (`resolveInvoiceLabel`) still exists for detail-page
-    // prose but list rows use the stamp form.
-    expect(code).toMatch(/resolveInvoiceStampLabel|resolveInvoiceLabel/)
+  it('issue refuses a non-draft, an entity with no billing contact, and an invoice with no authored line; Stripe never sees those', async () => {
+    const sent = await draftWithLine()
+    await db.prepare("UPDATE invoices SET status = 'sent' WHERE id = ?").bind(sent.id).run()
+    expect(locationQuery(await call(sent.id, { action: 'send' })).get('error')).toBe(
+      'invalid_transition'
+    )
+
+    const bare = await draftWithLine({ line_items: [] })
+    expect(locationQuery(await call(bare.id, { action: 'send' })).get('error')).toBe(
+      'missing_line_items'
+    )
+
+    await db.prepare('DELETE FROM contacts').run()
+    const draft = await draftWithLine()
+    expect(locationQuery(await call(draft.id, { action: 'present' })).get('error')).toBe(
+      'no_billing_contact'
+    )
+    expect(stripe.createStripeInvoice).not.toHaveBeenCalled()
   })
 
-  it('links each row to the invoice detail page', () => {
-    const code = source()
-    expect(code).toContain('/portal/billing/invoices/${inv.id}')
+  it('a Stripe failure on issue is reported by message and the invoice stays a draft', async () => {
+    stripe.createStripeInvoice.mockRejectedValue(new Error('Stripe create failed (402)'))
+    const invoice = await draftWithLine()
+    const res = await call(invoice.id, { action: 'send' })
+    expect(locationQuery(res).get('error')).toBe('Stripe create failed (402)')
+    expect((await getInvoice(db, ORG, invoice.id))?.status).toBe('draft')
+    expect(sendEmail).not.toHaveBeenCalled()
   })
 
-  it('signals unpaid/overdue state via tone, not a separate Pay button', () => {
-    const code = source()
-    // UI-PATTERNS R2 (redundancy): the card is the link; no standalone
-    // Pay affordance that would duplicate the card-level navigation.
-    // The tone (`info` for sent, `danger` for overdue) surfaces action-
-    // required state; detail page owns the actual pay CTA.
-    expect(code).toContain('resolveInvoiceTone')
-    expect(code).not.toMatch(/\bPay\b/)
-    expect(code).not.toContain('Payment link pending')
+  it('reschedule: replacement first, row repointed second, original voided last; a failed void is named', async () => {
+    const invoice = await draftWithLine()
+    await db
+      .prepare("UPDATE invoices SET status = 'sent', stripe_invoice_id = 'in_old' WHERE id = ?")
+      .bind(invoice.id)
+      .run()
+    const order: string[] = []
+    stripe.createStripeInvoice.mockImplementation(async () => {
+      order.push('create')
+      return { id: 'in_new', hosted_invoice_url: null }
+    })
+    stripe.finalizeStripeInvoice.mockImplementation(async () => {
+      order.push('finalize')
+      return { id: 'in_new', hosted_invoice_url: 'https://pay.stripe/new' }
+    })
+    stripe.voidStripeInvoice.mockImplementation(async () => {
+      order.push('void')
+    })
+
+    const res = await call(invoice.id, { action: 'reschedule', due_date: '2026-12-01' })
+    expect(locationQuery(res).get('rescheduled')).toBe('1')
+    expect(order).toEqual(['create', 'finalize', 'void'])
+    const [, params] = stripe.createStripeInvoice.mock.calls[0] as [string, Record<string, unknown>]
+    expect(params.metadata).toMatchObject({ replaces: 'in_old' })
+    expect(typeof params.due_date).toBe('number')
+    expect(stripe.voidStripeInvoice).toHaveBeenCalledWith('sk_test', 'in_old')
+    expect(await getInvoice(db, ORG, invoice.id)).toMatchObject({
+      status: 'sent',
+      due_date: '2026-12-01',
+      stripe_invoice_id: 'in_new',
+      stripe_hosted_url: 'https://pay.stripe/new',
+    })
+    expect(sendEmail).not.toHaveBeenCalled()
+
+    stripe.voidStripeInvoice.mockRejectedValue(new Error('void failed'))
+    stripe.createStripeInvoice.mockResolvedValue({ id: 'in_newer', hosted_invoice_url: null })
+    const stale = await call(invoice.id, { action: 'reschedule', due_date: '2026-12-15' })
+    expect(locationQuery(stale).get('error')).toBe('stale_stripe_invoice')
+    expect((await getInvoice(db, ORG, invoice.id))?.stripe_invoice_id).toBe('in_newer')
   })
 
-  it('surfaces paid / due dates via shared formatter', () => {
-    const code = source()
-    expect(code).toContain('formatShortDate')
-    // Post-Plainspoken (PR B) the page composes the date cell inline via
-    // `resolveDateLabel` + `resolveDateValue` helpers instead of a single
-    // `resolveMetaCaption`. Both patterns satisfy the R7 contract: dates
-    // come from the shared formatter, not a local string template.
-    expect(code).toMatch(/resolveMetaCaption|resolveDateValue/)
+  it('reschedule: refuses a draft and a malformed date; with no Stripe invoice it only moves the date', async () => {
+    const draft = await draftWithLine()
+    expect(
+      locationQuery(await call(draft.id, { action: 'reschedule', due_date: '2026-12-01' })).get(
+        'error'
+      )
+    ).toBe('invalid_transition')
+    await db.prepare("UPDATE invoices SET status = 'sent' WHERE id = ?").bind(draft.id).run()
+    expect(
+      locationQuery(await call(draft.id, { action: 'reschedule', due_date: 'next week' })).get(
+        'error'
+      )
+    ).toBe('invalid_due_date')
+    const res = await call(draft.id, { action: 'reschedule', due_date: '2026-12-01' })
+    expect(locationQuery(res).get('rescheduled')).toBe('1')
+    expect((await getInvoice(db, ORG, draft.id))?.due_date).toBe('2026-12-01')
+    expect(stripe.createStripeInvoice).not.toHaveBeenCalled()
   })
 
-  it('handles empty state when no invoices exist', () => {
-    expect(source()).toContain('Nothing on the ledger yet')
+  it('void: voids in Stripe when it can and locally regardless; refuses once paid', async () => {
+    const sent = await draftWithLine()
+    await db
+      .prepare("UPDATE invoices SET status = 'sent', stripe_invoice_id = 'in_old' WHERE id = ?")
+      .bind(sent.id)
+      .run()
+    stripe.voidStripeInvoice.mockRejectedValue(new Error('already void'))
+    expect(locationQuery(await call(sent.id, { action: 'void' })).get('saved')).toBe('1')
+    expect(stripe.voidStripeInvoice).toHaveBeenCalledWith('sk_test', 'in_old')
+    expect((await getInvoice(db, ORG, sent.id))?.status).toBe('void')
+
+    const paid = await draftWithLine()
+    await db.prepare("UPDATE invoices SET status = 'paid' WHERE id = ?").bind(paid.id).run()
+    expect(locationQuery(await call(paid.id, { action: 'void' })).get('error')).toBe(
+      'invalid_transition'
+    )
+    expect((await getInvoice(db, ORG, paid.id))?.status).toBe('paid')
+  })
+
+  it('mark_paid: records a manual payment, and a paid deposit activates its scheduled engagement', async () => {
+    const deposit = await draftWithLine()
+    await db.prepare("UPDATE invoices SET status = 'sent' WHERE id = ?").bind(deposit.id).run()
+    const before = Date.now()
+    expect(locationQuery(await call(deposit.id, { action: 'mark_paid' })).get('saved')).toBe('1')
+    const paid = await getInvoice(db, ORG, deposit.id)
+    expect(paid).toMatchObject({ status: 'paid', payment_method: 'manual' })
+    expect(Date.parse(paid!.paid_at!)).toBeGreaterThanOrEqual(before - 1000)
+    const engagement = await db
+      .prepare('SELECT status, start_date FROM engagements WHERE id = ?')
+      .bind(ENG)
+      .first<{ status: string; start_date: string | null }>()
+    expect(engagement?.status).toBe('active')
+    expect(engagement?.start_date).not.toBeNull()
+
+    const draft = await draftWithLine()
+    expect(locationQuery(await call(draft.id, { action: 'mark_paid' })).get('error')).toBe(
+      'invalid_transition'
+    )
   })
 })
 
-describe('invoices: portal detail view', () => {
-  const source = () =>
+describe('invoice emails', () => {
+  it('the sent notice names the amount and links the portal; markup in the amount is escaped', () => {
+    const html = invoiceSentEmailHtml(
+      'Dana',
+      '$1,000.00',
+      'https://portal.smd.services/portal/billing'
+    )
+    expect(html).toContain('Dana')
+    expect(html).toContain(`Your invoice from ${BRAND_NAME} for $1,000.00 is ready`)
+    expect(html).toContain('href="https://portal.smd.services/portal/billing"')
+    expect(invoiceSentEmailHtml('Dana', '<b>$1</b>', 'https://x')).not.toContain('<b>$1</b>')
+  })
+
+  it('the payment confirmation acknowledges the amount received', () => {
+    const html = paymentConfirmationEmailHtml('Dana', '$500.00')
+    expect(html).toContain('Dana')
+    expect(html).toContain("We've received your payment of $500.00")
+  })
+})
+
+describe('portal home: the billing card keeps the client one tap from a pending invoice', () => {
+  let db: D1Database
+
+  const billingCard = async () => {
+    const offerings = await resolvePortalOfferings(db, ORG, ENT)
+    const cards = await loadHomeCards(db, { orgId: ORG, entityId: ENT, userId: 'u-1', offerings })
+    return cards.find((c) => c.key === 'billing') ?? null
+  }
+
+  const invoiceIn = async (status: string, dueDate: string | null = null) => {
+    const invoice = await createInvoice(db, ORG, {
+      entity_id: ENT,
+      type: 'milestone',
+      amount: 250,
+      due_date: dueDate,
+    })
+    await db.prepare('UPDATE invoices SET status = ? WHERE id = ?').bind(status, invoice.id).run()
+    return invoice.id
+  }
+
+  beforeEach(async () => {
+    db = await migratedDb()
+    await seedAll(db)
+  })
+
+  it('no billing relationship, no card; paid history reads "Up to date" with nothing to do', async () => {
+    expect(await billingCard()).toBeNull()
+    await invoiceIn('paid')
+    expect(await billingCard()).toMatchObject({ statusLabel: 'Up to date', needsYou: null })
+  })
+
+  it('a sent or overdue invoice becomes the "Pay invoice" action, deep-linked, with its due date', async () => {
+    const sent = await invoiceIn('sent', '2026-10-15')
+    expect(await billingCard()).toMatchObject({
+      statusLabel: 'Invoice due',
+      meta: [`Due ${formatShortDate('2026-10-15')}`],
+      needsYou: { label: 'Pay invoice', href: `/portal/billing/invoices/${sent}` },
+    })
+    await db.prepare("UPDATE invoices SET status = 'overdue' WHERE id = ?").bind(sent).run()
+    expect((await billingCard())?.statusLabel).toBe('Invoice overdue')
+  })
+})
+
+// The billing pages are Astro; nothing here can invoke them. What is kept is
+// policy, each guard naming the rule and the incident behind it.
+describe('billing pages: policy guards', () => {
+  const list = readFileSync(resolve('src/pages/portal/billing/index.astro'), 'utf-8')
+  const detail =
     readFileSync(resolve('src/pages/portal/billing/invoices/[id].astro'), 'utf-8') +
     '\n' +
     readFileSync(resolve('src/lib/portal/invoice-detail.ts'), 'utf-8')
 
-  it('portal invoice detail page exists', () => {
-    expect(existsSync(resolve('src/pages/portal/billing/invoices/[id].astro'))).toBe(true)
+  it('ACH is us_bank_account, never the legacy ach_debit type (A&P implementation invoice, 2026-09-09)', () => {
+    for (const file of [
+      'src/pages/api/admin/invoices/[id].ts',
+      'src/lib/db/milestones.ts',
+      'src/lib/stripe/client.ts',
+      'src/lib/stripe/subscriptions.ts',
+    ]) {
+      expect(readFileSync(resolve(file), 'utf-8'), file).not.toContain("'ach_debit'")
+    }
   })
 
-  it('gates the pay CTA on a real Stripe hosted URL', () => {
-    const code = source()
-    // The detail page must only link to Stripe when stripe_hosted_url is
-    // present and not the dev-mode sentinel. A missing URL must render a
-    // non-link "Payment link pending" state, not a link to a server route.
-    expect(code).toContain('stripe_hosted_url')
-    expect(code).toContain('isPayable')
-    expect(code).toContain('Payment link pending')
+  it('the detail page pays through the Stripe hosted URL only, never a route that does not exist (#419)', () => {
+    expect(detail).toContain('isPayable')
+    expect(detail).toContain('Payment link pending')
+    expect(detail).not.toMatch(/\/api\/invoices\/\$\{[^}]*\}\/pay/)
+    expect(detail).not.toContain('payHref')
   })
 
-  it('does not link to a nonexistent /api/invoices/[id]/pay route (#419)', () => {
-    const code = source()
-    // The previous fallback rendered a clickable link to /api/invoices/[id]/pay,
-    // which never existed. This regression guard ensures we never reintroduce it.
-    expect(code).not.toMatch(/\/api\/invoices\/\$\{[^}]*\}\/pay/)
-    expect(code).not.toContain('payHref')
+  it('the detail page renders authored line items only, never a fabricated fallback row (#398)', () => {
+    expect(detail).not.toContain('Engagement work')
+    expect(detail).not.toContain('displayLineItems')
+    expect(detail).not.toMatch(/scope_summary\s*\?\?/)
   })
 
-  it('renders invoice line items without any fabricated fallback (#398)', () => {
-    const code = source()
-    // The page must never invent invoice line-item copy. No "Engagement work",
-    // no borrow from scope_summary, no fallback row synthesized from invoice.description.
-    expect(code).not.toContain('Engagement work')
-    expect(code).not.toContain('displayLineItems')
-    expect(code).not.toMatch(/scope_summary\s*\?\?/)
-  })
-
-  it('loads invoice detail through the portal reader', () => {
-    const code = source()
-    expect(code).toContain('loadPortalInvoiceDetail')
-    expect(code).toContain('getInvoiceForEntity')
-    expect(code).toContain('listLineItemsForInvoice')
-  })
-
-  it('carries no "Payment details" section (removed 2026-09-09)', () => {
-    // The section restated the due date already in the header and caption,
-    // and described Stripe's payment methods on SMD's own page. Captain
-    // direction: the page is the line items, the total, and the Pay card.
-    const code = source()
-    expect(code).not.toContain('Payment details')
-    expect(code).not.toContain('InvoicePaymentDetails')
-    expect(code).not.toContain('Card or bank transfer')
+  it('the "Payment details" section stays gone (Captain, 2026-09-09: the page is the lines, the total, and the Pay card)', () => {
+    expect(detail).not.toContain('Payment details')
+    expect(detail).not.toContain('InvoicePaymentDetails')
     expect(existsSync(resolve('src/components/portal/InvoicePaymentDetails.astro'))).toBe(false)
-    const preview = readFileSync(resolve('src/components/portal/InvoiceDetail.astro'), 'utf-8')
-    expect(preview).not.toContain('Payment details')
-  })
-})
-
-describe('invoices: admin API routes', () => {
-  it('POST /api/admin/invoices/index.ts exists', () => {
-    expect(existsSync(resolve('src/pages/api/admin/invoices/index.ts'))).toBe(true)
   })
 
-  it('POST /api/admin/invoices/[id].ts exists', () => {
-    expect(existsSync(resolve('src/pages/api/admin/invoices/[id].ts'))).toBe(true)
-  })
-
-  describe('create route (index.ts)', () => {
-    const source = () => readFileSync(resolve('src/pages/api/admin/invoices/index.ts'), 'utf-8')
-
-    it('exports POST handler', () => {
-      expect(source()).toContain('export const POST')
-    })
-
-    it('verifies admin session', () => {
-      expect(source()).toContain('requireAdminSession')
-    })
-
-    it('validates invoice type against the shared vocabulary', () => {
-      expect(source()).toContain('isInvoiceType')
-    })
-
-    it('validates amount is positive', () => {
-      expect(source()).toContain('amount <= 0')
-    })
-
-    it('calls createInvoice from data layer', () => {
-      expect(source()).toContain('createInvoice')
-    })
-  })
-
-  describe('action route ([id].ts)', () => {
-    const source = () => readFileSync(resolve('src/pages/api/admin/invoices/[id].ts'), 'utf-8')
-
-    it('exports POST handler', () => {
-      expect(source()).toContain('export const POST')
-    })
-
-    it('verifies admin session', () => {
-      expect(source()).toContain('requireAdminSession')
-    })
-
-    it('handles send action — creates in Stripe and sends', () => {
-      const code = source()
-      expect(code).toContain("action === 'send'")
-      expect(code).toContain('createStripeInvoice')
-      expect(code).toContain('sendStripeInvoice')
-    })
-
-    it('handles void action — voids in Stripe and locally', () => {
-      const code = source()
-      expect(code).toContain("action === 'void'")
-      expect(code).toContain('voidStripeInvoice')
-      expect(code).toContain('updateInvoiceStatus')
-    })
-
-    it('restricts ACH invoices to us_bank_account, never the legacy ach_debit type', () => {
-      // ach_debit is Stripe's Sources-era ACH: it only charges a bank account
-      // already verified on the customer and the hosted invoice page collects
-      // nothing for it. On 2026-09-09 the A&P implementation invoice rendered
-      // with no way to pay because of it. us_bank_account collects and
-      // verifies the bank account on the page (what the subscription checkout
-      // already uses in src/lib/stripe/subscriptions.ts).
-      const files = [
-        'src/pages/api/admin/invoices/[id].ts',
-        'src/lib/db/milestones.ts',
-        'src/lib/stripe/client.ts',
-      ]
-      for (const file of files) {
-        const code = readFileSync(resolve(file), 'utf-8')
-        expect(code, file).not.toContain("'ach_debit'")
-      }
-      expect(source()).toContain("['us_bank_account']")
-    })
-
-    it('handles reschedule action — re-issues in Stripe before voiding the original', () => {
-      const code = source()
-      expect(code).toContain("action === 'reschedule'")
-      expect(code).toContain('dueDateToStripeTimestamp')
-      // Replacement first, row repointed second, original voided last, so the
-      // row never references a voided invoice with nothing payable behind it.
-      const create = code.indexOf('createStripeInvoice(env.STRIPE_API_KEY, params)')
-      const repoint = code.indexOf('stripe_invoice_id: created.id')
-      const voidOld = code.indexOf('voidStripeInvoice(env.STRIPE_API_KEY, previousStripeId)')
-      expect(create).toBeGreaterThan(-1)
-      expect(repoint).toBeGreaterThan(create)
-      expect(voidOld).toBeGreaterThan(repoint)
-      expect(code).toContain('error=stale_stripe_invoice')
-    })
-
-    it('handles mark_paid action — manual override for offline payments', () => {
-      const code = source()
-      expect(code).toContain("action === 'mark_paid'")
-      expect(code).toContain("payment_method = 'manual'")
-    })
-
-    it('mark_paid activates engagement for deposit invoices', () => {
-      const code = source()
-      expect(code).toContain("existing.type === 'deposit'")
-      expect(code).toContain("status = 'active'")
-    })
-
-    it('sends notification email when invoice is sent', () => {
-      const code = source()
-      expect(code).toContain('invoiceSentEmailHtml')
-      expect(code).toContain('sendEmail')
-    })
-  })
-})
-
-describe('invoices: email templates', () => {
-  const source = () => readFileSync(resolve('src/lib/email/templates.ts'), 'utf-8')
-
-  it('exports invoiceSentEmailHtml function', () => {
-    expect(source()).toContain('export function invoiceSentEmailHtml')
-  })
-
-  it('invoiceSentEmailHtml includes clientName, amount, and portalUrl parameters', () => {
-    const code = source()
-    expect(code).toContain('invoiceSentEmailHtml(')
-    expect(code).toContain('clientName: string')
-    expect(code).toContain('amount: string')
-    expect(code).toContain('portalUrl: string')
-  })
-
-  it('invoiceSentEmailHtml mentions invoice is ready', () => {
-    expect(source()).toContain('invoice from ${BRAND_NAME}')
-  })
-
-  it('exports paymentConfirmationEmailHtml function', () => {
-    expect(source()).toContain('export function paymentConfirmationEmailHtml')
-  })
-
-  it('paymentConfirmationEmailHtml includes clientName and amount parameters', () => {
-    const code = source()
-    expect(code).toContain('paymentConfirmationEmailHtml(clientName: string, amount: string)')
-  })
-
-  it('paymentConfirmationEmailHtml confirms payment received', () => {
-    expect(source()).toContain('received your payment')
-  })
-})
-
-describe('invoices: env.d.ts bindings', () => {
-  const source = () => readFileSync(resolve('src/env.d.ts'), 'utf-8')
-
-  it('declares STRIPE_API_KEY in CfEnv', () => {
-    expect(source()).toContain('STRIPE_API_KEY')
-  })
-
-  it('declares STRIPE_WEBHOOK_SECRET in CfEnv', () => {
-    expect(source()).toContain('STRIPE_WEBHOOK_SECRET')
-  })
-
-  it('Stripe bindings are optional (using ?)', () => {
-    const code = source()
-    expect(code).toContain('STRIPE_API_KEY?: string')
-    expect(code).toContain('STRIPE_WEBHOOK_SECRET?: string')
-  })
-})
-
-describe('invoices: portal dashboard integration', () => {
-  const source = () => readFileSync(resolve('src/pages/portal/index.astro'), 'utf-8')
-
-  it('surfaces the pending invoice as the dominant action', () => {
-    // Portal IA rebuild: the pending-invoice action moved from the home
-    // rail into the Billing offering card (home-cards.ts), which deep-links
-    // the specific invoice. Keep users one tap away from payment.
-    const cards = readFileSync(resolve('src/lib/portal/home-cards.ts'), 'utf-8')
-    expect(cards).toContain("i.status === 'sent' || i.status === 'overdue'")
-    expect(cards).toContain('/portal/billing/invoices/')
-    expect(cards).toContain('Pay invoice')
-    expect(source()).toContain('loadHomeCards')
-  })
-
-  it('links paid and sent invoices from the activity timeline', () => {
-    const code = source()
-    expect(code).toContain('/portal/billing/invoices/')
-    expect(code).toMatch(/Invoice #/)
+  it('the list signals action through tone, not a second Pay control beside the card link (UI-PATTERNS R2)', () => {
+    expect(list).toContain('resolveInvoiceTone')
+    expect(list).not.toMatch(/\bPay\b/)
+    expect(list).not.toContain('Payment link pending')
   })
 })

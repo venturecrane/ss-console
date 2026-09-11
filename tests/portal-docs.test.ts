@@ -1,197 +1,337 @@
-import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync } from 'fs'
-import { resolve } from 'path'
+/**
+ * Behavioural tests for the portal document surface: the download route
+ * (src/pages/api/portal/documents/[...key].ts), the offerings resolver
+ * (src/lib/portal/offerings.ts), and the R2 listing helpers.
+ *
+ * Until 2026-09-11 this file matched source text (review 2026-09-10, Testing
+ * 3). The route is now driven end to end: a migrated D1 for the client, the
+ * engagement and the agreement rows, an in-memory R2 for the objects, and
+ * the Clerk seam faked the way tests/middleware-behavior.test.ts fakes it.
+ * Every refusal path is exercised, since the route is the only thing between
+ * a signed-in client and every other client's files.
+ */
 
-describe('portal: engagement progress page', () => {
-  const source = () =>
-    readFileSync(resolve('src/pages/portal/engagement/index.astro'), 'utf-8') +
-    readFileSync(resolve('src/layouts/PortalShell.astro'), 'utf-8')
+import { describe, it, expect, beforeEach } from 'vitest'
+import type { D1Database } from '@cloudflare/workers-types'
+import {
+  deriveOfferings,
+  hasPortalVisibleInvoices,
+  humanizeSlug,
+  resolvePortalOfferings,
+} from '../src/lib/portal/offerings'
+import type { SubscriptionRow } from '../src/lib/portal/product-access'
+import type { Engagement } from '../src/lib/db/engagements'
+import type { Quote } from '../src/lib/db/quotes'
+import { listDocuments, streamDocument } from '../src/lib/storage/r2'
+import { GET } from '../src/pages/api/portal/documents/[...key]'
+import {
+  bindEnv,
+  memoryBucket,
+  migratedDb,
+  portalLocals,
+  seedEngagement,
+  seedEntity,
+  seedOrg,
+  seedPortalUser,
+  type MemoryBucket,
+} from './_stubs/behavioural'
+import { ORG_ID } from '../src/lib/constants'
 
-  it('engagement progress page exists', () => {
-    expect(existsSync(resolve('src/pages/portal/engagement/index.astro'))).toBe(true)
+// The Clerk bridge binds a portal user to an entity only under the SMD tenant.
+const ORG = ORG_ID
+const ENT = 'ent-a'
+const ENT_OTHER = 'ent-other'
+const ENG = 'eng-a'
+const QUOTE = `quote-${ENG}`
+const CLERK_ID = 'user_clerk_docs'
+const USER_ID = 'u-docs'
+
+describe('GET /api/portal/documents/[...key]', () => {
+  let db: D1Database
+  let storage: MemoryBucket
+
+  const call = (key: string | undefined, clerkUserId: string | null = CLERK_ID) =>
+    GET({
+      locals: portalLocals({ clerkUserId }),
+      params: { key },
+    } as unknown as Parameters<typeof GET>[0])
+
+  const engagementDoc = `${ORG}/engagements/${ENG}/docs/plan.pdf`
+
+  beforeEach(async () => {
+    db = await migratedDb()
+    storage = memoryBucket()
+    await seedOrg(db, ORG)
+    await seedEntity(db, { id: ENT, orgId: ORG, stage: 'engaged' })
+    await seedEntity(db, { id: ENT_OTHER, orgId: ORG, stage: 'engaged' })
+    await seedEngagement(db, { id: ENG, orgId: ORG, entityId: ENT })
+    await seedEngagement(db, { id: 'eng-other', orgId: ORG, entityId: ENT_OTHER })
+    await seedPortalUser(db, { id: USER_ID, orgId: ORG, clerkUserId: CLERK_ID, entityId: ENT })
+    await seedPortalUser(db, {
+      id: 'u-unbound',
+      orgId: ORG,
+      clerkUserId: 'user_unbound',
+      entityId: null,
+    })
+    await storage.bucket.put(engagementDoc, '%PDF plan')
+    bindEnv({ DB: db, STORAGE: storage.bucket })
   })
 
-  it('loads engagement data via listEngagements', () => {
-    expect(source()).toContain('resolvePortalOfferings')
+  it('400 without a key, 401 signed out, 403 for a user with no entity', async () => {
+    expect((await call(undefined)).status).toBe(400)
+    expect((await call(engagementDoc, null)).status).toBe(401)
+    expect((await call(engagementDoc, 'user_unbound')).status).toBe(403)
   })
 
-  it('loads milestones via listMilestones', () => {
-    expect(source()).toContain('listMilestones')
+  it('refuses a key outside the org prefixes, a traversal, and a key under another client of the same org', async () => {
+    for (const key of [
+      `org-b/engagements/${ENG}/docs/plan.pdf`,
+      `${ORG}/engagements/${ENG}/../eng-other/docs/plan.pdf`,
+      `${ORG}//engagements/${ENG}/docs/plan.pdf`,
+      `${ORG}/engagements/eng-other/docs/plan.pdf`,
+      `orgs/${ORG}/quotes/quote-eng-other/sow/r/signed.pdf`,
+    ]) {
+      const res = await call(key)
+      expect(res.status, key).toBe(403)
+      expect(await res.json()).toMatchObject({ error: 'forbidden' })
+    }
   })
 
-  it('resolves entity via getPortalClient (Clerk-aware signature)', () => {
-    // After PR #906 the portal session resolver takes Astro.locals
-    // (Clerk-aware) instead of (userId, orgId). session.userId is
-    // gone from portal pages.
-    const code = source()
-    expect(code).toContain('getPortalClient(env.DB, Astro.locals)')
+  it('streams an engagement document inline when it is a PDF, as an attachment otherwise, and 404s a missing object', async () => {
+    const pdf = await call(engagementDoc)
+    expect(pdf.status).toBe(200)
+    expect(pdf.headers.get('Content-Type')).toBe('application/pdf')
+    expect(pdf.headers.get('Content-Disposition')).toBe('inline; filename="plan.pdf"')
+    expect(pdf.headers.get('Cache-Control')).toBe('private, max-age=3600')
+    expect(await pdf.text()).toBe('%PDF plan')
+
+    const docxKey = `${ORG}/engagements/${ENG}/docs/notes.docx`
+    await storage.bucket.put(docxKey, 'docx')
+    const docx = await call(docxKey)
+    expect(docx.headers.get('Content-Type')).toBe(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
+    expect(docx.headers.get('Content-Disposition')).toBe('attachment; filename="notes.docx"')
+
+    expect((await call(`${ORG}/engagements/${ENG}/docs/gone.pdf`)).status).toBe(404)
   })
 
-  it('separates terminal engagements from the active one (offerings resolver)', () => {
-    // The completed/cancelled filter moved into the shared offerings
-    // resolver during the portal IA rebuild; the page renders active and
-    // past engagements from its output.
-    const resolver = readFileSync(resolve('src/lib/portal/offerings.ts'), 'utf-8')
-    expect(resolver).toContain("'completed'")
-    expect(resolver).toContain("'cancelled'")
-    expect(source()).toContain('pastEngagements')
+  it("serves the client's SOW revisions under both the legacy and the orgs/ prefix", async () => {
+    const legacy = `${ORG}/quotes/${QUOTE}/sow.pdf`
+    const revisioned = `orgs/${ORG}/quotes/${QUOTE}/sow/rev-1/signed.pdf`
+    await storage.bucket.put(legacy, 'legacy')
+    await storage.bucket.put(revisioned, 'signed')
+    expect(await (await call(legacy)).text()).toBe('legacy')
+    expect(await (await call(revisioned)).text()).toBe('signed')
   })
 
-  it('shows milestone status indicators for all states', () => {
-    const code = source()
-    expect(code).toContain('pending')
-    expect(code).toContain('in_progress')
-    expect(code).toContain('completed')
-    expect(code).toContain('skipped')
-  })
+  it('an executed Operator agreement is authorized by its own row and a principal or compliance role, never by prefix', async () => {
+    const key = `${ORG}/engagements/${ENG}/docs/agreement.pdf`
+    await storage.bucket.put(key, 'agreement')
+    await db
+      .prepare(
+        `INSERT INTO operator_agreement_documents (id, org_id, entity_id, instance_slug, title, executed_on, storage_key, file_name)
+         VALUES ('agr-1', ?, ?, 'alpha', 'Operator Service Agreement', '2026-09-01', ?, 'agreement.pdf')`
+      )
+      .bind(ORG, ENT_OTHER, key)
+      .run()
+    // The key sits under this client's engagement prefix, but the row names
+    // another entity: refused, with no second chance at the prefix checks.
+    expect((await call(key)).status).toBe(403)
 
-  it('displays scope summary', () => {
-    expect(source()).toContain('scope_summary')
-  })
+    await db
+      .prepare('UPDATE operator_agreement_documents SET entity_id = ? WHERE id = ?')
+      .bind(ENT, 'agr-1')
+      .run()
+    expect((await call(key)).status).toBe(403)
 
-  it('displays timeline information', () => {
-    const code = source()
-    expect(code).toContain('start_date')
-    expect(code).toContain('estimated_end')
-  })
-
-  it('shows empty state when no active engagement', () => {
-    expect(source()).toContain('No active engagement')
-  })
-
-  it('is not indexed by search engines', () => {
-    expect(source()).toContain('noindex')
-  })
-})
-
-describe('portal: documents page', () => {
-  const source = () =>
-    readFileSync(resolve('src/pages/portal/engagement/documents/index.astro'), 'utf-8') +
-    readFileSync(resolve('src/layouts/PortalShell.astro'), 'utf-8')
-
-  it('documents page exists', () => {
-    expect(existsSync(resolve('src/pages/portal/engagement/documents/index.astro'))).toBe(true)
-  })
-
-  it('lists R2 documents via listDocuments', () => {
-    expect(source()).toContain('listDocuments')
-  })
-
-  it('includes SOW PDF from quote', () => {
-    const code = source()
-    expect(code).toContain('getSOWStateForQuote')
-    expect(code).toContain('downloadableRevision')
-    expect(code).toContain('Statement of Work')
-  })
-
-  it('scopes document listing to org/engagement prefix', () => {
-    // After PR #906 orgId is resolved from the Clerk-bridged local user
-    // (portalData.user.org_id) rather than the magic-link session.
-    const code = source()
-    expect(code).toContain('portalData.user.org_id')
-    expect(code).toContain('engagement.id')
-    expect(code).toContain('/docs/')
-  })
-
-  it('shows empty state when no documents', () => {
-    expect(source()).toContain('Documents will appear here as your engagement progresses')
-  })
-
-  it('provides download links to document API', () => {
-    expect(source()).toContain('/api/portal/documents/')
-  })
-
-  it('is not indexed by search engines', () => {
-    expect(source()).toContain('noindex')
-  })
-})
-
-describe('portal: document download route', () => {
-  const source = () => readFileSync(resolve('src/pages/api/portal/documents/[...key].ts'), 'utf-8')
-
-  it('document download route exists', () => {
-    expect(existsSync(resolve('src/pages/api/portal/documents/[...key].ts'))).toBe(true)
-  })
-
-  it('verifies portal session via Clerk identity bridge', () => {
-    // Portal API routes now authenticate via getPortalClient (Clerk-aware)
-    // rather than inspecting session.role. Unauthenticated requests get
-    // 401; authenticated-but-unprovisioned get 403 Forbidden.
-    const code = source()
-    expect(code).toContain('getPortalClient(env.DB, locals)')
-    expect(code).toContain('unauthorized')
-  })
-
-  it('prevents path traversal with .. check', () => {
-    const code = source()
-    expect(code).toContain("'..'")
-    expect(code).toContain("'//'")
-    expect(code).toContain('Forbidden')
-  })
-
-  it('verifies key starts with org prefix', () => {
-    // After PR #906 the orgId for path-prefix checks is sourced from
-    // portalData.user.org_id (resolved via the Clerk bridge), not the
-    // magic-link session.
-    const code = source()
-    expect(code).toContain('portalData.user.org_id')
-    expect(code).toContain('startsWith')
-  })
-
-  it('verifies key belongs to client engagement or quote', () => {
-    const code = source()
-    expect(code).toContain('isEngagementDoc')
-    expect(code).toContain('isQuoteDoc')
-    expect(code).toContain('listEngagements')
-  })
-
-  it('accepts SOW revision keys under the orgs/{orgId}/quotes/ prefix', () => {
-    // SOW revisions are stored at `orgs/{orgId}/quotes/{qid}/sow/...` per
-    // getSowRevisionSignedKey(). The handler must not reject these as off-org.
-    // After PR #906 the orgId interpolation uses portalData.user.org_id.
-    const code = source()
-    expect(code).toContain('orgs/${portalData.user.org_id}/')
-    expect(code).toContain('orgs/${portalData.user.org_id}/quotes/${qid}/')
-  })
-
-  it('streams document from R2', () => {
-    expect(source()).toContain('streamDocument')
-  })
-
-  it('sets Content-Disposition inline for PDFs', () => {
-    const code = source()
-    expect(code).toContain('inline')
-    expect(code).toContain('attachment')
-    expect(code).toContain('Content-Disposition')
-  })
-
-  it('sets Content-Type based on file extension', () => {
-    const code = source()
-    expect(code).toContain('Content-Type')
-    expect(code).toContain('application/pdf')
-    expect(code).toContain('application/octet-stream')
+    await db
+      .prepare(
+        `INSERT INTO product_roles (id, org_id, user_id, entity_id, product_slug, role) VALUES ('pr-1', ?, ?, ?, 'operator', 'principal')`
+      )
+      .bind(ORG, USER_ID, ENT)
+      .run()
+    const allowed = await call(key)
+    expect(allowed.status).toBe(200)
+    expect(await allowed.text()).toBe('agreement')
   })
 })
 
-describe('R2 helpers: listDocuments and streamDocument', () => {
-  const source = () => readFileSync(resolve('src/lib/storage/r2.ts'), 'utf-8')
-
-  it('exports listDocuments function', () => {
-    expect(source()).toContain('export async function listDocuments')
+describe('portal offerings', () => {
+  const engagement = (id: string, status: string) => ({ id, status }) as Engagement
+  const quote = (id: string, status: string) => ({ id, status }) as Quote
+  const subscription = (over: Partial<SubscriptionRow>): SubscriptionRow => ({
+    id: 'sub',
+    org_id: ORG,
+    entity_id: ENT,
+    product_slug: 'operator',
+    instance_slug: 'alpha',
+    status: 'active',
+    started_at: '',
+    ended_at: null,
+    settings_json: null,
+    service_id: null,
+    stripe_subscription_id: null,
+    created_at: '',
+    updated_at: '',
+    ...over,
   })
 
-  it('exports streamDocument function', () => {
-    expect(source()).toContain('export async function streamDocument')
+  it('humanizeSlug title-cases a kebab slug', () => {
+    expect(humanizeSlug('pilot-smokeball')).toBe('Pilot Smokeball')
+    expect(humanizeSlug('alpha')).toBe('Alpha')
+    expect(humanizeSlug('a--b')).toBe('A B')
   })
 
-  it('listDocuments uses prefix parameter', () => {
-    const code = source()
-    expect(code).toContain('prefix')
-    expect(code).toContain('r2.list')
+  it('separates the active engagement from past ones and finds the open proposal; both can be true at once', () => {
+    const offerings = deriveOfferings({
+      engagements: [
+        engagement('done', 'completed'),
+        engagement('live', 'active'),
+        engagement('gone', 'cancelled'),
+      ],
+      quotes: [quote('q1', 'accepted'), quote('q2', 'sent')],
+      subscriptions: [],
+      operatorConfigs: [],
+      hasInvoices: false,
+    })
+    expect(offerings.engagement.present).toBe(true)
+    expect(offerings.engagement.activeEngagement?.id).toBe('live')
+    expect(offerings.engagement.pastEngagements.map((e) => e.id)).toEqual(['done', 'gone'])
+    expect(offerings.engagement.openProposal?.id).toBe('q2')
+    expect(offerings.operators).toEqual([])
+    expect(offerings.hostedAgent).toBeNull()
+    expect(offerings.preGoLiveLanding).toBeNull()
   })
 
-  it('streamDocument returns R2 object', () => {
-    const code = source()
-    expect(code).toContain('r2.get')
+  it('a billing relationship exists once there is invoice history or a subscription past provisioning', () => {
+    const base = { engagements: [], quotes: [], operatorConfigs: [] }
+    expect(
+      deriveOfferings({ ...base, subscriptions: [], hasInvoices: false }).hasBillingRelationship
+    ).toBe(false)
+    expect(
+      deriveOfferings({ ...base, subscriptions: [], hasInvoices: true }).hasBillingRelationship
+    ).toBe(true)
+    expect(
+      deriveOfferings({
+        ...base,
+        subscriptions: [subscription({ status: 'provisioning' })],
+        hasInvoices: false,
+      }).hasBillingRelationship
+    ).toBe(false)
+    expect(
+      deriveOfferings({
+        ...base,
+        subscriptions: [subscription({ status: 'active' })],
+        hasInvoices: false,
+      }).hasBillingRelationship
+    ).toBe(true)
+  })
+
+  it('lists one operator per subscription, named by its active persona or the humanized slug, dropping a slug-less row', () => {
+    const offerings = deriveOfferings({
+      engagements: [],
+      quotes: [],
+      subscriptions: [
+        subscription({ id: 's1', instance_slug: 'alpha' }),
+        subscription({ id: 's2', instance_slug: 'beta-law' }),
+        subscription({ id: 's3', instance_slug: null }),
+        subscription({ id: 's4', product_slug: 'hosted-agent', instance_slug: null }),
+      ],
+      operatorConfigs: [{ customer_slug: 'alpha', displayName: 'Rae' }],
+      hasInvoices: true,
+    })
+    expect(offerings.operators.map((o) => [o.slug, o.displayName])).toEqual([
+      ['alpha', 'Rae'],
+      ['beta-law', 'Beta Law'],
+    ])
+    expect(offerings.hostedAgent?.id).toBe('s4')
+  })
+
+  it('pre-go-live, an operators-only client lands on the instance (one) or the list (many); anything live or engaged cancels it', () => {
+    const base = { engagements: [], quotes: [], operatorConfigs: [], hasInvoices: false }
+    const one = deriveOfferings({
+      ...base,
+      subscriptions: [subscription({ status: 'provisioning' })],
+    })
+    expect(one.preGoLiveLanding).toBe('/portal/products/operator/alpha')
+    const many = deriveOfferings({
+      ...base,
+      subscriptions: [
+        subscription({ id: 's1', status: 'provisioning', instance_slug: 'alpha' }),
+        subscription({ id: 's2', status: 'provisioning', instance_slug: 'beta' }),
+      ],
+    })
+    expect(many.preGoLiveLanding).toBe('/portal/products/operator')
+    expect(
+      deriveOfferings({ ...base, subscriptions: [subscription({ status: 'active' })] })
+        .preGoLiveLanding
+    ).toBeNull()
+    expect(
+      deriveOfferings({
+        ...base,
+        quotes: [quote('q', 'sent')],
+        subscriptions: [subscription({ status: 'provisioning' })],
+      }).preGoLiveLanding
+    ).toBeNull()
+  })
+
+  describe('against real D1', () => {
+    let db: D1Database
+
+    beforeEach(async () => {
+      db = await migratedDb()
+      await seedOrg(db, ORG)
+      await seedEntity(db, { id: ENT, orgId: ORG, stage: 'engaged' })
+      await seedEngagement(db, { id: ENG, orgId: ORG, entityId: ENT, status: 'completed' })
+    })
+
+    it('hasPortalVisibleInvoices sees sent, paid and overdue invoices, not drafts or voids', async () => {
+      expect(await hasPortalVisibleInvoices(db, ENT)).toBe(false)
+      for (const [id, status] of [
+        ['inv-draft', 'draft'],
+        ['inv-void', 'void'],
+      ]) {
+        await db
+          .prepare(
+            `INSERT INTO invoices (id, org_id, entity_id, type, amount, status) VALUES (?, ?, ?, 'deposit', 100, ?)`
+          )
+          .bind(id, ORG, ENT, status)
+          .run()
+      }
+      expect(await hasPortalVisibleInvoices(db, ENT)).toBe(false)
+      await db
+        .prepare(
+          `INSERT INTO invoices (id, org_id, entity_id, type, amount, status) VALUES ('inv-sent', ?, ?, 'deposit', 100, 'sent')`
+        )
+        .bind(ORG, ENT)
+        .run()
+      expect(await hasPortalVisibleInvoices(db, ENT)).toBe(true)
+    })
+
+    it('resolvePortalOfferings reads the rows and derives the same shape', async () => {
+      const offerings = await resolvePortalOfferings(db, ORG, ENT)
+      expect(offerings.engagement.present).toBe(true)
+      expect(offerings.engagement.activeEngagement).toBeNull()
+      expect(offerings.engagement.pastEngagements.map((e) => e.id)).toEqual([ENG])
+      expect(offerings.hasBillingRelationship).toBe(false)
+      expect(offerings.preGoLiveLanding).toBeNull()
+    })
+  })
+})
+
+describe('R2 document helpers', () => {
+  it('listDocuments returns the objects under a prefix; streamDocument returns the object or null', async () => {
+    const { bucket } = memoryBucket()
+    await bucket.put('org/engagements/e1/docs/a.pdf', 'a')
+    await bucket.put('org/engagements/e1/docs/b.pdf', 'b')
+    await bucket.put('org/engagements/e2/docs/c.pdf', 'c')
+    const listed = await listDocuments(bucket, 'org/engagements/e1/docs/')
+    expect(listed.map((o) => o.key).sort()).toEqual([
+      'org/engagements/e1/docs/a.pdf',
+      'org/engagements/e1/docs/b.pdf',
+    ])
+    expect(await (await streamDocument(bucket, 'org/engagements/e2/docs/c.pdf'))?.text()).toBe('c')
+    expect(await streamDocument(bucket, 'nope')).toBeNull()
   })
 })
