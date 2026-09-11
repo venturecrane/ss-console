@@ -156,7 +156,7 @@ from send_attribution import _usable_ids
 #: ss#2499 -- the msgraph half, factored verbatim into lib/msgraph_channel.py
 #: (module-size ratchet). Re-exported here so tests and callers read unchanged.
 from msgraph_channel import (
-    _GRAPH_MAX_PAGES,  # noqa: F401 — re-export (tests pin the page cap)
+    _GRAPH_MAX_PAGES,  # noqa: F401 — re-export: tests and callers read it from this module (tests pin the page cap)
     AUDIT_ROW_HEADER,  # noqa: F401 — re-export: tests and callers read it from this module
     MsGraphSeat,
     ReconcileError,

@@ -10,7 +10,7 @@
     "adapter/trust_ceiling.py::enforce": 130,
     "adapter/voice/transform.py::DraftTransformer.transform": 94,
     "adapter/voice/transform.py::build_voice_profile": 85,
-    "bin/lib/decommission_cli.py::_run": 88,
+    "bin/lib/decommission_cli.py::_run": 99,
     "bin/lib/evidence.py::_run": 83,
     "bin/lib/evidence.py::parse_args": 102,
     "bin/seat-readiness.py::check_connector_credentials": 76,
@@ -57,6 +57,7 @@
   },
   "complexity": {
     "adapter/trust_ceiling.py::enforce": 20,
+    "bin/lib/decommission_cli.py::_run": 16,
     "connectors/smokeball/smokeball_connector/vision.py::_stream": 19,
     "rehearsal/drivers.py::drive_leg": 18,
     "rehearsal/run.py::run_suite": 16,

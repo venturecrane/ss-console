@@ -91,14 +91,14 @@ from bin.lib.chain_pin import (  # noqa: E402 - the import needs the sys.path sh
 #: the cron-slot watchdog became its second consumer (same behavior, one
 #: client). Re-exported here so tests and callers read unchanged.
 from bin.lib.r2_lock_probe import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
-    LOCK_MIN_SECONDS,  # noqa: F401 — re-export (tests pin the commitment)
+    LOCK_MIN_SECONDS,  # noqa: F401 — re-export: tests and callers read it from this module (tests pin the commitment)
     LockFetcher,  # noqa: F401 — re-export: tests and callers read it from this module
     bucket_lock_url,  # noqa: F401 — re-export: tests and callers read it from this module
     evaluate_lock_payload,  # noqa: F401 — re-export: tests and callers read it from this module
     probe_bucket_lock,
 )
 from bin.lib.chain_rehearsal import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
-    EXIT_REHEARSAL_FAILED,  # noqa: F401 — re-export (tests pin the codes)
+    EXIT_REHEARSAL_FAILED,  # noqa: F401 — re-export: tests and callers read it from this module (tests pin the codes)
     rehearse_mismatch as _rehearse_mismatch,
 )
 from bin.lib.console_d1 import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
@@ -106,8 +106,8 @@ from bin.lib.console_d1 import (  # noqa: E402 - the import needs the sys.path s
     DEFAULT_DB,
     ConsoleD1,
     Runner,  # noqa: F401 — re-export: tests and callers read it from this module
-    first_result_set,  # noqa: F401 — re-export (tests pin the envelope parse)
-    sql_int,  # noqa: F401 — re-export (tests pin the literal forms)
+    first_result_set,  # noqa: F401 — re-export: tests and callers read it from this module (tests pin the envelope parse)
+    sql_int,  # noqa: F401 — re-export: tests and callers read it from this module (tests pin the literal forms)
     sql_text,  # noqa: F401 — re-export: tests and callers read it from this module
     utc_date,  # noqa: F401 — re-export: tests and callers read it from this module
     utc_now,
