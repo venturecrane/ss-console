@@ -181,5 +181,7 @@ async def try_write_emitted_wake(
             next_scheduled_at=next_scheduled_at,
             extra_metadata={**decision.extra_metadata, **plan_counts(decision)},
         )
-    except Exception:  # noqa: BLE001 — observability never gates the wake
-        pass
+    except Exception as exc:  # noqa: BLE001 - observability never gates the wake; the failure is written to stderr and the wake proceeds
+        sys.stderr.write(
+            "[pre_run] blind-wake emitted-wake row write failed (" + type(exc).__name__ + ": " + str(exc) + ")\n"
+        )
