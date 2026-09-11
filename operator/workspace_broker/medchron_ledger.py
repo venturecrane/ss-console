@@ -97,6 +97,21 @@ CREATE_SQL = (
 )
 CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_medchron_jobs_created ON medchron_jobs(created_at)"
 
+# The duplicate lookup, with its placeholders written out rather than composed.
+# Composing them from ``TERMINAL`` reads as string-built SQL (ruff S608) even
+# though no caller value reaches the text, and a literal is easier to check by
+# eye anyway. The guard below is what keeps the literal honest: adding a
+# terminal state without widening the SQL would silently start matching
+# finished jobs as duplicates, refusing rebuilds the firm is entitled to.
+_TERMINAL_ORDERED = tuple(sorted(TERMINAL))
+if len(_TERMINAL_ORDERED) != 2:  # pragma: no cover - a wiring error, not a runtime path
+    raise RuntimeError(f"_ACTIVE_TWIN_SQL is written for 2 terminal states, TERMINAL has {len(_TERMINAL_ORDERED)}")
+_ACTIVE_TWIN_SQL = (
+    "SELECT id, state FROM medchron_jobs "
+    "WHERE work_digest = ? AND work_digest IS NOT NULL AND state NOT IN (?, ?) "
+    "ORDER BY created_at DESC LIMIT 1"
+)
+
 # ONE debit rule for pages, documents and cents: a job DEBITS THE MONTH IT WAS
 # CREATED IN whenever it recorded cents, in whatever state it ended. Two halves:
 #
@@ -157,6 +172,21 @@ class EnvelopeError(ValueError):
 
 def digest(obj: Any) -> str:
     return "sha256:" + hashlib.sha256(json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+#: The envelope fields that describe the WORK, as opposed to who asked for it.
+#: ``digest()`` over the whole envelope cannot answer "is this the same job?",
+#: because ``requested_by`` and ``request_ref`` are composed by the agent from
+#: the asking message: an administrator who asks twice in one thread produces
+#: two different envelope digests for one piece of work, and the second one is a
+#: second bill. The work digest excludes provenance so the duplicate is visible,
+#: and excludes ``cap_usd`` so lowering the cap on a retry still reads as the
+#: same job rather than a new one.
+_WORK_KEYS = ("matter", "units", "incident", "injuries", "selection")
+
+
+def work_digest(envelope: dict[str, Any]) -> str:
+    return digest({k: envelope[k] for k in _WORK_KEYS if k in envelope})
 
 
 def validate_envelope(req: dict[str, Any]) -> dict[str, Any]:
@@ -259,6 +289,31 @@ def _medchron_skill_settings(path: str | Path) -> dict[str, Any] | None:
     return None
 
 
+def admins_from_customer_yaml(path: str | Path) -> tuple[str, ...] | None:
+    """The firm's Named Administrators (``scope.admins``), lowercased.
+
+    ``None`` means the list could not be read at all, which is NOT the same as
+    an empty list: an unreadable seat config must refuse rather than admit
+    everybody, and an empty authored list is the firm saying no administrator
+    exists yet. Both refuse; they are kept distinct so the refusal can say which
+    it is, because "your config did not load" and "nobody is authorized yet" are
+    different problems for the firm to fix.
+    """
+    try:
+        import yaml
+
+        doc = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    except Exception:  # noqa: BLE001 - an unreadable seat config is "cannot evaluate", never "permitted"
+        return None
+    scope = doc.get("scope")
+    if not isinstance(scope, dict) or "admins" not in scope:
+        return None
+    admins = scope.get("admins")
+    if not isinstance(admins, list):
+        return None
+    return tuple(sorted({str(a).strip().lower() for a in admins if str(a or "").strip()}))
+
+
 def cycle_from_customer_yaml(path: str | Path) -> tuple[int | None, str | None]:
     """The firm's authored billing-cycle anchor and its effective-from date.
 
@@ -316,6 +371,15 @@ class MedchronLedger:
         try:
             conn.execute(CREATE_SQL)
             conn.execute(CREATE_INDEX_SQL)
+            # CREATE TABLE IF NOT EXISTS does nothing to a table that already
+            # exists, so a seat whose ledger predates the duplicate guard needs
+            # the column added rather than declared. Adding it nullable is
+            # deliberate: rows written before this release have no work digest
+            # and must not be guessed at, and `active_duplicate` treats NULL as
+            # "not a match" so an old row can never masquerade as a duplicate.
+            have = {r["name"] for r in conn.execute("PRAGMA table_info(medchron_jobs)")}
+            if "work_digest" not in have:
+                conn.execute("ALTER TABLE medchron_jobs ADD COLUMN work_digest TEXT")
             conn.commit()
         finally:
             conn.close()
@@ -431,7 +495,7 @@ class MedchronLedger:
         try:
             conn.execute(
                 "INSERT INTO medchron_jobs (id, created_at, updated_at, state, matter_id, matter_number, requester, "
-                "request_ref, envelope_digest) VALUES (?,?,?,?,?,?,?,?,?)",
+                "request_ref, envelope_digest, work_digest) VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (
                     job_id,
                     now,
@@ -442,6 +506,7 @@ class MedchronLedger:
                     envelope.get("requested_by"),
                     envelope.get("request_ref"),
                     digest(envelope),
+                    work_digest(envelope),
                 ),
             )
             conn.commit()
@@ -453,6 +518,29 @@ class MedchronLedger:
         tmp.chmod(0o640)
         tmp.replace(self.queue_dir / f"{job_id}.json")
         return job_id
+
+    def active_duplicate(self, envelope: dict[str, Any]) -> tuple[str, str] | None:
+        """``(job_id, state)`` of a job already doing THIS work and not yet
+        finished, or None.
+
+        Terminal jobs are deliberately not matched: a delivered package the firm
+        wants rebuilt, or a failed one worth retrying, is a legitimate second
+        submission. A HELD job is matched, because a resubmission of held work
+        would hold again at the same gate and the useful answer is to name the
+        job waiting on a decision rather than to queue a twin behind it.
+
+        The state rides along so the refusal can say what is true of THIS job.
+        "Already running" reads as reassurance, and saying it about a job that
+        stopped hours ago for a spend decision would be the kind of confident
+        wrong sentence a person then relays to a client.
+        """
+        want = work_digest(envelope)
+        conn = self._connect()
+        try:
+            row = conn.execute(_ACTIVE_TWIN_SQL, (want, *_TERMINAL_ORDERED)).fetchone()
+            return (str(row["id"]), str(row["state"])) if row is not None else None
+        finally:
+            conn.close()
 
     # -- read --------------------------------------------------------------
     def read(self, job_id: str) -> dict[str, Any] | None:
