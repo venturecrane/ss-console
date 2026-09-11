@@ -164,7 +164,7 @@ from msgraph_channel import (
     graph_token,
     list_sent_msgraph,
     msgraph_seats,
-    normalize_graph_message,  # noqa: F401 — re-export (tests drive the matcher through it)
+    normalize_graph_message,  # noqa: F401 — re-export: tests and callers read it from this module (tests drive the matcher through it)
 )
 from msgraph_channel import AUDIT_TOKEN_KEY as _AUDIT_TOKEN_KEY
 
