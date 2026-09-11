@@ -90,6 +90,20 @@ const CONDITION_LABEL: Record<string, string> = {
 }
 
 /**
+ * Every unprefixed condition the worker can write into fleet_alert_state, for
+ * the guard test that inserts each one through the real migration chain. The
+ * table's `condition` column carries a CHECK constraint that SQLite cannot
+ * ALTER, so a new condition without a widening migration is a REJECTED row:
+ * the email goes out (it is sent before the row is written) and nothing is
+ * recorded, so the next tick pages again, forever. That is what 'edge_down'
+ * did on 2026-09-11 between #2775 and migration 0116.
+ *
+ * @public Guard surface. tests/fleet-alert-conditions-migrated.test.ts imports it to insert
+ * every name through the applied migrations. No runtime caller, by design.
+ */
+export const UNPREFIXED_CONDITIONS: readonly string[] = Object.keys(CONDITION_LABEL)
+
+/**
  * The hard_stop detail line, which is the only place the reader learns WHY.
  *
  * The subject deliberately names no meter (see CONDITION_LABEL.hard_stop), so
