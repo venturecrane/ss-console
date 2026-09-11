@@ -152,7 +152,7 @@ describe('POST /api/webhooks/resend', () => {
     expect(res.status).toBe(400)
 
     const json = await res.json<{ error: string }>()
-    expect(json.error).toBe('Malformed event payload')
+    expect(json.error).toBe('validation_failed')
   })
 
   it('records an event and re-attributes to the entity via the sent row', async () => {

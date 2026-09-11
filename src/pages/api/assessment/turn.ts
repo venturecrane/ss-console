@@ -34,7 +34,7 @@ import {
   issueAssessmentSession,
   verifyAssessmentSession,
 } from '../../../lib/assessment/session'
-import { jsonResponse } from '../../../lib/api/helpers'
+import { jsonResponse, errorResponse } from '../../../lib/api/helpers'
 
 const RATE_LIMIT_PER_HOUR = 200
 const MAX_TURNS = 60
@@ -45,10 +45,6 @@ export interface ParsedTurnRequest {
   turns: Turn[]
   /** Present once the opening turn has issued a session; absent on the opener. */
   session: string | null
-}
-
-function json(status: number, body: unknown): Response {
-  return jsonResponse(status, body)
 }
 
 /** Narrow one array element into a `Turn`, or null if it is not a valid turn. */
@@ -108,17 +104,17 @@ export const POST: APIRoute = async ({ request, clientAddress }: APIContext) => 
     clientAddress,
     RATE_LIMIT_PER_HOUR
   )
-  if (!rate.allowed) return json(429, { error: 'Too many requests. Please slow down.' })
+  if (!rate.allowed) return errorResponse(429, 'rate_limited')
 
   let body: unknown
   try {
     body = await request.json()
   } catch {
-    return json(400, { error: 'Invalid JSON.' })
+    return errorResponse(400, 'invalid_json')
   }
 
   const parsed = parseTurnRequest(body)
-  if (parsed === null) return json(400, { error: 'Invalid request.' })
+  if (parsed === null) return errorResponse(400, 'validation_failed', 'Invalid request.')
 
   // Opening turn: serve the warm opening as a fixed constant — NO LLM call — and
   // mint the session that gates every turn after it. Serving the opening
@@ -127,7 +123,7 @@ export const POST: APIRoute = async ({ request, clientAddress }: APIContext) => 
   // invoked once the owner has actually replied (a continuing turn below).
   if (isOpeningTurn(parsed)) {
     const session = await issueAssessmentSession()
-    return json(200, { ...assessmentOpening(), session: session.token })
+    return jsonResponse(200, { ...assessmentOpening(), session: session.token })
   }
 
   // Continuing turns must present a valid signed session, and each one is
@@ -135,26 +131,37 @@ export const POST: APIRoute = async ({ request, clientAddress }: APIContext) => 
   // closed on every bad-token path. This is the layer that survives IP
   // rotation: the ceiling is bound to the signed session, not the address.
   if (parsed.session === null) {
-    return json(401, { error: 'Missing assessment session. Please restart the assessment.' })
+    return errorResponse(
+      401,
+      'session_invalid',
+      'Missing assessment session. Please restart the assessment.'
+    )
   }
   const verified = await verifyAssessmentSession(parsed.session)
   if (!verified.ok) {
-    return json(401, { error: 'Your assessment session is no longer valid. Please restart.' })
+    return errorResponse(
+      401,
+      'session_invalid',
+      'Your assessment session is no longer valid. Please restart.'
+    )
   }
   const charge = await consumeSessionTurn(env.BOOKING_CACHE, verified.payload.sid)
   if (!charge.ok) {
-    return json(429, {
-      error: 'This assessment has reached its length limit. Please restart to continue.',
-    })
+    return errorResponse(
+      429,
+      'session_limit_reached',
+      'This assessment has reached its length limit. Please restart to continue.'
+    )
   }
 
   // Only continuing turns invoke the model, so the API-key gate lives here.
-  if (!env.ANTHROPIC_API_KEY) return json(503, { error: 'Assessment is temporarily unavailable.' })
+  if (!env.ANTHROPIC_API_KEY)
+    return errorResponse(503, 'unavailable', 'Assessment is temporarily unavailable.')
 
   try {
     const result = await assessmentTurn(env.ANTHROPIC_API_KEY, parsed.turns)
-    return json(200, result)
+    return jsonResponse(200, result)
   } catch {
-    return json(502, { error: 'The operator could not respond. Please try again.' })
+    return errorResponse(502, 'unavailable', 'The operator could not respond. Please try again.')
   }
 }

@@ -1,4 +1,4 @@
-import { jsonResponse } from '../../../lib/api/helpers'
+import { jsonResponse, errorResponse } from '../../../lib/api/helpers'
 import type { APIRoute } from 'astro'
 import { ORG_ID } from '../../../lib/constants'
 import { BOOKING_CONFIG } from '../../../lib/booking/config'
@@ -51,10 +51,7 @@ export const GET: APIRoute = async ({ url, request }) => {
     SLOTS_PER_IP_PER_HOUR
   )
   if (!rateLimitResult.allowed) {
-    return jsonResponse(429, {
-      error: 'rate_limited',
-      message: 'Too many booking attempts. Please try again later.',
-    })
+    return errorResponse(429, 'rate_limited', 'Too many booking attempts. Please try again later.')
   }
 
   try {
@@ -62,30 +59,36 @@ export const GET: APIRoute = async ({ url, request }) => {
     const integration = await getIntegration(env.DB, ORG_ID, 'google_calendar')
 
     if (!integration) {
-      return jsonResponse(503, {
-        error: 'calendar_unavailable',
-        message: 'Online booking is temporarily unavailable.',
-        fallback: {
-          type: 'email',
-          email: FALLBACK_EMAIL,
-          message: `Please email ${FALLBACK_EMAIL} to schedule your call.`,
-        },
-      })
+      return errorResponse(
+        503,
+        'calendar_unavailable',
+        'Online booking is temporarily unavailable.',
+        {
+          fallback: {
+            type: 'email',
+            email: FALLBACK_EMAIL,
+            message: `Please email ${FALLBACK_EMAIL} to schedule your call.`,
+          },
+        }
+      )
     }
 
     // 2. Get a valid access token (refreshes if needed)
     const accessToken = await getGoogleAccessToken(env.DB, integration, env)
 
     if (!accessToken) {
-      return jsonResponse(503, {
-        error: 'calendar_unavailable',
-        message: 'Online booking is temporarily unavailable.',
-        fallback: {
-          type: 'email',
-          email: FALLBACK_EMAIL,
-          message: `Please email ${FALLBACK_EMAIL} to schedule your call.`,
-        },
-      })
+      return errorResponse(
+        503,
+        'calendar_unavailable',
+        'Online booking is temporarily unavailable.',
+        {
+          fallback: {
+            type: 'email',
+            email: FALLBACK_EMAIL,
+            message: `Please email ${FALLBACK_EMAIL} to schedule your call.`,
+          },
+        }
+      )
     }
 
     // 3. Compute the time window
@@ -123,7 +126,7 @@ export const GET: APIRoute = async ({ url, request }) => {
     })
   } catch (err) {
     console.error('[api/booking/slots] Error:', err)
-    return jsonResponse(500, { error: 'Internal server error' })
+    return errorResponse(500, 'internal_error')
   }
 }
 

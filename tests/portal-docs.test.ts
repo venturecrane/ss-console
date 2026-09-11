@@ -119,7 +119,7 @@ describe('portal: document download route', () => {
     // 401; authenticated-but-unprovisioned get 403 Forbidden.
     const code = source()
     expect(code).toContain('getPortalClient(env.DB, locals)')
-    expect(code).toContain('Unauthorized')
+    expect(code).toContain('unauthorized')
   })
 
   it('prevents path traversal with .. check', () => {

@@ -183,7 +183,7 @@ async function dispatchInvoiceEvent(eventType: string, parsed: unknown): Promise
   }
   const eventResult = StripeInvoiceWebhookEventSchema.safeParse(parsed)
   if (!eventResult.success) {
-    return errorResponse(400, 'Malformed event payload')
+    return errorResponse(400, 'validation_failed', 'Malformed event payload.')
   }
   const invoice = eventResult.data.data.object
   const linkage = resolveStripeSubscriptionLinkage(invoice)
@@ -235,7 +235,7 @@ async function dispatchCheckoutEvent(eventType: string, parsed: unknown): Promis
   }
   const eventResult = StripeCheckoutSessionWebhookEventSchema.safeParse(parsed)
   if (!eventResult.success) {
-    return errorResponse(400, 'Malformed event payload')
+    return errorResponse(400, 'validation_failed', 'Malformed event payload.')
   }
   const session = eventResult.data.data.object
   const isOperator = session.metadata['product_slug'] === OPERATOR_CHECKOUT_PRODUCT_SLUG
@@ -283,7 +283,7 @@ async function dispatchSubscriptionEvent(
   }
   const eventResult = StripeSubscriptionWebhookEventSchema.safeParse(parsed)
   if (!eventResult.success) {
-    return errorResponse(400, 'Malformed event payload')
+    return errorResponse(400, 'validation_failed', 'Malformed event payload.')
   }
   return handleSubscriptionLifecycle(
     env.DB,
@@ -300,7 +300,7 @@ function parseStripeWebhookEvent(rawBody: string): ParseStripeWebhookEventResult
     return { parsed: JSON.parse(rawBody) as unknown }
   } catch {
     return {
-      response: errorResponse(400, 'Invalid JSON'),
+      response: errorResponse(400, 'invalid_json'),
     }
   }
 }
@@ -309,7 +309,7 @@ export const POST: APIRoute = async ({ request }) => {
   const webhookSecret = env.STRIPE_WEBHOOK_SECRET
   if (!webhookSecret) {
     console.error('[webhook/stripe] STRIPE_WEBHOOK_SECRET not configured')
-    return errorResponse(500, 'Server misconfigured')
+    return errorResponse(500, 'server_misconfigured')
   }
 
   // --- Signature verification ---
@@ -319,7 +319,7 @@ export const POST: APIRoute = async ({ request }) => {
   const isValid = await verifyStripeSignature(rawBody, signatureHeader, webhookSecret)
   if (!isValid) {
     console.error('[webhook/stripe] Invalid webhook signature')
-    return errorResponse(401, 'Invalid signature')
+    return errorResponse(401, 'invalid_signature')
   }
 
   // --- Parse payload ---
@@ -329,7 +329,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   const envelopeResult = StripeWebhookEnvelopeSchema.safeParse(parsed)
   if (!envelopeResult.success) {
-    return errorResponse(400, 'Invalid JSON')
+    return errorResponse(400, 'invalid_json')
   }
   const eventType = envelopeResult.data.type
 

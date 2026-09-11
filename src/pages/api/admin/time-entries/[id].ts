@@ -53,7 +53,7 @@ async function handlePost({ request, locals, redirect, params }: APIContext): Pr
 
   const entryId = params.id
   if (!entryId) {
-    return errorResponse(400, 'Time entry ID required')
+    return errorResponse(400, 'validation_failed', 'Time entry ID required.')
   }
 
   try {

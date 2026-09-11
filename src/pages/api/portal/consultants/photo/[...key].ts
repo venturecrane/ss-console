@@ -42,20 +42,20 @@ function isInvalidKey(key: string): boolean {
 export const GET: APIRoute = async ({ locals, params }) => {
   const key = params.key
   if (!key) {
-    return errorResponse(400, 'Key required')
+    return errorResponse(400, 'validation_failed', 'Key required.')
   }
 
   const portalData = await getPortalClient(env.DB, locals)
   if (!portalData) {
-    return errorResponse(401, 'Unauthorized')
+    return errorResponse(401, 'unauthorized')
   }
   if (!portalData.client) {
-    return errorResponse(403, 'Forbidden')
+    return errorResponse(403, 'forbidden', 'Forbidden.')
   }
 
   const engagementPrefix = `${portalData.user.org_id}/engagements/`
   if (!key.startsWith(engagementPrefix) || isInvalidKey(key)) {
-    return errorResponse(403, 'Forbidden')
+    return errorResponse(403, 'forbidden', 'Forbidden.')
   }
 
   const engagements = await listEngagements(env.DB, portalData.user.org_id, portalData.client.id)
@@ -63,12 +63,12 @@ export const GET: APIRoute = async ({ locals, params }) => {
     key.startsWith(`${engagementPrefix}${engagement.id}/`)
   )
   if (!isClientEngagementPhoto) {
-    return errorResponse(403, 'Forbidden')
+    return errorResponse(403, 'forbidden', 'Forbidden.')
   }
 
   const object = await env.CONSULTANT_PHOTOS.get(key)
   if (!object) {
-    return errorResponse(404, 'Not found')
+    return errorResponse(404, 'not_found', 'Not found.')
   }
 
   return new Response(object.body, {

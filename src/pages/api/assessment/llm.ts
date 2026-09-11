@@ -29,12 +29,8 @@ import {
   streamInterviewerCompletion,
   type OpenAIChatMessage,
 } from '../../../lib/claude/assessment-llm'
-import { jsonResponse } from '../../../lib/api/helpers'
+import { errorResponse } from '../../../lib/api/helpers'
 import { constantTimeEqual } from '../../../lib/auth/constant-time'
-
-function json(status: number, body: unknown): Response {
-  return jsonResponse(status, body)
-}
 
 /** Normalize OpenAI content, which may arrive as a string OR an array of parts (ElevenLabs/OpenAI multimodal). */
 function contentToString(content: unknown): string {
@@ -87,23 +83,23 @@ export const POST: APIRoute = async ({ request }: APIContext) => {
   const expected = env.ELEVENLABS_LLM_SECRET
   // Fail closed: no secret configured ⇒ refuse, never serve open. An open proxy
   // would let anyone spend our Anthropic budget.
-  if (!expected) return json(503, { error: 'unavailable' })
+  if (!expected) return errorResponse(503, 'unavailable')
   const auth = request.headers.get('authorization') ?? ''
   // Constant-time like every other shared-secret check in the tree; this is
   // the one public endpoint whose compromise spends the Anthropic budget.
-  if (!constantTimeEqual(auth, `Bearer ${expected}`)) return json(401, { error: 'unauthorized' })
+  if (!constantTimeEqual(auth, `Bearer ${expected}`)) return errorResponse(401, 'unauthorized')
 
-  if (!env.ANTHROPIC_API_KEY) return json(503, { error: 'unavailable' })
+  if (!env.ANTHROPIC_API_KEY) return errorResponse(503, 'unavailable')
 
   let body: unknown
   try {
     body = await request.json()
   } catch {
-    return json(400, { error: 'invalid json' })
+    return errorResponse(400, 'invalid_json')
   }
 
   const messages = parseMessages(body)
-  if (messages === null) return json(400, { error: 'invalid messages' })
+  if (messages === null) return errorResponse(400, 'validation_failed', 'Invalid messages.')
 
   // Diagnostic: metadata only (counts + roles), never content. Aids wrangler tail
   // while the voice channel is being stabilized.

@@ -1,6 +1,12 @@
 import type { APIContext, APIRoute } from 'astro'
 import { processIntakeSubmission } from '../../lib/booking/intake-core'
-import { trimString, isValidEmail, escapeHtml, jsonResponse } from '../../lib/api/helpers'
+import {
+  trimString,
+  isValidEmail,
+  escapeHtml,
+  jsonResponse,
+  errorResponse,
+} from '../../lib/api/helpers'
 import { rateLimitByIp } from '../../lib/booking/rate-limit'
 import { sendEmail } from '../../lib/email/resend'
 import { ORG_ID } from '../../lib/constants'
@@ -40,12 +46,14 @@ function validateIntakeBody(body: Record<string, unknown>): ValidatedIntake | Re
   const biggestChallenge = trimString(body.biggest_challenge)
 
   if (!name || !email || !businessName || !biggestChallenge) {
-    return jsonResponse(400, {
-      error: 'name, email, business_name, and biggest_challenge are required',
-    })
+    return errorResponse(
+      400,
+      'validation_failed',
+      'name, email, business_name, and biggest_challenge are required.'
+    )
   }
   if (!isValidEmail(email)) {
-    return jsonResponse(400, { error: 'Invalid email address' })
+    return errorResponse(400, 'invalid_email')
   }
 
   const ecRaw = trimString(body.employee_count) || null
@@ -91,7 +99,7 @@ async function handlePost({ request, clientAddress }: APIContext): Promise<Respo
   try {
     body = await request.json()
   } catch {
-    return jsonResponse(400, { error: 'Invalid JSON' })
+    return errorResponse(400, 'invalid_json')
   }
 
   // Honeypot check — bots fill this hidden field, humans don't
@@ -101,7 +109,7 @@ async function handlePost({ request, clientAddress }: APIContext): Promise<Respo
 
   const rateResult = await rateLimitByIp(env.BOOKING_CACHE, 'intake', clientAddress, RATE_LIMIT)
   if (!rateResult.allowed) {
-    return jsonResponse(429, { error: 'Too many submissions. Please try again later.' })
+    return errorResponse(429, 'rate_limited')
   }
 
   const validated = validateIntakeBody(body)
@@ -127,7 +135,7 @@ async function handlePost({ request, clientAddress }: APIContext): Promise<Respo
     return jsonResponse(201, { ok: true })
   } catch (err) {
     console.error('[api/intake] Error:', err)
-    return jsonResponse(500, { error: 'Internal server error' })
+    return errorResponse(500, 'internal_error')
   }
 }
 

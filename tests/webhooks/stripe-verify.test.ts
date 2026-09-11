@@ -128,7 +128,7 @@ describe('POST /api/webhooks/stripe — signature verification', () => {
     const res = await POST(buildContext({ body, signatureHeader: buildStripeHeader(ts, flipped) }))
     expect(res.status).toBe(401)
     const json = await parseJson<{ error: string }>(res)
-    expect(json.error).toBe('Invalid signature')
+    expect(json.error).toBe('invalid_signature')
   })
 
   it('rejects a request signed with the wrong secret', async () => {
@@ -138,7 +138,7 @@ describe('POST /api/webhooks/stripe — signature verification', () => {
     const res = await POST(buildContext({ body, signatureHeader: buildStripeHeader(ts, sig) }))
     expect(res.status).toBe(401)
     const json = await parseJson<{ error: string }>(res)
-    expect(json.error).toBe('Invalid signature')
+    expect(json.error).toBe('invalid_signature')
   })
 
   it('rejects a request with no Stripe-Signature header', async () => {
@@ -146,7 +146,7 @@ describe('POST /api/webhooks/stripe — signature verification', () => {
     const res = await POST(buildContext({ body, signatureHeader: null }))
     expect(res.status).toBe(401)
     const json = await parseJson<{ error: string }>(res)
-    expect(json.error).toBe('Invalid signature')
+    expect(json.error).toBe('invalid_signature')
   })
 
   it('rejects a request whose timestamp is more than 5 minutes old', async () => {
@@ -158,7 +158,7 @@ describe('POST /api/webhooks/stripe — signature verification', () => {
     const res = await POST(buildContext({ body, signatureHeader: buildStripeHeader(staleTs, sig) }))
     expect(res.status).toBe(401)
     const json = await parseJson<{ error: string }>(res)
-    expect(json.error).toBe('Invalid signature')
+    expect(json.error).toBe('invalid_signature')
   })
 
   it('rejects a request where the body has been mutated after signing', async () => {
@@ -173,7 +173,7 @@ describe('POST /api/webhooks/stripe — signature verification', () => {
     )
     expect(res.status).toBe(401)
     const json = await parseJson<{ error: string }>(res)
-    expect(json.error).toBe('Invalid signature')
+    expect(json.error).toBe('invalid_signature')
   })
 
   it('returns 500 when the webhook secret is not configured', async () => {
@@ -199,6 +199,6 @@ describe('POST /api/webhooks/stripe — signature verification', () => {
 
     expect(res.status).toBe(400)
     const json = await parseJson<{ error: string }>(res)
-    expect(json.error).toBe('Malformed event payload')
+    expect(json.error).toBe('validation_failed')
   })
 })

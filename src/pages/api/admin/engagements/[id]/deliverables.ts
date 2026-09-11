@@ -11,17 +11,17 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
   const { session } = auth
   const engagementId = params.id
   if (!engagementId) {
-    return errorResponse(400, 'Engagement ID required')
+    return errorResponse(400, 'validation_failed', 'Engagement ID required.')
   }
   try {
     const engagement = await getEngagement(env.DB, session.orgId, engagementId)
     if (!engagement) {
-      return errorResponse(404, 'Engagement not found')
+      return errorResponse(404, 'not_found', 'Engagement not found.')
     }
     const formData = await request.formData()
     const file = formData.get('file')
     if (!file || !(file instanceof File)) {
-      return errorResponse(400, 'File required')
+      return errorResponse(400, 'validation_failed', 'File required.')
     }
     // Collision-resistant key (ss#2315): two deliverables whose names
     // sanitized to the same string used to write the same key, and the
@@ -36,7 +36,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     return jsonResponse(201, { key, name: safeName })
   } catch (err) {
     console.error('[api/admin/engagements/[id]/deliverables] Upload error:', err)
-    return errorResponse(500, 'Internal server error')
+    return errorResponse(500, 'internal_error')
   }
 }
 
@@ -46,12 +46,12 @@ export const GET: APIRoute = async ({ locals, params }) => {
   const { session } = auth
   const engagementId = params.id
   if (!engagementId) {
-    return errorResponse(400, 'Engagement ID required')
+    return errorResponse(400, 'validation_failed', 'Engagement ID required.')
   }
   try {
     const engagement = await getEngagement(env.DB, session.orgId, engagementId)
     if (!engagement) {
-      return errorResponse(404, 'Engagement not found')
+      return errorResponse(404, 'not_found', 'Engagement not found.')
     }
     const prefix = `${session.orgId}/engagements/${engagementId}/docs/`
     const objects = await listDocuments(env.STORAGE, prefix)
@@ -64,6 +64,6 @@ export const GET: APIRoute = async ({ locals, params }) => {
     return jsonResponse(200, { files })
   } catch (err) {
     console.error('[api/admin/engagements/[id]/deliverables] List error:', err)
-    return errorResponse(500, 'Internal server error')
+    return errorResponse(500, 'internal_error')
   }
 }

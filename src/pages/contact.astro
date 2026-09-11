@@ -151,7 +151,7 @@ import { bookHref } from '../lib/booking/config'
           } else if (res.status === 429) {
             setBanner('error', 'Too many messages from this network. Please try again later.')
           } else {
-            throw new Error(body.error || 'Request failed')
+            throw new Error(body.message || 'Request failed')
           }
         } catch {
           // Intentionally no published email in the failure path. The whole
