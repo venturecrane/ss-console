@@ -1029,9 +1029,18 @@ COPY operator/requirements/ /app/requirements/
 # deliberately has neither, so execute_code and terminal cannot recreate an
 # ambient privileged connector path.
 COPY operator/workspace_broker/ /opt/workspace-broker/workspace_broker/
+# --no-config on every --require-hashes install (2026-09-11). This RUN executes
+# under `WORKDIR /opt/hermes` (set above; /app only becomes the workdir later),
+# so uv discovers Hermes' own pyproject.toml and applies its `[tool.uv]`
+# override-dependencies — including `pynacl>=1.6,<1.7`, which upstream forces to
+# dodge a vulnerable discord.py pin. Hash-checking mode then refuses the build,
+# because an inherited override is not `==` pinned and cannot carry a hash. The
+# pinned file itself is complete and correct; nothing in its closure needs
+# pynacl. `--no-config` makes the install depend on the file we pin and nothing
+# ambient, which is the property hash-checking is for.
 RUN uv venv /opt/workspace-broker/.venv \
  && uv pip install --python /opt/workspace-broker/.venv/bin/python \
-      --require-hashes -r /app/requirements/broker.txt \
+      --no-config --require-hashes -r /app/requirements/broker.txt \
  && chmod -R a+rX /opt/workspace-broker \
  && chown -R root:root /opt/workspace-broker
 
@@ -1243,7 +1252,7 @@ RUN set -eu; \
       uv venv "$venv"; \
       reqs="/app/requirements/connector-${name}.txt"; \
       [ -f "$reqs" ] || { echo "FATAL: connector ${name} has no pinned requirements at operator/requirements/connector-${name}.txt; run operator/requirements/compile.sh and commit the result"; exit 1; }; \
-      uv pip install --python "$venv/bin/python" --no-cache --require-hashes -r "$reqs"; \
+      uv pip install --python "$venv/bin/python" --no-cache --no-config --require-hashes -r "$reqs"; \
       uv pip install --python "$venv/bin/python" --no-cache --no-deps /app/connectors/_sdk "$cdir"; \
       ls "$venv"/bin/*-mcp >/dev/null 2>&1 || { echo "FATAL: connector ${name} produced no *-mcp console-script"; exit 1; }; \
     done; \
@@ -1263,7 +1272,7 @@ COPY operator/runners/ /app/runners/
 COPY operator/adapter/cost_telemetry/anthropic_pricing.json /opt/medchron/anthropic_pricing.json
 RUN set -eu; \
     uv venv /opt/medchron/.venv; \
-    uv pip install --python /opt/medchron/.venv/bin/python --no-cache \
+    uv pip install --python /opt/medchron/.venv/bin/python --no-cache --no-config \
       --require-hashes -r /app/requirements/medchron.txt; \
     uv pip install --python /opt/medchron/.venv/bin/python --no-cache --no-deps \
       /app/connectors/_sdk /app/connectors/smokeball /app/runners/medchron; \
