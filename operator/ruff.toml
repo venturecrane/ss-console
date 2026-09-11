@@ -39,6 +39,11 @@
 #   S110     14 / 14    try-except-pass.
 #   S103      6 / 1     bad-file-permissions.
 #
+# CI pins ruff 0.15.17 (operator-substrate.yml). Check locally with the same
+# version (`uvx ruff@0.15.17 check .`): RUF100 follows each version's BLE001
+# exemptions, so a different local version can disagree with the gate at a
+# handful of logged handlers.
+#
 # Complexity (C901) and function length are NOT ruff-selected either: they are
 # ratcheted per function by bin/tests/test_function_size_ratchet.py from
 # contracts/operator-function-size.json, the same shape as the module-size

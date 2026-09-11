@@ -80,7 +80,13 @@ jobs:
         # baseline).
         # pyright (pinned) runs in basic mode under operator/pyproject.toml and is
         # ratcheted by bin/pyright-ratchet.py; the pip package fetches its own node.
-        run: python3 -m pip install --quiet pytest pyyaml cryptography ruff pyright==1.1.406
+        # ruff is pinned too. RUF100 (unused-noqa) follows each version's BLE001
+        # exemptions: 0.16 exempts a handler that logs with exc_info, 0.15 does
+        # not, and an unpinned install turned a locally green tree red at one
+        # site on 2026-09-10. Bump deliberately: `uvx ruff@<new> check .` and
+        # `format --check .` locally first, then move this pin and the note in
+        # ruff.toml together.
+        run: python3 -m pip install --quiet pytest pyyaml cryptography ruff==0.15.17 pyright==1.1.406
 
       # The safe half of packaging (operator/pyproject.toml header): the tree is
       # installed as packages so imports resolve the way they will once the
