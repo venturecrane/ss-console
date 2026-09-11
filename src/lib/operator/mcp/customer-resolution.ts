@@ -1,7 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import { z } from 'zod'
 import type { McpConnector } from '../customer-yaml/types'
-import { parseMcpConnector } from '../../portal/customer-config'
+import { parseMcpConnector } from './connector-projection'
 import { normalizeEmail } from '../../identity/email'
 
 const CUSTOMER_SLUG = /^[a-z0-9][a-z0-9-]{0,31}$/

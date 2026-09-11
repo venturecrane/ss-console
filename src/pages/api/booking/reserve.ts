@@ -3,38 +3,22 @@ import { ORG_ID } from '../../../lib/constants'
 import { BOOKING_CONFIG } from '../../../lib/booking/config'
 import { rateLimitByIp } from '../../../lib/booking/rate-limit'
 import { acquireHold, releaseHold } from '../../../lib/booking/holds'
-import {
-  generateManageToken,
-  hashManageToken,
-  computeManageTokenExpiry,
-} from '../../../lib/booking/tokens'
-import { processIntakeSubmission, type PreSeededIntake } from '../../../lib/booking/intake-core'
-import {
-  readAttributionFromCookieHeader,
-  type AdAttribution,
-} from '../../../lib/marketing/attribution'
+import type { PreSeededIntake } from '../../../lib/booking/intake-core'
+import { readAttributionFromCookieHeader } from '../../../lib/marketing/attribution'
 import { emitMetaEvent, mintMetaEventId } from '../../../lib/marketing/meta-capi'
-import { rollbackFailedBooking } from '../../../lib/booking/rollback'
-import { createScheduleStatement, updateScheduleGoogleSync } from '../../../lib/booking/schedule'
 import { verifyBookingLink } from '../../../lib/booking/signed-link'
-import {
-  createMeetingScheduleStatement,
-  updateMeetingScheduleGoogleSync,
-} from '../../../lib/booking/meeting-schedule'
 import { getIntegration, getGoogleAccessToken } from '../../../lib/db/integrations'
-import { transitionStage } from '../../../lib/db/entities'
-import { sendConfirmationEmails } from './confirmation-emails'
-import { requireAppBaseUrl } from '../../../lib/config/app-url'
-import { env } from 'cloudflare:workers'
+import { sendConfirmationEmails } from '../../../lib/booking/confirmation-emails'
 import {
-  createGoogleCalendarEvent,
-  buildEventDescription,
-  formatSlotLabelLong,
-  trimString,
-  parseOptionalInt,
-  isValidEmail,
-  jsonResponse,
-} from './reserve-helpers'
+  commitBookingToDb,
+  type BookingCommitResult,
+  type ReserveInput,
+} from '../../../lib/booking/commit'
+import { syncGoogleCalendarAndPromote } from '../../../lib/booking/calendar-sync'
+import { formatSlotLabelLong, parseOptionalInt } from '../../../lib/booking/reserve-helpers'
+import { requireAppBaseUrl } from '../../../lib/config/app-url'
+import { trimString, isValidEmail, jsonResponse } from '../../../lib/api/helpers'
+import { env } from 'cloudflare:workers'
 
 const FALLBACK_EMAIL = 'team@smd.services'
 
@@ -48,25 +32,13 @@ const FALLBACK_EMAIL = 'team@smd.services'
  *   4. Post-commit — Promote stage, send confirmation email with ICS
  *
  * Google event creation failure = booking failure. No silent fallback.
+ *
+ * This route gates, validates, and delegates. The commit is
+ * `src/lib/booking/commit.ts`, the calendar sync and rollback
+ * `src/lib/booking/calendar-sync.ts`, the emails
+ * `src/lib/booking/confirmation-emails.ts` (code review 2026-09-10,
+ * Architecture 3).
  */
-
-interface ValidatedInput {
-  name: string
-  email: string
-  businessName: string
-  phone: string | null
-  slotStartUtc: string
-  slotEndUtc: string
-  website: string | null
-  userMessage: string | null
-  vertical: string | null
-  employeeCount: number | null
-  yearsInBusiness: number | null
-  biggestChallenge: string | null
-  howHeard: string | null
-  guestTimezone: string | null
-  prefillTokenRaw: string | null
-}
 
 function deriveBusinessNameFromEmail(email: string): string {
   const domain = email.split('@')[1] ?? ''
@@ -90,7 +62,7 @@ function validateSlotTiming(slotStartUtc: string): { slotEndUtc: string } | Resp
   }
 }
 
-function validateReserveInput(body: Record<string, unknown>): ValidatedInput | Response {
+function validateReserveInput(body: Record<string, unknown>): ReserveInput | Response {
   const name = trimString(body.name)
   const email = trimString(body.email)
   const businessNameRaw = trimString(body.business_name)
@@ -155,6 +127,18 @@ async function resolvePreSeeded(prefillTokenRaw: string | null): Promise<PreSeed
   return null
 }
 
+function calendarSyncFailedJson(): Response {
+  return jsonResponse(503, {
+    error: 'calendar_sync_failed',
+    message: 'We could not create the calendar event. Please try again or email us directly.',
+    fallback: {
+      type: 'email',
+      email: FALLBACK_EMAIL,
+      message: `Please email ${FALLBACK_EMAIL} to schedule your call.`,
+    },
+  })
+}
+
 function calendarUnavailableJson(): Response {
   return jsonResponse(503, {
     error: 'calendar_unavailable',
@@ -165,261 +149,6 @@ function calendarUnavailableJson(): Response {
       message: `Please email ${FALLBACK_EMAIL} to schedule your call.`,
     },
   })
-}
-
-interface DbCommitArgs {
-  input: ValidatedInput
-  preSeeded: PreSeededIntake | null
-  /** First-touch ad attribution from the ss_attr cookie (ADR 0066 gate 1). */
-  attribution: AdAttribution | null
-}
-
-interface DbCommitResult {
-  assessmentId: string
-  meetingId: string
-  entityId: string
-  scheduleId: string
-  meetingScheduleId: string
-  manageToken: string
-  intakeLines: string[]
-  entityCreated: boolean
-  contactCreated: boolean
-  contactId: string | undefined
-  contextId: string | null
-  previousAssessmentScheduledAt: string | null
-  previousMeetingScheduledAt: string | null
-}
-
-interface SidecarParams {
-  assessmentId: string
-  meetingId: string
-  name: string
-  email: string
-  slotStartUtc: string
-  slotEndUtc: string
-  guestTimezone: string | null
-  manageTokenHash: string
-  manageTokenExpiresAt: string
-}
-
-async function seedScheduleSidecars(
-  a: SidecarParams
-): Promise<{ scheduleId: string; meetingScheduleId: string }> {
-  // Both are seeded during the monitoring window so existing manage-token
-  // consumers continue to resolve whichever table they query.
-  // When the drop migration lands the legacy assessment_schedule write goes away.
-  const common = {
-    orgId: ORG_ID,
-    slotStartUtc: a.slotStartUtc,
-    slotEndUtc: a.slotEndUtc,
-    durationMinutes: BOOKING_CONFIG.slot_minutes,
-    timezone: BOOKING_CONFIG.consultant.timezone,
-    guestTimezone: a.guestTimezone,
-    guestName: a.name,
-    guestEmail: a.email,
-    manageTokenHash: a.manageTokenHash,
-    manageTokenExpiresAt: a.manageTokenExpiresAt,
-  }
-  const { statement: scheduleStmt, id: scheduleId } = createScheduleStatement(env.DB, {
-    assessmentId: a.assessmentId,
-    ...common,
-  })
-  await scheduleStmt.run()
-
-  const { statement: meetingScheduleStmt, id: meetingScheduleId } = createMeetingScheduleStatement(
-    env.DB,
-    { meetingId: a.meetingId, ...common }
-  )
-  await meetingScheduleStmt.run()
-
-  return { scheduleId, meetingScheduleId }
-}
-
-async function mintManageToken(
-  slotEndUtc: string
-): Promise<{ manageToken: string; manageTokenHash: string; manageTokenExpiresAt: string }> {
-  const manageToken = generateManageToken()
-  return {
-    manageToken,
-    manageTokenHash: await hashManageToken(manageToken),
-    manageTokenExpiresAt: computeManageTokenExpiry(
-      slotEndUtc,
-      BOOKING_CONFIG.manage_token_ttl_hours_after_slot
-    ),
-  }
-}
-
-async function commitBookingToDb(args: DbCommitArgs): Promise<DbCommitResult> {
-  const { input, preSeeded, attribution } = args
-  const {
-    name,
-    email,
-    businessName,
-    phone,
-    slotStartUtc,
-    slotEndUtc,
-    website,
-    userMessage,
-    vertical,
-    employeeCount,
-    yearsInBusiness,
-    biggestChallenge,
-    howHeard,
-    guestTimezone,
-  } = input
-
-  const intakeResult = await processIntakeSubmission(
-    env.DB,
-    ORG_ID,
-    {
-      name,
-      email,
-      businessName,
-      phone,
-      website,
-      userMessage,
-      vertical,
-      employeeCount,
-      yearsInBusiness,
-      biggestChallenge,
-      howHeard,
-      attribution,
-    },
-    {
-      scheduledAt: slotStartUtc,
-      source: preSeeded ? 'admin_booking_link' : 'website_intake_booking',
-      preSeeded,
-    }
-  )
-
-  // assessmentId is guaranteed non-null when scheduledAt is provided.
-  // By intake-core construction, assessmentId == meetingId — the booking
-  // flow seeds both tables with the same primary key during the
-  // monitoring window (see src/lib/booking/intake-core.ts).
-  const assessmentId = intakeResult.assessmentId!
-  const meetingId = intakeResult.meetingId!
-
-  const { manageToken, manageTokenHash, manageTokenExpiresAt } = await mintManageToken(slotEndUtc)
-
-  // Create assessment_schedule (legacy) and meeting_schedule (canonical) sidecars.
-  const { scheduleId, meetingScheduleId } = await seedScheduleSidecars({
-    assessmentId,
-    meetingId,
-    name,
-    email,
-    slotStartUtc,
-    slotEndUtc,
-    guestTimezone,
-    manageTokenHash,
-    manageTokenExpiresAt,
-  })
-
-  return {
-    assessmentId,
-    meetingId,
-    entityId: intakeResult.entityId,
-    scheduleId,
-    meetingScheduleId,
-    manageToken,
-    intakeLines: intakeResult.intakeLines,
-    entityCreated: intakeResult.entityCreated,
-    contactCreated: intakeResult.contactCreated,
-    contactId: intakeResult.contactId,
-    contextId: intakeResult.contextId,
-    previousAssessmentScheduledAt: intakeResult.previousAssessmentScheduledAt,
-    previousMeetingScheduledAt: intakeResult.previousMeetingScheduledAt,
-  }
-}
-
-interface GoogleSyncArgs {
-  accessToken: string
-  calendarId: string
-  input: ValidatedInput
-  dbResult: DbCommitResult
-  holdId: string
-  preSeeded: PreSeededIntake | null
-  manageUrl: string
-}
-
-async function syncGoogleCalendarAndPromote(args: GoogleSyncArgs): Promise<string | Response> {
-  const { accessToken, calendarId, input, dbResult, holdId, preSeeded, manageUrl } = args
-  const { name, email, businessName, slotStartUtc, slotEndUtc } = input
-  // prettier-ignore
-  const { assessmentId, meetingId, entityId, scheduleId, meetingScheduleId, entityCreated, contactCreated, contactId, contextId, previousAssessmentScheduledAt, previousMeetingScheduledAt } = dbResult
-
-  const meetUrl = BOOKING_CONFIG.meeting_url
-
-  try {
-    const eventResult = await createGoogleCalendarEvent(accessToken, calendarId, {
-      summary: `Assessment: ${businessName} (${name})`,
-      description: buildEventDescription(
-        name,
-        email,
-        businessName,
-        dbResult.intakeLines,
-        manageUrl
-      ),
-      startUtc: slotStartUtc,
-      endUtc: slotEndUtc,
-      guestEmail: email,
-      assessmentId,
-    })
-
-    // Update both schedules with Google sync data (dual-write during monitoring window).
-    const syncData = {
-      googleEventId: eventResult.eventId,
-      googleEventLink: eventResult.htmlLink,
-      googleMeetUrl: meetUrl,
-    }
-    await updateScheduleGoogleSync(env.DB, scheduleId, syncData)
-    await updateMeetingScheduleGoogleSync(env.DB, meetingScheduleId, syncData)
-
-    // Promote entity only after Google sync — prevents false "meeting scheduled" CRM state.
-    try {
-      await transitionStage(
-        env.DB,
-        ORG_ID,
-        entityId,
-        'meetings',
-        'Booking reserve: meeting scheduled'
-      )
-    } catch {
-      // Entity may already be past prospect. Do not fail the booking.
-    }
-
-    return meetUrl
-  } catch (err) {
-    console.error('[api/booking/reserve] Google Calendar event creation failed:', err)
-    try {
-      await rollbackFailedBooking(env.DB, {
-        orgId: ORG_ID,
-        holdId,
-        scheduleId,
-        meetingScheduleId,
-        assessmentId,
-        meetingId,
-        preserveBookingRows: Boolean(preSeeded),
-        previousAssessmentScheduledAt,
-        previousMeetingScheduledAt,
-        entityId,
-        entityCreated,
-        contactId,
-        contactCreated,
-        contextId,
-      })
-    } catch (rollbackErr) {
-      console.error('[api/booking/reserve] Rollback failed:', rollbackErr)
-    }
-    return jsonResponse(503, {
-      error: 'calendar_sync_failed',
-      message: 'We could not create the calendar event. Please try again or email us directly.',
-      fallback: {
-        type: 'email',
-        email: FALLBACK_EMAIL,
-        message: `Please email ${FALLBACK_EMAIL} to schedule your call.`,
-      },
-    })
-  }
 }
 
 async function handlePost({ request, locals }: APIContext): Promise<Response> {
@@ -468,7 +197,7 @@ async function handlePost({ request, locals }: APIContext): Promise<Response> {
   // (ADR 0066 gate 1). Server-side read — the client never sends it.
   const attribution = readAttributionFromCookieHeader(request.headers.get('cookie'))
 
-  let dbResult: DbCommitResult
+  let dbResult: BookingCommitResult
   try {
     dbResult = await commitBookingToDb({ input: validated, preSeeded, attribution })
   } catch (err) {
@@ -499,8 +228,8 @@ async function handlePost({ request, locals }: APIContext): Promise<Response> {
     preSeeded,
     manageUrl,
   })
-  if (googleSyncResult instanceof Response) return googleSyncResult
-  const googleMeetUrl = googleSyncResult
+  if (!googleSyncResult.ok) return calendarSyncFailedJson()
+  const googleMeetUrl = googleSyncResult.meetUrl
 
   // Release the hold — the live assessment row is now the lock
   await releaseHold(env.DB, holdResult.id!)
@@ -512,8 +241,8 @@ async function handlePost({ request, locals }: APIContext): Promise<Response> {
 interface FinalizeBookingArgs {
   request: Request
   locals: APIContext['locals']
-  validated: ValidatedInput
-  dbResult: DbCommitResult
+  validated: ReserveInput
+  dbResult: BookingCommitResult
   googleMeetUrl: string
   manageUrl: string
 }

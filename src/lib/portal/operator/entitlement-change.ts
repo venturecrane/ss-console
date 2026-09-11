@@ -27,6 +27,7 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types'
+import { machineBaseUrl } from '../../operator/machine-url'
 import {
   compileTierChange,
   type LiveExposure,
@@ -69,10 +70,6 @@ export interface GateEntitlementResult {
   applied: { action_class: string; ceiling: string }[]
   persona: string
   updated_at: string
-}
-
-function machineBaseUrl(template: string, app: string): string {
-  return template.includes('{app}') ? template.replace('{app}', app) : `https://${app}.fly.dev`
 }
 
 /** True when the entitlement transport can reach a Machine (secret + URL present). */

@@ -46,6 +46,7 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types'
+import { isRecord } from '../../api/helpers'
 import {
   readMachineRuntime,
   type RuntimeReadActor,
@@ -230,10 +231,6 @@ export function describeObject(row: ObjectAuditRow): string {
 // ---------------------------------------------------------------------------
 // Wire parsing
 // ---------------------------------------------------------------------------
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
-}
 
 function reqString(v: unknown): string | null {
   return typeof v === 'string' && v.length > 0 ? v : null

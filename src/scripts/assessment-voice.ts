@@ -9,6 +9,7 @@
  */
 
 import { Conversation } from '@elevenlabs/client'
+import { escapeHtml } from '../lib/api/helpers'
 
 interface Turn {
   speaker: 'owner' | 'operator'
@@ -33,14 +34,6 @@ function strField(value: unknown, key: string): string | undefined {
     return typeof v === 'string' ? v : undefined
   }
   return undefined
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
 }
 
 function inline(s: string): string {

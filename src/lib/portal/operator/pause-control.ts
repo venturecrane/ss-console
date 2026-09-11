@@ -20,6 +20,7 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types'
+import { machineBaseUrl } from '../../operator/machine-url'
 import { deriveRuntimeReadKey } from '../../operator/runtime-read-transport'
 import { resolveCustomerFlyApp } from '../../operator/fly-app-registry'
 import {
@@ -39,10 +40,6 @@ export interface PinnedRow {
 export interface GateSetResult {
   pinned: PinnedRow[]
   level: string
-}
-
-function machineBaseUrl(template: string, app: string): string {
-  return template.includes('{app}') ? template.replace('{app}', app) : `https://${app}.fly.dev`
 }
 
 /** True when the pause transport can reach a Machine (secret + URL present). */

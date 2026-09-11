@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro'
+import { captureError } from '../../../../lib/observability/sentry'
 import { env } from 'cloudflare:workers'
 import { requireAdminSession } from '../../../../lib/auth/admin-session'
 import { createEntity } from '../../../../lib/db/entities'
@@ -47,6 +48,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     return redirect(`/admin/clients/${entity.id}?created=1`, 302)
   } catch (err) {
     console.error('[api/admin/clients] POST Error:', err)
+    captureError(err, 'admin.clients.create')
     return redirect('/admin/clients/new?error=server', 302)
   }
 }

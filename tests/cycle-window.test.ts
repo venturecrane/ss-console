@@ -158,18 +158,25 @@ describe('the arithmetic', () => {
 })
 
 describe('the tiling property', () => {
-  it('windows tile with no gap or overlap, for every anchor across six years', () => {
-    const anchors: (number | null)[] = [...Array.from({ length: 31 }, (_, i) => i + 1), null]
-    for (const anchor of anchors) {
-      let day = Date.UTC(2024, 0, 1)
-      const stop = Date.UTC(2029, 11, 31)
-      while (day <= stop) {
-        const now = `${new Date(day).toISOString().slice(0, 10)}T12:00:00.000Z`
-        const w = cycleWindow(now, anchor)
-        expect(w.start <= now && now < w.end, `anchor=${anchor} now=${now}`).toBe(true)
-        expect(cycleWindow(w.end, anchor).start, `gap at anchor=${anchor} ${w.end}`).toBe(w.end)
-        day += 86400000
+  // 32 anchors x 2,191 days x two assertions is ~140k expect calls: 1.3s alone,
+  // over the 5s default under full-suite load (it timed out on a pre-push
+  // verify, 2026-09-11). The budget is sized to the sweep, not to the machine.
+  it(
+    'windows tile with no gap or overlap, for every anchor across six years',
+    { timeout: 60_000 },
+    () => {
+      const anchors: (number | null)[] = [...Array.from({ length: 31 }, (_, i) => i + 1), null]
+      for (const anchor of anchors) {
+        let day = Date.UTC(2024, 0, 1)
+        const stop = Date.UTC(2029, 11, 31)
+        while (day <= stop) {
+          const now = `${new Date(day).toISOString().slice(0, 10)}T12:00:00.000Z`
+          const w = cycleWindow(now, anchor)
+          expect(w.start <= now && now < w.end, `anchor=${anchor} now=${now}`).toBe(true)
+          expect(cycleWindow(w.end, anchor).start, `gap at anchor=${anchor} ${w.end}`).toBe(w.end)
+          day += 86400000
+        }
       }
     }
-  })
+  )
 })

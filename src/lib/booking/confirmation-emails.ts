@@ -11,14 +11,11 @@
  */
 
 import { env } from 'cloudflare:workers'
-import { BOOKING_CONFIG } from '../../../lib/booking/config'
-import { buildIcs, icsToBase64 } from '../../../lib/booking/ics'
-import { buildAdminUrl } from '../../../lib/config/app-url'
-import { recordBookingError } from '../../../lib/booking/alerts'
-import {
-  sendBookingConfirmation,
-  sendBookingAdminNotification,
-} from '../../../lib/email/booking-emails'
+import { BOOKING_CONFIG } from './config'
+import { buildIcs, icsToBase64 } from './ics'
+import { buildAdminUrl } from '../config/app-url'
+import { recordBookingError } from './alerts'
+import { sendBookingConfirmation, sendBookingAdminNotification } from '../email/booking-emails'
 import { formatSlotLabelLong } from './reserve-helpers'
 
 /** Narrow structural views of the reserve handler's validated input + commit result. */

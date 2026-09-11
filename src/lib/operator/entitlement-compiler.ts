@@ -53,7 +53,7 @@ import {
   restrictiveness,
   type Ceiling,
   type ChangeDirection,
-} from '../portal/operator/config-governance'
+} from './vertical-floors'
 import type { RoutineGrid, RoutineGridRow, RoutineTier } from './routine-grid'
 import { ROUTINE_TIERS } from './routine-grid'
 import { EXPOSURE_ACTION_CLASSES } from './customer-yaml/types'

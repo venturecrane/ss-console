@@ -88,7 +88,7 @@ const BUILD_FAILURE_STATUS: Record<SpecBuildFailure, string> = {
   invalid_class: 'spec_invalid',
 }
 
-function redirectWithStatus(instance: string | null, status: string): Response {
+function redirectToAdvancedSettings(instance: string | null, status: string): Response {
   const base = instance ? `${OPERATOR_ROOT}/${instance}/settings/advanced` : OPERATOR_ROOT
   return new Response(null, {
     status: 303,
@@ -258,13 +258,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   const auth = await authorizeAdvancedSettings(env.DB, locals, instance)
-  if (auth === null) return redirectWithStatus(instance, 'forbidden')
+  if (auth === null) return redirectToAdvancedSettings(instance, 'forbidden')
 
   const row = await getCustomerConfigBySlug(env.DB, auth.customerSlug)
-  if (row === null) return redirectWithStatus(auth.customerSlug, 'no_config')
+  if (row === null) return redirectToAdvancedSettings(auth.customerSlug, 'no_config')
 
   const classes = declaredClasses(row.output_classes)
-  if (classes.length === 0) return redirectWithStatus(auth.customerSlug, 'spec_no_classes')
+  if (classes.length === 0) return redirectToAdvancedSettings(auth.customerSlug, 'spec_no_classes')
 
   // Rules before prose. A refused rule must not be reported as a saved spec,
   // and the two halves come from one submission, so neither is written unless
@@ -272,13 +272,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const rules = collectAssertions(form, classes)
   if (!rules.ok) {
     await recordAttempt(auth, 'rejected', { reason: 'invalid_rule', errors: rules.errors })
-    return redirectWithStatus(auth.customerSlug, 'spec_invalid_rule')
+    return redirectToAdvancedSettings(auth.customerSlug, 'spec_invalid_rule')
   }
 
   const built = await buildSpecDocument(collectAuthoredBodies(form, classes), rules.byClass)
   if (!built.ok) {
     await recordAttempt(auth, 'rejected', { reason: built.reason, errors: built.errors })
-    return redirectWithStatus(auth.customerSlug, BUILD_FAILURE_STATUS[built.reason])
+    return redirectToAdvancedSettings(auth.customerSlug, BUILD_FAILURE_STATUS[built.reason])
   }
 
   // Read before write. An unparseable existing document must not be
@@ -290,7 +290,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const existing = await readSpecDocument(env.CUSTOMER_CONFIG, auth.customerSlug)
     if (existing.kind === 'unreadable') {
       await recordAttempt(auth, 'rejected', { reason: 'existing_document_unreadable' })
-      return redirectWithStatus(auth.customerSlug, 'spec_unreadable')
+      return redirectToAdvancedSettings(auth.customerSlug, 'spec_unreadable')
     }
 
     const merged = mergeUnaddressed(
@@ -302,7 +302,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const written = await writeSpecDocument(env.CUSTOMER_CONFIG, auth.customerSlug, merged)
     if (!written.ok) {
       await recordAttempt(auth, 'rejected', { errors: written.errors })
-      return redirectWithStatus(auth.customerSlug, 'spec_write_failed')
+      return redirectToAdvancedSettings(auth.customerSlug, 'spec_write_failed')
     }
 
     await recordPromotions(auth, merged, classes, collectCitations(form, classes), written.key)
@@ -311,10 +311,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
       bodies: written.bodies,
       classes: Object.keys(merged.classes).sort(),
     })
-    return redirectWithStatus(auth.customerSlug, 'spec_saved')
+    return redirectToAdvancedSettings(auth.customerSlug, 'spec_saved')
   } catch (err) {
     console.error('output-class-specs: vault write failed for', auth.customerSlug, err)
     await recordAttempt(auth, 'rejected', { reason: 'vault_error' })
-    return redirectWithStatus(auth.customerSlug, 'spec_write_failed')
+    return redirectToAdvancedSettings(auth.customerSlug, 'spec_write_failed')
   }
 }

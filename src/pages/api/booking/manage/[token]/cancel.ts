@@ -1,4 +1,4 @@
-import { jsonResponse } from '../../../../../lib/api/helpers'
+import { escapeHtml, jsonResponse } from '../../../../../lib/api/helpers'
 import type { APIContext, APIRoute } from 'astro'
 import { ORG_ID } from '../../../../../lib/constants'
 import { hashManageToken } from '../../../../../lib/booking/tokens'
@@ -37,14 +37,6 @@ const NOTIFY_EMAIL = 'team@smd.services'
  *   3. Delete Google Calendar event (best effort)
  *   4. Send cancellation email to guest + admin notification
  */
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
 
 type Schedule = NonNullable<Awaited<ReturnType<typeof getScheduleByManageToken>>>
 
