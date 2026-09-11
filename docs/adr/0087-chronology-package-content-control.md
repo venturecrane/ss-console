@@ -127,7 +127,68 @@ concession.
 
 **Still open after this amendment.** The window is still keyed to the CALENDAR
 month; the Captain's decision (2026-09-10) is that it must key to the firm's
-BILLING CYCLE. That change spans the broker's window computation, the console's
-matching roll-up, and an `OVERLAY_REF` bump for the allowance response shape, and
-it is inert until the firm actually starts a subscription (probed 2026-09-10:
-`sub-op-ashton-price` is `provisioning`, `stripe_subscription_id` NULL).
+BILLING CYCLE. _[Corrected 2026-09-11, see the next amendment: this paragraph
+went on to claim the change "spans ... an `OVERLAY_REF` bump" and "is inert until
+the firm actually starts a subscription". Both are false. The daemon calls the
+broker in-process, so no bump is needed; and the window is a product capability
+provable against an authored anchor on the proving seat, with no firm's billing
+state as a precondition. Left in place rather than deleted, because a phantom
+blocker re-derived from a stale doc is a recurring failure here and the retraction
+is more useful than a clean page.]_
+
+## Amendment, 2026-09-11 (Captain): the allowance window follows the firm's billing cycle
+
+The chronology-package page allowance is metered over the firm's **billing
+cycle** when one is authored, and over the calendar month when none is. Two new
+authored scalars on the seat: `chronology_package_cycle_anchor_day` (1-31) and
+`chronology_package_cycle_effective_from` (a date).
+
+**Why a second key.** The debit rule keys on `created_at`, so authoring an anchor
+would otherwise re-partition every row already in the ledger -- silently handing
+the firm a second allowance inside one period, or refusing it for pages it
+already consumed in a period it already paid for, depending only on which day was
+chosen. `effective_from` makes the first cycle short and moves nothing that was
+already metered. An anchor change is therefore a deliberate two-line diff, not a
+meter reset.
+
+**Three implementations, not two.** The window is computed on the seat (broker),
+in the console, and in the laptop pipeline in the private engagements repo -- the
+surface every delivered chronology has actually run on. That third one derived
+its month from `time.strftime`, **local time**, while the seat used UTC, so two
+of the three had already silently disagreed about when a period began. All three
+now run one algorithm (`cycle_window.py`, vendored byte-identical) against one
+hand-authored fixture whose sha256 is pinned on every side, following the
+`PINNED_CONTENT_SHA256` precedent in `tests/customer-yaml-parity-contract.test.ts`.
+
+**What guards it, and what each guard cannot see.** The fixture's return-to-anchor
+vectors catch a _chained_ implementation (Feb 28 -> Mar 28 instead of returning
+to the 31st); an exhaustive tiling property catches gaps and overlaps. Neither
+subsumes the other: a chained implementation tiles perfectly, and a table can be
+wrong the same way on every side. A reader table sits alongside both, because the
+divergence that actually bites is upstream of the arithmetic -- a quoted `"15"`
+passes the open scalar validator and reads as 15 on a coercing surface and as
+nothing on a type-checking one. `operator/bin/tests/cycle-window-mutation-check.sh`
+proves all of this can fail, and asserts its own import path first: on 2026-09-10
+a tamper proof in this repo came back green against a stale non-editable install.
+
+**Absent is not invalid.** No anchor means "no cycle known, meter by calendar
+month" -- what every seat did before, and safe. An anchor that is present but
+unreadable REFUSES and names the key, rather than quietly demoting the firm to
+calendar months on a window nobody authored.
+
+**No `OVERLAY_REF` bump.** The daemon calls `broker.allowance()` in-process, and
+the plugin's five-key whitelist already passes `month` through. `month` now
+carries PROSE ("the cycle ending Oct 14"), because the agent relays refusal
+sentences verbatim; the machine range rides separate `cycle_start`/`cycle_end`
+fields, and `job.py`'s `MONTH_RE` is unchanged and still rejects `2026-9`.
+
+**Client seats are NOT anchored by this change.** Only `pilot-smokeball` authors a
+cycle. Exhibit A row 11 still reads "per calendar month", and open item 18 says
+the paper is not to state otherwise until the code does it -- so a client anchor
+and the Exhibit A re-cut are a later, paired change, paper and code together.
+
+**Queued for the next `OVERLAY_REF` bump**, alongside the three items already owed
+above: have the seat report its window and the console _display_ it rather than
+recomputing one. That removes the second and third implementations from the
+critical path entirely, and needs a new runtime-read kind, which is what makes it
+a bump rather than part of this change.

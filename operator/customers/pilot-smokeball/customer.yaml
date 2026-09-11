@@ -510,6 +510,17 @@ personas:
           # seat's job is to prove the crossing, so a matter the sandbox
           # actually holds must be able to exceed it.
           chronology_package_page_allowance_per_month: 40
+          # The firm's billing-cycle day, so the allowance resets when the firm
+          # pays rather than on the 1st (ss#2618). Rehearsal value: the PROVING
+          # seat carries it first, and no client seat authors one until its own
+          # Exhibit A says "cycle" rather than "per calendar month".
+          #
+          # `effective_from` is not optional in practice: without it, authoring
+          # an anchor re-slices every row already in the ledger, because the
+          # debit rule keys on when a job was CREATED. With it the first cycle
+          # is simply short and nothing already metered moves.
+          chronology_package_cycle_anchor_day: 15
+          chronology_package_cycle_effective_from: '2026-09-11'
       # motions
       - name: motion-calendar-tracker # keeps motion deadlines/hearings current
         version: pending
