@@ -135,6 +135,32 @@ class ConsoleD1:
             if isinstance(r.get("customer_slug"), str)
         }
 
+    def count_where_slug(self, table: str, slug: str) -> int:
+        """How many rows ``table`` holds for ``slug`` -- the negative probe.
+
+        A DELETE through ``wrangler d1 execute --json`` comes back with an empty
+        ``results`` array whether it removed a row or matched nothing, so a
+        caller that wants to REPORT a removal has to read the table again. This
+        is that read. ``table`` is a code-controlled identifier (refused unless
+        it is one); ``slug`` travels as ``sql_text``'s hex literal.
+
+        Failure RAISES rather than returning 0, for the same reason
+        ``provisioned_slugs`` does: an unreachable D1 read as "nothing left"
+        would turn a failed cleanup into a reported success.
+        """
+        if not table.isidentifier():
+            raise ValueError(f"count_where_slug refuses a non-identifier table: {table!r}")
+        # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query — table is a checked identifier; the slug is sql_text's hex blob literal, which has no escape sequence.
+        # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query — not SQLAlchemy; the only interpolations are an identifier check and a fixed-alphabet hex literal.
+        sql = f"SELECT COUNT(*) AS n FROM {table} WHERE customer_slug = {sql_text(slug)}"
+        rows = self.execute(sql)
+        if not rows or "n" not in rows[0]:
+            raise RuntimeError(f"d1 count on {table} returned no row")
+        n = rows[0]["n"]
+        if isinstance(n, bool) or not isinstance(n, int):
+            raise RuntimeError(f"d1 count on {table} returned a non-integer: {n!r}")
+        return n
+
     def entity_id(self, slug: str) -> Optional[str]:
         # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query — see sql_text: no parameter binding exists on this CLI path; the interpolated text is a hex blob literal.
         # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query — not SQLAlchemy; the only interpolation is sql_text's fixed-alphabet hex literal.

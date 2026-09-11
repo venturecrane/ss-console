@@ -489,6 +489,8 @@ def test_cli_live_refuses_when_backends_unwired(tmp_path, _no_ambient_backends):
         [
             "smd",
             "--live",
+            "--confirm-slug",
+            "smd",
             "--customers-root",
             str(customers_root),
             "--archive-root",
@@ -511,6 +513,8 @@ def test_cli_live_allow_unwired_runs_and_tombstones(tmp_path, _no_ambient_backen
         [
             "smd",
             "--live",
+            "--confirm-slug",
+            "smd",
             "--allow-unwired",
             "--customers-root",
             str(customers_root),
@@ -524,6 +528,87 @@ def test_cli_live_allow_unwired_runs_and_tombstones(tmp_path, _no_ambient_backen
     # With the explicit override the flow proceeds and tombstones.
     assert not (customers_root / "smd").exists()
     assert len(list(customers_root.glob("smd.decommissioned.*"))) == 1
+
+
+def _untouched(customers_root: Path) -> bool:
+    return (customers_root / "smd" / "customer.yaml").exists() and not list(
+        customers_root.glob("smd.decommissioned.*")
+    )
+
+
+@pytest.mark.parametrize("confirm", [None, "sdm", "SMD"])
+def test_cli_live_requires_confirm_slug(tmp_path, _no_ambient_backends, confirm):
+    """A live run is typed twice. Missing or wrong, it exits 2 before any
+    backend is consulted and before the local audit writer opens."""
+    from bin.lib.decommission_cli import main
+
+    customers_root = _copy_fixture(tmp_path)
+    argv = ["smd", "--live", "--allow-unwired", "--customers-root", str(customers_root)]
+    if confirm is not None:
+        argv += ["--confirm-slug", confirm]
+    argv += ["--archive-root", str(tmp_path / "archive"), "--audit-db", str(tmp_path / "audit.sqlite")]
+    rc = main(argv)
+    assert rc == 2
+    assert _untouched(customers_root)
+    assert not (tmp_path / "audit.sqlite").exists()
+
+
+def test_cli_allow_unwired_refused_without_fixture_root(tmp_path, _no_ambient_backends, monkeypatch):
+    """--allow-unwired skips only the UNWIRED backends; the wired ones still
+    run. So it is refused (exit 5) unless the caller named a customers root
+    outside the repo's real operator/customers."""
+    from bin.lib import decommission_cli
+    from bin.lib.decommission_cli import main
+
+    # Make the "real" root point at this test's fixture copy so the test
+    # never has to touch the repo's actual customers directory.
+    real_root = _copy_fixture(tmp_path)
+    monkeypatch.setattr(decommission_cli, "_default_customers_root", lambda: real_root)
+    common = [
+        "--archive-root",
+        str(tmp_path / "archive"),
+        "--audit-db",
+        str(tmp_path / "audit.sqlite"),
+    ]
+
+    # No --customers-root at all: the default is the real root.
+    rc = main(["smd", "--live", "--confirm-slug", "smd", "--allow-unwired", *common])
+    assert rc == 5
+    assert _untouched(real_root)
+
+    # An explicit --customers-root that IS the real root (or a path under it).
+    rc = main(["smd", "--live", "--confirm-slug", "smd", "--allow-unwired", "--customers-root", str(real_root), *common])
+    assert rc == 5
+    assert _untouched(real_root)
+
+    # A fixture root elsewhere is the one shape the flag is for.
+    fixture_root = tmp_path / "elsewhere"
+    fixture_root.mkdir()
+    shutil.copytree(real_root / "smd", fixture_root / "smd")
+    rc = main(["smd", "--live", "--confirm-slug", "smd", "--allow-unwired", "--customers-root", str(fixture_root), *common])
+    assert rc == 0
+    assert _untouched(real_root)
+    assert not (fixture_root / "smd").exists()
+
+
+def test_cli_dry_run_ignores_confirm_slug(tmp_path, _no_ambient_backends):
+    from bin.lib.decommission_cli import main
+
+    customers_root = _copy_fixture(tmp_path)
+    rc = main(
+        [
+            "smd",
+            "--dry-run",
+            "--customers-root",
+            str(customers_root),
+            "--archive-root",
+            str(tmp_path / "archive"),
+            "--audit-db",
+            str(tmp_path / "audit.sqlite"),
+        ]
+    )
+    assert rc == 0
+    assert _untouched(customers_root)
 
 
 # ---------------------------------------------------------------------------
