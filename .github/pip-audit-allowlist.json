@@ -1,0 +1,6 @@
+{
+  "$comment": "Time-boxed pip-audit exceptions for the seat image's pinned Python (operator/requirements/*.txt), consumed by operator/bin/pip_audit_gate.py in .github/workflows/security.yml. Same rules as audit-allowlist.json: each key under `allow` is an advisory id (or alias) tolerated until `expires`; on and after that date the allowlist is ignored entirely, so a lingering exception re-fails the gate and forces the tracked fix to land. An entry is legitimate only when the advisory is triaged non-reachable on a seat AND its patched release is genuinely unavailable. Set `expires` to a date and `tracking` to the issue that will land the fix, and give each id a one-line justification as its value. An empty `allow` map means no exceptions are in force: every known advisory fails the gate.",
+  "expires": null,
+  "tracking": null,
+  "allow": {}
+}
