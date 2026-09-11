@@ -62,6 +62,7 @@ class Limits:
     month_cents_used: int | None = None
     allowance_remaining_pages: int | None = None
     allowance_month: str | None = None
+    allowance_cycle_label: str | None = None
 
     @property
     def month_spent_usd(self) -> float:
@@ -69,7 +70,11 @@ class Limits:
 
     @property
     def month_label(self) -> str:
-        return self.allowance_month or "this month"
+        """What the hold sentence calls the period. The cycle label is PROSE
+        ("the cycle ending Oct 14"); the unanchored case keeps `YYYY-MM`. The
+        agent relays this sentence verbatim, so a machine range here would read
+        "remain in 2026-09-15..2026-10-15's allowance"."""
+        return self.allowance_cycle_label or self.allowance_month or "this period"
 
     # ---- once, before the first paid stage ---------------------------------
     def check_before_first_paid(self, *, pages: int, projected_usd: float, spent_usd: float, stage: str) -> None:

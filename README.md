@@ -15,7 +15,7 @@ See `CLAUDE.md` for full context on the business model, enterprise rules, and ar
 - D1 (SQLite) for primary structured data
 - R2 for object storage
 - KV for sessions and rate-limit cache
-- TypeScript 5, Vitest 4, ESLint 10 (flat config), Tailwind 4
+- TypeScript 6, Vitest 4, ESLint 10 (flat config), Tailwind 4
 
 ## Three-subdomain architecture
 

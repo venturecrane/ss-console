@@ -254,20 +254,24 @@ initiation; this mode runs only on such a request, never on a schedule or a sign
    `get_files_on_matter` + `list_folders`, tell the requester what will be read and
    what will be left out (the firm's authored exclusions apply on the runner side);
    a folder that plainly does not fit the pattern is a question, not a silent skip.
-4. **Pre-flight the allowance.** Call `medchron_allowance`. The allowance is
+4. **Pre-flight the allowance.** Call `medchron_allowance`. The `month` field
+   is a PHRASE for the period the allowance covers -- the firm's billing cycle
+   when one is authored ("the cycle ending Oct 14"), a calendar month when none
+   is. Say it back as it comes; never call it "the month" yourself and never
+   parse it. The allowance is
    metered in the unit the response's `unit` field names, which is pages: quote
    that field, say "pages", and never restate the setting's key name to a
    requester. If it is not authored or the remainder is zero, relay the tool's
    refusal sentence verbatim and stop - the Operator stops at the crossing and
    surfaces the item; it never runs past it. A matter larger than the remaining
    pages is refused by the runner before anything is read, so a big matter near
-   the end of a month is a conversation to have now, not after a build.
+   the end of a period is a conversation to have now, not after a build.
 5. **Submit.** Call `medchron_job_submit` with the resolved matter id and number,
    the units (name, surname, DOB, folder prefix when joint), the incident date and
    its source, the claimed injuries when authored, and `requested_by` +
    `request_ref` from the asking message. Relay the ticket (job id) or the refusal
    sentence verbatim in the reply. An accepted submission comes back with
-   `allowance_remaining_pages`: that is what is left of the month after this job,
+   `allowance_remaining_pages`: that is what is left of the period after this job,
    in pages, and it is the figure to quote if the requester asks. Make no promise
    about timing: the delivery lands on the matter in its own dated folder, and
    this skill reports when it does.

@@ -69,8 +69,14 @@ GUARD = "steps.changes.outputs.relevant == 'true'"
 # same reason: it installs the connector client and needs its deps.
 PYTEST_EXEMPT_TOPDIRS = {"connectors", "runners"}
 
-# Cache/build dirs that legitimately contain no first-class tests.
-IGNORED_PARTS = {".pytest_cache", ".ruff_cache", "__pycache__", ".rendered", "node_modules"}
+# Cache/build dirs that legitimately contain no first-class tests. `.venv` is
+# here because operator/'s own test instructions create one at operator/.venv,
+# and site-packages ships thousands of third-party `test_*.py` files — so
+# following the documented setup made this conformance check fail locally with a
+# list of matplotlib and jsonschema tests. CI never sees it (it pip-installs into
+# the runner's system Python), which is exactly why it went unnoticed. Added
+# 2026-09-11, same shape as the `**/.venv/**` ignore added to eslint.config.js.
+IGNORED_PARTS = {".pytest_cache", ".ruff_cache", "__pycache__", ".rendered", "node_modules", ".venv"}
 
 
 def _load_workflow() -> dict:

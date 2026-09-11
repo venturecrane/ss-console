@@ -82,6 +82,14 @@ function stripComments(content: string): string {
 
 const FORBIDDEN_PATTERNS: Array<{ label: string; pattern: RegExp | string }> = [
   {
+    // A worker that never existed was cited as the thing that deletes stale
+    // booking holds and OAuth states (code review 2026-09-10, Documentation
+    // finding 3). A comment that names a non-existent mechanism is a false
+    // claim about the system; nothing under src/ may name it again.
+    label: 'phantom mechanism: workers/booking-cleanup never existed',
+    pattern: 'workers/booking-cleanup',
+  },
+  {
     label: 'Pattern A: hardcoded kickoff outreach promise',
     pattern: "We'll reach out to schedule kickoff",
   },
