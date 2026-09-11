@@ -49,8 +49,18 @@ describe('magic links', () => {
       .bind(SECONDARY_USER_ID, SECONDARY_ORG_ID, 'client@example.com', 'Secondary Client')
       .run()
 
+    // The magic-link POST is IP rate-limited through BOOKING_CACHE. The limiter
+    // fails CLOSED without a binding (2026-09-10), so the test binds an
+    // in-memory KV the way production binds a real one.
+    const kvStore = new Map<string, string>()
     Object.assign(testEnv, {
       DB: db,
+      BOOKING_CACHE: {
+        get: async (key: string) => kvStore.get(key) ?? null,
+        put: async (key: string, value: string) => {
+          kvStore.set(key, value)
+        },
+      },
       APP_BASE_URL: 'https://smd.services',
       PORTAL_BASE_URL: 'https://portal.smd.services',
     })

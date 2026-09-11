@@ -22,6 +22,8 @@ const ADMIN_API_ROOT = resolve('src/pages/api/admin')
 const EXEMPT = new Set<string>([])
 
 const HTTP_HANDLER = /export\s+const\s+(GET|POST|PUT|PATCH|DELETE|ALL)\b/
+const REQUIRE_ADMIN_SESSION_CALL_OR_IMPORT =
+  /(?:\brequireAdminSession\s*\()|(?:import\s*\{[^}]*\brequireAdminSession\b[^}]*\}\s*from)/
 
 function collectRouteFiles(): string[] {
   // recursive readdir returns paths relative to the constant absolute root;
@@ -40,11 +42,25 @@ describe('admin API auth convention', () => {
       if (EXEMPT.has(file)) continue
       const src = readFileSync(file, 'utf8')
       if (!HTTP_HANDLER.test(src)) continue // shared helper module, not a route
-      if (!src.includes('requireAdminSession')) {
+      // A call site or an import, never a bare mention: a comment naming the
+      // helper satisfied the old `includes` check (2026-09-10 review, T14).
+      if (!REQUIRE_ADMIN_SESSION_CALL_OR_IMPORT.test(src)) {
         offenders.push(file.replace(`${resolve('.')}/`, ''))
       }
     }
     expect(offenders).toEqual([])
+  })
+
+  it('the check matches a call site and an import, not a mention', () => {
+    expect(
+      REQUIRE_ADMIN_SESSION_CALL_OR_IMPORT.test('const auth = requireAdminSession(locals)')
+    ).toBe(true)
+    expect(
+      REQUIRE_ADMIN_SESSION_CALL_OR_IMPORT.test("import { requireAdminSession } from '../x'")
+    ).toBe(true)
+    expect(
+      REQUIRE_ADMIN_SESSION_CALL_OR_IMPORT.test('// gated by requireAdminSession upstream')
+    ).toBe(false)
   })
 
   it('every EXEMPT entry still exists (prunes stale allowlist entries)', () => {

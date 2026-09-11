@@ -17,6 +17,6 @@
     "operator/skills/medical-records-chaser/pre_run.py": 692,
     "operator/templates/drafting/drafting_gate_check.py": 1191,
     "operator/workspace_broker/establishment_store.py": 1415,
-    "operator/workspace_broker/server.py": 580
+    "operator/workspace_broker/server.py": 577
   }
 }

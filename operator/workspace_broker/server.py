@@ -34,6 +34,7 @@ from .msgraph_auth import materialize_read_credential as materialize_msgraph_rea
 from .msgraph_ops import MsGraphOps, MsGraphRefused, MsGraphTransportError
 from .msgraph_ops import collect_recipients as collect_msgraph_recipients
 from .operations import WorkspaceOperations
+from .request_errors import error_response_for
 from .send_witness import append_escalation_event
 
 MAX_REQUEST_BYTES = 1_048_576
@@ -983,12 +984,8 @@ class RequestHandler(socketserver.StreamRequestHandler):
             try:
                 request = json.loads(raw)
                 response = self.server.broker.handle(request, peer_pid, peer_uid)  # type: ignore[attr-defined]
-            except Exception as exc:  # noqa: BLE001 - protocol returns bounded errors
-                response = {
-                    "ok": False,
-                    "error": type(exc).__name__,
-                    "message": str(exc),
-                }
+            except Exception as exc:  # noqa: BLE001 - every exception becomes one bounded reply shape
+                response = error_response_for(exc)
         self.wfile.write(_canonical(response) + b"\n")
 
 

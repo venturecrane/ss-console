@@ -61,13 +61,34 @@ export function extractBearerToken(authorizationHeader: string | null): string |
   return token ? token : null
 }
 
+/**
+ * One remote JWKS per issuer, kept for the life of the isolate.
+ *
+ * `createRemoteJWKSet` owns a key cache with its own cooldown and max-age; the
+ * cache only helps if the same instance sees the next request. Constructing it
+ * per call (the shape before 2026-09-10) meant every MCP request fetched the
+ * issuer's JWKS again, which is a network round trip on the auth path and a
+ * dependency on Clerk's availability per call. The map is keyed by issuer URL,
+ * holds no request-scoped state, and is populated once per issuer, the same
+ * class of module-level value as the WASM init memo at `src/lib/pdf/render.ts`
+ * (coding-standards rule 10: module-level values are for immutable init-time
+ * state, which a public-key set per issuer is).
+ */
+const jwksByIssuer = new Map<string, ReturnType<typeof createRemoteJWKSet>>()
+
+function jwksFor(issuer: string): ReturnType<typeof createRemoteJWKSet> {
+  const cached = jwksByIssuer.get(issuer)
+  if (cached) return cached
+  const created = createRemoteJWKSet(new URL('/.well-known/jwks.json', issuer))
+  jwksByIssuer.set(issuer, created)
+  return created
+}
+
 async function verifyPinnedClerkToken(
   token: string,
   customer: ResolvedMcpCustomer
 ): Promise<unknown> {
-  const jwksUrl = new URL('/.well-known/jwks.json', customer.clerk.issuer)
-  const jwks = createRemoteJWKSet(jwksUrl)
-  const result = await jwtVerify(token, jwks, {
+  const result = await jwtVerify(token, jwksFor(customer.clerk.issuer), {
     algorithms: ['RS256'],
   })
   return result.payload

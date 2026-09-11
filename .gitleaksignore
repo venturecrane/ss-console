@@ -1,0 +1,25 @@
+# Historical gitleaks fingerprints, each audited and found to be a placeholder.
+#
+# The Secret Detection job scans full git history (security.yml, 2026-09-10).
+# These eight hits predate the working-tree-only scan and were re-read from the
+# commits named below before being pinned here. A fingerprint is one commit, one
+# file, one rule, one line; a new commit touching the same line is NOT covered,
+# so a real secret landing later still fails the gate. Add a line only with the
+# commit, the file, and what the value actually was.
+
+# operator/workspace_broker/tests/test_escalation_event_append.py: a twelve
+# character hex-looking item_key fixture for an escalation-ledger row (the value
+# is not repeated here because the scanner flags it in a comment too).
+fc77d90ecf5397711cfef67176d2ac5987cb1862:operator/workspace_broker/tests/test_escalation_event_append.py:generic-api-key:43
+fc77d90ecf5397711cfef67176d2ac5987cb1862:operator/workspace_broker/tests/test_escalation_event_append.py:generic-api-key:93
+a06d6655a1b67f3be39d6bdbe1a4b776da75458d:operator/workspace_broker/tests/test_escalation_event_append.py:generic-api-key:43
+a06d6655a1b67f3be39d6bdbe1a4b776da75458d:operator/workspace_broker/tests/test_escalation_event_append.py:generic-api-key:93
+
+# tests/oauth-callback.test.ts: `Object.assign(testEnv, { OAUTH_STATE_SIGNING_KEY:
+# ALT_SIGNING_KEY })`, a test constant assigned to a test env, no value on the line.
+02eb35f9b050e9cf7f516ef0ceed015a9f655706:tests/oauth-callback.test.ts:generic-api-key:110
+01ebac9df1d549bcab046f00cee6e44e8e9308c0:tests/oauth-callback.test.ts:generic-api-key:110
+
+# .dev.vars.example: `RESEND_API_KEY=""`, an empty example value.
+cf1af17673bd2a2f2fe0de22160c3d5ffe5183c6:.dev.vars.example:generic-api-key:19
+776d65430d3a348465f2a1dbea6e9fdfff90a11c:.dev.vars.example:generic-api-key:19

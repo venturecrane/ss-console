@@ -147,7 +147,9 @@ export const POST: APIRoute = async (context: APIContext) => {
     if (/already a member/i.test(message)) return redirectWithStatus(instance, 'already_member')
     if (/already invited|duplicate/i.test(message))
       return redirectWithStatus(instance, 'already_invited')
-    console.error('Clerk invitation failed', { email, message })
+    // The invitee's address is client PII; the customer id is enough to find
+    // the attempt, and the message carries Clerk's reason.
+    console.error('Clerk invitation failed', { customer_id: ctx.client.id, message })
     return redirectWithStatus(instance, 'invite_failed')
   }
 
