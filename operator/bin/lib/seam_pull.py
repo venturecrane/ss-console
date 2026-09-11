@@ -223,9 +223,9 @@ def _write_memory_snapshot(conn: sqlite3.Connection, table: str, rows: list[dict
         raise ValueError(f"memory export {table!r} served non-identifier column names: {bad!r}")
     col_defs = ", ".join(f'"{k}"' for k in keys)
     placeholders = ", ".join("?" for _ in keys)
-    conn.execute(f'CREATE TABLE IF NOT EXISTS "{table}" ({col_defs})')  # noqa: S608 — table from MEMORY_EXPORT_TABLES, columns isidentifier-checked above
+    conn.execute(f'CREATE TABLE IF NOT EXISTS "{table}" ({col_defs})')  # noqa: S608 - same statement shape as the line above: table from MEMORY_EXPORT_TABLES, values bound — table from MEMORY_EXPORT_TABLES, columns isidentifier-checked above
     conn.executemany(
-        f'INSERT INTO "{table}" ({col_defs}) VALUES ({placeholders})',  # noqa: S608 — same table and column set as the CREATE above; values are bound
+        f'INSERT INTO "{table}" ({col_defs}) VALUES ({placeholders})',  # noqa: S608 - same statement shape as the line above: table from MEMORY_EXPORT_TABLES, values bound — same table and column set as the CREATE above; values are bound
         [tuple(row.get(k) for k in keys) for row in rows],
     )
     conn.commit()

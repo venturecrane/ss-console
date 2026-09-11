@@ -69,13 +69,13 @@ def page_match(a: Any, b: Any, dpi: int = 60) -> tuple[bool | None, float]:
     None when the INSTRUMENT failed (a page the rasteriser cannot draw)."""
     try:
         ta, tb = a.get_text(), b.get_text()
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - the rasteriser raising on a page means the INSTRUMENT failed; None is the honest verdict, not False
         return None, 1.0
     if ta != tb:
         return False, 1.0
     try:
         pa, pb = a.get_pixmap(dpi=dpi), b.get_pixmap(dpi=dpi)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - the rasteriser raising on a page means the INSTRUMENT failed; None is the honest verdict, not False
         return None, 1.0
     if (pa.width, pa.height) != (pb.width, pb.height):
         return False, 1.0

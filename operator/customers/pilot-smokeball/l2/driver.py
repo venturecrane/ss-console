@@ -65,7 +65,7 @@ import urllib.parse
 import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "seed"))
-from seed_staging import Api, load_manifest, text_pdf  # noqa: E402
+from seed_staging import Api, load_manifest, text_pdf
 
 AGENTMAIL_HOST = "https://api.agentmail.to"
 SEAT_INBOX = "pilot-smokeball@agentmail.to"

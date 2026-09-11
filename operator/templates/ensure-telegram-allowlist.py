@@ -52,7 +52,7 @@ def _config_allow_from(path: Path) -> list[str]:
     try:
         with path.open() as f:
             cfg = yaml.safe_load(f) or {}
-    except Exception:
+    except Exception:  # noqa: BLE001 - an unreadable or invalid config.yaml contributes no allow_from entries; the check reports on what it can read
         return []
     if not isinstance(cfg, dict):
         return []

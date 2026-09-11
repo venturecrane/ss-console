@@ -132,7 +132,7 @@ def run(sr: StageRun) -> int:
                 continue
             try:
                 r = PdfReader(rec["path"])
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001 - an unreadable PDF is recorded as that file's error in the exhibit list and the loop continues
                 entries.append({"file": name, "error": str(exc)[:100]})
                 continue
             for pg in r.pages:

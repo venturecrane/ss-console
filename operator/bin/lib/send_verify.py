@@ -134,7 +134,7 @@ from send_attribution import (
     message_attributor,
     plain_stamp_edge,
     stamps_plain_at,
-)  # noqa: F401 -- attribution_counts re-exported
+)
 from send_invariants import (  # noqa: F401 -- re-exports; callers and tests read unchanged
     DEFAULT_INVARIANTS_PATH,
     InvariantFinding,
@@ -805,7 +805,7 @@ def verifier_from_contract(
 # ---------------------------------------------------------------------------
 
 
-from send_report import as_dicts, digest_keys, has_findings, has_holds, render_lines  # noqa: E402,F401 -- re-exports; callers and tests read unchanged
+from send_report import as_dicts, digest_keys, has_findings, has_holds, render_lines  # noqa: E402 -- re-exports; callers and tests read unchanged
 
 __all__ = [
     "BodyVerdict",

@@ -88,13 +88,10 @@ The steps:
 
 from __future__ import annotations
 
-import asyncio
 import csv
 import enum
 import json
 import logging
-import os
-import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -536,7 +533,7 @@ def _load_customer_yaml(customers_root: Path, slug: str) -> Optional[dict]:
 
         parsed = _yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
         return parsed if isinstance(parsed, dict) else None
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - an unparseable customer.yaml is logged and read as absent; the pipeline's preflight decides what that means
         log.warning("decommission: customer.yaml parse failed at %s", yaml_path)
         return None
 
@@ -1038,7 +1035,7 @@ class DecommissionPipeline:
                     detail={"failed": True, "error": f"{type(exc).__name__}: {exc}"},
                 ),
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             # If audit write itself fails we cannot do better than log;
             # the calling script still raises the original step failure.
             log.exception("decommission audit-row write failed for %s/%s", self.customer_slug, step_name)

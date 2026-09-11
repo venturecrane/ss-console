@@ -29,7 +29,7 @@ _OPERATOR = _HERE.parents[2]
 sys.path.insert(0, str(_OPERATOR))
 sys.path.insert(0, str(_OPERATOR / "workspace_broker"))
 
-from bin.lib.chain_pin import (  # noqa: E402
+from bin.lib.chain_pin import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     PIN_ABSENT,
     PIN_DESCENDS,
     PIN_MALFORMED,
@@ -37,7 +37,7 @@ from bin.lib.chain_pin import (  # noqa: E402
     PIN_UNCHANGED,
     check_pinned_head,
 )
-from chain import CHAIN_COLUMNS, GENESIS, compute_row_hash, verify_chain  # noqa: E402
+from chain import CHAIN_COLUMNS, GENESIS, compute_row_hash, verify_chain  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 _VERIFIER = _OPERATOR / "bin" / "verify-audit-chain.py"
 

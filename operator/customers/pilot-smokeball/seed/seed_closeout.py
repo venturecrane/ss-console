@@ -50,8 +50,8 @@ SEED_YAML = os.path.join(
 MANIFEST = os.path.join(HERE, "closeout-manifest.json")
 
 sys.path.insert(0, HERE)
-from seed_staging import Api  # noqa: E402  (module-local helper, same directory)
-from seed_data import MVA_PLAINTIFF_CA, PI_PLAINTIFF_CA  # noqa: E402
+from seed_staging import Api  # noqa: E402 - module-local helper in the same directory, after the sys.path shim above
+from seed_data import MVA_PLAINTIFF_CA, PI_PLAINTIFF_CA  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 
 def load_manifest() -> dict:

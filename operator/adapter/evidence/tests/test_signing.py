@@ -18,15 +18,15 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[3]))  # operator/ on sys.path
 
-from adapter.evidence import signing  # noqa: E402
+from adapter.evidence import signing  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 cryptography = pytest.importorskip(
     "cryptography",
     reason="signing requires the cryptography package; CI installs it",
 )
 
-from cryptography.hazmat.primitives import serialization  # noqa: E402
-from cryptography.hazmat.primitives.asymmetric.ed25519 import (  # noqa: E402
+from cryptography.hazmat.primitives import serialization  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     Ed25519PrivateKey,
 )
 

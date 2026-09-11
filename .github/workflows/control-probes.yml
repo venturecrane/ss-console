@@ -90,7 +90,6 @@ jobs:
           # before `status` reaches GITHUB_OUTPUT, silently skipping the alert
           # step below. That is, it would go quiet in exactly the cases the
           # control exists for (ss#2309, same shape as the send reconciler).
-          # shellcheck disable=SC2086 - ARGS is built above, not caller-supplied.
           STATUS=0
           python3 operator/bin/control-probes.py $ARGS > probes.txt 2>&1 || STATUS=$?
           cat probes.txt

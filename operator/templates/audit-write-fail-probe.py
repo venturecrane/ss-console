@@ -43,7 +43,7 @@ def main() -> int:
         con.commit()
         print("FAIL: INSERT into audit_log succeeded as the agent uid", file=sys.stderr)
         return 1
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - the probe EXPECTS the write to fail as the agent uid; any exception here is the pass condition
         pass
 
     return 0

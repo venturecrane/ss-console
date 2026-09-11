@@ -224,7 +224,7 @@ def probe_sticky_stop_cost_ladder(spec: dict, ctx: ProbeContext) -> tuple[bool, 
 def probe_sticky_stop_pause_pin(spec: dict, ctx: ProbeContext) -> tuple[bool, str]:
     """Pin HARD_STOP the way the portal pause does, then ask permission."""
     mod, machine = _machine(ctx)
-    store = machine._store if not ctx.neutered else machine._inner._store  # noqa: SLF001
+    store = machine._store if not ctx.neutered else machine._inner._store
     store.rows[("probe", "probe")] = mod.StickyStopState(
         customer="probe",
         persona="probe",
@@ -383,7 +383,7 @@ def probe_seat(spec: dict, ctx: ProbeContext) -> tuple[bool, str]:
     runner = ctx.run_seat or run_seat_command
     try:
         code, out = runner(ctx.seat, argv)
-    except Exception as exc:  # noqa: BLE001 - a transport failure holds, never passes
+    except Exception as exc:
         raise ProbeHold(f"seat-probe transport failure: {exc}") from exc
     pattern = spec.get("expect_pattern") or ""
     if not pattern:

@@ -47,7 +47,7 @@ rec = importlib.util.module_from_spec(_spec)
 sys.modules["reconcile_outcomes"] = rec
 _spec.loader.exec_module(rec)
 
-from adapter.audit_log import ACCEPTED_ACTION_TYPES  # noqa: E402
+from adapter.audit_log import ACCEPTED_ACTION_TYPES  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 CONTRACT = rec.load_contract()
 
@@ -655,7 +655,7 @@ def test_absent_seats_are_named_in_the_report_not_filtered_away():
 # mistaken for them.
 # ---------------------------------------------------------------------------
 
-from recipient_policy import sender_key as _sk  # noqa: E402
+from recipient_policy import sender_key as _sk  # noqa: E402 - mid-module import beside the tests that use it; the shim at the top puts lib on the path
 
 _FIRM = "christa@example-firm.test"
 _SMD = "operator@smd.services"

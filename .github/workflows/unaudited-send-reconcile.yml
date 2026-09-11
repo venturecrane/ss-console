@@ -168,7 +168,6 @@ jobs:
           # that exits non-zero, so the control was mute in exactly the case it
           # exists for. Putting the call in a `||` list makes its failure
           # handled, which is what suspends `-e`.
-          # shellcheck disable=SC2086 — ARGS is built above, not caller-supplied.
           STATUS=0
           python3 operator/bin/reconcile-sends.py $ARGS > reconcile.txt 2>&1 || STATUS=$?
           cat reconcile.txt

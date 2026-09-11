@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from citation_filter import contains_citation, scan, refusal_message  # noqa: E402
+from citation_filter import contains_citation, scan, refusal_message
 
 
 # ---------- Adversarial fixtures: each should be REFUSED ----------

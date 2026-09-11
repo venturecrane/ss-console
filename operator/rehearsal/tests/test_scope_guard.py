@@ -16,7 +16,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from rehearsal import scope  # noqa: E402 -- path injected above
+from rehearsal import scope
 
 _BIN = Path(__file__).resolve().parents[2] / "bin"
 

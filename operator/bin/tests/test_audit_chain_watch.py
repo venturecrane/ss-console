@@ -31,7 +31,7 @@ _OPERATOR = _HERE.parents[2]
 sys.path.insert(0, str(_OPERATOR))
 sys.path.insert(0, str(_OPERATOR / "workspace_broker"))
 
-from chain import CHAIN_COLUMNS, GENESIS, compute_row_hash  # noqa: E402
+from chain import CHAIN_COLUMNS, GENESIS, compute_row_hash  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 # The script has a dash in its name, so it is loaded by path rather than
 # imported. Same shape the other bin/ script tests use.

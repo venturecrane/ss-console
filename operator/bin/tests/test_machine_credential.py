@@ -22,7 +22,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
-import machine_credential as mc  # noqa: E402
+import machine_credential as mc
 
 VECTOR_SALT = "000102030405060708090a0b0c0d0e0f"
 VECTOR_PLAINTEXT = "test-plaintext-key"

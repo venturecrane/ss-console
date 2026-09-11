@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from rehearsal import drivers  # noqa: E402 -- path injected above
+from rehearsal import drivers
 
 
 def test_reconcile_unpack_matches_the_reconciler(monkeypatch) -> None:

@@ -69,7 +69,7 @@ def image_dims(data: bytes) -> tuple[int, int] | None:
 
         px = pymupdf.Pixmap(data)
         return px.width, px.height
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - a blob pymupdf cannot open has no dimensions; None is the answer and the caller records it
         return None
 
 
@@ -106,7 +106,7 @@ def pull_containers(sr: StageRun, targets: list[dict[str, Any]], fpath: dict[str
                 try:
                     got = sr.seat.fetch(url, dest, b.get("size"))
                     rec.update(ok=True, path=str(dest), size_got=got)
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:  # noqa: BLE001 - a fetch failure is recorded on the email's record and the partial file removed; the loop continues
                     dest.unlink(missing_ok=True)
                     rec.update(ok=False, error=str(exc)[:160])
             append_jsonl(log_path, rec)
@@ -173,7 +173,7 @@ def index_containers(sr: StageRun, pulled: list[dict[str, Any]], have: dict[str,
             continue
         try:
             m = extract_msg.Message(rec["path"])
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 - extract_msg raising on a container is recorded as that email's error; the loop continues
             ix.errors.append({"email": rec["name"], "error": str(exc)[:160]})
             continue
         try:
@@ -182,7 +182,7 @@ def index_containers(sr: StageRun, pulled: list[dict[str, Any]], have: dict[str,
                 name = att.longFilename or att.shortFilename or "unnamed"
                 try:
                     data = att.data
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:  # noqa: BLE001 - an attachment whose payload cannot be read is recorded as that attachment's error; the rest are still indexed
                     ix.errors.append({"email": subject, "attachment": name, "error": str(exc)[:120]})
                     continue
                 if not isinstance(data, bytes):
@@ -192,7 +192,7 @@ def index_containers(sr: StageRun, pulled: list[dict[str, Any]], have: dict[str,
         finally:
             try:
                 m.close()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 - closing the message in finally must not mask an error already recorded for it
                 pass
         if n % 25 == 0:
             sr.log(f"  opened {n}/{len(msgs)}, distinct attachments so far: {len(ix.by_hash)}")

@@ -817,7 +817,7 @@ def read_windows(client: Any, cand: dict) -> tuple[Windows | None, str]:
         )
     except UnsupportedDocumentError as exc:
         return None, f"no text layer ({exc})"
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - any extraction-library failure is recorded per document as "extraction failed" so the survey continues
         return None, f"extraction failed: {exc}"
     if not text.strip():
         return None, "no text layer"

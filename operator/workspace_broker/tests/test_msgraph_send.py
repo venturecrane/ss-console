@@ -38,21 +38,21 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from workspace_broker.transmit_verbs import dispatch_transmit  # noqa: E402
-from workspace_broker.msgraph_auth import (  # noqa: E402
+from workspace_broker.transmit_verbs import dispatch_transmit
+from workspace_broker.msgraph_auth import (
     load_credential,
     materialize_credential,
     seat_mailbox,
 )
-from workspace_broker.msgraph_ops import (  # noqa: E402
+from workspace_broker.msgraph_ops import (
     AUDIT_ROW_HEADER,
     MsGraphOps,
     _audit_header_of,
     MsGraphRefused,
     MsGraphTransportError,
 )
-from workspace_broker.recipient_policy import sender_key  # noqa: E402
-from workspace_broker.server import Broker  # noqa: E402
+from workspace_broker.recipient_policy import sender_key
+from workspace_broker.server import Broker
 
 GATEWAY_PID = 42
 AGENT_UID = 1000
@@ -171,7 +171,7 @@ class FakeGraph:
         self.transmitted_headers: list[list[dict]] = []
         self.sent_items_reads = 0
 
-    def __call__(self, request, timeout=None):  # noqa: ANN001 - urllib signature
+    def __call__(self, request, timeout=None):
         url = request.full_url
         raw = request.data
         body: dict | None = None
@@ -819,7 +819,7 @@ def test_the_client_secret_never_appears_in_a_token_error(tmp_path: Path) -> Non
     of those parameters is the secret. Status only, never the body."""
     import urllib.error
 
-    def _reject(request, timeout=None):  # noqa: ANN001
+    def _reject(request, timeout=None):
         raise urllib.error.HTTPError(request.full_url, 401, "Unauthorized", {}, None)
 
     customer, credential, _read = _seat(tmp_path)
@@ -912,7 +912,7 @@ def test_a_transport_failure_is_not_recorded_as_a_refusal(tmp_path: Path) -> Non
     ledger's own language, and the reconciler reads this field."""
     import urllib.error
 
-    def _boom(request, timeout=None):  # noqa: ANN001
+    def _boom(request, timeout=None):
         if request.full_url.endswith("/token"):
             return _Response(json.dumps({"access_token": "tok", "expires_in": 3600}))
         raise urllib.error.HTTPError(request.full_url, 503, "nope", {}, None)
@@ -1402,7 +1402,7 @@ def test_a_non_400_reply_failure_still_propagates(tmp_path: Path) -> None:
     original = http._record_transmit
     attempts: list[str] = []
 
-    def explode(url, body):  # noqa: ANN001 - test double
+    def explode(url, body):
         # ONCE, not always. A double that failed every attempt would let a
         # "retry everything" implementation pass this test by failing its retry
         # too — the mutation would be invisible behind the double.

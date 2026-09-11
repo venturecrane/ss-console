@@ -32,7 +32,7 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[3]))  # operator/ on sys.path
 
-from adapter.voice import (  # noqa: E402
+from adapter.voice import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     DraftTransformer,
     GENERAL_VOICE_COHORT,
     GENERAL_VOICE_USER_ID,

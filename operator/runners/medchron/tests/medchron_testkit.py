@@ -17,7 +17,7 @@ from pathlib import Path
 
 # The synthetic firm config lives in the package so the seat probes can run
 # without the firm's private tables (ss#2614); the tests reuse it verbatim.
-from medchron.probes import SYNTHETIC_FIRM as FIRM_CONFIG  # noqa: E402
+from medchron.probes import SYNTHETIC_FIRM as FIRM_CONFIG  # noqa: F401 - after the path shim; re-exported to test_decisions_driver, which imports it from here
 
 PRICING = {
     "_meta": {

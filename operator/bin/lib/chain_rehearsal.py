@@ -86,7 +86,7 @@ def rehearse_mismatch(
         return EXIT_REHEARSAL_FAILED, lines
     try:
         rows = client.read_all("audit_export")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - any transport failure pulling the export is the rehearsal's FAILED line, reported not raised
         lines.append(f"  FAILED  the audit export could not be pulled ({exc}).")
         return EXIT_REHEARSAL_FAILED, lines
 
@@ -136,7 +136,7 @@ def rehearse_mismatch(
 
     try:
         console.clear_rehearsal_alerts(slug=slug)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - the alert was written; a failed clear is reported as FAILED so a rehearsal row is never left in D1 silently
         lines.append(
             f"  FAILED  the rehearsal alert was written but could NOT be cleared ({exc}). "
             f"Delete it by hand: driver = '{REHEARSAL_DRIVER_PREFIX}{slug}'."

@@ -634,7 +634,7 @@ def _emit_boot_failure_audit(
             client.sendall(request + b"\n")
             raw = client.makefile("rb").readline()
         response = json.loads(raw)
-    except (OSError, ValueError) as exc:  # noqa: BLE001 - best-effort emit
+    except (OSError, ValueError) as exc:
         log.warning(
             "invariant_7: failed to emit INVARIANT_BOOT_CHECK_FAILED via "
             "broker %s: %s (boot still refused)",
@@ -763,7 +763,7 @@ def run() -> tuple[bool, str]:
     """
     try:
         return _self_check_fixtures()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 - boot self-check: any raise is a FAIL line for the substrate runner, never a crash at boot
         return (False, f"FAIL: invariant 7 self-check raised {type(e).__name__}: {e}")
 
 

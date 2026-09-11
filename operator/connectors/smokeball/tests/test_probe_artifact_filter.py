@@ -10,7 +10,6 @@ cannot be hidden by quoting the marker.
 
 from __future__ import annotations
 
-import pytest
 
 from smokeball_connector import server
 

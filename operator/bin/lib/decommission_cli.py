@@ -73,16 +73,14 @@ _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[2]))
 
 # Imported after sys.path tweak.
-from bin.lib.decommission import (  # noqa: E402
+from bin.lib.decommission import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     DecommissionPipeline,
     DecommissionStepFailed,
-    FilesystemTombstoner,
     StepResult,
-    StepStatus,
     _load_customer_yaml,
 )
-from bin.lib.decommission_backends import BACKEND_REQUIREMENTS, backends_from_env  # noqa: E402
-from bin.lib.seam_pull import SeamAuditLogPreserver, seam_client_from_env  # noqa: E402
+from bin.lib.decommission_backends import BACKEND_REQUIREMENTS, backends_from_env  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from bin.lib.seam_pull import SeamAuditLogPreserver, seam_client_from_env  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 log = logging.getLogger("aie.bin.decommission_cli")
 
@@ -303,7 +301,7 @@ async def _run(args: argparse.Namespace) -> int:
 
     try:
         audit_writer, audit_conn = _build_local_audit_writer(audit_db)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - audit writer init failure is exit 4 with the reason printed; the CLI's contract is exit codes, not traces
         print(f"[preflight] audit writer init failed: {exc}", file=sys.stderr)
         return 4
 
@@ -367,7 +365,7 @@ async def _run(args: argparse.Namespace) -> int:
             )
             try:
                 audit_conn.close()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 - closing the audit connection on the refusal path must not mask the refusal being reported
                 pass
             _print_footer(args.slug, mode=mode, ok=False)
             return 5
@@ -392,14 +390,14 @@ async def _run(args: argparse.Namespace) -> int:
         )
         _print_footer(args.slug, mode=mode, ok=False)
         return 3
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - the CLI's contract is exit 4 with the error type named; an unhandled trace would lose the footer
         print(f"[live] UNEXPECTED ERROR: {type(exc).__name__}: {exc}", file=sys.stderr)
         _print_footer(args.slug, mode=mode, ok=False)
         return 4
     finally:
         try:
             audit_conn.close()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 - closing the audit connection in finally must not replace the step's own exit code
             pass
 
     for r in results:

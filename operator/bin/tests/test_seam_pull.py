@@ -26,7 +26,7 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[2]))
 
-from bin.lib.seam_pull import (  # noqa: E402
+from bin.lib.seam_pull import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     AUDIT_COLUMNS,
     MEMORY_EXPORT_TABLES,
     SeamAuditLogPreserver,
@@ -95,7 +95,7 @@ def test_seam_client_from_env_requires_both_vars(monkeypatch):
     monkeypatch.setenv("OPERATOR_RUNTIME_READ_URL", "https://{app}.fly.dev")
     client = seam_client_from_env("smd")
     assert client is not None
-    assert client._base == "https://hermes-smd.fly.dev"  # noqa: SLF001
+    assert client._base == "https://hermes-smd.fly.dev"
 
 
 # ---------------------------------------------------------------------------

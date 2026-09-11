@@ -161,9 +161,7 @@ def reconcile(intent: dict[str, Any]) -> dict[str, Any]:
 
     try:
         client = build_client_from_env()
-    except (
-        Exception
-    ) as exc:  # ValueError (auth_code w/o token), missing required secret
+    except Exception as exc:  # noqa: BLE001 - ValueError (auth_code without a token) or a missing secret: not connected yet is a skip, not a crash
         _err(
             f"{slug}: client not constructable (likely not connected yet): {exc} — skip, retry next trigger"
         )
@@ -171,7 +169,7 @@ def reconcile(intent: dict[str, Any]) -> dict[str, Any]:
 
     try:
         raw = client.get("/webhooks")
-    except Exception as exc:  # SmokeballApiError / httpx / auth
+    except Exception as exc:  # SmokeballApiError / httpx / auth  # noqa: BLE001 - SmokeballApiError, httpx or auth: any failure listing subscriptions is a skip the next trigger retries
         _err(f"{slug}: GET /webhooks failed: {exc} — skip, retry next trigger")
         return manifest("skipped:list_failed", detail=str(exc))
 
@@ -203,7 +201,7 @@ def reconcile(intent: dict[str, Any]) -> dict[str, Any]:
         try:
             client.delete_webhook_subscription(sid)
             deleted.append(sid)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - a failed delete leaves a partial state the next trigger heals; the manifest says so
             _err(
                 f"{slug}: DELETE /webhooks/{sid} failed: {exc} — partial; next trigger heals"
             )
@@ -215,7 +213,7 @@ def reconcile(intent: dict[str, Any]) -> dict[str, Any]:
             resp = client.request("POST", "/webhooks", json=payload)
             sid = resp.get("id") if isinstance(resp, dict) else None
             created.append(str(sid) if sid else payload["name"])
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - a failed create is reported in the manifest as error:create_failed; the next trigger heals
             _err(f"{slug}: POST /webhooks failed: {exc} — partial; next trigger heals")
             return manifest(
                 "error:create_failed", created=created, deleted=deleted, detail=str(exc)
@@ -243,7 +241,7 @@ def main() -> int:
     an unexpected crash so it surfaces in the boot log."""
     try:
         intent = json.load(sys.stdin)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - malformed stdin intent must still yield a manifest the orchestrator can read, never a trace
         print(
             json.dumps(
                 {

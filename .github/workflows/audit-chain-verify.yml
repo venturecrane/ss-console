@@ -130,7 +130,6 @@ jobs:
           # HERE, before the report prints and before `status` reaches
           # GITHUB_OUTPUT, silently skipping the alert step below -- going quiet
           # in exactly the cases the control exists for.
-          # shellcheck disable=SC2086 - ARGS is built above, not caller-supplied.
           STATUS=0
           python3 operator/bin/audit-chain-watch.py $ARGS > watch.txt 2>&1 || STATUS=$?
           cat watch.txt

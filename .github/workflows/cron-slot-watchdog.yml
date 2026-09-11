@@ -98,7 +98,6 @@ jobs:
           # unguarded non-zero exit aborts the step before the report is printed
           # and before `status` reaches GITHUB_OUTPUT, which mutes the control in
           # exactly the case it exists for.
-          # shellcheck disable=SC2086 -- ARGS is built above, not caller-supplied.
           STATUS=0
           python3 operator/bin/reconcile-wakes.py $ARGS > wakes.txt 2>&1 || STATUS=$?
           cat wakes.txt

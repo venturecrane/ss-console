@@ -34,6 +34,14 @@ blind-wake behaviour must not diverge, but ``plan_counts`` differs on purpose
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # The skill's own pre_run module, which loads this file beside itself at
+    # runtime; a type-only import so the WakeDecision annotation names a real
+    # class (pyright 2026-09-10: it was an undefined name).
+    from pre_run import WakeDecision
+
 import asyncio
 import sys
 import threading

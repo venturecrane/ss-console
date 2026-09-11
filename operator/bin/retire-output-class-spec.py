@@ -85,7 +85,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         existing = json.loads(s3.get_object(Bucket=bucket, Key=key)["Body"].read())
-    except Exception:  # noqa: BLE001 — nothing to retire
+    except Exception:  # noqa: BLE001 — a missing or unreadable object means there is nothing to retire; the script reports that state
         print(f"key    : {key}")
         print("state  : no existing object — nothing to retire")
         return 0

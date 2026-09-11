@@ -573,7 +573,7 @@ class Daemon:
         while not stop():
             try:
                 self.tick()
-            except Exception:  # noqa: BLE001 - the loop outlives any single tick
+            except Exception:
                 logger.exception("tick failed")
             slept = 0.0
             while slept < poll_seconds and not stop():

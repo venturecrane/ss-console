@@ -145,7 +145,7 @@ def _walk(client, matter_id):
             path += "/" + folder_id
         try:
             r = client.get(path)
-        except Exception:
+        except Exception:  # noqa: BLE001 - a folder that cannot be listed contributes nothing; the survey continues over the rest
             return [], []
         node = (r.get("value") or [{}])[0]
         return node.get("folders") or [], node.get("files") or []
@@ -198,7 +198,7 @@ def measure(matter_id, budget_seconds=900.0):
             continue
         try:
             _meta, blob = client.download_file(matter_id, f.get("id"))
-        except Exception:
+        except Exception:  # noqa: BLE001 - a download failing is accounted as outcome=error for that file; the survey continues
             account(t, ext, outcome="error")
             continue
         try:
@@ -207,7 +207,7 @@ def measure(matter_id, budget_seconds=900.0):
         except UnsupportedDocumentError:
             account(t, ext, outcome="unsupported")
             continue
-        except Exception:
+        except Exception:  # noqa: BLE001 - an extractor failing is accounted as outcome=error for that file; the survey continues
             account(t, ext, outcome="error")
             continue
 

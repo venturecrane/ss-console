@@ -349,7 +349,7 @@ class MsGraphOps:
             raise MsGraphTransportError(
                 f"msgraph token mint rejected with HTTP {exc.code}"
             ) from exc
-        except Exception as exc:  # noqa: BLE001 - urllib raises a wide family
+        except Exception as exc:
             raise MsGraphTransportError(f"msgraph token mint failed: {exc}") from exc
         try:
             parsed = json.loads(raw)
@@ -400,7 +400,7 @@ class MsGraphOps:
             )
             failure.status = exc.code
             raise failure from exc
-        except Exception as exc:  # noqa: BLE001 - urllib raises a wide family
+        except Exception as exc:
             raise MsGraphTransportError(f"msgraph {method} {path} failed: {exc}") from exc
         # sendMail and reply answer 202 with no body; that is success, not a
         # malformed response, so an empty payload must not raise here.

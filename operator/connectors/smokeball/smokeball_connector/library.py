@@ -323,7 +323,7 @@ def _walk_folders(nodes: Any) -> list[dict[str, Any]]:
 def find_folder_id(client: Any, matter_id: str, folder_name: str) -> str | None:
     try:
         resp = client.get(f"/matters/{matter_id}/documents/folders", Limit=500, Offset=0)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - any transport or auth failure listing folders reads as "no such folder"; the caller falls back to the root
         return None
     want = _norm(folder_name)
     for f in _walk_folders(_listing(resp)):
@@ -338,7 +338,7 @@ def list_matter_files(client: Any, matter_id: str) -> list[dict[str, Any]]:
     while True:
         try:
             resp = client.get(f"/matters/{matter_id}/documents/files", Limit=500, Offset=offset)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 - a page fetch failing ends the listing with what was already read; the caller treats the list as partial
             break
         items = _listing(resp)
         files.extend(items)

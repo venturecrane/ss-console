@@ -14,13 +14,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from workspace_broker.audit_ledger import LedgerWriter  # noqa: E402
-from workspace_broker.medchron_ledger import (  # noqa: E402
+from workspace_broker.audit_ledger import LedgerWriter
+from workspace_broker.medchron_ledger import (
     MedchronLedger,
     allowance_from_customer_yaml,
     validate_envelope,
 )
-from workspace_broker.medchron_verbs import MedchronVerbs, medchron_dispatch  # noqa: E402
+from workspace_broker.medchron_verbs import MedchronVerbs, medchron_dispatch
 
 GATEWAY_PID = 4242
 AGENT_UID = 10000
@@ -297,7 +297,7 @@ def test_submit_writes_the_row_then_the_queue_file_with_the_remainder(verbs):
 def test_transitions_are_monotonic_and_each_pins_its_audit_type(verbs):
     v, ledger, _ = verbs
     j = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
-    rec = lambda state, **fields: call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state=state, fields=fields)  # noqa: E731
+    rec = lambda state, **fields: call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state=state, fields=fields)  # noqa: E731 - test-local shorthand for the verb call; a def adds only a name
     rec("running")
     rec("held", reason="seat paused")
     rec("running")

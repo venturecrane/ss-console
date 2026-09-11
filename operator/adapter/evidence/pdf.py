@@ -25,7 +25,6 @@ change.
 from __future__ import annotations
 
 import io
-import re
 import textwrap
 from dataclasses import dataclass
 from typing import Iterable, List, Optional, Sequence

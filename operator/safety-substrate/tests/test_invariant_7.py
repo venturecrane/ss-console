@@ -49,10 +49,9 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[1]))  # safety-substrate/ on path
 
-from invariants.invariant_7 import (  # noqa: E402
+from invariants.invariant_7 import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     BindingKind,
     BindingSnapshot,
-    Invariant7Violation,
     collect_snapshot_from_env,
     run as run_module_self_check,
     verify_at_boot,

@@ -46,13 +46,13 @@ _HERE = Path(__file__).resolve()
 # operator/ on sys.path so `from adapter.evidence import ...` resolves.
 sys.path.insert(0, str(_HERE.parents[2]))
 
-from adapter.evidence import (  # noqa: E402
+from adapter.evidence import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     EvidencePacketBuilder,
     EvidencePacketError,
     PacketActor,
     PacketRequest,
 )
-from adapter.evidence.packet import SqliteReadExecutor  # noqa: E402
+from adapter.evidence.packet import SqliteReadExecutor  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 log = logging.getLogger("aie.bin.evidence")
 
@@ -248,13 +248,13 @@ async def _run(args: argparse.Namespace) -> int:
 
     try:
         audit_writer, audit_conn = _build_local_audit_writer(audit_db)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - audit writer init failure is exit 4 with the reason printed; the CLI's contract is exit codes, not traces
         print(f"[preflight] audit writer init failed: {exc}", file=sys.stderr)
         return 4
 
     try:
         read_executor, read_conn = _build_local_read_executor(read_db)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - read executor init failure is exit 4 with the reason printed; the CLI's contract is exit codes, not traces
         print(f"[preflight] read executor init failed: {exc}", file=sys.stderr)
         audit_conn.close()
         return 4
@@ -265,7 +265,7 @@ async def _run(args: argparse.Namespace) -> int:
         import yaml  # type: ignore
 
         yaml_loader = yaml.safe_load
-        yaml_dumper = lambda data: yaml.safe_dump(data, sort_keys=True)  # noqa: E731
+        yaml_dumper = lambda data: yaml.safe_dump(data, sort_keys=True)  # noqa: E731 - a one-line dumper alias bound beside its loader; a def adds only a name
     except ImportError:
         log.warning(
             "pyyaml not installed; falling back to JSON-shaped yaml. "
@@ -297,7 +297,7 @@ async def _run(args: argparse.Namespace) -> int:
     except EvidencePacketError as exc:
         print(f"[build] HALTED: {exc}", file=sys.stderr)
         return 3
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - an unexpected build failure is exit 4 with the type named; the CLI's contract is exit codes, not traces
         print(
             f"[build] UNEXPECTED ERROR: {type(exc).__name__}: {exc}",
             file=sys.stderr,
@@ -306,11 +306,11 @@ async def _run(args: argparse.Namespace) -> int:
     finally:
         try:
             audit_conn.close()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 - closing the audit connection in finally must not replace the build's own exit code
             pass
         try:
             read_conn.close()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 - closing the read connection in finally must not replace the build's own exit code
             pass
 
     summary = {

@@ -519,7 +519,7 @@ class AuditLogWriter:
 
         try:
             await self._executor.execute(_INSERT_SQL, params)
-        except Exception as e:  # noqa: BLE001 — re-raise as audit-specific
+        except Exception as e:
             log.error(
                 "audit_log INSERT failed: action_type=%s actor=%s skill=%s err=%s",
                 event.action_type,

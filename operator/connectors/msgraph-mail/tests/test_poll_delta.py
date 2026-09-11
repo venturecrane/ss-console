@@ -6,7 +6,6 @@ tombstone skipping. No live Graph calls (httpx.MockTransport).
 from __future__ import annotations
 
 import httpx
-import pytest
 
 import msgraph_mail_connector.server as server_mod
 from msgraph_mail_connector.client import MsGraphClient

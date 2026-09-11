@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 
-import env_arrays as ea  # noqa: E402
+import env_arrays as ea
 
 
 def main(argv: list[str]) -> int:
