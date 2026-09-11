@@ -51,9 +51,7 @@
     "workspace_broker/establishment_store.py::EstablishmentStore._submit_install": 104,
     "workspace_broker/establishment_store.py::EstablishmentStore._submit_person": 89,
     "workspace_broker/establishment_store.py::EstablishmentStore.act_propose": 93,
-    "workspace_broker/establishment_store.py::EstablishmentStore.propose": 87,
-    "workspace_broker/server.py::Broker._dispatch_transmit": 82,
-    "workspace_broker/server.py::Broker.handle": 184
+    "workspace_broker/establishment_store.py::EstablishmentStore.propose": 87
   },
   "complexity": {
     "adapter/trust_ceiling.py::enforce": 20,
@@ -86,8 +84,6 @@
     "skills/medical-records-chaser/escalation_ledger.py::validate_append": 27,
     "templates/drafting/drafting_gate_check.py::gate_coverage": 16,
     "workspace_broker/escalation_ledger.py::validate_append": 27,
-    "workspace_broker/medchron_ledger.py::validate_envelope": 21,
-    "workspace_broker/server.py::_handle_job": 17,
-    "workspace_broker/server.py::handle": 51
+    "workspace_broker/medchron_ledger.py::validate_envelope": 21
   }
 }

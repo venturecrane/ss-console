@@ -31,8 +31,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from workspace_broker import verbs  # noqa: E402
-from workspace_broker.server import Broker  # noqa: E402
+from workspace_broker import verbs
+from workspace_broker.server import Broker
 
 GATEWAY_PID = 4242
 AGENT_UID = 1001

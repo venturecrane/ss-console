@@ -46,6 +46,7 @@
     "templates/r2-account-key-strip-probe.py": 1,
     "workspace_broker/establishment_store.py": 1,
     "workspace_broker/medchron_verbs.py": 4,
-    "workspace_broker/server.py": 4
+    "workspace_broker/transmit_verbs.py": 3,
+    "workspace_broker/verbs.py": 1
   }
 }
