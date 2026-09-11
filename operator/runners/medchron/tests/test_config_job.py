@@ -107,8 +107,8 @@ def test_job_refuses_the_shapes_it_must_not_guess(tmp_path: Path, data_root: Pat
         job_mod.parse(body, path=tmp_path / "job.yaml")
 
 
-# ---- the four routine-11 cost controls (2026-09-09) --------------------------
-COST_KEYS = ("monthly_budget_usd", "single_matter_page_threshold", "usd_per_scanned_page", "usd_per_audit_claim")
+# ---- the routine-11 cost controls (2026-09-09; per-matter line removed 09-10) -
+COST_KEYS = ("monthly_budget_usd", "usd_per_scanned_page", "usd_per_audit_claim")
 
 
 @pytest.mark.parametrize("key", COST_KEYS)
@@ -140,7 +140,6 @@ def test_a_zero_cost_control_is_refused(tmp_path: Path, key: str) -> None:
 def test_the_cost_controls_are_read_back_as_typed_values(firm_config_path: Path) -> None:
     cfg = config_mod.load(str(firm_config_path))
     assert cfg.monthly_budget_usd == 500.0
-    assert cfg.single_matter_page_threshold == 2500
     assert cfg.usd_per_scanned_page == 0.03 and cfg.usd_per_audit_claim == 0.06
 
 

@@ -1,11 +1,10 @@
-"""The four routine-11 limits, and the one grammar their holds speak.
+"""The three routine-11 limits, and the one grammar their holds speak.
 
-Four settings, checked at two moments:
+Three settings, checked at two moments:
 
-* ``single_matter_page_threshold`` and the seat's monthly page allowance are
-  read ONCE, before the first paid stage, from the pages the extract stage
-  actually found. Nothing is spent to learn them, so a matter that is too big
-  costs nothing to refuse.
+* The seat's cycle page allowance is read ONCE, before the first paid stage,
+  from the pages the extract stage actually found. Nothing is spent to learn
+  it, so a matter that does not fit costs nothing to refuse.
 * ``monthly_budget_usd`` and ``per_job_cap_usd`` are re-checked before every
   paid call in LIVE mode, through the doorway's ``before_request`` hook, and
   before every BATCH submission with the batch's projected cost, through
@@ -32,7 +31,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-THRESHOLD_SETTING = "single_matter_page_threshold"
 ALLOWANCE_SETTING = "chronology_package_page_allowance_per_month"
 BUDGET_SETTING = "monthly_budget_usd"
 CAP_SETTING = "per_job_cap_usd"
@@ -58,7 +56,6 @@ class Limits:
 
     cap_usd: float
     monthly_budget_usd: float
-    single_matter_page_threshold: int
     usd_per_scanned_page: float
     usd_per_audit_claim: float
     month_cents_used: int | None = None
@@ -76,15 +73,21 @@ class Limits:
     # ---- once, before the first paid stage ---------------------------------
     def check_before_first_paid(self, *, pages: int, projected_usd: float, spent_usd: float,
                                 stage: str) -> None:
-        """Threshold, then allowance, then the two cost limits. Order matters:
-        the two page checks cost nothing and answer the bigger question (should
-        this matter be built at all), so they go first."""
-        if pages > self.single_matter_page_threshold:
-            raise LimitHold(
-                THRESHOLD_SETTING,
-                f"{THRESHOLD_SETTING}: the matter's file is {pages:,} pages, above the firm's "
-                "single-matter page threshold; the package was not started",
-            )
+        """Allowance, then the two cost limits. The page check costs nothing and
+        answers the bigger question (does this matter fit what the firm bought),
+        so it goes first.
+
+        There is deliberately NO per-matter page gate here (removed 2026-09-10,
+        Captain). The firm buys a CYCLE allowance; how it spends it is its own
+        business, so one matter that consumes the whole cycle is a legitimate
+        use of it and not a refusal. A per-matter page line was the per-job cost
+        cap wearing client-facing clothes: both were sized off the same measured
+        rate, so it refused matters the cycle allowance could plainly afford --
+        matter 200454 measured 3,098+ pages against a 3,000-page line while the
+        firm's full 15,000-page allowance sat unused. Margin is not exposed by
+        its removal: ``monthly_budget_usd`` binds in DOLLARS, independently, on
+        every paid stage and every paid call, and dollars are what actually
+        track cost (a scanned page measured ~4x a text page)."""
         remaining = self.allowance_remaining_pages
         if remaining is not None and pages > remaining:
             raise LimitHold(

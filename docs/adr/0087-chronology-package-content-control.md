@@ -73,7 +73,7 @@ The forcing case was a delivered package that crossed no limit anything enforced
 
 Keyed on creation, not on the month the cents landed. A month-of-charge key needs a ledger column that is not in the broker's `PROJECTION`, and `PROJECTION`'s shape is pinned by the overlay's `_MEDCHRON_JOBS_COLUMNS` this release, so the console could never read it: a job created on the 31st whose cents land on the 1st would be debited to the new month on the seat and shown in the old month on the console. The two surfaces disagreeing about the same month is the one thing this rule exists to prevent, and `created_at` is a column both surfaces already have. Moving to month-of-charge keying belongs with the next overlay bump.
 
-**3. Four private controls, required not defaulted.** The runner's firm config (engagements repo) gains `monthly_budget_usd`, `single_matter_page_threshold`, `usd_per_scanned_page`, and `usd_per_audit_claim`, all required and all `> 0`. A firm.yaml predating them refuses to load rather than running unmetered, which is exactly the state routine 11 was in. They stay private because they are pricing-adjacent SMD posture; the seat still authors exactly one figure, the allowance.
+**3. Private controls, required not defaulted.** The runner's firm config (engagements repo) gains `monthly_budget_usd`, `usd_per_scanned_page`, and `usd_per_audit_claim`, all required and all `> 0`. (A fourth, `single_matter_page_threshold`, shipped 2026-09-09 and was removed 2026-09-10 -- see the second amendment.) A firm.yaml predating them refuses to load rather than running unmetered, which is exactly the state routine 11 was in. They stay private because they are pricing-adjacent SMD posture; the seat still authors exactly one figure, the allowance.
 
 **4. Enforcement moves from the stage boundary to the paid call, and the envelope can only lower the cap.** `cap = min(envelope, firm)` -- the envelope used to win outright, which made the firm's cap advisory. The cap and the monthly budget are re-read through the doorway's `before_request` hook before every paid call in live mode, and before every batch submission with the batch's projected cost through `before_batch`, so an overshoot is **bounded to one call or one batch** rather than one stage. Batch mode needs its own hook because a batch is one commitment: nothing checks between its items and the whole thing is billed, so the only place a limit can bind is before the submission. Both product seats run `batch_stages: []` today, which is why the claim has to be true of batch mode rather than conditional on nobody using it; the two page limits are still read once, before the first paid stage, from this matter's own extract output, so a matter too big to build costs nothing to refuse.
 
@@ -86,5 +86,48 @@ Keyed on creation, not on the month the cents landed. A month-of-charge key need
 ### Amended acceptance criteria
 
 - [ ] The broker meters pages, applies one debit rule, and its allowance verb reports its `unit`; the runner refuses a firm config missing any of the four controls; every hold reason names its setting and carries no figure. Pinned by `runners/medchron/tests/test_limits.py`, `test_config_job.py`, `test_decisions_driver.py`, and `workspace_broker/tests/test_medchron_verbs.py`.
-- [ ] (runtime) On a live seat, a matter over the single-matter page threshold is held at zero spend, and a job whose cap is reached mid-stage stops within one paid call; `crane_verify` ids in the rollout PR.
+- [ ] (runtime) On a live seat, a matter over the CYCLE page allowance is held at zero spend, a matter merely larger than any former per-matter line runs, and a job whose cap is reached mid-stage stops within one paid call; `crane_verify` ids in the rollout PR.
 - [ ] (runtime) The admin chronology page shows the month's pages against the authored allowance on `admin.smd.services`; `crane_verify` id.
+
+## Amendment, 2026-09-10 (Captain): the per-matter page gate is removed; the cycle allowance is the only page limit
+
+`single_matter_page_threshold` is deleted from the runner's closed key set, from
+`Limits`, and from both firm configs. The firm buys a CYCLE page allowance and
+spends it as it likes: one matter that consumes the whole cycle is a legitimate
+use of what it bought, not a refusal.
+
+**Why the 09-09 shape was wrong.** Four numbers expressed only two constraints.
+`15,000 pages/cycle` and `monthly_budget_usd: 800` are the same ceiling (our cost
+of goods) in two units; `3,000 pages/matter` and `per_job_cap_usd: 150` are the
+same ceiling (one run's blast radius) in two units. So the per-matter page line
+was the per-job cost cap wearing client-facing clothes, and because both were
+sized off the same measured rate it refused matters the cycle allowance could
+plainly afford. `limits.py` made this concrete by checking the per-matter line
+BEFORE consulting the allowance at all -- a firm sitting on its full pool was
+refused for a matter 3% over a per-matter line. Measured instance: matter 200454
+is 3,098+ pages of PDF against a 3,000-page line, with all 15,000 pages unused.
+
+**Why removing it does not expose margin.** `monthly_budget_usd` binds
+independently, in DOLLARS, before every paid stage and every paid call. Dollars
+are the honest unit: a scanned page measured about 4x a text page (6.3c vs 1.5c),
+so pages are a client-facing approximation and the budget is the real control.
+`per_job_cap_usd` is unchanged and stays INTERNAL -- an engineering limit on one
+run, never a contract term quoted to the firm.
+
+**Fail-loud, not fail-quiet.** The key stays out of the closed schema rather than
+being accepted-and-ignored, so a firm.yaml still carrying it refuses to load. A
+number a human believes is enforcing something, which silently is not, is the
+failure this project keeps rediscovering.
+
+**Paper.** Letter 38 (F-027) told the firm 15,000 pages/month AND a 3,000-page
+single-matter threshold. Exhibit A row 11 must be re-cut (engagements open item
+18). Relaxing the per-matter line is MORE generous, so it retracts no sent
+commitment; it is given unilaterally and is never to be presented as a negotiated
+concession.
+
+**Still open after this amendment.** The window is still keyed to the CALENDAR
+month; the Captain's decision (2026-09-10) is that it must key to the firm's
+BILLING CYCLE. That change spans the broker's window computation, the console's
+matching roll-up, and an `OVERLAY_REF` bump for the allowance response shape, and
+it is inert until the firm actually starts a subscription (probed 2026-09-10:
+`sub-op-ashton-price` is `provisioning`, `stripe_subscription_id` NULL).

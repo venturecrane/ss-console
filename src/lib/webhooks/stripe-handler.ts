@@ -11,7 +11,13 @@
  *     1. Log the failure (keep invoice status as sent)
  *
  * Phase 2 — Best-effort side effects:
- *   1. Send payment confirmation email via Resend
+ *   1. Send payment confirmation email to the client via Resend
+ *   2. Alert team@ that the money landed, so a one-time payment is observed
+ *      rather than discovered later in Stripe. The retainer flow has alerted
+ *      since #1679; this path predated the convention and stayed silent, so a
+ *      paid one-time invoice produced no SMD-side signal at all. Stripe's own
+ *      owner notification is a Dashboard toggle we do not control from here,
+ *      so this alert is the only signal we can guarantee.
  *
  * Returns 200 after Phase 1 succeeds, even if Phase 2 fails.
  */
@@ -19,6 +25,7 @@
 import type { StripeWebhookEvent } from '../stripe/types'
 import { sendEmail } from '../email/resend'
 import { paymentConfirmationEmailHtml } from '../email/templates'
+import { alertTeam } from './stripe-subscription-handler'
 
 /**
  * Look up an invoice by its Stripe invoice ID.
@@ -159,12 +166,36 @@ export async function handleInvoicePaid(
 
   // --- Phase 2: Side effects (best-effort) ---
 
+  await announcePayment(db, resendApiKey, invoice, stripeInvoiceId)
+
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+/**
+ * Phase 2 for a paid one-time invoice: thank the client, then tell team@.
+ *
+ * The two sends differ deliberately. The thank-you needs a contact address and
+ * is skipped when the entity has none; the team@ alert has no such condition,
+ * because a missing client contact must not also silence the money signal on
+ * the SMD side. Both are best-effort — neither turns a recorded payment into a
+ * webhook failure Stripe would retry.
+ */
+async function announcePayment(
+  db: D1Database,
+  resendApiKey: string | undefined,
+  invoice: { id: string; org_id: string; entity_id: string; type: string; amount: number },
+  stripeInvoiceId: string
+): Promise<void> {
+  const formattedAmount = `$${invoice.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  let clientName = invoice.entity_id
+
   try {
     const clientEmail = await getEntityPrimaryEmail(db, invoice.org_id, invoice.entity_id)
+    clientName = await getEntityName(db, invoice.org_id, invoice.entity_id)
     if (clientEmail) {
-      const clientName = await getEntityName(db, invoice.org_id, invoice.entity_id)
-      const formattedAmount = `$${invoice.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
       await sendEmail(resendApiKey, {
         to: clientEmail,
         subject: 'Payment received — thank you',
@@ -176,10 +207,15 @@ export async function handleInvoicePaid(
     // Non-fatal: admin can send manually
   }
 
-  return new Response(JSON.stringify({ ok: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  })
+  await alertTeam(
+    resendApiKey,
+    `Payment received — ${clientName}, ${formattedAmount}`,
+    `<p>A one-time invoice was paid.</p>` +
+      `<ul><li>Customer: ${clientName}</li><li>Amount: ${formattedAmount}</li>` +
+      `<li>Invoice type: ${invoice.type}</li>` +
+      `<li>Stripe invoice: ${stripeInvoiceId}</li>` +
+      `<li>Local invoice: ${invoice.id}</li></ul>`
+  )
 }
 
 /**
