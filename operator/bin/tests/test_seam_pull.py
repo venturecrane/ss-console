@@ -30,9 +30,32 @@ from bin.lib.seam_pull import (  # noqa: E402
     AUDIT_COLUMNS,
     MEMORY_EXPORT_TABLES,
     SeamAuditLogPreserver,
+    _write_memory_snapshot,
     derive_runtime_read_key,
     seam_client_from_env,
 )
+
+
+# ---------------------------------------------------------------------------
+# Served column names are identifiers or the snapshot refuses
+# ---------------------------------------------------------------------------
+
+
+def test_memory_snapshot_refuses_non_identifier_column_names():
+    conn = sqlite3.connect(":memory:")
+    rows = [{"good": 1, 'evil") ; DROP TABLE x; --': 2, "_rowid": 9}]
+    with pytest.raises(ValueError, match="non-identifier column names"):
+        _write_memory_snapshot(conn, "memory_facts", rows)
+    assert conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall() == []
+
+
+def test_memory_snapshot_writes_identifier_columns_and_drops_rowid():
+    conn = sqlite3.connect(":memory:")
+    rows = [{"subject": "a", "value": "b", "_rowid": 1}, {"subject": "c", "value": "d", "_rowid": 2}]
+    _write_memory_snapshot(conn, "memory_facts", rows)
+    cols = [r[1] for r in conn.execute('PRAGMA table_info("memory_facts")')]
+    assert cols == ["subject", "value"]
+    assert conn.execute('SELECT COUNT(*) FROM "memory_facts"').fetchone()[0] == 2
 
 
 def _run(coro):

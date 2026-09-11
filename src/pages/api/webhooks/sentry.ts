@@ -61,13 +61,19 @@ export const POST: APIRoute = async ({ request }) => {
     return jsonResponse(401, { error: 'invalid_signature' })
   }
 
+  // The timestamp is the replay window. It is not bound into the HMAC (Sentry
+  // signs the raw body only), so a missing or non-numeric header must be a
+  // refusal, not a skipped check: otherwise `abc` replays a captured body
+  // forever (2026-09-09 review, Security LOW 5).
   const timestampSec = Number(timestampHeader)
-  if (Number.isFinite(timestampSec)) {
-    const ageSec = Math.floor(Date.now() / 1000) - timestampSec
-    if (ageSec > MAX_WEBHOOK_AGE_SECONDS) {
-      console.error(`[webhook/sentry] stale webhook (age ${ageSec}s)`)
-      return jsonResponse(401, { error: 'stale' })
-    }
+  if (timestampHeader.trim() === '' || !Number.isFinite(timestampSec)) {
+    console.error('[webhook/sentry] missing or non-numeric timestamp header')
+    return jsonResponse(401, { error: 'invalid_timestamp' })
+  }
+  const ageSec = Math.floor(Date.now() / 1000) - timestampSec
+  if (ageSec > MAX_WEBHOOK_AGE_SECONDS) {
+    console.error(`[webhook/sentry] stale webhook (age ${ageSec}s)`)
+    return jsonResponse(401, { error: 'stale' })
   }
 
   let payload: SentryWebhookPayload
