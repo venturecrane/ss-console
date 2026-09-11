@@ -294,6 +294,18 @@ export default tseslint.config(
     files: ['**/pages/dev/**/*.astro'],
     rules: { 'max-lines': 'off' },
   },
+  // The customer.yaml contract is one authored schema: every accepted value
+  // set, every section interface, and the doc comment that says what each
+  // field means to the seat. Splitting it by section would scatter one
+  // contract across files with no cohesion gained, and two thirds of its raw
+  // lines are those doc comments, which the ceiling already skips. It carries
+  // no logic beyond a handful of one-line predicates; the line ceiling is a
+  // complexity proxy, and a type module has none to bound (review 2026-09-10,
+  // Architecture 3: the file sat at 497 logical lines, met by trimming).
+  {
+    files: ['src/lib/operator/customer-yaml/types.ts'],
+    rules: { 'max-lines': 'off' },
+  },
   {
     ignores: [
       '**/dist/**',

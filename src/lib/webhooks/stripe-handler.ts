@@ -25,7 +25,7 @@
 import type { StripeWebhookEvent } from '../stripe/types'
 import { sendEmail } from '../email/resend'
 import { paymentConfirmationEmailHtml } from '../email/templates'
-import { alertTeam } from './stripe-subscription-handler'
+import { alertTeam } from './stripe-subscription-shared'
 
 /**
  * Look up an invoice by its Stripe invoice ID.

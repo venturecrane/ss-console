@@ -1,5 +1,6 @@
 import type { APIContext, APIRoute } from 'astro'
-import { createQuote, parseLineItems } from '../../../../lib/db/quotes'
+import { createQuote } from '../../../../lib/db/quotes'
+import { parseLineItems } from '../../../../lib/db/quote-content'
 import type { LineItem } from '../../../../lib/db/quotes'
 import { env } from 'cloudflare:workers'
 import { requireAdminSession } from '../../../../lib/auth/admin-session'

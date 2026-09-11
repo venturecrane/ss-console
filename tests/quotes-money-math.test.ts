@@ -25,11 +25,11 @@ import {
   createQuote,
   updateQuote,
   updateQuoteStatus,
-  parseLineItems,
   VALID_TRANSITIONS,
   type Quote,
   type QuoteStatus,
 } from '../src/lib/db/quotes'
+import { parseLineItems } from '../src/lib/db/quote-content'
 
 const migrationsDir = resolve(process.cwd(), 'migrations')
 const ORG_ID = 'org-money-math'
