@@ -145,8 +145,7 @@ def _compute_anomalies(
                     d.platform,
                     "cpl_spike",
                     "CRITICAL",
-                    f"CPL ${d.cpl:.2f} > {thresholds.cpl_spike_multiplier}× baseline "
-                    f"${b.cpl_avg:.2f}",
+                    f"CPL ${d.cpl:.2f} > {thresholds.cpl_spike_multiplier}× baseline ${b.cpl_avg:.2f}",
                 )
             )
         if d.frequency > thresholds.frequency_ceiling:
@@ -166,14 +165,10 @@ def _compute_anomalies(
                     d.platform,
                     "ctr_collapse",
                     "WARN",
-                    f"CTR {d.ctr:.3f} < {thresholds.ctr_collapse_ratio:.0%} of "
-                    f"baseline {b.ctr_avg:.3f}",
+                    f"CTR {d.ctr:.3f} < {thresholds.ctr_collapse_ratio:.0%} of baseline {b.ctr_avg:.3f}",
                 )
             )
-        if (
-            b.conversions_avg > 0
-            and d.conversions < thresholds.conversion_drop_ratio * b.conversions_avg
-        ):
+        if b.conversions_avg > 0 and d.conversions < thresholds.conversion_drop_ratio * b.conversions_avg:
             anomalies.append(
                 Anomaly(
                     d.campaign_id,
@@ -421,16 +416,12 @@ async def run_once(
     for connector in connectors:
         snaps = list(connector.pull_snapshots())
         snapshots.extend(snaps)
-        raw_input_blob += json.dumps(
-            [_snapshot_to_dict(s) for s in snaps], sort_keys=True
-        ).encode("utf-8")
+        raw_input_blob += json.dumps([_snapshot_to_dict(s) for s in snaps], sort_keys=True).encode("utf-8")
 
     decision = decide(snapshots, thresholds, raw_inputs_for_digest=raw_input_blob)
     if decision.wake:
         # The row goes in BEFORE the wake line, and cannot stop it (#2253).
-        await _try_write_emitted_wake(
-            audit_writer_factory, decision, skill_name=skill_name, now=now
-        )
+        await _try_write_emitted_wake(audit_writer_factory, decision, skill_name=skill_name, now=now)
         return _emit_wake(decision)
 
     writer = audit_writer_factory()
@@ -484,9 +475,7 @@ def main() -> int:
         # No customer context → can't bind the audit writer to a customer
         # D1 binding. Wake the agent (mirror-don't-gate fallback) and let
         # the agent surface the missing-env error.
-        sys.stderr.write(
-            "[pre_run] CUSTOMER_SLUG unset; falling back to wake\n"
-        )
+        sys.stderr.write("[pre_run] CUSTOMER_SLUG unset; falling back to wake\n")
         return _emit_wake(basis="customer_slug_unset_fail_open")
 
     # TODO(connector-adapters): wire real connectors when

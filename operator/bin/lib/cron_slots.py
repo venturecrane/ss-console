@@ -123,9 +123,7 @@ def parse_schedule(schedule: str) -> CronSpec:
     fields = schedule.split()
     if len(fields) != 5:
         raise CronParseError(f"not a 5-field cron expression: {schedule!r}")
-    parsed = [
-        _parse_field(field, low, high) for field, (low, high) in zip(fields, _FIELD_RANGES)
-    ]
+    parsed = [_parse_field(field, low, high) for field, (low, high) in zip(fields, _FIELD_RANGES)]
     return CronSpec(
         minutes=parsed[0],
         hours=parsed[1],
@@ -175,20 +173,14 @@ def seat_timezone(customer_yaml: dict) -> ZoneInfo:
     return ZoneInfo("UTC")
 
 
-def expand_slots(
-    rows: list[CronRow], tz: ZoneInfo, since: datetime, until: datetime
-) -> list[Slot]:
+def expand_slots(rows: list[CronRow], tz: ZoneInfo, since: datetime, until: datetime) -> list[Slot]:
     """Concrete fire times for every expandable row inside [since, until).
 
     Walks UTC minutes (see module docstring for why that is the DST-correct
     construction). Only ``pre_run_decides`` rows expand; the caller reports the
     others as ``n/a`` so the denominator stays visible.
     """
-    specs = [
-        (row, parse_schedule(row.schedule))
-        for row in rows
-        if row.wake_policy == "pre_run_decides"
-    ]
+    specs = [(row, parse_schedule(row.schedule)) for row in rows if row.wake_policy == "pre_run_decides"]
     if not specs:
         return []
     slots: list[Slot] = []
@@ -216,9 +208,7 @@ class SlotVerdict:
         return self.covered_by is None and self.suppressed_reason is None
 
 
-def match_slots(
-    slots: list[Slot], wake_rows: list[dict], *, tolerance_s: int = 1800
-) -> list[SlotVerdict]:
+def match_slots(slots: list[Slot], wake_rows: list[dict], *, tolerance_s: int = 1800) -> list[SlotVerdict]:
     """Per slot: an EMITTED_WAKE or SUPPRESSED_WAKE row for that skill inside
     [slot, slot + tolerance], CONSUMED one-to-one (the reconciler discipline:
     one row can never cover two slots)."""
@@ -230,9 +220,7 @@ def match_slots(
             continue
         candidates.append(
             {
-                "ts": datetime.fromisoformat(str(row["ts"]).replace("Z", "+00:00")).astimezone(
-                    timezone.utc
-                ),
+                "ts": datetime.fromisoformat(str(row["ts"]).replace("Z", "+00:00")).astimezone(timezone.utc),
                 "skill": str(row.get("skill_name") or ""),
                 "kind": str(row.get("action_type")),
                 "row_id": row.get("id"),
@@ -256,15 +244,11 @@ def match_slots(
             verdicts.append(SlotVerdict(slot=slot))
             continue
         claim["claimed"] = True
-        verdicts.append(
-            SlotVerdict(slot=slot, covered_by=claim["kind"], covered_row_id=claim["row_id"])
-        )
+        verdicts.append(SlotVerdict(slot=slot, covered_by=claim["kind"], covered_row_id=claim["row_id"]))
     return verdicts
 
 
-def boot_window(
-    last_heartbeat_ts: Optional[str], uptime_s: Optional[int]
-) -> Optional[tuple[datetime, datetime]]:
+def boot_window(last_heartbeat_ts: Optional[str], uptime_s: Optional[int]) -> Optional[tuple[datetime, datetime]]:
     """The reprovision/boot suppression window, from fleet_status.
 
     boot = last_heartbeat - uptime; the window is [boot - 45min, boot + 15min].
@@ -282,9 +266,7 @@ def boot_window(
     return (boot - timedelta(minutes=45), boot + timedelta(minutes=15))
 
 
-def apply_boot_suppression(
-    verdicts: list[SlotVerdict], window: Optional[tuple[datetime, datetime]]
-) -> None:
+def apply_boot_suppression(verdicts: list[SlotVerdict], window: Optional[tuple[datetime, datetime]]) -> None:
     if window is None:
         return
     start, end = window

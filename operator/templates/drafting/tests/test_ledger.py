@@ -52,8 +52,7 @@ class _Env:
 
     def __enter__(self):
         self.tmp = tempfile.TemporaryDirectory()
-        env = {"SMD_DRAFT_DATA": self.tmp.name, "SMD_SLUG": self.slug,
-               "SMD_UNIT": self.unit}
+        env = {"SMD_DRAFT_DATA": self.tmp.name, "SMD_SLUG": self.slug, "SMD_UNIT": self.unit}
         for k, v in env.items():
             self._prev[k] = os.environ.get(k)
             if v is None:
@@ -109,8 +108,7 @@ class RateResolutionTest(unittest.TestCase):
     def test_dated_snapshot_resolves_by_prefix(self):
         # A dated id must price against its family, or a model pin silently
         # turns every row unpriced.
-        self.assertEqual(ledger.rate_for("claude-opus-5-20260814"),
-                         ledger.rate_for("claude-opus-5"))
+        self.assertEqual(ledger.rate_for("claude-opus-5-20260814"), ledger.rate_for("claude-opus-5"))
 
     def test_unknown_model_returns_none_not_a_default(self):
         self.assertIsNone(ledger.rate_for("some-other-vendor-model"))
@@ -131,22 +129,19 @@ class PriceTest(unittest.TestCase):
 
     def test_cache_read_is_cheaper_than_fresh_input(self):
         fresh = {"model": "claude-opus-5", "in": 1_000_000, "out": 0}
-        cached = {"model": "claude-opus-5", "in": 0, "out": 0,
-                  "cache_read": 1_000_000}
+        cached = {"model": "claude-opus-5", "in": 0, "out": 0, "cache_read": 1_000_000}
         self.assertLess(ledger.price(cached), ledger.price(fresh))
 
     def test_batch_halves_the_row(self):
         plain = {"model": "claude-sonnet-5", "in": 500_000, "out": 100_000}
         batched = dict(plain, batch=True)
         meta = json.loads(_CARD_PATH.read_text())["_meta"]
-        self.assertAlmostEqual(ledger.price(batched),
-                               ledger.price(plain) * meta["batch"], places=9)
+        self.assertAlmostEqual(ledger.price(batched), ledger.price(plain) * meta["batch"], places=9)
 
     def test_unknown_model_is_unpriced_not_free(self):
         # The failure this prevents: an unpriced row totalling as $0.00 and a
         # run reading cheap because a model name was misspelled.
-        self.assertIsNone(ledger.price({"model": "nope", "in": 9_999_999,
-                                        "out": 9_999_999}))
+        self.assertIsNone(ledger.price({"model": "nope", "in": 9_999_999, "out": 9_999_999}))
 
     def test_missing_token_fields_do_not_raise(self):
         self.assertEqual(ledger.price({"model": "claude-sonnet-5"}), 0.0)
@@ -166,8 +161,7 @@ class RecordTest(unittest.TestCase):
     def test_unit_defaults_to_slug(self):
         with _Env(slug="matter-beta", unit=None) as root:
             ledger.record("audit", "claude-sonnet-5", _Usage(10, 20))
-            self.assertTrue((Path(root) / "matter-beta" / "runs" / "matter-beta"
-                             / "usage-ledger.jsonl").exists())
+            self.assertTrue((Path(root) / "matter-beta" / "runs" / "matter-beta" / "usage-ledger.jsonl").exists())
 
     def test_a_stage_without_a_slug_still_writes_visibly(self):
         # The Moussa defect: stages ran without the env block and their money
@@ -198,8 +192,7 @@ class RecordTest(unittest.TestCase):
     def test_cache_fields_are_captured(self):
         with _Env(slug="m", unit="u") as root:
             ledger.record("compose", "claude-opus-5", _Usage(5, 6, cr=7, cw=8))
-            row = json.loads((Path(root) / "m" / "runs" / "u"
-                              / "usage-ledger.jsonl").read_text().strip())
+            row = json.loads((Path(root) / "m" / "runs" / "u" / "usage-ledger.jsonl").read_text().strip())
             self.assertEqual(row["cache_read"], 7)
             self.assertEqual(row["cache_write"], 8)
 
@@ -216,12 +209,10 @@ class ReportTest(unittest.TestCase):
             # Opus input is dearer than Sonnet input, so compose must outrank
             # audit on identical token counts; if it did not, the card is
             # wired backwards.
-            self.assertGreater(blob["dollars_by_stage"]["compose"],
-                               blob["dollars_by_stage"]["audit"])
+            self.assertGreater(blob["dollars_by_stage"]["compose"], blob["dollars_by_stage"]["audit"])
             self.assertAlmostEqual(
-                blob["dollars_total"],
-                blob["dollars_by_stage"]["compose"]
-                + blob["dollars_by_stage"]["audit"], places=6)
+                blob["dollars_total"], blob["dollars_by_stage"]["compose"] + blob["dollars_by_stage"]["audit"], places=6
+            )
 
     def test_report_counts_unpriced_rows(self):
         with _Env(slug="m", unit="u"):
@@ -250,8 +241,7 @@ class CalibrationTest(unittest.TestCase):
     def test_row_carries_class_chars_and_rate_card_age(self):
         with _Env(slug="m", unit="u") as root:
             ledger.record("compose", "claude-opus-5", _Usage(1000, 100))
-            row = ledger.append_calibration("m", "u", artifact_class="demand",
-                                            chars=2_192_627)
+            row = ledger.append_calibration("m", "u", artifact_class="demand", chars=2_192_627)
             self.assertEqual(row["artifact_class"], "demand")
             self.assertEqual(row["chars"], 2_192_627)
             # Without the card's age on the row, a stored dollar figure cannot
@@ -262,13 +252,10 @@ class CalibrationTest(unittest.TestCase):
     def test_anchors_filter_by_class_and_sort_by_distance(self):
         with _Env(slug="m", unit="u"):
             ledger.record("compose", "claude-opus-5", _Usage(10, 10))
-            for cls, chars in (("demand", 1_000_000), ("demand", 5_000_000),
-                               ("chronology", 1_050_000)):
-                ledger.append_calibration("m", "u", artifact_class=cls,
-                                          chars=chars)
+            for cls, chars in (("demand", 1_000_000), ("demand", 5_000_000), ("chronology", 1_050_000)):
+                ledger.append_calibration("m", "u", artifact_class=cls, chars=chars)
             got = ledger.anchors("demand", 1_100_000, k=3)
-            self.assertEqual([r["chars"] for r in got],
-                             [1_000_000, 5_000_000])
+            self.assertEqual([r["chars"] for r in got], [1_000_000, 5_000_000])
             # A chronology must never anchor a demand projection: different
             # cost shape, and the wrong anchor is worse than none.
             self.assertTrue(all(r["artifact_class"] == "demand" for r in got))

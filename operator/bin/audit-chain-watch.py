@@ -253,9 +253,7 @@ def authored_seats(repo_root: Path) -> list[str]:
     if not base.is_dir():
         return []
     return sorted(
-        d.name
-        for d in base.iterdir()
-        if d.is_dir() and not d.name.startswith("_") and (d / "customer.yaml").exists()
+        d.name for d in base.iterdir() if d.is_dir() and not d.name.startswith("_") and (d / "customer.yaml").exists()
     )
 
 
@@ -432,10 +430,6 @@ def archive_export(
     return ArchiveResult(key=key, sha256=hashlib.sha256(blob).hexdigest(), bytes_written=len(blob))
 
 
-
-
-
-
 def _hold(slug: str, message: str) -> SeatOutcome:
     return SeatOutcome(slug, HOLD, f"{slug}: {message}", {"slug": slug})
 
@@ -569,8 +563,7 @@ def write_step_summary(outcomes: Sequence[SeatOutcome], lock_note: str) -> None:
         verdict = o.details.get("chain_verdict")
         state = f"{o.state} (chain {verdict['state']})" if verdict else o.state
         lines.append(
-            f"| {o.slug} | {state} | {o.details.get('archive_key', '-')} | "
-            f"{o.details.get('archive_sha256', '-')} |"
+            f"| {o.slug} | {state} | {o.details.get('archive_key', '-')} | {o.details.get('archive_sha256', '-')} |"
         )
     lines += ["", lock_note, ""]
     with open(path, "a", encoding="utf-8") as fp:
@@ -659,9 +652,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             "Off-box copy skipped (--no-archive); no lock probe was run.",
         )
 
-    outcomes = [
-        process_seat(s, console, bucket=args.bucket, archive=archive) for s in roster.probed
-    ]
+    outcomes = [process_seat(s, console, bucket=args.bucket, archive=archive) for s in roster.probed]
     outcomes += roster_notices(roster)
 
     alert_holds: list[str] = []

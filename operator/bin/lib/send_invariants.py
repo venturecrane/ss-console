@@ -149,17 +149,14 @@ def recipient_invariant(
                 continue
             seen.add(hashed)
             if not allowed:
-                proposals.append(
-                    InvariantProposal(rule="recipient_set", skill_name=skill, hashed_key=hashed)
-                )
+                proposals.append(InvariantProposal(rule="recipient_set", skill_name=skill, hashed_key=hashed))
                 continue
             findings.append(
                 InvariantFinding(
                     rule="recipient_set",
                     skill_name=skill,
                     hashed_key=hashed,
-                    detail="dispatch recipient hash outside the committed set "
-                    "(operator/bin/send-invariants.json)",
+                    detail="dispatch recipient hash outside the committed set (operator/bin/send-invariants.json)",
                 )
             )
     return findings, proposals

@@ -102,7 +102,8 @@ def test_a_world_writable_directory_is_refused(tree):
     write permits CREATE, REPLACE, and RENAME even when every file inside is
     read-only. A spec the agent cannot edit but can replace wholesale is not
     protected."""
-    os.chmod(tree / "classes" / "staff", 0o777)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+    # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+    os.chmod(tree / "classes" / "staff", 0o777)
     result = sdo.verify_spec_dir(str(tree), agent_user="root")
     assert not result.passed
     offender = next(v for v in result.violations if "staff" in v.path)
@@ -130,7 +131,7 @@ def test_a_symlink_inside_the_tree_is_allowed(tree):
 
 
 def test_an_unresolvable_agent_user_is_refused_when_a_tree_exists(tree):
-    """"Cannot evaluate" must never read as "permitted". On the Machine this
+    """ "Cannot evaluate" must never read as "permitted". On the Machine this
     state is impossible — the Dockerfile creates the user and the exec-drop
     would fail without it — so reaching it means the image is broken."""
     result = sdo.verify_spec_dir(str(tree), agent_user="definitely-not-a-user-xyz")
@@ -141,9 +142,7 @@ def test_an_unresolvable_agent_user_is_refused_when_a_tree_exists(tree):
 def test_an_unresolvable_agent_user_still_passes_with_no_tree(tmp_path):
     """The absent-tree return happens BEFORE the user lookup, so a seat that has
     installed no specs is unaffected by the refusal above."""
-    result = sdo.verify_spec_dir(
-        str(tmp_path / "never-created"), agent_user="definitely-not-a-user-xyz"
-    )
+    result = sdo.verify_spec_dir(str(tmp_path / "never-created"), agent_user="definitely-not-a-user-xyz")
     assert result.passed
 
 
@@ -170,7 +169,8 @@ def test_verify_at_boot_returns_zero_when_unset():
 
 
 def test_refusal_message_names_why_it_matters(tree):
-    os.chmod(tree / "classes" / "staff" / "voice.md", 0o666)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+    # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+    os.chmod(tree / "classes" / "staff" / "voice.md", 0o666)
     msg = sdo.verify_spec_dir(str(tree), agent_user="root").refusal_message()
     assert "prompt-injection channel" in msg
     assert "does not taint" in msg

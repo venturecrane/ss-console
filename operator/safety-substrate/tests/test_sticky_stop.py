@@ -154,9 +154,7 @@ def _audit_rows(conn: sqlite3.Connection) -> list[dict]:
     # randomness suffix breaks within-ms order, so id-sort is not insertion
     # order when multiple writes land in <1ms as they do here).
     cur = conn.cursor()
-    rows = cur.execute(
-        "SELECT action_type, actor, skill_name, metadata FROM audit_log ORDER BY rowid"
-    ).fetchall()
+    rows = cur.execute("SELECT action_type, actor, skill_name, metadata FROM audit_log ORDER BY rowid").fetchall()
     out = []
     for action_type, actor, skill_name, metadata in rows:
         out.append(
@@ -479,11 +477,7 @@ def test_captain_clear_resets_to_ok_and_writes_audit_row():
     assert fresh.level == StickyStopLevel.OK
 
     # Audit row recorded with from_state, to_state, captain reason.
-    clear_rows = [
-        r
-        for r in _audit_rows(conn)
-        if r["metadata"] and r["metadata"].get("sticky_stop_cleared")
-    ]
+    clear_rows = [r for r in _audit_rows(conn) if r["metadata"] and r["metadata"].get("sticky_stop_cleared")]
     assert len(clear_rows) == 1
     row = clear_rows[0]
     assert row["action_type"] == "AGENT_RESUMED"
@@ -552,9 +546,7 @@ def test_integration_each_condition_triggers_a_transition_with_audit():
     # Audit log must carry one row per transition. Count rows tagged
     # sticky_stop_transition, then assert each condition appears at least
     # once.
-    transition_rows = [
-        r for r in _audit_rows(conn) if r["metadata"] and r["metadata"].get("sticky_stop_transition")
-    ]
+    transition_rows = [r for r in _audit_rows(conn) if r["metadata"] and r["metadata"].get("sticky_stop_transition")]
     conditions_seen = {r["metadata"]["condition_triggered"] for r in transition_rows}
     assert conditions_seen == {
         "consecutive_tool_failures",
@@ -568,13 +560,9 @@ def test_integration_each_condition_triggers_a_transition_with_audit():
     # condition still has to reach the audit log, and a silent meter would
     # fail this.
     observations = [
-        r
-        for r in _audit_rows(conn)
-        if r["metadata"] and r["metadata"].get("sticky_stop_transition") is False
+        r for r in _audit_rows(conn) if r["metadata"] and r["metadata"].get("sticky_stop_transition") is False
     ]
-    assert [r["metadata"]["condition_triggered"] for r in observations] == [
-        "time_budget_exceeded"
-    ]
+    assert [r["metadata"]["condition_triggered"] for r in observations] == ["time_budget_exceeded"]
     assert observations[0]["metadata"]["level_unchanged_by_design"] is True
 
 

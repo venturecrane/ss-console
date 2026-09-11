@@ -167,6 +167,7 @@ def _run_to_completion(coro_factory) -> None:
 # EMITTED_WAKE write -- blind and decided -- lives in one module.
 # ---------------------------------------------------------------------------
 
+
 def _plan_counts(decision: "WakeDecision") -> dict:
     """How many per-item plans the gate handed over.
 
@@ -178,7 +179,6 @@ def _plan_counts(decision: "WakeDecision") -> dict:
     if not decision.plans:
         return {}
     return {"plans_total": len(decision.plans)}
-
 
 
 async def try_write_emitted_wake(
@@ -226,5 +226,3 @@ async def try_write_emitted_wake(
         )
     except Exception:  # noqa: BLE001 — observability never gates the wake
         pass
-
-

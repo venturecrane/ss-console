@@ -120,11 +120,7 @@ def _truncate_body(text: str | None) -> str:
     if not text:
         return ""
     text = text.strip()
-    return (
-        text
-        if len(text) <= _MAX_ERROR_BODY
-        else text[:_MAX_ERROR_BODY] + "...(truncated)"
-    )
+    return text if len(text) <= _MAX_ERROR_BODY else text[:_MAX_ERROR_BODY] + "...(truncated)"
 
 
 class SmokeballApiError(RuntimeError):
@@ -139,9 +135,7 @@ class SmokeballApiError(RuntimeError):
         self.path = path
         self.status = status
         self.body = body
-        super().__init__(
-            f"Smokeball {method} {path} -> HTTP {status}: {body or '(empty body)'}"
-        )
+        super().__init__(f"Smokeball {method} {path} -> HTTP {status}: {body or '(empty body)'}")
 
 
 class SmokeballClient:
@@ -161,10 +155,7 @@ class SmokeballClient:
     ) -> None:
         key = (region.lower(), environment.lower())
         if key not in _HOSTS:
-            raise ValueError(
-                f"unknown region/environment {region!r}/{environment!r}; "
-                f"valid: {sorted(_HOSTS)}"
-            )
+            raise ValueError(f"unknown region/environment {region!r}/{environment!r}; valid: {sorted(_HOSTS)}")
         if auth_mode not in _AUTH_MODES:
             raise ValueError(f"unknown auth_mode {auth_mode!r}; valid: {_AUTH_MODES}")
         if auth_mode == "authorization_code" and not refresh_token:
@@ -204,9 +195,7 @@ class SmokeballClient:
         return {"grant_type": "client_credentials", "client_id": self._client_id}
 
     def _post_token_request(self) -> httpx.Response:
-        basic = base64.b64encode(
-            f"{self._client_id}:{self._client_secret}".encode()
-        ).decode()
+        basic = base64.b64encode(f"{self._client_id}:{self._client_secret}".encode()).decode()
         try:
             return self._http.post(
                 f"{self.auth_host}/oauth2/token",
@@ -217,9 +206,7 @@ class SmokeballClient:
                 data=self._token_request_body(),
             )
         except httpx.HTTPError as exc:
-            raise SmokeballAuthError(
-                f"token request to {self.auth_host} failed: {exc}"
-            ) from exc
+            raise SmokeballAuthError(f"token request to {self.auth_host} failed: {exc}") from exc
 
     def _reload_refresh_token_from_file(self) -> bool:
         """Re-read the durable refresh-token file and adopt its token when it
@@ -249,8 +236,7 @@ class SmokeballClient:
         if resp.status_code != 200:
             # Never include the response body verbatim — it can echo the grant.
             raise SmokeballAuthError(
-                f"token mint ({self.auth_mode}) rejected with HTTP {resp.status_code} "
-                f"at {self.auth_host}/oauth2/token"
+                f"token mint ({self.auth_mode}) rejected with HTTP {resp.status_code} at {self.auth_host}/oauth2/token"
             )
         body = resp.json()
         token = body.get("access_token")
@@ -260,18 +246,12 @@ class SmokeballClient:
         # returns a new one, hold it in memory AND rewrite the durable token file
         # so the rotated token survives a restart (ADR 0054, Clio pattern).
         rotated = body.get("refresh_token")
-        if (
-            self.auth_mode == "authorization_code"
-            and rotated
-            and rotated != self._refresh_token
-        ):
+        if self.auth_mode == "authorization_code" and rotated and rotated != self._refresh_token:
             self._refresh_token = rotated
             self._persist_refresh_token(rotated)
         expires_in = int(body.get("expires_in", 3600))
         self._token = token
-        self._token_deadline = time.monotonic() + max(
-            expires_in - _TOKEN_SKEW_SECONDS, 0
-        )
+        self._token_deadline = time.monotonic() + max(expires_in - _TOKEN_SKEW_SECONDS, 0)
         # Operability: log the granted scopes once per process on first successful
         # auth. The connector mints on the first tool call of any agent turn (e.g.
         # the inbox router's get_contacts/list_matters), so this surfaces the live
@@ -284,8 +264,7 @@ class SmokeballClient:
                 import sys
 
                 print(
-                    f"[smokeball] authenticated mode={self.auth_mode} "
-                    f"granted_scopes={self._decode_token_scopes()}",
+                    f"[smokeball] authenticated mode={self.auth_mode} granted_scopes={self._decode_token_scopes()}",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -367,9 +346,7 @@ class SmokeballClient:
                 "Authorization": f"Bearer {self._bearer()}",
                 "Accept": "application/json",
             }
-            last = self._http.request(
-                method, url, params=_clean(params), json=json, headers=headers
-            )
+            last = self._http.request(method, url, params=_clean(params), json=json, headers=headers)
             if last.status_code == 429:
                 time.sleep(min(2**attempt, 8))
                 continue
@@ -378,17 +355,13 @@ class SmokeballClient:
                 refreshed = True
                 continue
             if last.status_code >= 400:
-                raise SmokeballApiError(
-                    method, path, last.status_code, _truncate_body(last.text)
-                )
+                raise SmokeballApiError(method, path, last.status_code, _truncate_body(last.text))
             if last.status_code == 204 or not last.content:
                 return None
             return last.json()
         assert last is not None
         # Attempts exhausted (e.g. a persistent 429) — surface the last status+body.
-        raise SmokeballApiError(
-            method, path, last.status_code, _truncate_body(last.text)
-        )
+        raise SmokeballApiError(method, path, last.status_code, _truncate_body(last.text))
 
     def get(self, path: str, **params: Any) -> Any:
         return self.request("GET", path, params=params)
@@ -419,8 +392,7 @@ class SmokeballClient:
         info = self.request("POST", f"/matters/{matter_id}/documents/files", json=body)
         if not isinstance(info, dict) or not info.get("uploadUrl"):
             raise SmokeballWriteError(
-                "add_file: metadata POST did not return an uploadUrl "
-                f"(matter {matter_id!r}, file {file_name!r})"
+                f"add_file: metadata POST did not return an uploadUrl (matter {matter_id!r}, file {file_name!r})"
             )
         self._put_presigned(info["uploadUrl"], data)
         return {
@@ -440,32 +412,24 @@ class SmokeballClient:
         ``(download_info, blob)``. Size-guarded: refuses anything over
         ``_MAX_DOWNLOAD_BYTES`` up front (from the advertised sizeBytes) and again on
         the actual body, so a mislabeled giant can't flood the process."""
-        info = self.request(
-            "GET", f"/matters/{matter_id}/documents/files/{file_id}/download"
-        )
+        info = self.request("GET", f"/matters/{matter_id}/documents/files/{file_id}/download")
         if not isinstance(info, dict) or not info.get("downloadUrl"):
-            raise SmokeballWriteError(
-                f"download: no downloadUrl for file {file_id!r} on matter {matter_id!r}"
-            )
+            raise SmokeballWriteError(f"download: no downloadUrl for file {file_id!r} on matter {matter_id!r}")
         advertised = info.get("sizeBytes")
         if isinstance(advertised, int) and advertised > _MAX_DOWNLOAD_BYTES:
             raise SmokeballWriteError(
-                f"download: file {file_id!r} is {advertised} bytes, "
-                f"over the {_MAX_DOWNLOAD_BYTES}-byte read limit"
+                f"download: file {file_id!r} is {advertised} bytes, over the {_MAX_DOWNLOAD_BYTES}-byte read limit"
             )
         try:
             resp = self._http.get(info["downloadUrl"])
         except httpx.HTTPError as exc:
             raise SmokeballWriteError(f"presigned download GET failed: {exc}") from exc
         if resp.status_code >= 400:
-            raise SmokeballWriteError(
-                f"presigned download GET rejected with HTTP {resp.status_code}"
-            )
+            raise SmokeballWriteError(f"presigned download GET rejected with HTTP {resp.status_code}")
         blob = resp.content
         if len(blob) > _MAX_DOWNLOAD_BYTES:
             raise SmokeballWriteError(
-                f"download: file {file_id!r} body is {len(blob)} bytes, "
-                f"over the {_MAX_DOWNLOAD_BYTES}-byte read limit"
+                f"download: file {file_id!r} body is {len(blob)} bytes, over the {_MAX_DOWNLOAD_BYTES}-byte read limit"
             )
         return info, blob
 
@@ -483,9 +447,7 @@ class SmokeballClient:
         parsed = urllib.parse.urlparse(url)
         allowed = {
             h.strip().lower()
-            for h in os.environ.get(
-                "SMOKEBALL_ATTACHMENT_URL_HOSTS", _DEFAULT_ATTACHMENT_HOSTS
-            ).split(",")
+            for h in os.environ.get("SMOKEBALL_ATTACHMENT_URL_HOSTS", _DEFAULT_ATTACHMENT_HOSTS).split(",")
             if h.strip()
         }
         if parsed.scheme != "https" or (parsed.hostname or "").lower() not in allowed:
@@ -498,14 +460,11 @@ class SmokeballClient:
         except httpx.HTTPError as exc:
             raise SmokeballWriteError(f"attachment fetch failed: {exc}") from exc
         if resp.status_code >= 400:
-            raise SmokeballWriteError(
-                f"attachment fetch rejected with HTTP {resp.status_code}"
-            )
+            raise SmokeballWriteError(f"attachment fetch rejected with HTTP {resp.status_code}")
         blob = resp.content
         if len(blob) > _MAX_DOWNLOAD_BYTES:
             raise SmokeballWriteError(
-                f"attachment fetch: body is {len(blob)} bytes, over the "
-                f"{_MAX_DOWNLOAD_BYTES}-byte limit"
+                f"attachment fetch: body is {len(blob)} bytes, over the {_MAX_DOWNLOAD_BYTES}-byte limit"
             )
         return blob
 
@@ -518,13 +477,9 @@ class SmokeballClient:
         except httpx.HTTPError as exc:
             raise SmokeballWriteError(f"presigned upload PUT failed: {exc}") from exc
         if resp.status_code >= 400:
-            raise SmokeballWriteError(
-                f"presigned upload PUT rejected with HTTP {resp.status_code}"
-            )
+            raise SmokeballWriteError(f"presigned upload PUT rejected with HTTP {resp.status_code}")
 
-    def create_folder(
-        self, matter_id: str, name: str, parent_folder_id: str | None = None
-    ) -> Any:
+    def create_folder(self, matter_id: str, name: str, parent_folder_id: str | None = None) -> Any:
         """``POST /matters/{id}/documents/folders``: a document folder on a matter,
         nested under ``parent_folder_id`` or at the matter root. The MCP tool of
         the same name and the chronology runner's delivery step both call this,
@@ -640,9 +595,7 @@ def build_client_from_env() -> SmokeballClient:
     two (it was previously a comment-enforced "mirror"). Always passes
     ``refresh_token_file`` so a rotation during use is persisted to the canonical
     path the gateway reads, never desyncing the Machine's token."""
-    token_file = (
-        os.environ.get("SMOKEBALL_REFRESH_TOKEN_FILE") or _DEFAULT_REFRESH_TOKEN_FILE
-    )
+    token_file = os.environ.get("SMOKEBALL_REFRESH_TOKEN_FILE") or _DEFAULT_REFRESH_TOKEN_FILE
     return SmokeballClient(
         region=os.environ.get("SMOKEBALL_REGION", "us"),
         environment=os.environ.get("SMOKEBALL_ENVIRONMENT", "staging"),

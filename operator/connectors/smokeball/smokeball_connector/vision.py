@@ -261,9 +261,7 @@ def transcribe_pdf(blob: bytes, *, pages: int) -> VisionOutcome:
         # transcription, and caching one would put it in front of an attorney
         # as if it were the record.
         return VisionOutcome(reason=REASON_INCOMPLETE)
-    return VisionOutcome(
-        text=_compose(transcripts), pages_read=len(transcripts), stop_reason="end_turn"
-    )
+    return VisionOutcome(text=_compose(transcripts), pages_read=len(transcripts), stop_reason="end_turn")
 
 
 def _transcribe_page(page_pdf: bytes) -> tuple[str, str | None, str | None]:

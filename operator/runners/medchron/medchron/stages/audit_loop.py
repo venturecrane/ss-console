@@ -15,6 +15,7 @@ passes; 1 when the gate fails (the driver holds); 2 on an INVALID audit
 (control failure, no exhibit bytes) or a reconciliation mismatch; 3 at the
 double-sweep guard.
 """
+
 from __future__ import annotations
 
 from .. import llm
@@ -68,7 +69,9 @@ def run(sr: StageRun) -> int:
             sr.log("audit reported INVALID (control failure or no bytes); not repairing on an invalid audit")
             return 2
         if rc == 3:
-            sr.log("audit REFUSED at the double-sweep guard: prior rows for this exact body carry keys no longer produced")
+            sr.log(
+                "audit REFUSED at the double-sweep guard: prior rows for this exact body carry keys no longer produced"
+            )
             return 3
         sr.log(f"===== ROUND {rnd}/{ROUNDS}: repair =====")
         if not repair.run(sr.doorway, repair_model, paths, sr.log):

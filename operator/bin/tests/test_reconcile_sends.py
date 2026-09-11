@@ -241,9 +241,7 @@ def test_window_is_tight_enough_to_be_meaningful():
 # #2380, #2381 and #2382.
 # ---------------------------------------------------------------------------
 
-_CAPTURE = json.loads(
-    (Path(__file__).resolve().parent / "fixtures" / "unaudited-sends-2026-08-17.json").read_text()
-)
+_CAPTURE = json.loads((Path(__file__).resolve().parent / "fixtures" / "unaudited-sends-2026-08-17.json").read_text())
 _CAPTURED_INBOX = _CAPTURE["reports"][0]["inbox"]
 _CAPTURED_FINDS = _CAPTURE["reports"][0]["unaccounted"]
 
@@ -262,11 +260,7 @@ def test_the_shipped_baseline_covers_every_historical_find():
     scheduled run has nothing to say about them."""
     baseline = _shipped_baseline()
     assert len(_CAPTURED_FINDS) == 11
-    missing = [
-        m["message_id"]
-        for m in _captured_sends()
-        if rec.fingerprint(_CAPTURED_INBOX, m) not in baseline
-    ]
+    missing = [m["message_id"] for m in _captured_sends() if rec.fingerprint(_CAPTURED_INBOX, m) not in baseline]
     assert missing == []
 
 
@@ -312,9 +306,7 @@ def test_the_baseline_quiets_only_the_message_id_it_names():
 
 def test_the_baseline_cannot_reach_across_inboxes():
     """An entry naming the pilot inbox says nothing about anyone else's mail."""
-    fresh, already = rec.split_baselined(
-        "ashton-price@agentmail.to", _captured_sends(), _shipped_baseline()
-    )
+    fresh, already = rec.split_baselined("ashton-price@agentmail.to", _captured_sends(), _shipped_baseline())
     assert already == 0 and len(fresh) == 11
 
 
@@ -442,8 +434,16 @@ _MSG_SEAT = rec.MsGraphSeat(
 )
 
 
-def _graph_message(*, token="", mid="<a@firm.example>", gid="AAMk1=", ts="2026-08-20T10:00:00Z",
-                   to="scott@smd.services", subject="s", header_name=rec.AUDIT_ROW_HEADER):
+def _graph_message(
+    *,
+    token="",
+    mid="<a@firm.example>",
+    gid="AAMk1=",
+    ts="2026-08-20T10:00:00Z",
+    to="scott@smd.services",
+    subject="s",
+    header_name=rec.AUDIT_ROW_HEADER,
+):
     headers = [{"name": header_name, "value": token}] if token else []
     return {
         "id": gid,
@@ -724,8 +724,11 @@ def test_the_report_names_how_many_sends_were_matched_by_time():
     rendered = rec.render(
         [
             rec.InboxReport(
-                inbox=_MSG_MAILBOX, slug="a-seat", channel="msgraph",
-                sent_total=3, matched_broker=3,
+                inbox=_MSG_MAILBOX,
+                slug="a-seat",
+                channel="msgraph",
+                sent_total=3,
+                matched_broker=3,
             )
         ]
     )
@@ -790,8 +793,10 @@ def test_the_read_selects_the_header_field(tmp_path):
 def test_the_read_follows_pages(tmp_path):
     http = FakeGraph(
         [
-            {"value": [_graph_message(mid="<p1@firm.example>")],
-             "@odata.nextLink": "https://graph.microsoft.com/v1.0/next"},
+            {
+                "value": [_graph_message(mid="<p1@firm.example>")],
+                "@odata.nextLink": "https://graph.microsoft.com/v1.0/next",
+            },
             {"value": [_graph_message(mid="<p2@firm.example>")]},
         ]
     )
@@ -819,9 +824,7 @@ def test_a_since_window_stops_paging_at_the_boundary(tmp_path):
 def test_a_truncated_scan_raises_rather_than_reporting_clean(tmp_path):
     """A partial scan reported as a complete one is how a control quietly stops
     covering the oldest half of a mailbox. It holds instead."""
-    endless = [
-        {"value": [], "@odata.nextLink": "https://graph.microsoft.com/v1.0/next"}
-    ] * (rec._GRAPH_MAX_PAGES + 1)
+    endless = [{"value": [], "@odata.nextLink": "https://graph.microsoft.com/v1.0/next"}] * (rec._GRAPH_MAX_PAGES + 1)
     with pytest.raises(rec.ReconcileError):
         rec.list_sent_msgraph(_MSG_SEAT, "tok", opener=FakeGraph(endless))
 
@@ -829,6 +832,7 @@ def test_a_truncated_scan_raises_rather_than_reporting_clean(tmp_path):
 def test_a_token_failure_holds_and_never_echoes_the_secret(tmp_path):
     """The token endpoint echoes request parameters back in its error bodies, and
     one of those parameters is the client secret."""
+
     class Boom:
         def __call__(self, request, timeout=None):
             raise urllib.error.HTTPError(request.full_url, 401, "no", {}, None)
@@ -877,9 +881,7 @@ def test_seats_are_discovered_from_customer_yaml_not_a_hand_kept_list(tmp_path):
 def test_the_secret_env_is_per_seat(tmp_path):
     """ADR 0010: the firm's Graph secret is its own. A shared fallback would let
     a missing per-seat secret quietly authenticate as somebody else's app."""
-    assert rec.MsGraphSeat("ashton-price", "m", "t", "c").secret_env == (
-        "MSGRAPH_CLIENT_SECRET__ASHTON_PRICE"
-    )
+    assert rec.MsGraphSeat("ashton-price", "m", "t", "c").secret_env == ("MSGRAPH_CLIENT_SECRET__ASHTON_PRICE")
 
 
 def test_a_seat_with_no_secret_holds_rather_than_accusing(tmp_path, monkeypatch):
@@ -898,9 +900,7 @@ def test_a_seam_failure_holds_rather_than_marking_every_send_unaccounted(tmp_pat
     """Fail-closed the other way: a failed audit read must never read as "zero
     audit rows", which would accuse the Operator of every send it made."""
     http = FakeGraph([{"value": [_graph_message(token="01ABC")]}])
-    report = rec.reconcile_mailbox(
-        _MSG_SEAT, None, opener=http, secret="shh", client_factory=lambda _slug: None
-    )
+    report = rec.reconcile_mailbox(_MSG_SEAT, None, opener=http, secret="shh", client_factory=lambda _slug: None)
     assert report.held and not report.is_finding
 
 
@@ -909,14 +909,13 @@ def test_an_unaudited_msgraph_send_is_a_finding_end_to_end(tmp_path):
 
     FALSIFIER below is its twin -- the same call with the header recorded on the
     row comes back clean, so this cannot be an assertion that always passes."""
+
     class Ledger:
         def read_all(self, _table):
             return [_audited_row("2026-08-20T09:00:00Z", audit_row_token="OTHER")]
 
     http = FakeGraph([{"value": [_graph_message(token="01ABC")]}])
-    report = rec.reconcile_mailbox(
-        _MSG_SEAT, None, opener=http, secret="shh", client_factory=lambda _slug: Ledger()
-    )
+    report = rec.reconcile_mailbox(_MSG_SEAT, None, opener=http, secret="shh", client_factory=lambda _slug: Ledger())
     assert report.is_finding and report.channel == "msgraph"
     assert report.sent_total == 1 and report.matched_exact == 0
 
@@ -927,9 +926,7 @@ def test_an_audited_msgraph_send_is_clean_end_to_end(tmp_path):
             return [_audited_row("2026-08-20T09:00:00Z", audit_row_token="01ABC")]
 
     http = FakeGraph([{"value": [_graph_message(token="01ABC")]}])
-    report = rec.reconcile_mailbox(
-        _MSG_SEAT, None, opener=http, secret="shh", client_factory=lambda _slug: Ledger()
-    )
+    report = rec.reconcile_mailbox(_MSG_SEAT, None, opener=http, secret="shh", client_factory=lambda _slug: Ledger())
     assert not report.is_finding and report.matched_exact == 1
 
 
@@ -953,7 +950,9 @@ def test_the_report_names_which_channel_each_mailbox_came_from(tmp_path):
 
 def _finding_report(messages):
     return rec.InboxReport(
-        inbox=_CAPTURED_INBOX, slug="pilot-smokeball", sent_total=len(messages),
+        inbox=_CAPTURED_INBOX,
+        slug="pilot-smokeball",
+        sent_total=len(messages),
         unaccounted=list(messages),
     )
 
@@ -970,9 +969,7 @@ def test_one_new_send_changes_the_fingerprint():
     """The dedupe must not become the silence. A find set that grew is a
     different find set, and files a new issue even while the old one is open."""
     before = rec.finding_digest([_finding_report(_captured_sends())])
-    after = rec.finding_digest(
-        [_finding_report(_captured_sends() + [_msg("<new>", "2026-08-18T09:00:00.000Z")])]
-    )
+    after = rec.finding_digest([_finding_report(_captured_sends() + [_msg("<new>", "2026-08-18T09:00:00.000Z")])])
     assert after != before
 
 
@@ -1043,12 +1040,7 @@ def _fake_opener(payload):
 # the workflow that runs this
 # ---------------------------------------------------------------------------
 
-_WORKFLOW = (
-    Path(__file__).resolve().parents[3]
-    / ".github"
-    / "workflows"
-    / "unaudited-send-reconcile.yml"
-)
+_WORKFLOW = Path(__file__).resolve().parents[3] / ".github" / "workflows" / "unaudited-send-reconcile.yml"
 
 
 def test_every_msgraph_seat_has_its_secret_wired_into_the_workflow():
@@ -1066,11 +1058,7 @@ def test_every_msgraph_seat_has_its_secret_wired_into_the_workflow():
     a mailbox nobody noticed was unread.
     """
     workflow = _WORKFLOW.read_text(encoding="utf-8")
-    missing = [
-        seat.secret_env
-        for seat in rec.msgraph_seats()
-        if f"{seat.secret_env}: " not in workflow
-    ]
+    missing = [seat.secret_env for seat in rec.msgraph_seats() if f"{seat.secret_env}: " not in workflow]
     assert not missing, (
         "these msgraph seats are authored but their read secret is not wired into "
         f"unaudited-send-reconcile.yml, so the daily run cannot open their mailbox: {missing}"

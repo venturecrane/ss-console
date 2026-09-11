@@ -27,6 +27,7 @@ Page counts are fine: they are the metered unit and the firm authored the
 allowance. The figures themselves live where a person can read them: the run's
 state file, ``log-<stage>.txt``, and the job's console row.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -71,8 +72,7 @@ class Limits:
         return self.allowance_month or "this month"
 
     # ---- once, before the first paid stage ---------------------------------
-    def check_before_first_paid(self, *, pages: int, projected_usd: float, spent_usd: float,
-                                stage: str) -> None:
+    def check_before_first_paid(self, *, pages: int, projected_usd: float, spent_usd: float, stage: str) -> None:
         """Allowance, then the two cost limits. The page check costs nothing and
         answers the bigger question (does this matter fit what the firm bought),
         so it goes first.
@@ -98,8 +98,7 @@ class Limits:
         self.check_before_paid(projected_usd=projected_usd, spent_usd=spent_usd, stage=stage)
 
     # ---- before every paid stage -------------------------------------------
-    def check_before_paid(self, *, projected_usd: float, spent_usd: float, stage: str,
-                          batch: bool = False) -> None:
+    def check_before_paid(self, *, projected_usd: float, spent_usd: float, stage: str, batch: bool = False) -> None:
         """The month's budget and the job's cap against what this stage -- or,
         with `batch`, this one batch submission -- is projected to add. A
         projection of zero still catches a run that has already reached either
@@ -128,12 +127,10 @@ class Limits:
         if self.month_spent_usd + spent_usd >= self.monthly_budget_usd:
             raise LimitHold(
                 BUDGET_SETTING,
-                f"{BUDGET_SETTING}: the month's spend reached the monthly cost budget during "
-                f"{stage}; the run stopped",
+                f"{BUDGET_SETTING}: the month's spend reached the monthly cost budget during {stage}; the run stopped",
             )
         if spent_usd >= self.cap_usd:
             raise LimitHold(
                 CAP_SETTING,
-                f"{CAP_SETTING}: the run's spend reached the job's cost cap during {stage}; "
-                "the run stopped",
+                f"{CAP_SETTING}: the run's spend reached the job's cost cap during {stage}; the run stopped",
             )

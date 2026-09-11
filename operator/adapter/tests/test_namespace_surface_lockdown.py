@@ -118,6 +118,4 @@ def test_audit_log_star_import_does_not_pull_raw_executors():
     exec("from adapter.audit_log import *", namespace)  # noqa: S102 - the test exercises star-import on purpose, into a throwaway namespace
     forbidden = {"HttpD1Executor", "SqliteExecutor"}
     leaked = forbidden & set(namespace)
-    assert not leaked, (
-        f"`from adapter.audit_log import *` leaked raw executors: {leaked}"
-    )
+    assert not leaked, f"`from adapter.audit_log import *` leaked raw executors: {leaked}"

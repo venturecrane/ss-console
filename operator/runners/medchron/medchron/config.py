@@ -11,6 +11,7 @@ Resolution order: `MEDCHRON_FIRM_CONFIG` env, else the fixed root-owned path the
 seat's other config-as-data uses. A missing file is a refusal; there is no
 built-in firm.
 """
+
 from __future__ import annotations
 
 import os
@@ -256,9 +257,11 @@ def _semantic_checks(data: dict[str, Any]) -> list[str]:
     # A zero or negative control is not a control: it either refuses every job
     # or meters nothing. Each is named separately so the validator's message
     # points at the key the firm has to fix.
-    for key, what in (("monthly_budget_usd", "a zero budget refuses every job"),
-                      ("usd_per_scanned_page", "a zero rate projects every page at no cost"),
-                      ("usd_per_audit_claim", "a zero rate projects every claim at no cost")):
+    for key, what in (
+        ("monthly_budget_usd", "a zero budget refuses every job"),
+        ("usd_per_scanned_page", "a zero rate projects every page at no cost"),
+        ("usd_per_audit_claim", "a zero rate projects every claim at no cost"),
+    ):
         if key in budget and float(budget.get(key) or 0) <= 0:
             out.append(f"budget.{key}: must be > 0 ({what})")
     return out

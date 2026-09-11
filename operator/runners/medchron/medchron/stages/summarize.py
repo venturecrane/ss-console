@@ -14,6 +14,7 @@ from one exhibit, which names no page the source did not. A citation
 reaching a page the source never cited, or an exhibit it never used, is a
 summary reaching beyond the record: exit 1.
 """
+
 from __future__ import annotations
 
 import re
@@ -70,9 +71,16 @@ def run(sr: StageRun) -> int:
     if not pre:
         (d / "entries_scoped_final.md").write_text("\n\n".join(post), encoding="utf-8")
         return 0
-    r = sr.doorway.call("summarize", model=llm.model_for(sr.cfg, "judgment"), system=prompts.load("summarize-system", sr.cfg),
-                        max_tokens=4000, messages=[{"role": "user", "content": "\n\n".join(pre)}], effort="",
-                        timeout=240.0, custom_id="summarize")
+    r = sr.doorway.call(
+        "summarize",
+        model=llm.model_for(sr.cfg, "judgment"),
+        system=prompts.load("summarize-system", sr.cfg),
+        max_tokens=4000,
+        messages=[{"role": "user", "content": "\n\n".join(pre)}],
+        effort="",
+        timeout=240.0,
+        custom_id="summarize",
+    )
     block = r.text.strip()
     bad = beyond_source("\n".join(pre), block)
     if bad:

@@ -65,7 +65,9 @@ def job_create(broker: Any, _action: str, request: dict[str, Any], _pid: int, _u
     return {"ok": True, "id": _ledger(broker).create(row)}
 
 
-def job_list_claimable(broker: Any, _action: str, _request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def job_list_claimable(
+    broker: Any, _action: str, _request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     now, cutoff = now_and_lease_cutoff(LEASE_TTL_SECONDS)
     return {"ok": True, "jobs": _ledger(broker).list_claimable(now, cutoff)}
 
@@ -132,7 +134,9 @@ def job_idem_complete(broker: Any, action: str, request: dict[str, Any], _pid: i
     return {"ok": True, "result": ledger.idempotency_complete(job_id, step_key, epoch)}
 
 
-def unknown_job_action(broker: Any, action: str, _request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def unknown_job_action(
+    broker: Any, action: str, _request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     """A ``job_*`` name the table does not carry: the old prefix dispatcher's
     vocabulary, kept so a misspelt job verb still names itself in the reply."""
     _ledger(broker)

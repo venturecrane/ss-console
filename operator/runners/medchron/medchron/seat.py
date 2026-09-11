@@ -23,6 +23,7 @@ to disk, size checked against what the mint advertised (the predecessor's
 docstring CLAIMED byte verification and never compared, and a truncated pull
 passed silently).
 """
+
 from __future__ import annotations
 
 import base64
@@ -104,8 +105,7 @@ def walk_folder_tree(kids, pause: float = MINT_PAUSE_SECONDS) -> list[dict[str, 
     return out
 
 
-def fetch_https(url: str, dest: Path, expected_size: int | None,
-                timeout: float = FETCH_TIMEOUT_SECONDS) -> int:
+def fetch_https(url: str, dest: Path, expected_size: int | None, timeout: float = FETCH_TIMEOUT_SECONDS) -> int:
     """Stream a presigned URL to `dest`. https only and no redirects, because
     the URL comes back from a mint and urllib would happily honour file:// or
     a redirect to one. Size mismatch removes the file and raises."""
@@ -158,9 +158,16 @@ class ClientSeat:
         for fid in file_ids:
             try:
                 info = self.client.request("GET", f"/matters/{matter_id}/documents/files/{fid}/download")
-                out.append({"id": fid, "url": info.get("downloadUrl"), "expiry": info.get("expiry"),
-                            "name": info.get("name"), "size": info.get("sizeBytes"),
-                            "ext": info.get("fileExtension")})
+                out.append(
+                    {
+                        "id": fid,
+                        "url": info.get("downloadUrl"),
+                        "expiry": info.get("expiry"),
+                        "name": info.get("name"),
+                        "size": info.get("sizeBytes"),
+                        "ext": info.get("fileExtension"),
+                    }
+                )
             except Exception as exc:  # noqa: BLE001 - one bad id must not kill the batch
                 out.append({"id": fid, "error": str(exc)[:200]})
             time.sleep(MINT_PAUSE_SECONDS)
@@ -182,7 +189,7 @@ class ClientSeat:
 # The script that runs on the seat. It is the frozen pipeline's seat_list_mint
 # and seat_folders, joined, and it prints one JSON document after a sentinel
 # so the transport can find it inside whatever the ssh session also prints.
-_SEAT_SCRIPT = r'''
+_SEAT_SCRIPT = r"""
 import json, sys, time
 sys.path.insert(0, "/opt/connectors/smokeball")
 from smokeball_connector.client import build_client_from_env
@@ -231,7 +238,7 @@ else:
         time.sleep(0.25)
     payload = {"files": out}
 print("@@SEAT@@" + json.dumps(payload))
-'''
+"""
 SENTINEL = "@@SEAT@@"
 SEAT_PYTHON = "/opt/connectors/smokeball/.venv/bin/python3"
 
@@ -248,8 +255,13 @@ class SshSeat:
         b64 = base64.b64encode(_SEAT_SCRIPT.encode()).decode()
         argv_json = ",".join(json.dumps(a) for a in argv)
         code = f'import base64,sys;sys.argv=["seat",{argv_json}];exec(base64.b64decode("{b64}").decode())'
-        proc = subprocess.run([self.probe, self.customer_slug, SEAT_PYTHON, "-c", code],
-                              capture_output=True, text=True, timeout=self.timeout, check=False)
+        proc = subprocess.run(
+            [self.probe, self.customer_slug, SEAT_PYTHON, "-c", code],
+            capture_output=True,
+            text=True,
+            timeout=self.timeout,
+            check=False,
+        )
         if SENTINEL not in proc.stdout:
             raise SeatError(f"seat call {argv[0]} returned no payload: {proc.stderr.strip()[-300:]}")
         return json.loads(proc.stdout.split(SENTINEL, 1)[1])

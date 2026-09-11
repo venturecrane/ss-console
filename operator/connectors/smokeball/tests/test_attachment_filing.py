@@ -14,9 +14,7 @@ _ATTACH_URL = "https://download.agentmail.to/attachments/att_1?token=tok123"
 
 
 def _mock_client(handler) -> SmokeballClient:
-    client = SmokeballClient(
-        region="us", environment="staging", client_id="cid", client_secret="sec", api_key="apikey"
-    )
+    client = SmokeballClient(region="us", environment="staging", client_id="cid", client_secret="sec", api_key="apikey")
     client._http = httpx.Client(transport=httpx.MockTransport(handler))
     return client
 

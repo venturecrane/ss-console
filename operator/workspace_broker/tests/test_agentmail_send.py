@@ -288,12 +288,7 @@ def test_the_block_test_above_can_actually_fail(tmp_path: Path) -> None:
     Without this, a refusal coming from the allow set rather than the block would
     be indistinguishable from the control working.
     """
-    allow_only = (
-        "scope:\n"
-        "  inbound_allow_from:\n"
-        f"    - '@{_NFC_DOMAIN}'\n"
-        f"    - '@{_NFD_DOMAIN}'\n"
-    )
+    allow_only = f"scope:\n  inbound_allow_from:\n    - '@{_NFC_DOMAIN}'\n    - '@{_NFD_DOMAIN}'\n"
     policy = authored_policy(_seat(tmp_path, allow_only)[0])
     assert policy.allows_recipient(f"a@{_NFD_DOMAIN}")
 
@@ -350,20 +345,14 @@ def test_either_agentmail_id_spelling_reaches_the_audit_row(tmp_path: Path) -> N
     exact-match join — the backstop for this entire control.
     """
     camel = FakeHTTP({"/messages/send": {"messageId": "msg_camel"}})
-    assert _ops(tmp_path, camel).send({"to": ["scott@smd.services"], "text": "x"})[
-        "message_id"
-    ] == "msg_camel"
+    assert _ops(tmp_path, camel).send({"to": ["scott@smd.services"], "text": "x"})["message_id"] == "msg_camel"
     snake = FakeHTTP({"/messages/send": {"message_id": "msg_snake"}})
-    assert _ops(tmp_path, snake).send({"to": ["scott@smd.services"], "text": "x"})[
-        "message_id"
-    ] == "msg_snake"
+    assert _ops(tmp_path, snake).send({"to": ["scott@smd.services"], "text": "x"})["message_id"] == "msg_snake"
 
 
 def test_reply_parses_a_display_name_sender(tmp_path: Path) -> None:
     ops = _ops(tmp_path, _reply_http('"Scott" <scott@smd.services>'))
-    assert ops.reply({"message_id": "m1", "text": "answer"})["recipients"] == [
-        "scott@smd.services"
-    ]
+    assert ops.reply({"message_id": "m1", "text": "answer"})["recipients"] == ["scott@smd.services"]
 
 
 def test_a_lookalike_domain_is_not_the_authored_domain(tmp_path: Path) -> None:
@@ -407,9 +396,7 @@ def test_an_inbox_absent_from_the_listing_fails_closed(tmp_path: Path) -> None:
 
 def test_seat_inbox_address_prefers_authored_over_convention(tmp_path: Path) -> None:
     customer = tmp_path / "c.yaml"
-    customer.write_text(
-        "connectors:\n  Email:\n    inbox_address: PINNED@agentmail.to\nscope: {}\n"
-    )
+    customer.write_text("connectors:\n  Email:\n    inbox_address: PINNED@agentmail.to\nscope: {}\n")
     assert seat_inbox_address(customer, SEAT) == "pinned@agentmail.to"
     customer.write_text("scope: {}\n")
     assert seat_inbox_address(customer, SEAT) == SEAT_INBOX

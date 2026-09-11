@@ -12,6 +12,7 @@ Usage:
   ensure-operator-identity.py CUSTOMER_YAML [HERMES_HOME]
   (HERMES_HOME defaults to $HERMES_HOME or /opt/data.)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -118,9 +119,7 @@ def _replace_managed_block(text: str, block: str) -> str:
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(
-        description="Append customer-owned operator identity facts to SOUL.md."
-    )
+    parser = argparse.ArgumentParser(description="Append customer-owned operator identity facts to SOUL.md.")
     parser.add_argument("customer_yaml", help="path to customer.yaml")
     parser.add_argument(
         "hermes_home",

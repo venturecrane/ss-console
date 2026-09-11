@@ -84,9 +84,7 @@ def main() -> None:
     matter_binding.drop(SESSION)
 
     # The session reads matter A's memos.
-    matter_binding.record_from_read(
-        SESSION, "{}", tool_name=MEMOS, args={"matter_id": MATTER_A}
-    )
+    matter_binding.record_from_read(SESSION, "{}", tool_name=MEMOS, args={"matter_id": MATTER_A})
 
     held = matter_binding.membership_for(SESSION).content_read_matters()
     if MATTER_A not in held:

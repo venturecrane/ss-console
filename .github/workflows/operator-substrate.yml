@@ -105,6 +105,14 @@ jobs:
         working-directory: operator
         run: ruff check .
 
+      # One formatter for the Python half, the way prettier is for the
+      # TypeScript half (ruff.toml [format], line-length 120). Fix locally with
+      # `cd operator && ruff format .`.
+      - name: ruff format --check
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator
+        run: ruff format --check .
+
       # RUF100 (in ruff.toml) deletes suppressions for rules ruff does not
       # enable; this is the other half: every surviving noqa says what it
       # protects. Same shape as the nosemgrep gate in security.yml.

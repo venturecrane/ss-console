@@ -11,6 +11,7 @@ unknown models at zero cannot trip.
 Reading is incremental: the ledger only grows, so the reader remembers its byte
 offset and running totals per file and re-reads from there.
 """
+
 from __future__ import annotations
 
 import json
@@ -72,9 +73,7 @@ class Pricing:
         # Longest-prefix match covers dated ids ("claude-haiku-4-5-20251001").
         best = max((m for m in self.rates if model.startswith(m)), key=len, default=None)
         if best is None:
-            raise BudgetError(
-                f"model {model!r} has no row in {self.source}; refusing to price it at zero"
-            )
+            raise BudgetError(f"model {model!r} has no row in {self.source}; refusing to price it at zero")
         return self.rates[best]
 
     def price_row(self, row: dict[str, Any]) -> float:
@@ -107,6 +106,7 @@ class _Cursor:
 @dataclass
 class Budget:
     """Live spend for one job (all units) against one cap."""
+
     pricing: Pricing
     cap_usd: float
     ledgers: list[Path]
@@ -160,9 +160,7 @@ class Budget:
         the projection from extracted characters says the run will."""
         spent = self.refresh()
         if spent >= self.cap_usd:
-            raise BudgetError(
-                f"cap {self.cap_usd:.2f} USD reached before {stage}: {spent:.2f} USD spent"
-            )
+            raise BudgetError(f"cap {self.cap_usd:.2f} USD reached before {stage}: {spent:.2f} USD spent")
         if extracted_chars is not None:
             projected = self.projection(extracted_chars)
             if projected > self.cap_usd:

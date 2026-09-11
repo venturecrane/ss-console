@@ -110,8 +110,7 @@ class DeadlineSource(Protocol):
     authored date on an open matter, plus the matter's conflict-hold state and
     whether the escalation has been acknowledged."""
 
-    def pull_deadlines(self) -> Sequence[MatterDeadline]:
-        ...
+    def pull_deadlines(self) -> Sequence[MatterDeadline]: ...
 
 
 # ---------------------------------------------------------------------------
@@ -190,9 +189,7 @@ def load_escalation_config(
     )
     policy = FirePolicy(
         refire_days=_pos_int(esc.get("refire_days"), _PACK_DEFAULT_FIRE_POLICY.refire_days),
-        ack_snooze_days=_pos_int(
-            esc.get("ack_snooze_days"), _PACK_DEFAULT_FIRE_POLICY.ack_snooze_days
-        ),
+        ack_snooze_days=_pos_int(esc.get("ack_snooze_days"), _PACK_DEFAULT_FIRE_POLICY.ack_snooze_days),
     )
     return windows, policy
 
@@ -444,16 +441,11 @@ def project_digest(
     in_range = [
         d
         for d in deadlines
-        if d.matter_open
-        and d.authored_date <= today + timedelta(days=windows.escalation_window_days)
+        if d.matter_open and d.authored_date <= today + timedelta(days=windows.escalation_window_days)
     ]
     clearance = [d for d in in_range if d.conflict_hold]
     firing = [d for d in in_range if not d.acknowledged and not d.conflict_hold]
-    elsewhere = [
-        d
-        for d in in_range
-        if d.acknowledged and not d.acked and d.last_raised and not d.conflict_hold
-    ]
+    elsewhere = [d for d in in_range if d.acknowledged and not d.acked and d.last_raised and not d.conflict_hold]
 
     def code_for(d: MatterDeadline) -> str | None:
         if not ledger.has_stable_identity(d.task_id, d.matter_id):
@@ -482,9 +474,7 @@ def project_digest(
         "needs_you": [_digest_item(d, today, code_for(d)) for d in needs_you],
     }
     if admin:
-        digest["admin_confirms"] = _group_by_matter(
-            [_digest_item(d, today, code_for(d)) for d in admin]
-        )
+        digest["admin_confirms"] = _group_by_matter([_digest_item(d, today, code_for(d)) for d in admin])
     if elsewhere:
         # Collapsed per matter for the same reason admin_confirms is (Law 11).
         # The 2026-08-25 digest rendered this band as 38 flat rows, 20 of them
@@ -644,12 +634,7 @@ def _handoff_values(node, key: str, out: list) -> list:
 
 def _is_iso_day(value: str) -> bool:
     """YYYY-MM-DD and nothing else. The register must never learn a non-date."""
-    return (
-        len(value) == 10
-        and value[4] == "-"
-        and value[7] == "-"
-        and value.replace("-", "").isdigit()
-    )
+    return len(value) == 10 and value[4] == "-" and value[7] == "-" and value.replace("-", "").isdigit()
 
 
 #: Per-item date fields whose values a digest line renders BESIDE the matter
@@ -703,13 +688,9 @@ def _write_pre_run_handoff(payload: dict) -> None:
         record = {
             "skill": _HANDOFF_SKILL,
             "started_at": _HANDOFF_STARTED_AT,
-            "dates": [
-                d for d in _handoff_values(payload, "authored_date", []) if _is_iso_day(d)
-            ],
+            "dates": [d for d in _handoff_values(payload, "authored_date", []) if _is_iso_day(d)],
             "matter_ids": _handoff_values(payload, "matter_id", []),
-            "records": [
-                {"matterNumber": number, "dates": dates} for number, dates in grouped.items()
-            ],
+            "records": [{"matterNumber": number, "dates": dates} for number, dates in grouped.items()],
         }
         directory = Path(os.environ.get("HERMES_HOME") or "/opt/data") / ".smd" / "pre_run"
         # Modes are set AT CREATION, never by a follow-up chmod: umask can only
@@ -832,9 +813,7 @@ def _deadline_to_dict(d: MatterDeadline) -> dict:
 _RESOLUTION_FAILURES = frozenset({"lookup_failed", "budget_exhausted"})
 
 
-def _degradation(
-    deadlines: Sequence[MatterDeadline], today: date
-) -> tuple[int, int, str | None]:
+def _degradation(deadlines: Sequence[MatterDeadline], today: date) -> tuple[int, int, str | None]:
     """``(resolved, failed, reason)`` for the degraded-run judgment (2026-08-24).
 
     ``failed`` counts only RESOLUTION failures, never authored absence. The
@@ -847,19 +826,14 @@ def _degradation(
     failed = sum(1 for d in deadlines if d.matter_number_absent in _RESOLUTION_FAILURES)
     if failed == 0:
         return resolved, failed, None
-    nearest = min(
-        ((d.authored_date - today).days for d in deadlines), default=0
-    )
+    nearest = min(((d.authored_date - today).days for d in deadlines), default=0)
     if resolved == 0:
         reason = (
             f"{len(deadlines)} deadline(s) withheld: 0 matter numbers resolved, "
             f"{failed} lookup(s) failed, nearest deadline {nearest} day(s) out"
         )
     else:
-        reason = (
-            f"digest sent with explicit absences: {failed} of {failed + resolved} "
-            f"matter lookup(s) failed"
-        )
+        reason = f"digest sent with explicit absences: {failed} of {failed + resolved} matter lookup(s) failed"
     return resolved, failed, reason
 
 
@@ -894,13 +868,9 @@ async def run_once(
     for source in sources:
         pulled = list(source.pull_deadlines())
         deadlines.extend(pulled)
-        raw_input_blob += json.dumps(
-            [_deadline_to_dict(d) for d in pulled], sort_keys=True
-        ).encode("utf-8")
+        raw_input_blob += json.dumps([_deadline_to_dict(d) for d in pulled], sort_keys=True).encode("utf-8")
 
-    deadlines = enrich_with_ledger(
-        deadlines, today=today, policy=fire_policy, ledger_events=ledger_events
-    )
+    deadlines = enrich_with_ledger(deadlines, today=today, policy=fire_policy, ledger_events=ledger_events)
 
     decision = decide(
         deadlines,
@@ -997,9 +967,7 @@ async def run_once(
             # stamps ride the EMITTED_WAKE row + the wake line; {} on any
             # failure, and the wake proceeds undecorated (the SKILL.md
             # failure-note instruction + heartbeat pager carry the miss).
-            envelope_mod = _load_sibling_module(
-                "dispatch_envelope.py", "escalator_dispatch_envelope"
-            )
+            envelope_mod = _load_sibling_module("dispatch_envelope.py", "escalator_dispatch_envelope")
             if envelope_mod is not None:
                 events = ledger_events if ledger_events is not None else ledger.read_ledger()
                 envelope_meta = envelope_mod.build_and_write(
@@ -1267,9 +1235,7 @@ def _matter_number_of(item: dict) -> tuple[str | None, str | None]:
     return None, "lookup_failed"
 
 
-def parse_pull(
-    raw: dict, *, now: datetime | None = None
-) -> tuple[list[MatterDeadline], str | None, dict]:
+def parse_pull(raw: dict, *, now: datetime | None = None) -> tuple[list[MatterDeadline], str | None, dict]:
     """Pure parse of the connector pull. Returns (deadlines, problem, probe_stats).
 
     A non-None problem means the view is partial or unrecognizable and the
@@ -1307,9 +1273,7 @@ def parse_pull(
                 probe_stats["excluded"] += 1
                 stamp = _probe_stamp_of(item)
                 reference = now or datetime.now(timezone.utc)
-                if stamp is None or (
-                    reference - stamp
-                ) >= timedelta(hours=_PROBE_STALE_HOURS):
+                if stamp is None or (reference - stamp) >= timedelta(hours=_PROBE_STALE_HOURS):
                     probe_stats["stale"] += 1
                     if len(probe_stats["stale_task_ids"]) < 5:
                         sid = _source_id_of(item)
@@ -1351,9 +1315,7 @@ class SmokeballSubprocessSource:
     run_once after the pull; the DeadlineSource protocol itself stays a plain
     deadlines pull)."""
 
-    def __init__(
-        self, windows: EscalationWindows, today: date, matter_lookup_budget: int = 100
-    ) -> None:
+    def __init__(self, windows: EscalationWindows, today: date, matter_lookup_budget: int = 100) -> None:
         self._windows = windows
         self._today = today
         self._matter_lookup_budget = matter_lookup_budget
@@ -1366,9 +1328,7 @@ class SmokeballSubprocessSource:
         self.matter_ref_error: str | None = None
 
     def pull_deadlines(self) -> Sequence[MatterDeadline]:
-        connector_python = os.environ.get(
-            "SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT
-        )
+        connector_python = os.environ.get("SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT)
         frm = self._today.isoformat()
         to = (self._today + timedelta(days=self._windows.escalation_window_days)).isoformat()
         env = dict(os.environ)
@@ -1384,10 +1344,7 @@ class SmokeballSubprocessSource:
             env=env,
         )
         if result.returncode != 0:
-            raise RuntimeError(
-                f"smokeball pull exit {result.returncode}: "
-                f"{(result.stderr or '').strip()[:500]}"
-            )
+            raise RuntimeError(f"smokeball pull exit {result.returncode}: {(result.stderr or '').strip()[:500]}")
         raw = json.loads((result.stdout or "").strip().splitlines()[-1])
         counts = raw.get("matterNumberCounts")
         self.matter_number_counts = counts if isinstance(counts, dict) else None
@@ -1447,9 +1404,7 @@ def main() -> int:
         return _blind_wake("customer_slug_unset_fail_open")
     windows, fire_policy = load_escalation_config()
     today = datetime.now(timezone.utc).date()
-    source = SmokeballSubprocessSource(
-        windows, today, matter_lookup_budget=load_matter_lookup_budget()
-    )
+    source = SmokeballSubprocessSource(windows, today, matter_lookup_budget=load_matter_lookup_budget())
     try:
         return asyncio.run(
             run_once(

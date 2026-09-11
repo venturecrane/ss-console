@@ -56,6 +56,7 @@ USAGE
 Environment: ``SMD_DRAFT_DATA`` (required, the data root), ``SMD_SLUG``
 (the matter), ``SMD_UNIT`` (the run; defaults to the slug).
 """
+
 from __future__ import annotations
 
 import json
@@ -63,25 +64,26 @@ import os
 import sys
 import time
 
-_CARD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                          "rate-card.json")
+_CARD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rate-card.json")
 
 #: Stages whose model choice is a routing decision the discipline governs
 #: (Part III). Recording under a name outside this set is allowed -- an
 #: unrecognised stage is a new stage, not an error -- but the report marks it,
 #: because an unrouted stage is how an Opus call hides inside a cheap pipeline.
-KNOWN_STAGES = frozenset({
-    "assemble",     # pulling the matter record; usually no model call at all
-    "extract",      # mechanical text extraction (free; recorded for the count)
-    "digest",       # collapsing the record into a cited fact digest
-    "compose",      # the draft itself -- work-product model, never delegated
-    "audit",        # citation / quotation verification
-    "coverage",     # propounded-vs-response diffing
-    "gates",        # the ten mechanical gates
-    "lint",         # SPROG / subpart lint
-    "repair",       # correction passes over a composed draft
-    "revise",       # an attorney-requested revision round
-})
+KNOWN_STAGES = frozenset(
+    {
+        "assemble",  # pulling the matter record; usually no model call at all
+        "extract",  # mechanical text extraction (free; recorded for the count)
+        "digest",  # collapsing the record into a cited fact digest
+        "compose",  # the draft itself -- work-product model, never delegated
+        "audit",  # citation / quotation verification
+        "coverage",  # propounded-vs-response diffing
+        "gates",  # the ten mechanical gates
+        "lint",  # SPROG / subpart lint
+        "repair",  # correction passes over a composed draft
+        "revise",  # an attorney-requested revision round
+    }
+)
 
 #: A stage's ceiling must budget for THINKING, which is billed against the same
 #: allowance as the text. On the first instrumented run every stage was sized
@@ -171,10 +173,7 @@ def price(row):
     tout = row.get("out") or 0
     cr = row.get("cache_read") or 0
     cw = row.get("cache_write") or 0
-    cents_per_m = (tin * r["in"]
-                   + cw * r["in"] * m["cache_write_5m"]
-                   + cr * r["in"] * m["cache_read"]
-                   + tout * r["out"])
+    cents_per_m = tin * r["in"] + cw * r["in"] * m["cache_write_5m"] + cr * r["in"] * m["cache_read"] + tout * r["out"]
     dollars = cents_per_m / 1e8
     if row.get("batch"):
         dollars *= m["batch"]
@@ -200,9 +199,19 @@ def summarise(rows):
     by_stage = {}
     unknown = 0
     for row in rows:
-        s = by_stage.setdefault(row.get("stage") or "?", {
-            "models": set(), "calls": 0, "in": 0, "out": 0,
-            "cache_read": 0, "cache_write": 0, "batch": 0, "dollars": 0.0})
+        s = by_stage.setdefault(
+            row.get("stage") or "?",
+            {
+                "models": set(),
+                "calls": 0,
+                "in": 0,
+                "out": 0,
+                "cache_read": 0,
+                "cache_write": 0,
+                "batch": 0,
+                "dollars": 0.0,
+            },
+        )
         s["models"].add(row.get("model") or "?")
         s["calls"] += 1
         for k in ("in", "out", "cache_read", "cache_write"):
@@ -223,12 +232,13 @@ def report(slug, unit):
     path = os.path.join(_run_dir(data, slug, unit), "usage-ledger.jsonl")
     by_stage, unknown = summarise(_read_rows(path))
 
-    lines = [f"ledger: {path}",
-             f"{'stage':12s} {'calls':>6s} {'in':>12s} {'out':>10s} "
-             f"{'cache_rd':>10s} {'cache_wr':>10s} {'batch':>6s} "
-             f"{'dollars':>9s} {'share':>7s}"]
-    tot = {"calls": 0, "in": 0, "out": 0, "cache_read": 0, "cache_write": 0,
-           "batch": 0, "dollars": 0.0}
+    lines = [
+        f"ledger: {path}",
+        f"{'stage':12s} {'calls':>6s} {'in':>12s} {'out':>10s} "
+        f"{'cache_rd':>10s} {'cache_wr':>10s} {'batch':>6s} "
+        f"{'dollars':>9s} {'share':>7s}",
+    ]
+    tot = {"calls": 0, "in": 0, "out": 0, "cache_read": 0, "cache_write": 0, "batch": 0, "dollars": 0.0}
     for s in by_stage.values():
         for k in tot:
             tot[k] += s[k]
@@ -240,33 +250,45 @@ def report(slug, unit):
         mark = "" if stage in KNOWN_STAGES else "  <- unrouted stage"
         if stage not in KNOWN_STAGES:
             unrouted.append(stage)
-        lines.append(f"{stage:12s} {s['calls']:6d} {s['in']:12,d} "
-                     f"{s['out']:10,d} {s['cache_read']:10,d} "
-                     f"{s['cache_write']:10,d} {s['batch']:6d} "
-                     f"{s['dollars']:9.2f} {100 * s['dollars'] / grand:6.1f}%"
-                     f"{mark}")
+        lines.append(
+            f"{stage:12s} {s['calls']:6d} {s['in']:12,d} "
+            f"{s['out']:10,d} {s['cache_read']:10,d} "
+            f"{s['cache_write']:10,d} {s['batch']:6d} "
+            f"{s['dollars']:9.2f} {100 * s['dollars'] / grand:6.1f}%"
+            f"{mark}"
+        )
         tokens_by_stage[stage] = {
-            "model": ",".join(sorted(s["models"])), "calls": s["calls"],
-            "in": s["in"], "out": s["out"], "cache_read": s["cache_read"],
-            "cache_write": s["cache_write"]}
+            "model": ",".join(sorted(s["models"])),
+            "calls": s["calls"],
+            "in": s["in"],
+            "out": s["out"],
+            "cache_read": s["cache_read"],
+            "cache_write": s["cache_write"],
+        }
         dollars_by_stage[stage] = round(s["dollars"], 4)
 
-    lines.append(f"{'TOTAL':12s} {tot['calls']:6d} {tot['in']:12,d} "
-                 f"{tot['out']:10,d} {tot['cache_read']:10,d} "
-                 f"{tot['cache_write']:10,d} {tot['batch']:6d} "
-                 f"{tot['dollars']:9.2f}")
+    lines.append(
+        f"{'TOTAL':12s} {tot['calls']:6d} {tot['in']:12,d} "
+        f"{tot['out']:10,d} {tot['cache_read']:10,d} "
+        f"{tot['cache_write']:10,d} {tot['batch']:6d} "
+        f"{tot['dollars']:9.2f}"
+    )
     lines.append(f"unknown-model rows (unpriced): {unknown}")
     if unrouted:
-        lines.append("unrouted stages (not in KNOWN_STAGES): "
-                     + ", ".join(sorted(unrouted)))
-    lines.append(json.dumps({
-        "rate_card": RATES,
-        "tokens_by_stage": tokens_by_stage,
-        "dollars_by_stage": dollars_by_stage,
-        "dollars_total": round(tot["dollars"], 4),
-        "unpriced_rows": unknown,
-        "unrouted_stages": sorted(unrouted),
-    }, sort_keys=True))
+        lines.append("unrouted stages (not in KNOWN_STAGES): " + ", ".join(sorted(unrouted)))
+    lines.append(
+        json.dumps(
+            {
+                "rate_card": RATES,
+                "tokens_by_stage": tokens_by_stage,
+                "dollars_by_stage": dollars_by_stage,
+                "dollars_total": round(tot["dollars"], 4),
+                "unpriced_rows": unknown,
+                "unrouted_stages": sorted(unrouted),
+            },
+            sort_keys=True,
+        )
+    )
     return "\n".join(lines)
 
 
@@ -292,10 +314,16 @@ def append_calibration(slug, unit, artifact_class, chars, extra=None):
         "rate_card_as_of": RATES["_meta"]["as_of"],
         "unpriced_rows": unknown,
         "tokens_by_stage": {
-            k: {"model": ",".join(sorted(v["models"])), "calls": v["calls"],
-                "in": v["in"], "out": v["out"],
-                "cache_read": v["cache_read"], "cache_write": v["cache_write"]}
-            for k, v in by_stage.items()},
+            k: {
+                "model": ",".join(sorted(v["models"])),
+                "calls": v["calls"],
+                "in": v["in"],
+                "out": v["out"],
+                "cache_read": v["cache_read"],
+                "cache_write": v["cache_write"],
+            }
+            for k, v in by_stage.items()
+        },
         "dollars_total": round(sum(v["dollars"] for v in by_stage.values()), 4),
     }
     if extra:
@@ -320,8 +348,7 @@ def anchors(artifact_class, chars, k=3):
     path = os.path.join(data, "calibration.jsonl")
     if not os.path.exists(path):
         return []
-    rows = [r for r in _read_rows(path)
-            if r.get("artifact_class") == artifact_class and r.get("chars")]
+    rows = [r for r in _read_rows(path) if r.get("artifact_class") == artifact_class and r.get("chars")]
     rows.sort(key=lambda r: abs((r.get("chars") or 0) - chars))
     return rows[:k]
 
@@ -333,7 +360,7 @@ if __name__ == "__main__":
         for r in anchors(sys.argv[2], int(sys.argv[3])):
             print(json.dumps(r, sort_keys=True))
     else:
-        print("usage: ledger.py report <slug> <unit>\n"
-              "       ledger.py anchors <artifact_class> <chars>",
-              file=sys.stderr)
+        print(
+            "usage: ledger.py report <slug> <unit>\n       ledger.py anchors <artifact_class> <chars>", file=sys.stderr
+        )
         sys.exit(2)

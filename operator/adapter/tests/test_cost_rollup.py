@@ -184,10 +184,7 @@ def test_d1_drivers_map_to_cloudflare_d1():
 
 def test_vectorize_drivers_map_to_cloudflare_vectorize():
     assert category_for_driver("vectorize_queries") == DriverCategory.CLOUDFLARE_VECTORIZE
-    assert (
-        category_for_driver("vectorize_dimensions_stored")
-        == DriverCategory.CLOUDFLARE_VECTORIZE
-    )
+    assert category_for_driver("vectorize_dimensions_stored") == DriverCategory.CLOUDFLARE_VECTORIZE
 
 
 def test_fly_machine_minutes_maps_to_fly_compute():
@@ -418,12 +415,10 @@ def test_negative_amount_rows_are_filtered_out():
     cur = conn.cursor()
     # Two same-driver rows; the negative must not contribute.
     cur.execute(
-        "INSERT INTO cost_telemetry (date, driver, amount_cents) "
-        "VALUES ('2026-05-01', 'fly_machine_minutes', -500)"
+        "INSERT INTO cost_telemetry (date, driver, amount_cents) VALUES ('2026-05-01', 'fly_machine_minutes', -500)"
     )
     cur.execute(
-        "INSERT INTO cost_telemetry (date, driver, amount_cents) "
-        "VALUES ('2026-05-02', 'fly_machine_minutes', 200)"
+        "INSERT INTO cost_telemetry (date, driver, amount_cents) VALUES ('2026-05-02', 'fly_machine_minutes', 200)"
     )
     conn.commit()
 
@@ -594,8 +589,7 @@ def test_upsert_pattern_accumulates_then_rollup_reads_total():
 
     # One row in the table, accumulated cents
     row = cur.execute(
-        "SELECT amount_cents, units FROM cost_telemetry "
-        "WHERE date='2026-05-15' AND driver='claude_api_input_tokens'"
+        "SELECT amount_cents, units FROM cost_telemetry WHERE date='2026-05-15' AND driver='claude_api_input_tokens'"
     ).fetchone()
     assert row == (600, 60_000.0)
 

@@ -63,18 +63,9 @@ def test_conformance_every_tool_classified() -> None:
     assert runtime_map[runtime_tool_name("msgraph-mail", "list_messages")] == "read"
     assert runtime_map[runtime_tool_name("msgraph-mail", "read_message")] == "read"
     assert runtime_map[runtime_tool_name("msgraph-mail", "poll_delta")] == "read"
-    assert (
-        runtime_map[runtime_tool_name("msgraph-mail", "create_draft")]
-        == "internal_write"
-    )
-    assert (
-        runtime_map[runtime_tool_name("msgraph-mail", "send_message")]
-        == "external_send"
-    )
-    assert (
-        runtime_map[runtime_tool_name("msgraph-mail", "reply_message")]
-        == "external_send"
-    )
+    assert runtime_map[runtime_tool_name("msgraph-mail", "create_draft")] == "internal_write"
+    assert runtime_map[runtime_tool_name("msgraph-mail", "send_message")] == "external_send"
+    assert runtime_map[runtime_tool_name("msgraph-mail", "reply_message")] == "external_send"
 
 
 def test_write_surface_is_draft_and_two_sends() -> None:
@@ -90,9 +81,7 @@ def test_write_surface_is_draft_and_two_sends() -> None:
     assert not any(c == "destructive" for c in m.tool_classes.values())
 
 
-@pytest.mark.skipif(
-    _SCRIPT is None, reason="msgraph-mail-mcp console-script not on PATH"
-)
+@pytest.mark.skipif(_SCRIPT is None, reason="msgraph-mail-mcp console-script not on PATH")
 def test_stdio_serves_over_console_script() -> None:
     async def _roundtrip() -> None:
         async with stdio_client(StdioServerParameters(command=_SCRIPT)) as (

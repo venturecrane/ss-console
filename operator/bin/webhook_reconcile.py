@@ -31,9 +31,7 @@ import sys
 import yaml
 
 _STATE_DIR = "/opt/data/.smokeball-mcp"
-_HASH_FILE = os.path.join(
-    _STATE_DIR, "webhook-reconcile.json"
-)  # {connector_key: {hash, key_fp}}
+_HASH_FILE = os.path.join(_STATE_DIR, "webhook-reconcile.json")  # {connector_key: {hash, key_fp}}
 _STATUS_FILE = os.path.join(_STATE_DIR, "webhook-reconcile.status")  # one terminal line
 _SUBPROCESS_TIMEOUT_S = 20
 
@@ -88,9 +86,7 @@ def build_intents(customer: dict) -> list[dict]:
         vendor = backend.split(":", 1)[1]
         adapter = str(conn.get("adapter") or vendor)
         if adapter in seen_adapters:
-            log(
-                f"WARN two connectors share adapter {adapter!r}; skipping extra {cname!r} (events would collide)"
-            )
+            log(f"WARN two connectors share adapter {adapter!r}; skipping extra {cname!r} (events would collide)")
             continue
         seen_adapters.add(adapter)
         intents.append(
@@ -162,9 +158,7 @@ def _dispatch(intent: dict) -> dict:
     vendor = intent["vendor"]
     py = f"/opt/connectors/{vendor}/.venv/bin/python"
     if not os.path.exists(py):
-        log(
-            f"{vendor}: no author-built connector venv ({py}) — skipping (e.g. a vendor MCP)"
-        )
+        log(f"{vendor}: no author-built connector venv ({py}) — skipping (e.g. a vendor MCP)")
         return {"vendor": vendor, "status": "skipped:no_connector_venv"}
     try:
         proc = subprocess.run(
@@ -183,9 +177,7 @@ def _dispatch(intent: dict) -> dict:
     try:
         return json.loads(proc.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):
-        log(
-            f"{vendor}: reconcile produced no manifest (rc={proc.returncode}) — skipping"
-        )
+        log(f"{vendor}: reconcile produced no manifest (rc={proc.returncode}) — skipping")
         return {"vendor": vendor, "status": "skipped:no_manifest"}
 
 
@@ -210,16 +202,12 @@ def reconcile_all(customer_yaml: str, trigger: str) -> int:
         cur_hash = _canonical_hash(intent)
         prev = state.get(ckey) or {}
         if trigger == "boot" and prev.get("hash") == cur_hash:
-            log(
-                f"{intent['vendor']}/{ckey}: intent unchanged — steady (no vendor calls)"
-            )
+            log(f"{intent['vendor']}/{ckey}: intent unchanged — steady (no vendor calls)")
             outcomes.append(f"{intent['vendor']}=steady")
             continue
         # Key rotation: same connector, the signing key fingerprint changed → the
         # subscription's key is stale; force a delete+recreate (GET can't reveal it).
-        intent["force_recreate"] = bool(
-            prev.get("key_fp") and prev["key_fp"] != _key_fp(intent)
-        )
+        intent["force_recreate"] = bool(prev.get("key_fp") and prev["key_fp"] != _key_fp(intent))
         manifest = _dispatch(intent)
         status = str(manifest.get("status", "skipped:unknown"))
         outcomes.append(f"{intent['vendor']}={status}")
@@ -227,11 +215,7 @@ def reconcile_all(customer_yaml: str, trigger: str) -> int:
             state[ckey] = {"hash": cur_hash, "key_fp": _key_fp(intent)}
             _save_state(state)
 
-    _write_status(
-        ("ok" if all("error" not in o for o in outcomes) else "partial")
-        + ": "
-        + " ".join(outcomes)
-    )
+    _write_status(("ok" if all("error" not in o for o in outcomes) else "partial") + ": " + " ".join(outcomes))
     return 0
 
 

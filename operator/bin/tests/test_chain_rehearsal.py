@@ -34,9 +34,7 @@ from chain import CHAIN_COLUMNS, GENESIS, compute_row_hash  # noqa: E402 - the i
 
 # The script has a dash in its name, so it is loaded by path. The drill borrows
 # its real `evaluate_export`: a stub there would test the stub.
-_spec = importlib.util.spec_from_file_location(
-    "audit_chain_watch", _OPERATOR / "bin" / "audit-chain-watch.py"
-)
+_spec = importlib.util.spec_from_file_location("audit_chain_watch", _OPERATOR / "bin" / "audit-chain-watch.py")
 watch = importlib.util.module_from_spec(_spec)
 assert _spec.loader is not None
 sys.modules["audit_chain_watch"] = watch
@@ -117,10 +115,7 @@ class _Drill:
         return _Client()
 
     def _emit(self, console, outcome, driver_prefix):
-        console.writes.append(
-            {"summary": outcome.headline, "details": outcome.details,
-             "driver_prefix": driver_prefix}
-        )
+        console.writes.append({"summary": outcome.headline, "details": outcome.details, "driver_prefix": driver_prefix})
         return None
 
     def run(self, slug="smd-staging"):

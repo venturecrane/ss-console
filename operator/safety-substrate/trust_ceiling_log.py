@@ -312,14 +312,10 @@ async def log_decision(
     # Normalize ceiling_level + action_class. Accept enum or string-value,
     # validate string-values against the enum to fail fast on typos.
     ceiling_value = (
-        ceiling_level.value
-        if isinstance(ceiling_level, CeilingLevel)
-        else CeilingLevel(ceiling_level).value
+        ceiling_level.value if isinstance(ceiling_level, CeilingLevel) else CeilingLevel(ceiling_level).value
     )
     action_class_value = (
-        action_class.value
-        if isinstance(action_class, ActionClassName)
-        else ActionClassName(action_class).value
+        action_class.value if isinstance(action_class, ActionClassName) else ActionClassName(action_class).value
     )
 
     if not customer:
@@ -345,9 +341,7 @@ async def log_decision(
         canonical_keys = set(metadata.keys())
         collisions = canonical_keys & extra_metadata.keys()
         if collisions:
-            raise ValueError(
-                f"extra_metadata may not override canonical keys: {sorted(collisions)}"
-            )
+            raise ValueError(f"extra_metadata may not override canonical keys: {sorted(collisions)}")
         metadata.update(extra_metadata)
 
     return await writer.write(

@@ -13,6 +13,7 @@ produced almost nothing is not repaired, it is EMPTIED (one part returned 112
 bytes for 126k chars of input, twenty files including MRI reports), and the
 split escalates 2 -> 3 -> 5 rather than leaving the chunk unrepaired.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -23,26 +24,49 @@ from .chunking import MIN_YIELD, split_chunk
 from .compose import read_usage
 
 
-def _run_part(sr: StageRun, d: Path, model: str, system: str, text: str, label: str, max_tokens: int
-              ) -> tuple[str | None, str]:
+def _run_part(
+    sr: StageRun, d: Path, model: str, system: str, text: str, label: str, max_tokens: int
+) -> tuple[str | None, str]:
     try:
-        r = sr.doorway.call("map-repair", model=model, system=system, messages=[{"role": "user", "content": text}],
-                            max_tokens=max_tokens, effort="", stream=True, cache_blocks=("system",),
-                            custom_id=f"repair-{label}")
+        r = sr.doorway.call(
+            "map-repair",
+            model=model,
+            system=system,
+            messages=[{"role": "user", "content": text}],
+            max_tokens=max_tokens,
+            effort="",
+            stream=True,
+            cache_blocks=("system",),
+            custom_id=f"repair-{label}",
+        )
     except Exception as exc:  # noqa: BLE001 - a doorway failure on one part is recorded as that part's error and the stage continues with the rest
         sr.log(f"  {label}: {str(exc)[:120]}")
         return None, "error"
-    append_jsonl(d / "usage.jsonl", {"chunk": label, "in": r.usage.input_tokens, "out": r.usage.output_tokens,
-                                     "stop": r.stop_reason, "max_tokens": max_tokens})
+    append_jsonl(
+        d / "usage.jsonl",
+        {
+            "chunk": label,
+            "in": r.usage.input_tokens,
+            "out": r.usage.output_tokens,
+            "stop": r.stop_reason,
+            "max_tokens": max_tokens,
+        },
+    )
     sr.log(f"  {label}: {r.stop_reason} ({r.usage.output_tokens} out)")
     return r.text, r.stop_reason
 
 
 def run(sr: StageRun) -> int:
     d = sr.slug_dir / "runs" / sr.unit.unit
-    truncated = sorted({u["chunk"] for u in read_usage(d)
-                        if u.get("stop") == "max_tokens" and isinstance(u.get("chunk"), int)
-                        and not (d / f"map-{u['chunk']:02d}.md.truncated").exists()})
+    truncated = sorted(
+        {
+            u["chunk"]
+            for u in read_usage(d)
+            if u.get("stop") == "max_tokens"
+            and isinstance(u.get("chunk"), int)
+            and not (d / f"map-{u['chunk']:02d}.md.truncated").exists()
+        }
+    )
     if not truncated:
         sr.log("no unrepaired truncated chunks")
         return 0

@@ -75,11 +75,11 @@ class RetainerHoursConnector(Protocol):
 @dataclass(frozen=True)
 class BucketThresholds:
     over_critical_floor: float = 1.10  # >= 110% projected
-    over_warning_floor: float = 0.95   # 95-110% projected
-    balanced_floor: float = 0.65       # 65-95% projected
+    over_warning_floor: float = 0.95  # 95-110% projected
+    balanced_floor: float = 0.65  # 65-95% projected
     under_warning_floor: float = 0.40  # 40-65% projected
     # below under_warning_floor → UNDER_CRITICAL
-    low_confidence_min_days: int = 5    # < 5 mtd days → projection low confidence
+    low_confidence_min_days: int = 5  # < 5 mtd days → projection low confidence
 
 
 # Critical bands that demand owner attention before month-end.
@@ -97,15 +97,11 @@ class BucketAssignment:
 def _project_eom_pct(u: ClientUtilization) -> float:
     if u.contracted_monthly_hours <= 0 or u.mtd_days_elapsed <= 0:
         return 0.0
-    projected_hours = u.actual_mtd_hours * (
-        u.calendar_days_in_month / u.mtd_days_elapsed
-    )
+    projected_hours = u.actual_mtd_hours * (u.calendar_days_in_month / u.mtd_days_elapsed)
     return projected_hours / u.contracted_monthly_hours
 
 
-def _assign_bucket(
-    u: ClientUtilization, thresholds: BucketThresholds
-) -> BucketAssignment:
+def _assign_bucket(u: ClientUtilization, thresholds: BucketThresholds) -> BucketAssignment:
     pct = _project_eom_pct(u)
     low_conf = u.mtd_days_elapsed < thresholds.low_confidence_min_days
     if pct >= thresholds.over_critical_floor:
@@ -215,9 +211,7 @@ def decide(
             wake=True,
             decision_basis="previously_critical_pending_ack",
             pre_run_inputs_digest=raw_inputs_for_digest,
-            plans=tuple(
-                ClientPlan(client_slug=slug, kind="pending_ack") for slug in pending
-            ),
+            plans=tuple(ClientPlan(client_slug=slug, kind="pending_ack") for slug in pending),
             extra_metadata={"pending_ack_clients": pending},
         )
 
@@ -429,9 +423,7 @@ async def run_once(
     for connector in connectors:
         utils = list(connector.pull_utilizations())
         utilizations.extend(utils)
-        raw_input_blob += json.dumps(
-            [_utilization_to_dict(u) for u in utils], sort_keys=True
-        ).encode("utf-8")
+        raw_input_blob += json.dumps([_utilization_to_dict(u) for u in utils], sort_keys=True).encode("utf-8")
 
     decision = decide(
         utilizations,
@@ -441,9 +433,7 @@ async def run_once(
     )
     if decision.wake:
         # The row goes in BEFORE the wake line, and cannot stop it (#2253).
-        await _try_write_emitted_wake(
-            audit_writer_factory, decision, skill_name=skill_name, now=now
-        )
+        await _try_write_emitted_wake(audit_writer_factory, decision, skill_name=skill_name, now=now)
         return _emit_wake(decision)
 
     writer = audit_writer_factory()
@@ -476,9 +466,7 @@ async def run_once(
 def main() -> int:
     customer_slug = os.environ.get("CUSTOMER_SLUG")
     if not customer_slug:
-        sys.stderr.write(
-            "[pre_run] CUSTOMER_SLUG unset; falling back to wake\n"
-        )
+        sys.stderr.write("[pre_run] CUSTOMER_SLUG unset; falling back to wake\n")
         return _emit_wake(basis="customer_slug_unset_fail_open")
 
     # TODO(connector-adapters): wire real Harvest / Toggl / Float connectors

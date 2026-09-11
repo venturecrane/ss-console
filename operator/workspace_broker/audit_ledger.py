@@ -38,6 +38,7 @@ def _current_umask() -> int:
     os.umask(value)
     return value
 
+
 # Agent-supplied columns: the overlay COLUMNS tuple minus the leading id/ts,
 # which the broker stamps. Order here only governs the INSERT this module
 # builds; the wire payload is a name-keyed dict, so column *ordering* cannot
@@ -206,9 +207,7 @@ class LedgerWriter:
             # writer (there is only this broker, but the lock makes the chain
             # correct by construction, not by deployment assumption).
             conn.execute("BEGIN IMMEDIATE")
-            tail = conn.execute(
-                "SELECT id, row_hash FROM audit_log ORDER BY rowid DESC LIMIT 1"
-            ).fetchone()
+            tail = conn.execute("SELECT id, row_hash FROM audit_log ORDER BY rowid DESC LIMIT 1").fetchone()
             if tail is None:
                 prev_hash = GENESIS
             elif tail[1] is not None:

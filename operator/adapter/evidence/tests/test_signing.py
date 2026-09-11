@@ -125,9 +125,7 @@ def test_a_non_ed25519_key_raises():
         encryption_algorithm=serialization.NoEncryption(),
     )
     with pytest.raises(signing.EvidenceSigningError, match="Ed25519"):
-        signing.sign_manifest_bytes(
-            PAYLOAD, env={signing.SIGNING_KEY_ENV: base64.b64encode(pem).decode()}
-        )
+        signing.sign_manifest_bytes(PAYLOAD, env={signing.SIGNING_KEY_ENV: base64.b64encode(pem).decode()})
 
 
 def test_signing_configured_reports_presence():

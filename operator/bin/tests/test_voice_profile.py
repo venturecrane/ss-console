@@ -147,7 +147,7 @@ def test_fenced_examples_and_comments_are_exempt():
     card = (
         "<!-- provenance: derived 2026-08-01 -->\n\n"
         "# Card\n\n"
-        "```json\n{\"support_docs\": 11}\n```\n\n"
+        '```json\n{"support_docs": 11}\n```\n\n'
         "Prose with no digits.\n"
     )
     assert not vp.card_digit_violations(card)

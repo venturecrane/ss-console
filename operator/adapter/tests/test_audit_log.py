@@ -209,9 +209,7 @@ def test_metadata_is_deterministic_json():
     md_b = {"a": 2, "b": 1}
     u1 = _run(writer.write(AuditEvent(action_type="DRAFT_CREATED", actor="agent", metadata=md_a)))
     u2 = _run(writer.write(AuditEvent(action_type="DRAFT_CREATED", actor="agent", metadata=md_b)))
-    rows = conn.execute(
-        "SELECT metadata FROM audit_log WHERE id IN (?, ?) ORDER BY id", (u1, u2)
-    ).fetchall()
+    rows = conn.execute("SELECT metadata FROM audit_log WHERE id IN (?, ?) ORDER BY id", (u1, u2)).fetchall()
     assert rows[0][0] == rows[1][0]
     assert rows[0][0] == '{"a":2,"b":1}'
 

@@ -50,7 +50,7 @@ def test_bootstrap_exports_active_persona_env() -> None:
         re.MULTILINE,
     )
     assert m, (
-        "bootstrap.sh must `export HERMES_ACTIVE_PROFILE=\"${ACTIVE_PROFILE}\"` so "
+        'bootstrap.sh must `export HERMES_ACTIVE_PROFILE="${ACTIVE_PROFILE}"` so '
         "the overlay's ADR 0056 trust gate can resolve the active persona's "
         "exposure. Hermes core's `-p` flag does NOT set this env."
     )
@@ -65,8 +65,7 @@ def test_export_precedes_the_gateway_exec() -> None:
     assert export_at != -1, "active-persona export missing"
     assert exec_at != -1, "gateway exec line missing or changed shape"
     assert export_at < exec_at, (
-        "HERMES_ACTIVE_PROFILE must be exported before the gateway exec so the "
-        "gateway inherits it"
+        "HERMES_ACTIVE_PROFILE must be exported before the gateway exec so the gateway inherits it"
     )
 
 
@@ -74,10 +73,8 @@ def test_export_follows_active_profile_derivation() -> None:
     """The export must come AFTER ACTIVE_PROFILE is derived (it interpolates it),
     guarding against a reorder that would export an empty value."""
     text = _text()
-    derive_at = text.find("ACTIVE_PROFILE=\"$(/opt/hermes/.venv/bin/python3")
+    derive_at = text.find('ACTIVE_PROFILE="$(/opt/hermes/.venv/bin/python3')
     export_at = text.find('export HERMES_ACTIVE_PROFILE="${ACTIVE_PROFILE}"')
     assert derive_at != -1, "ACTIVE_PROFILE derivation block missing or changed shape"
     assert export_at != -1, "active-persona export missing"
-    assert derive_at < export_at, (
-        "HERMES_ACTIVE_PROFILE must be exported AFTER ACTIVE_PROFILE is computed"
-    )
+    assert derive_at < export_at, "HERMES_ACTIVE_PROFILE must be exported AFTER ACTIVE_PROFILE is computed"

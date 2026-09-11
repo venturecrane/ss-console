@@ -152,8 +152,7 @@ def load_contract(
             terminal_tool_calls[state] = entry["tool_call"]
 
     skill_outbound = {
-        skill: str((entry or {}).get("outbound"))
-        for skill, entry in (bindings.get("skill_bindings") or {}).items()
+        skill: str((entry or {}).get("outbound")) for skill, entry in (bindings.get("skill_bindings") or {}).items()
     }
     if not trigger_events or not terminal_events or not skill_outbound:
         raise ReconcileError("terminal-state contract loaded empty; refusing to evaluate")
@@ -255,9 +254,9 @@ def _terminal_state_of(contract: Contract, row: dict) -> Optional[str]:
         return None
     meta = metadata_of(row)
     for state, matcher in contract.terminal_tool_calls.items():
-        if meta.get("action_class") in (matcher.get("action_class") or []) and meta.get(
-            "outcome"
-        ) in (matcher.get("outcome") or []):
+        if meta.get("action_class") in (matcher.get("action_class") or []) and meta.get("outcome") in (
+            matcher.get("outcome") or []
+        ):
             return state
     return None
 
@@ -314,15 +313,12 @@ def _open_obligations(contract: Contract, slug: str, rows: list[dict]) -> list[O
     return triggers
 
 
-def _enclosing_run(
-    contract: Contract, triggers: list[Obligation], held_at: datetime
-) -> Optional[Obligation]:
+def _enclosing_run(contract: Contract, triggers: list[Obligation], held_at: datetime) -> Optional[Obligation]:
     """The already-open run this hold belongs to, latest one wins."""
     candidates = [
         o
         for o in triggers
-        if o.opened_at <= held_at
-        and held_at <= o.opened_at + timedelta(seconds=contract.window_for(o.routine_class))
+        if o.opened_at <= held_at and held_at <= o.opened_at + timedelta(seconds=contract.window_for(o.routine_class))
     ]
     return max(candidates, key=lambda o: o.opened_at) if candidates else None
 
@@ -375,9 +371,7 @@ def resolve(
         ]
         # Counted from the TRIGGER, not from the hold: "did anything at all
         # happen after this run was triggered" is the ss#2136 question.
-        obligation.rows_in_window = sum(
-            1 for ts, _row, _state in stamped if obligation.opened_at < ts <= deadline
-        )
+        obligation.rows_in_window = sum(1 for ts, _row, _state in stamped if obligation.opened_at < ts <= deadline)
 
         for index, ts, _row, state in in_window:
             if state is None or index in consumed:
@@ -565,11 +559,7 @@ def finding_digest(reports: list["SeatReport"]) -> str:
     run, so a run with nothing to say is distinguishable from one that has not
     been compared.
     """
-    keys = sorted(
-        finding_key(report.slug, obligation)
-        for report in reports
-        for obligation in report.findings
-    )
+    keys = sorted(finding_key(report.slug, obligation) for report in reports for obligation in report.findings)
     if not keys:
         return ""
     return hashlib.sha256("\n".join(keys).encode()).hexdigest()[:16]
@@ -730,8 +720,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     slugs = args.slug or seat_slugs()
     if offline_rows is not None and len(slugs) != 1:
-        print("HOLD: --rows needs exactly one --slug (an extract belongs to one seat)",
-              file=sys.stderr)
+        print("HOLD: --rows needs exactly one --slug (an extract belongs to one seat)", file=sys.stderr)
         return EXIT_HOLD
 
     if offline_rows is None and not os.environ.get("OPERATOR_RUNTIME_READ_SECRET"):

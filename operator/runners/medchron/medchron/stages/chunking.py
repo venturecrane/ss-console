@@ -15,6 +15,7 @@ YIELD_CEILING is the largest output/input byte ratio a healthy part has
 produced (0.85, measured on a repair tail), YIELD_MARGIN keeps 20% of the
 window in hand, and 4 chars per token is the conservative English rate.
 """
+
 from __future__ import annotations
 
 import hashlib

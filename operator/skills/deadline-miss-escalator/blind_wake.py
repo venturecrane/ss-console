@@ -108,6 +108,7 @@ def write_row(
 #: suite asserts field for field.
 _MAX_SERIALIZED_PLANS = 50
 
+
 def plan_counts(decision: "WakeDecision") -> dict:
     """The cap's own accounting, computed the one way ``_emit_wake`` computes it.
 
@@ -135,7 +136,6 @@ def plan_counts(decision: "WakeDecision") -> dict:
         admin = decision.digest.get("admin_confirms") or {}
         counts["digest_admin_total"] = int(admin.get("total") or 0)
     return counts
-
 
 
 async def try_write_emitted_wake(
@@ -183,5 +183,3 @@ async def try_write_emitted_wake(
         )
     except Exception:  # noqa: BLE001 — observability never gates the wake
         pass
-
-

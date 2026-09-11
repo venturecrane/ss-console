@@ -108,7 +108,7 @@ def test_the_counter_can_fail(tmp_path: Path) -> None:
 
 
 def test_docstrings_and_comments_do_not_count() -> None:
-    lines = ['def f():', '    """doc', '    more doc', '    """', '    # comment', '', '    return 1']
+    lines = ["def f():", '    """doc', "    more doc", '    """', "    # comment", "", "    return 1"]
     import ast
 
     tree = ast.parse("\n".join(lines))

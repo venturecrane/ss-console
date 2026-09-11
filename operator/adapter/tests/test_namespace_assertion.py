@@ -117,9 +117,7 @@ class _RecordingVectorize:
     async def upsert_vectors(self, index_name: str, vectors: list[dict]) -> None:
         self.upserts.append((index_name, vectors))
 
-    async def query_vectors(
-        self, index_name: str, vector: list[float], *, top_k: int
-    ):
+    async def query_vectors(self, index_name: str, vector: list[float], *, top_k: int):
         self.queries.append((index_name, vector, top_k))
         return []
 
@@ -214,8 +212,7 @@ def test_d1_refuses_query_mentioning_foreign_corrections_index():
     with pytest.raises(NamespaceAssertionError) as excinfo:
         _run(
             wrapped.execute(
-                "SELECT * FROM corrections_index "
-                "WHERE name = 'hermes-other-corrections'",
+                "SELECT * FROM corrections_index WHERE name = 'hermes-other-corrections'",
                 [],
             )
         )
@@ -229,8 +226,7 @@ def test_d1_refuses_query_embedding_foreign_vault_path():
     with pytest.raises(NamespaceAssertionError) as excinfo:
         _run(
             wrapped.execute(
-                "UPDATE memory_state SET r2_key = 'vaults/other/foo.json' "
-                "WHERE id = ?",
+                "UPDATE memory_state SET r2_key = 'vaults/other/foo.json' WHERE id = ?",
                 ["k1"],
             )
         )
@@ -462,9 +458,7 @@ def test_cross_customer_attempt_refused_and_audited():
     with pytest.raises(NamespaceAssertionError):
         _run(vec.upsert_vectors("hermes-other-vault", []))
 
-    rows = audit_conn.execute(
-        "SELECT action_type, actor, metadata FROM audit_log ORDER BY id"
-    ).fetchall()
+    rows = audit_conn.execute("SELECT action_type, actor, metadata FROM audit_log ORDER BY id").fetchall()
     assert len(rows) == 3
     for action_type, actor, metadata_json in rows:
         assert action_type == "INVARIANT_VIOLATION"
@@ -474,10 +468,7 @@ def test_cross_customer_attempt_refused_and_audited():
         assert meta["expected_slug"] == "acme"
         assert meta["source"].endswith("namespace_assertion.py")
 
-    violation_kinds = sorted(
-        json.loads(metadata_json)["violation_kind"]
-        for _, _, metadata_json in rows
-    )
+    violation_kinds = sorted(json.loads(metadata_json)["violation_kind"] for _, _, metadata_json in rows)
     assert violation_kinds == ["d1_sql", "r2_key", "vectorize_index"]
 
 

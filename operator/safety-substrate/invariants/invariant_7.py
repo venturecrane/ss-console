@@ -171,9 +171,9 @@ class BindingKind(str, enum.Enum):
     """
 
     SKILL_BODIES_BUCKET = "r2_skill_bodies_bucket"  # per-slug R2 bucket
-    CONFIG_BUCKET = "r2_bucket_config"              # shared R2 bucket
-    AUDIT_DB = "smd_d1_audit_binding"               # SQLite path on volume
-    AGENT_STATE_DB = "smd_d1_agent_state_binding"   # SQLite path on volume
+    CONFIG_BUCKET = "r2_bucket_config"  # shared R2 bucket
+    AUDIT_DB = "smd_d1_audit_binding"  # SQLite path on volume
+    AGENT_STATE_DB = "smd_d1_agent_state_binding"  # SQLite path on volume
 
 
 # Env-var name each kind is read from (used by collect_snapshot_from_env
@@ -229,9 +229,7 @@ class BindingSnapshot:
         ):
             value = getattr(self, field_name)
             if not isinstance(value, str):
-                raise TypeError(
-                    f"{field_name} must be a string, got {type(value).__name__}"
-                )
+                raise TypeError(f"{field_name} must be a string, got {type(value).__name__}")
 
     def to_kind_map(self) -> dict[BindingKind, str]:
         """Render the four bindings as a kind-keyed map for comparison."""
@@ -294,10 +292,7 @@ class Invariant7Violation:
         """One-line operator-facing summary for stdout."""
         if self.passed:
             return ""
-        parts = [
-            f"{m.kind.value}={m.observed!r} (expected {m.expected!r})"
-            for m in self.mismatches
-        ]
+        parts = [f"{m.kind.value}={m.observed!r} (expected {m.expected!r})" for m in self.mismatches]
         return (
             f"INVARIANT_7_VIOLATION: customer_slug={self.customer_slug!r} "
             f"storage bindings escape customer namespace: {'; '.join(parts)}"
@@ -614,8 +609,7 @@ def _emit_boot_failure_audit(
     """
     if not broker_socket:
         log.warning(
-            "invariant_7: no SMD_AUDIT_BROKER_SOCKET; cannot emit "
-            "INVARIANT_BOOT_CHECK_FAILED row (boot still refused)"
+            "invariant_7: no SMD_AUDIT_BROKER_SOCKET; cannot emit INVARIANT_BOOT_CHECK_FAILED row (boot still refused)"
         )
         return False
 
@@ -636,8 +630,7 @@ def _emit_boot_failure_audit(
         response = json.loads(raw)
     except (OSError, ValueError) as exc:
         log.warning(
-            "invariant_7: failed to emit INVARIANT_BOOT_CHECK_FAILED via "
-            "broker %s: %s (boot still refused)",
+            "invariant_7: failed to emit INVARIANT_BOOT_CHECK_FAILED via broker %s: %s (boot still refused)",
             broker_socket,
             exc,
         )
@@ -646,8 +639,7 @@ def _emit_boot_failure_audit(
     if response.get("ok") is True:
         return True
     log.warning(
-        "invariant_7: broker rejected INVARIANT_BOOT_CHECK_FAILED append: %s "
-        "(boot still refused)",
+        "invariant_7: broker rejected INVARIANT_BOOT_CHECK_FAILED append: %s (boot still refused)",
         response,
     )
     return False
@@ -739,14 +731,12 @@ def _self_check_fixtures() -> tuple[bool, str]:
     if "cross-Machine isolation failure mode" not in bad_result.mismatches[0].reason:
         return (
             False,
-            "FAIL: mismatch reason did not name the cross-Machine failure mode: "
-            f"{bad_result.mismatches[0].reason!r}",
+            f"FAIL: mismatch reason did not name the cross-Machine failure mode: {bad_result.mismatches[0].reason!r}",
         )
 
     return (
         True,
-        "PASS: invariant 7 detects cross-Machine binding mismatch "
-        "(2 of 2 self-check fixtures held)",
+        "PASS: invariant 7 detects cross-Machine binding mismatch (2 of 2 self-check fixtures held)",
     )
 
 

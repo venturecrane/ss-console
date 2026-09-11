@@ -11,6 +11,7 @@ to make the number come out.
 and where it would hold, so a rule's hold rate can be measured on delivered
 matters before it ships.
 """
+
 from __future__ import annotations
 
 import json
@@ -162,7 +163,9 @@ def billing_docs(job: Job, cfg: FirmConfig, slug_dir: Path, *, dry_run: bool) ->
     payload = {"docs": picked, "_decided": {"by": "medchron.decisions.billing_docs", "patterns": len(patterns)}}
     d = Decision("billing_docs", slug_dir / "billing_docs.json", payload)
     if pathless:
-        d.holds.append(f"{len(pathless)} billing document(s) matched by name but the pull recorded no local path: {pathless[:12]}")
+        d.holds.append(
+            f"{len(pathless)} billing document(s) matched by name but the pull recorded no local path: {pathless[:12]}"
+        )
         return d
     if not picked:
         d.notes.append("no billing documents matched by name; the worksheet will state that no ledger is on file")
@@ -197,10 +200,15 @@ def fold(job: Job, cfg: FirmConfig, slug_dir: Path, *, dry_run: bool) -> Decisio
         if ext in SKIP_EXT or ext == ".rpmsg":
             continue
         keep.append(sha)
-    disclosed = [str(e.get("attachment") or "") for e in (index.get("encrypted") or [] if isinstance(index, dict) else [])]
-    payload = {"fold": keep, "_note": "folded by medchron.decisions.fold: every byte-new attachment "
-                                      "not in SKIP_EXT; encrypted containers disclosed, not folded",
-               "_disclosed_encrypted": disclosed}
+    disclosed = [
+        str(e.get("attachment") or "") for e in (index.get("encrypted") or [] if isinstance(index, dict) else [])
+    ]
+    payload = {
+        "fold": keep,
+        "_note": "folded by medchron.decisions.fold: every byte-new attachment "
+        "not in SKIP_EXT; encrypted containers disclosed, not folded",
+        "_disclosed_encrypted": disclosed,
+    }
     d = Decision("fold", slug_dir / "msg_fold.json", payload)
     if disclosed:
         d.notes.append(f"{len(disclosed)} encrypted attachment(s) cannot be opened; disclosed")
@@ -254,7 +262,9 @@ def orphans(job: Job, cfg: FirmConfig, slug_dir: Path, unit: Unit, *, dry_run: b
     payload = {"orphans": explained, "_decided": {"by": "medchron.decisions.orphans"}}
     d = Decision("orphans", slug_dir / "orphans.json", payload)
     if residue:
-        d.holds.append(f"{len(residue)} pulled file(s) owned by no unit and matching no exclusion class: {residue[:12]}")
+        d.holds.append(
+            f"{len(residue)} pulled file(s) owned by no unit and matching no exclusion class: {residue[:12]}"
+        )
     else:
         _write(d.artifact, payload, dry_run=dry_run)
     return d
@@ -286,12 +296,17 @@ def control(job: Job, cfg: FirmConfig, slug_dir: Path, unit: Unit, *, dry_run: b
                 continue
             if best is None or dens[0] > best[0]:
                 best = (dens[0], int(ex.get("exhibit") or 0), int(f.get("start_page") or 1) + 1)
-    d = Decision("control", slug_dir / (f"record_control-{unit.unit}.json" if job.joint else "record_control.json"), None)
+    d = Decision(
+        "control", slug_dir / (f"record_control-{unit.unit}.json" if job.joint else "record_control.json"), None
+    )
     if best is None or best[0] < 800:
         d.holds.append("no exhibited file with dense native text to serve as the record control")
         return d
-    d.payload = {"exhibit": best[1], "page": best[2],
-                 "_decided": {"by": "medchron.decisions.control", "chars_per_page": round(best[0])}}
+    d.payload = {
+        "exhibit": best[1],
+        "page": best[2],
+        "_decided": {"by": "medchron.decisions.control", "chars_per_page": round(best[0])},
+    }
     _write(d.artifact, d.payload, dry_run=dry_run)
     return d
 

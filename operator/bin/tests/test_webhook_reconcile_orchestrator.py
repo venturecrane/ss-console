@@ -128,9 +128,7 @@ def test_disabled_or_no_webhook_connectors_excluded(monkeypatch):
 
 def test_two_connectors_same_adapter_skips_the_extra(monkeypatch):
     c = _customer()
-    c["connectors"]["PM2"] = dict(
-        c["connectors"]["PracticeManagement"]
-    )  # second smokeball
+    c["connectors"]["PM2"] = dict(c["connectors"]["PracticeManagement"])  # second smokeball
     intents = [i for i in build_intents(c) if i["vendor"] == "smokeball"]
     assert len(intents) == 1  # collision avoided — only the first smokeball connector
 
@@ -145,16 +143,8 @@ def test_canonical_hash_changes_on_intent_and_key_change():
     }
     h0 = _canonical_hash(base)
     assert _canonical_hash(base) == h0  # stable
-    assert (
-        _canonical_hash({**base, "event_types": ["matter.updated", "task.created"]})
-        != h0
-    )
-    assert (
-        _canonical_hash({**base, "webhook_url": "https://other/webhooks/smokeball"})
-        != h0
-    )
+    assert _canonical_hash({**base, "event_types": ["matter.updated", "task.created"]}) != h0
+    assert _canonical_hash({**base, "webhook_url": "https://other/webhooks/smokeball"}) != h0
     rotated = {**base, "key": "k2"}
-    assert (
-        _canonical_hash(rotated) != h0
-    )  # key rotation flips the hash → reconcile runs
+    assert _canonical_hash(rotated) != h0  # key rotation flips the hash → reconcile runs
     assert _key_fp(rotated) != _key_fp(base)  # and the fp flips → force_recreate

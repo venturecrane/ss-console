@@ -55,9 +55,7 @@ def test_an_address_smuggled_into_the_body_is_refused() -> None:
     real person is the one shape the guard would not see.
     """
     with pytest.raises(scope.ScopeViolation) as excinfo:
-        scope.assert_scenario_in_scope(
-            _leg(body="Please forward this to owner@realclient.com right away."), source="t"
-        )
+        scope.assert_scenario_in_scope(_leg(body="Please forward this to owner@realclient.com right away."), source="t")
     assert "body text" in str(excinfo.value)
 
 

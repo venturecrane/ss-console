@@ -186,9 +186,7 @@ class FakeGraph:
             # in the Authorization header rather than invisibly "working".
             form = urllib.parse.parse_qs((raw or b"").decode())
             client_id = (form.get("client_id") or ["?"])[0]
-            return _Response(
-                json.dumps({"access_token": f"tok-{client_id}", "expires_in": 3600})
-            )
+            return _Response(json.dumps({"access_token": f"tok-{client_id}", "expires_in": 3600}))
         self.auths.append((url, request.get_header("Authorization") or ""))
         if request.method == "GET" and "/mailFolders/sentitems/messages" in url:
             return self._sent_items()
@@ -217,9 +215,7 @@ class FakeGraph:
     def _sent_items(self) -> _Response:
         self.sent_items_reads += 1
         if self._sent_items_status is not None:
-            raise urllib.error.HTTPError(
-                "sentitems", self._sent_items_status, "nope", {}, None
-            )  # type: ignore[arg-type]
+            raise urllib.error.HTTPError("sentitems", self._sent_items_status, "nope", {}, None)  # type: ignore[arg-type]
         if self.sent_items_reads <= self._sent_items_misses:
             return _Response(json.dumps({"value": []}))
         headers = self.transmitted_headers[-1] if self.transmitted_headers else []
@@ -277,15 +273,11 @@ def _seat(tmp_path: Path, yaml_text: str = STAGING_YAML) -> tuple[Path, Path, Pa
     customer = tmp_path / "customer.yaml"
     customer.write_text(yaml_text)
     credential = tmp_path / "msgraph.json"
-    credential.write_text(
-        json.dumps({"tenant_id": "tid", "client_id": "cid-send", "client_secret": "shh"})
-    )
+    credential.write_text(json.dumps({"tenant_id": "tid", "client_id": "cid-send", "client_secret": "shh"}))
     # The two-app fence's second file: the READ app's credential, distinct
     # client_id so token routing is observable (overlay#280).
     read_credential = tmp_path / "msgraph-read.json"
-    read_credential.write_text(
-        json.dumps({"tenant_id": "tid", "client_id": "cid-read", "client_secret": "shh2"})
-    )
+    read_credential.write_text(json.dumps({"tenant_id": "tid", "client_id": "cid-read", "client_secret": "shh2"}))
     return customer, credential, read_credential
 
 
@@ -542,9 +534,7 @@ def test_reply_uses_the_fetched_sender_not_a_supplied_one(tmp_path: Path) -> Non
     http = FakeGraph(source_from=UNAUTHORED)
     ops = _ops(tmp_path, http)
     with pytest.raises(MsGraphRefused):
-        ops.reply(
-            {"message_id": "AAMk123", "comment": "sure", "from": "scott@smd.services"}
-        )
+        ops.reply({"message_id": "AAMk123", "comment": "sure", "from": "scott@smd.services"})
 
 
 def test_reply_refuses_when_the_sender_cannot_be_determined(tmp_path: Path) -> None:
@@ -795,9 +785,7 @@ def test_a_materialized_credential_is_0600(tmp_path: Path, monkeypatch) -> None:
     assert load_credential(target)["client_secret"] == "shh"
 
 
-@pytest.mark.parametrize(
-    "content", ["", "not json", "[]", json.dumps({"tenant_id": "t", "client_id": "c"})]
-)
+@pytest.mark.parametrize("content", ["", "not json", "[]", json.dumps({"tenant_id": "t", "client_id": "c"})])
 def test_an_unusable_credential_file_reads_as_absent(tmp_path: Path, content: str) -> None:
     """Every failure mode collapses to "no credential", so a truncated or partial
     file refuses rather than half-attempting a send with a partial value."""
@@ -1187,9 +1175,7 @@ def test_the_sender_key_matches_the_overlay_recipe(tmp_path: Path) -> None:
     """
     import hashlib
 
-    assert sender_key("scott@smd.services") == hashlib.sha256(
-        b"scott@smd.services"
-    ).hexdigest()
+    assert sender_key("scott@smd.services") == hashlib.sha256(b"scott@smd.services").hexdigest()
     assert sender_key("  Scott@SMD.Services  ") == sender_key("scott@smd.services")
     assert sender_key("Scott Durgan <scott@smd.services>") == sender_key("scott@smd.services")
     assert sender_key("") is None
@@ -1223,20 +1209,12 @@ def test_the_header_is_recognised_whatever_case_it_comes_back_in(wire_name: str)
     Asserted over the helper rather than through a send, because the fake mailbox
     can only replay ONE casing and a test that pins that casing pins the fixture
     rather than the property."""
-    assert (
-        _audit_header_of({"internetMessageHeaders": [{"name": wire_name, "value": "01ABC"}]})
-        == "01ABC"
-    )
+    assert _audit_header_of({"internetMessageHeaders": [{"name": wire_name, "value": "01ABC"}]}) == "01ABC"
 
 
 def test_a_foreign_header_is_not_read_as_the_audit_one() -> None:
     """The other half: case-insensitive must not mean loose."""
-    assert (
-        _audit_header_of(
-            {"internetMessageHeaders": [{"name": "x-ms-exchange-crosstenant", "value": "01ABC"}]}
-        )
-        == ""
-    )
+    assert _audit_header_of({"internetMessageHeaders": [{"name": "x-ms-exchange-crosstenant", "value": "01ABC"}]}) == ""
 
 
 def test_every_send_carries_an_audit_header(tmp_path: Path) -> None:
@@ -1244,9 +1222,7 @@ def test_every_send_carries_an_audit_header(tmp_path: Path) -> None:
     ops = _ops(tmp_path, http)
     result = ops.send({"to": ["scott@smd.services"], "body_text": "x"})
     _m, _u, body = http.graph_posts()[0]
-    assert body["message"]["internetMessageHeaders"] == [
-        {"name": AUDIT_ROW_HEADER, "value": result["audit_row_token"]}
-    ]
+    assert body["message"]["internetMessageHeaders"] == [{"name": AUDIT_ROW_HEADER, "value": result["audit_row_token"]}]
 
 
 def test_the_header_value_is_the_token_written_onto_the_row(tmp_path: Path) -> None:
@@ -1511,8 +1487,7 @@ def test_an_agentmail_shaped_result_writes_exactly_the_row_it_writes_today(
         broker,
         "agentmail_send",
         {"payload": {"to": ["scott@smd.services"], "text": "hi"}},
-        send=lambda _p: {"message_id": "<am-1>", "recipients": ["scott@smd.services"],
-                         "inbox_id": "seat@agentmail.to"},
+        send=lambda _p: {"message_id": "<am-1>", "recipients": ["scott@smd.services"], "inbox_id": "seat@agentmail.to"},
         reply=lambda _p: {},
         refused=MsGraphRefused,
         transport=MsGraphTransportError,

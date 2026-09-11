@@ -223,9 +223,7 @@ def test_gate_lists_every_violation_not_just_the_first() -> None:
 # ---- The gate, against the real authored skeletons -------------------------
 
 
-_SKELETON_DIR = (
-    Path(__file__).resolve().parents[3] / "templates" / "drafting" / "skeletons"
-)
+_SKELETON_DIR = Path(__file__).resolve().parents[3] / "templates" / "drafting" / "skeletons"
 
 
 @pytest.mark.parametrize(
@@ -329,9 +327,7 @@ def _handler(captured: list[httpx.Request]):
         captured.append(request)
         path = request.url.path
         if path.endswith("/oauth2/token"):
-            return httpx.Response(
-                200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"}
-            )
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"})
         if request.method == "POST" and path.endswith("/documents/files"):
             return httpx.Response(202, json={"fileId": "file-42", "uploadUrl": _UPLOAD_URL})
         if str(request.url) == _UPLOAD_URL:
@@ -434,9 +430,7 @@ def test_manifest_classifies_the_renderer_as_an_internal_write() -> None:
     the firm. The overlay's shared/action_classes.py must carry the matching
     mcp_smokeball_render_docx_template entry (coordinated change, noted in the
     manifest header) or the tool is unreachable at runtime."""
-    manifest = tomllib.loads(
-        (Path(__file__).resolve().parents[1] / "manifest.toml").read_text()
-    )
+    manifest = tomllib.loads((Path(__file__).resolve().parents[1] / "manifest.toml").read_text())
     assert manifest["connector"]["tool_classes"]["render_docx_template"] == "internal_write"
 
 

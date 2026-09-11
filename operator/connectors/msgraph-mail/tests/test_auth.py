@@ -56,9 +56,7 @@ def test_client_credentials_mint_body_and_scope() -> None:
     captured: list[httpx.Request] = []
     client = _mock_client(_token_handler(captured))
     client.list_messages("inbox", 10)  # first tool call mints
-    token_req = next(
-        r for r in captured if r.url.path.endswith("/oauth2/v2.0/token")
-    )
+    token_req = next(r for r in captured if r.url.path.endswith("/oauth2/v2.0/token"))
     form = parse_qs(token_req.content.decode())
     assert form["grant_type"] == ["client_credentials"]
     assert form["client_id"] == ["cid"]
@@ -70,12 +68,8 @@ def test_token_endpoint_carries_tenant_id() -> None:
     captured: list[httpx.Request] = []
     client = _mock_client(_token_handler(captured), tenant_id="my-tenant-guid")
     client.list_messages("inbox", 10)
-    token_req = next(
-        r for r in captured if r.url.path.endswith("/oauth2/v2.0/token")
-    )
-    assert str(token_req.url) == (
-        "https://login.microsoftonline.com/my-tenant-guid/oauth2/v2.0/token"
-    )
+    token_req = next(r for r in captured if r.url.path.endswith("/oauth2/v2.0/token"))
+    assert str(token_req.url) == ("https://login.microsoftonline.com/my-tenant-guid/oauth2/v2.0/token")
 
 
 # ---- caching --------------------------------------------------------------
@@ -117,9 +111,7 @@ def test_401_re_mints_and_retries_once() -> None:
 
 
 # ---- missing-credential errors (fail closed at construction) --------------
-@pytest.mark.parametrize(
-    "field", ["tenant_id", "client_id", "client_secret", "mailbox"]
-)
+@pytest.mark.parametrize("field", ["tenant_id", "client_id", "client_secret", "mailbox"])
 def test_missing_credential_raises_at_construction(field: str) -> None:
     kwargs = dict(
         tenant_id="t",
@@ -156,9 +148,7 @@ def test_build_client_from_env_constructs_when_present(monkeypatch) -> None:
 # ---- mint failure never echoes the secret ---------------------------------
 def test_mint_failure_does_not_echo_secret() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            401, json={"error": "invalid_client", "secret_echo": "sec"}
-        )
+        return httpx.Response(401, json={"error": "invalid_client", "secret_echo": "sec"})
 
     client = _mock_client(handler)
     with pytest.raises(MsGraphAuthError) as exc:

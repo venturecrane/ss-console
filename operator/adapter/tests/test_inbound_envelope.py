@@ -241,7 +241,7 @@ class TestSenderStatusFraming:
         assert SENDER_STATUS_PREFIX in out[:cut]
         assert "admin@firm.test" in out[:cut]
         # The region below the delimiter is untouched.
-        assert out[cut:] == self._PROMPT[self._PROMPT.find(UNTRUSTED_EMAIL_DELIMITER):]
+        assert out[cut:] == self._PROMPT[self._PROMPT.find(UNTRUSTED_EMAIL_DELIMITER) :]
 
     def test_non_admin_dispatch_is_byte_identical(self):
         out = with_sender_status(self._PROMPT, envelope=self._env(detail=None), address="rostered@firm.test")

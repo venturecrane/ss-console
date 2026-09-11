@@ -151,9 +151,7 @@ def _as_addresses(value: Any) -> list[str]:
     elif isinstance(value, dict):
         candidates = [value]
     else:
-        raise MsGraphRefused(
-            f"recipient field must be a string, list, or address object, got {type(value).__name__}"
-        )
+        raise MsGraphRefused(f"recipient field must be a string, list, or address object, got {type(value).__name__}")
     return [normalize_address(v) for v in candidates if normalize_address(v)]
 
 
@@ -196,9 +194,7 @@ def enforce_recipients(policy: RecipientPolicy, recipients: list[str]) -> None:
 #: URL-safe base64 variant, so alphanumerics plus ``-_=`` covers them; ``.`` and
 #: ``~`` are permitted because they are unreserved in a path and harmless.
 #: Everything else — most importantly ``/``, ``?`` and ``#`` — is refused.
-_SEGMENT_ALLOWED = set(
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_=.~"
-)
+_SEGMENT_ALLOWED = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_=.~")
 
 
 def _safe_segment(value: str) -> str:
@@ -212,10 +208,7 @@ def _safe_segment(value: str) -> str:
     addresses something else.
     """
     if not value or any(ch not in _SEGMENT_ALLOWED for ch in value):
-        raise MsGraphRefused(
-            "refusing a Graph path segment with characters outside the id "
-            f"alphabet: {value!r}"
-        )
+        raise MsGraphRefused(f"refusing a Graph path segment with characters outside the id alphabet: {value!r}")
     return value
 
 
@@ -253,9 +246,7 @@ def _audit_header_of(message: Any) -> str:
 def _recipients(addresses: Any) -> list[dict[str, Any]]:
     """Flat addresses → Graph's ``toRecipients``/``ccRecipients`` nesting."""
     items = [addresses] if isinstance(addresses, str) else list(addresses or [])
-    return [
-        {"emailAddress": {"address": str(a).strip()}} for a in items if str(a or "").strip()
-    ]
+    return [{"emailAddress": {"address": str(a).strip()}} for a in items if str(a or "").strip()]
 
 
 class MsGraphOps:
@@ -302,8 +293,7 @@ class MsGraphOps:
         address = seat_mailbox(self._customer_path)
         if not address:
             raise MsGraphTransportError(
-                "this seat authors no msgraph mailbox (connectors.Email.msgraph_auth); "
-                "refusing to send"
+                "this seat authors no msgraph mailbox (connectors.Email.msgraph_auth); refusing to send"
             )
         return address
 
@@ -317,9 +307,7 @@ class MsGraphOps:
             return cached[0]
         credential = load_credential(path)
         if not credential:
-            raise MsGraphTransportError(
-                f"no msgraph {role} credential in the broker store; refusing to {role}"
-            )
+            raise MsGraphTransportError(f"no msgraph {role} credential in the broker store; refusing to {role}")
         data = urllib.parse.urlencode(
             {
                 "grant_type": "client_credentials",
@@ -346,9 +334,7 @@ class MsGraphOps:
         except urllib.error.HTTPError as exc:
             # The token endpoint echoes request parameters in its error bodies,
             # and one of those parameters is the client secret. Status only.
-            raise MsGraphTransportError(
-                f"msgraph token mint rejected with HTTP {exc.code}"
-            ) from exc
+            raise MsGraphTransportError(f"msgraph token mint rejected with HTTP {exc.code}") from exc
         except Exception as exc:
             raise MsGraphTransportError(f"msgraph token mint failed: {exc}") from exc
         try:
@@ -395,9 +381,7 @@ class MsGraphOps:
             # which is the only failure it is safe to re-shape and retry. Parsing
             # it back out of the message string would be a second, silent
             # encoding of the same fact.
-            failure = MsGraphTransportError(
-                f"msgraph {method} {path} failed: HTTP {exc.code}"
-            )
+            failure = MsGraphTransportError(f"msgraph {method} {path} failed: HTTP {exc.code}")
             failure.status = exc.code
             raise failure from exc
         except Exception as exc:
@@ -455,11 +439,7 @@ class MsGraphOps:
             body = {"contentType": "HTML", "content": html}
         else:
             text = next(
-                (
-                    str(payload[key])
-                    for key in _TEXT_FIELDS
-                    if isinstance(payload.get(key), str) and payload[key]
-                ),
+                (str(payload[key]) for key in _TEXT_FIELDS if isinstance(payload.get(key), str) and payload[key]),
                 "",
             )
             body = {"contentType": "Text", "content": text}
@@ -564,11 +544,7 @@ class MsGraphOps:
                 continue
             value = page.get("value")
             found = next(
-                (
-                    m
-                    for m in (value if isinstance(value, list) else [])
-                    if _audit_header_of(m) == audit_token
-                ),
+                (m for m in (value if isinstance(value, list) else []) if _audit_header_of(m) == audit_token),
                 None,
             )
             if found is None:
@@ -619,8 +595,7 @@ class MsGraphOps:
         # against (ss#2499). Naming them makes the dependency visible to whoever
         # edits this next, instead of leaving it to a default that could narrow.
         source = self._request(
-            self._mail_path("messages", message_id)
-            + "?$select=id,from,sender,conversationId",
+            self._mail_path("messages", message_id) + "?$select=id,from,sender,conversationId",
             "GET",
             None,
             credential_path=self._read_credential_path,
@@ -628,9 +603,7 @@ class MsGraphOps:
         )
         sender = normalize_address(source.get("from") or source.get("sender"))
         if not sender:
-            raise MsGraphRefused(
-                f"cannot determine who sent message {message_id!r}; refusing to reply"
-            )
+            raise MsGraphRefused(f"cannot determine who sent message {message_id!r}; refusing to reply")
         policy = authored_policy(self._customer_path)
         if not policy.allows_reply_to(sender):
             raise MsGraphRefused(

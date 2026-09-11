@@ -16,6 +16,7 @@ Exhibits are built only for provider groups the chronology actually cites;
 a citation in the text overrides the undated-lane presumption, a cited
 sentinel lane refuses, and a citation that cannot be remapped is exit 1.
 """
+
 from __future__ import annotations
 
 import json
@@ -144,8 +145,13 @@ def run(sr: StageRun) -> int:
             n -= 1
             continue
         names = " ".join(e["file"] for e in entries)
-        rt = ("Certified Medical Records" if CERT.search(names) else "Medical Records & Bills" if BILL.search(names)
-              else "Medical Records")
+        rt = (
+            "Certified Medical Records"
+            if CERT.search(names)
+            else "Medical Records & Bills"
+            if BILL.search(names)
+            else "Medical Records"
+        )
         ud = sorted({dt for _f, name, _o, _x in gfiles for dt in idx_dates.get(name, [])})
         span = us(ud[0]) if ud else us(g["first"])
         if len(ud) > 1 and ud[-1] != ud[0]:
@@ -153,14 +159,24 @@ def run(sr: StageRun) -> int:
         title = f"Exhibit {n} - {g['provider']} - {span} ({rt})"
         with (out / (re.sub(r"[/:]", "-", title) + ".pdf")).open("wb") as fh:
             w.write(fh)
-        page_map.append({"exhibit": n, "title": title, "provider": g["provider"], "record_type": rt,
-                         "total_pages": cursor - 1, "files": entries})
+        page_map.append(
+            {
+                "exhibit": n,
+                "title": title,
+                "provider": g["provider"],
+                "record_type": rt,
+                "total_pages": cursor - 1,
+                "files": entries,
+            }
+        )
         sr.log(f"Exhibit {n}: {cursor - 1:5d} pp  {g['provider'][:44]}")
 
     remapped, missing = remap_citations(src_text, remap)
     (rd / "entries_final.md").write_text(remapped, encoding="utf-8")
     (out / "page_map.json").write_text(json.dumps(page_map, indent=1), encoding="utf-8")
-    (rd / "exhibit_remap.json").write_text(json.dumps({str(k): v for k, v in remap.items()}, indent=1), encoding="utf-8")
+    (rd / "exhibit_remap.json").write_text(
+        json.dumps({str(k): v for k, v in remap.items()}, indent=1), encoding="utf-8"
+    )
     uncited = [(g["provider"], len(g["file_ids"])) for g in groups if g not in live]
     sr.log(f"{len(page_map)} exhibits, {sum(e['total_pages'] for e in page_map)} pages -> {out}")
     if missing:

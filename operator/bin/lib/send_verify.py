@@ -146,13 +146,9 @@ from send_invariants import (  # noqa: F401 -- re-exports; callers and tests rea
     recipient_invariant,
 )
 
-_OPERATOR_DIR = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-)
+_OPERATOR_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SEND_RENDER_PATH = os.path.join(_OPERATOR_DIR, "contracts", "send-render.yaml")
-CANON_VECTORS_PATH = os.path.join(
-    _OPERATOR_DIR, "contracts", "fixtures", "body-canon-vectors.json"
-)
+CANON_VECTORS_PATH = os.path.join(_OPERATOR_DIR, "contracts", "fixtures", "body-canon-vectors.json")
 
 #: How long after a wake a dispatch may land and still be that wake's send.
 #: The terminal-state contract's ``scheduled_outbound`` window
@@ -171,9 +167,7 @@ VERDICT_NO_WAKE_HASH = "no_wake_hash"  # hold
 VERDICT_NO_DISPATCH_STAMP = "no_dispatch_stamp"  # hold
 VERDICT_BODY_UNAVAILABLE = "body_unavailable"  # hold
 VERDICT_CHANNEL_MISMATCH = "channel_mismatch_hold"  # hold until rehearsal calibrates
-VERDICT_PRE_EDGE = (
-    "pre_stamp_edge"  # neither hold nor finding: unverifiable by construction
-)
+VERDICT_PRE_EDGE = "pre_stamp_edge"  # neither hold nor finding: unverifiable by construction
 
 _HOLD_VERDICTS = (
     VERDICT_NO_WAKE_HASH,
@@ -245,17 +239,12 @@ def load_send_render(path: str = SEND_RENDER_PATH) -> dict[str, RenderDecl]:
         render = entry.get("render")
         if render not in ("templated", "slot-templated", "compositional"):
             raise SendRenderError(
-                f"{path}: skills.{skill}.render must be templated | slot-templated | "
-                f"compositional (got {render!r})"
+                f"{path}: skills.{skill}.render must be templated | slot-templated | compositional (got {render!r})"
             )
         template = entry.get("template")
         if render in _HASH_VERIFIED_MODES and not isinstance(template, str):
-            raise SendRenderError(
-                f"{path}: skills.{skill} declares render: {render} but names no template"
-            )
-        out[str(skill)] = RenderDecl(
-            skill=str(skill), render=str(render), template=template
-        )
+            raise SendRenderError(f"{path}: skills.{skill} declares render: {render} but names no template")
+        out[str(skill)] = RenderDecl(skill=str(skill), render=str(render), template=template)
     return out
 
 
@@ -301,15 +290,11 @@ class DispatchStamp:
     row_id: Optional[str] = None
     plain_body_sha256: str = ""  # "" == overlay predates the stamp; hold, never find
     plain_consumed: bool = False  # one stamp vouches for exactly one channel body
-    join_keys: frozenset = (
-        frozenset()
-    )  # message ids / audit token: the identity join (B7)
+    join_keys: frozenset = frozenset()  # message ids / audit token: the identity join (B7)
 
 
 def _parse_ts(value) -> datetime:
-    return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(
-        timezone.utc
-    )
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc)
 
 
 def _metadata(row: dict) -> dict:
@@ -336,15 +321,9 @@ def _hash_entries(meta: dict) -> tuple[list[str], list[str]]:
         if isinstance(entry, str) and entry:
             full.append(entry)
         elif isinstance(entry, dict):
-            if (
-                isinstance(entry.get("body_sha256_full"), str)
-                and entry["body_sha256_full"]
-            ):
+            if isinstance(entry.get("body_sha256_full"), str) and entry["body_sha256_full"]:
                 full.append(entry["body_sha256_full"])
-            if (
-                isinstance(entry.get("body_sha256_skeleton"), str)
-                and entry["body_sha256_skeleton"]
-            ):
+            if isinstance(entry.get("body_sha256_skeleton"), str) and entry["body_sha256_skeleton"]:
                 skeleton.append(entry["body_sha256_skeleton"])
     return full, skeleton
 
@@ -363,9 +342,7 @@ def index_wakes(rows: list[dict]) -> list[WakeStamp]:
         items = [
             entry
             for entry in (raw_items if isinstance(raw_items, list) else [])
-            if isinstance(entry, dict)
-            and entry.get("item_key")
-            and entry.get("ack_code")
+            if isinstance(entry, dict) and entry.get("item_key") and entry.get("ack_code")
         ]
         out.append(
             WakeStamp(
@@ -432,9 +409,7 @@ class BodyVerdict:
     expected_sha256: Optional[str] = None
     actual_sha256: Optional[str] = None
     detail: Optional[str] = None
-    attribution: str = (
-        ""  # skill | hash | "" -- how the pair was made (send_attribution)
-    )
+    attribution: str = ""  # skill | hash | "" -- how the pair was made (send_attribution)
 
     @property
     def is_finding(self) -> bool:
@@ -493,9 +468,7 @@ def verify_hash_join(
     return verdicts
 
 
-def _grade_pair(
-    wake: WakeStamp, dispatch: DispatchStamp, attribution: str
-) -> BodyVerdict:
+def _grade_pair(wake: WakeStamp, dispatch: DispatchStamp, attribution: str) -> BodyVerdict:
     common = {
         # The wake's name when the dispatch carried none (attributed by hash).
         "skill_name": dispatch.skill_name or wake.skill_name,
@@ -512,15 +485,11 @@ def _grade_pair(
             **common,
         )
     if dispatch.rendered_body_sha256 in wake.hashes_full:
-        return BodyVerdict(
-            verdict=VERDICT_MATCH, detail=_ATTRIBUTION_DETAIL.get(attribution), **common
-        )
+        return BodyVerdict(verdict=VERDICT_MATCH, detail=_ATTRIBUTION_DETAIL.get(attribution), **common)
     if dispatch.rendered_body_sha256 in wake.hashes_skeleton:
         # The authored fallback ladder delivered the identifier-free skeleton.
         # Designed behavior under a render fault -- reported, never a finding.
-        return BodyVerdict(
-            verdict=VERDICT_DEGRADED, detail="skeleton fallback delivered", **common
-        )
+        return BodyVerdict(verdict=VERDICT_DEGRADED, detail="skeleton fallback delivered", **common)
     return BodyVerdict(
         verdict=VERDICT_DIVERGED,
         expected_sha256=wake.hashes_full[0],
@@ -584,11 +553,7 @@ def verify_channel_bodies(
             if capacity_used >= wake.dispatch_capacity:
                 break
             claimed.add(index)
-            verdicts.append(
-                _grade_channel_body(
-                    wake, message, fetch_body, stamps, window_s, plain_edge, identified
-                )
-            )
+            verdicts.append(_grade_channel_body(wake, message, fetch_body, stamps, window_s, plain_edge, identified))
     return verdicts
 
 
@@ -607,9 +572,7 @@ def _messages_in_window(ordered, wake, window_s, claimed, attribute):
             yield index, message, owner is not None
 
 
-def _grade_channel_body(
-    wake, message, fetch_body, dispatches, window_s, plain_edge, identified
-) -> BodyVerdict:
+def _grade_channel_body(wake, message, fetch_body, dispatches, window_s, plain_edge, identified) -> BodyVerdict:
     common = {
         "skill_name": wake.skill_name,
         "wake_ts": wake.ts.isoformat(),
@@ -726,9 +689,7 @@ def _behind_the_edge(plain_edge, digest: str, common: dict) -> BodyVerdict:
     )
 
 
-def _graded(
-    matched: bool, digest: str, against: str, common: dict, identified: bool
-) -> BodyVerdict:
+def _graded(matched: bool, digest: str, against: str, common: dict, identified: bool) -> BodyVerdict:
     """MATCH or the finding, said once. Calibration is done: with a
     same-representation counterpart in hand, a mismatch can no longer be
     explained away by an uncalibrated channel transform, so it is a FINDING --
@@ -779,18 +740,12 @@ class SendVerifier:
         dispatches = index_dispatches(rows)
         verdicts = verify_hash_join(wakes, dispatches, self._declares)
         if fetch_body is not None:
-            verdicts += verify_channel_bodies(
-                sent, wakes, self._declares, fetch_body, dispatches=dispatches
-            )
+            verdicts += verify_channel_bodies(sent, wakes, self._declares, fetch_body, dispatches=dispatches)
         # Two tiers (send_invariants.py): conflicts with COMMITTED expectations
         # are findings; first-seen values are proposals for a reviewed
         # send-invariants.json PR, never findings.
-        findings, proposals = recipient_invariant(
-            rows, self._declares, self._invariants
-        )
-        ack_findings, ack_proposals = ack_invariant(
-            wakes, self._declares, self._invariants
-        )
+        findings, proposals = recipient_invariant(rows, self._declares, self._invariants)
+        ack_findings, ack_proposals = ack_invariant(wakes, self._declares, self._invariants)
         return verdicts, findings + ack_findings, proposals + ack_proposals
 
 
