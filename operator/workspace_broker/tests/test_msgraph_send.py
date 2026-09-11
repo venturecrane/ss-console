@@ -38,6 +38,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from workspace_broker.transmit_verbs import dispatch_transmit  # noqa: E402
 from workspace_broker.msgraph_auth import (  # noqa: E402
     load_credential,
     materialize_credential,
@@ -989,7 +990,7 @@ def test_the_reply_verb_writes_its_own_row(tmp_path: Path) -> None:
 
 
 def test_the_send_row_carries_the_session_and_the_matter(tmp_path: Path) -> None:
-    """FALSIFIER: drop the two kwargs from the _append_send_row call and both
+    """FALSIFIER: drop the two kwargs from the append_send_row call and both
     assertions fail while every other row assertion in this file stays green,
     which is exactly how the gap survived."""
     broker = _broker(tmp_path, FakeGraph())
@@ -1048,7 +1049,7 @@ def test_a_caller_that_sends_no_joins_writes_the_row_it_writes_today(tmp_path: P
 
 
 def test_audit_extra_rides_the_msgraph_row_through_the_same_allowlist(tmp_path: Path) -> None:
-    """The Graph channel shares ``_dispatch_transmit`` with AgentMail ON PURPOSE
+    """The Graph channel shares ``transmit_verbs.dispatch_transmit`` with AgentMail ON PURPOSE
     (one audit writer, no forked copy to drift), but until this test nothing
     on the paying seat's channel proved the caller stamps arrive here at all.
     Same closed allowlist, same column placement: the body stamps land in
@@ -1506,7 +1507,8 @@ def test_an_agentmail_shaped_result_writes_exactly_the_row_it_writes_today(
     reasoned about, because "AgentMail is unaffected" is the kind of claim that
     is true right up until someone copies a result wholesale."""
     broker = _broker(tmp_path, FakeGraph())
-    broker._dispatch_transmit(
+    dispatch_transmit(
+        broker,
         "agentmail_send",
         {"payload": {"to": ["scott@smd.services"], "text": "hi"}},
         send=lambda _p: {"message_id": "<am-1>", "recipients": ["scott@smd.services"],

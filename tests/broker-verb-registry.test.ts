@@ -3,62 +3,77 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 
 /**
- * Workspace-broker verb registry — the check that keeps F3 closed.
+ * Workspace-broker verb registry: the check that keeps F3 closed, and since
+ * 2026-09-10 the check that every verb DECLARES who may call it.
  *
- * THE FINDING. Nothing enumerated the broker's verb set. `handle()` in
- * `operator/workspace_broker/server.py` dispatches on bare string literals
- * (`if action == "job_claim":` …), 32 of them, and a verb could be added or
- * removed with no signal anywhere.
+ * THE FINDING (2026-08-24). Nothing enumerated the broker's verb set.
+ * `handle()` in `operator/workspace_broker/server.py` dispatched on bare
+ * string literals, and a verb could be added or removed with no signal.
  *
- * WHY THAT MATTERS HERE SPECIFICALLY. Each verb is a uid-gated door into the
- * append-only audit log, and the broker's whole discipline is that a WRITING
- * verb pins exactly one `action_type` so it cannot forge another verb's row
- * (see the comments around `suppressed_wake_append` and `emitted_wake_append`).
- * That discipline is per-verb by construction: it holds only for verbs someone
- * looked at. An unenumerated surface is one where "someone looked at all of
- * them" is not a checkable claim.
+ * THE SECOND FINDING (2026-09-10 review, Architecture 1). The if-chain was
+ * 313 lines at complexity 51 and its authorization was POSITIONAL: a gateway
+ * PID gate two thirds of the way down, five hand-rolled uid checks above it,
+ * and whether a verb was gated depended on where it had been typed. The
+ * dispatcher is now a table (`operator/workspace_broker/verbs.py`), one
+ * `Verb("name", <auth>, handler)` row per verb, and the dispatcher checks the
+ * declared auth BEFORE calling the handler. This file reads that table.
  *
- * TWO ASSERTIONS, AND AN HONEST ONE ABOUT COVERAGE.
+ * A CORRECTION THE TABLE FORCED. The old extractor matched `action == "x"`
+ * literals and so never saw the four transmit verbs or `establish_status`,
+ * which lived in `action in (...)` tuples: the registry pinned 37 of 42
+ * verbs and called it the whole surface. The table has one row per verb by
+ * construction, and the Python side (`test_verb_table.py`) asserts the
+ * establishment rows agree with the handler module's own list.
  *
- *   1. The verb set equals the contract. Adding or removing a verb is a
- *      conscious act that shows up in a reviewable diff, not a side effect of
- *      an edit to a 2,000-line dispatcher.
+ * WHY THIS MATTERS. Each verb is a gated door into the append-only audit
+ * log, and a WRITING verb pins exactly one `action_type` so it cannot forge
+ * another verb's row. That discipline is per-verb by construction: it holds
+ * only for verbs someone looked at, and now only for verbs whose gate is
+ * written down.
  *
- *   2. Every verb is NAMED somewhere in the broker's own test suite, except
+ * THREE ASSERTIONS, AND AN HONEST ONE ABOUT COVERAGE.
+ *
+ *   1. The verb set equals the contract. Adding or removing a verb shows up
+ *      in a reviewable diff of EXPECTED_VERBS, not as a side effect.
+ *   2. Every row carries an auth token from the closed set. A verb with no
+ *      gate cannot be written into the table's shape (the Python dataclass
+ *      also refuses an empty or unknown set at import).
+ *   3. Every verb is NAMED somewhere in the broker's own test suite, except
  *      for an exemption list that may only SHRINK.
  *
- * On (2): being named in a test file is a weak proxy for being tested, and
- * this file does not claim otherwise. It catches exactly one thing — a brand
- * new verb shipping with no test that so much as mentions it — which is the
- * case that actually occurs. Five verbs are exempt because they are in that
- * state TODAY (`health`, `job_cancel`, `job_heartbeat`, `job_list`,
- * `job_list_claimable`); pinning the debt at five and making six impossible is
- * a real gate, where blocking this PR on writing five tests would have been a
- * different piece of work wearing this one's clothes.
+ * On (3): being named in a test file is a weak proxy for being tested, and
+ * this file does not claim otherwise. It catches exactly one thing, a brand
+ * new verb shipping with no test that so much as mentions it. Four verbs are
+ * exempt because they are in that state (down from five: `health` acquired a
+ * behavioural test with the table); pinning the debt and making it
+ * impossible to grow is a real gate. The table's gate itself is pinned
+ * behaviourally, for every verb, by `test_verb_table.py`.
  *
- * WHAT WOULD MAKE THIS FALSE (Law 12). Add a verb to `handle()` and the
- * registry test goes red. Remove one and it goes red. Add a verb without a
- * test mention and the coverage test goes red naming it. Break the extractor
- * so it finds nothing and the self-test goes red — an empty verb set would
- * otherwise satisfy "every verb is tested" vacuously.
+ * WHAT WOULD MAKE THIS FALSE (Law 12). Add a row to VERBS and the registry
+ * test goes red. Remove one and it goes red. Write a row with an auth token
+ * outside the closed set and the token test goes red naming it. Add a verb
+ * without a test mention and the coverage test goes red. Break the extractor
+ * so it finds nothing and the self-test goes red, because an empty verb set
+ * would otherwise satisfy every assertion vacuously.
  */
 
 const REPO_ROOT = resolve(__dirname, '..')
-const SERVER = join(REPO_ROOT, 'operator', 'workspace_broker', 'server.py')
+const VERB_TABLE = join(REPO_ROOT, 'operator', 'workspace_broker', 'verbs.py')
 const TESTS_DIR = join(REPO_ROOT, 'operator', 'workspace_broker', 'tests')
 
 /**
- * The broker's dispatch verbs, in sorted order.
+ * The broker's verbs, in sorted order.
  *
- * Kept as a literal list rather than a generated JSON contract: at 32 entries
+ * Kept as a literal list rather than a generated JSON contract: at this size
  * it is readable in a diff, and the point of the gate is that a reviewer SEES
  * the verb being added. A generated artifact would be regenerated by the same
- * commit that adds the verb and would show the reviewer nothing they had to
- * think about.
+ * commit that adds the verb and would show the reviewer nothing.
  */
 const EXPECTED_VERBS = [
   'act_commit',
   'act_propose',
+  'agentmail_reply',
+  'agentmail_send',
   'audit_append',
   'authorize',
   'correction_propose',
@@ -71,6 +86,7 @@ const EXPECTED_VERBS = [
   'establish_pending',
   'establish_propose',
   'establish_stage_document',
+  'establish_status',
   'establish_submit',
   'execute',
   'health',
@@ -85,13 +101,15 @@ const EXPECTED_VERBS = [
   'job_read',
   'job_record',
   // ss#2614 routine 11: the chronology-package job seam. Bodies live in
-  // operator/workspace_broker/medchron_verbs.py; gating per verb is documented
-  // there (submit: gateway or root; record: root only).
+  // operator/workspace_broker/medchron_verbs.py; the table declares the
+  // compound gates (submit: gateway or root; record: root only).
   'medchron_allowance',
   'medchron_job_list',
   'medchron_job_record',
   'medchron_job_status',
   'medchron_job_submit',
+  'msgraph_reply',
+  'msgraph_send',
   'ops_ask_sent',
   'ops_propose',
   'ops_resolve',
@@ -100,29 +118,48 @@ const EXPECTED_VERBS = [
 ]
 
 /**
- * Verbs with no mention in the broker test suite as of 2026-08-24.
- *
- * THIS LIST MAY ONLY SHRINK. A verb leaves it by acquiring a test; nothing may
- * join it. The test below enforces both directions — an entry that no longer
- * needs the exemption fails just as loudly as a new verb that wants one, so
- * the list tracks reality downward instead of quietly becoming a permanent
- * amnesty.
+ * The auth tokens a row may carry, exactly as they are spelled in verbs.py.
+ * `_only(X)` is a single class; the three compound names are the medchron
+ * group's any-of sets. Anything else is a typo or a new class that needs a
+ * dispatcher change, a test, and an entry here.
  */
-const UNTESTED_VERBS = new Set([
-  'health',
-  'job_cancel',
-  'job_heartbeat',
-  'job_list',
-  'job_list_claimable',
+const AUTH_TOKENS = new Set([
+  '_only(ANY)',
+  '_only(AGENT)',
+  '_only(GATEWAY)',
+  '_only(ROOT)',
+  'GATEWAY_OR_ROOT',
+  'GATEWAY_ROOT_OR_AGENT',
+  'ROOT_OR_AGENT',
 ])
 
-function dispatchVerbs(): string[] {
-  const src = readFileSync(SERVER, 'utf-8')
-  const re = /action == "([a-z_]+)"/g
-  const found = new Set<string>()
+/**
+ * Verbs with no mention in the broker test suite.
+ *
+ * THIS LIST MAY ONLY SHRINK. A verb leaves it by acquiring a test; nothing
+ * may join it. The test below enforces both directions: an entry that no
+ * longer needs the exemption fails just as loudly as a new verb that wants
+ * one, so the list tracks reality downward instead of quietly becoming a
+ * permanent amnesty. Frozen 2026-08-24 at five; `health` left 2026-09-10.
+ */
+const UNTESTED_VERBS = new Set(['job_cancel', 'job_heartbeat', 'job_list', 'job_list_claimable'])
+
+interface Row {
+  name: string
+  auth: string
+}
+
+function tableRows(): Row[] {
+  const src = readFileSync(VERB_TABLE, 'utf-8')
+  const re = /^\s*Verb\("([a-z_]+)",\s*([A-Za-z_()]+),/gm
+  const rows: Row[] = []
   let m: RegExpExecArray | null
-  while ((m = re.exec(src)) !== null) found.add(m[1])
-  return [...found].sort()
+  while ((m = re.exec(src)) !== null) rows.push({ name: m[1], auth: m[2] })
+  return rows
+}
+
+function dispatchVerbs(): string[] {
+  return [...new Set(tableRows().map((r) => r.name))].sort()
 }
 
 function testSuiteText(): string {
@@ -147,11 +184,11 @@ describe('workspace broker verb registry', () => {
     // Law 12 on the instrument. "Every verb is tested" is trivially true of an
     // empty verb set, so the floor is asserted before anything is concluded
     // from the set's contents.
-    expect(dispatchVerbs().length).toBeGreaterThanOrEqual(25)
+    expect(dispatchVerbs().length).toBeGreaterThanOrEqual(40)
     expect(testSuiteText().length).toBeGreaterThan(1000)
   })
 
-  it('the dispatch surface matches the registry exactly', () => {
+  it('the verb table matches the registry exactly', () => {
     const actual = dispatchVerbs()
     const added = actual.filter((v) => !EXPECTED_VERBS.includes(v))
     const removed = EXPECTED_VERBS.filter((v) => !actual.includes(v))
@@ -161,11 +198,25 @@ describe('workspace broker verb registry', () => {
       `The broker's verb surface changed.\n` +
         `Added: ${added.join(', ') || '(none)'}\n` +
         `Removed: ${removed.join(', ') || '(none)'}\n` +
-        `Every verb is a uid-gated door into the append-only audit log, and a WRITING verb ` +
+        `Every verb is a gated door into the append-only audit log, and a WRITING verb ` +
         `must pin exactly one action_type so it cannot forge another verb's row. Update ` +
         `EXPECTED_VERBS in this file in the same PR, so the addition is something a reviewer ` +
-        `sees rather than something a dispatcher edit does quietly.`
+        `sees rather than something a table edit does quietly.`
     ).toEqual([...EXPECTED_VERBS].sort())
+  })
+
+  it('every row declares who may call it, from the closed set of auth tokens', () => {
+    const rows = tableRows()
+    expect(rows.length).toBe(EXPECTED_VERBS.length)
+    const bad = rows.filter((r) => !AUTH_TOKENS.has(r.auth))
+    expect(
+      bad.map((r) => `${r.name}: ${r.auth}`),
+      `These rows carry an auth token outside the closed set. A new class needs a ` +
+        `dispatcher change in verbs.py, a behavioural case in test_verb_table.py, and an ` +
+        `entry in AUTH_TOKENS here.`
+    ).toEqual([])
+    const ungated = rows.filter((r) => r.auth === '_only(ANY)').map((r) => r.name)
+    expect(ungated, 'only the read-only health verb may be ungated').toEqual(['health'])
   })
 
   it('every verb is named in the broker test suite, and the exemption list only shrinks', () => {
@@ -176,9 +227,9 @@ describe('workspace broker verb registry', () => {
     const newlyUnmentioned = dispatchVerbs().filter((v) => !mentioned(v) && !UNTESTED_VERBS.has(v))
     expect(
       newlyUnmentioned,
-      `These verbs are dispatched by the broker and appear in no test: ` +
+      `These verbs are on the broker's table and appear in no test: ` +
         `${newlyUnmentioned.join(', ')}. Add a test that exercises the verb. ` +
-        `Do not add it to UNTESTED_VERBS — that list is frozen debt from 2026-08-24 and ` +
+        `Do not add it to UNTESTED_VERBS; that list is frozen debt from 2026-08-24 and ` +
         `may only shrink.`
     ).toEqual([])
 
