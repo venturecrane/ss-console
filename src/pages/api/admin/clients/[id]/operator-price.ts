@@ -1,11 +1,11 @@
 import type { APIContext, APIRoute } from 'astro'
 import {
   isOperatorPaymentMethod,
-  setOperatorPaymentMethod,
-  setOperatorPrice,
+  setOperatorPriceAndPaymentMethod,
 } from '../../../../../lib/db/services'
 import { env } from 'cloudflare:workers'
 import { requireAdminSession } from '../../../../../lib/auth/admin-session'
+import { captureError } from '../../../../../lib/observability/sentry'
 
 /**
  * POST /api/admin/clients/[id]/operator-price
@@ -44,15 +44,17 @@ async function handlePost({ request, locals, params, redirect }: APIContext): Pr
     if (!parsed.ok) {
       return redirect(`/admin/clients/${entityId}?error=bad_price`, 302)
     }
-    const method = formData.get('payment_method')
-    if (method !== null && !isOperatorPaymentMethod(method)) {
+    const rawMethod = formData.get('payment_method')
+    if (rawMethod !== null && !isOperatorPaymentMethod(rawMethod)) {
       return redirect(`/admin/clients/${entityId}?error=bad_payment_method`, 302)
     }
-    await setOperatorPrice(env.DB, session.orgId, entityId, parsed.value)
-    if (method !== null) await setOperatorPaymentMethod(env.DB, session.orgId, entityId, method)
+    // One statement for both fields: the price and the rail land together or
+    // not at all (code review 2026-09-10, Architecture 8).
+    await setOperatorPriceAndPaymentMethod(env.DB, session.orgId, entityId, parsed.value, rawMethod)
     return redirect(`/admin/clients/${entityId}?priced=1`, 302)
   } catch (err) {
     console.error('[api/admin/clients/operator-price] error:', err)
+    captureError(err, 'admin.operator-price')
     return redirect(`/admin/clients/${entityId}?error=server`, 302)
   }
 }

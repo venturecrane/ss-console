@@ -21,6 +21,7 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types'
+import { isRecord } from '../../api/helpers'
 import { readMachineRuntime, type RuntimeReadActor } from '../../operator/runtime-read'
 import { isClientVisibleAction } from './activity-language'
 import { listPauseEvents } from './pause-control'
@@ -342,10 +343,6 @@ function roleFromMetadata(e: PortalActionEventRow): string | null {
 // ---------------------------------------------------------------------------
 // Defensive parsing of the runtime read payload into AuditEntry[].
 // ---------------------------------------------------------------------------
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
-}
 
 /** A required non-empty string field; returns null when absent/empty so the
  * caller can drop a malformed row rather than render a blank cell. */

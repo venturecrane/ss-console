@@ -5,11 +5,11 @@
  * Google Calendar is the only provider in v1; the schema is generic for
  * future providers (Gmail, HubSpot, etc.).
  *
- * Refresh tokens are stored encrypted (AES-GCM) — see `src/lib/booking/encryption.ts`.
+ * Refresh tokens are stored encrypted (AES-GCM) — see `src/lib/security/encryption.ts`.
  * All queries are parameterized to prevent SQL injection.
  */
 
-import { decrypt } from '../booking/encryption.js'
+import { decrypt } from '../security/encryption.js'
 
 export interface Integration {
   id: string

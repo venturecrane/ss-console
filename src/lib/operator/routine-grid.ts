@@ -25,6 +25,7 @@ import {
   EXPOSURE_ACTION_CLASSES,
   SEND_ACTION_CLASSES,
 } from './customer-yaml/types'
+import { isRecord } from '../api/helpers'
 
 /**
  * Closed tier vocabulary. The letter's prose forms ("Runs on its own",
@@ -92,10 +93,6 @@ export type RoutineGridValidationResult =
   { ok: true; value: RoutineGrid } | { ok: false; errors: RoutineGridValidationError[] }
 
 type Errors = RoutineGridValidationError[]
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
-}
 
 /** Required non-empty string. Pushes an error and returns '' on any failure;
  *  the empty value is only ever surfaced when the whole grid validates clean. */

@@ -53,15 +53,15 @@ describe('invariants the inventory makes visible', () => {
     expect(offenders).toEqual([])
   })
 
-  it('helper modules under src/pages/api are the two known ones (Astro serves every file here as a URL)', () => {
+  it('no helper module lives under src/pages/api (Astro serves every file here as a URL)', () => {
+    // The two that did (booking/confirmation-emails.ts, booking/reserve-helpers.ts)
+    // moved to src/lib/booking on 2026-09-11; tests/api-routes-are-routes.test.ts
+    // pins the same invariant from the source side.
     const helpers = rows
       .filter((r) => r.methods.startsWith('none'))
       .map((r) => r.file)
       .sort()
-    expect(helpers).toEqual([
-      'src/pages/api/booking/confirmation-emails.ts',
-      'src/pages/api/booking/reserve-helpers.ts',
-    ])
+    expect(helpers).toEqual([])
   })
 
   it('the page carries no em dash', () => {
