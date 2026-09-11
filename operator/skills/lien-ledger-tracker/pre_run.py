@@ -1213,7 +1213,7 @@ class SmokeballSubprocessSource:
             "SMD_SCT_MATTERS": ",".join(self._deep_matters),
             "SMD_SCT_BUDGET": str(self._budget),
         }
-        result = subprocess.run(  # raises on timeout → caller wakes
+        result = subprocess.run(  # noqa: S603 - connector-venv interpreter and a module-constant snippet, inputs ride the env; no shell; raises on timeout so the caller wakes
             # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args — argv[0] is the module-constant connector-venv interpreter, overridable only via SMD_CONNECTOR_VENV_PYTHON from the Machine's own boot env (same trust domain; the test seam). The snippet is a module constant, and the two run-varying inputs cross as shape-checked environment values, never argv.
             [connector_python, "-c", _PULL_SNIPPET],
             capture_output=True,

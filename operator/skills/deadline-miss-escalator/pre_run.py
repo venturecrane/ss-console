@@ -1295,7 +1295,7 @@ class SmokeballSubprocessSource:
         # Config-authored lookup cap for the matter-number join, carried in the
         # ENV rather than argv so the nosemgrep justification below stays true.
         env["SMD_MATTER_LOOKUP_BUDGET"] = str(self._matter_lookup_budget)
-        result = subprocess.run(  # raises on timeout → caller wakes
+        result = subprocess.run(  # noqa: S603 - connector-venv interpreter, a module-constant snippet, two isoformat dates; no shell; raises on timeout so the caller wakes
             # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args — argv[0] is the module-constant connector-venv interpreter, overridable only via SMD_CONNECTOR_VENV_PYTHON from the Machine's own boot env (same trust domain; the test seam). The snippet is a module constant; frm/to are date.isoformat() strings computed here, never external input.
             [connector_python, "-c", _PULL_SNIPPET, frm, to],
             capture_output=True,

@@ -161,7 +161,7 @@ def _dispatch(intent: dict) -> dict:
         log(f"{vendor}: no author-built connector venv ({py}) — skipping (e.g. a vendor MCP)")
         return {"vendor": vendor, "status": "skipped:no_connector_venv"}
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603 - argv is the vendor's own venv interpreter, exists-checked above, plus a module name; vendor is an authored customer.yaml backend
             [py, "-m", f"{vendor}_connector.webhook_reconcile"],
             input=json.dumps(intent),
             capture_output=True,

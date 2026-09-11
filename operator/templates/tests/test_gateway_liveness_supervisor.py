@@ -173,7 +173,7 @@ wait
         text = self.script(extra_env_lines).replace("/opt/hermes/gateway/run.py", str(self.hermes_run_py))
         path.write_text(text)
         path.chmod(0o755)
-        self.proc = subprocess.Popen(["bash", str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        self.proc = subprocess.Popen(["bash", str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)  # noqa: S603 - test runs its own generated harness script under bash, no shell
 
     def stop(self) -> None:
         if self.proc and self.proc.poll() is None:

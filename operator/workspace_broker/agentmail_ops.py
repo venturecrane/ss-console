@@ -128,6 +128,10 @@ class AgentMailOps:
         self._credential_path = credential_path
         self._customer_path = customer_path
         self._customer_slug = customer_slug
+        if not base_url.startswith("https://"):
+            # urllib follows file:// and ftp://; a transport whose only job is
+            # to carry a send credential refuses every other scheme at construction.
+            raise ValueError("AgentMailOps base_url must be https://")
         self._base_url = base_url.rstrip("/")
         self._opener = opener
         self._inbox_id: str | None = None
@@ -139,7 +143,7 @@ class AgentMailOps:
         if not key:
             raise AgentMailTransportError("no AgentMail send credential in the broker store; refusing to send")
         data = json.dumps(body).encode() if body is not None else None
-        request = urllib.request.Request(
+        request = urllib.request.Request(  # noqa: S310 - base_url is https-checked at construction; the path is a module literal
             self._base_url + path,
             data=data,
             method=method,

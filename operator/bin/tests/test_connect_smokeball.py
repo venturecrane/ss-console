@@ -35,7 +35,7 @@ _STALE_REF = "deadbeef" * 5
 
 def _origin_main_overlay_ref() -> str:
     """Read the pin exactly the way the script does."""
-    out = subprocess.run(
+    out = subprocess.run(  # noqa: S603 - literal git argv in a test, no shell; the path is the repo root
         ["git", "-C", str(REPO_ROOT), "show", "origin/main:operator/contracts/overlay-pairs.json"],
         capture_output=True,
         text=True,
@@ -66,7 +66,7 @@ def _run(args: list[str], bin_dir: Path | None = None, env_extra: dict | None = 
         env["PATH"] = f"{bin_dir}:{env['PATH']}"
     if env_extra:
         env.update(env_extra)
-    return subprocess.run(
+    return subprocess.run(  # noqa: S603 - test runs the script under bash with test-authored args, no shell
         ["bash", str(SCRIPT), *args],
         capture_output=True,
         text=True,

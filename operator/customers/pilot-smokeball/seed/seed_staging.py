@@ -93,18 +93,18 @@ class Api:
             sys.exit("missing SMOKEBALL_SEED_CLIENT_ID/SECRET or SMOKEBALL_STAGING_API_KEY (run under infisical)")
         basic = base64.b64encode(f"{cid}:{sec}".encode()).decode()
         body = urllib.parse.urlencode({"grant_type": "client_credentials", "client_id": cid}).encode()
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310 - AUTH_HOST is an https constant; the path is a module literal
             f"{AUTH_HOST}/oauth2/token",
             data=body,
             headers={"Authorization": f"Basic {basic}", "Content-Type": "application/x-www-form-urlencoded"},
         )
         # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected — URL is the module-constant AUTH_HOST token endpoint (https://); credentials come from Infisical-staged env, never from input.
-        with urllib.request.urlopen(req, timeout=30) as r:
+        with urllib.request.urlopen(req, timeout=30) as r:  # noqa: S310 - the request above targets the https AUTH_HOST constant
             self.token = json.load(r)["access_token"]
 
     def call(self, method: str, path: str, body: dict | None = None) -> tuple[int, dict | list | None]:
         data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310 - API_HOST is an https constant; the path is built in this module
             f"{API_HOST}{path}",
             data=data,
             method=method,
@@ -116,7 +116,7 @@ class Api:
         )
         try:
             # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected — scheme+host are the module-constant API_HOST (https://); paths are module-authored literals plus Smokeball-issued resource ids.
-            with urllib.request.urlopen(req, timeout=60) as r:
+            with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310 - the request above targets the https API_HOST constant
                 raw = r.read()
                 return r.status, (json.loads(raw) if raw else None)
         except urllib.error.HTTPError as e:

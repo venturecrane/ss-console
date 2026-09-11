@@ -43,7 +43,7 @@ Runner = Callable[[Sequence[str]], "subprocess.CompletedProcess[str]"]
 
 
 def _run(cmd: Sequence[str]) -> "subprocess.CompletedProcess[str]":
-    return subprocess.run(list(cmd), capture_output=True, text=True, check=False)
+    return subprocess.run(list(cmd), capture_output=True, text=True, check=False)  # noqa: S603 - list argv, no shell; every caller is a wrangler command this module builds
 
 
 def sql_text(value: Optional[str]) -> str:
@@ -94,7 +94,7 @@ class ConsoleD1:
 
     def newest_pin(self, slug: str) -> Optional[dict]:
         sql = (
-            "SELECT audit_head, audit_rows, first_seen_heartbeat_ts, last_seen_heartbeat_ts "
+            "SELECT audit_head, audit_rows, first_seen_heartbeat_ts, last_seen_heartbeat_ts "  # noqa: S608 - the slug is inlined as sql_text's hex blob literal; wrangler d1 execute has no binding
             f"FROM audit_head_history WHERE customer_slug = {sql_text(slug)} "
             "ORDER BY id DESC LIMIT 1"
         )
@@ -146,7 +146,7 @@ class ConsoleD1:
             raise ValueError(f"count_where_slug refuses a non-identifier table: {table!r}")
         # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query — table is a checked identifier; the slug is sql_text's hex blob literal, which has no escape sequence.
         # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query — not SQLAlchemy; the only interpolations are an identifier check and a fixed-alphabet hex literal.
-        sql = f"SELECT COUNT(*) AS n FROM {table} WHERE customer_slug = {sql_text(slug)}"
+        sql = f"SELECT COUNT(*) AS n FROM {table} WHERE customer_slug = {sql_text(slug)}"  # noqa: S608 - table passed isidentifier() above; the slug is sql_text's hex blob literal
         rows = self.execute(sql)
         if not rows or "n" not in rows[0]:
             raise RuntimeError(f"d1 count on {table} returned no row")
@@ -158,7 +158,7 @@ class ConsoleD1:
     def entity_id(self, slug: str) -> Optional[str]:
         # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query — see sql_text: no parameter binding exists on this CLI path; the interpolated text is a hex blob literal.
         # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query — not SQLAlchemy; the only interpolation is sql_text's fixed-alphabet hex literal.
-        sql = f"SELECT entity_id FROM customer_configs WHERE customer_slug = {sql_text(slug)}"
+        sql = f"SELECT entity_id FROM customer_configs WHERE customer_slug = {sql_text(slug)}"  # noqa: S608 - the slug is sql_text's hex blob literal, which carries no escape sequence
         # See sql_text: wrangler d1 execute has no parameter binding (checked
         # against the installed CLI's own --help), and sql_text emits a hex blob
         # literal, which carries no escape sequence to break out of.
@@ -208,7 +208,7 @@ class ConsoleD1:
         # precisely the untrusted input an injection needs.
         # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
         self.execute(
-            "INSERT INTO cost_anomaly_alerts ("
+            "INSERT INTO cost_anomaly_alerts ("  # noqa: S608 - every value went through sql_text or sql_int above; nothing else reaches the text
             "entity_id, customer_slug, alert_date, driver, source, "
             "daily_cents, rolling_avg_cents, ratio_bps, threshold_bps, "
             "summary, details_json, detected_at"
@@ -229,7 +229,7 @@ class ConsoleD1:
         so no pattern character in a slug can widen it.
         """
         # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
-        self.execute(f"DELETE FROM cost_anomaly_alerts WHERE driver = {sql_text(f'{REHEARSAL_DRIVER_PREFIX}{slug}')}")
+        self.execute(f"DELETE FROM cost_anomaly_alerts WHERE driver = {sql_text(f'{REHEARSAL_DRIVER_PREFIX}{slug}')}")  # noqa: S608 - the driver is sql_text's hex blob literal pinned to REHEARSAL_DRIVER_PREFIX
 
 
 def first_result_set(stdout: str) -> list[dict]:

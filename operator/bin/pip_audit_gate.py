@@ -56,7 +56,7 @@ def audit(requirements: Path) -> list[dict]:
     if exe is None:
         print("pip-audit is not installed", file=sys.stderr)
         raise SystemExit(2)
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: S603 - list argv from shutil.which, no shell; the only variable is the requirements path
         [
             exe,
             "--strict",

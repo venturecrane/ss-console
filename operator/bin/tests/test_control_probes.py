@@ -210,7 +210,7 @@ def test_seat_probe_fires_when_the_driver_output_matches() -> None:
 def test_hold_exits_two_and_findings_exit_one() -> None:
     """The exit-code contract the workflow depends on. A HOLD exiting 0 is the
     exact defect that let the send reconciler scan nothing for weeks."""
-    code = subprocess.run(
+    code = subprocess.run(  # noqa: S603 - test runs the probe script under sys.executable with literal args
         [sys.executable, str(_BIN / "control-probes.py"), "--kind", "boot"],
         capture_output=True,
         text=True,
@@ -220,7 +220,7 @@ def test_hold_exits_two_and_findings_exit_one() -> None:
 
 def test_local_run_is_clean_today() -> None:
     """The suite's own live state: every local probe attempted, no findings."""
-    proc = subprocess.run([sys.executable, str(_BIN / "control-probes.py")], capture_output=True, text=True)
+    proc = subprocess.run([sys.executable, str(_BIN / "control-probes.py")], capture_output=True, text=True)  # noqa: S603 - test runs the probe script under sys.executable with no arguments
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 

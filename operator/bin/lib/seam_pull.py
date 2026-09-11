@@ -117,7 +117,7 @@ class SeamClient:
         if table:
             params["table"] = table
         url = f"{self._base}/runtime/{kind}?{urllib.parse.urlencode(params)}"
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310 - https enforced at SeamClient construction; the path is a module literal
             url,
             headers={
                 "Authorization": f"Bearer {self._key}",
@@ -140,7 +140,7 @@ class SeamClient:
         check to read each Machine's running ``overlay_ref.value``.
         """
         url = f"{self._base}/runtime/config"
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310 - https enforced at SeamClient construction; the path is a module literal
             url,
             headers={
                 "Authorization": f"Bearer {self._key}",
@@ -201,7 +201,7 @@ def _write_audit_snapshot(conn: sqlite3.Connection, rows: list[dict]) -> None:
         "trust_ceiling TEXT, metadata TEXT, prev_hash TEXT, row_hash TEXT)"
     )
     conn.executemany(
-        f"INSERT OR REPLACE INTO audit_log ({cols}) VALUES ({placeholders})",
+        f"INSERT OR REPLACE INTO audit_log ({cols}) VALUES ({placeholders})",  # noqa: S608 - column names are the AUDIT_COLUMNS and CHAIN_LINK_COLUMNS constants; values are bound
         [tuple(row.get(c) for c in snapshot_columns) for row in rows],
     )
     conn.commit()
@@ -223,9 +223,9 @@ def _write_memory_snapshot(conn: sqlite3.Connection, table: str, rows: list[dict
         raise ValueError(f"memory export {table!r} served non-identifier column names: {bad!r}")
     col_defs = ", ".join(f'"{k}"' for k in keys)
     placeholders = ", ".join("?" for _ in keys)
-    conn.execute(f'CREATE TABLE IF NOT EXISTS "{table}" ({col_defs})')  # noqa: S608 - same statement shape as the line above: table from MEMORY_EXPORT_TABLES, values bound — table from MEMORY_EXPORT_TABLES, columns isidentifier-checked above
+    conn.execute(f'CREATE TABLE IF NOT EXISTS "{table}" ({col_defs})')
     conn.executemany(
-        f'INSERT INTO "{table}" ({col_defs}) VALUES ({placeholders})',  # noqa: S608 - same statement shape as the line above: table from MEMORY_EXPORT_TABLES, values bound — same table and column set as the CREATE above; values are bound
+        f'INSERT INTO "{table}" ({col_defs}) VALUES ({placeholders})',  # noqa: S608 - same table and column set as the CREATE above; the values are bound placeholders
         [tuple(row.get(k) for k in keys) for row in rows],
     )
     conn.commit()

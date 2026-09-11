@@ -128,6 +128,14 @@ def _ops(tmp_path: Path, http: FakeHTTP, yaml_text: str = PILOT_YAML) -> AgentMa
     return AgentMailOps(credential, customer, SEAT, opener=http)
 
 
+def test_a_non_https_base_url_is_refused_at_construction(tmp_path: Path) -> None:
+    """urllib follows file:// and ftp://. The transport that carries the send
+    credential refuses every other scheme before it can be handed a request."""
+    customer, credential = _seat(tmp_path)
+    with pytest.raises(ValueError):
+        AgentMailOps(credential, customer, SEAT, base_url="http://api.example", opener=FakeHTTP())
+
+
 # ---------------------------------------------------------------------------
 # The fence — would it have stopped the incident?
 # ---------------------------------------------------------------------------
