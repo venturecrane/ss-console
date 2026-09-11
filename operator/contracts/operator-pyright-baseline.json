@@ -1,8 +1,7 @@
 {
   "_comment": "pyright errors per file at adoption, generated and enforced by bin/pyright-ratchet.py. Do not hand-edit. Regenerate with `pyright --outputjson > r.json; python3 bin/pyright-ratchet.py r.json --update`. A file leaves this list by reaching zero; no count may grow.",
-  "total": 111,
+  "total": 109,
   "files": {
-    "/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/string/templatelib.py": 2,
     "adapter/voice/transform.py": 3,
     "bin/control-probes.py": 5,
     "bin/lib/chain_rehearsal.py": 1,

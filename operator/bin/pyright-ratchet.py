@@ -38,6 +38,11 @@ COMMENT = (
 
 
 def errors_per_file(report: dict, root: Path = OPERATOR) -> dict[str, int]:
+    """Errors per operator-relative file. A diagnostic outside the root is the
+    interpreter's own stdlib (pyright 1.1.406 cannot parse Python 3.14's
+    string/templatelib.py, for one) and is dropped: it is not our code, and
+    its absolute path differs between a laptop and the runner, so it would
+    make the baseline machine-specific (it did, on 2026-09-10)."""
     counts: dict[str, int] = {}
     for d in report.get("generalDiagnostics", []):
         if d.get("severity") != "error":
@@ -46,7 +51,7 @@ def errors_per_file(report: dict, root: Path = OPERATOR) -> dict[str, int]:
         try:
             rel = f.resolve().relative_to(root.resolve()).as_posix()
         except ValueError:
-            rel = f.as_posix()
+            continue
         counts[rel] = counts.get(rel, 0) + 1
     return dict(sorted(counts.items()))
 

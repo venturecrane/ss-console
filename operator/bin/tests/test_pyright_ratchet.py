@@ -35,6 +35,16 @@ def test_counts_errors_only_per_file() -> None:
     assert counts == {"a/b.py": 2, "c.py": 1}
 
 
+def test_diagnostics_outside_the_operator_root_are_not_ours() -> None:
+    """The interpreter's stdlib is analyzed but never baselined: its path is
+    machine-specific and its errors are pyright's, not the tree's."""
+    report = _report({"a.py": 1})
+    report["generalDiagnostics"].append(
+        {"file": "/opt/hostedtoolcache/Python/3.14.7/x64/lib/python3.14/string/templatelib.py", "severity": "error", "message": "x"}
+    )
+    assert pr.errors_per_file(report) == {"a.py": 1}
+
+
 def test_growth_fails_and_improvement_asks_to_regenerate() -> None:
     base = {"a.py": 2, "b.py": 1}
     assert pr.compare(base, {"a.py": 2, "b.py": 1}) == []
