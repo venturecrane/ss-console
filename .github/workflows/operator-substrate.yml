@@ -3,15 +3,15 @@
 # Closes the gap the harness-pivot review flagged: the Python safety-substrate
 # invariants (trust-ceiling enforcement incl. the ADR 0025 exposure rules, the
 # citation/no-fabrication invariants, sticky-stop, isolation) and the adapter
-# tests (audit log, inbound trust boundary, namespace assertion) were NOT run
+# tests (audit log, trust-gate injection, namespace assertion) were NOT run
 # in CI — only locally. This workflow gates them on every PR that touches the
 # substrate, so a trust-gate regression cannot merge green.
 #
 # Two runners, because the suite is intentionally dual-mode:
 #   * run()-style invariants (test_invariant_*.py with a `def run()` +
 #     __main__ that exits non-zero on failure) are executed directly;
-#   * pytest-style tests (adapter/tests, the pytest invariants, the inbound
-#     boundary test) are collected by pytest.
+#   * pytest-style tests (adapter/tests, the pytest invariants) are
+#     collected by pytest.
 
 name: operator-substrate
 

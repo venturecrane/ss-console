@@ -65,7 +65,7 @@ function boundSkillNames(value: unknown): string[] {
  * A bound skill is deployable if its body exists either in the shared repo
  * catalog (`operator/skills/<name>/`, baked into the image) or in the
  * customer-local catalog (`<customer.yaml dir>/skills/<name>/`). Mirrors the
- * two lookup locations in `operator/adapter/resolve_skill_pins.py`.
+ * two lookup locations of the overlay's `bootstrap/translate._resolve_skill_pins`.
  */
 function skillBodyExists(name: string, customerYamlPath: string): boolean {
   const repoSkill = join(REPO_ROOT, 'operator', 'skills', name, 'SKILL.md')

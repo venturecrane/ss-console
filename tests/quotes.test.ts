@@ -1,374 +1,554 @@
-import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync } from 'fs'
+/**
+ * Behavioural tests for quotes: the data layer (src/lib/db/quotes.ts), the
+ * R2 key helpers it stores, the two admin create routes, and the entity
+ * detail loader's new-quote rule (#472).
+ *
+ * Until 2026-09-11 this file matched source text (review 2026-09-10, Testing
+ * 3). Money math, the state machine and its two gates (authored content
+ * before send, a signed artifact before acceptance), the open-quote rule and
+ * the active-quote priority are all asserted on rows in a migrated D1. The
+ * cross-org paths of getQuote, updateQuote and updateQuoteStatus are covered
+ * in tests/db-cross-org.test.ts and not repeated here.
+ */
+
+import { describe, it, expect, beforeEach } from 'vitest'
+import { readFileSync } from 'fs'
 import { resolve } from 'path'
+import type { D1Database } from '@cloudflare/workers-types'
+import {
+  createQuote,
+  getActiveQuotesForEntities,
+  getQuote,
+  hasOpenQuoteForEntity,
+  listQuotes,
+  QUOTE_STATUSES,
+  updateQuote,
+  updateQuoteStatus,
+  VALID_TRANSITIONS,
+  type QuoteStatus,
+} from '../src/lib/db/quotes'
+import { createContact } from '../src/lib/db/contacts'
+import { getSowRevisionSignedKey, getSowRevisionUnsignedKey } from '../src/lib/storage/r2'
+import { loadEntityDetailPage } from '../src/lib/admin/entity-detail-page'
+import { POST as createRoute } from '../src/pages/api/admin/quotes/index'
+import { POST as newQuoteRoute } from '../src/pages/api/admin/entities/[id]/quotes'
+import {
+  adminSession,
+  bindEnv,
+  formRequest,
+  locationOf,
+  locationQuery,
+  migratedDb,
+  routeContext,
+  seedAssessment,
+  seedEntity,
+  seedOrg,
+} from './_stubs/behavioural'
 
-describe('quotes: data access layer', () => {
-  const source = () => readFileSync(resolve('src/lib/db/quotes.ts'), 'utf-8')
+const ORG_A = 'org-a'
+const ORG_B = 'org-b'
+const ENT_A1 = 'ent-a1'
+const ENT_A2 = 'ent-a2'
+const ENT_B1 = 'ent-b1'
+const ASSESS_A1 = 'assess-a1'
+const ASSESS_A2 = 'assess-a2'
+const ASSESS_B1 = 'assess-b1'
 
-  it('quotes.ts exists', () => {
-    expect(existsSync(resolve('src/lib/db/quotes.ts'))).toBe(true)
+const LINE_ITEMS = [
+  { problem: 'intake', description: 'Rebuild the intake form', estimated_hours: 10 },
+  { problem: 'scheduling', description: 'Tidy the dispatch board', estimated_hours: 6 },
+]
+const AUTHORED = {
+  schedule: [{ label: 'Week 1', body: 'We shadow the desk.' }],
+  deliverables: [{ title: 'Intake form', body: 'One form, one queue.' }],
+}
+
+async function seedAll(db: D1Database) {
+  await seedOrg(db, ORG_A)
+  await seedOrg(db, ORG_B)
+  await seedEntity(db, { id: ENT_A1, orgId: ORG_A, stage: 'prospect' })
+  await seedEntity(db, { id: ENT_A2, orgId: ORG_A, stage: 'prospect' })
+  await seedEntity(db, { id: ENT_B1, orgId: ORG_B, stage: 'prospect' })
+  await seedAssessment(db, { id: ASSESS_A1, orgId: ORG_A, entityId: ENT_A1 })
+  await seedAssessment(db, { id: ASSESS_A2, orgId: ORG_A, entityId: ENT_A2 })
+  await seedAssessment(db, { id: ASSESS_B1, orgId: ORG_B, entityId: ENT_B1 })
+}
+
+const draftA1 = (db: D1Database, extra: Partial<Parameters<typeof createQuote>[2]> = {}) =>
+  createQuote(db, ORG_A, {
+    entityId: ENT_A1,
+    assessmentId: ASSESS_A1,
+    lineItems: LINE_ITEMS,
+    rate: 175,
+    ...extra,
   })
 
-  it('exports listQuotes function', () => {
-    expect(source()).toContain('export async function listQuotes')
+async function setStatus(db: D1Database, id: string, status: string) {
+  await db.prepare('UPDATE quotes SET status = ? WHERE id = ?').bind(status, id).run()
+}
+
+async function stampUpdated(db: D1Database, id: string, updatedAt: string) {
+  await db.prepare('UPDATE quotes SET updated_at = ? WHERE id = ?').bind(updatedAt, id).run()
+}
+
+/**
+ * The acceptance guard reads signature_requests for a completed row with a
+ * persisted signed artifact. FKs are enforced, so the whole chain is seeded:
+ * contact -> sow_revision -> send_authorization -> signature_request.
+ */
+async function seedCompletedSignature(db: D1Database, orgId: string, quoteId: string) {
+  const contact = await createContact(db, orgId, ENT_A1, { name: 'Signer', email: 's@example.com' })
+  await db
+    .prepare(
+      `INSERT INTO sow_revisions (id, org_id, quote_id, quote_version, sow_number, status, unsigned_storage_key, checksum_sha256, rendered_by, rendered_at)
+       VALUES ('rev-1', ?, ?, 1, 'SOW-202609-001', 'signed', 'k/unsigned.pdf', 'abc', 'admin', '2026-09-01T00:00:00Z')`
+    )
+    .bind(orgId, quoteId)
+    .run()
+  await db
+    .prepare(
+      `INSERT INTO sow_send_authorizations (id, org_id, quote_id, sow_revision_id, signer_contact_id, signer_snapshot_json, checksum_sha256, authorized_by, authorized_at)
+       VALUES ('auth-1', ?, ?, 'rev-1', ?, '{}', 'abc', 'admin', '2026-09-01T00:00:00Z')`
+    )
+    .bind(orgId, quoteId, contact.id)
+    .run()
+  await db
+    .prepare(
+      `INSERT INTO signature_requests (id, org_id, quote_id, sow_revision_id, send_authorization_id, provider, provider_request_id, status, signer_snapshot_json, provider_payload_json, signed_storage_key)
+       VALUES ('sig-1', ?, ?, 'rev-1', 'auth-1', 'signwell', 'sw-1', 'completed', '{}', '{}', 'k/signed.pdf')`
+    )
+    .bind(orgId, quoteId)
+    .run()
+}
+
+describe('quotes data layer against real D1', () => {
+  let db: D1Database
+
+  beforeEach(async () => {
+    db = await migratedDb()
+    await seedAll(db)
   })
 
-  it('exports getQuote function', () => {
-    expect(source()).toContain('export async function getQuote')
+  describe('createQuote', () => {
+    it('freezes the rate and computes hours, price, and the default 50% deposit (Decisions #14, #16)', async () => {
+      const quote = await draftA1(db)
+      expect(quote).toMatchObject({
+        org_id: ORG_A,
+        entity_id: ENT_A1,
+        assessment_id: ASSESS_A1,
+        status: 'draft',
+        version: 1,
+        rate: 175,
+        total_hours: 16,
+        total_price: 2800,
+        deposit_pct: 0.5,
+        deposit_amount: 1400,
+        parent_quote_id: null,
+        sent_at: null,
+        expires_at: null,
+        accepted_at: null,
+      })
+      expect(JSON.parse(quote.line_items)).toEqual(LINE_ITEMS)
+      expect(await getQuote(db, ORG_A, quote.id)).toEqual(quote)
+    })
+
+    it('an explicit deposit percentage is honoured', async () => {
+      const quote = await draftA1(db, { depositPct: 0.25 })
+      expect(quote.deposit_amount).toBe(700)
+    })
+
+    it('a repeat quote links its parent and leaves the parent status alone (#472)', async () => {
+      const parent = await draftA1(db)
+      await setStatus(db, parent.id, 'declined')
+      const child = await draftA1(db, { parentQuoteId: parent.id })
+      expect(child.parent_quote_id).toBe(parent.id)
+      expect((await getQuote(db, ORG_A, parent.id))?.status).toBe('declined')
+    })
   })
 
-  it('exports createQuote function', () => {
-    expect(source()).toContain('export async function createQuote')
+  describe('listQuotes', () => {
+    it("lists the org's quotes most recently updated first, with an optional entity filter", async () => {
+      const older = await draftA1(db)
+      const newer = await createQuote(db, ORG_A, {
+        entityId: ENT_A2,
+        assessmentId: ASSESS_A2,
+        lineItems: [],
+        rate: 175,
+      })
+      await createQuote(db, ORG_B, {
+        entityId: ENT_B1,
+        assessmentId: ASSESS_B1,
+        lineItems: [],
+        rate: 175,
+      })
+      await stampUpdated(db, older.id, '2026-01-01T00:00:00.000Z')
+      await stampUpdated(db, newer.id, '2026-02-01T00:00:00.000Z')
+
+      expect((await listQuotes(db, ORG_A)).map((q) => q.id)).toEqual([newer.id, older.id])
+      expect((await listQuotes(db, ORG_A, ENT_A1)).map((q) => q.id)).toEqual([older.id])
+      expect(await listQuotes(db, ORG_A, ENT_B1)).toEqual([])
+    })
   })
 
-  it('exports updateQuote function', () => {
-    expect(source()).toContain('export async function updateQuote')
+  describe('updateQuote', () => {
+    it('a pricing change recalculates the totals and bumps the version', async () => {
+      const quote = await draftA1(db)
+      const repriced = await updateQuote(db, ORG_A, quote.id, {
+        lineItems: [{ problem: 'intake', description: 'Form only', estimated_hours: 4 }],
+        rate: 200,
+        depositPct: 0.4,
+      })
+      expect(repriced).toMatchObject({
+        version: 2,
+        total_hours: 4,
+        rate: 200,
+        total_price: 800,
+        deposit_pct: 0.4,
+        deposit_amount: 320,
+      })
+    })
+
+    it('a line-item-only change reprices at the frozen rate', async () => {
+      const quote = await draftA1(db)
+      const updated = await updateQuote(db, ORG_A, quote.id, {
+        lineItems: [{ problem: 'intake', description: 'x', estimated_hours: 2 }],
+      })
+      expect(updated).toMatchObject({ total_hours: 2, rate: 175, total_price: 350 })
+    })
+
+    it('authored content is stored as JSON; an explicit null clears it; no fields leaves the version alone', async () => {
+      const quote = await draftA1(db)
+      const authored = await updateQuote(db, ORG_A, quote.id, {
+        ...AUTHORED,
+        engagementOverview: 'We rebuild the intake path together.',
+      })
+      expect(JSON.parse(authored!.schedule!)).toEqual(AUTHORED.schedule)
+      expect(JSON.parse(authored!.deliverables!)).toEqual(AUTHORED.deliverables)
+      expect(authored?.engagement_overview).toBe('We rebuild the intake path together.')
+      expect(authored?.version).toBe(2)
+
+      const cleared = await updateQuote(db, ORG_A, quote.id, { engagementOverview: null })
+      expect(cleared?.engagement_overview).toBeNull()
+      expect(await updateQuote(db, ORG_A, quote.id, {})).toEqual(cleared)
+    })
   })
 
-  it('exports updateQuoteStatus function', () => {
-    expect(source()).toContain('export async function updateQuoteStatus')
+  describe('updateQuoteStatus', () => {
+    it('the vocabulary and the state machine', () => {
+      expect(QUOTE_STATUSES.map((s) => s.value)).toEqual([
+        'draft',
+        'sent',
+        'accepted',
+        'declined',
+        'expired',
+        'superseded',
+      ])
+      expect(VALID_TRANSITIONS).toEqual({
+        draft: ['sent', 'superseded'],
+        sent: ['accepted', 'declined', 'expired', 'superseded'],
+        accepted: [],
+        declined: [],
+        expired: [],
+        superseded: [],
+      })
+    })
+
+    it('draft -> sent is refused until the schedule and deliverables are authored (#377)', async () => {
+      const quote = await draftA1(db)
+      await expect(updateQuoteStatus(db, ORG_A, quote.id, 'sent')).rejects.toThrow(
+        'missing authored client-facing content (schedule, deliverables)'
+      )
+      expect((await getQuote(db, ORG_A, quote.id))?.status).toBe('draft')
+    })
+
+    it('draft -> sent stamps sent_at and a five-day expires_at (Decision #18)', async () => {
+      const quote = await draftA1(db)
+      await updateQuote(db, ORG_A, quote.id, AUTHORED)
+      const before = Date.now()
+      const sent = await updateQuoteStatus(db, ORG_A, quote.id, 'sent')
+      expect(sent?.status).toBe('sent')
+      const sentAt = Date.parse(sent!.sent_at!)
+      expect(sentAt).toBeGreaterThanOrEqual(before - 1000)
+      expect(Date.parse(sent!.expires_at!) - sentAt).toBe(5 * 24 * 60 * 60 * 1000)
+    })
+
+    it('sent -> accepted is refused without a completed signature request carrying a signed artifact', async () => {
+      const quote = await draftA1(db)
+      await setStatus(db, quote.id, 'sent')
+      await expect(updateQuoteStatus(db, ORG_A, quote.id, 'accepted')).rejects.toThrow(
+        'completed signed signature request'
+      )
+      expect((await getQuote(db, ORG_A, quote.id))?.status).toBe('sent')
+    })
+
+    it('sent -> accepted stamps accepted_at once the signed artifact exists', async () => {
+      const quote = await draftA1(db)
+      await setStatus(db, quote.id, 'sent')
+      await seedCompletedSignature(db, ORG_A, quote.id)
+      const before = Date.now()
+      const accepted = await updateQuoteStatus(db, ORG_A, quote.id, 'accepted')
+      expect(accepted?.status).toBe('accepted')
+      expect(Date.parse(accepted!.accepted_at!)).toBeGreaterThanOrEqual(before - 1000)
+    })
+
+    it('refuses a move the table does not allow, naming both states', async () => {
+      const quote = await draftA1(db)
+      await expect(updateQuoteStatus(db, ORG_A, quote.id, 'accepted')).rejects.toThrow(
+        'Invalid status transition: draft -> accepted'
+      )
+    })
+
+    it('accepted, declined, expired and superseded are terminal', async () => {
+      for (const terminal of ['accepted', 'declined', 'expired', 'superseded'] as const) {
+        const quote = await draftA1(db)
+        await setStatus(db, quote.id, terminal)
+        for (const target of Object.keys(VALID_TRANSITIONS) as QuoteStatus[]) {
+          await expect(updateQuoteStatus(db, ORG_A, quote.id, target)).rejects.toThrow(
+            'none (terminal state)'
+          )
+        }
+      }
+    })
   })
 
-  it('uses parameterized queries (no string interpolation in SQL)', () => {
-    const code = source()
-    expect(code).toContain('.bind(')
-    // Should not use template literals in SQL strings
-    expect(code).not.toMatch(/prepare\(`[^`]*\$\{/)
+  describe('hasOpenQuoteForEntity (#472)', () => {
+    it('is true while a draft or sent quote exists, false once every quote is terminal, and org-scoped', async () => {
+      expect(await hasOpenQuoteForEntity(db, ORG_A, ENT_A1)).toBe(false)
+      const quote = await draftA1(db)
+      expect(await hasOpenQuoteForEntity(db, ORG_A, ENT_A1)).toBe(true)
+      await setStatus(db, quote.id, 'sent')
+      expect(await hasOpenQuoteForEntity(db, ORG_A, ENT_A1)).toBe(true)
+      for (const terminal of ['accepted', 'declined', 'expired', 'superseded']) {
+        await setStatus(db, quote.id, terminal)
+        expect(await hasOpenQuoteForEntity(db, ORG_A, ENT_A1), terminal).toBe(false)
+      }
+      await setStatus(db, quote.id, 'draft')
+      expect(await hasOpenQuoteForEntity(db, ORG_B, ENT_A1)).toBe(false)
+    })
   })
 
-  it('generates UUIDs for primary keys', () => {
-    expect(source()).toContain('crypto.randomUUID()')
-  })
+  describe('getActiveQuotesForEntities', () => {
+    it('returns the sent quote over accepted over draft, ignores terminal-and-useless statuses, and is org-scoped', async () => {
+      expect((await getActiveQuotesForEntities(db, ORG_A, [])).size).toBe(0)
 
-  it('scopes all queries to org_id', () => {
-    const code = source()
-    expect(code).toContain("'org_id = ?'")
-    expect(code).toContain('org_id = ?')
-  })
+      const draft = await draftA1(db)
+      const accepted = await draftA1(db)
+      const sent = await draftA1(db)
+      const declined = await draftA1(db)
+      await setStatus(db, accepted.id, 'accepted')
+      await setStatus(db, sent.id, 'sent')
+      await setStatus(db, declined.id, 'declined')
+      const onlyDeclined = await createQuote(db, ORG_A, {
+        entityId: ENT_A2,
+        assessmentId: ASSESS_A2,
+        lineItems: [],
+        rate: 175,
+      })
+      await setStatus(db, onlyDeclined.id, 'expired')
+      await createQuote(db, ORG_B, {
+        entityId: ENT_B1,
+        assessmentId: ASSESS_B1,
+        lineItems: [],
+        rate: 175,
+      })
 
-  it('supports optional entity_id filter in listQuotes', () => {
-    const code = source()
-    expect(code).toContain("'entity_id = ?'")
-  })
+      const map = await getActiveQuotesForEntities(db, ORG_A, [ENT_A1, ENT_A2, ENT_B1])
+      expect(map.get(ENT_A1)?.id).toBe(sent.id)
+      expect(map.has(ENT_A2)).toBe(false)
+      expect(map.has(ENT_B1)).toBe(false)
 
-  it('defines all valid quote statuses', () => {
-    const code = source()
-    expect(code).toContain("'draft'")
-    expect(code).toContain("'sent'")
-    expect(code).toContain("'accepted'")
-    expect(code).toContain("'declined'")
-    expect(code).toContain("'expired'")
-    expect(code).toContain("'superseded'")
-  })
-
-  it('exports QUOTE_STATUSES constant', () => {
-    expect(source()).toContain('export const QUOTE_STATUSES')
-  })
-
-  it('exports VALID_TRANSITIONS for status state machine', () => {
-    expect(source()).toContain('export const VALID_TRANSITIONS')
-  })
-
-  it('enforces valid status transitions', () => {
-    const code = source()
-    expect(code).toContain('VALID_TRANSITIONS')
-    expect(code).toContain('Invalid status transition')
-  })
-
-  it('defines valid transitions: draft -> sent | superseded', () => {
-    const code = source()
-    expect(code).toContain("draft: ['sent', 'superseded']")
-  })
-
-  it('defines valid transitions: sent -> accepted | declined | expired | superseded', () => {
-    const code = source()
-    expect(code).toContain("sent: ['accepted', 'declined', 'expired', 'superseded']")
-  })
-
-  it('accepted, declined, expired, and superseded are terminal states', () => {
-    const code = source()
-    expect(code).toContain('accepted: []')
-    expect(code).toContain('declined: []')
-    expect(code).toContain('expired: []')
-    expect(code).toContain('superseded: []')
-  })
-
-  it('calculates total_hours as sum of line item hours', () => {
-    const code = source()
-    expect(code).toContain('totalHours')
-    expect(code).toContain('estimated_hours')
-    expect(code).toContain('reduce')
-  })
-
-  it('calculates total_price as total_hours * rate', () => {
-    const code = source()
-    expect(code).toContain('totalHours * data.rate')
-    // Also check recalculation path
-    expect(code).toContain('totalHours * effectiveRate')
-  })
-
-  it('calculates deposit_amount as total_price * deposit_pct', () => {
-    const code = source()
-    expect(code).toContain('totalPrice * depositPct')
-  })
-
-  it('sets sent_at and expires_at when transitioning to sent (5-day deadline)', () => {
-    const code = source()
-    expect(code).toContain("newStatus === 'sent'")
-    expect(code).toContain('sent_at')
-    expect(code).toContain('expires_at')
-    expect(code).toContain('5 * 24 * 60 * 60 * 1000')
-  })
-
-  it('sets accepted_at when transitioning to accepted', () => {
-    const code = source()
-    expect(code).toContain("newStatus === 'accepted'")
-    expect(code).toContain('accepted_at')
-  })
-
-  it('stores line items as JSON string', () => {
-    const code = source()
-    expect(code).toContain('JSON.stringify(data.lineItems)')
-  })
-
-  it('defaults deposit_pct to 0.5 (50%)', () => {
-    const code = source()
-    expect(code).toContain('data.depositPct ?? 0.5')
-  })
-
-  it('exports LineItem interface', () => {
-    const code = source()
-    expect(code).toContain('export interface LineItem')
-    expect(code).toContain('problem: string')
-    expect(code).toContain('description: string')
-    expect(code).toContain('estimated_hours: number')
-  })
-
-  it('exports Quote interface', () => {
-    expect(source()).toContain('export interface Quote')
-  })
-
-  it('exports QuoteStatus type', () => {
-    expect(source()).toContain('export type QuoteStatus')
-  })
-
-  it('documents business rules in comments', () => {
-    const code = source()
-    expect(code).toContain('Decision #16')
-    expect(code).toContain('Decision #18')
-    expect(code).toContain('Decision #14')
-  })
-
-  it('recalculates totals when line items change on update', () => {
-    const code = source()
-    // updateQuote should recalculate when lineItems are provided
-    expect(code).toContain('effectiveItems')
-    expect(code).toContain('effectiveRate')
-  })
-
-  it('exports getActiveQuotesForEntities batch helper', () => {
-    expect(source()).toContain('export async function getActiveQuotesForEntities')
-  })
-
-  it('getActiveQuotesForEntities returns empty for empty id list', () => {
-    const code = source()
-    // Short-circuit guard: D1 rejects `IN ()`, so we must bail early.
-    expect(code).toMatch(/entityIds\.length === 0[\s\S]+?return result/)
-  })
-
-  it('getActiveQuotesForEntities prioritizes sent > accepted > draft', () => {
-    const code = source()
-    expect(code).toContain("WHEN 'sent'     THEN 0")
-    expect(code).toContain("WHEN 'accepted' THEN 1")
-    expect(code).toContain("WHEN 'draft'    THEN 2")
-  })
-
-  it('getActiveQuotesForEntities ignores terminal statuses (declined/expired/superseded)', () => {
-    const code = source()
-    // Only the three "active" statuses should appear in the SQL filter.
-    expect(code).toContain("q.status IN ('sent', 'accepted', 'draft')")
-  })
-
-  it('getActiveQuotesForEntities is scoped to org_id', () => {
-    const code = source()
-    // The new query must bind org_id — prevent cross-tenant leakage (#399 class).
-    expect(code).toMatch(/getActiveQuotesForEntities[\s\S]+?q\.org_id = \?/)
-  })
-})
-
-describe('quotes: R2 storage helpers', () => {
-  const source = () => readFileSync(resolve('src/lib/storage/r2.ts'), 'utf-8')
-
-  it('r2.ts exists', () => {
-    expect(existsSync(resolve('src/lib/storage/r2.ts'))).toBe(true)
-  })
-
-  it('exports revisioned SOW key helpers', () => {
-    const code = source()
-    expect(code).toContain('export function getSowRevisionUnsignedKey')
-    expect(code).toContain('export function getSowRevisionSignedKey')
-  })
-
-  it('exports getPdf function', () => {
-    expect(source()).toContain('export async function getPdf')
-  })
-
-  it('uses revisioned org-scoped storage keys for SOW artifacts', () => {
-    const code = source()
-    expect(code).toContain('orgs/${orgId}/quotes/${quoteId}/sow/${revisionId}/unsigned.pdf')
-    expect(code).toContain('orgs/${orgId}/quotes/${quoteId}/sow/${revisionId}/signed.pdf')
-  })
-
-  it('stores content type as application/pdf', () => {
-    const code = source()
-    expect(code).toContain("'application/pdf'")
-  })
-})
-
-describe('quotes: API routes', () => {
-  it('create endpoint exists at src/pages/api/admin/quotes/index.ts', () => {
-    expect(existsSync(resolve('src/pages/api/admin/quotes/index.ts'))).toBe(true)
-  })
-
-  it('update endpoint exists at src/pages/api/admin/quotes/[id].ts', () => {
-    expect(existsSync(resolve('src/pages/api/admin/quotes/[id].ts'))).toBe(true)
-  })
-
-  it('create endpoint validates required fields', () => {
-    const code = readFileSync(resolve('src/pages/api/admin/quotes/index.ts'), 'utf-8')
-    expect(code).toContain('entity_id')
-    expect(code).toContain('assessment_id')
-    expect(code).toContain('line_items')
-    expect(code).toContain('rate')
-  })
-
-  it('create endpoint calls createQuote', () => {
-    const code = readFileSync(resolve('src/pages/api/admin/quotes/index.ts'), 'utf-8')
-    expect(code).toContain('createQuote')
-  })
-
-  it('create endpoint reads form data', () => {
-    const code = readFileSync(resolve('src/pages/api/admin/quotes/index.ts'), 'utf-8')
-    expect(code).toContain('request.formData()')
-  })
-
-  it('update endpoint handles generate-pdf action', () => {
-    const code = readFileSync(resolve('src/pages/api/admin/quotes/[id].ts'), 'utf-8')
-    expect(code).toContain('generate-pdf')
-    expect(code).toContain('createSOWRevisionForQuote')
-  })
-
-  it('update endpoint handles update action', () => {
-    const code = readFileSync(resolve('src/pages/api/admin/quotes/[id].ts'), 'utf-8')
-    expect(code).toContain('updateQuote')
-  })
-
-  it('endpoints verify admin session', () => {
-    const createCode = readFileSync(resolve('src/pages/api/admin/quotes/index.ts'), 'utf-8')
-    const updateCode = readFileSync(resolve('src/pages/api/admin/quotes/[id].ts'), 'utf-8')
-    expect(createCode).toContain('requireAdminSession')
-    expect(updateCode).toContain('requireAdminSession')
-  })
-})
-
-describe('quotes: repeat-quote flow (#472)', () => {
-  const dalSource = () => readFileSync(resolve('src/lib/db/quotes.ts'), 'utf-8')
-  const apiSource = () =>
-    readFileSync(resolve('src/pages/api/admin/entities/[id]/quotes.ts'), 'utf-8')
-  // After PR #868-style extraction (max-lines compliance), the entity-detail
-  // page JSX was split into siblings under src/components/admin/. Read the
-  // page + extracted siblings as a single source for pattern assertions.
-  const entityPageSource = () =>
-    [
-      readFileSync(resolve('src/pages/admin/entities/[id].astro'), 'utf-8'),
-      readFileSync(resolve('src/components/admin/EntityStageActions.astro'), 'utf-8'),
-    ].join('\n')
-  const entityLoaderSource = () =>
-    readFileSync(resolve('src/lib/admin/entity-detail-page.ts'), 'utf-8')
-
-  it('exports hasOpenQuoteForEntity helper', () => {
-    expect(dalSource()).toContain('export async function hasOpenQuoteForEntity')
-  })
-
-  it('OPEN_QUOTE_STATUSES covers draft and sent', () => {
-    const code = dalSource()
-    expect(code).toContain('OPEN_QUOTE_STATUSES')
-    expect(code).toMatch(/OPEN_QUOTE_STATUSES[^=]*=\s*\[[^\]]*'draft'[^\]]*'sent'/)
-  })
-
-  it('createQuote accepts optional parentQuoteId', () => {
-    const code = dalSource()
-    expect(code).toContain('parentQuoteId?: string | null')
-    expect(code).toContain('parent_quote_id')
-  })
-
-  it('createQuote does not mutate the parent quote status', () => {
-    // Supersede is an explicit admin action, not a side effect of create.
-    const code = dalSource()
-    // No UPDATE ... SET status = 'superseded' inside createQuote body.
-    const createFn = code.slice(code.indexOf('export async function createQuote'))
-    const endIdx = createFn.indexOf('export async function updateQuote')
-    const body = createFn.slice(0, endIdx)
-    expect(body).not.toMatch(/UPDATE\s+quotes[\s\S]*superseded/i)
-  })
-
-  it('new-quote API endpoint exists', () => {
-    expect(existsSync(resolve('src/pages/api/admin/entities/[id]/quotes.ts'))).toBe(true)
-  })
-
-  it('new-quote endpoint requires admin session', () => {
-    expect(apiSource()).toContain('requireAdminSession')
-  })
-
-  it('new-quote endpoint gates on stage (signal through proposing)', () => {
-    const code = apiSource()
-    expect(code).toContain("'signal'")
-    expect(code).toContain("'prospect'")
-    expect(code).toContain("'meetings'")
-    expect(code).toContain("'proposing'")
-  })
-
-  it('new-quote endpoint rejects when an open quote exists', () => {
-    expect(apiSource()).toContain('hasOpenQuoteForEntity')
-  })
-
-  it('new-quote endpoint reuses the most recent assessment', () => {
-    const code = apiSource()
-    expect(code).toContain('listAssessments')
-    // Most-recent comes from listAssessments order; first element.
-    expect(code).toContain('assessments[0]')
-  })
-
-  it('new-quote endpoint creates an empty draft shell', () => {
-    const code = apiSource()
-    expect(code).toContain('createQuote')
-    expect(code).toContain('lineItems: []')
-  })
-
-  it('new-quote endpoint accepts optional parent_quote_id without auto-superseding', () => {
-    const code = apiSource()
-    expect(code).toContain('parent_quote_id')
-    expect(code).toContain('parentQuoteId')
-    // Parent status mutation is NOT part of this endpoint.
-    expect(code).not.toContain("'superseded'")
-  })
-
-  it('entity detail loader computes showNewQuoteButton with correct preconditions', () => {
-    const code = entityLoaderSource()
-    expect(code).toContain('showNewQuoteButton')
-    expect(code).toContain('hasOpenQuoteForEntity')
-    expect(code).toContain("['signal', 'prospect', 'meetings', 'proposing'].includes(entity.stage)")
-    expect(code).toContain("'proposing'")
-  })
-
-  it('entity detail page renders button behind showNewQuoteButton guard', () => {
-    const code = entityPageSource()
-    // Button is inside a conditional block driven by the computed guard.
-    expect(code).toMatch(/showNewQuoteButton\s*&&/)
-    expect(code).toContain('New quote')
+      await setStatus(db, sent.id, 'superseded')
+      expect((await getActiveQuotesForEntities(db, ORG_A, [ENT_A1])).get(ENT_A1)?.id).toBe(
+        accepted.id
+      )
+      await setStatus(db, accepted.id, 'declined')
+      expect((await getActiveQuotesForEntities(db, ORG_A, [ENT_A1])).get(ENT_A1)?.id).toBe(draft.id)
+    })
   })
 })
 
-// 'quotes: email template' describe removed 2026-06-12: it asserted source
-// strings of quoteSentEmailHtml, a template with zero production callers
-// (test-only zombie — code review finding). The function was deleted.
+describe('quotes: SOW artifact keys are org-scoped and revisioned', () => {
+  it('unsigned and signed artifacts of one revision sit side by side under the org', () => {
+    expect(getSowRevisionUnsignedKey('org-a', 'q-1', 'rev-1')).toBe(
+      'orgs/org-a/quotes/q-1/sow/rev-1/unsigned.pdf'
+    )
+    expect(getSowRevisionSignedKey('org-a', 'q-1', 'rev-1')).toBe(
+      'orgs/org-a/quotes/q-1/sow/rev-1/signed.pdf'
+    )
+  })
+})
+
+describe('POST /api/admin/quotes', () => {
+  let db: D1Database
+
+  const call = (
+    fields: Record<string, string>,
+    session: ReturnType<typeof adminSession> | null = adminSession(ORG_A)
+  ) =>
+    createRoute(
+      routeContext({
+        request: formRequest('http://test.local/api/admin/quotes', fields),
+        session,
+      }) as unknown as Parameters<typeof createRoute>[0]
+    )
+
+  const valid = {
+    entity_id: ENT_A1,
+    assessment_id: ASSESS_A1,
+    line_items: JSON.stringify(LINE_ITEMS),
+    rate: '175',
+  }
+
+  beforeEach(async () => {
+    db = await migratedDb()
+    await seedAll(db)
+    bindEnv({ DB: db })
+  })
+
+  it('answers 401 with no admin session and writes nothing', async () => {
+    expect((await call(valid, null)).status).toBe(401)
+    expect(await listQuotes(db, ORG_A)).toEqual([])
+  })
+
+  it('names what is wrong: missing fields, unparseable line items, a non-positive rate', async () => {
+    expect(locationQuery(await call({ ...valid, rate: '' })).get('error')).toBe('missing')
+    expect(locationQuery(await call({ ...valid, line_items: 'not json' })).get('error')).toBe(
+      'invalid_line_items'
+    )
+    expect(locationQuery(await call({ ...valid, line_items: '[]' })).get('error')).toBe(
+      'invalid_line_items'
+    )
+    expect(locationQuery(await call({ ...valid, rate: '0' })).get('error')).toBe('invalid_rate')
+    expect(await listQuotes(db, ORG_A)).toEqual([])
+  })
+
+  it('creates the draft with the computed totals and lands on the quote builder', async () => {
+    const res = await call({ ...valid, deposit_pct: '0.3' })
+    const [quote] = await listQuotes(db, ORG_A)
+    expect(locationOf(res)).toBe(`/admin/entities/${ENT_A1}/quotes/${quote.id}?saved=1`)
+    expect(quote).toMatchObject({
+      status: 'draft',
+      total_hours: 16,
+      total_price: 2800,
+      deposit_pct: 0.3,
+      deposit_amount: 840,
+    })
+  })
+})
+
+describe('POST /api/admin/entities/[id]/quotes (repeat quote, #472)', () => {
+  let db: D1Database
+
+  const call = (
+    entityId: string,
+    fields: Record<string, string> = {},
+    session: ReturnType<typeof adminSession> | null = adminSession(ORG_A)
+  ) =>
+    newQuoteRoute(
+      routeContext({
+        request: formRequest(`http://test.local/api/admin/entities/${entityId}/quotes`, fields),
+        params: { id: entityId },
+        session,
+      }) as unknown as Parameters<typeof newQuoteRoute>[0]
+    )
+
+  beforeEach(async () => {
+    db = await migratedDb()
+    await seedAll(db)
+    bindEnv({ DB: db })
+  })
+
+  it('answers 401 with no session; an entity outside the org is not_found', async () => {
+    expect((await call(ENT_A1, {}, null)).status).toBe(401)
+    expect(locationOf(await call(ENT_B1))).toBe('/admin/entities?error=not_found')
+    expect(await listQuotes(db, ORG_A)).toEqual([])
+  })
+
+  it('refuses an entity past proposing, an entity with an open quote, and an entity with no assessment', async () => {
+    await db.prepare("UPDATE entities SET stage = 'engaged' WHERE id = ?").bind(ENT_A1).run()
+    expect(locationQuery(await call(ENT_A1)).get('error')).toContain('from this stage')
+
+    await db.prepare("UPDATE entities SET stage = 'proposing' WHERE id = ?").bind(ENT_A1).run()
+    await draftA1(db)
+    expect(locationQuery(await call(ENT_A1)).get('error')).toContain('still active')
+
+    await seedEntity(db, { id: 'ent-a3', orgId: ORG_A, stage: 'prospect' })
+    expect(locationQuery(await call('ent-a3')).get('error')).toContain('no assessment on file')
+    expect(await listQuotes(db, ORG_A)).toHaveLength(1)
+  })
+
+  it('creates an empty draft shell at the launch rate on the latest assessment, linked to a valid parent only', async () => {
+    const parent = await draftA1(db)
+    await setStatus(db, parent.id, 'declined')
+    const other = await createQuote(db, ORG_A, {
+      entityId: ENT_A2,
+      assessmentId: ASSESS_A2,
+      lineItems: [],
+      rate: 175,
+    })
+
+    const wrongParent = await call(ENT_A1, { parent_quote_id: other.id })
+    const [shell] = (await listQuotes(db, ORG_A, ENT_A1)).filter((q) => q.status === 'draft')
+    expect(locationOf(wrongParent)).toBe(`/admin/entities/${ENT_A1}/quotes/${shell.id}?saved=1`)
+    expect(shell).toMatchObject({
+      status: 'draft',
+      rate: 175,
+      total_hours: 0,
+      total_price: 0,
+      assessment_id: ASSESS_A1,
+      parent_quote_id: null,
+      schedule: null,
+      deliverables: null,
+      engagement_overview: null,
+    })
+    expect(JSON.parse(shell.line_items)).toEqual([])
+
+    await setStatus(db, shell.id, 'superseded')
+    await call(ENT_A1, { parent_quote_id: parent.id })
+    const linked = (await listQuotes(db, ORG_A, ENT_A1)).find((q) => q.status === 'draft')
+    expect(linked?.parent_quote_id).toBe(parent.id)
+    expect((await getQuote(db, ORG_A, parent.id))?.status).toBe('declined')
+  })
+})
+
+describe('entity detail: the new-quote action (#472)', () => {
+  let db: D1Database
+
+  const load = (entityId: string) =>
+    loadEntityDetailPage({
+      db,
+      orgId: ORG_A,
+      entityId,
+      url: new URL(`http://test.local/admin/entities/${entityId}`),
+    })
+
+  beforeEach(async () => {
+    db = await migratedDb()
+    await seedAll(db)
+    await db
+      .prepare(
+        "INSERT INTO meetings (id, org_id, entity_id, status) VALUES ('mtg-1', ?, ?, 'completed')"
+      )
+      .bind(ORG_A, ENT_A1)
+      .run()
+  })
+
+  it('shows for an entity at proposing or earlier with a meeting on file and no open quote', async () => {
+    expect((await load(ENT_A1)).showNewQuoteButton).toBe(true)
+  })
+
+  it('hides once a draft or sent quote is open, and past the proposing stage', async () => {
+    const quote = await draftA1(db)
+    expect((await load(ENT_A1)).showNewQuoteButton).toBe(false)
+    await setStatus(db, quote.id, 'declined')
+    expect((await load(ENT_A1)).showNewQuoteButton).toBe(true)
+    await db.prepare("UPDATE entities SET stage = 'engaged' WHERE id = ?").bind(ENT_A1).run()
+    expect((await load(ENT_A1)).showNewQuoteButton).toBe(false)
+  })
+
+  it('the page renders the action only behind that flag (drift guard on an Astro component)', () => {
+    const actions = readFileSync(resolve('src/components/admin/EntityStageActions.astro'), 'utf-8')
+    const page = readFileSync(resolve('src/pages/admin/entities/[id].astro'), 'utf-8')
+    expect(`${page}\n${actions}`).toMatch(/showNewQuoteButton\s*&&/)
+  })
+})

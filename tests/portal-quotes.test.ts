@@ -1,440 +1,292 @@
-import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync } from 'fs'
+/**
+ * Behavioural tests for the portal's proposal surface: the portal quote
+ * reads (src/lib/db/quotes.ts), the session resolver
+ * (src/lib/portal/session.ts), the detail reader
+ * (src/lib/portal/quote-detail.ts), and the SOW download route.
+ *
+ * Until 2026-09-11 this file matched source text (review 2026-09-10, Testing
+ * 3). The cross-org paths of the portal reads are covered in
+ * tests/portal/tenant-scoping.cross-org.test.ts; the Clerk bridge behind the
+ * session resolver in tests/clerk-bridge.test.ts; the portal API auth gate in
+ * tests/middleware-behavior.test.ts. The Astro pages have no handler to
+ * invoke; the policy guards over them are at the end, each with its reason.
+ */
+
+import { describe, it, expect, beforeEach } from 'vitest'
+import { readFileSync } from 'fs'
 import { resolve } from 'path'
+import type { D1Database } from '@cloudflare/workers-types'
+import { createQuote, getQuoteForEntity, listQuotesForEntity } from '../src/lib/db/quotes'
+import { getPortalClient } from '../src/lib/portal/session'
+import { loadPortalQuoteDetail } from '../src/lib/portal/quote-detail'
+import { GET } from '../src/pages/api/portal/quotes/[id]/sow'
+import {
+  bindEnv,
+  memoryBucket,
+  migratedDb,
+  portalLocals,
+  seedAssessment,
+  seedEntity,
+  seedOrg,
+  seedPortalUser,
+  type MemoryBucket,
+} from './_stubs/behavioural'
+import { ORG_ID } from '../src/lib/constants'
 
-describe('portal quotes: data access layer', () => {
-  const source = () => readFileSync(resolve('src/lib/db/quotes.ts'), 'utf-8')
+// The Clerk bridge binds a portal user to an entity only under the SMD tenant.
+const ORG = ORG_ID
+const ENT = 'ent-a'
+const ENT_OTHER = 'ent-other'
+const ASSESS = 'assess-a'
+const CLERK_ID = 'user_clerk_portal'
+const USER_ID = 'u-portal'
 
-  it('exports listQuotesForEntity function', () => {
-    expect(source()).toContain('export async function listQuotesForEntity')
+async function seedAll(db: D1Database) {
+  await seedOrg(db, ORG)
+  await seedEntity(db, { id: ENT, orgId: ORG, stage: 'proposing', name: 'Alpha Plumbing' })
+  await seedEntity(db, { id: ENT_OTHER, orgId: ORG, stage: 'proposing' })
+  await seedAssessment(db, { id: ASSESS, orgId: ORG, entityId: ENT })
+  await seedAssessment(db, { id: 'assess-other', orgId: ORG, entityId: ENT_OTHER })
+}
+
+async function quoteIn(db: D1Database, status: string, entityId = ENT, assessmentId = ASSESS) {
+  const quote = await createQuote(db, ORG, { entityId, assessmentId, lineItems: [], rate: 175 })
+  await db.prepare('UPDATE quotes SET status = ? WHERE id = ?').bind(status, quote.id).run()
+  return quote.id
+}
+
+async function seedRevision(
+  db: D1Database,
+  quoteId: string,
+  id: string,
+  status: string,
+  signedKey: string | null = null
+) {
+  await db
+    .prepare(
+      `INSERT INTO sow_revisions (id, org_id, quote_id, quote_version, sow_number, status, unsigned_storage_key, signed_storage_key, checksum_sha256, rendered_by, rendered_at)
+       VALUES (?, ?, ?, 1, ?, ?, ?, ?, 'abc', 'admin', '2026-09-01T00:00:00Z')`
+    )
+    .bind(id, ORG, quoteId, `SOW-${id}`, status, `k/${id}/unsigned.pdf`, signedKey)
+    .run()
+}
+
+describe('portal quote reads: what a client can see', () => {
+  let db: D1Database
+
+  beforeEach(async () => {
+    db = await migratedDb()
+    await seedAll(db)
   })
 
-  it('exports getQuoteForEntity function', () => {
-    expect(source()).toContain('export async function getQuoteForEntity')
+  it('lists sent, accepted, declined and expired quotes; drafts and superseded quotes stay internal', async () => {
+    const visible = new Set<string>()
+    for (const status of ['sent', 'accepted', 'declined', 'expired'])
+      visible.add(await quoteIn(db, status))
+    const draft = await quoteIn(db, 'draft')
+    const superseded = await quoteIn(db, 'superseded')
+    await quoteIn(db, 'sent', ENT_OTHER, 'assess-other')
+
+    const listed = await listQuotesForEntity(db, ORG, ENT)
+    expect(new Set(listed.map((q) => q.id))).toEqual(visible)
+    expect(await getQuoteForEntity(db, ORG, ENT, draft)).toBeNull()
+    expect(await getQuoteForEntity(db, ORG, ENT, superseded)).toBeNull()
+    expect((await getQuoteForEntity(db, ORG, ENT, [...visible][0]))?.id).toBe([...visible][0])
   })
 
-  it('listQuotesForEntity scopes by both entity_id and org_id (#399)', () => {
-    const code = source()
-    // Defense-in-depth: entity_id + org_id together for portal tenant isolation.
-    expect(code).toContain('SELECT * FROM quotes WHERE entity_id = ? AND org_id = ?')
-  })
-
-  it('getQuoteForEntity scopes by id, entity_id, and org_id (#399)', () => {
-    const code = source()
-    expect(code).toContain('SELECT * FROM quotes WHERE id = ? AND entity_id = ? AND org_id = ?')
-  })
-
-  it('portal queries filter to visible statuses only (sent, accepted, declined, expired)', () => {
-    const code = source()
-    expect(code).toContain("'sent', 'accepted', 'declined', 'expired'")
-    // Draft and superseded should not be visible
-    expect(code).toContain('PORTAL_VISIBLE_STATUSES')
-  })
-
-  it('portal functions accept orgId as a required parameter (#399)', () => {
-    const code = source()
-    // Portal DAL signatures must require orgId — the previous "entity_id-only"
-    // pattern was removed in the 2026-04-17 tenant-scoping hardening.
-    const listMatch = code.match(/export async function listQuotesForEntity\([^)]+\)/s)
-    expect(listMatch).toBeTruthy()
-    expect(listMatch![0]).toContain('orgId: string')
-
-    const getMatch = code.match(/export async function getQuoteForEntity\([^)]+\)/s)
-    expect(getMatch).toBeTruthy()
-    expect(getMatch![0]).toContain('orgId: string')
-  })
-})
-
-describe('portal quotes: session helper', () => {
-  it('portal session helper exists at src/lib/portal/session.ts', () => {
-    expect(existsSync(resolve('src/lib/portal/session.ts'))).toBe(true)
-  })
-
-  it('exports getPortalClient function', () => {
-    const code = readFileSync(resolve('src/lib/portal/session.ts'), 'utf-8')
-    expect(code).toContain('export async function getPortalClient')
-  })
-
-  it('resolves portal user via the Clerk identity bridge', () => {
-    // Portal auth migrated to Clerk (PR #906). getPortalClient reads
-    // Astro.locals.auth() / locals.currentUser() and delegates the
-    // entity-resolution chain to resolveClerkPortalContext in
-    // clerk-bridge.ts. That function (not getPortalClient inline)
-    // owns the resolution order:
-    //   1. users.entity_id  (direct binding)
-    //   2. entities.clerk_org_id via active Clerk org
-    // The post-2026-05-26 regression: getPortalClient used to skip
-    // step 1, returning client:null for any user without an active
-    // Clerk org even when their users.entity_id was set.
-    const code = readFileSync(resolve('src/lib/portal/session.ts'), 'utf-8')
-    expect(code).toContain('locals.auth()')
-    expect(code).toContain('locals.currentUser()')
-    expect(code).toContain('resolveClerkPortalContext')
-  })
-
-  it('scopes the entity lookup by org_id for defense-in-depth (#399)', () => {
-    // The Clerk-org → local-entity bridge enforces both:
-    //   * clerk_org_id matches the active Clerk Organization claim
-    //   * org_id matches the SMD tenant (ORG_ID), so a misconfigured
-    //     Clerk org cannot resolve to a cross-tenant entity row.
-    const code = readFileSync(resolve('src/lib/auth/clerk-bridge.ts'), 'utf-8')
-    expect(code).toContain('WHERE clerk_org_id = ? AND org_id = ?')
-  })
-
-  it('JIT-creates the local users row keyed by clerk_user_id', () => {
-    // First-time Clerk users get a local users row with role='client'
-    // and clerk_user_id set. The bridge does NOT JIT-create entities —
-    // a Clerk org without a matching entity returns client: null and
-    // the portal renders the "no portal access yet" state.
-    const code = readFileSync(resolve('src/lib/auth/clerk-bridge.ts'), 'utf-8')
-    expect(code).toContain('INSERT INTO users')
-    expect(code).toContain('clerk_user_id')
-    expect(code).toContain('role')
+  it('a visible quote asked for under another entity of the same org is not found', async () => {
+    const sent = await quoteIn(db, 'sent')
+    expect(await getQuoteForEntity(db, ORG, ENT_OTHER, sent)).toBeNull()
   })
 })
 
-describe('portal quotes: dashboard', () => {
-  // The shared PortalShell owns the html head (viewport, noindex) since the
-  // portal IA rebuild, so head assertions read page + shell together.
-  const source = () =>
-    readFileSync(resolve('src/pages/portal/index.astro'), 'utf-8') +
-    readFileSync(resolve('src/layouts/PortalShell.astro'), 'utf-8')
-  const homeSource = () => readFileSync(resolve('src/lib/portal/home.ts'), 'utf-8')
+describe('getPortalClient: the Clerk seam', () => {
+  let db: D1Database
 
-  it('portal dashboard exists', () => {
-    expect(existsSync(resolve('src/pages/portal/index.astro'))).toBe(true)
+  beforeEach(async () => {
+    db = await migratedDb()
+    await seedAll(db)
   })
 
-  it('shows client name', () => {
-    expect(source()).toContain('client.name')
+  it('no Clerk session resolves to null', async () => {
+    expect(
+      await getPortalClient(db, portalLocals({ clerkUserId: null }) as unknown as App.Locals)
+    ).toBeNull()
   })
 
-  it('surfaces proposal activity in the timeline', () => {
-    const code = source()
-    // C-hybrid timeline merges quote, invoice, and milestone events.
-    expect(code).toContain('quotes')
-    expect(code).toMatch(/proposal/i)
+  it('a signed-in user bound to an entity through users.entity_id resolves that entity', async () => {
+    await seedPortalUser(db, { id: USER_ID, orgId: ORG, clerkUserId: CLERK_ID, entityId: ENT })
+    const context = await getPortalClient(
+      db,
+      portalLocals({ clerkUserId: CLERK_ID }) as unknown as App.Locals
+    )
+    expect(context?.user.id).toBe(USER_ID)
+    expect(context?.client?.id).toBe(ENT)
   })
 
-  it('loads quotes scoped to the signed-in entity', () => {
-    const code = source()
-    const homeCode = homeSource()
-    expect(code).toContain('loadPortalHomeDashboard(env.DB, user.org_id, client.id)')
-    expect(homeCode).toContain('listQuotes(db, orgId, entityId)')
-  })
-
-  it('resolves client via getPortalClient', () => {
-    expect(source()).toContain('getPortalClient')
-  })
-
-  it('shows active engagement context', () => {
-    const code = source()
-    expect(code).toContain('activeEngagement')
-    // Guide voice: "Engagement in flight." replaces "Current Engagement".
-    expect(code).toMatch(/engagement in flight/i)
-  })
-
-  it('surfaces completed milestones in the timeline', () => {
-    expect(source()).toContain('completedMilestones')
-  })
-
-  it('shows recent activity feed', () => {
-    expect(source()).toContain('timeline')
-    expect(source()).toContain('Recent activity')
-  })
-
-  it('links proposal timeline entries to the quotes surface', () => {
-    expect(source()).toContain('/portal/engagement/proposals/')
-  })
-
-  it('has mobile viewport meta tag', () => {
-    expect(source()).toContain('width=device-width, initial-scale=1.0')
-  })
-
-  it('is not indexed by search engines', () => {
-    expect(source()).toContain('noindex')
-  })
-
-  it('does not expose hourly rates', () => {
-    const code = source()
-    expect(code).not.toContain('rate')
-    expect(code).not.toContain('/hr')
-    expect(code).not.toContain('hourly')
-  })
-
-  it('never fabricates consultant "will reach out" promises (#398)', () => {
-    const code = source()
-    // Two prior instances rendered "will reach out to schedule the next
-    // check-in / touchpoint" when no authored touchpoint existed. Those
-    // are uncontracted future-behavior promises and must not reappear.
-    expect(code).not.toMatch(/will reach out/i)
-  })
-
-  it('gates next-check-in subtext on an authored touchpoint', () => {
-    const code = source()
-    // The subtext renders only when an authored touchpoint exists. No
-    // fallback phrasing when absent. Post-Plainspoken (PR B) the hub
-    // flows the touchpoint through `PortalPageHead meta={...}` rather
-    // than a standalone `contextSubtext` variable, so the regression
-    // guard now checks that the gate on `touchpointText` is still in
-    // place (the page renders nothing in meta if touchpointText is null).
-    expect(code).toMatch(/touchpointText\s*\?/)
+  it('a signed-in user with no binding gets a user row and client null (no entity is invented)', async () => {
+    const context = await getPortalClient(
+      db,
+      portalLocals({ clerkUserId: 'user_new', email: 'new@example.com' }) as unknown as App.Locals
+    )
+    expect(context?.user.clerk_user_id).toBe('user_new')
+    expect(context?.client).toBeNull()
   })
 })
 
-describe('portal quotes: proposal spotlight (engagement destination)', () => {
-  // Portal IA rebuild: the standalone quote list page was absorbed into the
-  // Engagement destination. An open proposal renders as a spotlight above
-  // the active workspace; both can be true at once (follow-on proposals).
-  const source = () =>
-    readFileSync(resolve('src/pages/portal/engagement/index.astro'), 'utf-8') +
-    readFileSync(resolve('src/layouts/PortalShell.astro'), 'utf-8')
+describe('loadPortalQuoteDetail', () => {
+  let db: D1Database
 
-  it('engagement destination exists', () => {
-    expect(existsSync(resolve('src/pages/portal/engagement/index.astro'))).toBe(true)
+  beforeEach(async () => {
+    db = await migratedDb()
+    await seedAll(db)
   })
 
-  it('derives the open proposal through the offerings resolver', () => {
-    const code = source()
-    expect(code).toContain('resolvePortalOfferings')
-    expect(code).toContain('openProposal')
+  it('returns null for a quote the client cannot see', async () => {
+    const draft = await quoteIn(db, 'draft')
+    expect(await loadPortalQuoteDetail(db, ORG, ENT, draft)).toBeNull()
   })
 
-  it('resolves status via portal status helpers (R7 registry)', () => {
-    const code = source()
-    expect(code).toContain('resolveQuoteTone')
-    expect(code).toMatch(/resolveQuoteStampLabel|resolveQuoteLabel/)
+  it('carries the quote, its SOW state, the engagement summary, and no superseding quote by default', async () => {
+    const sent = await quoteIn(db, 'sent')
+    await seedRevision(db, sent, 'rev-1', 'sent')
+    await db
+      .prepare(
+        `INSERT INTO engagements (id, org_id, entity_id, quote_id, status, consultant_name, consultant_phone, next_touchpoint_label)
+         VALUES ('eng-1', ?, ?, ?, 'active', 'Sam', '602-555-0100', 'Kickoff walk-through')`
+      )
+      .bind(ORG, ENT, sent)
+      .run()
+
+    const detail = await loadPortalQuoteDetail(db, ORG, ENT, sent)
+    expect(detail?.quote.id).toBe(sent)
+    expect(detail?.sowState.downloadableRevision?.id).toBe('rev-1')
+    expect(detail?.sowState.openSignatureRequest).toBeNull()
+    expect(detail?.engagement).toEqual({
+      id: 'eng-1',
+      consultant_name: 'Sam',
+      consultant_phone: '602-555-0100',
+      next_touchpoint_label: 'Kickoff walk-through',
+    })
+    expect(detail?.superseding).toBeNull()
   })
 
-  it('displays the proposal total as cents through MoneyDisplay', () => {
-    expect(source()).toContain('openProposal.total_price * 100')
-  })
+  it('points a declined quote at the quote that superseded it, by parent link or by a newer sent version', async () => {
+    const declined = await quoteIn(db, 'declined')
+    const byParent = await quoteIn(db, 'sent')
+    await db
+      .prepare('UPDATE quotes SET parent_quote_id = ? WHERE id = ?')
+      .bind(declined, byParent)
+      .run()
+    expect((await loadPortalQuoteDetail(db, ORG, ENT, declined))?.superseding).toEqual({
+      id: byParent,
+    })
 
-  it('dates the proposal via the shared formatter', () => {
-    const code = source()
-    expect(code).toContain('formatShortDate')
-    expect(code).toContain('sent_at')
-  })
-
-  it('links the spotlight to the proposal detail page', () => {
-    expect(source()).toContain('/portal/engagement/proposals/${openProposal.id}')
-  })
-
-  it('renders the proposal spotlight above the active workspace (orthogonal states)', () => {
-    const code = readFileSync(resolve('src/pages/portal/engagement/index.astro'), 'utf-8')
-    const spotlightAt = code.indexOf('Proposal awaiting your review')
-    const overviewAt = code.indexOf('<span>Overview</span>')
-    expect(spotlightAt).toBeGreaterThan(-1)
-    expect(overviewAt).toBeGreaterThan(spotlightAt)
-  })
-
-  it('has mobile viewport meta tag', () => {
-    expect(source()).toContain('width=device-width, initial-scale=1.0')
-  })
-
-  it('is not indexed by search engines', () => {
-    expect(source()).toContain('noindex')
-  })
-})
-
-describe('portal quotes: quote detail page', () => {
-  // Deliverables/schedule rendering was extracted to QuoteProposalSections.astro
-  // to keep [id].astro within the 500-line ceiling. Combined source covers both.
-  const source = () =>
-    readFileSync(resolve('src/pages/portal/engagement/proposals/[id].astro'), 'utf-8') +
-    '\n' +
-    readFileSync(resolve('src/components/portal/QuoteProposalSections.astro'), 'utf-8') +
-    '\n' +
-    readFileSync(resolve('src/lib/portal/quote-detail.ts'), 'utf-8') +
-    '\n' +
-    readFileSync(resolve('src/layouts/PortalShell.astro'), 'utf-8')
-
-  it('quote detail page exists', () => {
-    expect(existsSync(resolve('src/pages/portal/engagement/proposals/[id].astro'))).toBe(true)
-  })
-
-  it('loads quote via getQuoteForEntity', () => {
-    const code = source()
-    expect(code).toContain('loadPortalQuoteDetail')
-    expect(code).toContain('getQuoteForEntity')
-  })
-
-  it('resolves client via getPortalClient', () => {
-    expect(source()).toContain('getPortalClient')
-  })
-
-  it('displays scope via authored deliverables only (not line items) (#398)', () => {
-    const code = source()
-    // Deliverables now come exclusively from parseDeliverables(quote). The
-    // page does not read or iterate line_items for client-facing scope
-    // rendering. Problem labels are no longer used as deliverable titles.
-    expect(code).toContain('parseDeliverables')
-    expect(code).toContain('deliverables.map')
-    expect(code).not.toContain('getProblemLabel')
-    expect(code).not.toMatch(/lineItems\.map/)
-  })
-
-  it('does NOT show hours column in scope table', () => {
-    const code = source()
-    // The scope section should not reference hours
-    expect(code).not.toMatch(/item\.estimated_hours/)
-    // Should not have a Hours column header in the scope section
-    expect(code).not.toContain('>Hours<')
-  })
-
-  it('does NOT show hourly rate', () => {
-    const code = source()
-    // Extract HTML template (after the closing --- frontmatter delimiter)
-    const parts = code.split('---')
-    const htmlTemplate = parts.slice(2).join('---')
-    expect(htmlTemplate).not.toContain('quote.rate')
-    expect(htmlTemplate).not.toContain('/hr')
-    expect(htmlTemplate).not.toContain('hourly')
-    expect(htmlTemplate).not.toContain('Rate')
-  })
-
-  it('does NOT show total_hours to client', () => {
-    const code = source()
-    // total_hours is used internally for 3-milestone calculation but not displayed
-    expect(code).not.toContain('>total_hours<')
-    expect(code).not.toContain('Total Hours')
-  })
-
-  it('displays total project price', () => {
-    expect(source()).toContain('quote.total_price')
-  })
-
-  it('displays payment terms with deposit and balance', () => {
-    const code = source()
-    expect(code).toContain('paymentSplitText')
-    expect(code).toContain('depositPctDisplay')
-    expect(code).toContain('balancePctDisplay')
-    expect(code).toContain('at signing')
-  })
-
-  it('handles 3-milestone payment for 40+ hour engagements', () => {
-    const code = source()
-    expect(code).toContain('isThreeMilestone')
-    expect(code).toContain('total_hours >= 40')
-  })
-
-  it('includes SOW PDF download link', () => {
-    const code = source()
-    expect(code).toContain('/api/portal/quotes/')
-    expect(code).toContain('/sow')
-    expect(code).toContain('View the full PDF')
-  })
-
-  it('shows signing iframe when an open signature request exists', () => {
-    const code = source()
-    expect(code).toContain('sowState.openSignatureRequest')
-    expect(code).toContain('provider_request_id')
-    expect(code).toContain('iframe')
-    expect(code).toContain('signwell.com')
-  })
-
-  it('shows "proposal is being prepared" when no open signature request exists (UX-004)', () => {
-    expect(source()).toContain('Your proposal is being prepared')
-  })
-
-  it('shows Review & Sign section for sent quotes', () => {
-    const code = source()
-    expect(code).toContain('Review and sign')
-    expect(code).toContain('isSent')
-  })
-
-  it('shows accepted confirmation state', () => {
-    const code = source()
-    expect(code).toContain('Signed')
-    expect(code).toContain('isSigned')
-  })
-
-  it('shows declined and expired states', () => {
-    const code = source()
-    expect(code).toContain('isDeclined')
-    expect(code).toContain('isExpired')
-  })
-
-  it('has mobile viewport meta tag', () => {
-    expect(source()).toContain('width=device-width, initial-scale=1.0')
-  })
-
-  it('is not indexed by search engines', () => {
-    expect(source()).toContain('noindex')
+    const expired = await quoteIn(db, 'expired')
+    const newer = await quoteIn(db, 'sent')
+    await db.prepare('UPDATE quotes SET version = 3 WHERE id = ?').bind(newer).run()
+    await db.prepare('UPDATE quotes SET parent_quote_id = NULL WHERE id = ?').bind(byParent).run()
+    const superseding = (await loadPortalQuoteDetail(db, ORG, ENT, expired))?.superseding
+    expect(superseding?.id).toBe(newer)
   })
 })
 
-describe('portal quotes: SOW download API route', () => {
-  it('SOW download route exists at src/pages/api/portal/quotes/[id]/sow.ts', () => {
-    expect(existsSync(resolve('src/pages/api/portal/quotes/[id]/sow.ts'))).toBe(true)
+describe('GET /api/portal/quotes/[id]/sow', () => {
+  let db: D1Database
+  let storage: MemoryBucket
+
+  const call = (quoteId: string | undefined, clerkUserId: string | null = CLERK_ID) =>
+    GET({
+      locals: portalLocals({ clerkUserId }),
+      params: { id: quoteId },
+    } as unknown as Parameters<typeof GET>[0])
+
+  beforeEach(async () => {
+    db = await migratedDb()
+    storage = memoryBucket()
+    await seedAll(db)
+    await seedPortalUser(db, { id: USER_ID, orgId: ORG, clerkUserId: CLERK_ID, entityId: ENT })
+    bindEnv({ DB: db, STORAGE: storage.bucket })
   })
 
-  it('verifies portal session via Clerk identity bridge', () => {
-    // Portal API routes now authenticate via getPortalClient (Clerk-aware
-    // resolver) instead of inspecting locals.session.role. Unauthenticated
-    // requests return 401; authenticated-but-unprovisioned requests return
-    // 403 with "Client not found".
-    const code = readFileSync(resolve('src/pages/api/portal/quotes/[id]/sow.ts'), 'utf-8')
-    expect(code).toContain('getPortalClient(env.DB, locals)')
-    // Unauthorized now returns via the shared errorResponse(status, message) helper.
-    expect(code).toContain('errorResponse(401')
+  it('400 without a quote id, 401 signed out, 403 for a user with no entity', async () => {
+    expect((await call(undefined)).status).toBe(400)
+    expect((await call('q', null)).status).toBe(401)
+    await seedPortalUser(db, {
+      id: 'u-unbound',
+      orgId: ORG,
+      clerkUserId: 'user_unbound',
+      entityId: null,
+    })
+    const unbound = await call('q', 'user_unbound')
+    expect(unbound.status).toBe(403)
+    expect(await unbound.json()).toMatchObject({ message: 'Client not found.' })
   })
 
-  it('scopes quote to entity via getQuoteForEntity', () => {
-    const code = readFileSync(resolve('src/pages/api/portal/quotes/[id]/sow.ts'), 'utf-8')
-    expect(code).toContain('getQuoteForEntity')
-    expect(code).toContain('getPortalClient')
+  it('404 for a quote the client cannot see, for a quote with no downloadable revision, and for a missing object', async () => {
+    const draft = await quoteIn(db, 'draft')
+    expect((await call(draft)).status).toBe(404)
+
+    const sent = await quoteIn(db, 'sent')
+    expect((await call(sent)).status).toBe(404)
+
+    await seedRevision(db, sent, 'rev-1', 'sent')
+    const missing = await call(sent)
+    expect(missing.status).toBe(404)
+    expect(await missing.json()).toMatchObject({ error: 'not_found' })
   })
 
-  it('loads the downloadable SOW revision from the lifecycle service', () => {
-    const code = readFileSync(resolve('src/pages/api/portal/quotes/[id]/sow.ts'), 'utf-8')
-    expect(code).toContain('getSOWStateForQuote')
-    expect(code).toContain('downloadableRevision')
-  })
+  it('streams the signed PDF when one exists, else the unsigned one, as an attachment', async () => {
+    const sent = await quoteIn(db, 'sent')
+    await seedRevision(db, sent, 'rev-1', 'sent')
+    await storage.bucket.put('k/rev-1/unsigned.pdf', new TextEncoder().encode('unsigned'))
+    const unsigned = await call(sent)
+    expect(unsigned.status).toBe(200)
+    expect(unsigned.headers.get('Content-Type')).toBe('application/pdf')
+    expect(unsigned.headers.get('Content-Disposition')).toContain('attachment')
+    expect(await unsigned.text()).toBe('unsigned')
 
-  it('streams PDF with correct Content-Type', () => {
-    const code = readFileSync(resolve('src/pages/api/portal/quotes/[id]/sow.ts'), 'utf-8')
-    expect(code).toContain("'Content-Type': 'application/pdf'")
-  })
-
-  it('sets Content-Disposition for download', () => {
-    const code = readFileSync(resolve('src/pages/api/portal/quotes/[id]/sow.ts'), 'utf-8')
-    expect(code).toContain('Content-Disposition')
-    expect(code).toContain('attachment')
-  })
-
-  it('returns 401 on unauthorized', () => {
-    const code = readFileSync(resolve('src/pages/api/portal/quotes/[id]/sow.ts'), 'utf-8')
-    expect(code).toContain('401')
-  })
-
-  it('returns 404 when quote not found', () => {
-    const code = readFileSync(resolve('src/pages/api/portal/quotes/[id]/sow.ts'), 'utf-8')
-    expect(code).toContain('404')
+    await seedRevision(db, sent, 'rev-2', 'signed', 'k/rev-2/signed.pdf')
+    await storage.bucket.put('k/rev-2/signed.pdf', new TextEncoder().encode('signed'))
+    expect(await (await call(sent)).text()).toBe('signed')
   })
 })
 
-describe('portal quotes: middleware handles /api/portal/* routes', () => {
-  const source = () => readFileSync(resolve('src/middleware.ts'), 'utf-8')
+// The portal pages are Astro; nothing here can invoke them. What is kept is
+// policy, not composition, and each guard names the rule it enforces.
+describe('portal proposal pages: policy guards', () => {
+  const pages = {
+    home: readFileSync(resolve('src/pages/portal/index.astro'), 'utf-8'),
+    engagement: readFileSync(resolve('src/pages/portal/engagement/index.astro'), 'utf-8'),
+    proposal: readFileSync(resolve('src/pages/portal/engagement/proposals/[id].astro'), 'utf-8'),
+    sections: readFileSync(resolve('src/components/portal/QuoteProposalSections.astro'), 'utf-8'),
+  }
+  const shell = readFileSync(resolve('src/layouts/PortalShell.astro'), 'utf-8')
+  const template = (source: string) => source.split('---').slice(2).join('---')
 
-  it('middleware detects portal API routes', () => {
-    expect(source()).toContain("pathname.startsWith('/api/portal')")
+  it('never shows the client an hourly rate or an hours column (Decision #16)', () => {
+    for (const [name, source] of Object.entries(pages)) {
+      const html = template(source)
+      expect(html, name).not.toMatch(
+        /quote\.rate|item\.estimated_hours|\/hr|hourly|>Hours<|Total Hours/
+      )
+    }
   })
 
-  it('portal API routes return 401 JSON on auth failure (not redirect)', () => {
-    const code = source()
-    // isPortalApiRoute should lead to JSON 401 response
-    expect(code).toContain('isPortalApiRoute')
+  it('never promises that someone "will reach out" (#398: no uncontracted future behaviour)', () => {
+    for (const [name, source] of Object.entries(pages)) {
+      expect(source, name).not.toMatch(/will reach out/i)
+    }
   })
 
-  it('portal API routes flow through portal auth enforcement', () => {
-    // Post Clerk-unified migration the gating moved from a single
-    // `isProtectedRoute` flag to per-surface enforcement functions
-    // (`enforceAdminAuth` / `enforcePortalAuth`). The portal-API
-    // detection still routes through `isPortalApiRoute` to choose
-    // 401-JSON vs 302-redirect.
-    const code = source()
-    expect(code).toContain('isPortalApiRoute')
-    expect(code).toContain('enforcePortalAuth')
+  it('the proposal page renders scope from authored deliverables only, never from line items (#398)', () => {
+    const combined = `${pages.proposal}\n${pages.sections}`
+    expect(combined).toContain('parseDeliverables')
+    expect(combined).not.toMatch(/lineItems\.map|getProblemLabel/)
+  })
+
+  it('the portal shell is noindex and mobile-scaled for every page', () => {
+    expect(shell).toContain('noindex')
+    expect(shell).toContain('width=device-width, initial-scale=1.0')
   })
 })
