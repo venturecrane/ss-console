@@ -1,0 +1,237 @@
+# Find authored cron slots that passed with NEITHER wake row.
+#
+# WHY (outbound-quality track, 2026-08). Every `pre_run_decides` cron row owes
+# one row per fire: EMITTED_WAKE or SUPPRESSED_WAKE. reconcile-outcomes.py
+# grades what happens AFTER a wake (a wake with no terminal outcome is ITS
+# finding); nothing read the slot where neither row exists -- a dead cron
+# daemon, materializer drift, a machine down outside a boot window, a pre_run
+# crash with the broker down. Fail-open wrote nothing, and nothing was the one
+# shape no reconciler could see.
+#
+# DAILY, NOT HOURLY, deliberately: the data is retrospective from audit_export,
+# the paging surface is a GitHub issue read at human cadence, and 24 extra
+# Actions runs a day buy no faster human response.
+#
+# LOUD HOLD -- the reconcile-outcomes contract, because this control's most
+# likely failure is the same rotated-secret shape:
+#   exit 0  clean    every expandable slot covered or suppressed
+#   exit 1  finding  a slot passed with neither row; the rolling issue updates
+#   exit 3  HOLD     nothing could be evaluated; the run goes red, loudly
+#
+# ONE ROLLING ISSUE (the ss#2582 pattern): found by a CONSTANT series marker,
+# body rewritten in place each run, a comment only when the finding digest
+# moved. Daily misses accrue, so a findings-derived key would file duplicates.
+
+name: cron-slot-watchdog
+
+on:
+  schedule:
+    # 07:23 UTC daily. Off the hour and off the sibling audit controls
+    # (06:41 terminal-state, 13:17 unaudited-send) so the three do not contend
+    # for the same seam.
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Window size in days (blank = 3)'
+        required: false
+  pull_request:
+    paths:
+      - 'operator/bin/reconcile-wakes.py'
+      - 'operator/bin/lib/cron_slots.py'
+      - 'operator/bin/lib/console_d1.py'
+      - 'operator/bin/tests/test_reconcile_wakes.py'
+      # The authored slot grid IS the contract this control expands; a cron
+      # edit must run the tests that prove the grid still parses.
+      - 'operator/customers/*/customer.yaml'
+      - '.github/workflows/cron-slot-watchdog.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '>=3.11'
+
+      - name: Install pytest
+        run: python3 -m pip install --quiet pytest pyyaml
+
+      # The unit tests gate the scheduled run. A watchdog whose expander is
+      # wrong pages on healthy slots or sleeps through dead ones, and both are
+      # worse than no report; the suite also proves every authored schedule
+      # still parses, so a customer.yaml edit cannot silently shrink the grid.
+      - name: Test the watchdog
+        run: python3 -m pytest operator/bin/tests/test_reconcile_wakes.py -q
+
+      # On pull_request there are no secrets and no seat to read. The tests
+      # above are the whole job, and that is stated rather than skipped
+      # silently.
+      - name: Reconcile every seat's slot grid
+        if: github.event_name != 'pull_request'
+        id: reconcile
+        env:
+          OPERATOR_RUNTIME_READ_SECRET: ${{ secrets.OPERATOR_RUNTIME_READ_SECRET }}
+          OPERATOR_RUNTIME_READ_URL: ${{ secrets.OPERATOR_RUNTIME_READ_URL }}
+          # fleet_status (partitioning + the boot window) reads through
+          # `npx wrangler d1 execute` -- the same credential shape as every
+          # other console-side CI job (bin/lib/console_d1.py).
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Via env, never interpolated into the script body: a workflow_dispatch
+          # input is user-supplied and would otherwise be a shell-injection seam.
+          RECONCILE_DAYS: ${{ github.event.inputs.days }}
+        run: |
+          set -u
+          ARGS=""
+          if [ -n "${RECONCILE_DAYS:-}" ]; then
+            ARGS="--days ${RECONCILE_DAYS}"
+          fi
+          # `|| STATUS=$?` is load-bearing (ss#2309): under `bash -e` an
+          # unguarded non-zero exit aborts the step before the report is printed
+          # and before `status` reaches GITHUB_OUTPUT, which mutes the control in
+          # exactly the case it exists for.
+          STATUS=0
+          python3 operator/bin/reconcile-wakes.py $ARGS > wakes.txt 2>&1 || STATUS=$?
+          cat wakes.txt
+          echo "status=${STATUS}" >> "$GITHUB_OUTPUT"
+          # Contract: 0 clean, 1 finding (next step files it), 3 hold (the step
+          # after that fails the run loudly). Anything else is the control
+          # itself breaking, and must fail here.
+          if [ "${STATUS}" -ne 0 ] && [ "${STATUS}" -ne 1 ] && [ "${STATUS}" -ne 3 ]; then
+            exit "${STATUS}"
+          fi
+
+      - name: Report the missing slots on ONE issue, updated in place
+        if: github.event_name != 'pull_request' && steps.reconcile.outputs.status == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # The ss#2582 rolling-issue pattern, copied from
+          # terminal-state-reconcile.yml: daily misses ACCRUE, so a
+          # findings-derived dedupe key would fail to match yesterday's issue on
+          # almost every run and file a second one. Find the one open issue by
+          # the constant series marker, rewrite its body, comment only when the
+          # digest moved.
+          SERIES="$(sed -n 's/^reconcile-series: //p' wakes.txt | tail -1)"
+          if [ -z "${SERIES}" ]; then
+            echo "findings reported with no reconcile-series line" >&2
+            exit 1
+          fi
+          DIGEST="$(sed -n 's/^reconcile-findings: //p' wakes.txt | tail -1)"
+
+          # Listed, not searched (the search index lags by minutes); bodies,
+          # not titles (a dated title defeats any title check).
+          gh issue list --repo "${REPO}" --state open --label "prio:P1" \
+            --limit 200 --json number,body > open-issues.json
+          EXISTING="$(SERIES="reconcile-series: ${SERIES}" python3 -c '
+          import json, os
+          series = os.environ["SERIES"]
+          issues = json.load(open("open-issues.json"))
+          print(next((str(i["number"]) for i in issues if series in (i.get("body") or "")), ""))
+          ')"
+
+          {
+            echo "Authored cron slots that passed with neither an EMITTED_WAKE nor a"
+            echo "SUPPRESSED_WAKE row."
+            echo
+            echo "Every pre_run-gated cron fire is supposed to leave exactly one row:"
+            echo "woke, or decided not to with its basis. A slot with neither is the"
+            echo "dead-daemon / materializer-drift / crashed-pre_run shape, where"
+            echo "fail-open wrote nothing and nothing was invisible to every other"
+            echo "reconciler. A wake whose obligation later went silent is ANNOTATED"
+            echo "here and FILED by the terminal-state reconciler, never twice."
+            echo
+            echo "**This issue is rewritten in place on every run.** The counts below"
+            echo "are current as of the run linked at the bottom. A comment is added"
+            echo "only when the finding set changes."
+            echo
+            echo '```'
+            cat wakes.txt
+            echo '```'
+            echo
+            echo "Watchdog: \`operator/bin/reconcile-wakes.py\` (slot grid from"
+            echo "\`personas[].cron[]\`, expansion in \`operator/bin/lib/cron_slots.py\`)."
+            echo "Series key, do not edit: \`reconcile-series: ${SERIES}\`"
+            echo "Last run: ${RUN_URL}"
+          } > body.md
+
+          if [ -n "${EXISTING}" ]; then
+            PREV="$(gh issue view "${EXISTING}" --repo "${REPO}" --json body --jq '.body' \
+                    | sed -n 's/^reconcile-findings: //p' | tail -1)"
+            gh issue edit "${EXISTING}" --repo "${REPO}" --body-file body.md
+            echo "Updated #${EXISTING} in place."
+            if [ "${PREV}" != "${DIGEST}" ]; then
+              {
+                echo "The finding set changed since the last run."
+                echo
+                echo "\`${PREV:-none}\` -> \`${DIGEST:-none}\`"
+                echo
+                echo "Current counts are in the issue body above. Run: ${RUN_URL}"
+              } > comment.md
+              gh issue comment "${EXISTING}" --repo "${REPO}" --body-file comment.md
+              echo "Finding set moved; commented."
+            else
+              echo "Finding set unchanged; body refreshed, no comment."
+            fi
+          else
+            gh issue create \
+              --repo "${REPO}" \
+              --title "Cron slots with neither wake row (rolling)" \
+              --label "prio:P1" --label "type:bug" \
+              --body-file body.md
+          fi
+
+      - name: A held seat is always said out loud
+        # Runs on EVERY outcome, including the clean one -- a per-seat hold does
+        # not fail the run (one seat's network blip must not mute the control),
+        # but it must never be invisible either (the pilot-law lesson,
+        # terminal-state-reconcile.yml).
+        if: github.event_name != 'pull_request' && always() && steps.reconcile.outputs.status != ''
+        run: |
+          if [ ! -f wakes.txt ]; then exit 0; fi
+          if grep -q '^HOLD' wakes.txt; then
+            {
+              echo "## Seats that could not be evaluated"
+              echo
+              echo "These seats' slot grids were not reconciled. They are neither"
+              echo "clean nor findings -- they are unmeasured."
+              echo
+              echo '```'
+              grep '^HOLD' wakes.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            grep '^HOLD' wakes.txt
+            echo "::warning title=cron-slot watchdog::$(grep -c '^HOLD' wakes.txt) seat(s) could not be evaluated"
+          fi
+
+      # THE LOUD HOLD. A control that cannot run has not passed, and a green
+      # check that means "nothing was measured" is the failure this whole track
+      # exists to remove.
+      - name: Fail loudly when nothing could be evaluated
+        if: github.event_name != 'pull_request' && steps.reconcile.outputs.status == '3'
+        run: |
+          {
+            echo "## Cron-slot watchdog: HOLD"
+            echo
+            echo "Nothing was evaluated. This is NOT a clean fleet: it is a"
+            echo "control that could not run (missing credential, unreachable"
+            echo "D1, or every provisioned seat failed to read). Fix the cause"
+            echo "and re-run before treating any slot grid as reconciled."
+            echo
+            echo '```'
+            cat wakes.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat wakes.txt
+          echo "::error title=cron-slot watchdog HOLD::nothing evaluated; the control did not run"
+          exit 1

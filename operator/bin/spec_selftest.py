@@ -126,7 +126,9 @@ def check_rule(rule: dict, prose_by_doc: dict[str, str], exemplary: set[str]) ->
     for doc, prose in sorted(prose_by_doc.items()):
         ok = True
         if kind == "absence":
-            hits = _absence_hits(prose, str(rule.get("pattern") or "(?!)"), re.IGNORECASE if rule.get("ignore_case") else 0)
+            hits = _absence_hits(
+                prose, str(rule.get("pattern") or "(?!)"), re.IGNORECASE if rule.get("ignore_case") else 0
+            )
             ok = hits == 0
         elif kind in {"min_pct_short_sentences", "max_mean_sentence_words", "max_sentence_words"}:
             lengths = [len(_VP.words(s)) for s in _VP.sentences(prose)]

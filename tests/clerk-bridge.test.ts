@@ -7,8 +7,19 @@ import {
 import { resolve } from 'path'
 import type { D1Database } from '@cloudflare/workers-types'
 
-import { ensureLocalUser, resolveClerkPortalContext } from '../src/lib/auth/clerk-bridge'
+import {
+  ensureLocalUser,
+  resolveClerkPortalContext,
+  type PortalUserRow,
+} from '../src/lib/auth/clerk-bridge'
+import { clerkProfile, verifiedPrimaryEmail } from '../src/lib/auth/clerk-profile'
 import { ORG_ID } from '../src/lib/constants'
+
+/** Narrow ensureLocalUser's nullable return for the cases that expect a row. */
+function expectRow(row: PortalUserRow | null): PortalUserRow {
+  expect(row).not.toBeNull()
+  return row!
+}
 
 const migrationsDir = resolve(process.cwd(), 'migrations')
 
@@ -58,10 +69,12 @@ describe('ensureLocalUser', () => {
       .bind(boundClerkId, PRE_CLERK_USER_ID)
       .run()
 
-    const result = await ensureLocalUser(db, boundClerkId, {
-      email: PRE_CLERK_EMAIL,
-      name: 'Pre Clerk Client',
-    })
+    const result = expectRow(
+      await ensureLocalUser(db, boundClerkId, {
+        email: PRE_CLERK_EMAIL,
+        name: 'Pre Clerk Client',
+      })
+    )
 
     expect(result.id).toBe(PRE_CLERK_USER_ID)
     expect(result.clerk_user_id).toBe(boundClerkId)
@@ -80,7 +93,9 @@ describe('ensureLocalUser', () => {
     const upper = PRE_CLERK_EMAIL.toUpperCase()
     expect(upper).not.toBe(PRE_CLERK_EMAIL)
 
-    const result = await ensureLocalUser(db, newClerkId, { email: upper, name: 'Pre Clerk Client' })
+    const result = expectRow(
+      await ensureLocalUser(db, newClerkId, { email: upper, name: 'Pre Clerk Client' })
+    )
 
     // Linked the SEEDED row (with its entity binding) — not a new orphan.
     expect(result.id).toBe(PRE_CLERK_USER_ID)
@@ -99,10 +114,12 @@ describe('ensureLocalUser', () => {
     // that INSERT crash and left the pre-Clerk row orphaned.
     const newClerkId = 'user_first_sign_in'
 
-    const result = await ensureLocalUser(db, newClerkId, {
-      email: PRE_CLERK_EMAIL,
-      name: 'Pre Clerk Client',
-    })
+    const result = expectRow(
+      await ensureLocalUser(db, newClerkId, {
+        email: PRE_CLERK_EMAIL,
+        name: 'Pre Clerk Client',
+      })
+    )
 
     expect(result.id).toBe(PRE_CLERK_USER_ID)
     expect(result.clerk_user_id).toBe(newClerkId)
@@ -141,10 +158,12 @@ describe('ensureLocalUser', () => {
     // of the bound row. The impostor sign-in carries a verified Clerk
     // email; this asserts that even on email collision against a bound
     // row, the existing binding is preserved.
-    const result = await ensureLocalUser(db, impostorClerkId, {
-      email: 'impostor@example.com',
-      name: 'Impostor',
-    })
+    const result = expectRow(
+      await ensureLocalUser(db, impostorClerkId, {
+        email: 'impostor@example.com',
+        name: 'Impostor',
+      })
+    )
 
     expect(result.clerk_user_id).toBe(impostorClerkId)
     expect(result.id).not.toBe(PRE_CLERK_USER_ID)
@@ -158,16 +177,119 @@ describe('ensureLocalUser', () => {
 
   it('JIT-creates a fresh client row when no email or clerk_user_id matches', async () => {
     const newClerkId = 'user_brand_new'
-    const result = await ensureLocalUser(db, newClerkId, {
-      email: 'brand-new@example.com',
-      name: 'Brand New',
-    })
+    const result = expectRow(
+      await ensureLocalUser(db, newClerkId, {
+        email: 'brand-new@example.com',
+        name: 'Brand New',
+      })
+    )
 
     expect(result.clerk_user_id).toBe(newClerkId)
     expect(result.email).toBe('brand-new@example.com')
     expect(result.role).toBe('client')
     expect(result.entity_id).toBeNull()
     expect(result.id).not.toBe(PRE_CLERK_USER_ID)
+  })
+
+  // ── No trusted email (2026-08-14 review finding) ─────────────────────────
+  // clerk-profile.ts yields email:null when Clerk has no VERIFIED PRIMARY
+  // address. The bridge must then refuse email-based linking and JIT
+  // creation: an unverified address auto-linking to a seeded row would hand
+  // one person another person's client seat.
+
+  it('does NOT auto-link a pre-Clerk row when the profile carries no trusted email', async () => {
+    const result = await ensureLocalUser(db, 'user_no_trusted_email', {
+      email: null,
+      name: 'Untrusted',
+    })
+
+    expect(result).toBeNull()
+
+    // The seeded row stayed unlinked — the seat is still waiting for its
+    // real owner.
+    const seeded = await db
+      .prepare('SELECT clerk_user_id FROM users WHERE id = ?')
+      .bind(PRE_CLERK_USER_ID)
+      .first<{ clerk_user_id: string | null }>()
+    expect(seeded?.clerk_user_id).toBeNull()
+  })
+
+  it('does NOT JIT-create a row when the profile carries no trusted email', async () => {
+    const before = await db.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>()
+
+    const result = await ensureLocalUser(db, 'user_no_trusted_email_2', {
+      email: null,
+      name: '',
+    })
+    expect(result).toBeNull()
+
+    const after = await db.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>()
+    expect(after?.n).toBe(before?.n)
+  })
+
+  it('still resolves an already-bound row when the profile carries no trusted email', async () => {
+    // A user whose row is already keyed by clerk_user_id needs no email at
+    // all — losing primary-email verification later must not lock them out.
+    const boundClerkId = 'user_bound_then_unverified'
+    await db
+      .prepare('UPDATE users SET clerk_user_id = ? WHERE id = ?')
+      .bind(boundClerkId, PRE_CLERK_USER_ID)
+      .run()
+
+    const result = expectRow(
+      await ensureLocalUser(db, boundClerkId, { email: null, name: 'Whoever' })
+    )
+    expect(result.id).toBe(PRE_CLERK_USER_ID)
+    expect(result.entity_id).toBe(PRE_CLERK_ENTITY_ID)
+  })
+})
+
+describe('clerkProfile / verifiedPrimaryEmail', () => {
+  it('trusts a verified primary address', () => {
+    const user = {
+      primaryEmailAddress: {
+        emailAddress: 'owner@example.com',
+        verification: { status: 'verified' },
+      },
+      firstName: 'Pat',
+      lastName: 'Owner',
+    }
+    expect(verifiedPrimaryEmail(user)).toBe('owner@example.com')
+    expect(clerkProfile(user)).toEqual({ email: 'owner@example.com', name: 'Pat Owner' })
+  })
+
+  it('rejects an UNVERIFIED primary address', () => {
+    const user = {
+      primaryEmailAddress: {
+        emailAddress: 'attacker-added@example.com',
+        verification: { status: 'unverified' },
+      },
+    }
+    expect(verifiedPrimaryEmail(user)).toBeNull()
+    expect(clerkProfile(user).email).toBeNull()
+  })
+
+  it('rejects a primary address with no verification record', () => {
+    const user = { primaryEmailAddress: { emailAddress: 'x@example.com' } }
+    expect(verifiedPrimaryEmail(user)).toBeNull()
+  })
+
+  it('yields null when there is no primary address at all — never falls back to another address', () => {
+    // The pre-fix behavior fell back to emailAddresses[0]; the profile shape
+    // deliberately no longer even accepts that list.
+    expect(verifiedPrimaryEmail({ primaryEmailAddress: null })).toBeNull()
+    expect(clerkProfile({ primaryEmailAddress: null }).email).toBeNull()
+  })
+
+  it('derives name from username, never from an untrusted email', () => {
+    const user = {
+      primaryEmailAddress: {
+        emailAddress: 'x@example.com',
+        verification: { status: 'unverified' },
+      },
+      username: 'pat-o',
+    }
+    expect(clerkProfile(user)).toEqual({ email: null, name: 'pat-o' })
   })
 })
 
@@ -299,6 +421,16 @@ describe('resolveClerkPortalContext', () => {
       { userId: BOUND_CLERK_ID, orgId: null },
       { email: PRE_CLERK_EMAIL, name: 'Pre Clerk Client' }
     )
+    expect(await loginEvents()).toHaveLength(0)
+  })
+
+  it('returns null (no access, no rows, no login stamp) for an unbound user with no trusted email', async () => {
+    const ctx = await resolveClerkPortalContext(
+      db,
+      { userId: 'user_untrusted_new', orgId: null, sessionId: 'sess_untrusted' },
+      { email: null, name: 'Untrusted' }
+    )
+    expect(ctx).toBeNull()
     expect(await loginEvents()).toHaveLength(0)
   })
 })

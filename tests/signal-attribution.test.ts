@@ -3,12 +3,11 @@
  *
  * Exercises:
  *   - DAL helpers (listSignalsForEntity, getDefaultOriginatingSignalId,
- *     getSignalById, getEngagementsBySourcePipeline)
- *   - createMeeting / createQuote / createEngagement default-resolution
- *     behavior (undefined → most recent signal, null → unattributed,
+ *     getSignalById)
+ *   - createQuote / createEngagement default-resolution behavior
+ *     (undefined → most recent signal, null → unattributed,
  *     explicit string → stored as-is)
  *   - update paths persist the new column
- *   - Roll-up query groups attributed engagements by source pipeline
  *
  * Uses @venturecrane/crane-test-harness so we exercise real D1 SQL,
  * not text-greps. The lifecycle DAL is the load-bearing surface here —
@@ -26,14 +25,12 @@ import type { D1Database } from '@cloudflare/workers-types'
 
 import { createEntity } from '../src/lib/db/entities'
 import { appendContext } from '../src/lib/db/context'
-import { createMeeting } from '../src/lib/db/meetings'
 import { createQuote } from '../src/lib/db/quotes'
 import { createEngagement, updateEngagement } from '../src/lib/db/engagements'
 import {
   listSignalsForEntity,
   getDefaultOriginatingSignalId,
   getSignalById,
-  getEngagementsBySourcePipeline,
 } from '../src/lib/db/signal-attribution'
 
 const migrationsDir = resolve(process.cwd(), 'migrations')
@@ -153,7 +150,7 @@ describe('signal attribution: DAL helpers (#589)', () => {
   })
 })
 
-describe('signal attribution: createMeeting/createQuote/createEngagement (#589)', () => {
+describe('signal attribution: createQuote/createEngagement (#589)', () => {
   let s: Setup
   beforeEach(async () => {
     s = await bootstrap()
@@ -168,26 +165,6 @@ describe('signal attribution: createMeeting/createQuote/createEngagement (#589)'
     })
     return sig.id
   }
-
-  it('createMeeting defaults to most-recent signal when omitted', async () => {
-    const sigId = await seedSignal(s.entityA, 'review_mining')
-    const meeting = await createMeeting(s.db, ORG, s.entityA, {})
-    expect(meeting.originating_signal_id).toBe(sigId)
-  })
-
-  it('createMeeting honors explicit null (unattributed)', async () => {
-    await seedSignal(s.entityA, 'review_mining')
-    const meeting = await createMeeting(s.db, ORG, s.entityA, { originating_signal_id: null })
-    expect(meeting.originating_signal_id).toBeNull()
-  })
-
-  it('createMeeting stores explicit signal id', async () => {
-    const sigId = await seedSignal(s.entityA, 'review_mining')
-    // Add a newer signal to prove the explicit override wins over the default.
-    await seedSignal(s.entityA, 'job_monitor')
-    const meeting = await createMeeting(s.db, ORG, s.entityA, { originating_signal_id: sigId })
-    expect(meeting.originating_signal_id).toBe(sigId)
-  })
 
   it('createQuote defaults to most-recent signal', async () => {
     const sigId = await seedSignal(s.entityA, 'review_mining')
@@ -259,113 +236,5 @@ describe('signal attribution: createMeeting/createQuote/createEngagement (#589)'
 
     const cleared = await updateEngagement(s.db, ORG, eng.id, { originating_signal_id: null })
     expect(cleared?.originating_signal_id).toBeNull()
-  })
-})
-
-describe('signal attribution: getEngagementsBySourcePipeline roll-up (#589)', () => {
-  let s: Setup
-  beforeEach(async () => {
-    s = await bootstrap()
-  })
-
-  it('groups engagements by the source pipeline of their attributed signal', async () => {
-    // Two engagements from review_mining, one from job_monitor, one
-    // unattributed (must be excluded from the buckets).
-    const make = async (entityId: string, source: string, hours: number) => {
-      const sig = await appendContext(s.db, ORG, {
-        entity_id: entityId,
-        type: 'signal',
-        content: 'sig',
-        source,
-      })
-      const aid = `mtg-${entityId}-${source}-${hours}`
-      await s.db
-        .prepare(
-          `INSERT INTO assessments (id, org_id, entity_id, scheduled_at, status, created_at)
-           VALUES (?, ?, ?, ?, 'scheduled', datetime('now'))`
-        )
-        .bind(aid, ORG, entityId, null)
-        .run()
-      const q = await createQuote(s.db, ORG, {
-        entityId,
-        assessmentId: aid,
-        lineItems: [],
-        rate: 175,
-        originatingSignalId: sig.id,
-      })
-      await createEngagement(s.db, ORG, {
-        entity_id: entityId,
-        quote_id: q.id,
-        estimated_hours: hours,
-        originating_signal_id: sig.id,
-      })
-    }
-
-    await make(s.entityA, 'review_mining', 10)
-    await make(s.entityB, 'review_mining', 20)
-    await make(s.entityC, 'job_monitor', 5)
-
-    // Unattributed engagement — must not appear in any bucket.
-    await s.db
-      .prepare(
-        `INSERT INTO assessments (id, org_id, entity_id, scheduled_at, status, created_at)
-         VALUES (?, ?, ?, ?, 'scheduled', datetime('now'))`
-      )
-      .bind('mtg-orphan', ORG, s.entityA, null)
-      .run()
-    const qOrphan = await createQuote(s.db, ORG, {
-      entityId: s.entityA,
-      assessmentId: 'mtg-orphan',
-      lineItems: [],
-      rate: 175,
-      originatingSignalId: null,
-    })
-    await createEngagement(s.db, ORG, {
-      entity_id: s.entityA,
-      quote_id: qOrphan.id,
-      estimated_hours: 99,
-      originating_signal_id: null,
-    })
-
-    const rows = await getEngagementsBySourcePipeline(s.db, ORG)
-    const byPipeline = Object.fromEntries(rows.map((r) => [r.source_pipeline, r]))
-
-    expect(byPipeline.review_mining?.engagement_count).toBe(2)
-    expect(byPipeline.review_mining?.total_estimated_hours).toBe(30)
-    expect(byPipeline.job_monitor?.engagement_count).toBe(1)
-    expect(byPipeline.job_monitor?.total_estimated_hours).toBe(5)
-    expect(byPipeline.website_booking).toBeUndefined()
-  })
-
-  it('is org-scoped — engagements from a different org never appear', async () => {
-    // Seed in ORG, query ORG_OTHER. Result must be empty.
-    const sig = await appendContext(s.db, ORG, {
-      entity_id: s.entityA,
-      type: 'signal',
-      content: 'sig',
-      source: 'review_mining',
-    })
-    await s.db
-      .prepare(
-        `INSERT INTO assessments (id, org_id, entity_id, scheduled_at, status, created_at)
-         VALUES (?, ?, ?, ?, 'scheduled', datetime('now'))`
-      )
-      .bind('mtg-iso', ORG, s.entityA, null)
-      .run()
-    const q = await createQuote(s.db, ORG, {
-      entityId: s.entityA,
-      assessmentId: 'mtg-iso',
-      lineItems: [],
-      rate: 175,
-      originatingSignalId: sig.id,
-    })
-    await createEngagement(s.db, ORG, {
-      entity_id: s.entityA,
-      quote_id: q.id,
-      originating_signal_id: sig.id,
-    })
-
-    const rows = await getEngagementsBySourcePipeline(s.db, ORG_OTHER)
-    expect(rows).toEqual([])
   })
 })

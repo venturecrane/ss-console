@@ -1,5 +1,9 @@
 import type { APIContext, APIRoute } from 'astro'
-import { setOperatorPrice } from '../../../../../lib/db/services'
+import {
+  isOperatorPaymentMethod,
+  setOperatorPaymentMethod,
+  setOperatorPrice,
+} from '../../../../../lib/db/services'
 import { env } from 'cloudflare:workers'
 import { requireAdminSession } from '../../../../../lib/auth/admin-session'
 
@@ -8,9 +12,12 @@ import { requireAdminSession } from '../../../../../lib/auth/admin-session'
  *
  * Authors the operator's monthly recurring price on the commercial spine
  * (ADR 0046). The form field `monthly_price` is the dollar amount; an empty
- * value clears it (back to unpriced). Writes ONLY the `services` commercial
- * record — never `subscriptions` (that is provisioning's, and gates portal
- * access). Admin-gated. Redirects back to the client hub.
+ * value clears it (back to unpriced). The optional `payment_method` field
+ * (`ach` | `card`, migration 0113) authors the rail the retainer is
+ * collected by; card adds the 3% fee line (agreement §3.8) to checkout and
+ * to every monthly invoice. Writes ONLY the `services` commercial record —
+ * never `subscriptions` (that is provisioning's, and gates portal access).
+ * Admin-gated. Redirects back to the client hub.
  */
 
 /** Parse the submitted price: '' → null (clear); otherwise a finite, non-negative number. */
@@ -37,7 +44,12 @@ async function handlePost({ request, locals, params, redirect }: APIContext): Pr
     if (!parsed.ok) {
       return redirect(`/admin/clients/${entityId}?error=bad_price`, 302)
     }
+    const method = formData.get('payment_method')
+    if (method !== null && !isOperatorPaymentMethod(method)) {
+      return redirect(`/admin/clients/${entityId}?error=bad_payment_method`, 302)
+    }
     await setOperatorPrice(env.DB, session.orgId, entityId, parsed.value)
+    if (method !== null) await setOperatorPaymentMethod(env.DB, session.orgId, entityId, method)
     return redirect(`/admin/clients/${entityId}?priced=1`, 302)
   } catch (err) {
     console.error('[api/admin/clients/operator-price] error:', err)

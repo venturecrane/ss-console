@@ -53,7 +53,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 #: Where the checker lives on a provisioned seat. The establishment intake pins
@@ -100,7 +100,10 @@ def _safe(name: str) -> str:
 
 
 def _materialize(
-    root: Path, sources: list[tuple[str, str]], held_out_names: set[str]
+    root: Path,
+    sources: list[tuple[str, str]],
+    held_out_names: set[str],
+    vision_names: set[str] | None = None,
 ) -> tuple[Path, Path | None]:
     """Write the extracted source texts to disk for the checker to walk.
 
@@ -108,7 +111,12 @@ def _materialize(
     so every source is written as ``.txt`` regardless of what it was in
     Smokeball — the extraction already happened upstream and what lands here is
     text either way.
+
+    A source whose text is a machine transcription of a scan is written as
+    ``NNN-VISION-<name>.txt``. The filename is the provenance an attorney sees
+    on the artifact itself, so it survives being copied out of the report.
     """
+    vision_names = vision_names or set()
     src_dir = root / "sources"
     src_dir.mkdir()
     held_dir: Path | None = None
@@ -119,7 +127,8 @@ def _materialize(
                 held_dir = root / "held-out"
                 held_dir.mkdir()
             target_dir = held_dir
-        (target_dir / f"{index:03d}-{_safe(name)}.txt").write_text(text, encoding="utf-8")
+        prefix = "VISION-" if name in vision_names else ""
+        (target_dir / f"{index:03d}-{prefix}{_safe(name)}.txt").write_text(text, encoding="utf-8")
     return src_dir, held_dir
 
 
@@ -129,15 +138,56 @@ def run_record_check(
     *,
     held_out_names: set[str] | None = None,
     unextractable: list[str] | None = None,
+    vision_sources: list[tuple[str, str]] | None = None,
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
 ) -> RecordCheckResult:
     """Check ``draft_markdown`` against the matter's record. Never raises.
 
     ``sources`` is ``(document_name, extracted_text)`` for every matter document
-    that extracted. ``unextractable`` names the ones that did not — a non-empty
-    list REFUSES before the checker runs, because a partial record turns honest
-    quotation into reported fabrication.
+    that extracted from its own text layer. ``vision_sources`` is the same shape
+    for documents whose text is a MACHINE TRANSCRIPTION of a scan (ss#2464):
+    they count as record — a quotation must still trace to one — but the result
+    WARNS and names every one of them, because nobody has read those pages. A
+    warning rides forward into the caller's result (see the module docstring),
+    which is the point: the attorney opening the draft is told which parts of
+    the record behind it are a machine's reading of a photograph.
+
+    ``unextractable`` names the documents that did not extract at all — a
+    non-empty list REFUSES before the checker runs, because a partial record
+    turns honest quotation into reported fabrication.
     """
+    transcribed = list(vision_sources or ())
+    result = _run_checked(
+        draft_markdown,
+        list(sources) + transcribed,
+        held_out_names=held_out_names,
+        unextractable=unextractable,
+        vision_names={name for name, _text in transcribed},
+        timeout=timeout,
+    )
+    if not transcribed:
+        return result
+    total = len(sources) + len(transcribed)
+    warning = (
+        f"{len(transcribed)} of {total} sources are machine transcriptions of scanned "
+        "documents and have not been read by a human: "
+        + ", ".join(sorted(name for name, _text in transcribed))
+        + ". Cite them as transcriptions and verify any passage you quote against the "
+        "scan itself; [illegible] marks a token the transcriber could not read."
+    )
+    return replace(result, warnings=[warning] + list(result.warnings))
+
+
+def _run_checked(
+    draft_markdown: str,
+    sources: list[tuple[str, str]],
+    *,
+    held_out_names: set[str] | None = None,
+    unextractable: list[str] | None = None,
+    vision_names: set[str] | None = None,
+    timeout: int = DEFAULT_TIMEOUT_SECONDS,
+) -> RecordCheckResult:
+    """The disposition table itself, over the combined source list."""
     if unextractable:
         return RecordCheckResult(
             passed=False,
@@ -178,7 +228,7 @@ def run_record_check(
         root = Path(tmp)
         draft_path = root / "draft.md"
         draft_path.write_text(draft_markdown, encoding="utf-8")
-        src_dir, held_dir = _materialize(root, sources, held_out_names or set())
+        src_dir, held_dir = _materialize(root, sources, held_out_names or set(), vision_names)
 
         argv = [
             sys.executable,
@@ -246,8 +296,7 @@ def run_record_check(
 
         def _lines(severity: str) -> list[str]:
             return [
-                f"[{f.get('gate')}] {f.get('message')}"
-                + (f" — {f.get('detail')}" if f.get("detail") else "")
+                f"[{f.get('gate')}] {f.get('message')}" + (f" — {f.get('detail')}" if f.get("detail") else "")
                 for f in findings
                 if f.get("severity") == severity
             ]

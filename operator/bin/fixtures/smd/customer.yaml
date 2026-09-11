@@ -18,7 +18,7 @@ machine:
   memory_mb: 256
 
 users:
-  - email: smdurgan@venturecrane.com
+  - email: principal@example.com
     role: principal
     full_name: Scott Durgan
 
@@ -57,4 +57,4 @@ scope:
 
 escalation:
   failure_recipients:
-    - smdurgan@venturecrane.com
+    - principal@example.com

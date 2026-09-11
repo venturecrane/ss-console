@@ -1,7 +1,18 @@
 # Client Verification Tracker — Voice
 
 Two outbound drafts, two voices. Neither is ever sent without authenticated
-attorney approval.
+attorney approval. The client-facing draft derives from the pack chase voice
+(`operator/verticals/law-firm/addons/pi/references/_shared-chase-voice.md`);
+fix the shared voice there first.
+
+## Salutation and signature (client-facing request and reminder)
+
+Per the shared "Salutation and signature" section (`_shared-chase-voice.md`):
+the salutation resolves down the ladder (the signer's name from the authored
+roster or the request record, then role-addressed, then none), and the body
+closes with "Thank you." plus the authored firm name (`customer_name`, or the
+persona `signature:` override). Authored data only; never a guessed name. The
+internal approve-and-send to the attorney carries no signature block.
 
 ## The verification request (to the signer — party / GAL / successor)
 

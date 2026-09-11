@@ -21,7 +21,7 @@ from pathlib import Path
 _BIN = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_BIN / "lib"))
 
-import env_arrays as ea  # noqa: E402
+import env_arrays as ea  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 _ROOT = ea.repo_root()
 

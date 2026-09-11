@@ -1,0 +1,225 @@
+---
+import AdminLayout from '../../../../layouts/AdminLayout.astro'
+import { resolveEntityIdBySlug } from '../../../../lib/admin/operator-overview'
+import {
+  loadMedchronJobsView,
+  loadAuthoredPageAllowance,
+  formatCents,
+  type MedchronJobsReadResult,
+} from '../../../../lib/admin/medchron-jobs-read'
+import {
+  isRuntimeReadConfigured,
+  createMachineRuntimeTransport,
+  createRuntimeReadAudit,
+} from '../../../../lib/operator/runtime-read-transport'
+import { env } from 'cloudflare:workers'
+
+/**
+ * Operator admin console: chronology packages (routine 11, ss#2614).
+ *
+ * What the seat's runner did this month and for which matters: counts, states,
+ * pages, cents, the delivery folder. Read live from the Machine over the
+ * runtime-read seam (kind `medchron_jobs`), audited per read, fail-closed.
+ * Never a document and never a page of text: this is a management surface
+ * (ADR 0052). Cents here are the runner's own ledger; the nightly cost plane
+ * is the other lane and lives on the costs page.
+ */
+
+const session = Astro.locals.session!
+if (session.role !== 'admin') {
+  return Astro.redirect('/auth/sign-in')
+}
+
+const slug = Astro.params.customer ?? ''
+const entityId = await resolveEntityIdBySlug(env.DB, slug)
+const notFound = entityId === null
+const configured = isRuntimeReadConfigured(env)
+
+// The allowance denominator comes from the seat's own authored config as D1
+// projected it. Absent (unauthored, disabled, or a projection this page cannot
+// parse) means the tile shows the numerator alone: an invented denominator
+// would misreport how much of the month's allowance is left.
+let allowancePages: number | null = null
+if (!notFound) {
+  allowancePages = await loadAuthoredPageAllowance(env.DB, slug)
+}
+
+let result: MedchronJobsReadResult = { status: 'not_enabled' }
+if (!notFound) {
+  result = await loadMedchronJobsView(
+    {
+      transport: createMachineRuntimeTransport(env),
+      audit: createRuntimeReadAudit(env.DB, { actorUserId: session.userId }),
+    },
+    slug,
+    { actor: session.email, actorRole: session.role },
+    configured
+  )
+}
+
+const statePill: Record<string, string> = {
+  delivered: 'bg-[color:var(--ss-color-success-soft)] text-[color:var(--ss-color-success)]',
+  running: 'bg-[color:var(--ss-color-info-soft)] text-[color:var(--ss-color-info)]',
+  submitted: 'bg-[color:var(--ss-color-surface-muted)] text-[color:var(--ss-color-text-secondary)]',
+  held: 'bg-[color:var(--ss-color-attention-soft)] text-[color:var(--ss-color-attention)]',
+  failed: 'bg-[color:var(--ss-color-error-soft)] text-[color:var(--ss-color-error)]',
+}
+---
+
+<AdminLayout
+  title={`Operator: Chronology packages: ${slug}`}
+  breadcrumbs={[
+    { label: 'Home', href: '/admin' },
+    { label: 'Operator', href: '/admin/operator' },
+    { label: slug, href: `/admin/operator/${encodeURIComponent(slug)}` },
+    { label: 'Chronology packages' },
+  ]}
+  maxWidth="max-w-5xl"
+>
+  <div class="space-y-card">
+    {
+      notFound ? (
+        <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card">
+          <h2 class="text-xl font-semibold text-[color:var(--ss-color-text-primary)]">
+            Operator not found
+          </h2>
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)] mt-1">
+            No operator is provisioned under <code>{slug}</code>.{' '}
+            <a href="/admin/operator" class="text-[color:var(--ss-color-action)] hover:underline">
+              Back to the fleet
+            </a>
+            .
+          </p>
+        </div>
+      ) : (
+        <>
+          <header>
+            <h2 class="text-xl font-semibold text-[color:var(--ss-color-text-primary)]">
+              Chronology packages
+            </h2>
+            <p class="text-sm text-[color:var(--ss-color-text-secondary)] mt-1">
+              Every chronology job the runner on this seat took, read live from its ledger. Counts
+              and states only; the documents stay on the matter.
+            </p>
+          </header>
+
+          {result.status === 'not_enabled' ? (
+            <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card">
+              <p class="text-sm text-[color:var(--ss-color-text-primary)]">
+                The runtime read path is not enabled yet.
+              </p>
+              <p class="text-xs text-[color:var(--ss-color-text-muted)] mt-1">
+                Jobs appear here once a Machine read endpoint is wired (
+                <code>OPERATOR_RUNTIME_READ_URL</code>). The view is dark, not empty: no data has
+                been read.
+              </p>
+            </div>
+          ) : result.status === 'unreachable' ? (
+            <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card">
+              <p class="text-sm text-[color:var(--ss-color-text-primary)]">
+                This operator's runtime is unreachable right now.
+              </p>
+              <p class="text-xs text-[color:var(--ss-color-text-muted)] mt-1">
+                Reason: {result.reason}. The read fails closed; try again, or check the seat's
+                health on the overview.
+              </p>
+            </div>
+          ) : result.status === 'empty' ? (
+            <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card">
+              <p class="text-sm text-[color:var(--ss-color-text-secondary)]">
+                No chronology jobs have been submitted on this seat.
+              </p>
+            </div>
+          ) : (
+            <>
+              <section class="grid grid-cols-1 md:grid-cols-4 gap-card">
+                {[
+                  { label: `Jobs in ${result.month.month}`, value: String(result.month.jobs) },
+                  {
+                    label: 'Delivered / held',
+                    value: `${result.month.delivered} / ${result.month.held}`,
+                  },
+                  {
+                    label: 'Pages read / allowance',
+                    value:
+                      allowancePages === null
+                        ? result.month.pagesUsed.toLocaleString('en-US')
+                        : `${result.month.pagesUsed.toLocaleString('en-US')} / ${allowancePages.toLocaleString('en-US')}`,
+                  },
+                  {
+                    label: 'Runner spend (month, all jobs)',
+                    value: formatCents(result.month.centsUsed),
+                  },
+                ].map((tile) => (
+                  <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card">
+                    <p class="text-xs tracking-wide uppercase text-[color:var(--ss-color-text-muted)]">
+                      {tile.label}
+                    </p>
+                    <p class="text-2xl font-bold text-[color:var(--ss-color-text-primary)] tabular-nums mt-1">
+                      {tile.value}
+                    </p>
+                  </div>
+                ))}
+              </section>
+
+              <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card">
+                <div class="overflow-x-auto">
+                  <table class="w-full text-sm">
+                    <thead>
+                      <tr class="text-left text-[color:var(--ss-color-text-muted)] border-b border-[color:var(--ss-color-border)]">
+                        <th class="py-2 pr-4 font-medium">Submitted</th>
+                        <th class="py-2 pr-4 font-medium">Matter</th>
+                        <th class="py-2 pr-4 font-medium">State</th>
+                        <th class="py-2 pr-4 font-medium text-right">Documents</th>
+                        <th class="py-2 pr-4 font-medium text-right">Pages</th>
+                        <th class="py-2 pr-4 font-medium text-right">Spend</th>
+                        <th class="py-2 font-medium">Note</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[color:var(--ss-color-border-subtle)]">
+                      {result.jobs.slice(0, 20).map((job) => (
+                        <tr>
+                          <td class="py-2 pr-4 tabular-nums text-[color:var(--ss-color-text-secondary)]">
+                            {job.createdAt.slice(0, 16).replace('T', ' ')}
+                          </td>
+                          <td class="py-2 pr-4 text-[color:var(--ss-color-text-primary)]">
+                            {job.matterNumber}
+                          </td>
+                          <td class="py-2 pr-4">
+                            <span
+                              class={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statePill[job.state] ?? ''}`}
+                            >
+                              {job.state}
+                            </span>
+                          </td>
+                          <td class="py-2 pr-4 text-right tabular-nums">{job.documents}</td>
+                          <td class="py-2 pr-4 text-right tabular-nums">{job.pages}</td>
+                          <td class="py-2 pr-4 text-right tabular-nums">
+                            {formatCents(job.cents)}
+                          </td>
+                          <td class="py-2 text-xs text-[color:var(--ss-color-text-muted)]">
+                            {job.state === 'delivered' && job.folderId
+                              ? `folder ${job.folderId}`
+                              : (job.reason ?? '')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p class="text-xs text-[color:var(--ss-color-text-muted)] mt-3">
+                  Pages and spend above count every job that recorded a cost this month, whatever
+                  state it ended in, which is the same rule the seat meters the allowance by. Spend
+                  is the runner's own ledger, priced from the seat's pricing table. The nightly cost
+                  plane books the same tokens to this customer's workspace on the costs page; the
+                  two are separate lanes and are never added together. The monthly cost budget and
+                  the per-job cap are seat posture and are not shown here.
+                </p>
+              </div>
+            </>
+          )}
+        </>
+      )
+    }
+  </div>
+</AdminLayout>

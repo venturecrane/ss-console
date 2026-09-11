@@ -26,14 +26,49 @@ import {
   verticalFloorActionClasses,
   applyExposureChange,
   applySkillToggle,
-  listConfigChangeAudit,
   isCeiling,
 } from '../src/lib/portal/operator/config-governance'
 import { ACCEPTED_ACTION_CLASSES } from '../src/lib/operator/customer-yaml/types'
 import type { ActionClass } from '../src/lib/operator/customer-yaml/types'
-import type { Ceiling } from '../src/lib/portal/operator/config-governance'
+import type {
+  Ceiling,
+  ChangeDirection,
+  ConfigChangeOutcome,
+  ConfigChangeType,
+} from '../src/lib/portal/operator/config-governance'
+
+interface ConfigChangeAuditRow {
+  id: number
+  created_at: string
+  source: string
+  actor_email: string
+  change_type: ConfigChangeType
+  persona_slug: string | null
+  skill_name: string | null
+  action_class: string | null
+  old_value: string | null
+  new_value: string | null
+  outcome: ConfigChangeOutcome
+  outcome_reason: string | null
+  direction: ChangeDirection
+}
 
 const migrationsDir = resolve(process.cwd(), 'migrations')
+
+async function configChangeAudit(
+  db: D1Database,
+  entityId: string
+): Promise<ConfigChangeAuditRow[]> {
+  const result = await db
+    .prepare(
+      'SELECT id, created_at, source, actor_email, change_type, persona_slug, skill_name, ' +
+        'action_class, old_value, new_value, outcome, outcome_reason, direction ' +
+        'FROM config_change_audit WHERE entity_id = ? ORDER BY created_at DESC, id DESC LIMIT 50'
+    )
+    .bind(entityId)
+    .all<ConfigChangeAuditRow>()
+  return result.results ?? []
+}
 
 async function freshDb(): Promise<D1Database> {
   const db = createTestD1()
@@ -163,7 +198,7 @@ describe('applyExposureChange (D1)', () => {
     })
     expect(result.outcome).toBe('accepted')
 
-    const rows = await listConfigChangeAudit(db, 'entity-1')
+    const rows = await configChangeAudit(db, 'entity-1')
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({
       action_class: 'external_send',
@@ -190,7 +225,7 @@ describe('applyExposureChange (D1)', () => {
       })
       expect(result.outcome).toBe('rejected_floor')
 
-      const rows = await listConfigChangeAudit(db, 'entity-1')
+      const rows = await configChangeAudit(db, 'entity-1')
       expect(rows).toHaveLength(1)
       expect(rows[0]).toMatchObject({
         source: 'portal_intent',
@@ -222,7 +257,7 @@ describe('applyExposureChange (D1)', () => {
     })
     expect(result.outcome).toBe('accepted')
 
-    const rows = await listConfigChangeAudit(db, 'entity-2')
+    const rows = await configChangeAudit(db, 'entity-2')
     expect(rows[0]).toMatchObject({ outcome: 'accepted', direction: 'lower' })
   })
 
@@ -239,7 +274,7 @@ describe('applyExposureChange (D1)', () => {
       new_value: 'autonomous',
     })
     expect(result.outcome).toBe('accepted')
-    const rows = await listConfigChangeAudit(db, 'entity-3')
+    const rows = await configChangeAudit(db, 'entity-3')
     expect(rows[0]).toMatchObject({
       change_type: 'entitlement_exposure',
       action_class: 'internal_write',
@@ -262,7 +297,7 @@ describe('applySkillToggle (D1)', () => {
       skill_name: 'ar-chaser',
       next_enabled: false,
     })
-    const rows = await listConfigChangeAudit(db, 'entity-4')
+    const rows = await configChangeAudit(db, 'entity-4')
     expect(rows[0]).toMatchObject({
       change_type: 'skill_enabled',
       old_value: 'true',

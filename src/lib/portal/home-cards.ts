@@ -13,7 +13,14 @@ import { resolveAlivenessSignal } from './operator/aliveness'
 import { readDraftQueueDepth } from './operator/home'
 import { resolveHostedAgentState } from './hosted-agent-state'
 import { listInvoicesForEntity } from '../db/invoices'
+import { getOperatorServiceForEntity } from '../db/services'
 import { formatShortDate } from './formatters'
+import {
+  canStartOperatorSubscription,
+  formatWholeDollars,
+  operatorMonthlyCharge,
+  operatorSubscriptionHref,
+} from './billing'
 
 export interface OfferingCard {
   /**
@@ -75,6 +82,8 @@ function engagementCard(offerings: PortalOfferings): OfferingCard | null {
  */
 async function operatorSummaryCard(
   db: D1Database,
+  orgId: string,
+  entityId: string,
   offerings: PortalOfferings
 ): Promise<OfferingCard | null> {
   const ops = offerings.operators
@@ -100,6 +109,31 @@ async function operatorSummaryCard(
       : 'unknown'
   const meta: string[] = []
   let needsYou: OfferingCard['needsYou'] = null
+
+  // The start door (Captain, 2026-08-29: the retainer starts by the client's
+  // own click). Until the client starts it, this is the one thing the
+  // Operator needs from them, so it outranks the draft queue and the card
+  // says so where they land (2026-09-09: the door lived only on Billing,
+  // under the ledger, and the client did not find it).
+  try {
+    const service = await getOperatorServiceForEntity(db, orgId, entityId)
+    const charge = operatorMonthlyCharge(service)
+    if (charge && canStartOperatorSubscription(op.subscription, charge.priceCents)) {
+      return {
+        key: 'operator',
+        label: 'Operator',
+        href,
+        statusLabel: 'Ready to start',
+        // The amount charged each month on the authored rail: the price, plus
+        // the card fee when the client pays by card (stated before payment).
+        meta: [`${formatWholeDollars(charge.totalCents)} per month`],
+        needsYou: { label: 'Start monthly subscription', href: operatorSubscriptionHref(op.slug) },
+      }
+    }
+  } catch {
+    // No price read, no door: the card falls through to the live status.
+  }
+
   try {
     const signal = await resolveAlivenessSignal(db, op.subscription)
     if (signal?.lastActionAt) {
@@ -209,7 +243,7 @@ export async function loadHomeCards(
   input: { orgId: string; entityId: string; userId: string; offerings: PortalOfferings }
 ): Promise<OfferingCard[]> {
   const [operator, hostedAgent, billing] = await Promise.all([
-    operatorSummaryCard(db, input.offerings),
+    operatorSummaryCard(db, input.orgId, input.entityId, input.offerings),
     hostedAgentCard(db, input.offerings, input.userId),
     billingCard(db, input.orgId, input.entityId, input.offerings),
   ])

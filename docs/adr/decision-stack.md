@@ -23,7 +23,7 @@ A complete record of every strategic decision made across 6 layers of the SMD Se
 | **Payment terms**       | 50% deposit at signing, 50% at completion                                                                                                                                            |
 | **Assessment**          | Free for first 3 clients, then $250 applied toward engagement                                                                                                                        |
 | **Voice standard**      | We / our team throughout. Never I / the consultant.                                                                                                                                  |
-| **Decisions locked**    | 37 active decisions across 6 layers (including venture-wide #20 positioning standard), numbered through #55; 3 superseded (#2, #12, #43)                                             |
+| **Decisions locked**    | 38 active decisions across 6 layers (including venture-wide #20 positioning standard), numbered through #56; 3 superseded (#2, #12, #43)                                             |
 | **Deliverables queued** | 11 artifacts ready to build                                                                                                                                                          |
 
 ---
@@ -892,6 +892,20 @@ The console validator compounds it: `src/lib/operator/customer-yaml/sections-sco
 **Cross-layer impact (Layer 6 - Delivery).** Posture change across three safety controls. An ADR follows from the implementing design rather than preceding it.
 
 **Captain authorized:** 2026-08-13.
+
+---
+
+## Decision #56 - The Chronology Package Is the Runner's Product, and the Runner's Gates Are Its Content Control
+
+**Issues:** [#2618](https://github.com/venturecrane/ss-console/issues/2618), [#2611](https://github.com/venturecrane/ss-console/issues/2611), [#2439](https://github.com/venturecrane/ss-console/issues/2439)
+
+**Decision: routine 11 delivers the chronology package the firm has been receiving, built by an SMD-owned runner on the firm's own Machine and filed into the matter through the connector, outside any agent turn. The agent-turn content gates never inspect it; the runner's own claim audit, extractive sweep, cross-client gate, and provenance gate are the registered control. The running chronology memo stays an agent write behind the gates and is reformatted to pass them.**
+
+The August 2026 sprint delivered sixteen chronology packages from a laptop, at about $30 in model spend each after two optimization rounds, and about $800 to $1,600 of the Captain's time each. The margin lever is the Captain's time, not the tokens. The agent-turn gates refused the running memo three times on 2026-08-19 because a chronology inherently carries the amounts, codes, and dates the gates exist to catch; they were never a fit for a 100-page audited document.
+
+**Cross-layer impact (Layer 5 - Delivery, Layer 3 - Pricing).** Exhibit A now defines the two forms and attaches the 2,000-document monthly allowance to the package (engagements #89); the seat authors that one figure and nothing else about the package. Nothing is signed; the wording goes into the signature copies before the firm signs.
+
+**Captain authorized:** 2026-08-27 (option (a)); recorded as ADR 0087, 2026-08-29.
 
 ---
 

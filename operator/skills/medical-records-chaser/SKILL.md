@@ -1,7 +1,7 @@
 ---
 name: medical-records-chaser
 description: Chases outstanding medical records from providers. Watches for the plaintiff's medical records landing in the Smokeball matter (records arrive through YoCierge, imported into the matter — observed via document reads, not a YoCierge tool), tracks which requested providers are still outstanding, and chases the provider or records vendor on a cadence until the records are in. Never decides which providers to request, never infers providers from treatment, never diagnoses or characterizes treatment, never drafts a demand, and never asserts a record was received unless the matching document is observed in the matter.
-version: 0.1.0
+version: 0.2.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -175,15 +175,99 @@ never Shape B (the firm's file-naming convention is unconfirmed).
    item with `create_task` (assigned to the responsible staff, keyed to
    `(matter, provider, request)`, dated to a **near-term administrative confirm-by
    date**, stated as such and distinct from any legal deadline).
-5. **Track + re-chase** — a scheduled job re-checks open records tasks
-   (`list_tasks(matter_id, is_completed=false)`) and re-reads `get_files_on_matter`:
+5. **Track + re-chase** — the bespoke `pre_run.py` gates the scheduled wake off
+   the escalation ledger + the authored cadence (see "The state ledger" below).
+   **The wake line's `plans` are the turn's work list AND the email's state
+   (ss #2404):** each `chase` entry names the `matter_id`, `task_id`, the
+   `attempt` this chase would be, `last_chased` (the date of the last chase
+   the seat staged, from the ledger — or null when the ledger holds none), and
+   `days_past_confirm_by` (computed by the gate from the tracking task's
+   authored confirm-by date). Verify each entry live
+   (`list_tasks(matter_id, is_completed=false)`, `get_files_on_matter`), then:
    - a matching record has landed and is matched with confidence → mark received
-     (`update_task`), log (`create_memo`), and let it fall into the daily digest.
+     (`update_task`), log (`create_memo`), and append a `resolved` ledger event —
+     but **only when the ledger holds a raise (a `chased`) for the item**: a
+     never-raised item needs no ledger row (closing the task is the state
+     change; the broker refuses a release with no prior raise — write nothing
+     and move on). Let it fall into the daily digest.
    - still outstanding → chase on the cadence (quiet by design; tell the attorney
-     only if it stalls). Never auto-mark received on a say-so or an ambiguous match.
+     only if it stalls). After the chase is **staged or sent** (the `send_message`
+     call succeeded — at `draft_for_review` that means a held draft exists), log
+     (`create_memo`) AND append a `chased` ledger event via the
+     `escalation_append` tool's derive-then-handle two-step (ss #2304), identity
+     = (`matter_id`, the roster task's stable id, label `records-chase`,
+     `authored_date` null). Never append a `chased` for a send that did not
+     happen. Never auto-mark received on a say-so or an ambiguous match.
+   - plan action `surface_hold` → the matter is held (no authored roster, a
+     roster without addresses, an ambiguous receipt match). Re-check the blocking
+     fact live first: cleanly resolved → append `resolved` on the hold sentinel,
+     and state in the same turn's memo WHY the hold released (what was observed,
+     and from where — the release must read as an observed fact, never an
+     assumption). The hold sentinel needs a prior raise like any other item: if
+     the ledger holds no `fired` for it, there is no hold to release and no row
+     to write. Still blocked → re-surface to a person AND append a fresh `fired`
+     on the hold sentinel in the same turn (the raise starts the next quiet
+     window; a later `fired` after a release RE-ACTIVATES the hold — release is
+     terminal only until the alarm rings again).
+     Send no chase.
+   - plan action `surface_config_missing` / `surface_no_roster_tasks` → surface
+     the seat-level condition (cadence not authored / open tasks carry no roster
+     marker) and append a `fired` on that sentinel; hold quiet through the
+     re-fire window. Never default a cadence and never treat zero roster matches
+     as "nothing due".
+     When the wake line carries **no plans** (a fail-open `decision_basis`), the
+     gate woke blind: enumerate the roster tasks yourself and act per the branches
+     above — and state in any email that ledger state was unavailable this run
+     rather than asserting counts or dates from recall.
 6. **Escalate** — if records are still outstanding as a demand-prep or
-   statute-of-limitations date the deadline lane surfaced approaches, raise it to the
-   responsible attorney. The skill **reads** that date; it never computes it.
+   statute-of-limitations date the deadline lane surfaced approaches, or the
+   provider/vendor is non-responsive past the cadence, raise it to the
+   responsible attorney. The skill **reads** the deadline; it never computes it.
+   A stall raise is recorded on its own sentinel — identity
+   (`matter_id`, `__mrc_stall__<task_id>`, label `mrc-stall`, null) — **never on
+   the chase item's key**: attempts count every raise, so a stall `fired` on the
+   chase key would inflate the "chase N" numerator the email copies.
+
+## The state ledger (ss #2404) — the email copies it, never recalls it
+
+The chase's history lives in the shared **escalation ledger** (vendored
+byte-identical as `escalation_ledger.py`; the same broker-owned state the
+verification tracker and deadline lanes use). Item identity is the roster
+task's stable Smokeball id via
+`item_key(matter_id, task_id, "records-chase", null)` — derive with the
+`escalation_append` tool (`derive_only: true`), then write with the returned
+handle; never build a key by hand (ss #2304).
+
+Three rules, each the direct product of the 2026-08-18 defect (the Valley
+Imaging email that asserted "last chase staged July 13, no chase in five
+weeks" three days after its own August 11 chase, threaded by an improvised
+`[op-mrc:...]` tag that drifted weekly):
+
+1. **The email copies the plan's state verbatim.** "Chase N" is the plan's
+   `attempt`; the last-chase date is the plan's `last_chased`; the overdue
+   figure is the plan's `days_past_confirm_by`, phrased as "days past the
+   confirm-by date on the tracking task" (it anchors to the admin confirm-by
+   date, which the firm may refresh — never phrase it as "records N days
+   overdue"). Never recompute, never recall, never carry over from an earlier
+   week's email.
+2. **Null history is stated as null history.** When `last_chased` is null the
+   ledger has no recorded chase for this item — which is NOT the same as "no
+   chase ever happened" (pre-ledger chases live in matter memos; a recreated
+   roster task also starts a fresh identity). Write "first chase recorded in
+   the tracking ledger; earlier chases may appear in the matter memos" and
+   omit any "chase N" numerator. Never write "no prior chase" or "no chase in
+   the last N weeks" from a null.
+3. **No email-body tracking tags.** The `[op-mrc:...]` tag is retired;
+   identity lives in the ledger, and the memos on the matter remain the
+   firm-visible mirror (loss-safety: if the ledger is lost, items re-fire once
+   and the memos let a person reconstruct history).
+
+Every chase email keeps the **forwardable chase letter** (Shape A's blockquote
+in `references/output-format.md`) — the 2026-08-18 emails dropped it, which
+turned an actionable artifact into a nag. Sentinel namespaces here are
+per-skill (`__mrc_*`) because `item_key` ignores the label and the ledger is
+shared: reusing another skill's sentinel source id would let an ack on their
+sentinel silence ours, and their matter-hold block our chases.
 
 ## The autonomy dial (live; the firm turns it)
 
@@ -230,6 +314,14 @@ ceiling, which silently defeats the graduation.
   send by the firm's method. (ADR 0035/0037/0073.)
 - **Never move or compute a deadline** — it reads the date the deadline lane
   surfaced.
+- **Never state chase history from recall** — "chase N", the last-chase date,
+  and the overdue figure come from the wake plan's ledger state, copied
+  verbatim; a null history is stated as "first chase recorded in the tracking
+  ledger", never as "no prior chase" (ss #2404).
+- **Never chase a held matter, and never hold in prose only** — a surfaced
+  blocker is written to the ledger as the matter's hold (`fired` on the
+  `__mrc_hold__` sentinel) in the same turn; only an observed resolution writes
+  the `resolved` that releases it (the ss #2402 rule).
 
 ## Training output (built into every run)
 
@@ -280,13 +372,14 @@ refusal is a stalled deliverable and a full-context redraft — write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.
-- In email and task text, refer to the matter by its NUMBER, taken ONLY from
-  the `matterNumber` field of a record you read this turn. Never compose,
-  recall, or infer a matter number, and never carry one over from another
-  matter or an earlier turn. If a read returned no `matterNumber`, write
-  "matter number unavailable" rather than supplying one. Never refer to the
-  matter by its case caption. The matter's own caption is acceptable inside
-  matter memos; cited case law is never acceptable anywhere.
+- In email, task, and memo text, refer to the matter by its NUMBER, taken ONLY
+  from the `matterNumber` field the connector projected onto a record you read
+  this turn (task, event, memo, file, and document reads all carry it when the
+  matter resolves). Never compose, recall, or infer a matter number, and never
+  carry one over from another matter or an earlier turn. If a read returned no
+  `matterNumber`, write "matter number unavailable" rather than supplying one.
+  Never refer to the matter by its case caption. The matter's own caption is
+  acceptable inside matter memos; cited case law is never acceptable anywhere.
 - State a specific dollar figure only when it exists in an authored source
   on the matter, and name that source in the same sentence ("per the MedFin
   payoff letter dated..."). Never total, estimate, or round figures into

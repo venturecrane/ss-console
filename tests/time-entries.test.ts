@@ -9,10 +9,6 @@ describe('time-entries: data access layer', () => {
     expect(existsSync(resolve('src/lib/db/time-entries.ts'))).toBe(true)
   })
 
-  it('exports listTimeEntries function', () => {
-    expect(source()).toContain('export async function listTimeEntries')
-  })
-
   it('exports getTimeEntry function', () => {
     expect(source()).toContain('export async function getTimeEntry')
   })
@@ -42,11 +38,6 @@ describe('time-entries: data access layer', () => {
 
   it('generates UUIDs for primary keys', () => {
     expect(source()).toContain('crypto.randomUUID()')
-  })
-
-  it('orders time entries by date DESC', () => {
-    const code = source()
-    expect(code).toContain('ORDER BY date DESC')
   })
 
   it('recalculateActualHours sums hours from time_entries', () => {
@@ -79,21 +70,11 @@ describe('time-entries: data access layer', () => {
     expect(deleteFn).toContain('recalculateActualHours')
   })
 
-  it('defines all valid time entry categories', () => {
-    const code = source()
-    expect(code).toContain("'solution_design'")
-    expect(code).toContain("'implementation'")
-    expect(code).toContain("'training'")
-    expect(code).toContain("'admin'")
-    expect(code).toContain("'other'")
-  })
-
   it('every DAL function requires orgId as a parameter (#399)', () => {
     const code = source()
     // All public functions must accept orgId — no raw-ID primitives that
     // could be used to read or mutate rows outside the caller's org.
     const fnNames = [
-      'listTimeEntries',
       'getTimeEntry',
       'createTimeEntry',
       'updateTimeEntry',
@@ -110,9 +91,6 @@ describe('time-entries: data access layer', () => {
   it('every SQL read/write against time_entries is scoped by org_id (#399)', () => {
     const code = source()
     // Enumerate the exact SQL statements and assert each is org-scoped.
-    expect(code).toContain(
-      'SELECT * FROM time_entries WHERE engagement_id = ? AND org_id = ? ORDER BY date DESC'
-    )
     expect(code).toContain('SELECT * FROM time_entries WHERE id = ? AND org_id = ?')
     expect(code).toContain(
       'SELECT COALESCE(SUM(hours), 0) as total FROM time_entries WHERE engagement_id = ? AND org_id = ?'
@@ -128,16 +106,8 @@ describe('time-entries: data access layer', () => {
     )
   })
 
-  it('exports TIME_ENTRY_CATEGORIES constant', () => {
-    expect(source()).toContain('export const TIME_ENTRY_CATEGORIES')
-  })
-
   it('exports TimeEntry interface', () => {
     expect(source()).toContain('export interface TimeEntry')
-  })
-
-  it('exports TimeEntryCategory type', () => {
-    expect(source()).toContain('export type TimeEntryCategory')
   })
 
   it('recalculate uses COALESCE for zero-entry case', () => {

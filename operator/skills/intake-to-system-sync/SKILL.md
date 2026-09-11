@@ -83,6 +83,17 @@ The agent MUST NOT: create a Smokeball matter/contact or mark a lead synced with
 4. **No fabricated fields.** Only CRM-captured data is mapped; missing fields stay empty, never guessed.
 5. **Privilege + isolation.** Lead and matter data stay on firm surfaces; the sync touches only the two authored systems.
 
+## Matter identifiers (projected, never composed)
+
+- In email, task, and memo text, refer to the matter by its NUMBER, taken ONLY
+  from the `matterNumber` field the connector projected onto a record you read
+  this turn (task, event, memo, file, and document reads all carry it when the
+  matter resolves). Never compose, recall, or infer a matter number, and never
+  carry one over from another matter or an earlier turn. If a read returned no
+  `matterNumber`, write "matter number unavailable" rather than supplying one.
+  A matter this skill has only PROPOSED has no number yet, and a proposal that
+  reads as though it does is the dedupe error this skill exists to prevent.
+
 ## Pitfalls
 
 Creating a duplicate matter because the dedupe match was weak and got ignored; proposing a matter before the conflict cross-check (ordering breach); inventing a practice area or client detail the CRM didn't capture; committing the write before review in the fail-closed phase; enabling this skill when Smokeball is the single system of record (there is nothing to sync from).

@@ -183,8 +183,7 @@ def build_manifest(
         generated_at=generated_at or _iso_utc(),
         signer_name=signer_name or os.environ.get("EVIDENCE_SIGNER_NAME", SIGNER_NAME),
         signer_email=signer_email or os.environ.get("EVIDENCE_SIGNER_EMAIL", SIGNER_EMAIL),
-        signer_key_id=signer_key_id
-        or os.environ.get("EVIDENCE_SIGNER_KEY_ID", "unconfigured"),
+        signer_key_id=signer_key_id or os.environ.get("EVIDENCE_SIGNER_KEY_ID", "unconfigured"),
         file_hashes=dict(file_hashes),
         actor=actor,
         actor_role=actor_role,

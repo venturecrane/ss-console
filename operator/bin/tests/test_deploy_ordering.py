@@ -55,11 +55,7 @@ def test_no_secrets_deploy_before_image_roll() -> None:
     deploy_idx = _first_index(lines, r"\bfly\s+deploy\s+--config\b")
     assert deploy_idx != -1, "could not find the `fly deploy --config` image roll"
 
-    early = [
-        i + 1
-        for i, line in enumerate(lines)
-        if i < deploy_idx and re.search(r"\bfly\s+secrets\s+deploy\b", line)
-    ]
+    early = [i + 1 for i, line in enumerate(lines) if i < deploy_idx and re.search(r"\bfly\s+secrets\s+deploy\b", line)]
     assert not early, (
         f"`fly secrets deploy` appears before the image roll at line(s) {early} — "
         "this commits staged secrets to the OLD running image and caused the "
@@ -72,19 +68,14 @@ def test_post_deploy_no_staged_secrets_guard_exists() -> None:
     lines = _code_lines()
     deploy_idx = _first_index(lines, r"\bfly\s+deploy\s+--config\b")
     guard_idx = _first_index(lines, r"fly\s+secrets\s+list\b.*\|\s*grep\s+-qw\s+Staged")
-    assert guard_idx != -1, (
-        "missing the post-deploy staged-secret guard "
-        "(`fly secrets list ... | grep -qw Staged`)"
-    )
+    assert guard_idx != -1, "missing the post-deploy staged-secret guard (`fly secrets list ... | grep -qw Staged`)"
     assert guard_idx > deploy_idx, (
         "the staged-secret guard must run AFTER the `fly deploy` image roll, "
         f"not before (guard line {guard_idx + 1}, deploy line {deploy_idx + 1})"
     )
     # The guard must terminate provisioning (die) when staged secrets remain.
     window = "\n".join(lines[guard_idx : guard_idx + 4])
-    assert "die " in window, (
-        "the staged-secret guard must `die` when secrets remain staged"
-    )
+    assert "die " in window, "the staged-secret guard must `die` when secrets remain staged"
 
 
 # ---------------------------------------------------------------------------
@@ -117,9 +108,7 @@ def test_r2_account_key_strip_before_any_same_uid_child() -> None:
         f"webhook-gate launch (line {gate_idx + 1}) — a child forked before the strip "
         "retains the key, leaking it to a code-executing agent via /proc (OP-P2-1)."
     )
-    assert strip_idx < gateway_idx, (
-        "the R2 key strip must run before the gateway exec (it already did; keep it so)."
-    )
+    assert strip_idx < gateway_idx, "the R2 key strip must run before the gateway exec (it already did; keep it so)."
 
 
 def test_r2_account_key_strip_after_the_boot_time_fetches() -> None:
@@ -166,22 +155,34 @@ def test_webhook_gate_launched_with_r2_key_scrubbed() -> None:
     )
 
 
-def test_disabled_skills_reconciler_subshell_scrubs_r2() -> None:
-    """SEC-23: the disabled-skills reconciler subshell is forked ~300 lines before
-    the parent's R2 strip, so it must scrub the account-wide R2 key from its OWN
-    environ — else its /proc/<pid>/environ leaks the key to a same-uid code-executing
-    agent while it lives. This guard fails if the `unset` inside the subshell
-    is removed."""
+def test_disabled_skills_reconciler_launched_with_r2_key_scrubbed() -> None:
+    """SEC-23, corrected by ss#2420: the disabled-skills reconciler must be
+    LAUNCHED via ``env -u R2_ACCESS_KEY_ID -u R2_SECRET_ACCESS_KEY bash -c``,
+    never as a forked ``( ) &`` subshell with an inner ``unset``.
+
+    The prior form (which THIS test used to pin) did not work: a fork is never
+    exec'd, so its /proc/<pid>/environ stays the exec-time snapshot and the
+    ``unset`` inside it scrubs only the shell's variable table. The lingering
+    fork held the account-wide key for its whole 120-300s converge window at
+    the agent uid — the actual producer of every ss#2420 first-smoke FAIL,
+    proven live on pilot-smokeball 2026-08-19 (pid 1055, `bash /app/bootstrap.sh`,
+    hermes uid, R2 names in environ; the exec'd gateway clean). Same mechanism,
+    same fix shape as the webhook-gate launch, whose test sits above this one.
+    This guard fails if the launch reverts to a bare fork."""
     lines = _code_lines(_BOOTSTRAP)
-    # ss#2230 replaced the fixed 6x5s window with a convergent while-loop; the
-    # anchor follows the loop, the SEC-23 assertion is unchanged.
     loop_idx = _first_index(lines, r'while \[ "\$\{_ticks\}" -lt 60 \]')
     assert loop_idx != -1, "could not find the disabled-skills reconciler loop"
     window = "\n".join(lines[max(0, loop_idx - 6) : loop_idx])
-    assert re.search(r"\bunset\b.*\bR2_ACCESS_KEY_ID\b", window), (
-        "the disabled-skills reconciler subshell must `unset R2_ACCESS_KEY_ID "
-        "R2_SECRET_ACCESS_KEY` before its loop (SEC-23) so its /proc/environ does "
-        "not leak the account-wide key while it lives."
+    assert re.search(r"env -u R2_ACCESS_KEY_ID -u R2_SECRET_ACCESS_KEY bash -c", window), (
+        "the disabled-skills reconciler must be launched via "
+        "`env -u R2_ACCESS_KEY_ID -u R2_SECRET_ACCESS_KEY bash -c …` — an exec "
+        "that rebuilds a clean environ. A forked `( ) &` subshell keeps the "
+        "account-wide key in /proc/environ for its whole life regardless of any "
+        "inner `unset` (ss#2420)."
+    )
+    assert "(" not in window.replace("$((", "").replace("))", ""), (
+        "a `(` immediately before the reconciler loop suggests the launch "
+        "reverted to a forked subshell — the exact ss#2420 leak shape."
     )
 
 
@@ -207,12 +208,13 @@ def test_runtime_read_key_stripped_from_agent_before_gateway_exec() -> None:
 
 
 def test_heartbeat_secrets_stripped_from_agent_before_gateway_exec() -> None:
-    """ADR 0023: MACHINE_HEARTBEAT_KEY (shared fleet bearer) and
-    HEALTHCHECKS_PING_URL must be stripped from the agent (hermes gateway) env —
-    AFTER the webhook-gate launch (whose emitter holds the inherited copies) and
-    BEFORE the gateway exec. The shared key + attacker-controlled X-Tenant-Slug
-    would otherwise let a code-executing agent forge cross-tenant heartbeats
-    (ADR 0023 locked-decision #10); the ping URL would let it spoof liveness."""
+    """ADR 0023: MACHINE_HEARTBEAT_KEY (this seat's own bearer since migration
+    0114; the shared fleet bearer before it) and HEALTHCHECKS_PING_URL must be
+    stripped from the agent (hermes gateway) env — AFTER the webhook-gate launch
+    (whose emitter holds the inherited copies) and BEFORE the gateway exec. An
+    agent holding the key could write a false "green" for its own seat (and,
+    before 0114, forge another tenant's via X-Tenant-Slug, ADR 0023
+    locked-decision #10); the ping URL would let it spoof liveness."""
     lines = _code_lines(_BOOTSTRAP)
     gate_idx = _first_index(lines, r"hermes-smd-webhook-gate")
     gateway_idx = _first_index(lines, r"\bexec\b.*\bhermes\b.*\bgateway\s+run\b")

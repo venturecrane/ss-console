@@ -39,844 +39,165 @@ WHAT THE AUDIT ROWS NEVER CARRY. Corpus text and spec bodies stay in the spool
 (purged by the root intake after the run) and in the one-shot result payload.
 Retained ledger rows carry document names, hashes, rule ids, and counts — never
 the client's prose. That is ADR 0083's retention posture applied to this path.
+
+PROPOSE / READ BACK / CONFIRM (ss-console#2529, ADR 0085 §4 as amended
+2026-08-21). A firm also establishes by talking: an admin writes one sentence
+about how a kind of output should read, and any person writes one about their
+own work. That sentence has no corpus, so it cannot cross the staged-document
+path above, and the compilers that gate that path all refuse an empty corpus.
+What replaces them is a readback the person answers:
+
+    establish_propose   the sentence is stored PENDING, and the broker returns
+                        the canonical block the seat must send verbatim
+    establish_pending   what this sender may still confirm
+    establish_submit    scope firm_adjust (or person) with the proposal id
+
+THE ROW IS THE AUTHORITY ON WHAT WAS AGREED. At submit, the committed text and
+subject come out of the pending row, never off the wire. A request carrying a
+different text is refused rather than quietly overwritten, because the person
+said yes to a specific sentence and the only way that yes means anything is if
+the committed bytes are the bytes they were shown. Consumption is a conditional
+UPDATE, so a proposal commits exactly once.
+
+AN OPERATIONS REQUEST IS THE THIRD THING THIS TABLE HOLDS (ss-console#2546,
+ADR 0085 as amended 2026-08-23). A routine, a schedule, a channel, a memory
+setting, an autonomy level, an on/off — those are SMD's to change, not the
+firm's, so the firm cannot confirm one and there is nothing here to commit.
+What the row is for is the OTHER half of the loop: somebody asked, SMD was
+emailed, and the person who asked has to hear the answer. So an ``ops_request``
+row is recorded (``ops_propose``), tagged ``[ops XXXX]`` for SMD to quote back,
+and ended by ``ops_resolve`` with one of three words — done, declined,
+withdrawn. It is NEVER confirmable: ``establish_submit`` and
+``establish_decline`` refuse the kind by name, ``consume`` refuses it in SQL,
+and ``open_for`` (the list of what a sender may still confirm) does not return
+it at all. Three independent refusals rather than one, because "the firm
+accidentally installed a routine change by saying yes" is the failure worth
+three.
+
+WHAT THIS MODULE STILL CANNOT SEE. Whether the sender is an Operator admin.
+``instructed_by`` remains provenance, never authorization, on every verb here
+(the corrections ``stated_by`` posture); the admin gate is seat-side, against
+the authored allow list in customer.yaml, which this uid cannot read.
 """
 
 from __future__ import annotations
 
-import json
-import re
-import secrets
-import shutil
-import time
-from hashlib import sha256
-from pathlib import Path
-from typing import Any
-
-# Pinned audit action types — exactly one per writing verb (discipline 1).
-ESTABLISHMENT_SUBMITTED_ACTION_TYPE = "ESTABLISHMENT_SUBMITTED"
-ESTABLISHMENT_RESULT_ACTION_TYPE = "ESTABLISHMENT_RESULT"
-
-# The two spec properties an output class carries (ADR 0083 §2-3). Mirrors
-# SPEC_PROPERTIES in corrections.py and src/lib/operator/output-class-specs.ts.
-SPEC_PROPERTIES: frozenset[str] = frozenset({"voice", "format"})
-
-# The two submission phases (design §3 steps 4-5): ``analyze`` runs the profile
-# and fixed-strings compilers over the corpus; ``install`` carries the drafted
-# spec through the write gates.
-SUBMIT_PHASES: frozenset[str] = frozenset({"analyze", "install"})
-
-# Output-class slug charset. Mirrors corrections.py and the console writer's
-# CLASS_SLUG_PATTERN; refused rather than sanitized (discipline 4).
-_CLASS_SLUG_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789_-")
-_MAX_CLASS_SLUG = 64
-
-# Staging ceilings (design §3 step 3). The per-document text ceiling matches
-# the broker's whole-frame ceiling (server.py MAX_REQUEST_BYTES) — a larger
-# document could never arrive anyway; stating it here makes the refusal named
-# instead of a transport error.
-MAX_DOC_TEXT_BYTES = 1_048_576
-MAX_DOCS_PER_SET = 64
-MAX_SET_BYTES = 16 * 1_048_576
-STAGING_TTL_SECONDS = 30 * 60
-
-# Results are one-shot reads; the TTL sweep is the backstop for a result the
-# agent never came back for.
-RESULT_TTL_SECONDS = 30 * 60
-
-# Spec-body ceiling — applier parity (spec_applier holds a 256 KiB body
-# ceiling; a body the applier would refuse must be refused here, not queued).
-MAX_SPEC_BODY_BYTES = 262_144
-
-# Assertions ride to the selftest compiler, which owns their schema and refuses
-# malformed rules (exit 1). The broker's job is shape and bound, not schema.
-_MAX_ASSERTIONS = 100
-_MAX_ASSERTIONS_BYTES = 65_536
-
-_MAX_SHORT_TEXT = 200
-_MAX_NAME_INPUT = 200
-_MAX_NAME_SLUG = 64
-
-# Identifier charset — mirrors the intake's ``_SAFE_SEGMENT`` exactly
-# (overlay establish_intake/intake.py): lowercase first char, [a-z0-9_-]
-# after, ≤64. The broker mints ids as lowercase hex (token_hex) so they
-# always match; a caller-echoed id outside the charset is refused. Excludes
-# ``/`` and ``.`` so an identifier can never traverse.
-_ID_PATTERN = re.compile(r"\A[a-z0-9][a-z0-9_-]{7,63}\Z")
-
-_NAME_SLUG_KEEP = set("abcdefghijklmnopqrstuvwxyz0123456789._-")
-
-
-class EstablishmentValidationError(ValueError):
-    """An establishment request was malformed. Raised before anything is written."""
-
-
-def _require_text(value: Any, field: str, limit: int) -> str:
-    if not isinstance(value, str):
-        raise EstablishmentValidationError(f"{field} must be a string")
-    text = value.strip()
-    if not text:
-        raise EstablishmentValidationError(f"{field} must not be empty")
-    if len(text) > limit:
-        raise EstablishmentValidationError(
-            f"{field} is {len(text)} characters; the ceiling is {limit}"
-        )
-    return text
-
-
-def _optional_text(value: Any, field: str, limit: int) -> str | None:
-    if value is None:
-        return None
-    return _require_text(value, field, limit)
-
-
-def _require_class_slug(value: Any) -> str:
-    slug = _require_text(value, "output_class", _MAX_CLASS_SLUG)
-    if not set(slug) <= _CLASS_SLUG_CHARS:
-        raise EstablishmentValidationError(
-            "output_class must match [a-z0-9_-]; refusing to rewrite it"
-        )
-    return slug
-
-
-def _require_property(value: Any) -> str:
-    prop = _require_text(value, "property", _MAX_SHORT_TEXT)
-    if prop not in SPEC_PROPERTIES:
-        raise EstablishmentValidationError(
-            f"property must be one of {sorted(SPEC_PROPERTIES)}; got {prop!r}"
-        )
-    return prop
-
-
-def _require_id(value: Any, field: str) -> str:
-    ident = _require_text(value, field, 64)
-    if not _ID_PATTERN.match(ident):
-        raise EstablishmentValidationError(
-            f"{field} must match [a-z0-9][a-z0-9_-]{{7,63}}; refusing to rewrite it"
-        )
-    return ident
-
-
-def safe_slug(name: Any) -> str:
-    """Derive the stored document name from the caller's raw name.
-
-    A broker-side derivation (discipline 3), like the sha256: the raw name is
-    validated for type and bound, the slug is computed here, and the raw bytes
-    are never stored — so a hostile filename from a client system cannot ride
-    into the spool, the audit ledger, or a later reply. A name that derives to
-    nothing is refused (discipline 4), never invented.
-    """
-    raw = _require_text(name, "name", _MAX_NAME_INPUT)
-    out: list[str] = []
-    for ch in raw.lower():
-        if ch in _NAME_SLUG_KEEP and ch != "-":
-            out.append(ch)
-        elif out and out[-1] != "-":
-            out.append("-")
-    slug = "".join(out).strip("-._")[:_MAX_NAME_SLUG]
-    if not slug:
-        raise EstablishmentValidationError(
-            "name derives to an empty slug; provide a name with [a-z0-9._-] content"
-        )
-    return slug
-
-
-def normalize_lf(text: str) -> str:
-    """Collapse CRLF and lone CR to LF.
-
-    The portal writer's precedent (src/lib/operator/output-class-specs.ts):
-    the stored bytes are LF-only, so the byte ceiling, the hash, and the
-    installed file agree — and agree on LF.
-    """
-    return text.replace("\r\n", "\n").replace("\r", "\n")
-
-
-def _hash_text(text: str) -> str:
-    return sha256(text.encode("utf-8")).hexdigest()
-
-
-def _bounded_str(value: Any, limit: int = _MAX_SHORT_TEXT) -> str | None:
-    """Bounded coercion for fields read off a ROOT-authored result file.
-
-    Truncation (not refusal) is correct here and only here: the writer is the
-    root intake, not the agent, and the bound is belt-and-braces against an
-    intake bug — a refusal would strand a result the admin is owed.
-    """
-    if not isinstance(value, str) or not value:
-        return None
-    return value[:limit]
-
-
-def build_result_row(run_id: str, result: dict[str, Any]) -> dict[str, Any]:
-    """Build the ESTABLISHMENT_RESULT audit row from a bounded field set.
-
-    The retained record carries the verdict, the demoted rules with the
-    documents that violated them (names, never text), and the recovery key.
-    The corpus and any leak excerpts stay in the one-shot result payload,
-    which is deleted after this row is appended. Demotion entries arrive as
-    ``{rule_id, documents, detail}`` (the intake's selftest gate); ``detail``
-    is deliberately NOT retained — it is compiler prose that may quote, and
-    retained records carry names, ids, and counts only.
-    """
-    demotions: list[dict[str, Any]] = []
-    raw_demotions = result.get("demotions")
-    if isinstance(raw_demotions, list):
-        for entry in raw_demotions[:50]:
-            if not isinstance(entry, dict):
-                continue
-            rule_id = _bounded_str(entry.get("rule_id"))
-            raw_docs = entry.get("documents")
-            documents = []
-            if isinstance(raw_docs, list):
-                documents = [
-                    d[:_MAX_SHORT_TEXT] for d in raw_docs[:MAX_DOCS_PER_SET] if isinstance(d, str)
-                ]
-            demotions.append({"rule_id": rule_id, "documents": documents})
-
-    metadata = {
-        "run_id": run_id,
-        "verdict": _bounded_str(result.get("status")),
-        "phase": _bounded_str(result.get("phase")),
-        "scope": _bounded_str(result.get("scope")),
-        "person": _bounded_str(result.get("person")),
-        "output_class": _bounded_str(result.get("output_class")),
-        "property": _bounded_str(result.get("property")),
-        "demotions": demotions,
-        "previous_key": _bounded_str(result.get("previous_key")),
-    }
-    return {
-        "action_type": ESTABLISHMENT_RESULT_ACTION_TYPE,
-        "actor": "operator",
-        "actor_role": "agent",
-        "metadata": json.dumps(metadata, sort_keys=True, separators=(",", ":")),
-    }
-
-
-class EstablishmentStore:
-    """The broker's half of the establishment spool.
-
-    Layout (created and moded by the entrypoint, never here — the spool root is
-    root-owned and the broker uid cannot create it):
-
-        <root>/staging/<staging_id>/meta.json      broker-written
-        <root>/staging/<staging_id>/docs/<id>.json broker-written (holds text)
-        <root>/staging/<staging_id>/analysis/      ROOT-written (intake), 0700
-        <root>/runs/<run_id>/submission.json       broker-written
-        <root>/runs/<run_id>/docs/<id>.json        broker-moved from staging
-        <root>/results/<run_id>.json               ROOT-written 0640, one-shot
-
-    Runs are assembled complete (INCLUDING submission.json) in a dot-prefixed
-    temp dir and atomically renamed into place; the intake skips dot-prefixed
-    entries and run dirs without a submission.json, so it never observes a
-    half-written submission (overlay establish_intake/intake.py, the other
-    half of this contract).
-
-    Lifecycle split with the root intake: the intake purges each RUN dir after
-    writing its result, purges the whole staging set after an install run, and
-    backstop-sweeps staging at its own longer TTL — because the broker cannot
-    remove the root-owned ``analysis/`` subdir the analyze phase leaves in a
-    staging set. The broker's sweep therefore only removes staging sets it
-    fully owns, and enforces expiry on the rest by refusal.
-    """
-
-    def __init__(self, spool_root: str | Path, ledger: Any) -> None:
-        self.root = Path(spool_root)
-        self.staging_dir = self.root / "staging"
-        self.runs_dir = self.root / "runs"
-        self.results_dir = self.root / "results"
-        self._ledger = ledger
-
-    # ------------------------------------------------------------------
-    # TTL sweep
-    # ------------------------------------------------------------------
-
-    def sweep(self, now: float | None = None) -> None:
-        """Remove expired staging sets and unread results.
-
-        Best-effort by design: a sweep failure must not refuse the verb that
-        triggered it. Run dirs are NOT swept here — their lifecycle belongs to
-        the root intake, which purges each run after writing its result.
-        """
-        now = time.time() if now is None else now
-        if self.staging_dir.is_dir():
-            for entry in self.staging_dir.iterdir():
-                if not entry.is_dir():
-                    continue
-                if (entry / "analysis").is_dir():
-                    # Root-owned analyze artifacts the broker cannot remove.
-                    # Don't try — a partial rmtree leaves a zombie set. The
-                    # intake's backstop sweep purges these as root; expiry is
-                    # still ENFORCED broker-side by _require_staging's age
-                    # check, so the lingering dir grants nothing.
-                    continue
-                created = self._staging_created_at(entry)
-                if now - created > STAGING_TTL_SECONDS:
-                    shutil.rmtree(entry, ignore_errors=True)
-        if self.results_dir.is_dir():
-            for entry in self.results_dir.iterdir():
-                if not entry.is_file():
-                    continue
-                try:
-                    if now - entry.stat().st_mtime > RESULT_TTL_SECONDS:
-                        entry.unlink(missing_ok=True)
-                except OSError:
-                    continue
-
-    def _staging_created_at(self, staging_path: Path) -> float:
-        meta_path = staging_path / "meta.json"
-        try:
-            meta = json.loads(meta_path.read_text("utf-8"))
-            created = meta.get("created_at")
-            if isinstance(created, (int, float)):
-                return float(created)
-        except (OSError, ValueError):
-            pass
-        try:
-            return staging_path.stat().st_mtime
-        except OSError:
-            return 0.0
-
-    # ------------------------------------------------------------------
-    # establish_stage_document
-    # ------------------------------------------------------------------
-
-    def stage_document(self, request: dict[str, Any]) -> dict[str, Any]:
-        """Validate one corpus document and write it into a staging set.
-
-        The stored file is rebuilt from the bounded field set below; the
-        sha256 is computed here from the bytes being stored (a wire-supplied
-        hash is never read).
-        """
-        name = safe_slug(request.get("name"))
-
-        text = request.get("text")
-        if not isinstance(text, str):
-            raise EstablishmentValidationError("text must be a string")
-        if not text.strip():
-            raise EstablishmentValidationError("text must not be empty")
-        text_bytes = text.encode("utf-8")
-        if len(text_bytes) > MAX_DOC_TEXT_BYTES:
-            raise EstablishmentValidationError(
-                f"text is {len(text_bytes)} bytes; the ceiling is {MAX_DOC_TEXT_BYTES}"
-            )
-
-        source_raw = request.get("source")
-        if not isinstance(source_raw, dict):
-            raise EstablishmentValidationError(
-                "source must be an object with connector and document_id"
-            )
-        source = {
-            "connector": _require_text(
-                source_raw.get("connector"), "source.connector", _MAX_SHORT_TEXT
-            ),
-            "document_id": _require_text(
-                source_raw.get("document_id"), "source.document_id", _MAX_SHORT_TEXT
-            ),
-            "matter_id": _optional_text(
-                source_raw.get("matter_id"), "source.matter_id", _MAX_SHORT_TEXT
-            ),
-        }
-
-        staging_id_raw = request.get("staging_id")
-        if staging_id_raw is None:
-            # Lowercase hex so the id always matches the intake's _SAFE_SEGMENT.
-            staging_id = secrets.token_hex(12)
-            staging_path = self.staging_dir / staging_id
-            (staging_path / "docs").mkdir(parents=True)
-            (staging_path / "meta.json").write_text(
-                json.dumps({"created_at": time.time()}), "utf-8"
-            )
-        else:
-            staging_id, staging_path = self._require_staging(staging_id_raw)
-
-        existing = self._load_staged_docs(staging_path)
-        if len(existing) + 1 > MAX_DOCS_PER_SET:
-            raise EstablishmentValidationError(
-                f"staging set already holds {len(existing)} documents; the ceiling is {MAX_DOCS_PER_SET}"
-            )
-        set_bytes = sum(int(doc.get("size_bytes", 0)) for doc in existing)
-        if set_bytes + len(text_bytes) > MAX_SET_BYTES:
-            raise EstablishmentValidationError(
-                f"staging set would grow to {set_bytes + len(text_bytes)} bytes; the ceiling is {MAX_SET_BYTES}"
-            )
-
-        doc_id = f"doc-{len(existing) + 1:03d}"
-        while (staging_path / "docs" / f"{doc_id}.json").exists():
-            doc_id = f"doc-{secrets.token_hex(4)}"
-        digest = _hash_text(text)
-        record = {
-            "doc_id": doc_id,
-            "name": name,
-            "sha256": digest,
-            "size_bytes": len(text_bytes),
-            "source": source,
-            "staged_at": time.time(),
-            "text": text,
-        }
-        (staging_path / "docs" / f"{doc_id}.json").write_text(
-            json.dumps(record, sort_keys=True), "utf-8"
-        )
-        return {
-            "ok": True,
-            "staging_id": staging_id,
-            "doc_id": doc_id,
-            "name": name,
-            "sha256": digest,
-            "doc_count": len(existing) + 1,
-            "set_bytes": set_bytes + len(text_bytes),
-        }
-
-    def _require_staging(self, value: Any) -> tuple[str, Path]:
-        staging_id = _require_id(value, "staging_id")
-        staging_path = self.staging_dir / staging_id
-        if not staging_path.is_dir():
-            raise EstablishmentValidationError(
-                "unknown or expired staging_id; stage the documents again"
-            )
-        # Expiry is enforced here by refusal, not only by the sweep: a set the
-        # broker cannot remove (root-owned analysis/ inside) lingers until the
-        # intake's backstop purge, and lingering must not extend its life.
-        if time.time() - self._staging_created_at(staging_path) > STAGING_TTL_SECONDS:
-            raise EstablishmentValidationError(
-                "staging set expired "
-                f"({STAGING_TTL_SECONDS // 60}-minute TTL); stage the documents again"
-            )
-        return staging_id, staging_path
-
-    def _load_staged_docs(self, staging_path: Path) -> list[dict[str, Any]]:
-        docs_dir = staging_path / "docs"
-        docs: list[dict[str, Any]] = []
-        if not docs_dir.is_dir():
-            return docs
-        for entry in sorted(docs_dir.glob("*.json")):
-            try:
-                record = json.loads(entry.read_text("utf-8"))
-            except (OSError, ValueError) as exc:
-                raise EstablishmentValidationError(
-                    f"staged document {entry.name} is unreadable; stage the documents again"
-                ) from exc
-            record["_path"] = entry
-            docs.append(record)
-        return docs
-
-    # ------------------------------------------------------------------
-    # establish_submit
-    # ------------------------------------------------------------------
-
-    def submit(self, request: dict[str, Any]) -> dict[str, Any]:
-        """Validate a submission, append its audit row, and materialize the run.
-
-        The audit row is appended BEFORE the run dir is renamed into place: a
-        run the root intake can see without a ledger row would be an unaudited
-        install path, which is the worse failure than a row for a run that
-        never materialized.
-
-        Two scopes (ADR 0085 §2/§6). ``firm`` (the default) is the staged-
-        corpus path below — Operator admins only, gated seat-side. ``person``
-        records the SPEAKER's own preferences: no staging, no corpus, no
-        compiler gates; the seat-side predicate pins the subject to the
-        attributed sender, and the intake re-validates shape + roster.
-        """
-        scope = request.get("scope") or "firm"
-        if scope not in ("firm", "person"):
-            raise EstablishmentValidationError(
-                f"scope must be 'firm' or 'person'; got {scope!r}"
-            )
-        if scope == "person":
-            return self._submit_person(request, secrets.token_hex(16))
-        staging_id, staging_path = self._require_staging(request.get("staging_id"))
-        phase = _require_text(request.get("phase"), "phase", _MAX_SHORT_TEXT)
-        if phase not in SUBMIT_PHASES:
-            raise EstablishmentValidationError(
-                f"phase must be one of {sorted(SUBMIT_PHASES)}; got {phase!r}"
-            )
-
-        staged = self._load_staged_docs(staging_path)
-        if not staged:
-            raise EstablishmentValidationError(
-                "staging set holds no documents; stage the corpus first"
-            )
-        # Integrity re-check of the broker's own files (defense in depth — the
-        # intake re-verifies too): every staged text must still hash to the
-        # digest recorded when it was staged.
-        for doc in staged:
-            if _hash_text(doc.get("text", "")) != doc.get("sha256"):
-                raise EstablishmentValidationError(
-                    f"staged document {doc.get('doc_id')} failed its integrity re-hash; stage the documents again"
-                )
-
-        # Lowercase hex so the id always matches the intake's _SAFE_SEGMENT.
-        run_id = secrets.token_hex(16)
-        if phase == "analyze":
-            return self._submit_analyze(staging_id, staging_path, staged, run_id)
-        return self._submit_install(request, staging_id, staging_path, staged, run_id)
-
-    def _submit_analyze(
-        self,
-        staging_id: str,
-        staging_path: Path,
-        staged: list[dict[str, Any]],
-        run_id: str,
-    ) -> dict[str, Any]:
-        doc_summaries = [{"name": d["name"], "sha256": d["sha256"]} for d in staged]
-        # The intake's submission contract (its module docstring): run_id,
-        # staging_id, phase, created_at. The doc files in docs/ carry the rest.
-        submission = {
-            "phase": "analyze",
-            "scope": "firm",
-            "run_id": run_id,
-            "staging_id": staging_id,
-            "created_at": time.time(),
-        }
-        row = {
-            "action_type": ESTABLISHMENT_SUBMITTED_ACTION_TYPE,
-            "actor": "operator",
-            "actor_role": "agent",
-            "metadata": json.dumps(
-                {
-                    "phase": "analyze",
-                    "run_id": run_id,
-                    "staging_id": staging_id,
-                    "docs": doc_summaries,
-                    "doc_count": len(staged),
-                },
-                sort_keys=True,
-                separators=(",", ":"),
-            ),
-        }
-        self._ledger.append(row)
-        # Analyze COPIES the corpus into the run: the staging set must survive
-        # so the later install submission can hash-bind against it.
-        self._materialize_run(run_id, submission, staged, move=False)
-        return {"ok": True, "run_id": run_id, "phase": "analyze", "status": "queued"}
-
-    def _submit_install(
-        self,
-        request: dict[str, Any],
-        staging_id: str,
-        staging_path: Path,
-        staged: list[dict[str, Any]],
-        run_id: str,
-    ) -> dict[str, Any]:
-        output_class = _require_class_slug(request.get("output_class"))
-        prop = _require_property(request.get("property"))
-
-        body_raw = request.get("spec_body")
-        if not isinstance(body_raw, str):
-            raise EstablishmentValidationError("spec_body must be a string")
-        # LF-normalize BEFORE the ceiling and the hash (portal precedent): the
-        # byte count, the digest, and the installed file must agree, on LF.
-        body = normalize_lf(body_raw).strip()
-        if not body:
-            raise EstablishmentValidationError("spec_body must not be empty")
-        body_bytes = body.encode("utf-8")
-        if len(body_bytes) > MAX_SPEC_BODY_BYTES:
-            raise EstablishmentValidationError(
-                f"spec_body is {len(body_bytes)} bytes after LF normalization; the ceiling is {MAX_SPEC_BODY_BYTES}"
-            )
-        spec_digest = sha256(body_bytes).hexdigest()
-
-        assertions = self._validate_assertions(request.get("assertions"))
-
-        manifest_raw = request.get("corpus_manifest")
-        if not isinstance(manifest_raw, list) or not manifest_raw:
-            raise EstablishmentValidationError(
-                "corpus_manifest must be a non-empty list of {doc_id, sha256}"
-            )
-        if len(manifest_raw) > MAX_DOCS_PER_SET:
-            raise EstablishmentValidationError(
-                f"corpus_manifest holds {len(manifest_raw)} entries; the ceiling is {MAX_DOCS_PER_SET}"
-            )
-        staged_by_id = {d["doc_id"]: d for d in staged}
-        seen: set[str] = set()
-        selected: list[dict[str, Any]] = []
-        for index, entry in enumerate(manifest_raw):
-            if not isinstance(entry, dict):
-                raise EstablishmentValidationError(
-                    f"corpus_manifest[{index}] must be an object with doc_id and sha256"
-                )
-            doc_id = _require_text(entry.get("doc_id"), f"corpus_manifest[{index}].doc_id", 64)
-            claimed = _require_text(entry.get("sha256"), f"corpus_manifest[{index}].sha256", 64)
-            if doc_id in seen:
-                raise EstablishmentValidationError(
-                    f"corpus_manifest names {doc_id} twice; refusing an ambiguous corpus"
-                )
-            seen.add(doc_id)
-            doc = staged_by_id.get(doc_id)
-            if doc is None:
-                raise EstablishmentValidationError(
-                    f"corpus_manifest names {doc_id}, which is not in this staging set"
-                )
-            # The claim must match the broker's OWN hash of the staged bytes —
-            # the spec is bound to exactly the corpus the agent staged, and a
-            # manifest that disagrees is a refusal, never a repair.
-            if claimed != doc["sha256"]:
-                raise EstablishmentValidationError(
-                    f"corpus_manifest hash for {doc_id} does not match the staged document"
-                )
-            selected.append(doc)
-
-        instructed_by = _require_text(
-            request.get("instructed_by"), "instructed_by", _MAX_SHORT_TEXT
-        )
-        source_ref = _require_text(request.get("source_ref"), "source_ref", _MAX_SHORT_TEXT)
-
-        doc_summaries = [{"name": d["name"], "sha256": d["sha256"]} for d in selected]
-        # The intake's submission contract (its module docstring). The manifest
-        # is REBUILT from the broker-verified selection — the intake re-checks
-        # that it maps 1:1 onto the run's docs with matching hashes.
-        submission = {
-            "phase": "install",
-            "scope": "firm",
-            "run_id": run_id,
-            "staging_id": staging_id,
-            "output_class": output_class,
-            "property": prop,
-            "spec_body": body,
-            "spec_sha256": spec_digest,
-            "assertions": assertions,
-            "corpus_manifest": [
-                {"doc_id": d["doc_id"], "sha256": d["sha256"]} for d in selected
-            ],
-            # Provenance for the audit trail, never authorization — the broker
-            # cannot verify a claimed instructor (same posture as corrections
-            # ``stated_by``); the authorization gate is the admin hook seat-side.
-            "instructed_by": instructed_by,
-            "source_ref": source_ref,
-            "created_at": time.time(),
-        }
-        row = {
-            "action_type": ESTABLISHMENT_SUBMITTED_ACTION_TYPE,
-            "actor": "operator",
-            "actor_role": "agent",
-            "metadata": json.dumps(
-                {
-                    "phase": "install",
-                    "run_id": run_id,
-                    "staging_id": staging_id,
-                    "output_class": output_class,
-                    "property": prop,
-                    "spec_sha256": spec_digest,
-                    "docs": doc_summaries,
-                    "doc_count": len(selected),
-                    "assertion_count": len((assertions or {}).get("rules") or []),
-                    "instructed_by": instructed_by,
-                    "source_ref": source_ref,
-                },
-                sort_keys=True,
-                separators=(",", ":"),
-            ),
-        }
-        self._ledger.append(row)
-        # Install MOVES the manifest docs into the run. The staging set itself
-        # is deliberately NOT removed here: the intake's leak check reads the
-        # root-owned analysis/approved_strings.json out of it DURING the run,
-        # and the intake purges the whole set (analysis included, as root)
-        # after the run completes — pass or fail.
-        self._materialize_run(run_id, submission, selected, move=True)
-        return {"ok": True, "run_id": run_id, "phase": "install", "status": "queued"}
-
-    def _submit_person(self, request: dict[str, Any], run_id: str) -> dict[str, Any]:
-        """A person-scoped install: the speaker's own preferences, docs-less.
-
-        Refuses every firm-path field a person submit must not carry —
-        "present" means NON-NULL (the overlay sends ``staging_id: null``, key
-        present). The subject was already pinned to the attributed sender by
-        the seat-side predicate; the broker re-validates SHAPE only, and the
-        intake re-validates shape + roster (defense in depth, same split as
-        the firm path).
-        """
-        for forbidden in ("staging_id", "corpus_manifest", "output_class", "property"):
-            if request.get(forbidden) is not None:
-                raise EstablishmentValidationError(
-                    f"{forbidden} must not be supplied on a person-scoped submit"
-                )
-        person_raw = _require_text(request.get("person"), "person", _MAX_SHORT_TEXT)
-        person = person_raw.strip().lower()
-        local, sep, domain = person.partition("@")
-        if not local or sep != "@" or "@" in domain or "." not in domain:
-            raise EstablishmentValidationError(
-                "person must be a single person email address (local@domain)"
-            )
-
-        body_raw = request.get("spec_body")
-        if not isinstance(body_raw, str):
-            raise EstablishmentValidationError("spec_body must be a string")
-        body = normalize_lf(body_raw).strip()
-        if not body:
-            raise EstablishmentValidationError("spec_body must not be empty")
-        body_bytes = body.encode("utf-8")
-        if len(body_bytes) > MAX_SPEC_BODY_BYTES:
-            raise EstablishmentValidationError(
-                f"spec_body is {len(body_bytes)} bytes after LF normalization; the ceiling is {MAX_SPEC_BODY_BYTES}"
-            )
-        spec_digest = sha256(body_bytes).hexdigest()
-
-        assertions = self._validate_assertions(request.get("assertions"))
-        instructed_by = _require_text(
-            request.get("instructed_by"), "instructed_by", _MAX_SHORT_TEXT
-        )
-        source_ref = _require_text(request.get("source_ref"), "source_ref", _MAX_SHORT_TEXT)
-
-        submission = {
-            "phase": "install",
-            "scope": "person",
-            "run_id": run_id,
-            "person": person,
-            "spec_body": body,
-            "spec_sha256": spec_digest,
-            "assertions": assertions,
-            # Provenance for the audit trail, never authorization (firm-path
-            # posture; the authorization gate is the seat-side predicate).
-            "instructed_by": instructed_by,
-            "source_ref": source_ref,
-            "created_at": time.time(),
-        }
-        row = {
-            "action_type": ESTABLISHMENT_SUBMITTED_ACTION_TYPE,
-            "actor": "operator",
-            "actor_role": "agent",
-            "metadata": json.dumps(
-                {
-                    "phase": "install",
-                    "scope": "person",
-                    "run_id": run_id,
-                    "person": person,
-                    "spec_sha256": spec_digest,
-                    "assertion_count": len((assertions or {}).get("rules") or []),
-                    "instructed_by": instructed_by,
-                    "source_ref": source_ref,
-                },
-                sort_keys=True,
-                separators=(",", ":"),
-            ),
-        }
-        self._ledger.append(row)
-        self._materialize_run(run_id, submission, [], move=False)
-        return {"ok": True, "run_id": run_id, "phase": "install", "status": "queued"}
-
-    def _validate_assertions(self, value: Any) -> dict[str, Any] | None:
-        """Shape-and-bound check for assertions.
-
-        The wire shape is an OBJECT carrying a ``rules`` list (the intake reads
-        ``assertions.get("rules")`` and forwards the rules to the selftest
-        compiler). Full rule-schema validation is deliberately NOT here: the
-        selftest owns the rule schema and refuses malformed rules (exit 1,
-        design §5). The broker guarantees the payload is a bounded JSON object
-        whose rules are objects, and nothing else.
-        """
-        if value is None:
-            return None
-        if not isinstance(value, dict):
-            raise EstablishmentValidationError(
-                "assertions must be an object (with an optional 'rules' list)"
-            )
-        rules = value.get("rules")
-        if rules is not None:
-            if not isinstance(rules, list):
-                raise EstablishmentValidationError("assertions.rules must be a list")
-            if len(rules) > _MAX_ASSERTIONS:
-                raise EstablishmentValidationError(
-                    f"assertions.rules holds {len(rules)} rules; the ceiling is {_MAX_ASSERTIONS}"
-                )
-            for index, entry in enumerate(rules):
-                if not isinstance(entry, dict):
-                    raise EstablishmentValidationError(
-                        f"assertions.rules[{index}] must be an object"
-                    )
-        serialized = json.dumps(value, sort_keys=True, separators=(",", ":"))
-        if len(serialized.encode("utf-8")) > _MAX_ASSERTIONS_BYTES:
-            raise EstablishmentValidationError(
-                f"assertions serialize to {len(serialized)} bytes; the ceiling is {_MAX_ASSERTIONS_BYTES}"
-            )
-        return json.loads(serialized)
-
-    def _materialize_run(
-        self,
-        run_id: str,
-        submission: dict[str, Any],
-        docs: list[dict[str, Any]],
-        move: bool,
-    ) -> None:
-        """Assemble the run in a dot-prefixed temp dir, then atomically rename.
-
-        The root intake polls the runs dir and ignores dot-prefixed entries, so
-        it can never observe a half-written submission (same-filesystem rename
-        is atomic).
-        """
-        tmp_dir = self.runs_dir / f".tmp-{run_id}"
-        try:
-            (tmp_dir / "docs").mkdir(parents=True)
-            for doc in docs:
-                source_path: Path = doc["_path"]
-                target = tmp_dir / "docs" / source_path.name
-                if move:
-                    source_path.rename(target)
-                else:
-                    shutil.copyfile(source_path, target)
-            (tmp_dir / "submission.json").write_text(
-                json.dumps(submission, sort_keys=True), "utf-8"
-            )
-            tmp_dir.rename(self.runs_dir / run_id)
-        except OSError:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
-            raise
-
-    # ------------------------------------------------------------------
-    # establish_status
-    # ------------------------------------------------------------------
-
-    def status(self, request: dict[str, Any]) -> dict[str, Any]:
-        """Read a run's result. One-shot: the result file is deleted after the
-        first successful read, and its retained trace is the bounded
-        ESTABLISHMENT_RESULT audit row (appended before the delete, so a failed
-        append leaves the result readable and retryable)."""
-        run_id = _require_id(request.get("run_id"), "run_id")
-        result_path = self.results_dir / f"{run_id}.json"
-        if result_path.is_file():
-            try:
-                result = json.loads(result_path.read_text("utf-8"))
-            except (OSError, ValueError) as exc:
-                raise ValueError(
-                    f"result for run {run_id} is unreadable; the TTL sweep will clear it"
-                ) from exc
-            if not isinstance(result, dict):
-                raise ValueError(
-                    f"result for run {run_id} is not an object; the TTL sweep will clear it"
-                )
-            self._ledger.append(build_result_row(run_id, result))
-            # One-shot delete. The results dir is 0770 root:workspace-broker
-            # (entrypoint-authored; the intake re-hardens to the same, its
-            # overlay#221 fix), so this unlink succeeds in production. The
-            # guard is resilience only: against a mis-hardened dir the read
-            # must still succeed (the agent is owed the result it was
-            # promised) and the intake's 30-min TTL sweep becomes the remover.
-            try:
-                result_path.unlink(missing_ok=True)
-            except OSError:
-                pass
-            return {"ok": True, "run_id": run_id, "status": "complete", "result": result}
-        if (self.runs_dir / run_id).is_dir():
-            return {"ok": True, "run_id": run_id, "status": "pending"}
-        raise EstablishmentValidationError(
-            "unknown run_id; results are one-shot reads and expire after "
-            f"{RESULT_TTL_SECONDS // 60} minutes"
-        )
-
-
+# ---------------------------------------------------------------------------
+# THIS MODULE IS THE IMPORT SURFACE, NOT THE IMPLEMENTATION.
+#
+# `establishment.py` was 3,509 lines and had grown 692 -> 2,752 logical lines in
+# the nine days before 2026-08-24. It was split along the seam its own structure
+# already had:
+#
+#   establishment_constants.py   audit action types, sizes, TTLs, DDL
+#   establishment_validation.py  pure validators, normalizers, read-back text
+#   pending_rule_store.py        PendingRuleStore — the proposals table
+#   establishment_store.py       EstablishmentStore — the spool and its lifecycle
+#
+# Everything those modules expose is re-exported here, so every existing import
+# keeps working untouched: `from .establishment import EstablishmentStore` in
+# server.py, the three test modules' symbol lists, and the module-object form
+# (`from workspace_broker import establishment`, then `establishment.MAX_...`).
+#
+# The re-export is not maintained by hand. `tests/test_establishment_surface.py`
+# holds a recorded fixture of every public name with its type, class members and
+# constant values, and fails if this module's surface drifts from it in either
+# direction. Name-set equality would not have been enough: it cannot fail on a
+# constant whose literal was mistyped during the move, or a method dropped from a
+# relocated class, which are the two ways a split like this actually goes wrong.
+# ---------------------------------------------------------------------------
+
+from .establishment_constants import *  # vocabulary and tuning surface
+from .establishment_validation import *  # validators and renderers
+from .pending_rule_store import PendingRuleStore
+from .establishment_store import EstablishmentStore
+
+# The private names too. Nothing outside this package imports them today, but
+# `import *` skips underscore names and the recorded surface fixture is asserted
+# in BOTH directions — so re-exporting them keeps the guarantee total rather than
+# "public names only, and trust me about the rest".
+from .establishment_constants import (  # noqa: F401 - re-exported so the surface lockdown covers private names too (see above)
+    _CLASS_SLUG_CHARS,
+    _ID_PATTERN,
+    _MAX_ACT_DISPLAY_NAME,
+    _MAX_ASSERTIONS,
+    _MAX_ASSERTIONS_BYTES,
+    _MAX_CLASS_SLUG,
+    _MAX_NAME_INPUT,
+    _MAX_NAME_SLUG,
+    _MAX_SHORT_TEXT,
+    _NAME_SLUG_KEEP,
+    _PROPOSAL_ID_PATTERN,
+)
+from .establishment_validation import (  # noqa: F401 - re-exported so the surface lockdown covers private names too (see above)
+    _URL_PATTERN,
+    _bounded_str,
+    _column,
+    _hash_text,
+    _optional_text,
+    _require_class_slug,
+    _require_display_name,
+    _require_id,
+    _require_property,
+    _require_proposal_id,
+    _require_text,
+)
+
+# Rebuilt 2026-08-24 from the module's actual public surface. The previous
+# list had drifted in BOTH directions: it omitted five names the tests import
+# (MAX_OUTCOME_REASON, NOTIFY_CLAIM_STALE_SECONDS, and the three OPS_REQUEST_*
+# action types, all added by ss#2546) while listing twelve nothing imports. It
+# is derived from tests/fixtures/establishment_surface.json, which is the same
+# artifact test_establishment_surface.py asserts against, so the two cannot
+# drift apart without a test failing.
 __all__ = [
+    "ACT_COMMITTED_ACTION_TYPE",
+    "ACT_CONFIG_KEYS",
+    "ACT_NAME_KEYS",
+    "ACT_PROPOSED_ACTION_TYPE",
+    "ACT_TOOLS",
+    "CREATE_PENDING_RULES_INDEX_SQL",
+    "CREATE_PENDING_RULES_SQL",
     "ESTABLISHMENT_RESULT_ACTION_TYPE",
     "ESTABLISHMENT_SUBMITTED_ACTION_TYPE",
-    "MAX_DOCS_PER_SET",
-    "MAX_DOC_TEXT_BYTES",
-    "MAX_SET_BYTES",
-    "MAX_SPEC_BODY_BYTES",
-    "RESULT_TTL_SECONDS",
-    "SPEC_PROPERTIES",
-    "STAGING_TTL_SECONDS",
-    "SUBMIT_PHASES",
     "EstablishmentStore",
     "EstablishmentValidationError",
+    "MAX_DOCS_PER_SET",
+    "MAX_DOC_TEXT_BYTES",
+    "MAX_OUTCOME_REASON",
+    "MAX_RULE_TEXT_BYTES",
+    "MAX_SET_BYTES",
+    "MAX_SPEC_BODY_BYTES",
+    "NOTIFY_CLAIM_STALE_SECONDS",
+    "OPS_OUTCOMES",
+    "OPS_REQUEST_KIND",
+    "OPS_REQUEST_LAPSED_ACTION_TYPE",
+    "OPS_REQUEST_RECORDED_ACTION_TYPE",
+    "OPS_REQUEST_RESOLVED_ACTION_TYPE",
+    "PENDING_RULES_COLUMN_ALTERS",
+    "PROPOSAL_ID_HEX_BYTES",
+    "PROPOSAL_KINDS",
+    "PROPOSAL_SCOPES",
+    "PROPOSAL_TTL_SECONDS",
+    "PendingRuleStore",
+    "RESULT_TTL_SECONDS",
+    "RULE_DECLINED_ACTION_TYPE",
+    "RULE_LAPSED_ACTION_TYPE",
+    "RULE_PROPOSED_ACTION_TYPE",
+    "RULE_TTL_SECONDS",
+    "SPEC_PROPERTIES",
+    "STAGING_TTL_SECONDS",
+    "STATUS_INSTALLED",
+    "SUBMIT_PHASES",
+    "TERMINAL_RETENTION_SECONDS",
+    "act_readback_text",
     "build_result_row",
     "normalize_lf",
+    "normalize_outcome_reason",
+    "normalize_rule_text",
+    "proposal_state",
+    "readback_for",
+    "require_address",
     "safe_slug",
+    "ttl_for_kind",
 ]

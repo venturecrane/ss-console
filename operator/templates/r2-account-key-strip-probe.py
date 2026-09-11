@@ -21,10 +21,18 @@ R2 config object.
 The key VALUE is never printed — only the offending pid + comm, so the probe
 output is safe in a CI transcript.
 
-Usage:  r2-account-key-strip-probe.py [agent-username] [VAR ...]
+Usage:  r2-account-key-strip-probe.py [--wait-gateway-s N] [agent-username] [VAR ...]
         defaults: agent-username=hermes  VARs=R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY
 Intended to be invoked by boot-smoke-test.sh via:
         /opt/hermes/.venv/bin/python3 /app/r2-account-key-strip-probe.py
+
+``--wait-gateway-s N`` retries ONLY the "no agent-uid process yet" verdict for up
+to N seconds (ss#2420: on a cold boot, smoke reaches this probe ~75s after boot,
+before the gateway has spawned, and the vacuous-zero fail-closed rule fired a
+false FATAL on a healthy deploy). The wait never applies to a real finding: a
+scan that sees an offender exits 1 the moment it sees it, and a missing user or
+unreadable /proc stays an immediate failure — those are configuration defects,
+not races.
 """
 
 from __future__ import annotations
@@ -32,9 +40,13 @@ from __future__ import annotations
 import os
 import pwd
 import sys
+import time
 
 _DEFAULT_USER = "hermes"
 _DEFAULT_VARS = ("R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY")
+
+# Re-scan cadence while waiting for the gateway to come up.
+_WAIT_POLL_S = 3.0
 
 
 def _proc_uid(proc_root: str, pid: str) -> int | None:
@@ -106,9 +118,48 @@ def scan(
     return agent_procs, offenders
 
 
+def wait_scan(
+    proc_root: str,
+    target_uid: int,
+    var_names: list[str],
+    *,
+    wait_s: float = 0.0,
+    uid_of=_proc_uid,
+    sleep=time.sleep,
+    monotonic=time.monotonic,
+) -> tuple[int, list[str]]:
+    """``scan``, retrying ONLY the zero-agent-process verdict for up to ``wait_s``.
+
+    An offender ends the wait the instant any scan sees it (the retry must never
+    swallow the real signal — ss#2420 AC), and a scan that finds a clean agent
+    process ends it too. Only "nothing to scan yet" keeps polling; when the
+    deadline passes it is returned as-is for main() to fail loud (exit 3).
+    ``sleep``/``monotonic`` are injectable so tests drive the loop without
+    real time passing.
+    """
+    deadline = monotonic() + wait_s
+    while True:
+        agent_procs, offenders = scan(proc_root, target_uid, var_names, uid_of=uid_of)
+        if offenders or agent_procs > 0 or monotonic() >= deadline:
+            return agent_procs, offenders
+        sleep(_WAIT_POLL_S)
+
+
 def main(argv: list[str]) -> int:
-    username = argv[1] if len(argv) > 1 else _DEFAULT_USER
-    var_names = argv[2:] if len(argv) > 2 else list(_DEFAULT_VARS)
+    args = argv[1:]
+    wait_s = 0.0
+    if args and args[0] == "--wait-gateway-s":
+        if len(args) < 2:
+            print("FAIL: --wait-gateway-s requires a seconds value", file=sys.stderr)
+            return 2
+        try:
+            wait_s = float(args[1])
+        except ValueError:
+            print(f"FAIL: --wait-gateway-s value {args[1]!r} is not a number", file=sys.stderr)
+            return 2
+        args = args[2:]
+    username = args[0] if args else _DEFAULT_USER
+    var_names = list(args[1:]) if len(args) > 1 else list(_DEFAULT_VARS)
 
     try:
         target_uid = pwd.getpwnam(username).pw_uid
@@ -120,7 +171,7 @@ def main(argv: list[str]) -> int:
     # guard that cannot inspect /proc has proved nothing. (Also makes this a clean
     # failure on a host without procfs, e.g. a dev macOS box, instead of a crash.)
     try:
-        agent_procs, offenders = scan("/proc", target_uid, var_names)
+        agent_procs, offenders = wait_scan("/proc", target_uid, var_names, wait_s=wait_s)
     except OSError as exc:
         print(f"FAIL: cannot enumerate the process table at /proc ({exc.strerror})", file=sys.stderr)
         return 4

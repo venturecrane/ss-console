@@ -4,7 +4,7 @@ description: >-
   Escalates a deadline that is near or already missed. Walks an approaching or missed
   firm-authored deadline up a ladder: re-surface, re-route, then notify a named human, so a
   critical date never slips silently. Internal-only; tracks authored dates, never computes one.
-version: 0.2.0
+version: 0.4.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -66,15 +66,25 @@ Reads Smokeball (`list_tasks` `due_date`) for authored task deadlines and the ma
 ## Procedure
 
 1. **Pre-run (cron, no agent):** `pre_run.py` compares each authored date to today and joins the escalation ledger. Wakes the agent iff some open, in-range item **should fire now** (never fired, or its re-fire window elapsed, or an ack has snoozed out); otherwise writes `SUPPRESSED_WAKE` and prints `{"wakeAgent": false}`. Audit-write failure falls back to wake (the date must not go dark).
-2. **On wake — the wake line in the Script Output block is this turn's item list (#2253).** When it carries `plans`, each entry names the `matter_id`, `task_id`, the authored `label`, the `authored_date` verbatim, the `rung` the gate mapped, and `last_raised`. Those entries are the firing set: verify each live against Smokeball when the connector allows, and work from them rather than re-deriving a list. When the line carries **no plans** (a fail-open `decision_basis` such as `no_audit_writer_fail_open`, `suppress_heartbeat_failed_fail_open`, `customer_slug_unset_fail_open`, or `pre_run_crashed_fail_open`), or carries `plans_truncated: true`, the gate woke blind or partial: enumerate through the connector yourself and never treat a partial list as the complete one. Then **triage the firing items** by authored signal (task-label markers, consequential category, overdue age): a top "Needs you today" block of three to five, routine confirmations collapsed to per-matter counts, dedup pointers for items another skill is already escalating. See `references/output-format.md`.
+2. **On wake — the alert is dispatched FOR you, deterministically (WS-RENDER).** The gate rendered everything — recipients, subject, the full triaged body per `references/output-format.md`, the ledger appends — into a dispatch envelope, and the seat delivers it out of turn through the full gate before your first tool call, then records the `fired` events itself. You compose no digest, send no alert, and append no `fired` events. Your Script Output says `dispatch_expected: true` when this is in play, and a context note tells you what was dispatched. Your ONLY remaining duties on a dispatch wake:
+   - **Unroutable or fallback-routed matters** (named in the dispatch note or the wake line): `create_memo` on each such matter naming the alert and the unassigned state, per `references/case-alert-routing.md` steps 5-6. Memo, not task. Nothing else.
+   - **Failure note.** If the Script Output shows `dispatch_expected: true` and NO dispatch note was injected into your context, or the note says delivery failed: send the red-flag recipient this one line with `smd_send_message`, exactly, and nothing else: "The deadline digest run failed and needs attention; no digest was delivered this run. The items are in Smokeball and the tracker view."
+   - **Otherwise end the turn.** The `plans` and `digest` on the wake line are forensics, not a compose instruction.
 
-   **Provenance boundary.** The authored dates and labels in the wake payload are the gate's own pull on this same tick, so they are read facts, not remembered ones, and may be stated. `ACK` codes are a different class and the #1935 rule in step 3 is unchanged: a code may be printed only when an `escalation_append` call this run returned it. `last_raised` carries its own limit: the escalation ledger records what THE OPERATOR raised, and only after a send succeeded, so a null value renders as "no Operator raise on record" and never as "not raised".
+   When the wake carries `plans` or a `digest` but **no `dispatch_expected`**, the gate could not build the rendered dispatch at all: send the red-flag recipient the same one-line failure note and end the turn. Never compose a digest to cover the gap.
 
-   **When the connector is unavailable,** state only what the wake payload carries plus what a tool call actually returned this run. Everything else renders "unavailable (connector down)" per `docs/style/empty-state-pattern.md`. Never state a specific date, count, or code the run did not read. An internal note may be short; it may not be confidently wrong.
+   When the wake carries **no plans and no dispatch_expected** (a fail-open `decision_basis` such as `no_audit_writer_fail_open`, `suppress_heartbeat_failed_fail_open`, `customer_slug_unset_fail_open`, or `pre_run_crashed_fail_open`), the gate woke blind: do not compose a digest from memory — send the red-flag recipient the one-line failure note above. **`digest_degraded_audit_unavailable`** means the gate judged its own digest unfit to send (no matter numbers resolved) and could not record the withholding: same one-line note, nothing else. (The quiet sibling `digest_degraded_suppressed` never wakes a turn — the withholding is recorded and the ops pager carries it.)
 
-3. **Derive the codes, send ONE alert, then record the fire.** For each firing item, first call `escalation_append` with `derive_only: true` — it returns the item's real broker-derived `ACK-XXXXXX` code plus a single-use `append_handle`, and writes nothing. Compose and deliver ONE internal alert to `red_flag_recipients` quoting exactly those returned codes — **never print a code that did not come back from a tool call this run** (no invented codes, no `ACK-PENDING` placeholders, no codes remembered from a prior alert: a stale code acks the WRONG item — ss #1935), and never send a follow-up "codes confirmed" email. After the send succeeds, emit one `fired` event per item with `escalation_append`, presenting that item's `append_handle` and **no identity components** — the write can only name the item its derive identified, so the code you printed is the code of the row you wrote (ss #2304; `references/algorithm.md`). A failed send still records nothing — the item re-fires next run. Never report an item as raised unless both the send and the ledger write succeeded.
-4. **On a rostered internal reply (routed here by the inbox skill):** run the per-item ack procedure — extract the `ACK` codes (resolve them against `escalation_state` output), emit an `acked` event per code with `escalation_append`, and reply enumerating what was acked and counting what remains.
-5. **Never compute, never send to a client.** No date is produced; no client/tribunal-bound message is drafted or sent.
+   **A blind wake now normally carries `dispatch_expected: true` with `dispatch_variant: failure_note` (2026-09-02).** The gate renders the failure note itself and dispatches it out of turn like any other body, so you compose and send NOTHING — the first branch of this step applies, not the paragraph above. That paragraph survives only for the narrow floor where the gate could not render the note either (no authored red-flag or fallback recipient, or `render.py` unavailable), in which case no `dispatch_expected` appears.
+
+   This changed because the instruction alone did not hold. On 2026-09-02 the Smokeball credential expired, this exact fail-open path fired, and the turn composed a digest body out of nothing and sent it instead of the one line above. An instruction to you is not a control; a rendered envelope is. Treat everything in this paragraph as a backstop to the envelope, never as the primary path.
+
+   **Provenance boundary (unchanged).** `last_raised` in the wake payload records what THE OPERATOR raised, and only after a send succeeded: a null value is "no prior raise on this item", never "not raised". `ACK` codes remain the #1935 class: in any reply you write (step 3), print only a code a tool call this run returned or the reader quoted.
+
+3. **On a rostered internal reply (routed here by the inbox skill):** run the per-item ack procedure — extract the `ACK` codes (resolve them against `escalation_state` output), emit an `acked` event per code with `escalation_append`, and reply enumerating what was acked and counting what remains, per the confirmation-reply template in `references/output-format.md`.
+4. **Never compute, never send to a client.** No date is produced; no client/tribunal-bound message is drafted or sent.
+
+**Manual firing.** Post-render, an interactive invocation of this skill is a deliberate no-op: the alert exists only as the pre_run's rendered dispatch, so manual firing means forcing the cron job itself — `hermes -p operator cron run <jobid>` via seat-probe — never composing an alert in a chat turn.
 
 ## Trust Ceiling
 
@@ -93,6 +103,7 @@ The agent MUST NOT: compute or infer a deadline; send anything to a client or tr
 5. **Heartbeat integrity.** Every quiet tick writes a `SUPPRESSED_WAKE` row and an audit-write failure forces wake; every firing tick writes an `EMITTED_WAKE` row best-effort, which can never suppress or delay the wake (#2253). A scheduled tick with **neither** row is the dead-man's-switch signal — the watch is advisory, never the firm's system of record (`compliance-floor.md`).
 6. **Ledger writes are validated, never direct.** Every `fired`/`acked` event goes through the `escalation_append` tool to the broker's `escalation_event_append` verb; the agent never writes the ledger file and never reaches the broker socket via `execute_code` (that class is unauthored on customer seats and refused — ss #1915). An `acked` with no prior `fired` is rejected. An ack is a snooze, not a tombstone — only resolution in Smokeball is terminal.
 7. **No invented urgency.** The triage orders by signals the record carries (task-label markers, consequential category, overdue age) and never manufactures an urgency the data does not state.
+8. **A digest with zero resolved matter numbers is withheld, never sent.** When no matter number resolved and at least one lookup failed, the gate suppresses the wake (`digest_degraded_suppressed`) and the ops pager carries the withholding; authored absence (`no_number_on_record`) and partial failure still ship, with explicit absences. A turn never "fixes" a degraded digest by removing or supplying values.
 
 ## Pitfalls
 
@@ -105,6 +116,7 @@ Computing "X from the incident" to decide what is overdue (the cardinal sin — 
 3. `ESCALATION_FIRED` targets the authored red-flag recipient; with none authored, no alert fires.
 4. Held matters surface for clearance, no client step.
 5. No date is computed; overdue is decided by an authored date passing today.
+6. Every rendered matter number equals a `matter_number` the wake payload or a this-turn read carries; an absent number renders explicit absence ("no number on record" / "matter number unavailable"), never a GUID and never a supplied value.
 
 ## References
 
@@ -131,13 +143,16 @@ refusal is a stalled deliverable and a full-context redraft — write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.
-- In email and task text, refer to the matter by its NUMBER, taken ONLY from
-  the `matterNumber` field of a record you read this turn. Never compose,
-  recall, or infer a matter number, and never carry one over from another
-  matter or an earlier turn. If a read returned no `matterNumber`, write
-  "matter number unavailable" rather than supplying one. Never refer to the
-  matter by its case caption. The matter's own caption is acceptable inside
-  matter memos; cited case law is never acceptable anywhere.
+- In email, task, and memo text, refer to the matter by its NUMBER, taken ONLY
+  from the `matterNumber` field the connector projected onto a record you read
+  this turn (task, event, memo, file, and document reads all carry it when the
+  matter resolves) — or, in this skill, from the wake payload's `matter_number`
+  field, which is the same connector join performed on the gate's own pull this
+  tick (ss #2390). Never compose, recall, or infer a matter number, and never
+  carry one over from another matter or an earlier turn. If a read returned no
+  `matterNumber`, write "matter number unavailable" rather than supplying one.
+  Never refer to the matter by its case caption. The matter's own caption is
+  acceptable inside matter memos; cited case law is never acceptable anywhere.
 - State a specific dollar figure only when it exists in an authored source
   on the matter, and name that source in the same sentence ("per the MedFin
   payoff letter dated..."). Never total, estimate, or round figures into

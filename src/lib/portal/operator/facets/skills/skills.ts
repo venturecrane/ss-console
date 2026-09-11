@@ -85,7 +85,7 @@ export function initiationLabels(init: SkillInitiation): string[] {
 
 /**
  * Compose the Skills view model from the config projection. Selects the active
- * persona (mirrors `getActivePersona`) and maps its authored skill list,
+ * persona (status === 'active', the same rule as the identity hero) and maps its authored skill list,
  * preserving order. No second DB read — the caller passes the already-projected,
  * typed config.
  */

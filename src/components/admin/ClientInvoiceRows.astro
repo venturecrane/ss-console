@@ -1,0 +1,99 @@
+---
+/**
+ * The client hub's invoice rows with their admin actions (extracted from
+ * clients/[id].astro so the page stays under the file ceiling).
+ *
+ * Draft: present (portal only, no email) or send (portal + email).
+ * Sent/overdue: mark paid, or change the due date (re-issues the Stripe
+ * invoice; no email). Draft/sent: void. Every form posts to
+ * /api/admin/invoices/[id] and redirects back to the hub.
+ */
+import type { Invoice } from '../../lib/db/invoices'
+import { invoiceTypeLabel } from '../../lib/db/invoices'
+import { formatDate } from '../../lib/admin/entity-detail-page'
+import { formatMoney } from '../../lib/admin/client-hub'
+import { statusBadgeClass } from '../../lib/ui/status-badge'
+import InvoiceRescheduleForm from './InvoiceRescheduleForm.astro'
+
+interface Props {
+  invoices: Invoice[]
+  hubUrl: string
+}
+
+const { invoices, hubUrl } = Astro.props
+---
+
+<div class="flex gap-3">
+  <span
+    class="w-20 shrink-0 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]"
+  >
+    Invoices
+  </span>
+  <ul class="flex min-w-0 flex-1 list-none flex-col gap-2">
+    {
+      invoices.map((inv) => (
+        <li class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <span class={statusBadgeClass(inv.status)}>{inv.status}</span>
+          <span class="font-mono">{formatMoney(inv.amount)}</span>
+          <span class="text-xs text-[color:var(--ss-color-text-muted)]">
+            {invoiceTypeLabel(inv.type) ?? inv.type}
+            {inv.due_date && ` · due ${formatDate(inv.due_date)}`}
+          </span>
+          {inv.status === 'draft' && (
+            <span class="inline-flex items-center gap-1.5">
+              <form method="POST" action={`/api/admin/invoices/${inv.id}`}>
+                <input type="hidden" name="action" value="present" />
+                <input type="hidden" name="redirect_url" value={hubUrl} />
+                <button
+                  type="submit"
+                  title="Payable in the portal now. No email to the client."
+                  class="border border-[color:var(--ss-color-primary)] px-2 py-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-primary)]"
+                >
+                  Present in portal
+                </button>
+              </form>
+              <form method="POST" action={`/api/admin/invoices/${inv.id}`}>
+                <input type="hidden" name="action" value="send" />
+                <input type="hidden" name="redirect_url" value={hubUrl} />
+                <button
+                  type="submit"
+                  title="Payable in the portal and emailed to the client."
+                  class="border border-[color:var(--ss-color-border)] px-2 py-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]"
+                >
+                  Send by email
+                </button>
+              </form>
+            </span>
+          )}
+          {(inv.status === 'sent' || inv.status === 'overdue') && (
+            <form method="POST" action={`/api/admin/invoices/${inv.id}`}>
+              <input type="hidden" name="action" value="mark_paid" />
+              <input type="hidden" name="redirect_url" value={hubUrl} />
+              <button
+                type="submit"
+                class="border border-[color:var(--ss-color-border)] px-2 py-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]"
+              >
+                Mark paid
+              </button>
+            </form>
+          )}
+          {(inv.status === 'sent' || inv.status === 'overdue') && (
+            <InvoiceRescheduleForm invoiceId={inv.id} dueDate={inv.due_date} hubUrl={hubUrl} />
+          )}
+          {(inv.status === 'draft' || inv.status === 'sent') && (
+            <form method="POST" action={`/api/admin/invoices/${inv.id}`}>
+              <input type="hidden" name="action" value="void" />
+              <input type="hidden" name="redirect_url" value={hubUrl} />
+              <button
+                type="submit"
+                class="border border-[color:var(--ss-color-error)] px-2 py-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-error)]"
+              >
+                Void
+              </button>
+            </form>
+          )}
+        </li>
+      ))
+    }
+  </ul>
+</div>

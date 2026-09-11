@@ -1,0 +1,21 @@
+{
+  "contacts": {
+    "sct-adaeze-okonkwo": "6c410c24-f6a1-49ce-b0aa-5b83d2a21f15",
+    "sct-dean-halverson": "fb7d3ff4-6bc3-4bb9-8097-890f883526b0",
+    "sct-grace-vanterpool": "73e37b1b-53ba-4b99-9599-7a817547b089",
+    "sct-marisol-reyes": "9e963f8f-7bc4-4a1e-b26f-5248efe4164e",
+    "sct-philip-brannigan": "6189be48-9b83-4f5e-b005-8537c8044c85",
+    "sct-tomas-reyes": "5daa1f90-97f6-44c6-aaea-53d58d6f4f31",
+    "sct-yvette-delacroix": "69e6dbb1-9b01-430e-8b02-2ce6603e628e"
+  },
+  "created_at": "2026-08-20T04:36:45Z",
+  "matters": {
+    "S-01": "0533d283-3d5c-4cdc-a3a9-613d15f12e58",
+    "S-02": "68c4141a-2834-46af-8e45-1e83935b57c5",
+    "S-03": "c5eb50b6-391e-49b2-8be4-8db1f12e975e",
+    "S-04": "2f2167f0-e389-4590-bf49-55167c31064d",
+    "S-05": "20fa8555-78e7-4428-84cb-f98e2aaf0d04",
+    "S-06": "50860515-1190-4f53-bc00-167f2f9a6eed"
+  },
+  "source": "operator/fixtures/law-firm/pi/lien-ledger-tracker/seed/closeout-seed.yaml"
+}

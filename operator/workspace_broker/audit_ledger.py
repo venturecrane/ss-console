@@ -38,6 +38,7 @@ def _current_umask() -> int:
     os.umask(value)
     return value
 
+
 # Agent-supplied columns: the overlay COLUMNS tuple minus the leading id/ts,
 # which the broker stamps. Order here only governs the INSERT this module
 # builds; the wire payload is a name-keyed dict, so column *ordering* cannot
@@ -106,6 +107,24 @@ def _ulid() -> str:
     """26-char Crockford ULID — matches overlay shared/ids.ulid()."""
     ts = int(time.time() * 1000)
     return _encode_crockford(ts, 10) + _encode_crockford(secrets.randbits(80), 16)
+
+
+def new_row_token() -> str:
+    """A ULID minted for a row that does not exist yet (ss#2499).
+
+    ``append`` mints a row's own id at write time, and a transmit row is written
+    AFTER the send it records. So a header that has to travel WITH the message —
+    ``X-SMD-Audit-Row``, the exact key the console-side reconciler joins on —
+    cannot carry the row id: the row does not have one yet. Pre-minting the id
+    instead would mean teaching ``append`` to accept a caller-supplied id, which
+    is the hash-chain seam (``chain.py`` is a byte-identical overlay twin) and
+    not a place to spend risk for a naming convenience.
+
+    This is that id in every way that matters to the join: the same generator,
+    the same alphabet, minted once per transmit, and written onto the row it
+    belongs to as ``audit_row_token``. One token, one row, both directions.
+    """
+    return _ulid()
 
 
 def _iso_utc() -> str:
@@ -188,9 +207,7 @@ class LedgerWriter:
             # writer (there is only this broker, but the lock makes the chain
             # correct by construction, not by deployment assumption).
             conn.execute("BEGIN IMMEDIATE")
-            tail = conn.execute(
-                "SELECT id, row_hash FROM audit_log ORDER BY rowid DESC LIMIT 1"
-            ).fetchone()
+            tail = conn.execute("SELECT id, row_hash FROM audit_log ORDER BY rowid DESC LIMIT 1").fetchone()
             if tail is None:
                 prev_hash = GENESIS
             elif tail[1] is not None:

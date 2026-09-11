@@ -28,8 +28,13 @@ import type { D1Database } from '@cloudflare/workers-types'
 import { sendEmail } from '../email/resend'
 import { paymentConfirmationEmailHtml } from '../email/templates'
 import {
+  activateOperatorSubscriptionForBilling,
+  attachStripeSubscription,
+  getSubscriptionById,
   getSubscriptionByStripeId,
+  parseCancelAt,
   setSubscriptionBillingStatus,
+  setSubscriptionCancelSchedule,
   type SubscriptionBillingRow,
 } from '../db/subscriptions'
 
@@ -144,18 +149,6 @@ function subscriptionSignal(
 }
 
 /**
- * The subscription id, or null when there is not a readable one.
- *
- * Retained for call sites that only need the id. Anything that decides how to
- * ROUTE an event must use {@link resolveStripeSubscriptionLinkage} instead —
- * null here still cannot distinguish "no subscription" from "cannot read it".
- */
-export function extractStripeSubscriptionId(invoice: unknown): string | null {
-  const linkage = resolveStripeSubscriptionLinkage(invoice)
-  return linkage.kind === 'linked' ? linkage.subscriptionId : null
-}
-
-/**
  * An invoice signalled a subscription linkage this code cannot read.
  *
  * Loud on three surfaces, because each catches a different reader: an error
@@ -195,6 +188,11 @@ export async function handleUnrecognizedInvoiceLinkage(
   return serverError()
 }
 
+/** The subscription-metadata snapshot Stripe stamps on every invoice a
+ * subscription generates. Either position, by API version (see
+ * {@link readInvoiceSubscriptionMetadata}). */
+type InvoiceSubscriptionDetails = { metadata?: Record<string, string> | null } | null
+
 /** The invoice-payload fields the retainer mirror consumes. */
 export interface RetainerInvoicePayload {
   id: string
@@ -203,6 +201,34 @@ export interface RetainerInvoicePayload {
   hosted_invoice_url: string | null
   due_date: number | null
   status_transitions: { paid_at: number | null }
+  /** The Stripe customer id; recorded on the row by the ordering fallback. */
+  customer?: string | null
+  /** Pre-basil position of the subscription-metadata snapshot. */
+  subscription_details?: InvoiceSubscriptionDetails
+  /** 2025-03-31.basil+ position of the same snapshot. */
+  parent?: { subscription_details?: InvoiceSubscriptionDetails } | null
+}
+
+/**
+ * The `smd_subscription_id` the checkout stamped on the Stripe subscription
+ * (`subscription_data[metadata]`, src/lib/stripe/subscriptions.ts), as it
+ * rides on the invoice.
+ *
+ * Stripe snapshots subscription metadata onto each invoice the subscription
+ * generates. Pre-basil the snapshot is `invoice.subscription_details.metadata`;
+ * from 2025-03-31.basil it is `invoice.parent.subscription_details.metadata`
+ * (docs.stripe.com/api/invoices/object, "parent.subscription_details.metadata:
+ * Set of key-value pairs defined as subscription metadata when an invoice is
+ * created"). The prod endpoint pins 2026-03-25.dahlia, so the live payload
+ * carries the nested form; both are read because the client itself pins no
+ * version and the linkage resolver above already reads both positions.
+ */
+export function readInvoiceSubscriptionMetadata(
+  invoice: Pick<RetainerInvoicePayload, 'subscription_details' | 'parent'>
+): Record<string, string> | null {
+  return (
+    invoice.parent?.subscription_details?.metadata ?? invoice.subscription_details?.metadata ?? null
+  )
 }
 
 function unixToIso(unix: number | null): string | null {
@@ -285,6 +311,98 @@ export async function handleRetainerInvoiceFinalized(
 }
 
 /**
+ * Event-ordering fallback for the first paid invoice (A1, claims-2026-09-04).
+ *
+ * Stripe does not order `checkout.session.completed` ahead of the first
+ * `invoice.paid`; when the invoice arrives first, no local row carries the
+ * Stripe subscription id yet and the paid invoice would be skipped as
+ * "unknown subscription" — money landed and the client's portal never went
+ * live. The subscription metadata the checkout stamped names the row, so
+ * bind it here: attach the Stripe subscription + customer and promote the
+ * row, exactly what the checkout handler would have done. Only an operator
+ * row still in `provisioning` with `stripe_subscription_id IS NULL`
+ * qualifies (the checks are here, not in `attachStripeSubscription`, which
+ * stays an unguarded UPDATE for the checkout handler's own retry); anything
+ * else is still an honest skip.
+ *
+ * Runs from `invoice.paid` only: `finalized` precedes ACH collection and
+ * `payment_failed` is not a go-live act.
+ */
+async function bindSubscriptionFromInvoiceMetadata(
+  db: D1Database,
+  stripeSubscriptionId: string,
+  invoice: RetainerInvoicePayload
+): Promise<SubscriptionBillingRow | null> {
+  const rowId = readInvoiceSubscriptionMetadata(invoice)?.['smd_subscription_id']
+  if (!rowId) return null
+  const row = await getSubscriptionById(db, rowId)
+  if (
+    !row ||
+    row.product_slug !== 'operator' ||
+    row.status !== 'provisioning' ||
+    row.stripe_subscription_id !== null
+  ) {
+    return null
+  }
+  await attachStripeSubscription(db, row.id, stripeSubscriptionId, invoice.customer ?? null)
+  const promoted = await activateOperatorSubscriptionForBilling(db, row.id)
+  console.log(
+    `[stripe-subscription] invoice.paid arrived before checkout completion; bound ${stripeSubscriptionId} to row ${row.id} from invoice metadata (promoted=${promoted})`
+  )
+  return {
+    ...row,
+    status: promoted ? 'active' : row.status,
+    stripe_subscription_id: stripeSubscriptionId,
+  }
+}
+
+/** Phase-1 write for a paid cycle invoice: refresh the existing mirror row
+ * (`existingId`) or insert one already `paid`. */
+async function mirrorPaidInvoice(
+  db: D1Database,
+  sub: SubscriptionBillingRow,
+  invoice: RetainerInvoicePayload,
+  amount: number,
+  existingId: string | null
+): Promise<void> {
+  const paidAt = unixToIso(invoice.status_transitions.paid_at) ?? new Date().toISOString()
+  const now = new Date().toISOString()
+  if (existingId !== null) {
+    await db
+      .prepare(
+        `UPDATE invoices SET status = 'paid', amount = ?, paid_at = ?, payment_method = 'stripe',
+                             stripe_hosted_url = COALESCE(?, stripe_hosted_url), updated_at = ?
+         WHERE id = ?`
+      )
+      .bind(amount, paidAt, invoice.hosted_invoice_url, now, existingId)
+      .run()
+    return
+  }
+  await db
+    .prepare(
+      `INSERT INTO invoices (id, org_id, entity_id, type, amount, description, status,
+                             stripe_invoice_id, stripe_hosted_url, due_date, sent_at, paid_at, payment_method,
+                             created_at, updated_at)
+       VALUES (?, ?, ?, 'retainer', ?, ?, 'paid', ?, ?, ?, ?, ?, 'stripe', ?, ?)`
+    )
+    .bind(
+      crypto.randomUUID(),
+      sub.org_id,
+      sub.entity_id,
+      amount,
+      'Operator retainer — monthly',
+      invoice.id,
+      invoice.hosted_invoice_url,
+      unixToIso(invoice.due_date),
+      now,
+      paidAt,
+      now,
+      now
+    )
+    .run()
+}
+
+/**
  * Mark a cycle invoice paid. Upserts (a paid event may arrive without the
  * finalized mirror having landed), then sends the same confirmation email
  * the one-time flow sends. Idempotent on the paid state.
@@ -295,7 +413,15 @@ export async function handleRetainerInvoicePaid(
   stripeSubscriptionId: string,
   invoice: RetainerInvoicePayload
 ): Promise<Response> {
-  const sub = await getSubscriptionByStripeId(db, stripeSubscriptionId)
+  let sub = await getSubscriptionByStripeId(db, stripeSubscriptionId)
+  if (!sub) {
+    try {
+      sub = await bindSubscriptionFromInvoiceMetadata(db, stripeSubscriptionId, invoice)
+    } catch (err) {
+      console.error('[stripe-subscription] ordering-fallback bind failed:', err)
+      return serverError() // let Stripe retry
+    }
+  }
   if (!sub) {
     console.log(
       `[stripe-subscription] No local subscription for ${stripeSubscriptionId}; skipping paid invoice ${invoice.id}`
@@ -304,53 +430,38 @@ export async function handleRetainerInvoicePaid(
   }
 
   const amount = (invoice.amount_paid > 0 ? invoice.amount_paid : invoice.amount_due) / 100
-  const paidAt = unixToIso(invoice.status_transitions.paid_at) ?? new Date().toISOString()
-  const now = new Date().toISOString()
 
   try {
     const existing = await getLocalRetainerInvoice(db, invoice.id)
     if (existing?.status === 'paid') return ok() // idempotency guard
-
-    if (existing) {
-      await db
-        .prepare(
-          `UPDATE invoices SET status = 'paid', amount = ?, paid_at = ?, payment_method = 'stripe',
-                               stripe_hosted_url = COALESCE(?, stripe_hosted_url), updated_at = ?
-           WHERE id = ?`
-        )
-        .bind(amount, paidAt, invoice.hosted_invoice_url, now, existing.id)
-        .run()
-    } else {
-      await db
-        .prepare(
-          `INSERT INTO invoices (id, org_id, entity_id, type, amount, description, status,
-                                 stripe_invoice_id, stripe_hosted_url, due_date, sent_at, paid_at, payment_method,
-                                 created_at, updated_at)
-           VALUES (?, ?, ?, 'retainer', ?, ?, 'paid', ?, ?, ?, ?, ?, 'stripe', ?, ?)`
-        )
-        .bind(
-          crypto.randomUUID(),
-          sub.org_id,
-          sub.entity_id,
-          amount,
-          'Operator retainer — monthly',
-          invoice.id,
-          invoice.hosted_invoice_url,
-          unixToIso(invoice.due_date),
-          now,
-          paidAt,
-          now,
-          now
-        )
-        .run()
+    await mirrorPaidInvoice(db, sub, invoice, amount, existing?.id ?? null)
+    // A paid invoice on an operator row still in `provisioning` is the ACH
+    // first payment settling (the checkout completed `unpaid` and attached
+    // without promoting — see operator-checkout-handler.ts). The money is
+    // the act, so go live here as well as on async_payment_succeeded: the
+    // two signals converge, and neither has to arrive first.
+    if (sub.product_slug === 'operator' && sub.status === 'provisioning') {
+      await activateOperatorSubscriptionForBilling(db, sub.id)
     }
   } catch (err) {
     console.error('[stripe-subscription] paid mirror failed:', err)
     return serverError() // let Stripe retry
   }
 
-  // Phase 2: confirmation email, best-effort.
+  // Phase 2: emails, best-effort. The client is thanked; team@ is told the
+  // money landed, so revenue is observed rather than discovered later in
+  // Stripe.
   await sendRetainerConfirmationEmail(db, resendApiKey, sub, amount)
+  const formatted = `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const name = await entityName(db, sub)
+  await alertTeam(
+    resendApiKey,
+    `Retainer payment received — ${name}, ${formatted}`,
+    `<p>A retainer cycle invoice was paid.</p>` +
+      `<ul><li>Customer: ${name}</li><li>Amount: ${formatted}</li>` +
+      `<li>Stripe invoice: ${invoice.id}</li>` +
+      `<li>Stripe subscription: ${stripeSubscriptionId}</li></ul>`
+  )
   return ok()
 }
 
@@ -442,6 +553,31 @@ export interface StripeSubscriptionEventPayload {
   id: string
   status: string
   pause_collection?: unknown
+  /** True from the moment the client schedules a cancellation in the Stripe
+   * Billing Portal until the period actually ends (or they reverse it). */
+  cancel_at_period_end?: boolean
+  /** Unix seconds the subscription will end. Stripe sets this alongside
+   * `cancel_at_period_end`. */
+  cancel_at?: number | null
+  /** Fallback source for the end date: this Stripe API version carries
+   * `current_period_end` on the subscription ITEM, not the subscription
+   * (verified against the live account 2026-08-29). */
+  items?: { data?: { current_period_end?: number | null }[] }
+}
+
+/**
+ * The date a scheduled cancellation takes effect, or null when none is
+ * scheduled. Returns `unreadable` when Stripe says a cancellation is
+ * scheduled but names no date — a shape change we alert on rather than
+ * guess at, since the date is what both sides plan around.
+ */
+function resolveCancelSchedule(
+  payload: StripeSubscriptionEventPayload
+): { kind: 'none' } | { kind: 'scheduled'; iso: string } | { kind: 'unreadable' } {
+  if (payload.cancel_at_period_end !== true) return { kind: 'none' }
+  const seconds = payload.cancel_at ?? payload.items?.data?.[0]?.current_period_end ?? null
+  const iso = unixToIso(seconds ?? null)
+  return iso ? { kind: 'scheduled', iso } : { kind: 'unreadable' }
 }
 
 /**
@@ -449,11 +585,16 @@ export interface StripeSubscriptionEventPayload {
  * Transitions are billing-scoped (see setSubscriptionBillingStatus): a
  * deleted subscription cancels the row; pause_collection presence maps to
  * paused/active. Unknown Stripe subscriptions are skipped honestly.
+ *
+ * A client-scheduled cancellation arrives here as an `updated` event that
+ * changes no status (see setSubscriptionCancelSchedule) — it is mirrored to
+ * settings_json and alerted on separately.
  */
 export async function handleSubscriptionLifecycle(
   db: D1Database,
   eventType: 'customer.subscription.updated' | 'customer.subscription.deleted',
-  payload: StripeSubscriptionEventPayload
+  payload: StripeSubscriptionEventPayload,
+  resendApiKey?: string
 ): Promise<Response> {
   const sub = await getSubscriptionByStripeId(db, payload.id)
   if (!sub) {
@@ -466,12 +607,17 @@ export async function handleSubscriptionLifecycle(
   try {
     if (eventType === 'customer.subscription.deleted' || payload.status === 'canceled') {
       await setSubscriptionBillingStatus(db, sub.id, 'cancelled')
-    } else if (payload.pause_collection !== null && payload.pause_collection !== undefined) {
+      if (parseCancelAt(sub.settings_json)) await setSubscriptionCancelSchedule(db, sub.id, null)
+      await alertCancellationEffective(db, resendApiKey, sub)
+      return ok()
+    }
+    if (payload.pause_collection !== null && payload.pause_collection !== undefined) {
       await setSubscriptionBillingStatus(db, sub.id, 'paused')
     } else if (payload.status === 'active' || payload.status === 'past_due') {
       // past_due keeps access: the failure alert + Captain decide, never the webhook.
       await setSubscriptionBillingStatus(db, sub.id, 'active')
     }
+    await mirrorCancelSchedule(db, resendApiKey, sub, payload)
     return ok()
   } catch (err) {
     console.error('[stripe-subscription] lifecycle mirror failed:', err)
@@ -479,4 +625,95 @@ export async function handleSubscriptionLifecycle(
   }
 }
 
-export type { SubscriptionBillingRow }
+/**
+ * Reconcile the row's scheduled-cancellation posture with the event, and
+ * alert `team@` when it CHANGES. Stripe re-sends the whole subscription on
+ * every `updated` event, so the stored value is the edge detector: without
+ * it a routine price or payment-method update would re-alert a cancellation
+ * scheduled weeks ago.
+ */
+async function mirrorCancelSchedule(
+  db: D1Database,
+  resendApiKey: string | undefined,
+  sub: SubscriptionBillingRow,
+  payload: StripeSubscriptionEventPayload
+): Promise<void> {
+  const known = parseCancelAt(sub.settings_json)
+  const schedule = resolveCancelSchedule(payload)
+
+  if (schedule.kind === 'unreadable') {
+    // Stripe says a cancellation is scheduled but named no date. Never guess
+    // one onto a client-facing surface; alert and leave the row honest.
+    await alertTeam(
+      resendApiKey,
+      `Retainer cancellation scheduled, end date unreadable — ${await entityName(db, sub)}`,
+      `<p>Stripe reports <code>cancel_at_period_end=true</code> on <code>${payload.id}</code> but carried no <code>cancel_at</code> and no item <code>current_period_end</code>.</p>` +
+        `<p>The client's cancellation is REAL. The portal is not showing an end date because we could not read one — check Stripe and the payload shape.</p>`
+    )
+    return
+  }
+
+  const next = schedule.kind === 'scheduled' ? schedule.iso : null
+  if (next === known) return // no change; nothing to write, nothing to say
+
+  await setSubscriptionCancelSchedule(db, sub.id, next)
+  const name = await entityName(db, sub)
+  await (next === null
+    ? alertTeam(
+        resendApiKey,
+        `Retainer cancellation REVERSED — ${name}`,
+        `<p>${name} removed the scheduled cancellation on <code>${payload.id}</code>. Billing continues as normal.</p>`
+      )
+    : alertTeam(
+        resendApiKey,
+        `Retainer cancellation scheduled — ${name}`,
+        `<p>${name} cancelled the Operator retainer from the portal.</p>` +
+          `<ul><li>Service and billing continue until <strong>${next.slice(0, 10)}</strong></li>` +
+          `<li>Stripe subscription: ${payload.id}</li></ul>` +
+          `<p>No automatic action was taken. Offboarding (export, destruction, seat decommission) is a Captain decision under the offboarding doctrine, ss-console#1684.</p>`
+      ))
+}
+
+/** The subscription ended. Alerts `team@`; offboarding stays a human act. */
+async function alertCancellationEffective(
+  db: D1Database,
+  resendApiKey: string | undefined,
+  sub: SubscriptionBillingRow
+): Promise<void> {
+  const name = await entityName(db, sub)
+  await alertTeam(
+    resendApiKey,
+    `Retainer ENDED — ${name}`,
+    `<p>The Operator retainer for ${name} has ended at Stripe; the local subscription row is now cancelled.</p>` +
+      `<ul><li>Stripe subscription: ${sub.stripe_subscription_id ?? 'unknown'}</li></ul>` +
+      `<p>The seat is still running. Offboarding under Section 9.3 — audit export, operational memory, Machine and volume destruction — is a Captain act (ss-console#1684).</p>`
+  )
+}
+
+/** Entity display name for alert copy; falls back to the id, never invents. */
+async function entityName(db: D1Database, sub: SubscriptionBillingRow): Promise<string> {
+  try {
+    const entity = await db
+      .prepare('SELECT name FROM entities WHERE id = ? AND org_id = ?')
+      .bind(sub.entity_id, sub.org_id)
+      .first<{ name: string }>()
+    return entity?.name ?? sub.entity_id
+  } catch {
+    return sub.entity_id
+  }
+}
+
+/** Operational alert to team@. Best-effort: never turns a mirrored billing
+ * event into a webhook failure Stripe will retry. Shared with the checkout
+ * handler (its failed-first-payment path). */
+export async function alertTeam(
+  resendApiKey: string | undefined,
+  subject: string,
+  html: string
+): Promise<void> {
+  try {
+    await sendEmail(resendApiKey, { to: ALERT_EMAIL, subject, html })
+  } catch (err) {
+    console.error('[stripe-subscription] alert email failed:', subject, err)
+  }
+}

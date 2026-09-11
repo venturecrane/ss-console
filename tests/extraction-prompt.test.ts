@@ -4,14 +4,9 @@ import { resolve } from 'path'
 import {
   EXTRACTION_SYSTEM_PROMPT,
   buildExtractionUserPrompt,
-  buildManualExtractionPrompt,
   validateExtraction,
 } from '../src/portal/assessments/extraction-prompt.js'
-import {
-  PROBLEM_IDS,
-  PROBLEM_LABELS,
-  VERTICALS,
-} from '../src/portal/assessments/extraction-schema.js'
+import { PROBLEM_IDS, VERTICALS } from '../src/portal/assessments/extraction-schema.js'
 import { SAMPLE_TRANSCRIPT, SAMPLE_EXTRACTION_OUTPUT } from './fixtures/sample-transcript.js'
 
 // ---------------------------------------------------------------------------
@@ -21,14 +16,6 @@ import { SAMPLE_TRANSCRIPT, SAMPLE_EXTRACTION_OUTPUT } from './fixtures/sample-t
 describe('extraction schema constants', () => {
   it('defines exactly 5 solution capability IDs', () => {
     expect(PROBLEM_IDS).toHaveLength(5)
-  })
-
-  it('every problem ID has a human-readable label', () => {
-    for (const id of PROBLEM_IDS) {
-      expect(PROBLEM_LABELS[id]).toBeDefined()
-      expect(typeof PROBLEM_LABELS[id]).toBe('string')
-      expect(PROBLEM_LABELS[id].length).toBeGreaterThan(0)
-    }
   })
 
   it('problem IDs match the canonical 5', () => {
@@ -90,12 +77,6 @@ describe('extraction prompt construction', () => {
     expect(prompt).toContain('disqualification_flags')
     expect(prompt).toContain('quote_drivers')
     expect(prompt).toContain('champion_candidate')
-  })
-
-  it('manual prompt combines system and user prompts', () => {
-    const manual = buildManualExtractionPrompt('test transcript')
-    expect(manual).toContain(EXTRACTION_SYSTEM_PROMPT)
-    expect(manual).toContain('test transcript')
   })
 
   it('system prompt instructs JSON-only output', () => {

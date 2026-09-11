@@ -58,6 +58,3 @@ export function modelFor(tier: ModelTier, env?: Record<string, string | undefine
 
 /** Default QUALITY model ID (no override applied). */
 export const QUALITY_MODEL = TIER_DEFAULTS.QUALITY
-
-/** Default FAST model ID (no override applied). */
-export const FAST_MODEL = TIER_DEFAULTS.FAST

@@ -47,6 +47,7 @@ EXPECTED_TOOLS = {
     "read_document",
     "list_folders",
     "create_folder",
+    "create_matter",
     "add_file",
     "file_attachment_to_matter",
     "delete_file",
@@ -95,34 +96,25 @@ def test_conformance_every_tool_classified() -> None:
     # Trust-account fund-movement tools are never exposed here.
     assert not any("transaction" in k or "protect" in k for k in runtime_map)
     # Writes carry their classes under the runtime name; reads are reads.
-    assert (
-        runtime_map[runtime_tool_name("smokeball", "create_memo")] == "internal_write"
-    )
-    assert (
-        runtime_map[runtime_tool_name("smokeball", "create_webhook_subscription")]
-        == "internal_write"
-    )
+    assert runtime_map[runtime_tool_name("smokeball", "create_memo")] == "internal_write"
+    assert runtime_map[runtime_tool_name("smokeball", "create_webhook_subscription")] == "internal_write"
     assert runtime_map[runtime_tool_name("smokeball", "add_file")] == "internal_write"
     assert runtime_map[runtime_tool_name("smokeball", "delete_file")] == "destructive"
-    assert (
-        runtime_map[runtime_tool_name("smokeball", "create_event")] == "internal_write"
-    )
-    assert (
-        runtime_map[runtime_tool_name("smokeball", "create_task")] == "internal_write"
-    )
-    assert (
-        runtime_map[runtime_tool_name("smokeball", "create_folder")] == "internal_write"
-    )
+    assert runtime_map[runtime_tool_name("smokeball", "create_event")] == "internal_write"
+    assert runtime_map[runtime_tool_name("smokeball", "create_task")] == "internal_write"
+    assert runtime_map[runtime_tool_name("smokeball", "create_folder")] == "internal_write"
+    assert runtime_map[runtime_tool_name("smokeball", "create_matter")] == "commitment"
     assert runtime_map[runtime_tool_name("smokeball", "list_events")] == "read"
     assert runtime_map[runtime_tool_name("smokeball", "get_matter_balances")] == "read"
     assert runtime_map[runtime_tool_name("smokeball", "list_matters")] == "read"
 
 
 def test_write_surface_is_memo_document_and_deadline_engine() -> None:
-    # The write surface: the internal-log memo, the document round-trip, and the
-    # deadline-engine / document-organization cut (events, tasks, folders). Every
-    # write is internal_write except delete_file (destructive, taint-gated). Trust
-    # fund-movement is never here.
+    # The write surface: the internal-log memo, the document round-trip, the
+    # deadline-engine / document-organization cut (events, tasks, folders), and
+    # the Operator's own matter. Every write is internal_write except
+    # delete_file (destructive, taint-gated) and create_matter (commitment,
+    # confirm-gated). Trust fund-movement is never here.
     m = _manifest()
     writes = {t: c for t, c in m.tool_classes.items() if c != "read"}
     assert writes == {
@@ -137,6 +129,14 @@ def test_write_surface_is_memo_document_and_deadline_engine() -> None:
         "create_task": "internal_write",
         "update_task": "internal_write",
         "create_folder": "internal_write",
+        # The Operator's OWN matter, and the only write here that is not
+        # internal_write or destructive (ss-console#2536). COMMITMENT because it
+        # changes the firm's system of record and must never be autonomous: it
+        # happens after a Named Administrator has been shown the exact matter
+        # and has said yes. The overlay map already classifies it this way
+        # (shared/action_classes.py:432), so this declaration adds no coordinated
+        # overlay change, only the OVERLAY_REF bump that ships the confirm path.
+        "create_matter": "commitment",
         # The .docx producer (2026-08-10, Captain directive #2222): renders a
         # gated markdown skeleton server-side and files it into the matter via
         # the same two-stage upload as add_file. Bytes never transit the model.

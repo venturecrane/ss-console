@@ -29,7 +29,7 @@ function input(
   overrides: Partial<Parameters<ReturnType<typeof createFlySecretTokenStore>['store']>[0]> = {}
 ) {
   return {
-    customer_id: 'smd',
+    customer_id: 'smd-staging',
     provider: 'google-workspace',
     reviewer_id: 'user_1',
     token: TOKEN,
@@ -85,7 +85,7 @@ describe('createFlySecretTokenStore', () => {
     expect(result).toEqual({ ok: true })
 
     const body = JSON.parse(fly.setSecretsBody())
-    expect(body.variables.input.appId).toBe('hermes-smd')
+    expect(body.variables.input.appId).toBe('hermes-smd-staging')
     const secret = body.variables.input.secrets[0]
     expect(secret.key).toBe('GOOGLE_TOKEN_JSON')
     const onDisk = JSON.parse(atob(secret.value))
@@ -101,7 +101,7 @@ describe('createFlySecretTokenStore', () => {
       expiry: '2026-06-02T04:57:53.000Z',
     })
     expect(fly.restarts).toEqual([
-      'https://api.machines.dev/v1/apps/hermes-smd/machines/m1/restart',
+      'https://api.machines.dev/v1/apps/hermes-smd-staging/machines/m1/restart',
     ])
   })
 

@@ -131,7 +131,9 @@ export function checkPersonaEntitlements(
   }
   rejectLegacyField(raw, 'trust_ceiling', path, errors)
   rejectLegacyField(raw, 'action_ceilings', path, errors)
-  const exposure = checkExposureMap(raw['exposure'], `${path}.exposure`, errors)
+  const exposure = checkExposureMap(raw['exposure'], `${path}.exposure`, errors, {
+    allowCommitmentConfirm: true,
+  })
   if (raw['exposure_ceiling'] === undefined || raw['exposure_ceiling'] === null) {
     return { exposure }
   }
@@ -170,7 +172,8 @@ function restrictiveness(c: ExposureCeiling): number {
 function checkExposureMap(
   raw: unknown,
   path: string,
-  errors: ValidationError[]
+  errors: ValidationError[],
+  options: { allowCommitmentConfirm?: boolean } = {}
 ): Partial<Record<AuthoredExposureActionClass, ExposureCeiling>> {
   if (raw === undefined || raw === null) return {}
   if (!isPlainObject(raw)) {
@@ -195,11 +198,27 @@ function checkExposureMap(
       })
       continue
     }
-    // `confirm` (send after an explicit in-turn approval, ADR 0071) is only valid
-    // for the send classes (external_send / external_send_internal / external_send_client
-    // / external_send_vendor); enforce()'s confirm branch lives in the send branch, so
-    // on any other class the accepted set excludes it.
-    const allowedCeilings = (SEND_ACTION_CLASSES as readonly string[]).includes(key)
+    // `confirm` (act after an explicit in-turn approval, ADR 0071) is valid for
+    // the send classes (external_send / external_send_internal /
+    // external_send_client / external_send_vendor), and, since ss-console#2536,
+    // for `commitment` on the AUTHORED EXPOSURE only.
+    //
+    // Why commitment and not destructive: a commitment is the firm's own record
+    // gaining something (the Operator's internal matter), and the firm's
+    // administrators can be shown exactly what it will be and can answer. A
+    // destructive act removes something, the read-back cannot show what would be
+    // lost, and it stays where it is until somebody argues otherwise.
+    //
+    // Why exposure and not exposure_ceiling: the ceiling is the entitlement
+    // dial's Machine-side clamp, derived from the routine grid's send tiers
+    // (tests/customer-commitments.test.ts gate (i) checks that derivation
+    // equals the authored map), and commitment has no send tier to derive from.
+    // Leaving it out of the ceiling map means the dial can never raise
+    // commitment at all, which is the fail-closed direction.
+    const confirmAllowed =
+      (SEND_ACTION_CLASSES as readonly string[]).includes(key) ||
+      (key === 'commitment' && options.allowCommitmentConfirm === true)
+    const allowedCeilings = confirmAllowed
       ? ACCEPTED_EXPOSURE_CEILINGS
       : ACCEPTED_EXPOSURE_CEILINGS.filter((c) => c !== 'confirm')
     if (typeof value !== 'string' || !(allowedCeilings as readonly string[]).includes(value)) {

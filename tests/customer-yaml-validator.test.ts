@@ -3296,6 +3296,184 @@ describe('validate — scope.admins (ADR 0085 §2)', () => {
   })
 })
 
+describe('validate — scope.ops_reply_from (ss-console#2546)', () => {
+  function withOpsReply(list: unknown): Record<string, unknown> {
+    const f = validFixture()
+    const scope = f['scope'] as Record<string, unknown>
+    scope['ops_reply_from'] = list
+    return f
+  }
+
+  it('accepts SMD person addresses at either domain, canonicalized', () => {
+    const r = validate(
+      withOpsReply(['Scott@SMD.services', 'team@smd.services', 'smdurgan@smdurgan.com'])
+    )
+    expect(r.ok).toBe(true)
+    if (r.ok)
+      expect(r.value.scope.ops_reply_from).toEqual([
+        'scott@smd.services',
+        'team@smd.services',
+        'smdurgan@smdurgan.com',
+      ])
+  })
+
+  // The rule the key exists for. The list decides whose answer resolves an
+  // operations request, so a config that could name a third party would hand
+  // the answering power away from SMD entirely.
+  it("rejects an address outside SMD's own mail domains", () => {
+    const r = validate(withOpsReply(['christa@example-firm.com']))
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(codesOf(r.errors)).toContain('InvalidOpsReplyFrom')
+      expect(r.errors.some((e) => e.message.includes('not at an SMD domain'))).toBe(true)
+    }
+  })
+
+  it('rejects a lookalike domain rather than matching on a suffix', () => {
+    // notsmd.services ends with the same characters; the check is on the @
+    // boundary, not on the tail of the string.
+    const r = validate(withOpsReply(['scott@notsmd.services']))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(codesOf(r.errors)).toContain('InvalidOpsReplyFrom')
+  })
+
+  it('rejects an @domain grant — an answer comes from a person', () => {
+    const r = validate(withOpsReply(['@smd.services']))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(codesOf(r.errors)).toContain('InvalidOpsReplyFrom')
+  })
+
+  it('rejects a duplicate, so the authored list is the count of who answers', () => {
+    const r = validate(withOpsReply(['scott@smd.services', 'SCOTT@smd.services']))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(codesOf(r.errors)).toContain('InvalidOpsReplyFrom')
+  })
+
+  it('rejects a malformed address', () => {
+    const r = validate(withOpsReply(['not-an-email']))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(codesOf(r.errors)).toContain('InvalidOpsReplyFrom')
+  })
+
+  it('rejects a non-string entry', () => {
+    const r = validate(withOpsReply([{ email: 'scott@smd.services' }]))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(codesOf(r.errors)).toContain('MissingField')
+  })
+
+  it('rejects a non-list ops_reply_from', () => {
+    const r = validate(withOpsReply('scott@smd.services'))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(codesOf(r.errors)).toContain('TypeMismatch')
+  })
+
+  it('defaults to [] when unauthored, so no reply resolves anything', () => {
+    const r = validate(validFixture())
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.value.scope.ops_reply_from).toEqual([])
+  })
+
+  // It is NOT the admin list and NOT the roster. An SMD address that answers
+  // operations requests is not thereby an Operator admin, and nothing here may
+  // make it one.
+  it('does not require the answering address to be an admin or on the roster', () => {
+    const f = withOpsReply(['team@smd.services'])
+    const scope = f['scope'] as Record<string, unknown>
+    scope['admins'] = []
+    scope['inbound_allow_from'] = []
+    const r = validate(f)
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.value.scope.admins).toEqual([])
+      expect(r.value.scope.inbound_allow_from).not.toContain('team@smd.services')
+    }
+  })
+})
+
+describe('validate — scope.rule_requests_to (ss-console#2546)', () => {
+  const ADMINS = ['dana@example-firm.com', 'lee@example-firm.com']
+
+  function withRouting(routing: unknown, admins: unknown = ADMINS): Record<string, unknown> {
+    const f = validFixture()
+    const scope = f['scope'] as Record<string, unknown>
+    scope['admins'] = admins
+    scope['rule_requests_to'] = routing
+    return f
+  }
+
+  it('accepts a subset of the admin list, canonicalized', () => {
+    const r = validate(withRouting(['Dana@Example-Firm.com']))
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.value.scope.rule_requests_to).toEqual(['dana@example-firm.com'])
+  })
+
+  it('accepts every admin, which is the no-split default a firm may author', () => {
+    const r = validate(withRouting(ADMINS))
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.value.scope.rule_requests_to).toEqual(ADMINS)
+  })
+
+  // The rule the key exists for. Routing may narrow who is PAGED; it may never
+  // name somebody who could not act on the request, and it may never widen
+  // authority by naming a non-admin.
+  it('rejects an address that is not on scope.admins', () => {
+    const r = validate(withRouting(['sarah@example-firm.com']))
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(codesOf(r.errors)).toContain('InvalidRuleRequestsTo')
+      expect(r.errors.some((e) => e.message.includes('not on scope.admins'))).toBe(true)
+    }
+  })
+
+  it('rejects an @domain grant — a request goes to a person, not to a building', () => {
+    const r = validate(withRouting(['@example-firm.com']))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(codesOf(r.errors)).toContain('InvalidRuleRequestsTo')
+  })
+
+  it('rejects a duplicate, so the authored list is the count of who is paged', () => {
+    const r = validate(withRouting(['dana@example-firm.com', 'DANA@example-firm.com']))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(codesOf(r.errors)).toContain('InvalidRuleRequestsTo')
+  })
+
+  it('rejects a malformed address', () => {
+    const r = validate(withRouting(['not-an-email']))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(codesOf(r.errors)).toContain('InvalidRuleRequestsTo')
+  })
+
+  it('rejects a non-string entry', () => {
+    const r = validate(withRouting([{ email: 'dana@example-firm.com' }]))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(codesOf(r.errors)).toContain('MissingField')
+  })
+
+  it('rejects a non-list rule_requests_to', () => {
+    const r = validate(withRouting('dana@example-firm.com'))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(codesOf(r.errors)).toContain('TypeMismatch')
+  })
+
+  it('defaults to [] when unauthored, so nothing claims an admin was asked', () => {
+    const r = validate(validFixture())
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.value.scope.rule_requests_to).toEqual([])
+  })
+
+  // An admin list that is itself invalid drops the offending entries, and the
+  // subset check must then refuse the routing rather than silently accept it
+  // against a shorter list than the author wrote.
+  it('refuses routing to an address the admin list rejected', () => {
+    const r = validate(withRouting(['dana@example-firm.com'], ['@example-firm.com']))
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(codesOf(r.errors)).toContain('InvalidAdminList')
+      expect(codesOf(r.errors)).toContain('InvalidRuleRequestsTo')
+    }
+  })
+})
+
 describe('validate — send exposure classes (ADR 0075)', () => {
   function withExposure(exposure: Record<string, unknown>): Record<string, unknown> {
     const f = validFixture()
@@ -3320,6 +3498,39 @@ describe('validate — send exposure classes (ADR 0075)', () => {
 
   it('rejects confirm on a non-send class', () => {
     const r = validate(withExposure({ internal_write: 'confirm' }))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(codesOf(r.errors)).toContain('InvalidActionCeiling')
+  })
+
+  // ss-console#2536. `commitment: confirm` is the one non-send class that may
+  // be authored as confirm, and it may be authored that way on the EXPOSURE
+  // only. A commitment is the firm's own record gaining something, an admin can
+  // be shown exactly what it will be and can answer; the ceiling map is the
+  // entitlement dial's Machine-side clamp, derived from the routine grid's send
+  // tiers, and commitment has none to derive from.
+  it('accepts confirm on commitment in exposure', () => {
+    const r = validate(withExposure({ commitment: 'confirm' }))
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.value.personas[0].entitlements.exposure.commitment).toBe('confirm')
+  })
+
+  it('rejects confirm on commitment in exposure_ceiling', () => {
+    const f = validFixture()
+    const persona = (f['personas'] as Record<string, unknown>[])[0]
+    persona['entitlements'] = {
+      exposure: { commitment: 'confirm' },
+      exposure_ceiling: { commitment: 'confirm' },
+    }
+    const r = validate(f)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(codesOf(r.errors)).toContain('InvalidActionCeiling')
+  })
+
+  it('still rejects confirm on destructive', () => {
+    // A destructive act REMOVES something, and the read-back cannot show the
+    // admin what would be lost. It stays refused-or-drafted until somebody
+    // argues otherwise in writing.
+    const r = validate(withExposure({ destructive: 'confirm' }))
     expect(r.ok).toBe(false)
     if (!r.ok) expect(codesOf(r.errors)).toContain('InvalidActionCeiling')
   })
@@ -3652,5 +3863,90 @@ describe('send_policy', () => {
     const paths = r.errors.map((e) => e.path)
     expect(paths).toContain('send_policy.held_release.enabled')
     expect(paths).toContain('send_policy.held_release.ttl_seconds')
+  })
+})
+
+// -----------------------------------------------------------------------------
+// personas[].signature — the authored chase-mail signature block
+// (outbound-quality track; consumed by the chase skills' rendered sign-off per
+// _shared-chase-voice.md "Salutation and signature")
+// -----------------------------------------------------------------------------
+
+describe('personas[].signature', () => {
+  function withSignature(signature: unknown): Record<string, unknown> {
+    const f = validFixture()
+    const personas = f['personas'] as Record<string, unknown>[]
+    personas[0]['signature'] = signature
+    return f
+  }
+
+  it('is optional: an unauthored persona carries null (degrades to customer_name)', () => {
+    const r = validate(validFixture())
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.value.personas[0].signature).toBeNull()
+  })
+
+  it('accepts an authored firm_line + closing', () => {
+    const r = validate(withSignature({ firm_line: 'Smith PI Firm', closing: 'Thank you.' }))
+    if (!r.ok) throw new Error(JSON.stringify(r.errors))
+    expect(r.value.personas[0].signature).toEqual({
+      firm_line: 'Smith PI Firm',
+      closing: 'Thank you.',
+    })
+  })
+
+  it('accepts a partial authoring (firm_line only)', () => {
+    const r = validate(withSignature({ firm_line: 'Smith PI Firm' }))
+    if (!r.ok) throw new Error(JSON.stringify(r.errors))
+    expect(r.value.personas[0].signature).toEqual({ firm_line: 'Smith PI Firm', closing: null })
+  })
+
+  it('refuses a non-mapping authoring rather than silently dropping it', () => {
+    const r = validate(withSignature('Smith PI Firm'))
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.errors.map((e) => e.path)).toContain('personas[0].signature')
+  })
+
+  it('refuses an unknown key so a typo cannot author nothing', () => {
+    const r = validate(withSignature({ firm_name: 'Smith PI Firm' }))
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.errors.map((e) => e.path)).toContain('personas[0].signature.firm_name')
+  })
+
+  it('refuses a floor-trigger word in firm_line, naming the word (finding 3)', () => {
+    // The block renders verbatim into every chase body; the ADR 0031 floor
+    // would hold each one as a draft. Refused where authored, correctively.
+    const r = validate(withSignature({ firm_line: 'Smith, Attorneys at Law' }))
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    const error = r.errors.find((e) => e.path === 'personas[0].signature.firm_line')
+    expect(error).toBeDefined()
+    expect(error!.message).toContain('"attorney"')
+    expect(error!.message).toContain('content-floor')
+    expect(error!.message).toContain('_shared-chase-voice.md')
+  })
+
+  it('refuses a floor-trigger word in closing too', () => {
+    const r = validate(withSignature({ closing: 'Please sign and return promptly.' }))
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.errors.map((e) => e.path)).toContain('personas[0].signature.closing')
+  })
+
+  it('word boundaries hold: a clean firm_line with an embedded substring passes', () => {
+    // "Signal" is not "sign"; the gate must refuse words, not substrings.
+    const r = validate(withSignature({ firm_line: 'Signal Hill LLP' }))
+    if (!r.ok) throw new Error(JSON.stringify(r.errors))
+    expect(r.value.personas[0].signature?.firm_line).toBe('Signal Hill LLP')
+  })
+
+  it('refuses non-string field values', () => {
+    const r = validate(withSignature({ firm_line: 42 }))
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.errors.map((e) => e.path)).toContain('personas[0].signature.firm_line')
   })
 })

@@ -229,6 +229,35 @@ describe('pilot-smokeball commitments contract (ADR 0075)', () => {
       byName('medical-chronology-maintainer')?.settings?.['treatment_gap_flag_days'],
       'medical-chronology-maintainer must author treatment_gap_flag_days: 45 (correspondence 09)'
     ).toBe(45)
+    // Agreement 2.8 / Exhibit A row 11 (engagements #89, 2026-08-28): the package
+    // allowance is the ONE contract figure the seat authors for routine 11. The
+    // per-matter gates, the per-job cap, and the behavioral defaults are SMD
+    // runner posture and live in the runner's per-firm config, never here
+    // (ADR 0087; a value authored here is agent-readable and world-readable).
+    // Restated in PAGES (engagements #107, 2026-09-09): a document is not a
+    // unit of work, and the cost of a package tracks its pages.
+    expect(
+      byName('medical-chronology-maintainer')?.settings?.[
+        'chronology_package_page_allowance_per_month'
+      ],
+      'medical-chronology-maintainer must author the Exhibit A row 11 allowance: 15000 pages per month'
+    ).toBe(15000)
+    // The transitional document key is gone: both seats were reprovisioned
+    // onto the page key on 2026-09-09 (vfy_01M23V6QKNRHN4SB1ZPRBWZ1V9), and a
+    // broker that reads only the page key must never find the old one
+    // authored beside it again.
+    expect(
+      byName('medical-chronology-maintainer')?.settings?.[
+        'chronology_package_document_allowance_per_month'
+      ],
+      'the document allowance key was retired 2026-09-09; the allowance is in pages'
+    ).toBeUndefined()
+    for (const key of Object.keys(byName('medical-chronology-maintainer')?.settings ?? {})) {
+      expect(
+        ['treatment_gap_flag_days', 'chronology_package_page_allowance_per_month'],
+        `medical-chronology-maintainer.settings.${key}: only contract-derived keys are authored on the client seat (ADR 0087)`
+      ).toContain(key)
+    }
   })
 
   // (h) A&P GRID TRACEABILITY. The (c) gate above checks the pilot seat
@@ -448,6 +477,137 @@ describe('pilot-smokeball commitments contract (ADR 0075)', () => {
     const [, ap] = seats[0]
     expect(ap.scope.inbound_allow_from.some((e) => e.startsWith('@'))).toBe(true)
     expect(ap.scope.admins.length).toBe(3)
+  })
+
+  // (k) ss-console#2546. The loop the admin list could not close on its own.
+  // Every admin may apply a firm rule; this says whose inbox a NON-admin's
+  // request lands in, so a partner is not paged every time a paralegal asks for
+  // a different sign-off. Two invariants on both seats, and each is the property
+  // the feature actually needs:
+  //   - non-empty, or a non-admin's rule reaches nobody and the Operator has
+  //     nothing true to say about who was asked;
+  //   - a subset of the admin list, so a request can never be routed to somebody
+  //     who could not act on it (the validator enforces this per-seat; asserted
+  //     again here because the authored VALUES are what ship, not the schema).
+  it('(k) both seats route rule requests to a subset of their admins (ss#2546)', () => {
+    const seats: Array<readonly [string, CustomerYaml]> = [
+      ['ashton-price', validatedSeat(join(AP_DIR, 'customer.yaml'))],
+      ['pilot-smokeball', seatValue()],
+    ]
+
+    for (const [label, cfg] of seats) {
+      const routing = cfg.scope.rule_requests_to
+      expect(
+        routing.length,
+        `${label}: an unauthored routing list means a non-admin's rule reaches nobody`
+      ).toBeGreaterThan(0)
+      const admins = new Set(cfg.scope.admins)
+      for (const to of routing) {
+        expect(to.startsWith('@'), `${label}: a request goes to a person, never a domain`).toBe(
+          false
+        )
+        expect(admins.has(to), `${label}: ${to} is routed a request it could not act on`).toBe(true)
+      }
+    }
+
+    // The split is REAL on both seats, not decorative: each authors at least one
+    // admin who is NOT paged. On A&P that is Chris by name (an admin who keeps
+    // the authority and loses the traffic); on the proving seat it is scott@,
+    // whose absence is what makes the "an admin not named receives nothing" leg
+    // falsifiable there.
+    for (const [label, cfg] of seats) {
+      const unpaged = cfg.scope.admins.filter((a) => !cfg.scope.rule_requests_to.includes(a))
+      expect(
+        unpaged.length,
+        `${label}: routing names every admin, so nothing proves the split is wired`
+      ).toBeGreaterThan(0)
+    }
+  })
+
+  // (l) ss-console#2546. An operations request (routine, schedule, channel,
+  // memory, autonomy, on/off) is SMD's to make, and the Operator has to be able
+  // to pass one on. That send needs a typed outbound class or it falls to the
+  // outside external_send ceiling and sits as a held draft.
+  //
+  // The second half is the one worth a gate: the same address must NOT be on
+  // the inbound roster. Rostering it would trust mail claiming to come FROM it,
+  // which is a different and much larger grant than being able to write to it.
+  it('(l) both seats can send to the SMD operations desk, and trust nothing from it', () => {
+    const seats: Array<readonly [string, CustomerYaml]> = [
+      ['ashton-price', validatedSeat(join(AP_DIR, 'customer.yaml'))],
+      ['pilot-smokeball', seatValue()],
+    ]
+    const DESK = 'team@smd.services'
+
+    for (const [label, cfg] of seats) {
+      const entry = cfg.scope.outbound_roster.find((e) => e.address === DESK)
+      expect(entry, `${label}: no outbound class for the operations desk`).toBeDefined()
+      expect(entry!.class, `${label}: the desk is firm staff, not a client or a vendor`).toBe(
+        'firm_staff'
+      )
+      expect(
+        cfg.scope.inbound_allow_from.includes(DESK),
+        `${label}: the operations desk must not be granted inbound trust`
+      ).toBe(false)
+    }
+  })
+
+  // (m) ss-console#2546, the operations half. `rule_requests_to` above routes a
+  // firm rule to somebody who can APPLY it. This is the other direction: an
+  // operations request (routine, schedule, channel, memory, autonomy, on/off) is
+  // SMD's to make, so SMD is who ANSWERS it, and `ops_reply_from` is whose
+  // answer counts.
+  //
+  // THE ASSERTION WORTH THE GATE is the last one, and it is (l)'s shape: being
+  // able to answer a question the Operator asked must not become inbound trust.
+  // A regression that quietly added team@ to inbound_allow_from to "make the
+  // reply work" would pass every other assertion in this file, and would grant
+  // any forged mail from that address the power to instruct the seat.
+  //
+  // It is pinned on the DESK specifically rather than on every entry, and the
+  // reason is that scott@smd.services is on both seats' rosters and admin lists
+  // already, under a separate and earlier Captain decision (the self-initiation
+  // set, 2026-08-11 — see (j)). Asserting "no answering address is rostered"
+  // would therefore fail on a grant this key did not make and cannot revoke.
+  // team@ is the address this feature actually introduces, and it is the one
+  // whose isolation this key could plausibly break.
+  it('(m) both seats let SMD answer an operations request, and the desk stays untrusted', () => {
+    const seats: Array<readonly [string, CustomerYaml]> = [
+      ['ashton-price', validatedSeat(join(AP_DIR, 'customer.yaml'))],
+      ['pilot-smokeball', seatValue()],
+    ]
+    const DESK = 'team@smd.services'
+    const SMD_DOMAINS = ['smd.services', 'smdurgan.com']
+
+    for (const [label, cfg] of seats) {
+      const answering = cfg.scope.ops_reply_from
+      expect(
+        answering.length,
+        `${label}: an unauthored answering list means every request lapses unanswered`
+      ).toBeGreaterThan(0)
+
+      // The desk is on it, because the desk is where the request is SENT and a
+      // reply arrives from where it was sent. Without this the loop cannot close
+      // at all: SMD would answer from an address the seat does not read.
+      expect(answering, `${label}: the desk cannot answer its own mail`).toContain(DESK)
+
+      for (const address of answering) {
+        expect(address.startsWith('@'), `${label}: an answer comes from a person`).toBe(false)
+        expect(
+          SMD_DOMAINS.some((d) => address.endsWith(`@${d}`)),
+          `${label}: ${address} is not SMD, and operations changes are SMD's`
+        ).toBe(true)
+      }
+
+      expect(
+        cfg.scope.inbound_allow_from.includes(DESK),
+        `${label}: the desk may answer an operations request, never instruct the seat`
+      ).toBe(false)
+      expect(
+        cfg.scope.admins.includes(DESK),
+        `${label}: answering for SMD does not make the desk an administrator of the firm`
+      ).toBe(false)
+    }
   })
 
   it('(i) the authored persona register is real and identical across the client and proving seats', () => {

@@ -52,6 +52,12 @@ The correction-capture invariant (#2091 / overlay#214: the agent records, never 
 
 Correction capture is unchanged for everyone else: a non-admin statement is captured as `proposed`; **promotion authority is the same Operator-admin role**, exercisable conversationally ("apply Sarah's correction") or from the portal's review view.
 
+**Amendment, 2026-08-21 (Captain decision; ss-console#2529).** The clause above assumes the instruction arrives as designated content. A firm also establishes by talking: an admin writes one sentence about how a kind of output should read, and any person writes one about their own work. That sentence has no corpus, and every compiler named above refuses an empty one, so the write gates cannot apply to it. Rather than refuse the act, this ADR names a second, narrower authorization for it: **an admin's confirmed one-sentence adjustment installs on authority, attribution, an untainted turn, and a readback, not on the compilers.** Personal preferences (§6) install on the same footing, with the person's own identity as the authority.
+
+**The readback is the control.** The Operator states the rule back in a canonical block rendered server-side, carrying a short tag; the person answers; only then does it commit, and the committed bytes are the bytes from that block, taken from the stored proposal and never from the confirming request. A request that carries a different sentence is refused, not substituted. What replaces four compiler gates is therefore not nothing: it is a human confirming a specific sentence, and a mechanism in which that confirmation is checkable rather than asserted.
+
+**What is given up, stated plainly.** A confirmed adjustment is not checked for retained client prose, for asserted numbers, or against the firm's own writing. The bound on the damage is that it is one sentence, capped in length and in count per property, attributed to a named person on both ends (who instructed it, who applied it), rendered into the spec file where the firm can read it, superseded by any later contradicting sentence, and reversible by re-establishing the property from documents. Corpus-fed establishment keeps all four gates unchanged; nothing here weakens that path.
+
 ### 5. Channel trust rides the mailbox custody model
 
 Admin authority is an email identity, so sender attribution matters per channel:
@@ -101,3 +107,65 @@ Nothing else about ADR 0083's registry moves: declarations (`output_classes:`) s
 - [ ] (runtime) The same motion updates an existing voice, and the prior spec is recoverable
 - [ ] (runtime) A non-admin's identical instruction is refused with a reply naming who can do it, and is captured as a proposed correction where applicable
 - [ ] (runtime) A user states a personal preference; work produced for that user honors it; firm-level output is unchanged
+
+## Amendment, 2026-08-22: three categories of change, and who decides each (Captain decision; ss-console#2546)
+
+The 2026-08-21 amendment above named a second authorization: an admin's confirmed one-sentence adjustment installs on authority, attribution, an untainted turn, and a readback. Building it exposed a question the ADR had not answered. A person who is not an admin can also state a firm-level sentence, and what happened next was that the Operator recorded it and said an admin could apply it by replying "apply that". No admin was told. A decline was silent, a lapse was silent, and a request about a routine got a sentence with nothing behind it.
+
+The gap was not in the mechanism. It was that "who decides" had only two values, admin and not-admin, and a firm has three kinds of change.
+
+| Kind           | Example                                                 | Who decides                                         | How                                                                                      |
+| -------------- | ------------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Personal       | "open tasks first, for me"                              | the person                                          | readback, yes                                                                            |
+| Firm standards | voice, document shape and templates, letter tone        | any Operator admin                                  | readback, yes; a non-admin's request goes to `rule_requests_to` for "apply that" or "no" |
+| Operations     | routines, schedules, channels, memory, autonomy, on/off | SMD on request; admins keep pause/off in the portal | fixed reply; request passed to SMD by email                                              |
+
+Two things follow from the table, and both are deliberate.
+
+**Operations stay with SMD for now.** A routine is a schedule that initiates work on its own, and changing one changes what the Operator does when nobody is watching. That is a configuration act with a reviewed diff behind it, not a sentence. So the Operator's answer to "start sending me a digest every Monday" is that SMD makes those changes, and the request actually reaches SMD rather than being absorbed by a polite reply. What an admin keeps unilaterally is the direction that only ever reduces exposure: pause, and off, from the portal. The self-managed end of this spectrum, where an admin approves a routine change by email the way they approve a rule, is a later decision and is not taken here.
+
+**Authority and traffic are separated.** Every Operator admin may apply a firm rule; that is §2 and it does not move. What ss-console#2546 adds is `scope.rule_requests_to`, an authored subset of `scope.admins` naming who is EMAILED when a non-admin asks for one. The distinction exists because the two lists answer different questions. Authority asks who may speak for the firm, and the firm's answer is its Named Administrators. Traffic asks whose inbox rings, and a firm with a litigating partner and an office manager on the same list does not want the partner paged every time a paralegal asks for a different sign-off. Before this key, the only way to spare him that was to take his authority away.
+
+The routing list is a subset by validation, not by convention. An address on it that is not an admin would be a person asked to answer a question they have no power to answer, and the broker's own recipient fence would refuse the send anyway, so the request would reach nobody and nothing would say so. Empty is fail-closed in the honest direction: no admin is emailed, and the Operator says that rather than claiming somebody was asked.
+
+The loop the routing closes is the point of the whole amendment. A rule stated by somebody who is not an admin is recorded, read back, and emailed to every address on `rule_requests_to` with the tag and "reply 'apply that' or 'no'". An admin's "apply that" commits it and the person who asked is told it is in effect. An admin's "no" declines it, once, and the person who asked is told it was declined. Nobody answering inside seven days lapses it, and the person who asked is told that too. An admin who is not named for requests receives nothing at any point. Personal preferences under §6 are untouched: a person's own identity is the authority over their own layer, and nothing about their own preference is routed to anybody.
+
+Two bounds worth stating plainly. The seven-day window applies to a rule only; an act proposed for confirmation keeps the twenty-four hours it was authorized under, because widening it would widen a commitment nobody widened. And a decline is an explicit act by a second person: the requester cannot decline their own rule, since leaving it unconfirmed is how they withdraw it.
+
+### Acceptance criteria (this amendment)
+
+- [ ] (repo) `customer.yaml` carries `scope.rule_requests_to`, validated as a subset of `scope.admins`, parsed by the seat, and authored on both the client seat and the proving seat
+- [ ] (repo) A non-admin's firm rule is emailed to every `rule_requests_to` address with the readback and the two answers; an admin not named receives nothing
+- [ ] (repo) An admin's "no" declines the proposal once, and the person who asked is told the outcome on apply and on decline
+- [ ] (repo) A rule nobody answers lapses at seven days and the person who asked is told; an act still expires at twenty-four hours
+- [ ] (repo) An operations request gets the fixed reply and reaches SMD by email
+- [ ] (runtime) On a proving seat, all four legs are observed end to end from the seat's own mailbox
+
+## Amendment, 2026-08-23: an operations request comes back answered (Captain decision; ss-console#2546, reopened)
+
+The 2026-08-22 amendment above put operations — routines, schedules, channels, memory, autonomy, on/off — with SMD, and said the request "actually reaches SMD rather than being absorbed by a polite reply". Half of that shipped. An email reaches `team@smd.services`; nothing comes back. SMD's answer never reaches the person who asked, and the Operator's reply at request time narrates a routine that does not exist ("Once it is live, the digest will arrive every Monday"), which is the same promise-of-future-behavior the rest of this ADR spends its length refusing to make.
+
+**The loop closes.** An operations request is now recorded as a row, tagged, answered, and reported, in the same shape a firm rule already is:
+
+- The request is recorded when it is made, and it carries an `[ops XXXX]` tag — eight hex characters, the same shape as `[rule XXXX]` and `[act XXXX]` and deliberately a different word, because the person answering it is deciding something different.
+- SMD is emailed with the tag in the subject.
+- SMD answers by replying with the tag and either `done` or `no, <reason>`. A reply that says neither leaves the row open and gets one automated ask for those words; it is asked once, because a per-turn re-ask is how a nudge becomes a mail loop.
+- The person who asked receives exactly one email: SMD set this up, SMD declined this with the reason SMD wrote, or the request lapsed unanswered after seven days. The reason is **quoted, never paraphrased** — an Operator composing its own account of somebody else's refusal would be inventing client-facing content.
+- When the seat cannot get the request out of the building at all, the row is withdrawn and nothing is sent, because nothing was ever asked and the person already heard that in the refusal they got in the same turn.
+
+**Who may answer.** `scope.ops_reply_from`, authored per seat, person addresses at an SMD domain. The grant is exactly one act: resolving a request the Operator itself raised, identified by its tag, whose whole effect is one templated notice to the person who asked. It is not inbound trust. None of these addresses goes on `scope.inbound_allow_from` — `team@smd.services` in particular stays off it, pinned by a test — so mail from one of them that quotes no tag is as untrusted as any other mail, cannot untaint a turn, and cannot instruct the seat.
+
+**The tag is the capability, and that is the accepted risk, stated plainly.** No seat receives an SPF or DKIM verdict on inbound mail (§5 above), so a forged `From: team@smd.services` is exactly as available as a forged `From: scott@smd.services`; naming one rather than the other buys nothing. What bounds the exposure is not the sender but the effect: the most a forged answer can do is send one person at the firm a templated notice about a request they themselves made. Nothing is configured, nothing is installed, and no routine changes — operations changes remain a reviewed diff made by SMD, which is what the 2026-08-22 amendment decided and this one does not touch.
+
+**An operations request is never confirmable, and that is enforced three times.** It is not a rule: nobody at the firm can say yes to it, because it was never theirs to decide. So a submit naming one is refused by name, an administrator's decline is refused by name, and the broker's `consume` — the write that turns a row into something the firm committed — refuses the kind in SQL. Three refusals rather than one, because "the firm accidentally installed a routine change by saying yes" is the failure this shape could plausibly produce.
+
+**Seven days, matching a rule.** The request is emailed to a person at SMD who may be with a client all day, and a request that dies overnight is a request the firm never had. An act still expires at twenty-four hours; widening that would widen a commitment nobody widened.
+
+### Acceptance criteria (this amendment)
+
+- [ ] (repo) `customer.yaml` carries `scope.ops_reply_from`, validated as person addresses at an SMD domain, authored on both the client seat and the proving seat, and absent from `inbound_allow_from`
+- [ ] (repo) An operations request is recorded with an `[ops XXXX]` tag; a reply from an authored address quoting that tag resolves it as done or declined; a reply from any other address does not
+- [ ] (repo) The person who asked is told once — set up, declined with SMD's quoted reason, or lapsed at seven days — and a withdrawn request tells them nothing
+- [ ] (repo) An operations request cannot be committed by a confirmation, declined by a firm administrator, or consumed by the broker
+- [ ] (repo) The Operator's reply at request time does not describe what a not-yet-existing routine will do
+- [ ] (runtime) On a proving seat, all four legs are observed end to end from the seat's own mailbox: set up, declined with a reason, lapsed, and a tagged reply from an address that is not authored doing nothing

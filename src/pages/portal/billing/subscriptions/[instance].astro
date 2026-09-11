@@ -1,0 +1,182 @@
+---
+import { getPortalClient } from '../../../../lib/portal/session'
+import PortalShell from '../../../../layouts/PortalShell.astro'
+import PortalPageHead from '../../../../components/portal/PortalPageHead.astro'
+import PortalDetailTable from '../../../../components/portal/PortalDetailTable.astro'
+import PortalDetailRow from '../../../../components/portal/PortalDetailRow.astro'
+import MoneyDisplay from '../../../../components/portal/MoneyDisplay.astro'
+import SubmitButton from '../../../../components/portal/form/SubmitButton.astro'
+import { resolvePortalOfferings } from '../../../../lib/portal/offerings'
+import {
+  getOperatorSubscriptionByInstance,
+  listProductRoles,
+} from '../../../../lib/portal/product-access'
+import { getOperatorServiceForEntity } from '../../../../lib/db/services'
+import { parseCancelAt } from '../../../../lib/db/subscriptions'
+import {
+  canStartOperatorSubscription,
+  operatorMonthlyCharge,
+  parseStripeCustomerId,
+} from '../../../../lib/portal/billing'
+import { formatShortDate } from '../../../../lib/portal/formatters'
+import { env } from 'cloudflare:workers'
+
+/**
+ * The Operator subscription page: the one place the client starts the
+ * monthly plan and, once started, manages it. Billing's ledger row, Home's
+ * card and the Operator hero all land here; this page carries the single
+ * primary action (UI-PATTERNS Rule 3) and states, before the client commits,
+ * what the system will do: the authored price, monthly in advance, and
+ * cancellation at the end of the paid month (what the Billing Portal
+ * configuration does, mirrored by setSubscriptionCancelSchedule). The rail
+ * is authored per client (services.payment_method, migration 0113): bank
+ * account, or card with the 3% processing fee of agreement §3.8 shown here
+ * as its own row and in the charged total, so the fee is stated before the
+ * client pays.
+ *
+ * Same shape as the invoice page (invoices/[id].astro): head with the
+ * status in the meta column, one ink-bordered fact table, one primary
+ * action with a mono caption under it.
+ *
+ * Every figure here is authored data (services.recurring_price) or system
+ * behaviour. Nothing about the Operator's work, the agreement, or dates we
+ * have not recorded is stated (no fabricated client-facing content).
+ */
+
+export const prerender = false
+
+const instance = Astro.params.instance
+if (!instance) return Astro.redirect('/portal/billing')
+
+const portalData = await getPortalClient(env.DB, Astro.locals)
+if (!portalData) {
+  return Astro.redirect('/auth/sign-in')
+}
+if (!portalData.client) {
+  return Astro.redirect('/auth/sign-in?status=no_subscription')
+}
+const { user, client } = portalData
+
+const offerings = await resolvePortalOfferings(env.DB, user.org_id, client.id)
+const subscription = await getOperatorSubscriptionByInstance(env.DB, client.id, instance)
+// A slug this client does not own reads as absent, never as someone else's.
+if (!subscription) return Astro.redirect('/portal/billing')
+
+const operatorName = offerings.operators.find((o) => o.slug === instance)?.displayName ?? 'Operator'
+
+const service = await getOperatorServiceForEntity(env.DB, user.org_id, client.id)
+const charge = operatorMonthlyCharge(service)
+const priceCents = charge?.priceCents ?? null
+const byCard = charge?.paymentMethod === 'card'
+const startable = canStartOperatorSubscription(subscription, priceCents)
+const roles = await listProductRoles(env.DB, user.id, client.id, 'operator')
+const isPrincipal = roles.includes('principal')
+const cancelAt = parseCancelAt(subscription.settings_json)
+const stripeCustomerId = parseStripeCustomerId(subscription.settings_json)
+const started = subscription.status === 'active' || !!subscription.stripe_subscription_id
+
+const statusLine = startable
+  ? 'Not started'
+  : cancelAt
+    ? `Cancels ${formatShortDate(cancelAt)}`
+    : subscription.status === 'active'
+      ? `Active since ${formatShortDate(subscription.started_at)}`
+      : subscription.status === 'paused'
+        ? 'Paused'
+        : started
+          ? 'Started, first payment settling'
+          : 'Being set up'
+---
+
+<PortalShell
+  title={`${operatorName} subscription`}
+  clientName={client.name}
+  orgId={user.org_id}
+  entityId={client.id}
+  pathname={Astro.url.pathname}
+  offerings={offerings}
+>
+  <PortalPageHead
+    crumbHref="/portal/billing"
+    crumbLabel="Billing"
+    h1={`${operatorName} subscription`}
+    meta={statusLine}
+  />
+
+  <PortalDetailTable eyebrow={startable ? 'What you are starting' : 'Terms'} label="Terms">
+    <PortalDetailRow label="Monthly fee">
+      {
+        priceCents !== null ? (
+          <>
+            <MoneyDisplay amountCents={priceCents} size="row" /> per month
+          </>
+        ) : (
+          'Not yet priced. Write to team@smd.services and we sort it out.'
+        )
+      }
+    </PortalDetailRow>
+    {
+      charge && byCard && (
+        <PortalDetailRow label="Card processing fee (3%)">
+          <MoneyDisplay amountCents={charge.feeCents} size="row" /> per month
+        </PortalDetailRow>
+      )
+    }
+    {
+      charge && byCard && (
+        <PortalDetailRow label="Charged monthly">
+          <MoneyDisplay amountCents={charge.totalCents} size="row" /> per month
+        </PortalDetailRow>
+      )
+    }
+    <PortalDetailRow label="Billed">
+      Monthly in advance. The first month is paid when you start; each month after that is charged
+      automatically{byCard ? ' to the card you enter at checkout' : ''}.
+    </PortalDetailRow>
+    <PortalDetailRow label="Cancelling">
+      Any time, from this page. Service continues to the end of the month you have paid for, and you
+      are not billed again.
+    </PortalDetailRow>
+  </PortalDetailTable>
+
+  {
+    startable && isPrincipal && (
+      <form
+        method="POST"
+        action={`/api/portal/products/operator/${instance}/start-subscription`}
+        class="mt-8"
+        aria-label="Start the subscription"
+      >
+        <SubmitButton label="Start monthly subscription" tone="primary" />
+        <p class="mt-3 font-mono text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
+          Opens secure checkout on Stripe. Nothing is charged until you complete it there.
+        </p>
+      </form>
+    )
+  }
+
+  {
+    startable && !isPrincipal && (
+      <p class="mt-8 font-mono text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
+        A principal on this account starts the subscription.
+      </p>
+    )
+  }
+
+  {
+    !startable && stripeCustomerId && (
+      <form
+        method="POST"
+        action="/api/portal/billing/manage"
+        class="mt-8"
+        aria-label="Manage billing"
+      >
+        <input type="hidden" name="product_slug" value="operator" />
+        <SubmitButton label="Manage billing" tone="neutral" />
+        <p class="mt-3 font-mono text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
+          Payment method, receipts, and cancellation, on Stripe.
+        </p>
+      </form>
+    )
+  }
+</PortalShell>

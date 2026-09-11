@@ -8,6 +8,7 @@ from __future__ import annotations
 import pytest
 
 from smokeball_connector import server
+from smokeball_connector.client import SmokeballClient
 
 
 class _Recorder:
@@ -15,6 +16,7 @@ class _Recorder:
 
     def __init__(self) -> None:
         self.calls: list[dict] = []
+        self.responses: dict[str, dict] = {}  # per-path canned GET responses
 
     def request(self, method: str, path: str, *, json=None):
         self.calls.append({"method": method, "path": path, "json": json})
@@ -24,7 +26,12 @@ class _Recorder:
         # Mirror the real client: drop None-valued params.
         cleaned = {k: v for k, v in params.items() if v is not None}
         self.calls.append({"method": "GET", "path": path, "params": cleaned})
-        return {"ok": True}
+        return self.responses.get(path, {"ok": True})
+
+    # create_folder lives on the client (the chronology runner's delivery step
+    # calls it too, ss#2613); bind the real method so its wire body is still
+    # what these tests lock.
+    create_folder = SmokeballClient.create_folder
 
 
 @pytest.fixture()
@@ -63,13 +70,46 @@ def test_create_task_maps_due_date_to_due_date_only(rec: _Recorder) -> None:
     }
 
 
-def test_update_task_partial(rec: _Recorder) -> None:
-    server.update_task(task_id="t-7", is_completed=True)
-    assert rec.calls[0] == {
+def test_update_task_completion_read_merges_and_stamps_completer(rec: _Recorder) -> None:
+    """PUT /tasks is a full replace (proven live 2026-08-31,
+    vfy_01M1CWACT2NSB1WFSZXD3KQK5F): the tool must read the task, re-send its
+    current fields, carry StaffId, and stamp CompletedByStaffId on completion.
+    The read echoes dueDateOnly as a datetime; the PUT re-sends date-only."""
+    rec.responses["/tasks/t-7"] = {
+        "id": "t-7",
+        "subject": "[Operator] Review chronology package",
+        "note": "delivered folder pointer",
+        "dueDateOnly": "2026-09-01T00:00:00",
+        "isCompleted": False,
+        "matter": {"id": "m-9"},
+        "assignees": [{"id": "s-2"}],
+    }
+    server.update_task(task_id="t-7", is_completed=True, staff_id="s-1")
+    assert rec.calls[0] == {"method": "GET", "path": "/tasks/t-7", "params": {}}
+    assert rec.calls[1] == {
         "method": "PUT",
         "path": "/tasks/t-7",
-        "json": {"isCompleted": True},
+        "json": {
+            "staffId": "s-1",
+            "subject": "[Operator] Review chronology package",
+            "note": "delivered folder pointer",
+            "dueDateOnly": "2026-09-01",
+            "matterId": "m-9",
+            "isCompleted": True,
+            "completedByStaffId": "s-1",
+            "assigneeIds": ["s-2"],
+        },
     }
+
+
+def test_update_task_without_staff_id_refuses_before_the_wire(rec: _Recorder) -> None:
+    """The task read never echoes staffId (proven live 2026-08-31), so a
+    completion with no staff_id cannot form a valid PUT; refuse loudly instead
+    of letting the tenant 400 (or worse, letting a replace-PUT clear fields)."""
+    rec.responses["/tasks/t-7"] = {"id": "t-7", "isCompleted": False}
+    with pytest.raises(ValueError, match="staff_id"):
+        server.update_task(task_id="t-7", is_completed=True)
+    assert [c for c in rec.calls if c["method"] == "PUT"] == []
 
 
 # ---- events ---------------------------------------------------------------

@@ -1,10 +1,10 @@
 /**
- * Operator settings — typed contracts for the config-derived rows the
- * console renders:
+ * Operator settings — the connector-status rows the console renders from
+ * the config projection.
  *
- *   - Trust ceiling rows per action class
- *   - Skill toggles (per-persona skill list)
- *   - Connector status rows
+ * The trust-ceiling vocabulary, its label, and the skill-toggle row shape
+ * that once lived here went with the components that rendered them
+ * (2026-09-10; nothing mounted those components).
  *
  * Source of truth is `customer.yaml` per
  * [ADR 0012](../../../../docs/adr/0012-customer-yaml-storage.md); the
@@ -17,129 +17,6 @@
  * the portal surface was chrome over a stub — no ingestion wiring
  * existed. Client-voice establishment is its own workstream.
  */
-
-import type { PersonaConfig } from '../customer-config'
-import type { ActionClass, AuthoredExposureActionClass } from '../../operator/customer-yaml/types'
-
-// ---------------------------------------------------------------------------
-// Trust ceiling
-// ---------------------------------------------------------------------------
-
-/**
- * Closed vocabulary for the exposure decision attached to a persona action
- * class. The old exported names are retained for component compatibility while
- * the UI is renamed.
- *
- *   autonomous       — the Operator may execute and send without
- *                      a human reviewer in the loop
- *   draft_for_review — default; the Operator proposes; a reviewer
- *                      must approve and send
- *   refused          — the skill is configured but the Operator
- *                      will refuse to run it
- *
- * The vocabulary is closed because adding a value silently breaks
- * persona-renderer dispatch in both the portal and Hermes. New
- * ceilings require a customer.yaml schema bump.
- */
-export type TrustCeilingLevel = 'autonomous' | 'draft_for_review' | 'refused'
-
-export const TRUST_CEILING_LEVELS: readonly TrustCeilingLevel[] = [
-  'autonomous',
-  'draft_for_review',
-  'refused',
-] as const
-
-export function isTrustCeilingLevel(value: unknown): value is TrustCeilingLevel {
-  return typeof value === 'string' && (TRUST_CEILING_LEVELS as readonly string[]).includes(value)
-}
-
-/**
- * Human label for a TrustCeilingLevel. Closed vocabulary; unknown
- * values fall through to the raw value rather than fabricating a
- * friendly label.
- */
-export function formatTrustCeilingLevel(level: TrustCeilingLevel): string {
-  switch (level) {
-    case 'autonomous':
-      return 'Autonomous'
-    case 'draft_for_review':
-      return 'Draft for review'
-    case 'refused':
-      return 'Refused'
-  }
-}
-
-/**
- * One row in the trust-ceiling section. Shape mirrors the persona
- * skill entry from customer.yaml, with the ceiling parsed against
- * the closed vocabulary. Unknown ceiling strings render as the raw
- * value so a hand-edited customer.yaml does not silently change
- * runtime behavior.
- */
-export interface TrustCeilingRow {
-  skillName: string
-  currentLevel: TrustCeilingLevel | null
-  rawLevel: string
-  actionClass: ActionClass
-}
-
-/**
- * Project a persona's skill list into trust-ceiling rows. Order is
- * preserved (skills are authored in priority order by the customer
- * principal in customer.yaml).
- */
-export function trustCeilingRowsFromPersona(persona: PersonaConfig | null): TrustCeilingRow[] {
-  if (!persona) return []
-  const classes: AuthoredExposureActionClass[] = [
-    'internal_write',
-    'external_send',
-    'external_send_internal',
-    'external_send_client',
-    'external_send_vendor',
-    'commitment',
-    'destructive',
-    'code_execution',
-  ]
-  return classes.map((actionClass) => {
-    const level = persona.entitlements.exposure[actionClass]
-    return {
-      skillName: actionClass,
-      currentLevel: isTrustCeilingLevel(level) ? level : null,
-      rawLevel: typeof level === 'string' ? level : '',
-      actionClass,
-    }
-  })
-}
-
-// ---------------------------------------------------------------------------
-// Skill toggles
-// ---------------------------------------------------------------------------
-
-/**
- * One skill toggle row. Sourced from the customer's persona skill
- * list — a skill is "enabled" for this customer iff it appears in
- * persona.skills. Initiation modes are displayed separately from exposure.
- *
- *   skillName       — slug from `operator/skills/<name>/SKILL.md`
- *   enabled         — true when the persona configures the skill
- *                     and its ceiling is not `refused`
- *   trustCeiling    — current ceiling (or null when the persona's
- *                     ceiling does not match the closed vocabulary)
- */
-export interface SkillToggleRow {
-  skillName: string
-  enabled: boolean
-  trustCeiling: TrustCeilingLevel | null
-}
-
-export function skillToggleRowsFromPersona(persona: PersonaConfig | null): SkillToggleRow[] {
-  if (!persona) return []
-  return persona.skills.map((s) => ({
-    skillName: s.name,
-    enabled: true,
-    trustCeiling: null,
-  }))
-}
 
 // ---------------------------------------------------------------------------
 // Connector status
@@ -156,19 +33,6 @@ export function skillToggleRowsFromPersona(persona: PersonaConfig | null): Skill
  * `docs/specs/operator/capability-contracts.md`.
  */
 export type ConnectorHealth = 'ok' | 'warn' | 'fail' | 'unconfigured'
-
-export function formatConnectorHealth(health: ConnectorHealth): string {
-  switch (health) {
-    case 'ok':
-      return 'OK'
-    case 'warn':
-      return 'Warn'
-    case 'fail':
-      return 'Fail'
-    case 'unconfigured':
-      return 'Unconfigured'
-  }
-}
 
 /**
  * One connector row.
@@ -243,6 +107,7 @@ export function connectorRowsFromCustomerYaml(connectorsYaml: unknown): Connecto
 // endpoint only logged intent. Real voice-sample ingestion is the #1851 /
 // voice-establishment workstream; nothing renders sample chrome until the
 // wiring exists (feedback: never build the chrome ahead of the wiring).
-// The live exports above (trust ceilings, skill toggles, connectors) are
-// consumed by the facet resolvers and remain.
+// The per-persona row projections (trust-ceiling rows, skill-toggle rows)
+// went the same way on 2026-09-09: no facet resolver called them. What remains
+// is the closed vocabularies, their labels, and the connector rows.
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 # ADR 0086: Matter identity binds at the send-scan seam, via provenance pairs
 
-Status: Proposed (2026-08-09)
+Status: Accepted (2026-08-09; unverifiable posture measured and ratified by Captain 2026-08-19 — see §Checking)
 Issue: [#2167](https://github.com/venturecrane/ss-console/issues/2167)
 Related: ADR 0072 (recipient classes), ADR 0075 (typed outbound roster), ADR 0080 (control pattern), audit `docs/audits/operator-output-provenance-2026-07-31.md` §3.3, #2115 (the deferral this resolves), #2128 (pair provenance)
 
@@ -37,7 +37,23 @@ At `check_outbound_send` (and the draft gate for completeness), the body's own m
 - `records_vendor` (typed roster, ADR 0075): exempt — a records vendor serves many matters; the class is the authorization boundary.
 - `client` and `OUTSIDE`: must pair. Matter-scoping the client is the point — the firm's client on matter A must not receive matter B's content.
 
-Unverifiable → refuse, matching the implementation playbook's client-facing safety line: "it refuses rather than guesses when it cannot verify what it needs." A skill that sends matter-scoped mail must read the matter's roles first; the gate enforces what the skill contract instructs.
+### Unverifiable: allow under the routine's posture (ratified 2026-08-19)
+
+As proposed, this section read "unverifiable → refuse." The implementation shipped the other rule — unverifiable reads as _unresolved_ and passes to the routine's authored posture — first as a documented deviation, then measured, then ratified by the Captain on 2026-08-19. The rule now is:
+
+- **Provably wrong → refuse.** A recipient the session's evidence pairs with a _different_ matter than the body asserts is withheld, always. This is the incident class the control exists for, and it holds on 100% of matters.
+- **Unprovable → the routine's posture decides.** No party-set evidence means no verdict — the send falls through to whatever exposure level the routine has earned (day one: `draft_for_review`, a person in front of it).
+
+Why refuse-mode was foreclosed by measurement, not preference: the production census of the first client's full book (3,874 matters, `vfy_01M0BT2TF3GDFT3FZDBYZAVMNX`) found only 8.9% of open matters (51/574) and 39.4% of Pending matters carry a party set this control can close — firms record parties for conflicts and captions, and fill in an email only when someone needed to email that person. Refuse-on-unverifiable would have refused ~91% of active-matter outbound: a guarantee for a sliver of the book at the price of the product's graduation path. The rig's 8-of-9-open ceiling was representative, not a fixture artifact.
+
+This does not contradict the playbook's safety lines (`docs/runbooks/operator/implementation-playbook.md` §safety-lines); it composes with them:
+
+- "Nothing goes to an outside party or a tribunal without a person in front of it" is **never on the client's dial** — so the OUTSIDE class (including the medical providers at the center of the first client's Pending mandate, who attach as roles and are structurally unprovable by this control) is permanently human-fronted regardless of this ADR.
+- "Refuses rather than guesses" governs acting on _asserted_ membership: the gate never manufactures a verdict from absence. Absence routes to a person; only proof routes around one.
+
+**Graduation evidence (required before any routine loosens past `draft_for_review` on matter-scoped outbound):** (a) contact-axis coverage measured on that routine's real traffic — how often the recipient-side direction (ss#2264) actually closes; (b) a re-census after the client's committed client-email gap-fill (A&P letter 27, item 4 — the client filling missing emails directly grows the provable population); (c) if the routine addresses roles-attached parties (providers), a roles-axis census first — the party-list census does not cover them.
+
+A skill that sends matter-scoped mail must still read the matter's roles first; the gate enforces what the skill contract instructs.
 
 ### Rejected alternatives
 
@@ -55,10 +71,10 @@ Unverifiable → refuse, matching the implementation playbook's client-facing sa
 
 ## Acceptance criteria (build phase, filed as follow-on issues on acceptance)
 
-- [ ] (repo, connector) Field-shape confirmation: `get_roles_on_matter` / `get_relationships_on_matter` payloads carry (matterNumber, email) in one record; connector enrichment added where they don't
-- [ ] (repo, overlay + substrate) `(matter, recipient)` pair seeding + send-gate check, both filter copies in lockstep, class exemptions per this ADR
+- [x] (repo, connector) Field-shape confirmation: `get_roles_on_matter` / `get_relationships_on_matter` payloads carry (matterNumber, email) in one record; connector enrichment added where they don't — the payload does NOT carry the join; enrichment shipped in ss#2396
+- [x] (repo, overlay + substrate) `(matter, recipient)` pair seeding + send-gate check, both filter copies in lockstep, class exemptions per this ADR — overlay#271 + ss#2396 (the checking half lives in `matter_gate.py`)
 - [ ] (repo) Unit false-control + mutation companion (Law 12)
-- [ ] (runtime) Kill-test pair on a product seat: cross-matter send REFUSES and correct-pairing send PASSES — crane_verify both; the pass direction is the authorizing row
+- [x] (runtime) Kill-test pair on a product seat: cross-matter send REFUSES and correct-pairing send PASSES — crane_verify both; the pass direction is the authorizing row — `vfy_01M0B1X4CR4K1M04RTPK1MDMS8` (shadow-firm run d5916657c670-green, both directions on one armed run)
 
 ## Verification
 

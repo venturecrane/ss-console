@@ -3,8 +3,8 @@
  * live runtime read (readMachineRuntime) into the existing audit display
  * machinery (filters / sort / pagination / formatters in audit.ts).
  *
- * Why route through readMachineRuntime rather than the legacy
- * `listAuditEntries` stub: the foundation converges every deep per-customer
+ * Why route through readMachineRuntime rather than a per-page resolver in
+ * audit.ts: the foundation converges every deep per-customer
  * read on the single audited, fail-closed, one-customer-per-call path
  * (foundations §6, ADR 0043). Activity is one of those drill-ins.
  *

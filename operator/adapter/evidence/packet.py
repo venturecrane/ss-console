@@ -97,7 +97,6 @@ import json
 import logging
 import re
 import tarfile
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -131,15 +130,13 @@ _SECRET_KEY_PATTERN = re.compile(
     r"refresh_token|access_token|private_key)$"
 )
 _OAUTH_KEY_PATTERN = re.compile(r"(?i)^oauth_scopes$")
-_RECIPIENT_KEY_PATTERN = re.compile(
-    r"(?i)^(failure_recipients|red_flag_recipients|notification_recipients)$"
-)
+_RECIPIENT_KEY_PATTERN = re.compile(r"(?i)^(failure_recipients|red_flag_recipients|notification_recipients)$")
 
 # Pre-export validator: a redacted file must NOT contain these patterns.
 _SECRET_VALUE_PATTERNS = [
-    re.compile(r"sk-[A-Za-z0-9]{20,}"),       # OpenAI / Anthropic style secret
-    re.compile(r"AKIA[0-9A-Z]{16}"),          # AWS access key
-    re.compile(r"AIza[0-9A-Za-z_-]{35}"),     # Google API key
+    re.compile(r"sk-[A-Za-z0-9]{20,}"),  # OpenAI / Anthropic style secret
+    re.compile(r"AKIA[0-9A-Z]{16}"),  # AWS access key
+    re.compile(r"AIza[0-9A-Za-z_-]{35}"),  # Google API key
     re.compile(r"xox[abposr]-[A-Za-z0-9-]{10,}"),  # Slack token
     re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
     re.compile(r"ghp_[A-Za-z0-9]{20,}"),
@@ -178,6 +175,13 @@ class PacketRequest:
     the packet says: the gap is disclosed either way, and the
     acknowledgement itself is recorded in the manifest and the
     ``COMPLIANCE_PACKET_EXPORTED`` audit row.
+
+    ``pinned_head`` is a chain head recorded OFF the Machine before this export
+    (ss#2500). Supplying one turns the packet's audit section from "these rows
+    are internally consistent" into "these rows still contain a head recorded at
+    a moment nobody on the Machine could reach". Without it, tail truncation is
+    invisible -- and the packet says so on its face rather than implying a
+    completeness it did not test.
     """
 
     customer_slug: str
@@ -189,28 +193,29 @@ class PacketRequest:
     actor: str
     actor_role: PacketActor
     acknowledge_unattributed_gap: bool = False
+    pinned_head: Optional[str] = None
 
     def validate(self) -> None:
         if not self.customer_slug:
             raise EvidencePacketError("customer_slug must be non-empty")
         if not self.matter:
-            raise EvidencePacketError(
-                "matter must be a specific id or 'all'; never empty"
-            )
+            raise EvidencePacketError("matter must be a specific id or 'all'; never empty")
         if not _is_iso8601(self.period_start) or not _is_iso8601(self.period_end):
-            raise EvidencePacketError(
-                "period_start / period_end must be ISO 8601 strings"
-            )
+            raise EvidencePacketError("period_start / period_end must be ISO 8601 strings")
         if self.period_end < self.period_start:
             raise EvidencePacketError("period_end must be >= period_start")
         if not isinstance(self.actor_role, PacketActor):
-            raise EvidencePacketError(
-                "actor_role must be a PacketActor (captain | compliance)"
-            )
+            raise EvidencePacketError("actor_role must be a PacketActor (captain | compliance)")
         if self.actor_role.value not in REQUIRED_ACTOR_ROLES:
+            raise EvidencePacketError(f"actor_role {self.actor_role.value!r} not in {sorted(REQUIRED_ACTOR_ROLES)}")
+        if self.pinned_head is not None and not _CHAIN_HEAD_RE.match(self.pinned_head):
+            # Refused here rather than reported as a missing head later. A
+            # malformed pin can never match any row, so carrying it forward
+            # would print "the record was truncated" on a packet about a healthy
+            # ledger -- a false accusation in a document written for a court.
             raise EvidencePacketError(
-                f"actor_role {self.actor_role.value!r} not in "
-                f"{sorted(REQUIRED_ACTOR_ROLES)}"
+                "pinned_head must be a sha256 hexdigest (64 lowercase hex "
+                "characters), the shape row_hash takes in the audit ledger"
             )
 
 
@@ -225,6 +230,11 @@ class EvidencePacketResult:
     counts: Mapping[str, int]
     manifest: EvidenceManifest
     coverage: "AuditCoverage"
+    # ss#2500. Present even when no pin was supplied, carrying checked=False, so
+    # a caller reading the result cannot mistake "not asked" for "asked and fine".
+    chain_pin: "ChainPin" = field(
+        default_factory=lambda: ChainPin(pinned_head=None, present=False, chain_readable=True, source=CHAIN_PIN_SOURCE)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -239,9 +249,91 @@ class EvidencePacketResult:
 # quiet matter look like an unresolvable gap.
 _COVERAGE_EXCLUDED_ACTION_TYPE = "COMPLIANCE_PACKET_EXPORTED"
 
+#: A chain head is a sha256 hexdigest -- ``compute_row_hash`` in
+#: ``operator/workspace_broker/chain.py``. Matched, never trusted: see
+#: PacketRequest.validate for why a malformed pin is refused up front.
+_CHAIN_HEAD_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+@dataclass(frozen=True)
+class ChainPin:
+    """Whether a head recorded off the Machine is still in this ledger (ss#2500).
+
+    THE PROBLEM IT ANSWERS. The ledger is a hash chain, and this packet has
+    always been able to say a mutated or deleted MIDDLE row would show. It could
+    never say anything about rows cut off the END, because the surviving prefix
+    is a valid chain -- shown, not argued: against a live 1,473-row export,
+    deleting the last 50 rows and deleting the last 1 row both verified INTACT
+    (vfy_01M0H8D1CV2X8J9ZACMAC8E6E2).
+
+    A pin is the missing input. The console records the chain head from every
+    heartbeat into ``audit_head_history``; a packet built with one of those heads
+    can state that the ledger still contains a row that existed at a moment the
+    Machine could not reach backwards into.
+
+    ``present`` False with a pin supplied is a BREAK, and the builder halts on
+    it: a compliance packet asserting a complete record over a ledger that lost
+    rows is the exact artifact this whole mechanism exists to prevent.
+    """
+
+    #: False when the export source could not be asked at all -- no audit_log
+    #: table, or a snapshot taken before the hash-chain columns were preserved.
+    #: Kept distinct from ``present`` for the reason AuditCoverage.table_present
+    #: exists: "could not look" and "looked and it is gone" are different facts
+    #: and a compliance artifact must not present one as the other.
+    pinned_head: Optional[str]
+    present: bool
+    chain_readable: bool
+    source: str
+
+    @property
+    def was_checked(self) -> bool:
+        return self.pinned_head is not None
+
+    def narrative_lines(self) -> List[str]:
+        """Plain-language statement for the README. One wording, one surface."""
+        if not self.was_checked:
+            return [
+                "No externally pinned chain head was supplied for this export, so "
+                "the audit rows here were checked for internal consistency only. "
+                "Internal consistency does not detect rows removed from the END "
+                "of the log: what remains after such a removal is itself a valid "
+                "chain. Read this packet's audit section as complete only if you "
+                "have an independent record of where the log ended.",
+                "Such a record exists and was not used for this export: "
+                f"{self.source}. Request a packet built against one if "
+                "completeness of the log itself is the question you need "
+                "answered.",
+            ]
+        return [
+            "This export was checked against a chain head recorded outside the "
+            f"Operator's own machine before the export was taken ({self.source}). "
+            f"That head, {self.pinned_head}, is still present in this ledger, so "
+            "no row that existed when it was recorded has since been removed, "
+            "reordered, or altered.",
+            "That check covers rows OLDER than the recorded head. Rows written "
+            "after it were not yet covered by any external record when this "
+            "export was taken.",
+        ]
+
+    def to_dict(self) -> dict:
+        return {
+            "pinned_head": self.pinned_head,
+            "checked": self.was_checked,
+            "present": self.present,
+            "chain_readable": self.chain_readable,
+            "source": self.source,
+        }
+
+
+#: Where a pin comes from, stated in the packet so a reader can go and check it.
+CHAIN_PIN_SOURCE = (
+    "the audit_head_history table on the SMD control plane, appended from every heartbeat the Operator sends"
+)
+
 
 def _rows_phrase(count: int) -> str:
-    """"1 row" / "4130 rows". The packet is read by lawyers; "1 rows"
+    """ "1 row" / "4130 rows". The packet is read by lawyers; "1 rows"
     in a compliance artifact undercuts everything around it."""
     return "1 row" if count == 1 else f"{count} rows"
 
@@ -364,10 +456,7 @@ class AuditCoverage:
                     "they may concern other clients. Request the customer-wide "
                     "export if they need to be enumerated."
                 )
-                lines.append(
-                    "Read the counts in this packet as a floor for this matter, "
-                    "not as a complete tally."
-                )
+                lines.append("Read the counts in this packet as a floor for this matter, not as a complete tally.")
             else:
                 lines.append(
                     "Every audit row in this period carries a matter "
@@ -460,9 +549,7 @@ def _row_factory(cursor, row):
 # ---------------------------------------------------------------------------
 
 
-_ISO_8601_RE = re.compile(
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z?$"
-)
+_ISO_8601_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z?$")
 
 
 def _is_iso8601(value: str) -> bool:
@@ -505,12 +592,7 @@ def redact_customer_yaml(parsed: Any) -> Any:
                 out[key] = "<redacted>"
                 continue
             if isinstance(key, str) and _OAUTH_KEY_PATTERN.match(key):
-                count = (
-                    len(value)
-                    if isinstance(value, (list, tuple, set))
-                    else 1 if value
-                    else 0
-                )
+                count = len(value) if isinstance(value, (list, tuple, set)) else 1 if value else 0
                 out[key] = f"<{count} scopes redacted>"
                 continue
             if isinstance(key, str) and _RECIPIENT_KEY_PATTERN.match(key):
@@ -568,20 +650,68 @@ async def _fetch_audit_log(
     matter: str,
 ) -> List[dict]:
     if matter == "all":
-        sql = (
-            "SELECT * FROM audit_log "
-            "WHERE ts >= ? AND ts <= ? "
-            "ORDER BY ts ASC, id ASC"
-        )
+        sql = "SELECT * FROM audit_log WHERE ts >= ? AND ts <= ? ORDER BY ts ASC, id ASC"
         params: list = [period_start, period_end]
     else:
-        sql = (
-            "SELECT * FROM audit_log "
-            "WHERE ts >= ? AND ts <= ? AND matter_ref = ? "
-            "ORDER BY ts ASC, id ASC"
-        )
+        sql = "SELECT * FROM audit_log WHERE ts >= ? AND ts <= ? AND matter_ref = ? ORDER BY ts ASC, id ASC"
         params = [period_start, period_end, matter]
     return await _fetch_safe(reader, sql, params)
+
+
+async def _fetch_chain_pin(
+    reader: ReadExecutor,
+    *,
+    pinned_head: Optional[str],
+) -> ChainPin:
+    """Is the pinned head still somewhere in this ledger?
+
+    Deliberately NOT scoped to the packet's period or matter. The question is
+    whether the LEDGER still holds the row, and a period-scoped lookup would
+    report a break every time the pin predated the export window -- a false
+    accusation with the same words as a real one.
+
+    A missing ``audit_log`` table is reported as ``table_present=False`` rather
+    than as an absent head, for the reason :func:`_fetch_optional` exists: "the
+    table is not there" and "the row is not there" are different facts and a
+    packet must not present one as the other.
+    """
+    if pinned_head is None:
+        return ChainPin(None, present=False, chain_readable=True, source=CHAIN_PIN_SOURCE)
+    try:
+        rows = await reader.fetch_all("SELECT row_hash FROM audit_log WHERE row_hash = ? LIMIT 1", [pinned_head])
+    except Exception as exc:
+        # Two ways the question cannot be asked, and neither is an answer: no
+        # audit_log table, and an audit_log without the chain columns (a
+        # snapshot written before they were preserved). Anything else re-raises
+        # rather than being flattened into a reassuring shape.
+        msg = str(exc).lower()
+        if "no such table" in msg or "no such column" in msg or "does not exist" in msg:
+            log.warning("chain pin lookup skipped (chain columns unreadable): %s", exc)
+            return ChainPin(pinned_head, present=False, chain_readable=False, source=CHAIN_PIN_SOURCE)
+        raise
+    return ChainPin(pinned_head, present=len(rows) > 0, chain_readable=True, source=CHAIN_PIN_SOURCE)
+
+
+def _chain_pin_refusal_message(pin: ChainPin) -> str:
+    if not pin.chain_readable:
+        return (
+            "A pinned chain head was supplied but this export source carries no "
+            "hash-chain columns to look it up in: either there is no audit_log "
+            "table, or the snapshot predates the chain columns being preserved. "
+            "A packet cannot assert an unbroken record it did not read. Point "
+            "--read-db at a current ledger snapshot, or omit --pinned-head and "
+            "accept a packet that states its audit section is unchecked for "
+            "truncation."
+        )
+    return (
+        f"HALTED: the pinned chain head {pin.pinned_head} is NOT present in this "
+        "ledger. A head recorded off the Machine before this export has since "
+        "disappeared from the log, which means rows that existed at that moment "
+        "are gone: truncated, rewritten, or rolled back to an older copy. There "
+        "is no acknowledge flag for this. Do not ship a compliance packet over "
+        "it. Escalate per the invariants runbook and preserve the export as it "
+        "stands."
+    )
 
 
 async def _fetch_audit_coverage(
@@ -652,10 +782,7 @@ async def _fetch_audit_coverage(
 def _coverage_refusal_message(coverage: AuditCoverage) -> str:
     """The error an operator sees instead of a silently empty packet."""
     if not coverage.table_present:
-        cause = (
-            "the export source read for this packet has no audit_log table, so "
-            "no activity can be reported at all."
-        )
+        cause = "the export source read for this packet has no audit_log table, so no activity can be reported at all."
     else:
         cause = (
             f"{_rows_phrase(coverage.rows_unattributed)} in this period "
@@ -676,9 +803,7 @@ def _coverage_refusal_message(coverage: AuditCoverage) -> str:
     )
 
 
-async def _fetch_boot_checks(
-    reader: ReadExecutor, *, period_start: str, period_end: str
-) -> List[dict]:
+async def _fetch_boot_checks(reader: ReadExecutor, *, period_start: str, period_end: str) -> List[dict]:
     sql = (
         "SELECT id, ts, invariant_num, passed, failure_detail "
         "FROM invariant_boot_checks "
@@ -724,9 +849,7 @@ async def _fetch_memory_snapshot(reader: ReadExecutor) -> dict:
     # (bin/lib/seam_pull.py) before decommission. SELECT * because the table
     # schema is owned by the overlay's memory-mirror plugin; absent table →
     # honest empty via _fetch_safe.
-    observations = await _fetch_safe(
-        reader, "SELECT * FROM persona_observations ORDER BY rowid ASC"
-    )
+    observations = await _fetch_safe(reader, "SELECT * FROM persona_observations ORDER BY rowid ASC")
 
     return {
         "memory_rules": rules,
@@ -743,9 +866,7 @@ async def _fetch_memory_snapshot(reader: ReadExecutor) -> dict:
     }
 
 
-async def _fetch_skill_catalog(
-    reader: ReadExecutor, *, period_start: str, period_end: str
-) -> List[dict]:
+async def _fetch_skill_catalog(reader: ReadExecutor, *, period_start: str, period_end: str) -> List[dict]:
     sql = (
         "SELECT skill_name, trust_ceiling, content_hash, activated_at, "
         "last_run_at, run_count, operator_may_approve, config "
@@ -757,9 +878,7 @@ async def _fetch_skill_catalog(
     return rows
 
 
-async def _fetch_safe(
-    reader: ReadExecutor, sql: str, params: Optional[Sequence[Any]] = None
-) -> List[dict]:
+async def _fetch_safe(reader: ReadExecutor, sql: str, params: Optional[Sequence[Any]] = None) -> List[dict]:
     """Run a SELECT; return [] on table-missing errors.
 
     Production D1 will have every migration applied; tests may construct
@@ -782,7 +901,7 @@ async def _fetch_optional(
     """
     try:
         return await reader.fetch_all(sql, list(params or []))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         msg = str(exc).lower()
         if "no such table" in msg or "does not exist" in msg:
             log.warning("evidence read skipped (table absent): %s", exc)
@@ -816,10 +935,7 @@ def _render_yaml(data: Any) -> bytes:
     JSON is a valid YAML 1.2 subset, which is enough for the packet's
     audit purpose.
     """
-    return (
-        json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False, default=str)
-        + "\n"
-    ).encode("utf-8")
+    return (json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False, default=str) + "\n").encode("utf-8")
 
 
 def _readme_text(
@@ -835,6 +951,7 @@ def _readme_text(
     actor_role: str,
     manifest_sha256: str,
     coverage: AuditCoverage,
+    chain_pin: ChainPin,
     signed: bool = False,
     key_id: str = "",
 ) -> bytes:
@@ -849,6 +966,7 @@ def _readme_text(
     packet cannot answer.
     """
     coverage_body = "\n\n".join(coverage.narrative_lines())
+    pin_body = "\n\n".join(chain_pin.narrative_lines())
     body = (
         f"# Compliance Evidence -- {customer_name}\n\n"
         f"**Customer slug:** {customer_slug}\n"
@@ -869,6 +987,8 @@ def _readme_text(
         "summary PDF.\n\n"
         "## What this package covers, and what it cannot\n\n"
         f"{coverage_body}\n\n"
+        "## Whether the log itself is complete\n\n"
+        f"{pin_body}\n\n"
         "## What is in the package\n\n"
         "- `00-README.md` -- this document\n"
         "- `01-summary.pdf` -- the Susan-readable narrative\n"
@@ -880,14 +1000,8 @@ def _readme_text(
         "- `07-skill-catalog.json` -- the skills active during the period\n"
         "- `09-boot-checks.csv` -- the substrate's invariant boot-check log\n"
         "- `manifest.json` -- file hashes plus the signature block\n"
-        + (
-            "- `manifest.sig` -- detached Ed25519 signature over "
-            "`manifest.json`\n\n"
-            if signed
-            else "\n"
-        )
-        +
-        "## What this package does NOT contain\n\n"
+        + ("- `manifest.sig` -- detached Ed25519 signature over `manifest.json`\n\n" if signed else "\n")
+        + "## What this package does NOT contain\n\n"
         "Substantive content of drafts, sent messages, or memory payloads "
         "is not in this packet. Those bodies live in per-customer R2 "
         "storage keyed by SHA-256 digest; the audit log records every "
@@ -897,6 +1011,87 @@ def _readme_text(
         "separate signed export path "
         "(`operator/bin/export-voice-samples.sh`) when full bodies are "
         "required.\n\n"
+        # ss-console#2501. A digest an outsider cannot recompute asks the
+        # reader to take SMD's word for it, which is the opposite of what an
+        # evidence packet is for. The recipe differs per transport because the
+        # transports differ: one carries our bytes verbatim, the other composes
+        # the stored message itself. Stating that plainly is the honest move;
+        # a single recipe that quietly failed on the reply path would be worse
+        # than none.
+        "## Checking a message against your own copy\n\n"
+        "You can check a message body the Operator sent against the copy "
+        "your own mail system stored, using nothing from SMD. The check "
+        "does not depend on this packet being honest, which is the point of "
+        "it.\n\n"
+        "Rows for messages the Operator sent as a REPLY carry these "
+        "hashes. A message the Operator sent on its own initiative records "
+        "a hash of the whole send request rather than of the body bytes, so "
+        "the check below does not apply to it; the row will simply not "
+        "carry these fields.\n\n"
+        "- `body_digest` is internal. It covers the subject and the body "
+        "joined together, which is what our content checks read. The subject "
+        "is not part of a reply on the wire, so this one cannot be "
+        "reproduced from the message you hold. Do not try.\n"
+        "- `body_digest_authored` is the SHA-256 of exactly the plain-text "
+        "bytes the Operator handed to the mail system.\n"
+        "- `body_digest_authored_html` is the same for the HTML body, when "
+        "one was sent.\n\n"
+        "**Which check applies depends on what your mail system did with "
+        "the body, and the difference is not a technicality.** Where the "
+        "mail system stores the bytes it was handed, the test is EQUALITY: "
+        "the hash of the stored body equals the hash on the row. Where the "
+        "mail system COMPOSES the stored message, the test is CONTAINMENT: "
+        "the authored text must appear, byte for byte, inside the stored "
+        "body, and its hash will never equal the whole.\n\n"
+        "Microsoft Graph composes. A reply sent through it "
+        "(`POST /messages/{id}/reply`) gets Microsoft's own HTML wrapper "
+        "and the quoted original appended beneath what we wrote, so the "
+        "stored body is LONGER than what the Operator authored and equality "
+        "cannot hold. Use containment for those. Where the message went out "
+        "through a transport that carries a real plain-text part, equality "
+        "holds on that part. If you do not know which applies to a "
+        "particular message, run the containment check: it holds in both "
+        "cases.\n\n"
+        "Equality, worked. Save the stored body to `stored.txt` exactly as "
+        "your mail system holds it, with no re-wrapping and no added "
+        "newline, then:\n\n"
+        "```\n"
+        "openssl dgst -sha256 stored.txt\n"
+        "```\n\n"
+        "Compare that hex value to `body_digest_authored` on the row (or to "
+        "`body_digest_authored_html` if you saved the HTML body). They match "
+        "or they do not; there is no partial credit.\n\n"
+        "Containment, worked. Here you hold the stored message and we hold "
+        "nothing you have to trust, so the check runs in two steps. Save "
+        "the whole stored body to `stored.txt`. Then save the part of it "
+        "you take to be what the Operator wrote, which on a Graph reply is "
+        "everything above the quoted original, to `candidate.txt`, keeping "
+        "its bytes exactly as they appear:\n\n"
+        "```\n"
+        "grep -F -f candidate.txt stored.txt\n"
+        "openssl dgst -sha256 candidate.txt\n"
+        "```\n\n"
+        "The first prints the matching lines and exits 0 when your "
+        "candidate is present verbatim, which is what makes the boundary "
+        "you drew legitimate rather than convenient; it exits 1 when it is "
+        "not. The second must equal `body_digest_authored_html` on the row "
+        "when your candidate is HTML, or `body_digest_authored` when it is "
+        "plain text. Both together are the proof: the bytes you extracted "
+        "are inside the message you hold, AND they are the bytes the "
+        "Operator handed the mail system.\n\n"
+        "Whether the hashes match is a fact about your mail system, not a "
+        "promise from us. If it stored what it was handed, they match. If "
+        "it re-encoded the body on the way in, by re-wrapping lines or "
+        "changing the character encoding, they will not, and that "
+        "difference is itself something worth knowing rather than "
+        "something we should have hidden by hashing a normalized copy.\n\n"
+        "We do not normalize, reformat, or canonicalize anything before "
+        "hashing, and neither should you. A recipe that first massages the "
+        "bytes is a recipe someone can argue with.\n\n"
+        "What a match proves: the body on that row is the body your mail "
+        "system stored. What it does not prove on its own: that the row "
+        "itself was not altered. That is what the hash chain and the "
+        "signature below are for.\n\n"
         "## Verification\n\n"
         + (
             (
@@ -931,9 +1126,11 @@ def _readme_text(
                 "The signature covers origin and integrity after export. It "
                 "says nothing about whether the underlying audit log is "
                 "correct. Tamper evidence within the log itself is a separate "
-                "mechanism: the ledger is hash chained, so a deleted, "
-                "reordered, or inserted row breaks the chain at a verifiable "
-                "point.\n\n"
+                "mechanism: the ledger is hash chained, so a row altered, "
+                "removed, or inserted anywhere before the end of the log "
+                "breaks the chain at a verifiable point. Rows removed from the "
+                "END of the log are a separate question, answered by the "
+                "section above.\n\n"
             )
             if signed
             else (
@@ -955,8 +1152,7 @@ def _readme_text(
                 "compare it to its entry in `manifest.json`.\n\n"
             )
         )
-        +
-        "## Questions\n\n"
+        + "## Questions\n\n"
         f"Contact: {signer_email}\n"
     )
     return body.encode("utf-8")
@@ -975,6 +1171,7 @@ def _compute_counts(
     memory_snapshot: Mapping[str, Any],
 ) -> dict:
     """Tally the headline numbers the summary PDF reports."""
+
     def _count(action_type: str) -> int:
         return sum(1 for r in audit_rows if r.get("action_type") == action_type)
 
@@ -984,23 +1181,15 @@ def _compute_counts(
         "drafts_approved": _count("DRAFT_APPROVED"),
         "drafts_rejected": _count("DRAFT_REJECTED"),
         "memory_rule_events": (
-            _count("MEMORY_RULE_ADDED")
-            + _count("MEMORY_RULE_EDITED")
-            + _count("MEMORY_RULE_DELETED")
+            _count("MEMORY_RULE_ADDED") + _count("MEMORY_RULE_EDITED") + _count("MEMORY_RULE_DELETED")
         ),
-        "skills_enabled": sum(
-            1 for r in skill_rows if (r.get("trust_ceiling") or "").lower() != "refused"
-        ),
+        "skills_enabled": sum(1 for r in skill_rows if (r.get("trust_ceiling") or "").lower() != "refused"),
         "boot_checks": len(boot_check_rows),
-        "invariant_violations": (
-            _count("INVARIANT_VIOLATION") + _count("INVARIANT_BOOT_CHECK_FAILED")
-        ),
+        "invariant_violations": (_count("INVARIANT_VIOLATION") + _count("INVARIANT_BOOT_CHECK_FAILED")),
         "escalations": _count("ESCALATION_FIRED"),
         "memory_rules_in_snapshot": len(memory_snapshot.get("memory_rules", [])),
         "person_mappings_in_snapshot": len(memory_snapshot.get("person_mappings", [])),
-        "voice_samples_metadata_rows": len(
-            memory_snapshot.get("voice_samples_metadata", [])
-        ),
+        "voice_samples_metadata_rows": len(memory_snapshot.get("voice_samples_metadata", [])),
     }
 
 
@@ -1062,6 +1251,12 @@ class EvidencePacketBuilder:
         if coverage.is_unanswerable_empty and not coverage.gap_acknowledged:
             raise EvidencePacketError(_coverage_refusal_message(coverage))
 
+        # ss#2500. Checked BEFORE any file is rendered, so a packet over a
+        # truncated ledger never reaches disk in the first place.
+        chain_pin = await _fetch_chain_pin(self.reader, pinned_head=request.pinned_head)
+        if chain_pin.was_checked and not chain_pin.present:
+            raise EvidencePacketError(_chain_pin_refusal_message(chain_pin))
+
         audit_rows = await _fetch_audit_log(
             self.reader,
             period_start=request.period_start,
@@ -1115,6 +1310,7 @@ class EvidencePacketBuilder:
             extra={
                 "counts": counts,
                 "coverage": coverage.to_dict(),
+                "chain_pin": chain_pin.to_dict(),
                 "stage": "provisional",
             },
         )
@@ -1155,6 +1351,7 @@ class EvidencePacketBuilder:
             actor_role=request.actor_role.value,
             manifest_sha256=provisional_sha,
             coverage=coverage,
+            chain_pin=chain_pin,
             signed=signer is not None,
             key_id=signer.key_id if signer else "",
         )
@@ -1183,6 +1380,7 @@ class EvidencePacketBuilder:
             extra={
                 "counts": counts,
                 "coverage": coverage.to_dict(),
+                "chain_pin": chain_pin.to_dict(),
                 "provisional_manifest_sha256": provisional_sha,
             },
         )
@@ -1204,9 +1402,7 @@ class EvidencePacketBuilder:
         # artifact. It is deliberately NOT in file_hashes: it cannot hash
         # itself. Trust order: manifest.sig -> manifest.json -> everything else.
         if signer is not None:
-            entries.append(
-                (DETACHED_SIGNATURE_FILENAME, signer.sign(manifest_bytes))
-            )
+            entries.append((DETACHED_SIGNATURE_FILENAME, signer.sign(manifest_bytes)))
 
         bytes_written = self._write_targz(request.output_path, entries)
 
@@ -1217,6 +1413,7 @@ class EvidencePacketBuilder:
             file_count=len(entries),
             bytes_written=bytes_written,
             coverage=coverage,
+            chain_pin=chain_pin,
         )
 
         return EvidencePacketResult(
@@ -1227,6 +1424,7 @@ class EvidencePacketBuilder:
             counts=counts,
             manifest=manifest,
             coverage=coverage,
+            chain_pin=chain_pin,
         )
 
     # ------------------------------------------------------------------
@@ -1236,8 +1434,7 @@ class EvidencePacketBuilder:
     def _load_customer_yaml(self, path: Path) -> bytes:
         if not path.exists():
             raise EvidencePacketError(
-                f"customer.yaml not found at {path}; refusing to fabricate a "
-                "placeholder. Provide a real customer.yaml."
+                f"customer.yaml not found at {path}; refusing to fabricate a placeholder. Provide a real customer.yaml."
             )
         return path.read_bytes()
 
@@ -1269,9 +1466,7 @@ class EvidencePacketBuilder:
                     return value.strip()
         return fallback_slug
 
-    def _write_targz(
-        self, output_path: Path, entries: Sequence[Tuple[str, bytes]]
-    ) -> int:
+    def _write_targz(self, output_path: Path, entries: Sequence[Tuple[str, bytes]]) -> int:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
         with tarfile.open(tmp_path, "w:gz", format=tarfile.PAX_FORMAT) as tar:
@@ -1298,6 +1493,7 @@ class EvidencePacketBuilder:
         file_count: int,
         bytes_written: int,
         coverage: AuditCoverage,
+        chain_pin: ChainPin,
     ) -> None:
         # Import locally to mirror the bin/lib/decommission.py pattern
         # (avoids hard adapter import at module load time).
@@ -1346,11 +1542,16 @@ class EvidencePacketBuilder:
                 "output_path": str(request.output_path),
                 "counts": dict(counts),
                 "coverage": coverage.to_dict(),
+                # The pin this packet was checked against, recorded INSIDE the
+                # chain it attests to. A later reader can take this row's own
+                # row_hash as the next pin, which is how the chain of custody
+                # keeps going without a new mechanism.
+                "chain_pin": chain_pin.to_dict(),
             },
         )
         try:
             await self.audit_writer.write(event)  # type: ignore[attr-defined]
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             # If chain-of-custody fails, the packet that exists on disk
             # is unprovable. Surface the failure rather than swallow it.
             raise EvidencePacketError(
@@ -1365,6 +1566,8 @@ class EvidencePacketBuilder:
 
 __all__ = [
     "AuditCoverage",
+    "CHAIN_PIN_SOURCE",
+    "ChainPin",
     "EvidencePacketBuilder",
     "EvidencePacketError",
     "EvidencePacketResult",

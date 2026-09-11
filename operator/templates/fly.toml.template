@@ -89,14 +89,16 @@ primary_region = "{{FLY_REGION}}"
   # HONCHO_BASE_URL / HONCHO_DATABASE_URL env in Phase 1 — there is no
   # in-container Honcho server. Phase 2 adds them with the real source vendor.
 
-# Smallest sensible machine class. Postgres + Redis + Honcho + Hermes need
-# more memory than the pre-§6 1024MB single-process Hermes did. Per-customer
-# customer.yaml.machine.memory_mb overrides this default at render time.
+# Rendered from customer.yaml.machine: size and memory_mb verbatim, cpu_kind
+# and cpus derived from the size name by operator/bin/lib/machine-size.sh
+# (ss#2612: `cpus = 1` was hardcoded here, so a shared-cpu-2x seat ran on one
+# vCPU). A seat that runs the chronology-package runner beside the gateway
+# authors shared-cpu-2x / 4096 (ADR 0087).
 [[vm]]
   size = "{{MACHINE_SIZE}}"
   memory = "{{MEMORY_MB}}"
-  cpu_kind = "shared"
-  cpus = 1
+  cpu_kind = "{{MACHINE_CPU_KIND}}"
+  cpus = {{MACHINE_CPUS}}
 
 # Inbound webhooks — the ONLY public surface. Fly routes 443 → the front-door
 # gate (overlay `hermes-smd-webhook-gate`, internal_port 8643), which verifies

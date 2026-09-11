@@ -115,8 +115,7 @@ def run() -> tuple[bool, str]:
     if decision.allowed or decision.audit_action != "refuse":
         return (
             False,
-            f"FAIL: external_send=refused should refuse, got allowed={decision.allowed} "
-            f"audit={decision.audit_action}",
+            f"FAIL: external_send=refused should refuse, got allowed={decision.allowed} audit={decision.audit_action}",
         )
 
     # Scenario E: a vertical floor can only NARROW. A floor of draft_for_review

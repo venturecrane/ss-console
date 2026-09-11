@@ -901,7 +901,356 @@ describe('Operator customer Machine Dockerfile', () => {
     // snapshots were re-checked across the EXTENDED range: heartbeat.py and
     // hermes-smd-audit/schemas.py are untouched from d567cfb to 20518e8, so the
     // re-derivation recorded above still holds.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="20518e862f11d2f6401a34519c134d781165d029"')
+    // 20518e8 -> 0716dc1 (2026-08-18, hardening epic ss#2392 runtime pass):
+    // overlay#270 (reply path reads the money register; a delivery-path hold is
+    // appended to the draft tool's own result at transform_tool_result, ss#2367)
+    // and overlay#271 (ADR 0086 matter-party seeding for the matter gate,
+    // ss#2167). NO tracked twin moves in the range (compare API: reply plugin
+    // internals, shared/matter_binding.py, docs, tests only), so every
+    // overlaySha256 is unchanged. Both parity snapshots re-checked: heartbeat.py
+    // and the audit emit surface are untouched 20518e8..0716dc1; re-stamps are
+    // the identity. Bump merge is gated on the first armed shadow-firm run
+    // (ss#2389 release gate); the run id is cited in the bump PR.
+    // af0c8a0 -> 0088352 (2026-08-18f, overlay#275 / ss#2258 A&P bring-up):
+    // overlay#278 — the msgraph delta poller holds its cursor on per-item
+    // failure instead of orphaning the mail (the observed A&P first-boot loss),
+    // with poison-vs-systemic dead-letter discrimination, a resync watermark,
+    // Sentry page signals, and shared/msgraph_replay.py as the recovery path.
+    // Single-commit range, msgraph poller/replay/consumes/tests only: NO
+    // tracked twin moves, heartbeat.py and the audit emit surface untouched,
+    // re-stamps are the identity. Shadow-firm gate note: the rehearsal
+    // scenarios ride AgentMail, so the green run is whole-overlay regression
+    // evidence — the revised poller's own runtime proof happens on the A&P
+    // seat per the overlay#275 contract ACs.
+    // overlay#281 + #282 + #283 (ss#2444, Hermes v0.18.0 -> v0.20.4 promotion PR-1): translate.py
+    // pins the v0.18 behaviours that v2026.8.18 defaults flip (approvals.mode
+    // manual, agent.max_turns 90, tools.tool_search off, delegation fan-out 3,
+    // display.show_reasoning false) + the tests. Single-commit range, NO tracked
+    // twin moves; overlaySha256 unchanged, only overlayRef. #283 canonicalizes the
+    // v0.19 mcp__server__tool rename at the fan-out (without it a v0.20 seat refuses
+    // every connector tool); #282 is the matter-mixing read fence, carried along
+    // because it merged to overlay main between the two bumps.
+    // d35e0b0 -> 4dbf415 (2026-08-21): five overlay merges. #296 is the ss#2511
+    // fix after the A&P self-test wrote a sentinel case number onto a real
+    // matter: the seat's own skill text, memory and scored drafts stop seeding
+    // the identifier register (allowlist of tenant-source reads), identifiers
+    // seen in the seat's own text block even with an empty register, add_file /
+    // render_docx_draft are scanned report-only per tool, and the enforce reason
+    // for an executed internal write no longer reads "routed to draft folder".
+    // Riding along: #294 (ss#2497 audit joins), #292 (ss#2498 routine on/off
+    // rows: ROUTINE_ENABLED/ROUTINE_DISABLED join the vocabulary), #295
+    // (ss#2501 sent-reply digest), #297 (ss#2499 msgraph message identity).
+    // ONE tracked twin moves: plugins/hermes-smd-audit/emit.py, re-recorded
+    // one-sided in overlay-pairs.json.
+    // 4dbf415 -> 4ca6682 (2026-08-21, overlay#298): the Captain's flip after four
+    // pilot drafting lanes (0 false positives, 1 genuine catch: computed response
+    // deadlines reached a filed Word draft while the same values were refused on
+    // the memo and the email). render_docx_draft leaves the report-only carve and
+    // blocks like every other draft tool; add_file stays report-only until a lane
+    // exercises it. Single-commit range, NO tracked twin moves.
+    // 4ca6682 -> 349d86b (2026-08-21, overlay#299 + #300): the A&P Operator's setup
+    // reply to the firm's administrator hit the Tier-2 citation gate four to six
+    // times in one turn on ordinary comparison prose, and the refusal named neither
+    // the shape it saw nor a fix, so the model retried blind and then shipped a
+    // trimmed reply that told the client a gate had blocked it. #299 gives the
+    // refusal a per-pattern hint carrying the kind and the remedy, never the matched
+    // text, and closes the hole the retries were finding: "Palsgraf versus Long
+    // Island Railroad" matched nothing, because CASE_NAME_RE folds only "v" and
+    // "vs". CASE_NAME_VERSUS_RE keeps its parties case-SENSITIVE so "apples versus
+    // oranges" still passes, and provenance harvests versus-form captions. #300
+    // folds "versus" in canonical_caption on both sides of the repo boundary so an
+    // allowlist entry registered by one copy matches a hit canonicalized by the
+    // other. ONE tracked twin moves: shared/citation_filter.py, re-recorded
+    // one-sided in overlay-pairs.json (behaviour identical, prose and wrapping not).
+    // 349d86b -> 991044a (2026-08-21, overlay#301 + #302, ss#2529): the firm
+    // teaches the Operator by talking to it. Before this, a partner writing "in
+    // client letters, be more formal and shorter, no pleasantries" had no route:
+    // firm establishment needs a staged corpus, all four distillation compilers
+    // refuse an empty one, so the sentence could only be captured and the person
+    // told it was not in effect. Two rehearsal turns spoken by an Operator ADMIN
+    // were answered exactly that way on 08-21, which is the opposite of what ADR
+    // 0085 section 3 promised. #301 gives the sentence somewhere to live: a spec
+    // property renders standing adjustments beside its distilled body, and the
+    // intake installs one confirmed sentence with no corpus and no compilers
+    // (they cannot run on it - every one of them refuses an empty corpus). #302
+    // is the seat behaviour: establish_propose reads the rule back with a tag,
+    // the reply must carry that block VERBATIM or the send is refused, the
+    // affirmative is read from the sender's OWN words with quoted history
+    // stripped (the block says "Reply yes to confirm", so reading the whole
+    // message would let the Operator confirm its own proposal), and a submit
+    // commits only the id the seat saw confirmed. The corrections nudge is gone
+    // and the tool is not. VOCABULARY MOVES, 62 -> 65: RULE_PROPOSED,
+    // ESTABLISHMENT_SUBMITTED, ESTABLISHMENT_RESULT. The last two are a
+    // correction - they have reached client ledgers since establishment shipped
+    // while neither vocabulary declared them. NO tracked twin moves: none of the
+    // nine overlayPaths is in the range, re-hashed at the new ref rather than
+    // assumed (verify-overlay-pairs.py PASS 9/9).
+    // 991044a -> 07ed486 (2026-08-21, overlay#303 + #304 + #305): #304 is the ss#2529
+    // hotfix found on the pilot's first live proof: the confirmation matcher read
+    // the Operator's own prompt preamble as the person's words, and its "never"
+    // made every real "yes" read as a refusal. It now reads only the email body
+    // below the untrusted delimiter, with tests rendered from the real template.
+    // #303 and #305 are the operator-own-matter commitment confirm (a peer
+    // session's work, carried so the seats take one bump, not two). No tracked twin moves.
+    // 07ed486 -> b782926c (2026-08-21, overlay#306, ss#2537 follow-up): the pilot
+    // seat crash-looped at boot at 22:57Z because ss#2537 authored `commitment:
+    // confirm` on pilot-smokeball and ashton-price while the on-box config
+    // validator still refused `confirm` on every non-send class. The enforce
+    // branch that gives it meaning shipped in #303, carried into the 07ed486
+    // bump; the validator had not moved with it. #306 accepts it on `commitment`
+    // in a persona's `exposure` and nowhere else, never on `exposure_ceiling`,
+    // so it still cannot be authored where it would do nothing. This PR un-parks
+    // both seat lines in the same change. No tracked twin moves: bootstrap/
+    // validate.py and tests/test_customer_config.py are the whole range.
+    // b782926c -> e9d9fae1 (2026-08-21, overlay#307, ss#2529): second hotfix from
+    // the pilot proof. The plugin sent the model's own paraphrase as spec_body
+    // beside the proposal id and the broker refused it (by design: only the
+    // words the person saw may be committed); the Operator then claimed "in
+    // effect" with nothing installed. Now a confirmed commit sends only the id,
+    // and a reply cannot claim effect until establish_status says installed.
+    // e9d9fae1 -> 2b0c786d (2026-08-22, overlay#308, ss#2537 follow-up): read
+    // live on pilot-smokeball. SOUL.md rendered the persona's `commitment:
+    // confirm` exposure with the generic confirm sentence, which was written for
+    // sends: prepare the action and request explicit approval in the same turn.
+    // The model did exactly that, described the matter it would create, asked for
+    // a yes in its own words, and never called mcp_smokeball_create_matter, so
+    // the gate never minted an act proposal and the administrator's yes had
+    // nothing to bind to. #308 adds a per-(action, ceiling) SOUL override: at
+    // (commitment, confirm) the line tells the model to call the tool as soon as
+    // an administrator asks, relay the gate's returned act line verbatim, and on
+    // the answer call again with the same values. Send classes keep the generic
+    // sentence. No tracked twin moves: bootstrap/translate.py and
+    // tests/test_bootstrap_translate.py are the whole range.
+    //
+    // 2026-08-22: 2b0c786 -> 241df3bc (overlay#309, ss#2547). A refusal that keeps a
+    // routine from reaching a human now reaches us instead: the heartbeat carries
+    // send_refusals / send_refusals_last_ts / send_refusals_json (refused cron
+    // sends, CONFIRM_SEND_FAILED, and wakes with needs-you items that sent
+    // nothing, trailing 24h); a pre-run script's handoff seeds the provenance
+    // register with date atoms only, bound to one session and consumed once, and
+    // a turn cannot write under $HERMES_HOME/.smd/; staff-class sends normalize
+    // em and en dashes instead of being refused. No tracked pair moves; schemas.py
+    // untouched. Retro-falsifier over the pilot ledger: vfy_01M0N81GHW5PHY0N453ZHN18RY.
+    //
+    // 2026-08-22b: 241df3bc -> 119f6bf2 (overlay#311, ss-console#2546 PR 2). ONE
+    // merge in the range, checked rather than assumed: `git log
+    // 241df3bc..119f6bf` on the overlay returns a single commit. A rule stated by
+    // somebody who is NOT an Operator admin used to end in silence: it was
+    // recorded, nobody was told, an admin's "no" did nothing, and the sweep
+    // deleted it so its author could not even be told it lapsed. From this pin
+    // the request is emailed to the administrators the firm names on
+    // scope.rule_requests_to (traffic, not authority: an admin not named receives
+    // nothing), the requester is told on apply, on decline and on lapse, a 30 s
+    // daemon reports the lapse because the client seat's crons are all off, and a
+    // routine/schedule/channel/memory/autonomy/on-off ask reaches SMD through the
+    // new operations_request tool. Every one of those sends re-authorizes through
+    // the same enforce.evaluate_tool_call a model's own send goes through, so a
+    // tainted turn refuses it and the Operator says so rather than claiming
+    // somebody was asked. VOCABULARY MOVED: 65 -> 68 types (RULE_DECLINED,
+    // RULE_LAPSED, RULE_REQUEST_NOTIFIED), re-extracted by AST at both refs and
+    // compared as sets; all three leave consoleOnly. No tracked pair moves, and
+    // that was established by re-hashing all nine twins at the new ref rather
+    // than by reading the range's file list.
+    //
+    // 2026-08-22c: 119f6bf2 -> 29536fcb (overlay#310, ss#2547 follow-up). A silent
+    // wake is joined to its routine's OWN turn (skill_name + time, capped at 60
+    // min; 30 min when no turn row exists) instead of by session id, which the
+    // pre-run child never stamps on an EMITTED_WAKE row. Without it the unsent
+    // fact fell back to a fixed 30-minute window on every live wake and would
+    // have paged a false "unsent" on any escalator turn that sent after 30 min.
+    // Range touches shared/heartbeat.py, tests/test_heartbeat.py and the retro
+    // script only; no tracked pair moves; schemas.py untouched. Retro-falsifier
+    // at this ref reproduces every muting day per kind on the pilot ledger.
+    // 29536fcb -> 87fa8501 (2026-08-22, overlay#312 + #313). #313 is the ss#2546
+    // fix from the pilot proof: a firm rule may attach only to one of the six
+    // registry output classes (the model had filed rules under invented classes
+    // no output ever reads), and the person who asked hears "in effect" when the
+    // install is actually observed (the single immediate poll had missed it).
+    // #312 is ss#2552 (a peer session): a colleague who states a preference hears
+    // what will change, not that a profile was updated.
+    // 87fa8501 -> cce3126e (2026-08-23, overlay#314, ss#2546 reopened). A request
+    // only SMD can grant comes back answered: the operations email to SMD carries
+    // an [ops XXXX] tag, SMD's "done" / "no, reason" reply from a listed SMD
+    // address resolves the row (no inbound trust granted), the requester gets one
+    // sweeper-sent letter, and the reply at request time can no longer describe
+    // the future routine. Vocabulary 68 -> 71 (OPS_REQUEST_*); no tracked pair moves.
+    // cce3126e -> fc8f88c1 (2026-08-23, overlay#315, ss#2546 pilot-proof fixes): the
+    // requester's outcome letter is claimed once across the sweeper thread and the
+    // in-turn path (it had arrived twice, 38 ms apart), and a reply to a sender who
+    // cannot answer an ops request may no longer say it is closed. Vocabulary
+    // identical (71); no tracked pair moves.
+    // fc8f88c1 -> 2c4e8e92 (2026-08-23, overlay#316, ss#2546): the outcome letter is
+    // claimed in the broker before it is sent; the seat runs the plugin in two
+    // processes (gateway + webhook-gate), so the in-process claim of #315 could not
+    // arbitrate. Pairs with console #2564. Vocabulary identical (71); no pair moves.
+    // 2c4e8e92 -> 0f84a625 (2026-08-23, overlay#317, ss#2546): on the pass-on turn a
+    // future description of the requested routine is withheld even when named only by
+    // pronoun ("when it's set up, you'll start seeing it"), and curly apostrophes no
+    // longer slip the patterns. Vocabulary identical (71); no pair moves.
+    // 0f84a625 -> f16d4920 (2026-08-24, overlay#318, ss#2390 + the ss#2547 live
+    // defects): the pre-run handoff actually binds in production (persona-home
+    // reader, recency binding), seeds (matterNumber, dates) records as pair
+    // associations, the empty-register refusal stops offering value removal, and
+    // the heartbeat counts withheld degraded digests as the 'degraded' kind.
+    // Vocabulary identical; no tracked pair moves.
+    // bc9285bf -> 29eac2c7 (2026-08-28e, overlay#331): unwrap the inbound
+    // fence before parsing a counted read. The round-5 trace (the #330 journal
+    // in one turn): marking OK, evaluation OK, accumulation dead - the hook
+    // receives nonce-FENCED text because Hermes v0.20.4 fires transform before
+    // post (ss#2444); same cure establishment took 2026-08-20. read_volume +
+    // tests only. Vocabulary identical; no tracked pair moves.
+    // 6e4223d1 -> bc9285bf (2026-08-28d, overlay#330): shape-only trace journal
+    // for the read-volume gate (/tmp/read_volume_trace.jsonl, 120-entry cap,
+    // keys/types/counts never content) - three silent rehearsal rounds had no
+    // discriminator between marking, accumulation, and evaluation failures.
+    // read_volume + tests only. Vocabulary identical; no tracked pair moves.
+    // 3f86737d -> 6e4223d1 (2026-08-28c, overlay#329): the read-volume
+    // accumulator parses the dispatcher envelope. Round-3 rehearsal: session
+    // marked, 30pp read against a 20pp threshold, gate silent - post_tool_call
+    // hands {"result": "<connector JSON as a string>"} and the field walker
+    // never descended nested JSON strings (the exact live-caught trap
+    // _unwrap_read_result documents in hermes-smd-establishment). read_volume
+    // + tests only. Vocabulary identical; no tracked pair moves.
+    // c2668ce2 -> 3f86737d (2026-08-28b, overlay#328): the read-volume gate's
+    // review marker watches skill_view in addition to read_file. The live pilot
+    // rehearsal showed the model reads skill procedures via the gateway-native
+    // skill_view (3 calls, zero read_file), so the spine-path marker was inert
+    // and a 30-page review ran unfenced against a 20-page threshold; on-seat
+    // selftest proved the rest of the deployed gate correct. read_volume.py +
+    // tests only. Vocabulary identical; no tracked pair moves.
+    // 671507b7 -> c2668ce2 (2026-08-28, overlay#327, agreement §2.8 routine 5):
+    // the read-volume gate. A served opposing-response review is metered in
+    // pages at the read seam (shared/read_volume.py; fence beside the
+    // matter-mixing fence in trust enforce); past the client-authored
+    // settings.review_threshold_pages the crossing read is refused with a
+    // surface-only-note directive. Review sessions are marked by webhook route
+    // OR by the session reading the gated skill's SKILL.md (the spine path).
+    // Lever SMD_READ_VOLUME_GATE_MODE off|report|block (unset=block).
+    // Vocabulary identical; no tracked pair moves.
+    // 99c62699 -> 671507b7 (2026-08-25, overlay#320-#325): the message-structure floor
+    // (#323, ss#2090) plus the pilot-law retirement (#324). The abandoned loop-arm boot
+    // self-check is REMOVED again (#325) rather than carried forward. The runaway-loop
+    // BRAKE (_meter_loop_arms) was already in the old pin and is unchanged.
+    // f16d4920 -> 99c62699 (2026-08-25, overlay#319): the sticky-stop ladder's
+    // runaway-loop arms get fed. record_tool_failure and record_refusal were
+    // implemented, thresholded and audited but had NO caller in either repo, so a
+    // seat looping on a failing tool or refusing every call stopped only on cost.
+    // post_tool_call in hermes-smd-audit now feeds both, plus record_tool_success
+    // (the ladder counts CONSECUTIVE failures, so feeding failures alone would
+    // march every long-lived seat to HARD_STOP). Detection is positive-only: an
+    // unrecognised `status` records nothing, so an envelope rename degrades to the
+    // old unbraked behaviour rather than stopping a live seat. The controls stay
+    // status: inert in runtime-controls.yaml until a boot probe proves the arm
+    // fires on a provisioned seat. Vocabulary identical; no tracked pair moves.
+    // 29eac2c7 -> 3c1b8e98 (2026-08-29f, overlay#333, ss#2614): the chronology-package
+    // seam's agent side: hermes-smd-medchron (submit / status / allowance over the
+    // broker), the medchron_jobs runtime-read kind, three action-class rows. The
+    // runner, the verbs and the daemon land here in the same change. Vocabulary
+    // identical (71); no tracked pair moves.
+    // 3c1b8e98 -> c5846c68 (2026-08-31, overlay#334 + overlay#335, ss#2652/ss#2654):
+    // the ledger-integrity pair (symmetric raise reset, release validation, hold
+    // determinations via the escalation plugin) and the identifier pair
+    // (register-anchored bare-digit matter numbers: pre_run_handoff seeding,
+    // identifier_filter known-number scan, matter_gate chunked membership pass).
+    // TWO tracked pairs move: escalation_ledger (byte-identical again at
+    // 912bac29...) and identifier_filter (overlay side re-recorded at 71e598a5...).
+    // c5846c68 -> 45cc19e7 (2026-08-31c, overlay#336, ss#2616): the handoff route
+    // is real (translate materializes it on the MCP bearer; the gate retries any
+    // non-2xx forward) and medchron submit gains the append file-id selection.
+    // Vocabulary identical (71); no tracked pair moves.
+    // 45cc19e7 -> 727f3f5b (2026-08-31d, overlay#337, ss#2664 WS-RENDER pair):
+    // pre-rendered out-of-turn dispatch (consume-once envelope, full ->
+    // skeleton -> failure-note ladder, post-dispatch ledger appends under the
+    // witness session), the in-turn rendered-body slot check, CONFIRM-row
+    // body-conformance stamps (rendered_body_sha256 / body_variant /
+    // routing_leg, pre-mutation canonical hash), the text/plain down-render,
+    // and the outbound scans wired on the out-of-turn path. Vocabulary
+    // identical (71); no tracked pair moves.
+    // 727f3f5b -> 799647d1 (2026-09-01, TWO merges: overlay#338 then overlay#339;
+    // console halves ss#2674 and ss#2677, both already on main).
+    // #338: the CONFIRM row gains a SECOND canonical hash, plain_body_sha256, over
+    // the exact text/plain handed to the channel, because _attach_html_body
+    // down-renders `text` before dispatch and the channel therefore never stores
+    // the bytes rendered_body_sha256 names -- which graded every conformant
+    // templated send channel_mismatch_hold. Omitted, never duplicated, when no
+    // down-render happened.
+    // #339: SUPERVISOR_STATES widens 5 -> 7 (`starting`, `never-healthy`). The set
+    // is a closed vocabulary that drops unrecognised words to NULL, and the console
+    // holds on NULL rather than paging -- so until this pin, both words entrypoint.sh
+    // already writes were discarded in transit as silence.
+    // Vocabulary identical (71, AST at both refs); no tracked pair moves;
+    // shared/heartbeat.py byte-identical (a field VALUE vocabulary changed, not the
+    // field set).
+    // 799647d1 -> b16e32f7 (2026-09-01b, overlay#341; console half is migration
+    // 0112 + the ingest + the alert label, same ss PR as this bump).
+    // The sticky-stop ladder has FOUR meters (consecutive tool failures, refusal
+    // cascade, runtime budget, cost threshold) and the beat carried only the
+    // LEVEL, so every page read "Cost breaker HARD_STOP" whatever tripped it --
+    // on 2026-09-01 ashton-price stopped on a bad credential and the SEV1 named
+    // the wrong meter. The cause was never missing, only dropped:
+    // sticky_stop_state has recorded `reason` and `condition` on the transition
+    // all along and read_level did `SELECT level`. read_stop_state now returns
+    // all three from the SAME row (worst level, latest stamp) and build_payload
+    // carries them. Also fixes three cause-pairing defects found in review:
+    // pin_hard_stops left a stale condition beside an operator-pause reason; an
+    // OK row could hand back a cause; rows with no recognised level returned a
+    // fabricated OK instead of unknown.
+    // Vocabulary identical; no tracked pair moves (cost_breaker.py and
+    // heartbeat.py have no ss-console twin). shared/heartbeat.py DID change --
+    // the field SET grew by two, so heartbeat-fields.json is re-stamped in the
+    // same change and its parity gate covers both new columns.
+    // b16e32f7 -> c557f8c0 (2026-09-02b, overlay#343; Captain decision).
+    // The sticky-stop ladder collapses to TWO states, OK and HARD_STOP. WARN
+    // and SOFT_STOP are removed because they did nothing: SOFT_STOP was
+    // specified to pin every skill's trust_ceiling to draft_for_review and no
+    // caller ever did it, no reader compared against anything but HARD_STOP,
+    // and the alerter never paged on it -- while the CLIENT portal told the
+    // customer "the safety substrate has pinned the agent". pilot-smokeball
+    // sat latched at SOFT_STOP for five days restricting nothing.
+    // THE HARD_STOP THRESHOLDS DID NOT MOVE (8 tool failures / 600s, 20
+    // refusals / 1800s, 200% of the cost cap), pinned by a test in both repos:
+    // deleting two dead states must not be confusable with changing when a
+    // client's Operator halts. The one meter with no hard threshold
+    // (record_runtime_seconds) now stops nothing and records an observation
+    // row -- exactly its prior effect, since SOFT_STOP restricted nothing.
+    // Legacy WARN/SOFT_STOP rows read as OK, which also releases a seat
+    // latched at SOFT_STOP with no Captain clear.
+    // Vocabulary identical; the canonical twin
+    // operator/safety-substrate/sticky_stop.py moves in the SAME change (this
+    // repo is where it lands first per the vendoring header).
+    // c557f8c0 -> 9951fbf8 (2026-09-02c, overlay#344; canonical half ss#2690).
+    // Every fabrication marker now carries a `remedy` appended to the refusal
+    // text the model reads. Measured cause: scoped to client-write tools, 132
+    // of 150 refused (session, tool) pairs RECOVER in the same session -- the
+    // gate refuses, the model corrects, the memo lands. The ones that STRAND
+    // cluster on markers whose refusal names a rule instead of an action; the
+    // em-dash marker lost a daily-needs-you-digest memo on 2026-08-19 and again
+    // on 2026-09-02, each on ONE attempt with no retry. Remedies are narrow and
+    // never restate the rule (the 2026-08-24 refusal that named its rule taught
+    // the model to strip 38 matter numbers), enforced by a test in the overlay.
+    // Vocabulary identical; fabrication_markers.json moves in BOTH repos with a
+    // re-pinned sha256 on the overlay side.
+    // 9951fbf8 -> e0288582 (2026-09-04, overlay#345 + #346; console half
+    // ss#2697, B3 of claims-2026-09-04). Every out-of-turn prerendered send now
+    // stamps `skill_name` (cron-resolved routine, not the envelope) into
+    // audit_extra; the broker (#2697) writes it to the COLUMN, and the console's
+    // verifier joins dispatch to wake by that column, hash second, never by
+    // window proximity. Before this every templated send on a live seat held
+    // at channel_mismatch_hold because the column was NULL. #345 only drops the
+    // retired smd seat from the overlay's contract snapshot. No paired twin
+    // moves (neither commit touches a tracked pair); vocabulary and heartbeat
+    // fields re-read as identical (empty range diff on schemas.py/heartbeat.py).
+    // e0288582 -> 5770b79f (2026-09-08, overlay#348; ss voice-establishment). An
+    // Operator admin's email voice-establishment survey may now read the firm's
+    // own letters ACROSS matters — the read-time matter-mixing fence
+    // (shared/matter_gate.py content_read_refusal) is exempted for a
+    // seat-classified admin establishment session; the send-time fence is
+    // untouched and establishment never sends. The range e0288582..5770b79f is
+    // overlay#347 (send-render.yaml contract mirror, ss#2700) + overlay#348
+    // (matter_gate + hermes-smd-establishment), NEITHER a tracked .py twin, so
+    // every overlaySha256 is unchanged (verify-overlay-pairs.py 9/9 PASS at the
+    // new ref); only overlayRef moves.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="5770b79fea3206f01df343489d232daf2fdc4a2b"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

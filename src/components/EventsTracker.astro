@@ -82,6 +82,32 @@
       return fresh
     }
 
+    // Mirrors redactOpaqueSegments in src/pages/api/events.ts. The server
+    // redacts again on receipt — this half exists so the credential never
+    // leaves the browser in the first place.
+    const OPAQUE_SEGMENT_PREFIXES = ['/book/manage/']
+    const OPAQUE_SEGMENT_MIN_LEN = 24
+    const OPAQUE_SEGMENT_RE = /^[A-Za-z0-9_-]+$/
+
+    function redactOpaqueSegments(path) {
+      for (let i = 0; i < OPAQUE_SEGMENT_PREFIXES.length; i++) {
+        const prefix = OPAQUE_SEGMENT_PREFIXES[i]
+        if (path.indexOf(prefix) === 0 && path.length > prefix.length) {
+          const rest = path.slice(prefix.length)
+          const slash = rest.indexOf('/')
+          return prefix + ':redacted' + (slash === -1 ? '' : rest.slice(slash))
+        }
+      }
+      return path
+        .split('/')
+        .map(function (seg) {
+          return seg.length >= OPAQUE_SEGMENT_MIN_LEN && OPAQUE_SEGMENT_RE.test(seg)
+            ? ':redacted'
+            : seg
+        })
+        .join('/')
+    }
+
     function scrubPath(p) {
       if (!p) return '/'
       const q = p.indexOf('?')
@@ -89,7 +115,7 @@
       let end = p.length
       if (q !== -1) end = Math.min(end, q)
       if (h !== -1) end = Math.min(end, h)
-      return p.slice(0, end) || '/'
+      return redactOpaqueSegments(p.slice(0, end) || '/')
     }
 
     const sessionId = getSessionId()

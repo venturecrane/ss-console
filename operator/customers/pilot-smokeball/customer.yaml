@@ -101,13 +101,34 @@ fly_region: lax # Pacific — the pilot firm is California-based
 model: claude-sonnet-4-6
 escalation_model: claude-opus-4-8
 # Pin to the CURRENT overlay/hermes ref at provision time (matches OVERLAY_REF).
-# Hermes v0.14.0 → v0.18.0 upgrade (Step 4, real-connector proving seat before A&P).
-# Rollback pin: v2026.5.16@a91a57fa5a13d516c38b07a141a9ce8a3daabeb0.
-hermes_ref: v2026.7.1@7c1a029553d87c43ecff8a3821336bc95872213b
+# Hermes v0.18.0 → v0.20.4 promotion (Step 2, real-connector proving seat before
+# A&P, ss#2444). Rollback pin: v2026.7.1@7c1a029553d87c43ecff8a3821336bc95872213b.
+# See docs/runbooks/operator/hermes-v0.20-upgrade-plan.md.
+hermes_ref: v2026.8.18@e624e9fde561e1add9388384012b295fde669ade
 
 machine:
   size: shared-cpu-1x
-  memory_mb: 1024
+  # 2048 is this seat's FLOOR, not a preference. The 2026-09-01 crash loop
+  # (00:12-02:45 UTC) ran here: at 1024 the gateway's startup crawl -- the
+  # synchronous platform-plugin imports inside gateway/channel_directory.py's
+  # build_channel_directory, which runs as the event loop's first task -- took
+  # roughly four minutes, while hermes' own in-process loop watchdog
+  # (gateway/shutdown_watchdog.py start_loop_liveness_watchdog, armed at
+  # gateway/run.py:12186 BEFORE that crawl) hard-exits 75 after three missed
+  # probes, a budget of about two minutes. The loop wedged on its own startup:
+  # exit 75, container restart, colder caches, slower startup, repeat every
+  # ~15 minutes. oom_killed was false throughout, so memory pressure is not the
+  # proximate cause -- the extra GB buys page cache and import headroom that
+  # pulls startup back under the watchdog budget. `fly scale memory 2048` broke
+  # the loop instantly (beat age 3s, stable since).
+  #
+  # The live Machine was scaled to 2048 by hand during the incident. This line
+  # is what a reprovision reads, so leaving it at 1024 would silently shrink the
+  # seat back into the loop. Do not lower it without either raising hermes'
+  # watchdog budget (not configurable at this pin -- see
+  # docs/runbooks/operator/incidents/2026-09-01-gateway-startup-watchdog-collision.md) or
+  # making the platform-plugin import lazy.
+  memory_mb: 2048
 
 # ---- HUMANS WITH PORTAL ACCESS ----
 users:
@@ -172,6 +193,12 @@ personas:
         external_send_client: draft_for_review # day-one grid posture (graduation proven config-correct; see ADR 0075 + the send-delivery follow-on)
         external_send_vendor: draft_for_review # day-one grid posture
         destructive: autonomous
+        # The Operator's own internal matter (ss-console#2536), rehearsing the
+        # A&P posture: an admin-confirmed act proposal is the only path, never
+        # autonomous. No exposure_ceiling entry, so the entitlement dial cannot
+        # raise it.
+        commitment: confirm
+        # Captain-authorized 2026-08-21: an admin-confirmed act proposal is the only path, never autonomous. Requires overlay >= b782926c (validator accepts confirm on commitment).
       # Letter-commitment bounds for the runtime entitlement dial (ss#2003
       # Q7), mirroring the A&P seat (this seat rehearses that grid). Derived
       # from routine-grid.yaml ceiling_tier per send class; the Machine clamps
@@ -413,6 +440,11 @@ personas:
           scheduled: false
           webhook: true
         enabled: true
+        settings:
+          # Rehearsal threshold for the read-volume gate (overlay#327) - small
+          # on purpose so an over-set fixture crosses cheaply. The client
+          # seat authors its contract value; this seat proves the control.
+          review_threshold_pages: 20
       - name: meet-and-confer-drafter # drafted only; attorney decides + sends
         version: pending
         initiation:
@@ -451,6 +483,14 @@ personas:
           scheduled: true
           webhook: false
         enabled: true
+        # PLACEHOLDER(christa): the chase cadence awaits the firm's answer. The
+        # 7 here is seed-authored, not invented: the pilot's roster-task note
+        # itself says "Chase cadence: weekly until the records land in the
+        # matter" (seed/seed_data.py, records-roster-alvarez). Unauthored is
+        # fail-closed: no cadence, no chase, a re-fired surface instead
+        # (ss #2404; same contract as client-verification-tracker's dials).
+        settings:
+          chase_cadence_days: 7 # PLACEHOLDER(christa): days between records chases
       - name: medical-chronology-maintainer # checks for newly landed records
         version: pending
         initiation:
@@ -464,6 +504,12 @@ personas:
         # MUST replace it before go-live (enforced by tests/customer-commitments).
         settings:
           treatment_gap_flag_days: 45 # PLACEHOLDER(christa): flag treatment gaps beyond this many days
+          # Rehearsal-only value for the routine-11 package allowance (ADR 0087);
+          # the client seat authors the contract figure.
+          # The page allowance (2026-09-09). Small on purpose: the rehearsal
+          # seat's job is to prove the crossing, so a matter the sandbox
+          # actually holds must be able to exceed it.
+          chronology_package_page_allowance_per_month: 40
       # motions
       - name: motion-calendar-tracker # keeps motion deadlines/hearings current
         version: pending
@@ -503,13 +549,29 @@ personas:
           scheduled: true
           webhook: false
         enabled: true
-      - name: lien-ledger-tracker # weekly open-payoff chase
+      - name: lien-ledger-tracker # weekly obligation sweep + provider chase
         version: pending
         initiation:
           manual: true
           scheduled: true
           webhook: false
         enabled: true
+        settings:
+          # Which matter status means "settled, money still in trust" is a FIRM
+          # fact with no pack default: unauthored, the gate refuses and surfaces
+          # rather than guessing at a vendor-global enum value (ss #2455).
+          trigger_status: Pending # PLACEHOLDER(rehearsal) - staging sandbox value
+          # How often one provider may be contacted. Also a firm fact, also
+          # fail-closed: a cadence we picked is a commitment nobody made.
+          chase_cadence_days: 14 # PLACEHOLDER(rehearsal)
+          # How long an obligation may go quiet before it is flagged. NOT in the
+          # fail-closed class: unauthored, stall flags are simply withheld and
+          # the register says so, while tracking and chasing continue.
+          stall_days: 60 # PLACEHOLDER(rehearsal)
+          # How often the standing register is produced on its own. Also NOT
+          # fail-closed: unauthored, there is no periodic run and the register
+          # rides along with other wakes, saying so on its own face.
+          register_days: 7 # PLACEHOLDER(rehearsal)
       - name: settlement-statement-feeder # person-invoked; figures from authored data only
         version: pending
         initiation:
@@ -755,6 +817,25 @@ webhook_triggers:
     event_type: message.received
     skill: matter-inbox-router
     persona: operator
+  # REHEARSAL ONLY (read-volume gate, overlay#327): a synthetic signed event
+  # drives the opposing-response review directly so the gate's webhook-route
+  # marking can be exercised; the real vendor never emits this event_type.
+  #
+  # `vendor_emitted: false` is what keeps that last sentence true at the egress
+  # boundary, and it is NOT optional. Without it the reconciler unions this
+  # event_type into the smokeball subscription beside matter.updated; Smokeball
+  # validates eventTypes as a set and rejects the whole POST /webhooks with
+  # HTTP 400 "Invalid EventTypes". That is exactly what happened between
+  # 2026-08-28 (when this trigger landed, #2622) and 2026-09-02: the changed
+  # intent hash set force_recreate, so the reconciler deleted the working
+  # matter.updated subscription and then failed to recreate it, and the seat
+  # ran with ZERO webhook subscriptions — no event feed for the flagship
+  # matter-memo-on-update skill — until the flag was added.
+  - source: smokeball
+    event_type: responses.served
+    skill: opposing-response-deficiency-review
+    persona: operator
+    vendor_emitted: false
 
 # ---- SCOPE ----
 scope:
@@ -805,6 +886,45 @@ scope:
     # install + the possession ceremony); mirrors A&P's two-admin shape. Never
     # copy to a client seat.
     - ss-probe-admin@agentmail.to
+  # TRAFFIC ROUTING ONLY (ss-console#2546) — who is EMAILED when a non-admin
+  # asks for a firm-level rule. Authority is unchanged: both admins above may
+  # still apply a rule.
+  #
+  # The probe admin alone, and scott@ deliberately left out, because that
+  # omission is what makes the routing leg falsifiable here: scott@ IS an admin,
+  # so if a rule request reaches him the split is decorative rather than real.
+  # Mirrors the A&P shape, where Chris is the admin who is not paged.
+  rule_requests_to:
+    - ss-probe-admin@agentmail.to
+  # Whose reply ANSWERS an operations request (ss-console#2546). A routine, a
+  # schedule, a channel, a memory setting, an autonomy level, an on/off: ADR 0085
+  # as amended places all of those with SMD rather than with the firm, so when
+  # somebody here asks for one the Operator records it, emails SMD with an
+  # `[ops XXXX]` tag, and waits. A reply from one of these addresses quoting that
+  # tag resolves that row, and the person who asked is told once — set up,
+  # declined with SMD's reason, or lapsed unanswered after seven days.
+  #
+  # WHAT THIS GRANTS, exactly: a reply quoting an `[ops XXXX]` tag from this
+  # address resolves that row. Nothing else. It is NOT inbound trust — none of
+  # these addresses is on scope.inbound_allow_from, none of them is an admin, and
+  # mail from one of them quoting no tag is as untrusted as any other mail. In
+  # particular team@smd.services stays OFF inbound_allow_from, which is pinned by
+  # a test: being able to answer a question the Operator asked is a much smaller
+  # grant than being able to instruct it.
+  #
+  # The tag is the capability, and the spoof class is identical for all three: no
+  # seat gets an SPF or DKIM verdict on inbound mail (ADR 0085 §5), so naming
+  # scott@ rather than team@ buys nothing. What bounds the risk is the effect —
+  # one templated notice to the person who asked.
+  #
+  # smdurgan@smdurgan.com is here because team@smd.services is an alias of that
+  # mailbox, and a reply sent from the bare mailbox carries the bare address.
+  #
+  # Empty = no reply resolves anything and every request lapses at seven days.
+  ops_reply_from:
+    - scott@smd.services
+    - team@smd.services
+    - smdurgan@smdurgan.com
   # Typed outbound roster (ADR 0075) — the firm's own client / records-vendor
   # addresses, which resolve to the external_send_client / external_send_vendor
   # action classes instead of the outside external_send ceiling. These two are
@@ -824,6 +944,17 @@ scope:
     - address: ap-records-standin@agentmail.to
       class: records_vendor
       note: 'records vendor stand-in inbox for the live send probes'
+    # SMD's own operations desk (ss-console#2546), authored identically on
+    # ashton-price. An operations request (routine, schedule, channel, memory,
+    # autonomy, on/off) is SMD's to make, so the Operator has to be able to pass
+    # one on. This grants outbound CLASSIFICATION only: the send resolves as
+    # internal firm staff instead of falling to the outside external_send
+    # ceiling. It grants NO inbound trust — the address is deliberately absent
+    # from scope.inbound_allow_from above, so mail claiming to come from it does
+    # not untaint a turn and cannot instruct the seat.
+    - address: team@smd.services
+      class: firm_staff
+      note: 'SMD operations desk; outbound classification only, never inbound trust'
   # External send (to anyone OUTSIDE the roster and NOT in outbound_roster) follows
   # the authored external_send ceiling above — draft_for_review under the Ashton &
   # Price day-one grid posture (2026-07-09 letter), the letter's permanent
@@ -957,6 +1088,34 @@ self_initiation:
   document_library:
     matter_hint: '2026-OPS-001 (the internal operations matter)'
     folder_name: 'Document Library'
+    # The Smokeball connector's renderer resolves the firm's per-class Word
+    # template from here, deterministically, the same way every time (#2448):
+    # this matter (by its number) -> this folder -> the file named
+    # templates[<class>] or the convention "Template - <Class>.docx". Read off
+    # the live customer.yaml by the connector at render time (config-as-data;
+    # no translate step). Typography lives ONLY in those .docx files: a style
+    # edited in Word takes effect on the next draft.
+    matter_number: '2026-OPS-001'
+    templates:
+      demand_letter: 'Template - Demand Letter (Policy Limits)'
+      discovery_response: 'Template - Discovery Responses (RFP and FROG Combined)'
+    # The Operator's OWN matter (ss-console#2536), for the rehearsal of the
+    # A&P path. The number is deliberately DIFFERENT from the probe matter that
+    # already exists on this sandbox tenant (OPS-OPERATOR-LIBRARY, created
+    # 2026-08-21 while pinning the vendor's wire shape), so the rehearsal
+    # exercises a real create rather than a dedupe refusal. matter_number above
+    # stays as it is: this seat's template library already lives on 2026-OPS-001
+    # and this feature does not move it.
+    operator_matter:
+      number: '2026-OPS-LIBRARY'
+      description: 'Operator Library (rehearsal)'
+      # This seat's own "SMD Operations" person contact.
+      client_contact_id: '7236214f-628e-412b-ad0e-099c61371cd4'
+      matter_type_id: '42cc724c-f046-451c-8452-4284f7a82b66_CA'
+      # The two names the read-back shows the administrator (read live
+      # 2026-08-21 from this tenant's contact and type catalog).
+      client_contact_name: 'SMD Operations'
+      matter_type_name: 'Personal Injury - Plaintiff'
 
 # ---- VOICE COHORTS ----
 # The audience classes this seat's voice profiles are partitioned by. An

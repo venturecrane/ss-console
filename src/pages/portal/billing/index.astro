@@ -1,27 +1,45 @@
 ---
 import { getPortalClient } from '../../../lib/portal/session'
-import { listInvoicesForEntity } from '../../../lib/db/invoices'
+import { invoiceTypeLabel, listInvoicesForEntity } from '../../../lib/db/invoices'
 import type { Invoice } from '../../../lib/db/invoices'
 import PortalShell from '../../../layouts/PortalShell.astro'
 import PortalPageHead from '../../../components/portal/PortalPageHead.astro'
 import PortalListItem from '../../../components/portal/PortalListItem.astro'
-import MoneyDisplay from '../../../components/portal/MoneyDisplay.astro'
 import { formatShortDate } from '../../../lib/portal/formatters'
 import { resolveInvoiceTone, resolveInvoiceStampLabel } from '../../../lib/portal/status'
-import {
-  subscriptionStatusLabel,
-  subscriptionStatusProse,
-  type SubscriptionStatus,
-} from '../../../lib/portal/operator/account-read'
 import { resolvePortalOfferings } from '../../../lib/portal/offerings'
-import { parseStripeCustomerId, productDisplayName } from '../../../lib/portal/billing'
+import type { SubscriptionRow } from '../../../lib/portal/product-access'
+import {
+  canStartOperatorSubscription,
+  formatWholeDollars,
+  operatorMonthlyPriceCents,
+  operatorSubscriptionHref,
+  productDisplayName,
+  resolveStartDoneMessage,
+  subscriptionStamp,
+} from '../../../lib/portal/billing'
+import { parseCancelAt } from '../../../lib/db/subscriptions'
+import { getOperatorCheckoutSession } from '../../../lib/stripe/subscriptions'
+import { getOperatorServiceForEntity } from '../../../lib/db/services'
 import { env } from 'cloudflare:workers'
 
 /**
- * Billing — the one money surface (portal IA rebuild, Captain decision 4).
- * Engagement invoices and product subscriptions side by side; subscription
- * management hands off to the Stripe Billing Portal via the generalized
- * manage door. Invoice rows link to /portal/billing/invoices/[id].
+ * Billing — the one money surface (portal IA rebuild, Captain decision 4),
+ * composed as a ledger: two lists of the same ticket row, subscriptions
+ * and invoices, each row a link to the page where its act happens (the
+ * subscription page to start or manage; the invoice page to pay). The
+ * amount due sits in the page meta, once.
+ *
+ * What was here before and why it went (Captain, 2026-09-09: "confusing"):
+ * a subscription block with its own inline button, then a Paid-to-date /
+ * Balance-due pair, then the invoice list. The pair dated from the
+ * consulting-era invoices page (#530), where several invoices across an
+ * engagement made a running total meaningful; folded under subscriptions
+ * by ADR 0068 it restated the one invoice below it (UI-PATTERNS Rule 2),
+ * and a $0 paid figure was a claim about history that had none. The inline
+ * Start button made two primaries on one screen (Rule 3) and a "Being set
+ * up" label beside "Start" contradicted itself (Rule 1). Rows with stamps
+ * now carry the state at scan time; the acts live on their own pages.
  */
 
 export const prerender = false
@@ -39,12 +57,30 @@ const offerings = await resolvePortalOfferings(env.DB, user.org_id, client.id)
 const invoices = await listInvoicesForEntity(env.DB, user.org_id, client.id)
 const subscriptions = offerings.subscriptions
 
-const typeLabel: Record<string, string> = {
-  deposit: 'Deposit',
-  completion: 'Completion',
-  milestone: 'Milestone',
-  assessment: 'Assessment',
-  retainer: 'Retainer',
+// The retainer starts by the client's own act (Captain, 2026-08-29), from the
+// authored monthly price. No price authored, no door, nothing invented.
+const operatorService = await getOperatorServiceForEntity(env.DB, user.org_id, client.id)
+const operatorPriceCents = operatorMonthlyPriceCents(operatorService?.recurring_price)
+// One gate, shared with Home and the Operator page (lib/portal/billing.ts).
+function canStart(sub: SubscriptionRow): boolean {
+  return canStartOperatorSubscription(sub, operatorPriceCents)
+}
+
+const SERIALS: Record<string, string> = { operator: 'OP', 'hosted-agent': 'AG' }
+
+function subscriptionHref(sub: SubscriptionRow): string {
+  if (sub.product_slug === 'operator' && sub.instance_slug) {
+    return operatorSubscriptionHref(sub.instance_slug)
+  }
+  return `/portal/products/${sub.product_slug}`
+}
+
+/** The date cell: the one date that matters for the row's state. */
+function subscriptionDate(sub: SubscriptionRow): { label: string; value: string } {
+  const cancelAt = parseCancelAt(sub.settings_json)
+  if (canStart(sub)) return { label: 'Started', value: 'Not yet' }
+  if (cancelAt) return { label: 'Cancels', value: formatShortDate(cancelAt) }
+  return { label: 'Started', value: formatShortDate(sub.started_at) }
 }
 
 function resolveDateLabel(inv: Invoice): string {
@@ -59,26 +95,65 @@ function resolveDateValue(inv: Invoice): string {
   return formatShortDate(inv.created_at)
 }
 
-const paidCents = invoices
-  .filter((i) => i.status === 'paid')
-  .reduce((sum, i) => sum + Math.round(i.amount * 100), 0)
 const balanceCents = invoices
   .filter((i) => i.status === 'sent' || i.status === 'overdue')
   .reduce((sum, i) => sum + Math.round(i.amount * 100), 0)
+const paidCount = invoices.filter((i) => i.status === 'paid').length
 
-function asSubscriptionStatus(status: string): SubscriptionStatus {
-  return status === 'provisioning' || status === 'active' || status === 'paused'
-    ? status
-    : 'unknown'
-}
+// The page meta states the one number a client comes here for. "Up to
+// date" is a claim about history and needs some: a paid invoice.
+const headMeta =
+  balanceCents > 0 ? `${formatWholeDollars(balanceCents)} due` : paidCount > 0 ? 'Up to date' : null
 
 const csStatus = Astro.url.searchParams.get('cs')
+const startStatus = Astro.url.searchParams.get('start')
+
+// The checkout return (`?start=done&session_id=…`, start-subscription.ts)
+// carries no fact about the subscription; the query string is the client's
+// own navigation. What is shown comes from the Checkout Session Stripe
+// substituted into the URL plus the row that session names, and only when
+// that row is one this client owns (`offerings.subscriptions` is already
+// scoped to the signed-in client). Any lookup failure shows nothing.
+const sessionId = Astro.url.searchParams.get('session_id')
+let startDoneMessage: string | null = null
+if (startStatus === 'done' && sessionId && /^[A-Za-z0-9_]+$/.test(sessionId)) {
+  try {
+    const session = await getOperatorCheckoutSession(env.STRIPE_API_KEY, sessionId)
+    const row = session.smd_subscription_id
+      ? (subscriptions.find(
+          (s) => s.id === session.smd_subscription_id && s.product_slug === 'operator'
+        ) ?? null)
+      : null
+    if (row) {
+      startDoneMessage = resolveStartDoneMessage(
+        session.payment_status,
+        row,
+        formatShortDate(row.started_at)
+      )
+    }
+  } catch (err) {
+    console.error('[portal/billing] checkout session lookup failed:', err)
+  }
+}
+
+const START_MESSAGES: Record<string, string> = {
+  cancelled: 'Checkout was not completed. Your subscription has not started.',
+  already_started: 'This subscription has already been started.',
+  unpriced:
+    'Your subscription is not ready to start yet. Write to team@smd.services and we sort it out.',
+  failed: 'Could not open checkout. Try again, or write to team@smd.services.',
+}
 const csMessage =
   csStatus === 'billing_unavailable'
     ? 'Billing management is not available for that subscription yet. Write to team@smd.services and we sort it out.'
     : csStatus === 'billing_error'
       ? 'Could not open billing management. Try again, or write to team@smd.services.'
-      : null
+      : startStatus === 'done'
+        ? startDoneMessage
+        : startStatus
+          ? (START_MESSAGES[startStatus] ?? null)
+          : null
+const csTone = startStatus === 'done' ? 'success' : 'error'
 ---
 
 <PortalShell
@@ -93,19 +168,18 @@ const csMessage =
     /* No crumb: this page is the Billing nav tab's destination — a "← Home"
       crumb would duplicate the Home tab directly above it. */
   }
-  <PortalPageHead
-    tag="Ledger"
-    h1="Billing"
-    meta={invoices.length > 0
-      ? `${invoices.length} invoice${invoices.length !== 1 ? 's' : ''}`
-      : null}
-  />
+  <PortalPageHead tag="Ledger" h1="Billing" meta={headMeta} />
 
   {
     csMessage && (
       <div
         role="status"
-        class="mt-6 border-[3px] border-[color:var(--ss-color-error)] px-5 py-3 font-mono text-label uppercase tracking-[0.14em] font-bold text-[color:var(--ss-color-error)]"
+        class:list={[
+          'mt-6 border-[3px] px-5 py-3 font-mono text-label uppercase tracking-[0.14em] font-bold',
+          csTone === 'success'
+            ? 'border-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-text-primary)]'
+            : 'border-[color:var(--ss-color-error)] text-[color:var(--ss-color-error)]',
+        ]}
       >
         {csMessage}
       </div>
@@ -114,37 +188,30 @@ const csMessage =
 
   {
     subscriptions.length > 0 && (
-      <section class="mt-8" aria-label="Subscriptions">
+      <section id="subscriptions" class="mt-8 scroll-mt-16" aria-label="Subscriptions">
         <p class="mb-4 font-mono text-label uppercase tracking-[0.14em] font-bold text-[color:var(--ss-color-text-secondary)]">
           Subscriptions
         </p>
         <div class="border-[3px] border-[color:var(--ss-color-text-primary)]">
-          {subscriptions.map((sub) => (
-            <div class="flex flex-wrap items-center justify-between gap-4 p-5 md:p-6 border-b-[2px] border-[color:var(--ss-color-text-primary)] last:border-b-0">
-              <div class="min-w-0">
-                <p class="font-body text-lg font-black uppercase tracking-[-0.01em] text-[color:var(--ss-color-text-primary)]">
-                  {productDisplayName(sub)}
-                </p>
-                <p class="mt-1 font-mono text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
-                  {subscriptionStatusLabel(asSubscriptionStatus(sub.status))}
-                </p>
-                <p class="mt-1 font-body text-sm text-[color:var(--ss-color-text-secondary)]">
-                  {subscriptionStatusProse(asSubscriptionStatus(sub.status))}
-                </p>
-              </div>
-              {parseStripeCustomerId(sub.settings_json) && (
-                <form method="POST" action="/api/portal/billing/manage">
-                  <input type="hidden" name="product_slug" value={sub.product_slug} />
-                  <button
-                    type="submit"
-                    class="px-5 py-2.5 border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)] font-bold uppercase tracking-[0.08em] font-body hover:bg-[color:var(--ss-color-text-primary)] hover:text-[color:var(--ss-color-background)] transition-colors"
-                  >
-                    Manage Billing
-                  </button>
-                </form>
-              )}
-            </div>
-          ))}
+          {subscriptions.map((sub) => {
+            const stamp = subscriptionStamp(sub, canStart(sub))
+            const date = subscriptionDate(sub)
+            return (
+              <PortalListItem
+                chrome="ticket"
+                variant="status"
+                href={subscriptionHref(sub)}
+                serial={SERIALS[sub.product_slug] ?? null}
+                tone={stamp.tone}
+                toneLabel={stamp.label}
+                title={productDisplayName(sub)}
+                amountCents={sub.product_slug === 'operator' ? (operatorPriceCents ?? 0) : 0}
+                metaCaption="Per month"
+                metaLabel={date.label}
+                trailingCaption={date.value}
+              />
+            )
+          })}
         </div>
       </section>
     )
@@ -153,31 +220,8 @@ const csMessage =
   {
     invoices.length > 0 && (
       <section class="mt-10" aria-label="Invoices">
-        <div class="grid grid-cols-1 md:grid-cols-2 border-[3px] border-[color:var(--ss-color-text-primary)]">
-          <div class="p-6 md:p-7 md:border-r-[2px] border-b-[2px] md:border-b-0 border-[color:var(--ss-color-text-primary)]">
-            <p class="font-mono text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-text-secondary)]">
-              Paid to date
-            </p>
-            <div class="mt-3">
-              <MoneyDisplay amountCents={paidCents} size="kpi" />
-            </div>
-          </div>
-          <div class="bg-[color:var(--ss-color-text-primary)] p-6 md:p-7">
-            <p class="font-mono text-label uppercase tracking-[0.18em] font-bold text-[color:var(--ss-color-primary)]">
-              Balance due
-            </p>
-            <div class="mt-3 font-body text-kpi tabular-nums text-[color:var(--ss-color-background)]">
-              {new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: 'USD',
-                maximumFractionDigits: 0,
-              }).format(Math.round(balanceCents / 100))}
-            </div>
-          </div>
-        </div>
-
-        <p class="mt-10 mb-4 font-mono text-label uppercase tracking-[0.14em] font-bold text-[color:var(--ss-color-text-secondary)]">
-          {invoices.length} invoice{invoices.length !== 1 ? 's' : ''}
+        <p class="mb-4 font-mono text-label uppercase tracking-[0.14em] font-bold text-[color:var(--ss-color-text-secondary)]">
+          Invoices
         </p>
         <div class="border-[3px] border-[color:var(--ss-color-text-primary)]">
           {invoices.map((inv: Invoice, idx: number) => (
@@ -188,7 +232,7 @@ const csMessage =
               serial={String(invoices.length - idx).padStart(2, '0')}
               tone={resolveInvoiceTone(inv.status)}
               toneLabel={resolveInvoiceStampLabel(inv.status)}
-              title={typeLabel[inv.type] ?? inv.type}
+              title={invoiceTypeLabel(inv.type) ?? 'Invoice'}
               amountCents={Math.round(inv.amount * 100)}
               metaCaption={inv.status === 'paid' ? 'Settled' : 'Amount'}
               metaLabel={resolveDateLabel(inv)}

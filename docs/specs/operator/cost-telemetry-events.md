@@ -64,13 +64,16 @@ async def chat_completion(prompt: ...) -> Response:
 
 A buffer flushes to D1 every 60s or 500 events, whichever comes first. Flushed via D1 UPSERT (`ON CONFLICT (date, driver) DO UPDATE SET amount_cents = amount_cents + excluded.amount_cents, units = units + excluded.units`).
 
-Model pricing live in `operator/adapter/anthropic_pricing.json`:
+Model pricing lives in `operator/adapter/cost_telemetry/anthropic_pricing.json`:
 
 ```json
 {
   "claude-opus-4-7": { "input_per_million_cents": 1500, "output_per_million_cents": 7500 },
   "claude-sonnet-4-6": { "input_per_million_cents": 300, "output_per_million_cents": 1500 },
-  "claude-haiku-4-5-20251001": { "input_per_million_cents": 80, "output_per_million_cents": 400 }
+  "claude-haiku-4-5-20251001": { "input_per_million_cents": 80, "output_per_million_cents": 400 },
+  "claude-opus-4-8": { "input_per_million_cents": 500, "output_per_million_cents": 2500 },
+  "claude-opus-5": { "input_per_million_cents": 500, "output_per_million_cents": 2500 },
+  "claude-sonnet-5": { "input_per_million_cents": 200, "output_per_million_cents": 1000 }
 }
 ```
 

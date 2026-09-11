@@ -11,7 +11,10 @@ import {
 import type { Vertical } from '../../../../../../lib/operator/customer-yaml'
 import { ACCEPTED_VERTICALS } from '../../../../../../lib/operator/customer-yaml'
 import PortalPageHead from '../../../../../../components/portal/PortalPageHead.astro'
+import PortalListItem from '../../../../../../components/portal/PortalListItem.astro'
 import { env } from 'cloudflare:workers'
+import { listAgreementsForInstance } from '../../../../../../lib/portal/agreement-documents'
+import { formatShortDate } from '../../../../../../lib/portal/formatters'
 
 /**
  * Operator — Compliance dashboard view.
@@ -121,6 +124,15 @@ const view = resolveComplianceView({
 })
 
 const isPrincipalOnly = roles.includes('principal') && !roles.includes('compliance')
+
+// Executed agreements (ss#2641). Read OUTSIDE the compliance_enabled branch on
+// purpose, and rendered outside it below: `compliance_enabled` is the opt-in
+// for the dedicated dashboard, while a firm's own executed paper is owed to it
+// unconditionally -- the same reasoning that keeps the audit-record link
+// ungated above. Empty means the card renders nothing at all; promising the
+// documents will appear later would be a claim about future business behavior
+// on a client surface.
+const agreements = await listAgreementsForInstance(env.DB, client.id, instance)
 ---
 
 <PortalShell
@@ -321,6 +333,40 @@ const isPrincipalOnly = roles.includes('principal') && !roles.includes('complian
           </div>
         </section>
       </div>
+    )
+  }
+
+  {
+    agreements.length > 0 && (
+      <section
+        aria-label="Executed agreements"
+        class="mt-8 border-[3px] border-[color:var(--ss-color-text-primary)] bg-[color:var(--ss-color-background)]"
+      >
+        <div class="bg-[color:var(--ss-color-text-primary)] text-[color:var(--ss-color-background)] px-5 py-2.5 font-mono text-label uppercase tracking-[0.18em] font-bold">
+          Executed agreements
+        </div>
+        <div class="px-5 md:px-7 py-6">
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)]">
+            The signed paper governing this engagement, with the date each document was executed.
+            The most recent sits at the top.
+          </p>
+          <div class="mt-5 border-[3px] border-[color:var(--ss-color-text-primary)]">
+            {agreements.map((doc) => (
+              <PortalListItem
+                chrome="ticket"
+                variant="document"
+                href={doc.href}
+                icon="description"
+                title={doc.title}
+                eyebrow={`Executed ${formatShortDate(doc.executedOn)}`}
+                fileExt="PDF"
+                kind="Agreement"
+                trailingIcon="open_in_new"
+              />
+            ))}
+          </div>
+        </div>
+      </section>
     )
   }
 </PortalShell>

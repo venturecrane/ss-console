@@ -16,7 +16,20 @@
 #     --output <path> \
 #     --actor <name> \
 #     [--actor-role captain|compliance] \
-#     [--acknowledge-unattributed-gap]
+#     [--acknowledge-unattributed-gap] \
+#     [--pinned-head <sha256 hex>]
+#
+# Completeness of the log itself (ss#2500):
+#   The hash chain proves that a row altered, removed, or inserted BEFORE the
+#   end of the log breaks it at a verifiable point. It proves nothing about rows
+#   cut off the END, because what survives such a cut is itself a valid chain.
+#   --pinned-head takes a chain head recorded off the Machine before the export
+#   (the newest audit_head_history row for this seat on the control plane); the
+#   ledger must still contain it. If it does not, the build HALTS (exit 3) and
+#   there is no acknowledge flag, because a compliance packet asserting a
+#   complete record over a ledger that lost rows is the artifact the whole
+#   mechanism exists to prevent. Without the flag the packet states on its face
+#   that its audit section was not checked for truncation.
 #
 # Captain CLI integration (when bin/smd-cli lands):
 #   smd-cli evidence <slug> --matter <m> --from <a> --to <b>
@@ -52,7 +65,8 @@ Usage: generate-evidence-packet.sh --customer <slug> --matter <id|all> \
                                    --from <ISO> --to <ISO> \
                                    --output <path> --actor <name> \
                                    [--actor-role captain|compliance] \
-                                   [--acknowledge-unattributed-gap]
+                                   [--acknowledge-unattributed-gap] \
+                                   [--pinned-head <sha256 hex>]
 USAGE
   exit 2
 fi

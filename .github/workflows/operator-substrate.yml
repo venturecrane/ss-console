@@ -16,31 +16,16 @@
 name: operator-substrate
 
 on:
+  # No `paths:` filter, on purpose. operator-substrate is a REQUIRED check on
+  # main (2026-09-09 code review, top action item 1). A path-filtered workflow
+  # reports nothing on the PRs it skips, and a required check that never
+  # reports strands the PR at "Expected". So the workflow runs on every PR and
+  # the `changes` step below decides whether the suites need to run, from the
+  # list in .github/operator-substrate-paths.txt. That list is the old filter,
+  # verbatim, and bin/tests/test_ci_coverage_conformance.py pins it to the test
+  # inventory exactly as it pinned the old `paths:` block, plus one new
+  # invariant: this trigger must never grow a path filter again.
   pull_request:
-    paths:
-      - 'operator/adapter/**'
-      - 'operator/bin/**'
-      - 'operator/safety-substrate/**'
-      - 'operator/connectors/**'
-      # EFF-05: a customer.yaml-only change must trigger the block-conformance
-      # gate (test_customer_yaml_block_conformance.py) — otherwise an unclassified
-      # top-level block added to only a customer.yaml merges without the gate.
-      - 'operator/customers/**'
-      # #1688 (2026-07-04 review): whole-directory coverage. The prior filter
-      # named 4 contract files, Dockerfile, and bootstrap.sh — so skill bodies,
-      # vertical packs, migrations, the broker, templates/tests, and the
-      # migration tests could all change without this workflow running.
-      # bin/tests/test_ci_coverage_conformance.py pins filter <-> test-inventory
-      # parity so the gap cannot silently reopen.
-      - 'operator/contracts/**'
-      - 'operator/templates/**'
-      - 'operator/skills/**'
-      - 'operator/verticals/**'
-      - 'operator/migrations/**'
-      - 'operator/workspace_broker/**'
-      - 'operator/tests/**'
-      - 'operator/pytest.ini'
-      - '.github/workflows/operator-substrate.yml'
   push:
     branches: [main]
 
@@ -60,23 +45,107 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The detect step diffs base...head; both need to be in the clone.
+          fetch-depth: 0
+
+      # Decides whether anything under .github/operator-substrate-paths.txt
+      # changed. Fails closed: no base sha (push to main) or a diff error both
+      # mean "run everything". Every later step is gated on this output, and
+      # the job itself always completes, which is what makes it requirable.
+      - name: Detect substrate-relevant changes
+        id: changes
+        run: >-
+          python3 operator/bin/substrate-paths-changed.py
+          --base "${{ github.event.pull_request.base.sha }}"
+          --head "${{ github.event.pull_request.head.sha || github.sha }}"
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        if: steps.changes.outputs.relevant == 'true'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '>=3.11'
 
       - name: Install pytest
+        if: steps.changes.outputs.relevant == 'true'
         # PyYAML is needed by the workspace-broker tests (the broker reads
         # authored customer.yaml to validate impersonation subject + send-as).
         # cryptography is needed by the evidence-packet signing tests (#2122):
         # they round-trip a real Ed25519 detached signature over a real built
         # packet. Without it those tests skip, and a signature that does not
         # verify would be discovered by a client's carrier instead of by CI.
-        run: python3 -m pip install --quiet pytest pyyaml cryptography
+        # ruff lints the tree against operator/ruff.toml (see that file's header
+        # for why the rule selection is narrow and why it is a gate, not a
+        # baseline).
+        # pyright (pinned) runs in basic mode under operator/pyproject.toml and is
+        # ratcheted by bin/pyright-ratchet.py; the pip package fetches its own node.
+        # ruff is pinned too. RUF100 (unused-noqa) follows each version's BLE001
+        # exemptions: 0.16 exempts a handler that logs with exc_info, 0.15 does
+        # not, and an unpinned install turned a locally green tree red at one
+        # site on 2026-09-10. Bump deliberately: `uvx ruff@<new> check .` and
+        # `format --check .` locally first, then move this pin and the note in
+        # ruff.toml together.
+        run: python3 -m pip install --quiet pytest pyyaml cryptography ruff==0.15.17 pyright==1.1.406
+
+      # The safe half of packaging (operator/pyproject.toml header): the tree is
+      # installed as packages so imports resolve the way they will once the
+      # seat image installs it too. The sys.path shims stay until that
+      # reprovision-proven follow-up.
+      - name: Install the operator tree as packages
+        if: steps.changes.outputs.relevant == 'true'
+        run: python3 -m pip install --quiet -e ./operator
+
+      - name: Run ruff
+        if: steps.changes.outputs.relevant == 'true'
+        # Selection is exactly the set that reports zero across the tree, so this
+        # blocks new violations outright. It also makes 106 of the 261 `# noqa`
+        # annotations already in the tree mean something — before operator/ruff.toml
+        # existed, no Python linter ran here at all and every one was inert.
+        working-directory: operator
+        run: ruff check .
+
+      # One formatter for the Python half, the way prettier is for the
+      # TypeScript half (ruff.toml [format], line-length 120). Fix locally with
+      # `cd operator && ruff format .`.
+      - name: ruff format --check
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator
+        run: ruff format --check .
+
+      # RUF100 (in ruff.toml) deletes suppressions for rules ruff does not
+      # enable; this is the other half: every surviving noqa says what it
+      # protects. Same shape as the nosemgrep gate in security.yml.
+      - name: Every noqa carries a reason
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator
+        run: python3 bin/noqa-reasons.py
+
+      # pyright, ratcheted: contracts/operator-pyright-baseline.json records
+      # errors per file; any file that grows fails, and improvement asks for a
+      # regenerate so the number only moves down. `|| true` because pyright
+      # exits 1 on any error and the ratchet, not the raw exit, is the gate.
+      - name: pyright (ratcheted)
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator
+        run: |
+          set -euo pipefail
+          pyright --outputjson > /tmp/pyright.json || true
+          python3 bin/pyright-ratchet.py /tmp/pyright.json
+
+      # shellcheck never ran anywhere before 2026-09-10; five `shellcheck
+      # disable` directives sat in workflow run: blocks, which no linter reads.
+      # The generated env-array file is excluded (no shebang by design).
+      - name: shellcheck (operator shell)
+        if: steps.changes.outputs.relevant == 'true'
+        run: |
+          set -euo pipefail
+          git ls-files 'operator/**/*.sh' 'operator/*.sh' \
+            | grep -v '_env-arrays.generated.sh' \
+            | xargs shellcheck --severity=warning
 
       - name: Run run()-style safety invariants
+        if: steps.changes.outputs.relevant == 'true'
         working-directory: operator
         run: |
           set -euo pipefail
@@ -96,6 +165,7 @@ jobs:
           exit $fail
 
       - name: Run pytest suites (adapter + evidence + invariants + bin + skills + templates + migrations)
+        if: steps.changes.outputs.relevant == 'true'
         working-directory: operator
         # #1688: full-directory invocation, replacing the prior hand-named
         # bin/tests list. That list's exclusion rationale ("some of bin/tests
@@ -108,7 +178,7 @@ jobs:
         # per-connector venv conformance step further down.
         # bin/tests/test_ci_coverage_conformance.py asserts this invocation
         # covers every test_*.py under operator/ (connectors excepted).
-        run: python3 -m pytest adapter/tests adapter/evidence/tests adapter/voice/tests safety-substrate/tests bin/tests workspace_broker/tests templates/tests templates/drafting/tests tests skills -q
+        run: python3 -m pytest adapter/tests adapter/evidence/tests adapter/voice/tests safety-substrate/tests bin/tests rehearsal/tests workspace_broker/tests templates/tests templates/drafting/tests tests skills -q
 
       # SEC-32: overlay-RUNTIME side of the adapter <-> overlay drift gate.
       #
@@ -126,6 +196,7 @@ jobs:
       # bump FAILS. Fail-closed: mismatch/missing/malformed -> exit 1; a genuine
       # fetch failure -> exit 2 (env), and the workflow still fails.
       - name: Verify overlay runtime hashes (SEC-32 drift gate)
+        if: steps.changes.outputs.relevant == 'true'
         run: python3 operator/bin/verify-overlay-pairs.py
 
       # Author-built MCP connector conformance. The bare pytest env above
@@ -137,9 +208,11 @@ jobs:
       # not a source-tree import. Per-connector venv = the same isolation the
       # image gets.
       - name: Set up uv (connector venvs)
-        uses: astral-sh/setup-uv@f98e06938123ccabd21905ea5d0069192241f9f1 # v8.3.1
+        if: steps.changes.outputs.relevant == 'true'
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Author-built connector conformance
+        if: steps.changes.outputs.relevant == 'true'
         working-directory: operator/connectors
         run: |
           set -euo pipefail
@@ -160,3 +233,23 @@ jobs:
             uv pip install --python "$venv/bin/python" ./_sdk "$cdir" pytest
             PATH="$venv/bin:$PATH" "$venv/bin/python" -m pytest "${cdir}tests" -q
           done
+
+      # ss#2613: the medchron runner is installed exactly as the seat image will
+      # install it (the explicit three-path form: sdk, connector, runner), and
+      # its tests run against that artifact. Not the bare env: the runner's
+      # seat access imports the connector's client.
+      - name: medchron runner tests (own venv)
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator
+        run: |
+          set -euo pipefail
+          uv venv /tmp/medchronv
+          uv pip install --python /tmp/medchronv/bin/python ./connectors/_sdk ./connectors/smokeball ./runners/medchron pytest
+          /tmp/medchronv/bin/python -m pytest -c runners/medchron/pyproject.toml runners/medchron/tests -q
+
+      - name: No substrate paths changed
+        if: steps.changes.outputs.relevant != 'true'
+        run: >-
+          echo "No file under .github/operator-substrate-paths.txt changed;
+          the substrate suites did not need to run. This job still reports so
+          the required check is satisfied."

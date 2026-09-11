@@ -18,10 +18,6 @@
  */
 
 import { PROBLEM_IDS, VERTICALS, REVENUE_RANGES } from './extraction-schema.js'
-import type { AssessmentExtraction } from './extraction-schema.js'
-
-// Re-export the type so callers can import both from this module
-export type { AssessmentExtraction }
 
 /**
  * The system prompt that establishes context for extraction.
@@ -170,24 +166,6 @@ ${OUTPUT_SCHEMA_BLOCK}
 ## Transcript
 
 ${transcript}`
-}
-
-/**
- * Builds the complete prompt for manual use (Phase 1).
- *
- * Returns a single string that the admin can paste into Claude's chat interface
- * along with the transcript. The system context is embedded in the prompt since
- * the chat interface does not support separate system messages.
- *
- * @param transcript - The full MacWhisper speaker-separated transcript text
- * @returns The complete prompt string for manual use
- */
-export function buildManualExtractionPrompt(transcript: string): string {
-  return `${EXTRACTION_SYSTEM_PROMPT}
-
----
-
-${buildExtractionUserPrompt(transcript)}`
 }
 
 // ---------------------------------------------------------------------------

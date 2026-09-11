@@ -1,0 +1,277 @@
+[
+ {
+  "id": "seed-2026-sc-206-p0",
+  "itemId": "seed-2026-sc-206-p0",
+  "parentId": "Plaintiff",
+  "index": 0,
+  "parentIndex": 0,
+  "layoutDesign": {
+   "id": "PersonalInjurySettlementDetailsItem",
+   "rel": "Layouts"
+  },
+  "layoutDesignId": "PersonalInjurySettlementDetailsItem",
+  "values": [
+   {
+    "key": "Providers[]"
+   },
+   {
+    "key": "OtherLiensAndBalances[]"
+   },
+   {
+    "key": "Providers[0]/Provider/DisplayName",
+    "value": "Open Sierra Imaging"
+   },
+   {
+    "key": "Providers[0]/Provider/MatterEntityId",
+    "value": "b6d1039f-5e48-4c2a-93bb-0ae7fd21c580"
+   },
+   {
+    "key": "Providers[0]/InvoiceInitialAmount",
+    "value": "2750.00"
+   },
+   {
+    "key": "Providers[0]/InvoiceBalance",
+    "value": "0.00"
+   },
+   {
+    "key": "Providers[0]/InvoiceAmountPaidTotal",
+    "value": "2750.00"
+   },
+   {
+    "key": "Providers[0]/InvoiceAdjustmentsTotal",
+    "value": "0.00"
+   },
+   {
+    "key": "Providers[0]/InvoiceTotalClaim",
+    "value": "2750.00"
+   },
+   {
+    "key": "Providers[0]/SummaryTotalClaim",
+    "value": "2750.00"
+   },
+   {
+    "key": "Providers[0]/LienAsserted",
+    "value": "false"
+   },
+   {
+    "key": "Providers[0]/OverrideCalculations",
+    "value": "false"
+   },
+   {
+    "key": "Providers[0]/AccountNumber"
+   },
+   {
+    "key": "Providers[0]/Note"
+   },
+   {
+    "key": "Providers[0]/LienOrBalanceNote"
+   },
+   {
+    "key": "Providers[0]/DocumentRequests[]"
+   },
+   {
+    "key": "Providers[0]/LienAmount",
+    "value": "0.00"
+   },
+   {
+    "key": "Providers[0]/FinalAmount",
+    "value": "0.00"
+   },
+   {
+    "key": "Providers[0]/ServiceStartDate",
+    "value": "2024-02-06"
+   },
+   {
+    "key": "Providers[0]/ServiceEndDate",
+    "value": "2024-02-06"
+   },
+   {
+    "key": "Providers[0]/Invoices[0]/InitialInvoiceAmount",
+    "value": "2750.00"
+   },
+   {
+    "key": "Providers[0]/Invoices[0]/InvoiceBalance",
+    "value": "0.00"
+   },
+   {
+    "key": "Providers[0]/Invoices[0]/InvoiceAdjustmentAmount",
+    "value": "0.00"
+   },
+   {
+    "key": "Providers[0]/Invoices[0]/Description"
+   },
+   {
+    "key": "Providers[0]/Invoices[0]/Payors[]"
+   },
+   {
+    "key": "Providers[0]/Invoices[0]/ServiceStartDate",
+    "value": "2024-02-06"
+   },
+   {
+    "key": "Providers[0]/Invoices[0]/ServiceEndDate",
+    "value": "2024-02-06"
+   },
+   {
+    "key": "Providers[1]/Provider/DisplayName",
+    "value": "Lakeside Chiropractic"
+   },
+   {
+    "key": "Providers[1]/Provider/MatterEntityId",
+    "value": "d4093c6e-2fa1-4b57-85dc-93e60b7a1128"
+   },
+   {
+    "key": "Providers[1]/InvoiceInitialAmount",
+    "value": "5400.00"
+   },
+   {
+    "key": "Providers[1]/InvoiceBalance",
+    "value": "0.00"
+   },
+   {
+    "key": "Providers[1]/InvoiceAmountPaidTotal",
+    "value": "5400.00"
+   },
+   {
+    "key": "Providers[1]/InvoiceAdjustmentsTotal",
+    "value": "0.00"
+   },
+   {
+    "key": "Providers[1]/InvoiceTotalClaim",
+    "value": "5400.00"
+   },
+   {
+    "key": "Providers[1]/SummaryTotalClaim",
+    "value": "5400.00"
+   },
+   {
+    "key": "Providers[1]/LienAsserted",
+    "value": "false"
+   },
+   {
+    "key": "Providers[1]/OverrideCalculations",
+    "value": "false"
+   },
+   {
+    "key": "Providers[1]/AccountNumber"
+   },
+   {
+    "key": "Providers[1]/Note"
+   },
+   {
+    "key": "Providers[1]/LienOrBalanceNote"
+   },
+   {
+    "key": "Providers[1]/DocumentRequests[]"
+   },
+   {
+    "key": "Providers[1]/LienAmount",
+    "value": "0.00"
+   },
+   {
+    "key": "Providers[1]/FinalAmount",
+    "value": "0.00"
+   },
+   {
+    "key": "Providers[1]/ServiceStartDate",
+    "value": "2024-03-01"
+   },
+   {
+    "key": "Providers[1]/ServiceEndDate",
+    "value": "2024-07-22"
+   },
+   {
+    "key": "Providers[1]/Invoices[0]/InitialInvoiceAmount",
+    "value": "5400.00"
+   },
+   {
+    "key": "Providers[1]/Invoices[0]/InvoiceBalance",
+    "value": "0.00"
+   },
+   {
+    "key": "Providers[1]/Invoices[0]/InvoiceAdjustmentAmount",
+    "value": "0.00"
+   },
+   {
+    "key": "Providers[1]/Invoices[0]/Description"
+   },
+   {
+    "key": "Providers[1]/Invoices[0]/Payors[]"
+   },
+   {
+    "key": "Providers[1]/Invoices[0]/ServiceStartDate",
+    "value": "2024-03-01"
+   },
+   {
+    "key": "Providers[1]/Invoices[0]/ServiceEndDate",
+    "value": "2024-07-22"
+   },
+   {
+    "key": "InvoiceInitialTotal",
+    "value": "8150.00"
+   },
+   {
+    "key": "InvoiceBalanceTotal",
+    "value": "0.00"
+   },
+   {
+    "key": "LiensAndBalancesTotalClaimSum",
+    "value": "8150.00"
+   },
+   {
+    "key": "LiensAndBalancesLienAmountSum",
+    "value": "0.00"
+   },
+   {
+    "key": "LiensAndBalancesFinalAmountSum",
+    "value": "0.00"
+   },
+   {
+    "key": "OtherLiensAndBalancesSummaryTotalClaimSum",
+    "value": "0.00"
+   },
+   {
+    "key": "OtherLiensAndBalancesLienAmountSum",
+    "value": "0.00"
+   },
+   {
+    "key": "OtherLiensAndBalancesFinalAmountSum",
+    "value": "0.00"
+   },
+   {
+    "key": "SettlementAmount",
+    "value": "40000.00"
+   },
+   {
+    "key": "FirmFee",
+    "value": "13333.33"
+   },
+   {
+    "key": "FirmCosts",
+    "value": "0.00"
+   },
+   {
+    "key": "FirmFeePercentage",
+    "value": "33.33"
+   },
+   {
+    "key": "FirmFeeType"
+   },
+   {
+    "key": "SettlementStatement/MatterId"
+   },
+   {
+    "key": "SettlementStatement/MatterLineItems[]"
+   },
+   {
+    "key": "SettlementStatement/ProjectedSettlementAmount",
+    "value": "40000.00"
+   },
+   {
+    "key": "SettlementStatement/ProjectedSettlementDate"
+   },
+   {
+    "key": "SettlementStatement/SettlementDate"
+   }
+  ]
+ }
+]

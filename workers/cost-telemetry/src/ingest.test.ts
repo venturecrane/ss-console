@@ -58,6 +58,12 @@ describe('pricing JSON shape', () => {
     expect(anthropicPricing.models['claude-opus-4-7'].output_per_million_cents).toBe(7500)
     // #1658 added claude-opus-4-8; the fleet model selection depends on it.
     expect(anthropicPricing.models['claude-opus-4-8']).toBeDefined()
+    // 2026-08-27: the A&P medchron pipeline (engagements tools/medchron/models.py) defaults every
+    // stage to these two ids; without rows the whole pipeline costed to zero with a warning.
+    expect(anthropicPricing.models['claude-opus-5'].input_per_million_cents).toBe(500)
+    expect(anthropicPricing.models['claude-opus-5'].output_per_million_cents).toBe(2500)
+    expect(anthropicPricing.models['claude-sonnet-5'].input_per_million_cents).toBe(200)
+    expect(anthropicPricing.models['claude-sonnet-5'].output_per_million_cents).toBe(1000)
   })
 })
 

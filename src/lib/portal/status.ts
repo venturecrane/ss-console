@@ -173,6 +173,10 @@ export type StampLabel =
   | 'EXPIRED'
   | 'OVERDUE'
 
+/**
+ * @public Closed vocabulary. tests/portal-status-labels.test.ts imports it and asserts every
+ * resolver lands inside it. No runtime caller, by design.
+ */
 export const STAMP_VOCABULARY: readonly StampLabel[] = [
   'PAID',
   'ACCEPTED',
@@ -205,15 +209,6 @@ const INVOICE_STAMP: Record<InvoiceStatus, StampLabel> = {
   void: 'ARCHIVED',
 }
 
-const ENGAGEMENT_STAMP: Record<EngagementStatus, StampLabel> = {
-  scheduled: 'PENDING',
-  active: 'UNDERWAY',
-  handoff: 'IN PROG',
-  safety_net: 'IN PROG',
-  completed: 'COMPLETED',
-  cancelled: 'ARCHIVED',
-}
-
 export type MilestoneStatus = 'pending' | 'in_progress' | 'completed' | 'skipped'
 
 const MILESTONE_STAMP: Record<MilestoneStatus, StampLabel> = {
@@ -229,10 +224,6 @@ export function resolveQuoteStampLabel(status: string): StampLabel {
 
 export function resolveInvoiceStampLabel(status: string): StampLabel {
   return INVOICE_STAMP[status as InvoiceStatus] ?? 'ARCHIVED'
-}
-
-export function resolveEngagementStampLabel(status: string): StampLabel {
-  return ENGAGEMENT_STAMP[status as EngagementStatus] ?? 'ARCHIVED'
 }
 
 export function resolveMilestoneStampLabel(status: string): StampLabel {

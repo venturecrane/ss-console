@@ -69,11 +69,9 @@ function shortSha(sha: string): string {
       rows.length === 0 ? (
         <div class="rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] bg-white p-card">
           <p class="text-sm text-[color:var(--ss-color-text-secondary)]">
-            No sync events recorded for this customer yet. The first sync event lands when the CI
-            sync code path, the bootstrap script, or a manual portal action calls{' '}
-            <code>recordCustomerConfigSync</code> from{' '}
-            <code>src/lib/portal/customer-config.ts</code>. The substrate is in place (migration
-            0045); waiting on the sync code path itself.
+            No sync events recorded for this customer yet. A sync event lands each time the
+            customer.yaml projection (<code>scripts/project-customer-config.ts</code>, run by CI on
+            merge or by hand under Captain approval) records a new git sha for this customer.
           </p>
         </div>
       ) : (

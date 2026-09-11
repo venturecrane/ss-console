@@ -32,7 +32,7 @@ The Operator retrieves data transiently via authorized Smokeball API calls made 
 
 This is materially different from a traditional cloud storage or SaaS provider. Many standard questionnaire items (data destruction methods, storage-device disposal, customer-held encryption keys, backup of customer data) are **not applicable** to us because the data they concern never comes to rest in our systems. The correct mental model is that **the Operator is a credentialed user acting on the firm's behalf — analogous to an employee with API access — not a data repository.**
 
-What SMD _does_ store, on isolated per-customer infrastructure, is limited to: the customer's encrypted OAuth tokens, per-customer configuration, and an audit log of Operator actions. These are addressed in §4 and §8.
+What SMD _does_ store, on isolated per-customer infrastructure, is limited to: the customer's encrypted OAuth tokens, per-customer configuration, an audit log of Operator actions, and the bounded transcription cache described in §5 (text from scanned documents a firm user asked the Operator to read). These are addressed in §4, §5 and §8.
 
 ---
 
@@ -55,16 +55,18 @@ What SMD _does_ store, on isolated per-customer infrastructure, is limited to: t
   - never written to logs or shared storage,
   - never accessible to other customers or to SMD personnel in plaintext,
   - encrypted at rest (Fly.io platform volume encryption; AES-256-GCM application-layer encryption for connector tokens).
+- **Per-customer LLM credentials.** Each customer's Operator runs on its own LLM workspace key rather than a shared account-wide key, so spend limits, revocation, and cost attribution are per customer. Every component of that customer's Operator — including the path that reads scanned documents — uses that same per-customer credential; no component holds a broader one.
 - **SMD-side secrets** (e.g. the LLM API key) are held in a dedicated secrets-management system (Infisical), accessible only to named principals, and pushed to each customer Machine's secret store at provisioning time. Encryption keys are managed there and are not shared with sub-contractors.
 
 ---
 
 ## 5. Data handling and residency
 
-- **Residency.** SMD does not store Smokeball data. Transient processing occurs on Fly.io infrastructure in the United States (Ashburn, VA).
-- **LLM inference.** When — and only when — a firm user explicitly requests an AI-assisted task (drafting, summarizing, analysis), the specific content required for that task passes transiently through Anthropic's API. Pure retrieval-and-forward actions do not invoke LLM inference and transmit no data to Anthropic. No autonomous action transmits firm data to an LLM without the user's express request.
+- **Residency.** SMD does not store Smokeball data, with the single bounded exception described in the next bullet. Transient processing occurs on Fly.io infrastructure in the United States (Ashburn, VA).
+- **One bounded at-rest exception: transcribed scans.** A scanned document (a PDF with no text layer) can only be read by transcribing the image of the page. When a firm user asks the Operator to read one, the resulting text is cached on that customer's own isolated volume so the same pages are not re-processed on every later read. That cache is keyed by a hash of the file's contents, restricted to the customer's own agent process (`0700` directory, `0600` files), size-bounded, and expires after 30 days. It holds only text SMD already processed transiently at the firm's request, it never leaves that customer's volume, and it is the only Smokeball-derived content written to disk.
+- **LLM inference.** When — and only when — a firm user explicitly requests an AI-assisted task (drafting, summarizing, analysis, or reading a scanned document), the specific content required for that task passes transiently through Anthropic's API. Pure retrieval-and-forward actions do not invoke LLM inference and transmit no data to Anthropic. No autonomous action transmits firm data to an LLM without the user's express request.
 - **No onward transfer.** No Smokeball data is stored or transferred to any other region, party, or service beyond the transient flows described above.
-- **Law-enforcement requests.** Because SMD holds no Smokeball data, any law-enforcement request referencing Smokeball data is promptly referred to Smokeball as the data controller, and Smokeball is notified.
+- **Law-enforcement requests.** Because SMD is not the controller of Smokeball data, any law-enforcement request referencing Smokeball data is promptly referred to Smokeball as the data controller, and Smokeball is notified.
 
 ---
 
@@ -126,12 +128,12 @@ These controls are reviewed against a maintained threat model and are verified a
 
 SMD engages a deliberately minimal set of sub-processors. We assess each for security posture before engagement, monitor for material changes to their certifications, and re-evaluate when significant changes occur.
 
-| Sub-processor  | Role in the Smokeball integration                                                                     | Touches firm data?                                                       | Security posture                                |
-| -------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------- |
-| **Fly.io**     | Per-customer compute Machines + isolated persistent volumes (hosts the Operator and encrypted tokens) | Transiently, in-memory during task execution; tokens at rest (encrypted) | SOC 2 Type II — trust.fly.io                    |
-| **Anthropic**  | LLM inference, **only** when a user explicitly requests an AI-assisted task                           | Only the specific content the user requests to process, transiently      | SOC 2 Type II — trust.anthropic.com             |
-| **Cloudflare** | Network routing and edge for the control-plane/marketing surface                                      | No Smokeball matter data                                                 | SOC 2 / ISO 27001 attested                      |
-| **Infisical**  | Secrets management for SMD-side secrets (not customer OAuth tokens)                                   | No Smokeball data                                                        | Encrypted secrets store; named-principal access |
+| Sub-processor  | Role in the Smokeball integration                                                                     | Touches firm data?                                                                                                                           | Security posture                                |
+| -------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **Fly.io**     | Per-customer compute Machines + isolated persistent volumes (hosts the Operator and encrypted tokens) | Transiently, in-memory during task execution; tokens at rest (encrypted)                                                                     | SOC 2 Type II — trust.fly.io                    |
+| **Anthropic**  | LLM inference, **only** when a user explicitly requests an AI-assisted task                           | Only the specific content the user requests to process (including the page images of a scan the user asks the Operator to read), transiently | SOC 2 Type II — trust.anthropic.com             |
+| **Cloudflare** | Network routing and edge for the control-plane/marketing surface                                      | No Smokeball matter data                                                                                                                     | SOC 2 / ISO 27001 attested                      |
+| **Infisical**  | Secrets management for SMD-side secrets (not customer OAuth tokens)                                   | No Smokeball data                                                                                                                            | Encrypted secrets store; named-principal access |
 
 Documentation for each sub-processor's compliance program is available on request, and the SOC 2 trust centers above are directly accessible.
 
@@ -139,7 +141,7 @@ Documentation for each sub-processor's compliance program is available on reques
 
 ## 12. Summary
 
-SMD Services secures the Smokeball integration primarily through **architecture**: no storage of Smokeball data, hard per-customer isolation, backend-only credential handling with tokens isolated to a single customer's volume, a fail-closed action-authority model, and a tamper-resistant audit trail. These structural controls are reinforced by automated security gates in CI, scheduled security reviews, a maintained threat model with live verification, and a minimal, SOC 2-assessed sub-processor set.
+SMD Services secures the Smokeball integration primarily through **architecture**: no storage of Smokeball data beyond the one bounded, per-customer transcription cache described in § 5, hard per-customer isolation, backend-only credential handling with tokens isolated to a single customer's volume, a fail-closed action-authority model, and a tamper-resistant audit trail. These structural controls are reinforced by automated security gates in CI, scheduled security reviews, a maintained threat model with live verification, and a minimal, SOC 2-assessed sub-processor set.
 
 We do not yet hold formal certifications, and we say so plainly. We are glad to walk Smokeball's security team through any control in this document, provide supporting evidence, or answer follow-up questions.
 

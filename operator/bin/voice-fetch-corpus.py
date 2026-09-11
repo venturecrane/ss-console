@@ -104,7 +104,7 @@ class ResolutionError(Exception):
 # Shared with voice-ingest-corpus.py (moved to the lib 2026-08-10, #2222, so
 # the fetch and ingest gates cannot drift). Re-exported here so callers and
 # tests keep their `vfc.load_cohort_vocabulary` / `vfc.BASE_COHORTS` handles.
-from bin.lib.voice_corpus import BASE_COHORTS, load_cohort_vocabulary  # noqa: E402,F401
+from bin.lib.voice_corpus import BASE_COHORTS, load_cohort_vocabulary  # noqa: E402,F401 - after the path shim; re-exported so vfc.load_cohort_vocabulary keeps working
 
 
 # ---------------------------------------------------------------------------
@@ -139,17 +139,11 @@ def load_manifest(path: str) -> list[ManifestEntry]:
         missing = [k for k in ("matter", "file", "cohort") if not e.get(k)]
         if missing:
             raise ValueError(f"{path}: entry {i} missing {', '.join(missing)}")
-        out.append(
-            ManifestEntry(
-                matter=str(e["matter"]), file=str(e["file"]), cohort=str(e["cohort"])
-            )
-        )
+        out.append(ManifestEntry(matter=str(e["matter"]), file=str(e["file"]), cohort=str(e["cohort"])))
     return out
 
 
-def validate_cohorts(
-    entries: Iterable[ManifestEntry], vocabulary: frozenset[str]
-) -> None:
+def validate_cohorts(entries: Iterable[ManifestEntry], vocabulary: frozenset[str]) -> None:
     """Fail before any fetch if a manifest names a cohort the seat has not authored."""
     unknown = sorted({e.cohort for e in entries if e.cohort not in vocabulary})
     if unknown:
@@ -208,8 +202,7 @@ def resolve_one(
         return hits[0]
     if not hits:
         raise ResolutionError(
-            f"no {kind} matches {needle!r}. "
-            f"Available: {[_label(c, name_keys) for c in candidates][:12]}"
+            f"no {kind} matches {needle!r}. Available: {[_label(c, name_keys) for c in candidates][:12]}"
         )
     raise ResolutionError(
         f"{needle!r} matches {len(hits)} {kind}s — refusing to guess. "
@@ -237,9 +230,7 @@ def resolve_one(
 # construction: if no salutation or no closer is recognized, that end is left
 # exactly as it was rather than guessed at.
 
-_SALUTATION_RE = re.compile(
-    r"^\**\s*(dear|hi|hello|hey|good (morning|afternoon|evening))\b", re.I
-)
+_SALUTATION_RE = re.compile(r"^\**\s*(dear|hi|hello|hey|good (morning|afternoon|evening))\b", re.I)
 _CLOSER_RE = re.compile(
     r"^\**\s*(yours|sincerely|best|thanks|thank you|regards|warm(ly| regards)|"
     r"cordially|respectfully|very truly yours)\b[\s,.]*\**\s*$",
@@ -324,9 +315,7 @@ def fetch_entries(entries: list[ManifestEntry], client: Any) -> list[FetchedDoc]
             kind="matter",
         )
         matter_id = str(matter.get("id", ""))
-        files = _items(
-            client.get(f"/matters/{matter_id}/documents/files", Limit=500, Offset=0)
-        )
+        files = _items(client.get(f"/matters/{matter_id}/documents/files", Limit=500, Offset=0))
         f = resolve_one(
             files,
             entry.file,
@@ -386,9 +375,7 @@ def strip_frontmatter(raw: str) -> tuple[dict[str, str], str]:
     return fields, raw[m.end() :].strip()
 
 
-def load_markdown_dir(
-    path: str, *, cohort: str, audience_map: dict[str, str] | None = None
-) -> list[FetchedDoc]:
+def load_markdown_dir(path: str, *, cohort: str, audience_map: dict[str, str] | None = None) -> list[FetchedDoc]:
     """Emit corpus docs from a directory (or single file) of frontmatter markdown.
 
     ``audience_map`` maps a frontmatter ``audience`` value (or any prefix of
@@ -489,9 +476,7 @@ def write_provenance(docs: list[FetchedDoc], path: str, corpus_files: dict[str, 
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(
-        description="Fetch named matter documents into a voice corpus JSONL."
-    )
+    p = argparse.ArgumentParser(description="Fetch named matter documents into a voice corpus JSONL.")
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--manifest", help="YAML/JSON manifest of {matter, file, cohort}.")
     src.add_argument("--from-md", help="Directory (or file) of frontmatter markdown.")
@@ -516,9 +501,7 @@ def main(argv: list[str] | None = None) -> int:
             docs = fetch_entries(entries, build_client_from_env())
         else:
             amap = json.loads(args.audience_map) if args.audience_map else None
-            docs = load_markdown_dir(
-                args.from_md, cohort=args.cohort, audience_map=amap
-            )
+            docs = load_markdown_dir(args.from_md, cohort=args.cohort, audience_map=amap)
             validate_cohorts(
                 [ManifestEntry(matter="", file="", cohort=d.cohort) for d in docs],
                 vocabulary,

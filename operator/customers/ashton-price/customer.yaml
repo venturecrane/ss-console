@@ -84,13 +84,31 @@ fly_region: sjc # Fair Oaks (Sacramento), CA — San Jose is the nearest Fly reg
 # instruction translate.py renders when escalation_model is set.
 model: claude-sonnet-4-6
 escalation_model: claude-opus-4-8
-# CONFIRM: bump to the OVERLAY_REF carrying the smokeball authorization_code +
-# per-seat-env change before reprovision.sh (matches pilot at provision time).
-hermes_ref: v2026.7.1@7c1a029553d87c43ecff8a3821336bc95872213b
+# Promoted to the blessed v0.20 line 2026-08-20 (ss#2444 PR-2, Captain go). The
+# four SMD-own seats moved on PR-1 (#2453) and this seat, the paying client,
+# moves last and alone — the staged order the upgrade plan exists to enforce
+# (docs/runbooks/operator/hermes-v0.20-upgrade-plan.md). The prior CONFIRM note
+# here asked for an OVERLAY_REF carrying the smokeball authorization_code +
+# per-seat-env change; that condition was met long before this bump and the note
+# outlived it.
+#
+# Two properties of THIS seat that pilot could not prove, both first exercised
+# by this promotion: `msgraph-send-credential-stripped-from-agent` asserts
+# something real here for the first time (it passed vacuously on all four
+# SMD-own seats, none of which author msgraph), and the msgraph delta POLLER
+# has never run on v0.20 anywhere — pilot is inbound-by-webhook, this seat is
+# inbound-by-poll. Cursor resume is proven by delta-state.json's post-boot mtime
+# plus zero duplicate inbound rows, not by boot-smoke.
+hermes_ref: v2026.8.18@e624e9fde561e1add9388384012b295fde669ade
 
+# ss#2612 / ADR 0087: the chronology-package runner runs on this Machine beside
+# the gateway. Memory is the binding constraint (vision and billing render
+# whole documents to base64; exhibit assembly holds a provider production;
+# the 1 GB seat went health-critical under two 40 MB downloads, ss#2465), so
+# 4 GB with one job at a time; two shared vCPUs set wall clock, not cost.
 machine:
-  size: shared-cpu-1x
-  memory_mb: 1024
+  size: shared-cpu-2x
+  memory_mb: 4096
 
 # ---- HUMANS WITH PORTAL ACCESS ----
 # A&P's two principals-of-use plus the SMD operator for the pilot period.
@@ -178,6 +196,16 @@ personas:
         # (h) now covers it.
         external_send_client: draft_for_review
         external_send_vendor: draft_for_review
+        # The Operator's own internal matter, and nothing else this class can
+        # reach (mcp_smokeball_create_matter is the only COMMITMENT tool on the
+        # Smokeball surface). Captain-authorized 2026-08-21: an admin-confirmed
+        # act proposal is the only path; never autonomous. The Operator states
+        # the exact matter back to a Named Administrator, the administrator
+        # answers in their own words, and only then does the act happen. There
+        # is deliberately no exposure_ceiling entry for this class, so the
+        # runtime entitlement dial cannot raise it at all.
+        commitment: confirm
+        # Captain-authorized 2026-08-21: an admin-confirmed act proposal is the only path, never autonomous. Requires overlay >= b782926c (validator accepts confirm on commitment).
       # Letter-commitment bounds for the runtime entitlement dial (ss#2003
       # Q7). Derived from routine-grid.yaml ceiling_tier per send class
       # (auto-handle -> autonomous, prepare-and-route -> draft_for_review),
@@ -402,6 +430,12 @@ personas:
           scheduled: false
           webhook: true
         enabled: true
+        settings:
+          # Agreement §2.8 / Exhibit A row 5 (engagements PR #92): pages of
+          # documents read in the course of a single review. The overlay's
+          # read-volume gate (overlay#327) reads this LIVE and suspends the
+          # review at the crossing read. Unauthored would mean ungated.
+          review_threshold_pages: 250
       - name: meet-and-confer-drafter # drafted only; attorney decides + sends
         version: pending
         initiation:
@@ -453,6 +487,19 @@ personas:
         # a one-line settings change here when she asks.
         settings:
           treatment_gap_flag_days: 45
+          # Agreement 2.8 / Exhibit A row 11 as sent 2026-09-09 (engagements #107,
+          # #112): PAGES of medical records read to produce requested chronology
+          # PACKAGES per calendar month. The running chronology (this skill's memo)
+          # is unmetered; the allowance governs the package the runner builds
+          # (ADR 0087, amended 2026-09-09). Read by the runner's allowance
+          # pre-flight, never by the agent; the Operator surfaces and stops at
+          # the crossing, it never carries on past it on its own. A document is
+          # not a unit of work: the delivered packages ran from a one-page bill
+          # to a 700-page hospital chart, and the cost of a package tracks its
+          # pages. The earlier document key was carried for one release and
+          # removed once both seats were reprovisioned onto the page key
+          # (2026-09-09, vfy_01M23V6QKNRHN4SB1ZPRBWZ1V9).
+          chronology_package_page_allowance_per_month: 15000
       # motions
       - name: motion-calendar-tracker # keeps motion deadlines/hearings current
         version: pending
@@ -667,37 +714,53 @@ connectors:
     token_ref: 'infisical:/operator/ashton-price/practice-management/smokeball-oauth'
     webhook_url: 'https://hermes-ashton-price.fly.dev/webhooks/smokeball'
 
-  # NO Email connector is authored, deliberately (Captain, 2026-08-12).
+  # Email — the firm's own M365 Operator mailbox, via Microsoft Graph (Captain,
+  # 2026-08-18, reversing the deliberate 2026-08-12 absence now that every
+  # prerequisite that decision named is met).
   #
-  # This block used to author `adapter: agentmail` while the note directly below
-  # it said the firm runs M365 — a contradiction that made the file assert a
-  # channel this firm will never use. The authored field is what the system ACTS
-  # on, so provisioning staged an AgentMail credential onto the seat for a
-  # mailbox that does not exist: `mint-agentmail-keys.py ashton-price` exits 1,
-  # `inbox 'ashton-price@agentmail.to' does not exist`, and the account's 8
-  # inboxes contain no A&P seat (the two `ap-*-standin` boxes are rehearsal
-  # stand-ins, not this firm's mailbox).
+  # History, kept because each line was earned: this block once authored
+  # `adapter: agentmail` for a firm that runs M365 (F-002), which staged the
+  # org-wide AgentMail key onto this seat — the credential shape behind the
+  # ss#2258 incident. The Captain removed the authoring 2026-08-12 (PR #2336)
+  # rather than scope a key for a channel nobody would use, and the note here
+  # said msgraph would be authored "when Track E wires the firm's own M365
+  # Operator mailbox." That condition is now met: the firm created
+  # operator@ashtonandprice.com in its own tenant, its admin ran the two-app
+  # setup 2026-08-17/18 (letters 24/25 + the re-issue exchange), and the fence
+  # is proven live from Entra's own tokens — READ app 03c32f5c holds only
+  # Mail.ReadWrite and cannot transmit (vfy_01M0B1R1245T45E2727W1MXSNT), the
+  # SEND app 30d47c7a holds only Mail.Send (vfy_01M0B1JQMY6YP1WFZRNS6M07C9),
+  # and both are pinned to the one mailbox by Exchange ApplicationAccessPolicy:
+  # a control-mailbox read returns 403 "Blocked by tenant configured AppOnly
+  # AccessPolicy settings". The msgraph backend itself is runtime-wired and
+  # live on smd-staging (the "dropped by translate.py" note above this one
+  # described the pre-Track-E overlay and is obsolete).
   #
-  # The cost of leaving it was concrete, not cosmetic. `provision-customer.sh`
-  # stages the AgentMail keys only when this file names agentmail, and it falls
-  # back to the GLOBAL org-wide key when no per-seat key is vaulted. A&P has no
-  # per-seat key, so the seat was handed the org-wide credential — the one that
-  # can send as ANY inbox on the account, which is the exact credential shape
-  # behind the ss#2258 incident. Removing the authoring removes the credential at
-  # its source rather than scoping a key for a channel nobody will use.
+  # client_id is the READ registration, deliberately — the agent's own
+  # credential must not be able to transmit. The SEND registration's id and
+  # secret ride the broker-only MSGRAPH_SEND_* staging
+  # (provision-customer.sh msgraph-two-app-fence, which refuses a seat whose
+  # read and send apps are the same registration). Secrets are firm-custodied
+  # per ADR 0010: vaulted as MSGRAPH_CLIENT_SECRET__ASHTON_PRICE /
+  # MSGRAPH_SEND_CLIENT_SECRET__ASHTON_PRICE in /ss prod, never in this file.
+  Email:
+    adapter: msgraph
+    backend: mcp:msgraph-mail
+    enabled: true
+    msgraph_auth:
+      tenant_id: 'e4ad47eb-14d8-4131-9e13-9573a09a7d69'
+      client_id: '03c32f5c-bbbb-412c-bdf9-fc657f8c4c3a'
+      mailbox: operator@ashtonandprice.com
+      secret_ref: 'fly-secret:MSGRAPH_CLIENT_SECRET'
+    poll_seconds: 45
   #
-  # A&P's mail and calendar ride Microsoft Graph (F-002: the firm runs Outlook;
-  # Smokeball has no calendar API), and the firm is creating the Operator's own
-  # mailbox inside its own M365 tenant (letter 18, 2026-07-29 — name to follow
-  # from Christa). That backend is not yet runtime-wired (Track E), so the Email
-  # and Calendar connectors are authored at a later provision; authoring msgraph
-  # here now would be dropped by translate.py.
-  #
-  # CONSEQUENCE, stated so it is not discovered later: until Track E lands, this
-  # seat has NO inbound-mail lane. `matter-inbox-router` stays in the skill list
-  # but has no webhook source, so the PI skills described as "webhook-initiable
-  # via the matter-inbox-router spine" are person-invoked only. Nothing is lost
-  # that worked — without an inbox that lane was already inert.
+  # Still true until the firm's Calendar work is scoped: no Calendar connector.
+  # And the CONSEQUENCE note from 2026-08-12 still applies to skills: every
+  # authored skill on this seat is webhook: false, so wiring the mailbox gives
+  # the seat an inbound lane and an outbound broker path but initiates nothing
+  # by itself — mail arriving wakes no skill until a webhook_trigger and the
+  # per-skill initiation flags are deliberately re-authored (a separate Captain
+  # act, after the SMD-only shakeout).
   #
   # Documents ride the Smokeball Documents API (get_files_on_matter), not a
   # separate store.
@@ -721,7 +784,23 @@ connectors:
 # webhook_reconcile.py: an empty desired is a SKIP, never a delete), so any
 # vendor-side subscription that exists stays registered and its deliveries are
 # absorbed at the gate with nothing to fire.
-webhook_triggers: []
+# INBOUND EMAIL OPENED FOR THE SMD PHASE (Captain, 2026-08-19, Option A —
+# "receive a request from us and respond, but only to us"). Mail arriving at
+# operator@ now wakes matter-inbox-router through the VERIFIED route: the
+# delta poller re-injects each message to /webhooks/msgraph, where sender
+# identity is authenticated before any turn fires. The walls this rides
+# inside, all unchanged: replies auto-deliver ONLY to the organization roster
+# (scope.inbound_allow_from), non-roster senders get drafts-held-for-review,
+# and the taint gate still bounds every turn. Authored after the 2026-08-19
+# Lane-0 finding that with this list empty the seat could read mail but never
+# transmit a reply to anyone (tool-read mail is unverifiable by design;
+# verification lives on this route). The 2026-08-21 firm flip changed nothing
+# here — it only emptied scope.domain_blocks.
+webhook_triggers:
+  - source: msgraph
+    event_type: message.received
+    skill: matter-inbox-router
+    persona: operator
 # The flagship: a Smokeball matter change drives the internal supervision memo.
 # - source: smokeball
 #   event_type: matter.updated
@@ -753,6 +832,10 @@ scope:
     - Sent
   email_folders_blind: []
   email_keyword_blocks: []
+  # The firm is reachable (Captain, 2026-08-21). The 2026-08-18 bring-up fence
+  # (domain_blocks: '@ashtonandprice.com', SMD-only while the test batch ran)
+  # was removed the day the Captain approved the Operator's welcome to the firm;
+  # the flip is proven by that one observed send to an @ashtonandprice.com admin.
   domain_blocks: []
   # The organization roster (ADR 0055) — who the Operator may RESPOND to (not just
   # draft) when they email its inbox. The whole firm (@ashtonandprice.com) plus the
@@ -786,6 +869,69 @@ scope:
     - chris@ashtonandprice.com
     - christa@ashtonandprice.com
     - scott@smd.services
+  # TRAFFIC ROUTING ONLY (ss-console#2546). When somebody at the firm who is not
+  # an admin asks for a firm-level rule, this is who gets the email asking them
+  # to reply "apply that" or "no". It changes nothing about AUTHORITY: all three
+  # admins above may still apply a rule, and any of them can, by answering the
+  # Operator directly. Chris is deliberately absent — he is an admin who is not
+  # paged for every request, which is the reason this key is separate from the
+  # list above. Scott (SMD) is here so the path has a second answerer while the
+  # firm settles in.
+  #
+  # Every entry must also be on scope.admins (validator-enforced): routing a
+  # request to somebody who could not act on it would produce an email nobody
+  # can answer, and the broker's recipient fence would refuse the send anyway.
+  #
+  # Empty = no admin is emailed, and the Operator says so rather than claiming
+  # somebody was asked.
+  rule_requests_to:
+    - christa@ashtonandprice.com
+    - scott@smd.services
+  # Whose reply ANSWERS an operations request (ss-console#2546). A routine, a
+  # schedule, a channel, a memory setting, an autonomy level, an on/off: ADR 0085
+  # as amended places all of those with SMD rather than with the firm, so when
+  # somebody here asks for one the Operator records it, emails SMD with an
+  # `[ops XXXX]` tag, and waits. A reply from one of these addresses quoting that
+  # tag resolves that row, and the person who asked is told once — set up,
+  # declined with SMD's reason, or lapsed unanswered after seven days.
+  #
+  # WHAT THIS GRANTS, exactly: a reply quoting an `[ops XXXX]` tag from this
+  # address resolves that row. Nothing else. It is NOT inbound trust — none of
+  # these addresses is on scope.inbound_allow_from, none of them is an admin, and
+  # mail from one of them quoting no tag is as untrusted as any other mail. In
+  # particular team@smd.services stays OFF inbound_allow_from, which is pinned by
+  # a test: being able to answer a question the Operator asked is a much smaller
+  # grant than being able to instruct it.
+  #
+  # The tag is the capability, and the spoof class is identical for all three: no
+  # seat gets an SPF or DKIM verdict on inbound mail (ADR 0085 §5), so naming
+  # scott@ rather than team@ buys nothing. What bounds the risk is the effect —
+  # one templated notice to the person who asked.
+  #
+  # smdurgan@smdurgan.com is here because team@smd.services is an alias of that
+  # mailbox, and a reply sent from the bare mailbox carries the bare address.
+  #
+  # Empty = no reply resolves anything and every request lapses at seven days.
+  ops_reply_from:
+    - scott@smd.services
+    - team@smd.services
+    - smdurgan@smdurgan.com
+  # Typed outbound roster (ADR 0075). One entry on this seat, and it is an SMD
+  # address rather than a firm one: operations requests (routines, schedules,
+  # channels, memory, autonomy, on/off) are made by SMD, not by the firm's own
+  # admins, so the Operator has to be able to pass such a request on to us
+  # (ss-console#2546).
+  #
+  # WHAT THIS GRANTS, exactly: outbound CLASSIFICATION. A send to this address
+  # resolves as internal firm staff instead of falling to the outside
+  # external_send ceiling, so the request goes rather than sitting as a held
+  # draft. It grants NO inbound trust — this address is deliberately absent from
+  # scope.inbound_allow_from, so mail claiming to come from it does not untaint
+  # a turn and cannot instruct the seat.
+  outbound_roster:
+    - address: team@smd.services
+      class: firm_staff
+      note: 'SMD operations desk; outbound classification only, never inbound trust'
   # External send to non-roster recipients is drafted, never autonomous — client-
   # and tribunal-bound mail ships under a human reviewer. The draft_for_review
   # posture is authored on the persona's entitlements.exposure (ADR 0056), the
@@ -931,6 +1077,31 @@ self_initiation:
     - document-library-establishment
   document_library:
     folder_name: 'Document Library'
+    # The Operator's OWN matter (ss-console#2536). Four authored values, and
+    # every one of them is a decision the firm made here rather than one the
+    # Operator makes at runtime: the model can ask for this matter and cannot
+    # compose a different one. The broker refuses any proposal whose payload is
+    # not byte-equal to this block, and a seat that authored nothing here can
+    # propose nothing at all.
+    operator_matter:
+      number: 'OPS-OPERATOR-LIBRARY'
+      description: 'Operator Library'
+      # The firm's own company contact, Ashton and Price. The firm is its own
+      # client on this matter, which is what makes it an internal file rather
+      # than a client's case.
+      client_contact_id: '0ac0f746-bf92-462d-b4e5-d133070314fa'
+      # Personal Injury - Plaintiff, the type the firm already uses. A matter
+      # needs a type and this is the one their tenant is built around; choosing
+      # a different one is an edit to this line, never a free-text value from an
+      # email.
+      matter_type_id: '42cc724c-f046-451c-8452-4284f7a82b66_CA'
+      # The two names the read-back shows the administrator. Authored beside the
+      # identifiers, so the sentence she says yes to and the bytes the act
+      # carries come from one file; the seat resolves nothing and composes
+      # nothing. Read live 2026-08-21: the company contact's name and the type's
+      # catalog name.
+      client_contact_name: 'Ashton and Price'
+      matter_type_name: 'Personal Injury - Plaintiff'
 
 # ---- VOICE COHORTS ----
 # The audience classes this seat's voice profiles are partitioned by. An

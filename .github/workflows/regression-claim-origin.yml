@@ -4,11 +4,35 @@ on:
   issues:
     types: [opened, labeled]
 
+# LOAD-BEARING, and the reason this workflow was dead for 104 days (ss#2441).
+#
+# The repo's `default_workflow_permissions` is `read`. A called reusable workflow
+# may only be granted permissions the CALLER already holds, and the called job in
+# crane-console declares `permissions: issues: write` because its whole job is to
+# post a comment. With no `permissions:` key here, the caller started at the
+# read-only default, the called workflow's request exceeded it, and GitHub refused
+# the run before any job existed: 2,059 runs from 2026-05-07 onward, every one a
+# `startup_failure`, zero successes, zero claim-origin comments ever posted.
+#
+# It never alerted because a `startup_failure` produces no job and no check run,
+# so the CI notification sink — which recorded 6,000+ events for this repo in the
+# same window, successes included — never saw it. A dead check is silent by
+# construction; only its output being ABSENT gives it away, and nobody counts
+# absences. Hence the structural test in tests/workflow-permissions.test.ts:
+# any delegating caller without this block fails at merge, not in 104 days.
+#
+# Every other issue-writing workflow here (escape-analysis-on-close, tick-acs-on-
+# merge, unmet-ac-on-close, ...) declares the same block and works, which is the
+# positive control proving an explicit grant does override the read-only default.
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   claim-origin:
     if: |
       contains(github.event.issue.labels.*.name, 'regression') ||
       github.event.label.name == 'regression'
-    uses: venturecrane/crane-console/.github/workflows/regression-claim-origin-reusable.yml@ec197443b763c444751ce4ea50558130c9c856c2 # main
+    uses: venturecrane/crane-console/.github/workflows/regression-claim-origin-reusable.yml@8dade7d54460b08bfecb6e0ae303f11e3be9f95d # main
     secrets:
       CRANE_RELAY_KEY: ${{ secrets.CRANE_RELAY_KEY }}

@@ -5,7 +5,6 @@ import {
   ANTHROPIC_API_URL,
   ANTHROPIC_VERSION,
   QUALITY_MODEL,
-  FAST_MODEL,
   modelFor,
 } from '../src/lib/llm/models'
 
@@ -19,14 +18,11 @@ describe('llm/models: central model selection', () => {
     // This is the ONE place model IDs live. Bumping a tier (e.g. the Opus 4.8-era
     // refresh) is a one-line change here plus this assertion.
     expect(QUALITY_MODEL).toBe('claude-sonnet-4-6')
-    expect(FAST_MODEL).toBe('claude-haiku-4-5-20251001')
   })
 
   it('modelFor returns tier defaults when no env override is present', () => {
     expect(modelFor('QUALITY')).toBe(QUALITY_MODEL)
-    expect(modelFor('FAST')).toBe(FAST_MODEL)
     expect(modelFor('QUALITY', {})).toBe(QUALITY_MODEL)
-    expect(modelFor('FAST', null)).toBe(FAST_MODEL)
   })
 
   it('modelFor honors per-tier env overrides', () => {

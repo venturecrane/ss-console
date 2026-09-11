@@ -22,7 +22,8 @@
  * rot.
  */
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
@@ -88,7 +89,7 @@ const RUNTIME = (() => {
 })()
 
 /**
- * Candidates. The first five are the slugs that exist in
+ * Candidates. The first four are the slugs that exist in
  * `operator/customers/` today — a fix that rejects a live seat is worse than
  * the bug it fixes, so they lead the table. The rest are the edge cases that
  * split the four patterns apart in the #2285 audit.
@@ -97,9 +98,7 @@ const CANDIDATES: readonly string[] = [
   // live seats
   'ashton-price',
   'pilot-smokeball',
-  'pilot-law',
   'scott',
-  'smd',
   'smd-staging',
   // shape edges that MUST be accepted (2..40 chars). 39 and 40 both exceed the
   // provisioner's old 32-char ceiling — the divergence in the other direction.
@@ -133,15 +132,8 @@ const MUST_REJECT: readonly string[] = [
   'a/b',
 ]
 
-/** The five live seats, asserted separately so a regression names them. */
-const LIVE_SLUGS: readonly string[] = [
-  'ashton-price',
-  'pilot-smokeball',
-  'pilot-law',
-  'scott',
-  'smd',
-  'smd-staging',
-]
+/** The four live seats, asserted separately so a regression names them. */
+const LIVE_SLUGS: readonly string[] = ['ashton-price', 'pilot-smokeball', 'scott', 'smd-staging']
 
 /**
  * Evaluate a bash ERE the way bash evaluates it — via bash, not via a
@@ -249,5 +241,56 @@ describe('customer slug pattern: one shape, every guard (#2285)', () => {
       rejected,
       `real customer dirs rejected by the canonical pattern: ${rejected.join(', ')}`
     ).toEqual([])
+  })
+})
+
+/**
+ * Retired seats stay retired.
+ *
+ * `pilot-law` was authored 2026-06-05 for the ADR 0038 6 Clio-sandbox law wedge
+ * and never provisioned: no Fly app, no `customer_configs` row. It sat in
+ * `operator/customers/` for eleven weeks, and because seat enumeration walks
+ * AUTHORED directories rather than provisioned seats, every terminal-state
+ * reconciler run held on it with a DNS failure for a machine that never
+ * existed. Retired in full 2026-08-25 -- git, and the orphaned prod R2 object
+ * at `vaults/pilot-law/customer.yaml`.
+ *
+ * This is a guard, not a note. A seat directory is cheap to recreate and the
+ * cost of its return is a daily false hold; the R2 publisher and the
+ * terminal-state reconciler both key off directory presence, so a reappearing
+ * directory silently re-arms both. The second assertion is the one that
+ * generalises: it fails for ANY directory nobody listed, not just this slug.
+ *
+ * If pilot-law is ever genuinely stood up, update this test in the same PR that
+ * provisions it. A visible decision, not a silent one.
+ */
+describe('retired seats', () => {
+  it('pilot-law has no seat directory', () => {
+    expect(existsSync(resolve(REPO_ROOT, 'operator/customers/pilot-law'))).toBe(false)
+  })
+
+  /**
+   * `smd` -- customer-zero, the June 2026 bring-up seat -- was retired
+   * 2026-09-03 by Captain directive. Unlike pilot-law it HAD been provisioned:
+   * a started Machine billing for nothing since its last activity on 07-13,
+   * and once stopped, a daily HOLD on the audit-chain run (a stopped Machine
+   * still resolves in DNS, so it is held rather than skipped). Fly app and
+   * volume destroyed, `customer_configs` row deleted, R2 vault removed,
+   * healthchecks ping deleted, each with a negative probe on the PR. Its
+   * customer.yaml is in git history for when it is stood up again -- and when
+   * it is, this assertion is updated in the same PR, as a visible decision.
+   */
+  it('smd has no seat directory', () => {
+    expect(existsSync(resolve(REPO_ROOT, 'operator/customers/smd'))).toBe(false)
+  })
+
+  it('the live-seat list matches the directories on disk', () => {
+    const onDisk = readdirSync(resolve(REPO_ROOT, 'operator/customers'), {
+      withFileTypes: true,
+    })
+      .filter((e) => e.isDirectory() && !e.name.startsWith('_') && !e.name.startsWith('.'))
+      .map((e) => e.name)
+      .sort()
+    expect(onDisk).toEqual([...LIVE_SLUGS].sort())
   })
 })

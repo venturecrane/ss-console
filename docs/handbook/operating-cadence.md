@@ -85,6 +85,59 @@ carries the venture's accumulated judgment. Captain dismissal of a memory is a
 physical delete (the same discipline as Operator memory dismissal, see
 `/admin/playbook/knowledge-memory`).
 
+Durable memory is tiered, because the index loads into every session and cannot
+grow without bound. `MEMORY.md` is the always-on layer and carries two
+thresholds: a hard read limit of 24,985 bytes (24.4 KiB), past which the index is
+truncated, and a recommended target of 17,510 bytes (17.1 KiB) that the harness
+asks you to compact under. Headroom is measured against the target, because that
+is the number that should change a decision. Depth lives one hop away, in sub-indexes grouped
+by theme, and retired memories move to an `attic/` directory rather than being
+deleted. A memory reached only through a sub-index still loads: the tier model
+works because following the pointer is the rule (see Law 2 in
+`docs/doctrine/agent-operating-doctrine.md`).
+
+That structure has one failure mode, and it is silent. Compacting the index by
+deleting rows instead of moving them to a sub-index leaves the files on disk and
+reachable from nothing, which means they never load again and no session notices.
+On 2026-09-09 that had happened to 60 files, some of them standing Captain
+directives. `.claude/bin/memory-audit` is the detector: it walks reachability
+from `MEMORY.md` through every sub-index, and reports memories that no index
+reaches, index rows that point at nothing, and the remaining headroom against
+the target. It exits non-zero on a lost or dangling memory, so the loss is a
+state a session can see rather than something discovered weeks later, and it
+warns without failing when the index is over the target, because a soft cue that
+breaks the build gets switched off.
+
+The detector runs at every session start and, by design, says nothing when the
+store is healthy - which left it with the same hole it was built to close: a
+clean run and a hook that never fired produce identical output, namely none. So
+each hook run now stamps `.memory-audit-receipt.json` beside the store, and
+`memory-audit --wiring` answers whether the hook is firing. The receipt alone
+would be circular (a hook that stops running also stops updating its own
+receipt), so the check compares it against the session transcripts the harness
+writes whether or not any hook runs: a session that started after the last
+receipt is a session the hook did not serve. A manual run deliberately does not
+stamp - proof a human can mint by running the tool shows the tool works, not
+that the wiring fires.
+
+Reachability is only half the question. The other half is whether the always-on
+tier changes what an agent does, and `MEMORY.md` pre-registers that experiment
+itself: on or after 2026-09-23, check whether any of the traps it lists still
+fired. `.claude/bin/trap-recurrence` is the instrument, and the review is on the
+venture schedule so it surfaces in the `/sos` briefing that morning rather than
+depending on someone remembering.
+
+What it counts is the distinction the decision turns on. An ENCOUNTER is the
+trap condition appearing in tool output; a STUMBLE is an encounter where the
+documented remedy did not follow. A pull request left BEHIND by a sibling merge
+is not a failure - one an agent answered by re-running `gh pr merge` is. Stumbles
+above zero justify a delivery hook; zero with encounters above zero means the
+tier is doing its job. The counter reports its own blind spots on every run, and
+its rules were narrowed by running them over thirty-two sessions of history:
+the first draft scored a thousand false stumbles on one rule and made another
+incapable of ever passing, either of which would have handed the review a
+predetermined answer.
+
 ## Escalation triggers - mandatory stop points
 
 The cadence has hard stops. An agent does not churn on a blocker; it escalates.

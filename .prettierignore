@@ -46,3 +46,17 @@ docs/handbook/
 # permanently red. The sibling gate-coverage-snapshot.json is NOT exempt — it
 # has no short arrays, so the two formatters already agree on it.
 operator/contracts/gate-coverage-snapshot.overlay.json
+.stitch/shadow-firm/
+# Generated Settlement Closeout proving data (ss #2455). render_seed.py emits
+# both the keying sheet a person works from and the canned layout payloads the
+# offline tests run against, and operator/tests/test_closeout_seed.py asserts
+# a re-render is byte-identical to what is committed. A formatter rewriting
+# either artifact makes that determinism test permanently red, and the whole
+# point of single-sourcing them is that the sandbox and the fixtures cannot
+# disagree. Same rationale as gate-coverage-snapshot.overlay.json above: the
+# emitter owns the formatting.
+operator/fixtures/law-firm/pi/lien-ledger-tracker/seed/KEYING-SHEET.md
+operator/fixtures/law-firm/pi/lien-ledger-tracker/seed/wire/
+# The chronology runner's system prompts are package data the model reads
+# byte-for-byte; rewrapping them changes what the model sees.
+operator/runners/medchron/medchron/prompts/

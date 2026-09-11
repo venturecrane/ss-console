@@ -61,3 +61,26 @@ export function captureError(err: unknown, area: string): void {
   if (!env.SENTRY_DSN) return
   Sentry.captureException(err, { tags: { area } })
 }
+
+/**
+ * Report an operationally significant condition that is not an exception.
+ *
+ * Some things worth paging on never throw: a seat reporting that it has lost
+ * audit rows (#2498) is a successful request carrying bad news. Wrapping it in
+ * a synthetic Error to reach `captureError` would put a meaningless stack in
+ * the issue and group unrelated conditions by that stack, so it goes through
+ * `captureMessage` at warning level instead — grouped by its own text, with the
+ * numbers in `extra`.
+ *
+ * Same contract as `captureError`: no-ops when SENTRY_DSN is unset, and only
+ * meaningful inside a request wrapped by `withSentryRequestHandler`.
+ * `extra` must never carry secret material or client content.
+ */
+export function captureWarning(
+  message: string,
+  area: string,
+  extra?: Record<string, unknown>
+): void {
+  if (!env.SENTRY_DSN) return
+  Sentry.captureMessage(message, { level: 'warning', tags: { area }, extra })
+}

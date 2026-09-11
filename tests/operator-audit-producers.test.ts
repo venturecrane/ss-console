@@ -239,7 +239,7 @@ describe('audit action_type consumer-without-producer guard', () => {
 
 /**
  * Dashboard-consumed-field check: the aliveness header consumes
- * `stickyStopLevel` (one of OK/WARN/SOFT_STOP/HARD_STOP) from the Hermes
+ * `stickyStopLevel` (OK or HARD_STOP) from the Hermes
  * bridge. That vocabulary mirrors the substrate's StickyStopLevel
  * (operator/safety-substrate/sticky_stop.py). If a level is renamed on the
  * substrate side without updating the consumer, the chip silently stops
@@ -266,7 +266,14 @@ describe('dashboard sticky-stop consumer is anchored to its producer enum', () =
       .map((m) => m[1])
       .sort()
 
-    expect(producerLevels.length, 'expected StickyStopLevel to declare members').toBeGreaterThan(2)
+    // >= 2, not > 2: the ladder is OK / HARD_STOP since the 2026-09-02
+    // collapse. The old bound quietly encoded the four-state shape, so it
+    // would have failed the removal rather than checked it -- while still
+    // catching the case this guard is for, an enum that parsed to nothing.
+    expect(
+      producerLevels.length,
+      'expected StickyStopLevel to declare members'
+    ).toBeGreaterThanOrEqual(2)
     expect(
       consumerLevels,
       'aliveness.ts stickyStopLevel union must match the substrate StickyStopLevel ' +

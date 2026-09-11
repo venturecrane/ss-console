@@ -11,8 +11,6 @@ prerequisites:
 metadata:
   hermes:
     tags: [Email, Calendar, Drive, Docs, Sheets, Google, SMD]
-  smd:
-    customer: smd
 ---
 
 # Workspace

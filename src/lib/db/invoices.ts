@@ -33,21 +33,40 @@ export interface Invoice {
   updated_at: string
 }
 
-export type InvoiceType = 'deposit' | 'completion' | 'milestone' | 'assessment' | 'retainer'
+/**
+ * The invoice vocabulary. Enforced HERE and at every insert site, not by
+ * the database: migration 0110 dropped the type CHECK (the 0033 decision on
+ * users.role, applied to invoices) so a new type is a code change, not a
+ * table rebuild.
+ *
+ *   deposit / completion / milestone / assessment — consulting engagements
+ *   retainer       — the Operator's monthly subscription cycle invoice,
+ *                    mirrored from Stripe (stripe-subscription-handler.ts)
+ *   implementation — the Operator's one-time stand-up fee (ADR 0063)
+ */
+export type InvoiceType =
+  'deposit' | 'completion' | 'milestone' | 'assessment' | 'retainer' | 'implementation'
+
+/** Type-label table. The label is what a client reads as the invoice's title,
+ * so every type must carry one. */
+export const INVOICE_TYPES: { value: InvoiceType; label: string }[] = [
+  { value: 'deposit', label: 'Deposit' },
+  { value: 'completion', label: 'Completion' },
+  { value: 'milestone', label: 'Milestone' },
+  { value: 'assessment', label: 'Assessment' },
+  { value: 'retainer', label: 'Retainer' },
+  { value: 'implementation', label: 'Implementation' },
+]
+
+export function isInvoiceType(value: unknown): value is InvoiceType {
+  return typeof value === 'string' && INVOICE_TYPES.some((t) => t.value === value)
+}
+
+export function invoiceTypeLabel(type: string): string | null {
+  return INVOICE_TYPES.find((t) => t.value === type)?.label ?? null
+}
 
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'void'
-
-/**
- * @public Status-label table for admin selects, sibling of
- * ASSESSMENT_STATUSES and MILESTONE_STATUSES. Kept as one family.
- */
-export const INVOICE_STATUSES: { value: InvoiceStatus; label: string }[] = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'sent', label: 'Sent' },
-  { value: 'paid', label: 'Paid' },
-  { value: 'overdue', label: 'Overdue' },
-  { value: 'void', label: 'Void' },
-]
 
 /**
  * Valid status transitions enforced at the application layer.
@@ -73,6 +92,13 @@ export interface CreateInvoiceData {
   amount: number
   description?: string | null
   due_date?: string | null
+  /**
+   * Authored line items, written in the same call. The send-gate refuses to
+   * send an invoice with none (the portal's "What's included" would render
+   * empty), so an invoice created for immediate presentation carries its
+   * lines from birth. Amounts in cents.
+   */
+  line_items?: { description: string; amount_cents: number }[]
 }
 
 export interface UpdateInvoiceData {
@@ -227,6 +253,20 @@ export async function createInvoice(
       now
     )
     .run()
+
+  const lines = data.line_items ?? []
+  if (lines.length > 0) {
+    await db.batch(
+      lines.map((line, i) =>
+        db
+          .prepare(
+            `INSERT INTO invoice_line_items (id, invoice_id, description, amount_cents, sort_order, created_at)
+             VALUES (?, ?, ?, ?, ?, ?)`
+          )
+          .bind(crypto.randomUUID(), id, line.description, line.amount_cents, i, now)
+      )
+    )
+  }
 
   const invoice = await getInvoice(db, orgId, id)
   if (!invoice) {
@@ -446,4 +486,28 @@ export async function listLineItemsForInvoice(
     .bind(invoiceId)
     .all<InvoiceLineItem>()
   return result.results
+}
+
+// ---------------------------------------------------------------------------
+// Card processing fee (Operator Service Agreement §3.8; Captain, 2026-08-29)
+// ---------------------------------------------------------------------------
+
+/** ACH carries no fee. Card payment adds this share of the amount paid by card. */
+export const CARD_PROCESSING_FEE_RATE = 0.03
+
+/**
+ * The authored line the client reads when an invoice is payable by card.
+ * It is also how the issue route knows an invoice is a card invoice: there
+ * is no separate flag column, the fee line IS the fact, and no other path
+ * writes line items with this text.
+ */
+export const CARD_FEE_LINE_DESCRIPTION = 'Card processing fee (3%)'
+
+export function cardProcessingFeeCents(amountCents: number): number {
+  return Math.round(amountCents * CARD_PROCESSING_FEE_RATE)
+}
+
+/** True when the invoice carries the card fee line, i.e. it is to be paid by card. */
+export function invoiceIsCardPayable(lines: { description: string }[]): boolean {
+  return lines.some((l) => l.description === CARD_FEE_LINE_DESCRIPTION)
 }

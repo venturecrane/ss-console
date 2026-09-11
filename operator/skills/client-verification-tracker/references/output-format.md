@@ -3,6 +3,16 @@
 The decision determines the shape. Every verification is keyed to
 `(plaintiff, response-set, version)`.
 
+**SHAPES B AND D ARE RENDERED IN CODE (WS-RENDER).** The chase reminder
+(Shape B) and the surface-to-a-human alert (Shape D, including the ceiling
+hand-off, the config-missing note, and the hold surfaces) render
+deterministically in `pre_run` (`render.py`, whose closed situation map holds
+the authored phrases) and dispatch out of turn; their ledger writes are
+appended by the seat post-send. The model composes neither. Shape B is
+fail-closed while `settings.return_link` is unauthored: every due chase
+degrades to a throttled Shape-D surface and no `chased` event is written.
+Shapes A and C remain the turn's own work, under the templates below.
+
 ## Shape A — Prepare & route for authenticated approval
 
 ```markdown

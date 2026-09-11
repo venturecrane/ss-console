@@ -5,7 +5,7 @@
 **Skill version:** d88ea7 (first content hash)
 **Connector:** Composio MCP (Composio → GMAIL_FETCH_EMAILS)
 **Window:** `is:unread`, max_results=10
-**Captain inbox:** smdurgan@venturecrane.com (live data, not synthetic)
+**Captain inbox:** the Captain's own venturecrane.com Gmail (live data, not synthetic; address redacted from this record 2026-09-04)
 
 This is the **first real-data execution** of any SMD Operator skill against a paying-customer-shape stack: Hermes on Fly + Composio MCP + Gmail OAuth. Phase A's end-to-end Gmail round-trip is closed by this run.
 

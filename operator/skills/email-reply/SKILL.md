@@ -13,8 +13,6 @@ prerequisites:
 metadata:
   hermes:
     tags: [Email, Reply, Draft, SMD, Customer-Zero]
-  smd:
-    customer: smd
 ---
 
 # Crane Email Reply

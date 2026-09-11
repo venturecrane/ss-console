@@ -11,6 +11,10 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro'
 import AdminFlashNotice from '../../../components/admin/AdminFlashNotice.astro'
 import EntityTimelineEntry from '../../../components/admin/EntityTimelineEntry.astro'
+import ClientInvoiceRows from '../../../components/admin/ClientInvoiceRows.astro'
+import IssueInvoiceForm from '../../../components/admin/IssueInvoiceForm.astro'
+import OperatorAgreementDocs from '../../../components/admin/OperatorAgreementDocs.astro'
+import OperatorPriceForm from '../../../components/admin/OperatorPriceForm.astro'
 import { loadEntityDetailPage, formatDate } from '../../../lib/admin/entity-detail-page'
 import { listFleetRoster, personaSummary, posturePill } from '../../../lib/admin/fleet-roster'
 import {
@@ -20,9 +24,11 @@ import {
   serviceToneDotClass,
   clientStageBadge,
 } from '../../../lib/admin/client-hub'
+import { resolveClientHubNotices } from '../../../lib/admin/client-hub-notices'
 import { ENTITY_VERTICALS } from '../../../lib/db/entities'
-import { getOperatorServiceForEntity } from '../../../lib/db/services'
-import { getSubscriptionForBilling } from '../../../lib/db/subscriptions'
+import { getOperatorServiceForEntity, operatorPaymentMethod } from '../../../lib/db/services'
+import { getSubscriptionForBilling, parseCancelAt } from '../../../lib/db/subscriptions'
+import { listOperatorAgreementDocumentsForEntity } from '../../../lib/db/operator-agreements'
 import { statusBadgeClass } from '../../../lib/ui/status-badge'
 import { env } from 'cloudflare:workers'
 
@@ -46,12 +52,18 @@ const operatorService = operator
   ? await getOperatorServiceForEntity(env.DB, session.orgId, entityId)
   : null
 const operatorPrice = operatorService?.recurring_price ?? null
+const operatorPaymentRail = operatorPaymentMethod(operatorService)
 // Retainer billing state (#1679): the (entity,'operator') subscriptions row +
 // its Stripe attachment. Billing controls render only when the row exists —
 // provisioning owns access grants; billing never creates one.
 const operatorSubscription = operator
   ? await getSubscriptionForBilling(env.DB, entityId, 'operator')
   : null
+// Executed agreement documents (ss#2641): the signed paper the firm reads on
+// its own Compliance page. Instance-scoped, so this needs the roster's slug.
+const agreementDocs = operator
+  ? await listOperatorAgreementDocumentsForEntity(env.DB, session.orgId, entityId)
+  : []
 
 const rollup = computeBillingRollup(invoices)
 const serviceRows = engagements.map((eng) => engagementToServiceRow(eng, quotes))
@@ -66,6 +78,11 @@ const subtitleParts = [verticalLabel, entity.area].filter(Boolean)
 const badge = clientStageBadge(entity.stage)
 const created = Astro.url.searchParams.get('created')
 const primaryContact = contacts[0] ?? null
+
+const { success: noticeSuccess, error: noticeError } = resolveClientHubNotices(
+  Astro.url.searchParams
+)
+const hubUrl = `/admin/clients/${entityId}`
 
 const earliestStart = engagements
   .map((e) => e.start_date)
@@ -88,6 +105,8 @@ const LINK_ACT =
   maxWidth="max-w-6xl"
 >
   {created && <AdminFlashNotice message={`${entity.name} added.`} />}
+  {noticeSuccess && <AdminFlashNotice message={noticeSuccess} />}
+  {noticeError && <AdminFlashNotice kind="error" message={noticeError} />}
 
   <a
     href="/admin/clients"
@@ -187,44 +206,11 @@ const LINK_ACT =
                 {personaSummary(operator.personas)}
                 {operator.config_error && ' · config needs attention'}
               </div>
-              <div class="mt-3 flex items-baseline justify-between border-t border-[color:var(--ss-color-border-subtle)] pt-3">
-                <span class="font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]">
-                  Monthly price
-                </span>
-                <span
-                  class:list={[
-                    'font-mono text-base font-bold',
-                    operatorPrice == null && 'text-[color:var(--ss-color-text-muted)]',
-                  ]}
-                >
-                  {operatorPrice == null ? 'Not set' : `${formatMoney(operatorPrice)}/mo`}
-                </span>
-              </div>
-              <form
-                method="POST"
-                action={`/api/admin/clients/${entityId}/operator-price`}
-                class="mt-2.5 flex items-center gap-2"
-              >
-                <span class="font-mono text-sm text-[color:var(--ss-color-text-secondary)]">$</span>
-                <input
-                  type="number"
-                  name="monthly_price"
-                  min="0"
-                  step="1"
-                  value={operatorPrice ?? ''}
-                  placeholder="0"
-                  class="w-28 border border-[color:var(--ss-color-border)] px-2 py-1 font-mono text-sm"
-                />
-                <span class="font-mono text-[11px] text-[color:var(--ss-color-text-muted)]">
-                  / mo
-                </span>
-                <button
-                  type="submit"
-                  class="border border-[color:var(--ss-color-primary)] px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-primary)]"
-                >
-                  Save
-                </button>
-              </form>
+              <OperatorPriceForm
+                entityId={entityId}
+                operatorPrice={operatorPrice}
+                operatorPaymentRail={operatorPaymentRail}
+              />
               {operatorSubscription && (
                 <div class="mt-3 border-t border-[color:var(--ss-color-border-subtle)] pt-3">
                   <div class="flex items-baseline justify-between">
@@ -237,24 +223,23 @@ const LINK_ACT =
                         : 'Not attached'}
                     </span>
                   </div>
+                  {parseCancelAt(operatorSubscription.settings_json) && (
+                    <p class="mt-2 text-sm font-bold text-[color:var(--ss-color-error)]">
+                      Client cancelled from the portal. Service and billing run through{' '}
+                      {parseCancelAt(operatorSubscription.settings_json)?.slice(0, 10)}. Offboarding
+                      (Section 9.3) is a Captain act.
+                    </p>
+                  )}
                   {!operatorSubscription.stripe_subscription_id && operatorPrice != null && (
-                    <form
-                      method="POST"
-                      action={`/api/admin/clients/${entityId}/subscription-billing`}
-                      class="mt-2.5"
-                    >
-                      <input type="hidden" name="action" value="start" />
-                      <button
-                        type="submit"
-                        class="border border-[color:var(--ss-color-primary)] px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-primary)]"
-                      >
-                        Start monthly billing ({formatMoney(operatorPrice)}/mo)
-                      </button>
-                    </form>
+                    <p class="mt-2 text-sm text-[color:var(--ss-color-text-muted)]">
+                      The client starts the subscription from their portal (Billing → Start
+                      subscription) and pays the first month on Stripe. Nothing is billed or sent
+                      until they do.
+                    </p>
                   )}
                   {!operatorSubscription.stripe_subscription_id && operatorPrice == null && (
                     <p class="mt-2 text-sm text-[color:var(--ss-color-text-muted)]">
-                      Author the monthly price above to start billing.
+                      Author the monthly price above; the client cannot start without one.
                     </p>
                   )}
                   {operatorSubscription.stripe_subscription_id && (
@@ -305,6 +290,11 @@ const LINK_ACT =
                   )}
                 </div>
               )}
+              <OperatorAgreementDocs
+                entityId={entityId}
+                instanceSlug={operator.customer_slug}
+                documents={agreementDocs}
+              />
               <div class="mt-3 flex items-center justify-end border-t border-[color:var(--ss-color-border-subtle)] pt-3">
                 <a href="/admin/operator" class={LINK_ACT}>
                   Open cockpit →
@@ -390,24 +380,12 @@ const LINK_ACT =
                   </span>
                 </div>
               )}
-              {invoices.length > 0 && (
-                <div class="flex gap-3">
-                  <span class="w-20 shrink-0 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]">
-                    Invoices
-                  </span>
-                  <span class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                    {invoices.map((inv) => (
-                      <span class="inline-flex items-center gap-1.5">
-                        <span class={statusBadgeClass(inv.status)}>{inv.status}</span>
-                        {formatMoney(inv.amount)}
-                      </span>
-                    ))}
-                  </span>
-                </div>
-              )}
+              {invoices.length > 0 && <ClientInvoiceRows invoices={invoices} hubUrl={hubUrl} />}
             </div>
           )
         }
+
+        <IssueInvoiceForm entityId={entityId} hubUrl={hubUrl} />
       </section>
 
       <!-- activity -->

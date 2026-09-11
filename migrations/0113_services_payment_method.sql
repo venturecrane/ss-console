@@ -1,0 +1,22 @@
+-- 0113: the payment method the Operator retainer is collected by.
+--
+-- The retainer starts by the client's own click in the portal, on a Stripe
+-- Checkout Session that until now offered ACH Direct Debit only (Captain,
+-- 2026-09-09). On 2026-09-10 the first Operator client wrote that the firm
+-- cannot pay from its bank account and needs a card. The Operator Service
+-- Agreement §3.8 already prices that: ACH carries no fee, card carries a 3%
+-- processing fee stated before payment.
+--
+-- One Checkout Session cannot offer both rails and add the fee only when a
+-- card is chosen, so the rail is authored per client, on the commercial
+-- record next to the monthly price, by the Captain on the client hub:
+--
+--   ach  (default) — bank account at checkout, no fee. Every existing row.
+--   card           — card at checkout, plus a recurring "Card processing
+--                    fee (3%)" line on every monthly invoice.
+--
+-- NOT NULL with a default so no reader ever has to decide what an absent
+-- value means; `src/lib/db/services.ts` parses it and treats anything else
+-- as ach.
+
+ALTER TABLE services ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'ach';

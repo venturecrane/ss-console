@@ -1,0 +1,55 @@
+-- 0107: the audit ledger reports on itself (#2498, and #2500's half of it)
+--
+-- THE GAP. `fleet_status` carried `last_audit_ts` and nothing else about the
+-- ledger, so three completely different seat states arrived at the console as
+-- the same picture: routines deliberately off (ashton-price since #2332),
+-- routines awake with nothing to do, and an audit writer that has been failing
+-- silently. Every audit hook on the Machine swallows `AuditWriteError` by
+-- design -- the ledger is observability and an enforced decision is never
+-- rolled back because its row failed to persist -- so a write failure leaves a
+-- GAP, and a gap is exactly what a quiet seat also leaves. Nothing off-Machine
+-- ever learned of it. Of the nine client scenarios in the 2026-08-20
+-- audit-fitness assessment this is the one that hits first on any real seat: a
+-- broken Operator is far likelier than a malicious one.
+--
+-- Three columns, two owners, one migration -- because they are read from ONE
+-- read-only pass over the ledger in `shared/heartbeat.py` and splitting them
+-- across migrations would let the schema claim they can arrive apart.
+--
+-- 1. audit_write_failures (#2498). Cumulative count of rows the seat could not
+--    persist, from the volume-backed tally at
+--    $HERMES_HOME/.smd/audit_write_failures.tally (overlay
+--    shared/audit_failure_counter.py). MONOTONIC and NOT reset at boot, so the
+--    console alerts on a positive DELTA between beats: a reboot must not
+--    re-page, and failures that happened just before a crash must not vanish.
+--
+--    Stored with COALESCE (not the overwrite-including-NULL discipline the
+--    alert-driving *_ok fields use), and the reason is the direction of harm.
+--    NULL here means the seat cannot answer -- the audit plugin has never
+--    registered, so `.smd` does not exist. Overwriting a known count with that
+--    absence would erase the record of failures we have already seen and
+--    silently reset the delta baseline to zero. A stale count reads as "we last
+--    knew N"; an erased one reads as "healthy".
+--
+--    0 is a REAL value and the one that matters most: it says the writer is up
+--    and has lost nothing, which is the only thing that distinguishes a quiet
+--    ledger from a broken one.
+--
+-- 2. audit_head + 3. audit_rows (#2500). The `row_hash` of the newest CHAINED
+--    row and COUNT(*), for the off-Machine chain pin. Same COALESCE reasoning:
+--    a beat that omits them has nothing to say about the chain, and a pin
+--    overwritten to NULL would read as "the chain vanished". Rows written
+--    before #1686 carry NULL row_hash and are not part of the chain, so a
+--    ledger of only legacy rows reports a NULL head and a non-zero count --
+--    those two disagreeing is information, not a contradiction.
+--
+-- No fleet_alert_state CHECK rebuild here, deliberately. The write-failure
+-- signal raises a Sentry event on a non-zero delta at ingest rather than
+-- opening a fleet alert condition: the delta is computed per beat from the
+-- prior stored value, which is a moment-in-time observation rather than a
+-- standing condition an alerter would open and resolve. If it earns a standing
+-- condition later, that is the 0106-shaped table rebuild, not this.
+
+ALTER TABLE fleet_status ADD COLUMN audit_write_failures INTEGER;
+ALTER TABLE fleet_status ADD COLUMN audit_head TEXT;
+ALTER TABLE fleet_status ADD COLUMN audit_rows INTEGER;

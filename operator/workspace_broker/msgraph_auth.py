@@ -26,13 +26,26 @@ gateway today would not harden the seat; it would blind it.
 
 The way out is TWO app registrations in the tenant — a read-only one
 (``Mail.ReadWrite``, no ``Mail.Send``) whose credential the agent holds, and a
-send-capable one (``Mail.Send``) whose secret only ever reaches this file, both
-pinned to the one mailbox by an Exchange ``ApplicationAccessPolicy``. That is a
-tenant action requiring admin consent, so on a client seat it is the client's to
+send-capable one (``Mail.Send``) whose secret only ever reaches the broker store,
+both pinned to the one mailbox by an Exchange ``ApplicationAccessPolicy``. That is
+a tenant action requiring admin consent, so on a client seat it is the client's to
 grant. As of 2026-08-13 it is REQUIRED rather than hoped for: the Captain made two
 registrations a precondition of the channel, and ``provision-customer.sh`` refuses
 to stand up an msgraph seat whose ``MSGRAPH_SEND_*`` values are unstaged, equal to
 the read app's, or half-staged.
+
+THE BROKER HOLDS BOTH CREDENTIALS; THE AGENT HOLDS ONLY THE READ APP.
+
+The reply verb must verify the ORIGINAL SENDER itself (a caller that could name
+the sender could name any sender), and under the two-app fence the send app
+cannot read — its ``GET /messages/{id}`` is 403 by construction, observed live
+on the first production two-app seat (hermes-ashton-price 2026-08-19,
+overlay#280). So the broker store carries a SECOND file: the read app's
+credential, materialized from the same ``MSGRAPH_*`` env the gateway keeps.
+This grants the broker nothing novel — reading is the LOWER privilege, and the
+agent already holds this exact credential — while keeping the send secret where
+it always was. Do not "simplify" the read file away: without it no reply can
+ever transmit on a two-app seat.
 
 So the position on a seat that provisioned successfully:
 
@@ -73,9 +86,19 @@ SEND_ENV = (
     "MSGRAPH_SEND_CLIENT_SECRET",
 )
 
+#: The read app's credential — the SAME registration the gateway/agent already
+#: holds (Mail.ReadWrite, no Mail.Send). The broker needs it because the reply
+#: verb's sender-verification GET cannot run on the send app under the two-app
+#: fence (overlay#280).
+READ_ENV = (
+    "MSGRAPH_TENANT_ID",
+    "MSGRAPH_CLIENT_ID",
+    "MSGRAPH_CLIENT_SECRET",
+)
 
-def materialize_credential(credential_path: Path) -> None:
-    """Write the Graph send credential into the broker-owned store, 0600.
+
+def _materialize(env_names: tuple[str, ...], credential_path: Path, label: str) -> None:
+    """Write one Graph credential into the broker-owned store, 0600.
 
     Mirrors ``google_auth`` / ``agentmail_auth``: root calls this under the broker
     venv while it still holds the secrets in env, then chowns the file to the
@@ -83,33 +106,50 @@ def materialize_credential(credential_path: Path) -> None:
     later dropped.
 
     None of the three present ⇒ no-op. A seat with no msgraph connector never
-    stages them, and absence becomes a fail-closed refusal at send time.
+    stages them, and absence becomes a fail-closed refusal at use time.
 
     SOME but not all present ⇒ raise. A half-staged credential is a provisioning
-    mistake, and the seat must not boot believing it has a send path it does not
+    mistake, and the seat must not boot believing it has a path it does not
     have. Names only in the error; never a value.
     """
-    present = {name: (os.environ.get(name) or "").strip() for name in SEND_ENV}
+    tenant, client, secret = env_names
+    present = {name: (os.environ.get(name) or "").strip() for name in env_names}
     missing = [name for name, value in present.items() if not value]
-    if len(missing) == len(SEND_ENV):
+    if len(missing) == len(env_names):
         return
     if missing:
         raise RuntimeError(
-            "msgraph send credential is partially staged; refusing to boot a seat "
-            f"with a half-wired send path. Missing: {', '.join(sorted(missing))}"
+            f"msgraph {label} credential is partially staged; refusing to boot a seat "
+            f"with a half-wired {label} path. Missing: {', '.join(sorted(missing))}"
         )
     credential_path.write_text(
         json.dumps(
             {
-                "tenant_id": present["MSGRAPH_SEND_TENANT_ID"],
-                "client_id": present["MSGRAPH_SEND_CLIENT_ID"],
-                "client_secret": present["MSGRAPH_SEND_CLIENT_SECRET"],
+                "tenant_id": present[tenant],
+                "client_id": present[client],
+                "client_secret": present[secret],
             },
             separators=(",", ":"),
         ),
         encoding="utf-8",
     )
     credential_path.chmod(0o600)
+
+
+def materialize_credential(credential_path: Path) -> None:
+    """The send app's credential (``MSGRAPH_SEND_*``) → the broker store."""
+    _materialize(SEND_ENV, credential_path, "send")
+
+
+def materialize_read_credential(credential_path: Path) -> None:
+    """The read app's credential (``MSGRAPH_*``) → the broker store.
+
+    Written by the ROOT entrypoint only: the broker itself runs under ``env -i``
+    with an allowlist that deliberately excludes secrets, so calling this from
+    the broker process is a guaranteed no-op (all-absent → return) — kept there
+    for shape parity with the send path, nothing more. The file on disk is what
+    survives respawns."""
+    _materialize(READ_ENV, credential_path, "read")
 
 
 def load_credential(credential_path: Path) -> dict[str, str]:

@@ -64,7 +64,7 @@ describe('0010_voice_corrections is retired', () => {
       'src/lib/operator/customer-yaml/types.ts',
       'src/lib/operator/customer-yaml/sections-relationship.ts',
       'operator/contracts/customer-yaml-blocks.yaml',
-      'operator/customers/smd/customer.yaml',
+      'operator/customers/smd-staging/customer.yaml',
     ]) {
       const lines = readFileSync(new URL(relative, `file://${repoRoot}`), 'utf8').split('\n')
       lines.forEach((line, i) => {

@@ -19,7 +19,15 @@ The request MAY NOT: invent a consequence ("we'll stop work today") the firm did
 
 **Good:**
 
-> Hi <name>, a quick heads-up that the trust balance on your matter is at $400, below the $1,000 retainer level set in your engagement. To keep things moving, you can top it up by $600 here: <link>. Happy to answer any questions.
+> Hi <name>, a quick heads-up that the trust balance on your matter is at <balance>, below the <floor> retainer level set in your engagement. To keep things moving, you can top it up by <shortfall> here: <link>. Happy to answer any questions.
+
+The money is a placeholder for the same reason `<name>` and `<link>` are, and
+this one matters more: a concrete figure sitting in an example of a
+CLIENT-FACING message is the most liftable text in the skill. Every dollar
+figure in a client message must come from a read of the firm's own records, and
+the substrate refuses one it cannot trace (`specific-dollar-amount`, the second
+largest refusal class on the pilot). An example that shows a real-looking
+number teaches the model the sentence and hands it a value at the same time.
 
 **Bad — invents a consequence:**
 
@@ -29,6 +37,6 @@ The request MAY NOT: invent a consequence ("we'll stop work today") the firm did
 
 **Bad — offers to move money:**
 
-> No problem, I'll just move $600 over from the trust on your other matter to cover it.
+> No problem, I'll just move <shortfall> over from the trust on your other matter to cover it.
 
 (The skill never moves or reallocates trust funds — that is an IOLTA decision for a human, and no tool exists to do it.)

@@ -27,17 +27,6 @@ export interface Milestone {
 export type MilestoneStatus = 'pending' | 'in_progress' | 'completed' | 'skipped'
 
 /**
- * @public Status-label table for admin selects. Pinned as a contract by
- * tests/milestones.test.ts.
- */
-export const MILESTONE_STATUSES: { value: MilestoneStatus; label: string }[] = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'skipped', label: 'Skipped' },
-]
-
-/**
  * Valid status transitions enforced at the application layer.
  *
  * pending     -> in_progress | skipped
@@ -358,7 +347,7 @@ async function sendStripeInvoiceForMilestone(args: StripeInvoiceArgs): Promise<v
       milestone_id: milestone.id,
       engagement_id: engagement.id,
     },
-    payment_settings: { payment_method_types: ['ach_debit', 'card'] },
+    payment_settings: { payment_method_types: ['us_bank_account', 'card'] },
   })
   const sentResult = await sendStripeInvoice(stripeApiKey, stripeResult.id)
   await updateInvoice(db, orgId, invoice.id, {
@@ -460,33 +449,6 @@ export async function completeMilestoneWithInvoicing(
  */
 function formatAmount(amount: number): string {
   return `$\u200B${amount.toFixed(2)}`
-}
-
-/**
- * Bulk create milestones for an engagement (e.g. from a template).
- * Returns the array of created milestones.
- *
- * @public Template-seeding entry point, pinned as a contract by
- * tests/milestones.test.ts.
- */
-export async function bulkCreateMilestones(
-  db: D1Database,
-  orgId: string,
-  engagementId: string,
-  milestones: CreateMilestoneData[]
-): Promise<Milestone[]> {
-  const created: Milestone[] = []
-
-  for (let i = 0; i < milestones.length; i++) {
-    const data = milestones[i]
-    const milestone = await createMilestone(db, orgId, engagementId, {
-      ...data,
-      sort_order: data.sort_order ?? i,
-    })
-    created.push(milestone)
-  }
-
-  return created
 }
 
 /**

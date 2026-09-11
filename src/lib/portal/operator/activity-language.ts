@@ -29,8 +29,8 @@
  * Copy rules: authored template sentences describing SHIPPED system
  * behavior only; entry.skill / entry.target / entry.reason are real data
  * and may be interpolated; nothing is invented (anti-fabrication policy).
- * The admin console keeps the raw vocabulary via formatAuditAction; a
- * guard test bans that function from client surfaces.
+ * The raw SCREAMING_SNAKE vocabulary never reaches a client surface; this
+ * module is the only client-facing renderer of an audit action.
  */
 
 import type { AuditEntry } from './audit'
@@ -81,6 +81,8 @@ export const CLIENT_ACTIVITY_CATEGORIES: readonly ClientActivityCategory[] = [
     actions: [
       'SKILL_ENABLED',
       'SKILL_DISABLED',
+      'ROUTINE_ENABLED',
+      'ROUTINE_DISABLED',
       'TRUST_PROMOTED',
       'TRUST_DEMOTED',
       'ENTITLEMENT_CHANGED',
@@ -90,6 +92,22 @@ export const CLIENT_ACTIVITY_CATEGORIES: readonly ClientActivityCategory[] = [
       'OUTPUT_SPEC_AUTHORED',
       'OUTPUT_SPEC_REJECTED',
       'CORRECTION_PROPOSED',
+      'RULE_PROPOSED',
+      'RULE_REQUEST_NOTIFIED',
+      'RULE_DECLINED',
+      'RULE_LAPSED',
+      'ESTABLISHMENT_SUBMITTED',
+      'ESTABLISHMENT_RESULT',
+      'ACT_PROPOSED',
+      'ACT_COMMITTED',
+      'OPS_REQUEST_RECORDED',
+      'OPS_REQUEST_RESOLVED',
+      'OPS_REQUEST_LAPSED',
+      'MEDCHRON_JOB_SUBMITTED',
+      'MEDCHRON_JOB_RUNNING',
+      'MEDCHRON_JOB_HELD',
+      'MEDCHRON_JOB_DELIVERED',
+      'MEDCHRON_JOB_FAILED',
     ],
   },
   {
@@ -204,7 +222,7 @@ export const SUPPRESSED_ACTION_REASONS: Readonly<Record<string, string>> = {
   HONCHO_CONCLUSION_DISMISSED:
     'INTERNAL. Captain dismissed a memory-mirror conclusion in the admin console (ADR 0016). An admin action on our tooling.',
   RBAC_EVENT:
-    'INTERNAL. Access-control bookkeeping. Note: no producer writes this row yet (manifest side "deferred"), so it is structurally absent as well as suppressed.',
+    'INTERNAL. Access-control bookkeeping. Produced since ss#2429 by the overlay corrections plugin: a refusal row (subAction correction_capture_refused) when a non-admin message would have installed a standing correction. Suppressed from the client feed; the portal RBAC writer (rbac-audit.ts) remains gated on #821/#891.',
   DECOMMISSION_INITIATED: 'INTERNAL. Decommission pipeline boundary, run by us.',
   DECOMMISSION_DRAIN_COMPLETE: 'INTERNAL. Decommission pipeline boundary, run by us.',
   DECOMMISSION_STEP_BEGIN: 'INTERNAL. Per-step decommission marker for the compliance trail.',
@@ -264,6 +282,44 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   CONFIRM_SEND_DISPATCHED: () => 'Sent a confirmed message',
   CONFIRM_SEND_FAILED: () => 'A confirmed message could not be sent',
   CORRECTION_PROPOSED: () => 'Captured your correction',
+  // ADR 0085 / ss#2529. Three lines for three different things, because a
+  // client reading their feed needs to tell them apart: a rule waiting on
+  // someone, a rule that was agreed to, and the rule taking effect on the work.
+  // Deliberately no timing promise on the middle one (Pattern A): "committed"
+  // is a fact about the record, "applied" is the one that says the next
+  // document of that kind is written to it.
+  RULE_PROPOSED: () => 'Stated a rule back for confirmation',
+  // ss#2546. Three more lines, for the three things that used to happen in
+  // silence when the person who asked was not an administrator. Each is written
+  // from the reader's side: what happened to the request they made, never which
+  // verb ran. No timing promise on any of them (Pattern A).
+  RULE_REQUEST_NOTIFIED: () => 'Asked an administrator to apply a rule',
+  RULE_DECLINED: () => 'An administrator declined a rule',
+  RULE_LAPSED: () => 'A rule request lapsed unanswered',
+  ESTABLISHMENT_SUBMITTED: () => 'Committed a rule you confirmed',
+  ESTABLISHMENT_RESULT: () => 'Applied a rule to how work is written',
+  // ss#2536. Two lines for the two halves of an act, and the first one has to
+  // read as a QUESTION: nothing happened, somebody was asked. The second says
+  // the thing was done, which is a fact about the firm's own records and the
+  // sentence a client should be able to find later.
+  ACT_PROPOSED: () => 'Asked you to confirm something before doing it',
+  ACT_COMMITTED: () => 'Did what you confirmed',
+  // ss#2614 routine 11. Five lines for a chronology package's life on the
+  // seat, in the reader's words: what was asked, that it is under way, that it
+  // stopped and why, that it landed on the matter, or that it did not.
+  MEDCHRON_JOB_SUBMITTED: () => 'Started a medical chronology package for a matter',
+  MEDCHRON_JOB_RUNNING: () => 'Is building a medical chronology package',
+  MEDCHRON_JOB_HELD: () => 'Paused a medical chronology package and surfaced why',
+  MEDCHRON_JOB_DELIVERED: () => 'Filed a medical chronology package on the matter',
+  MEDCHRON_JOB_FAILED: () => 'Could not finish a medical chronology package',
+  // ss#2546 (the operations half). Three lines for a change the firm asked for
+  // and SMD makes. Written from the reader's side, and the middle one stays
+  // deliberately vague about WHICH answer: the outcome the client cares about
+  // arrives in the email they get, and a feed line that said "declined" would
+  // put a business decision on a row that carries no reason with it (Pattern A).
+  OPS_REQUEST_RECORDED: () => 'Passed a setup request to SMD',
+  OPS_REQUEST_RESOLVED: () => 'SMD answered a setup request',
+  OPS_REQUEST_LAPSED: () => 'A setup request to SMD lapsed unanswered',
   ESCALATION_FIRED: (e) => e.reason ?? 'Flagged something for your attention',
   ESCALATION_ACKNOWLEDGED: () => 'An escalation was acknowledged',
   AGENT_STOPPED: () => 'Your operator was paused',
@@ -274,6 +330,12 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
       : "A routine's autonomy level was changed",
   SKILL_ENABLED: withSkill('A skill was turned on'),
   SKILL_DISABLED: withSkill('A skill was turned off'),
+  // #2498. Distinct from the two above in the client's terms too, not just
+  // ours: a skill being on is permission, a routine being on is a schedule. A
+  // Named Administrator reading a silent week needs to see which one changed,
+  // and "no routines are scheduled" is the sentence the record could not say.
+  ROUTINE_ENABLED: withSkill('A routine was scheduled'),
+  ROUTINE_DISABLED: withSkill('A routine was unscheduled'),
   TRUST_PROMOTED: withSkill('An approval level was raised'),
   TRUST_DEMOTED: withSkill('An approval level was lowered'),
   CONNECTOR_BOUND: (e) => (e.target ? `Connected ${e.target}` : 'Connected a system'),
@@ -311,17 +373,6 @@ export function mappedActionsForCategories(categoryKeys: readonly string[]): str
   return CLIENT_ACTIVITY_CATEGORIES.filter((c) => wanted.has(c.key)).flatMap((c) => [...c.actions])
 }
 
-export interface ClientActivityLine {
-  id: string
-  at: string
-  summary: string
-  categoryKey: string
-}
-
-const ACTION_TO_CATEGORY: ReadonlyMap<string, string> = new Map(
-  CLIENT_ACTIVITY_CATEGORIES.flatMap((c) => c.actions.map((a) => [a, c.key] as const))
-)
-
 /** Client-language summary for one entry, or null when unmapped. */
 export function clientSummaryFor(entry: AuditEntry): string | null {
   const build = CLIENT_LANGUAGE[entry.action]
@@ -357,6 +408,9 @@ export function activityDisposition(action: string): ActivityDisposition {
  * being an absent-key accident. Callers may log or count it; the guard test
  * (tests/activity-language-producers.test.ts) asserts the set is empty for every
  * action type with a declared runtime producer.
+ *
+ * @public Producer guard. tests/activity-language-producers.test.ts imports it and asserts the
+ * set is empty for every declared producer. No runtime caller, by design.
  */
 export function undeclaredClientActions(entries: readonly AuditEntry[]): string[] {
   const seen = new Set<string>()
@@ -364,29 +418,4 @@ export function undeclaredClientActions(entries: readonly AuditEntry[]): string[
     if (activityDisposition(entry.action) === 'undeclared') seen.add(entry.action)
   }
   return [...seen].sort()
-}
-
-/**
- * Map raw entries to client lines.
- *
- * Suppressed AND undeclared entries both render nothing, and that is deliberate
- * for suppressed and unavoidable for undeclared: the only alternative for an
- * action with no authored sentence is to invent one, which the venture forbids
- * (CLAUDE.md, "No fabricated client-facing content"). The difference is that
- * undeclared is a defect, reachable through {@link undeclaredClientActions},
- * rather than a silent absent-key drop.
- */
-export function toClientActivity(entries: readonly AuditEntry[]): ClientActivityLine[] {
-  const lines: ClientActivityLine[] = []
-  for (const entry of entries) {
-    const build = CLIENT_LANGUAGE[entry.action]
-    if (!build) continue
-    lines.push({
-      id: entry.id,
-      at: entry.ts,
-      summary: build(entry),
-      categoryKey: ACTION_TO_CATEGORY.get(entry.action) ?? 'other',
-    })
-  }
-  return lines
 }

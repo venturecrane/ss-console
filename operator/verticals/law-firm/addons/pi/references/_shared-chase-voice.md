@@ -51,13 +51,55 @@ that is not observed; invent a consequence or a fact not in the record.
 - Recipient-appropriate: a client gets warmth; a lienholder or records vendor gets a
   professional, businesslike tone.
 
+## Salutation and signature
+
+Every chase body opens with a salutation resolved by the ladder below and closes
+with the signature block. Both halves are AUTHORED DATA ONLY: nothing here is
+ever invented (ADR 0035; the "Business Owner" compliance lesson from the SOW
+audit is the failure mode this exists to prevent).
+
+**Salutation ladder, in order, stop at the first available:**
+
+1. **Named contact.** The name on the request record the chase is about: the
+   records-request contact in Smokeball for a vendor chase, or the authored
+   roster entry for a client chase. Extractive from the firm's own system of
+   record, never composed.
+2. **Role-addressed.** "records team at <vendor name from the request record>".
+   The vendor name comes from the request record itself.
+3. **No salutation.** The body starts at the fact line.
+
+Never a guessed name. Never placeholder filler of the "Business Owner" class.
+
+**Rendered shape** (the chase templates read `{{firm_name}}` from the seat's
+`/var/lib/smd-config/customer.yaml` `customer_name`; the optional authored
+override is the persona `signature:` key, fields `firm_line` + `closing`):
+
+```
+<salutation>
+
+<body>
+
+Thank you.
+<signature.closing | omitted when unauthored>
+<signature.firm_line | customer_name>
+```
+
+The signature block carries only the closing and the firm name. Unauthored
+`signature:` degrades to `customer_name` alone, which is authored data, not
+invention. **Floor note:** no title line ("Attorneys at Law" trips the floor on
+its own vocabulary) and no floor-trigger word from the table above may enter the
+block; the firm's authored display name is used exactly as authored.
+
 ## Good / bad
 
 **Good (records chase, to a vendor):**
 
 > Hi <name>, following up on the records request for <patient> (DOR <date>). We show
 > the <provider> records still outstanding. Could you let us know the status or an
-> expected date? Happy to resend the authorization if that helps. Thanks.
+> expected date? Happy to resend the authorization if that helps.
+>
+> Thank you.
+> <firm name from customer_name>
 
 **Bad (invents a consequence / pressures):**
 

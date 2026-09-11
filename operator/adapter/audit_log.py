@@ -100,6 +100,15 @@ ACCEPTED_ACTION_TYPES = frozenset(
         # Skill activation
         "SKILL_ENABLED",
         "SKILL_DISABLED",
+        # Routine scheduling (#2498). DELIBERATELY NOT the two above.
+        # SKILL_ENABLED is a skill-catalog mutation — whether the Operator is
+        # ALLOWED to do a thing. These are whether it is SCHEDULED to. A seat
+        # can have every skill enabled and initiate nothing (ashton-price since
+        # #2332), and a ledger that conflated the two would report that seat as
+        # fully armed. Written by the overlay's audit plugin at registration
+        # from the bootstrap cron-reconcile spool, on the DELTA only.
+        "ROUTINE_ENABLED",
+        "ROUTINE_DISABLED",
         # Agent lifecycle
         "AGENT_STOPPED",
         "AGENT_RESUMED",
@@ -276,6 +285,54 @@ ACCEPTED_ACTION_TYPES = frozenset(
         # Client-correction capture appended broker-side (ss#2091,
         # operator/workspace_broker/corrections.py):
         "CORRECTION_PROPOSED",
+        # Conversational establishment, appended broker-side (ADR 0085;
+        # operator/workspace_broker/establishment.py). The two ESTABLISHMENT
+        # types have been written to client ledgers since ss#2161 and were never
+        # declared here, so the portal rendered them as nothing and the silence
+        # was indistinguishable from a deliberate suppression (ss#2316's third
+        # state). RULE_PROPOSED is the ss#2529 propose-read-back-confirm path.
+        "RULE_PROPOSED",
+        "ESTABLISHMENT_SUBMITTED",
+        "ESTABLISHMENT_RESULT",
+        # ss#2546: the loop closing round the two silences #2529 left. A rule a
+        # non-admin states is now EMAILED to the administrators the firm named
+        # for request traffic (RULE_REQUEST_NOTIFIED, written by the seat's
+        # establishment hook when that email is away); an administrator's "no"
+        # is a decision with a row (RULE_DECLINED, broker-side); and a rule
+        # nobody answered inside seven days lapses and the person who asked is
+        # told (RULE_LAPSED, broker-side, written when the note is away).
+        "RULE_REQUEST_NOTIFIED",
+        "RULE_DECLINED",
+        "RULE_LAPSED",
+        # ss#2536: the same broker-side channel carrying a TOOL CALL. Proposed
+        # when the Operator states one act back for an admin to confirm;
+        # committed after that act succeeded, naming the confirmer.
+        "ACT_PROPOSED",
+        "ACT_COMMITTED",
+        # ss#2614 routine 11: a chronology-package job's life on the seat, one
+        # row per transition, written by the broker under its own uid on the
+        # runner daemon's report (operator/workspace_broker/medchron_verbs.py).
+        # Counts, cents, ids and the delivery folder; never the envelope.
+        "MEDCHRON_JOB_SUBMITTED",
+        "MEDCHRON_JOB_RUNNING",
+        "MEDCHRON_JOB_HELD",
+        "MEDCHRON_JOB_DELIVERED",
+        "MEDCHRON_JOB_FAILED",
+        # ss#2546 (the operations half). The three beats of a change only SMD
+        # makes -- a routine, a schedule, a channel, a memory setting, an
+        # autonomy level, an on/off. Recorded when somebody at the firm asks and
+        # the request is given a tag; resolved when SMD answers done, declined,
+        # or withdrawn; lapsed when nobody answered inside seven days and the
+        # person who asked has been told so. All three are broker-side
+        # (operator/workspace_broker/establishment.py).
+        #
+        # DELIBERATELY NOT the RULE_* types above. A rule is a standard the firm
+        # may apply itself; an operations request is a change the firm cannot
+        # make, and a ledger that filed them under one name would make "who
+        # decided this" unanswerable from the rows.
+        "OPS_REQUEST_RECORDED",
+        "OPS_REQUEST_RESOLVED",
+        "OPS_REQUEST_LAPSED",
     }
 )
 
@@ -462,7 +519,7 @@ class AuditLogWriter:
 
         try:
             await self._executor.execute(_INSERT_SQL, params)
-        except Exception as e:  # noqa: BLE001 — re-raise as audit-specific
+        except Exception as e:
             log.error(
                 "audit_log INSERT failed: action_type=%s actor=%s skill=%s err=%s",
                 event.action_type,

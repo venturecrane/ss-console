@@ -14,10 +14,6 @@
         }
       }
     },
-    "pilot-law": {
-      "voice_library_nonempty": true,
-      "output_classes": {}
-    },
     "pilot-smokeball": {
       "voice_library_nonempty": true,
       "output_classes": {
@@ -32,10 +28,6 @@
       }
     },
     "scott": {
-      "voice_library_nonempty": true,
-      "output_classes": {}
-    },
-    "smd": {
       "voice_library_nonempty": true,
       "output_classes": {}
     },

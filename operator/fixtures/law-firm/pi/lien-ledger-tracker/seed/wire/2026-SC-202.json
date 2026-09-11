@@ -1,0 +1,89 @@
+[
+ {
+  "id": "seed-2026-sc-202-p0",
+  "itemId": "seed-2026-sc-202-p0",
+  "parentId": "Plaintiff",
+  "index": 0,
+  "parentIndex": 0,
+  "layoutDesign": {
+   "id": "PersonalInjurySettlementDetailsItem",
+   "rel": "Layouts"
+  },
+  "layoutDesignId": "PersonalInjurySettlementDetailsItem",
+  "values": [
+   {
+    "key": "Providers[]"
+   },
+   {
+    "key": "OtherLiensAndBalances[]"
+   },
+   {
+    "key": "InvoiceInitialTotal",
+    "value": "0.00"
+   },
+   {
+    "key": "InvoiceBalanceTotal",
+    "value": "0.00"
+   },
+   {
+    "key": "LiensAndBalancesTotalClaimSum",
+    "value": "0.00"
+   },
+   {
+    "key": "LiensAndBalancesLienAmountSum",
+    "value": "0.00"
+   },
+   {
+    "key": "LiensAndBalancesFinalAmountSum",
+    "value": "0.00"
+   },
+   {
+    "key": "OtherLiensAndBalancesSummaryTotalClaimSum",
+    "value": "0.00"
+   },
+   {
+    "key": "OtherLiensAndBalancesLienAmountSum",
+    "value": "0.00"
+   },
+   {
+    "key": "OtherLiensAndBalancesFinalAmountSum",
+    "value": "0.00"
+   },
+   {
+    "key": "SettlementAmount",
+    "value": "0.00"
+   },
+   {
+    "key": "FirmFee",
+    "value": "0.00"
+   },
+   {
+    "key": "FirmCosts",
+    "value": "0.00"
+   },
+   {
+    "key": "FirmFeePercentage",
+    "value": "33.33"
+   },
+   {
+    "key": "FirmFeeType"
+   },
+   {
+    "key": "SettlementStatement/MatterId"
+   },
+   {
+    "key": "SettlementStatement/MatterLineItems[]"
+   },
+   {
+    "key": "SettlementStatement/ProjectedSettlementAmount",
+    "value": "0.00"
+   },
+   {
+    "key": "SettlementStatement/ProjectedSettlementDate"
+   },
+   {
+    "key": "SettlementStatement/SettlementDate"
+   }
+  ]
+ }
+]

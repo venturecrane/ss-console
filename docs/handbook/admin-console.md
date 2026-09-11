@@ -99,7 +99,7 @@ The delivery surface once a quote is accepted. It shows the engagement header (s
 - **Deliverables and consultant photo** - file uploads to R2 (`engagements/[id]/deliverables`, `engagements/[id]/consultant-photo`).
 - **Time entries** - logged hours against the engagement (`/api/admin/time-entries`).
 
-Invoices are sent and voided from the invoice endpoints (`/api/admin/invoices/[id]`): `send` creates the invoice in Stripe and emails the hosted link, `void` voids it, and a mark-paid path records an offline payment. The integration mechanics (Stripe, SignWell, R2, Google) are in `/admin/playbook/integrations-tooling`.
+Invoices are sent and voided from the invoice endpoints (`/api/admin/invoices/[id]`): `send` creates the invoice in Stripe and emails the hosted link, `present` finalizes it in Stripe with no email so it is payable in the portal only, `void` voids it, and a mark-paid path records an offline payment. A `reschedule` action changes the due date of a presented or sent invoice: Stripe does not allow a due date to change once an invoice is finalized, so the action issues a replacement Stripe invoice with the same authored lines and payment method, points the row at it, then voids the original. No email goes out; the client sees the new date in the portal and on the Stripe payment page. The integration mechanics (Stripe, SignWell, R2, Google) are in `/admin/playbook/integrations-tooling`.
 
 ## Clients, Services, and Billing
 
@@ -115,7 +115,7 @@ These three surfaces watch the post-acceptance business.
 
 ### Fleet-wide pages
 
-- **Roster** (`operator/index.astro`) - the default landing, one row per operator, built for scanning a growing fleet: is anything on fire across all my operators. It composes three console-side projections only (customer identity and posture, the runtime-summary mirror, and heartbeat) and never reads a Machine's runtime D1 directly or joins two customers (ADR 0009). The heartbeat also carries the Machine's cost-breaker ladder level (ADR 0062): a SOFT_STOP escalates the seat's dot to yellow, a HARD_STOP to red with a "cost breaker hard stop" note; recovery is a Captain clear, never automatic.
+- **Roster** (`operator/index.astro`) - the default landing, one row per operator, built for scanning a growing fleet: is anything on fire across all my operators. It composes three console-side projections only (customer identity and posture, the runtime-summary mirror, and heartbeat) and never reads a Machine's runtime D1 directly or joins two customers (ADR 0009). The heartbeat also carries the Machine's cost-breaker level (ADR 0062): a HARD_STOP turns the seat's dot red with a note naming what stopped it, and recovery is a Captain clear, never automatic. Since 2026-09-02 that ladder is two states, OK and HARD_STOP; the yellow SOFT_STOP dot is kept only so a seat still running a pre-collapse overlay renders correctly until it is reprovisioned.
 - **Alerts** (`operator/alerts.astro`) - fleet alerts.
 - **Requests** (`operator/requests.astro`) - the change-request inbox: client-originated config-change requests awaiting Captain action. These are the requests raised by the client-facing console's Read-and-Request surfaces.
 - **Provision** (`operator/provision.astro`) - author and validate a `customer.yaml`, then record provisioning intent.

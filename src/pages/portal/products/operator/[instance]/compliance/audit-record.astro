@@ -9,6 +9,7 @@ import { formatAuditTimestamp } from '../../../../../../lib/portal/operator/audi
 import {
   authorizationOf,
   describeAuthorization,
+  describeObject,
   loadObjectAuditRecord,
   type ObjectAuditRecord,
 } from '../../../../../../lib/portal/operator/object-audit-record'
@@ -237,6 +238,9 @@ const PANEL_HEAD =
                   What authorized it
                 </th>
                 <th scope="col" class={HEAD_CELL}>
+                  What it touched
+                </th>
+                <th scope="col" class={HEAD_CELL}>
                   Skill
                 </th>
                 <th scope="col" class={HEAD_CELL}>
@@ -255,6 +259,9 @@ const PANEL_HEAD =
                   </td>
                   <td class="px-4 py-3 text-[color:var(--ss-color-text-primary)]">
                     {describeAuthorization(authorizationOf(row))}
+                  </td>
+                  <td class="px-4 py-3 font-mono text-xs break-all text-[color:var(--ss-color-text-secondary)]">
+                    {describeObject(row)}
                   </td>
                   <td class="px-4 py-3 font-mono text-[color:var(--ss-color-text-secondary)]">
                     {row.skillName ?? 'Not recorded'}

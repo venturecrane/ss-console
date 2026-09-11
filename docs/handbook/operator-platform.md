@@ -16,6 +16,8 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0011-multi-persona-per-customer.md
   - label: ADR 0019 - customer.yaml to profile translation
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0019-customer-yaml-to-profile-config-translation.md
+  - label: ADR 0083 - Authorship model and output classes (format amendment 2026-08-19)
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0083-authorship-model-output-classes.md
 ---
 
 ## What the Operator runs on
@@ -67,6 +69,10 @@ v1 ships at `personas[]` length 1; the validator enforces this until a v2 unlock
 The bridge between the SMD product surface and the Hermes runtime is a translation step. SMD authors a `customer.yaml` (storage and authoring covered in `/admin/playbook/knowledge-memory`), which speaks the product's vocabulary - customer, persona, connector, entitlement. Hermes speaks a different vocabulary - profile, model, MCP server, personality file. The `hermes-smd bootstrap` CLI in the overlay performs that translation at Machine startup (ADR 0019).
 
 For each persona, bootstrap creates the profile directory, writes `SOUL.md` (identity, tone, escalation rules) and `config.yaml` (model pin, memory config, MCP server bindings from `connectors{}`, the four overlay plugins enabled with their per-plugin config), and symlinks the enabled skills into the profile. The translation is deterministic (same input produces byte-identical output) and idempotent (re-running it changes nothing). A `customer-sync` sidecar polls R2 for config changes; non-structural changes (escalation contacts, entitlement edits such as persona exposure and skill initiation, scope edits) reload without a restart, while structural changes (adding a persona, swapping a connector backend) are logged for a Captain re-provision so that OAuth tokens on the volume are never disturbed (ADR 0019).
+
+## Documents come back in the firm's format, and the format lives in Word
+
+A drafting skill files work product as a real Word document through the Smokeball connector (`mcp_smokeball_render_docx_draft` with a `document_class`), and the connector renders the content into the firm's own Word template for that class when the firm's Document Library holds one (resolved deterministically from `self_initiation.document_library` in `customer.yaml`: the library matter by number, the folder by name, the file by the class's name), else onto a Times New Roman starter with the named styles defined. Letterhead, page setup, fonts, spacing, item labels, headings, caption tables, and page numbers are the renderer's; the model writes content only, including the labels' own numbers, the caption, the signature block, and the proof of service, and the renderer adds no text. Typography is not config: the firm edits a style in Word and the next draft follows, with no publish and no reboot. The establishment turn files a starter template per class for the firm to edit, or the firm drops its own letterhead into the folder under the class's file name (ADR 0083, 2026-08-19 amendment; `operator/connectors/smokeball/smokeball_connector/docx_format.py`, `library.py`).
 
 ## The system, not a feature
 

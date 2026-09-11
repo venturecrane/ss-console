@@ -60,6 +60,15 @@ const ogImageUrl = new URL('/og-image.png', 'https://smd.services')
   <body>
     <SkipToMain />
     <slot />
-    <EventsTracker />
+    {
+      /* Respects disableAnalytics for the same reason Analytics and MetaPixel do
+        above. It did not, and that was the whole defect: /book/manage/[token]
+        already passed disableAnalytics, but this tracker ignored it and posted
+        location.pathname — which on that route CONTAINS the manage token, and
+        that token IS the auth (no session required). The path landed in the
+        events table, contradicting tokens.ts, which states the raw token is
+        never written to the DB or logged. */
+    }
+    {!disableAnalytics && <EventsTracker />}
   </body>
 </html>

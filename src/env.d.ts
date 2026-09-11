@@ -184,13 +184,15 @@ declare namespace Cloudflare {
      */
     FLY_API_TOKEN?: string
     /**
-     * Shared bearer secret for the per-customer Operator Machine
-     * heartbeat path (`POST /api/internal/heartbeat`). Wave 1 uses a
-     * single shared key authenticating ANY Machine; the X-Tenant-Slug
-     * header identifies the tenant. Single-secret shape is right-sized
-     * for fleet-of-one (SMD customer-zero); per-tenant upgrade path is
-     * documented in ADR 0023 §"Cross-cutting calls" #10 (gated on
-     * customer #2 onboarding). Generated with `openssl rand -hex 32`.
+     * TRANSITIONAL shared bearer for the Machine -> control-plane paths
+     * (`POST /api/internal/heartbeat`, `/runtime-summary`, `/sentry-probe`).
+     * Since migration 0114 each seat authenticates with its own credential
+     * (`machine_credentials`, HMAC-SHA256 with a per-row salt, minted by
+     * operator/bin/lib/machine_credential.py); this secret is accepted only
+     * for a slug that has NO credential row yet, and every such use is
+     * logged as `[machine-key] shared-key fallback`. Once every shipped seat
+     * has a row, unset this secret on the Worker: that is the retirement of
+     * the Wave 1 shared key (ADR 0023 §"Cross-cutting calls" #10).
      */
     MACHINE_HEARTBEAT_KEY?: string
     /**

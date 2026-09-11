@@ -26,7 +26,6 @@ import {
   updateTimeEntry,
   deleteTimeEntry,
   recalculateActualHours,
-  listTimeEntries,
   createTimeEntry,
 } from '../../src/lib/db/time-entries'
 import { resolve } from 'path'
@@ -198,21 +197,6 @@ describe('time-entries DAL — cross-org behavior (#399)', () => {
       .bind(ENGAGEMENT_A)
       .first<{ actual_hours: number }>()
     expect(row?.actual_hours).toBe(4)
-  })
-
-  // ============================================================
-  // listTimeEntries
-  // ============================================================
-
-  it('listTimeEntries called from org A for an org B engagement returns empty', async () => {
-    const rows = await listTimeEntries(db, ORG_A, ENGAGEMENT_B)
-    expect(rows).toHaveLength(0)
-  })
-
-  it('listTimeEntries returns the entries for the owning org', async () => {
-    const rows = await listTimeEntries(db, ORG_A, ENGAGEMENT_A)
-    expect(rows).toHaveLength(1)
-    expect(rows[0].id).toBe(ENTRY_A)
   })
 
   // ============================================================

@@ -225,6 +225,23 @@ scope:
   # (nobody can establish firm-level voice/shape; per-person preferences are
   # unaffected — a person's own rostered identity governs their own layer).
   admins: []
+  # Who is EMAILED when somebody who is not an admin asks for a firm-level rule
+  # (ss-console#2546). Routing, not authority: every admin above may still apply
+  # a rule. Author a subset of `admins` when the organization does not want each
+  # of them paged for every request; author all of them, or leave it empty, when
+  # it does not care. Every entry MUST also appear on `admins` (validated).
+  # Empty = no admin is emailed, and the Operator says so rather than claiming
+  # somebody was asked.
+  rule_requests_to: []
+  # Whose reply ANSWERS an operations request (ss-console#2546) — a routine, a
+  # schedule, a channel, a memory setting, an autonomy level, an on/off, all of
+  # which ADR 0085 as amended places with SMD rather than with the firm. A reply
+  # from one of these addresses quoting the request's `[ops XXXX]` tag resolves
+  # it, and the person who asked is told once. Person addresses at an SMD domain
+  # only (validated); NOT inbound trust, and deliberately never on
+  # `inbound_allow_from`. Empty = no reply resolves anything and every request
+  # lapses unanswered at seven days.
+  ops_reply_from: []
 
 # ---- ESCALATION ----
 escalation:
@@ -238,8 +255,13 @@ escalation:
 # the platform default, never fail-open). Live-read from the volume per use.
 # safety:
 #   sticky_stop:
-#     cost_cap_daily_cents: 5000   # job-path daily ladder base ($50/day):
-#                                  # warn 80% / soft-stop 100% / hard-stop 200%
+#     cost_cap_daily_cents: 5000   # job-path daily cap base ($50/day). The seat
+#                                  # HARD-STOPS at 200% of this ($100/day), which
+#                                  # is platform semantics, not authorable. Note
+#                                  # it does NOT stop at 100%: the 80%/100% rungs
+#                                  # named states that restricted nothing and
+#                                  # were removed 2026-09-02. To brake at the cap
+#                                  # itself, halve this number.
 #     inbound_daily_cap: 200       # verified webhook wakes routed per UTC day;
 #                                  # overflow is parked (202 + audit, no wake)
 
@@ -259,6 +281,18 @@ escalation:
 #   document_library:
 #     matter_hint: '[the ops matter the library lives on — authored after the blessing]'
 #     folder_name: 'Document Library'
+#     # Format templates (#2448). The Smokeball connector's renderer resolves the
+#     # firm's per-class Word template from here at render time: matter_number
+#     # (the library matter's NUMBER, a stable human key) -> folder_name -> the
+#     # file named templates[<class>], else "Template - <Class>.docx". Classes:
+#     # discovery_set, discovery_response, demand_letter, mediation_brief, memo,
+#     # letter. Typography lives ONLY in those .docx files (the firm edits them in
+#     # Word; no config change, no reboot). Either provenance: the firm's own
+#     # template/letterhead dropped into the folder under that name, or the
+#     # starter the establishment turn files for the firm to edit.
+#     matter_number: '[the library matter number, e.g. 2026-OPS-001]'
+#     templates:
+#       letter: '[optional: the firm letterhead file name in the folder]'
 
 # ---- VOICE LIBRARY ----
 voice_library:

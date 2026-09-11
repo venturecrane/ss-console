@@ -6,16 +6,12 @@ tombstone skipping. No live Graph calls (httpx.MockTransport).
 from __future__ import annotations
 
 import httpx
-import pytest
 
 import msgraph_mail_connector.server as server_mod
 from msgraph_mail_connector.client import MsGraphClient
 
 _TOKEN = {"access_token": "t", "expires_in": 3600, "token_type": "Bearer"}
-_DELTA_BASE = (
-    "https://graph.microsoft.com/v1.0/users/operator@example.com/"
-    "mailFolders/inbox/messages/delta"
-)
+_DELTA_BASE = "https://graph.microsoft.com/v1.0/users/operator@example.com/mailFolders/inbox/messages/delta"
 
 
 def _msg(mid: str, *, with_body: bool = True) -> dict:
@@ -79,9 +75,7 @@ def test_first_call_sends_select() -> None:
         captured.append(request)
         if _is_token(request):
             return httpx.Response(200, json=_TOKEN)
-        return httpx.Response(
-            200, json={"value": [], "@odata.deltaLink": _DELTA_BASE + "?d=1"}
-        )
+        return httpx.Response(200, json={"value": [], "@odata.deltaLink": _DELTA_BASE + "?d=1"})
 
     _client(handler).poll_delta()
     delta_req = next(r for r in captured if "messages/delta" in r.url.path)

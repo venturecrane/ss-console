@@ -268,7 +268,7 @@ rows:
     start_verbatim: 'Runs on its own'
     ceiling_verbatim: 'Internal record only (never characterizes)'
     enforcement:
-      initiation: 'manual + scheduled (after records imports land)'
+      initiation: 'manual + scheduled (records-driven; package build on administrator request via the on-seat runner)'
       exposure_keys:
         internal_write: autonomous
       content_floor: false
@@ -280,6 +280,15 @@ rows:
         never characterizes: it records what is in the file, it does not compute or
         opine. The "internal record only" cap means no draft, no send, no
         characterization; internal_write is the only governing exposure.
+        Exhibit A (engagements #89) defines two forms of this record: the running
+        chronology is this skill's memo and stays unmetered; the requested
+        chronology package is built by the SMD runner on this seat and filed through
+        the connector, governed by the seat's chronology_package_page_allowance_per_month
+        setting and the runner's registered gates (ADR 0087). Since ss#2616 the skill
+        carries the request path: a Named Administrator's ask becomes a submitted
+        runner job (allowance pre-flight, dual-probe matter resolution), and the
+        runner's completion wakes the skill's deliver mode (memo pointer, review
+        task, reply to the requester through the seat's authored mail posture).
 
   # ------------------------------------------------------------------- MOTIONS
   - routine: 'Motion calendar'

@@ -12,7 +12,7 @@ Captain or a reviewer treats this file as the unit-test suite for the prompt.
 
 ```
 From: Jane Patel <jane@reachforward.co>
-To: smdurgan@venturecrane.com
+To: owner@example.com
 Date: Tue, 2026-05-13 09:14
 Subject: Quick question on the workflow doc
 
@@ -35,7 +35,7 @@ Jane
 
 ```
 From: Sarah Kim <sarah@bookingstack.io>
-To: smdurgan@venturecrane.com
+To: owner@example.com
 Date: Tue, 2026-05-13 07:42
 Subject: Solve your scheduling pain in 5 minutes
 
@@ -59,7 +59,7 @@ Sarah
 
 ```
 From: Tom Reeves <tom@reevescontracting.com>
-To: smdurgan@venturecrane.com
+To: owner@example.com
 Date: Tue, 2026-05-13 11:02
 Subject: Referral from David Chen — operations help
 
@@ -87,7 +87,7 @@ Reeves Contracting
 
 ```
 From: Marcus Lee <marcus@dgcapitaladvisors.com>
-To: smdurgan@venturecrane.com
+To: owner@example.com
 Date: Tue, 2026-05-13 14:30
 Subject: Re: Coffee next week
 
@@ -106,7 +106,7 @@ Marcus
 
 ```
 From: Lisa Han <lisa@haccm.com>
-To: smdurgan@venturecrane.com
+To: owner@example.com
 Date: Mon, 2026-05-12 16:18
 Subject: Following up on our call
 
@@ -127,7 +127,7 @@ Lisa
 
 ```
 From: Pinpoint Insights <newsletter@pinpoint.ai>
-To: smdurgan@venturecrane.com
+To: owner@example.com
 Date: Tue, 2026-05-13 06:00
 Subject: This week's AI ops digest
 
@@ -142,7 +142,7 @@ Subject: This week's AI ops digest
 
 ```
 From: Aaron Wu <aaron@wuestate.com>
-To: smdurgan@venturecrane.com
+To: owner@example.com
 Date: Mon, 2026-05-12 09:11
 Subject: Re: Re: Re: Process doc draft
 
@@ -161,7 +161,7 @@ Aaron
 
 ```
 From: Megan O'Brien <megan@obrienlegal.com>
-To: smdurgan@venturecrane.com
+To: owner@example.com
 Date: Tue, 2026-05-13 10:01
 Subject: Confirming the NDA you mentioned
 
@@ -181,7 +181,7 @@ Megan
 ## #9 — WAIT (Captain replied last)
 
 ```
-From: Scott Durgan <smdurgan@venturecrane.com>
+From: Scott Durgan <owner@example.com>
 To: David Chen <david@chencpa.com>
 Date: Fri, 2026-05-09 17:22
 Subject: Re: Bookkeeping referrals
@@ -204,7 +204,7 @@ Scott
 
 ```
 From: Brett Cassidy <brett@cassidymarketing.com>
-To: smdurgan@venturecrane.com
+To: owner@example.com
 Date: Tue, 2026-05-13 08:34
 Subject: Re: Where are we on the deliverable
 
@@ -220,11 +220,11 @@ Brett
 
 ---
 
-## #11 — FYI from venturecrane.com (internal-ish)
+## #11 — FYI from the owner's own domain (internal-ish)
 
 ```
-From: Crane System <noreply@venturecrane.com>
-To: smdurgan@venturecrane.com
+From: Crane System <noreply@example.com>
+To: owner@example.com
 Date: Tue, 2026-05-13 12:00
 Subject: Weekly venture roll-up — SS
 
@@ -242,7 +242,7 @@ Pipeline:
 
 ```
 From: Patrick Olsen <patrick@bartolozzi.partners>
-To: smdurgan@venturecrane.com
+To: owner@example.com
 Date: Tue, 2026-05-13 13:45
 Subject: Can you redline the engagement letter and send back?
 

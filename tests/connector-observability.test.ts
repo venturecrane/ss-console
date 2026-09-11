@@ -21,6 +21,7 @@ import {
   installWorkerdPolyfills,
 } from '@venturecrane/crane-test-harness'
 import path from 'node:path'
+import { readFileSync } from 'node:fs'
 import { POST } from '../src/pages/api/internal/heartbeat'
 import { runOnce, type Env as WorkerEnv } from '../workers/fleet-alerts/src/index'
 import { env as testEnv } from 'cloudflare:workers'
@@ -542,5 +543,121 @@ describe('worker runOnce — connector_token_expiring lifecycle', () => {
     expect(held.stale_holds).toEqual([
       expect.objectContaining({ condition: 'connector_token_expiring:smokeball' }),
     ])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 4b. The vendor lifetime cutover (2026-09-02 incident).
+//
+// Smokeball raised refresh-token validity 30d -> 180d effective 2026-08-24,
+// keyed to the token's ISSUE date. Both regimes were live at once: ashton-price
+// held a pre-cutover token while pilot-smokeball was about to receive a
+// post-cutover one, so a single global lifetime constant is wrong for one of
+// them whichever value it takes.
+//
+// These two tests are the falsifiers the original design never had. Each fails
+// loudly if effectiveLifetimeDays() is removed and the configured 180 is applied
+// flat, and they fail in OPPOSITE directions — which is the point, because the
+// one-constant bug is silent in both.
+// ---------------------------------------------------------------------------
+
+describe('worker runOnce — Smokeball 2026-08-24 lifetime cutover', () => {
+  const NOW = Date.parse('2026-09-02T15:00:00.000Z')
+  const FRESH = '2026-09-02T14:59:30.000Z'
+
+  let db: D1Database
+
+  beforeEach(async () => {
+    db = createTestD1()
+    await runMigrations(db, { files: allMigrations() })
+    await seedOrgEntityConfig(db, 'seat')
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation(() =>
+          Promise.resolve(new Response(JSON.stringify({ id: 'rk-1' }), { status: 200 }))
+        )
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  // The live config after the cutover: 180 is the CURRENT vendor lifetime.
+  function workerEnv(): WorkerEnv {
+    return {
+      DB: db,
+      RESEND_API_KEY: 'rk_test',
+      SMOKEBALL_REFRESH_TOKEN_LIFETIME_DAYS: '180',
+      TOKEN_EXPIRY_WARN_DAYS: '5',
+    }
+  }
+
+  async function setTokenAge(ageSeconds: number): Promise<void> {
+    await db
+      .prepare(
+        `INSERT INTO fleet_status (entity_id, customer_slug, last_heartbeat_ts, heartbeat_status, connector_token_age_json)
+         VALUES (?, 'seat', ?, 'green', ?)
+         ON CONFLICT(customer_slug) DO UPDATE SET connector_token_age_json = excluded.connector_token_age_json`
+      )
+      .bind(ENTITY_A, FRESH, JSON.stringify({ smokeball: ageSeconds }))
+      .run()
+  }
+
+  // Only this condition is under test; a far-future `now` also ages the
+  // heartbeat, and those transitions are not what these cases assert about.
+  function tokenTransitions(result: { transitions: Array<{ condition: string }> }) {
+    return result.transitions.filter(
+      (t) => t.condition === 'connector_token_expiring:smokeball'
+    ) as Array<{ condition: string; kind?: string; detail?: string }>
+  }
+
+  it('a PRE-cutover token still warns at its real 30d horizon (the ashton-price case)', async () => {
+    // Issued 2026-08-07, i.e. before the 08-24 cutover, so it genuinely dies at
+    // 30 days. At 26 days old it is inside the 25-day warn horizon and MUST
+    // page. Judged flat against 180 it would stay silent all the way to death.
+    await setTokenAge(26 * 86400)
+    const opened = tokenTransitions(await runOnce(workerEnv(), NOW))
+    expect(opened).toHaveLength(1)
+    expect(opened[0]?.kind).toBe('opened')
+    expect(opened[0]?.detail).toContain('recorded lifetime 30d')
+    expect(opened[0]?.detail).toContain('pre-cutover token')
+  })
+
+  it('a POST-cutover token stays quiet at 26d instead of latching open for ~155d', async () => {
+    // Same age, but `now` is far enough past the cutover that issued_at lands
+    // after 2026-08-24, so it lives 180 days and 26 days is nowhere near its
+    // horizon. Judged flat against 30 it would open here, page once, then sit
+    // open and SILENT through the real expiry — the edge-triggered failure that
+    // made the 2026-08-27 warning useless.
+    await setTokenAge(26 * 86400)
+    const quiet = tokenTransitions(await runOnce(workerEnv(), Date.parse('2026-10-01T15:00:00Z')))
+    expect(quiet).toEqual([])
+  })
+
+  it('a post-cutover token DOES warn once it reaches the 175d horizon', async () => {
+    await setTokenAge(176 * 86400)
+    const opened = tokenTransitions(await runOnce(workerEnv(), Date.parse('2027-03-01T15:00:00Z')))
+    expect(opened).toHaveLength(1)
+    expect(opened[0]?.kind).toBe('opened')
+    expect(opened[0]?.detail).toContain('recorded lifetime 180d')
+    expect(opened[0]?.detail).not.toContain('pre-cutover token')
+  })
+
+  // The cases above supply their own env, so none of them can see the DEPLOYED
+  // constant drift. That is not hypothetical: the deployed value said 30 for
+  // three weeks while the vendor's current lifetime was 180, and no test failed.
+  it('wrangler.toml declares the CURRENT vendor lifetime, not the pre-cutover one', () => {
+    const source = readFileSync(
+      path.resolve(process.cwd(), 'workers/fleet-alerts/wrangler.toml'),
+      'utf-8'
+    )
+    expect(source).toMatch(/^SMOKEBALL_REFRESH_TOKEN_LIFETIME_DAYS = "180"$/m)
+    // A bare 30 here would silence the pre-expiry warning for every
+    // post-cutover token until ~5 days before death, and latch it open and
+    // silent for months. src/token-expiry.ts owns the pre-cutover case.
+    expect(source).not.toMatch(/^SMOKEBALL_REFRESH_TOKEN_LIFETIME_DAYS = "30"$/m)
   })
 })

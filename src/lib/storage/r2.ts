@@ -65,6 +65,40 @@ export async function getEngagementDocumentKey(
 }
 
 /**
+ * Structured key for an Operator instance's executed agreement document
+ * (ss#2641). Instance-scoped because the portal's Compliance surface is
+ * instance-addressed and an entity may hold several operator instances.
+ *
+ * Keyed by the D1 ROW, not by the filename (A3, claims-2026-09-04). The
+ * `uploadKeyLeaf` name-hash convention makes "the same name replaces", which
+ * is right for a deliverable and wrong for executed paper: an amendment
+ * uploaded under the same filename as the agreement it amends silently
+ * overwrote the original's bytes and, through the UNIQUE storage_key, its
+ * row. Every executed document is its own row, so the row id is the segment
+ * that keeps two documents apart — the same shape as SOW revision keys
+ * ({@link getSowRevisionSignedKey}).
+ *
+ * The `{orgId}/` prefix is load-bearing: the portal download endpoint's
+ * traversal check accepts exactly two conventions, and this joins the first.
+ * The filename stays the LAST segment (readers show `key.split('/').pop()`).
+ * Authorization itself is by D1 row, not by this prefix — see
+ * src/lib/portal/agreement-documents.ts.
+ *
+ * @param orgId - Organization ID for tenant scoping
+ * @param instanceSlug - The operator instance's customer_slug
+ * @param documentId - The `operator_agreement_documents.id` the object backs
+ * @param originalName - The uploaded file's name, unsanitized
+ */
+export function getOperatorAgreementKey(
+  orgId: string,
+  instanceSlug: string,
+  documentId: string,
+  originalName: string
+): string {
+  return `${orgId}/operator/${instanceSlug}/agreements/${documentId}/${sanitizeFileName(originalName)}`
+}
+
+/**
  * Upload a transcript file to R2.
  *
  * @param r2 - The R2 bucket binding (STORAGE)
@@ -93,21 +127,6 @@ export async function uploadTranscript(
     },
   })
 
-  return key
-}
-
-/**
- * Get a transcript URL or key for download.
- *
- * In Phase 1, this returns the R2 key directly. The admin can
- * use an API route to stream the file content.
- *
- * @param key - The R2 key of the stored transcript
- * @returns The key (or presigned URL in future phases)
- * @public Part of the transcript-storage surface, pinned as a contract by
- * tests/assessments.test.ts.
- */
-export function getTranscriptUrl(key: string): string {
   return key
 }
 

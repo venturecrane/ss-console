@@ -67,10 +67,6 @@ describe('signwell: API client', () => {
     expect(source()).toContain('export async function createSignatureRequest')
   })
 
-  it('exports getDocument function', () => {
-    expect(source()).toContain('export async function getDocument')
-  })
-
   it('exports getSignedPdf function', () => {
     expect(source()).toContain('export async function getSignedPdf')
   })
@@ -83,12 +79,6 @@ describe('signwell: API client', () => {
     const code = source()
     expect(code).toContain('/documents')
     expect(code).toContain("method: 'POST'")
-  })
-
-  it('getDocument calls GET /documents/:id', () => {
-    const code = source()
-    expect(code).toContain('`${SIGNWELL_API_BASE}/documents/${docId}`')
-    expect(code).toContain("method: 'GET'")
   })
 
   it('getSignedPdf calls GET /documents/:id/completed_pdf', () => {

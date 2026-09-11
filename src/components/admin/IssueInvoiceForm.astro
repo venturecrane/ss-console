@@ -1,0 +1,115 @@
+---
+/**
+ * "Issue an invoice" on the client hub (extracted from clients/[id].astro).
+ * Creates a DRAFT with its authored line item via POST /api/admin/invoices;
+ * present/send happen from the invoice rows.
+ */
+import { INVOICE_TYPES } from '../../lib/db/invoices'
+
+interface Props {
+  entityId: string
+  hubUrl: string
+}
+
+const { entityId, hubUrl } = Astro.props
+---
+
+<details class="mt-4 border border-[color:var(--ss-color-border)]">
+  <summary
+    class="cursor-pointer px-4 py-2.5 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]"
+  >
+    Issue an invoice
+  </summary>
+  <form method="POST" action="/api/admin/invoices" class="grid gap-3 px-4 pb-4 pt-2">
+    <input type="hidden" name="client_id" value={entityId} />
+    <input type="hidden" name="redirect_url" value={hubUrl} />
+    <div class="grid gap-3 sm:grid-cols-3">
+      <label class="grid gap-1">
+        <span
+          class="font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]"
+        >
+          Type
+        </span>
+        <select
+          name="type"
+          required
+          class="border border-[color:var(--ss-color-border)] px-2 py-1 font-mono text-sm"
+        >
+          {INVOICE_TYPES.map((t) => <option value={t.value}>{t.label}</option>)}
+        </select>
+      </label>
+      <label class="grid gap-1">
+        <span
+          class="font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]"
+        >
+          Amount (USD)
+        </span>
+        <input
+          type="number"
+          name="amount"
+          min="1"
+          step="0.01"
+          required
+          class="border border-[color:var(--ss-color-border)] px-2 py-1 font-mono text-sm"
+        />
+      </label>
+      <label class="grid gap-1">
+        <span
+          class="font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]"
+        >
+          Due date
+        </span>
+        <input
+          type="date"
+          name="due_date"
+          class="border border-[color:var(--ss-color-border)] px-2 py-1 font-mono text-sm"
+        />
+      </label>
+    </div>
+    <label class="grid gap-1">
+      <span
+        class="font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]"
+      >
+        Line item (what the client reads under "What's included")
+      </span>
+      <input
+        type="text"
+        name="line_item"
+        required
+        maxlength="200"
+        class="border border-[color:var(--ss-color-border)] px-2 py-1 text-sm"
+      />
+    </label>
+    <label class="grid gap-1">
+      <span
+        class="font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]"
+      >
+        Description (optional, shown as the invoice subtitle)
+      </span>
+      <input
+        type="text"
+        name="description"
+        maxlength="200"
+        class="border border-[color:var(--ss-color-border)] px-2 py-1 text-sm"
+      />
+    </label>
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" name="card_payment" />
+      <span>
+        Client will pay by card: adds the 3% processing fee line and offers card instead of ACH
+      </span>
+    </label>
+    <p class="text-xs text-[color:var(--ss-color-text-muted)]">
+      Creates a draft, payable by ACH with no fee unless card is chosen above. Present it (portal
+      only, no email) or send it (portal + email) from the list above.
+    </p>
+    <div>
+      <button
+        type="submit"
+        class="border border-[color:var(--ss-color-primary)] px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-primary)]"
+      >
+        Create draft
+      </button>
+    </div>
+  </form>
+</details>

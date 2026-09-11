@@ -25,7 +25,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Compare upstream latest vs blessed fleet pin
         env:
@@ -39,8 +39,51 @@ jobs:
           [ -n "$BLESSED_TAG" ] || { echo "could not read blessed HERMES_UPSTREAM_TAG from Dockerfile" >&2; exit 1; }
 
           # Latest non-prerelease upstream release tag.
-          LATEST_TAG="$(gh api repos/NousResearch/hermes-agent/releases --jq '[.[] | select(.prerelease==false)][0].tag_name')"
-          [ -n "$LATEST_TAG" ] || { echo "could not read latest upstream release tag" >&2; exit 1; }
+          #
+          # Read it with retries, then from a SECOND endpoint, before giving up.
+          # Run #6 (2026-08-17) died on one bad second: a single `gh api` call came
+          # back empty, the job exited 1, and a weekly signal became a critical
+          # alert for a GitHub hiccup. The identical call returns v2026.8.18 today.
+          #
+          # This still fails loudly when upstream is genuinely unreadable — a
+          # renamed repo, a revoked token, a changed response shape — because that
+          # is the failure the watcher exists to catch: a watcher that quietly
+          # exits 0 on an unreadable upstream lets the pin rot invisibly, which is
+          # the exact drift ADR 0024 wrote this job to prevent (and the shape of
+          # ss#2441, a check that never ran and never said so). What changes is
+          # that a transient blip no longer counts as unreadable, and that a real
+          # failure now names WHICH read failed and what it returned.
+          read_latest_tag() {
+            local endpoint="$1" filter="$2" attempt out
+            for attempt in 1 2 3; do
+              # `|| true`: a non-zero gh must fall through to the retry, not abort
+              # the step under `set -e` from inside a command substitution.
+              out="$(gh api "$endpoint" --jq "$filter" 2>&1 || true)"
+              case "$out" in
+                v[0-9]*) printf '%s\n' "$out"; return 0 ;;
+              esac
+              echo "attempt $attempt on $endpoint returned: ${out:-<empty>}" >&2
+              [ "$attempt" -lt 3 ] && sleep $((attempt * 5))
+            done
+            return 1
+          }
+
+          LATEST_TAG="$(read_latest_tag \
+            'repos/NousResearch/hermes-agent/releases' \
+            '[.[] | select(.prerelease==false)][0].tag_name' || true)"
+
+          if [ -z "$LATEST_TAG" ]; then
+            # Different endpoint, same signal. Releases and tags fail independently.
+            echo "releases endpoint unreadable after 3 attempts; falling back to tags" >&2
+            LATEST_TAG="$(read_latest_tag \
+              'repos/NousResearch/hermes-agent/tags' \
+              '.[0].name' || true)"
+          fi
+
+          [ -n "$LATEST_TAG" ] || {
+            echo "could not read latest upstream release tag from releases OR tags after 3 attempts each — see the per-attempt output above" >&2
+            exit 1
+          }
 
           echo "blessed=$BLESSED_TAG latest=$LATEST_TAG"
 

@@ -342,7 +342,12 @@ anything to anyone.
    assertion.
 4. **No inert rule.** `single_closing_line` never travels without a closing prefix.
 5. **No leak, no invented number.** Verbatim only from `approved_strings`; every figure a
-   `{{profile.*}}` token.
+   `{{profile.*}}` token. **Write the prose half as bullets, never as a numbered list.** The
+   digit invariant counts an ordered-list marker as a digit, so `1.` and `2.` on their own
+   lines refuse the whole specification (`REFUSED: 5 digit(s) in spec.md outside a profile
+token`, pilot-smokeball 2026-08-02). Spell out any quantity that is not a `{{profile.*}}`
+   token: "three sentences", not "3". This governs how you WRITE the specification; it says
+   nothing about `forbid_bullets`, which is a rule the firm's own output may carry.
 6. **Legible reply.** Every derived rule stated as a sentence the admin can check, every
    demotion with its documents, every rejection with its gate. Installed claimed only on
    `installed`.

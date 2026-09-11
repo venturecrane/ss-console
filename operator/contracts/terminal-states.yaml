@@ -1,0 +1,277 @@
+# ============================================================================
+# Terminal-state contract (ss#2388, hardening track 4).
+#
+# THE INVARIANT. Every triggered routine run ends in exactly ONE observable
+# terminal state: delivered-and-observed, refused-with-the-reason-delivered, or
+# escalated. Nothing else counts as an ending. A run that stops without one of
+# those is SILENCE, and silence is the one outcome a client cannot tell apart
+# from success.
+#
+# WHY THIS FILE EXISTS. Two incidents, one shape.
+#
+#   ss#2367 (2026-08-13). A firm admin asked the pilot seat for a demand letter.
+#   The Operator read fifteen documents, filed a correct .docx through the
+#   checked seam, drafted a reply naming it, and then the reply was HELD by the
+#   fabrication gate. The ledger, verbatim:
+#       21:21:53.918  TOOL_CALL_COMPLETED  mcp_agentmail_create_draft  internal_write  ok
+#       21:21:53.988  REPLY_HELD           fabrication:tier1_marker
+#       21:22:16.691  LLM_TURN_COMPLETED
+#   Nothing after. No redraft, no minimal factual note, no escalation. From the
+#   firm's side: asked for a letter, got silence. A correct deliverable nobody
+#   is told about is indistinguishable from no deliverable.
+#
+#   ss#2136 (2026-08-01). `hermes cron run <id>` printed "Ran now: succeeded."
+#   for two jobs. Audit rows after the trigger: ZERO. The escalation ledger's
+#   mtime predated the deploy. The audit write path was healthy that hour (the
+#   boot self-check wrote rows at 21:02, 21:32 and 21:40Z), so this was not a
+#   broken emitter: it was a trigger that reported success and executed nothing
+#   observable.
+#
+# WHAT THE TWO HAVE IN COMMON. In both, every individual row was honest. What
+# was missing was the row that was never written, and nothing in the system
+# reads absence. This file is the declaration of which absences are findings,
+# so that `operator/bin/reconcile-outcomes.py` can read it rather than carry
+# the judgment in code where it drifts unreviewed.
+#
+# THIS FILE IS CONSUMED, NOT DECORATIVE. The reconciler loads these vocabularies
+# at run time; the tests in operator/bin/tests/test_reconcile_outcomes.py drive
+# the reconciler against CAPTURED ledger rows from both incidents above. Editing
+# a list here changes what the control finds. That is the point: a contract that
+# no instrument reads is prose, and prose has never caught anything.
+#
+# WHAT IT DOES NOT DO. It does not decide whether an output was GOOD. Voice,
+# format, and content gates own that. This asks one question only, and asks it
+# of every run: did anybody outside the machine learn what happened?
+# ============================================================================
+
+schema_version: 1
+
+# ---------------------------------------------------------------------------
+# TRIGGERS: the events that OPEN an obligation.
+#
+# An obligation is opened by something arriving (a person wrote in, a webhook
+# routed), by a schedule firing (the gate decided to wake), or by a REFUSAL
+# (the work was stopped mid-flight and somebody is now owed a reason). The
+# third kind is the ss#2367 case and the reason `holds` is a trigger list here
+# rather than a footnote: a hold is not an ending, it is the START of an
+# obligation to say so.
+# ---------------------------------------------------------------------------
+triggers:
+  inbound:
+    events: [INBOUND_RECEIVED, WEBHOOK_ROUTED]
+    routine_class: reply_to_person
+    note: >-
+      A human or an upstream system put something in front of the seat. Somebody
+      is waiting, and they know they are waiting.
+  scheduled:
+    events: [EMITTED_WAKE]
+    routine_class: from_skill_binding
+    note: >-
+      The cron gate decided to wake and act. Its sibling SUPPRESSED_WAKE is NOT
+      a trigger: it is a recorded decision not to act, which is already a
+      terminal state (see `gate_suppressed` below).
+  hold:
+    events:
+      - REPLY_HELD
+      - REPLY_FAILED
+      - CONFIRM_SEND_FAILED
+      - VOICE_GATE_FAILED
+      - SPEC_GATE_TRIGGERED
+      - FABRICATION_FILTER_TRIGGERED
+    routine_class: reply_to_person
+    note: >-
+      The output was stopped. The authored recovery (for example
+      operator/skills/demand-letter-drafter/SKILL.md:502-505 - redraft once,
+      strip only the flagged class, and if refused twice deliver the minimal
+      factual note) has to end somewhere a person can see. Until it does, the
+      obligation is open.
+      REPLY_FAILED and CONFIRM_SEND_FAILED are here for the same reason a hold
+      is: an attempt that errored delivered nothing, so the obligation survives
+      it.
+
+# ---------------------------------------------------------------------------
+# TERMINAL STATES: the events that CLOSE an obligation.
+#
+# `tool_call` matchers are TOOL_CALL_COMPLETED rows, matched on the metadata the
+# overlay's hermes-smd-audit plugin records (action_class + outcome). They exist
+# because roughly two thirds of the pilot ledger is TOOL_CALL_COMPLETED, and a
+# send that went out through the tool path records no reply event at all.
+# ---------------------------------------------------------------------------
+terminal_states:
+  delivered:
+    summary: Something reached a person outside the machine, and the ledger says so.
+    events: [REPLY_SENT, CONFIRM_SEND_DISPATCHED]
+    tool_call:
+      action_class:
+        - external_send
+        - external_send_internal
+        - external_send_client
+        - external_send_vendor
+      outcome: [ok]
+
+  escalated:
+    summary: The seat handed the problem to a person by the escalation path.
+    events: [ESCALATION_FIRED]
+
+  gate_suppressed:
+    summary: >-
+      The cron gate decided not to act and RECORDED the decision with its basis.
+      A deliberate, reasoned no-op is an observable ending, which is exactly what
+      SUPPRESSED_WAKE was built to make visible (ADR 0021 Stream B). This is the
+      one terminal state where nobody is told anything, and it is terminal only
+      because the decision itself is on the record with `decision_basis`.
+    events: [SUPPRESSED_WAKE]
+
+  internal_artifact_landed:
+    summary: >-
+      An internal artifact was written: a memo, a task, a chronology row, a file
+      on the matter. Terminal for routines that are declared to send NOTHING
+      (`outbound: none` in operator/contracts/output-classes.yaml), because for
+      those the artifact IS the delivery and the firm reads it where it lives.
+    tool_call:
+      action_class: [internal_write]
+      outcome: [ok]
+
+# ---------------------------------------------------------------------------
+# EXPLICITLY NON-TERMINAL. The list that would have caught both incidents.
+#
+# Each entry names the event and the false ending it would otherwise be mistaken
+# for. These are not merely "events we ignore": they are the events most likely
+# to be read as an ending by a human scanning a ledger, which is how ss#2367 sat
+# unnoticed while a filed letter went unmentioned.
+# ---------------------------------------------------------------------------
+non_terminal:
+  - event: LLM_TURN_COMPLETED
+    why: >-
+      The turn ended. That says the model stopped, not that anything left the
+      machine. In ss#2367 this is the LAST row of the run, 23 seconds after the
+      hold, and the whole incident is the gap between "the turn ended" and
+      "somebody was told".
+  - event: TOOL_CALL_COMPLETED
+    qualifier: action_class == read
+    why: A read changed nothing and told nobody.
+  - event: TOOL_CALL_COMPLETED
+    qualifier: outcome != ok
+    why: >-
+      A tool call that errored produced no artifact and no delivery. Counting it
+      would let a failed send close the obligation it created.
+  - event: DRAFT_CREATED
+    why: >-
+      A draft is work in progress sitting in a mailbox. ss#2367's held reply was
+      a good draft, and it is still sitting there.
+  - event: REPLY_HELD
+    why: >-
+      A hold OPENS an obligation (see triggers.hold). Treating it as an ending is
+      the precise error this contract exists to name.
+  - event: MATTER_UNRESOLVED
+    why: A recorded uncertainty, not an outcome.
+  - event: IDENTIFIER_UNVERIFIED
+    why: Report-only gate row (tier 3, non-blocking); it ends nothing.
+
+# ---------------------------------------------------------------------------
+# NON-TERMINAL SEQUENCES: the two shapes, stated as sequences rather than as
+# single events, because neither incident is visible one row at a time.
+# ---------------------------------------------------------------------------
+non_terminal_sequences:
+  - id: held_without_notice
+    shape: >-
+      A hold event (REPLY_HELD / REPLY_FAILED / CONFIRM_SEND_FAILED /
+      VOICE_GATE_FAILED / SPEC_GATE_TRIGGERED / FABRICATION_FILTER_TRIGGERED)
+      with NO delivery, refusal notice, or escalation after it inside the run
+      window. LLM_TURN_COMPLETED after the hold does not close it.
+    incident: ss#2367
+    severity: finding
+
+  - id: no_run_events
+    shape: >-
+      A trigger CLAIMED by a surface outside the ledger (`hermes cron run`
+      printing "Ran now: succeeded.", a `Last run` field advancing, a scheduler
+      dashboard) with no audit rows at all inside the window. Zero rows is not a
+      quiet success: on a seat whose audit write path is healthy, it is the
+      absence of execution.
+    incident: ss#2136
+    severity: finding
+
+  - id: ended_without_outcome
+    shape: >-
+      A trigger with work rows in the window (tool calls, turns) but no terminal
+      state accepted by the routine's class. The general case the two named
+      incidents are instances of.
+    severity: finding
+
+  - id: unclassified
+    shape: >-
+      A trigger whose routine class cannot be resolved (an unrecognized
+      skill_name, absent from output-classes.yaml skill_bindings).
+    severity: hold
+    why: >-
+      Cannot-evaluate must never render as permitted. It is reported on its own
+      line, and it keeps the report from being called clean.
+
+# ---------------------------------------------------------------------------
+# ROUTINE CLASSES: which terminal states are accepted for which kind of run.
+#
+# The class of a scheduled run is DERIVED, never separately authored: it comes
+# from `skill_bindings.<skill>.outbound` in
+# operator/contracts/output-classes.yaml, which already declares, per skill and
+# under CI enforcement, whether the skill addresses a human at all. A second
+# hand-maintained list would drift from that one, and the drift would be silent.
+# ---------------------------------------------------------------------------
+routine_classes:
+  reply_to_person:
+    summary: >-
+      Somebody wrote in, or an output aimed at somebody was stopped. A person is
+      waiting and knows it.
+    accepts: [delivered, escalated]
+    rejects:
+      - state: internal_artifact_landed
+        why: >-
+          This is ss#2367 exactly. The letter was filed correctly (an internal
+          write, outcome ok) and the requester was told nothing. An internal
+          artifact cannot close an obligation owed to a person who is waiting on
+          a reply.
+    window_seconds: 1800
+
+  scheduled_outbound:
+    summary: >-
+      A scheduled routine whose binding is `outbound: derived`: it may address a
+      human outside its own process.
+    derived_from: output-classes.yaml skill_bindings.<skill>.outbound == derived
+    accepts: [delivered, escalated, gate_suppressed]
+    window_seconds: 3600
+
+  scheduled_internal:
+    summary: >-
+      A scheduled routine declared to send NOTHING (`outbound: none`): a
+      chronology maintainer, a memo writer, a tracker. Its artifact is its
+      outcome.
+    derived_from: output-classes.yaml skill_bindings.<skill>.outbound == none
+    accepts: [internal_artifact_landed, delivered, escalated, gate_suppressed]
+    window_seconds: 3600
+
+# ---------------------------------------------------------------------------
+# WINDOWS. How long after a trigger a terminal state may still arrive before the
+# run is called silent.
+#
+# 30 minutes for a reply lane and 60 for a scheduled routine are chosen to sit
+# far outside observed turn durations (the ss#2367 run went hold-to-turn-end in
+# 23 seconds) while staying inside any cadence a person would call responsive.
+# A run still inside its window is reported as `pending`, never as a finding:
+# work in flight is not silence, and a control that pages on in-flight work is
+# muted within a week.
+# ---------------------------------------------------------------------------
+windows:
+  pending_grace_note: >-
+    An obligation whose window has not yet elapsed at evaluation time is
+    reported as pending and counted separately. It is neither clean nor a
+    finding.
+
+# ---------------------------------------------------------------------------
+# ONE TERMINAL ROW CLOSES ONE OBLIGATION.
+#
+# Same discipline as the unaudited-send reconciler (ss#2258): a matched terminal
+# row is CONSUMED, so a single delivery cannot launder two silent runs. Two
+# holds and one reply leave exactly one finding.
+# ---------------------------------------------------------------------------
+matching:
+  consume_terminal_rows: true

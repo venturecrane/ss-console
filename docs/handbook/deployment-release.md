@@ -12,6 +12,10 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/reprovision.sh
   - label: operator/bin/overlay-ref-drift.py
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/overlay-ref-drift.py
+  - label: operator/rehearsal/run.py
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/rehearsal/run.py
+  - label: docs/runbooks/operator/shadow-firm.md
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/runbooks/operator/shadow-firm.md
 ---
 
 ## Two deploy paths
@@ -86,8 +90,39 @@ customer's Machine image against a new overlay commit. The flow:
    commit it should pin to.
 2. **Bump `OVERLAY_REF`.** The overlay commit is pinned as the `ARG OVERLAY_REF`
    in `operator/templates/Dockerfile`. This is the desired state for every
-   customer Machine.
-3. **Reprovision the customer Machine.** Run `operator/bin/reprovision.sh <slug>`
+   customer Machine. The PR names its tracking issue and carries an acceptance
+   criterion tagged `(runtime)`: a green shadow-firm run on the rig at this ref.
+   Steps 3 and 4 are how that AC is met, and they happen after this PR merges.
+3. **Reprovision the rig, before any client seat.** The rig is
+   `pilot-smokeball`. Run `yes s | operator/bin/reprovision.sh pilot-smokeball`.
+   This step exists here, in this position, because a rig runs a candidate
+   overlay ref only once it has been reprovisioned onto it. The old procedure
+   asked step 2 to cite a green run "on the candidate ref", which no rig could
+   produce yet, and three bumps in a row (#2518, #2525, #2531) cited nothing.
+4. **Drive the shadow firm against the rig, and cite the run id.** The shadow
+   firm (`operator/rehearsal/`, runbook `docs/runbooks/operator/shadow-firm.md`)
+   replays every incident class this venture has had - an unaudited direct-API
+   send, cross-matter content, a fabricated matter number under failure, an
+   instruction injected through inbound mail, a dead connector mid-task, a
+   privileged instruction from an unauthored sender - against the rig seat, and
+   scores each from audit rows and mailbox observations rather than from how the
+   answers read. Run it as
+   `infisical run --env=prod --path=/ss -- operator/rehearsal/run.py --seat pilot-smokeball --overlay-ref <candidate> --drive`.
+   The runner reads the rig's running overlay ref off the live seam and refuses
+   to drive unless it equals the candidate, so the id cannot be produced by a rig
+   still on the previous release, and a ref it cannot read refuses too. Cite the
+   run id, with the report's evidence table, on the tracking issue or as a
+   comment on the merged bump PR: that citation is the `(runtime)` AC's proof.
+   `.stitch/shadow-firm/` is gitignored (PR #2407: the provision-source guard
+   refuses a dirty tree), so the report is NOT committed; the digest-shaped run
+   id is recomputable from the pasted report body, which is what makes the
+   citation auditable. A run id ending in `-notgreen` does not satisfy this, and
+   neither does a run with skipped scenarios: a skipped scenario did not run, so
+   it certifies nothing. A bump with no green id once the rig has been
+   reprovisioned is drift, not a completed release. The suite never touches a
+   client seat or a client-visible address; that is enforced in
+   `operator/rehearsal/scope.py`, not by convention.
+5. **Reprovision the customer Machines.** Run `operator/bin/reprovision.sh <slug>`
    from the repo root. That wrapper is exactly
    `infisical run --env=prod --path=/ss --silent -- operator/bin/provision-customer.sh <slug>`;
    it injects the R2 credentials the provisioner needs (historically not stored
@@ -98,18 +133,21 @@ customer's Machine image against a new overlay commit. The flow:
    non-interactively (Machine secrets persist across deploy, so there is nothing
    to re-enter). git is the single source of truth for `customer.yaml`;
    provisioning projects it to R2 unconditionally.
-4. **Pass the verify gate.** Confirm the runtime came up against the live read
+6. **Pass the verify gate.** Confirm the runtime came up against the live read
    seam (a correct key returns 200; a wrong key or wrong slug returns 401) and
    the boot smoke test passed - not just that the config validated.
-5. **Flip secrets** on the website side if the release changes the per-customer
+7. **Flip secrets** on the website side if the release changes the per-customer
    seam keys.
 
 **An `OVERLAY_REF` bump only reaches a Machine when that Machine is
 reprovisioned.** Nothing reprovisions automatically. `overlay-ref-drift.py` reads
 each Machine's running overlay commit from the live read seam and compares it to
 the ref pinned in the Dockerfile, so drift between desired and deployed is a
-surfaced fact rather than something to remember. Run it under Infisical (it needs
-the seam master key) and treat a non-zero exit as drift to resolve.
+surfaced fact rather than something to remember. It is also how you answer "which
+seats did this bump actually reach" after step 5. Run it under Infisical (it needs
+the seam master key) and treat a non-zero exit as drift to resolve. The shadow
+firm's release gate reads a seat's running ref through that same code path, so
+the runner and the drift report cannot disagree about what a seat is running.
 
 ## Never root-SSH a live Operator Machine
 

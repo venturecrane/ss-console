@@ -18,6 +18,7 @@
  */
 
 import { resolveClerkPortalContext, type PortalContext } from '../auth/clerk-bridge'
+import { clerkProfile } from '../auth/clerk-profile'
 
 export type { PortalContext } from '../auth/clerk-bridge'
 
@@ -40,17 +41,13 @@ export async function getPortalClient(
   const clerkUser = await locals.currentUser()
   if (!clerkUser) return null
 
-  const email =
-    clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress ?? ''
-  const name =
-    [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ').trim() ||
-    clerkUser.username ||
-    email
-
   return resolveClerkPortalContext(
     db,
     { userId: auth.userId, orgId: auth.orgId, sessionId: auth.sessionId },
-    { email, name },
+    // Verified-primary-only email extraction (clerk-profile.ts): an
+    // unverified address yields email:null and the bridge refuses to
+    // auto-link or JIT-create.
+    clerkProfile(clerkUser),
     // Fire-and-forget on the Workers request path; awaited when no
     // ExecutionContext is available (local dev, tests).
     { waitUntil: locals.cfContext ? (p) => locals.cfContext!.waitUntil(p) : undefined }

@@ -1,0 +1,112 @@
+---
+/**
+ * Executed agreement documents for an Operator client (ss#2641).
+ *
+ * The human-review half of the no-fabricated-client-content policy: the title
+ * and the execution date the firm will read in its portal are typed here by a
+ * person, never derived from the file. The endpoint refuses a future date, so
+ * a draft cannot be published as if it governed.
+ *
+ * Renders only when the client actually has an Operator instance, since the
+ * documents are instance-scoped and the portal surface that shows them is too.
+ */
+import { formatDate } from '../../lib/admin/entity-detail-page'
+import type { OperatorAgreementDocument } from '../../lib/db/operator-agreements'
+
+interface Props {
+  entityId: string
+  instanceSlug: string
+  documents: OperatorAgreementDocument[]
+}
+
+const { entityId, instanceSlug, documents } = Astro.props
+const action = `/api/admin/clients/${entityId}/operator-agreements`
+---
+
+<div class="mt-3 border-t border-[color:var(--ss-color-border-subtle)] pt-3">
+  <div class="flex items-baseline justify-between">
+    <span
+      class="font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]"
+    >
+      Executed agreements
+    </span>
+    <span class="font-mono text-sm">
+      {documents.length === 0 ? 'None recorded' : `${documents.length} on file`}
+    </span>
+  </div>
+
+  {
+    documents.length === 0 && (
+      <p class="mt-2 text-sm text-[color:var(--ss-color-text-muted)]">
+        Nothing is shown on the client's Compliance page until an executed document is recorded
+        here. Drafts do not belong in a client portal, so only signed paper can be added.
+      </p>
+    )
+  }
+
+  {
+    documents.length > 0 && (
+      <ul class="mt-2 flex flex-col gap-1.5">
+        {documents.map((doc) => (
+          <li class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <span class="font-mono text-sm text-[color:var(--ss-color-text-primary)]">
+              {doc.title}
+            </span>
+            <span class="flex items-baseline gap-3">
+              <span class="font-mono text-[11px] uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]">
+                Executed {formatDate(doc.executed_on)}
+              </span>
+              <form method="POST" action={action} enctype="multipart/form-data">
+                <input type="hidden" name="action" value="delete" />
+                <input type="hidden" name="document_id" value={doc.id} />
+                <button
+                  type="submit"
+                  class="font-mono text-[11px] uppercase tracking-[0.1em] text-[color:var(--ss-color-error)] underline"
+                >
+                  Remove
+                </button>
+              </form>
+            </span>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+
+  <form
+    method="POST"
+    action={action}
+    enctype="multipart/form-data"
+    class="mt-3 flex flex-col gap-2"
+  >
+    <input type="hidden" name="instance_slug" value={instanceSlug} />
+    <div class="flex flex-wrap gap-2">
+      <label class="flex-1 min-w-[12rem]">
+        <span class="sr-only">Document title</span>
+        <input
+          type="text"
+          name="title"
+          required
+          placeholder="Operator Service Agreement"
+          class="w-full border border-[color:var(--ss-color-border)] px-2 py-1 font-mono text-sm"
+        />
+      </label>
+      <label>
+        <span class="sr-only">Execution date</span>
+        <input
+          type="date"
+          name="executed_on"
+          required
+          class="border border-[color:var(--ss-color-border)] px-2 py-1 font-mono text-sm"
+        />
+      </label>
+    </div>
+    <input type="file" name="file" accept="application/pdf" required class="font-mono text-xs" />
+    <button
+      type="submit"
+      class="self-start border border-[color:var(--ss-color-primary)] px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-primary)]"
+    >
+      Record executed document
+    </button>
+  </form>
+</div>

@@ -563,7 +563,251 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # ss#2255). Files: plugins/hermes-smd-trust/outbound_send.py,
 # plugins/hermes-smd-reply/__init__.py + tests — NOT tracked pairs; every
 # overlaySha256 unchanged, only overlayRef.
-ARG OVERLAY_REF="20518e862f11d2f6401a34519c134d781165d029"
+# ab352d5b -> 88f6daa (2026-08-20, ss#2444 PR-2 + ss#2464): three commits, and the
+# third is why the pin goes to overlay main rather than to an intermediate.
+# overlay#284 proves the ss#2167 matter-mixing fence survives the v0.19 tool
+# rename — the BINDING was already tested, the wire NAME was not, and the rename
+# is exactly what silently unbound every connector tool on the first v0.20 build
+# (overlay#283). overlay#285 added a purpose-made SMOKEBALL_VISION_ANTHROPIC_KEY
+# for the scanned-document read path; the Captain's review found that premise
+# false and overlay#286 RETIRES it back to the seat's own ANTHROPIC_API_KEY,
+# which provisioning already stages per seat. So pinning main means no new secret
+# to stage for any seat, and pinning #285 alone would wire a seat to a credential
+# nobody stages. Containment checked before writing this pin:
+# `git merge-base --is-ancestor ab352d5b 88f6daa` — a fast-forward, no divergence.
+# Files: plugins/hermes-smd-trust tests, connectors/registry — NOT tracked pairs;
+# every overlaySha256 unchanged, only overlayRef.
+# 88f6daa -> 78c2544 (2026-08-20, ss#2444 PR-2 follow-up): one commit, and it is a
+# LIVE DEFECT found on the paying client's seat 17 minutes after promoting it.
+# Hermes v0.20.4 inverted the order two hooks fire in --
+# v0.18 was pre_tool_call -> post_tool_call -> transform_tool_result;
+# v0.20.4 is pre_tool_call -> transform_tool_result -> post_tool_call,
+# observed on five consecutive tool calls on hermes-ashton-price's own log
+# (vfy_01M0G7DYTBHAGDRQYXX02DKMZJ). hermes-smd-inbound fences at
+# transform_tool_result, so hermes-smd-establishment's on_post_tool_call stopped
+# receiving the connector's raw text and started receiving the FENCE. json.loads
+# died at char 1 ("[" then "U" of UNTRUSTED) on 100% of document reads -- 0.18: 3
+# reads / 0 failures, 0.20.4: 2 reads / 2 failures -- so read_capture never
+# recorded, and voice-establishment and document-library-establishment, the first
+# two things a new firm is asked to run, would have refused in front of the
+# client. overlay#287 adds shared.inbound.unwrap_inbound (nonce matched as a
+# BACKREFERENCE so a forged inner sentinel cannot terminate the real fence) and
+# parses through it. Pass-through on unfenced input is deliberate: correct under
+# BOTH hook orders, so the ordering never becomes an invariant again. Falsifier
+# run: reverting only the unwrap call reproduces the identical production
+# traceback while the other 46 tests in that file still pass.
+# STILL AT RISK, unconfirmed, deliberately not swept in: hermes-smd-audit:117
+# (output_digest), hermes-smd-reply relay.py:180, hermes-smd-trust:348/:359 all
+# consume kwargs["result"] the same way. Files: shared/inbound.py,
+# plugins/hermes-smd-establishment + tests -- NOT tracked pairs; every
+# overlaySha256 unchanged, only overlayRef.
+# 78c2544 -> 16770d3 (2026-08-20, ss#2489): one commit, and it is the second
+# live defect this evening on the paying client's seat. Four Operator replies
+# reached the firm as ONE UNBROKEN BLOCK -- sections, lists and paragraphs all
+# collapsed. Graph's /reply action composes the reply message IN HTML (its own
+# reference says so where it explains `Prefer: outlook.timezone`), and this
+# transport hands it a plain-text `comment`, so every newline dies to HTML
+# whitespace collapsing before the message leaves the tenant. Proven from the
+# wire, not inferred: the raw MIME of message 1a020fe88536d941 is
+# multipart/alternative whose text/html part carries the model's text inline in
+# <body> with ZERO <br>, and whose text/plain half is that same HTML with the
+# tags stripped -- which is why both halves were equally unreadable and no mail
+# client could rescue it. Second half of the cause: shared/report_render.py is
+# escape-by-default, purity-tested and live-proven (vfy_01KXMVRX1C2NAMYKH6JSQWTJEV),
+# but hermes-smd-trust injects it as args["html"], a field only the AgentMail
+# transport reads, so it had never once run on an msgraph seat. overlay#288
+# renders the body in `_send_msgraph_reply` and passes it beside the plain text;
+# the broker half (operator/workspace_broker/msgraph_ops.py, this same PR) posts
+# message.body instead of comment. Both sides treat the html as OPTIONAL on the
+# wire, so the two repos deploy in either order. Falsifier run: reverting only
+# the render call fails exactly the three new structure/escaping tests while the
+# other 14 in that file pass. Files: plugins/hermes-smd-reply,
+# shared/msgraph_broker.py + tests -- NOT tracked pairs; every overlaySha256
+# unchanged, only overlayRef.
+# 16770d3 -> 7a8ba42 (2026-08-20, ss#2489 follow-on): one commit, found by
+# reading the wire on the reply the previous bump had just made readable. The
+# formatting fix worked -- real <p>/<ul>/<li> reached the firm -- and the same
+# MIME showed report_render emitting INVALID HTML underneath it. The <ul> opened
+# at the introduction's first section was never closed, so three following
+# paragraphs rendered INSIDE the list and the second bullet group joined the
+# first list instead of opening its own; </li> outnumbered <li> 7 to 4.
+# Reproduced offline at the old ref against the same source shape, and the
+# counts invert at the new one (2 uls, 4/4 items, 0 trapped paragraphs).
+# TWO CAUSES REMOVED, NOT PATCHED: _flush_paragraph emitted a <p> without
+# closing the list (three sibling block handlers each remembered to; the rule
+# now lives with the emitter, so a caller cannot forget it), and
+# _close_open_item decided item state by sniffing parts[-1].endswith("</li>"),
+# which is false both for a genuinely open item and for a paragraph emitted
+# inside a list -- replaced with an explicit flag. NOT INTRODUCED BY overlay#288:
+# this renderer has shipped in AgentMail report emails since 2026-07-16
+# (vfy_01KXMVRX1C2NAMYKH6JSQWTJEV), so any report mixing a list with a following
+# paragraph has been malformed there too; #288 only made it visible on a channel
+# someone was reading closely. Nine green tests missed it because neither corpus
+# in that file had a paragraph after a list item -- the live A&P shape is now a
+# third corpus and joins the purity parametrize. Falsifier run: reverting only
+# the close_list line fails exactly 3 of the 6 new tests while the other 13 pass.
+# Files: shared/report_render.py, tests/test_report_render.py -- NOT tracked
+# pairs; every overlaySha256 unchanged, only overlayRef.
+#
+# 7a8ba42 -> d35e0b0 (overlay #293, ss#2488 part 2): the webhook gate ships the
+# gateway's loop-pulse age and the part-1 supervisor's state on the control-plane
+# heartbeat (gateway_loop_ok, gateway_loop_age_seconds, gateway_supervisor_state,
+# gateway_restarts_last_hour; shared/gateway_loop_check.py + shared/heartbeat.py).
+# The gate is the one process on the seat that survives a gateway wedge, which is
+# exactly why every liveness signal stayed green for 33 minutes on 2026-08-20 --
+# and exactly why it can be the process that reports one. Two signals because one
+# is racable: the part-1 restart also refreshes the heartbeat, so an age-only
+# alert can be overwritten before the console's 2-minute cron samples it; the
+# kill-ledger count cannot be. Arming latch mirrors part 1 (a stale beat from the
+# previous boot is on the volume at every cold start and must not page on deploy).
+# Consumer side: migration 0107, heartbeat.ts, fleet-alerts gateway-loop.ts, the
+# admin roster. Files: shared/gateway_loop_check.py (new), shared/heartbeat.py,
+# contracts/consumes.yaml, tests -- NOT tracked pairs; every overlaySha256
+# unchanged, only overlayRef.
+#
+# 4ca6682 -> 349d86b (overlay#299 + #300, ss welcome rehearsal): two commits, and
+# what they exist for is what the A&P Operator did with the old refusal. Drafting
+# the setup reply to the firm's administrator, the Tier-2 citation gate fired
+# four to six times in one turn on ordinary comparison prose; the refusal said
+# only "content matching legal-citation patterns", naming neither the shape nor a
+# fix, so the model retried blind and then shipped a trimmed reply that told the
+# client a gate had blocked it. #299 gives the refusal a per-pattern hint that
+# names the kind that hit and the remedy for it, and that never echoes the
+# matched text (a refusal quoting the cite hands it back to the drafter). It also
+# closes the hole those retries were finding: "Palsgraf versus Long Island
+# Railroad" was caught by nothing, because CASE_NAME_RE folds only "v" and "vs".
+# The new CASE_NAME_VERSUS_RE keeps its parties case-SENSITIVE, unlike
+# CASE_NAME_RE, so "apples versus oranges" still passes while the capitalized
+# form blocks, and provenance harvests versus-form captions so a caption the
+# record spells in longhand registers as the same caption. #300 puts the same
+# "versus" fold in canonical_caption on both sides of the repo boundary, so an
+# allowlist entry registered by one copy still matches a hit canonicalized by the
+# other. Files: shared/citation_filter.py (a TRACKED pair; overlaySha256
+# re-recorded one-sided in overlay-pairs.json), shared/outbound_gate.py,
+# shared/provenance.py, tests.
+#
+# 07ed486 -> b782926c (overlay#306, ss#2537 follow-up). The pilot seat
+# crash-looped at boot on 2026-08-21 22:57Z because ss#2537 authored
+# `commitment: confirm` on pilot-smokeball and ashton-price while the on-box
+# config validator still refused `confirm` on every non-send class. The
+# enforce branch that gives it meaning landed in overlay#303, carried into the
+# 07ed486 bump; the validator had not moved with it, so the seat rejected the
+# config the runtime was ready to honor. #306 accepts `confirm` on
+# `commitment` in a persona's `exposure` and nowhere else: never on
+# `exposure_ceiling` (the runtime entitlement dial derives that from send
+# tiers) and never on another class, so it still cannot be authored where it
+# would do nothing. This PR un-parks both seat lines in the same change, so
+# the config and the validator that accepts it land together. Files:
+# bootstrap/validate.py, tests/test_customer_config.py -- NOT tracked pairs;
+# every overlaySha256 unchanged, only overlayRef.
+#
+# e9d9fae1 -> 2b0c786d (overlay#308, ss#2537 follow-up). Read live on
+# pilot-smokeball 2026-08-22: SOUL.md rendered the persona's
+# `commitment: confirm` exposure with the generic confirm sentence, which was
+# written for sends (prepare the action, request explicit approval in the same
+# turn). The model did exactly that -- it described the matter it would create,
+# asked for a yes in its own words, and never called
+# mcp_smokeball_create_matter. So the gate never minted an act proposal, the
+# administrator's yes had nothing to bind to, and the readback the
+# administrator saw was the model's own composition with identifiers in it,
+# which is the one thing overlay#303/#305 exist to prevent. #308 adds a
+# per-(action, ceiling) SOUL override: at (commitment, confirm) the line now
+# tells the model to CALL the tool as soon as an Operator administrator asks,
+# relay the gate's returned act line verbatim, and on the administrator's
+# answer call the same tool again with the same values. Send classes keep the
+# generic sentence. Files: bootstrap/translate.py,
+# tests/test_bootstrap_translate.py -- NOT tracked pairs; every overlaySha256
+# unchanged, only overlayRef.
+#
+# 241df3bc -> 119f6bf2 (overlay#311, ss-console#2546 PR 2). ONE merge in the
+# range, checked rather than assumed: `git log 241df3bc..119f6bf` on the
+# overlay returns a single commit.
+#
+# WHAT REACHES A SEAT AT THIS PIN. Under ss-console#2529 a person who is NOT an
+# Operator admin could state a firm-level rule and be told an admin could apply
+# it, and then nothing happened: no administrator was told there was anything to
+# answer, an administrator's "no" did nothing at all, and a rule nobody answered
+# was deleted by the broker sweep, so the person who asked could not even be
+# told it had lapsed. From this ref the request is EMAILED to the administrators
+# the firm names on scope.rule_requests_to (traffic, not authority: an admin not
+# named receives nothing), the person who asked is told on apply, on decline and
+# on lapse, a 30 s daemon reports the lapse because the client seat's crons are
+# all off, and a routine/schedule/channel/memory/autonomy/on-off ask reaches SMD
+# through the new operations_request tool instead of getting a sentence with
+# nothing behind it. Every one of those sends re-authorizes through the same
+# enforce.evaluate_tool_call a model's own send goes through, so a tainted turn
+# refuses it and the Operator says so rather than claiming somebody was asked.
+#
+# VOCABULARY MOVED at this pin: 65 -> 68 types (RULE_DECLINED, RULE_LAPSED,
+# RULE_REQUEST_NOTIFIED), re-extracted by AST at both refs and compared as sets;
+# all three move out of consoleOnly in audit-action-vocabulary.json.
+#
+# Files: plugins/hermes-smd-audit/schemas.py,
+# plugins/hermes-smd-establishment/{__init__.py,plugin.yaml,sweeper.py},
+# plugins/hermes-smd-trust/{__init__.py,enforce.py},
+# shared/{action_classes,customer_config,operations_request,rule_confirm,
+# rule_dispatch,send_dispatch,spec_gate}.py and three test files -- NOT tracked
+# pairs; every overlaySha256 unchanged, only overlayRef.
+#
+# 45cc19e7 -> 727f3f5b (overlay#337, ss#2664 WS-RENDER pair). ONE merge in the
+# range. From this ref the seat dispatches a routine's PRE-RENDERED outbound
+# out of turn at pre_llm_call (shared/prerendered_dispatch.py: consume-once
+# envelope, full -> skeleton -> failure-note ladder, post-dispatch ledger
+# appends under the witness session), enforces the in-turn rendered-body slot
+# check (shared/rendered_body_gate.py), stamps rendered_body_sha256 +
+# body_variant + routing_leg onto CONFIRM rows (pre-mutation canonical hash),
+# down-renders the text/plain half of report sends (report_render.render_plain),
+# and runs the outbound fabrication/identifier scans on the out-of-turn send
+# path. Mirrors tests/contract/send-render.yaml + the canon-vector arbiter.
+# Files: plugins/hermes-smd-trust/{__init__.py,outbound_send.py},
+# shared/{agentmail_broker,msgraph_broker,prerendered_dispatch,
+# rendered_body_gate,report_render}.py and eight test files -- NOT tracked
+# pairs; every overlaySha256 unchanged, only overlayRef. Vocabulary identical
+# (71, AST re-read at both refs); shared/heartbeat.py byte-identical.
+#
+# 727f3f5b -> 799647d1 (TWO merges: overlay#338 then overlay#339; both console
+# halves already on main, ss#2674 and ss#2677 respectively).
+#
+# overlay#338 closes the hash the previous pin opened. _attach_html_body
+# replaces `text` with report_render.render_plain(text) before the payload
+# leaves the process, so the channel never stores the bytes
+# rendered_body_sha256 names, and every conformant templated send graded
+# channel_mismatch_hold -- a loud hold on a correct send, the worst kind,
+# because it teaches the reader to ignore the instrument. From this ref
+# _dispatch_internal_message stamps a SECOND canonical hash on the CONFIRM row,
+# plain_body_sha256, over the exact text/plain handed to the channel, and
+# _attach_html_body returns whether it actually attached so the stamp is
+# OMITTED (never duplicated from the rendered one) on every path where no
+# down-render happened. Two hashes, two joins: rendered answers wake<->confirm
+# (did the authored body reach dispatch), plain answers confirm<->channel (did
+# the dispatched body reach the reader).
+#
+# overlay#339 widens shared/gateway_loop_check.py's SUPERVISOR_STATES from five
+# words to seven, adding `starting` and `never-healthy`. That frozenset is a
+# CLOSED vocabulary and the closure is load-bearing: _read_supervisor_state
+# forwards nothing it does not recognise, so a word entrypoint.sh writes and
+# the set omits is dropped to None -- a NULL, which the console holds on rather
+# than pages on. Silence, not a failure. entrypoint.sh (authored HERE) already
+# emits both words, so this pin is what stops them being discarded in transit.
+# `never-healthy` pages (gateway wedged during startup; the supervisor
+# deliberately does not kill a slow starter, so a human is the only recovery
+# path); `starting` deliberately does not (bootstrap has not yet exec'd the
+# gateway -- a normal, minutes-long window every boot, previously mislabelled
+# `inert`, which paged). fleet-alerts grades both at
+# workers/fleet-alerts/src/gateway-loop.ts.
+#
+# Merge-range files (the union, read at the merge commit -- NOT a two-dot diff
+# off either PR head; #339 was branched from 727f3f5b, before #338 landed, so
+# such a diff hides #338's three files): plugins/hermes-smd-trust/__init__.py,
+# shared/gateway_loop_check.py, tests/contract/send-render.yaml,
+# tests/test_dispatch_body_stamp.py, tests/test_gateway_loop_check.py -- NONE a
+# tracked pair. All nine overlaySha256 re-hashed from the runtime files at
+# 799647d1 and byte-identical to the recorded values, so only overlayRef moves.
+# Vocabulary identical (71, AST re-read at both refs, set-diff empty both ways;
+# schemas.py absent from the range). shared/heartbeat.py byte-identical
+# (cc8c23d8...) -- #339 changes a heartbeat field's VALUE vocabulary, not the
+# field set, so the manifest's field list is unaffected.
+ARG OVERLAY_REF="5770b79fea3206f01df343489d232daf2fdc4a2b"
 
 ARG CUSTOMER_SLUG=customer-zero
 
@@ -586,6 +830,20 @@ RUN git clone --depth 1 --branch ${HERMES_UPSTREAM_TAG} \
 
 # ---------- Stage 2: runtime image ----------
 FROM ghcr.io/astral-sh/uv:0.11.6-python3.13-trixie AS uv_source
+# Node 26 source stage (Hermes v2026.8.18 / 0.20.4 promotion, ss-console#2444).
+# Debian 13 trixie's apt `nodejs` is 20.19.x, EOL April 2026. Upstream Hermes
+# pins its toolchain to Node 26 everywhere and, as of v2026.8.18, ships
+# `.npmrc engine-strict=true` with `engines.node >=22.22.0` — so `npm install`
+# over the Hermes tree hard-fails on the apt Node (vfy_01M0DP257XDYJ0Z04V1ZF57G2X:
+# seat had v20.19.2 / npm 9.2.0). We copy node + npm from the official image
+# exactly the way upstream's own Dockerfile does at that tag (its `node_source`
+# stage, same digest), so the runtime matches what Hermes is built and tested
+# against. The `engines.npm` range (`<11.10.0 || >=11.17.0`) is satisfied by
+# construction: upstream builds its published image from this digest under
+# engine-strict. Bumping the Node major is a one-line change to this FROM; the
+# next digest bump re-checks that npm range. Node is needed at RUNTIME too:
+# `@oktopeak/clio-mcp` (below) is a Node stdio MCP server the gateway launches.
+FROM node:26-bookworm-slim@sha256:9e6f9357d371591e32ab6f2d8a26d63bdd0d17c29eee3f4f3e7e454d9634bf73 AS node_source
 FROM debian:13.4
 
 ARG CUSTOMER_SLUG
@@ -601,6 +859,19 @@ ENV PYTHONUNBUFFERED=1
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/hermes/.playwright
 ENV HERMES_HOME=/opt/data
 ENV PATH="/opt/data/.local/bin:/usr/lib/postgresql/17/bin:${PATH}"
+# Pin every uv invocation to the SYSTEM interpreter (Hermes v0.20.4 promotion,
+# ss-console#2444). The v2026.8.18 tree ships `.python-version: 3.11`; because
+# this Dockerfile copies the WHOLE tree before `uv sync` (upstream copies only
+# pyproject.toml + uv.lock, so their image never sees the pin), every bare
+# `uv sync` / `uv venv` — the Hermes venv, the workspace-broker venv, the
+# per-connector venvs — resolved that pin, downloaded a managed CPython into
+# /root/.local/share/uv (mode 0700), and symlinked venv pythons into it. The
+# non-root broker uid then got `Permission denied` executing its own venv
+# python (rc=126 crash-loop; the pilot seat went down and was restored by
+# image-ref rollback). UV_PYTHON outranks .python-version, so this keeps all
+# venvs on Debian 13's python3 (3.13 — inside requires-python >=3.11,<3.14),
+# exactly what the v0.18 seats ran and what upstream's published image runs.
+ENV UV_PYTHON=/usr/bin/python3
 
 # ---------- System packages ----------
 # tini: PID 1 zombie reaper (signals + orphaned MCP stdio subprocesses).
@@ -611,11 +882,14 @@ ENV PATH="/opt/data/.local/bin:/usr/lib/postgresql/17/bin:${PATH}"
 # curl + ca-certificates: R2 fetch + general TLS.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      build-essential curl nodejs npm python3 python3-pip python3-venv \
+      build-essential curl unzip python3 python3-pip python3-venv \
       ripgrep ffmpeg gcc python3-dev libffi-dev procps git openssh-client \
       docker-cli tini ca-certificates util-linux \
       postgresql-17 postgresql-client-17 redis-server awscli \
+      poppler-utils fonts-dejavu-core \
  && rm -rf /var/lib/apt/lists/*
+# poppler-utils + fonts-dejavu-core (ss#2614): the chronology runner's exhibit
+# rendering fallback and matplotlib's timeline visuals need a real font.
 
 # ---------- runtime principals ----------
 # The gateway and credential broker are distinct non-root principals. The
@@ -632,7 +906,26 @@ RUN groupadd -r workspace-connectors \
  && usermod -a -G workspace-connectors workspace-broker \
  && usermod -a -G audit-readers hermes \
  && usermod -a -G audit-readers workspace-broker
+# medchron (ss#2614): the uid the chronology runner's driver child runs as. No
+# home, no shell, no group beyond smokeball-token, which is the ONE thing it
+# shares with hermes: the Smokeball refresh-token file (setgid dir, 0660),
+# because both principals mint against the same rotating token. The runner
+# daemon itself stays root (it owns the queue and the job dirs); only the
+# stages that read the matter and call the model run as this uid.
+RUN groupadd -r smokeball-token \
+ && useradd -u 10002 -r -M -d /nonexistent -s /usr/sbin/nologin medchron \
+ && usermod -a -G smokeball-token medchron \
+ && usermod -a -G smokeball-token hermes
 COPY --chmod=0755 --from=uv_source /usr/local/bin/uv /usr/local/bin/uvx /usr/local/bin/
+
+# Node 26 + npm from the node_source stage (see the stage comment above). npm
+# and npx are recreated as symlinks into the bundled npm install, mirroring
+# upstream's Dockerfile; no corepack (unbundled upstream; nothing here needs it).
+COPY --chmod=0755 --from=node_source /usr/local/bin/node /usr/local/bin/
+COPY --from=node_source /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+ && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+ && node --version && npm --version
 
 WORKDIR /opt/hermes
 
@@ -642,8 +935,39 @@ COPY --from=hermes_source /src/HERMES_SHA /opt/hermes/HERMES_SHA
 
 # ---------- Layer-cached Hermes deps install ----------
 ENV npm_config_install_links=false
+# Playwright browsers are PREFETCHED with curl, then `playwright install` runs
+# against the already-populated cache (Hermes v0.20.4 promotion, ss-console#2444).
+# WHY: at v2026.8.18 `npx playwright install --with-deps chromium --only-shell`
+# deterministically WEDGED on the Depot builder — the chromium-headless-shell
+# download hit 100% and Node's downloader never observed the socket close (three
+# independent builds; one sat silent for 59 minutes). Upstream's own Dockerfile
+# wraps the same command in a 3-attempt retry loop (their :201-202) — they hit
+# it too — but a retry cannot rescue a hang, and every retry re-enters the same
+# downloader. So: `--dry-run` prints each browser's install location + download
+# url; curl (hard --max-time, --retry, immune to the close-hang) fetches each
+# zip; unzip + the INSTALLATION_COMPLETE marker reproduce playwright's own
+# on-disk layout; the real install then finds every browser present, downloads
+# nothing, and only installs apt deps. The timeout+retry loop stays as the
+# backstop so NO variant of this step can wedge the seat-rebuild path:
+# rollback-by-rebuild depends on this Dockerfile finishing.
 RUN npm install --prefer-offline --no-audit \
- && npx playwright install --with-deps chromium --only-shell \
+ && npx playwright install --dry-run chromium --only-shell > /tmp/pw-plan.txt \
+ && cat /tmp/pw-plan.txt \
+ && awk '/Install location:/{loc=$3} /Download url:/{print loc" "$3}' /tmp/pw-plan.txt > /tmp/pw-pairs.txt \
+ && [ -s /tmp/pw-pairs.txt ] \
+ && while read -r loc url; do \
+      echo "prefetch: $url -> $loc"; \
+      curl -fL --retry 3 --retry-delay 5 --max-time 900 -o /tmp/pw-browser.zip "$url"; \
+      mkdir -p "$loc"; \
+      unzip -q /tmp/pw-browser.zip -d "$loc"; \
+      rm -f /tmp/pw-browser.zip; \
+      touch "$loc/INSTALLATION_COMPLETE"; \
+    done < /tmp/pw-pairs.txt \
+ && for i in 1 2 3; do \
+      timeout 900 npx playwright install --with-deps chromium --only-shell && break || \
+      { [ "$i" = 3 ] && exit 1; echo "playwright install failed/wedged (attempt $i); retrying in 10s" >&2; sleep 10; }; \
+    done \
+ && rm -f /tmp/pw-plan.txt /tmp/pw-pairs.txt \
  && (cd web && npm install --prefer-offline --no-audit) \
  && (cd ui-tui && npm install --prefer-offline --no-audit) \
  && npm cache clean --force
@@ -654,9 +978,19 @@ RUN npm install --prefer-offline --no-audit \
 # inert (TELEGRAM_AVAILABLE=False), so a TELEGRAM_BOT_TOKEN env would silently do
 # nothing. We add it explicitly: lock-governed (frozen) and forward-aligned with the
 # Slack/Discord channels the productized Operator will offer. See ADR 0033.
-RUN uv sync --frozen --no-install-project --extra all --extra messaging
+# `--extra anthropic` (Hermes v0.20.4 promotion, ss-console#2444): v2026.8.18
+# moved the anthropic SDK out of `[all]` into its own extra (pinned
+# anthropic==0.87.0 for CVE-2026-34450/34452; upstream's own Dockerfile passes
+# it too). Without it the gateway boots but EVERY turn dies at
+# build_anthropic_client with ImportError — observed live on the pilot seat's
+# first 0.20.4 rehearsal turn. bedrock/azure/matrix/otlp/hindsight stay out:
+# no seat consumes them.
+RUN uv sync --frozen --no-install-project --extra all --extra messaging --extra anthropic
 RUN cd web && npm run build && cd ../ui-tui && npm run build
-RUN uv pip install --no-cache-dir --no-deps -e "."
+# --python is explicit because ENV UV_PYTHON (above) would otherwise aim this
+# bare `uv pip` at the SYSTEM interpreter (PEP 668 refusal on Debian); an
+# explicit flag outranks the env var and targets the project venv uv sync made.
+RUN uv pip install --no-cache-dir --no-deps --python /opt/hermes/.venv/bin/python -e "."
 
 # ---------- Honcho: deferred to Phase 2 (ADR 0016, revised 2026-05-30) ----------
 # No in-container Honcho server is installed. The prior `honcho-ai` pip install
@@ -671,7 +1005,7 @@ RUN uv pip install --no-cache-dir --no-deps -e "."
 # bootstrap translator and customer-sync sidecar) and then register the
 # plugin pack with Hermes. Plugins land under ~/.hermes/plugins/ where the
 # Hermes plugin loader discovers them at runtime.
-RUN uv pip install --no-cache-dir \
+RUN uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
       "git+${OVERLAY_REPO}@${OVERLAY_REF}"
 
 # ---------- Workspace capability broker ----------
@@ -692,7 +1026,15 @@ RUN uv venv /opt/workspace-broker/.venv \
 # PATH for the gateway to launch. Pinned to 2.0.0 — the version the connector
 # reality-check and live loop test ran against. It reads its OAuth token from
 # ~/.clio-mcp/tokens.enc (seeded by bootstrap.sh) under ENCRYPTION_KEY.
-RUN npm install -g @oktopeak/clio-mcp@2.0.0
+# Run from a neutral cwd (npm ignores a project .npmrc in -g mode, but the
+# Hermes tree's npm policy should never govern a third-party global install),
+# then prove the bin resolves on PATH and the package landed under the Node 26
+# global prefix (/usr/local/lib/node_modules) so a regression fails the BUILD,
+# not a seat. Presence checks only: it is a stdio MCP server, so invoking it
+# here would block on stdin.
+RUN cd /tmp && npm install -g @oktopeak/clio-mcp@2.0.0 \
+ && test -x "$(command -v clio-mcp)" \
+ && test -f /usr/local/lib/node_modules/@oktopeak/clio-mcp/package.json
 
 # NOTE: web search needs NO installed binary. It is Hermes' NATIVE brave-free
 # provider (plugins/web/brave_free, bundled in the pinned Hermes), selected by
@@ -701,21 +1043,35 @@ RUN npm install -g @oktopeak/clio-mcp@2.0.0
 # was removed with the ADR 0070 native cut (2026-07-08) — MCP-wrapping a native
 # feature was the redundant layer.
 
-# Register the plugin pack with Hermes' loader. `hermes plugins install` clones
-# the overlay repo's DEFAULT BRANCH HEAD into ~/.hermes/plugins/ — upstream
-# hermes_cli/plugins_cmd.py `_install_plugin_core` does `git clone --depth 1`
-# with no ref argument, so the plugin surface cannot be pinned through this
-# command (tracked follow-up; for a tagged-release build, default branch == the
-# tag). The pip install above IS pinned and provides the importable `shared`
-# policy core, which is what the runtime plugins actually `import`.
+# Register the plugin pack with Hermes' loader. As of Hermes v2026.8.18
+# `hermes plugins install` accepts `--ref`, so the install is pinned to the same
+# OVERLAY_REF the pack below is staged at (the old "cannot be pinned through
+# this command" caveat is retired). The pip install above is also pinned and
+# provides the importable `shared` policy core the runtime plugins `import`.
+#
+# Build-step scan opt-out (Hermes 0.20.4 promotion, ss-console#2444): v2026.8.18
+# security-scans a plugin tree at install (hermes_cli/plugins_cmd.py
+# `_scan_plugin_tree`, tools/plugin_guard.py); a `dangerous` verdict is a hard
+# fail that `--force` does NOT override. The overlay is OUR plugin, and its own
+# security TEST fixtures (prompt-injection strings, fake keys, /etc/passwd in
+# gate tests, an AGENTS.md filename) trip the pattern set. So the scan is
+# disabled in the build-time root $HERMES_HOME/config.yaml (the install then
+# merges its `plugins.enabled` record into that same file, exactly as before).
+# At runtime /opt/data is the volume mount and shadows this file on every
+# persisted seat; on a fresh volume Fly's empty-volume copy carries it over,
+# where it also covers bootstrap.sh's rare runtime-install fallback (which
+# would otherwise hit the same scan). The pack is pinned and import-gated two
+# steps below; that is the real integrity check for our own code.
 #
 # FAIL-CLOSED: the prior `|| echo "WARN ...; continuing"` swallowed an install
 # failure and booted a silently harness-less Machine — the exact fail-open
 # defect the venture forbids. Both the install and the policy-core import below
-# are now hard build gates: a Machine whose trust/inbound plugins cannot load
+# are hard build gates: a Machine whose trust/inbound plugins cannot load
 # their own policy core MUST NOT build green.
-RUN /opt/hermes/.venv/bin/hermes plugins install \
-      venturecrane/hermes-smd-overlay --enable
+RUN mkdir -p "${HERMES_HOME}" \
+ && printf 'plugins:\n  scan_on_install: false\n' > "${HERMES_HOME}/config.yaml" \
+ && /opt/hermes/.venv/bin/hermes plugins install \
+      venturecrane/hermes-smd-overlay --enable --ref "${OVERLAY_REF}"
 
 # Stage a PINNED copy of the overlay at a NON-VOLUME path (/app/overlay-pack) so
 # bootstrap.sh can refresh the per-customer volume's overlay to this exact
@@ -874,6 +1230,27 @@ RUN set -eu; \
     done; \
     chmod -R a+rX /opt/connectors
 
+# ---------- The chronology runner (routine 11, ss#2614) ----------
+# operator/runners/medchron is installed into its OWN root-owned venv from the
+# same three paths CI installs it from (the connector SDK, the Smokeball
+# connector, the runner), so the daemon and the driver child never share a
+# dependency closure with the Hermes venv or the broker venv. The venv is
+# root:root a+rX: the medchron uid executes it and can write nothing in it.
+# The `medchron` console-script assertion fails the BUILD, not a seat.
+COPY operator/runners/ /app/runners/
+# The pricing table the runner's cents cap and ledger price from, beside the
+# venv (NOT under /opt/smd, which is the establishment compilers' contract
+# tree and is pinned file-by-file by tests/shipped-runtime-paths.test.ts).
+COPY operator/adapter/cost_telemetry/anthropic_pricing.json /opt/medchron/anthropic_pricing.json
+RUN set -eu; \
+    uv venv /opt/medchron/.venv; \
+    uv pip install --python /opt/medchron/.venv/bin/python --no-cache \
+      /app/connectors/_sdk /app/connectors/smokeball /app/runners/medchron; \
+    [ -x /opt/medchron/.venv/bin/medchron ] || { echo "FATAL: the medchron runner produced no console-script"; exit 1; }; \
+    /opt/medchron/.venv/bin/python -c "import medchron.daemon, medchron.stages.upload"; \
+    chown -R root:root /opt/medchron; \
+    chmod -R a+rX /opt/medchron
+
 # Safety-substrate tests — bootstrap.sh runs these on container start
 COPY operator/safety-substrate/ /app/safety-substrate/
 
@@ -911,6 +1288,12 @@ COPY operator/templates/r2-account-key-strip-probe.py /app/r2-account-key-strip-
 # manifest<=map check, run where both the baked manifest and the installed overlay
 # are present).
 COPY operator/templates/connector-classification-probe.py /app/connector-classification-probe.py
+# ss#2167: boot-smoke asserts the matter-mixing READ fence is installed and
+# discriminates (refuses a second matter, allows the same one). The capture path
+# it depends on swallows exceptions by contract, so a broken fence is otherwise
+# indistinguishable from a clean fleet — no error, no alert, sends simply stop
+# being checked.
+COPY operator/templates/matter-mixing-fence-probe.py /app/matter-mixing-fence-probe.py
 
 # NOTE: customer.yaml is NOT copied into the image. It lives on the Fly
 # volume at /opt/data/customer.yaml; bootstrap.sh fetches it from R2 on

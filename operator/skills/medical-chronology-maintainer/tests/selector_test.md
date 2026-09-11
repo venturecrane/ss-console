@@ -27,6 +27,11 @@ arrive, which is this skill's sole job.
 - "What's this case worth?" → no skill values a case; this skill extracts the record
   and characterizes nothing.
 - "What's the status of the Reyes matter?" → `matter-status-responder`.
+- "Build the chronology package for matter 12345." → **this skill**, BUILD mode
+  (ss#2616): the administrator's request becomes a submitted runner job; the skill
+  composes nothing itself.
+- "Package the new records on Reyes." → **this skill**, APPEND mode (the covered-set
+  delta, `selection.include_file_ids`).
 
 The near-neighbor risk is `matter-document-review` (both read the medical records)
 and `medical-records-chaser` (both are in the medical phase). The distinguisher: this

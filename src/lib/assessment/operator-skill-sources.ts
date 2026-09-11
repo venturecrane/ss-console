@@ -40,6 +40,9 @@ export const operatorSkillSources = {
  * Repo-root-relative paths of the assets imported above. Kept in lockstep with
  * the imports so the existence test can guard the coupling. If you add or move
  * an import, update this list to match.
+ *
+ * @public Existence-guard list. tests/assessment-operator-sources.test.ts imports it and asserts
+ * every path exists and is non-empty. No runtime caller, by design.
  */
 export const OPERATOR_SKILL_SOURCE_PATHS = [
   'operator/assessment-eval/fixtures/interviewer-skill/SKILL.md',

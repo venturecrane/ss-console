@@ -41,10 +41,7 @@ def _columns(conn: sqlite3.Connection) -> dict[str, dict]:
     # PRAGMA statements do not accept bind parameters; use a literal table
     # name (the only table this test inspects) to satisfy the SAST lint.
     rows = conn.execute("PRAGMA table_info(agent_skills_inventory)").fetchall()
-    return {
-        r[1]: {"type": r[2], "notnull": bool(r[3]), "dflt": r[4]}
-        for r in rows
-    }
+    return {r[1]: {"type": r[2], "notnull": bool(r[3]), "dflt": r[4]} for r in rows}
 
 
 def _indexes(conn: sqlite3.Connection) -> set[str]:
@@ -71,9 +68,7 @@ def test_legacy_row_survives_with_unknown_status() -> None:
     conn.executescript(path.read_text(encoding="utf-8"))
     conn.commit()
 
-    row = conn.execute(
-        "SELECT r2_key, r2_status, r2_write_error FROM agent_skills_inventory"
-    ).fetchone()
+    row = conn.execute("SELECT r2_key, r2_status, r2_write_error FROM agent_skills_inventory").fetchone()
     assert row == (None, "unknown", None)
 
 
@@ -128,9 +123,7 @@ def test_each_valid_status_accepted() -> None:
             ("smith", "marcus", f"skill-{status}", "c" * 64, f"turn-{status}", status),
         )
     conn.commit()
-    n = conn.execute(
-        "SELECT COUNT(*) FROM agent_skills_inventory"
-    ).fetchone()[0]
+    n = conn.execute("SELECT COUNT(*) FROM agent_skills_inventory").fetchone()[0]
     assert n == 4
 
 
@@ -147,8 +140,8 @@ def test_partial_index_excludes_persisted_rows() -> None:
         """,
         [
             ("smith", "marcus", "s-persisted", "d" * 64, "t-p", "persisted"),
-            ("smith", "marcus", "s-pending",   "e" * 64, "t-pe", "pending"),
-            ("smith", "marcus", "s-failed",    "f" * 64, "t-f", "failed"),
+            ("smith", "marcus", "s-pending", "e" * 64, "t-pe", "pending"),
+            ("smith", "marcus", "s-failed", "f" * 64, "t-f", "failed"),
         ],
     )
     conn.commit()

@@ -60,21 +60,21 @@
  * verification, plus GET /health.
  */
 
-import {
-  CONNECTOR_DOWN_PREFIX,
-  CONNECTOR_TOKEN_EXPIRING_PREFIX,
-  SPEC_CONTROL_BROKEN_PREFIX,
-  WEBHOOK_SURFACE_MISSING_PREFIX,
-  conditionPayload,
-} from './conditions'
+import { CONNECTOR_DOWN_PREFIX } from './conditions'
 import { escapeHtml } from './html'
 import { notifySinkAlerts, type SinkNotification } from './sink-notify'
+import { notifySendRefusals, type SendRefusedNotification } from './send-refused'
 import { getOpenSpecControlKeys, specControlConditions } from './spec-control'
 import { getStaleHolds } from './stale-holds'
 import { tokenExpiryConditions } from './token-expiry'
 import { getOpenWebhookSurfaceKeys, webhookSurfaceConditions } from './webhook-surface'
+import { gatewayLoopConditions, gatewayLoopRedSeconds } from './gateway-loop'
+import { conditionLabel, hardStopDetail } from './conditions'
+import { listFleetStatus, type FleetStatusRow } from './fleet-status'
+export { listFleetStatus, type FleetStatusRow } from './fleet-status'
+export { conditionLabel, hardStopDetail } from './conditions'
 
-export type { SinkNotification }
+export type { SinkNotification, SendRefusedNotification }
 
 export interface Env {
   DB: D1Database
@@ -90,6 +90,15 @@ export interface Env {
    */
   WORK_OVERDUE_RED_SECONDS?: string
   /**
+   * Seconds the gateway loop heartbeat may be stale before gateway_loop_wedged
+   * fires (ss#2488 part 2). Default 120, floor 60. MUST stay BELOW the seat's
+   * kill point -- SMD_GATEWAY_LIVENESS_STALE_SECONDS x 2 samples + the dump and
+   * TERM graces, ~270s at defaults (operator/templates/entrypoint.sh) -- or the
+   * page lands after the restart it was meant to precede. A documented
+   * cross-repo contract, not an import, like WORK_OVERDUE_RED_SECONDS.
+   */
+  GATEWAY_LOOP_RED_SECONDS?: string
+  /**
    * Minimum writer-side run age (seconds) before the conn-class connector_down
    * path fires. Default 300 — a failure burst that self-heals inside Hermes'
    * 60s breaker cooldown never reaches an inbox. MUST match the admin roster's
@@ -98,11 +107,15 @@ export interface Env {
    */
   CONNECTOR_DOWN_RUN_AGE_SECONDS?: string
   /**
-   * Vendor-confirmed refresh-token lifetime for the Smokeball connector, in
-   * days (ss#2148; Smokeball auth docs: 30). The connector_token_expiring
-   * condition opens when the seat-reported token-file age reaches
-   * (lifetime - TOKEN_EXPIRY_WARN_DAYS). Unset/invalid disables the condition
-   * for smokeball rather than guessing a lifetime.
+   * The CURRENT vendor refresh-token lifetime for the Smokeball connector, in
+   * days (ss#2148; Smokeball auth docs: 180 since their 2026-08-24 cutover,
+   * 30 before it). This is the lifetime for a token issued TODAY — tokens
+   * minted before the cutover still die at 30, and ./token-expiry.ts dates each
+   * token from its reported age to pick the right one. Do not fold that back
+   * into this single value; on 2026-09-02 both regimes were live at once.
+   * The connector_token_expiring condition opens when the seat-reported
+   * token-file age reaches (lifetime - TOKEN_EXPIRY_WARN_DAYS). Unset/invalid
+   * disables the condition for smokeball rather than guessing a lifetime.
    */
   SMOKEBALL_REFRESH_TOKEN_LIFETIME_DAYS?: string
   /** Days of warning before the recorded lifetime. Default 5. */
@@ -126,25 +139,18 @@ export type FleetCondition =
   | 'connector_check_error'
   | 'spec_control_unprovable'
   | 'webhook_surface_unprovable'
+  | 'gateway_loop_wedged'
+  | 'gateway_loop_unprovable'
+  | 'gateway_restarted'
+  | 'gateway_supervisor_refusing'
+  | 'gateway_supervisor_inert'
+  // ss#2547. The one EVENT-shaped member of this union: it never goes `open`
+  // and never resolves, it only carries a marker. See ./send-refused.
+  | 'send_refused'
   | `connector_down:${string}`
   | `connector_token_expiring:${string}`
   | `spec_control_broken:${string}`
   | `webhook_surface_missing:${string}`
-
-export interface FleetStatusRow {
-  customer_slug: string
-  last_heartbeat_ts: string | null
-  sticky_stop_level: string | null
-  scheduler_ok: number | null
-  scheduler_max_overdue_seconds: number | null
-  connectors_json: string | null
-  connector_check_ok: number | null
-  connector_token_age_json: string | null
-  spec_control_json: string | null
-  spec_control_ok: number | null
-  webhook_surface_json: string | null
-  webhook_surface_ok: number | null
-}
 
 /** One per-server entry from the seat's connectors map (writer-side ages). */
 export interface ConnectorEntry {
@@ -191,6 +197,7 @@ export interface RunSummary {
   transitions: Transition[]
   stale_holds: StaleHold[]
   sink_notifications: SinkNotification[]
+  send_refusals: SendRefusedNotification[]
 }
 
 const DEFAULT_RED_SECONDS = 300
@@ -324,6 +331,8 @@ export interface EvaluateOptions {
    * from the seat's map and nothing would ever close the alert.
    */
   openWebhookSurfaceKeys?: Record<string, string[]>
+  /** gateway_loop_wedged threshold (ss#2488 part 2). See Env.GATEWAY_LOOP_RED_SECONDS. */
+  gatewayLoopRedSeconds?: number
 }
 
 export function evaluateConditions(
@@ -339,6 +348,7 @@ export function evaluateConditions(
     tokenWarnDays = DEFAULT_TOKEN_EXPIRY_WARN_DAYS,
     openSpecControlKeys = {},
     openWebhookSurfaceKeys = {},
+    gatewayLoopRedSeconds: loopRed = gatewayLoopRedSeconds(undefined),
   } = options
   const out: ConditionState[] = []
   for (const row of rows) {
@@ -366,7 +376,7 @@ export function evaluateConditions(
       customer_slug: row.customer_slug,
       condition: 'hard_stop',
       active: row.sticky_stop_level === 'HARD_STOP',
-      detail: `sticky_stop_level=${row.sticky_stop_level ?? 'null'}`,
+      detail: hardStopDetail(row),
     })
     // scheduler_error — per-field NULL-hold: only evaluate when scheduler_ok
     // was actually reported this beat.
@@ -390,12 +400,13 @@ export function evaluateConditions(
       })
     }
     out.push(...connectorConditions(row, connectorRunAgeThresholdSeconds))
-    out.push(...tokenExpiryConditions(row, tokenLifetimesDays, tokenWarnDays))
+    out.push(...tokenExpiryConditions(row, tokenLifetimesDays, tokenWarnDays, nowMs))
     // Indexed straight in, no `?? []`: both helpers default an absent list to
     // empty, and the extra branches pushed this function over its complexity
     // ceiling once the ss#2287 condition joined.
     out.push(...specControlConditions(row, openSpecControlKeys[row.customer_slug]))
     out.push(...webhookSurfaceConditions(row, openWebhookSurfaceKeys[row.customer_slug]))
+    out.push(...gatewayLoopConditions(row, loopRed))
   }
   return out
 }
@@ -463,20 +474,6 @@ function connectorConditions(row: FleetStatusRow, runAgeThreshold: number): Cond
   return out
 }
 
-async function listFleetStatus(db: D1Database): Promise<FleetStatusRow[]> {
-  const result = await db
-    .prepare(
-      `SELECT customer_slug, last_heartbeat_ts, sticky_stop_level,
-              scheduler_ok, scheduler_max_overdue_seconds,
-              connectors_json, connector_check_ok, connector_token_age_json,
-              spec_control_json, spec_control_ok,
-              webhook_surface_json, webhook_surface_ok
-         FROM fleet_status`
-    )
-    .all<FleetStatusRow>()
-  return result.results ?? []
-}
-
 async function getAlertState(
   db: D1Database,
   slug: string,
@@ -510,29 +507,6 @@ async function markResolved(db: D1Database, s: ConditionState): Promise<void> {
     )
     .bind(s.customer_slug, s.condition)
     .run()
-}
-
-const CONDITION_LABEL: Record<string, string> = {
-  heartbeat_red: 'Machine not heartbeating',
-  hard_stop: 'Cost breaker HARD_STOP',
-  scheduler_error: 'Cron scheduler broken/unreadable',
-  work_overdue: 'Scheduled work not firing',
-  connector_check_error: 'Connector health check broken (outages not counted)',
-  spec_control_unprovable: 'Authored-spec manifest unreadable (spec health unknown)',
-  webhook_surface_unprovable: 'Webhook tool surface unresolvable (warn-tier health unknown)',
-}
-
-/** Label lookup with the per-connector prefix form (ADR 0080). */
-export function conditionLabel(condition: FleetCondition): string {
-  const down = conditionPayload(condition, CONNECTOR_DOWN_PREFIX)
-  if (down !== null) return `Connector failing: ${down}`
-  const expiring = conditionPayload(condition, CONNECTOR_TOKEN_EXPIRING_PREFIX)
-  if (expiring !== null) return `Connector credential expiring: ${expiring}`
-  const spec = conditionPayload(condition, SPEC_CONTROL_BROKEN_PREFIX)
-  if (spec !== null) return `Authored spec declared but not installed: ${spec}`
-  const tool = conditionPayload(condition, WEBHOOK_SURFACE_MISSING_PREFIX)
-  if (tool !== null) return `Webhook tool expected but not offered: ${tool}`
-  return CONDITION_LABEL[condition] ?? condition
 }
 
 async function sendTransitionEmail(
@@ -647,6 +621,7 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
     tokenWarnDays: tokenWarnDays(env),
     openSpecControlKeys: await getOpenSpecControlKeys(env.DB),
     openWebhookSurfaceKeys: await getOpenWebhookSurfaceKeys(env.DB),
+    gatewayLoopRedSeconds: gatewayLoopRedSeconds(env.GATEWAY_LOOP_RED_SECONDS),
   })
   const transitions: Transition[] = []
 
@@ -677,6 +652,11 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
   // fail-soft, so a sink problem can never suppress the fleet_status pager.
   const sinkNotifications = await notifySinkAlerts(env)
 
+  // ss#2547: the refused-or-unsent pager. Runs after condition evaluation for
+  // the same reason the sink does, and is event-shaped rather than a condition
+  // -- see ./send-refused for why a refusal has no green state to return to.
+  const sendRefusals = await notifySendRefusals(env, rows)
+
   const summary: RunSummary = {
     at: new Date(nowMs).toISOString(),
     seats: rows.length,
@@ -684,12 +664,16 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
     transitions,
     stale_holds: staleHolds,
     sink_notifications: sinkNotifications,
+    send_refusals: sendRefusals,
   }
   if (transitions.length > 0) {
     console.log(`[fleet-alerts] transitions: ${JSON.stringify(transitions)}`)
   }
   if (sinkNotifications.length > 0) {
     console.log(`[fleet-alerts] sink notifications: ${JSON.stringify(sinkNotifications)}`)
+  }
+  if (sendRefusals.length > 0) {
+    console.log(`[fleet-alerts] send refusals: ${JSON.stringify(sendRefusals)}`)
   }
 
   // Watch the watcher: only reached when the run completed without throwing.

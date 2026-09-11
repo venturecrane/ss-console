@@ -117,15 +117,10 @@ export async function resolveAdminSessionFromClerk(
   return sessionData
 }
 
-/**
- * Invalidate the cached admin session for a Clerk user_id. Call after any
- * mutation that changes the user's role or email (admin tools, future
- * settings flows). Optional — natural TTL expiry resolves stale state
- * within 120s either way.
- */
-export async function invalidateAdminSessionCache(
-  clerkUserId: string,
-  kv: KVNamespace
-): Promise<void> {
-  await kv.delete(`admin-session:${clerkUserId}`)
-}
+// An explicit invalidateAdminSessionCache(clerkUserId, kv) helper existed
+// here but had zero production call sites — no admin route mutates a user's
+// role or email today (resend-invitation only touches role='client' rows,
+// which never enter this cache). Deleted 2026-08-14 (code review); the 120s
+// TTL above IS the invalidation story. If a role/email mutation surface is
+// ever built, reintroduce the helper (a kv.delete of the admin-session:<id>
+// key) and call it from that mutation path.

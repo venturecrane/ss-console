@@ -10,7 +10,13 @@ posture here; every skill inherits it.
 `smokeball-surface.md` marks the write bodies — `create_task`/`update_task`,
 `create_event`/`update_event`, `create_folder`, `add_file`/`delete_file`, and the
 `create_memo` body field — as **UNVERIFIED against a live tenant** ("re-confirm ALL
-writes at the A&P prod connect"; `add_file`/`delete_file` currently 403 on staging).
+writes at the A&P prod connect"). Since then `create_folder` and `add_file` have
+delivered sixteen chronology packages into the A&P production tenant (August 2026,
+runner-side through the connector), and the task DTO was verified on prod
+2026-08-31 (`POST /tasks` is 202-async - an immediate read 404s, so a confirming
+read must retry; `update_task` needs `staff_id` because the vendor PUT is a full
+replace). The earlier staging 403 is history, not a live constraint; the rule
+below still governs every agent-side write.
 
 So the rule is uniform, not scoped to one write:
 
@@ -47,7 +53,9 @@ There is **no move tool** in the surface. "Filing" or "routing" a document is
 `delete_file` (destructive, banned) or an `add_file` copy to "move" a document, which
 would duplicate it. Before re-staging an input, read `get_files_on_matter` and
 skip/surface if it is already present (avoid duplicate drops into the drafting
-folder). `add_file` overwrite/versioning behavior is unpinned — confirm at connect.
+folder). `add_file` never overwrites: a superseding file is uploaded first and the
+prior one removed by id only after the read-back confirms the new one (the August
+2026 delivery posture); a skill never deletes.
 
 ## 4. `create_memo` is the audit log — but it too can fail
 

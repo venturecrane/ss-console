@@ -9,7 +9,7 @@ description: >-
   template per blessed item, structure only, with every case-specific value left as a visible
   marker, and it reports a template delivered only after reading the filed document back.
   Firm-level establishment is refused for anyone who is not an Operator admin.
-version: 0.1.0
+version: 0.4.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -32,10 +32,10 @@ metadata:
       ]
   smd:
     weight: heavy # a survey across the firm's document corpus plus a derived skeleton per template; the reasoning is the bulk
-    action_class: read + internal_write # reads the firm's own documents in place; creates one folder and files rendered templates on a matter. No send of any kind.
+    action_class: read + internal_write + commitment # reads the firm's own documents in place; creates one folder and files rendered templates on a matter; and, where the firm authored one, offers to create the Operator's own internal matter (commitment, never autonomous, only on an admin's confirmation of the exact matter). No send of any kind.
     content_ceiling: connective # it derives structure from the firm's own exemplars and files skeletons; it authors no legal work product and no case content
     connectors:
-      - smokeball # PracticeManagement / Documents - surveys and reads the firm's documents in place (read), creates the library folder and files the rendered templates (internal_write)
+      - smokeball # PracticeManagement / Documents - surveys and reads the firm's documents in place (read), creates the library folder and files the rendered templates (internal_write), and creates the Operator's own internal matter on an admin's confirmation (commitment)
     # No Email/Calendar send connector. This skill's only output is the reply to
     # the admin who instructed it, in their own turn, plus the folder and the
     # templates it files into the firm's own record. It never addresses anyone
@@ -174,16 +174,82 @@ Two or three exemplars of one type is better than one, because a structure deriv
 single document cannot tell what is invariant from what that document happened to do. Say how
 many you have per type; one is workable and the admin should know it is one.
 
-**The storage location.** Propose a new folder, suggested name **"Document Library"**, on a
-matter you name from the survey.
+**The format half of each template (#2448).** Every template you file is also the firm's
+FORMAT template for its document class: when a drafter later files a draft of that class,
+the renderer opens the library template as the base document and writes the draft into it,
+so the template's fonts, spacing, indents, letterhead and named styles (`SMD Body`,
+`SMD Item Label`, `SMD Item Text`, `SMD Heading 1-3`, `SMD Caption`, `SMD Signature`) become
+the draft's. Typography lives only in that .docx; a style the firm edits in Word takes
+effect on the next draft. So, per proposed template, name its **document class** (one of
+`discovery_set`, `discovery_response`, `demand_letter`, `mediation_brief`, `memo`, `letter`),
+and say which of two provenances it will have: **the firm's own file**, if the admin points
+you at a template or letterhead already in the folder (or drops one in under the class's file
+name), which you leave exactly as it is; or **the starter**, a Times New Roman 12 base with the
+named styles defined, which you file for the firm to open and adjust in Word. Say plainly
+which it is. Where you observed the firm's own typography in the exemplars (font, spacing,
+heading look), report it as an observation for the admin, never as something you will impose:
+the starter is a starting point, the firm's Word edit is the authority.
 
-Be plain about the constraint rather than hiding it: **the connector can create folders on a
-matter and cannot create a matter.** So the library has to live on a matter that already
-exists, and you are proposing one. Name it, say why you picked it (an administrative or
-internal matter is a better home than a live client file), and **invite the admin to redirect
-you** to a different matter or to a folder they already keep templates in. If the firm would
-rather have a dedicated matter for it, that is a thing a person creates in the case system, and
-the honest answer is to say so and wait.
+**The storage location.** Propose a new folder, suggested name **"Document Library"**. Where it
+lives has exactly two answers, and which one you are in is decided by the seat's configuration,
+never by your judgment about a matter.
+
+**If the firm has already authored the location** in `/var/lib/smd-config/customer.yaml`, as
+`self_initiation.document_library.matter_hint` or `digest.home_matter_id`, propose that matter
+and **say that it is the authored one**: the firm chose this, you are repeating their choice
+back for confirmation, not selecting it. Resolve the hint against `mcp_smokeball_list_matters`
+so you can name the matter as the firm will recognize it.
+
+**If the firm has authored an `operator_matter` block** under
+`self_initiation.document_library`, the answer is to OFFER TO CREATE IT. That block is the
+firm's decision, written into their configuration, that the Operator may open one internal
+matter of its own to keep templates in. It carries exactly four values: `number`,
+`description`, `client_contact_id` (the firm's own contact, so the firm is its own client on
+this matter), and `matter_type_id`. You do not choose any of them, you do not vary any of
+them, and you cannot invent one that is missing.
+
+The number a seat uses by convention is **OPS-OPERATOR-LIBRARY**, and that is also what the
+template resolver falls back to when no number is authored anywhere. Where the firm authored a
+different number, theirs is the one, everywhere. Read the number out of the block rather than
+assuming this one.
+
+Do this, in order:
+
+1. **Read the block** from `/var/lib/smd-config/customer.yaml` with `read_file`.
+2. **Resolve the two ids to names** so the admin can read the offer: the client contact with
+   `mcp_smokeball_get_contact(client_contact_id)`, and the matter type by finding that id in
+   `mcp_smokeball_list_matter_types()`. If either will not resolve, say so and stop; an offer
+   naming a raw identifier is not an offer anybody can judge.
+3. **Call `mcp_smokeball_create_matter`** with exactly the four authored values, nothing
+   added and nothing changed.
+4. **Nothing is created on this turn.** The call does not go through: the trust layer holds
+   it and hands you back one bracketed line beginning `[act ` and an eight-character tag.
+   That is the offer, rendered by the platform from the authored values rather than composed
+   by you.
+5. **Put that line in your reply verbatim**, on its own line, and ask the admin to reply
+   **"yes, create it"** if they want it. Say in your own words what the matter will be: the
+   firm's own internal file, named by the description, with the firm itself as the client,
+   used to hold the templates and nothing else. Then stop.
+
+The admin can decline, and a decline is a normal answer. They can also point you at an
+existing matter instead, and then that is the location and no matter is created.
+
+**If neither is authored, ask, and stop there.** Say plainly that the library needs an
+**internal, non-client matter**, and that you cannot pick one. Two ways forward, and offer
+both in the same breath: a person creates or names the matter in the case system and tells
+you which it is; or, if they would rather the Operator keep its own file, that is a
+configuration change SMD makes for them, after which you can offer to create it and they
+confirm. If they already keep templates in a folder somewhere, point you at that instead.
+Then wait.
+
+**Never nominate a client matter as the home, however well documented.** A client's file is
+never the firm's template shelf. This holds against every temptation the survey creates: the
+matter with the most documents in it is the most tempting and the most wrong, and you cannot
+tell an internal matter from a client's by looking. A matter named "Office Depot" is a vendor
+dispute someone is being billed for. A matter typed "Internal Affairs" is a police-misconduct
+case. Names and types are the firm's shorthand, not a category you are entitled to read. Absent
+an authored location, every matter in the survey is a client's case until the firm says
+otherwise, so there is nothing in the survey for you to pick from, and the ask is the answer.
 
 Then **STOP.** Report the proposal, say plainly that nothing has been created and nothing will
 be until they bless it, and end the turn. A survey report that goes unanswered establishes
@@ -193,6 +259,31 @@ nothing, and that is the correct outcome.
 
 The blessed list is the specification. Read it for three things before touching anything: which
 templates survived, whether any were renamed, and where the library goes.
+
+**One check before you create anything.** If the blessed matter is one of the firm's client
+matters, say so once, in those words, and ask the admin to confirm that is what they intend.
+Not a warning, not a lecture: one sentence naming the matter, saying you read it as a client
+file, and asking them to say yes before you put the firm's templates in it. Then wait. An admin
+can bless a location by reflex, and a client's file is the one place the library should not
+quietly appear. If they confirm, proceed and note the confirmation in the report. If the
+blessed matter is the authored internal one, or one they created for this, there is nothing to
+ask and you do not ask it.
+
+**If the blessing is "yes, create it" on an offered matter**, the matter comes first and the
+folder second.
+
+- **Call `mcp_smokeball_create_matter` again, with exactly the same four values.** The
+  platform recognizes the confirmation, replays the values it showed the admin, and performs
+  the act. Do not vary a character; the values that get used are the ones in the proposal
+  either way, and a changed argument is a refusal rather than a substitution.
+- **Never call it twice in one turn.** One offer, one confirmation, one matter.
+- **Report every field that came back**: the matter's id, its number, its description, its
+  type by name, its client by name, and its status. This is the read-back, and it is what
+  turns "I created it" into something the admin can check against their own screen.
+- **If the result says `pending`**, say that Smokeball accepted the matter and has not
+  finished making it visible yet, and that you will read it back on the next turn. That is a
+  success reported honestly, not a failure, and it is never a reason to create a second one.
+- Then create the folder on that matter, as below.
 
 - New folder: `mcp_smokeball_create_folder` on the blessed matter, with the blessed name.
   Keep the returned folder id; every template is filed into it.
@@ -248,10 +339,33 @@ exemplars do not establish, that is a marker, never a plausible sentence.
 
 ### 6. Render each template, and respect the gate
 
-`mcp_smokeball_render_docx_template(matter_id, file_name, skeleton_markdown, folder_id)`. You
-pass the skeleton's **text**; the .docx bytes are built in tool code from bytes you never saw.
-`file_name` gains a `.docx` suffix if it lacks one, and the returned `fileName` is the name
-actually filed.
+`mcp_smokeball_render_docx_template(matter_id, file_name, skeleton_markdown, folder_id,
+document_class)`. You pass the skeleton's **text** and the template's **document class**; the
+.docx bytes are built in tool code from bytes you never saw. With the class the tool renders
+the skeleton onto the class starter (the named styles defined, Times New Roman 12, a page
+number in the footer) or, when the library already holds a template for that class, INTO
+that file, keeping its letterhead and styles; the return carries `formatApplied` saying
+which. `file_name` gains a `.docx` suffix if it lacks one, and the returned `fileName` is the
+name actually filed.
+
+**The class's template has exactly one name, and the tool tells you what it is.** The
+return carries `formatApplied.classTemplateName` — the name the renderer will look for
+when it drafts this class. File under that name. Filing under any other name is refused,
+not filed-with-a-warning, because a template the renderer never opens is worse than no
+template at all: the firm edits it in Word, nothing changes in any draft, and nothing
+anywhere says why. That is ss#2490, found live on 2026-08-20 with three templates filed
+and one live.
+
+So: **read `classTemplateName` off the return and use it.** Do not assume the convention
+`Template - <Class>.docx` — a seat whose firm keeps templates under their own names has
+`self_initiation.document_library.templates` authored, and then the authored name is the
+one name. If the blessing asks for a name that is neither, that mapping is authored by PR
+**first**; you file afterwards, under the authored name. Say in the report the name you
+filed under.
+
+Never upload bytes yourself and never rename a file the firm placed in the folder. If a
+class already has a template and the firm wants it rebuilt, filing under the same name is
+the rebuild: the resolver takes the newest, and nothing is destroyed.
 
 **The content gate refuses; it never repairs.** Before anything is rendered or uploaded the
 markdown is checked, and the whole violation list comes back in `refusals` with `fileId` null.
@@ -310,6 +424,9 @@ Per template, in the admin's own terms:
 - the **fileId**,
 - the **sha256** and **sizeBytes** the tool returned,
 - **where it is**: the matter and folder it was filed into,
+- **its document class and format provenance**, from the tool's `formatApplied`: rendered
+  onto the starter (tell the admin: open it in Word, adjust the styles, and every future
+  draft of that class follows), or rendered into the firm's own file (name it),
 - **confirmed by read-back**, or **filed and awaiting materialization**, in those words.
 
 Then the things that did not work, plainly and not at the bottom:
@@ -327,11 +444,15 @@ whose documents. **Claim nothing that read-back did not confirm.**
 **Admin-instructed, blessing-gated, internal only, never sends.**
 
 The agent MAY: survey the firm's matters and documents; read documents in place; classify;
-propose a library and a location; on the blessing, create the blessed folder, render one
-template per blessed item, file them into that folder, read them back, and report.
+propose a library and a location; offer to create the firm's authored `operator_matter` and,
+on an admin's confirmation of that offer, create it and read it back; on the blessing, create
+the blessed folder, render one template per blessed item, file them into that folder, read
+them back, and report.
 
 The agent MUST NOT: run on a turn the initiation context did not admit as Admin-classed (and
-MUST NOT seek another route when it declines); create a folder or file a template before the
+MUST NOT seek another route when it declines); create a matter with any value the firm did not
+author, or for any purpose other than the Operator's own template library; create a matter for
+a client, ever, under any instruction; create a folder or file a template before the
 blessing; build a template the admin did not bless; derive a template from received paper or
 from no exemplar at all; write any person, party, business, court, adjuster, or provider name
 into a skeleton outside a marker; write a date, figure, promise, timeline, or commitment into a
@@ -343,8 +464,9 @@ send anything to anyone.
 
 1. **Admin-gated.** The initiation context's decline is final. No retry, no alternate path, no
    asking the person to vouch for themselves.
-2. **Nothing is created before the blessing.** No folder, no file, no rename. The proposal turn
-   creates nothing at all.
+2. **Nothing is created before the blessing.** No folder, no file, no rename, no matter. The
+   proposal turn creates nothing at all, and the offer to create a matter is a proposal like
+   any other.
 3. **Blessed list only.** Every template built was on the blessed list; every template on the
    blessed list was built or its failure was named.
 4. **Firm-authored exemplars only.** No template is derived from received paper, from a test
@@ -360,6 +482,10 @@ send anything to anyone.
 ## Pitfalls
 
 Creating the folder during the proposal turn because it is obviously going to be blessed;
+paraphrasing the bracketed offer line instead of copying it, so the admin's "yes" answers a
+sentence the platform never recorded; calling the create tool a second time in the same turn
+because the first call did not appear to do anything; reading a `pending` result as a failure
+and creating a second matter; offering to create a matter on a seat that authored none;
 proposing a template for a document type the survey never found an exemplar of; deriving a
 template from opposing counsel's letter because it was the cleanest example of that type in the
 file; leaving the plaintiff's name in a skeleton because it read naturally in the sentence;
@@ -376,8 +502,10 @@ covered the firm.
 1. The proposal turn created nothing: no folder, no file, and the reply said so.
 2. Every proposed template named its exemplars and the matter each exemplar lives on, and every
    exemplar was firm-authored.
-3. The proposal named the storage location, said the connector cannot create a matter, and
-   invited the admin to redirect it.
+3. The proposal named the storage location. Where the firm authored an `operator_matter`, the
+   reply carried the platform's bracketed offer line verbatim and asked for "yes, create it",
+   and nothing was created on that turn. Where nothing was authored, the reply asked for an
+   internal matter and invited the admin to redirect it. Either way the admin could redirect.
 4. Every template built appears on the blessed list, and nothing else was built.
 5. Every skeleton is structure: no name, date, figure, or identifier outside a marker, and every
    `{{FILL}}` marker names its source.

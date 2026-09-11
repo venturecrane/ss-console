@@ -41,8 +41,22 @@ not a gap to fill.
 
 **Good — an item line (Shape A):**
 
-> Reyes v. Doe (7a11...5001) — interrogatory verification, sent 2026-06-14, unsigned
-> (17 days) — owns: client-verification-tracker.
+> <matter number> (<matter id, first 4 and last 4>) — interrogatory verification, sent
+> <date as the record prints it>, unsigned (<age>) — owns: client-verification-tracker.
+
+Placeholders, not sample values, and this line is why. It previously read
+"Reyes v. Doe (7a11...5001) - interrogatory verification, sent 2026-06-14,
+unsigned (17 days)", which put four separately-refused classes into the one
+example the model is asked to copy: a case caption (`case-name`, tier 2), a
+date (`date:####-##-##`, the largest single refusal shape), a matter-id
+fragment, and a derived interval. Every value in a digest line has to come
+from a read of the firm's records, and a sample value in the template is the
+easiest thing in the file to reach for when a read comes up short.
+
+Note the identifier form: a matter NUMBER, not a caption. The rest of the
+system names matters by number (the escalator's digest renders "matter
+2026-PI-101"), and a caption in client-adjacent output is refused by the
+citation gate. The old example taught the one form the substrate rejects.
 
 **Good — a quiet day (Shape B):**
 

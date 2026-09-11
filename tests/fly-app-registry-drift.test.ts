@@ -121,9 +121,14 @@ describe('fly-app-registry drift guard', () => {
   })
 
   it('does not resolve via the hermes-<slug> convention', () => {
-    // ADR 0036 rejects the convention as authority. `pilot-law` has a seat dir
-    // and no app; a convention-derived registry would happily hand back
-    // "hermes-pilot-law".
-    expect(resolveCustomerFlyApp('pilot-law')).toBeNull()
+    // ADR 0036 rejects the convention as authority. A convention-derived
+    // registry would happily hand back "hermes-<anything>"; the registry must
+    // return null for a slug it does not know.
+    //
+    // The original example here was `pilot-law`, a seat authored 2026-06-05 and
+    // never provisioned, retired in full on 2026-08-25. Deliberately replaced
+    // with a slug that has never existed and never will, so this assertion
+    // cannot be quietly satisfied by a real entry appearing later.
+    expect(resolveCustomerFlyApp('never-a-real-seat')).toBeNull()
   })
 })

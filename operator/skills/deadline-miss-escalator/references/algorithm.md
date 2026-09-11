@@ -53,7 +53,7 @@ authored_date)`. The task id is the anti-collision half: two same-day tasks on
 
 ```
 never raised            -> fire (attempt 1)
-resolved / handed_off   -> never (terminal; a person owns it)
+resolved / handed_off   -> never (terminal until a later raise re-opens it)
 acked, still open       -> re-surface only after ack_snooze_days (ack = snooze)
 raised, not acked       -> re-fire only after refire_days (fire once, not daily)
 ```
@@ -153,7 +153,13 @@ recompute a code for it.
   1. For each firing item, call `escalation_append` with `derive_only=true` to
      get its real `item_key` + ACK token + `append_handle`. Nothing is written.
      Keep each item's handle next to the code you are about to print for it.
-  2. Compose and send ONE alert quoting exactly those returned tokens. NEVER
+  2. Compose and send ONE alert **with `smd_send_message`**, quoting exactly
+     those returned tokens. That tool is the delivery. A memo, a task or a
+     draft is a log of the work, never a substitute for it, and
+     `smd_deliver_draft` only AUTHORIZES a draft — it sends nothing. The broker
+     now enforces this: it refuses step 3's `fired` unless it witnessed a
+     dispatch to a person in this session, so a turn that logged instead of
+     sending records nothing and the item re-fires next run. NEVER
      print a code the tool did not return this run — an invented code
      (`ACK-A1`, `ACK-PENDING`) resolves to nothing, and a code remembered from
      a prior alert belongs to a DIFFERENT item and would silently ack the
@@ -165,7 +171,9 @@ recompute a code for it.
      necessarily the code of the row you write. The broker stamps `ts`/`id`. If
      the send did not happen, write nothing (the item re-fires next run:
      annoying, never dangerous). Never report an item as raised unless the send
-     AND the ledger write both succeeded.
+     AND the ledger write both succeeded. This is no longer only a rule you
+     follow: the broker refuses the write when it did not witness the send, so
+     an unwitnessed raise is a refusal you must read and act on, not retry.
 - **acked** — on a rostered internal reply (routed here by the inbox skill), emit
   one `acked` event per quoted token. The broker REJECTS an `acked` whose token
   has no prior `fired`, so a stray or forged code cannot silence an alarm that

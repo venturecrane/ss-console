@@ -26,7 +26,11 @@ Outputs land in the per-customer archive dir:
 * ``machine-snapshot-{date}.sqlite`` — ``audit_log`` + memory tables as real
   sqlite tables. This file doubles as the evidence generator's ``--read-db``
   input, which was always specified as "the per-customer audit-export
-  snapshot" — the seam pull is what finally makes that input real.
+  snapshot" — the seam pull is what finally makes that input real. The
+  snapshot's ``audit_log`` carries the hash-chain link columns as well as the
+  12 compliance columns (ss#2500), because a snapshot without them cannot
+  answer any question about the chain, including whether a pinned head is
+  still in it.
 * ``audit-log-manifest-{date}.json`` / key counts in the step manifest.
 """
 
@@ -73,6 +77,14 @@ MEMORY_EXPORT_TABLES: tuple[str, ...] = (
     "agent_skills_inventory",
     "peer_preferences",
 )
+
+# The hash-chain link columns (#1686). NOT part of AUDIT_COLUMNS, which is the
+# frozen compliance-CSV column order, and preserved in the sqlite snapshot
+# anyway (ss#2500): the snapshot is what the evidence generator reads as
+# --read-db, and without these the packet cannot check a pinned head against the
+# ledger at all. Written as NULL when the Machine's overlay does not serve them,
+# so an older seat degrades to "unchecked" rather than to a crash.
+CHAIN_LINK_COLUMNS: tuple[str, ...] = ("prev_hash", "row_hash")
 
 _PAGE_LIMIT = 200  # overlay MAX_LIMIT
 
@@ -178,18 +190,19 @@ def _snapshot_conn(snapshot_path: Path) -> sqlite3.Connection:
 
 
 def _write_audit_snapshot(conn: sqlite3.Connection, rows: list[dict]) -> None:
-    cols = ", ".join(AUDIT_COLUMNS)
-    placeholders = ", ".join("?" for _ in AUDIT_COLUMNS)
+    snapshot_columns = AUDIT_COLUMNS + CHAIN_LINK_COLUMNS
+    cols = ", ".join(snapshot_columns)
+    placeholders = ", ".join("?" for _ in snapshot_columns)
     conn.execute(
         "CREATE TABLE IF NOT EXISTS audit_log ("
         "id TEXT PRIMARY KEY, ts TEXT NOT NULL, action_type TEXT NOT NULL, "
         "actor TEXT NOT NULL, actor_role TEXT, skill_name TEXT, matter_ref TEXT, "
         "input_digest TEXT, output_digest TEXT, diff_digest TEXT, "
-        "trust_ceiling TEXT, metadata TEXT)"
+        "trust_ceiling TEXT, metadata TEXT, prev_hash TEXT, row_hash TEXT)"
     )
     conn.executemany(
         f"INSERT OR REPLACE INTO audit_log ({cols}) VALUES ({placeholders})",
-        [tuple(row.get(c) for c in AUDIT_COLUMNS) for row in rows],
+        [tuple(row.get(c) for c in snapshot_columns) for row in rows],
     )
     conn.commit()
 
@@ -200,11 +213,19 @@ def _write_memory_snapshot(conn: sqlite3.Connection, table: str, rows: list[dict
     if not rows:
         return
     keys = [k for k in rows[0].keys() if k != "_rowid"]
+    # The column names are served by the seat and interpolated into DDL. A
+    # quoted identifier is safe against everything except a quote in the name,
+    # and a name that is not a Python identifier is not a column this schema
+    # ever served (2026-09-09 review, Security LOW 6). Refuse rather than quote
+    # around it: a hostile seat gets a clear error, not a table it named.
+    bad = [k for k in keys if not k.isidentifier()]
+    if bad:
+        raise ValueError(f"memory export {table!r} served non-identifier column names: {bad!r}")
     col_defs = ", ".join(f'"{k}"' for k in keys)
     placeholders = ", ".join("?" for _ in keys)
-    conn.execute(f'CREATE TABLE IF NOT EXISTS "{table}" ({col_defs})')  # noqa: S608 — table from MEMORY_EXPORT_TABLES
+    conn.execute(f'CREATE TABLE IF NOT EXISTS "{table}" ({col_defs})')  # noqa: S608 - same statement shape as the line above: table from MEMORY_EXPORT_TABLES, values bound — table from MEMORY_EXPORT_TABLES, columns isidentifier-checked above
     conn.executemany(
-        f'INSERT INTO "{table}" ({col_defs}) VALUES ({placeholders})',  # noqa: S608
+        f'INSERT INTO "{table}" ({col_defs}) VALUES ({placeholders})',  # noqa: S608 - same statement shape as the line above: table from MEMORY_EXPORT_TABLES, values bound — same table and column set as the CREATE above; values are bound
         [tuple(row.get(k) for k in keys) for row in rows],
     )
     conn.commit()
@@ -311,6 +332,7 @@ class SeamAuditLogPreserver:
 
 __all__ = [
     "AUDIT_COLUMNS",
+    "CHAIN_LINK_COLUMNS",
     "MEMORY_EXPORT_TABLES",
     "SeamAuditLogPreserver",
     "SeamClient",

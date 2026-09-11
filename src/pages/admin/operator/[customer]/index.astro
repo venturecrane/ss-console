@@ -171,9 +171,27 @@ const personas = config?.personas ?? []
                   <p class="text-xs text-[color:var(--ss-color-text-muted)] mb-2">{health.note}</p>
                 )}
                 {
-                  /* Captain clear (ADR 0062 §6): shown only when the cost
-                     breaker is tripped. Resets the ladder to OK on the Machine
-                     and records the governance action. */
+                  /* WHY the ladder tripped (migration 0112, overlay#341).
+                     Rendered ABOVE the clear form on purpose: clearing is a
+                     Captain judgement, and four different meters drive this
+                     ladder, so deciding without the cause is deciding blind.
+                     Absent on a seat still running a pre-cause overlay, in
+                     which case nothing renders rather than a guess. */
+                  (fleet?.sticky_stop_level === 'HARD_STOP' ||
+                    fleet?.sticky_stop_level === 'SOFT_STOP') &&
+                    (fleet?.sticky_stop_reason || fleet?.sticky_stop_condition) && (
+                      <p class="text-xs mb-2 text-[color:var(--ss-color-error)]">
+                        {fleet.sticky_stop_condition && (
+                          <span class="font-medium">{fleet.sticky_stop_condition}</span>
+                        )}
+                        {fleet.sticky_stop_reason && <span> {fleet.sticky_stop_reason}</span>}
+                      </p>
+                    )
+                }
+                {
+                  /* Captain clear (ADR 0062 §6): shown only when the ladder is
+                     tripped. Resets it to OK on the Machine and records the
+                     governance action. */
                   (fleet?.sticky_stop_level === 'HARD_STOP' ||
                     fleet?.sticky_stop_level === 'SOFT_STOP') && (
                     <form
@@ -185,22 +203,20 @@ const personas = config?.personas ?? []
                         type="text"
                         name="reason"
                         required
-                        placeholder="Reason for clearing the cost stop"
+                        placeholder="Reason for clearing the stop"
                         class="text-xs border border-[color:var(--ss-color-border)] rounded-[var(--ss-radius-card)] px-2 py-1 bg-surface"
                       />
                       <button
                         type="submit"
                         class="text-xs font-medium px-3 py-1 rounded-[var(--ss-radius-badge)] bg-[color:var(--ss-color-error)] text-white w-fit"
                       >
-                        Clear cost stop
+                        Clear stop
                       </button>
                     </form>
                   )
                 }
                 {clearStatus === 'ok' && (
-                  <p class="text-xs text-[color:var(--ss-color-complete)] mb-2">
-                    Cost stop cleared.
-                  </p>
+                  <p class="text-xs text-[color:var(--ss-color-complete)] mb-2">Stop cleared.</p>
                 )}
                 {clearStatus === 'error' && (
                   <p class="text-xs text-[color:var(--ss-color-error)] mb-2">
@@ -366,6 +382,14 @@ const personas = config?.personas ?? []
                     class="text-[color:var(--ss-color-action)] hover:underline"
                   >
                     Memory
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href={`/admin/operator/${encodeURIComponent(slug)}/chronology`}
+                    class="text-[color:var(--ss-color-action)] hover:underline"
+                  >
+                    Chronology packages
                   </a>
                 </li>
                 <li>

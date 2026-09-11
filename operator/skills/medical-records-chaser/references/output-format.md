@@ -9,7 +9,12 @@ The decision determines the shape. Every tracked item is keyed to
 # Records Chase — <provider> — <patient / plaintiff> — matter <id> — YYYY-MM-DD
 
 **Requested:** <date records were requested, from the authored roster>
-**Status:** outstanding (<N> days); nudge <#> of <max>
+**Status:** outstanding; <N> days past the confirm-by date on the tracking task
+(the plan's `days_past_confirm_by`, copied verbatim); chase <#> (the plan's
+`attempt`) — or, when the plan's `last_chased` is null, "first chase recorded
+in the tracking ledger" with no numerator (ss #2404)
+**Last chase staged:** <the plan's `last_chased` date, or the null-history
+sentence — never a recalled date>
 **Decision:** cadence due — chase <sent | drafted, per the authored external_send
 ceiling> to <provider | records vendor>.
 

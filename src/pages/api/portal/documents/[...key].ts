@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro'
 import { streamDocument } from '../../../../lib/storage/r2'
 import { listEngagements } from '../../../../lib/db/engagements'
+import { getOperatorAgreementForKey } from '../../../../lib/portal/agreement-documents'
 import { getPortalClient } from '../../../../lib/portal/session'
 import { env } from 'cloudflare:workers'
 import { errorResponse } from '../../../../lib/api/helpers'
@@ -15,6 +16,9 @@ import { errorResponse } from '../../../../lib/api/helpers'
  * - Requires valid client session (middleware ensures role=client)
  * - Resolves entity via getPortalClient() (users.entity_id)
  * - Verifies the R2 key belongs to this client's org/engagement
+ * - Executed Operator agreements (ss#2641) authorize on their D1 row rather
+ *   than a prefix guess, and additionally require a principal/compliance
+ *   role, matching the Compliance surface that links them
  * - Prevents path traversal by checking key prefix
  *
  * Content-Disposition:
@@ -70,6 +74,22 @@ export const GET: APIRoute = async ({ locals, params }) => {
     return errorResponse(403, 'Forbidden')
   }
 
+  // Executed Operator agreements: authorized by their own row, not by prefix
+  // shape. The row names the owning entity, so a key that is not this client's
+  // cannot pass, and the role check mirrors the Compliance page that links it.
+  const agreement = await getOperatorAgreementForKey(env.DB, {
+    key,
+    userId: portalData.user.id,
+    orgId: portalData.user.org_id,
+    entityId: portalData.client.id,
+  })
+  if (agreement.kind === 'allowed') {
+    return streamKey(key)
+  }
+  if (agreement.kind === 'forbidden') {
+    return errorResponse(403, 'Forbidden')
+  }
+
   // Verify the key belongs to this client's engagement
   const engagements = await listEngagements(env.DB, portalData.user.org_id, portalData.client.id)
   const engagementIds = engagements.map((e) => e.id)
@@ -89,7 +109,12 @@ export const GET: APIRoute = async ({ locals, params }) => {
     return errorResponse(403, 'Forbidden')
   }
 
-  // Stream the document from R2
+  return streamKey(key)
+}
+
+/** Stream an already-AUTHORIZED key. Every caller must have proven the key
+ * belongs to the signed-in client first; this function performs no checks. */
+async function streamKey(key: string): Promise<Response> {
   const object = await streamDocument(env.STORAGE, key)
   if (!object) {
     return errorResponse(404, 'Not found')

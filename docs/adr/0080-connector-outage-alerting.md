@@ -116,27 +116,68 @@ both keeping this ADR's deterministic-predicate discipline:
    endpoint. The `connector-auth-check` skill (authored per seat in
    `customer.yaml` cron — visible, never ambient) calls it daily and retries
    twice on failure, so a dead credential crosses the 3-consecutive threshold
-   and pages the same day it dies. **Named honestly: this probe is a
-   keepalive, not just a detector.** `auth_status` performs a real refresh
-   grant; where the vendor rotates refresh tokens on refresh (Smokeball
-   does), the daily probe renews the credential and the idle-expiry death
-   stops happening at all. The probe also surfaces the rotation-persist race:
+   and pages the same day it dies. **This probe is a DETECTOR ONLY. It is not
+   a keepalive, and the earlier text here claiming otherwise was false.**
+
+   RETRACTED 2026-09-02, after `pilot-smokeball`'s token died at its 30-day
+   lifetime on 09-01 despite ~12 consecutive successful daily probes. The
+   original text read: "where the vendor rotates refresh tokens on refresh
+   (Smokeball does), the daily probe renews the credential and the idle-expiry
+   death stops happening at all." Every clause of that is wrong, and the
+   parenthetical carried no citation, no verify ID, and no observation — it
+   hardened from a conditional in ADR 0054 that was justified by analogy to
+   `clio-mcp`, a different vendor.
+
+   What is actually true, verified against vendor documentation
+   (vfy_01M1HBNGAQK0SGKSVKXYM7DYYB, vfy_01M1HBKA7DMVT108T6621WRG6P):
+   - Smokeball auth is AWS Cognito, where a refresh token's expiry is FIXED
+     from the sign-in that issued it. AWS: "By default, the refresh token
+     expires 30 days after your application user signs into your user pool."
+   - Rotation would not have helped either. AWS: "The new refresh token is
+     valid for the remaining duration of the original refresh token." No
+     refresh call, however frequent, can extend the deadline.
+   - Smokeball's documented refresh response carries no `refresh_token` field,
+     and AWS returns one only when rotation is enabled — so nothing rotates
+     and the durable file's mtime never moves between consents.
+   - The only things that reset the clock are a fresh consent, or moving to the
+     Client Credentials grant, which issues no refresh token at all.
+
+   We had recorded the disproof seven days before writing the claim:
+   `vfy_01KZ1KG79CN44K2RV4W7EWJEQM` (2026-08-02) reads "token file unrotated
+   since Jul 3 03:27 UTC (30-day-old)". An unrotated file across a full token
+   lifetime IS the disproof; it was read as a statement about our own traffic
+   and the vendor half went untested. The probe also surfaces the
+   rotation-persist race:
    `auth_status` now reports `refresh_token_persisted`, and the skill treats
    `false` as a failure — a rotated token that failed its best-effort write to
    the durable file (silent today, bricks at next restart) pages the same day.
+
 2. **Credential-age horizon, as the backstop for the probe itself.** The seat
    ships `connector_token_age` (the durable token file's mtime age; overlay
    `connector_check.token_ages()`) as a heartbeat field SEPARATE from the
    health map — synthesizing a `consecutive_failures: 0` entry would falsely
    resolve an open `connector_down` alert. The worker's
    `connector_token_expiring:<server>` condition opens at
-   `lifetime − warn_days` (Smokeball: 30 − 5) and resolves when the file is
-   rewritten. In normal operation the keepalive rotates the file daily and
-   this condition never fires; it fires when the probe infrastructure itself
-   has been dead for ~25 days — the watcher's watcher, same role
-   healthchecks.io plays for the alerter. Lifetimes are recorded per server in
-   the worker's vars (`SMOKEBALL_REFRESH_TOKEN_LIFETIME_DAYS = 30`); a server
-   with no recorded lifetime is never evaluated.
+   `lifetime − warn_days` (Smokeball: 180 − 5 for a token issued on or after
+   the vendor's 2026-08-24 cutover, 30 − 5 for one issued before it) and
+   resolves when the file is rewritten.
+
+   CORRECTED 2026-09-02, same retraction as item 1 above: this paragraph used
+   to say "in normal operation the keepalive rotates the file daily and this
+   condition never fires; it fires when the probe infrastructure itself has
+   been dead for ~25 days — the watcher's watcher". That is false for a vendor
+   that does not rotate refresh tokens, which Smokeball is. Nothing rotates the
+   file between consents, so this condition is not a backstop behind a working
+   keepalive — **it is the ONLY warning before a silent expiry**, and it fired
+   correctly on 2026-08-27 while every probe reported green. Treat a page from
+   it as the last notice, not as evidence that some other watcher died.
+
+   Lifetimes are recorded per server in the worker's vars
+   (`SMOKEBALL_REFRESH_TOKEN_LIFETIME_DAYS`, now `180` — the CURRENT vendor
+   lifetime); `src/token-expiry.ts` dates each token from its reported age and
+   applies the older 30-day lifetime to pre-cutover tokens, because the vendor
+   keyed the change to the issue date. A server with no recorded lifetime is
+   never evaluated.
 
 ## Accepted gaps (named, not hidden)
 

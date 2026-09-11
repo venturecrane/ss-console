@@ -22,10 +22,7 @@ import type { D1Database } from '@cloudflare/workers-types'
 // @cloudflare/workers-types in tsconfig) so it is the SAME nominal type the
 // shim's signature uses — importing the non-versioned index causes a ts(2345)
 // identity mismatch when passing the fake KV straight into the function.
-import {
-  resolveAdminSessionFromClerk,
-  invalidateAdminSessionCache,
-} from '../src/lib/auth/admin-session-shim'
+import { resolveAdminSessionFromClerk } from '../src/lib/auth/admin-session-shim'
 
 installWorkerdPolyfills()
 
@@ -141,13 +138,5 @@ describe('resolveAdminSessionFromClerk', () => {
     )
     const session = await resolveAdminSessionFromClerk(ADMIN_CLERK, db, kv)
     expect(session).toMatchObject({ userId: 'u-admin', role: 'admin' })
-  })
-
-  it('invalidateAdminSessionCache deletes the cached entry', async () => {
-    const { kv, store } = createMemoryKv()
-    await resolveAdminSessionFromClerk(ADMIN_CLERK, db, kv)
-    expect(store.has(cacheKey(ADMIN_CLERK))).toBe(true)
-    await invalidateAdminSessionCache(ADMIN_CLERK, kv)
-    expect(store.has(cacheKey(ADMIN_CLERK))).toBe(false)
   })
 })

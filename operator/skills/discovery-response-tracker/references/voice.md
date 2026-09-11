@@ -3,6 +3,14 @@
 Derived from `operator/verticals/law-firm/addons/pi/references/_shared-chase-voice.md`.
 Fix the shared voice there first; this file adds only what is skill-specific.
 
+## Salutation and signature
+
+The shared "Salutation and signature" section (`_shared-chase-voice.md`)
+governs any chase leg this skill emits: salutation down the ladder (the
+responsible attorney is a rostered, named recipient, so the ladder resolves at
+step 1), closing with "Thank you." plus the authored firm name
+(`customer_name`, or the persona `signature:` override). Authored data only.
+
 **This skill has no client-facing or party-facing draft.** Both of its surfaces are
 **internal, to the responsible attorney** (a rostered recipient): the deadline
 present-for-confirm, and the meet-and-confer / compel decision flag. It never addresses a

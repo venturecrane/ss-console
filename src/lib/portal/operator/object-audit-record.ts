@@ -85,6 +85,64 @@ export interface ObjectAuditRow {
   rowHash: string | null
   /** `metadata.routine` — the scheduled routine that opened the session. */
   routine: string | null
+  /**
+   * The joins (ss#2497). Every one of these is `null` on rows written before
+   * the overlay change that emits them, and that is a real state of the ledger
+   * rather than a parse failure: the writers gained the fields after seats had
+   * begun writing, exactly as `matterRef` and `trustCeiling` did. The surface
+   * says "Not recorded" and never guesses.
+   *
+   * `metadata.session_id` — the agent turn this row belongs to. It is what ties
+   * an inbound message to the reply it produced and to every tool call between
+   * them; before it, that trace was a join by timestamp adjacency.
+   *
+   * `metadata.sender_key` — sha256 of the canonical address of the person who
+   * caused this. Deliberately NOT an address: this record is exported and
+   * forwarded, and the firm can reproduce the key from an address it holds.
+   *
+   * `metadata.vendor_message_id` — the provider's own id for the inbound
+   * message, so a row can be matched against the mailbox itself.
+   *
+   * `objectId` / `objectKind` — the document, memo, or draft the action
+   * touched. One field rather than three, because a row names at most one and a
+   * table column that is sometimes `memo_id` and sometimes `document_id` reads
+   * as three sparse columns to anyone scanning it. The kind is carried beside
+   * it so nothing is lost.
+   *
+   * `writtenBodySha256` — sha256 of the body a write actually wrote. It is what
+   * lets a firm prove the memo in its own system is the one this row describes.
+   */
+  sessionId: string | null
+  senderKey: string | null
+  vendorMessageId: string | null
+  objectId: string | null
+  objectKind: 'document' | 'memo' | 'draft' | null
+  writtenBodySha256: string | null
+  /**
+   * The message-body digests a firm can recompute from its OWN copy of the
+   * email (ss#2501). Same null-on-older-rows story as the joins above.
+   *
+   * `metadata.body_digest` (not surfaced here) covers subject + body joined,
+   * which is what the content checks read. The subject is never on the wire for
+   * a reply, so nobody outside the Operator can reproduce that input. These two
+   * cover exactly the bytes handed to the mail system, so they can be checked
+   * without trusting us.
+   *
+   * The check differs by what the mail system did with the body, and the
+   * difference is structural rather than a caveat: where it stores the bytes it
+   * was handed, the test is equality; where it COMPOSES the stored message, as
+   * Graph does for a reply (its wrapper plus the quoted original), the test is
+   * containment of the authored bytes inside the stored body. The evidence
+   * packet README carries the worked commands.
+   *
+   * Coverage, so a reader of this type does not assume more than it holds:
+   * these ride REPLY rows. A proactively sent message records `input_digest`
+   * over the whole send request, not over the body bytes, so its row carries
+   * neither of these and the packet says so rather than letting an auditor
+   * find an empty column.
+   */
+  bodyDigestAuthored: string | null
+  bodyDigestAuthoredHtml: string | null
 }
 
 /**
@@ -143,6 +201,32 @@ export function describeAuthorization(basis: AuthorizationBasis): string {
   return `Not recorded (${ceiling})`
 }
 
+/**
+ * One line naming WHAT the action touched (ss#2497), for a reader who is not
+ * technical. Written for the same audience as `describeAuthorization` and under
+ * the same rule: it reports only fields the writer populated, and says "Not
+ * recorded" rather than describing a row it cannot describe.
+ *
+ * The digest is shown as a short prefix. A firm verifying a document computes
+ * the full hash and compares; a firm reading the table needs to see that a
+ * digest EXISTS and that two rows carry different ones. Sixty-four hex
+ * characters in a table cell communicate neither. Contains no em dashes (house
+ * style).
+ */
+export function describeObject(row: ObjectAuditRow): string {
+  const parts: string[] = []
+  if (row.objectId !== null && row.objectKind !== null) {
+    parts.push(`${row.objectKind} ${row.objectId}`)
+  }
+  if (row.writtenBodySha256 !== null) {
+    parts.push(`content ${row.writtenBodySha256.slice(0, 12)}`)
+  }
+  if (parts.length === 0 && row.vendorMessageId !== null) {
+    parts.push(`message ${row.vendorMessageId}`)
+  }
+  return parts.length === 0 ? 'Not recorded' : parts.join(', ')
+}
+
 // ---------------------------------------------------------------------------
 // Wire parsing
 // ---------------------------------------------------------------------------
@@ -160,12 +244,12 @@ function optString(v: unknown): string | null {
 }
 
 /**
- * Pull `metadata.routine` out of the row's metadata column. The column is
- * serialized JSON on the wire; a malformed or absent blob yields null rather
- * than throwing, because an unparseable metadata blob must not cost us the row
- * itself (the row's own facts are still evidence).
+ * The row's `metadata` column as a record, or null. The column is serialized
+ * JSON on the wire; a malformed or absent blob yields null rather than throwing,
+ * because an unparseable metadata blob must not cost us the row itself (the
+ * row's own facts are still evidence).
  */
-function routineFromMetadata(raw: unknown): string | null {
+function parseMetadata(raw: unknown): Record<string, unknown> | null {
   let parsed: unknown = raw
   if (typeof raw === 'string') {
     if (raw.length === 0) return null
@@ -175,8 +259,69 @@ function routineFromMetadata(raw: unknown): string | null {
       return null
     }
   }
-  if (!isRecord(parsed)) return null
-  return optString(parsed['routine'])
+  return isRecord(parsed) ? parsed : null
+}
+
+/**
+ * The object a read or write touched, as one `(kind, id)` pair (ss#2497).
+ *
+ * A row names at most one, and the overlay writes them under their own names so
+ * a query can ask for memos specifically. The precedence below is a display
+ * decision, not a semantic one: it only ever chooses between keys that cannot
+ * co-occur on a row the overlay wrote.
+ *
+ * A file LISTING carries `document_ids` (plural) and is deliberately not folded
+ * in here: it names many objects and the single-object column would have to
+ * pick one, which is the same "name one of several and it reads as the only
+ * one" failure the matter column avoids by staying null.
+ */
+function objectFromMetadata(
+  metadata: Record<string, unknown> | null
+): { id: string; kind: 'document' | 'memo' | 'draft' } | null {
+  if (metadata === null) return null
+  const document = optString(metadata['document_id'])
+  if (document !== null) return { id: document, kind: 'document' }
+  const memo = optString(metadata['memo_id'])
+  if (memo !== null) return { id: memo, kind: 'memo' }
+  const draft = optString(metadata['draft_id'])
+  if (draft !== null) return { id: draft, kind: 'draft' }
+  return null
+}
+
+/**
+ * The metadata-derived half of a row: the routine, the three joins, and the
+ * object. Lifted out of the row builder so that builder stays a flat mapping of
+ * wire keys to fields and the null-handling for an unparseable blob lives in
+ * exactly one place rather than seven ternaries.
+ */
+function metadataFields(
+  raw: unknown
+): Pick<
+  ObjectAuditRow,
+  | 'routine'
+  | 'sessionId'
+  | 'senderKey'
+  | 'vendorMessageId'
+  | 'objectId'
+  | 'objectKind'
+  | 'writtenBodySha256'
+  | 'bodyDigestAuthored'
+  | 'bodyDigestAuthoredHtml'
+> {
+  const metadata = parseMetadata(raw)
+  const object = objectFromMetadata(metadata)
+  return {
+    routine: metadata === null ? null : optString(metadata['routine']),
+    sessionId: metadata === null ? null : optString(metadata['session_id']),
+    senderKey: metadata === null ? null : optString(metadata['sender_key']),
+    vendorMessageId: metadata === null ? null : optString(metadata['vendor_message_id']),
+    objectId: object === null ? null : object.id,
+    objectKind: object === null ? null : object.kind,
+    writtenBodySha256: metadata === null ? null : optString(metadata['written_body_sha256']),
+    bodyDigestAuthored: metadata === null ? null : optString(metadata['body_digest_authored']),
+    bodyDigestAuthoredHtml:
+      metadata === null ? null : optString(metadata['body_digest_authored_html']),
+  }
 }
 
 /** Parse a Machine `audit_export` payload. Malformed rows are dropped. */
@@ -205,7 +350,7 @@ export function parseObjectAuditRows(data: unknown): ObjectAuditRow[] {
       diffDigest: optString(item['diff_digest']),
       prevHash: optString(item['prev_hash']),
       rowHash: optString(item['row_hash']),
-      routine: routineFromMetadata(item['metadata']),
+      ...metadataFields(item['metadata']),
     })
   }
   return out
@@ -279,7 +424,14 @@ export function scopeToRef(rows: ObjectAuditRow[], query: ObjectAuditQuery): Obj
 // CSV
 // ---------------------------------------------------------------------------
 
-/** Header row of the exported CSV. Order is stable: a firm may diff two exports. */
+/**
+ * Header row of the exported CSV. Order is stable: a firm may diff two exports.
+ *
+ * The ss#2497 join columns are APPENDED rather than interleaved, for that
+ * reason: a firm diffing this month's export against last month's must see new
+ * columns arrive at the end, not every existing column shift one place right.
+ * The ss#2501 body digests follow the same rule, at the end again.
+ */
 export const OBJECT_AUDIT_CSV_COLUMNS = [
   'id',
   'ts',
@@ -297,6 +449,14 @@ export const OBJECT_AUDIT_CSV_COLUMNS = [
   'diff_digest',
   'prev_hash',
   'row_hash',
+  'session_id',
+  'sender_key',
+  'vendor_message_id',
+  'object_kind',
+  'object_id',
+  'written_body_sha256',
+  'body_digest_authored',
+  'body_digest_authored_html',
 ] as const
 
 function csvCell(value: string | null): string {
@@ -332,6 +492,14 @@ export function toObjectAuditCsv(record: ObjectAuditRecord): string {
         csvCell(row.diffDigest),
         csvCell(row.prevHash),
         csvCell(row.rowHash),
+        csvCell(row.sessionId),
+        csvCell(row.senderKey),
+        csvCell(row.vendorMessageId),
+        csvCell(row.objectKind),
+        csvCell(row.objectId),
+        csvCell(row.writtenBodySha256),
+        csvCell(row.bodyDigestAuthored),
+        csvCell(row.bodyDigestAuthoredHtml),
       ].join(',')
     )
   }
