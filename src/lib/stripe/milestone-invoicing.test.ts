@@ -5,30 +5,30 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { completeMilestoneWithInvoicing } from './milestones'
+import { completeMilestoneWithInvoicing } from './milestone-invoicing'
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('./invoices', () => ({
+vi.mock('../db/invoices', () => ({
   createInvoice: vi.fn(),
   updateInvoice: vi.fn(),
   updateInvoiceStatus: vi.fn(),
 }))
 
-vi.mock('./context', () => ({
+vi.mock('../db/context', () => ({
   appendContext: vi.fn(),
 }))
 
-vi.mock('../stripe/client', () => ({
+vi.mock('./client', () => ({
   createStripeInvoice: vi.fn(),
   sendStripeInvoice: vi.fn(),
 }))
 
-import { createInvoice, updateInvoice, updateInvoiceStatus } from './invoices'
-import { appendContext } from './context'
-import { createStripeInvoice, sendStripeInvoice } from '../stripe/client'
+import { createInvoice, updateInvoice, updateInvoiceStatus } from '../db/invoices'
+import { appendContext } from '../db/context'
+import { createStripeInvoice, sendStripeInvoice } from './client'
 
 // ---------------------------------------------------------------------------
 // Helpers

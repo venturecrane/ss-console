@@ -1,6 +1,14 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
+import {
+  createTestD1,
+  discoverNumericMigrations,
+  runMigrations,
+} from '@venturecrane/crane-test-harness'
+import type { D1Database } from '@cloudflare/workers-types'
+import { createEngagement, updateEngagementStatus } from '../src/lib/db/engagements'
+import { createQuote } from '../src/lib/db/quotes'
 
 describe('engagements: data access layer', () => {
   const source = () => readFileSync(resolve('src/lib/db/engagements.ts'), 'utf-8')
@@ -118,41 +126,95 @@ describe('engagements: data access layer', () => {
 })
 
 describe('engagements: handoff wiring', () => {
-  const source = () => readFileSync(resolve('src/lib/db/engagements.ts'), 'utf-8')
+  // Behavioural, against a real D1, because the thing under test is a
+  // contract between layers: the data layer sets the handoff dates and
+  // promotes the entity, and the follow-up cadence is INJECTED by the caller
+  // that owns that policy (src/lib/follow-ups/scheduler.ts). Until
+  // 2026-09-10 the data layer imported the scheduler directly, which the
+  // 2026-09-10 code review flagged as one of four upward edges out of
+  // src/lib/db; tests/db-layer-boundary.test.ts now keeps the edge out, and
+  // this suite keeps the behaviour in.
+  const migrationsDir = resolve(process.cwd(), 'migrations')
+  const ORG = 'org-handoff'
+  let db: D1Database
 
-  it('imports scheduleEngagementCadence from scheduler', () => {
-    expect(source()).toContain(
-      "import { scheduleEngagementCadence } from '../follow-ups/scheduler'"
+  async function seed(): Promise<{ engagementId: string; entityId: string }> {
+    await db
+      .prepare(
+        `INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES (?, 'T', 't', datetime('now'), datetime('now'))`
+      )
+      .bind(ORG)
+      .run()
+    await db
+      .prepare(
+        `INSERT INTO entities (id, org_id, name, slug, stage, stage_changed_at, created_at, updated_at) VALUES ('ent-1', ?, 'ent-1', 'ent-1', 'engaged', datetime('now'), datetime('now'), datetime('now'))`
+      )
+      .bind(ORG)
+      .run()
+    await db
+      .prepare(
+        `INSERT INTO assessments (id, org_id, entity_id, scheduled_at, status, created_at) VALUES ('mtg-1', ?, 'ent-1', NULL, 'scheduled', datetime('now'))`
+      )
+      .bind(ORG)
+      .run()
+    const quote = await createQuote(db, ORG, {
+      entityId: 'ent-1',
+      assessmentId: 'mtg-1',
+      lineItems: [],
+      rate: 175,
+    })
+    const engagement = await createEngagement(db, ORG, { entity_id: 'ent-1', quote_id: quote.id })
+    return { engagementId: engagement.id, entityId: 'ent-1' }
+  }
+
+  beforeEach(async () => {
+    db = createTestD1()
+    await runMigrations(db, { files: discoverNumericMigrations(migrationsDir) })
+  })
+
+  it('on handoff, calls the injected cadence with db, org, engagement, entity, and the handoff instant', async () => {
+    const { engagementId, entityId } = await seed()
+    const scheduleHandoffCadence = vi.fn(async () => {})
+    const deps = { scheduleHandoffCadence }
+
+    await updateEngagementStatus(db, ORG, engagementId, 'active', deps)
+    expect(scheduleHandoffCadence).not.toHaveBeenCalled()
+
+    const before = Date.now()
+    const updated = await updateEngagementStatus(db, ORG, engagementId, 'handoff', deps)
+    expect(updated?.status).toBe('handoff')
+    expect(scheduleHandoffCadence).toHaveBeenCalledTimes(1)
+    const [calledDb, calledOrg, calledEngagement, calledEntity, calledIso] = scheduleHandoffCadence
+      .mock.calls[0] as unknown as [unknown, string, string, string, string]
+    expect(calledDb).toBe(db)
+    expect(calledOrg).toBe(ORG)
+    expect(calledEngagement).toBe(engagementId)
+    expect(calledEntity).toBe(entityId)
+    expect(Date.parse(calledIso)).toBeGreaterThanOrEqual(before - 1000)
+    expect(calledIso).toBe(updated?.handoff_date)
+  })
+
+  it('on handoff, sets safety_net_end fourteen days after handoff_date and promotes the entity to delivered', async () => {
+    const { engagementId, entityId } = await seed()
+    const deps = { scheduleHandoffCadence: vi.fn(async () => {}) }
+    await updateEngagementStatus(db, ORG, engagementId, 'active', deps)
+    const updated = await updateEngagementStatus(db, ORG, engagementId, 'handoff', deps)
+    const handoff = Date.parse(updated?.handoff_date ?? '')
+    const safetyNetEnd = Date.parse(updated?.safety_net_end ?? '')
+    expect(Math.round((safetyNetEnd - handoff) / 86_400_000)).toBe(14)
+    const entity = await db
+      .prepare('SELECT stage FROM entities WHERE id = ? AND org_id = ?')
+      .bind(entityId, ORG)
+      .first<{ stage: string }>()
+    expect(entity?.stage).toBe('delivered')
+  })
+
+  it('the real scheduler is what the admin route injects', () => {
+    const route = readFileSync(resolve('src/pages/api/admin/engagements/[id].ts'), 'utf-8')
+    expect(route).toContain(
+      "import { scheduleEngagementCadence } from '../../../../lib/follow-ups/scheduler'"
     )
-  })
-
-  it('imports transitionStage from entities', () => {
-    expect(source()).toContain("import { transitionStage } from './entities'")
-  })
-
-  it('calls scheduleEngagementCadence on handoff transition', () => {
-    const code = source()
-    expect(code).toContain('scheduleEngagementCadence(')
-    expect(code).toContain('existing.entity_id')
-  })
-
-  it('passes correct args to scheduleEngagementCadence: db, orgId, engagementId, entityId, handoffDate', () => {
-    const code = source()
-    expect(code).toContain(
-      'scheduleEngagementCadence(\n      db,\n      orgId,\n      engagementId,\n      existing.entity_id,\n      handoffDate.toISOString()\n    )'
-    )
-  })
-
-  it('calls transitionStage to delivered on handoff', () => {
-    const code = source()
-    expect(code).toContain("transitionStage(db, orgId, existing.entity_id, 'delivered'")
-  })
-
-  it('safety_net_end is set to handoff_date + 14 days on handoff', () => {
-    const code = source()
-    expect(code).toContain("newStatus === 'handoff'")
-    expect(code).toContain('safety_net_end')
-    expect(code).toContain('getDate() + 14')
+    expect(route).toContain('{ scheduleHandoffCadence: scheduleEngagementCadence }')
   })
 })
 

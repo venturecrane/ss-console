@@ -8,11 +8,10 @@
  * customer is already operating; the admin subdomain stays role-gated
  * for SMD operations only.
  *
- * The admin-side callback at /api/oauth/callback (PR #936) stays in
- * place as the v1 backstop and as the SMD-initiated initial-consent
- * surface — the audit-log trail there is the source of truth for
- * Captain-driven provisioning. Per the issue resolution we run both
- * surfaces in parallel during the transition.
+ * The admin-side callback at /api/oauth/callback (PR #936) was the v1
+ * backstop; it was deleted 2026-09-10 because nothing ever issued a state
+ * that returned to it (the only `issueOAuthState` caller is the portal
+ * initiator). This route is the one consent surface.
  *
  * Flow:
  *

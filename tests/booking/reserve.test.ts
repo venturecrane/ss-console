@@ -30,7 +30,7 @@ import { BOOKING_CONFIG } from '../../src/lib/booking/config'
 // Mocks for external boundaries.
 // ---------------------------------------------------------------------------
 //
-// Google Calendar event creation lives in reserve-helpers.ts — mock it so we
+// Google Calendar event creation lives in lib/booking/reserve-helpers.ts — mock it so we
 // can flip success/failure per test. The other helpers (jsonResponse,
 // trimString, etc.) are pure utilities; we re-export them unchanged.
 //
@@ -41,10 +41,10 @@ let googleEventResult: { eventId: string; htmlLink: string | null } | Error = {
   htmlLink: 'https://calendar.google.com/event?eid=test',
 }
 
-vi.mock('../../src/pages/api/booking/reserve-helpers', async () => {
-  const actual = await vi.importActual<
-    typeof import('../../src/pages/api/booking/reserve-helpers')
-  >('../../src/pages/api/booking/reserve-helpers')
+vi.mock('../../src/lib/booking/reserve-helpers', async () => {
+  const actual = await vi.importActual<typeof import('../../src/lib/booking/reserve-helpers')>(
+    '../../src/lib/booking/reserve-helpers'
+  )
   return {
     ...actual,
     createGoogleCalendarEvent: vi.fn(async () => {

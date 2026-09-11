@@ -39,7 +39,7 @@
  * as client.ts / resend.ts.
  */
 
-import { CARD_FEE_LINE_DESCRIPTION, cardProcessingFeeCents } from '../db/invoices'
+import { CARD_FEE_LINE_DESCRIPTION, cardProcessingFeeCents } from '../pricing/card-fee'
 import type { OperatorPaymentMethod } from '../db/services'
 
 const STRIPE_API_BASE = 'https://api.stripe.com/v1'
