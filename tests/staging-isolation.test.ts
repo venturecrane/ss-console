@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
+import { readdirSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 
 /**
@@ -123,5 +123,92 @@ describe('staging deploy uses the build-time environment selector', () => {
 
   it('records why --env staging is wrong, so the trap is not re-learned', () => {
     expect(toml).toContain('CLOUDFLARE_ENV=staging')
+  })
+})
+
+/**
+ * Staging seed fixtures must be unable to reach production.
+ *
+ * Two distinct escape routes exist, and they fail in opposite directions:
+ *
+ *   1. `migrations/`  — .github/workflows/deploy.yml runs
+ *      `d1 migrations apply ss-console-db --remote` on every push to main with
+ *      `migrations_dir` unset, so ANY .sql dropped there is auto-applied to
+ *      PRODUCTION. Seeds therefore live in scripts/seeds/.
+ *
+ *   2. Addressing D1 by BINDING — `wrangler d1 execute DB --remote` resolves
+ *      `DB` through the top-level wrangler.toml and lands on production.
+ *      Addressing by literal NAME is the safe form: wrangler resolves an
+ *      unrecognised name through the account API, so it reaches staging with or
+ *      without `--env`. Note this is the exact inverse of `wrangler deploy`,
+ *      where `--env staging` is the broken form — the two subcommands do not
+ *      share resolution rules, which is why the guard targets the binding.
+ */
+describe('staging seeds cannot reach production', () => {
+  const SEED_DIR = 'scripts/seeds'
+  const STAGING_MARKERS = ['01JSTAGING', 'staging-fixture', 'staging-client@', 'staging-admin@']
+
+  it('no migration carries a staging fixture marker', () => {
+    const migrations = readdirSync(resolve('migrations')).filter((f) => f.endsWith('.sql'))
+    expect(migrations.length).toBeGreaterThan(0)
+    for (const file of migrations) {
+      const sql = readFileSync(resolve('migrations', file), 'utf-8')
+      for (const marker of STAGING_MARKERS) {
+        expect(sql, `${file} must not contain the staging marker "${marker}"`).not.toContain(marker)
+      }
+    }
+  })
+
+  it('the seed runner never addresses D1 by binding', () => {
+    const runner = readFileSync(resolve('scripts/seed-staging.mjs'), 'utf-8')
+    // `d1 execute DB` / `'d1','execute','DB'` would resolve through the
+    // top-level config straight to production.
+    expect(runner).not.toMatch(/d1['"\s,]+execute['"\s,]+['"]DB['"]/)
+    expect(runner).toContain('ss-console-db-staging')
+  })
+
+  it('the seed runner pins the staging database and cannot be retargeted', () => {
+    const runner = readFileSync(resolve('scripts/seed-staging.mjs'), 'utf-8')
+    // The name is a constant, and the uuid is checked before anything executes.
+    expect(runner).toContain("DB_NAME = 'ss-console-db-staging'")
+    expect(runner).toContain('DB_UUID')
+    expect(runner).toContain('assertPinnedDatabase')
+  })
+
+  it('seed SQL never writes customer_configs (ADR 0012)', () => {
+    // customer_configs rows are projected from a committed customer.yaml via
+    // scripts/project-customer-config.ts. A hand-seeded row is the violation.
+    for (const file of readdirSync(resolve(SEED_DIR)).filter((f) => f.endsWith('.sql'))) {
+      const sql = readFileSync(resolve(SEED_DIR, file), 'utf-8').toLowerCase()
+      expect(sql, `${file} must not insert into customer_configs`).not.toMatch(
+        /insert\s+into\s+customer_configs/
+      )
+    }
+  })
+
+  it('seed SQL never writes clerk_user_id, so a re-seed cannot unlink an identity', () => {
+    // ensureLocalUser claims a seeded row by case-insensitive email when
+    // clerk_user_id IS NULL. Writing that column would break the auto-link and
+    // could orphan a signed-in identity on re-seed.
+    for (const file of readdirSync(resolve(SEED_DIR)).filter((f) => f.endsWith('.sql'))) {
+      const sql = readFileSync(resolve(SEED_DIR, file), 'utf-8')
+      const statements = sql.replace(/--[^\n]*/g, '')
+      expect(statements, `${file} must not write clerk_user_id`).not.toContain('clerk_user_id')
+    }
+  })
+})
+
+describe('the Clerk fixture script targets only the development instance', () => {
+  it('refuses any key that is not sk_test_', () => {
+    const script = readFileSync(resolve('scripts/staging-clerk-users.mjs'), 'utf-8')
+    expect(script).toContain("startsWith('sk_test_')")
+    // The guard must precede any network call — it is the only safety layer.
+    expect(script.indexOf("startsWith('sk_test_')")).toBeLessThan(script.indexOf('fetch('))
+  })
+
+  it('never generates a password, which would have to be printed to be usable', () => {
+    const script = readFileSync(resolve('scripts/staging-clerk-users.mjs'), 'utf-8')
+    expect(script).not.toContain('randomBytes')
+    expect(script).toContain('STAGING_PORTAL_CLIENT_PASSWORD')
   })
 })

@@ -23,6 +23,7 @@
     "verify": "npm run typecheck && npm run typecheck:workers && npm run format:check && npm run lint && npm run deadcode && npm run build && npm run test && npm run test:workers",
     "handbook:drift": "node scripts/handbook-drift.mjs",
     "db:migrate:local": "wrangler d1 migrations apply ss-console-db --local",
+    "db:seed:staging": "node scripts/seed-staging.mjs",
     "prepare": "node -e \"if(process.env.CI)process.exit(0)\" && husky"
   },
   "dependencies": {
