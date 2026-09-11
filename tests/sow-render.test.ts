@@ -13,6 +13,13 @@
  * To run manually: deploy to a preview branch and generate a SOW
  * via the admin UI, or use `npx astro build` to verify the template
  * compiles without errors.
+ *
+ * What would make this real (2026-09-10 code review, Testing 5): a second
+ * vitest project on `@cloudflare/vitest-pool-workers` (`environment:
+ * 'workers'`), where workerd loads `forme_bg.wasm` the way the deployed
+ * Worker does, so `renderSow()` runs here and the assertions below become
+ * text extracted from a real PDF. Until then the one artifact a client signs
+ * is validated only by the build compiling the template.
  */
 
 import { describe, it, expect } from 'vitest'

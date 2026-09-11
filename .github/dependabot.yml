@@ -108,3 +108,49 @@ updates:
           - patch
     commit-message:
       prefix: chore(deps)
+
+  # The seat image's Python. Until 2026-09-11 no pip ecosystem existed, so the
+  # Python that runs on every customer Machine had neither currency nor
+  # security bumps surfacing anywhere (2026-09-10 code review, Dependencies
+  # HIGH, third review running). operator/requirements/*.txt are the
+  # hash-locked files the Dockerfile installs from (compiled by
+  # operator/requirements/compile.sh); Dependabot bumps a pin and its hashes
+  # together. The pyproject entries keep the declared ranges current; a range
+  # bump alone changes nothing on a seat until compile.sh re-resolves it, and
+  # bin/tests/test_requirements_pins.py fails when a declared dependency has
+  # no pin. Majors separated for manual review, as with npm.
+  - package-ecosystem: pip
+    directory: /operator/requirements
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      pip-minor-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: chore(deps)
+
+  - package-ecosystem: pip
+    directories:
+      - /operator
+      - /operator/connectors/_sdk
+      - /operator/connectors/_reference
+      - /operator/connectors/msgraph-mail
+      - /operator/connectors/smokeball
+      - /operator/runners/medchron
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      pip-minor-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: chore(deps)

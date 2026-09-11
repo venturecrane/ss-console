@@ -300,10 +300,36 @@ jobs:
             exit "$rc"
           fi
 
+  # The seat image's pinned Python (operator/requirements/*.txt, the exact
+  # bytes operator/templates/Dockerfile installs with --require-hashes) is
+  # audited against OSV / PyPA advisories. Until 2026-09-11 no Python
+  # dependency was audited anywhere in CI (2026-09-10 code review,
+  # Dependencies HIGH, third review running). The gate script applies the
+  # time-boxed allowlist at .github/pip-audit-allowlist.json with the same
+  # rules as the npm one, and exits 2 (never green) when pip-audit itself
+  # cannot run.
+  pip-audit:
+    name: pip audit (seat image Python)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+
+      - name: Install pip-audit
+        run: python3 -m pip install --quiet pip-audit==2.10.1
+
+      - name: Audit the pinned seat-image requirements
+        run: python3 operator/bin/pip_audit_gate.py
+
   summary:
     name: Security Summary
     runs-on: ubuntu-latest
-    needs: [audit, gitleaks, semgrep]
+    needs: [audit, gitleaks, semgrep, pip-audit]
     if: always()
     steps:
       - name: Check results
@@ -329,10 +355,17 @@ jobs:
             echo "- Static Analysis (Semgrep): FAILED" >> $GITHUB_STEP_SUMMARY
           fi
 
+          if [ "${{ needs.pip-audit.result }}" == "success" ]; then
+            echo "- pip audit (seat image Python): PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- pip audit (seat image Python): FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
           # Fail if any check failed
           if [ "${{ needs.audit.result }}" != "success" ] || \
              [ "${{ needs.gitleaks.result }}" != "success" ] || \
-             [ "${{ needs.semgrep.result }}" != "success" ]; then
+             [ "${{ needs.semgrep.result }}" != "success" ] || \
+             [ "${{ needs.pip-audit.result }}" != "success" ]; then
             echo ""
             echo "One or more security checks failed."
             exit 1
