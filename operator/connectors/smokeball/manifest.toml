@@ -45,6 +45,17 @@
 # sibling: it saves the Operator's own work product into the firm's record and
 # sends nothing outside. The two tools differ only in which artifact their
 # content gate is written for, never in what they are permitted to do.
+# COORDINATED CHANGE (create_matter, ss-console#2536): the overlay map ALREADY
+# carries mcp_smokeball_create_matter = ActionClass.COMMITMENT
+# (shared/action_classes.py:432 at overlay ref 349d86b, read 2026-08-21), so
+# unlike the render tools above there is no overlay map entry to add. What
+# remains is the OVERLAY_REF bump that ships the CONFIRM branch this tool needs,
+# and until that lands the tool is UNREACHABLE at runtime in the fail-closed
+# direction: an authored `commitment: confirm` exposure reaches
+# _decide_approval_class (enforce.py:421), which has no CONFIRM branch, so it
+# falls through to `if not approved: _refuse(...)` at enforce.py:443. Nothing is
+# created and nothing crashes. The confirm path is the overlay half of this
+# work; this half is the tool and the proposal channel.
 [connector]
 name = "smokeball"
 capability = "PracticeManagement"
@@ -95,6 +106,8 @@ get_download_url = "read"
 read_document = "read"
 list_folders = "read"
 create_folder = "internal_write"
+# The Operator's own internal matter, and never a client's case (ss#2536).
+create_matter = "commitment"
 add_file = "internal_write"
 file_attachment_to_matter = "internal_write"
 render_docx_template = "internal_write"

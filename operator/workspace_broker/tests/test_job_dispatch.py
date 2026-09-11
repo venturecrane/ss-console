@@ -65,16 +65,14 @@ def test_claim_record_flow_through_broker(tmp_path):
     assert epoch == 1
 
     rec = b.handle(
-        {"action": "job_record", "job_id": job_id, "lease_epoch": epoch,
-         "fields": {"spent_cents": 42}},
+        {"action": "job_record", "job_id": job_id, "lease_epoch": epoch, "fields": {"spent_cents": 42}},
         GATEWAY_PID,
     )
     assert rec["result"] is True
     # Stale epoch is fenced out at the dispatch boundary too (ok=processed,
     # result=False).
     stale = b.handle(
-        {"action": "job_record", "job_id": job_id, "lease_epoch": epoch - 1,
-         "fields": {"spent_cents": 999}},
+        {"action": "job_record", "job_id": job_id, "lease_epoch": epoch - 1, "fields": {"spent_cents": 999}},
         GATEWAY_PID,
     )
     assert stale["ok"] is True

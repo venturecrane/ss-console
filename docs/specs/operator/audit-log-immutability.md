@@ -1,14 +1,32 @@
 # Audit log immutability
 
-> **Status — pending rehome (2026-05-25):** the original implementation
-> (`operator/adapter/audit_log_immutability.py` + `audit_log_integrity.py`)
-> was retired when the in-tree Hermes adapter was removed per ADR 0015
-> rewrite. The immutability **requirement** stands; its new home is the
-> overlay's `hermes-smd-audit` plugin (write-side rejection of
-> UPDATE/DELETE) plus a control-plane Worker for the integrity check.
-> Code samples below reference paths that no longer exist; treat them as
-> design intent until the spec is rewritten against the new substrate.
-> Follow-on: refresh this spec against the post-2026-05-24 architecture.
+> **Status — SUPERSEDED (2026-08-20, ss#2500). Do not build from this
+> document.** It specifies a D1-era design: a `D1Executor` wrapper rejecting
+> UPDATE/DELETE, a Cloudflare Logpush mirror of D1 query logs into an
+> Object-Locked R2 bucket, and a `check_audit_integrity` comparator between
+> the two. None of its three layers describes the running system, and the
+> substrate each one assumed is gone.
+>
+> **What actually holds the requirement now**, layer by layer:
+>
+> | This spec's layer                                          | What ships instead                                                                                                                                                                                                                                                                                                                  |
+> | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | 1. Worker-layer UPDATE/DELETE rejection against D1         | The ledger is not in D1. It is Machine-local sqlite owned by the capability broker, the single process holding the RW handle; the agent uid has read-only access and the IPC surface exposes no update or delete verb (`operator/workspace_broker/audit_ledger.py`, `server.py`).                                                   |
+> | 2. Logpush mirror into an Object-Locked bucket             | `.github/workflows/audit-chain-verify.yml` pulls each seat's full export over the ADR-0043 runtime-read seam daily and writes it to R2 at `audit/<slug>/<date>/<HHMMSS>Z-<head12>.json.gz`, one object per run. Logpush mirrors D1 query logs and there are no D1 queries to mirror.                                                |
+> | 3. `check_audit_integrity` comparing D1 against the mirror | `operator/workspace_broker/chain.py` (`verify_chain`) plus `operator/bin/lib/chain_pin.py` (the descends check against a head pinned off the Machine, `audit_head_history`, migration 0108). There is no second store to diff against, so the tamper evidence is the chain itself plus an external pin, not a two-store comparison. |
+>
+> The **Captain exception process** below (court-ordered redaction: counsel
+> review, multi-confirmation script, exceptions ledger, disclosure in the next
+> evidence packet) was never implemented and is not superseded by anything. It
+> stands as unbuilt design intent. Nothing in the current system provides a
+> sanctioned redaction path, which is the honest state: today a court-ordered
+> redaction would be performed by root on the Machine and would show up as a
+> chain break in the daily verifier.
+>
+> Kept rather than deleted because the failure-mode table and the exception
+> process are the parts worth reading, and because a reader who arrives here
+> from an old link needs to be told where the live design went rather than
+> finding nothing. Everything below this box is historical.
 
 **Spec for issue #892.** Worker-layer enforcement that rejects UPDATE/DELETE
 against the per-customer `audit_log` table, plus an immutable Logpush

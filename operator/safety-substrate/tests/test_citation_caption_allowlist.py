@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from citation_filter import canonical_caption, contains_citation, scan  # noqa: E402
+from citation_filter import canonical_caption, contains_citation, scan
 
 CAPTION = "Alvarez v. Draper"
 
@@ -90,3 +90,33 @@ def test_empty_or_bad_allowlist_narrows_never_widens() -> None:
 def test_canonical_caption_folds_separator_and_case() -> None:
     assert canonical_caption("ALVAREZ VS. DRAPER") == canonical_caption("alvarez v draper")
     assert canonical_caption("In re  Ramirez") == "in re ramirez"
+
+
+def test_every_separator_spelling_canonicalizes_the_same() -> None:
+    """All seven spellings of the party separator collapse to one canonical form.
+
+    This is a PAIR-PARITY test, mirrored in the overlay's copy of this suite
+    (hermes-smd-overlay#300). The manifest sha gates catch an UNRECORDED edit to
+    either copy; they cannot catch two edits that are both consciously recorded
+    and differ. That is the drift that bites: _canonical_allowlist compares
+    canonical forms, so if one copy folds a spelling the other does not, a
+    caption the firm's own record contains is exempt on one seat and refused on
+    the other, silently, with nothing red anywhere.
+
+    The trailing-dot case is the one that found a real divergence between the
+    two copies: `\\bv(?:ersus|s)?\\.?\\s` folds "versus." because the optional
+    dot follows the whole alternation, where `\\b(?:v(?:s)?\\.?|versus)\\s` does
+    not, because its dot sits inside the short branch and the longhand branch
+    never reaches one. Keep the two regexes character-identical.
+    """
+    canon = "smith v. jones"
+    for spelling in (
+        "Smith v. Jones",
+        "Smith v Jones",
+        "Smith vs. Jones",
+        "Smith vs Jones",
+        "Smith versus Jones",
+        "Smith versus. Jones",
+        "SMITH VERSUS JONES",
+    ):
+        assert canonical_caption(spelling) == canon, spelling

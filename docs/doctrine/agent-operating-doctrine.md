@@ -50,12 +50,16 @@ tier: gate
 enforcement:
   - .claude/hooks/engagement-guard.mjs
   - .claude/hooks/read-tracker.mjs
+  - .claude/hooks/memory-audit.mjs
   - tests/engagement-guard.test.ts
+  - tests/memory-audit.test.ts
 incidents:
   - date: 2026-07-26
     ref: Christa-reply session (critiqued the A&P pricing letter without loading the engagement posture sitting in the corpus; the write gate and read advisory exist because of this session)
   - date: 2026-06-03
     ref: feedback_no_revenue_band_anchoring (stale doc treated as live law; loading the wrong context is the sibling failure)
+  - date: 2026-09-09
+    ref: memory-store reachability audit (60 memory files in ~/.claude/projects/-Users-scottdurgan-dev-ss-console/memory/ were referenced from no index at all, unread for weeks, including standing Captain directives and two secret-leak hazards. A prior compaction of MEMORY.md deleted index rows instead of moving them to an archive index, so the pointer was not stale, it was gone. Nothing detected it; .claude/hooks/memory-audit.mjs is the detector)
 escalation: none pending
 ```
 
@@ -299,6 +303,8 @@ incidents:
     ref: "evidence-packet tamper test (#2122: the check ran `sed 's/Acme/Acmf/'` against a manifest whose slug is lowercase `acme`, so it altered nothing; openssl then verified the unmodified bytes and the session reported a passing tamper test. The signature was in fact sound, which is worse -- a real regression would have been reported green by the same command)"
   - date: 2026-08-01
     ref: 'memory-corpus audit (asked for a wrongness rate, the session built six checks and three failed on the instrument rather than the claim: guessed ADR filenames produced five false FAILs against memories that were correct, an issue number was checked as a PR, and an absence assertion was written inverted so the correct result was labelled a failure. Measured memory error rate 2/147; measured first-attempt instrument error rate 3/6)'
+  - date: 2026-08-19
+    ref: 'gate-muted escalator (ss#2547, docs/runbooks/operator/incidents/2026-08-19-gate-muted-escalator.md: the pilot Operator woke with a court date seven days out, was refused five times by its own gates, and every liveness instrument stayed green because none of them could return the other answer. Heartbeat fresh, scheduler healthy, cron fired, routine woke, nothing sent, three days silent. The instruments measured that the routine RAN, which it could not have failed, rather than that a message ARRIVED)'
 escalation: none pending
 ```
 
@@ -309,6 +315,67 @@ The failure does not look like carelessness from inside. Each of the incidents a
 This venture already enforces exactly this discipline on its code and not on its reasoning. `operator/contracts/runtime-controls.yaml` exists because a control can be registered yet inert, and refuses the status `enforced` without a named negative-fire probe. The Dockerfile's own note on a mode assertion records that it "measured the environment, not the code" and passed for months under a permissive umask. The gap this law closes is that the same standard was never applied to the checks an agent runs on its own work.
 
 It is `primer` rather than `gate` because the failure is a missing thought, not a detectable state: no hook can see that a passing command was incapable of failing. The cost is `low` -- naming the falsifier takes one sentence and usually one extra command, and unlike a radar line it produces no false positives to teach agents to skim.
+
+### Law 13: Do the work, do not file it
+
+```yaml
+id: do-it-now-dont-file-it
+primer_line: 'Do the work, do not file it: work found mid-task gets done now unless it is blocked on something that does not exist yet or needs a Captain decision. Standing target is zero open issues.'
+cost: low
+tier: primer
+enforcement:
+  - .claude/hooks/reflex-primer.sh
+  - CLAUDE.md
+incidents:
+  - date: 2026-08-31
+    ref: feedback_do_the_work_dont_file_an_issue (140 open, 136 agent-filed, 115 within 30 days)
+escalation: none pending
+```
+
+A backlog is not a record of ambition, it is a record of work the venture declined to do while telling itself otherwise. On 2026-08-31 a census counted 140 open issues in this repo. 136 of them had been filed by agent sessions and 115 within the previous 30 days, the same month a client went into production. Only three were older than sixty days. None of that was drift or neglect: every one of those sessions was following the rule this repo had written down, which said to finish the current scope and file a new issue for anything else.
+
+The Captain had been saying the opposite out loud for months. That is the diagnosis, and it is not a diligence problem: the repo contradicted the Captain in writing, on every turn, and the writing won. This venture already names the pattern in its own words, that a fact an agent has to be told repeatedly is a fact the repo failed to write down.
+
+So the rule inverts. A platoon of agents can do in an afternoon what a backlog was invented to defer, and the reason to file was never capability, it was calendar. Work found mid-task gets finished after the current scope, in the same session. An issue is correct in exactly two cases: the work is blocked on something that does not exist yet, or it needs a decision only the Captain can make. Noticing something is not one of them, and neither is a defect you could have fixed in the time it took to describe it.
+
+Two guards on the target. Automated reconcilers file alerts rather than backlog and are exempt, because a standing goal of zero must never become an argument for silencing a monitor. And closing an issue is not doing the work: a close records a decision not to do something, which is why the retirement path is `force-close` with a written rationale, a visible scope decision rather than a silent omission.
+
+It is `primer` rather than `gate` because no hook can tell a deferral from a genuine block. The cost is `low`: the rule removes a step rather than adding one.
+
+### Law 14: The report is a probe
+
+```yaml
+id: report-is-a-probe
+primer_line: "A program's report about the world is a claim: a manifest, a completion, a wired map, or a done flag is proven by reading the world back after acting, never by echoing the statement that ran. Ask what the report would say if the action had matched nothing."
+cost: low
+tier: primer
+enforcement:
+  - .claude/hooks/reflex-primer.sh
+  - docs/doctrine/report-is-a-probe-checklist.md
+  - tests/doctrine-integrity.test.ts
+incidents:
+  - date: 2026-09-10
+    ref: 'decommission observability backend (operator/bin/lib/decommission_backends.py: cleanup() returned fleet_status_row_deleted: True unconditionally after a DELETE whose result set is empty by construction, so the manifest a completion report would cite could not tell a deleted row from a matched-nothing; code review 2026-09-10, Security finding 3)'
+  - date: 2026-09-10
+    ref: 'substrate required check (.github/operator-substrate-paths.txt with operator/bin/tests/test_ci_coverage_conformance.py: the conformance test pinned test FILES, not the fixture modules those tests execute, so operator/tests/test_closeout_seed.py ran a script under operator/fixtures/ that the trigger list did not cover and a fixture-only PR merged reporting "No substrate paths changed"; code review 2026-09-10, top action item 4)'
+  - date: 2026-09-10
+    ref: 'retainer price and rail (src/pages/api/admin/clients/[id]/operator-price.ts:50-51: two non-atomic read-modify-writes with no db.batch(), so a failed second write left the row half-updated while the caller saw one generic error and could not say which half landed; code review 2026-09-10, Architecture finding 8)'
+  - date: 2026-09-10
+    ref: 'decommission --allow-unwired (operator/bin/lib/decommission_cli.py: the flag''s help text said DEV/FIXTURE ONLY and nothing enforced it, so a live run with the flag destroyed every wired backend while printing that it "does NOT fully decommission the customer"; code review 2026-09-10, Security finding 3)'
+  - date: 2026-07-28
+    ref: 'entitlement-control incident (Law 9 lineage: four PRs each reported built, wired, and tested against their own definition of done while a Named Administrator could not perform the act; the report certified the author, not the world)'
+  - date: 2026-07-26
+    ref: 'quinn incident (the gone-means-gone lineage: a persona name was reported removed four times between 2026-07-02 and 2026-07-13, each report honest about the git layer it touched, while the Fly volume kept the slug alive until monitoring paged on it twelve days later)'
+escalation: none pending
+```
+
+Law 12 asks whether an agent's check could have come back red. This law asks the same question of the code the agent ships. A program that acts on the world and then reports on the result has two ways to write that report: from the statement it ran, or from the world after it ran. The first is not a report, it is an echo. It says the DELETE was issued, the flag was passed, the two writes were awaited, and it says those things identically whether the row was deleted, the flag was honoured, or the second write landed. The manifest reads the same in the success case and in the failure case, which is Law 12's broken instrument, built into the artifact and shipped.
+
+The four 2026-09-10 incidents are one shape. Each was new code in a window that also closed six prior findings, written carefully, with tests that passed. What each lacked was the read-back: a SELECT after the DELETE, a walk of the paths the tests actually execute rather than the tests, a batch that either lands both halves or neither, a guard on the flag whose text made a promise. The two older incidents in the lineage are the same shape one level up: a PR's status table is a program's report about the world, and "done" was defined as the artifact rather than the act.
+
+So the rule: anything a program emits that describes the state of the world after it acted (a manifest, a completion record, a wired or unwired map, a `*_deleted` or `*_done` boolean, a "nothing to do" exit) is a claim, and the program earns it by reading the world back. The cheapest test of whether it does is the one in the primer line: ask what the report would say if the action had matched nothing. If the answer is "the same thing", the report is an echo. The checklist at `docs/doctrine/report-is-a-probe-checklist.md` carries the five questions a reviewer or author answers for any such module, and the answer "it does not read back" is a defect, not a note.
+
+It is `primer` rather than `gate` because the failure is a missing read, and no hook can see that a returned dictionary was composed from intent rather than observation. The checklist is the review-time mechanism; the merge gates that already exist for the incidents above (`test_decommission_backends.py` on the counting D1 fake, the conformance test walking executed paths) are the pattern each new instance should add. The cost is `low`: one read after the write, and one question before the review.
 
 ---
 
@@ -340,6 +407,12 @@ mechanisms:
     success_criterion: 'Zero duplicate-featureset builds across concurrent sessions between now and the review date; board records stay accurate (no ghost peers older than 24h observed in the primer output).'
     review: 2026-09-30
     on_failure: 'If ghosts or noise teach agents to skim the board block, tighten pruning or remove the block. A peer listing that is sometimes wrong is worse than the blindness it replaced.'
+  - id: memory-audit
+    file: .claude/hooks/memory-audit.mjs
+    hypothesis: 'Making index-to-store reachability computable turns silent memory loss into a detectable state, so a tiered index (a capped always-on MEMORY.md, depth behind sub-indexes and an attic) can be compacted without dropping memories on the floor (Law 2: an index line is the pointer, and a deleted pointer is a deleted memory).'
+    success_criterion: 'The audit reports zero orphans and zero dangling references across the sessions between now and the review date, with MEMORY.md under the 24985-byte read limit and trending at or below the 17510-byte recommended target; every non-zero exit is traceable to a compaction that a session then repaired rather than to a false positive. That criterion was unmeasurable as first written, because a silent-when-clean hook cannot be distinguished from one that never ran: `memory-audit --wiring` supplies the missing half, and a reading of "the hook is not firing" falsifies the whole entry regardless of the orphan count.'
+    review: 2026-12-09
+    on_failure: 'If the orphan count is routinely non-zero because agents write memories faster than they index them, the fix is to move indexing into the write path, not to raise the cap. If the findings are false positives (prose parentheticals, links out of the store), narrow the link grammar or delete the mechanism: an audit whose noise is indistinguishable from its findings gets ignored, which is worse than not having it.'
 ```
 
 ## Closure loop

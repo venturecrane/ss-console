@@ -10,10 +10,12 @@ import {
   SLUG_PATTERN,
   type Persona,
   type PersonaChannelBinding,
+  type PersonaSignature,
   type PersonaStatus,
   type ValidationError,
 } from './types'
 import { isPlainObject, optionalEnum, optionalString } from './helpers'
+import { findFloorTrigger } from '../floor-triggers'
 import { checkSendAs } from './sections-personas-send-as'
 import { checkBundles, checkCron } from './sections-bundles-cron'
 import { checkPersonaEntitlements, checkPersonaSkills } from './sections-persona-skills'
@@ -91,7 +93,8 @@ function checkOnePersona(
   const bundles = checkBundles(p['bundles'], `personas[${i}].bundles`, skills, errors)
   const cron = checkCron(p['cron'], `personas[${i}].cron`, skills, errors)
   const title = optionalString(p, 'title', `personas[${i}].title`, errors)
-  const signature = optionalString(p, 'signature_html', `personas[${i}].signature_html`, errors)
+  const signatureHtml = optionalString(p, 'signature_html', `personas[${i}].signature_html`, errors)
+  const signature = checkPersonaSignature(p['signature'], `personas[${i}].signature`, errors)
   const avatar = optionalString(p, 'avatar_url', `personas[${i}].avatar_url`, errors)
   const pronouns = optionalEnum(p, 'pronouns', ACCEPTED_PRONOUNS, `personas[${i}].pronouns`, errors)
   const sendAs = checkSendAs(p['send_as'], `personas[${i}].send_as`, errors)
@@ -105,7 +108,8 @@ function checkOnePersona(
     status,
     name,
     title,
-    signature_html: signature,
+    signature_html: signatureHtml,
+    signature,
     avatar_url: avatar,
     tone: extractToneList(p['tone']),
     pronouns: pronouns,
@@ -126,6 +130,68 @@ function checkOnePersona(
     bundles,
     cron,
   }
+}
+
+/**
+ * The authored chase-mail signature block (outbound-quality track): an
+ * optional mapping with optional `firm_line` / `closing` strings, nothing
+ * else. Additive and optional on purpose -- unauthored degrades to
+ * `customer_name` alone (ADR 0035, no imposed defaults) -- but a MALFORMED
+ * authoring is an error, never a silent null: a firm that authored a
+ * signature and got the shape wrong must hear about it at validation time,
+ * not discover its sign-off missing in a client's mailbox.
+ */
+function checkPersonaSignature(
+  value: unknown,
+  path: string,
+  errors: ValidationError[]
+): PersonaSignature | null {
+  if (value === undefined || value === null) return null
+  if (!isPlainObject(value)) {
+    errors.push({
+      code: 'TypeMismatch',
+      path,
+      message: `${path} must be a mapping with optional firm_line / closing strings`,
+    })
+    return null
+  }
+  for (const key of Object.keys(value)) {
+    if (key !== 'firm_line' && key !== 'closing') {
+      errors.push({
+        code: 'TypeMismatch',
+        path: `${path}.${key}`,
+        message: `${path}.${key}: unknown key (only firm_line and closing are authored here)`,
+      })
+      return null
+    }
+  }
+  const firmLine = optionalString(value, 'firm_line', `${path}.firm_line`, errors)
+  const closing = optionalString(value, 'closing', `${path}.closing`, errors)
+  // The block renders VERBATIM into every chase body, which the ADR 0031
+  // content floor re-scans before delivery (overlay shared/content_floor.py).
+  // A trigger word authored here would silently downgrade every autonomous
+  // chase to a held draft, so it is refused at authoring time with the word
+  // named (PR #2651 review, finding 3). Shared vocabulary + drift guard:
+  // src/lib/operator/floor-triggers.ts.
+  for (const [key, text] of [
+    ['firm_line', firmLine],
+    ['closing', closing],
+  ] as const) {
+    const trigger = text === null ? null : findFloorTrigger(text)
+    if (trigger !== null) {
+      errors.push({
+        code: 'TypeMismatch',
+        path: `${path}.${key}`,
+        message:
+          `${path}.${key} contains "${trigger}", a content-floor trigger word (ADR 0031): ` +
+          'the signature renders into every outbound chase body, and the floor would hold ' +
+          'each one as a draft. Use the floor-clean substitution from ' +
+          '_shared-chase-voice.md instead of this word.',
+      })
+      return null
+    }
+  }
+  return { firm_line: firmLine, closing }
 }
 
 /**

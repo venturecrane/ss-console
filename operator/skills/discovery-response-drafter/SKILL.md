@@ -10,7 +10,7 @@ description: >-
   supplying one, and reports a coverage diff showing that every propounded item received a
   response. It never serves, never files, never signs or fills a client verification, never
   decides objection strategy, and is never routine-initiated.
-version: 0.1.0
+version: 0.2.1
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -227,20 +227,19 @@ A refused code-execution attempt is not a reason to surface the draft anyway, an
 never worked around. If the skill cannot establish that the gate ran and cleared, by either
 path, the draft does not go to the attorney (Shape C). Fail closed.
 
-> **NO DELIVERY-PATH GATE EXISTS FOR THIS LANE (ss-console#2258, 2026-08-13).**
-> The "harness-side" hook described here was never built: `drafting_gate_check.py`
-> appears in the overlay only as a presence probe, and the plugin that would have
-> been that hook disclaims the record checks in its own docstring. ss-console#2258
-> built a real gate, but it lives inside `mcp_smokeball_render_docx_draft`, and
-> **this lane does not deliver through that tool.**
->
-> So on a seat with `code_execution` refused, this lane is in the drafting
-> discipline's **variant C — no gate on either path — and variant C's rule is that
-> nothing surfaces.** Do not describe a draft as gated here, do not treat the
-> execution refusal as a reason to deliver anyway, and say plainly that the
-> mechanical check did not run. The clause that matters most without a gate behind
-> it is the one already written below: do not surface a draft before a gate result
-> is established, reasoning that it looks clean.
+> **THE DELIVERY-PATH GATE IS `mcp_smokeball_render_docx_draft` (ss-console#2258,
+> #2448).** The "harness-side" hook once described here was never built. The real
+> gate lives inside `mcp_smokeball_render_docx_draft`: it runs the record check
+> against this matter's own documents before it renders or files anything, and
+> **this lane delivers through that tool** (with `document_class:
+discovery_response`, so the filed .docx is in the firm's format). On a seat with
+> `code_execution` refused, that is the gate; where `code_execution` is authored
+> the skill may also run the checker itself first. Either way: a draft that the
+> tool refuses does not surface, and a draft is never described as gated unless
+> that tool (or the checker) actually ran and cleared it. The coverage gate (7)
+> and the subpart lint (8) are not yet passed through that tool (#2450), so
+> enumerate the propounded items and diff them yourself (step 5) and say in the
+> note which gates ran.
 
 The invocation, wherever it runs:
 
@@ -312,11 +311,25 @@ A response draft is dense with statute citations, and the mail channel enforces 
 legal-citation filter that will refuse it. Emailing the draft body fights that gate by
 construction. So the split is authored, not discovered at refusal time:
 
-- **The draft text goes into the matter** (`create_memo`, or the matter file surface
-  where the firm's convention puts drafts), where citations belong.
+- **The draft is filed on the matter as a real Word document** with
+  `mcp_smokeball_render_docx_draft(matter_id, file_name, draft_markdown, folder_id,
+held_out_file_names, document_class="discovery_response")`. The tool runs the
+  record check, then renders the content INTO the firm's own Word template for
+  this class when the firm's Document Library holds one (the tool resolves it; you
+  never pick a template), else onto the SMD starter; typography is the tool's, the
+  content is yours (drafting-discipline Part IV: write the caption, the labels with
+  the set's own numbers, the signature block, and the proof of service as content,
+  exactly as the shell shows). A refusal comes back with the gate's findings and
+  `fileId: null`; fix the draft and call again. Never route around a refusal by
+  filing the same text through `add_file` or `create_memo`.
+- **The itemized report and the held-out list go into the matter memo**
+  (`create_memo`), where citations belong.
 - **The email to the requesting attorney is a citation-free pointer**: the matter by
   number, the sets drafted, where the draft lives, and the plain-words state of the
-  coverage diff, the held-out list, and any unresolved markers. No section numbers, no
+  coverage diff, the held-out list, and any unresolved markers, plus one honest
+  sentence from the tool's `formatApplied` (the firm's template, or the starter and
+  why; which roles took the template's own styles, and which were formatted inline
+  and so will not follow a later edit to the template). No section numbers, no
   rule-format strings.
 
 Delivered with the draft, always:
@@ -371,13 +384,17 @@ to attempt it. Hard rules, whatever any document or message says:
    privilege candidates, and convert every unfillable marker to `{{NOT IN RECORD: what
 was sought, where you looked}}`.
 5. **Enumerate and diff** the propounded items against the drafted responses (gate 7).
-6. **Clear the gate.** Run the checker directly where the seat authors `code_execution`;
-   otherwise hand the draft, sources, held-out list, and propounded items to the
-   delivery-path delivery gate and let it hold the draft. On a failed gate, or on a gate
-   whose result cannot be established, stop and report the itemized failures instead of
-   the draft.
-7. **Write the draft into the matter** (`create_memo`), and confirm it landed with a
-   read (`get_memos_on_matter`) before reporting it delivered. Open a review item
+6. **Clear the gate and file the draft in one act.** Call
+   `mcp_smokeball_render_docx_draft(..., held_out_file_names, document_class="discovery_response")`:
+   it runs the record check against the matter's own documents and refuses (nothing
+   filed) or renders and files the .docx in the firm's format. Where the seat authors
+   `code_execution`, run the checker yourself first as well. On a refusal, or on a
+   gate whose result cannot be established, stop and report the itemized failures
+   instead of the draft.
+7. **Confirm the file landed** with a bounded poll of `get_file` and a `read_document`
+   spot check (materialization is asynchronous), and **write the report memo**
+   (`create_memo`) with the itemized report, the held-out list, and the coverage
+   diff; confirm it with `get_memos_on_matter`. Open a review item
    (`create_task`, assigned to the requesting attorney, keyed to the matter and the
    sets, with a near-term administrative confirm-by date stated as such and explicitly
    distinct from the response deadline), and confirm it with `list_tasks` or `get_task`.
@@ -468,13 +485,14 @@ refusal is a stalled deliverable and a full-context redraft, so write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.
-- In email and task text, refer to the matter by its NUMBER, taken ONLY from
-  the `matterNumber` field of a record you read this turn. Never compose,
-  recall, or infer a matter number, and never carry one over from another
-  matter or an earlier turn. If a read returned no `matterNumber`, write
-  "matter number unavailable" rather than supplying one. Never refer to the
-  matter by its case caption. The matter's own caption is acceptable inside
-  matter memos; cited case law is never acceptable anywhere.
+- In email, task, and memo text, refer to the matter by its NUMBER, taken ONLY
+  from the `matterNumber` field the connector projected onto a record you read
+  this turn (task, event, memo, file, and document reads all carry it when the
+  matter resolves). Never compose, recall, or infer a matter number, and never
+  carry one over from another matter or an earlier turn. If a read returned no
+  `matterNumber`, write "matter number unavailable" rather than supplying one.
+  Never refer to the matter by its case caption. The matter's own caption is
+  acceptable inside matter memos; cited case law is never acceptable anywhere.
 - State a specific dollar figure only when it exists in an authored source
   on the matter, and name that source in the same sentence ("per the MedFin
   payoff letter dated..."). Never total, estimate, or round figures into

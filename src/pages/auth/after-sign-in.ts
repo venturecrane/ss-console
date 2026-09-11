@@ -10,6 +10,7 @@ import {
   getPortalBaseUrl,
 } from '../../lib/config/app-url'
 import { chooseSignedInSurface, hostnameOf } from '../../lib/auth/after-sign-in-target'
+import { clerkProfile } from '../../lib/auth/clerk-profile'
 
 /**
  * Post-sign-in dispatcher.
@@ -42,19 +43,6 @@ import { chooseSignedInSurface, hostnameOf } from '../../lib/auth/after-sign-in-
  * subdomain rewrite in src/middleware.ts handles routing on a single host.
  */
 
-type ClerkUser = NonNullable<Awaited<ReturnType<App.Locals['currentUser']>>>
-
-/** Extract the email + display name we persist locally from a Clerk user. */
-function clerkProfile(clerkUser: ClerkUser): { email: string; name: string } {
-  const email =
-    clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress ?? ''
-  const name =
-    [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ').trim() ||
-    clerkUser.username ||
-    email
-  return { email, name }
-}
-
 export const GET: APIRoute = async ({ locals, redirect, url }) => {
   const auth = locals.auth()
   if (!auth.userId) {
@@ -70,15 +58,21 @@ export const GET: APIRoute = async ({ locals, redirect, url }) => {
   }
 
   // Link/JIT the local row first; the admin shim then sees the linked row.
+  // Null when the Clerk user has no local binding AND no verified primary
+  // email (clerk-profile.ts) — nothing to key on, so no row is linked or
+  // created and both eligibility checks below fail closed to the
+  // no_subscription state.
   const userRow = await ensureLocalUser(env.DB, auth.userId, clerkProfile(clerkUser))
 
-  // Login accountability: record the sign-in at the true sign-in moment.
-  // Covers admin-only and dual-eligible users who may never hit a portal
-  // route (entity_id is NULL for admin-only). Never throws.
-  const loginEntityId =
-    userRow.entity_id ??
-    (auth.orgId ? ((await resolveClerkEntity(env.DB, auth.orgId))?.id ?? null) : null)
-  await stampLoginIfNewSession(env.DB, userRow, auth.sessionId, loginEntityId)
+  if (userRow) {
+    // Login accountability: record the sign-in at the true sign-in moment.
+    // Covers admin-only and dual-eligible users who may never hit a portal
+    // route (entity_id is NULL for admin-only). Never throws.
+    const loginEntityId =
+      userRow.entity_id ??
+      (auth.orgId ? ((await resolveClerkEntity(env.DB, auth.orgId))?.id ?? null) : null)
+    await stampLoginIfNewSession(env.DB, userRow, auth.sessionId, loginEntityId)
+  }
 
   const adminSession = await resolveAdminSessionFromClerk(auth.userId, env.DB, env.SESSIONS)
 
@@ -87,7 +81,9 @@ export const GET: APIRoute = async ({ locals, redirect, url }) => {
   // bound to a customer entity is a legitimate portal (Operator) user. Per
   // operator-access.ts, in-product authorization keys off product_roles, not
   // users.role — so we must not exclude an admin from the portal seat here.
-  const portalEligible = Boolean(userRow.entity_id || auth.orgId)
+  // Requires a local row: without one, an active Clerk org alone must not
+  // grant a portal surface (getPortalClient would bounce it anyway).
+  const portalEligible = Boolean(userRow && (userRow.entity_id || auth.orgId))
 
   // Host-aware selection. Fail-safe: any throw falls back to chooseSignedInSurface
   // with unknown hosts, which yields the admin-first default — so a dispatcher

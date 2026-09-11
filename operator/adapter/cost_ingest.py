@@ -116,8 +116,7 @@ def _load_pricing(filename: str) -> dict:
     path = _PRICING_DIR / filename
     if not path.is_file():
         raise FileNotFoundError(
-            f"cost telemetry pricing file not found: {path}; "
-            "must be checked in alongside this module"
+            f"cost telemetry pricing file not found: {path}; must be checked in alongside this module"
         )
     return json.loads(path.read_text())
 
@@ -236,10 +235,7 @@ def _compute_anthropic_cents(
     models = pricing.get("models", {})
     entry = models.get(model)
     if entry is None:
-        return 0, 0, (
-            f"model {model!r} not in anthropic_pricing.json; "
-            "wrote tokens with amount_cents=0"
-        )
+        return 0, 0, (f"model {model!r} not in anthropic_pricing.json; wrote tokens with amount_cents=0")
     in_per_m = int(entry.get("input_per_million_cents", 0))
     out_per_m = int(entry.get("output_per_million_cents", 0))
     in_cents = (input_tokens * in_per_m) // 1_000_000
@@ -270,7 +266,7 @@ async def ingest_anthropic_billing(
 
     try:
         rows = await source.fetch_daily_usage(api_key, day)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 - the vendor fetch failing must not abort the day's ingest; it is logged and the day is marked unfetched
         log.warning(
             "anthropic_billing fetch failed for %s: %s",
             day_str,
@@ -289,9 +285,7 @@ async def ingest_anthropic_billing(
     warnings: list[str] = []
 
     for model, in_tokens, out_tokens in rows:
-        in_cents, out_cents, warn = _compute_anthropic_cents(
-            model, in_tokens, out_tokens, pricing
-        )
+        in_cents, out_cents, warn = _compute_anthropic_cents(model, in_tokens, out_tokens, pricing)
         if warn:
             warnings.append(warn)
             log.warning(warn)
@@ -365,8 +359,7 @@ async def run_ingest_for_customer(
     """
     if ctx.executor is None:
         raise ValueError(
-            "CustomerIngestContext.executor is required; "
-            "the cron worker must bind a CostIngestExecutor before calling"
+            "CustomerIngestContext.executor is required; the cron worker must bind a CostIngestExecutor before calling"
         )
 
     if day is None:
@@ -383,7 +376,7 @@ async def run_ingest_for_customer(
             ctx.anthropic_api_key,
             day,
         )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 - one source raising must not abort the other sources' ingest; it is logged as that source's failure
         log.error(
             "ingest_anthropic_billing raised for %s on %s: %s",
             ctx.customer_slug,

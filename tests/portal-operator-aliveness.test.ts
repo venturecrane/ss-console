@@ -9,16 +9,14 @@
  *
  * The resolver reads the customer's `fleet_status` heartbeat row
  * (ADR 0023 Wave 1, wired in #1678); a customer with no row resolves to
- * null and the AlivenessHeader renders nothing per
+ * null and the dashboard renders nothing per
  * docs/style/empty-state-pattern.md. These tests cover:
  *
  *   - The closed AlivenessLevel vocabulary
- *   - alivenessTone → Tone mapping (closed switch)
  *   - deriveAlivenessFromBridge — the pure transition. Priority and edge
  *     cases (sticky-stop wins, in-flight wins, missing timestamp,
  *     unparseable timestamp, threshold crossing, heartbeat-driven
  *     liveness).
- *   - formatAlivenessLevel — friendly headline per level
  *   - formatLastActionRelative — relative-time bucket boundaries
  *   - formatLastActionAbsolute — null + unparseable handling
  *   - needsEscalationAffordance — true only for the unhealthy postures
@@ -42,9 +40,7 @@ import { ORG_ID } from '../src/lib/constants'
 import {
   ALIVENESS_LEVELS,
   OFFLINE_THRESHOLD_MINUTES,
-  alivenessTone,
   deriveAlivenessFromBridge,
-  formatAlivenessLevel,
   formatLastActionAbsolute,
   formatLastActionRelative,
   needsEscalationAffordance,
@@ -100,6 +96,7 @@ function makeSubscription(overrides?: Partial<SubscriptionRow>): SubscriptionRow
     ended_at: null,
     settings_json: null,
     service_id: null,
+    stripe_subscription_id: null,
     created_at: '2026-05-01T00:00:00.000Z',
     updated_at: '2026-05-01T00:00:00.000Z',
     ...overrides,
@@ -118,29 +115,6 @@ describe('OFFLINE_THRESHOLD_MINUTES', () => {
   })
 })
 
-describe('alivenessTone', () => {
-  it('maps each level to its assigned tone', () => {
-    const cases: Array<[AlivenessLevel, ReturnType<typeof alivenessTone>]> = [
-      ['idle', 'success'],
-      ['running', 'info'],
-      ['sticky_stop', 'danger'],
-      ['offline', 'warning'],
-    ]
-    for (const [level, expected] of cases) {
-      expect(alivenessTone(level)).toBe(expected)
-    }
-  })
-})
-
-describe('formatAlivenessLevel', () => {
-  it('maps each level to a friendly headline', () => {
-    expect(formatAlivenessLevel('idle')).toBe('Idle')
-    expect(formatAlivenessLevel('running')).toBe('Running')
-    expect(formatAlivenessLevel('sticky_stop')).toBe('Paused by safety check')
-    expect(formatAlivenessLevel('offline')).toBe('Offline')
-  })
-})
-
 describe('needsEscalationAffordance', () => {
   it('is true for the unhealthy postures only', () => {
     expect(needsEscalationAffordance('sticky_stop')).toBe(true)
@@ -155,25 +129,31 @@ describe('deriveAlivenessFromBridge', () => {
   const NOW_MS = Date.parse('2026-05-24T12:05:00.000Z')
 
   describe('sticky-stop priority', () => {
-    it('returns sticky_stop when stickyStopLevel is WARN', () => {
+    it('returns sticky_stop when stickyStopLevel is HARD_STOP', () => {
       const reading = makeReading({
-        stickyStopLevel: 'WARN',
-        stickyStopReason: 'consecutive_tool_failures=3',
+        stickyStopLevel: 'HARD_STOP',
+        stickyStopReason: 'consecutive_tool_failures=8',
       })
       const signal = deriveAlivenessFromBridge(reading, NOW_MS)
       expect(signal.level).toBe('sticky_stop')
-      expect(signal.stickyStopReason).toBe('consecutive_tool_failures=3')
+      expect(signal.stickyStopReason).toBe('consecutive_tool_failures=8')
       expect(signal.currentSkill).toBeNull()
     })
 
-    it('returns sticky_stop when stickyStopLevel is SOFT_STOP', () => {
-      const reading = makeReading({ stickyStopLevel: 'SOFT_STOP', stickyStopReason: 'refusals' })
-      expect(deriveAlivenessFromBridge(reading, NOW_MS).level).toBe('sticky_stop')
-    })
-
-    it('returns sticky_stop when stickyStopLevel is HARD_STOP', () => {
-      const reading = makeReading({ stickyStopLevel: 'HARD_STOP', stickyStopReason: 'capped' })
-      expect(deriveAlivenessFromBridge(reading, NOW_MS).level).toBe('sticky_stop')
+    it('a legacy WARN / SOFT_STOP does NOT tell a client the agent is stopped', () => {
+      // Two tests used to assert the opposite, and they were asserting a lie
+      // to a client: neither rung restricted a single call, yet both painted
+      // the portal chip "the safety substrate has pinned the agent". Both were
+      // removed 2026-09-02; a seat still reporting them reads OK, which is
+      // what they always meant. Cast because the union no longer admits them,
+      // which is the point -- a seat can still SEND them until it reprovisions.
+      for (const legacy of ['WARN', 'SOFT_STOP']) {
+        const reading = makeReading({
+          stickyStopLevel: legacy as unknown as 'HARD_STOP',
+          stickyStopReason: 'refusals',
+        })
+        expect(deriveAlivenessFromBridge(reading, NOW_MS).level).not.toBe('sticky_stop')
+      }
     })
 
     it('sticky-stop wins over an in-flight skill', () => {

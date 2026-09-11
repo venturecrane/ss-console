@@ -1,0 +1,43 @@
+---
+/**
+ * "Change due date" on a presented or sent invoice (client hub invoice row).
+ *
+ * Posts action=reschedule to /api/admin/invoices/[id]: Stripe cannot change
+ * a finalized invoice's due date, so the route re-issues the Stripe invoice
+ * with the same lines and payment method, repoints the row, and voids the
+ * original. No email to the client in any case.
+ */
+interface Props {
+  invoiceId: string
+  dueDate: string | null
+  hubUrl: string
+}
+
+const { invoiceId, dueDate, hubUrl } = Astro.props
+---
+
+<form
+  method="POST"
+  action={`/api/admin/invoices/${invoiceId}`}
+  class="inline-flex items-center gap-1.5"
+>
+  <input type="hidden" name="action" value="reschedule" />
+  <input type="hidden" name="redirect_url" value={hubUrl} />
+  <label class="inline-flex items-center gap-1.5">
+    <span class="sr-only">New due date</span>
+    <input
+      type="date"
+      name="due_date"
+      required
+      value={dueDate ?? ''}
+      class="border border-[color:var(--ss-color-border)] px-1.5 py-0.5 font-mono text-[11px]"
+    />
+  </label>
+  <button
+    type="submit"
+    title="Re-issues the Stripe invoice with the new due date. No email to the client."
+    class="border border-[color:var(--ss-color-border)] px-2 py-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]"
+  >
+    Change due date
+  </button>
+</form>

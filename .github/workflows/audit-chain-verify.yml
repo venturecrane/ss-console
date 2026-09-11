@@ -1,0 +1,203 @@
+# Prove daily that no seat's audit record was truncated or rewritten, and keep a
+# copy of it somewhere the seat cannot reach.
+#
+# WHY (ss#2500). The ledger is a hash chain and NOTHING CALLED THE VERIFIER: not
+# a workflow, not the evidence packet, not the portal export. It ran when a human
+# ran it. Worse, running it would not have caught the thing a firm's insurer
+# actually asks about, because the chain walk alone cannot see tail truncation --
+# the surviving prefix is a valid chain. Measured against a live 1,473-row export
+# (vfy_01M0H8D1CV2X8J9ZACMAC8E6E2): deleting the last 50 rows, deleting the last
+# 1 row, and mutate-then-re-hash-everything-after all reported INTACT.
+#
+# The missing input is a head recorded off the Machine. The heartbeat now carries
+# one and the console pins every one into `audit_head_history` (migration 0108).
+# This job pulls each seat's full export over the ADR-0043 seam and requires the
+# newest pinned head to still be in it.
+#
+# AND THE COPY. The only copy of the ledger off the broker's file was Fly's daily
+# volume snapshot on 5-DAY retention. The A&P ledger already lost its
+# pre-2026-07-29 rows once when the seat was rebuilt on a new volume. This job
+# writes audit/<slug>/<date>/<HHMMSS>Z-<head12>.json.gz to R2 and records the
+# key and sha256 in the run summary, so the record survives loss of the Machine.
+# The key is unique per RUN because the audit/ prefix is object-locked and a
+# repeated key cannot be overwritten inside its retention window.
+#
+# HOLDS vs FINDS, and a hold is loud (#2395, the control-probes contract). Exit 1
+# is a finding (an alert row is written to the shared sink, source
+# `audit_integrity`, and the dashboard banner renders it). Exit 2 is a hold: a
+# transport failure, an unreadable D1, an archive that would not write, a bucket
+# whose immutability could not be confirmed, or -- most importantly -- a seat
+# with NO PINNED HEAD YET, because a run with no pin proves only self-consistency
+# and that is the property already shown insufficient. Both exits fail the run.
+# There is no path where this workflow is green because it asked nothing.
+#
+# WHAT THIS STILL DOES NOT PROVE. A pin protects rows OLDER than the last pin.
+# Rows written since the last heartbeat are unpinned, so root on the Machine has
+# a beat-sized window. That limit is stated on the client-facing pages rather
+# than papered over.
+
+name: audit-chain-verify
+
+on:
+  schedule:
+    # 04:23 UTC daily. Off the hour and off every other scheduled job here
+    # (06:41 control-probes, 09:41 config-reconcile, 13:17 send-reconcile).
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+    inputs:
+      seat:
+        description: 'Limit to one customer slug (blank = every authored seat)'
+        required: false
+      no_archive:
+        description: 'Verify only; write no off-box copy (any value = on)'
+        required: false
+      rehearse_mismatch:
+        description: >-
+          ALARM DRILL (ss#2500): one customer slug. Forces a head mismatch with a
+          synthetic pin, proves the alert reaches the sink, clears its own row.
+          Writes no archive; never touches audit_head_history. Prefer smd-staging.
+        required: false
+  pull_request:
+    paths:
+      - 'operator/bin/audit-chain-watch.py'
+      - 'operator/bin/verify-audit-chain.py'
+      - 'operator/bin/lib/chain_pin.py'
+      - 'operator/bin/tests/test_audit_chain_watch.py'
+      - 'operator/bin/tests/test_chain_pin.py'
+      - '.github/workflows/audit-chain-verify.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '>=3.11'
+
+      - name: Install pytest
+        run: python3 -m pip install --quiet pytest
+
+      # The falsifier gates the scheduled run. test_chain_pin.py contains a
+      # NEGATIVE CONTROL that asserts a truncated export still passes the chain
+      # walk alone -- so if the pin check silently stopped doing anything, these
+      # tests go red rather than the daily job going quietly green.
+      - name: Prove the tail check can fail
+        run: |
+          python3 -m pytest \
+            operator/bin/tests/test_chain_pin.py \
+            operator/bin/tests/test_audit_chain_watch.py -q
+
+      # On pull_request there are no secrets, no seats and no R2. The tests above
+      # are the whole job.
+      - name: Verify every seat's chain and copy it off-box
+        if: github.event_name != 'pull_request'
+        id: watch
+        env:
+          OPERATOR_RUNTIME_READ_SECRET: ${{ secrets.OPERATOR_RUNTIME_READ_SECRET }}
+          OPERATOR_RUNTIME_READ_URL: ${{ secrets.OPERATOR_RUNTIME_READ_URL }}
+          # The R2 S3 credentials are DERIVED from these two inside the runner,
+          # exactly as ci-reconcile-r2-customer-configs.sh derives them. Derive,
+          # never mint, and one credential shape for every console-side CI job.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Via env, never interpolated into the script body: a workflow_dispatch
+          # input is user-supplied and would otherwise be a shell-injection seam.
+          WATCH_SEAT: ${{ github.event.inputs.seat }}
+          WATCH_NO_ARCHIVE: ${{ github.event.inputs.no_archive }}
+          WATCH_REHEARSE: ${{ github.event.inputs.rehearse_mismatch }}
+        run: |
+          set -u
+          ARGS=""
+          if [ -n "${WATCH_REHEARSE:-}" ]; then
+            # The drill is its own run and takes no other flags: it evaluates one
+            # named seat with a synthetic pin and writes nothing to the archive.
+            # Mixing it with --seat / --no-archive would make the report ambiguous
+            # about which rows were real.
+            ARGS="--rehearse-mismatch ${WATCH_REHEARSE}"
+          else
+            if [ -n "${WATCH_SEAT:-}" ]; then ARGS="${ARGS} --seat ${WATCH_SEAT}"; fi
+            if [ -n "${WATCH_NO_ARCHIVE:-}" ]; then ARGS="${ARGS} --no-archive"; fi
+          fi
+          # `|| STATUS=$?` is load-bearing, not style (ss#2307/ss#2309). This
+          # body runs under `bash -e`, so an unguarded non-zero exit would abort
+          # HERE, before the report prints and before `status` reaches
+          # GITHUB_OUTPUT, silently skipping the alert step below -- going quiet
+          # in exactly the cases the control exists for.
+          STATUS=0
+          python3 operator/bin/audit-chain-watch.py $ARGS > watch.txt 2>&1 || STATUS=$?
+          cat watch.txt
+          echo "status=${STATUS}" >> "$GITHUB_OUTPUT"
+          # Contract (operator/bin/audit-chain-watch.py): 0 clean, 1 finding,
+          # 2 hold; 3 = the alarm drill FIRED (a pass), 4 = the drill failed.
+          # Anything else is the control itself breaking.
+          #
+          # 3 is green and 4 is red, and neither is ever 1, so a drill cannot
+          # open the "a seat's audit record does not hold up" issue below. That
+          # separation is the whole reason the drill has its own codes: a
+          # rehearsal that could be read as a real finding would train the reader
+          # to discount the real one.
+          if [ "${STATUS}" = "3" ]; then
+            echo "REHEARSAL PASSED: the head-mismatch alarm fired and its row was cleared."
+            exit 0
+          fi
+          if [ "${STATUS}" -gt 2 ]; then exit "${STATUS}"; fi
+
+      # A FINDING opens an issue. A HOLD does not: an instrument failure is not
+      # a finding about a client's records, and a control that pages on its own
+      # blips gets muted within a week. The hold still reddens the run below.
+      - name: Open an issue when a seat's audit record does not hold up
+        if: github.event_name != 'pull_request' && steps.watch.outputs.status == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "A seat's audit ledger no longer contains a chain head this console pinned."
+            echo
+            echo "The audit log is what a client firm is offered as the record of what its"
+            echo "Operator did, and what its insurer or the State Bar would be shown. A head"
+            echo "that was pinned and is now absent means rows that existed at that moment"
+            echo "are gone: the ledger was truncated, rewritten, or rolled back to an older"
+            echo "copy. The agent cannot do this. Root on the Machine can."
+            echo
+            echo "An \`audit_integrity\` alert row is already on the dashboard banner."
+            echo "Do not clear it until the cause is known."
+            echo
+            echo '```'
+            cat watch.txt
+            echo '```'
+            echo
+            echo "Runner: \`operator/bin/audit-chain-watch.py\` (ss#2500)."
+            echo "Pin source: \`audit_head_history\`, written from every heartbeat."
+            echo "Run: ${RUN_URL}"
+          } > body.md
+          gh issue create \
+            --repo "${REPO}" \
+            --title "Audit chain head missing from a seat export $(date -u +%Y-%m-%d)" \
+            --label "prio:P0" --label "type:bug" \
+            --body-file body.md
+
+      # Anything but a clean run fails, including a hold. A green check mark on a
+      # run that could not evaluate a seat is the defect this job exists to make
+      # impossible -- and until the heartbeat field reaches a seat, EVERY run
+      # holds, which is the honest state and looks like one.
+      #
+      # 3 is the ONE exception: an alarm drill that fired and cleared its own row
+      # (ss#2500). It is a pass, and the first live drill went red here until this
+      # said so -- the step above had already printed "REHEARSAL PASSED" and
+      # exited 0, and this gate reddened the run anyway on the raw status. A
+      # failed drill is 4, still caught by `!= '0'`.
+      - name: Fail the run when the check was not clean
+        if: >-
+          github.event_name != 'pull_request'
+          && steps.watch.outputs.status != '0'
+          && steps.watch.outputs.status != '3'
+        run: exit 1

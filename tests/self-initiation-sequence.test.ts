@@ -42,8 +42,23 @@ const CONDUCTOR = 'operator-self-initiation'
 
 interface SelfInitiation {
   sequence?: string[]
-  document_library?: { matter_hint?: string; folder_name?: string }
+  document_library?: {
+    matter_hint?: string
+    folder_name?: string
+    matter_number?: string
+    templates?: Record<string, string>
+  }
 }
+
+/** The renderer's document classes (smokeball_connector/docx_format.py DOCUMENT_CLASSES). */
+const DOCUMENT_CLASSES = [
+  'discovery_set',
+  'discovery_response',
+  'demand_letter',
+  'mediation_brief',
+  'memo',
+  'letter',
+] as const
 
 function loadSeat(slug: keyof typeof SEAT_PATHS) {
   const raw = parseYaml(readFileSync(SEAT_PATHS[slug], 'utf-8')) as Record<string, unknown>
@@ -102,6 +117,33 @@ describe('self_initiation <-> seat-binding drift gate', () => {
           `${slug}: self_initiation.document_library authored without folder_name — ` +
             `the status probe has no search key`
         ).toBe(true)
+      })
+
+      it('document_library format-template keys are well-shaped for the renderer (#2448)', () => {
+        const lib = selfInitiation?.document_library
+        if (!lib) return
+        if (lib.matter_number !== undefined) {
+          expect(
+            typeof lib.matter_number === 'string' && lib.matter_number.trim().length > 0,
+            `${slug}: document_library.matter_number must be a non-empty string (the library matter's number)`
+          ).toBe(true)
+        }
+        if (lib.templates !== undefined) {
+          for (const [cls, name] of Object.entries(lib.templates)) {
+            expect(
+              (DOCUMENT_CLASSES as readonly string[]).includes(cls),
+              `${slug}: document_library.templates names unknown class '${cls}' (known: ${DOCUMENT_CLASSES.join(', ')})`
+            ).toBe(true)
+            expect(
+              typeof name === 'string' && name.trim().length > 0,
+              `${slug}: document_library.templates.${cls} must be a non-empty file name`
+            ).toBe(true)
+          }
+          expect(
+            lib.matter_number !== undefined,
+            `${slug}: document_library.templates authored without matter_number — the renderer cannot resolve the library matter`
+          ).toBe(true)
+        }
       })
     })
   }

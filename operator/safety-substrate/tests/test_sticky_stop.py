@@ -11,7 +11,7 @@ Plus the state-machine invariants:
 
   - Forward-only transitions
   - Captain `clear()` is the only path backwards
-  - SOFT_STOP semantics surface via the returned state
+  - the returned state surfaces the level to the dispatch caller
   - HARD_STOP raises StickyStopError from the dispatch guard
   - Every transition writes an audit_log row
   - Captain clear writes an AGENT_RESUMED audit_log row
@@ -42,12 +42,12 @@ sys.path.insert(0, str(_HERE.parents[2]))  # operator/
 # we use the same dash-named-directory trick the other invariant tests use.
 sys.path.insert(0, str(_HERE.parents[1]))  # operator/safety-substrate/
 
-from adapter.audit_log import (  # noqa: E402
+from adapter.audit_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     AuditEvent,
     AuditLogWriter,
     SqliteExecutor,
 )
-from sticky_stop import (  # noqa: E402
+from sticky_stop import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     DEFAULT_THRESHOLDS,
     SqliteStickyStopStore,
     StickyStopCondition,
@@ -55,7 +55,6 @@ from sticky_stop import (  # noqa: E402
     StickyStopLevel,
     StickyStopMachine,
     StickyStopAuditRecord,
-    StickyStopState,
     StickyStopThresholds,
 )
 
@@ -155,9 +154,7 @@ def _audit_rows(conn: sqlite3.Connection) -> list[dict]:
     # randomness suffix breaks within-ms order, so id-sort is not insertion
     # order when multiple writes land in <1ms as they do here).
     cur = conn.cursor()
-    rows = cur.execute(
-        "SELECT action_type, actor, skill_name, metadata FROM audit_log ORDER BY rowid"
-    ).fetchall()
+    rows = cur.execute("SELECT action_type, actor, skill_name, metadata FROM audit_log ORDER BY rowid").fetchall()
     out = []
     for action_type, actor, skill_name, metadata in rows:
         out.append(
@@ -208,43 +205,25 @@ def test_consecutive_tool_failures_warn_soft_stop_hard_stop_ladder():
     assert s.level == StickyStopLevel.OK
     assert s.consecutive_tool_failures == 1
 
-    # 2 failures -> OK
-    _run(machine.record_tool_failure(customer="acme", persona="marcus", skill_name="inbox-triage"))
-    # 3 -> WARN
-    s = _run(machine.record_tool_failure(customer="acme", persona="marcus", skill_name="inbox-triage"))
-    assert s.level == StickyStopLevel.WARN
-
-    # 4 -> still WARN (soft_stop is 5)
-    s = _run(machine.record_tool_failure(customer="acme", persona="marcus", skill_name="inbox-triage"))
-    assert s.level == StickyStopLevel.WARN
-
-    # 5 -> SOFT_STOP
-    s = _run(machine.record_tool_failure(customer="acme", persona="marcus", skill_name="inbox-triage"))
-    assert s.level == StickyStopLevel.SOFT_STOP
-
-    # 6, 7 -> still SOFT_STOP (hard_stop is 8)
-    _run(machine.record_tool_failure(customer="acme", persona="marcus", skill_name="inbox-triage"))
-    _run(machine.record_tool_failure(customer="acme", persona="marcus", skill_name="inbox-triage"))
+    # 2..7 -> still OK. Two states since 2026-09-02: the seat keeps working
+    # right up to the hard threshold, so a lowered stop cannot slip in
+    # unnoticed.
+    for _ in range(6):
+        s = _run(machine.record_tool_failure(customer="acme", persona="marcus", skill_name="inbox-triage"))
+        assert s.level == StickyStopLevel.OK
 
     # 8 -> HARD_STOP
     s = _run(machine.record_tool_failure(customer="acme", persona="marcus", skill_name="inbox-triage"))
     assert s.level == StickyStopLevel.HARD_STOP
 
-    # Three transitions in the audit log: WARN, SOFT_STOP, HARD_STOP
+    # ONE transition in the audit log now: OK -> HARD_STOP. The two rungs
+    # that used to sit between them wrote INVARIANT_VIOLATION rows about
+    # states that restricted nothing.
     rows = [r for r in _audit_rows(conn) if r["metadata"] and r["metadata"].get("sticky_stop_transition")]
-    assert len(rows) == 3
+    assert len(rows) == 1
     transitions = [(r["metadata"]["from_state"], r["metadata"]["to_state"]) for r in rows]
-    assert transitions == [
-        ("OK", "WARN"),
-        ("WARN", "SOFT_STOP"),
-        ("SOFT_STOP", "HARD_STOP"),
-    ]
-    # Action_type tagging:
-    # - WARN / SOFT_STOP -> INVARIANT_VIOLATION
-    # - HARD_STOP -> AGENT_STOPPED
-    assert rows[0]["action_type"] == "INVARIANT_VIOLATION"
-    assert rows[1]["action_type"] == "INVARIANT_VIOLATION"
-    assert rows[2]["action_type"] == "AGENT_STOPPED"
+    assert transitions == [("OK", "HARD_STOP")]
+    assert rows[0]["action_type"] == "AGENT_STOPPED"
     # Condition propagated
     assert all(r["metadata"]["condition_triggered"] == "consecutive_tool_failures" for r in rows)
 
@@ -260,12 +239,17 @@ def test_tool_success_resets_consecutive_failures_counter():
 
 
 def test_tool_success_does_not_downgrade_level():
-    # Drive into SOFT_STOP, then a success arrives. Level stays SOFT_STOP.
+    """A success resets the STREAK, never the level.
+
+    Driven to HARD_STOP rather than the removed middle rung: the property
+    under test is that only a Captain clear moves the level back, and a
+    stopped seat is where that matters.
+    """
     machine, _ = _machine()
-    for _ in range(5):
+    for _ in range(DEFAULT_THRESHOLDS.tool_failure_hard_stop):
         _run(machine.record_tool_failure(customer="acme", persona="marcus"))
     state = _run(machine.record_tool_success(customer="acme", persona="marcus"))
-    assert state.level == StickyStopLevel.SOFT_STOP
+    assert state.level == StickyStopLevel.HARD_STOP
     assert state.consecutive_tool_failures == 0
 
 
@@ -284,7 +268,7 @@ def test_tool_failures_outside_window_reset_streak():
     # Jump past the 10-minute window.
     times[0] = epoch + timedelta(seconds=DEFAULT_THRESHOLDS.tool_failure_window_seconds + 1)
     state = _run(machine.record_tool_failure(customer="acme", persona="marcus"))
-    # Streak resets to 1, so we are below the WARN threshold of 3.
+    # Streak resets to 1, far below the hard-stop threshold of 8.
     assert state.consecutive_tool_failures == 1
     assert state.level == StickyStopLevel.OK
 
@@ -297,19 +281,14 @@ def test_tool_failures_outside_window_reset_streak():
 def test_refusal_cascade_warn_soft_stop_hard_stop_ladder():
     machine, conn = _machine()
 
-    # 5 refusals -> WARN
-    for _ in range(5):
+    # 19 refusals -> still OK. The seat keeps working right up to the hard
+    # threshold (two states since 2026-09-02).
+    for _ in range(19):
         s = _run(machine.record_refusal(customer="acme", persona="marcus", skill_name="commitment-skill"))
-    assert s.level == StickyStopLevel.WARN
+    assert s.level == StickyStopLevel.OK
 
-    # +5 more -> SOFT_STOP
-    for _ in range(5):
-        s = _run(machine.record_refusal(customer="acme", persona="marcus", skill_name="commitment-skill"))
-    assert s.level == StickyStopLevel.SOFT_STOP
-
-    # +10 more -> HARD_STOP
-    for _ in range(10):
-        s = _run(machine.record_refusal(customer="acme", persona="marcus", skill_name="commitment-skill"))
+    # the 20th -> HARD_STOP
+    s = _run(machine.record_refusal(customer="acme", persona="marcus", skill_name="commitment-skill"))
     assert s.level == StickyStopLevel.HARD_STOP
 
     transitions = [
@@ -317,11 +296,7 @@ def test_refusal_cascade_warn_soft_stop_hard_stop_ladder():
         for r in _audit_rows(conn)
         if r["metadata"] and r["metadata"].get("sticky_stop_transition")
     ]
-    assert transitions == [
-        ("OK", "WARN"),
-        ("WARN", "SOFT_STOP"),
-        ("SOFT_STOP", "HARD_STOP"),
-    ]
+    assert transitions == [("OK", "HARD_STOP")]
 
 
 # ---------------------------------------------------------------------------
@@ -329,7 +304,16 @@ def test_refusal_cascade_warn_soft_stop_hard_stop_ladder():
 # ---------------------------------------------------------------------------
 
 
-def test_time_budget_exceeded_jumps_to_soft_stop():
+def test_time_budget_exceeded_is_recorded_and_stops_nothing():
+    """The one meter left with no HARD_STOP threshold.
+
+    SOFT_STOP was its only outcome and SOFT_STOP restricted nothing, so with
+    the rung gone it records the overrun and changes no level -- exactly its
+    prior effect. Promoting it to HARD_STOP would be a silent tightening that
+    could halt a client mid-run; that is a deliberate call, not a side effect
+    of deleting two unused words. The audit row still lands, because it is the
+    evidence any later decision to enforce the budget would rest on.
+    """
     machine, conn = _machine()
     state = _run(
         machine.record_runtime_seconds(
@@ -338,10 +322,13 @@ def test_time_budget_exceeded_jumps_to_soft_stop():
             seconds=DEFAULT_THRESHOLDS.time_budget_seconds + 1,
         )
     )
-    assert state.level == StickyStopLevel.SOFT_STOP
-    rows = [r for r in _audit_rows(conn) if r["metadata"] and r["metadata"].get("sticky_stop_transition")]
-    assert len(rows) == 1
+    assert state.level == StickyStopLevel.OK  # stops nothing
+    assert state.condition is None  # and leaves no cause on a healthy seat
+    rows = [r for r in _audit_rows(conn) if r["metadata"]]
+    assert len(rows) == 1, "the overrun must still be recorded"
     assert rows[0]["metadata"]["condition_triggered"] == "time_budget_exceeded"
+    assert rows[0]["metadata"]["sticky_stop_transition"] is False
+    assert rows[0]["metadata"]["level_unchanged_by_design"] is True
     assert rows[0]["action_type"] == "INVARIANT_VIOLATION"
 
 
@@ -367,21 +354,17 @@ def test_cost_threshold_warn_soft_stop_hard_stop_ladder():
     # Use a tight cap so the test runs with small numbers.
     thresholds = StickyStopThresholds(
         cost_daily_cents=1000,  # $10
-        cost_warn_pct=80,
-        cost_soft_stop_pct=100,
         cost_hard_stop_pct=200,
     )
     machine, conn = _machine(thresholds=thresholds)
 
-    # 80% -> WARN
+    # 80% and 100% of the cap -> still OK. Those two rungs restricted nothing.
     state = _run(machine.record_cost_cents(customer="acme", persona="marcus", amount_cents=800))
-    assert state.level == StickyStopLevel.WARN
-
-    # +200 -> 100% -> SOFT_STOP
+    assert state.level == StickyStopLevel.OK
     state = _run(machine.record_cost_cents(customer="acme", persona="marcus", amount_cents=200))
-    assert state.level == StickyStopLevel.SOFT_STOP
+    assert state.level == StickyStopLevel.OK
 
-    # +1000 -> 200% -> HARD_STOP
+    # +1000 -> 200% -> HARD_STOP, where it always stopped
     state = _run(machine.record_cost_cents(customer="acme", persona="marcus", amount_cents=1000))
     assert state.level == StickyStopLevel.HARD_STOP
 
@@ -390,11 +373,7 @@ def test_cost_threshold_warn_soft_stop_hard_stop_ladder():
         for r in _audit_rows(conn)
         if r["metadata"] and r["metadata"].get("sticky_stop_transition")
     ]
-    assert transitions == [
-        ("OK", "WARN"),
-        ("WARN", "SOFT_STOP"),
-        ("SOFT_STOP", "HARD_STOP"),
-    ]
+    assert transitions == [("OK", "HARD_STOP")]
 
 
 def test_cost_resets_on_utc_day_rollover():
@@ -403,20 +382,21 @@ def test_cost_resets_on_utc_day_rollover():
     def clock() -> datetime:
         return times[0]
 
-    thresholds = StickyStopThresholds(cost_daily_cents=1000, cost_warn_pct=80)
+    thresholds = StickyStopThresholds(cost_daily_cents=1000)
     machine, _ = _machine(thresholds=thresholds, clock=clock)
 
-    # 80% on Day 1
+    # 80% on Day 1: spend recorded, no stop.
     state = _run(machine.record_cost_cents(customer="acme", persona="marcus", amount_cents=800))
-    assert state.level == StickyStopLevel.WARN
+    assert state.level == StickyStopLevel.OK
     assert state.cost_cents_today == 800
 
     # Roll over to Day 2; counter resets.
     times[0] = datetime(2026, 5, 22, 0, 30, 0, tzinfo=timezone.utc)
     state = _run(machine.record_cost_cents(customer="acme", persona="marcus", amount_cents=100))
+    # The DAILY COUNTER resets; the level is what forward-only protects, and
+    # this seat never left OK.
     assert state.cost_cents_today == 100
-    # Level stays at WARN (forward-only); not OK.
-    assert state.level == StickyStopLevel.WARN
+    assert state.level == StickyStopLevel.OK
 
 
 def test_cost_amount_must_be_non_negative():
@@ -431,17 +411,17 @@ def test_cost_amount_must_be_non_negative():
 
 
 def test_state_is_forward_only_no_autonomous_downgrade():
-    machine, _ = _machine()
-    # Drive to SOFT_STOP via cost.
-    thresholds = StickyStopThresholds(cost_daily_cents=1000, cost_warn_pct=80)
+    # Drive to HARD_STOP via cost (200% of a 1000c cap).
+    thresholds = StickyStopThresholds(cost_daily_cents=1000)
     machine, _ = _machine(thresholds=thresholds)
-    _run(machine.record_cost_cents(customer="acme", persona="marcus", amount_cents=1000))
+    _run(machine.record_cost_cents(customer="acme", persona="marcus", amount_cents=2000))
     state = _run(machine.get_state("acme", "marcus"))
-    assert state.level == StickyStopLevel.SOFT_STOP
+    assert state.level == StickyStopLevel.HARD_STOP
 
-    # A WARN-eligible event MUST NOT downgrade.
+    # A single tool failure -- which on its own maps to OK -- MUST NOT
+    # downgrade a stopped seat. Only a Captain clear moves it back.
     state = _run(machine.record_tool_failure(customer="acme", persona="marcus"))
-    assert state.level == StickyStopLevel.SOFT_STOP
+    assert state.level == StickyStopLevel.HARD_STOP
 
 
 # ---------------------------------------------------------------------------
@@ -451,11 +431,11 @@ def test_state_is_forward_only_no_autonomous_downgrade():
 
 def test_assert_allowed_passes_through_below_hard_stop():
     machine, _ = _machine()
-    # Drive to SOFT_STOP
-    for _ in range(5):
+    # Seven consecutive failures: one short of the stop, and still allowed.
+    for _ in range(7):
         _run(machine.record_tool_failure(customer="acme", persona="marcus"))
     state = _run(machine.assert_allowed(customer="acme", persona="marcus"))
-    assert state.level == StickyStopLevel.SOFT_STOP
+    assert state.level == StickyStopLevel.OK
 
 
 def test_assert_allowed_raises_at_hard_stop():
@@ -497,11 +477,7 @@ def test_captain_clear_resets_to_ok_and_writes_audit_row():
     assert fresh.level == StickyStopLevel.OK
 
     # Audit row recorded with from_state, to_state, captain reason.
-    clear_rows = [
-        r
-        for r in _audit_rows(conn)
-        if r["metadata"] and r["metadata"].get("sticky_stop_cleared")
-    ]
+    clear_rows = [r for r in _audit_rows(conn) if r["metadata"] and r["metadata"].get("sticky_stop_cleared")]
     assert len(clear_rows) == 1
     row = clear_rows[0]
     assert row["action_type"] == "AGENT_RESUMED"
@@ -531,7 +507,7 @@ def test_integration_each_condition_triggers_a_transition_with_audit():
     each transition is unambiguous against the audit log.
     """
     machine, conn = _machine(
-        thresholds=StickyStopThresholds(cost_daily_cents=1000, cost_warn_pct=80),
+        thresholds=StickyStopThresholds(cost_daily_cents=1000),
     )
 
     # Condition 1: consecutive tool failures
@@ -548,7 +524,8 @@ def test_integration_each_condition_triggers_a_transition_with_audit():
     assert s2.level == StickyStopLevel.HARD_STOP
     assert s2.condition == StickyStopCondition.REFUSAL_CASCADE
 
-    # Condition 3: time budget exceeded (single-step to SOFT_STOP)
+    # Condition 3: time budget exceeded. Recorded, stops nothing, and
+    # deliberately leaves no cause on a seat that is still OK.
     _run(
         machine.record_runtime_seconds(
             customer="c3",
@@ -557,8 +534,8 @@ def test_integration_each_condition_triggers_a_transition_with_audit():
         )
     )
     s3 = _run(machine.get_state("c3", "p"))
-    assert s3.level == StickyStopLevel.SOFT_STOP
-    assert s3.condition == StickyStopCondition.TIME_BUDGET_EXCEEDED
+    assert s3.level == StickyStopLevel.OK
+    assert s3.condition is None
 
     # Condition 4: cost threshold (cents only; 200% of 1000 = HARD_STOP)
     _run(machine.record_cost_cents(customer="c4", persona="p", amount_cents=2000))
@@ -569,16 +546,24 @@ def test_integration_each_condition_triggers_a_transition_with_audit():
     # Audit log must carry one row per transition. Count rows tagged
     # sticky_stop_transition, then assert each condition appears at least
     # once.
-    transition_rows = [
-        r for r in _audit_rows(conn) if r["metadata"] and r["metadata"].get("sticky_stop_transition")
-    ]
+    transition_rows = [r for r in _audit_rows(conn) if r["metadata"] and r["metadata"].get("sticky_stop_transition")]
     conditions_seen = {r["metadata"]["condition_triggered"] for r in transition_rows}
     assert conditions_seen == {
         "consecutive_tool_failures",
         "refusal_cascade",
-        "time_budget_exceeded",
         "cost_threshold",
     }
+
+    # time_budget_exceeded is recorded WITHOUT a transition: it is the one
+    # meter with no HARD_STOP threshold, so it observes and stops nothing.
+    # Asserting it here rather than dropping it keeps the AC intact -- every
+    # condition still has to reach the audit log, and a silent meter would
+    # fail this.
+    observations = [
+        r for r in _audit_rows(conn) if r["metadata"] and r["metadata"].get("sticky_stop_transition") is False
+    ]
+    assert [r["metadata"]["condition_triggered"] for r in observations] == ["time_budget_exceeded"]
+    assert observations[0]["metadata"]["level_unchanged_by_design"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -591,7 +576,7 @@ def test_state_survives_store_round_trip():
     writer = _RecordSink(AuditLogWriter(SqliteExecutor(conn)))
     store_a = SqliteStickyStopStore(conn)
     machine_a = StickyStopMachine(store=store_a, audit_writer=writer)
-    for _ in range(5):
+    for _ in range(DEFAULT_THRESHOLDS.tool_failure_hard_stop):
         _run(machine_a.record_tool_failure(customer="acme", persona="marcus"))
 
     # New machine instance over the SAME D1 connection — simulates a Hermes
@@ -599,5 +584,5 @@ def test_state_survives_store_round_trip():
     store_b = SqliteStickyStopStore(conn)
     machine_b = StickyStopMachine(store=store_b, audit_writer=writer)
     state = _run(machine_b.get_state("acme", "marcus"))
-    assert state.level == StickyStopLevel.SOFT_STOP
-    assert state.consecutive_tool_failures == 5
+    assert state.level == StickyStopLevel.HARD_STOP
+    assert state.consecutive_tool_failures == DEFAULT_THRESHOLDS.tool_failure_hard_stop

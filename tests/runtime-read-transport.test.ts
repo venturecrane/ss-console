@@ -58,8 +58,8 @@ describe('isRuntimeReadConfigured', () => {
 
 describe('deriveRuntimeReadKey', () => {
   it('is deterministic and produces a 64-hex key', async () => {
-    const a = await deriveRuntimeReadKey('master', 'smd')
-    const b = await deriveRuntimeReadKey('master', 'smd')
+    const a = await deriveRuntimeReadKey('master', 'smd-staging')
+    const b = await deriveRuntimeReadKey('master', 'smd-staging')
     expect(a).toBe(b)
     expect(a).toMatch(/^[0-9a-f]{64}$/)
     expect(await deriveRuntimeReadKey('master', 'other')).not.toBe(a)
@@ -124,7 +124,7 @@ describe('MCP handoff bearer (cross-side)', () => {
 
   it('matches the shell derivation the provision script uses', async () => {
     const master = 'test-mcp-master-key-0987654321'
-    const slug = 'smd'
+    const slug = 'smd-staging'
 
     const pipeline = scriptDerivation('_mcp_key')
     expect(pipeline, 'the MCP handoff derivation must still hash the slug').toContain('${SLUG}')
@@ -174,11 +174,11 @@ describe('createMachineRuntimeTransport.read', () => {
       return new Response(JSON.stringify({ entries: [], cursor: null }), { status: 200 })
     })
     const t = createMachineRuntimeTransport(ENV)
-    const { data } = await t.read('smd', { kind: 'audit_log', limit: 25 })
-    expect(seenUrl).toBe('https://hermes-smd.fly.dev/runtime/audit_log?limit=25')
-    expect(seenHeaders['X-Tenant-Slug']).toBe('smd')
+    const { data } = await t.read('smd-staging', { kind: 'audit_log', limit: 25 })
+    expect(seenUrl).toBe('https://hermes-smd-staging.fly.dev/runtime/audit_log?limit=25')
+    expect(seenHeaders['X-Tenant-Slug']).toBe('smd-staging')
     expect(seenHeaders['Authorization']).toBe(
-      `Bearer ${await deriveRuntimeReadKey(ENV.OPERATOR_RUNTIME_READ_SECRET!, 'smd')}`
+      `Bearer ${await deriveRuntimeReadKey(ENV.OPERATOR_RUNTIME_READ_SECRET!, 'smd-staging')}`
     )
     expect(data).toEqual({ entries: [], cursor: null })
   })
@@ -186,13 +186,13 @@ describe('createMachineRuntimeTransport.read', () => {
   it('throws RuntimeReadUnauthorizedError on 401/403 (→ unauthorized e2e)', async () => {
     stubFetch(() => new Response('', { status: 401 }))
     const t = createMachineRuntimeTransport(ENV)
-    await expect(t.read('smd', { kind: 'audit_log' })).rejects.toBeInstanceOf(
+    await expect(t.read('smd-staging', { kind: 'audit_log' })).rejects.toBeInstanceOf(
       RuntimeReadUnauthorizedError
     )
     // End-to-end: readMachineRuntime maps it to reason 'unauthorized', not 'unreachable'.
     const res = await readMachineRuntime(
       { transport: t, audit: noopAudit },
-      'smd',
+      'smd-staging',
       { kind: 'audit_log' },
       ACTOR
     )
@@ -204,7 +204,7 @@ describe('createMachineRuntimeTransport.read', () => {
     const t = createMachineRuntimeTransport(ENV)
     const res = await readMachineRuntime(
       { transport: t, audit: noopAudit },
-      'smd',
+      'smd-staging',
       { kind: 'audit_log' },
       ACTOR
     )
@@ -214,12 +214,12 @@ describe('createMachineRuntimeTransport.read', () => {
   it('throws on a network failure (→ unreachable)', async () => {
     stubFetch(() => Promise.reject(new Error('ECONNREFUSED')))
     const t = createMachineRuntimeTransport(ENV)
-    await expect(t.read('smd', { kind: 'audit_log' })).rejects.toThrow()
+    await expect(t.read('smd-staging', { kind: 'audit_log' })).rejects.toThrow()
   })
 
   it('throws RuntimeReadNotConfiguredError when not configured', async () => {
     const t = createMachineRuntimeTransport({})
-    await expect(t.read('smd', { kind: 'audit_log' })).rejects.toBeInstanceOf(
+    await expect(t.read('smd-staging', { kind: 'audit_log' })).rejects.toBeInstanceOf(
       RuntimeReadNotConfiguredError
     )
   })
@@ -242,7 +242,7 @@ describe('createMachineRuntimeTransport.read', () => {
       OPERATOR_RUNTIME_READ_URL: 'enabled',
       OPERATOR_RUNTIME_READ_SECRET: 'm',
     })
-    await t.read('smd', { kind: 'audit_log' })
-    expect(seenUrl).toBe('https://hermes-smd.fly.dev/runtime/audit_log')
+    await t.read('smd-staging', { kind: 'audit_log' })
+    expect(seenUrl).toBe('https://hermes-smd-staging.fly.dev/runtime/audit_log')
   })
 })

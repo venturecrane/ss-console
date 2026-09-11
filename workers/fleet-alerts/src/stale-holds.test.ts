@@ -33,6 +33,12 @@ interface StatusSeed {
   connector_token_age_json?: string | null
   spec_control_json?: string | null
   webhook_surface_json?: string | null
+  // ss#2488 part 2. Default null = the seat reports nothing for that field,
+  // which is the stranding condition; tests set a value to prove NOT stranded.
+  gateway_loop_ok?: number | null
+  gateway_loop_age_seconds?: number | null
+  gateway_supervisor_state?: string | null
+  gateway_restarts_last_hour?: number | null
 }
 
 /**
@@ -60,7 +66,11 @@ function runQuery(
              connectors_json TEXT,
              connector_token_age_json TEXT,
              spec_control_json TEXT,
-             webhook_surface_json TEXT)`)
+             webhook_surface_json TEXT,
+             gateway_loop_ok INTEGER,
+             gateway_loop_age_seconds INTEGER,
+             gateway_supervisor_state TEXT,
+             gateway_restarts_last_hour INTEGER)`)
 
   const insertAlert = db.prepare(
     `INSERT INTO fleet_alert_state (customer_slug, condition, status) VALUES (?, ?, 'open')`
@@ -71,8 +81,9 @@ function runQuery(
     `INSERT INTO fleet_status (customer_slug, last_heartbeat_ts, sticky_stop_level,
        scheduler_ok, scheduler_max_overdue_seconds, connector_check_ok, spec_control_ok,
        webhook_surface_ok, connectors_json, connector_token_age_json, spec_control_json,
-       webhook_surface_json)
-     VALUES (?, '2026-08-11T00:00:00Z', 'OK', 1, 0, 1, 1, 1, ?, ?, ?, ?)`
+       webhook_surface_json, gateway_loop_ok, gateway_loop_age_seconds,
+       gateway_supervisor_state, gateway_restarts_last_hour)
+     VALUES (?, '2026-08-11T00:00:00Z', 'OK', 1, 0, 1, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
   for (const s of statuses) {
     insertStatus.run(
@@ -80,7 +91,11 @@ function runQuery(
       s.connectors_json ?? null,
       s.connector_token_age_json ?? null,
       s.spec_control_json ?? null,
-      s.webhook_surface_json ?? null
+      s.webhook_surface_json ?? null,
+      s.gateway_loop_ok ?? null,
+      s.gateway_loop_age_seconds ?? null,
+      s.gateway_supervisor_state ?? null,
+      s.gateway_restarts_last_hour ?? null
     )
   }
 
@@ -170,6 +185,48 @@ describe('stale-holds SQL (executed against real SQLite)', () => {
         [{ customer_slug: 'smd', webhook_surface_json: JSON.stringify({ other: {} }) }]
       )
     ).toEqual([])
+  })
+
+  it('strands each ss#2488 gateway condition on its OWN source column, and only that one', () => {
+    // Each condition knows its source column. A wedge alert is stranded by a
+    // NULL age, not by a NULL supervisor state; a refusing alert is stranded by
+    // a NULL state, not by a NULL age. Cross-wiring would strand the wrong
+    // alerts -- the 2026-07-08 pilot-smokeball shape, where an unresolvable
+    // alert sat open for 16 days.
+    const cases: Array<[string, StatusSeed, StatusSeed]> = [
+      // [condition, seed that STRANDS it, seed that does NOT]
+      [
+        'gateway_loop_wedged',
+        { customer_slug: 'smd', gateway_supervisor_state: 'armed' },
+        { customer_slug: 'smd', gateway_loop_age_seconds: 400 },
+      ],
+      [
+        'gateway_loop_unprovable',
+        { customer_slug: 'smd', gateway_loop_age_seconds: 5 },
+        { customer_slug: 'smd', gateway_loop_ok: 0 },
+      ],
+      [
+        'gateway_restarted',
+        { customer_slug: 'smd', gateway_loop_ok: 1 },
+        { customer_slug: 'smd', gateway_restarts_last_hour: 0 },
+      ],
+      [
+        'gateway_supervisor_refusing',
+        { customer_slug: 'smd', gateway_loop_age_seconds: 5 },
+        { customer_slug: 'smd', gateway_supervisor_state: 'armed' },
+      ],
+      [
+        'gateway_supervisor_inert',
+        { customer_slug: 'smd', gateway_restarts_last_hour: 0 },
+        { customer_slug: 'smd', gateway_supervisor_state: 'inert' },
+      ],
+    ]
+    for (const [cond, strands, keeps] of cases) {
+      expect(runQuery([{ customer_slug: 'smd', condition: cond }], [strands]), cond).toEqual([
+        { customer_slug: 'smd', condition: cond },
+      ])
+      expect(runQuery([{ customer_slug: 'smd', condition: cond }], [keeps]), cond).toEqual([])
+    }
   })
 
   // --- (a) the SQL follows the constant, not a memorized offset --------------

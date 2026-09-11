@@ -76,6 +76,17 @@ The agent MUST NOT: send autonomously; disclose the client's identity or matter 
 4. **Right recipient.** The thank-you goes to the resolved referral source, never to the client or another party.
 5. **Privilege.** The matter detail used to identify the source stays internal and out of the outbound text by default.
 
+## Matter identifiers (projected, never composed)
+
+- In email, task, and memo text, refer to the matter by its NUMBER, taken ONLY
+  from the `matterNumber` field the connector projected onto a record you read
+  this turn (task, event, memo, file, and document reads all carry it when the
+  matter resolves). Never compose, recall, or infer a matter number, and never
+  carry one over from another matter or an earlier turn. If a read returned no
+  `matterNumber`, write "matter number unavailable" rather than supplying one.
+  On this skill the number belongs to the internal log, not the thank-you: the
+  outbound text carries no matter identifier at all.
+
 ## Pitfalls
 
 Naming the client or the matter to the referrer out of friendliness (the central confidentiality breach); thanking a guessed source when none is recorded; a generic form-letter tone that reads as automated and undercuts the relationship; letting the draft send without review.

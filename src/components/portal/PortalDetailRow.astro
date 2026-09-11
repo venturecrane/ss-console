@@ -1,0 +1,31 @@
+---
+/**
+ * One row of a PortalDetailTable: a mono eyebrow label on the left, the fact
+ * on the right. `align="end"` right-aligns the fact (money columns);
+ * `emphasis` is the total row (ink-weight label, heavier rule above).
+ */
+interface Props {
+  label: string
+  align?: 'start' | 'end'
+  emphasis?: boolean
+}
+const { label, align = 'start', emphasis = false } = Astro.props
+
+const rowClass = [
+  'grid grid-cols-1 gap-1 px-5 py-4 md:grid-cols-[minmax(0,14rem)_1fr] md:gap-6 md:px-6',
+  'border-b-[2px] border-[color:var(--ss-color-text-primary)] last:border-b-0',
+  emphasis ? 'border-t-[3px] bg-[color:var(--ss-color-border-subtle)]' : '',
+].join(' ')
+const labelClass = emphasis
+  ? 'font-body text-lg font-black uppercase tracking-[-0.01em] text-[color:var(--ss-color-text-primary)] self-center'
+  : 'font-mono text-label font-bold uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)] md:pt-1'
+const valueClass = [
+  'font-body text-base text-[color:var(--ss-color-text-primary)] min-w-0',
+  align === 'end' ? 'md:text-right md:justify-self-end' : '',
+].join(' ')
+---
+
+<div class={rowClass}>
+  <span class={labelClass}>{label}</span>
+  <span class={valueClass}><slot /></span>
+</div>

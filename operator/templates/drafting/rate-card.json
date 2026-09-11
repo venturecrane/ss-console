@@ -1,0 +1,29 @@
+{
+  "_comment": [
+    "Model prices, in CENTS PER MILLION TOKENS. The single place a dollar figure",
+    "for the drafting lane comes from. Never hand-price a run: a remembered price",
+    "list is what put $145.11 into the medical-chronology skill for a day, priced",
+    "at a rate card two generations stale.",
+    "",
+    "DUPLICATION, STATED RATHER THAN HIDDEN: the medical-chronology pipeline",
+    "carries the same card inline as `RATES` in its own ledger.py (venturecrane/",
+    "engagements, operator/customers/ashton-price/tools/medchron/ledger.py). The",
+    "two are separate repos and neither can import the other, so they are kept in",
+    "step by hand until one of them is made to read this file. When you change a",
+    "price here, change it there in the same breath, and move `as_of` on both.",
+    "tests/drafting-ledger.test.ts pins the shape of this file, not its agreement",
+    "with the other copy, because CI here cannot see the private repo."
+  ],
+  "_meta": {
+    "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "as_of": "2026-08-27",
+    "units": "cents per million tokens",
+    "batch": 0.5,
+    "cache_write_5m": 1.25,
+    "cache_write_1h": 2.0,
+    "cache_read": 0.1
+  },
+  "claude-opus-5": { "in": 500, "out": 2500 },
+  "claude-sonnet-5": { "in": 200, "out": 1000 },
+  "claude-haiku-4-5": { "in": 100, "out": 500 }
+}

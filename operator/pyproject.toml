@@ -1,0 +1,54 @@
+# The Python operator tree as one project (2026-09-10, code review Code
+# Quality 7 and Architecture 2).
+#
+# WHY. 451 Python files, no root manifest, no type checker, no formatter, and
+# 33 `sys.path.insert` shims plus 130 `# noqa: E402` paying for the missing
+# packaging. The three leaf subtrees that do carry a pyproject
+# (connectors/_sdk, connectors/*, runners/medchron) prove the pattern works
+# here; this file extends it to the root so CI installs the tree as packages
+# and pyright has a project to check.
+#
+# THE SAFE HALF ONLY (this PR). `uv pip install -e .` in the substrate job
+# makes `adapter`, `workspace_broker`, `bin` importable as packages in CI. The
+# sys.path shims STAY in place: they are harmless once the package is
+# installed, and removing them changes what runs on the seat image (which
+# installs each subtree by path into its own venv, templates/Dockerfile:
+# workspace_broker at :1015, connectors at :1228, medchron at :1247). That
+# removal is the follow-up, proven by a reprovision, not by CI:
+#   1. Dockerfile installs this project into the broker venv,
+#   2. the shims and their E402 suppressions are deleted,
+#   3. a reprovisioned seat boots and its broker answers (boot-smoke-test.sh).
+# `safety-substrate/` is not a package name (the hyphen); its modules are
+# reached by bare name after a shim today, and renaming the directory is part
+# of the same follow-up.
+
+[project]
+name = "smd-operator"
+version = "0.0.0"
+description = "SMD Operator control-plane tooling: broker, adapter, provisioning CLIs. Not published; installed editable into CI and, in the follow-up, into the seat's broker venv."
+requires-python = ">=3.11"
+dependencies = ["pyyaml>=6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["adapter", "workspace_broker", "bin"]
+
+# pyright, basic mode, ratcheted. bin/pyright-ratchet.py compares a
+# `pyright --outputjson` report against contracts/operator-pyright-baseline.json
+# (errors per file) and fails on any file whose count grew; the baseline only
+# tightens. Tests are excluded: the baseline is about production code, and the
+# tests' fixture shapes would triple the count without changing what ships.
+# Third-party imports that are absent from the CI venv (anthropic, pymupdf,
+# httpx, boto3, the Hermes runtime) report as warnings, not errors, so the
+# error count measures our code, not the venv.
+[tool.pyright]
+include = ["adapter", "safety-substrate", "workspace_broker", "bin", "skills", "runners", "templates", "rehearsal"]
+exclude = ["**/.venv", "**/__pycache__", "**/tests", "**/test_*.py", "**/.rendered", "**/node_modules"]
+typeCheckingMode = "basic"
+pythonVersion = "3.11"
+pythonPlatform = "Linux"
+reportMissingImports = "warning"
+reportMissingModuleSource = "none"

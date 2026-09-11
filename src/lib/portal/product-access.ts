@@ -37,20 +37,10 @@ export interface SubscriptionRow {
   settings_json: string | null
   /** COGS/MRR service linkage (nullable; $0 internal instances leave it null). */
   service_id: string | null
+  /** Set by the client's own checkout (operator) or the Hosted Agent checkout; null until started. */
+  stripe_subscription_id: string | null
   created_at: string
   updated_at: string
-}
-
-export interface ProductRoleRow {
-  id: string
-  org_id: string
-  user_id: string
-  entity_id: string
-  product_slug: string
-  role: string
-  granted_by: string | null
-  granted_at: string
-  revoked_at: string | null
 }
 
 export interface ProductAccess {

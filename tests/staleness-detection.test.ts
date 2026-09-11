@@ -42,19 +42,59 @@ const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const HOOK = join(REPO_ROOT, '.claude', 'hooks', 'reflex-primer.sh')
 const DOCTRINE = join(REPO_ROOT, 'docs', 'doctrine', 'agent-operating-doctrine.md')
 
-/** Every INJECTED primer_line (tier primer/radar), parsed from the doctrine
- *  the same way doctrine-integrity.test.ts parses it. Gate-tier laws are
- *  compressed to a pointer line since the 2026-08-01 consolidation and are
- *  pinned by id in doctrine-integrity, not asserted line-by-line here. */
-const PRIMER_LINES: string[] = [
-  ...readFileSync(DOCTRINE, 'utf8').matchAll(/```yaml\n([\s\S]*?)```/g),
-]
-  .map((m) => parseYaml(m[1]) as Record<string, unknown>)
-  .filter(
-    (d): d is { primer_line: string; tier: string } =>
-      typeof d?.primer_line === 'string' && (d?.tier === 'primer' || d?.tier === 'radar')
-  )
-  .map((d) => d.primer_line)
+/** Every INJECTED primer_line (tier primer/radar) in a doctrine document.
+ *  Gate-tier laws are compressed to a pointer line since the 2026-08-01
+ *  consolidation and are pinned by id in doctrine-integrity, not asserted
+ *  line-by-line here. */
+function injectedLines(doctrine: string): string[] {
+  return [...doctrine.matchAll(/```yaml\n([\s\S]*?)```/g)]
+    .map((m) => parseYaml(m[1]) as Record<string, unknown>)
+    .filter(
+      (d): d is { primer_line: string; tier: string } =>
+        typeof d?.primer_line === 'string' && (d?.tier === 'primer' || d?.tier === 'radar')
+    )
+    .map((d) => d.primer_line)
+}
+
+const PRIMER_LINES: string[] = injectedLines(readFileSync(DOCTRINE, 'utf8'))
+
+/**
+ * The same laws as the doctrine on `origin/main`, when that ref exists here.
+ *
+ * The primer serves doctrine from `origin/main` whenever it parses, and that
+ * is deliberate: a law merged to main must reach every session's NEXT turn,
+ * and both the primary checkout and every worktree predate any given merge.
+ * The consequence is that the WORKING TREE is legitimately ahead of what the
+ * primer emits for the whole life of any branch that adds or edits a law.
+ *
+ * Asserting the primer's origin/main output against the working tree's law set
+ * failed that expected state as if it were a crash, and did so ONLY on machines
+ * that have an origin/main ref: CI runs `actions/checkout` at its shallow,
+ * single-branch default, so `git show origin/main:` fails there, the primer
+ * falls back to its heredoc, and the heredoc always matched. Green in CI, red
+ * on every developer machine carrying an unmerged doctrine change, which is the
+ * exact inversion of "works on my machine" and is worth more than the two lines
+ * it takes to fix (Law 12: this check was answering a question about doctrine
+ * freshness while claiming to answer one about crash resilience).
+ */
+const ORIGIN_PRIMER_LINES: string[] = (() => {
+  try {
+    return injectedLines(
+      execFileSync('git', ['show', 'origin/main:docs/doctrine/agent-operating-doctrine.md'], {
+        cwd: REPO_ROOT,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+    )
+  } catch {
+    return PRIMER_LINES // no origin/main here (a CI checkout): the primer uses its heredoc
+  }
+})()
+
+/** The primer labels origin/main-served output; anything else is the heredoc. */
+function expectedLinesFor(out: string): string[] {
+  return out.includes('(origin/main @') ? ORIGIN_PRIMER_LINES : PRIMER_LINES
+}
 
 const scratch: string[] = []
 afterEach(() => {
@@ -184,7 +224,11 @@ function runHook(
 /** The invariant that matters more than any signal. */
 function expectLawsIntact(res: { out: string; code: number }): void {
   expect(res.code).toBe(0)
-  const missing = PRIMER_LINES.filter((l) => !res.out.includes(l))
+  const expected = expectedLinesFor(res.out)
+  // Guard the guard: an empty expectation set would make every case below pass
+  // no matter what the primer printed.
+  expect(expected.length).toBeGreaterThanOrEqual(5)
+  const missing = expected.filter((l) => !res.out.includes(l))
   expect(missing).toEqual([])
 }
 

@@ -242,7 +242,29 @@ export interface SchedulerSignal {
   connectorsJson?: string | null
   /** ss#2276: 1 = crons deliberately contained, 0 normal, NULL unreported. */
   cronContainment?: number | null
+  /** ss#2488 part 2: seconds since the gateway loop last beat; NULL = hold. */
+  gatewayLoopAgeSeconds?: number | null
+  /** ss#2488 part 2: 1 could look / 0 could not / NULL unreported. */
+  gatewayLoopOk?: number | null
+  /** ss#2488 part 2: the part-1 supervisor's state word, or NULL. */
+  gatewaySupervisorState?: string | null
+  /**
+   * Migration 0112: which of the ladder's four meters tripped the stop. Lives
+   * on the signal bag rather than beside `stickyStopLevel` because a sixth
+   * positional parameter trips the arity ceiling -- and this IS a signal read
+   * off the same fleet_status row as everything else here.
+   */
+  stickyStopCondition?: string | null
 }
+
+/**
+ * Same number as the fleet-alerts Worker's GATEWAY_LOOP_RED_SECONDS
+ * (workers/fleet-alerts/wrangler.toml) -- a documented contract across two
+ * packages, like WORK_OVERDUE_RED_SECONDS. It must stay BELOW the seat
+ * supervisor's kill point (~270s at defaults) so the dot goes red before the
+ * seat restarts itself.
+ */
+export const GATEWAY_LOOP_RED_SECONDS = 120
 
 /**
  * Sanitized server names whose failure run crosses an ADR 0080 open path
@@ -277,14 +299,27 @@ export function seatSignals(
     connector_check_ok: number | null
     connectors_json: string | null
     cron_containment?: number | null
+    gateway_loop_ok?: number | null
+    gateway_loop_age_seconds?: number | null
+    gateway_supervisor_state?: string | null
+    sticky_stop_condition?: string | null
   } | null
 ): SchedulerSignal {
+  // One null-row branch up front, then plain reads: every `?? null` below
+  // counted as its own branch against the complexity ceiling.
+  if (fleet === null) {
+    return { ok: null, maxOverdueSeconds: null }
+  }
   return {
-    ok: fleet?.scheduler_ok ?? null,
-    maxOverdueSeconds: fleet?.scheduler_max_overdue_seconds ?? null,
-    connectorCheckOk: fleet?.connector_check_ok ?? null,
-    connectorsJson: fleet?.connectors_json ?? null,
-    cronContainment: fleet?.cron_containment ?? null,
+    ok: fleet.scheduler_ok,
+    maxOverdueSeconds: fleet.scheduler_max_overdue_seconds,
+    connectorCheckOk: fleet.connector_check_ok,
+    connectorsJson: fleet.connectors_json,
+    cronContainment: fleet.cron_containment ?? null,
+    gatewayLoopOk: fleet.gateway_loop_ok ?? null,
+    gatewayLoopAgeSeconds: fleet.gateway_loop_age_seconds ?? null,
+    gatewaySupervisorState: fleet.gateway_supervisor_state ?? null,
+    stickyStopCondition: fleet.sticky_stop_condition ?? null,
   }
 }
 
@@ -305,12 +340,26 @@ export function failingConnectorNames(connectorsJson: string | null | undefined)
 
 interface RosterNoteInputs {
   stickyStopLevel: string | null
+  /**
+   * Which meter tripped the ladder (migration 0112). Four drive it, so the
+   * note must not assert one: "cost breaker hard stop" is what the roster said
+   * on 2026-09-01 while ashton-price was stopped by a bad credential. Null on
+   * a seat still running a pre-cause overlay, where the note says the level
+   * and stops rather than guessing.
+   */
+  stickyStopCondition: string | null
   schedulerOk: number | null
   overdue: boolean
   summaryStatus: SummaryStatus | null
   connectorCheckOk: number | null
   failingConnectors: string[]
   cronContainment: number | null
+  /** ss#2488 part 2: the loop is beating-stale past GATEWAY_LOOP_RED_SECONDS (ok=1 AND age present). */
+  loopWedged: boolean
+  /** ss#2488 part 2: the seat could not read its own loop heartbeat. */
+  loopUnprovable: boolean
+  /** ss#2488 part 2: the supervisor's word, or null. */
+  supervisorState: string | null
   /**
    * ss#2295: true when this seat is reporting at all — a live heartbeat AND a
    * fleet_status row to have carried it. That is what makes an ABSENT
@@ -354,14 +403,49 @@ function containmentUnreported(inputs: RosterNoteInputs): boolean {
 // connector ranks just below the scheduler (client-facing work failing on a
 // live seat); a broken connector CHECK ranks with it (outages not being
 // counted is itself an outage of the monitoring).
+// ss#2488 part 2, the two tiers of gateway note. `urgent` is the pair that
+// outranks everything else in rosterHealthNote, including the breaker: a wedged
+// event loop means the Operator is not answering on ANY channel, and a refusing
+// supervisor is that same outage plus the knowledge it will not self-heal. The
+// `attention` pair ranks below the connector check: a seat whose self-recovery
+// is silently absent, or that cannot read its own pulse, is not yet down.
+function gatewayNote(inputs: RosterNoteInputs, tier: 'urgent' | 'attention'): string | null {
+  if (tier === 'urgent') {
+    if (inputs.loopWedged) return 'gateway loop wedged (Operator not answering)'
+    if (inputs.supervisorState === 'refusing') {
+      return 'seat supervisor stopped restarting (needs a human)'
+    }
+    return null
+  }
+  if (inputs.loopUnprovable) return 'gateway loop heartbeat unreadable'
+  if (inputs.supervisorState === 'inert' || inputs.supervisorState === 'not-watching') {
+    return 'seat supervisor cannot act (a wedge would not self-recover)'
+  }
+  return null
+}
+
+/**
+ * The roster's stop note. Names the METER when the seat reported one and the
+ * level alone when it did not -- never a meter the ladder did not report.
+ */
+function stopNote(level: string, condition: string | null): string {
+  return condition ? `${level}: ${condition.replace(/_/g, ' ')}` : level
+}
+
 function rosterHealthNote(inputs: RosterNoteInputs): string | null {
-  if (inputs.stickyStopLevel === 'HARD_STOP') return 'cost breaker hard stop'
+  const urgent = gatewayNote(inputs, 'urgent')
+  if (urgent) return urgent
+  if (inputs.stickyStopLevel === 'HARD_STOP')
+    return stopNote('hard stop', inputs.stickyStopCondition)
   if (inputs.schedulerOk === 0) return 'cron scheduler broken'
   if (inputs.failingConnectors.length > 0) {
     return `connector failing: ${inputs.failingConnectors.join(', ')}`
   }
   if (inputs.connectorCheckOk === 0) return 'connector health check broken'
-  if (inputs.stickyStopLevel === 'SOFT_STOP') return 'cost breaker soft stop'
+  const attention = gatewayNote(inputs, 'attention')
+  if (attention) return attention
+  if (inputs.stickyStopLevel === 'SOFT_STOP')
+    return stopNote('soft stop', inputs.stickyStopCondition)
   // ss#2276: a deliberate state, not a fault - but it must be SAID, because it
   // also explains a zero job count and suppressed routines. Sits above
   // 'overdue' so containment is named instead of read as lateness.
@@ -387,6 +471,16 @@ function signalEscalations(inputs: RosterNoteInputs): (RosterHealthColor | null)
     inputs.overdue ? 'yellow' : null,
     inputs.failingConnectors.length > 0 ? 'red' : null,
     inputs.connectorCheckOk === 0 ? 'red' : null,
+    // ss#2488 part 2: a wedged loop or a supervisor that has given up is red
+    // (the Operator is down and staying down); a check that cannot look, or a
+    // supervisor that could never act, is attention-yellow -- a seat whose
+    // self-recovery is silently absent must not render as calm.
+    inputs.loopWedged ? 'red' : null,
+    inputs.supervisorState === 'refusing' ? 'red' : null,
+    inputs.loopUnprovable ? 'yellow' : null,
+    inputs.supervisorState === 'inert' || inputs.supervisorState === 'not-watching'
+      ? 'yellow'
+      : null,
     // Containment paints attention-yellow: deliberate, but never invisible.
     inputs.cronContainment === 1 ? 'yellow' : null,
     // ss#2295: and UNKNOWN containment paints attention-yellow too, for the
@@ -416,6 +510,22 @@ function breakerColor(stickyStopLevel: string | null): RosterHealthColor | null 
   return null
 }
 
+// ss#2488 part 2. Both fields are required for a wedge verdict: ok=1 with a
+// NULL age is the seat's arming latch or boot suppression, not a beat, and
+// `null > N` is false in JS, which would otherwise read as "not wedged".
+// `!= null` (loose) so an absent column holds exactly like NULL.
+function gatewayInputs(
+  scheduler: SchedulerSignal | null
+): Pick<RosterNoteInputs, 'loopWedged' | 'loopUnprovable' | 'supervisorState'> {
+  const ok = scheduler?.gatewayLoopOk ?? null
+  const age = scheduler?.gatewayLoopAgeSeconds ?? null
+  return {
+    loopWedged: ok === 1 && age != null && age > GATEWAY_LOOP_RED_SECONDS,
+    loopUnprovable: ok === 0,
+    supervisorState: scheduler?.gatewaySupervisorState ?? null,
+  }
+}
+
 export function rosterHealth(
   heartbeatColor: RosterHealthColor,
   heartbeatLabel: string,
@@ -430,6 +540,7 @@ export function rosterHealth(
   // dot and never overrides an existing worse color.
   const inputs: RosterNoteInputs = {
     stickyStopLevel,
+    stickyStopCondition: scheduler?.stickyStopCondition ?? null,
     schedulerOk: scheduler?.ok ?? null,
     overdue:
       scheduler?.maxOverdueSeconds != null &&
@@ -438,6 +549,7 @@ export function rosterHealth(
     connectorCheckOk: scheduler?.connectorCheckOk ?? null,
     failingConnectors: failingConnectorNames(scheduler?.connectorsJson),
     cronContainment: scheduler?.cronContainment ?? null,
+    ...gatewayInputs(scheduler),
     seatReporting: heartbeatColor !== 'gray' && scheduler !== null,
   }
   const color = escalatedColor(heartbeatColor, signalEscalations(inputs))

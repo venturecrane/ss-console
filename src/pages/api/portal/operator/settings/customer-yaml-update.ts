@@ -76,6 +76,7 @@ import {
   recordCustomerYamlUpdateAudit,
 } from '../../../../../lib/portal/operator/customer-yaml-audit'
 import { recordPortalActionEvent } from '../../../../../lib/portal/operator/action-events'
+import { captureError } from '../../../../../lib/observability/sentry'
 import {
   ACCEPTED_PERSONA_STATUSES,
   ACCEPTED_PRONOUNS,
@@ -318,7 +319,15 @@ async function emitAudit(args: AuditArgs): Promise<void> {
       metadata: fullMetadata,
     })
   } catch (err) {
+    // A lost primary record means the client's submission never reaches
+    // their own Activity/audit surface while they are told "submitted" —
+    // for a product whose promise includes pulling the audit record, that
+    // cannot live as a console line nobody reads (2026-08-14 code review,
+    // Code Quality #3). Sentry carries it to a human; the request still
+    // succeeds because the tail-log sink above already recorded the event
+    // for the compliance drain.
     console.error('customer-yaml-update: failed to record portal_action_events row', err)
+    captureError(err, 'portal.customer-yaml-update.audit')
   }
 }
 

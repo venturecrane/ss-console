@@ -16,10 +16,13 @@ schema_version: 1
 #     never used for a live Google call by boot-smoke or the voice gate.
 #     Staged at provision time, NEVER committed.
 #   - No managed_mailboxes  -> touches no real Google inbox.
-#   - No Telegram, no cron. The ONE inbound path is the msgraph Email binding
-#     below (ADR 0078 / ss#1978 sandbox e2e): the client-custody mail loop is
-#     proven here against the smdopslab SANDBOX tenant (a throwaway M365 we
-#     own — operator@smdopslab.onmicrosoft.com), never a real client mailbox.
+#   - No Telegram, no cron. The msgraph Email binding (ADR 0078 / ss#1978
+#     sandbox e2e) was the one inbound path, proven against the smdopslab
+#     tenant we own — operator@smdopslab.onmicrosoft.com, never a real client
+#     mailbox. PARKED 2026-08-21: the M365 licences are not being retained
+#     unless a future troubleshoot needs them, and the connector cannot work
+#     without a licensed mailbox. The seat currently has NO inbound path.
+#     See the parked block under connectors: for how to revive it.
 #   - Own R2 prefix (vaults/smd-staging/), own D1 namespace, own skill-bodies
 #     bucket. Shares no mutable state with smd.
 #
@@ -72,10 +75,11 @@ fly_region: lax
 
 # ---- RUNTIME ----
 model: claude-opus-4-8
-# Hermes v0.14.0 → v0.18.0 upgrade (staging leads the fleet). Rollback pin:
-# v2026.5.16@a91a57fa5a13d516c38b07a141a9ce8a3daabeb0 (uv.lock + uv sync --frozen
-# make the Python rebuild reproducible). See docs/runbooks/operator/hermes-v0.18-upgrade-plan.md.
-hermes_ref: v2026.7.1@7c1a029553d87c43ecff8a3821336bc95872213b
+# Hermes v0.18.0 → v0.20.4 promotion (staging leads the fleet, ss#2444). Rollback
+# pin: v2026.7.1@7c1a029553d87c43ecff8a3821336bc95872213b (uv.lock + uv sync --frozen
+# make the Python rebuild reproducible; proven to build on the Node-26 image by
+# the staging rollback rehearsal). See docs/runbooks/operator/hermes-v0.20-upgrade-plan.md.
+hermes_ref: v2026.8.18@e624e9fde561e1add9388384012b295fde669ade
 
 machine:
   size: shared-cpu-1x
@@ -125,8 +129,10 @@ personas:
         initiation:
           manual: true
           scheduled: false
-          # webhook: the msgraph message.received trigger below wakes this
-          # skill — the ADR 0078 sandbox e2e inbound path.
+          # webhook: WAS woken by the msgraph message.received trigger — the
+          # ADR 0078 sandbox e2e inbound path, parked 2026-08-21 with the
+          # connector. Left true so reviving the connector needs no edit here;
+          # with no trigger authored, nothing wakes this skill by webhook.
           webhook: true
         enabled: true
       - name: workspace
@@ -145,7 +151,11 @@ personas:
 # broker — NOT the connector mechanism. The broker holds the DWD service-account
 # credential (see google_auth:) and exposes the governed workspace_* tools; no CLI to
 # shell out to.
-connectors:
+# EXPLICIT EMPTY MAP, not an oversight: the seat's only connector is the msgraph
+# Email one parked below, and a bare `connectors:` with every child commented out
+# parses as null, which the validator rejects with "connectors is required".
+# Restore this to `connectors:` when the Email block below is uncommented.
+connectors: {}
   # Client-custody email (ADR 0078 / email-channel-seam spec / ss#1978) — the
   # sandbox END-TO-END proof binding. The mailbox is operator@smdopslab
   # .onmicrosoft.com on the smdopslab SANDBOX tenant we own (app-only
@@ -174,25 +184,43 @@ connectors:
   # staged as MSGRAPH_CLIENT_ID — handing the agent the app that can transmit and
   # undoing the fence. The read-only app is 9301fd6f-… , which is what the live
   # seat actually runs.
-  Email:
-    adapter: msgraph
-    backend: mcp:msgraph-mail
-    enabled: true
-    msgraph_auth:
-      tenant_id: 'f11d2887-b7f2-4464-a9c6-d4db2166b43c'
-      client_id: '9301fd6f-1d97-4ed4-abc3-e99e3cf326f0'
-      mailbox: operator@smdopslab.onmicrosoft.com
-      secret_ref: 'fly-secret:MSGRAPH_CLIENT_SECRET'
-    poll_seconds: 45
+  # ---- MSGRAPH PARKED 2026-08-21 ----
+  # The smdopslab M365 licences are not being retained unless a future
+  # troubleshoot needs them, and without a licensed mailbox this connector
+  # cannot work regardless of how fresh its credentials are. Parked rather
+  # than deleted: the provisioner derives its authored-channel facts with
+  # yaml.safe_load, so a commented block is invisible to the msgraph gate
+  # (the gate that refuses a seat carrying no SEND app credential) while
+  # every id below stays on hand. Commenting only became safe on
+  # 2026-08-18 -- before that the gates grepped the raw file and read
+  # comments as config.
+  #
+  # TO REVIVE: re-licence the mailbox, uncomment this block and the
+  # webhook_triggers block below (indentation is preserved -- strip the
+  # leading "# " and nothing else), mint a SEND secret on the EXISTING
+  # send registration, vault it as MSGRAPH_SEND_CLIENT_ID__SMD_STAGING /
+  # MSGRAPH_SEND_CLIENT_SECRET__SMD_STAGING, and replace the stale
+  # MSGRAPH_CLIENT_SECRET__SMD_STAGING in /ss prod -- it is invalid
+  # (AADSTS7000215); the bare MSGRAPH_CLIENT_SECRET is the good read value.
+  # Email:
+  # adapter: msgraph
+  # backend: mcp:msgraph-mail
+  # enabled: true
+  # msgraph_auth:
+  # tenant_id: 'f11d2887-b7f2-4464-a9c6-d4db2166b43c'
+  # client_id: '9301fd6f-1d97-4ed4-abc3-e99e3cf326f0'
+  # mailbox: operator@smdopslab.onmicrosoft.com
+  # secret_ref: 'fly-secret:MSGRAPH_CLIENT_SECRET'
+  # poll_seconds: 45
 
 # ---- WEBHOOK TRIGGERS ----
 # The e2e wake path: a new message in the operator's sandbox inbox (delivered
 # by the delta poller through the signed loopback) routes to inbox-triage.
-webhook_triggers:
-  - source: msgraph
-    event_type: message.received
-    skill: inbox-triage
-    persona: crane
+# webhook_triggers:
+# - source: msgraph
+# event_type: message.received
+# skill: inbox-triage
+# persona: crane
 
 # ---- SCOPE ----
 scope:

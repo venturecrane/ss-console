@@ -56,22 +56,32 @@ export default getViteConfig(
       },
       coverage: {
         provider: 'v8',
-        // Thresholds are set at the 2026-04-16 baseline (rounded down 1-2 pts)
-        // to act as a regression guardrail, not an aspirational target.
-        // Branches/functions are the meaningful signals; lines/statements are
-        // dragged down by .astro templates which v8 instruments but cannot
-        // exercise their request/response lifecycle, leading to misleading
-        // zero-coverage numbers.
+        // NO THRESHOLDS. There were four here — lines 22, branches 67,
+        // functions 52, statements 22 — recorded at a 2026-04-16 baseline and
+        // described as "a regression guardrail". The 2026-08-23 review found
+        // no workflow ran them. Probing that (2026-08-24) found something
+        // worse: `@vitest/coverage-v8` was never a dependency, so
+        // `npm run test:coverage` had never executed at all, and with the
+        // provider installed the run reports `0/0` files — under Astro's
+        // `getViteConfig` wrapper the v8 provider collects nothing, with the
+        // default include and with an explicit `src/**/*.ts` one alike.
         //
-        // To raise thresholds: run `npm run test:coverage`, note new numbers,
-        // bump here, and open a PR. Never set a threshold you can't currently
-        // meet.
-        thresholds: {
-          lines: 22,
-          branches: 67,
-          functions: 52,
-          statements: 22,
-        },
+        // So the thresholds were not a lapsed guardrail. They were four
+        // numbers that had never been evaluated once, over an instrument that
+        // measures zero files, and their presence read to every subsequent
+        // reader as a coverage floor the repo was holding. A check that cannot
+        // fail has measured nothing; a threshold that cannot be evaluated is
+        // worse, because it also misinforms.
+        //
+        // They are removed rather than fixed because making v8 coverage work
+        // through `getViteConfig` is its own piece of work, and leaving the
+        // claim standing while it waits is the failure mode being corrected.
+        // `tests/coverage-config-honesty.test.ts` fails if thresholds return
+        // without a workflow that runs them.
+        //
+        // The `exclude` list below is retained: it is the authored knowledge
+        // of what should not count, and it costs nothing to keep for whenever
+        // the provider is made to work.
         exclude: [
           // Test files themselves
           'tests/**',

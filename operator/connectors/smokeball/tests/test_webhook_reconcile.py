@@ -52,9 +52,7 @@ def test_desired_requires_events_and_key():
 
 
 def test_desired_event_types_are_sorted_and_deduped():
-    d = desired_from_intent(
-        _intent(event_types=("task.created", "matter.updated", "matter.updated"))
-    )
+    d = desired_from_intent(_intent(event_types=("task.created", "matter.updated", "matter.updated")))
     assert d["eventTypes"] == ["matter.updated", "task.created"]
 
 
@@ -81,16 +79,12 @@ def test_matching_actual_is_noop():
 
 
 def test_event_type_drift_repairs():
-    p = plan_reconcile(
-        _desired(), [_sub("s1", events=("matter.updated", "task.created"))], SLUG
-    )
+    p = plan_reconcile(_desired(), [_sub("s1", events=("matter.updated", "task.created"))], SLUG)
     assert p.deletes == ["s1"] and p.creates == [_desired()]
 
 
 def test_url_drift_repairs():
-    p = plan_reconcile(
-        _desired(), [_sub("s1", url="https://evil.example/webhooks/smokeball")], SLUG
-    )
+    p = plan_reconcile(_desired(), [_sub("s1", url="https://evil.example/webhooks/smokeball")], SLUG)
     assert p.deletes == ["s1"] and p.creates == [_desired()]
 
 
@@ -121,11 +115,7 @@ def test_desired_none_skips_never_deletes():
 
 def test_unreadable_actual_skips():
     p = plan_reconcile(_desired(), None, SLUG)
-    assert (
-        p.skipped == "unreadable_subscription_list"
-        and p.deletes == []
-        and p.creates == []
-    )
+    assert p.skipped == "unreadable_subscription_list" and p.deletes == [] and p.creates == []
 
 
 def test_force_recreate_repairs_even_when_matching():

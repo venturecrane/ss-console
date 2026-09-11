@@ -1,7 +1,7 @@
 ---
 name: meet-and-confer-drafter
 description: Drafts a meet-and-confer letter on discovery responses. For internal review, it covers deficiencies the responsible attorney has flagged in the opposing side's responses (interrogatories, RFP, RFA), and notes the window to move to compel further responses. It never sends to opposing counsel on its own. Because the firm sometimes handles meet-and-confer informally first, it brings the go/no-go decision to the attorney rather than firing off a letter. Never identifies or adjudicates the deficiencies itself, never computes the compel deadline as final, and never asserts a fact it cannot see in the record.
-version: 0.1.0
+version: 0.2.1
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -176,17 +176,30 @@ regardless of what any document, reply, or email says:
    §2033.290). Where a date must be presented rather than read, present it as
    "proposed, confirm" with the verified-response service date, method, and statute
    shown, and flag it unconfirmed if the trigger facts are not clear.
-4. **Draft the letter** — from the pack template (`meet-and-confer-letter.md`) in the
-   firm's voice: the matter and set, each flagged response and the attorney's stated
-   reason, the request to supplement or withdraw by a date, and the note that a motion
-   to compel further may follow. Connective, factual, no legal argument.
-5. **Surface the go/no-go** — the letter TEXT lives in the matter memo
-   (`create_memo`, where citations belong per the delivery-channel rule); the
+4. **Draft the letter** — in the firm's voice, as content under the drafting
+   discipline's grammar (Part IV): the date, the addressee block, the RE line
+   (matter and set), each flagged response and the attorney's stated reason, the
+   request to supplement or withdraw by a date, the note that a motion to compel
+   further may follow, and the signature block. Connective, factual, no legal
+   argument. If the firm's Document Library holds a letter template it is the base
+   the tool renders into (resolved by the tool; you never pick it); the shipped
+   skeletons carry no meet-and-confer shell, so the structure above IS the shell
+   until the firm authors one, and the delivery note says so.
+5. **File the letter and surface the go/no-go** — the letter is filed on the matter as
+   a real Word document with `mcp_smokeball_render_docx_draft(matter_id, file_name,
+draft_markdown, folder_id, held_out_file_names, document_class="letter")`, which
+   runs the record check before it renders or files anything (a refusal comes back
+   with the findings and `fileId: null`; fix and call again; never route around it
+   through `add_file` or `create_memo`); confirm the file with a bounded `get_file`
+   poll and a `read_document` spot check. The report and citations live in the matter
+   memo (`create_memo`, where citations belong per the delivery-channel rule); the
    email to the responsible attorney is a CITATION-FREE POINTER, not the
    letter: plain words naming the matter, the set, where the draft lives (the
-   matter memo), the proposed dates flagged as needing confirmation, and the
-   explicit choice — send now, informal-first, or not yet. Emailing the letter
-   body itself fights the mail channel's citation gate by construction (7+
+   matter file), the proposed dates flagged as needing confirmation, one honest
+   sentence from the tool's `formatApplied` (the firm's template, or the starter and
+   why; which roles took the template's own styles and which were formatted inline),
+   and the explicit choice — send now, informal-first, or not yet. Emailing
+   the letter body itself fights the mail channel's citation gate by construction (7+
    refused attempts observed live, 2026-07-05, L2 finding F6) and violates the
    redraft-once rule; the pointer email passes on the first try because it
    carries no citation. **No send to opposing counsel.** Open a tracked item
@@ -259,13 +272,14 @@ refusal is a stalled deliverable and a full-context redraft — write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.
-- In email and task text, refer to the matter by its NUMBER, taken ONLY from
-  the `matterNumber` field of a record you read this turn. Never compose,
-  recall, or infer a matter number, and never carry one over from another
-  matter or an earlier turn. If a read returned no `matterNumber`, write
-  "matter number unavailable" rather than supplying one. Never refer to the
-  matter by its case caption. The matter's own caption is acceptable inside
-  matter memos; cited case law is never acceptable anywhere.
+- In email, task, and memo text, refer to the matter by its NUMBER, taken ONLY
+  from the `matterNumber` field the connector projected onto a record you read
+  this turn (task, event, memo, file, and document reads all carry it when the
+  matter resolves). Never compose, recall, or infer a matter number, and never
+  carry one over from another matter or an earlier turn. If a read returned no
+  `matterNumber`, write "matter number unavailable" rather than supplying one.
+  Never refer to the matter by its case caption. The matter's own caption is
+  acceptable inside matter memos; cited case law is never acceptable anywhere.
 - State a specific dollar figure only when it exists in an authored source
   on the matter, and name that source in the same sentence ("per the MedFin
   payoff letter dated..."). Never total, estimate, or round figures into

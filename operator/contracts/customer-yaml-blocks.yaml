@@ -184,12 +184,16 @@ top_level:
   self_initiation:
     status: implemented
     materializer: >-
-      no translate step by design — the block's runtime consumer is the
-      operator-self-initiation skill, which reads it directly off the seat's
-      own /var/lib/smd-config/customer.yaml via read_file at turn time (the
-      routine_names materialization shape, proven agent-readable by #2222
-      probe vfy_01KZPBXY9D). Reaches the seat through the existing R2
-      publish -> boot fetch of customer.yaml itself.
+      no translate step by design — the block's runtime consumers read it
+      directly off the seat's own /var/lib/smd-config/customer.yaml at turn
+      time (the routine_names materialization shape, proven agent-readable by
+      #2222 probe vfy_01KZPBXY9D): the operator-self-initiation skill via
+      read_file, and, since #2448, the Smokeball connector's format renderer
+      (smokeball_connector/library.py, a connector-process read of the same
+      file, proven on the pilot by vfy_01M0DTM2EGQZP9FZTM53S17CJ7), which
+      resolves `document_library.{matter_number, folder_name, templates}` to
+      the firm's per-class Word template. Reaches the seat through the
+      existing R2 publish -> boot fetch of customer.yaml itself.
     note: >-
       The seat's authored initiation sequence (ss#2220 rescoped, Captain
       2026-08-11): `sequence` is the ordered list of acts one admin request
@@ -198,6 +202,21 @@ top_level:
       Drift-gated by tests/self-initiation-sequence.test.ts: every sequence
       act is a skill bound+enabled on that seat, and any seat binding the
       conductor authors a sequence.
+
+      `document_library.operator_matter` (ss#2536) is the one internal matter
+      the Operator may offer to create for its own template library, and it is
+      the ONLY source of the values that act carries: `number`, `description`,
+      `client_contact_id` (the firm's own contact, so the firm is its own
+      client on the matter), `matter_type_id`. Two runtime consumers, both
+      reading the seat's own /var/lib/smd-config/customer.yaml. The workspace
+      broker (operator/workspace_broker/establishment.py act_propose) refuses
+      any proposal whose payload is not byte-equal to this block, so a seat
+      that authors nothing here can propose nothing at all; the Smokeball
+      connector's library resolver (smokeball_connector/library.py) falls back
+      to `operator_matter.number`, and then to the convention number
+      OPS-OPERATOR-LIBRARY, when no `matter_number` is authored. Changing which
+      matter the Operator would create is an edit HERE, in a PR, never a value
+      taken from an email.
   voice_library:
     status: implemented
     materializer: bootstrap Step 2a (R2 voice-vault sync) + translate _persona_config (config.yaml)

@@ -48,8 +48,16 @@ export interface FleetStatusRow {
   process_uptime_seconds: number | null
   version: string | null
   heartbeat_status: 'green' | 'yellow' | 'red' | 'unknown'
-  /** Cost-breaker ladder level from the Machine (ADR 0062); NULL = not reported. */
+  /** Sticky-stop ladder level from the Machine (ADR 0062); NULL = not reported. */
   sticky_stop_level: string | null
+  /**
+   * WHY the ladder tripped (migration 0112, overlay#341). Four meters drive it
+   * and each needs a different response, so the Captain deciding whether to
+   * clear a stop needs the cause, not just the level. NULL on a seat still
+   * running a pre-cause overlay, which is a legitimate state, not a fault.
+   */
+  sticky_stop_reason: string | null
+  sticky_stop_condition: string | null
   /** Scheduler self-check verdict (WP-2): 1 healthy / 0 broken / NULL unreported. */
   scheduler_ok: number | null
   /** Enabled scheduled-job count the gate could read this beat; NULL unreported. */
@@ -62,6 +70,35 @@ export interface FleetStatusRow {
   connector_check_ok: number | null
   /** ss#2276: 1 = crons deliberately contained (volume sentinel), 0 normal, NULL unreported. */
   cron_containment: number | null
+  /**
+   * #2498: audit rows this seat has failed to persist, cumulative and monotonic
+   * across reboots. 0 is a REAL value — the writer is up and has lost nothing —
+   * and NULL means the seat cannot answer. Rendered beside `last_audit_ts`
+   * because the two only mean anything together: a stale `last_audit_ts` with 0
+   * failures is a quiet seat, the same timestamp with a non-zero count is a
+   * broken one, and before this column they looked identical.
+   */
+  audit_write_failures: number | null
+  /** ss#2488 part 2: 1 = the seat's loop check could look / 0 could not / NULL unreported. */
+  gateway_loop_ok: number | null
+  /** Seconds since the gateway event loop last beat; NULL = hold (latch, no heartbeat, boot). */
+  gateway_loop_age_seconds: number | null
+  /** Part-1 supervisor state: armed | not-armed | inert | not-watching | refusing; NULL unreported. */
+  gateway_supervisor_state: string | null
+  /** Supervisor kill-ledger lines inside the last hour; NULL unreported. */
+  gateway_restarts_last_hour: number | null
+  /**
+   * ss#2547: outbound sends this seat's own gates refused, plus wakes that
+   * carried needs-you items and attempted nothing, over the trailing 24h. 0 is
+   * a REAL value and the load-bearing one: it is what separates a seat whose
+   * escalations are landing from a seat that has gone quiet because it cannot
+   * get past itself. NULL means the seat cannot answer.
+   */
+  send_refusals: number | null
+  /** Newest refusal-or-unsent event, canonical UTC; NULL = nothing to show. */
+  send_refusals_last_ts: string | null
+  /** The newest few events verbatim (ts, routine, tool, kind, reason); NULL = no detail. */
+  send_refusals_json: string | null
   sentry_errors_last_24h: number | null
   sentry_errors_synced_at: string | null
   updated_at: string
@@ -72,8 +109,13 @@ export async function listFleetStatus(db: D1Database): Promise<FleetStatusRow[]>
     .prepare(
       `SELECT entity_id, customer_slug, last_heartbeat_ts, last_audit_ts, last_skill_ts,
               process_uptime_seconds, version, heartbeat_status, sticky_stop_level,
+              sticky_stop_reason, sticky_stop_condition,
               scheduler_ok, scheduler_job_count, scheduler_max_overdue_seconds,
               connectors_json, connector_check_ok, cron_containment,
+              audit_write_failures,
+              gateway_loop_ok, gateway_loop_age_seconds,
+              gateway_supervisor_state, gateway_restarts_last_hour,
+              send_refusals, send_refusals_last_ts, send_refusals_json,
               sentry_errors_last_24h, sentry_errors_synced_at, updated_at
          FROM fleet_status
         ORDER BY customer_slug ASC`
@@ -147,6 +189,42 @@ export function heartbeatColorClass(color: 'green' | 'yellow' | 'red' | 'gray'):
       return 'text-[color:var(--ss-color-error)]'
     case 'gray':
       return 'text-[color:var(--ss-color-text-muted)]'
+  }
+}
+
+export interface AuditWriteFailureDisplay {
+  label: string
+  colorClass: string
+}
+
+/**
+ * Render the audit-write-failure counter for the lifecycle page (#2498).
+ *
+ * Three states, and keeping them apart IS the feature. Before this column, a
+ * seat that had sent nothing for days and a seat whose audit writer had been
+ * failing silently produced the same page, because every audit hook on the
+ * Machine swallows a write failure by design and `last_audit_ts` alone cannot
+ * tell a gap from a quiet week.
+ *
+ *   - null → "not reported". The seat has no opinion (the audit plugin has
+ *     never registered, so the volume tally has no home). NEVER rendered as
+ *     "none" — a reassuring answer we did not receive is the failure this
+ *     whole issue is about.
+ *   - 0    → "none". A real, load-bearing zero: the writer is up and has lost
+ *     nothing, so a stale `last_audit_ts` next to it means a quiet seat.
+ *   - n>0  → "N lost", in the error color. The ledger has gaps and the beside
+ *     -it timestamp cannot be trusted as "nothing happened".
+ */
+export function auditWriteFailureDisplay(count: number | null): AuditWriteFailureDisplay {
+  if (count === null || !Number.isFinite(count) || count < 0) {
+    return { label: 'not reported', colorClass: 'text-[color:var(--ss-color-text-muted)]' }
+  }
+  if (count === 0) {
+    return { label: 'none', colorClass: 'text-[color:var(--ss-color-text-primary)]' }
+  }
+  return {
+    label: `${count} lost`,
+    colorClass: 'text-[color:var(--ss-color-error)]',
   }
 }
 

@@ -1,0 +1,63 @@
+{
+  "_source": "ss#2136, quoted from the issue body. Pilot seat pilot-smokeball, 2026-08-01, after the ss#2122 reprovision. Two jobs triggered by `hermes cron run`, both reporting success, both producing no observable execution.",
+  "_captured_block": [
+    "Triggered job: op-managed:operator:deadline-miss-escalator (a726fd5efd24)",
+    "  Ran now: succeeded.",
+    "",
+    "audit_log rows after 21:40:15Z            : 0",
+    "/opt/data/audit/audit.db mtime            : Aug 1 21:40  (the boot self-check, not the runs)",
+    "/opt/data/audit/escalation-ledger.jsonl   : Aug 1 19:09  (before the deploy)",
+    "fly logs grepped for escalat|chronolog|cron|skill|turn : no matching lines"
+  ],
+  "_healthy_emitter_note": "The issue records that the audit write path was healthy on this image: 'the boot self-check wrote LLM_TURN_COMPLETED rows at 21:02, 21:32 and 21:40Z'. Those three rows are reproduced below, at second-precision timestamps inside the minutes the issue names, so the fixture proves the finding survives a ledger that is demonstrably being written to. The second job's `Last run` never appeared at all.",
+  "claims": [
+    {
+      "slug": "pilot-smokeball",
+      "routine": "deadline-miss-escalator",
+      "job_id": "a726fd5efd24",
+      "trigger_ts": "2026-08-01T21:40:15Z",
+      "claimed_by": "hermes cron run",
+      "claim_text": "Ran now: succeeded."
+    },
+    {
+      "slug": "pilot-smokeball",
+      "routine": "medical-chronology-maintainer",
+      "job_id": "804e3f3f00cd",
+      "trigger_ts": "2026-08-01T22:00:00Z",
+      "claimed_by": "hermes cron run",
+      "claim_text": "Ran now: succeeded."
+    }
+  ],
+  "rows": [
+    {
+      "id": "01K2136CAPTURED0000000001",
+      "ts": "2026-08-01T21:02:00.000Z",
+      "action_type": "LLM_TURN_COMPLETED",
+      "actor": "operator",
+      "actor_role": "agent",
+      "skill_name": null,
+      "matter_ref": null,
+      "metadata": { "source": "boot self-check" }
+    },
+    {
+      "id": "01K2136CAPTURED0000000002",
+      "ts": "2026-08-01T21:32:00.000Z",
+      "action_type": "LLM_TURN_COMPLETED",
+      "actor": "operator",
+      "actor_role": "agent",
+      "skill_name": null,
+      "matter_ref": null,
+      "metadata": { "source": "boot self-check" }
+    },
+    {
+      "id": "01K2136CAPTURED0000000003",
+      "ts": "2026-08-01T21:40:00.000Z",
+      "action_type": "LLM_TURN_COMPLETED",
+      "actor": "operator",
+      "actor_role": "agent",
+      "skill_name": null,
+      "matter_ref": null,
+      "metadata": { "source": "boot self-check" }
+    }
+  ]
+}

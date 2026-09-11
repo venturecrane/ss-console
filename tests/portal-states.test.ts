@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  resolveInvoiceState,
-  resolveProposalState,
-  resolveContactLink,
-} from '../src/lib/portal/states'
+import { resolveInvoiceState, resolveProposalState } from '../src/lib/portal/states'
 
 describe('resolveInvoiceState', () => {
   it('returns paid when invoice.paid_at is set, regardless of query hint', () => {
@@ -182,33 +178,5 @@ describe('resolveProposalState', () => {
     expect(expired.state).toBe('expired')
     expect(expired.next).not.toBeNull()
     expect(expired.next!.toLowerCase()).not.toContain('text ')
-  })
-})
-
-describe('resolveContactLink', () => {
-  it('returns both sms and tel hrefs when phone is present', () => {
-    const link = resolveContactLink('+1 (480) 555-0100', 'iPhone')
-    expect(link.smsHref).toBe('sms:+14805550100')
-    expect(link.telHref).toBe('tel:+14805550100')
-    expect(link.isMobile).toBe(true)
-  })
-
-  it('detects desktop UA as non-mobile', () => {
-    const link = resolveContactLink(
-      '+14805550100',
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit'
-    )
-    expect(link.isMobile).toBe(false)
-  })
-
-  it('returns all nulls when phone is absent', () => {
-    const link = resolveContactLink(null, 'iPhone')
-    expect(link.smsHref).toBeNull()
-    expect(link.telHref).toBeNull()
-  })
-
-  it('strips non-digit characters except leading plus', () => {
-    const link = resolveContactLink('(480) 555-0100 x123', null)
-    expect(link.smsHref).toBe('sms:4805550100123')
   })
 })

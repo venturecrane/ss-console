@@ -85,6 +85,11 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/sync-primary.sh\"",
             "timeout": 45
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/sync-overlay-checkout.sh\"",
+            "timeout": 45
           }
         ]
       },
@@ -93,6 +98,11 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-peers.sh\"",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/memory-audit.mjs\" --session-start",
             "timeout": 20
           }
         ]

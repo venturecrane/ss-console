@@ -176,15 +176,151 @@ ledger.
 
 ## Part III — Model routing
 
-Work-product drafting runs on **Opus-class reasoning** (prove-out: four decisive
-probes split Opus/Sonnet on exactly the failures that matter — refusing false
-premises, holding inadmissibility traps, no self-contradicting dates). Mechanical
-transcription sub-steps may run lighter, but the draft itself is never delegated
-below the seat's work-product model. The premium is ~$0.50 per document.
+**Composition runs on Opus-class reasoning, and is never delegated below the
+seat's work-product model.** The prove-out split Opus and Sonnet on exactly the
+failures that matter: Opus refused the false "damages exceed the limits"
+sentence Sonnet wrote into a demand's opening paragraph, held the §40834
+inadmissibility trap Sonnet broke, and did not self-contradict its own dates.
+Sonnet's measured profile is worth stating precisely, because it is what the
+routing below rests on: **it transcribes exactly — the best verbatim-cite work
+in the matrix — and derives unreliably.** The premium is ~$0.50 per document.
 
-## Part IV — Skeletons
+**Verification stages run on Sonnet.** Checking a citation is transcription
+work, which is the half Sonnet does best, and it is where the calls are.
+
+This is imported, not guessed. The medical-chronology pipeline moved its
+citation audit from Opus to Sonnet after validating the swap against a
+delivered matter: **95.2% verdict agreement, stricter never looser, 100% recall
+on the serious category.** On a real chronology run that reroute took the audit
+stage from $19.49 to $7.80 — a $11.69 saving on what would otherwise have been
+a $40 run, about 29% (`vfy_01M1EY2SBTHDDTMKW6KY8W80K9`). The stage was 568 of
+the run's 948 calls. Drafting has the same shape: one long composition, then
+many small verifications over it.
+
+**Where this table applies, stated first.** It governs a **harness-driven run** —
+the pipeline driven against the API by a caller that picks a model per call,
+which is how the prove-out and every chronology run to date executed, and how a
+run instrumented by `ledger.py` executes.
+
+It does **not** describe the seat, and that is a design decision, not a gap.
+[ADR 0049](../../../docs/adr/0049-operator-model-selection.md) explicitly
+rejected a per-skill `model` field and a per-turn complexity classifier: skills
+stay tier-unaware, and the seat's only model movement is **escalate-up** — a
+`weight: heavy` skill hands work to a subagent on the seat's `escalation_model`.
+There is no seam that routes a sub-stage _down_ to a cheaper model inside a
+skill run. So on the seat, a demand's verification calls run on whatever model
+the turn is running, and the saving below is not available there. Do not author
+a skill that names a model to chase it; that is the restructuring ADR 0049 puts
+off-limits. The consequence worth carrying into any cost projection: **a seat
+run and a harness run of the same demand have different economics**, and only
+the harness one can be attributed by stage.
+
+| Stage      | Model                   | Why                                                                                                                          |
+| ---------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `assemble` | none                    | Connector reads; no model call.                                                                                              |
+| `extract`  | none                    | Mechanical extraction only. Vision transcription is a separate, explicit act — see below.                                    |
+| `digest`   | Sonnet                  | Collapsing the record into a cited fact digest. Transcription, which is Sonnet's strength, and where most of the money goes. |
+| `compose`  | **work-product (Opus)** | Derivation, judgment, refusals. Never delegated down.                                                                        |
+| `audit`    | Sonnet                  | Quote contiguity, question-pairing, citation resolution (gate 2).                                                            |
+| `coverage` | Sonnet                  | Propounded-vs-response diffing (gate 7). Enumeration, not judgment.                                                          |
+| `gates`    | Sonnet                  | The mechanical gates' model-assisted portions.                                                                               |
+| `lint`     | Sonnet                  | SPROG / subpart lint (gate 8).                                                                                               |
+| `repair`   | **work-product (Opus)** | A repair rewrites work product, so it inherits composition's model.                                                          |
+| `revise`   | **work-product (Opus)** | An attorney-requested revision round is composition.                                                                         |
+
+Two rules that keep the table honest:
+
+- **A cheaper model is proven per stage, never assumed.** The chronology
+  pipeline also tested Haiku for transcription and **rejected it**: it would
+  have saved $1.65 on that run and it scrambled field associations on dense
+  insurance forms. A saving that corrupts the record is not a saving. Before
+  moving any stage down, validate it against a delivered artifact the way the
+  audit swap was validated, and record the agreement rate.
+- **An unrouted stage is a routing failure.** `ledger.py` marks any stage
+  outside its `KNOWN_STAGES` set in the report, because an Opus call hiding
+  under an unrecognised stage name is how a routing decision gets silently
+  reversed. A new stage is fine; an unnamed one is not.
+
+**Two levers this lane should use that the chronology pipeline did not.** On the
+measured chronology run, batch pricing (0.5x) was applied to nothing, and
+prompt caching covered 1.0% of composition's 1.13M input tokens. Both apply
+harder here. The non-interactive verification stages are batchable by nature.
+And a demand is revised in rounds against an unchanged record — the prove-out's
+own revision gauntlet grew its input 103k → 140k → 175k tokens across three
+rounds — which is the textbook case for caching the record prefix at 0.10x
+rather than re-paying for it each round.
+
+**Cost is recorded, not estimated.** Every model call in this lane records its
+stage and usage through `operator/templates/drafting/ledger.py`; a completed run
+appends a row to the shared calibration corpus with its `artifact_class` and its
+extracted-character count. Project a run from the nearest calibration rows **of
+the same class**, from extracted characters and never from bytes — Epic EMR
+exports measured 63% more characters per byte than a mixed corpus, and a quote
+projected from megabytes came in 30% low. Dollars come from the rate card in
+`rate-card.json` at read time; never hand-price a run.
+
+> **What the ledger does not see.** It records usage from the API call the
+> caller makes, which measures a harness-driven run. It does **not** measure a
+> run the Operator performs on its own seat: the seat's `LLM_TURN_COMPLETED`
+> audit row carries `customer, model, per_llm_audit, platform, session_id` and
+> no token counts (probed on the A&P seat 2026-09-01, all 232 rows). Seat-side
+> cost is attributable only from the organisation cost report — whole-workspace
+> granularity, a day's lag, no stage breakdown. Do not describe a seat run's
+> cost as measured until the overlay records usage into the audit row.
+
+## Part IV — Skeletons and format
 
 Default skeletons ship in `operator/templates/drafting/skeletons/`. They are SMD
 defaults for rehearsal and demonstration; at onboarding the firm's own skeletons
 replace them per matter type. A skill invoked without a skeleton for its artifact
 class uses its default and says so in the delivery note.
+
+### Format: the firm's template, code's typography, your content (ADR 0083)
+
+A draft is filed as a real Word document through `mcp_smokeball_render_docx_draft`
+with a `document_class` (`discovery_set`, `discovery_response`, `demand_letter`,
+`mediation_brief`, `memo`, `letter`). The tool renders your content INTO the
+firm's own Word template for that class when one is authored in the firm's
+Document Library (it resolves the template itself, the same way every time; you
+never pick one), else onto the SMD starter base. The firm's template carries the
+typography: letterhead, fonts, spacing, the named styles `SMD Body`, `SMD Item
+Label`, `SMD Item Text`, `SMD Heading 1-3`, `SMD Caption`, `SMD Signature`.
+Nothing you write chooses a font, a margin, or a spacing.
+
+**Which of the firm's edits reach the next draft is per-element, and
+`formatApplied` reports it rather than promising it.** Three states. A role the
+template styles by name (`stylesHonored`) follows that style. A heading the
+template does not name falls to the template's OWN `Heading 1-3`
+(`stylesDelegated`), so a firm that edits those in Word still moves the next
+draft. Anything else is formatted inline (`fallbacks`), which means its
+typography is fixed in that document and a later template edit will not move it.
+Say which, from the report; do not tell a firm that editing a style will change
+their drafts when the report says that element was inline.
+
+**What you write** is the content grammar, and only this:
+
+| You write                                                                                                                                             | The renderer does                                                                                                                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `#` / `##` / `###` headings, numeral included (`## I. Introduction`, `### A. Parties`)                                                                | styles the level per class (centered bold roman, indented bold-underlined letters); never renumbers                                |
+| paragraphs, `**bold**`, `*italic*`                                                                                                                    | body style                                                                                                                         |
+| a SHORT line that starts with an item label (`**SPECIAL INTERROGATORY NO. 7:**`, `REQUEST FOR PRODUCTION NO. 3:`), the number from the propounded set | label style (all-caps bold underlined), then the paragraphs after it as item text (first-line indent, the "between items" spacing) |
+| `-` bullets; literal `1.` numbered items                                                                                                              | list formatting; the number is content                                                                                             |
+| pipe tables (`\| a \| b \|`; a `\| --- \|` row after the first marks a header row); the FIRST table of a court document is the caption                | real tables; a caption table gets the caption look                                                                                 |
+| `---` on its own line                                                                                                                                 | a horizontal rule                                                                                                                  |
+| `{{FILL: … \| source}}`, `{{NOT IN RECORD: …}}`, `{{ATTORNEY: …}}`                                                                                    | emitted verbatim, unstyled, render-visible; markers survive inside table cells and bold spans                                      |
+| `` `backticked text` `` (the skeletons wrap markers this way for human readers)                                                                       | the backticks are syntax and are dropped; the text inside renders plain, a marker inside stays a marker                            |
+
+Everything else renders as plain text with its characters intact, never
+dropped. Write the caption, the signature block, and the proof of service as
+content, exactly as the skeleton shows; the renderer adds NO text of its own,
+no count, no declaration, no label. Those are record and judgment, not
+typography.
+
+**The delivery note states `formatApplied` honestly:** which template was used
+(or the starter), `templateExpected` (the library is authored but the class
+template did not resolve: say so, and why), `stylesDelegated` (roles that took
+the template's own style), the fallbacks (roles formatted inline), and the
+template's own header/footer text (it bypasses every content gate, so the
+attorney sees it named). A `formatApplied.notes` entry that says the firm's
+template was not used, or that names a style the firm could add in Word to
+control a level, is a sentence in your note, not a detail to omit.

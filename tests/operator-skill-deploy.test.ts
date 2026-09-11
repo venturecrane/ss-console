@@ -32,7 +32,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
-const SMD_CUSTOMER_YAML = join(REPO_ROOT, 'operator', 'customers', 'smd', 'customer.yaml')
+const SMD_CUSTOMER_YAML = join(REPO_ROOT, 'operator', 'customers', 'smd-staging', 'customer.yaml')
 const BOOTSTRAP_SH = join(REPO_ROOT, 'operator', 'templates', 'bootstrap.sh')
 
 interface ValidatorResult {

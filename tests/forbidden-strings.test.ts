@@ -125,7 +125,7 @@ const FORBIDDEN_PATTERNS: Array<{ label: string; pattern: RegExp | string }> = [
     // as discussed during assessment.'`). Invoice/SOW/PDF descriptions must come
     // from authored quote content, never a template scope phrase.
     // Case-SENSITIVE on purpose: the lowercase "operations cleanup engagements"
-    // in LLM system prompts (assessment-to-quote.ts, dossier.ts) describes the
+    // in LLM system prompts (dossier.ts) describes the
     // business to the model and is not client-rendered content — matching the
     // title-case rendered label avoids those false positives.
     label: 'Pattern B: hardcoded "Operations Cleanup Engagement" scope label (invoices/SOW/PDF)',
@@ -295,7 +295,49 @@ const USER_FACING_COPY_GUARDS: Array<{ label: string; pattern: RegExp }> = [
     label: 'no "off the shelf" framing in shipped user-facing surfaces',
     pattern: /\boff the shelf\b/i,
   },
+  // The compliance page asserted which agreements are in force from a
+  // template sentence (claims review 2026-09-04, A4). Whether documents are
+  // in force is a reading of the paper, never a sentence the code supplies.
+  {
+    label: 'no "in force together" contractual-status assertion in shipped user-facing surfaces',
+    pattern: /\bin force together\b/i,
+  },
 ]
+
+// ============================================================================
+// Checkout-return guard (claims review 2026-09-04, A5). The Billing surface
+// told the client "Your subscription is active" from `?start=done` alone,
+// and the Hosted Agent thanks page carried the lowercase form. Both surfaces
+// now render from the Checkout Session and the client's own row, so the
+// sentence must not return to either file. Scoped to the two files where it
+// lived: the hosted-agent product page derives its own wording from a
+// loaded row plus roles and is not this guard's subject.
+// ============================================================================
+
+const CHECKOUT_RETURN_FILES = [
+  resolve('src/pages/portal/billing/index.astro'),
+  resolve('src/pages/agent/thanks.astro'),
+]
+const CHECKOUT_RETURN_PATTERN = /\byour subscription is active\b/i
+
+describe('checkout-return copy guard (no "your subscription is active" from the query string)', () => {
+  it('finds both checkout-return surfaces (sanity)', () => {
+    for (const file of CHECKOUT_RETURN_FILES) {
+      expect(existsSync(file), file).toBe(true)
+    }
+  })
+
+  it('neither surface states the subscription is active', () => {
+    const violations: string[] = []
+    for (const file of CHECKOUT_RETURN_FILES) {
+      const content = stripComments(readFileSync(file, 'utf-8'))
+      if (CHECKOUT_RETURN_PATTERN.test(content)) {
+        violations.push(file.replace(SRC_ROOT, 'src'))
+      }
+    }
+    expect(violations).toEqual([])
+  })
+})
 
 describe('forbidden-strings: Pattern A/B violations must not appear in shipped source', () => {
   for (const { label, pattern } of FORBIDDEN_PATTERNS) {
@@ -705,28 +747,6 @@ describe('operator customer.yaml invariants', () => {
           `${rel} hermes_ref "${ref}" is not v{YYYY}.{M}.{D}@{40-hex-sha} ` +
             `(fork tags like -smd.N are rejected per ADR 0024).`
         ).toBe(true)
-      }
-    }
-  })
-})
-
-describe('client surfaces render curated activity language only', () => {
-  // Portal IA rebuild, Captain decision 7 (2026-07-07): raw runtime audit
-  // vocabulary ("INVARIANT_VIOLATION" title-cased to "Invariant Violation")
-  // must never render on a client surface. formatAuditAction is the raw
-  // mechanical transform and stays admin-side; client surfaces go through
-  // src/lib/portal/operator/activity-language.ts (allowlist; unmapped
-  // renders nothing).
-  const CLIENT_SURFACE_ROOTS = [resolve('src/pages/portal'), resolve('src/components/portal')]
-
-  it('formatAuditAction is not imported by any client surface', () => {
-    for (const root of CLIENT_SURFACE_ROOTS) {
-      for (const file of collectSourceFiles(root)) {
-        const content = readFileSync(file, 'utf-8')
-        expect(
-          content.includes('formatAuditAction'),
-          `${file} references formatAuditAction — client surfaces must use activity-language`
-        ).toBe(false)
       }
     }
   })
@@ -1202,4 +1222,223 @@ describe('skill prose carries no matter-number-shaped example (ss#2168)', () => 
       ).toEqual([])
     })
   }
+})
+
+// The establishment skills must warn that an ordered-list marker is a digit
+// (ss#2212).
+//
+// The digit invariant refuses any digit in a spec body outside a `{{profile.*}}`
+// token, and it counts `1.` and `2.` at the head of a line. Found on
+// pilot-smokeball 2026-08-02: a specification written as a numbered list of rules
+// was refused with `REFUSED: 5 digit(s) in spec.md outside a profile token`, one
+// per list item; the identical content in bullets installed cleanly
+// (vfy_01KZ288YZAPW5GNY180DRNX2Q1).
+//
+// A numbered list is the natural way to write "rules", so the constraint reads as
+// a bug the first time a firm hits it. The fix is prose in the skills rather than
+// a wider gate: nothing about the invariant changes, and no line position gains
+// the ability to carry an asserted measurement. Prose with no guard is a
+// suggestion, though, so this pins it the same way ss#2168's example ban is
+// pinned.
+describe('establishment skills warn that a numbered list is refused (ss#2212)', () => {
+  // Both skills write a spec body through the same invariant. `document-library-
+  // establishment` does not, so it is deliberately absent.
+  const SPEC_WRITING_SKILLS = ['voice-establishment', 'shape-establishment']
+
+  for (const skill of SPEC_WRITING_SKILLS) {
+    it(`${skill} tells the model to use bullets, not numbers`, () => {
+      // Whitespace-tolerant on purpose: these files are hard-wrapped, so the
+      // phrase routinely straddles a newline plus indent. A regex with a literal
+      // space passes or fails on where prettier happened to break the line,
+      // which is a check that answers a question about formatting rather than
+      // about content. (It failed exactly that way on first run.)
+      const body = readFileSync(resolve('operator/skills', skill, 'SKILL.md'), 'utf-8')
+      expect(
+        /bullets,\s+never\s+(as\s+)?a\s+numbered\s+list/i.test(body),
+        `operator/skills/${skill}/SKILL.md no longer warns that an ordered-list marker counts ` +
+          'as a digit. Without it the first firm to write its rules as "1. ... 2. ..." gets ' +
+          'the whole specification refused and reads the control as a defect.'
+      ).toBe(true)
+      // The warning is worth nothing if it does not say what breaks, so pin the
+      // mechanism too: a reader who sees only "use bullets" will delete it as
+      // style advice.
+      expect(
+        /digit\s+invariant\s+counts\s+an\s+ordered-list\s+marker/i.test(body),
+        `operator/skills/${skill}/SKILL.md states the rule without its reason. Keep the ` +
+          'mechanism next to it or the next editor removes it as a style preference.'
+      ).toBe(true)
+    })
+  }
+})
+
+// Seat-reaching scripts must not print a process's command line (ss#2218).
+//
+// `seat-probe.sh` re-execs the probe as `runuser -- env ${ENVV} ...`, which puts
+// the gateway's entire environment on the wrapper's own argv. That is deliberate
+// and load-bearing: it is how the probe reaches the seat with the credentials it
+// needs. The consequence is that any flag which prints a command line is an
+// exfiltration primitive in these files, not a debugging convenience.
+//
+// On 2026-08-10 a probe ran `pgrep -af establish_intake`, matched its own
+// wrapper, and printed ANTHROPIC_API_KEY, the Smokeball client id and secret and
+// more into a session transcript (P1). The prose warning landed with the fix;
+// this is what stops the next edit removing it by accident.
+describe('seat-reaching scripts never print a process command line (ss#2218)', () => {
+  const SEAT_SCRIPTS = ['operator/bin/seat-probe.sh']
+
+  // `pgrep -a`, `pgrep -af`, `ps e`, `ps auxe`. Matches the flag cluster, not a
+  // fixed string, so `-fa` and `-af` are both caught.
+  const ARGV_PRINTERS = /\b(pgrep\s+-[a-z]*a[a-z]*|ps\s+(e\b|aux?e\b))/
+
+  for (const rel of SEAT_SCRIPTS) {
+    const body = readFileSync(resolve(rel), 'utf-8')
+
+    it(`${rel} contains no argv-printing invocation`, () => {
+      // Comments are where the ban is explained, so they must not trip it.
+      const code = body
+        .split('\n')
+        .filter((l) => !/^\s*#/.test(l))
+        .join('\n')
+      const hit = ARGV_PRINTERS.exec(code)
+      expect(
+        hit?.[0] ?? null,
+        `${rel} invokes ${hit?.[0]} — on a seat this prints the gateway environment, ` +
+          'secret values included (ss#2218). Match a pattern that cannot match the ' +
+          'wrapper and print pids only.'
+      ).toBeNull()
+    })
+
+    it(`${rel} still carries the ban in prose`, () => {
+      // A guard with no explanation gets deleted by whoever hits it next.
+      expect(
+        /NEVER run `pgrep -a`/.test(body),
+        `${rel} lost the ss#2218 warning. The rule is not obvious from the code: ` +
+          'the env is on the wrapper argv by design, and the comment is what says why.'
+      ).toBe(true)
+    })
+  }
+
+  it('the pattern catches the exact invocation from the incident', () => {
+    // The inverse control. Without this the regex could match nothing at all and
+    // every assertion above would pass on an empty check.
+    expect(ARGV_PRINTERS.test('pgrep -af establish_intake')).toBe(true)
+    expect(ARGV_PRINTERS.test('ps auxe')).toBe(true)
+    // ...and leaves the safe form alone.
+    expect(ARGV_PRINTERS.test('pgrep -f "hermes.*gateway run"')).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tree walker for the two guards below (same shape as the retired-persona
+// scan above): every file with one of `exts` under `dir`, node_modules and the
+// caller's exclusions skipped, unreadable entries ignored.
+// ---------------------------------------------------------------------------
+function walkTree(dir: string, exts: string[], excluded: string[]): string[] {
+  const out: string[] = []
+  let entries: string[]
+  try {
+    entries = readdirSync(dir)
+  } catch {
+    return out
+  }
+  for (const entry of entries) {
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- dir is a hardcoded repo root; entry is readdirSync output, not user input.
+    const full = join(dir, entry)
+    if (excluded.some((e) => isWithinDir(full, e))) continue
+    let st
+    try {
+      st = statSync(full)
+    } catch {
+      continue
+    }
+    if (st.isDirectory()) {
+      if (entry === 'node_modules') continue
+      out.push(...walkTree(full, exts, excluded))
+    } else if (exts.includes(extname(entry))) {
+      out.push(full)
+    }
+  }
+  return out
+}
+
+/** Python source with comment lines dropped, so an explanation cannot trip a gate. */
+function stripPythonComments(content: string): string {
+  return content
+    .split('\n')
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n')
+}
+
+// ---------------------------------------------------------------------------
+// Delivered documents promise no future behaviour (claims review 2026-09-04,
+// B6). The medchron chronology's limitations section told the reader "tell us
+// and we will extend the chronology" in the firm's voice: a first-person
+// commitment nobody contracted, shipped inside a delivered work product. The
+// same Pattern A rule that governs the portal governs every Python module that
+// renders text a client reads.
+// ---------------------------------------------------------------------------
+describe('operator Python renders no first-person future-behaviour promise (ss claims 2026-09-04 B6)', () => {
+  const PROMISE = /\bwe will extend the\b/i
+  const files = walkTree(resolve('operator'), ['.py'], [])
+
+  it('finds operator Python to scan (sanity)', () => {
+    expect(files.length).toBeGreaterThan(0)
+  })
+
+  it('no operator Python module carries "we will extend the"', () => {
+    const offenders: string[] = []
+    for (const file of files) {
+      if (PROMISE.test(stripPythonComments(readFileSync(file, 'utf-8')))) {
+        offenders.push(file.replace(resolve('.') + '/', ''))
+      }
+    }
+    expect(
+      offenders,
+      'a delivered document may state what was reviewed; it may not promise what will be done next:\n' +
+        offenders.join('\n')
+    ).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The other venture's mail domain stays out of SMD code (CLAUDE.md, "Contact
+// Addresses"; claims review 2026-09-04, I15). Seventeen occurrences had
+// accumulated, most in a skill reference COPYed into every seat image, and
+// `tests/client-identity-gate.test.ts` allowlists the domain as "ours", so it
+// could not catch them. Example addresses use `@example.com`. This scans the
+// same four roots the review probed, comments included: the domain has no
+// business in a comment either.
+// ---------------------------------------------------------------------------
+describe('the venturecrane mail domain appears nowhere in SMD code (CLAUDE.md contact addresses)', () => {
+  const DOMAIN = /@venturecrane\.com/i
+  const ROOTS = ['src', 'operator', 'scripts', 'workers']
+  const EXTS = [
+    '.ts',
+    '.tsx',
+    '.astro',
+    '.md',
+    '.yaml',
+    '.yml',
+    '.json',
+    '.py',
+    '.sh',
+    '.toml',
+    '.txt',
+  ]
+
+  it('the venturecrane address is in no file under src, operator, scripts, workers', () => {
+    const offenders: string[] = []
+    for (const root of ROOTS) {
+      for (const file of walkTree(resolve(root), EXTS, [])) {
+        if (DOMAIN.test(readFileSync(file, 'utf-8'))) {
+          offenders.push(file.replace(resolve('.') + '/', ''))
+        }
+      }
+    }
+    expect(
+      offenders,
+      'SMD addresses are team@smd.services and scott@smd.services; examples use @example.com:\n' +
+        offenders.join('\n')
+    ).toEqual([])
+  })
 })

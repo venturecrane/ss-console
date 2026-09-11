@@ -26,6 +26,16 @@ For each open verification tracking item the skill maintains:
       the ledger holds no ``handed_off`` event yet: wake ONCE to stop chasing the
       client and hand the open item to the responsible attorney. A ``handed_off``
       item is terminal for autonomous wakes.
+  (d) HELD — the ledger carries an open per-MATTER hold (a ``fired`` raise on
+      the matter's hold sentinel; see ``HOLD_SOURCE_ID``): a turn that
+      inspected the matter found it cannot chase safely (signer unresolved, or
+      any other surface-and-ask condition). A held matter NEVER plans a chase
+      or a hand-off for any of its verification items; instead the hold
+      re-surfaces to a person on the re-fire window until a turn writes
+      ``resolved`` on the hold sentinel (ss #2402 — on 2026-08-11 the turn
+      surfaced "signer not confirmed" and three days later the next wake
+      planned a chase to the unconfirmed signer, because the hold lived only
+      in an email).
 
 Plus one seat-level condition:
 
@@ -74,13 +84,11 @@ Exit codes:
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import os
-import socket
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Protocol, Sequence
@@ -92,6 +100,37 @@ SKILL_NAME = "client-verification-tracker"
 # (every refire_days until authored), never daily (#1899).
 _CONFIG_SENTINEL_SOURCE_ID = "__chase_config__"
 _CONFIG_SENTINEL_LABEL = "chase-config-missing"
+
+# Per-MATTER hold sentinel (ss #2402). A turn that finds a matter unsafe to
+# chase (signer unresolved is the founding case) appends a ``fired`` raise on
+# the matter's HOLD identity — the matter id plus the fixed source id below —
+# via the broker (derive-then-handle, ss #2304). ``decide()`` then refuses to
+# plan a chase or hand-off for ANY verification item on that matter until a
+# turn appends ``resolved`` on the hold.
+#
+# The identity is deliberately MATTER-level, not task-level: the founding
+# blocker (conflicting Minor/Deceased sub-roles on the plaintiff) is a fact
+# about the matter's roles, not about one tracking task. A task-keyed hold
+# would evaporate the moment the tracking task is completed, deleted, or
+# recreated — the first wake on a replacement task would plan a chase straight
+# past the still-unresolved blocker. Matter-level is also fail-closed for
+# multi-plaintiff matters: one unresolved signer holds every verification
+# chase on the matter, and the re-surface asks a person rather than guessing
+# which sibling items are safe.
+#
+# The constants are the cross-side contract: the turn and this gate must
+# derive the same key from the same components, so they live here and are
+# cited verbatim in SKILL.md.
+HOLD_SOURCE_ID = "__hold__"
+_HOLD_LABEL = "chase-hold"
+
+# The role-snapshot projection + hash + connector pull for the signer
+# determination (ss #2402 Part 3) live in the sibling ``role_snapshot.py``,
+# path-loaded exactly like the vendored ledger below (the scheduler stages
+# this file alone; the skill dir carries the siblings). A load failure
+# degrades every hash to None (unknown) - fail toward holding, never toward
+# trusting. Projection pinned by the 2026-08-31 live probe
+# (vfy_01M1CB0NTKCV3ACRY0P6QD6JX7); fixture: tests/role_snapshot_probe.json.
 
 
 # ---------------------------------------------------------------------------
@@ -128,14 +167,18 @@ class VerificationItem:
     next_chase_due: date
     authored_date: date | None = None
     label: str = "client-verification"
+    # The firm's human-readable matter number + typed absence, projected in
+    # code by the connector's matter.id -> matter.number join during the pull
+    # (ss #2390; WS-RENDER — the rendered alert names numbers, never GUIDs).
+    matter_number: str | None = None
+    matter_number_absent: str | None = None
 
 
 class VerificationSource(Protocol):
     """Adapter the real Smokeball reader satisfies: one VerificationItem per open
     verification tracking task the skill maintains."""
 
-    def pull_open_verifications(self) -> Sequence[VerificationItem]:
-        ...
+    def pull_open_verifications(self) -> Sequence[VerificationItem]: ...
 
 
 # ---------------------------------------------------------------------------
@@ -235,33 +278,32 @@ def load_chase_config(customer_yaml_path: str | None = None) -> tuple[ChaseConfi
         escalate_after_attempts=_pos_int_or_none(settings.get("escalate_after_attempts")),
     )
     esc = data.get("escalation") if isinstance(data, dict) else None
-    refire_days = _pos_int(
-        esc.get("refire_days") if isinstance(esc, dict) else None, _DEFAULT_REFIRE_DAYS
-    )
+    refire_days = _pos_int(esc.get("refire_days") if isinstance(esc, dict) else None, _DEFAULT_REFIRE_DAYS)
     return config, refire_days
 
 
 # ---------------------------------------------------------------------------
-# Escalation ledger — vendored copy of the shared module (byte-identical to
-# operator/workspace_broker/escalation_ledger.py; test_escalation_ledger_sync).
-# Loaded by absolute path because the cron scheduler may run pre_run from a
-# staged scripts dir, not the skill dir. If it cannot be loaded, the chase fails
-# OPEN — it wakes (the pre-graduation behavior) rather than going silent.
+# Sibling-module loading. The escalation ledger is a vendored copy of the
+# shared module (byte-identical to operator/workspace_broker/
+# escalation_ledger.py; test_escalation_ledger_sync); role_snapshot.py is this
+# skill's own. Loaded by absolute path because the cron scheduler may run
+# pre_run from a staged scripts dir, not the skill dir. If the ledger cannot
+# be loaded, the chase fails OPEN — it wakes (the pre-graduation behavior)
+# rather than going silent; if role_snapshot cannot be loaded, every snapshot
+# hash degrades to unknown (fail toward holding).
 # ---------------------------------------------------------------------------
 
 
-def _load_ledger_module():
+def _load_sibling_module(filename: str, module_name: str):
     import importlib.util
 
     candidates = [Path(__file__).resolve().parent]
     for base in ("/opt/data/skills", "/app/skills"):
         candidates.append(Path(base) / SKILL_NAME)
     for cand in candidates:
-        module_path = cand / "escalation_ledger.py"
+        module_path = cand / filename
         if module_path.is_file():
-            spec = importlib.util.spec_from_file_location(
-                "escalation_ledger_vendored_cvt", module_path
-            )
+            spec = importlib.util.spec_from_file_location(module_name, module_path)
             if spec is None or spec.loader is None:
                 continue
             module = importlib.util.module_from_spec(spec)
@@ -274,6 +316,14 @@ def _load_ledger_module():
     return None
 
 
+def _load_ledger_module():
+    return _load_sibling_module("escalation_ledger.py", "escalation_ledger_vendored_cvt")
+
+
+def _load_role_snapshot_module():
+    return _load_sibling_module("role_snapshot.py", "cvt_role_snapshot")
+
+
 # ---------------------------------------------------------------------------
 # Decision engine — pure, no I/O. Unit-tested directly.
 # ---------------------------------------------------------------------------
@@ -282,19 +332,39 @@ def _load_ledger_module():
 ACTION_CHASE = "chase"  # a client nudge is due (attempt < ceiling)
 ACTION_HANDOFF = "handoff"  # ceiling reached; stop chasing, hand to the attorney (once)
 ACTION_SURFACE_CONFIG = "surface_config_missing"  # seat-level, on the refire window
+ACTION_SURFACE_HOLD = "surface_hold"  # item held (e.g. signer unresolved); re-surface, never chase
 ACTION_SUPPRESS = "suppress"  # nothing due for this item
 
 
 @dataclass(frozen=True)
 class ItemPlan:
     """What the next turn should do for one item, plus the attempt number a chase
-    would carry (the ``nudge <#> of <max>`` numerator)."""
+    would carry (the ``nudge <#> of <max>`` numerator).
+
+    ``reason`` qualifies a surface plan (today: ``determination_stale`` on a
+    hold surface swapped in for a due chase). ``current_role_snapshot_sha256``
+    rides on every ``surface_hold`` plan (or None when the pull failed): the
+    resolving turn COPIES it into the hold release's determination — never
+    computes it. ``determination`` is the consult stamp for a matter whose hold
+    carries a recorded determination:
+    ``{note, recorded_sha256, status: current|stale|unknown}``.
+    """
 
     matter_id: str
     task_id: str | None
     item_key: str
     action: str
     attempt: int  # for a chase: the nudge number this chase would be
+    reason: str = ""
+    current_role_snapshot_sha256: str | None = None
+    determination: dict | None = None
+    # Code-projected matter number + typed absence (ss #2390) and the tracking
+    # task's due date, carried so the rendered alert can name the matter and
+    # the provenance handoff can seed the (number, date) association
+    # (WS-RENDER). Never composed here; copied off the pulled item.
+    matter_number: str | None = None
+    matter_number_absent: str | None = None
+    next_chase_due: str | None = None
 
 
 @dataclass(frozen=True)
@@ -304,6 +374,22 @@ class WakeDecision:
     pre_run_inputs_digest: bytes
     plans: tuple[ItemPlan, ...] = ()
     extra_metadata: dict = field(default_factory=dict)
+
+
+def _hold_active(hold_state) -> bool:
+    """True iff the item's hold sentinel blocks the chase.
+
+    A hold is open once it has any raise and is not ``resolved``. An ``acked``
+    hold stays BLOCKING — ack means "a person saw the surface", not "the
+    condition is fixed"; it only snoozes the re-surface (``should_fire``
+    handles that). ``handed_off`` likewise blocks and additionally ends
+    autonomous re-surfacing: a person owns the item. Only ``resolved`` —
+    written by the turn that confirmed the condition is fixed (e.g. the signer
+    is confirmed) — releases the chase.
+    """
+    if hold_state is None or hold_state.attempts == 0:
+        return False
+    return not hold_state.resolved
 
 
 def _chase_due(
@@ -321,6 +407,35 @@ def _chase_due(
     return today >= state.last_raised_date + timedelta(days=max(0, cadence_days))
 
 
+def _determination_stamp(hold_state, current_hash: str | None) -> dict | None:
+    """The consult stamp for a matter whose hold sentinel carries a recorded
+    determination, or None when it carries none.
+
+    ``status`` compares the determination's ``role_snapshot_sha256`` against
+    the CURRENT hash pre_run computed this run: ``current`` (facts unchanged —
+    the turn may adopt the determination when its fresh derivation is
+    ambiguous), ``stale`` (the roles moved since the determination was
+    recorded — the discrepancy is escalated, never silently preferred either
+    way), ``unknown`` (the pull failed — the turn treats it as no
+    determination: fresh derivation, ambiguity holds).
+    """
+    determination = getattr(hold_state, "determination", None) if hold_state else None
+    if not isinstance(determination, dict):
+        return None
+    recorded = determination.get("role_snapshot_sha256")
+    if current_hash is None:
+        status = "unknown"
+    elif recorded == current_hash:
+        status = "current"
+    else:
+        status = "stale"
+    return {
+        "note": determination.get("note"),
+        "recorded_sha256": recorded,
+        "status": status,
+    }
+
+
 def decide(
     items: Sequence[VerificationItem],
     config: ChaseConfig,
@@ -330,27 +445,27 @@ def decide(
     raw_inputs_for_digest: bytes,
     today: date,
     refire_days: int,
+    role_snapshot_hashes: dict | None = None,
 ) -> WakeDecision:
     """Pure decision: does any open verification need a turn today?
 
     ``ledger`` is the loaded ledger module (or None → caller fires open before
     reaching here). ``events`` are the ledger rows. Wake iff any item plan is
-    actionable; otherwise suppress.
+    actionable; otherwise suppress. ``role_snapshot_hashes`` maps matter_id ->
+    the CURRENT role-snapshot hash (or None when the pull failed), computed by
+    the caller for hold-bearing matters only; absent entries read as unknown.
     """
     states = ledger.derive_state(events)
+    snapshot_hashes = role_snapshot_hashes or {}
 
     # (c) Seat-level: config unauthored → fail-closed hold + re-fired surface.
     # The sentinel follows the same fire-once + re-fire-window rule as every
     # other internal raise (never daily, but never once-ever either): a held
     # chase re-surfaces every refire_days until the dials are authored (#1899).
     if not config.authored:
-        sentinel_key = ledger.item_key(
-            "", _CONFIG_SENTINEL_SOURCE_ID, _CONFIG_SENTINEL_LABEL, ""
-        )
+        sentinel_key = ledger.item_key("", _CONFIG_SENTINEL_SOURCE_ID, _CONFIG_SENTINEL_LABEL, "")
         sentinel_state = states.get(sentinel_key)
-        if not ledger.should_fire(
-            sentinel_state, today, refire_days=refire_days, ack_snooze_days=refire_days
-        ):
+        if not ledger.should_fire(sentinel_state, today, refire_days=refire_days, ack_snooze_days=refire_days):
             return WakeDecision(
                 wake=False,
                 decision_basis="chase_config_unauthored_within_refire_window",
@@ -392,6 +507,36 @@ def decide(
         # Terminal: resolved, or already handed off (a person owns it now).
         if state is not None and (state.resolved or state.handed_off):
             continue
+        # (d) HELD — an open hold on this MATTER blocks chase AND hand-off for
+        # every verification item on it (the ambiguity precedes the count, and
+        # it is a fact about the matter, so a recreated tracking task cannot
+        # slip past it). Re-surface on the re-fire window so a held matter
+        # never goes permanently dark (#1899); release only on a ``resolved``
+        # hold event (ss #2402). One surface per held matter per wake, even
+        # with several tracked items on it.
+        hold_key = ledger.item_key(item.matter_id, HOLD_SOURCE_ID, _HOLD_LABEL, None)
+        hold_state = states.get(hold_key)
+        current_hash = snapshot_hashes.get(item.matter_id)
+        det_stamp = _determination_stamp(hold_state, current_hash)
+        if _hold_active(hold_state):
+            already_surfacing = any(p.item_key == hold_key for p in plans)
+            if (
+                not already_surfacing
+                and not hold_state.handed_off
+                and ledger.should_fire(hold_state, today, refire_days=refire_days, ack_snooze_days=refire_days)
+            ):
+                plans.append(
+                    ItemPlan(
+                        matter_id=item.matter_id,
+                        task_id=item.task_id,
+                        item_key=hold_key,
+                        action=ACTION_SURFACE_HOLD,
+                        attempt=ledger.next_attempt(hold_state),
+                        current_role_snapshot_sha256=current_hash,
+                        determination=det_stamp,
+                    )
+                )
+            continue
         attempts = 0 if state is None else state.attempts
         if attempts >= ceiling:
             # (b) Ceiling reached, not yet handed off → wake once to hand off.
@@ -402,11 +547,34 @@ def decide(
                     item_key=key,
                     action=ACTION_HANDOFF,
                     attempt=attempts,
+                    determination=det_stamp,
                 )
             )
             continue
         # (a) Chase due?
         if _chase_due(state, item.next_chase_due, today, cadence_days=cadence_days):
+            if det_stamp is not None and det_stamp["status"] == "stale":
+                # The recorded determination's snapshot no longer matches the
+                # live roles: the facts the release rested on have moved. Never
+                # silently prefer either reading — swap the chase for a hold
+                # surface so a person decides, with both readings on the table.
+                # The item_key is the HOLD key: the turn's re-surface appends a
+                # fresh ``fired`` there, which (post the symmetric-reset fix)
+                # re-activates the hold and starts the normal re-fire window.
+                if not any(p.item_key == hold_key for p in plans):
+                    plans.append(
+                        ItemPlan(
+                            matter_id=item.matter_id,
+                            task_id=item.task_id,
+                            item_key=hold_key,
+                            action=ACTION_SURFACE_HOLD,
+                            attempt=ledger.next_attempt(hold_state),
+                            reason="determination_stale",
+                            current_role_snapshot_sha256=current_hash,
+                            determination=det_stamp,
+                        )
+                    )
+                continue
             plans.append(
                 ItemPlan(
                     matter_id=item.matter_id,
@@ -414,12 +582,31 @@ def decide(
                     item_key=key,
                     action=ACTION_CHASE,
                     attempt=ledger.next_attempt(state),  # the nudge number this chase carries
+                    determination=det_stamp,
                 )
             )
-    actionable = tuple(p for p in plans if p.action != ACTION_SUPPRESS)
+    # Stamp each plan with its matter's code-projected number + the tracking
+    # task's due date (WS-RENDER): the renderer names the matter and the
+    # provenance handoff seeds the (number, date) association. One site, so a
+    # new plan kind cannot forget the stamp.
+    by_matter = {i.matter_id: i for i in items}
+
+    def _stamp(p: ItemPlan) -> ItemPlan:
+        it = by_matter.get(p.matter_id)
+        if it is None:
+            return p
+        return replace(
+            p,
+            matter_number=it.matter_number,
+            matter_number_absent=it.matter_number_absent,
+            next_chase_due=it.next_chase_due.isoformat(),
+        )
+
+    actionable = tuple(_stamp(p) for p in plans if p.action != ACTION_SUPPRESS)
     if actionable:
         chases = sum(1 for p in actionable if p.action == ACTION_CHASE)
         handoffs = sum(1 for p in actionable if p.action == ACTION_HANDOFF)
+        holds = sum(1 for p in actionable if p.action == ACTION_SURFACE_HOLD)
         return WakeDecision(
             wake=True,
             decision_basis="verification_action_due",
@@ -428,6 +615,7 @@ def decide(
             extra_metadata={
                 "chase_due": chases,
                 "handoff_due": handoffs,
+                "hold_surface_due": holds,
                 "open_item_count": len(items),
                 "items": [
                     {
@@ -435,6 +623,7 @@ def decide(
                         "action": p.action,
                         "attempt": p.attempt,
                         "ceiling": ceiling,
+                        **({"reason": p.reason} if p.reason else {}),
                     }
                     for p in actionable
                 ],
@@ -453,11 +642,71 @@ def decide(
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Pre-run handoff (ss#2547)
+# ---------------------------------------------------------------------------
+# The dates this script emits were READ from the firm's record. On the woken
+# turn they arrive as prompt text, and prompt text is not a source: on
+# 2026-08-19 the escalator's digest was refused five times by the identifier
+# gate for the very dates this script had just read, and the escalation nobody
+# received was a court date seven days out
+# (docs/runbooks/operator/incidents/2026-08-19-gate-muted-escalator.md).
+#
+# This file is the seam that turns the script's read into a source. The READER
+# is the overlay's ``shared/pre_run_handoff.take_handoff``, which binds the
+# handoff to the one session started inside its window, seeds only the date
+# atoms into the provenance register, and consumes it. The same block is copied
+# verbatim into every bespoke pre_run that emits authored record dates: this
+# script runs as a subprocess under the connector interpreter and cannot import
+# the overlay.
+#
+# Best-effort by construction. Any failure goes to stderr and changes neither
+# stdout nor the wake decision, because a routine that cannot write a handoff
+# still has to wake.
+
+_HANDOFF_SKILL = "client-verification-tracker"
+_HANDOFF_STARTED_AT = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _write_pre_run_handoff(payload: dict) -> None:
+    """Project the emitted payload down to dates + matter ids + per-matter
+    (number, dates) records and hand it off — delegated to the sibling
+    ``handoff_writer.py`` (module-size ratchet; the records block landed with
+    WS-RENDER because the rendered alert names matter numbers). A missing
+    sibling costs the seeding, never the wake: the identifier gate then
+    refuses the full body and the skeleton fallback ships."""
+    writer = _load_sibling_module("handoff_writer.py", "cvt_handoff_writer")
+    if writer is None:
+        sys.stderr.write("[pre_run] handoff writer sibling unavailable\n")
+        return
+    writer.write_pre_run_handoff(payload, skill=_HANDOFF_SKILL, started_at=_HANDOFF_STARTED_AT)
+
+
+def _emit_suppress() -> int:
+    print(json.dumps({"wakeAgent": False}))
+    return 0
+
+
 def _next_scheduled_at(now: datetime, schedule_hours: int = 24) -> str:
     return (now + timedelta(hours=schedule_hours)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
-def _emit_wake(decision: "WakeDecision | None" = None, *, basis: str | None = None) -> int:
+def _parse():
+    """The pure date/string coercions, in the sibling ``parsing.py`` (module-size
+    ratchet). A missing sibling is a deployment fault, not a runtime state, so
+    this raises rather than degrading a parse into a silent None."""
+    mod = _load_sibling_module("parsing.py", "cvt_parsing")
+    if mod is None:
+        raise RuntimeError("parsing.py sibling missing")
+    return mod
+
+
+def _emit_wake(
+    decision: "WakeDecision | None" = None,
+    *,
+    basis: str | None = None,
+    extra: dict | None = None,
+) -> int:
     """Print the wake gate line — WITH the decision's plans (ss #2226).
 
     Hermes reads only ``wakeAgent`` from the last stdout line and then injects
@@ -478,82 +727,44 @@ def _emit_wake(decision: "WakeDecision | None" = None, *, basis: str | None = No
     if resolved_basis:
         payload["decision_basis"] = resolved_basis
     if decision is not None and decision.plans:
-        payload["plans"] = [
-            {
+        serialized = []
+        for p in decision.plans:
+            entry: dict = {
                 "matter_id": p.matter_id,
+                "matter_number": p.matter_number,
+                "matter_number_absent": p.matter_number_absent,
+                "next_chase_due": p.next_chase_due,
                 "task_id": p.task_id,
                 "item_key": p.item_key,
                 "action": p.action,
                 "attempt": p.attempt,
             }
-            for p in decision.plans
-        ]
+            if p.reason:
+                entry["reason"] = p.reason
+            if p.action == ACTION_SURFACE_HOLD:
+                # Always present on a hold surface, explicitly null when the
+                # snapshot pull failed: the resolving turn COPIES this value
+                # into the hold release's determination, and "unknown" must be
+                # visible as null rather than silently absent (a release with
+                # no hash to copy waits for a run where the pull succeeds —
+                # fail toward holding).
+                entry["current_role_snapshot_sha256"] = p.current_role_snapshot_sha256
+            if p.determination is not None:
+                entry["determination"] = p.determination
+            serialized.append(entry)
+        payload["plans"] = serialized
+    if decision is not None and decision.extra_metadata.get("dispatch_expected"):
+        # WS-RENDER: a deterministic out-of-turn dispatch is coming; if no
+        # dispatch note is injected, the SKILL.md failure-note applies.
+        payload["dispatch_expected"] = True
+    if extra:
+        # Already filtered to blind_wake.WAKE_PAYLOAD_KEYS. Carrying
+        # dispatch_expected is what puts the turn on SKILL.md's "a dispatch is
+        # coming, compose nothing" branch instead of the one it ignored on
+        # 2026-09-02.
+        payload.update(extra)
+    _write_pre_run_handoff(payload)
     print(json.dumps(payload))
-    return 0
-
-
-def _plan_counts(decision: "WakeDecision") -> dict:
-    """How many per-item plans the gate handed over.
-
-    Only ``plans_total`` here: this gate serializes the whole plan list (no
-    ``_MAX_SERIALIZED_PLANS`` cap, unlike its three siblings), so emitted and
-    total are the same number and a ``plans_truncated`` field would be a
-    constant dressed as a measurement.
-    """
-    if not decision.plans:
-        return {}
-    return {"plans_total": len(decision.plans)}
-
-
-async def _try_write_emitted_wake(
-    audit_writer_factory,
-    decision: "WakeDecision",
-    *,
-    skill_name: str,
-    now: datetime,
-) -> None:
-    """Best-effort EMITTED_WAKE row for a real-decision wake (#2253).
-
-    The suppress path logged its reasoning and the wake path logged nothing, so
-    the ledger held a record of every tick the gate stayed quiet and no record
-    of the ticks it fired. On 2026-08-10 the sibling escalator woke with its
-    connector down and sent an alert stating a date it could not read; the only
-    way anyone found it was reading the mailbox.
-
-    BEST-EFFORT IS THE CONTRACT, and it inverts the suppress path's on purpose.
-    Below, an audit failure escalates to a wake, because a silent suppress is
-    indistinguishable from a broken gate. Here the wake is already the decision,
-    so every failure — no writer wired, socket down, broker refusal, a writer
-    object too old to have the method — is swallowed. A wake that a failed audit
-    write could suppress or delay would be a gate made of observability.
-
-    It is not free, and the cost is stated rather than assumed away: the
-    broker-socket writer blocks for up to `_HEARTBEAT_TIMEOUT_SECONDS` against a
-    hung broker — the same bound the suppress path already accepts. Bounded, and
-    never a change of decision.
-
-    Not called on the fail-open paths: `ledger_unavailable_fail_open` returns
-    before there is a decision to record, `no_audit_writer_fail_open` fires
-    because there is no writer to call, and `suppress_heartbeat_failed_fail_open`
-    fires because a write to that writer just failed.
-    """
-    try:
-        writer = audit_writer_factory()
-        if writer is None:
-            return
-        await writer.write_emitted_wake(
-            skill_name=skill_name,
-            pre_run_inputs=decision.pre_run_inputs_digest,
-            decision_basis=decision.decision_basis,
-            next_scheduled_at=_next_scheduled_at(now),
-            extra_metadata={**decision.extra_metadata, **_plan_counts(decision)},
-        )
-    except Exception:  # noqa: BLE001 — observability never gates the wake
-        pass
-
-
-def _emit_suppress() -> int:
-    print(json.dumps({"wakeAgent": False}))
     return 0
 
 
@@ -568,6 +779,28 @@ def _item_to_dict(item: VerificationItem) -> dict:
     }
 
 
+def _snapshot_hashes_for(items, ledger, ledger_events, snapshot_hash_fn) -> dict:
+    """role_snapshot.hold_matter_snapshot_hashes via the sibling loader —
+    hashes only for hold-bearing matters, pulls serialized (1 vCPU seat).
+    No sibling module -> empty map: every consult reads unknown, the
+    fail-toward-holding direction. ``snapshot_hash_fn`` is the test seam;
+    production leaves it None and uses the sibling's live connector pull."""
+    snapshot = _load_role_snapshot_module()
+    if snapshot is None:
+        return {}
+    try:
+        return snapshot.hold_matter_snapshot_hashes(
+            items,
+            ledger,
+            ledger_events,
+            snapshot_hash_fn or snapshot.pull_role_snapshot_hash,
+            hold_source_id=HOLD_SOURCE_ID,
+            hold_label=_HOLD_LABEL,
+        )
+    except Exception:  # noqa: BLE001 — unknown, never a guess
+        return {}
+
+
 async def run_once(
     sources: Sequence[VerificationSource],
     audit_writer_factory,  # () -> SuppressedWakeWriter | None
@@ -578,6 +811,7 @@ async def run_once(
     refire_days: int | None = None,
     ledger_module=None,
     ledger_events: Sequence[dict] | None = None,
+    snapshot_hash_fn=None,
 ) -> int:
     """Driver. Returns the exit code; emits stdout JSON as a side effect.
 
@@ -588,7 +822,8 @@ async def run_once(
     pre-graduation behavior). Config-read is the unauthored path on failure, but
     that is handled inside ``decide`` (re-fired surface), not here.
     ``config``/``refire_days``/``ledger_events`` default to the live config +
-    on-disk ledger; tests inject them directly."""
+    on-disk ledger; tests inject them directly. ``snapshot_hash_fn`` defaults to
+    the sibling role_snapshot module's live connector pull; tests inject a fake."""
     now = now or datetime.now(timezone.utc)
     today = today or now.date()
     if config is None or refire_days is None:
@@ -600,7 +835,7 @@ async def run_once(
     if ledger is None:
         # Fire-open: a chase watcher that goes silent is the dangerous failure.
         sys.stderr.write("[pre_run] escalation ledger unavailable; waking\n")
-        return _emit_wake(basis="ledger_unavailable_fail_open")
+        return _blind_wake("ledger_unavailable_fail_open")
     if ledger_events is None:
         ledger_events = ledger.read_ledger()
 
@@ -609,9 +844,9 @@ async def run_once(
     for source in sources:
         pulled = list(source.pull_open_verifications())
         items.extend(pulled)
-        raw_input_blob += json.dumps(
-            [_item_to_dict(i) for i in pulled], sort_keys=True
-        ).encode("utf-8")
+        raw_input_blob += json.dumps([_item_to_dict(i) for i in pulled], sort_keys=True).encode("utf-8")
+
+    role_snapshot_hashes = _snapshot_hashes_for(items, ledger, ledger_events, snapshot_hash_fn)
 
     decision = decide(
         items,
@@ -621,18 +856,46 @@ async def run_once(
         raw_inputs_for_digest=raw_input_blob,
         today=today,
         refire_days=refire_days,
+        role_snapshot_hashes=role_snapshot_hashes,
     )
     if decision.wake:
+        if decision.plans:
+            # WS-RENDER: render the internal escalations into the out-of-turn
+            # dispatch envelope. {} on any failure; the wake proceeds
+            # undecorated — SKILL.md's plans-without-dispatch_expected branch
+            # has the turn send the failure note, and the terminal-state
+            # reconcile + the ledger's re-fire property observe the miss.
+            envelope_mod = _load_sibling_module("dispatch_envelope.py", "cvt_dispatch_envelope")
+            if envelope_mod is not None:
+                envelope_meta = envelope_mod.build_and_write(
+                    plans=decision.plans,
+                    items=items,
+                    ledger=ledger,
+                    ledger_events=ledger_events,
+                    today=today,
+                    refire_days=refire_days,
+                    ceiling=config.escalate_after_attempts,
+                )
+                if envelope_meta:
+                    decision = replace(
+                        decision,
+                        extra_metadata={**decision.extra_metadata, **envelope_meta},
+                    )
         # The row goes in BEFORE the wake line, and cannot stop it (#2253).
-        await _try_write_emitted_wake(
-            audit_writer_factory, decision, skill_name=SKILL_NAME, now=now
-        )
+        _wake = _load_sibling_module("blind_wake.py", "cvt_blind_wake")
+        if _wake is not None:
+            await _wake.try_write_emitted_wake(
+                audit_writer_factory,
+                decision,
+                skill_name=SKILL_NAME,
+                next_scheduled_at=_next_scheduled_at(now),
+            )
         return _emit_wake(decision)
 
     writer = audit_writer_factory()
     if writer is None:
         # Mirror-don't-gate: no writer = no heartbeat trail = always wake.
-        return _emit_wake(basis="no_audit_writer_fail_open")
+        return _blind_wake("no_audit_writer_fail_open")
     try:
         await writer.write_suppressed_wake(
             skill_name=SKILL_NAME,
@@ -642,7 +905,7 @@ async def run_once(
             extra_metadata=decision.extra_metadata,
         )
     except Exception:  # noqa: BLE001 — any audit failure → wake (dead-man's-switch)
-        return _emit_wake(basis="suppress_heartbeat_failed_fail_open")
+        return _blind_wake("suppress_heartbeat_failed_fail_open")
     return _emit_suppress()
 
 
@@ -656,7 +919,6 @@ async def run_once(
 
 _CONNECTOR_PYTHON_DEFAULT = "/opt/connectors/smokeball/.venv/bin/python"
 _PULL_TIMEOUT_SECONDS = 60
-_HEARTBEAT_TIMEOUT_SECONDS = 10
 
 # The verification tracking tasks the skill maintains carry a stable marker in
 # their subject so the pull can subset them out of the open-task list. The
@@ -668,8 +930,10 @@ _VERIFICATION_SUBJECT_MARKER = "verification"
 # partial view must wake, never suppress.
 _PULL_SNIPPET = """\
 import json
+import os
 
 from smokeball_connector.client import build_client_from_env
+from smokeball_connector.matter_ref import attach_matter_numbers
 
 client = build_client_from_env()
 out = {}
@@ -677,6 +941,17 @@ try:
     out["tasks"] = client.get("/tasks", IsCompleted=False, Limit=500)
 except Exception as exc:
     out["tasksError"] = str(exc)[:300]
+try:
+    budget = int(os.environ.get("SMD_MATTER_LOOKUP_BUDGET", "100"))
+    envelope = out.get("tasks")
+    items = []
+    if isinstance(envelope, dict) and isinstance(envelope.get("value"), list):
+        items = envelope["value"]
+    elif isinstance(envelope, list):
+        items = envelope
+    out["matterNumberCounts"] = attach_matter_numbers(client, items, budget=budget)
+except Exception as exc:
+    out["matterRefError"] = str(exc)[:300]
 print(json.dumps(out, default=str))
 """
 
@@ -695,31 +970,6 @@ def _extract_items(payload) -> list | None:
             if isinstance(value, list):
                 return value
     return None
-
-
-def _parse_iso_date(value) -> date | None:
-    if not isinstance(value, str) or len(value) < 10:
-        return None
-    try:
-        return date.fromisoformat(value[:10])
-    except ValueError:
-        return None
-
-
-def _first_date(item: dict, keys: Sequence[str]) -> date | None:
-    for key in keys:
-        parsed = _parse_iso_date(item.get(key))
-        if parsed is not None:
-            return parsed
-    return None
-
-
-def _first_str(item: dict, keys: Sequence[str]) -> str:
-    for key in keys:
-        value = item.get(key)
-        if isinstance(value, str) and value.strip():
-            return value
-    return ""
 
 
 def _matter_id_of(item: dict) -> str:
@@ -747,8 +997,41 @@ def _source_id_of(item: dict) -> str | None:
     return None
 
 
+# Rehearsal/self-test artifacts carry "[SMD-PROBE <stamp>]" at the start of
+# the subject (after the connector's "[Operator]" provenance stamp) — ss #2403:
+# a probe task outlived its test and became THIS skill's live tracking anchor
+# (task 28745d01, 2026-08-14). Probe rows are never tracked verifications.
+# Position-anchored: a real task quoting the marker mid-subject is not hidden.
+_PROBE_MARK = "[SMD-PROBE"
+_PROVENANCE_MARK = "[Operator]"
+
+
+def _is_probe_subject(subject: str) -> bool:
+    text = subject.lstrip()
+    if text.upper().startswith(_PROVENANCE_MARK.upper()):
+        text = text[len(_PROVENANCE_MARK) :].lstrip()
+    return text.upper().startswith(_PROBE_MARK.upper())
+
+
 def _is_verification_task(subject: str) -> bool:
+    if _is_probe_subject(subject):
+        return False
     return _VERIFICATION_SUBJECT_MARKER in subject.lower()
+
+
+def _matter_number_of(item: dict) -> tuple[str | None, str | None]:
+    """``(matter_number, absent_reason)`` — exactly one is non-None. The
+    number is the connector's code-projected ``matterNumber`` (ss #2390);
+    never derived here. Same reading as the escalator's."""
+    number = item.get("matterNumber")
+    if isinstance(number, str) and number:
+        return number, None
+    absent = item.get("matterNumberAbsent")
+    if isinstance(absent, str) and absent:
+        return None, absent
+    if _matter_id_of(item) == "unknown-matter":
+        return None, "no_matter_link"
+    return None, "lookup_failed"
 
 
 def parse_pull(raw: dict, *, today: date) -> tuple[list[VerificationItem], str | None]:
@@ -768,10 +1051,11 @@ def parse_pull(raw: dict, *, today: date) -> tuple[list[VerificationItem], str |
     for task in tasks:
         if not isinstance(task, dict):
             continue
-        subject = _first_str(task, _TASK_SUBJECT_KEYS)
+        subject = _parse().first_str(task, _TASK_SUBJECT_KEYS)
         if not _is_verification_task(subject):
             continue
-        due = _first_date(task, _TASK_DATE_KEYS) or today
+        due = _parse().first_date(task, _TASK_DATE_KEYS) or today
+        number, number_absent = _matter_number_of(task)
         items.append(
             VerificationItem(
                 matter_id=_matter_id_of(task),
@@ -781,6 +1065,8 @@ def parse_pull(raw: dict, *, today: date) -> tuple[list[VerificationItem], str |
                 # the moving tracking-task due date (see VerificationItem).
                 authored_date=None,
                 label="client-verification",
+                matter_number=number,
+                matter_number_absent=number_absent,
             )
         )
     return items, None
@@ -793,9 +1079,7 @@ class SmokeballSubprocessSource:
         self._today = today
 
     def pull_open_verifications(self) -> Sequence[VerificationItem]:
-        connector_python = os.environ.get(
-            "SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT
-        )
+        connector_python = os.environ.get("SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT)
         result = subprocess.run(  # raises on timeout → caller wakes
             # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args — argv[0] is the module-constant connector-venv interpreter, overridable only via SMD_CONNECTOR_VENV_PYTHON from the Machine's own boot env (same trust domain; the test seam). The snippet is a module constant; no request/agent-controlled data reaches argv.
             [connector_python, "-c", _PULL_SNIPPET],
@@ -804,10 +1088,7 @@ class SmokeballSubprocessSource:
             timeout=_PULL_TIMEOUT_SECONDS,
         )
         if result.returncode != 0:
-            raise RuntimeError(
-                f"smokeball pull exit {result.returncode}: "
-                f"{(result.stderr or '').strip()[:500]}"
-            )
+            raise RuntimeError(f"smokeball pull exit {result.returncode}: {(result.stderr or '').strip()[:500]}")
         raw = json.loads((result.stdout or "").strip().splitlines()[-1])
         items, problem = parse_pull(raw, today=self._today)
         if problem:
@@ -815,115 +1096,42 @@ class SmokeballSubprocessSource:
         return items
 
 
-class BrokerSuppressedWakeWriter:
-    """SuppressedWakeWriter over the broker's uid-gated heartbeat verbs.
-
-    Two verbs, one per action_type — `suppressed_wake_append` for the quiet
-    tick, `emitted_wake_append` for the firing one (#2253). The broker pins each
-    verb to exactly one action_type, so neither can forge the other's row.
-    """
-
-    def __init__(self, socket_path: str, customer_slug: str) -> None:
-        self._socket_path = socket_path
-        self._customer_slug = customer_slug
-
-    async def write_suppressed_wake(
-        self,
-        *,
-        skill_name: str,
-        pre_run_inputs: bytes,
-        decision_basis: str,
-        next_scheduled_at: str,
-        extra_metadata: dict | None = None,
-    ) -> str:
-        return self._append(
-            verb="suppressed_wake_append",
-            action_type="SUPPRESSED_WAKE",
-            skill_name=skill_name,
-            pre_run_inputs=pre_run_inputs,
-            decision_basis=decision_basis,
-            next_scheduled_at=next_scheduled_at,
-            extra_metadata=extra_metadata,
-        )
-
-    async def write_emitted_wake(
-        self,
-        *,
-        skill_name: str,
-        pre_run_inputs: bytes,
-        decision_basis: str,
-        next_scheduled_at: str,
-        extra_metadata: dict | None = None,
-    ) -> str:
-        """Same payload shape, the wake-path verb. Raises like its sibling; the
-        caller (`_try_write_emitted_wake`) is the one that swallows."""
-        return self._append(
-            verb="emitted_wake_append",
-            action_type="EMITTED_WAKE",
-            skill_name=skill_name,
-            pre_run_inputs=pre_run_inputs,
-            decision_basis=decision_basis,
-            next_scheduled_at=next_scheduled_at,
-            extra_metadata=extra_metadata,
-        )
-
-    def _append(
-        self,
-        *,
-        verb: str,
-        action_type: str,
-        skill_name: str,
-        pre_run_inputs: bytes,
-        decision_basis: str,
-        next_scheduled_at: str,
-        extra_metadata: dict | None,
-    ) -> str:
-        request = {
-            "action": verb,
-            "row": {
-                "action_type": action_type,
-                "actor": "agent",
-                "actor_role": "agent",
-                "skill_name": skill_name,
-                "input_digest": hashlib.sha256(pre_run_inputs).hexdigest(),
-                "metadata": json.dumps(
-                    {
-                        "decision_basis": decision_basis,
-                        "next_scheduled_at": next_scheduled_at,
-                        "platform": "cron-pre-run",
-                        "customer": self._customer_slug,
-                        **(extra_metadata or {}),
-                    },
-                    sort_keys=True,
-                    separators=(",", ":"),
-                    default=str,
-                ),
-            },
-        }
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            sock.settimeout(_HEARTBEAT_TIMEOUT_SECONDS)
-            sock.connect(self._socket_path)
-            sock.sendall(json.dumps(request).encode("utf-8") + b"\n")
-            raw = b""
-            while not raw.endswith(b"\n"):
-                chunk = sock.recv(4096)
-                if not chunk:
-                    break
-                raw += chunk
-        response = json.loads(raw.decode("utf-8"))
-        if response.get("ok") is not True:
-            raise RuntimeError(f"heartbeat rejected: {response}")
-        return str(response.get("id", ""))
-
-
-def _writer_factory():
-    socket_path = os.environ.get("SMD_AUDIT_BROKER_SOCKET") or os.environ.get(
-        "SMD_WORKSPACE_BROKER_SOCKET"
-    )
-    if not socket_path:
+# The SUPPRESSED/EMITTED_WAKE heartbeat writer (BrokerSuppressedWakeWriter)
+# lives in the sibling ``broker_writer.py``, loaded like the vendored ledger —
+# this skill deliberately DROPPED the vendored `_writer_factory` /
+# `BrokerSuppressedWakeWriter` copies (pre-run-shared-symbols contract
+# regenerated; the sibling split is what got pre_run.py back under the
+# module-size ratchet). A missing sibling degrades to None, which run_once
+# already treats as "no writer wired" — every tick wakes
+# (no_audit_writer_fail_open) and the missing heartbeat trail is what the
+# watcher-health view alarms on. Loud, never silent.
+def _sibling_writer_factory():
+    writer_mod = _load_sibling_module("broker_writer.py", "cvt_broker_writer")
+    if writer_mod is None:
         return None  # run_once treats None as "no writer wired" → wake
-    return BrokerSuppressedWakeWriter(
-        socket_path, os.environ.get("CUSTOMER_SLUG", "")
+    return writer_mod.writer_factory()
+
+
+def _blind_wake(basis: str) -> int:
+    """Wake with no decision, but never without a trace and never bare.
+
+    The two guarantees, and the 2026-09-02 tick that forced them, live in the
+    sibling ``blind_wake.py``. A missing sibling degrades to the pre-fix
+    behaviour, which is why that failure is loud rather than swallowed.
+    """
+    mod = _load_sibling_module("blind_wake.py", "cvt_blind_wake")
+    if mod is None:
+        sys.stderr.write("[pre_run] blind_wake sibling missing; waking bare\n")
+        return _emit_wake(basis=basis)
+    return _emit_wake(
+        basis=basis,
+        extra=mod.wake_blind(
+            basis,
+            load_sibling=_load_sibling_module,
+            writer_factory=_sibling_writer_factory,
+            skill_name=SKILL_NAME,
+            next_scheduled_at=_next_scheduled_at(datetime.now(timezone.utc)),
+        ),
     )
 
 
@@ -931,7 +1139,7 @@ def main() -> int:
     customer_slug = os.environ.get("CUSTOMER_SLUG")
     if not customer_slug:
         sys.stderr.write("[pre_run] CUSTOMER_SLUG unset; falling back to wake\n")
-        return _emit_wake(basis="customer_slug_unset_fail_open")
+        return _blind_wake("customer_slug_unset_fail_open")
     config, refire_days = load_chase_config()
     today = datetime.now(timezone.utc).date()
     source = SmokeballSubprocessSource(today)
@@ -939,7 +1147,7 @@ def main() -> int:
         return asyncio.run(
             run_once(
                 [source],
-                _writer_factory,
+                _sibling_writer_factory,
                 today=today,
                 config=config,
                 refire_days=refire_days,
@@ -947,7 +1155,7 @@ def main() -> int:
         )
     except Exception as exc:  # noqa: BLE001 — any wiring failure → wake
         sys.stderr.write(f"[pre_run] chase pre_run failed ({exc}); waking\n")
-        return _emit_wake(basis="pre_run_crashed_fail_open")
+        return _blind_wake("pre_run_crashed_fail_open")
 
 
 if __name__ == "__main__":

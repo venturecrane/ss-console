@@ -9,7 +9,8 @@
       "value": true,
       "why": "The letter's permanent cap: opposing counsel and the court always take a person's send. No persona on this seat may author external_send: autonomous."
     },
-    "outbound_roster_classes_allowed": ["client", "records_vendor"],
+    "outbound_roster_classes_allowed": ["client", "records_vendor", "firm_staff"],
+    "outbound_roster_classes_note": "firm_staff added 2026-08-22 (ss-console#2546). The letter's roster is the firm's own client and records vendor, and those two keep their own graduatable ceilings unchanged. The third class carries no client mail: it types SMD's own operations desk (team@smd.services) so an operations request the firm makes of SMD can be passed on instead of sitting as a held draft. Outbound classification only; the address is not on scope.inbound_allow_from on either seat, so nothing claiming to come from it is trusted.",
     "tier_vocabulary": ["flag-only", "prepare-and-route", "auto-handle"]
   },
   "outbound_roster": [
@@ -20,6 +21,10 @@
     {
       "address": "ap-records-standin@agentmail.to",
       "class": "records_vendor"
+    },
+    {
+      "address": "team@smd.services",
+      "class": "firm_staff"
     }
   ],
   "settings_placeholders": {

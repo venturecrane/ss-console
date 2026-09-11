@@ -108,25 +108,59 @@ function resolvePrincipals(
  * seeded for an "allowlist" policy — that authorizes a Clerk subject until its
  * bounded `expires_at`. Authored `mcp_connector.access[]` principals take
  * precedence: a subject already authored is left untouched (its local user id
- * and profile win). A grant-only subject has no local `users` row (JIT firm
- * employees are not portal users), so its Clerk subject doubles as the audit
- * actor id.
+ * and profile win). A granted subject's `localUserId` follows the one rule in
+ * `localUserIdForSubject`: the local `users.id` when the entity has a row for
+ * that Clerk subject, else the Clerk subject itself (a JIT firm employee who is
+ * not a portal user). The JIT path in `mcp-route.ts` applies the same rule at
+ * grant time, so an audit row's `local_user_id` means the same thing whether
+ * the grant was minted a second ago or read back on the next request.
  */
 function mergeGrantPrincipals(
   authored: readonly AuthorizedMcpPrincipal[],
-  grantRows: readonly z.infer<typeof grantRowSchema>[]
+  grantRows: readonly z.infer<typeof grantRowSchema>[],
+  userRows: readonly z.infer<typeof userRowSchema>[]
 ): AuthorizedMcpPrincipal[] {
   const bySubject = new Map(authored.map((principal) => [principal.clerkUserId, principal]))
   for (const grant of grantRows) {
     if (bySubject.has(grant.clerk_user_id)) continue
     bySubject.set(grant.clerk_user_id, {
-      localUserId: grant.clerk_user_id,
+      localUserId: localUserIdForSubject(userRows, grant.clerk_user_id),
       clerkUserId: grant.clerk_user_id,
       email: grant.email,
       profile: grant.profile,
     })
   }
   return [...bySubject.values()]
+}
+
+/**
+ * The one rule for what `localUserId` means for a Clerk subject that is not an
+ * authored principal: the entity's `users.id` when such a row carries the
+ * subject, else the subject itself. Two id spaces used to share the column
+ * with nothing saying which was which (2026-09-09 review, Security C6).
+ */
+export function localUserIdForSubject(
+  userRows: readonly { id: string; clerk_user_id: string | null }[],
+  clerkUserId: string
+): string {
+  const user = userRows.find((row) => row.clerk_user_id === clerkUserId)
+  return user ? user.id : clerkUserId
+}
+
+/**
+ * DB-backed form of `localUserIdForSubject` for the JIT path, which holds a
+ * resolved customer but not its user rows.
+ */
+export async function resolveLocalUserIdForSubject(
+  db: D1Database,
+  entityId: string,
+  clerkUserId: string
+): Promise<string> {
+  const row = await db
+    .prepare('SELECT id FROM users WHERE entity_id = ? AND clerk_user_id = ?')
+    .bind(entityId, clerkUserId)
+    .first<{ id: string }>()
+  return row ? row.id : clerkUserId
 }
 
 export async function loadMcpCustomer(
@@ -180,6 +214,6 @@ export async function loadMcpCustomer(
       clientId: binding.client_id,
       clerkAppId: binding.clerk_app_id,
     },
-    principals: mergeGrantPrincipals(resolvePrincipals(connector, users), grants),
+    principals: mergeGrantPrincipals(resolvePrincipals(connector, users), grants, users),
   }
 }

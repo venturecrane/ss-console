@@ -138,7 +138,7 @@ Every violation set the caller decides to enforce on writes one row via `AuditLo
 }
 ```
 
-We reuse `INVARIANT_VIOLATION` rather than introducing a new `CITATION_VIOLATION` member - consistent with how `sticky_stop.py` routes WARN/SOFT_STOP transitions. Adding a new closed-set action type requires updating both the constant and `d1-schema.md` §1.
+We reuse `INVARIANT_VIOLATION` rather than introducing a new `CITATION_VIOLATION` member - consistent with how `sticky_stop.py` routes an observation that changes no level (since the 2026-09-02 two-state collapse, the time-budget overrun; before it, the WARN/SOFT_STOP transitions). Adding a new closed-set action type requires updating both the constant and `d1-schema.md` §1.
 
 Excerpts are truncated to 80 characters with a trailing ellipsis to bound the audit-row size; the full draft is content-addressed via the writer's existing `output_payload` SHA-256 digest channel.
 

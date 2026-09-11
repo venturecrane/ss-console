@@ -36,9 +36,10 @@ fly_region: lax # Phoenix-adjacent; Fly retired phx (fleet standard, same as cus
 # Cheap main model on the customer's own key; no escalation tier at this
 # price point (their key, their spend limit — keep the burn predictable).
 model: claude-sonnet-4-6
-# Hermes v0.14.0 → v0.18.0 (canary #3, SMD-own, draft-governed external send).
-# Rollback pin: v2026.5.16@a91a57fa5a13d516c38b07a141a9ce8a3daabeb0.
-hermes_ref: v2026.7.1@7c1a029553d87c43ecff8a3821336bc95872213b
+# Hermes v0.18.0 → v0.20.4 promotion (Step 3, SMD-own Telegram seat, ss#2444).
+# Rollback pin: v2026.7.1@7c1a029553d87c43ecff8a3821336bc95872213b.
+# See docs/runbooks/operator/hermes-v0.20-upgrade-plan.md.
+hermes_ref: v2026.8.18@e624e9fde561e1add9388384012b295fde669ade
 
 machine:
   size: shared-cpu-1x

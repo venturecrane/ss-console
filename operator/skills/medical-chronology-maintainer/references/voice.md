@@ -12,8 +12,9 @@ Each row states what a record records and where it says it. The tone is a court
 reporter's, not an advocate's.
 
 The chronology MAY: give the date, provider, visit type, body part, diagnosis,
-treatment, and billed amount **exactly as the record states them**, each cited to
-document and page; note a treatment interval as a plain span of dates; note a
+and treatment **exactly as the record states them**, each cited to document and
+page; carry a billed amount exactly as the page read this run prints it, or point
+to that page; point to (never restate) codes; note a treatment interval as a plain span of dates; note a
 referenced-but-absent record; mark a page it could not read; quote a record's own
 wording where the exact phrase matters, attributed to the record.
 
@@ -45,10 +46,11 @@ is worth or what the medicine means.
   cell carries the diagnosis as recorded; a record's "severe," "permanent," "poor
   prognosis," or "caused by" wording is not that cell's content. This is the
   extractive line; it is not a style preference.
-- **No damages arithmetic.** Each per-row billed amount is carried exactly as the
-  record states it; the skill never sums, subtotals, or totals the bills, adds up the
-  specials, or computes a specials/damages figure. A specials total is a damages
-  number, and that is the attorney's.
+- **Figures as printed or pointed to; no damages arithmetic.** A billed amount is
+  carried exactly as the page read this run prints it, otherwise pointed to; codes
+  are always pointed to; the skill never sums, subtotals, or totals the bills, adds
+  up the specials, or computes a specials/damages figure. A specials total is a
+  damages number, and that is the attorney's.
 - **No fabrication.** A date, provider, or diagnosis that is not legibly in a record
   is not written. "Not legible" and "could not read" are correct, honest cells.
 - **As recorded.** Diagnoses and findings are carried in the record's terms, not

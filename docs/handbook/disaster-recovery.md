@@ -35,6 +35,8 @@ The written runbooks today are Operator-focused and live in `docs/runbooks/opera
 | `first-boot.md` | Standing up a new Operator Machine for the first time |
 | `curator-supervised-consolidation.md` | Safely consolidating an Operator's skill inventory |
 | `ms-graph-azure-ad-setup.md` | Microsoft Graph / Azure AD OAuth setup for document storage |
+| `hermes-v0.18-upgrade-plan.md` | The first deliberate Hermes fleet promotion (v0.14.0 to v0.18.0, July 2026): hook-surface diff, staged rollout, bless, release-watch |
+| `hermes-v0.20-upgrade-plan.md` | The second promotion (v0.18.0 to v0.20.4, August 2026): the staged procedure to repeat at every pin bump, including the defaults-diff step and the rollback rehearsal |
 
 ## Known failure modes and recovery
 

@@ -55,7 +55,7 @@ SENTRY_PROJECT_ID = "4511689128148992"
 
 # Secrets (set via `wrangler secret put` after first deploy):
 #   RESEND_API_KEY        — Resend API key for Captain notification email
-#   ALERT_TO_EMAIL        — Captain inbox (e.g. smdurgan@venturecrane.com)
+#   ALERT_TO_EMAIL        — Captain inbox (e.g. owner@example.com)
 #   COST_ANOMALY_BEARER   — Bearer token for manual /run invocations
 #   SENTRY_AUTH_TOKEN     — Sentry read token (event:read + project:read +
 #                           org:read), from Infisical /ss. Powers the 24h

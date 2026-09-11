@@ -7,9 +7,11 @@ let `sticky_stop` (a complete, tested circuit breaker) sit with zero callers and
 zero overlay references while every other test stayed green.
 
 This is the deterministic, offline, CI-time tier. It does NOT prove a control
-fires on a live turn — that is the live negative-fire probe (harness Component 3),
-which overlaps ADR 0050 B3 and folds into B3's design review (Captain decision
-2026-06-18). What this tier enforces against operator/contracts/runtime-controls.yaml:
+fires on a live turn: that is the negative-fire probe suite (harness Component 3,
+built 2026-08-17 in ss#2387), which lives at operator/bin/control-probes.py with
+its specs in operator/contracts/runtime-control-probes.yaml. What this tier adds
+is the LINKAGE, so a status cannot rest on a probe name that resolves to nothing.
+What it enforces against operator/contracts/runtime-controls.yaml:
 
   (a) completeness from the declared cross-repo surface — every safety-critical
       hook in overlay-hook-surface.json maps to >=1 registry entry (sees
@@ -20,7 +22,11 @@ which overlaps ADR 0050 B3 and folds into B3's design review (Captain decision
       unprobed/inert => owner + tracking + note;
   (d) tracking hygiene — references are well-formed and (once the referenced ADR
       is in-repo) actually resolve, so an inert control cannot point at a
-      vanished work item.
+      vanished work item;
+  (e) probe linkage — an `enforced` row names a probe that EXISTS in the probe
+      specs, every control is named by at least one probe, and every
+      unprobed/inert row carries a dated risk review. A status resting on a
+      string was the gap ss#2387 closed.
 
 Run::
 
@@ -37,6 +43,7 @@ import yaml
 
 _OP = Path(__file__).resolve().parents[2]
 _REGISTRY = _OP / "contracts" / "runtime-controls.yaml"
+_PROBE_SPECS = _OP / "contracts" / "runtime-control-probes.yaml"
 _HOOK_SURFACE = _OP / "contracts" / "overlay-hook-surface.json"
 _ADR_DIR = _OP.parent / "docs" / "adr"
 
@@ -65,6 +72,10 @@ def _registry() -> dict:
 
 def _controls() -> dict:
     return _registry().get("controls") or {}
+
+
+def _probes() -> dict:
+    return (yaml.safe_load(_PROBE_SPECS.read_text(encoding="utf-8")) or {}).get("probes") or {}
 
 
 def _hook_surface() -> dict:
@@ -101,6 +112,20 @@ def _tool_of(wired_via: str) -> str:
     return parts[1].strip()
 
 
+#: `wired_via` prefix for a control that fires as a mandatory stage of the
+#: medchron runner's fixed DAG (ss#2614) — neither a hook nor an agent-called
+#: tool. The remainder is the gate module's repo path.
+_RUNNER_PREFIX = "runner"
+
+
+def _runner_of(wired_via: str) -> str:
+    """`"runner / <repo path>"` -> `<repo path>`, else `""`."""
+    parts = (wired_via or "").split("/", 1)
+    if len(parts) != 2 or parts[0].strip() != _RUNNER_PREFIX:
+        return ""
+    return parts[1].strip()
+
+
 # --------------------------------------------------------------------------- #
 # structure                                                                    #
 # --------------------------------------------------------------------------- #
@@ -114,19 +139,13 @@ def test_registry_has_maintainer_and_controls() -> None:
 
 def test_keys_match_control_ids() -> None:
     for key, spec in _controls().items():
-        assert spec.get("control") == key, (
-            f"control map key {key!r} != entry's control id {spec.get('control')!r}"
-        )
+        assert spec.get("control") == key, f"control map key {key!r} != entry's control id {spec.get('control')!r}"
 
 
 def test_status_and_class_are_valid() -> None:
     for key, spec in _controls().items():
-        assert spec.get("status") in _VALID_STATUS, (
-            f"{key}: invalid status {spec.get('status')!r}"
-        )
-        assert spec.get("class") in _VALID_CLASS, (
-            f"{key}: invalid class {spec.get('class')!r}"
-        )
+        assert spec.get("status") in _VALID_STATUS, f"{key}: invalid status {spec.get('status')!r}"
+        assert spec.get("class") in _VALID_CLASS, f"{key}: invalid class {spec.get('class')!r}"
         assert spec.get("owner"), f"{key}: every control needs a named owner"
 
 
@@ -147,6 +166,74 @@ def test_well_formed_by_status() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# probe linkage (ss#2387)                                                      #
+# --------------------------------------------------------------------------- #
+
+
+def test_enforced_rows_name_a_probe_that_exists() -> None:
+    """`enforced` means a probe proves it fires. Before the probe suite existed,
+    `live_probe` was a name with nothing behind it, which is how a status came to
+    rest on a string. Now the name must resolve."""
+    probes = _probes()
+    for key, spec in _controls().items():
+        if spec.get("status") != "enforced":
+            continue
+        name = spec.get("live_probe")
+        assert name in probes, (
+            f"{key}: live_probe {name!r} has no entry in runtime-control-probes.yaml. "
+            "An enforced status must point at a probe that exists."
+        )
+        assert probes[name].get("control") == key, (
+            f"{key}: probe {name!r} declares control {probes[name].get('control')!r}"
+        )
+
+
+def test_candidate_probes_resolve_and_are_not_claimed_as_live() -> None:
+    """`candidate_probe` is deliberately a different field from `live_probe`:
+    naming a probe must never be mistakable for having passed one."""
+    probes = _probes()
+    for key, spec in _controls().items():
+        name = spec.get("candidate_probe")
+        if not name:
+            continue
+        assert spec.get("status") != "enforced", f"{key}: an enforced row must use live_probe, not candidate_probe"
+        assert name in probes, f"{key}: candidate_probe {name!r} has no entry in the probe specs"
+        assert probes[name].get("control") == key, f"{key}: candidate probe names another control"
+
+
+def test_every_control_is_named_by_at_least_one_probe() -> None:
+    """A control nobody wrote a probe for is a control whose status nobody can
+    ever challenge. New controls inherit the requirement automatically."""
+    claimed = {spec.get("control") for spec in _probes().values()}
+    missing = sorted(set(_controls()) - claimed)
+    assert not missing, (
+        f"control(s) {missing} have no probe in runtime-control-probes.yaml. Author one "
+        "(a seat probe with no driver is honest and holds; silence is not)."
+    )
+
+
+def test_every_probe_names_a_real_control() -> None:
+    controls = set(_controls())
+    for name, spec in _probes().items():
+        assert spec.get("control") in controls, (
+            f"probe {name!r} speaks for control {spec.get('control')!r}, which is not in the registry"
+        )
+
+
+def test_unprobed_and_inert_rows_carry_a_dated_risk_review() -> None:
+    """AC4 of ss#2387. An undated risk note is indistinguishable from one nobody
+    has looked at since the day it was written."""
+    for key, spec in _controls().items():
+        if spec.get("status") == "enforced":
+            continue
+        review = spec.get("risk_review") or ""
+        assert review, f"{key}: {spec.get('status')} => needs a dated risk_review"
+        assert re.match(r"^\d{4}-\d{2}-\d{2}\b", review.strip()), (
+            f"{key}: risk_review must open with an ISO date; got {review[:40]!r}"
+        )
+
+
+# --------------------------------------------------------------------------- #
 # completeness                                                                 #
 # --------------------------------------------------------------------------- #
 
@@ -158,11 +245,7 @@ def test_every_safety_critical_hook_is_covered() -> None:
     """
     required = _hook_surface().get("requiredHooks") or {}
     safety_hooks = {h for h, meta in required.items() if meta.get("safetyCritical")}
-    covered = {
-        _hook_of(spec.get("wired_via", ""))
-        for spec in _controls().values()
-        if spec.get("wired_via")
-    }
+    covered = {_hook_of(spec.get("wired_via", "")) for spec in _controls().values() if spec.get("wired_via")}
     missing = safety_hooks - covered
     assert not missing, (
         f"safety-critical hook(s) {sorted(missing)} are declared in "
@@ -185,11 +268,44 @@ def test_wired_via_hooks_exist_in_surface() -> None:
     required = set(_hook_surface().get("requiredHooks") or {})
     for key, spec in _controls().items():
         wired = spec.get("wired_via")
-        if not wired or _tool_of(wired):
+        if not wired or _tool_of(wired) or _runner_of(wired):
             continue
         hook = _hook_of(wired)
-        assert hook in required, (
-            f"{key}: wired_via names hook {hook!r} which is not in overlay-hook-surface.json"
+        assert hook in required, f"{key}: wired_via names hook {hook!r} which is not in overlay-hook-surface.json"
+
+
+def test_runner_wired_controls_name_a_module_the_runner_ships() -> None:
+    """ss#2614: a third wiring shape beside hooks and tools. `runner / <path>`
+    means the control fires because it is a mandatory stage of the medchron
+    runner's fixed DAG — no hook wraps it and no agent chooses to call it; the
+    driver cannot reach delivery without it. The claim is checkable two ways:
+    the named module exists in this tree, and the runner's DAG module names it
+    (a gate module the DAG never binds would be inert by construction)."""
+    dag_src = (_OP / "runners" / "medchron" / "medchron" / "dag.py").read_text(encoding="utf-8")
+    stages_dir = _OP / "runners" / "medchron" / "medchron" / "stages"
+    stage_srcs = "\n".join(p.read_text(encoding="utf-8") for p in stages_dir.glob("*.py"))
+    audit_dir = _OP / "runners" / "medchron" / "medchron" / "audit"
+    audit_srcs = "\n".join(p.read_text(encoding="utf-8") for p in audit_dir.glob("*.py"))
+    for key, spec in _controls().items():
+        path = _runner_of(spec.get("wired_via", ""))
+        if not path:
+            continue
+        module = _OP / path.removeprefix("operator/")
+        assert module.is_file(), f"{key}: runner-wired module {path!r} does not exist"
+        # Two honest shapes of "the DAG reaches this gate": a stage imports the
+        # gate by name (identity.py -> cross_client), or the gate delegates to
+        # a stage/audit seam whose module the DAG binds (extractive -> strip,
+        # provenance -> coverage, claim_audit -> audit.coverage). Either way
+        # there is a text path from dag.py to the module; a gate with neither
+        # is inert by construction.
+        stem = module.stem
+        src = module.read_text(encoding="utf-8")
+        seams = re.findall(r"from \.\.(?:stages|audit) import ([a-z_]+)", src)
+        seam_bound = any(seam in dag_src for seam in seams)
+        named_by_stage = stem in dag_src or stem in stage_srcs or stem in audit_srcs
+        assert seam_bound or named_by_stage, (
+            f"{key}: {stem!r} is neither named by a DAG/stage module nor delegating "
+            f"to a DAG-bound seam (imports: {seams})"
         )
 
 
@@ -227,15 +343,18 @@ def test_tool_wired_controls_are_actually_instructed() -> None:
 def test_ss_console_substrate_paths_exist() -> None:
     """ss-console substrate modules must exist on disk. Overlay-resident modules
     (prefixed `overlay:`) are not checked out here — the cross-repo limit
-    overlay-pairs.json / overlay-hook-surface.json already document."""
+    overlay-pairs.json / overlay-hook-surface.json already document. Modules in
+    the private engagements repo (prefixed `engagements:`, ADR 0087: the
+    chronology-package runner gates live beside the pipeline they audit) are
+    likewise not checked out here; the prefix names the repo so the row is
+    honest about where the code is, not a way to skip the check for a path
+    that ought to be in this tree."""
     for key, spec in _controls().items():
         module = spec.get("substrate_module") or ""
         assert module, f"{key}: substrate_module is required"
-        if module.startswith("overlay:"):
+        if module.startswith(("overlay:", "engagements:")):
             continue
-        assert (_OP / module).is_file(), (
-            f"{key}: substrate_module {module!r} does not exist under operator/"
-        )
+        assert (_OP / module).is_file(), f"{key}: substrate_module {module!r} does not exist under operator/"
 
 
 def test_tracking_references_are_well_formed() -> None:
@@ -243,9 +362,7 @@ def test_tracking_references_are_well_formed() -> None:
         if spec.get("status") == "enforced":
             continue
         tracking = spec.get("tracking", "")
-        assert _TRACKING_RE.match(tracking), (
-            f"{key}: tracking {tracking!r} must be `ADR-NNNN:Bx`, `#<issue>`, or a URL"
-        )
+        assert _TRACKING_RE.match(tracking), f"{key}: tracking {tracking!r} must be `ADR-NNNN:Bx`, `#<issue>`, or a URL"
 
 
 def test_adr_tracking_resolves_when_present() -> None:

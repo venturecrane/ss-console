@@ -1,0 +1,92 @@
+{
+  "tasks": {
+    "value": [
+      {
+        "id": "57d7a3b8-a91b-4465-ad44-335e88dc4934",
+        "subject": "Request certified medical records from Sutter Roseville",
+        "dueDate": "2026-06-30T17:00:00Z",
+        "matter": {
+          "id": "54bc1371-5c82-47ae-b722-da1b29e79ef5"
+        }
+      },
+      {
+        "id": "d1daf4fd-c484-4f26-868a-c8f7ed8c675a",
+        "subject": "CONFIRM: Requests for admission served July 2, 2026 -- verify service date and method, compute and calendar response deadline",
+        "dueDate": "2026-07-07T17:00:00Z",
+        "matter": {
+          "id": "54bc1371-5c82-47ae-b722-da1b29e79ef5"
+        }
+      },
+      {
+        "id": "be08487c-1d5c-4c29-a52b-987876336ad9",
+        "subject": "Client verification outstanding - FROG responses Set One",
+        "dueDate": "2026-07-10T17:00:00Z",
+        "matter": {
+          "id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390"
+        }
+      },
+      {
+        "id": "843e1ade-2b39-4a11-9ae3-952eb78d856d",
+        "subject": "Chase Medi-Cal (DHCS) final lien payoff demand",
+        "dueDate": "2026-07-08T17:00:00Z",
+        "matter": {
+          "id": "cd710b6b-a7ae-44b0-bb8a-be79e8c5d351"
+        }
+      },
+      {
+        "id": "e1f6b2db-fca3-4981-9f7e-4043f2b3916e",
+        "subject": "Confirm service of summons and complaint on Sunrise Plaza Properties LLC",
+        "dueDate": "2026-07-14T17:00:00Z",
+        "matter": {
+          "id": "404b292e-ec0f-4c12-aa53-3ea27784cd0e"
+        }
+      },
+      {
+        "id": "1f5546c6-2e64-4879-b5c8-8fb7c09d0038",
+        "subject": "Discovery scan: 7 served files need proof-of-service review and deadline input (Alvarez v. Draper)",
+        "dueDate": "2026-07-08T17:00:00Z",
+        "matter": {
+          "id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390"
+        }
+      },
+      {
+        "id": "1ec31561-1136-4986-9692-1457dae9513a",
+        "subject": "CONFIRM: Amended Special Interrogatories Set Two served by mail June 27 - verify and calendar deadline (Alvarez v. Draper)",
+        "dueDate": "2026-07-08T17:00:00Z",
+        "matter": {
+          "id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390"
+        }
+      },
+      {
+        "id": "95de85b8-7b9e-4d06-89f8-0ad88c8ce1ad",
+        "subject": "CONFIRM: Form Interrogatories Set One served by electronic service June 23 - verify and calendar deadline (Alvarez v. Draper)",
+        "dueDate": "2026-07-08T17:00:00Z",
+        "matter": {
+          "id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390"
+        }
+      }
+    ]
+  },
+  "matters": {
+    "54bc1371-5c82-47ae-b722-da1b29e79ef5": {
+      "id": "54bc1371-5c82-47ae-b722-da1b29e79ef5",
+      "number": "PI-2026-0001",
+      "status": "Open"
+    },
+    "f220c8e4-eab5-4fd9-8f1d-0becf715b390": {
+      "id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+      "number": "2026-PI-101",
+      "status": "Open"
+    },
+    "cd710b6b-a7ae-44b0-bb8a-be79e8c5d351": {
+      "id": "cd710b6b-a7ae-44b0-bb8a-be79e8c5d351",
+      "number": "2026-PI-104",
+      "status": "Open"
+    },
+    "404b292e-ec0f-4c12-aa53-3ea27784cd0e": {
+      "id": "404b292e-ec0f-4c12-aa53-3ea27784cd0e",
+      "number": "2026-PI-102",
+      "status": "Open"
+    }
+  }
+}

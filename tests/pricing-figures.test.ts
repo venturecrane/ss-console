@@ -3,9 +3,11 @@
  *
  * Venture policy: no dollar amount appears on any public surface, and the
  * Operator launch price specifically is "internal, never published" (ADR 0063,
- * decision #50). This repo is private today, but its visibility is a setting
- * somebody could flip, so the figures live in `venturecrane/engagements:pricing/`
- * where confidentiality is a property of what the repo is for.
+ * decision #50). This repo is PUBLIC (`gh api repos/venturecrane/ss-console
+ * --jq .private` returns false; visibility decision 2026-08), so this gate is
+ * the load-bearing control, not defence in depth: the figures live in
+ * `venturecrane/engagements:pricing/` where confidentiality is a property of
+ * what the repo is for, and this test is what keeps them from coming back.
  *
  * WHAT MOVED IS THE NUMBER, NOT THE DECISION. ADR 0063 keeps its path, its
  * reasoning, its supersession of ADR 0004's deferred-pricing clause, and all

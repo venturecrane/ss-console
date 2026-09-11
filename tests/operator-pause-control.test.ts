@@ -25,6 +25,8 @@ import {
   setStopOnMachine,
   recordPauseEvent,
   listPauseEvents,
+  readPausePosture,
+  reconcilePausePosture,
 } from '../src/lib/portal/operator/pause-control'
 import { isClientVisibleAction } from '../src/lib/portal/operator/activity-language'
 
@@ -133,6 +135,90 @@ describe('operator_pause_events governance ledger (migration 0096)', () => {
     await expect(
       recordPauseEvent(db, { ...EVENT, source: 'api' as unknown as 'portal' })
     ).rejects.toThrow()
+  })
+})
+
+describe('pause posture reconciliation (#2206)', () => {
+  const mirror = (level: string | null, updated_at: string | null) => ({
+    sticky_stop_level: level,
+    updated_at,
+  })
+  const event = (action: 'pause' | 'resume', created_at: string) => ({ action, created_at })
+
+  it('no events: the heartbeat mirror decides', () => {
+    expect(reconcilePausePosture(mirror('HARD_STOP', '2026-08-29 10:00:00'), null)).toBe(true)
+    expect(reconcilePausePosture(mirror(null, '2026-08-29 10:00:00'), null)).toBe(false)
+    expect(reconcilePausePosture(null, null)).toBe(false)
+  })
+
+  it('a pause acknowledged AFTER the last beat renders paused before the mirror catches up', () => {
+    const m = mirror(null, '2026-08-29 10:00:00')
+    expect(reconcilePausePosture(m, event('pause', '2026-08-29 10:00:05'))).toBe(true)
+  })
+
+  it('a resume acknowledged AFTER the last beat renders un-paused before the mirror catches up', () => {
+    const m = mirror('HARD_STOP', '2026-08-29 10:00:00')
+    expect(reconcilePausePosture(m, event('resume', '2026-08-29 10:00:05'))).toBe(false)
+  })
+
+  it('once the mirror is newer than the last event, the Machine report wins again', () => {
+    // The Captain cleared the stop from the admin side (no portal event):
+    // the beat after that says no stop, and an older portal pause must not
+    // resurrect it.
+    const m = mirror(null, '2026-08-29 10:05:00')
+    expect(reconcilePausePosture(m, event('pause', '2026-08-29 10:00:05'))).toBe(false)
+    const m2 = mirror('HARD_STOP', '2026-08-29 10:05:00')
+    expect(reconcilePausePosture(m2, event('resume', '2026-08-29 10:00:05'))).toBe(true)
+  })
+
+  it('no fleet_status row yet: the latest event decides', () => {
+    expect(reconcilePausePosture(null, event('pause', '2026-08-29 10:00:05'))).toBe(true)
+    expect(reconcilePausePosture(mirror(null, null), event('resume', '2026-08-29 10:00:05'))).toBe(
+      false
+    )
+  })
+
+  it('accepts ISO timestamps as well as SQLite datetime text', () => {
+    const m = mirror(null, '2026-08-29T10:00:00.000Z')
+    expect(reconcilePausePosture(m, event('pause', '2026-08-29 10:00:05'))).toBe(true)
+  })
+})
+
+describe('readPausePosture against D1 (#2206)', () => {
+  let db: D1Database
+
+  beforeEach(async () => {
+    db = createTestD1()
+    await runMigrations(db, { files: discoverNumericMigrations(migrationsDir) })
+  })
+
+  it('the render right after a portal pause shows paused even though the mirror still says running', async () => {
+    await db
+      .prepare("INSERT INTO organizations (id, name, slug) VALUES ('org-1', 'Org', 'org')")
+      .run()
+    await db
+      .prepare(
+        "INSERT INTO entities (id, org_id, name, slug) VALUES ('entity-1', 'org-1', 'Seat A', 'seat-a')"
+      )
+      .run()
+    await db
+      .prepare(
+        "INSERT INTO fleet_status (customer_slug, entity_id, sticky_stop_level, updated_at) VALUES ('seat-a', 'entity-1', NULL, '2026-08-29 10:00:00')"
+      )
+      .run()
+    expect(await readPausePosture(db, 'seat-a')).toBe(false)
+    await recordPauseEvent(db, {
+      entity_id: 'entity-1',
+      customer_slug: 'seat-a',
+      action: 'pause',
+      actor_user_id: 'user-1',
+      actor_email: 'admin@firm.example',
+      actor_role: 'principal',
+      source: 'portal',
+      reason: 'client pause',
+      gate_level: 'HARD_STOP',
+    })
+    expect(await readPausePosture(db, 'seat-a')).toBe(true)
   })
 })
 

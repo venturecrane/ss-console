@@ -9,6 +9,9 @@ dependencies = [
     # read_document text extraction (PDF + DOCX); both pure-Python.
     "pypdf>=4",
     "python-docx>=1.1",
+    # The format renderer reads the firm's document-library location off the
+    # seat's live customer.yaml (the registered config-as-data shape); pure Python.
+    "pyyaml>=6",
 ]
 
 # The console-script the overlay registry launches as `command` (absolute path to

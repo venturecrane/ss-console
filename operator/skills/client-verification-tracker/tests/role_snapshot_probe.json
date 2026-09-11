@@ -1,0 +1,295 @@
+{
+  "_source": "pilot-smokeball staging probe 2026-08-31 (two pulls 90s apart, byte-identical), vfy_01M1CB0NTKCV3ACRY0P6QD6JX7. Field projection pinned from THIS payload: /matters/{id} and /matters/{id}/roles; the roles payload EMBEDS relationships per role, and the flat /matters/{id}/relationships endpoint returns 403 on this tenant, so the snapshot pull reads matter + roles only. Structural (F13) role slots live under matter.items subItems and carry no id.",
+  "matter": {
+    "href": "https://stagingapi.smokeball.com/matters/f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+    "id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+    "versionId": "639207317062994050",
+    "number": "2026-PI-101",
+    "title": "2026-PI-101 - Alvarez, Maria - Motor Vehicle Accident - Plaintiff - Draper, Kenneth",
+    "matterType": {
+      "name": "Motor Vehicle Accident - Plaintiff",
+      "id": "f259434f-54c1-4d30-be3a-adb51df72b93_CA",
+      "href": "https://stagingapi.smokeball.com/mattertypes/f259434f-54c1-4d30-be3a-adb51df72b93_CA",
+      "rel": "MatterTypes"
+    },
+    "clients": [
+      {
+        "id": "7b55d9cc-0aa1-4d27-ac0b-6f3cacdad75e",
+        "href": "https://stagingapi.smokeball.com/contacts/7b55d9cc-0aa1-4d27-ac0b-6f3cacdad75e",
+        "rel": "Contacts"
+      }
+    ],
+    "otherSides": [
+      {
+        "id": "ab06f68e-9873-40b4-946e-047faa6b09f0",
+        "href": "https://stagingapi.smokeball.com/contacts/ab06f68e-9873-40b4-946e-047faa6b09f0",
+        "rel": "Contacts"
+      }
+    ],
+    "description": "[SEED] MVA rear-end collision; discovery active. Alvarez v. Draper, LASC 24STCV18223. [l2-trigger: lean-reads live check 1783572256]",
+    "status": "Open",
+    "personResponsible": {
+      "id": "ba848ad4-28ca-43a3-abe6-faa21b5fbbb3",
+      "href": "https://stagingapi.smokeball.com/staff/ba848ad4-28ca-43a3-abe6-faa21b5fbbb3",
+      "rel": "Staff"
+    },
+    "personAssistingStaffs": [],
+    "originatingStaffs": [],
+    "openedDate": "2026-02-10T17:00:00Z",
+    "isLead": false,
+    "matterTypeId": "f259434f-54c1-4d30-be3a-adb51df72b93_CA",
+    "clientIds": ["7b55d9cc-0aa1-4d27-ac0b-6f3cacdad75e"],
+    "otherSideIds": ["ab06f68e-9873-40b4-946e-047faa6b09f0"],
+    "personResponsibleStaffId": "ba848ad4-28ca-43a3-abe6-faa21b5fbbb3",
+    "items": {
+      "Plaintiff": [
+        {
+          "type": "role",
+          "id": "39d7331a-d7f8-42e4-bada-209daec89bb1",
+          "name": "Plaintiff",
+          "role": "Plaintiff",
+          "isClient": true,
+          "isOtherSide": false,
+          "contact": {
+            "id": "7b55d9cc-0aa1-4d27-ac0b-6f3cacdad75e",
+            "href": "https://stagingapi.smokeball.com/contacts/7b55d9cc-0aa1-4d27-ac0b-6f3cacdad75e",
+            "rel": "Contacts"
+          },
+          "subItems": {
+            "Attorney": [
+              {
+                "type": "role",
+                "id": "0d37544a-e90d-44ec-a1f4-cafcec4206b9",
+                "name": "Attorney",
+                "role": "Attorney",
+                "isClient": false,
+                "isOtherSide": false,
+                "contact": {
+                  "id": "MyFirm",
+                  "href": "https://stagingapi.smokeball.com/contacts/MyFirm",
+                  "rel": "Contacts"
+                }
+              }
+            ],
+            "Insurance Policy & Vehicle Details": [
+              {
+                "href": "/matters/f220c8e4-eab5-4fd9-8f1d-0becf715b390/layouts/2d3f56fd-4255-4145-a397-35494a1403fd",
+                "rel": "layout",
+                "type": "layout",
+                "id": "2d3f56fd-4255-4145-a397-35494a1403fd",
+                "name": "Insurance Policy & Vehicle Details"
+              }
+            ],
+            "Health Insurer Details": [
+              {
+                "href": "/matters/f220c8e4-eab5-4fd9-8f1d-0becf715b390/layouts/af4460d9-330d-4159-9f0c-94027c57106a",
+                "rel": "layout",
+                "type": "layout",
+                "id": "af4460d9-330d-4159-9f0c-94027c57106a",
+                "name": "Health Insurer Details"
+              }
+            ],
+            "Medicals & Settlement Details": [
+              {
+                "href": "/matters/f220c8e4-eab5-4fd9-8f1d-0becf715b390/layouts/e01a135f-a7b1-ad26-3086-df23ae7b1c9e",
+                "rel": "layout",
+                "type": "layout",
+                "id": "e01a135f-a7b1-ad26-3086-df23ae7b1c9e",
+                "name": "Medicals & Settlement Details"
+              }
+            ],
+            "Employment & Wage Loss Details": [
+              {
+                "href": "/matters/f220c8e4-eab5-4fd9-8f1d-0becf715b390/layouts/cfacbb07-5596-eee0-d3bc-d117c95482b5",
+                "rel": "layout",
+                "type": "layout",
+                "id": "cfacbb07-5596-eee0-d3bc-d117c95482b5",
+                "name": "Employment & Wage Loss Details"
+              }
+            ],
+            "Negotiation Details": [
+              {
+                "href": "/matters/f220c8e4-eab5-4fd9-8f1d-0becf715b390/layouts/e947182e-73df-4fde-be11-7d771136b17c",
+                "rel": "layout",
+                "type": "layout",
+                "id": "e947182e-73df-4fde-be11-7d771136b17c",
+                "name": "Negotiation Details"
+              }
+            ],
+            "Witnesses": [
+              {
+                "href": "/matters/f220c8e4-eab5-4fd9-8f1d-0becf715b390/layouts/",
+                "rel": "layout",
+                "type": "layout",
+                "name": "Witnesses"
+              }
+            ],
+            "Deceased": [
+              {
+                "type": "role",
+                "name": "Deceased",
+                "role": "Plaintiff",
+                "isClient": true,
+                "isOtherSide": false,
+                "contact": {
+                  "id": "7b55d9cc-0aa1-4d27-ac0b-6f3cacdad75e",
+                  "href": "https://stagingapi.smokeball.com/contacts/7b55d9cc-0aa1-4d27-ac0b-6f3cacdad75e",
+                  "rel": "Contacts"
+                }
+              }
+            ],
+            "Minor": [
+              {
+                "type": "role",
+                "name": "Minor",
+                "role": "Plaintiff",
+                "isClient": true,
+                "isOtherSide": false,
+                "contact": {
+                  "id": "7b55d9cc-0aa1-4d27-ac0b-6f3cacdad75e",
+                  "href": "https://stagingapi.smokeball.com/contacts/7b55d9cc-0aa1-4d27-ac0b-6f3cacdad75e",
+                  "rel": "Contacts"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "Defendant": [
+        {
+          "type": "role",
+          "id": "d765ebd5-2b0a-46ea-b5ba-684e44558d1b",
+          "name": "Defendant",
+          "role": "Defendant",
+          "isClient": false,
+          "isOtherSide": true,
+          "contact": {
+            "id": "ab06f68e-9873-40b4-946e-047faa6b09f0",
+            "href": "https://stagingapi.smokeball.com/contacts/ab06f68e-9873-40b4-946e-047faa6b09f0",
+            "rel": "Contacts"
+          },
+          "subItems": {
+            "Attorney": [
+              {
+                "type": "role",
+                "id": "d0e46c7e-4d79-4f28-b719-4dd76bad68b3",
+                "name": "Attorney",
+                "role": "Attorney",
+                "isClient": false,
+                "isOtherSide": false
+              }
+            ],
+            "Insurance Policy & Vehicle Details": [
+              {
+                "href": "/matters/f220c8e4-eab5-4fd9-8f1d-0becf715b390/layouts/0950aa1f-0e30-4d8a-9571-515ffced0805",
+                "rel": "layout",
+                "type": "layout",
+                "id": "0950aa1f-0e30-4d8a-9571-515ffced0805",
+                "name": "Insurance Policy & Vehicle Details"
+              }
+            ],
+            "Witnesses": [
+              {
+                "href": "/matters/f220c8e4-eab5-4fd9-8f1d-0becf715b390/layouts/",
+                "rel": "layout",
+                "type": "layout",
+                "name": "Witnesses"
+              }
+            ],
+            "Deceased": [
+              {
+                "type": "role",
+                "name": "Deceased",
+                "role": "Defendant",
+                "isClient": false,
+                "isOtherSide": true,
+                "contact": {
+                  "id": "ab06f68e-9873-40b4-946e-047faa6b09f0",
+                  "href": "https://stagingapi.smokeball.com/contacts/ab06f68e-9873-40b4-946e-047faa6b09f0",
+                  "rel": "Contacts"
+                }
+              }
+            ],
+            "Minor": [
+              {
+                "type": "role",
+                "name": "Minor",
+                "role": "Defendant",
+                "isClient": false,
+                "isOtherSide": true,
+                "contact": {
+                  "id": "ab06f68e-9873-40b4-946e-047faa6b09f0",
+                  "href": "https://stagingapi.smokeball.com/contacts/ab06f68e-9873-40b4-946e-047faa6b09f0",
+                  "rel": "Contacts"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "Case Details": [
+        {
+          "href": "/matters/f220c8e4-eab5-4fd9-8f1d-0becf715b390/layouts/286afcae-23a2-4e44-8c25-79c31dc056fe",
+          "rel": "layout",
+          "type": "layout",
+          "id": "286afcae-23a2-4e44-8c25-79c31dc056fe",
+          "name": "Case Details"
+        }
+      ],
+      "Discovery Details": [
+        {
+          "href": "/matters/f220c8e4-eab5-4fd9-8f1d-0becf715b390/layouts/2101e308-0647-47c5-9e79-b7bff051902c",
+          "rel": "layout",
+          "type": "layout",
+          "id": "2101e308-0647-47c5-9e79-b7bff051902c",
+          "name": "Discovery Details"
+        }
+      ]
+    },
+    "tags": []
+  },
+  "roles": {
+    "matterId": "f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+    "roles": [
+      {
+        "id": "39d7331a-d7f8-42e4-bada-209daec89bb1",
+        "name": "Plaintiff",
+        "contact": {
+          "id": "7b55d9cc-0aa1-4d27-ac0b-6f3cacdad75e",
+          "href": "https://stagingapi.smokeball.com/contacts/7b55d9cc-0aa1-4d27-ac0b-6f3cacdad75e",
+          "rel": "Contacts"
+        },
+        "relationships": [
+          {
+            "id": "0d37544a-e90d-44ec-a1f4-cafcec4206b9",
+            "name": "Attorney",
+            "contactId": "MyFirm"
+          }
+        ],
+        "isClient": true,
+        "isOtherSide": false,
+        "contactId": "7b55d9cc-0aa1-4d27-ac0b-6f3cacdad75e",
+        "relationshipIds": ["0d37544a-e90d-44ec-a1f4-cafcec4206b9"]
+      },
+      {
+        "id": "d765ebd5-2b0a-46ea-b5ba-684e44558d1b",
+        "name": "Defendant",
+        "contact": {
+          "id": "ab06f68e-9873-40b4-946e-047faa6b09f0",
+          "href": "https://stagingapi.smokeball.com/contacts/ab06f68e-9873-40b4-946e-047faa6b09f0",
+          "rel": "Contacts"
+        },
+        "relationships": [
+          {
+            "id": "d0e46c7e-4d79-4f28-b719-4dd76bad68b3",
+            "name": "Attorney"
+          }
+        ],
+        "isClient": false,
+        "isOtherSide": true,
+        "contactId": "ab06f68e-9873-40b4-946e-047faa6b09f0",
+        "relationshipIds": ["d0e46c7e-4d79-4f28-b719-4dd76bad68b3"]
+      }
+    ]
+  }
+}

@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from citation_filter import contains_citation, scan, refusal_message  # noqa: E402
+from citation_filter import contains_citation, scan, refusal_message
 
 
 # ---------- Adversarial fixtures: each should be REFUSED ----------
@@ -103,6 +103,22 @@ ADVERSARIAL_OUTPUTS: list[tuple[str, str]] = [
         "uscode-no-section-symbol",
         "Plaintiff's claim arises under 42 U.S.C. 1983 for the deprivation of rights.",
     ),
+    # --- Spelled-out separator (2026-08-21 welcome rehearsal): an Operator
+    # that has learned "v." trips the gate reaches for the word instead and
+    # produces the same caption. Parties must be capitalized to fire; see the
+    # CLEAN fixtures below for the prose these must not catch. ---
+    (
+        "versus-spelled-out",
+        "Palsgraf versus Long Island Railroad is the duty case you are thinking of.",
+    ),
+    (
+        "versus-spelled-out-bare",
+        "Smith versus Jones is the controlling authority on this point.",
+    ),
+    (
+        "vs-lowercase-no-reporter",
+        "see smith vs jones for the controlling rule on the duty owed.",
+    ),
 ]
 
 # ---------- Clean fixtures: each should PASS (no citation detected) ----------
@@ -133,6 +149,18 @@ CLEAN_OUTPUTS: list[tuple[str, str]] = [
         "practice area (estate planning), one outside Arizona venue. Recommend "
         "warm referrals to local estate and out-of-state PI counsel.",
     ),
+    # --- "versus" as ordinary English. These are the reason CASE_NAME_VERSUS_RE
+    # keeps its parties case-sensitive: the word is common between ordinary
+    # lowercase nouns, and refusing it would refuse the Operator's own prose
+    # several times a turn. ---
+    (
+        "versus-ordinary-nouns",
+        "The trade-off here is apples versus oranges, so the comparison does not settle anything on its own.",
+    ),
+    (
+        "versus-version-numbers",
+        "The template diff is version two versus version three; only the heading styles moved.",
+    ),
 ]
 
 
@@ -153,8 +181,7 @@ def run() -> tuple[bool, str]:
         if contains_citation(text):
             hits = scan(text)
             failures.append(
-                f"FAIL [{label}]: filter falsely flagged clean output. "
-                f"hits={[(h.pattern, h.match) for h in hits]}"
+                f"FAIL [{label}]: filter falsely flagged clean output. hits={[(h.pattern, h.match) for h in hits]}"
             )
 
     # Verify refusal_message produces non-empty output for adversarial cases

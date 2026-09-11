@@ -9,12 +9,22 @@ const bootSmoke = readFileSync(resolve('operator/bin/boot-smoke-test.sh'), 'utf8
 const workspaceSkill = readFileSync(resolve('operator/skills/workspace/SKILL.md'), 'utf8')
 const inboxTriageSkill = readFileSync(resolve('operator/skills/inbox-triage/SKILL.md'), 'utf8')
 const emailReplySkill = readFileSync(resolve('operator/skills/email-reply/SKILL.md'), 'utf8')
-const smdCustomerConfig = readFileSync(resolve('operator/customers/smd/customer.yaml'), 'utf8')
+const smdCustomerConfig = readFileSync(
+  resolve('operator/customers/smd-staging/customer.yaml'),
+  'utf8'
+)
 
 describe('ADR 0045 Workspace capability broker', () => {
   it('runs broker and gateway under distinct non-root principals', () => {
     expect(dockerfile).toContain('useradd -u 10000 -m -d /opt/data hermes')
     expect(dockerfile).toContain('useradd -u 10001 -r -m -d /opt/workspace-broker workspace-broker')
+    // ss#2614: the chronology runner's child uid. No home, no shell; its one
+    // shared group is the Smokeball token file it mints against beside hermes.
+    expect(dockerfile).toContain(
+      'useradd -u 10002 -r -M -d /nonexistent -s /usr/sbin/nologin medchron'
+    )
+    expect(dockerfile).toContain('usermod -a -G smokeball-token medchron')
+    expect(dockerfile).toContain('usermod -a -G smokeball-token hermes')
     expect(entrypoint).toContain('--reuid=workspace-broker')
     expect(entrypoint).toContain('--reuid=hermes')
     expect(entrypoint).toContain('--no-new-privs')

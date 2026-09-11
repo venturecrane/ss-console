@@ -2,7 +2,7 @@
 title: Incident Response
 section: operations
 order: 9
-summary: The severity ladder, the detection surfaces, the escalation path, and the client-communication commitments for Operator incidents - ADR 0064 as a runbook.
+summary: The severity ladder, the detection surfaces, the escalation path, the client-communication commitments, and the exposure-ladder demotion rule a SEV1 triggers - ADR 0064 as a runbook.
 sources:
   - label: ADR 0064 - Operator service commitments
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0064-operator-service-commitments.md
@@ -10,6 +10,10 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/docs/security/smd-services-security-overview.md
   - label: docs/legal/operator-dpa-template.md
     href: https://github.com/venturecrane/ss-console/blob/main/docs/legal/operator-dpa-template.md
+  - label: docs/runbooks/operator/enable-gate-checklist.md - the promotion instrument and the demotion rule
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/runbooks/operator/enable-gate-checklist.md
+  - label: docs/runbooks/operator/incidents/ - the post-incident notes and their template
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/runbooks/operator/incidents/README.md
 ---
 
 ## The commitment shape
@@ -29,7 +33,7 @@ Business hours are Monday through Friday, Arizona time. Incident notification wi
 ## Detection surfaces
 
 1. **Heartbeats** - every Machine reports every 60 seconds into `fleet_status`; staleness renders on the admin fleet dashboard and the client-portal aliveness chip.
-2. **Cost breaker** - WARN, SOFT_STOP, HARD_STOP ride the heartbeat; HARD_STOP parks inbound at the gate.
+2. **Cost breaker** - the level rides the heartbeat, along with the reason and condition that drove it; HARD_STOP parks inbound at the gate. Two states since 2026-09-02, OK and HARD_STOP: the old WARN and SOFT_STOP rungs restricted nothing and only named a cause, which read as a brake that was holding.
 3. **Automated alerts** - retainer payment failures email team@smd.services; Sentry errors sync to the fleet view.
 4. **Client reports** - the portal change-request path and direct channels.
 
@@ -38,10 +42,25 @@ Business hours are Monday through Friday, Arizona time. Incident notification wi
 ## Running an incident
 
 1. **Classify** against the ladder. When in doubt between two severities, take the higher.
-2. **Stabilize** - for a down Machine: `flyctl status`, then the deploy/rollback runbooks (never root SSH on a live Machine; it crash-loops bootstrap). For out-of-authorization behavior: pause the seat first, investigate second; the audit log is the record.
-3. **Communicate** - first client message inside the window with what is known, what is being done, and when the next update comes. Plain language, no hedging, no blame.
-4. **Track to resolution** - updates at the committed cadence; the incident is over when the client agrees it is.
-5. **Record** - a dated post-incident note in `docs/runbooks/operator/` covering what broke, detection-to-resolution timeline, and what changed to prevent recurrence. Recurring patterns become memory lessons or executable gates.
+2. **Stabilize** - for a down Machine: `flyctl status`, then the deploy/rollback runbooks (never root SSH on a live Machine; it crash-loops bootstrap). For out-of-authorization behavior: pause the seat first, investigate second; the audit log is the record. The kill-switch is `operator/bin/pause-customer.sh <slug> --reason "<text>"`, which halts the agent loop while keeping the Machine warm for diagnosis.
+3. **Demote** - a SEV1 also demotes every routine involved, per the pre-committed rule below. This happens during stabilization, not after the postmortem.
+4. **Communicate** - first client message inside the window with what is known, what is being done, and when the next update comes. Plain language, no hedging, no blame.
+5. **Track to resolution** - updates at the committed cadence; the incident is over when the client agrees it is.
+6. **Record** - a dated post-incident note in `docs/runbooks/operator/incidents/`, written from `_TEMPLATE.md` in that directory, covering what broke, how it was detected, the timeline **as recorded**, and what changed to prevent recurrence with the PR, issue or gate cited. Where a source does not establish a fact - detection-to-resolution time is the usual one - the note writes `not recorded` rather than a plausible number. Recurring patterns become memory lessons or executable gates. Every note is also given a **class** from the fixed set in that directory's `README.md` (`gate-regression`, `built-not-wired`, `gone-not-gone`, `identity`, `other`) and indexed there, so the next reader can ask whether this shape has happened before and get a real answer; `tests/incidents-register.test.ts` blocks merge on a note that is on disk and not in the index, or classed outside the set.
+
+The register carries one rule that came out of the `gate-regression` cluster (2026-08-04, 2026-08-13, 2026-08-19): **a new refusal gate on an outbound path is done when its refusal shows in `send_refusals` on the heartbeat and the pager has been proven on a seat, not when its unit tests pass.** A gate that can refuse and a human who can learn that it refused are one deliverable.
+
+## The exposure ladder and the demotion rule
+
+Severity governs how we respond to an incident. The **exposure ladder** governs how much a routine was allowed to do before one, and it is the instrument that bounds blast radius: `docs/runbooks/operator/enable-gate-checklist.md`.
+
+Each routine climbs three rungs, and each rung is claimed by a named artifact rather than by a report: a shadow-firm run id (rehearsed), dated review-period observations (drafting on the client seat under human review), then Captain sign-off (acting on its own). A routine with an empty evidence slot is on the rung below, and nothing climbs by age.
+
+The demotion rule is pre-committed, so the decision is not made by whoever is holding the incident:
+
+> **Any SEV1 pauses the seat and demotes every routine involved to the bottom rung, and the routine stays there until BOTH the root cause has landed as a merged change with its own evidence AND the incident exists as a shadow-firm scenario observed to fail against the unfixed state before it passes against the fixed one.**
+
+There is no restoration to the prior rung, because the prior rung's evidence is exactly what the incident falsified. The routine re-climbs from the bottom. Two clarifications that have each cost us once: a fix that closes the reported symptom does not count if the class survives, and a gate re-enabled in report-only mode does not restore a routine, because report-only is a staging state with an expiry date rather than a steady state.
 
 ## Escalation
 

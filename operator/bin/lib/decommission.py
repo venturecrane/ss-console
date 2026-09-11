@@ -36,11 +36,16 @@ Design notes
   :class:`adapter.audit_log.AuditLogWriter`; on failure it writes a third
   ``failed`` row before raising :class:`DecommissionStepFailed`.
 
-* **External services behind Protocols.** AgentMail and Fly
-  Machine are not wired yet. Each is stubbed behind a
-  ``Protocol`` plus a :class:`NoOpStub` implementation that logs
-  "skipped (no client wired)" and returns a manifest with
-  ``skipped=True``. Production wiring is a constructor swap.
+* **External services behind Protocols.** Every destructive service
+  (R2, Vectorize, AgentMail, Fly, observability) is a ``Protocol`` with a
+  real implementation in ``bin/lib/decommission_backends.py`` (#2735) and
+  a :class:`NoOpStub` that the pipeline defaults to. The CLI wires each
+  real backend from a staged credential (``backends_from_env``); Fly arms
+  only from ``FLY_API_TOKEN``, never from a logged-in ``fly`` CLI. A
+  backend whose credential is absent stays the stub, which logs
+  "skipped (no client wired)" and returns ``skipped=True``, and the
+  ``--live`` gate refuses (exit 5) rather than report a clean
+  decommission over a skipped deletion.
 
 * **Dry-run mode is non-destructive.** Each step exposes a ``plan(...)``
   method that returns the manifest of what *would* happen without
@@ -83,13 +88,10 @@ The steps:
 
 from __future__ import annotations
 
-import asyncio
 import csv
 import enum
 import json
 import logging
-import os
-import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -114,8 +116,7 @@ class DecommissionStepFailed(RuntimeError):
 
     def __init__(self, step_name: str, customer_slug: str, cause: BaseException) -> None:
         super().__init__(
-            f"decommission step {step_name!r} failed for customer {customer_slug!r}: "
-            f"{type(cause).__name__}: {cause}"
+            f"decommission step {step_name!r} failed for customer {customer_slug!r}: {type(cause).__name__}: {cause}"
         )
         self.step_name = step_name
         self.customer_slug = customer_slug
@@ -133,10 +134,10 @@ class DecommissionStepFailed(RuntimeError):
 
 
 class StepStatus(str, enum.Enum):
-    PLANNED = "planned"      # dry-run; nothing executed
-    EXECUTED = "executed"    # live run; work performed
-    SKIPPED = "skipped"      # input already absent or stub
-    FAILED = "failed"        # live run; exception raised
+    PLANNED = "planned"  # dry-run; nothing executed
+    EXECUTED = "executed"  # live run; work performed
+    SKIPPED = "skipped"  # input already absent or stub
+    FAILED = "failed"  # live run; exception raised
 
 
 @dataclass(frozen=True)
@@ -153,12 +154,15 @@ class StepResult:
 
 
 # ---------------------------------------------------------------------------
-# Stubbed external services (AgentMail, Fly)
+# External services (AgentMail, Fly): Protocols and their NoOpStubs
 #
-# Each Protocol has a NoOpStub that the CLI defaults to. Production
-# wiring is a constructor swap with a real client. The stubs return
-# manifests that look like real ones so the audit trail stays the same
-# shape across stub vs live transitions.
+# The real implementations live in bin/lib/decommission_backends.py
+# (AgentMailInboxDeprovisioner, FlyAppDestroyer; #2735) and are injected by
+# the CLI when their credential is staged (AGENTMAIL_API_KEY; FLY_API_TOKEN,
+# a logged-in fly CLI does not count). The NoOpStub is the default the
+# pipeline falls back to, and unwired_destructive_backends() reports it so a
+# --live run refuses. The stubs return manifests that look like real ones so
+# the audit trail stays the same shape across stub vs live transitions.
 # ---------------------------------------------------------------------------
 
 
@@ -215,9 +219,7 @@ class NoOpObservabilityCleanupStub:
     _SKIPPED_REASON = "external_client_not_wired"
 
     async def cleanup(self, customer_slug: str) -> dict:
-        log.info(
-            "observability.cleanup skipped (no client wired) customer=%s", customer_slug
-        )
+        log.info("observability.cleanup skipped (no client wired) customer=%s", customer_slug)
         return {
             "skipped": True,
             "reason": self._SKIPPED_REASON,
@@ -344,11 +346,7 @@ class FilesystemTombstoner:
         # Move the directory and drop a marker file at its root.
         live_dir.rename(tomb_dir)
         marker = tomb_dir / "DECOMMISSIONED.md"
-        preserve_line = (
-            f"audit_log_preserve_until: {audit_log_preserve_until}\n"
-            if audit_log_preserve_until
-            else ""
-        )
+        preserve_line = f"audit_log_preserve_until: {audit_log_preserve_until}\n" if audit_log_preserve_until else ""
         marker.write_text(
             "# Decommissioned\n\n"
             f"This directory contained the customer config for `{customer_slug}` until "
@@ -528,7 +526,7 @@ def _load_customer_yaml(customers_root: Path, slug: str) -> Optional[dict]:
 
         parsed = _yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
         return parsed if isinstance(parsed, dict) else None
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - an unparseable customer.yaml is logged and read as absent; the pipeline's preflight decides what that means
         log.warning("decommission: customer.yaml parse failed at %s", yaml_path)
         return None
 
@@ -665,9 +663,7 @@ class DecommissionPipeline:
     fly: FlyMachineManager = field(default_factory=NoOpFlyStub)
     observability: ObservabilityCleanup = field(default_factory=NoOpObservabilityCleanupStub)
     archiver: ComplianceArchiver = field(default_factory=InMemoryComplianceArchiver)
-    audit_log_preserver: AuditLogPreserver = field(
-        default_factory=InMemoryAuditLogPreserver
-    )
+    audit_log_preserver: AuditLogPreserver = field(default_factory=InMemoryAuditLogPreserver)
     tombstoner: Optional[FilesystemTombstoner] = None
     # Parsed customer.yaml (or None when the file is missing/unparseable).
     # Drives `resolve_audit_log_days` for the step-2 carve-out. Tests inject
@@ -739,13 +735,10 @@ class DecommissionPipeline:
                         "pull audit ledger + ADR-0016 memory tables via the "
                         "runtime-read seam to the archive dir (pull-before-destroy)"
                     ),
-                    "preserver_wired": not isinstance(
-                        self.audit_log_preserver, InMemoryAuditLogPreserver
-                    ),
+                    "preserver_wired": not isinstance(self.audit_log_preserver, InMemoryAuditLogPreserver),
                     "audit_log_days": resolve_audit_log_days(self.customer_yaml),
                     "audit_log_preserve_until": (
-                        datetime.now(timezone.utc)
-                        + timedelta(days=resolve_audit_log_days(self.customer_yaml))
+                        datetime.now(timezone.utc) + timedelta(days=resolve_audit_log_days(self.customer_yaml))
                     ).isoformat(),
                 },
             ),
@@ -818,46 +811,60 @@ class DecommissionPipeline:
         )
 
         # Step 2 — preserve Machine-local data (pull-before-destroy, #1355)
-        results.append(await self._run_step(
-            "02_preserve_machine_data",
-            self._step_preserve_machine_data,
-        ))
+        results.append(
+            await self._run_step(
+                "02_preserve_machine_data",
+                self._step_preserve_machine_data,
+            )
+        )
 
         # Step 3 — R2 namespace delete
-        results.append(await self._run_step(
-            "03_r2_namespace",
-            self._step_r2_namespace,
-        ))
+        results.append(
+            await self._run_step(
+                "03_r2_namespace",
+                self._step_r2_namespace,
+            )
+        )
 
         # Step 4 — Vectorize indexes delete
-        results.append(await self._run_step(
-            "04_vectorize_indexes",
-            self._step_vectorize_indexes,
-        ))
+        results.append(
+            await self._run_step(
+                "04_vectorize_indexes",
+                self._step_vectorize_indexes,
+            )
+        )
 
         # Step 5 — AgentMail
-        results.append(await self._run_step(
-            "05_agentmail",
-            self._step_agentmail,
-        ))
+        results.append(
+            await self._run_step(
+                "05_agentmail",
+                self._step_agentmail,
+            )
+        )
 
         # Step 6 — Fly Machine
-        results.append(await self._run_step(
-            "06_fly_machine",
-            self._step_fly_machine,
-        ))
+        results.append(
+            await self._run_step(
+                "06_fly_machine",
+                self._step_fly_machine,
+            )
+        )
 
         # Step 7 — Compliance archive
-        results.append(await self._run_step(
-            "07_compliance_archive",
-            self._step_compliance_archive,
-        ))
+        results.append(
+            await self._run_step(
+                "07_compliance_archive",
+                self._step_compliance_archive,
+            )
+        )
 
         # Step 8 — Tombstone
-        results.append(await self._run_step(
-            "08_tombstone",
-            self._step_tombstone,
-        ))
+        results.append(
+            await self._run_step(
+                "08_tombstone",
+                self._step_tombstone,
+            )
+        )
 
         # Step 9 — Observability cleanup (ADR 0023 Wave 1)
         # Runs at the tail of the pipeline because the work is
@@ -867,10 +874,12 @@ class DecommissionPipeline:
         # expiration alert could fire; the windowed noise is acceptable
         # vs. the structural cost of weaving observability into the
         # core teardown sequence.
-        results.append(await self._run_step(
-            "09_observability_cleanup",
-            self._step_observability_cleanup,
-        ))
+        results.append(
+            await self._run_step(
+                "09_observability_cleanup",
+                self._step_observability_cleanup,
+            )
+        )
 
         # Final marker: DECOMMISSION_FINAL records the end of the pipeline.
         await self._write_audit_row(
@@ -924,9 +933,7 @@ class DecommissionPipeline:
         # was never provisioned and never written (see module docstring).
         audit_log_days = resolve_audit_log_days(self.customer_yaml)
         archive_dir = self.archive_root / self.customer_slug
-        audit_log_manifest = await self.audit_log_preserver.preserve(
-            self.customer_slug, archive_dir, audit_log_days
-        )
+        audit_log_manifest = await self.audit_log_preserver.preserve(self.customer_slug, archive_dir, audit_log_days)
         # Emit a discrete audit row so the decommission report names the
         # carve-out and its manifest explicitly.
         await self._write_audit_row(
@@ -988,12 +995,8 @@ class DecommissionPipeline:
         # Pass the resolved preserve-until so the marker file names the
         # audit-log retention deadline alongside the tombstone date.
         audit_log_days = resolve_audit_log_days(self.customer_yaml)
-        preserve_until = (
-            datetime.now(timezone.utc) + timedelta(days=audit_log_days)
-        ).isoformat()
-        return self.tombstoner.tombstone(
-            self.customer_slug, audit_log_preserve_until=preserve_until
-        )
+        preserve_until = (datetime.now(timezone.utc) + timedelta(days=audit_log_days)).isoformat()
+        return self.tombstoner.tombstone(self.customer_slug, audit_log_preserve_until=preserve_until)
 
     async def _step_observability_cleanup(self) -> dict:
         # ADR 0023 Wave 1: cancel the healthchecks.io check and delete
@@ -1030,7 +1033,7 @@ class DecommissionPipeline:
                     detail={"failed": True, "error": f"{type(exc).__name__}: {exc}"},
                 ),
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             # If audit write itself fails we cannot do better than log;
             # the calling script still raises the original step failure.
             log.exception("decommission audit-row write failed for %s/%s", self.customer_slug, step_name)

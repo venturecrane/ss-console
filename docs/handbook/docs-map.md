@@ -44,7 +44,7 @@ Reusable templates filled in per engagement. Top-level: `sow-template.md`. Subtr
 
 ### `docs/runbooks/` - Operational runbooks
 
-Step-by-step operational procedures. Currently one subtree, `runbooks/operator/`: `first-boot.md` (standing up a customer Machine end to end), `curator-supervised-consolidation.md`, and `ms-graph-azure-ad-setup.md`.
+Step-by-step operational procedures. Currently one subtree, `runbooks/operator/`: `first-boot.md` (standing up a customer Machine end to end), `curator-supervised-consolidation.md`, `ms-graph-azure-ad-setup.md`, `enable-gate-checklist.md` (the per-routine promotion instrument: three rungs, one recorded artifact per rung, and the pre-committed demotion rule a SEV1 triggers), and the Hermes fleet promotion runbooks `hermes-v0.18-upgrade-plan.md` and `hermes-v0.20-upgrade-plan.md` (how a pinned Hermes version is evaluated, staged across the seats, and blessed). Nested under it, `runbooks/operator/incidents/` holds the dated post-incident notes mandated by [Incident Response](/admin/playbook/incident-response), plus `_TEMPLATE.md` and a `README.md` index.
 
 ### `docs/security/` - Security documents
 

@@ -40,4 +40,11 @@ regexes = [
   '''(?i)changeme''',
   '''(?i)test[._-]?(api[._-]?key|secret|token|relay[._-]?key)''',
   '''[a-f0-9]{32,64}\.(jpg|png|gif|webp)''',  # asset filenames look like hashes
+  # The HMAC-SHA256 test vector pinned on both sides of the Machine-credential
+  # seam (tests/machine-key-auth.test.ts and
+  # operator/bin/tests/test_machine_credential.py): the digest of the public
+  # string "test-plaintext-key" under an all-zero-to-0f salt. It is a hash of
+  # known inputs, not a credential; any other 64-hex value next to key_hash
+  # still trips the scanner.
+  '''e858ae0a20bbe215e94b7e816abc9f918ec4317aa725c351d26730af9e13071e''',
 ]

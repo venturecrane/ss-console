@@ -6,6 +6,7 @@ import {
   heartbeatDisplay,
   formatUptime,
   relativeTimestamp,
+  auditWriteFailureDisplay,
 } from '../../../../lib/admin/fleet-status'
 import { getProductSubscription } from '../../../../lib/portal/product-access'
 import { env } from 'cloudflare:workers'
@@ -38,6 +39,11 @@ const fleetRows = entityId ? await listFleetStatus(env.DB) : []
 const fleet =
   fleetRows.find((r) => r.entity_id === entityId) ?? fleetRows.find((r) => r.customer_slug === slug)
 const hb = heartbeatDisplay(fleet?.last_heartbeat_ts ?? null)
+// #2498. Rendered immediately beside "Last audit" because neither reading means
+// anything alone: a stale timestamp with no failures is a quiet seat, the same
+// timestamp with a non-zero count is a broken one, and until this column they
+// were the same page.
+const auditFailures = auditWriteFailureDisplay(fleet?.audit_write_failures ?? null)
 ---
 
 <AdminLayout
@@ -106,6 +112,10 @@ const hb = heartbeatDisplay(fleet?.last_heartbeat_ts ?? null)
                 <dd class="text-[color:var(--ss-color-text-primary)]">
                   {relativeTimestamp(fleet?.last_audit_ts ?? null)}
                 </dd>
+              </div>
+              <div class="flex justify-between gap-4">
+                <dt class="text-[color:var(--ss-color-text-secondary)]">Audit writes lost</dt>
+                <dd class={auditFailures.colorClass}>{auditFailures.label}</dd>
               </div>
             </dl>
           </div>

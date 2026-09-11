@@ -56,8 +56,8 @@ import { isPlainObject } from './helpers'
  * are eligible `webhook_triggers[].source` values with no `webhook_url`.
  *
  * Membership is keyed on the ADAPTER, not on `poll_seconds`: the cadence field
- * is optional under msgraph (unauthored ⇒ the overlay poller applies
- * DEFAULT_MSGRAPH_POLL_SECONDS), so a seat that omits it still polls.
+ * is optional under msgraph (unauthored ⇒ the overlay poller applies its own
+ * 45-second default), so a seat that omits it still polls.
  */
 const POLL_INBOUND_ADAPTERS: ReadonlySet<string> = new Set([MSGRAPH_ADAPTER])
 
@@ -177,7 +177,45 @@ function checkOneTrigger(
   if (exclude === undefined) return null
   const throttle = checkTriggerThrottle(raw['throttle'], `${path}.throttle`, errors)
   if (throttle === undefined) return null
-  return { source, event_type: eventType, skill, persona, exclude, throttle }
+  const vendorEmitted = checkVendorEmitted(raw['vendor_emitted'], `${path}.vendor_emitted`, errors)
+  if (vendorEmitted === undefined) return null
+  return {
+    source,
+    event_type: eventType,
+    skill,
+    persona,
+    exclude,
+    throttle,
+    vendor_emitted: vendorEmitted,
+  }
+}
+
+/**
+ * Parse the optional `vendor_emitted` flag. Absent → null, which the egress
+ * reconciler reads as "the vendor emits this" (the safe default: a real event
+ * type belongs in the subscription).
+ *
+ * Explicit `false` means SYNTHETIC — the gate still routes the event, but
+ * build_intents keeps it out of the vendor subscription's eventTypes. Without
+ * this, one synthetic sibling invalidates the whole POST /webhooks for its
+ * adapter and takes every real event type down with it (pilot-smokeball,
+ * 2026-08-28 → 2026-09-02).
+ */
+function checkVendorEmitted(
+  raw: unknown,
+  path: string,
+  errors: ValidationError[]
+): boolean | null | undefined {
+  if (raw === undefined || raw === null) return null
+  if (typeof raw !== 'boolean') {
+    errors.push({
+      code: 'TypeMismatch',
+      path,
+      message: 'vendor_emitted must be a boolean when present',
+    })
+    return undefined
+  }
+  return raw
 }
 
 const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

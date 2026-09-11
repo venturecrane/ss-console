@@ -13,7 +13,7 @@ description: >-
   never rounds or smooths a number. Time-limited demand mechanics under Code of Civil Procedure
   section 999 are surfaced as attorney decision points, never as a final acceptance deadline. It
   never sends the letter to a carrier or to anyone outside the firm by any path.
-version: 0.1.0
+version: 0.2.1
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -368,22 +368,30 @@ reported. Fail closed.
 
 **Delivery is verified by read-back (shared discipline, delivery-verification rule).** After filing, read the artifact back from the system of record and verify it is present, complete, and uncorrupted before the delivery note claims it. A failed or unverifiable delivery is reported as exactly that, never as delivered; a fallback delivery is disclosed as a fallback with the reason.
 
-**The letter itself is filed with `mcp_smokeball_render_docx_draft`**, which produces a
-real Word document the attorney can edit and which runs the ten mechanical gates against
-this matter's record before it writes anything. Pass the privileged documents as
-`held_out_file_names` so gate 1's leakage check has its input. A refusal comes back with
-the checker's own findings and `fileId: null`; fix the draft and call again, and never
-route around a refusal by filing the same text through `add_file` — that path is
-ungated, it is visible in the audit log, and using it to escape a gate is the one thing
-this lane cannot tolerate.
+**The letter itself is filed with `mcp_smokeball_render_docx_draft`** (with
+`document_class="demand_letter"`), which produces a real Word document the attorney can
+edit, runs the mechanical gates against this matter's record before it writes anything,
+and renders the letter INTO the firm's own Word template for this class when the firm's
+Document Library holds one (the tool resolves it; you never pick a template), else onto
+the SMD starter. Typography is the tool's; the content is yours (drafting-discipline
+Part IV: the date, the addressee block, the RE line, the sections, the specials table
+as a pipe table, and the signature block written as content, exactly as the skeleton
+shows). Pass the privileged documents as `held_out_file_names` so gate 1's leakage
+check has its input. A refusal comes back with the checker's own findings and
+`fileId: null`; fix the draft and call again, and never route around a refusal by
+filing the same text through `add_file` — that path is ungated, it is visible in the
+audit log, and using it to escape a gate is the one thing this lane cannot tolerate.
 
 The itemized report and the held-out list go into the **matter memo**
 (`create_memo`), which is where citations belong. The email to the requesting attorney
 (`agentmail`) is a **citation-free pointer**, not the letter: plain words naming the
 matter by number, that the demand draft is ready, where it lives, what is reserved for
-the attorney, and what the record does not establish. The letter's own RE line
-references a statute by section, so emailing the body would fight the mail channel's
-citation gate by construction. Write the pointer citation-free on the first draft.
+the attorney, what the record does not establish, and one honest sentence from the
+tool's `formatApplied` (the firm's template, or the starter and why; which roles took
+the template's own styles, and which were formatted inline and so will not follow a
+later edit to the template). The letter's own RE line references a statute by section, so
+emailing the body would fight the mail channel's citation gate by construction. Write
+the pointer citation-free on the first draft.
 
 Open a review item with `create_task` assigned to the requesting attorney, with a
 near-term administrative confirm-by date, stated in the task body as an administrative
@@ -485,14 +493,15 @@ citation-free; do not write a cited draft and wait for the gate to teach you.
 Three more first-draft rules, same rationale:
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.
-- In email and task text, refer to the matter by its NUMBER, taken ONLY from
-  the `matterNumber` field of a record you read this turn. Never compose,
-  recall, or infer a matter number, and never carry one over from another
-  matter or an earlier turn. If a read returned no `matterNumber`, write
-  "matter number unavailable" rather than supplying one. Never refer to the
-  matter by its case caption. The matter's own caption is acceptable inside
-  matter memos and inside the drafted letter; cited case law is never
-  acceptable in email.
+- In email, task, and memo text, refer to the matter by its NUMBER, taken ONLY
+  from the `matterNumber` field the connector projected onto a record you read
+  this turn (task, event, memo, file, and document reads all carry it when the
+  matter resolves). Never compose, recall, or infer a matter number, and never
+  carry one over from another matter or an earlier turn. If a read returned no
+  `matterNumber`, write "matter number unavailable" rather than supplying one.
+  Never refer to the matter by its case caption. The matter's own caption is
+  acceptable inside matter memos and inside the drafted letter; cited case law
+  is never acceptable in email.
 - State a specific dollar figure only when it exists in an authored source on the matter,
   and name that source in the same sentence. Never total, estimate, or round figures into
   existence.

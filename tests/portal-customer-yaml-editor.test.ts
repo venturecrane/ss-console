@@ -22,11 +22,9 @@
 
 import { describe, it, expect } from 'vitest'
 import {
-  LOCKED_FIELD_PATHS,
   applyEditableChanges,
   computeChangedFields,
   hashEditableConfig,
-  isLockedFieldPath,
   projectEditableConfig,
   validateEditableChanges,
   type EditableCustomerConfig,
@@ -119,52 +117,6 @@ function validYaml(): CustomerYaml {
   }
   return result.value
 }
-
-// -----------------------------------------------------------------------------
-// Locked-field policy
-// -----------------------------------------------------------------------------
-
-describe('isLockedFieldPath', () => {
-  it('matches exact paths in LOCKED_FIELD_PATHS', () => {
-    expect(isLockedFieldPath('schema_version')).toBe(true)
-    expect(isLockedFieldPath('customer_id')).toBe(true)
-    expect(isLockedFieldPath('memory.d1_namespace')).toBe(true)
-    expect(isLockedFieldPath('machine.size')).toBe(true)
-  })
-
-  it('matches wildcard children (connectors.X.token_ref)', () => {
-    expect(isLockedFieldPath('connectors.Email.token_ref')).toBe(true)
-    expect(isLockedFieldPath('connectors.PracticeManagement.token_ref')).toBe(true)
-  })
-
-  it('matches wildcard children (safety.sticky_stop.*)', () => {
-    expect(isLockedFieldPath('safety.sticky_stop.duration_minutes')).toBe(true)
-    expect(isLockedFieldPath('safety.sticky_stop.cooldown_minutes')).toBe(true)
-  })
-
-  it('does NOT match editable paths', () => {
-    expect(isLockedFieldPath('personas[0].name')).toBe(false)
-    expect(isLockedFieldPath('escalation.red_flag_recipients')).toBe(false)
-    expect(isLockedFieldPath('connectors.Email.adapter')).toBe(false)
-    expect(isLockedFieldPath('scope.email_folders_visible')).toBe(false)
-  })
-
-  it('includes the eight locked paths from the issue body at minimum', () => {
-    const required = [
-      'schema_version',
-      'customer_id',
-      'memory.d1_namespace',
-      'memory.r2_vault_path',
-      'memory.vectorize_index',
-      'machine.size',
-      'connectors.*.token_ref',
-      'safety.sticky_stop.*',
-    ]
-    for (const p of required) {
-      expect(LOCKED_FIELD_PATHS).toContain(p)
-    }
-  })
-})
 
 // -----------------------------------------------------------------------------
 // Projection

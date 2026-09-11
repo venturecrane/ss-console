@@ -1,16 +1,14 @@
 /**
  * Coverage for the Microsoft Graph provider entry at
- * `src/lib/oauth/providers/ms-graph.ts`. Verifies scope discipline,
- * authorize-URL shape, and Mail.Send refusal.
+ * `src/lib/oauth/providers/ms-graph.ts`. Verifies scope discipline
+ * and Mail.Send refusal.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { env as testEnv } from 'cloudflare:workers'
 
 import {
-  MS_GRAPH_AUTHORIZE_URL,
   MS_GRAPH_PHASE_1_SCOPES,
   MS_GRAPH_TOKEN_URL,
-  buildMicrosoftGraphAuthorizeUrl,
   microsoftGraphProvider,
 } from '../src/lib/oauth/providers/ms-graph'
 
@@ -46,70 +44,6 @@ describe('MS_GRAPH_PHASE_1_SCOPES', () => {
 
   it('is frozen so callers cannot mutate it', () => {
     expect(Object.isFrozen(MS_GRAPH_PHASE_1_SCOPES)).toBe(true)
-  })
-})
-
-describe('buildMicrosoftGraphAuthorizeUrl', () => {
-  it('emits a URL on the Entra v2 authorize endpoint with every Phase-1 scope', () => {
-    const url = buildMicrosoftGraphAuthorizeUrl({
-      client_id: 'app-123',
-      redirect_uri:
-        'https://portal.smd.services/portal/products/operator/oauth/microsoft-graph/callback',
-      state: 'signed-state-token',
-    })
-    expect(url.startsWith(MS_GRAPH_AUTHORIZE_URL)).toBe(true)
-    expect(url).toContain('client_id=app-123')
-    expect(url).toContain('state=signed-state-token')
-    expect(url).toContain('response_type=code')
-    for (const scope of MS_GRAPH_PHASE_1_SCOPES) {
-      expect(url).toContain(scope)
-    }
-    expect(url).not.toContain('Mail.Send')
-  })
-
-  it('includes login_hint when provided', () => {
-    const url = buildMicrosoftGraphAuthorizeUrl({
-      client_id: 'app',
-      redirect_uri: 'https://example/cb',
-      state: 's',
-      login_hint: 'user@example.com',
-    })
-    expect(url).toMatch(/login_hint=user(%40|@)example.com/)
-  })
-
-  it('refuses to emit a URL containing Mail.Send', () => {
-    expect(() =>
-      buildMicrosoftGraphAuthorizeUrl({
-        client_id: 'app',
-        redirect_uri: 'https://example/cb',
-        state: 's',
-        scopes: ['Mail.Read', 'Mail.Send'],
-      })
-    ).toThrow(/Mail\.Send is a wave-2 scope/)
-  })
-
-  it('requires client_id, redirect_uri, and state', () => {
-    expect(() =>
-      buildMicrosoftGraphAuthorizeUrl({
-        client_id: '',
-        redirect_uri: 'https://example/cb',
-        state: 's',
-      })
-    ).toThrow(/client_id is required/)
-    expect(() =>
-      buildMicrosoftGraphAuthorizeUrl({
-        client_id: 'app',
-        redirect_uri: '',
-        state: 's',
-      })
-    ).toThrow(/redirect_uri is required/)
-    expect(() =>
-      buildMicrosoftGraphAuthorizeUrl({
-        client_id: 'app',
-        redirect_uri: 'https://example/cb',
-        state: '',
-      })
-    ).toThrow(/state is required/)
   })
 })
 

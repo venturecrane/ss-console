@@ -10,21 +10,31 @@ import {
   createService,
   getService,
   listServices,
-  getServicesForEntity,
-  updateServiceStatus,
   projectConsultingStatus,
   projectOperatorStatus,
   findSpineDrift,
   hasSpineDrift,
   setOperatorPrice,
+  setOperatorPaymentMethod,
+  operatorPaymentMethod,
+  isOperatorPaymentMethod,
   getOperatorServiceForEntity,
-  SERVICE_VALID_TRANSITIONS,
 } from '../src/lib/db/services'
 import { createEngagement } from '../src/lib/db/engagements'
+import type { Service } from '../src/lib/db/services'
 import { createQuote } from '../src/lib/db/quotes'
 
 const migrationsDir = path.resolve(__dirname, '../migrations')
 const ORG = 'org-test'
+
+/** Direct read of an entity's services, newest first. */
+async function servicesForEntity(db: D1Database, entityId: string): Promise<Service[]> {
+  const result = await db
+    .prepare('SELECT * FROM services WHERE org_id = ? AND entity_id = ? ORDER BY created_at DESC')
+    .bind(ORG, entityId)
+    .all<Service>()
+  return result.results
+}
 
 async function seed(db: D1Database) {
   await db
@@ -129,7 +139,7 @@ describe('services DAL', () => {
       cadence: 'one_time',
       status: 'completed',
     })
-    const all = await getServicesForEntity(db, ORG, 'ent-1')
+    const all = await servicesForEntity(db, 'ent-1')
     expect(all.filter((s) => s.type === 'consulting')).toHaveLength(2)
     expect(all.filter((s) => s.type === 'operator')).toHaveLength(1)
   })
@@ -151,31 +161,6 @@ describe('services DAL', () => {
     expect(await listServices(db, ORG, { status: 'active' })).toHaveLength(1)
     expect(await listServices(db, ORG, { type: 'operator' })).toHaveLength(0)
   })
-
-  it('updateServiceStatus enforces the commercial transition guard + stamps ended_at', async () => {
-    const svc = await createService(db, ORG, {
-      entity_id: 'ent-1',
-      type: 'consulting',
-      cadence: 'one_time',
-      status: 'active',
-    })
-    // active → proposed is invalid
-    await expect(updateServiceStatus(db, ORG, svc.id, 'proposed')).rejects.toThrow(
-      /Invalid service status transition/
-    )
-    // active → completed is valid and stamps ended_at
-    const done = await updateServiceStatus(db, ORG, svc.id, 'completed')
-    expect(done?.status).toBe('completed')
-    expect(done?.ended_at).toBeTruthy()
-    // completed is terminal
-    await expect(updateServiceStatus(db, ORG, svc.id, 'churned')).rejects.toThrow(
-      /none \(terminal state\)/
-    )
-  })
-
-  it('updateServiceStatus returns null for an unknown id', async () => {
-    expect(await updateServiceStatus(db, ORG, 'svc_nope', 'active')).toBeNull()
-  })
 })
 
 describe('status projection (must match the backfill SQL CASE in 0069/0070)', () => {
@@ -191,10 +176,6 @@ describe('status projection (must match the backfill SQL CASE in 0069/0070)', ()
     for (const s of ['provisioning', 'active', 'paused']) {
       expect(projectOperatorStatus(s)).toBe('active')
     }
-  })
-  it('transition graph terminals are empty', () => {
-    expect(SERVICE_VALID_TRANSITIONS.completed).toEqual([])
-    expect(SERVICE_VALID_TRANSITIONS.churned).toEqual([])
   })
 })
 
@@ -213,7 +194,7 @@ describe('createEngagement spawns a linked service (ADR 0046 Stage 1b)', () => {
     expect(eng.service_id).toBeTruthy()
     expect(eng.service_id?.startsWith('svc_')).toBe(true)
 
-    const services = await getServicesForEntity(db, ORG, 'ent-1')
+    const services = await servicesForEntity(db, 'ent-1')
     expect(services).toHaveLength(1)
     expect(services[0].id).toBe(eng.service_id)
     expect(services[0].type).toBe('consulting')
@@ -323,7 +304,7 @@ describe('setOperatorPrice (ADR 0046 operator arc)', () => {
     const second = await setOperatorPrice(db, ORG, 'ent-1', 1500)
     expect(second.id).toBe(first.id) // same row, no duplicate
     expect(second.recurring_price).toBe(1500)
-    const all = await getServicesForEntity(db, ORG, 'ent-1')
+    const all = await servicesForEntity(db, 'ent-1')
     expect(all.filter((s) => s.type === 'operator')).toHaveLength(1)
   })
 
@@ -332,6 +313,52 @@ describe('setOperatorPrice (ADR 0046 operator arc)', () => {
     const cleared = await setOperatorPrice(db, ORG, 'ent-1', null)
     expect(cleared.recurring_price).toBeNull()
     expect(cleared.status).toBe('active')
+  })
+})
+
+describe('setOperatorPaymentMethod (migration 0113, agreement §3.8)', () => {
+  let db: D1Database
+  beforeEach(async () => {
+    db = createTestD1()
+    await runMigrations(db, { files: discoverNumericMigrations(migrationsDir) })
+    await seed(db)
+  })
+
+  it('a priced service is born on ACH (no fee) and reads as such', async () => {
+    const svc = await setOperatorPrice(db, ORG, 'ent-1', 5000)
+    expect(svc.payment_method).toBe('ach')
+    expect(operatorPaymentMethod(svc)).toBe('ach')
+    expect(operatorPaymentMethod(null)).toBe('ach')
+  })
+
+  it('authors card on the same row the price lives on, and back to ach', async () => {
+    const priced = await setOperatorPrice(db, ORG, 'ent-1', 5000)
+    const card = await setOperatorPaymentMethod(db, ORG, 'ent-1', 'card')
+    expect(card.id).toBe(priced.id)
+    expect(card.payment_method).toBe('card')
+    expect(card.recurring_price).toBe(5000)
+    expect(operatorPaymentMethod(card)).toBe('card')
+    const ach = await setOperatorPaymentMethod(db, ORG, 'ent-1', 'ach')
+    expect(ach.payment_method).toBe('ach')
+    expect(
+      (await servicesForEntity(db, 'ent-1')).filter((s) => s.type === 'operator')
+    ).toHaveLength(1)
+  })
+
+  it('a rail authored before any price creates the (unpriced) operator service', async () => {
+    const svc = await setOperatorPaymentMethod(db, ORG, 'ent-2', 'card')
+    expect(svc.type).toBe('operator')
+    expect(svc.recurring_price).toBeNull()
+    expect(svc.payment_method).toBe('card')
+    const priced = await setOperatorPrice(db, ORG, 'ent-2', 4000)
+    expect(priced.id).toBe(svc.id)
+    expect(priced.payment_method).toBe('card')
+  })
+
+  it('anything unrecognised in the column reads as ach', () => {
+    expect(operatorPaymentMethod({ payment_method: 'crypto' })).toBe('ach')
+    expect(isOperatorPaymentMethod('card')).toBe(true)
+    expect(isOperatorPaymentMethod('CARD')).toBe(false)
   })
 })
 

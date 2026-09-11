@@ -78,8 +78,7 @@ def check_tool_classes(
     phantom = declared - live
     if phantom:
         raise AssertionError(
-            f"{server.name}: tool_classes declares {sorted(phantom)} but the server "
-            f"exposes no such tool"
+            f"{server.name}: tool_classes declares {sorted(phantom)} but the server exposes no such tool"
         )
 
     ungoverned = live - declared - expected_unclassified
@@ -93,14 +92,10 @@ def check_tool_classes(
     overlap = declared & expected_unclassified
     if overlap:
         raise AssertionError(
-            f"{server.name}: {sorted(overlap)} are both classified and listed as "
-            f"expected-unclassified — pick one"
+            f"{server.name}: {sorted(overlap)} are both classified and listed as expected-unclassified — pick one"
         )
 
-    return {
-        runtime_tool_name(manifest.name, tool): cls
-        for tool, cls in manifest.tool_classes.items()
-    }
+    return {runtime_tool_name(manifest.name, tool): cls for tool, cls in manifest.tool_classes.items()}
 
 
 def run_all(

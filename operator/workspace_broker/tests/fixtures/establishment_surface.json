@@ -1,0 +1,416 @@
+{
+  "ACT_COMMITTED_ACTION_TYPE": {
+    "type": "str",
+    "value": "ACT_COMMITTED"
+  },
+  "ACT_CONFIG_KEYS": {
+    "type": "tuple",
+    "value": ["self_initiation", "document_library", "operator_matter"]
+  },
+  "ACT_NAME_KEYS": {
+    "keys": ["mcp_smokeball_create_matter"],
+    "type": "dict"
+  },
+  "ACT_PROPOSED_ACTION_TYPE": {
+    "type": "str",
+    "value": "ACT_PROPOSED"
+  },
+  "ACT_TOOLS": {
+    "keys": ["mcp_smokeball_create_matter"],
+    "type": "dict"
+  },
+  "CREATE_PENDING_RULES_INDEX_SQL": {
+    "type": "str",
+    "value": "CREATE INDEX IF NOT EXISTS idx_pending_rules_open ON pending_rules(instructed_by, expires_at) WHERE consumed_at IS NULL"
+  },
+  "CREATE_PENDING_RULES_SQL": {
+    "type": "str",
+    "value": "CREATE TABLE IF NOT EXISTS pending_rules (proposal_id TEXT PRIMARY KEY, scope TEXT NOT NULL, subject_json TEXT NOT NULL, text TEXT NOT NULL, text_sha256 TEXT NOT NULL, instructed_by TEXT NOT NULL, for_admin INTEGER NOT NULL DEFAULT 0, created_at REAL NOT NULL, expires_at REAL NOT NULL, consumed_at REAL, consumed_run_id TEXT, kind TEXT NOT NULL DEFAULT 'rule', payload_json TEXT, declined_at REAL, declined_by TEXT, lapsed_at REAL, lapse_notified_at REAL, installed_at REAL, resolved_by TEXT, outcome_reason TEXT, ask_sent_at REAL, notify_claimed_at REAL, notify_claimed_by TEXT)"
+  },
+  "ESTABLISHMENT_RESULT_ACTION_TYPE": {
+    "type": "str",
+    "value": "ESTABLISHMENT_RESULT"
+  },
+  "ESTABLISHMENT_SUBMITTED_ACTION_TYPE": {
+    "type": "str",
+    "value": "ESTABLISHMENT_SUBMITTED"
+  },
+  "EstablishmentStore": {
+    "members": [
+      "_authored_act_names",
+      "_authored_act_payload",
+      "_claim_proposal",
+      "_claim_refusal",
+      "_load_staged_docs",
+      "_materialize_run",
+      "_payload_names",
+      "_pending_view",
+      "_refuse_restated",
+      "_refuse_undeclinable",
+      "_refuse_unresolvable",
+      "_require_act_exposure",
+      "_require_act_payload",
+      "_require_act_tool",
+      "_require_pending",
+      "_require_staging",
+      "_seat_config",
+      "_staging_created_at",
+      "_stamp_installed",
+      "_submit_analyze",
+      "_submit_firm_adjust",
+      "_submit_install",
+      "_submit_person",
+      "_validate_assertions",
+      "act_commit",
+      "act_propose",
+      "decline",
+      "lapse_notified",
+      "notify_claim",
+      "notify_release",
+      "ops_ask_sent",
+      "ops_propose",
+      "ops_resolve",
+      "pending_rules",
+      "propose",
+      "stage_document",
+      "status",
+      "submit",
+      "sweep"
+    ],
+    "type": "type"
+  },
+  "EstablishmentValidationError": {
+    "members": ["add_note", "args", "with_traceback"],
+    "type": "type"
+  },
+  "MAX_DOCS_PER_SET": {
+    "type": "int",
+    "value": 64
+  },
+  "MAX_DOC_TEXT_BYTES": {
+    "type": "int",
+    "value": 1048576
+  },
+  "MAX_OUTCOME_REASON": {
+    "type": "int",
+    "value": 300
+  },
+  "MAX_RULE_TEXT_BYTES": {
+    "type": "int",
+    "value": 2000
+  },
+  "MAX_SET_BYTES": {
+    "type": "int",
+    "value": 16777216
+  },
+  "MAX_SPEC_BODY_BYTES": {
+    "type": "int",
+    "value": 262144
+  },
+  "NOTIFY_CLAIM_STALE_SECONDS": {
+    "type": "float",
+    "value": 120.0
+  },
+  "OPS_OUTCOMES": {
+    "type": "frozenset",
+    "value": ["declined", "done", "withdrawn"]
+  },
+  "OPS_REQUEST_KIND": {
+    "type": "str",
+    "value": "ops_request"
+  },
+  "OPS_REQUEST_LAPSED_ACTION_TYPE": {
+    "type": "str",
+    "value": "OPS_REQUEST_LAPSED"
+  },
+  "OPS_REQUEST_RECORDED_ACTION_TYPE": {
+    "type": "str",
+    "value": "OPS_REQUEST_RECORDED"
+  },
+  "OPS_REQUEST_RESOLVED_ACTION_TYPE": {
+    "type": "str",
+    "value": "OPS_REQUEST_RESOLVED"
+  },
+  "PENDING_RULES_COLUMN_ALTERS": {
+    "type": "tuple",
+    "value": [
+      "ALTER TABLE pending_rules ADD COLUMN kind TEXT NOT NULL DEFAULT 'rule'",
+      "ALTER TABLE pending_rules ADD COLUMN payload_json TEXT",
+      "ALTER TABLE pending_rules ADD COLUMN declined_at REAL",
+      "ALTER TABLE pending_rules ADD COLUMN declined_by TEXT",
+      "ALTER TABLE pending_rules ADD COLUMN lapsed_at REAL",
+      "ALTER TABLE pending_rules ADD COLUMN lapse_notified_at REAL",
+      "ALTER TABLE pending_rules ADD COLUMN installed_at REAL",
+      "ALTER TABLE pending_rules ADD COLUMN resolved_by TEXT",
+      "ALTER TABLE pending_rules ADD COLUMN outcome_reason TEXT",
+      "ALTER TABLE pending_rules ADD COLUMN ask_sent_at REAL",
+      "ALTER TABLE pending_rules ADD COLUMN notify_claimed_at REAL",
+      "ALTER TABLE pending_rules ADD COLUMN notify_claimed_by TEXT"
+    ]
+  },
+  "PROPOSAL_ID_HEX_BYTES": {
+    "type": "int",
+    "value": 4
+  },
+  "PROPOSAL_KINDS": {
+    "type": "frozenset",
+    "value": ["ops_request", "rule", "tool_call"]
+  },
+  "PROPOSAL_SCOPES": {
+    "type": "frozenset",
+    "value": ["act", "firm_adjust", "ops", "person"]
+  },
+  "PROPOSAL_TTL_SECONDS": {
+    "type": "int",
+    "value": 86400
+  },
+  "PendingRuleStore": {
+    "members": [
+      "_connect",
+      "_hydrate",
+      "claim_notify",
+      "consume",
+      "create",
+      "decline",
+      "ensure_schema",
+      "find_open_duplicate",
+      "get",
+      "mark_ask_sent",
+      "mark_installed",
+      "mark_outcome_reported",
+      "open_for",
+      "release_notify",
+      "resolve_ops",
+      "sweep",
+      "unreported_outcomes_for"
+    ],
+    "type": "type"
+  },
+  "RESULT_TTL_SECONDS": {
+    "type": "int",
+    "value": 1800
+  },
+  "RULE_DECLINED_ACTION_TYPE": {
+    "type": "str",
+    "value": "RULE_DECLINED"
+  },
+  "RULE_LAPSED_ACTION_TYPE": {
+    "type": "str",
+    "value": "RULE_LAPSED"
+  },
+  "RULE_PROPOSED_ACTION_TYPE": {
+    "type": "str",
+    "value": "RULE_PROPOSED"
+  },
+  "RULE_TTL_SECONDS": {
+    "type": "int",
+    "value": 604800
+  },
+  "SPEC_PROPERTIES": {
+    "type": "frozenset",
+    "value": ["format", "voice"]
+  },
+  "STAGING_TTL_SECONDS": {
+    "type": "int",
+    "value": 1800
+  },
+  "STATUS_INSTALLED": {
+    "type": "str",
+    "value": "installed"
+  },
+  "SUBMIT_PHASES": {
+    "type": "frozenset",
+    "value": ["analyze", "install"]
+  },
+  "TERMINAL_RETENTION_SECONDS": {
+    "type": "int",
+    "value": 604800
+  },
+  "_CLASS_SLUG_CHARS": {
+    "type": "set",
+    "value": [
+      "-",
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "_",
+      "a",
+      "b",
+      "c",
+      "d",
+      "e",
+      "f",
+      "g",
+      "h",
+      "i",
+      "j",
+      "k",
+      "l",
+      "m",
+      "n",
+      "o",
+      "p",
+      "q",
+      "r",
+      "s",
+      "t",
+      "u",
+      "v",
+      "w",
+      "x",
+      "y",
+      "z"
+    ]
+  },
+  "_ID_PATTERN": {
+    "pattern": "\\A[a-z0-9][a-z0-9_-]{7,63}\\Z",
+    "type": "Pattern"
+  },
+  "_MAX_ACT_DISPLAY_NAME": {
+    "type": "int",
+    "value": 120
+  },
+  "_MAX_ASSERTIONS": {
+    "type": "int",
+    "value": 100
+  },
+  "_MAX_ASSERTIONS_BYTES": {
+    "type": "int",
+    "value": 65536
+  },
+  "_MAX_CLASS_SLUG": {
+    "type": "int",
+    "value": 64
+  },
+  "_MAX_NAME_INPUT": {
+    "type": "int",
+    "value": 200
+  },
+  "_MAX_NAME_SLUG": {
+    "type": "int",
+    "value": 64
+  },
+  "_MAX_SHORT_TEXT": {
+    "type": "int",
+    "value": 200
+  },
+  "_NAME_SLUG_KEEP": {
+    "type": "set",
+    "value": [
+      "-",
+      ".",
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "_",
+      "a",
+      "b",
+      "c",
+      "d",
+      "e",
+      "f",
+      "g",
+      "h",
+      "i",
+      "j",
+      "k",
+      "l",
+      "m",
+      "n",
+      "o",
+      "p",
+      "q",
+      "r",
+      "s",
+      "t",
+      "u",
+      "v",
+      "w",
+      "x",
+      "y",
+      "z"
+    ]
+  },
+  "_PROPOSAL_ID_PATTERN": {
+    "pattern": "\\A[0-9a-f]{8}\\Z",
+    "type": "Pattern"
+  },
+  "_URL_PATTERN": {
+    "pattern": "(?i)\\b(?:https?://|www\\.)\\S+",
+    "type": "Pattern"
+  },
+  "_bounded_str": {
+    "type": "function"
+  },
+  "_column": {
+    "type": "function"
+  },
+  "_hash_text": {
+    "type": "function"
+  },
+  "_optional_text": {
+    "type": "function"
+  },
+  "_require_class_slug": {
+    "type": "function"
+  },
+  "_require_display_name": {
+    "type": "function"
+  },
+  "_require_id": {
+    "type": "function"
+  },
+  "_require_property": {
+    "type": "function"
+  },
+  "_require_proposal_id": {
+    "type": "function"
+  },
+  "_require_text": {
+    "type": "function"
+  },
+  "act_readback_text": {
+    "type": "function"
+  },
+  "build_result_row": {
+    "type": "function"
+  },
+  "normalize_lf": {
+    "type": "function"
+  },
+  "normalize_outcome_reason": {
+    "type": "function"
+  },
+  "normalize_rule_text": {
+    "type": "function"
+  },
+  "proposal_state": {
+    "type": "function"
+  },
+  "readback_for": {
+    "type": "function"
+  },
+  "require_address": {
+    "type": "function"
+  },
+  "safe_slug": {
+    "type": "function"
+  },
+  "ttl_for_kind": {
+    "type": "function"
+  }
+}

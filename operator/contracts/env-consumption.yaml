@@ -66,7 +66,18 @@ vars:
     requirement: required
     agent_env: held
     custody: customer
-    note: the gateway's model credential (per-seat Anthropic workspace key or BYO key)
+    note: >-
+      the gateway's model credential (per-seat Anthropic workspace key or BYO
+      key). TWO CONSUMERS, one value (ss#2464): the long-running gateway, and —
+      on a Smokeball seat — the smokeball MCP subprocess, which needs a model
+      credential to transcribe scanned documents. The overlay registry delivers
+      it under the same name (a remap-from-same-name optional row), so no second
+      credential exists. Deliberate: ADR 0062 §2 already makes this a per-seat
+      Anthropic WORKSPACE key, so spend limits, revocation, and cost attribution
+      are per client seat, and it is already at rest on that seat's volume
+      (profile auth.json) — a separate connector key would add a credential to
+      rotate without narrowing any blast radius. Absent from the subprocess =>
+      the connector fail-safes to pypdf-only with explicit unreadable marking.
   SMD_D1_AUDIT_BINDING:
     stage: agent
     requirement: required
@@ -285,6 +296,70 @@ vars:
       connector var — the Machine uses it to verify the state parameter that
       connect-smokeball.sh signs, so an unstaged key makes the connect callback
       reject every attempt. Infra custody: derived from an SMD-owned master.
+
+  # ---- Smokeball connector: scanned-document vision read (ss#2464) ----
+  # A no-text-layer PDF is a photograph of paper, so the connector transcribes
+  # it through the Messages API. The credential for that is NOT declared here:
+  # it is the seat's own ANTHROPIC_API_KEY (see that row above), delivered into
+  # the subprocess by the overlay registry under the same name. Per-seat
+  # workspace keys (ADR 0062 §2) already bound spend and attribute cost per
+  # client, and the value is already at rest on the seat volume, so a second
+  # key would be one more thing to rotate for no narrowing of exposure.
+  # What IS declared here is the tuning surface — model, the two cost fences,
+  # the kill switch, and the transcription cache.
+  SMOKEBALL_VISION_MODEL:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: infra
+    note: >-
+      Transcription model override; defaults to claude-opus-5 in the connector.
+      Non-secret SMD deployment choice, like SMOKEBALL_ENVIRONMENT.
+  SMOKEBALL_VISION_PAGE_CAP:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: infra
+    note: >-
+      Per-file page ceiling for a transcription (default 40). A file above it is
+      refused EXPLICITLY (extraction none_scanned / over_page_cap), never read
+      partially. The cost fence.
+  SMOKEBALL_VISION_MAX_BYTES:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: infra
+    note: >-
+      Per-file byte ceiling (default 8MB), checked BEFORE base64. The connector
+      clamps it to a hard 23MB because base64 inflates by 4/3 against the API's
+      32MB request cap.
+  SMOKEBALL_VISION_DISABLED:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: infra
+    note: >-
+      Kill switch. Set => scanned files are marked unreadable
+      (none_scanned / disabled) with no API call. Reads in the safe direction.
+  SMOKEBALL_EXTRACT_CACHE_DIR:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: infra
+    note: >-
+      Where transcriptions are cached, default
+      /opt/data/smokeball-extract-cache (0700, files 0600). Deliberately OUTSIDE
+      .smokeball-mcp/, which holds the OAuth refresh token. On the Fly volume,
+      so it SURVIVES REPROVISION — it is on the gone-means-gone layer list.
+  SMOKEBALL_EXTRACT_CACHE_MAX_BYTES:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: infra
+    note: >-
+      Cache ceiling in bytes (default 256MB), LRU-evicted on write; entries
+      expire after 30 days. The volume is small and an unbounded cache becomes a
+      disk-full incident.
 
   # ---- Telegram approval channel ----
   # The confirm round-trip's transport. The bot token is a hand-set Fly secret,

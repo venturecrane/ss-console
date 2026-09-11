@@ -132,7 +132,10 @@ _LABEL_SHAPE = re.compile(r"\A(?:#{1,6}\s+\S|\*\*[^*]+\*\*\s*\Z|__[^_]+__\s*\Z)"
 #: and make the dropped-list useless for deciding whether a drop was right.
 _DISQUALIFIERS: tuple[tuple[str, str], ...] = (
     (r"\$", "carries a currency figure"),
-    (r"\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\b", "carries a date"),
+    (
+        r"\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\b",
+        "carries a date",
+    ),
     (r"\d", "carries a digit"),
 )
 
@@ -230,9 +233,7 @@ def candidates(corpus: dict[str, str]) -> tuple[list[Candidate], list[tuple[str,
             # candidate is dropped because it carries matter content.
             dropped.append((f"<{category}, {n} tokens, {len(docs)} documents>", reason))
             return
-        found.append(
-            Candidate(text=text, category=category, tokens=n, doc_count=len(docs), docs=sorted(docs))
-        )
+        found.append(Candidate(text=text, category=category, tokens=n, doc_count=len(docs), docs=sorted(docs)))
 
     for text, docs in blocks.items():
         consider(text, docs, "block", len(_VP.words(text)) >= BLOCK_MIN_TOKENS)

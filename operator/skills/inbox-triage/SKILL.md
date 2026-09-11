@@ -13,8 +13,6 @@ prerequisites:
 metadata:
   hermes:
     tags: [Email, Triage, Draft, SMD, Customer-Zero]
-  smd:
-    customer: smd
 ---
 
 # SMD Inbox Triage Drafter

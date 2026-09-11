@@ -24,7 +24,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from workspace_broker import establishment
+from workspace_broker import establishment, establishment_store
 from workspace_broker.audit_ledger import LedgerWriter
 from workspace_broker.establishment import (
     ESTABLISHMENT_RESULT_ACTION_TYPE,
@@ -98,9 +98,7 @@ def _install_request(staged: dict, **overrides) -> dict:
 
 def _rows(tmp_path: Path) -> list[tuple[str, dict]]:
     conn = sqlite3.connect(str(tmp_path / "audit.db"))
-    rows = conn.execute(
-        "SELECT action_type, metadata FROM audit_log ORDER BY rowid"
-    ).fetchall()
+    rows = conn.execute("SELECT action_type, metadata FROM audit_log ORDER BY rowid").fetchall()
     conn.close()
     return [(r[0], json.loads(r[1])) for r in rows]
 
@@ -193,9 +191,7 @@ def test_stage_name_is_a_server_side_derivation(tmp_path: Path) -> None:
     resp = _stage(broker, name="../..//Étrange  Letter (FINAL).PDF")
     assert resp["name"] == "trange-letter-final-.pdf".strip("-")
     # No path separators, no uppercase, no raw bytes retained anywhere.
-    doc_path = (
-        broker.establishment.staging_dir / resp["staging_id"] / "docs" / f"{resp['doc_id']}.json"
-    )
+    doc_path = broker.establishment.staging_dir / resp["staging_id"] / "docs" / f"{resp['doc_id']}.json"
     assert "FINAL" not in doc_path.read_text()
 
 
@@ -230,9 +226,7 @@ def test_stage_source_fields_are_rebuilt_and_required(tmp_path: Path) -> None:
             "spec_path": "/opt/data/specs/x",
         },
     )
-    doc_path = (
-        broker.establishment.staging_dir / resp["staging_id"] / "docs" / f"{resp['doc_id']}.json"
-    )
+    doc_path = broker.establishment.staging_dir / resp["staging_id"] / "docs" / f"{resp['doc_id']}.json"
     assert "spec_path" not in json.loads(doc_path.read_text())["source"]
 
 
@@ -245,7 +239,10 @@ def test_stage_unknown_staging_id_is_refused(tmp_path: Path) -> None:
 
 
 def test_stage_doc_count_ceiling(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr(establishment, "MAX_DOCS_PER_SET", 2)
+    # Patch target is establishment_store, not establishment: the constant is
+    # consumed there, and `import *` binds values at import time, so patching
+    # the re-export surface would not reach the consumer (2026-08-24 split).
+    monkeypatch.setattr(establishment_store, "MAX_DOCS_PER_SET", 2)
     broker = _broker(tmp_path)
     first = _stage(broker)
     _stage(broker, staging_id=first["staging_id"])
@@ -254,7 +251,10 @@ def test_stage_doc_count_ceiling(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_stage_total_bytes_ceiling(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr(establishment, "MAX_SET_BYTES", 100)
+    # Patch target is establishment_store, not establishment: the constant is
+    # consumed there, and `import *` binds values at import time, so patching
+    # the re-export surface would not reach the consumer (2026-08-24 split).
+    monkeypatch.setattr(establishment_store, "MAX_SET_BYTES", 100)
     broker = _broker(tmp_path)
     first = _stage(broker, text="x" * 80)
     with pytest.raises(EstablishmentValidationError):
@@ -308,12 +308,7 @@ def test_submit_staged_doc_failing_rehash_is_refused(tmp_path: Path) -> None:
     integrity refusal — the spec must bind to exactly the staged corpus."""
     broker = _broker(tmp_path)
     staged = _stage(broker)
-    doc_path = (
-        broker.establishment.staging_dir
-        / staged["staging_id"]
-        / "docs"
-        / f"{staged['doc_id']}.json"
-    )
+    doc_path = broker.establishment.staging_dir / staged["staging_id"] / "docs" / f"{staged['doc_id']}.json"
     record = json.loads(doc_path.read_text())
     record["text"] = record["text"] + " tampered"
     doc_path.write_text(json.dumps(record))
@@ -384,9 +379,7 @@ def test_install_materializes_run_and_moves_docs(tmp_path: Path) -> None:
     assert submission["instructed_by"] == "admin@example-firm.com"
     assert "created_at" in submission and "submitted_at" not in submission
     # The manifest the intake re-verifies 1:1 against the run's docs.
-    assert submission["corpus_manifest"] == [
-        {"doc_id": staged["doc_id"], "sha256": staged["sha256"]}
-    ]
+    assert submission["corpus_manifest"] == [{"doc_id": staged["doc_id"], "sha256": staged["sha256"]}]
     # The corpus MOVED into the run (docs gone from staging), but the staging
     # set itself is retained — the intake reads its analysis/ artifacts during
     # the run and purges the whole set afterwards, as root.
@@ -400,9 +393,7 @@ def test_install_body_is_lf_normalized_before_hash_and_ceiling(tmp_path: Path) -
     broker = _broker(tmp_path)
     staged = _stage(broker)
     resp = broker.handle(_install_request(staged), peer_pid=9999, peer_uid=AGENT_UID)
-    submission = json.loads(
-        (broker.establishment.runs_dir / resp["run_id"] / "submission.json").read_text()
-    )
+    submission = json.loads((broker.establishment.runs_dir / resp["run_id"] / "submission.json").read_text())
     assert "\r" not in submission["spec_body"]
     from hashlib import sha256
 
@@ -414,17 +405,13 @@ def test_install_spec_body_ceiling_counts_normalized_bytes(tmp_path: Path) -> No
     staged = _stage(broker)
     over = "x" * establishment.MAX_SPEC_BODY_BYTES + "y"
     with pytest.raises(EstablishmentValidationError):
-        broker.handle(
-            _install_request(staged, spec_body=over), peer_pid=9999, peer_uid=AGENT_UID
-        )
+        broker.handle(_install_request(staged, spec_body=over), peer_pid=9999, peer_uid=AGENT_UID)
     # CRLF that fits once normalized is accepted: the ceiling reads the stored
     # bytes, not the wire bytes.
     line = "a" * 100 + "\r\n"
     body = line * (establishment.MAX_SPEC_BODY_BYTES // 101)
     assert len(body.encode()) > establishment.MAX_SPEC_BODY_BYTES
-    resp = broker.handle(
-        _install_request(staged, spec_body=body), peer_pid=9999, peer_uid=AGENT_UID
-    )
+    resp = broker.handle(_install_request(staged, spec_body=body), peer_pid=9999, peer_uid=AGENT_UID)
     assert resp["ok"] is True
 
 
@@ -447,9 +434,7 @@ def test_install_refusals_by_field(tmp_path: Path) -> None:
     ]
     for overrides in cases:
         with pytest.raises(EstablishmentValidationError):
-            broker.handle(
-                _install_request(staged, **overrides), peer_pid=9999, peer_uid=AGENT_UID
-            )
+            broker.handle(_install_request(staged, **overrides), peer_pid=9999, peer_uid=AGENT_UID)
     # Nothing materialized by any refusal.
     assert not list(broker.establishment.runs_dir.iterdir())
 
@@ -459,9 +444,7 @@ def test_install_manifest_hash_mismatch_is_refused(tmp_path: Path) -> None:
     staged = _stage(broker)
     bad = [{"doc_id": staged["doc_id"], "sha256": "0" * 64}]
     with pytest.raises(EstablishmentValidationError):
-        broker.handle(
-            _install_request(staged, corpus_manifest=bad), peer_pid=9999, peer_uid=AGENT_UID
-        )
+        broker.handle(_install_request(staged, corpus_manifest=bad), peer_pid=9999, peer_uid=AGENT_UID)
 
 
 def test_install_manifest_unknown_doc_and_duplicate_are_refused(tmp_path: Path) -> None:
@@ -469,9 +452,7 @@ def test_install_manifest_unknown_doc_and_duplicate_are_refused(tmp_path: Path) 
     staged = _stage(broker)
     with pytest.raises(EstablishmentValidationError):
         broker.handle(
-            _install_request(
-                staged, corpus_manifest=[{"doc_id": "doc-999", "sha256": staged["sha256"]}]
-            ),
+            _install_request(staged, corpus_manifest=[{"doc_id": "doc-999", "sha256": staged["sha256"]}]),
             peer_pid=9999,
             peer_uid=AGENT_UID,
         )
@@ -505,7 +486,10 @@ def test_install_assertions_shape_and_ceilings(tmp_path: Path, monkeypatch) -> N
                 peer_pid=9999,
                 peer_uid=AGENT_UID,
             )
-    monkeypatch.setattr(establishment, "_MAX_ASSERTIONS", 1)
+    # Patch target is establishment_store, not establishment: the constant is
+    # consumed there, and `import *` binds values at import time, so patching
+    # the re-export surface would not reach the consumer (2026-08-24 split).
+    monkeypatch.setattr(establishment_store, "_MAX_ASSERTIONS", 1)
     with pytest.raises(EstablishmentValidationError):
         broker.handle(
             _install_request(staged, assertions={"rules": [{"a": 1}, {"b": 2}]}),
@@ -517,12 +501,8 @@ def test_install_assertions_shape_and_ceilings(tmp_path: Path, monkeypatch) -> N
 def test_install_assertions_are_optional(tmp_path: Path) -> None:
     broker = _broker(tmp_path)
     staged = _stage(broker)
-    resp = broker.handle(
-        _install_request(staged, assertions=None), peer_pid=9999, peer_uid=AGENT_UID
-    )
-    submission = json.loads(
-        (broker.establishment.runs_dir / resp["run_id"] / "submission.json").read_text()
-    )
+    resp = broker.handle(_install_request(staged, assertions=None), peer_pid=9999, peer_uid=AGENT_UID)
+    submission = json.loads((broker.establishment.runs_dir / resp["run_id"] / "submission.json").read_text())
     assert submission["assertions"] is None
 
 
@@ -557,9 +537,7 @@ def test_submit_action_type_cannot_be_forged(tmp_path: Path) -> None:
     """Discipline 1: a caller-supplied action_type is simply never read."""
     broker = _broker(tmp_path)
     staged = _stage(broker)
-    broker.handle(
-        _install_request(staged, action_type="REPLY_SENT"), peer_pid=9999, peer_uid=AGENT_UID
-    )
+    broker.handle(_install_request(staged, action_type="REPLY_SENT"), peer_pid=9999, peer_uid=AGENT_UID)
     assert [r[0] for r in _rows(tmp_path)] == [ESTABLISHMENT_SUBMITTED_ACTION_TYPE]
 
 
@@ -576,9 +554,7 @@ def test_submitted_row_joins_the_hash_chain(tmp_path: Path) -> None:
     staged = _stage(broker)
     broker.handle(_install_request(staged), peer_pid=9999, peer_uid=AGENT_UID)
     conn = sqlite3.connect(str(tmp_path / "audit.db"))
-    rows = conn.execute(
-        "SELECT action_type, prev_hash, row_hash FROM audit_log ORDER BY rowid"
-    ).fetchall()
+    rows = conn.execute("SELECT action_type, prev_hash, row_hash FROM audit_log ORDER BY rowid").fetchall()
     conn.close()
     assert [r[0] for r in rows] == ["TOOL_CALL_COMPLETED", ESTABLISHMENT_SUBMITTED_ACTION_TYPE]
     assert rows[1][1] == rows[0][2]
@@ -650,9 +626,7 @@ def test_status_returns_result_verbatim_and_deletes_it(tmp_path: Path) -> None:
     broker = _broker(tmp_path)
     staged = _stage(broker)
     run_id = _complete_run(broker, staged)
-    resp = broker.handle(
-        {"action": "establish_status", "run_id": run_id}, peer_pid=9999, peer_uid=AGENT_UID
-    )
+    resp = broker.handle({"action": "establish_status", "run_id": run_id}, peer_pid=9999, peer_uid=AGENT_UID)
     assert resp["status"] == "complete"
     assert resp["result"]["status"] == "installed"
     assert resp["result"]["demotions"][0]["rule_id"] == "no-exclamation-points"
@@ -660,18 +634,14 @@ def test_status_returns_result_verbatim_and_deletes_it(tmp_path: Path) -> None:
     # One-shot: the file is gone and a second read is an unknown-run refusal.
     assert not (broker.establishment.results_dir / f"{run_id}.json").exists()
     with pytest.raises(EstablishmentValidationError):
-        broker.handle(
-            {"action": "establish_status", "run_id": run_id}, peer_pid=9999, peer_uid=AGENT_UID
-        )
+        broker.handle({"action": "establish_status", "run_id": run_id}, peer_pid=9999, peer_uid=AGENT_UID)
 
 
 def test_status_appends_bounded_result_row(tmp_path: Path) -> None:
     broker = _broker(tmp_path)
     staged = _stage(broker)
     run_id = _complete_run(broker, staged)
-    broker.handle(
-        {"action": "establish_status", "run_id": run_id}, peer_pid=9999, peer_uid=AGENT_UID
-    )
+    broker.handle({"action": "establish_status", "run_id": run_id}, peer_pid=9999, peer_uid=AGENT_UID)
     rows = _rows(tmp_path)
     assert [r[0] for r in rows] == [
         ESTABLISHMENT_SUBMITTED_ACTION_TYPE,
@@ -680,9 +650,7 @@ def test_status_appends_bounded_result_row(tmp_path: Path) -> None:
     metadata = rows[1][1]
     assert metadata["verdict"] == "installed"
     # detail (compiler prose that may quote) is NOT retained — rule ids + names.
-    assert metadata["demotions"] == [
-        {"rule_id": "no-exclamation-points", "documents": ["demand-letter-chen.docx"]}
-    ]
+    assert metadata["demotions"] == [{"rule_id": "no-exclamation-points", "documents": ["demand-letter-chen.docx"]}]
     assert metadata["previous_key"] == "vaults/smd/output-classes.previous.json"
     assert "Dear Ms. Chen" not in json.dumps(metadata)
     assert "detail" not in json.dumps(metadata)
@@ -733,9 +701,7 @@ def test_unparseable_result_is_an_error_not_a_delete(tmp_path: Path) -> None:
     result_path = broker.establishment.results_dir / f"{run_id}.json"
     result_path.write_text("{not json")
     with pytest.raises(ValueError):
-        broker.handle(
-            {"action": "establish_status", "run_id": run_id}, peer_pid=9999, peer_uid=AGENT_UID
-        )
+        broker.handle({"action": "establish_status", "run_id": run_id}, peer_pid=9999, peer_uid=AGENT_UID)
     assert result_path.exists()  # left for the TTL sweep, not silently eaten
 
 
@@ -792,9 +758,7 @@ def test_status_survives_an_undeletable_result(tmp_path: Path) -> None:
     results_dir = broker.establishment.results_dir
     results_dir.chmod(0o500)
     try:
-        resp = broker.handle(
-            {"action": "establish_status", "run_id": run_id}, peer_pid=9999, peer_uid=AGENT_UID
-        )
+        resp = broker.handle({"action": "establish_status", "run_id": run_id}, peer_pid=9999, peer_uid=AGENT_UID)
     finally:
         results_dir.chmod(0o700)
     assert resp["status"] == "complete"
@@ -880,9 +844,7 @@ def test_person_submit_refuses_non_null_firm_fields(tmp_path, field, value):
         _person_submit(broker, **{field: value})
 
 
-@pytest.mark.parametrize(
-    "person", [None, "", "not-an-address", "two@ats@x.com", "sarah@nodot", "@firm.com"]
-)
+@pytest.mark.parametrize("person", [None, "", "not-an-address", "two@ats@x.com", "sarah@nodot", "@firm.com"])
 def test_person_submit_refuses_a_malformed_person(tmp_path, person):
     broker = _broker(tmp_path)
     with pytest.raises(EstablishmentValidationError, match="person"):
@@ -913,9 +875,7 @@ def test_person_submit_audit_row_is_bounded_and_body_free(tmp_path):
 def test_firm_submissions_now_stamp_their_scope(tmp_path):
     broker = _broker(tmp_path)
     staged = _stage(broker)
-    result = broker.handle(
-        _install_request(staged), peer_pid=9999, peer_uid=AGENT_UID
-    )
+    result = broker.handle(_install_request(staged), peer_pid=9999, peer_uid=AGENT_UID)
     run_dir = tmp_path / "establish-spool" / "runs" / result["run_id"]
     sub = json.loads((run_dir / "submission.json").read_text())
     assert sub["scope"] == "firm"

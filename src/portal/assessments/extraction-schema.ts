@@ -33,40 +33,6 @@ export const PROBLEM_IDS = [
 
 export type ProblemId = (typeof PROBLEM_IDS)[number]
 
-export const PROBLEM_LABELS: Record<ProblemId, string> = {
-  process_design: 'Process design',
-  tool_systems: 'Tools & systems',
-  data_visibility: 'Data & visibility',
-  customer_pipeline: 'Customer pipeline',
-  team_operations: 'Team operations',
-}
-
-// Legacy v1 problem IDs — used for backward compatibility with existing
-// assessments, quotes, and lead signals stored as schema_version "1.0".
-export const LEGACY_PROBLEM_IDS = [
-  'owner_bottleneck',
-  'lead_leakage',
-  'financial_blindness',
-  'scheduling_chaos',
-  'manual_communication',
-  'employee_retention',
-] as const
-
-export type LegacyProblemId = (typeof LEGACY_PROBLEM_IDS)[number]
-
-/**
- * @public Label map for the pre-ADR-0001 problem taxonomy. Kept alongside
- * LEGACY_PROBLEM_IDS so historical extraction rows stay renderable.
- */
-export const LEGACY_PROBLEM_LABELS: Record<LegacyProblemId, string> = {
-  owner_bottleneck: 'Owner bottleneck',
-  lead_leakage: 'Lead leakage',
-  financial_blindness: 'Financial blindness',
-  scheduling_chaos: 'Scheduling chaos',
-  manual_communication: 'Manual communication',
-  employee_retention: 'Employee retention',
-}
-
 // ---------------------------------------------------------------------------
 // Verticals — broader ICP, no longer gated to 2 launch verticals
 // ---------------------------------------------------------------------------

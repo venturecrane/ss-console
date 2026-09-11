@@ -85,6 +85,10 @@ export function changeDirection(oldValue: Ceiling, newValue: Ceiling): ChangeDir
 export const VERTICAL_FLOORS: Readonly<Record<string, Partial<Record<ActionClass, Ceiling>>>> = {}
 
 /** Every action-class key used in VERTICAL_FLOORS, for the membership assertion. */
+/**
+ * @public Membership guard. tests/config-governance.test.ts imports it to assert every floor key
+ * is an accepted action class. No runtime caller, by design.
+ */
 export function verticalFloorActionClasses(): string[] {
   const keys = new Set<string>()
   for (const floors of Object.values(VERTICAL_FLOORS)) {
@@ -268,40 +272,4 @@ export async function applySkillToggle(
   })
 
   return { outcome: 'accepted', reason: null }
-}
-
-export interface ConfigChangeAuditRow {
-  id: number
-  created_at: string
-  source: string
-  actor_email: string
-  change_type: ConfigChangeType
-  persona_slug: string | null
-  skill_name: string | null
-  action_class: string | null
-  old_value: string | null
-  new_value: string | null
-  outcome: ConfigChangeOutcome
-  outcome_reason: string | null
-  direction: ChangeDirection
-}
-
-/**
- * Read the most-recent N governance actions for an entity, newest first.
- * Powers the control-plane authority-audit pane (ADR 0030 §4). Read-only.
- */
-export async function listConfigChangeAudit(
-  db: D1Database,
-  entityId: string,
-  limit = 50
-): Promise<ConfigChangeAuditRow[]> {
-  const result = await db
-    .prepare(
-      'SELECT id, created_at, source, actor_email, change_type, persona_slug, skill_name, ' +
-        'action_class, old_value, new_value, outcome, outcome_reason, direction ' +
-        'FROM config_change_audit WHERE entity_id = ? ORDER BY created_at DESC, id DESC LIMIT ?'
-    )
-    .bind(entityId, limit)
-    .all<ConfigChangeAuditRow>()
-  return result.results ?? []
 }

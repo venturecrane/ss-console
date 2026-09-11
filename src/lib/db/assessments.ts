@@ -23,18 +23,6 @@ export type AssessmentStatus =
   'scheduled' | 'completed' | 'disqualified' | 'converted' | 'cancelled'
 
 /**
- * @public Status-label table for admin selects. Pinned as a contract by
- * tests/assessments.test.ts.
- */
-export const ASSESSMENT_STATUSES: { value: AssessmentStatus; label: string }[] = [
-  { value: 'scheduled', label: 'Scheduled' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
-  { value: 'disqualified', label: 'Disqualified' },
-  { value: 'converted', label: 'Converted' },
-]
-
-/**
  * Valid status transitions enforced at the application layer.
  *
  * scheduled   -> completed | disqualified | cancelled

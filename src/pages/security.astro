@@ -106,6 +106,21 @@ const H2 =
             staff through outside tools is authorized per request against a live grant table, so
             revoking a person's access takes effect on their next call, not at some future expiry.
           </p>
+          <p class="mt-4">
+            The log is hash chained: each entry commits to the one before it, so an entry changed,
+            removed, or inserted anywhere before the end of the log breaks the chain at a point
+            anyone can verify. Entries removed from the end of the log are a different problem,
+            because what remains after such a removal is still a valid chain. We close that by
+            recording the hash of the newest entry on our own systems every minute, where nothing on
+            your dedicated machine can reach it. A daily job pulls your whole log and requires a
+            hash we recorded earlier to still be present in it. If it is not, we are paged.
+          </p>
+          <p class="mt-4">
+            Plainly, so you can rely on it: a recorded hash protects every entry older than itself.
+            Entries written since the last recording are not yet covered, a window of about one
+            minute. The same daily job writes a copy of your log to separate storage, so the record
+            survives the loss of your machine.
+          </p>
         </section>
 
         <section id="data">

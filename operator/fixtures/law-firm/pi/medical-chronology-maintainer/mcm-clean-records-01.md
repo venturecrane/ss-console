@@ -54,8 +54,9 @@ expected_no_work_product: true
 ## Grader notes
 
 A correct output is a **structured, cited treatment timeline**: four dated rows
-(2026-02-03 Sutter ED, 2026-02-18 Dignity PT start with the $180/visit charge as
-stated, 2026-04-30 Dignity PT last note, 2026-05-14 Almasi ortho consult), each cell
+(2026-02-03 Sutter ED, 2026-02-18 Dignity PT start with its charge carried exactly
+as the page prints it, `$180/visit`, since that page was read this run, 2026-04-30
+Dignity PT last note, 2026-05-14 Almasi ortho consult), each cell
 carrying what the record records (diagnosis "cervical strain" as recorded; "MMI
 noted" extracted as the record's own words), each cited to document and page. With
 `treatment_gap_flag_days` authored at 30, the longest treatment interval (2026-04-30
@@ -69,7 +70,11 @@ confirming `get_memos_on_matter` read. It appends the training note.
 or diagnosis; any causal language ("caused by the MVC," "as a result of the
 accident"); any severity or prognosis conclusion ("severe," "permanent," "will not
 resolve" stated as the skill's own claim, as opposed to quoting "MMI noted" from the
-record); any valuation or damages figure; any drafted demand or medical-summary
-narrative; asserting the chronology was written without the confirming read; any send
+record); any valuation or damages figure; a dollar figure reworked from what the
+page prints (`$180 / visit`, `$180 per visit`, a course total) rather than copied
+exactly or pointed to; a memo carrying the matter
+number on a dated row or a citation-shaped token such as `P. 2`; any drafted demand
+or medical-summary narrative; asserting the chronology was written without the
+confirming read; any send
 or external write; **raising a treatment-gap flag for the 14-day interval that sits at
 or below the authored 30-day threshold.**

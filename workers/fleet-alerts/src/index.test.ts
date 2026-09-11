@@ -28,6 +28,8 @@ function row(overrides: Partial<FleetStatusRow>): FleetStatusRow {
     customer_slug: 'smd',
     last_heartbeat_ts: '2026-07-04T11:59:00.000Z', // 60s ago = green
     sticky_stop_level: 'OK',
+    sticky_stop_reason: null,
+    sticky_stop_condition: null,
     scheduler_ok: null,
     scheduler_max_overdue_seconds: null,
     connectors_json: null,
@@ -37,6 +39,10 @@ function row(overrides: Partial<FleetStatusRow>): FleetStatusRow {
     spec_control_ok: null,
     webhook_surface_json: null,
     webhook_surface_ok: null,
+    gateway_loop_ok: null,
+    gateway_loop_age_seconds: null,
+    gateway_supervisor_state: null,
+    gateway_restarts_last_hour: null,
     ...overrides,
   }
 }
@@ -84,6 +90,58 @@ describe('evaluateConditions', () => {
       })
       expect(out.find((c) => c.condition === 'hard_stop')?.active).toBe(want)
     }
+  })
+
+  it('the hard_stop detail carries the cause the seat recorded', () => {
+    const out = evaluateConditions(
+      [
+        row({
+          sticky_stop_level: 'HARD_STOP',
+          sticky_stop_condition: 'consecutive_tool_failures',
+          sticky_stop_reason:
+            'consecutive_tool_failures=8 (window=600s, skill=mcp_smokeball_list_matters)',
+        }),
+      ],
+      NOW,
+      RED,
+      { overdueThresholdSeconds: OVERDUE }
+    )
+    const detail = out.find((c) => c.condition === 'hard_stop')?.detail ?? ''
+    expect(detail).toContain('sticky_stop_level=HARD_STOP')
+    expect(detail).toContain('condition=consecutive_tool_failures')
+    // The operative half: the page must name the failing skill, or the reader
+    // goes to the seat to find it (which is what happened on 2026-09-01).
+    expect(detail).toContain('skill=mcp_smokeball_list_matters')
+    // And hand them the way back: the same incident's responder cleared the
+    // stop by raw sqlite because nothing in their path named the built surface.
+    expect(detail).toContain('clear: admin.smd.services/admin/operator/smd')
+    expect(detail).toContain('runbook docs/runbooks/operator/sticky-stop-clear.md')
+  })
+
+  it('the hard_stop detail degrades to the level alone on a pre-cause seat', () => {
+    // A seat not yet reprovisioned onto the cause-carrying overlay. The line
+    // must not claim a cause it does not have - but it still points at the
+    // clear surface, which is true of every seat.
+    const out = evaluateConditions([row({ sticky_stop_level: 'HARD_STOP' })], NOW, RED, {
+      overdueThresholdSeconds: OVERDUE,
+    })
+    const detail = out.find((c) => c.condition === 'hard_stop')?.detail ?? ''
+    expect(detail).toBe(
+      'sticky_stop_level=HARD_STOP | clear: admin.smd.services/admin/operator/smd ' +
+        '(runbook docs/runbooks/operator/sticky-stop-clear.md)'
+    )
+    expect(detail).not.toContain('condition=')
+  })
+
+  it('the hard_stop label names no meter', () => {
+    // Four meters drive this ladder; naming one in the subject asserts a cause
+    // the condition never measured. Regression guard for the 2026-09-01
+    // "Cost breaker HARD_STOP" page on a credential failure.
+    const label = conditionLabel('hard_stop')
+    for (const meter of ['Cost', 'cost', 'refusal', 'tool failure', 'runtime']) {
+      expect(label).not.toContain(meter)
+    }
+    expect(label).toContain('HARD_STOP')
   })
 
   // --- scheduler conditions + per-field NULL-hold ---------------------------
@@ -1282,5 +1340,157 @@ describe('webhook_surface (ss#2287 — the ss#2222 warn tier)', () => {
       customer_slug: 'pilot-smokeball',
       condition: 'webhook_surface_missing:operator_seat_facts',
     })
+  })
+})
+
+describe('gateway loop + supervisor (ss#2488 part 2)', () => {
+  const loopStates = (r: FleetStatusRow, red = 120) =>
+    evaluateConditions([r], NOW, RED, {
+      overdueThresholdSeconds: OVERDUE,
+      gatewayLoopRedSeconds: red,
+    }).filter((c) => c.condition.startsWith('gateway_'))
+  const one = (r: FleetStatusRow, cond: string, red = 120) =>
+    loopStates(r, red).filter((c) => c.condition === cond)
+
+  it('all four fields NULL push nothing (hold)', () => {
+    // A pre-part-2 overlay, a Hermes pin with no loop heartbeat, a seat without
+    // the supervisor. None of those is a recovery and none is a page.
+    expect(loopStates(row({}))).toHaveLength(0)
+  })
+
+  it('a row missing the columns entirely (undefined, pre-0107 read) pushes nothing', () => {
+    // The critique's case: `undefined !== null` is TRUE, so a strict-null guard
+    // would fall through to `=== 0` (false) and push active:false -- a false
+    // RECOVERED. The guards use `== null` precisely so this holds.
+    const r = row({}) as unknown as Record<string, unknown>
+    delete r.gateway_loop_ok
+    delete r.gateway_loop_age_seconds
+    delete r.gateway_supervisor_state
+    delete r.gateway_restarts_last_hour
+    expect(loopStates(r as unknown as FleetStatusRow)).toHaveLength(0)
+  })
+
+  // -- gateway_loop_wedged ---------------------------------------------------
+  it('ok=1, age past threshold opens wedged', () => {
+    const out = one(
+      row({ gateway_loop_ok: 1, gateway_loop_age_seconds: 400 }),
+      'gateway_loop_wedged'
+    )
+    expect(out).toHaveLength(1)
+    expect(out[0].active).toBe(true)
+    expect(out[0].detail).toContain('400s')
+  })
+
+  it('ok=1, age under threshold resolves wedged', () => {
+    const out = one(
+      row({ gateway_loop_ok: 1, gateway_loop_age_seconds: 10 }),
+      'gateway_loop_wedged'
+    )
+    expect(out).toHaveLength(1)
+    expect(out[0].active).toBe(false)
+  })
+
+  it('ok=1 with a NULL age holds wedged (arming latch / boot suppression is not a verdict)', () => {
+    // `null > 120` is false in JS. Without the both-present guard this would
+    // RESOLVE an open wedge on a number nobody measured.
+    expect(
+      one(row({ gateway_loop_ok: 1, gateway_loop_age_seconds: null }), 'gateway_loop_wedged')
+    ).toHaveLength(0)
+  })
+
+  it('ok=0 holds wedged and opens unprovable -- never resolves an open wedge on disowned data', () => {
+    const out = loopStates(row({ gateway_loop_ok: 0, gateway_loop_age_seconds: 5 }))
+    expect(out.filter((c) => c.condition === 'gateway_loop_wedged')).toHaveLength(0)
+    const unp = out.filter((c) => c.condition === 'gateway_loop_unprovable')
+    expect(unp).toHaveLength(1)
+    expect(unp[0].active).toBe(true)
+  })
+
+  it('ok=1 resolves unprovable', () => {
+    const out = one(
+      row({ gateway_loop_ok: 1, gateway_loop_age_seconds: 5 }),
+      'gateway_loop_unprovable'
+    )
+    expect(out).toHaveLength(1)
+    expect(out[0].active).toBe(false)
+  })
+
+  it('threshold is honoured from options', () => {
+    const r = row({ gateway_loop_ok: 1, gateway_loop_age_seconds: 200 })
+    expect(one(r, 'gateway_loop_wedged', 300)[0].active).toBe(false)
+    expect(one(r, 'gateway_loop_wedged', 120)[0].active).toBe(true)
+  })
+
+  // -- gateway_restarted -----------------------------------------------------
+  it('restarts >= 1 opens restarted; 0 resolves it; NULL holds', () => {
+    expect(one(row({ gateway_restarts_last_hour: 1 }), 'gateway_restarted')[0].active).toBe(true)
+    expect(one(row({ gateway_restarts_last_hour: 3 }), 'gateway_restarted')[0].active).toBe(true)
+    expect(one(row({ gateway_restarts_last_hour: 0 }), 'gateway_restarted')[0].active).toBe(false)
+    expect(one(row({ gateway_restarts_last_hour: null }), 'gateway_restarted')).toHaveLength(0)
+  })
+
+  // -- supervisor state --------------------------------------------------------
+  it('refusing opens refusing and resolves inert', () => {
+    const out = loopStates(row({ gateway_supervisor_state: 'refusing' }))
+    expect(out.find((c) => c.condition === 'gateway_supervisor_refusing')!.active).toBe(true)
+    expect(out.find((c) => c.condition === 'gateway_supervisor_inert')!.active).toBe(false)
+  })
+
+  it('inert and not-watching both open inert, with distinct detail', () => {
+    const a = one(row({ gateway_supervisor_state: 'inert' }), 'gateway_supervisor_inert')[0]
+    const b = one(row({ gateway_supervisor_state: 'not-watching' }), 'gateway_supervisor_inert')[0]
+    expect(a.active).toBe(true)
+    expect(b.active).toBe(true)
+    expect(a.detail).toContain('argv')
+    expect(b.detail).toContain('no loop heartbeat')
+  })
+
+  it('never-healthy opens inert, and says a human is the only recovery path', () => {
+    // The 2026-09-01 pilot-smokeball crash loop. A gateway that wedges DURING
+    // startup never writes a first beat, so the seat supervisor never arms and
+    // its state stayed `not-armed` -- which does not page, and must not, since
+    // `not-armed` is also every healthy seat's first thirty seconds. The seat
+    // restarted every ~15 minutes for two and a half hours and reached nobody.
+    //
+    // It shares gateway_supervisor_inert rather than adding a fourth condition
+    // because `condition` carries a CHECK constraint (migrations 0107, 0109) --
+    // a new name without a migration is a REJECTED row, i.e. a page that
+    // silently never lands. The detail is where the three are told apart.
+    const c = one(row({ gateway_supervisor_state: 'never-healthy' }), 'gateway_supervisor_inert')[0]
+    expect(c.active).toBe(true)
+    expect(c.detail).toContain('NEVER CAME UP')
+    // The two halves an on-call needs: that nothing automatic follows, and that
+    // it is not the supervisor's job to kill it.
+    expect(c.detail).toMatch(/will NOT restart it/)
+    expect(c.detail).toMatch(/needs a human/)
+  })
+
+  it('starting resolves both supervisor conditions — it is every healthy boot', () => {
+    // Before the fix this window reported `inert` and paged on every boot: the
+    // entrypoint forks the supervisor while still root, and bootstrap.sh runs
+    // for minutes before its own gateway exec, so /proc/<main>/cmdline
+    // legitimately names no hermes for that whole time.
+    const out = loopStates(row({ gateway_supervisor_state: 'starting' }))
+    expect(out.find((c) => c.condition === 'gateway_supervisor_inert')!.active).toBe(false)
+    expect(out.find((c) => c.condition === 'gateway_supervisor_refusing')!.active).toBe(false)
+  })
+
+  it('armed and not-armed resolve both supervisor conditions; NULL holds both', () => {
+    for (const s of ['armed', 'not-armed']) {
+      const out = loopStates(row({ gateway_supervisor_state: s }))
+      expect(out.find((c) => c.condition === 'gateway_supervisor_refusing')!.active).toBe(false)
+      expect(out.find((c) => c.condition === 'gateway_supervisor_inert')!.active).toBe(false)
+    }
+    expect(
+      loopStates(row({ gateway_supervisor_state: null })).filter((c) =>
+        c.condition.startsWith('gateway_supervisor')
+      )
+    ).toHaveLength(0)
+  })
+
+  it('labels are human, not identifiers', () => {
+    expect(conditionLabel('gateway_loop_wedged')).toMatch(/wedged/i)
+    expect(conditionLabel('gateway_supervisor_refusing')).toMatch(/human/i)
+    expect(conditionLabel('gateway_supervisor_inert')).toMatch(/cannot act/i)
   })
 })

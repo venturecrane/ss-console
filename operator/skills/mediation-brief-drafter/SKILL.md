@@ -12,7 +12,7 @@ description: >-
   the edge of the record and stopped. Every quotation is verified verbatim, contiguous, and paired
   with the question it actually answered; every factual sentence carries a record cite; a fact the
   record does not establish stays a visible NOT IN RECORD marker and is never filled.
-version: 0.1.0
+version: 0.2.1
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -318,20 +318,18 @@ process. A skill that tried to execute the checker on such a seat would be refus
 by the entitlement, and a skill that treated the refusal as "gate skipped" would
 have inverted the whole point.
 
-> **NO DELIVERY-PATH GATE EXISTS FOR THIS LANE (ss-console#2258, 2026-08-13).**
-> The "harness-side" hook described here was never built: `drafting_gate_check.py`
-> appears in the overlay only as a presence probe, and the plugin that would have
-> been that hook disclaims the record checks in its own docstring. ss-console#2258
-> built a real gate, but it lives inside `mcp_smokeball_render_docx_draft`, and
-> **this lane does not deliver through that tool.**
->
-> So on a seat with `code_execution` refused, this lane is in the drafting
-> discipline's **variant C — no gate on either path — and variant C's rule is that
-> nothing surfaces.** Do not describe a draft as gated here, do not treat the
-> execution refusal as a reason to deliver anyway, and say plainly that the
-> mechanical check did not run. The clause that matters most without a gate behind
-> it is the one already written below: do not surface a draft before a gate result
-> is established, reasoning that it looks clean.
+> **THE DELIVERY-PATH GATE IS `mcp_smokeball_render_docx_draft` (ss-console#2258,
+> #2448).** The "harness-side" hook once described here was never built. The real
+> gate lives inside `mcp_smokeball_render_docx_draft`: it runs the record check
+> against this matter's own documents before it renders or files anything, and
+> **this lane delivers through that tool** (with `document_class:
+mediation_brief`, so the filed .docx is in the firm's format: centered bold
+> roman-numeral sections, indented bold-underlined lettered subsections, as the
+> firm's template or the starter defines them). On a seat with `code_execution`
+> refused, that is the gate; where `code_execution` is authored the skill may also
+> run the checker itself first. A draft the tool refuses does not surface, and a
+> draft is never described as gated unless that tool (or the checker) actually ran
+> and cleared it.
 
 So the skill's obligation is: produce the draft with the manifests the gate needs
 (the assembled source set and the held-out manifest), hand it to the gate on
@@ -405,15 +403,25 @@ false premise, and not cutting adverse findings from inside quotation marks.
    NOT IN RECORD, ATTORNEY markers left standing with the record laid out beneath
    them, GUIDANCE comments never leaked into the draft, confidentiality legend
    present.
-6. **Gate it.** Hand the draft, the assembled source set, and the held-out manifest
-   to the drafting gate, run in-seat where `code_execution` is authored and
-   on the delivery path (not built for this lane) where it is not. On failure, do not surface;
-   report the finding (Shape E).
-7. **Deliver** to the requesting attorney, internal only: the draft, the itemized
-   what-was-done report, the held-out list, the flagged-characterizations list, the
-   NOT IN RECORD list, and the ATTORNEY-marker list. Log the run with `create_memo`
-   and confirm the write by read-back per the pack write posture. The draft is
-   staged for the attorney; it is not filed, not submitted, and not exchanged.
+6. **Gate it and file it in one act.** Call
+   `mcp_smokeball_render_docx_draft(matter_id, file_name, draft_markdown, folder_id,
+held_out_file_names, document_class="mediation_brief")`: the tool runs the record
+   check against the matter's own documents and refuses (nothing filed) or renders
+   the brief INTO the firm's own Word template for this class when the firm's
+   Document Library holds one (the tool resolves it; you never pick a template), else
+   onto the SMD starter. Where `code_execution` is authored, run the checker yourself
+   first as well. On a refusal, do not surface; report the finding (Shape E). Write
+   the heading numerals yourself (`# I. INTRODUCTION`, `## A. Parties and Counsel`):
+   the body cross-references them and the tool styles the level, never renumbers.
+   Confirm the file with a bounded `get_file` poll and a `read_document` spot check.
+7. **Deliver** to the requesting attorney, internal only: where the brief lives, the
+   itemized what-was-done report, the held-out list, the flagged-characterizations
+   list, the NOT IN RECORD list, the ATTORNEY-marker list, and one honest sentence
+   from the tool's `formatApplied` (the firm's template, or the starter and why; which
+   roles took the template's own styles, and which were formatted inline and so will
+   not follow a later edit to the template). Log the run with `create_memo` and confirm the
+   write by read-back per the pack write posture. The draft is staged for the
+   attorney; it is not filed with any tribunal, not submitted, and not exchanged.
 
 ## Boundaries (never)
 
@@ -503,14 +511,15 @@ refusal is a stalled deliverable and a full-context redraft, write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.
-- In email and task text, refer to the matter by its NUMBER, taken ONLY from
-  the `matterNumber` field of a record you read this turn. Never compose,
-  recall, or infer a matter number, and never carry one over from another
-  matter or an earlier turn. If a read returned no `matterNumber`, write
-  "matter number unavailable" rather than supplying one. Never refer to the
-  matter by its case caption. The matter's own caption is acceptable inside
-  matter memos and inside the brief's own caption block; cited case law is
-  never acceptable in email.
+- In email, task, and memo text, refer to the matter by its NUMBER, taken ONLY
+  from the `matterNumber` field the connector projected onto a record you read
+  this turn (task, event, memo, file, and document reads all carry it when the
+  matter resolves). Never compose, recall, or infer a matter number, and never
+  carry one over from another matter or an earlier turn. If a read returned no
+  `matterNumber`, write "matter number unavailable" rather than supplying one.
+  Never refer to the matter by its case caption. The matter's own caption is
+  acceptable inside matter memos and inside the brief's own caption block;
+  cited case law is never acceptable in email.
 - State a specific dollar figure only when it exists in an authored source
   on the matter, and name that source in the same sentence ("per the MedFin
   payoff letter dated..."). Never total, estimate, or round figures into

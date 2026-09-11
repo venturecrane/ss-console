@@ -162,22 +162,3 @@ export async function findSentByMessageId(
     .first<OutreachEvent>()
   return row ?? null
 }
-
-/**
- * Return all events for an entity, newest first. Used by the admin entity
- * detail page to render a per-prospect outreach timeline.
- */
-export async function listEventsByEntity(
-  db: D1Database,
-  entityId: string
-): Promise<OutreachEvent[]> {
-  const result = await db
-    .prepare(
-      `SELECT * FROM outreach_events
-       WHERE entity_id = ?
-       ORDER BY created_at DESC`
-    )
-    .bind(entityId)
-    .all<OutreachEvent>()
-  return result.results ?? []
-}

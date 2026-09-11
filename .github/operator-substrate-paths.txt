@@ -1,0 +1,58 @@
+# Paths whose change makes the operator-substrate workflow run its suites.
+#
+# This file replaces the `on.pull_request.paths` filter the workflow used to
+# carry. The filter had to go because a path-filtered workflow does not report
+# a check on PRs it skips, and a required check that never reports strands the
+# PR at "Expected". operator-substrate is required on main (2026-09-09 code
+# review, top action item 1), so the workflow now triggers on every PR and
+# decides INSIDE the job whether the suites need to run, using this list.
+#
+# Consumers (both must agree; bin/tests/test_ci_coverage_conformance.py pins it):
+#   - operator/bin/substrate-paths-changed.py, the detect step in the workflow
+#   - operator/bin/tests/test_ci_coverage_conformance.py, which asserts every
+#     operator test file falls under one of these patterns
+#
+# Glob shapes: `dir/**` (prefix), an exact file, or single-`*` segments.
+# One pattern per line. Blank lines and `#` comments are ignored.
+
+operator/adapter/**
+operator/bin/**
+operator/safety-substrate/**
+operator/connectors/**
+# EFF-05: a customer.yaml-only change must trigger the block-conformance
+# gate (test_customer_yaml_block_conformance.py); otherwise an unclassified
+# top-level block added to only a customer.yaml merges without the gate.
+operator/customers/**
+# #1688 (2026-07-04 review): whole-directory coverage. The prior filter
+# named 4 contract files, Dockerfile, and bootstrap.sh, so skill bodies,
+# vertical packs, migrations, the broker, templates/tests, and the
+# migration tests could all change without this workflow running.
+operator/contracts/**
+# ss#2389: the shadow firm. Its scope guard is the mechanism that keeps an
+# adversarial scenario off a client seat, so a change to a scenario file
+# must run the guard's tests, not only a change to the tests themselves.
+operator/rehearsal/**
+operator/templates/**
+operator/skills/**
+operator/verticals/**
+operator/migrations/**
+operator/workspace_broker/**
+# ss#2613: the chronology-package runner. Its tests need the connector
+# client's deps, so it runs in its own venv step; a runner change must run it.
+operator/runners/**
+operator/tests/**
+# 2026-09-10 review, top action item 4: operator/tests/test_closeout_seed.py
+# executes operator/fixtures/law-firm/pi/lien-ledger-tracker/seed/render_seed.py
+# by subprocess, and the conformance test now walks every substrate test for
+# the fixture paths it opens or runs. A fixture-only PR ran nothing before.
+operator/fixtures/**
+operator/pytest.ini
+# The project manifest: pyright config and the package set CI installs.
+operator/pyproject.toml
+# The lint config itself: narrowing the rule selection must re-run the gate
+# it narrows.
+operator/ruff.toml
+# The workflow, this list, and the detect script: a change to the mechanism
+# runs the mechanism.
+.github/workflows/operator-substrate.yml
+.github/operator-substrate-paths.txt

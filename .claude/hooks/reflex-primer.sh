@@ -2,8 +2,8 @@
 #
 # Reflex Primer Hook (UserPromptSubmit) -- the always-on doctrine surface.
 #
-# Emits the eleven operating-law primer lines into context on every user
-# prompt. Ported from crane-console's redirect-reflex-hook.sh (v2 always-on:
+# Emits the operating-law primer lines (registry: fourteen laws as of
+# 2026-09-10) into context on every user prompt. Ported from crane-console's redirect-reflex-hook.sh (v2 always-on:
 # pattern-matching redirect language proved too brittle to build a forcing
 # function on; the laws are universal, so the primer fires universally).
 #
@@ -85,6 +85,8 @@ emit_laws() {
 8. Finish or say why: no stopping-point offers, no hedging finished work as draft, no relitigating settled calls.
 10. Your snapshot is not the system. Tree state, branch lists, merged PRs, and installed dependencies decay within minutes of the briefing that reported them. Re-probe before acting on any of them.
 12. A check that cannot fail has measured nothing. Before reporting an observation, name what would have made it false and confirm your instrument would have shown it.
+13. Do the work, do not file it: work found mid-task gets done now unless it is blocked on something that does not exist yet or needs a Captain decision. Standing target is zero open issues.
+14. A program's report about the world is a claim: a manifest, a completion, a wired map, or a done flag is proven by reading the world back after acting, never by echoing the statement that ran. Ask what the report would say if the action had matched nothing.
 Gate-enforced laws (mechanisms, not memory -- registry has the prose): 2 load-before-touch, 5 claims-trace, 6 authored-voice, 7 blast-radius, 9 deliverable-is-the-act, 11 signal-not-volume.
 PRIMER
 }

@@ -2,6 +2,18 @@ name: Tick ACs on PR merge
 
 # Caller for the canonical reusable workflow hosted in crane-console.
 # See https://github.com/venturecrane/crane-console/blob/main/docs/runbooks/ac-tick-workflow-rollout.md
+#
+# THIS REPO PINS A SHA; THE OTHER EIGHT VENTURES FOLLOW THE `tick-acs-v1` TAG.
+# That divergence is deliberate and it is the whole blast-radius control here.
+# crane-console#1241 widened the section-heading match and normalized the status
+# cell; it is proven on ss-console first, alone, and the tag stays where it is
+# until someone decides to move it for everyone. Moving the tag is a
+# nine-venture change made in one push and is not an agent's call.
+#
+# The old comment on this line read `# tick-acs-v1`, which was untrue: the SHA
+# it pinned (ec197443) and the tag pointed at different commits. They happened
+# to carry an identical workflow blob, so nothing had diverged in behaviour, but
+# the comment asserted a link that did not exist. It now names its real source.
 
 on:
   pull_request:
@@ -13,7 +25,7 @@ on:
 
 jobs:
   tick:
-    uses: venturecrane/crane-console/.github/workflows/tick-acs-on-merge-reusable.yml@ec197443b763c444751ce4ea50558130c9c856c2 # tick-acs-v1
+    uses: venturecrane/crane-console/.github/workflows/tick-acs-on-merge-reusable.yml@8dade7d54460b08bfecb6e0ae303f11e3be9f95d # crane-console#1241, NOT the tick-acs-v1 tag
     permissions:
       issues: write
       pull-requests: write

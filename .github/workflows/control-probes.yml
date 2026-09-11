@@ -1,0 +1,141 @@
+# Negative-fire probe suite: does each registered runtime control still refuse a
+# planted violation?
+#
+# WHY (ss#2387). runtime-controls.yaml records a status per control, and until
+# the probe suite existed a status rested on a name. The strongest evidence any
+# row carried was "manual-observed", which proves a control fired once, not that
+# a regression would be caught. This job plants the violations on a schedule so a
+# control that quietly stops refusing surfaces here rather than in a client's
+# mailbox.
+#
+# HOLD IS LOUD. The send reconciler ran daily for weeks with its secrets unset,
+# exiting 0 while scanning nothing. So this runner exits 2 on a HOLD (a probe it
+# could not run at all) and 1 on a finding, and BOTH open an issue and fail the
+# job. There is no path where this workflow is green because it asked nothing:
+# the runner also exits 2 when zero probes ran.
+#
+# WHAT THE SCHEDULE COVERS. Local probes only, because they are the set this
+# runner can actually execute: seat-kind probes need a live seat and no driver is
+# authored for them yet, and boot-kind probes are executed on the seat by the
+# overlay activation handler. Those rows print in the report as not attempted,
+# with no status claimed for them. Running the seat set is a manual dispatch with
+# a slug, and it will HOLD loudly until the drivers exist.
+
+name: control-probes
+
+on:
+  schedule:
+    # 06:41 UTC daily. Off the hour and off the other jobs on purpose.
+    - cron: '41 6 * * *'
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: 'Probe kinds to attempt: local | seat | boot | all'
+        required: false
+        default: 'local'
+      seat:
+        description: 'Customer slug (required for seat-kind probes)'
+        required: false
+  pull_request:
+    paths:
+      - 'operator/bin/control-probes.py'
+      - 'operator/bin/tests/test_control_probes.py'
+      - 'operator/contracts/runtime-control-probes.yaml'
+      - 'operator/contracts/runtime-controls.yaml'
+      - 'operator/safety-substrate/sticky_stop.py'
+      - '.github/workflows/control-probes.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  probes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '>=3.11'
+
+      - name: Install pytest
+        run: python3 -m pip install --quiet pytest pyyaml
+
+      # The falsifier gates the scheduled run. A suite whose probes cannot come
+      # back red would report green forever, which is worse than no suite: it
+      # would be cited as evidence.
+      - name: Prove the probes can fail
+        run: python3 operator/bin/control-probes.py --self-test
+
+      - name: Test the runner
+        run: |
+          python3 -m pytest operator/bin/tests/test_control_probes.py \
+            operator/bin/tests/test_runtime_control_conformance.py -q
+
+      - name: Run the probe suite
+        id: probes
+        env:
+          # Via env, never interpolated into the script body: a workflow_dispatch
+          # input is user-supplied and would otherwise be a shell-injection seam.
+          PROBE_KIND: ${{ github.event.inputs.kind }}
+          PROBE_SEAT: ${{ github.event.inputs.seat }}
+        run: |
+          set -u
+          ARGS="--kind ${PROBE_KIND:-local}"
+          if [ -n "${PROBE_SEAT:-}" ]; then ARGS="${ARGS} --seat ${PROBE_SEAT}"; fi
+          # `|| STATUS=$?` is load-bearing: the body runs under `bash -e`, so an
+          # unguarded non-zero exit would abort HERE, before the report prints and
+          # before `status` reaches GITHUB_OUTPUT, silently skipping the alert
+          # step below. That is, it would go quiet in exactly the cases the
+          # control exists for (ss#2309, same shape as the send reconciler).
+          STATUS=0
+          python3 operator/bin/control-probes.py $ARGS > probes.txt 2>&1 || STATUS=$?
+          cat probes.txt
+          echo "status=${STATUS}" >> "$GITHUB_OUTPUT"
+          # Contract (operator/bin/control-probes.py): 0 clean, 1 finding, 2 hold,
+          # 3 a probe that cannot fail. Anything else is the control itself
+          # breaking and must fail the run immediately.
+          if [ "${STATUS}" -gt 3 ]; then exit "${STATUS}"; fi
+
+      - name: Alert on a finding or a hold
+        if: github.event_name != 'pull_request' && steps.probes.outputs.status != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          STATUS: ${{ steps.probes.outputs.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          case "${STATUS}" in
+            1) HEADLINE="A runtime control did not refuse a planted violation." ;;
+            2) HEADLINE="A runtime control could not be probed at all (HOLD)." ;;
+            3) HEADLINE="A probe cannot come back red, so it is proving nothing." ;;
+            *) HEADLINE="The probe suite exited ${STATUS}." ;;
+          esac
+          {
+            echo "${HEADLINE}"
+            echo
+            echo "A HOLD is not a pass: a control nobody could ask about is a"
+            echo "control nobody proved. Both cases page, by design."
+            echo
+            echo '```'
+            cat probes.txt
+            echo '```'
+            echo
+            echo "Runner: \`operator/bin/control-probes.py\` (ss#2387)."
+            echo "Specs: \`operator/contracts/runtime-control-probes.yaml\`."
+            echo "Run: ${RUN_URL}"
+          } > body.md
+          gh issue create \
+            --repo "${REPO}" \
+            --title "Runtime control probe suite exit ${STATUS} $(date -u +%Y-%m-%d)" \
+            --label "prio:P1" --label "type:bug" \
+            --body-file body.md
+
+      # The job fails on anything but a clean run, including a hold. A green
+      # check mark on a run that probed nothing is the defect this suite exists
+      # to make impossible.
+      - name: Fail the run when the suite was not clean
+        if: steps.probes.outputs.status != '0'
+        run: exit 1

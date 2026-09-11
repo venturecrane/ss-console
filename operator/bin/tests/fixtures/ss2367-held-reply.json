@@ -1,0 +1,55 @@
+{
+  "_source": "ss#2367, quoted verbatim from the issue body. Pilot seat pilot-smokeball, 2026-08-13, during the #2258 drafting-lane runtime proof. The three rows below are the ENTIRE tail of that run: the issue states 'No redraft, no minimal note, no second attempt - the turn simply ended 23 seconds later.'",
+  "_captured_block": [
+    "21:21:53.918  mcp_agentmail_create_draft   internal_write  ok",
+    "21:21:53.988  REPLY_HELD                   fabrication:tier1_marker",
+    "21:22:16.691  LLM_TURN_COMPLETED"
+  ],
+  "_reply_held_metadata_block": [
+    "2026-08-13T21:21:53.988Z  REPLY_HELD",
+    "  reason      : fabrication:tier1_marker",
+    "  recipient   : ss-probe-admin@agentmail.to",
+    "  reply_channel: True"
+  ],
+  "_shape_note": "Column names follow the canonical audit_log order in operator/bin/lib/seam_pull.py AUDIT_COLUMNS, which is what the runtime-read seam serves. Only the fields the issue quoted are populated; nothing else is invented.",
+  "rows": [
+    {
+      "id": "01K2367CAPTURED0000000001",
+      "ts": "2026-08-13T21:21:53.918Z",
+      "action_type": "TOOL_CALL_COMPLETED",
+      "actor": "operator",
+      "actor_role": "agent",
+      "skill_name": "demand-letter-drafter",
+      "matter_ref": "2026-PI-104",
+      "metadata": {
+        "tool": "mcp_agentmail_create_draft",
+        "action_class": "internal_write",
+        "outcome": "ok"
+      }
+    },
+    {
+      "id": "01K2367CAPTURED0000000002",
+      "ts": "2026-08-13T21:21:53.988Z",
+      "action_type": "REPLY_HELD",
+      "actor": "operator",
+      "actor_role": "agent",
+      "skill_name": "demand-letter-drafter",
+      "matter_ref": "2026-PI-104",
+      "metadata": {
+        "reason": "fabrication:tier1_marker",
+        "recipient": "ss-probe-admin@agentmail.to",
+        "reply_channel": true
+      }
+    },
+    {
+      "id": "01K2367CAPTURED0000000003",
+      "ts": "2026-08-13T21:22:16.691Z",
+      "action_type": "LLM_TURN_COMPLETED",
+      "actor": "operator",
+      "actor_role": "agent",
+      "skill_name": "demand-letter-drafter",
+      "matter_ref": "2026-PI-104",
+      "metadata": {}
+    }
+  ]
+}

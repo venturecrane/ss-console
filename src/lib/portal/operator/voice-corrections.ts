@@ -56,9 +56,6 @@ const PROPERTIES = ['voice', 'format'] as const
 const MAX_STATEMENT = 4000
 const MAX_SHORT_TEXT = 200
 
-/** Lifecycle of one correction. `proposed` never sources spec bytes. */
-export type CorrectionStatus = 'proposed' | 'promoted' | 'declined' | 'superseded'
-
 /** Which property of the output class the correction edits (ADR 0083 §2-3). */
 export type CorrectionProperty = 'voice' | 'format'
 
@@ -69,31 +66,6 @@ export type CorrectionProperty = 'voice' | 'format'
  * reviewer should read the row.
  */
 export type CorrectionOrigin = 'agent_capture' | 'portal'
-
-export interface VoiceCorrectionRow {
-  id: string
-  entity_id: string
-  customer_slug: string
-  output_class: string
-  spec_property: CorrectionProperty
-  reviewer_user_id: string | null
-  /** What was heard. Human-read provenance; never a byte source. */
-  statement: string | null
-  stated_by: string | null
-  source_ref: string | null
-  /** What was authored and written. Replayed to a person, never applied. */
-  promoted_body: string | null
-  origin: CorrectionOrigin
-  priority: number
-  status: CorrectionStatus
-  promoted_by_user_id: string | null
-  promoted_by_email: string | null
-  promoted_at: string | null
-  spec_key: string | null
-  spec_sha256: string | null
-  superseded_by: string | null
-  created_at: string
-}
 
 /**
  * What a promotion records.
@@ -227,32 +199,6 @@ async function supersedePriorPromotions(
     .run()
 }
 
-/**
- * The live promoted corrections for one customer, highest priority first.
- *
- * Read-only, and deliberately returns whole rows rather than a body: a caller
- * that wants to display what was promoted reads `statement` and shows it as
- * captured text. Nothing downstream may feed it back into a spec.
- *
- * @public Authored read surface; the portal view that consumes it has not
- * shipped yet.
- */
-export async function listPromotedCorrections(
-  db: D1Database,
-  customerSlug: string,
-  limit = 50
-): Promise<VoiceCorrectionRow[]> {
-  const res = await db
-    .prepare(
-      'SELECT * FROM operator_voice_corrections ' +
-        "WHERE customer_slug = ? AND status = 'promoted' " +
-        'ORDER BY output_class ASC, spec_property ASC, priority DESC, created_at DESC LIMIT ?'
-    )
-    .bind(customerSlug, limit)
-    .all<VoiceCorrectionRow>()
-  return res.results ?? []
-}
-
 // ---------------------------------------------------------------------------
 // Citations
 // ---------------------------------------------------------------------------
@@ -337,25 +283,4 @@ export function collectCitations(
     }
   }
   return citations
-}
-
-/**
- * Every correction for one entity, newest first — the review and audit walk.
- *
- * @public Authored read surface; the portal view that consumes it has not
- * shipped yet.
- */
-export async function listCorrectionsForEntity(
-  db: D1Database,
-  entityId: string,
-  limit = 50
-): Promise<VoiceCorrectionRow[]> {
-  const res = await db
-    .prepare(
-      'SELECT * FROM operator_voice_corrections WHERE entity_id = ? ' +
-        'ORDER BY created_at DESC LIMIT ?'
-    )
-    .bind(entityId, limit)
-    .all<VoiceCorrectionRow>()
-  return res.results ?? []
 }

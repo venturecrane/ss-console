@@ -43,6 +43,7 @@ from .recipient_policy import (
     authored_policy,
     canonicalize,
     normalize_address,
+    sender_key,
 )
 
 #: Env var carrying the SEND-capable, inbox-scoped AgentMail key. Deliberately a
@@ -107,4 +108,5 @@ __all__ = [
     "materialize_credential",
     "normalize_address",
     "seat_inbox_address",
+    "sender_key",
 ]

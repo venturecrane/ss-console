@@ -1,0 +1,24 @@
+#!/bin/bash
+#
+# memory-audit -- reachability audit over this project's durable memory store.
+#
+#   .claude/bin/memory-audit              # audit the real store, JSON on stdout
+#   .claude/bin/memory-audit --wiring     # is the SessionStart hook actually firing?
+#   .claude/bin/memory-audit --self-test  # prove the audit can still fail
+#   .claude/bin/memory-audit <dir>        # audit some other store
+#
+# Exit 0 clean, 1 when a memory is reachable from no index, a reference points
+# at nothing, MEMORY.md is over its cap, or the store cannot be found.
+#
+# On 2026-09-09 sixty memory files in this venture's store were reachable from
+# no index at all, including standing Captain directives and two secret-leak
+# hazards, after a compaction of MEMORY.md deleted index rows instead of moving
+# them to an archive index. Nothing detected it, because nothing was ever asked.
+# This is the asking. The logic lives in the .mjs; this only marshals arguments.
+set -u
+DIR=$(cd "$(dirname "$0")/.." && pwd)   # .claude/
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "memory-audit: not in a git tree" >&2; exit 1; }
+HOOK="$DIR/hooks/memory-audit.mjs"
+[ -f "$HOOK" ] || HOOK="$ROOT/.claude/hooks/memory-audit.mjs"
+
+node "$HOOK" "$@"

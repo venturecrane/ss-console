@@ -132,12 +132,52 @@ chown root:root "${LIVE_CUSTOMER_YAML}"
 chmod 0644 "${LIVE_CUSTOMER_YAML}"
 rm -f /opt/data/customer.yaml
 
+# ss#2614: the chronology runner's per-firm config rides the same vault prefix.
+# Same fail-static shape as customer.yaml above, without the FATAL arm: a seat
+# without it boots fine and the runner refuses every job with one loud line.
+# Root-owned, group medchron read-only (the driver child reads it; the agent
+# uid has no group membership and no need to read the firm's tables).
+MEDCHRON_FIRM_CONFIG="${CONFIG_DIR}/medchron-firm.yaml"
+if AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" \
+     AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?}" \
+       aws s3 cp \
+         --endpoint-url "${_seed_endpoint}" \
+         --only-show-errors \
+         "s3://${R2_BUCKET_CONFIG}/vaults/${CUSTOMER_SLUG}/medchron-firm.yaml" \
+         "${MEDCHRON_FIRM_CONFIG}.r2.tmp" 2>/dev/null; then
+  mv -f "${MEDCHRON_FIRM_CONFIG}.r2.tmp" "${MEDCHRON_FIRM_CONFIG}"
+  log "medchron-firm.yaml refreshed from R2 into ${CONFIG_DIR}"
+elif [ -f "${MEDCHRON_FIRM_CONFIG}" ]; then
+  rm -f "${MEDCHRON_FIRM_CONFIG}.r2.tmp" 2>/dev/null || true
+  log "WARN: R2 fetch of medchron-firm.yaml failed; keeping the existing root-owned copy"
+else
+  rm -f "${MEDCHRON_FIRM_CONFIG}.r2.tmp" 2>/dev/null || true
+  log "No medchron-firm.yaml in the vault for ${CUSTOMER_SLUG}; the chronology runner will refuse jobs"
+fi
+if [ -f "${MEDCHRON_FIRM_CONFIG}" ]; then
+  chown root:medchron "${MEDCHRON_FIRM_CONFIG}"
+  chmod 0640 "${MEDCHRON_FIRM_CONFIG}"
+fi
+
 # OP-P1-4 audit ledger: owned by the broker uid, readable (not writable) by the
 # agent uid via the audit-readers group. The agent's only write path is the
 # broker's append-only audit_append verb.
 AUDIT_DIR="/opt/data/audit"
 AUDIT_DB="${AUDIT_DIR}/audit.db"
 LEGACY_AUDIT_DB="/opt/data/audit.db"
+# The ss#2488 gateway-liveness kill ledger. Declared HERE, next to the audit
+# dir, purely so the chown sweep below can prune it: the supervisor that uses it
+# is defined much further down, but the sweep runs first and would otherwise
+# hand the agent ownership of its own restart budget on the second boot onward
+# (the dir is re-created root-owned every boot, but the `kills` FILE inside it
+# would already have flipped). Same reasoning, same fix, as the audit subtree.
+GATEWAY_LIVENESS_LEDGER_DIR="/opt/data/gateway-liveness"
+# ss#2614: the chronology runner's queue + job workdirs. Root-owned on the
+# volume (a job's exhibits are hundreds of MB and a crash must resume), pruned
+# from the sweep for the same reason as the audit subtree, and reached by the
+# broker and the daemon through a bind mount below (the gateway's mid-boot
+# chmod of /opt/data severs a child dir's group-traverse; see the audit note).
+MEDCHRON_DATA_DIR="/opt/data/medchron"
 # Group-readable default so the broker's rollback journal is readable by the
 # hermes mode=ro read seam during a write window. Explicit chmods below for the
 # 0700/0600 broker paths are unaffected by this.
@@ -146,12 +186,27 @@ umask 027
 # Agent owns its data EXCEPT the broker-owned audit subtree (R1). This REPLACES
 # a plain `chown -R hermes:hermes /opt/data`, which would re-own the ledger back
 # to hermes on every reboot and silently false-close the tamper-resistance.
-find /opt/data -path "${AUDIT_DIR}" -prune -o -print0 | xargs -0 -r chown hermes:hermes
+find /opt/data \( -path "${AUDIT_DIR}" -o -path "${GATEWAY_LIVENESS_LEDGER_DIR}" -o -path "${MEDCHRON_DATA_DIR}" \) -prune -o -print0 | xargs -0 -r chown hermes:hermes
 
 # NOTE: the broker reaches the ledger via the bind mount established below, NOT
 # by traversing /opt/data. The Hermes gateway chmods its home (/opt/data) to
 # 0700 mid-boot, which strips any group-traverse we could grant here — so the
 # write path must not depend on the home dir's mode.
+
+# Staging area for file transfers into the seat. `fly ssh sftp put` runs as
+# ROOT, so if this directory does not already exist the first push creates it
+# root-owned — and the sweep above cannot help, because it ran at boot, before
+# the directory existed. hermes then cannot unlink there (unlink permission
+# comes from the DIRECTORY), so every transfer copy stays until someone runs a
+# root op. On ashton-price that reached 18 files and 157 MiB of client medical
+# material before it was noticed (2026-08-26).
+#
+# Creating it here, explicitly owned and moded rather than relying on mkdir -p
+# defaults, means a root-created FILE inside it is still removable by hermes.
+# Lifecycle of the contents belongs to whatever pushes them: this establishes
+# the directory, it does not purge it.
+STAGE_DIR="/opt/data/tmp-deliverable"
+install -d -o hermes -g hermes -m 0700 "${STAGE_DIR}"
 
 # Convergent (idempotent, every-boot) audit-ledger establishment. Never drops
 # rows. Fails loud rather than silently diverging two ledgers (R5 / DA #5).
@@ -198,6 +253,81 @@ mkdir -p "${AUDIT_BIND_DIR}"
 mountpoint -q "${AUDIT_BIND_DIR}" \
   || mount --bind "${AUDIT_DIR}" "${AUDIT_BIND_DIR}" \
   || { log "FATAL: could not bind-mount ${AUDIT_DIR} -> ${AUDIT_BIND_DIR}"; exit 1; }
+
+# ss#2614: the chronology runner's tree, converged on every boot with explicit
+# owners and modes (never mkdir -p defaults; the establish-spool note below
+# explains why). queue/ is written by the broker uid (submit) and read by root
+# (the daemon); jobs/ is root only; both reach their users through the bind
+# mount, exactly like the audit ledger. The Smokeball refresh token becomes
+# group-shared (setgid dir, 0660 file) so the medchron uid can mint and rotate
+# it alongside the connector; the connector preserves that mode on rotation.
+install -d -o root -g root -m 0755 "${MEDCHRON_DATA_DIR}"
+install -d -o root -g workspace-broker -m 0770 "${MEDCHRON_DATA_DIR}/queue"
+# jobs/: root-owned, group medchron EXECUTE-ONLY (0710) — the driver child
+# must traverse it to reach its own job dir (live-caught 2026-08-31: 0700
+# gave the child PermissionError on its job.yaml) but must not be able to
+# list or open sibling jobs; each job dir is 0700 medchron.
+install -d -o root -g medchron -m 0710 "${MEDCHRON_DATA_DIR}/jobs"
+MEDCHRON_RUN_DIR="/run/smd-medchron"
+mkdir -p "${MEDCHRON_RUN_DIR}"
+mountpoint -q "${MEDCHRON_RUN_DIR}" \
+  || mount --bind "${MEDCHRON_DATA_DIR}" "${MEDCHRON_RUN_DIR}" \
+  || { log "FATAL: could not bind-mount ${MEDCHRON_DATA_DIR} -> ${MEDCHRON_RUN_DIR}"; exit 1; }
+export SMD_MEDCHRON_QUEUE_DIR="${MEDCHRON_RUN_DIR}/queue"
+
+# 2026-09-04: the chronology runner's INSTALL-level artifacts — the scanned-page
+# classifier's authored control pages (`controls.json` + the PDFs it names) and
+# the vendored ICD tables (`icd/`) — ride the same vault prefix as the firm
+# config, under medchron-controls/. Every job gets a fresh data_root under
+# jobs/<id>/, so no job can carry them; the runner resolves them against this
+# tree (Job.install_root, which the daemon points at the run dir). Seeded from
+# the vault on EVERY boot, so a volume recreate converges on the authored set
+# instead of refusing every job until someone copies files in by hand. Same
+# fail-static shape as medchron-firm.yaml, no FATAL arm: a seat with nothing in
+# its vault boots fine and the runner refuses the classify stage of each job
+# with one loud line. Root-owned, group medchron read-only: the child reads
+# its falsifier and can never rewrite it (a classifier that can edit its own
+# controls measures nothing).
+MEDCHRON_CONTROLS_DIR="${MEDCHRON_DATA_DIR}/controls"
+rm -rf "${MEDCHRON_CONTROLS_DIR}.r2.tmp"
+if AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" \
+     AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?}" \
+       aws s3 cp \
+         --endpoint-url "${_seed_endpoint}" \
+         --only-show-errors \
+         --recursive \
+         "s3://${R2_BUCKET_CONFIG}/vaults/${CUSTOMER_SLUG}/medchron-controls/" \
+         "${MEDCHRON_CONTROLS_DIR}.r2.tmp/" 2>/dev/null \
+   && [ -f "${MEDCHRON_CONTROLS_DIR}.r2.tmp/controls.json" ]; then
+  rm -rf "${MEDCHRON_CONTROLS_DIR}"
+  mv "${MEDCHRON_CONTROLS_DIR}.r2.tmp" "${MEDCHRON_CONTROLS_DIR}"
+  log "medchron controls refreshed from R2 into ${MEDCHRON_CONTROLS_DIR}"
+elif [ -f "${MEDCHRON_CONTROLS_DIR}/controls.json" ]; then
+  rm -rf "${MEDCHRON_CONTROLS_DIR}.r2.tmp"
+  log "WARN: R2 fetch of medchron-controls/ failed; keeping the existing root-owned copy"
+else
+  rm -rf "${MEDCHRON_CONTROLS_DIR}.r2.tmp"
+  log "No medchron-controls/ in the vault for ${CUSTOMER_SLUG}; the chronology runner will refuse the classify stage of every job"
+fi
+if [ -d "${MEDCHRON_CONTROLS_DIR}" ]; then
+  chown -R root:medchron "${MEDCHRON_CONTROLS_DIR}"
+  find "${MEDCHRON_CONTROLS_DIR}" -type d -exec chmod 0750 {} +
+  find "${MEDCHRON_CONTROLS_DIR}" -type f -exec chmod 0640 {} +
+fi
+SMOKEBALL_TOKEN_DIR="/opt/data/.smokeball-mcp"
+SMOKEBALL_TOKEN_RUN_DIR="/run/smd-smokeball-token"
+if [ -d "${SMOKEBALL_TOKEN_DIR}" ]; then
+  chown hermes:smokeball-token "${SMOKEBALL_TOKEN_DIR}"
+  chmod 2770 "${SMOKEBALL_TOKEN_DIR}"
+  if [ -f "${SMOKEBALL_TOKEN_DIR}/refresh_token" ]; then
+    chown hermes:smokeball-token "${SMOKEBALL_TOKEN_DIR}/refresh_token"
+    chmod 0660 "${SMOKEBALL_TOKEN_DIR}/refresh_token"
+  fi
+  mkdir -p "${SMOKEBALL_TOKEN_RUN_DIR}"
+  mountpoint -q "${SMOKEBALL_TOKEN_RUN_DIR}" \
+    || mount --bind "${SMOKEBALL_TOKEN_DIR}" "${SMOKEBALL_TOKEN_RUN_DIR}" \
+    || log "WARN: could not bind-mount the Smokeball token dir; the chronology runner cannot reach the matter"
+fi
 
 rm -rf /opt/data/workspace-broker
 rm -f /opt/data/oauth/google.json
@@ -325,6 +455,29 @@ else
   log "MSGRAPH_SEND_CLIENT_SECRET unset; broker msgraph verbs stay fail-closed"
 fi
 
+# overlay#280: the broker ALSO carries the READ app's credential (the same
+# registration the gateway keeps — Mail.ReadWrite, no Mail.Send), because the
+# reply verb's sender-verification GET is 403 on the send app under the two-app
+# fence. Reading is the lower privilege and the agent already holds this exact
+# credential, so nothing widens; without this file no reply can ever transmit
+# on a two-app seat. Export is unconditional so launch_broker()'s env -i
+# allowlist line below always references a set variable.
+export SMD_MSGRAPH_READ_CREDENTIAL_PATH="${BROKER_DIR}/msgraph-read.json"
+if [ -n "${MSGRAPH_CLIENT_SECRET:-}" ]; then
+  PYTHONPATH="/opt/workspace-broker" \
+    /opt/workspace-broker/.venv/bin/python -c \
+    'import os; from pathlib import Path; from workspace_broker.msgraph_auth import materialize_read_credential; materialize_read_credential(Path(os.environ["SMD_MSGRAPH_READ_CREDENTIAL_PATH"]))'
+  [ -f "${SMD_MSGRAPH_READ_CREDENTIAL_PATH}" ] || {
+    log "FATAL: msgraph read credential was staged but not materialized"
+    exit 1
+  }
+  chown workspace-broker:workspace-broker "${SMD_MSGRAPH_READ_CREDENTIAL_PATH}"
+  chmod 0600 "${SMD_MSGRAPH_READ_CREDENTIAL_PATH}"
+  log "msgraph read credential materialized to the broker store (reply sender-verification)"
+else
+  log "MSGRAPH_CLIENT_SECRET unset; broker msgraph reply verb stays fail-closed"
+fi
+
 # The broker is the SECOND principal that BOTH the Google capability path AND the
 # OP-P1-4 audit_append path depend on. Define its launch ONCE; the supervisor
 # below uses it for the first start and every respawn. env -i with a fixed
@@ -349,8 +502,10 @@ launch_broker() {
     SMD_AGENT_UID="$(id -u hermes)" \
     SMD_AUDIT_DB_PATH="${AUDIT_BIND_DB}" \
     SMD_ESTABLISH_SPOOL_DIR="${SMD_ESTABLISH_SPOOL_DIR}" \
+    SMD_MEDCHRON_QUEUE_DIR="${SMD_MEDCHRON_QUEUE_DIR}" \
     SMD_AGENTMAIL_CREDENTIAL_PATH="${SMD_AGENTMAIL_CREDENTIAL_PATH}" \
     SMD_MSGRAPH_CREDENTIAL_PATH="${SMD_MSGRAPH_CREDENTIAL_PATH}" \
+    SMD_MSGRAPH_READ_CREDENTIAL_PATH="${SMD_MSGRAPH_READ_CREDENTIAL_PATH}" \
     /opt/workspace-broker/.venv/bin/python \
     -m workspace_broker.server
 }
@@ -506,6 +661,31 @@ else
   log "Root config applier NOT launched (R2 config creds absent, or config_applier not in this overlay)"
 fi
 
+# Root-side chronology runner daemon (routine 11, ss#2614). Same fork point and
+# respawn discipline as the appliers above, for the same reason: it owns the
+# root-only job dirs and the queue, and it drops each driver child to the
+# medchron uid itself (setpriv), which a hermes process could never do. What
+# the child gets is an ALLOW-LIST from this env (the daemon copies only the
+# Anthropic key, the Smokeball credentials and the firm config path; R2 and
+# Google credentials never reach it). Import-gated so an image whose venv is
+# missing degrades to a loud "NOT launched" line, never a broken boot. Runs
+# from its own root-owned venv, not the Hermes one.
+if [ -x /opt/medchron/.venv/bin/python ] \
+   && /opt/medchron/.venv/bin/python -c "import medchron.daemon" 2>/dev/null; then
+  ( while true; do
+      SMD_MEDCHRON_RUN_DIR="${MEDCHRON_RUN_DIR}" \
+      SMOKEBALL_REFRESH_TOKEN_FILE="${SMOKEBALL_TOKEN_RUN_DIR}/refresh_token" \
+      MEDCHRON_FIRM_CONFIG="${MEDCHRON_FIRM_CONFIG}" \
+      MEDCHRON_PRICING_JSON="/opt/medchron/anthropic_pricing.json" \
+      /opt/medchron/.venv/bin/python -m medchron.daemon || true
+      log "medchron daemon exited; restarting in 5s"
+      sleep 5
+    done ) &
+  log "Root medchron daemon launched (uid 0; runs chronology jobs as the medchron uid from ${MEDCHRON_RUN_DIR}/queue)"
+else
+  log "Root medchron daemon NOT launched (the runner venv is not in this image)"
+fi
+
 # Root-side authored-spec applier (ss ADR 0083 #2084). Same shape, same
 # principal, same respawn discipline as the config applier above, and forked at
 # the same point for the same reason: it must survive the exec-drop below and
@@ -555,6 +735,476 @@ if [ -n "${R2_ACCESS_KEY_ID:-}" ] && [ -n "${R2_BUCKET_CONFIG:-}" ] \
 else
   log "Root establishment intake NOT launched (R2 config creds absent, or establish_intake not in this overlay); establish_submit runs will queue unprocessed"
 fi
+
+# Root-side gateway liveness supervisor (P0 ss#2488). On 2026-08-20 the paying
+# client's seat wedged for 33 minutes and recovered only because a human
+# restarted it. Hermes' OWN loop-liveness watchdog fired and logged "...exiting
+# with code 75 so the service supervisor can restart it" — and then did not
+# exit. At the pin we run (v2026.8.18@e624e9fd) that path is already a hard
+# os._exit(75) (gateway/shutdown_watchdog.py:196), so there was no graceful
+# shutdown to blame: the thread reached its logger.critical (the line is in
+# gateway.log) and never reached the os._exit two statements later. That
+# module's docstring names why such a thing happens — "every asyncio-based
+# recovery path is structurally unable to fire: they need the same loop that is
+# stuck" — and the rule extends one step further: an IN-PROCESS recovery path
+# can be blocked by whatever blocked the process. Recovery has to come from
+# outside it. Nothing outside it existed: this entrypoint EXECS the gateway as
+# the container's main process, the supervisor above covers the BROKER, and Fly
+# does not restart a Machine on a failing health check.
+#
+# Two facts make the fix cheap. Hermes already rewrites a loop heartbeat every
+# 30s from an asyncio task ON the loop that wedges, so the file goes stale the
+# instant the loop freezes; and this entrypoint already forks root children that
+# survive the exec-drop. We were simply not reading the heartbeat.
+#
+# The path is PROBED, not read off the source. shutdown_watchdog's
+# _process_hermes_home() reads HERMES_HOME (= /opt/data here), but on a live
+# seat `stat /opt/data/state/gateway.heartbeat` is "No such file or directory" —
+# the file sits under the PROFILE home. Hence the argv-derived path below.
+# vfy_01M0H9BKDCTFKSC5WSS9Z9DYVG.
+GATEWAY_LIVENESS_RUN_DIR="/run/smd-gateway-liveness"
+# GATEWAY_LIVENESS_LEDGER_DIR is declared beside AUDIT_DIR at the top of this
+# file so the boot-time chown sweep can prune it. See the note there.
+GATEWAY_LIVENESS_PROFILES_DIR="${GATEWAY_LIVENESS_PROFILES_DIR:-/opt/data/profiles}"
+# The one seam that exists for the test harness rather than for the Machine:
+# templates/tests/test_gateway_liveness_supervisor.py drives the REAL loop text
+# extracted from this file against a fake process tree, which is the only way to
+# prove the state machine (the arming guard, the recovery re-check, the kill
+# ledger) rather than merely assert that its source contains certain words. It
+# also lets the suite run on a developer's macOS, which has no /proc at all.
+GATEWAY_LIVENESS_PROC_DIR="${GATEWAY_LIVENESS_PROC_DIR:-/proc}"
+# The module that WRITES the heartbeat, in the installed Hermes. Probed, not
+# assumed: hermes-smd-staging runs 0.18.0 (7c1a029) today, and that pin predates
+# the loop heartbeat entirely -- the module does not exist in its tree and no
+# heartbeat file exists on its volume (vfy_01M0HBR1NZHSRMWSFPSQM32D1E). On such
+# a pin "no heartbeat has ever appeared" means "this build has no heartbeat",
+# NOT "the gateway is wedged", and the boot-deadline path below would SIGKILL a
+# perfectly healthy seat every 15 minutes until the ledger stopped it. Same
+# import-gate discipline as the establishment intake above: a lagging pin
+# degrades to a LOUD not-watching line, never to a wrong action.
+GATEWAY_LIVENESS_HEARTBEAT_WRITER="${GATEWAY_LIVENESS_HEARTBEAT_WRITER:-/opt/hermes/gateway/shutdown_watchdog.py}"
+# Every threshold is per-seat tunable, same shape as SMD_ESTABLISH_POLL_SECONDS
+# above. 240s of staleness is 8 missed beats, and the margin is sized against
+# CPU STARVATION rather than out of deference to Hermes' own watchdog — that
+# watchdog took 22 minutes to notice this incident and then failed to exit, so
+# waiting on it buys nothing. The evidence for the margin is the incident: the
+# webhook gate answered /health every 30s on the dot throughout, so the box —
+# 1 vCPU at loadavg 15.25 — was never so starved that a 30s task could not run.
+SMD_GATEWAY_LIVENESS_POLL_SECONDS="${SMD_GATEWAY_LIVENESS_POLL_SECONDS:-30}"
+SMD_GATEWAY_LIVENESS_STALE_SECONDS="${SMD_GATEWAY_LIVENESS_STALE_SECONDS:-240}"
+SMD_GATEWAY_LIVENESS_DUMP_GRACE_SECONDS="${SMD_GATEWAY_LIVENESS_DUMP_GRACE_SECONDS:-20}"
+SMD_GATEWAY_LIVENESS_TERM_GRACE_SECONDS="${SMD_GATEWAY_LIVENESS_TERM_GRACE_SECONDS:-15}"
+SMD_GATEWAY_LIVENESS_BOOT_DEADLINE_SECONDS="${SMD_GATEWAY_LIVENESS_BOOT_DEADLINE_SECONDS:-900}"
+# How long a boot is ALLOWED to take before the supervisor says so out loud.
+# Two conditions read it, both about a boot that has not finished yet:
+#
+#   1. argv does not name hermes. Expected for the first minutes of every boot —
+#      entrypoint EXECS bootstrap.sh, which does its own several-minute setup
+#      before its own `exec` of the gateway at bootstrap.sh:916, so
+#      /proc/<SMD_GATEWAY_PID>/cmdline reads `bash /app/bootstrap.sh` until then.
+#   2. the heartbeat is on disk but has never been seen FRESH this boot. The
+#      volume persists, so a stale beat from the previous boot is always there.
+#
+# Before the grace both are normal and neither pages. After it, a boot that
+# still has not produced a beat is a wedge at startup, which is exactly what no
+# instrument on this seat could see during the 2026-09-01 crash loop.
+#
+# 900s is sized off the incident: the observed cold-start crawl was ~4 minutes
+# at 1GB, so the grace is ~3.5x the worst startup actually measured. Raise it on
+# a seat with a heavier connector set rather than lowering it anywhere.
+SMD_GATEWAY_LIVENESS_STARTUP_GRACE_SECONDS="${SMD_GATEWAY_LIVENESS_STARTUP_GRACE_SECONDS:-900}"
+SMD_GATEWAY_LIVENESS_MAX_KILLS="${SMD_GATEWAY_LIVENESS_MAX_KILLS:-3}"
+SMD_GATEWAY_LIVENESS_KILL_WINDOW_SECONDS="${SMD_GATEWAY_LIVENESS_KILL_WINDOW_SECONDS:-3600}"
+SMD_GATEWAY_LIVENESS_KILL_VERIFY_SECONDS="${SMD_GATEWAY_LIVENESS_KILL_VERIFY_SECONDS:-10}"
+
+# /run is a root-owned tmpfs (the tick is per-boot and must not persist); the
+# kill ledger is on the volume because its whole job is to bound restarts ACROSS
+# restarts. Both root-owned, alongside /opt/data/audit as the precedent for a
+# non-agent directory on the volume. The ledger bounds availability, not
+# security: it sits under an agent-writable parent (/opt/data is hermes-owned,
+# and write+exec on a parent is enough to unlink a child — the same keystone
+# hole this file documents at the top), so a code-executing agent could remove
+# it and buy itself unlimited restarts. That is why the authoritative record of
+# every kill and every refusal is the log line, which reaches `fly logs` and
+# which the agent cannot reach at all.
+#
+# 0755 / 0644, NOT 0700 (ss#2488 part 2). The webhook gate -- hermes uid, and
+# the one process that survives a wedge -- reads the tick, the state line and
+# the ledger below and puts them on the control-plane heartbeat, so a stale
+# pulse, a restart, a refusing supervisor or one that never armed reaches an
+# inbox instead of only `fly logs`. Read-only for the agent is still the whole
+# security property: root is the sole writer, and under a root-owned directory
+# with no group/other write bit the agent uid can neither forge, edit, nor
+# unlink a line. (The unlink caveat in the paragraph above is about the PARENT
+# /opt/data, and is unchanged by this.) The cross-repo threshold contract lives
+# here too: fleet-alerts' GATEWAY_LOOP_RED_SECONDS must stay BELOW
+# SMD_GATEWAY_LIVENESS_STALE_SECONDS x 2 samples + the dump and TERM graces
+# (~270s at defaults), or the page lands after the restart it was meant to
+# precede. wrangler.toml carries the same sentence.
+install -d -o root -g root -m 0755 "${GATEWAY_LIVENESS_RUN_DIR}"
+install -d -o root -g root -m 0755 "${GATEWAY_LIVENESS_LEDGER_DIR}"
+# Converge the ledger FILE's mode every boot, not only at creation. The volume
+# persists, so a seat that restarted under the 0700/umask-027 first cut carries
+# a 0640 `kills` forever; `install -m 0644` on creation never re-runs for it.
+# Found live on hermes-scott 2026-08-21: the gate read "Permission denied" and
+# shipped gateway_restarts_last_hour as absent -- a hold, so not dangerous, but
+# the one field a restart cannot race was silently missing. A reconciler, not a
+# sweep (CLAUDE.md "prefer structural fixes"): every boot makes the layer
+# converge on authored state. `|| true` because a missing file is the normal
+# first-boot case and `set -e` is live here.
+chmod 0644 "${GATEWAY_LIVENESS_LEDGER_DIR}/kills" 2>/dev/null || true
+# The supervisor's state machine, one word, rewritten on every transition so the
+# gate (and boot-smoke) can tell an ARMED supervisor from one that is inert,
+# not-watching this pin, or refusing further restarts. Same loud-not-silent
+# discipline as the log lines; this is the copy that leaves the Machine.
+gateway_liveness_state() {
+  # A TRANSITION must be spoken at once. gateway_liveness_nag has a 300s floor so
+  # a standing condition does not drown `fly logs`, but that floor also silences
+  # the FIRST line of a new condition for up to five minutes if an unrelated nag
+  # happened to fire just before it — which is exactly when a human most needs
+  # the log to say what changed. Zeroing last_nag on a change of word makes the
+  # next nag in this iteration speak, then the floor resumes for the repeats.
+  # Callers therefore set the state BEFORE they nag.
+  if [ "$1" != "$(cat "${GATEWAY_LIVENESS_RUN_DIR}/state" 2>/dev/null)" ]; then
+    last_nag=0
+  fi
+  printf '%s\n' "$1" > "${GATEWAY_LIVENESS_RUN_DIR}/state.tmp" \
+    && chmod 0644 "${GATEWAY_LIVENESS_RUN_DIR}/state.tmp" \
+    && mv -f "${GATEWAY_LIVENESS_RUN_DIR}/state.tmp" "${GATEWAY_LIVENESS_RUN_DIR}/state"
+}
+
+# Resolve the ACTIVE profile from the gateway's own argv, not by mtime-ordering
+# /opt/data/profiles/*. A seat may carry several persona homes (ADR 0011;
+# boot-smoke Step 6b reconciles the SET of them against personas[]), and only
+# one belongs to the running gateway. "Newest mtime" identifies it only while it
+# is healthy — precisely the assumption that stops holding in the scenario this
+# supervisor exists for, and it would fail SILENTLY by watching a file nobody
+# writes. An argv that no longer names hermes means the container is not in the
+# state this was written for: return empty and let the caller refuse, loudly.
+gateway_heartbeat_path() {
+  local cmdline="${GATEWAY_LIVENESS_PROC_DIR}/${SMD_GATEWAY_PID}/cmdline"
+  local tok prev='' profile='' seen_hermes=0
+  [ -r "${cmdline}" ] || return 1
+  # NUL-delimited `read -d` rather than `mapfile -d`, which needs bash >= 4.4.
+  # The Machine ships bash 5, but a boot-critical path should not carry a
+  # version dependency it does not need — and templates/tests drives this exact
+  # function, so it has to run on a developer's macOS too, where /bin/bash is
+  # still 3.2. The redirect (not a pipe) keeps the loop in this shell, so the
+  # assignments below survive it.
+  #
+  # All four spellings of the profile flag, because argv is written by
+  # bootstrap.sh today but read here forever. bootstrap.sh:916 uses the separated
+  # short form (`-p operator`) and the live cmdline confirms it, NUL-separated
+  # behind the shebang interpreter:
+  #   /opt/hermes/.venv/bin/python\0/opt/hermes/.venv/bin/hermes\0-p\0operator\0gateway\0run
+  # The attached and long forms cost two `case` arms and remove a class where a
+  # future invocation change would silently un-watch the seat rather than fail.
+  # FIRST occurrence wins in every form: `hermes -p a -p b` is the caller's bug,
+  # and picking one deterministically beats picking whichever came last.
+  while IFS= read -r -d '' tok; do
+    case "${tok}" in *hermes*) seen_hermes=1 ;; esac
+    case "${tok}" in
+      -p=*|--profile=*)
+        if [ -z "${profile}" ]; then profile="${tok#*=}"; fi
+        ;;
+    esac
+    if [ -z "${profile}" ]; then
+      case "${prev}" in
+        -p|--profile) profile="${tok}" ;;
+      esac
+    fi
+    prev="${tok}"
+  done < "${cmdline}"
+  [ "${seen_hermes}" -eq 1 ] || return 1
+  [ -n "${profile}" ] || return 1
+  printf '%s\n' "${GATEWAY_LIVENESS_PROFILES_DIR}/${profile}/state/gateway.heartbeat"
+}
+
+# Epoch first so the window comparison is integer arithmetic, no date parsing.
+gateway_liveness_record_kill() {
+  [ -f "${GATEWAY_LIVENESS_LEDGER_DIR}/kills" ] \
+    || install -m 0644 -o root -g root /dev/null "${GATEWAY_LIVENESS_LEDGER_DIR}/kills"
+  printf '%s %s %s\n' "$(date -u +%s)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" \
+    >> "${GATEWAY_LIVENESS_LEDGER_DIR}/kills"
+}
+
+gateway_liveness_kill_budget_ok() {
+  local ledger="${GATEWAY_LIVENESS_LEDGER_DIR}/kills" cutoff now line ts count=0
+  [ -f "${ledger}" ] || return 0
+  now="$(date -u +%s)"
+  cutoff=$(( now - SMD_GATEWAY_LIVENESS_KILL_WINDOW_SECONDS ))
+  while IFS= read -r line; do
+    ts="${line%% *}"
+    case "${ts}" in ''|*[!0-9]*) continue ;; esac
+    [ "${ts}" -ge "${cutoff}" ] && count=$(( count + 1 ))
+  done < "${ledger}"
+  [ "${count}" -lt "${SMD_GATEWAY_LIVENESS_MAX_KILLS}" ]
+}
+
+gateway_liveness_heartbeat_pid() {
+  sed -n 's/.*"pid"[: ]*\([0-9][0-9]*\).*/\1/p' "$1" 2>/dev/null
+}
+
+# A refusal, or a supervisor that has gone inert, must never be silent — that is
+# the entire defect class this PR is about. Repeat on a 5-minute floor so the
+# condition shows continuously in `fly logs` without drowning the stream. Same
+# discipline as the establishment intake's NOT-launched line above: a silent
+# skip is indistinguishable from a healthy seat.
+gateway_liveness_nag() {
+  local now
+  now="$(date -u +%s)"
+  if [ $(( now - last_nag )) -ge 300 ]; then
+    log "GATEWAY LIVENESS: $*"
+    last_nag="${now}"
+  fi
+}
+
+# SIGUSR2 is what finally makes gateway_faulthandler.log non-empty: Hermes
+# registers an all-thread faulthandler dump on it (gateway/run.py) and nothing
+# ever sent the signal, which is why the "0-byte diagnostic" reported in ss#2488
+# is expected behaviour and not a defect. Best-effort, and DOUBLY gated, because
+# SIGUSR2's default disposition is TERMINATE: if a future pin drops that
+# registration, an unguarded send stops being a diagnostic and becomes an
+# unlogged kill that skips the recovery re-check and the kill ledger below.
+gateway_liveness_request_dump() {
+  local hbpid
+  hbpid="$(gateway_liveness_heartbeat_pid "$1")"
+  if [ "${hbpid}" != "${SMD_GATEWAY_PID}" ]; then
+    log "Gateway liveness: heartbeat names pid '${hbpid}', container main is ${SMD_GATEWAY_PID}; skipping the stack dump"
+    return 0
+  fi
+  if ! grep -q 'faulthandler.register' /opt/hermes/gateway/run.py 2>/dev/null; then
+    log "Gateway liveness: this Hermes pin registers no SIGUSR2 faulthandler; skipping the stack dump (sending it would terminate the process unlogged)"
+    return 0
+  fi
+  log "Gateway liveness: SIGUSR2 to ${SMD_GATEWAY_PID} for an all-thread stack dump (best-effort — a fully frozen process may never service it)"
+  kill -USR2 "${SMD_GATEWAY_PID}" 2>/dev/null
+}
+
+gateway_liveness_escalate() {
+  local reason="$1" hb hbpid
+  if ! gateway_liveness_kill_budget_ok; then
+    # A seat that flaps every few minutes on an environmental cause is not
+    # better than a seat that is down — it is the same outage plus churn, and it
+    # destroys in-flight work each cycle. Stop, and keep saying so, so that the
+    # next thing to touch this Machine is a human.
+    gateway_liveness_nag "REFUSING to restart (${reason}): ${SMD_GATEWAY_LIVENESS_MAX_KILLS} kill(s) already inside ${SMD_GATEWAY_LIVENESS_KILL_WINDOW_SECONDS}s. This seat is flapping and needs a human."
+    gateway_liveness_state refusing
+    return 0
+  fi
+  gateway_liveness_record_kill "${reason}"
+  # SIGTERM first. It does nothing for a genuinely wedged loop — the handler
+  # would have to run ON that loop — and that is exactly the point: it costs
+  # 15s and buys a clean shutdown (audit WAL flushed, spool drained) in the
+  # false-positive case where the process is alive and healthy and we misread a
+  # starved heartbeat as a dead one.
+  log "GATEWAY LIVENESS: restarting the seat (${reason}) — SIGTERM to container main ${SMD_GATEWAY_PID}"
+  kill -TERM "${SMD_GATEWAY_PID}" 2>/dev/null
+  sleep "${SMD_GATEWAY_LIVENESS_TERM_GRACE_SECONDS}"
+  [ -d "${GATEWAY_LIVENESS_PROC_DIR}/${SMD_GATEWAY_PID}" ] || return 0
+  log "GATEWAY LIVENESS: SIGKILL to container main ${SMD_GATEWAY_PID}; tini exits non-zero and Fly replaces the Machine"
+  kill -KILL "${SMD_GATEWAY_PID}" 2>/dev/null
+  for _ in 1 2 3; do
+    sleep "${SMD_GATEWAY_LIVENESS_KILL_VERIFY_SECONDS}"
+    [ -d "${GATEWAY_LIVENESS_PROC_DIR}/${SMD_GATEWAY_PID}" ] || return 0
+  done
+  # Still alive 30s after SIGKILL. The kill target is the one thing ss#2488
+  # could NOT explain — the gateway pid moved 655 -> 657 while the container
+  # never restarted — so rather than assume, fall back to whatever pid the
+  # heartbeat itself names, and say plainly that the first target was wrong.
+  log "GATEWAY LIVENESS: ${SMD_GATEWAY_PID} SURVIVED SIGKILL for $(( SMD_GATEWAY_LIVENESS_KILL_VERIFY_SECONDS * 3 ))s — falling back to the pid named in the heartbeat"
+  hb="$(gateway_heartbeat_path)"
+  [ -n "${hb}" ] && [ -e "${hb}" ] || return 0
+  hbpid="$(gateway_liveness_heartbeat_pid "${hb}")"
+  case "${hbpid}" in
+    ''|*[!0-9]*) return 0 ;;
+    "${SMD_GATEWAY_PID}") return 0 ;;
+  esac
+  log "GATEWAY LIVENESS: SIGKILL to heartbeat-named pid ${hbpid}"
+  kill -KILL "${hbpid}" 2>/dev/null
+}
+
+(
+  # This loop MUST outlive every failing probe. entrypoint.sh runs under
+  # `set -euo pipefail` (line 4) and a backgrounded subshell INHERITS it, so a
+  # vanished heartbeat, a `stat` on a file mid-replace, a `kill` on a pid that
+  # just died, or arithmetic on an empty mtime would silently END the supervisor
+  # for the life of the container — the exact failure class this PR exists to
+  # fix, reproduced one level up and even harder to see. The broker loop above
+  # pays for the same hazard with an `if` guard (see its comment); this loop
+  # turns `set -e` off outright, because nearly every line in it is a probe that
+  # is ALLOWED to fail.
+  #
+  # On the `( ... ) &` secret-carry hazard (ss#2420): a fork keeps its parent's
+  # execve-time environ for life, and no `unset` rewrites it — which is why the
+  # skill reconciler and the webhook gate are exec'd with `env -u`. It does not
+  # apply here. Those two run at the AGENT uid, where a same-uid process can read
+  # /proc/<pid>/environ; this one stays root, like the appliers and the intake
+  # above, and the hermes uid cannot read a root process's environ at all. The
+  # supervisor also needs no credential of any kind — it reads a file mtime and
+  # sends signals.
+  set +e
+  if [ ! -f "${GATEWAY_LIVENESS_HEARTBEAT_WRITER}" ] || \
+     ! grep -q 'loop_heartbeat_forever' "${GATEWAY_LIVENESS_HEARTBEAT_WRITER}"; then
+    log "GATEWAY LIVENESS: NOT watching — this Hermes pin has no loop heartbeat (${GATEWAY_LIVENESS_HEARTBEAT_WRITER} absent or without loop_heartbeat_forever). A wedged gateway on this seat will NOT self-recover."
+    gateway_liveness_state not-watching
+    exit 0
+  fi
+  armed=0
+  stale_streak=0
+  last_nag=0
+  boot_epoch="$(date -u +%s)"
+  gateway_liveness_state not-armed
+  while true; do
+    # Tick FIRST, every iteration. This file is the supervisor's own liveness
+    # proof and boot-smoke asserts its freshness. A pid file would only prove a
+    # number was written once — the "check confirmed a process EXISTED rather
+    # than that it WORKED" shape boot-smoke-test.sh warns about after the
+    # 2026-07-16 scheduler outage ran eight days green on exactly that.
+    touch "${GATEWAY_LIVENESS_RUN_DIR}/tick"
+    chmod 0644 "${GATEWAY_LIVENESS_RUN_DIR}/tick" 2>/dev/null
+    sleep "${SMD_GATEWAY_LIVENESS_POLL_SECONDS}"
+    now="$(date -u +%s)"
+
+    hb="$(gateway_heartbeat_path)"
+    if [ -z "${hb}" ]; then
+      # UNRESOLVED ARGV IS NOT THE SAME CONDITION BEFORE AND AFTER THE EXEC.
+      #
+      # This branch used to report `inert` unconditionally, and `inert` is a
+      # paging state: gateway_loop_check.py forwards the word and fleet-alerts'
+      # gateway_supervisor_inert fires on it, saying "it will never act". But the
+      # supervisor is forked while still root, MINUTES before the gateway exists.
+      # entrypoint execs bootstrap.sh, which stages skills, syncs the voice
+      # vault, runs the appliers and enables plugins before its own exec at
+      # bootstrap.sh:916 — so for that whole window /proc/<SMD_GATEWAY_PID>/cmdline
+      # legitimately reads `bash /app/bootstrap.sh`, names no hermes, and carries
+      # no profile.
+      #
+      # Observed live on pilot-smokeball 2026-09-01T02:30:37Z: this exact line
+      # fired for /proc/652 while the bootstrap log two seconds earlier and five
+      # seconds later showed it seeding the skill catalog. The same boot resolved
+      # the profile normally once the exec landed. So the historical reading of
+      # this signal is inverted — a healthy boot produced the alarm, which is the
+      # cheapest way to teach everyone to ignore it.
+      #
+      # The parse is not the defect and was not changed to fix this: it walks
+      # NUL-split argv and resolves the real live cmdline correctly. WHAT IT
+      # CANNOT DO IS TELL TIME. The clock is the only thing that separates "the
+      # gateway has not started yet" from "the gateway will never be found", so
+      # the clock is what decides which of the two we say.
+      if [ $(( now - boot_epoch )) -lt "${SMD_GATEWAY_LIVENESS_STARTUP_GRACE_SECONDS}" ]; then
+        gateway_liveness_state starting
+        gateway_liveness_nag "argv at ${GATEWAY_LIVENESS_PROC_DIR}/${SMD_GATEWAY_PID}/cmdline does not name hermes yet — bootstrap has not reached its gateway exec ($(( now - boot_epoch ))s into a ${SMD_GATEWAY_LIVENESS_STARTUP_GRACE_SECONDS}s startup grace). NOT inert: re-checking every ${SMD_GATEWAY_LIVENESS_POLL_SECONDS}s, and if argv still does not resolve at the end of the grace this becomes an INERT page."
+      else
+        gateway_liveness_state inert
+        gateway_liveness_nag "cannot resolve the gateway profile from ${GATEWAY_LIVENESS_PROC_DIR}/${SMD_GATEWAY_PID}/cmdline after $(( now - boot_epoch ))s (startup grace ${SMD_GATEWAY_LIVENESS_STARTUP_GRACE_SECONDS}s); supervisor is INERT and this seat has no automatic recovery"
+      fi
+      continue
+    fi
+
+    if [ ! -e "${hb}" ]; then
+      # No heartbeat yet. Never kill a slow boot — but do not hand a boot-time
+      # wedge to "Fly's job" either: the Fly check is served by the webhook
+      # gate's /health, which is a literal constant, and the process never
+      # exits. Left alone, this window is the original bug in miniature.
+      if [ "${armed}" -eq 0 ] && [ $(( now - boot_epoch )) -ge "${SMD_GATEWAY_LIVENESS_BOOT_DEADLINE_SECONDS}" ]; then
+        gateway_liveness_nag "gateway has written NO loop heartbeat in $(( now - boot_epoch ))s (deadline ${SMD_GATEWAY_LIVENESS_BOOT_DEADLINE_SECONDS}s); ${hb} absent"
+        gateway_liveness_escalate never-armed
+        # Restart the deadline clock. Without this the condition is still true
+        # on the next poll, and the ledger's whole budget burns in three ticks
+        # instead of bounding three genuinely separate attempts.
+        boot_epoch="$(date -u +%s)"
+      fi
+      continue
+    fi
+
+    mtime="$(stat -c %Y "${hb}" 2>/dev/null)"
+    case "${mtime}" in ''|*[!0-9]*) continue ;; esac
+    age=$(( now - mtime ))
+
+    if [ "${age}" -le "${SMD_GATEWAY_LIVENESS_STALE_SECONDS}" ]; then
+      [ "${armed}" -eq 0 ] && log "Gateway liveness supervisor ARMED (loop heartbeat ${hb} is ${age}s fresh)"
+      [ "${armed}" -eq 0 ] && gateway_liveness_state armed
+      armed=1
+      stale_streak=0
+      continue
+    fi
+
+    if [ "${armed}" -eq 0 ]; then
+      # The volume PERSISTS, so a heartbeat from a PREVIOUS boot is on disk at
+      # every cold start. Arming on it would kill every boot, forever. Say so
+      # out loud — a silent skip here reads identically to a healthy seat.
+      #
+      # BUT: not arming has no deadline of its own, and that was the blind spot.
+      # A gateway that wedges DURING startup never writes a first beat, so this
+      # branch is where it lands — and before this grace it stayed here forever,
+      # nagging on a 5-minute floor into `fly logs` and reaching no inbox at all.
+      # The state stayed `not-armed`, which fleet-alerts does not page on (nor
+      # should it: `not-armed` is also every healthy seat's first 30 seconds).
+      # The 2026-09-01 crash loop is the proof — pilot-smokeball emitted this
+      # exact line at 02:21:54, 02:27:01 and 02:35:44 across three separate boots
+      # while restarting every ~15 minutes, and no instrument on the seat treated
+      # it as a fault.
+      #
+      # We PAGE and we do NOT kill. Killing is what sustained the loop: hermes'
+      # own in-process watchdog already hard-exits 75 on its own budget
+      # (gateway/shutdown_watchdog.py:196), and a slow-starting gateway that gets
+      # signalled here just boots colder and slower next time. There is no
+      # recovery action a supervisor can take against "startup is too slow" — the
+      # fixes are memory, a lighter connector set, or a lazier import, and all
+      # three need a human. So the correct output is a person, not a signal.
+      #
+      # The page rides the state word, the same channel as every other supervisor
+      # condition: gateway_loop_check.py forwards it on the heartbeat and
+      # fleet-alerts' gateway_never_healthy fires on it. The entrypoint has no
+      # other outbound path — it cannot reach the network and holds no credential
+      # — which is by design (see the environ note at the top of this subshell).
+      if [ $(( now - boot_epoch )) -ge "${SMD_GATEWAY_LIVENESS_STARTUP_GRACE_SECONDS}" ]; then
+        gateway_liveness_state never-healthy
+        gateway_liveness_nag "GATEWAY NEVER CAME UP: loop heartbeat ${hb} is ${age}s stale and no fresh beat has appeared in the $(( now - boot_epoch ))s since this supervisor started (startup grace ${SMD_GATEWAY_LIVENESS_STARTUP_GRACE_SECONDS}s). The gateway is wedged DURING startup. NOTHING AUTOMATIC WILL HAPPEN: this supervisor will not kill a slow-starting gateway, and it will keep re-checking every ${SMD_GATEWAY_LIVENESS_POLL_SECONDS}s and clear itself the moment a fresh beat appears. A human must look — check memory headroom and the gateway's startup log."
+        continue
+      fi
+      gateway_liveness_nag "loop heartbeat ${hb} is ${age}s stale but has never been seen fresh this boot; NOT arming (stale beat from a previous boot). $(( now - boot_epoch ))s into a ${SMD_GATEWAY_LIVENESS_STARTUP_GRACE_SECONDS}s startup grace; if no fresh beat arrives by then this becomes a never-healthy page."
+      continue
+    fi
+
+    stale_streak=$(( stale_streak + 1 ))
+    if [ "${stale_streak}" -lt 2 ]; then
+      log "Gateway liveness: loop heartbeat ${age}s stale (sample ${stale_streak}); one more before acting"
+      continue
+    fi
+
+    log "GATEWAY WEDGE: loop heartbeat ${hb} is ${age}s stale across ${stale_streak} consecutive samples (threshold ${SMD_GATEWAY_LIVENESS_STALE_SECONDS}s)"
+    # Budget FIRST, before the dump. Signalling a process we have already
+    # decided not to restart is perturbation without a plan: the diagnostic
+    # dump was captured on the first kill in this window, and attempts 4..N
+    # add nothing but risk (SIGUSR2's default disposition is terminate) and a
+    # 20s sleep per cycle. escalate() re-checks the budget as the authoritative
+    # gate — it also guards the never-armed path, which does not come through
+    # here.
+    if ! gateway_liveness_kill_budget_ok; then
+      gateway_liveness_nag "REFUSING to restart (loop-wedge, heartbeat ${age}s stale): ${SMD_GATEWAY_LIVENESS_MAX_KILLS} kill(s) already inside ${SMD_GATEWAY_LIVENESS_KILL_WINDOW_SECONDS}s. This seat is flapping and needs a human."
+      gateway_liveness_state refusing
+      stale_streak=0
+      continue
+    fi
+    gateway_liveness_request_dump "${hb}"
+    sleep "${SMD_GATEWAY_LIVENESS_DUMP_GRACE_SECONDS}"
+    # Never block on the dump, and never kill on a reading we did not
+    # re-confirm after it: the loop may have come back while we waited.
+    now="$(date -u +%s)"
+    mtime="$(stat -c %Y "${hb}" 2>/dev/null)"
+    case "${mtime}" in ''|*[!0-9]*) mtime=0 ;; esac
+    if [ $(( now - mtime )) -le "${SMD_GATEWAY_LIVENESS_STALE_SECONDS}" ]; then
+      log "Gateway liveness: loop recovered during the dump grace ($(( now - mtime ))s); NOT killing"
+      stale_streak=0
+      continue
+    fi
+    gateway_liveness_escalate loop-wedge
+    stale_streak=0
+  done
+) &
+log "Root gateway liveness supervisor forked (uid 0; watches the Hermes loop heartbeat and kills container main ${SMD_GATEWAY_PID} so Fly replaces the Machine; stale>${SMD_GATEWAY_LIVENESS_STALE_SECONDS}s, max ${SMD_GATEWAY_LIVENESS_MAX_KILLS} kill(s)/${SMD_GATEWAY_LIVENESS_KILL_WINDOW_SECONDS}s)"
 
 # MCP channel cross-process result/thread store (shared/mcp_result_store.py +
 # shared/mcp_thread_store.py). The webhook gate (:8643) and the agent's result-sink

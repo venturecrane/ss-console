@@ -14,7 +14,7 @@ import {
 } from '@venturecrane/crane-test-harness'
 import type { D1Database } from '@cloudflare/workers-types'
 import path from 'node:path'
-import { recordEvent, findSentByMessageId, listEventsByEntity } from './outreach-events'
+import { recordEvent, findSentByMessageId } from './outreach-events'
 
 installWorkerdPolyfills()
 
@@ -163,42 +163,5 @@ describe('outreach-events DAL', () => {
   it('findSentByMessageId returns null when the message_id is unknown', async () => {
     const sent = await findSentByMessageId(db, 'never-existed')
     expect(sent).toBeNull()
-  })
-
-  it('listEventsByEntity returns events newest-first', async () => {
-    // Force ordering by inserting with explicit small delays via separate
-    // calls — created_at default uses datetime('now') which is per-second
-    // resolution, so we sort by created_at DESC then by insertion order is
-    // not guaranteed. Instead, verify that all entries appear.
-    await recordEvent(db, {
-      org_id: ORG_ID,
-      entity_id: ENTITY_ID,
-      event_type: 'sent',
-      message_id: 'msg-list-1',
-    })
-    await recordEvent(db, {
-      org_id: ORG_ID,
-      entity_id: ENTITY_ID,
-      event_type: 'open',
-      message_id: 'msg-list-1',
-      provider_event_id: 'svix-list-1',
-    })
-    await recordEvent(db, {
-      org_id: ORG_ID,
-      entity_id: ENTITY_ID,
-      event_type: 'click',
-      message_id: 'msg-list-1',
-      provider_event_id: 'svix-list-2',
-    })
-
-    const events = await listEventsByEntity(db, ENTITY_ID)
-    expect(events.length).toBe(3)
-    const types = events.map((e) => e.event_type).sort()
-    expect(types).toEqual(['click', 'open', 'sent'])
-  })
-
-  it('listEventsByEntity returns an empty array for an entity with no events', async () => {
-    const events = await listEventsByEntity(db, 'no-such-entity')
-    expect(events).toEqual([])
   })
 })

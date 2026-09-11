@@ -21,7 +21,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
-import secret_custody as sc  # noqa: E402
+import secret_custody as sc
 
 _OP = Path(__file__).resolve().parents[2]
 _PROVISION = _OP / "bin" / "provision-customer.sh"
@@ -96,9 +96,15 @@ def test_known_customer_secrets_classify_customer() -> None:
 
 
 def test_infra_secrets_classify_infra() -> None:
-    for name in ("R2_ACCESS_KEY_ID", "SENTRY_DSN", "MACHINE_HEARTBEAT_KEY",
-                 "WEBHOOK_SECRET_MCP", "SMOKEBALL_OAUTH_STATE_KEY",
-                 "SMOKEBALL_ENVIRONMENT", "R2_BUCKET_CONFIG"):
+    for name in (
+        "R2_ACCESS_KEY_ID",
+        "SENTRY_DSN",
+        "MACHINE_HEARTBEAT_KEY",
+        "WEBHOOK_SECRET_MCP",
+        "SMOKEBALL_OAUTH_STATE_KEY",
+        "SMOKEBALL_ENVIRONMENT",
+        "R2_BUCKET_CONFIG",
+    ):
         assert sc.classify(name) == sc.INFRA, f"{name} must be infra"
 
 

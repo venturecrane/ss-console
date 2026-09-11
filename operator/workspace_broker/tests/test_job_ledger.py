@@ -210,3 +210,62 @@ def test_list_claimable_excludes_terminal_and_live_leases(tmp_path):
     # With all leases expired: the leased job re-appears; terminal stays out.
     ids = {r["id"] for r in w.list_claimable(now=T2, lease_expiry_cutoff=CUTOFF_ALL_EXPIRED)}
     assert ids == {queued, leased}
+
+
+def test_same_millisecond_burst_orders_by_id_every_time(tmp_path):
+    """The regression for ss#2486, and it pins the contract that actually holds.
+
+    ``list_all`` orders ``created_at DESC, id DESC``, so the id and the timestamp
+    are one composite sort key. They used to be minted from two separate clock
+    reads, which let a pair straddle a millisecond boundary: ``created_at`` said
+    a row came second while its ULID said it came first, and the composite order
+    became neither id order nor creation order. That flaked the ``substrate``
+    merge gate on PR #2484 and passed on re-run, which is the worst shape a gate
+    can have.
+
+    WHAT IS AND IS NOT PROMISED. For rows in the same millisecond the ledger
+    gives a STABLE order, not creation order: the ULID time prefix ties too, so
+    ``id DESC`` falls through to the 80 random bits. Asserting creation order
+    here would be asserting something the ledger cannot deliver at millisecond
+    resolution, and it fails outright. What one clock read buys is that the
+    composite key is always exactly id order, on every row, forever.
+
+    A single burst would catch the old bug only by luck, so this runs many.
+    """
+    for burst in range(40):
+        d = tmp_path / f"burst-{burst}"
+        d.mkdir()
+        w = _writer(d)
+        created = [_new_job(w) for _ in range(8)]
+        got = [r["id"] for r in w.list_all()]
+        assert set(got) == set(created), "list_all lost or invented a row"
+        assert got == sorted(created, reverse=True), (
+            "list_all's composite key stopped agreeing with id order, which means "
+            "created_at and the ULID disagree about when a row was made (ss#2486)"
+        )
+
+
+def test_id_and_created_at_come_from_one_clock_read(tmp_path):
+    """Pin the mechanism, not just the effect.
+
+    A burst test can pass by luck on a fast machine, which would make it a check
+    that cannot fail. This asserts the property that makes luck irrelevant: the
+    millisecond embedded in the ULID and the stored ``created_at`` describe the
+    same instant, because both are derived from one integer.
+    """
+    from datetime import UTC, datetime
+
+    from workspace_broker.audit_ledger import _CROCKFORD
+
+    w = _writer(tmp_path)
+    job_id = _new_job(w)
+    row = next(r for r in w.list_all() if r["id"] == job_id)
+
+    ulid_ms = 0
+    for ch in job_id[:10]:
+        ulid_ms = ulid_ms * 32 + _CROCKFORD.index(ch)
+    stamp_ms = int(datetime.strptime(row["created_at"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=UTC).timestamp() * 1000)
+    assert ulid_ms == stamp_ms, (
+        f"ULID says {ulid_ms}, created_at says {stamp_ms}: the two were minted "
+        "from separate clock reads and can disagree (ss#2486)"
+    )

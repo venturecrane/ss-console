@@ -56,6 +56,39 @@ SMD contact addresses:
 - **Operational alerts / escalations:** `team@smd.services`
 - **Direct to Captain:** `scott@smd.services`
 
+## Venture Repositories — moving between these is NOT a repo switch
+
+This venture spans **three** repositories. Work that crosses them is ordinary
+work inside one venture. The SOS directive "never switch repos or ventures
+without explicit Captain approval" governs moving to a **different venture**
+(vc, ke, dfg, sc...), not moving between the repos listed here.
+
+| Repo                                 | Clone at                                     | What lives there                                                                                                                                                                                                                      |
+| ------------------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `venturecrane/ss-console`            | `~/dev/ss-console`                           | This repo. Marketing site, admin console, portal, Operator skills/contracts/config, the seat `customer.yaml` set.                                                                                                                     |
+| `venturecrane/hermes-smd-overlay`    | `~/dev/hermes-smd-overlay`                   | The Operator runtime overlay: the trust plugin, gates, connectors' Python side, boot smoke, and the contract fixtures that MIRROR this repo's (`tests/contract/seat_gate_binding_snapshot.json`). Pinned into seats by `OVERLAY_REF`. |
+| `venturecrane/engagements` (private) | `~/dev/engagements` or `$SS_ENGAGEMENTS_DIR` | Client material: dossiers, correspondence, proposals, agreements. See the Law 2 guard above.                                                                                                                                          |
+
+**Why this section exists.** It was added 2026-08-25 after an agent completed a
+seat retirement across git, D1, R2 and Fly, then stopped at the overlay's
+mirrored fixture and asked permission to continue — because the venture declared
+`engagements` as a sibling repo and never declared the overlay, so "don't switch
+repos" had no repo set to check against and the conservative reading won. The
+Captain reports having explained this many times. A fact an agent has to be told
+repeatedly is a fact the repo failed to write down.
+
+**Two consequences that bite in practice.**
+
+1. **A change is not shipped until every repo it spans is shipped.** ss-console
+   and the overlay carry mirrored artifacts on purpose — the seat/gate snapshot
+   is the standing example, and `tests/gate-coverage-snapshot.test.ts` says so in
+   its own header: regenerate here, then COPY the `.overlay.json` over the
+   overlay's fixture _in the same change_. The overlay has no way to pull it.
+   Landing one side and stopping is the same defect as a merged-but-not-deployed
+   overlay fix.
+2. **A removal is not complete until it is absent from all three.** "Gone means
+   gone" enumerates runtime layers; the repo layer is plural here.
+
 ## Enterprise Rules
 
 - **All changes through PRs.** Never push directly to main. Branch, PR, CI, QA, merge.
@@ -66,7 +99,7 @@ SMD contact addresses:
 - **Never echo secret values.** Transcripts persist in ~/.claude/ and are sent to API providers.
 - **Verify secret VALUES, not just key existence.**
 - **Never auto-save to VCMS** without explicit Captain approval.
-- **Scope discipline.** Discover additional work mid-task — finish current scope, file a new issue.
+- **Scope discipline: do the work, do not file it.** Work discovered mid-task gets **done now** if it is within reach — that is what a platoon of agents is for. Finish the current scope first, then do it. File an issue only when it is genuinely not doable now: blocked on something that does not yet exist, or a decision only the Captain can make. "I noticed something" is not a reason to file. **Standing target: zero open issues.** Automated reconcilers (`unaudited-send-reconcile`, `terminal-state-reconcile`) are exempt — their issues are alerts, and the target must never become a reason to silence a monitor.
 - **Escalation triggers.** Credential not found in 2 min, same error 3 times, blocked >30 min — stop and escalate.
 
 ### Gone means gone (removal discipline)
@@ -77,7 +110,7 @@ The lesson (the quinn incident, 2026-07-02 → 2026-07-26): a persona name was "
 
 The rule, mechanically:
 
-1. **Inventory before claiming.** Before reporting a removal complete, enumerate the layers the artifact can live in. For this venture that list is: git (source, fixtures, docs), D1 projections (`customer_configs` — no auto-sync, #1308), R2 (skills, vaults, config), the Fly volume (`/opt/data` — profile homes, cron stores, tokens; survives reprovision BY DESIGN), the running Machine (env, loaded config, skills_list), monitoring surfaces (heartbeat fields, alert sinks, Sentry), and external records (GitHub issues/PRs, mailboxes, calendars, vendor dashboards).
+1. **Inventory before claiming.** Before reporting a removal complete, enumerate the layers the artifact can live in. For this venture that list is: git (source, fixtures, docs), D1 projections (`customer_configs` — no auto-sync, #1308), R2 (skills, vaults, config), the Fly volume (`/opt/data` — profile homes, cron stores, tokens, the Smokeball extraction cache at `/opt/data/smokeball-extract-cache/` which holds transcribed matter-document TEXT; survives reprovision BY DESIGN), the running Machine (env, loaded config, skills_list), monitoring surfaces (heartbeat fields, alert sinks, Sentry), and external records (GitHub issues/PRs, mailboxes, calendars, vendor dashboards).
 2. **Negative probe per runtime layer.** Each runtime layer gets a probe showing absence, recorded via `crane_verify` with the probe output. Repo layers are covered by CI guards (`tests/forbidden-strings.test.ts`); runtime layers are never covered by CI guards — that is the whole point.
 3. **Prefer structural fixes over sweeps.** A one-time cleanup leaves the class alive. When a removal keeps resurfacing, the fix is a reconciler that makes the layer converge on authored state (the overlay#185 profile-home reconciler is the template) plus a boot/smoke assertion that the convergence held (`boot-smoke-test.sh` step 6b).
 4. **The completion report cites the probes.** "Removed X" without verify IDs for the runtime layers is a repo-layer claim and must be worded as one.
@@ -184,137 +217,15 @@ We do not write copy that implies pre-knowledge of a specific prospect's busines
 
 ---
 
-## The Business Model
+## The Business Model and Domain Context
 
-### Problem Framework
+The problem framework, the six-category delivery taxonomy, pain clusters by vertical, engagement phases, the pricing ladder, the assessment-call thesis, the pre-launch priority checklist, and the buyer / competition / referral context live in `.claude/rules/venture-model.md`. It loads automatically when a session touches marketing pages, components, the handbook, ADRs, or vertical packs; for content, collateral, scoping, or pricing work that touches none of those paths, read it first.
 
-We use a three-layer model to connect research to delivery:
-
-**1. Four root patterns** (internal, research-grounded):
-
-- The founder ceiling
-- Invisible operational drag
-- Revenue plateau
-- Cash flow fragility
-
-**2. Owner-voiced symptoms** (external, what owners actually say):
-"I can't step away." "I can't find good people." "Customers slip through the cracks." "I don't know if we're making money." "Everything runs on spreadsheets." "Our systems don't talk to each other." "We've stalled."
-
-These are representative, not exhaustive. The assessment listens for whatever comes up.
-
-**3. Six solution categories** (delivery taxonomy):
-
-- Process design
-- Custom internal tools
-- Systems integration
-- Operational visibility
-- Vendor/platform selection
-- AI & automation
-
-No dollar ranges are attached to solution categories. Pricing comes from scope estimation per engagement.
-
-**AI & automation sub-capabilities** (for agent reference when authoring copy or scoping engagements, not a list to publish verbatim):
-
-- AI strategy conversations and readiness assessment
-- AI tool selection and rollout
-- Custom AI and agent implementations
-- Team training and enablement on AI tools
-- Non-AI workflow automation (scripts, integrations that don't require AI)
-
-**Taxonomy two-layer model.** Resolved in [ADR 0001](docs/adr/0001-taxonomy-two-layer-model.md) (Captain decision 2026-04-27, [#591](https://github.com/venturecrane/ss-console/issues/591)); the observation half was retired with the automated lead-gen machine by [ADR 0060](docs/adr/0060-retire-automated-lead-gen-machine.md) (2026-07-01). The six-category list above is the **delivery taxonomy** — what engagements we offer. It is the marketing and doctrinal source of truth. The five-category schema (`process_design`, `tool_systems`, `data_visibility`, `customer_pipeline`, `team_operations` — defined in `src/portal/assessments/extraction-schema.ts`) survives repurposed as the **client-assessment extraction taxonomy**: it structures what the assessment call captures, consumed by the assessment extraction and assessment-to-quote flows, not by outreach. The two layers remain deliberately distinct: assessments speak the extraction taxonomy internally, marketing speaks delivery, and the consultant translates between them. Agents editing either side must not silently change the other.
-
-### Pain Clusters by Vertical
-
-These suggest where to lead the conversation, not which problems to look for. The assessment listens for whatever comes up across the full range of symptoms.
-
-| Business Type                                | Likely Entry Points                                   |
-| -------------------------------------------- | ----------------------------------------------------- |
-| Home services (plumber, HVAC)                | Scheduling + lead follow-up + employee retention      |
-| Professional services (accountant, attorney) | Owner bottleneck + manual communication + pipeline    |
-| Retail/salon/spa                             | Scheduling + communication + financial visibility     |
-| Contractor/trades                            | Estimating/quoting + scheduling + employee retention  |
-| Restaurant/food service                      | Team communication + inventory + financial visibility |
-
-### Engagement Phases
-
-| Phase            | Activities                                                                        |
-| ---------------- | --------------------------------------------------------------------------------- |
-| Assessment call  | Walk through their day, "show me how you do X," identify top 3 pain points        |
-| Solution design  | Choose simplest tools, design workflows, estimate scope and price, send proposal  |
-| Implementation   | Build templates/workflows/docs, configure tools, migrate data, connect systems    |
-| Training         | Hands-on walkthrough, practice, deliver "how to" docs, identify internal champion |
-| Handoff + polish | Handle feedback, adjust based on real use, final handoff                          |
-
-**Phases scale per engagement.** Every engagement includes every phase. What changes is how heavy each one is. Training may be a three-day program or a single "on Tuesdays you click this button." Implementation may be a multi-week build or a one-afternoon script. Scope determines depth, not presence.
-
-### Pricing
-
-- **Internal rate:** $175/hr at launch, then $200/hr after first case study, then $250/hr, then $300/hr with volume
-- **Engagement range:** scoped per engagement. Smallest engagements (targeted automation scripts, AI pilots) start around $2,500. Below that, assessment overhead exceeds delivery value. Largest engagements have no fixed ceiling. Nothing published externally.
-- **Paid Assessment:** $250, applied toward engagement if they proceed. First 3 assessments free.
-- **Recurring revenue product:** Productized Operator offering — flat-rate monthly retainer SKU, second front door alongside the scope-based consulting funnel. Launch price locked 2026-07-04: a flat monthly retainer plus a one-time stand-up fee, internal and never published; the figures live in `venturecrane/engagements:pricing/` ([ADR 0063](docs/adr/0063-operator-launch-pricing.md) / Decision #50; supersedes ADR 0004's deferred-pricing clause). See [ADR 0004](docs/adr/0004-productized-operator-offering.md) / Decision #44 for the SKU shape. The prior undefined post-delivery retainer is superseded.
-- **Post-handoff support for scope-based engagements:** Two-week async stabilization included (Decision #27). Beyond that, customers are quoted a follow-on scope or converted to an Operator subscription if the fit is right.
-- **No dollar amounts published externally.** Client sees a project price, not hourly rate.
-
-### The Assessment Call Is the Product
-
-The value is NOT configuring HubSpot. Anyone can do that. The value is:
-
-1. An experienced outsider seeing their operations with fresh eyes
-2. Identifying the problems they can't see because they're too close
-3. Prioritizing ruthlessly — "these 3 things first, everything else later"
-4. Making decisions for them so they don't research for 6 months
-
-## Current Phase: Pre-Launch
-
-We are in the **pre-launch phase**. Nothing has been sold yet. The immediate priorities are:
-
-### Priority 1: Collateral to Start Selling
-
-- [ ] Assessment call script (structured conversation guide, objectives-first)
-- [ ] Proposal/SOW template (what gets sent after the assessment, reflecting full solution range)
-- [ ] Pricing framework (scope estimation across all 6 solution categories)
-- [ ] One-pager / leave-behind (physical or PDF for networking, guide positioning)
-
-### Priority 2: Go-to-Market
-
-- [ ] Vertical selection for initial targeting (pick ONE vertical to start)
-- [ ] Outreach strategy (how to find and reach first 5 prospects; includes Vistage, EO Arizona, local networking)
-- [x] Landing page — smd.services live; rebuilt to the firm-with-flagship structure 2026-06 (home, `/operator`, `/about`, `/industries`, `/patterns`, `/contact`)
-- [x] ~~**Outside View**~~ — retired 2026-05-04 in PR #702 (user-visible surface) and #703 (infrastructure). Public-footprint scraping turned out not to surface anything useful. ADR 0002 is superseded. The lead-magnet surfaces (`/scan`, `/scorecard`, `/get-started`, `/outside-view`) middleware-301 to home for permanent-bookmark backwards compat.
-- [ ] Pipeline math (how many conversations to sustain profitability)
-- [ ] Phased geographic approach (Phoenix in-person first, remote-capable after proof of model)
-
-### Priority 3: Delivery Readiness
-
-- [ ] Tool and solution matrix (across all 6 solution categories, including custom internal tools, integrations, and AI & automation)
-- [ ] SOP templates (reusable frameworks filled in per client)
-- [ ] Client onboarding checklist (what we need from them before Day 1)
-- [ ] Quality checklist templates (reusable across engagements)
-
-### Priority 4: Business Model Refinement
-
-- [x] Payment terms (50% deposit at signing, 50% at completion; 3-milestone for 40+ hr engagements)
-- [ ] Paid assessment entry point ($250 applied toward engagement, first 3 free)
-- [x] ~~Recurring retainer model~~ — superseded 2026-05-13 by [ADR 0004](docs/adr/0004-productized-operator-offering.md) (productized Operator SKU). Stack evaluation, pricing analysis, service contract terms, and stack build filed as follow-ons against ADR 0004.
-- [x] Client data management system — the D1-backed admin console exists (`src/pages/admin/`: clients, assessments, quotes, engagements, billing)
-
-## Domain Context
-
-- **Geography:** Phoenix metro (Phase 1, in-person default), remote-capable
-- **Target:** Established, owner-led businesses with real operational load and the ability to pay for a solution. No revenue-band gate — we work with any business that can pay and benefit, and qualification happens in conversation, not by filtering on a guessed revenue figure (see ADR 0003; the automated pipeline that once enforced a gate was retired entirely by ADR 0060). The "too big for one person, too small for a COO" framing still captures the shape of the buyer. For the Operator specifically, the target profiles are defined by the vertical packs in `operator/verticals/`.
-- **Buyer:** The owner. Sometimes the office manager, but the owner writes the check.
-- **Competition:** Traditional consultancies ($15-50k+ engagements, slow), fractional CTOs/COOs (ongoing cost, no bounded deliverable), EOS implementers (framework-locked), managed IT providers (technical only). Nobody does assessment + implementation + handoff as bounded, scope-priced engagements.
-- **Referral sources:** Vistage, EO Arizona, fractional CFOs, local networking groups (BNI, chamber of commerce), accountants/bookkeepers, commercial insurance agents, SBA/SCORE
-
-## Tech Stack
-
-- **Domain:** smd.services
-- **No product/app planned** — this is a services business. Tech is for marketing and internal tools only. (Stack details are derivable from `package.json`: Astro SSR on Cloudflare Workers, TypeScript.)
+One rule from it applies everywhere: the six-category list is the **delivery taxonomy** and the marketing source of truth ([ADR 0001](docs/adr/0001-taxonomy-two-layer-model.md)); the five-category schema in `src/portal/assessments/extraction-schema.ts` is the **client-assessment extraction taxonomy**, a different layer. Agents editing either side must not silently change the other.
 
 ## Three-Subdomain Architecture
 
-One Astro app, one Cloudflare Worker, three custom domains. Routing is handled by `src/middleware.ts` — not by separate deployments.
+One Astro app on Cloudflare Workers, one Worker (`ss-web`), three custom domains, routed by `src/middleware.ts`. Its header comment documents the rewrite, the Clerk-primary auth model, and the legacy magic-link fallback; `src/lib/auth/admin-session-shim.ts` is the admin bridge.
 
 | Host                  | Serves                                   | Auth role |
 | --------------------- | ---------------------------------------- | --------- |
@@ -322,66 +233,21 @@ One Astro app, one Cloudflare Worker, three custom domains. Routing is handled b
 | `admin.smd.services`  | Admin console (rewritten to `/admin/*`)  | `admin`   |
 | `portal.smd.services` | Client portal (rewritten to `/portal/*`) | `client`  |
 
-**How the rewrite works.** The middleware inspects `hostname`. On `admin.smd.services`, paths get `/admin` prepended unless they already start with `/admin`, `/api/admin`, `/auth`, `/api/auth`, or `/api/oauth`. Same pattern for `portal.smd.services`. The admin source files still live under `src/pages/admin/*` — the subdomain is a front door.
-
-**Auth model (unified 2026-05-25 — Clerk is primary).** Clerk owns identity for **both** admin and portal. `clerkMiddleware` is composed before the SS middleware (`sequence(clerkMiddleware(), ssMiddleware)`) and populates `locals.auth()` for downstream handlers. On admin paths, `resolveAdminSessionFromClerk` maps the Clerk `user_id` to the local `users` row (gated on `role='admin'`) and synthesizes the legacy `SessionData` shape into `locals.session` so existing call sites keep working. On portal paths, Clerk is the primary path; the bridge from Clerk identity to the local user/entity runs per-route (e.g. `getPortalClient`). See `src/middleware.ts` (header comment) and `src/lib/auth/admin-session-shim.ts`.
-
-**Legacy magic-link fallback.** The per-host session cookie is now a _fallback_, kept only so in-flight client invitation links (set by `/auth/verify` via `createSession`) keep working during the Clerk transition. Cookies are per-host (no `Domain` attribute): admin cookies only live on `admin.smd.services`, client cookies only on `portal.smd.services`. An admin cookie that lands on the apex (from pre-migration logins) is proactively cleared on next visit. New client onboarding will migrate to Clerk invitations; the legacy path stays active until all in-flight invitations expire.
-
-**Backwards compat.** `smd.services/admin/*` and `smd.services/auth/login` 301 to the admin subdomain — old bookmarks still work.
-
 **Env vars.** `APP_BASE_URL` (marketing, SignWell webhooks), `ADMIN_BASE_URL` (OAuth redirect URI, outbound admin links — strict, no fallback), `PORTAL_BASE_URL` (portal links, falls back to `APP_BASE_URL`). See `src/lib/config/app-url.ts`.
+
+**Env access in code.** Adapter v13 removed `Astro.locals.runtime`; import `env` from `cloudflare:workers` (typed by augmenting `Cloudflare.Env` in `src/env.d.ts`).
 
 ## Local Dev
 
-`.mcp.json` is user-local config (gitignored). Create it in the repo root with at minimum the `crane` MCP entry. It is not checked in.
-
-Also register the Sentry MCP server, so agents can read `smd-operator` issues directly instead of a human forwarding alert emails:
+`.mcp.json` is user-local and gitignored; create it with at least the `crane` entry. Also register Sentry so agents can read `smd-operator` issues directly (remote server, OAuth 2.1 + PKCE, no token to vault; the first call opens a browser consent):
 
 ```bash
 claude mcp add --transport http -s project sentry https://mcp.sentry.dev/mcp/smdurgan-llc
 ```
 
-Remote server, OAuth 2.1 + PKCE — no token to vault; the first call opens a browser consent. The org slug scopes it to SMDurgan LLC. This is the pull side of alert handling; the push side is the fleet-alerts sink notifier (migration 0095).
+Subdomain routing does not fire at `localhost:4321`; hit `/admin/*` and `/portal/*` directly. For full-fidelity testing add `127.0.0.1 admin.localhost` and `127.0.0.1 portal.localhost` to `/etc/hosts` and set matching `ADMIN_BASE_URL` / `PORTAL_BASE_URL` in `.dev.vars`.
 
-Subdomain-based routing keys off `hostname.startsWith('admin.')` / `portal.`. At `localhost:4321` neither fires, which is usually fine — just hit `/admin/*` and `/portal/*` paths directly.
-
-**For full-fidelity subdomain testing**, add to `/etc/hosts`:
-
-```
-127.0.0.1 admin.localhost
-127.0.0.1 portal.localhost
-```
-
-Then `http://admin.localhost:4321/` and `http://portal.localhost:4321/` exercise the rewrite. Set matching values in `.dev.vars` (e.g. `ADMIN_BASE_URL=http://admin.localhost:4321`) so outbound-URL builders emit the right origin.
-
-## Deployment: Workers + Static Assets
-
-SS deploys as a single Cloudflare Worker (`ss-web`) via `wrangler deploy`. The build produces two directories:
-
-- `dist/client/` — static assets, bound to the Worker via `[assets]` in `wrangler.toml`
-- `dist/server/` — the Astro SSR entrypoint (resolved from `@astrojs/cloudflare/entrypoints/server`)
-
-`run_worker_first = true` in the `[assets]` block ensures every request flows through Astro middleware first — subdomain routing and session middleware always run, even for requests that would otherwise resolve to a prerendered asset.
-
-**Env access in code.** Adapter v13 removed `Astro.locals.runtime`. Import env directly:
-
-```ts
-import { env } from 'cloudflare:workers'
-const db = env.DB
-```
-
-Typed via augmenting `Cloudflare.Env` in `src/env.d.ts`.
-
-**Secrets.** Workers store secrets independently of `wrangler deploy` runs — unlike the Pages-era `wrangler pages deploy` trap, secrets persist across deploys natively. Rotate from Infisical:
-
-```bash
-infisical export --env=prod --path=/ss --format=dotenv \
-  | grep -vE '^(APP_|ADMIN_|PORTAL_|MEETING_|PUBLIC_)' \
-  | npx wrangler secret bulk
-```
-
-**Historical note.** SS ran on Cloudflare Pages through April 2026. The Pages `[vars]` trap — every `wrangler pages deploy` silently wiping dashboard-set secrets — is documented enterprise-wide in `crane-console/docs/infra/secrets-management.md`. It no longer applies to SS on Workers, but the guidance stands for any future venture that adopts Pages.
+Build layout, deploy, and secret rotation are documented in `wrangler.toml`, `docs/handbook/deployment-release.md`, and `docs/handbook/secrets-access.md`.
 
 ## Instruction Modules
 
@@ -418,6 +284,12 @@ ADR load-lists live in `operator/CLAUDE.md`, which auto-loads whenever a
 session works with files under `operator/`. For Operator strategy work that
 touches no operator/ file, read `operator/CLAUDE.md` first — the thesis is
 to be built upon, not re-derived.
+
+## Captain-Side Skills (docs/skills/)
+
+Venture-local slash commands (currently `/medchron`), authored under `docs/skills/<name>/SKILL.md` and installed with `bash scripts/install-captain-skills.sh`, which symlinks them into the gitignored `.agents/skills/` and `.claude/commands/`. Edit the tracked file only; run the installer on a fresh checkout. These are not enterprise skills; nothing here syncs with crane-console.
+
+The governing constraint: the Captain cannot see any artifact a run produces, so every decision point arrives as prose carrying the counts, the exclusions and their reasons, the money, a recommendation, and a specific question. See `feedback_captain_cannot_see_artifacts_gates_must_be_prose.md`.
 
 ## Venture Handbook
 

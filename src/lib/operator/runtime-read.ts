@@ -89,6 +89,11 @@ export type RuntimeReadKind =
   // for cron/skills/delegated work, and aggregates by (day, person, model).
   // SMD-only: this feeds the admin cost plane, never a client surface.
   | 'usage_export'
+  // Chronology-package jobs (routine 11, ss#2614): the broker-owned
+  // medchron_jobs ledger projected to states, counts, cents and the delivery
+  // folder id. Never a document, never a page of text (ADR 0052: the console
+  // is a management surface, not a data surface). One page, no query field.
+  | 'medchron_jobs'
 
 export interface RuntimeReadQuery {
   kind: RuntimeReadKind

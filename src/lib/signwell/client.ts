@@ -43,31 +43,6 @@ export async function createSignatureRequest(
 }
 
 /**
- * Get a document by ID from SignWell.
- *
- * @param apiKey - SignWell API key
- * @param docId - SignWell document ID
- * @returns The SignWell document details
- * @public Part of the SignWell client surface, pinned as a contract by
- * tests/signwell.test.ts.
- */
-export async function getDocument(apiKey: string, docId: string): Promise<SignWellDocument> {
-  const response = await fetch(`${SIGNWELL_API_BASE}/documents/${docId}`, {
-    method: 'GET',
-    headers: {
-      'X-Api-Key': apiKey,
-    },
-  })
-
-  if (!response.ok) {
-    const errorBody = await response.text()
-    throw new Error(`SignWell getDocument failed (${response.status}): ${errorBody}`)
-  }
-
-  return response.json()
-}
-
-/**
  * Download the completed (signed) PDF for a document.
  *
  * Only available after all signers have completed signing.

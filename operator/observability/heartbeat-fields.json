@@ -21,7 +21,7 @@
     "re-reads build_payload at the new ref and re-stamps this file. Read the",
     "limits of that in the test's header before trusting it further than it goes."
   ],
-  "overlay_ref": "20518e862f11d2f6401a34519c134d781165d029",
+  "overlay_ref": "5770b79fea3206f01df343489d232daf2fdc4a2b",
   "fields": [
     {
       "name": "heartbeat_ts",
@@ -52,6 +52,17 @@
       "name": "sticky_stop_level",
       "column": "sticky_stop_level",
       "sample": "OK"
+    },
+    {
+      "_comment": "The ladder's CAUSE, carried since overlay#341. Four meters drive the sticky-stop ladder and each needs a different investigation, so the level alone mislabels the incident (ashton-price, 2026-09-01: a credential failure paged as 'Cost breaker'). condition is a CLOSED vocabulary at ingest -- consecutive_tool_failures | refusal_cascade | time_budget_exceeded | cost_threshold | captain_clear, from the overlay's StickyStopCondition -- and an unknown word stores NULL; reason is the seat's free-text counter line, capped at 300 chars by BOTH sides. Pairing (a cause only ever beside a level) is the SENDER's job, so these two store independently here.",
+      "name": "sticky_stop_reason",
+      "column": "sticky_stop_reason",
+      "sample": "consecutive_tool_failures=8 (window=600s, skill=mcp_smokeball_list_matters)"
+    },
+    {
+      "name": "sticky_stop_condition",
+      "column": "sticky_stop_condition",
+      "sample": "consecutive_tool_failures"
     },
     {
       "name": "scheduler_ok",
@@ -124,6 +135,81 @@
       "name": "cron_containment",
       "column": "cron_containment",
       "sample": 1
+    },
+    {
+      "_comment": "ss#2498, hermes-smd-overlay#292. Ahead of the pin, same as cron_containment above. Cumulative count of audit rows the seat could not persist, from the volume tally at $HERMES_HOME/.smd/audit_write_failures.tally. 0 is the load-bearing value: it is what says the writer is up and has lost nothing, and the only thing that distinguishes a quiet ledger from a broken one -- so the sample is deliberately 0 and the parity probe asserts the column is written, not that it is truthy.",
+      "name": "audit_write_failures",
+      "column": "audit_write_failures",
+      "sample": 0
+    },
+    {
+      "_comment": "ss#2500, hermes-smd-overlay#292. Ahead of the pin. row_hash of the newest CHAINED audit row (sha-256 hexdigest, 64 lowercase hex); the console pins it off-Machine so a ledger cannot be rewritten without the pin disagreeing. Read in the same read-only pass as audit_rows and last_audit_ts so the head and the count always describe one moment.",
+      "name": "audit_head",
+      "column": "audit_head",
+      "sample": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "_comment": "ss#2500, hermes-smd-overlay#292. Ahead of the pin. COUNT(*) over audit_log, the other half of the chain pin.",
+      "name": "audit_rows",
+      "column": "audit_rows",
+      "sample": 7
+    },
+    {
+      "_comment": "ss#2488 part 2 (overlay PR #293). Emitted by the webhook gate, which survives a gateway wedge. 1 = the seat's check could look, 0 = it could not (our blindness, paged as gateway_loop_unprovable).",
+      "name": "gateway_loop_ok",
+      "column": "gateway_loop_ok",
+      "sample": 1
+    },
+    {
+      "_comment": "Seconds since the gateway event loop last beat. Absent (not zero) while the seat's arming latch is closed, on a Hermes pin with no loop heartbeat, and inside boot suppression -- absent is a HOLD. 0 is a real value.",
+      "name": "gateway_loop_age_seconds",
+      "column": "gateway_loop_age_seconds",
+      "sample": 7
+    },
+    {
+      "_comment": "The part-1 supervisor's state word (entrypoint.sh gateway_liveness_state). Closed vocabulary at ingest: armed | not-armed | starting | inert | not-watching | never-healthy | refusing; anything else stores NULL. The vocabulary is enforced in FOUR places that must move together -- entrypoint.sh (writer), the overlay's shared/gateway_loop_check.py SUPERVISOR_STATES (forwarder), src/pages/api/internal/heartbeat.ts GATEWAY_SUPERVISOR_STATES (ingest), workers/fleet-alerts/src/gateway-loop.ts (alerter) -- and each drops an unknown word to NULL, which the console holds on rather than pages on. A gap in any one of them is therefore silence, not a failure.",
+      "name": "gateway_supervisor_state",
+      "column": "gateway_supervisor_state",
+      "sample": "armed"
+    },
+    {
+      "_comment": "Kill-ledger lines inside the last hour. The one field a supervisor restart cannot race: the line is on the volume before the container dies, so the first beat after reboot carries it.",
+      "name": "gateway_restarts_last_hour",
+      "column": "gateway_restarts_last_hour",
+      "sample": 0
+    },
+    {
+      "_comment": "ss#2547, hermes-smd-overlay#309. Count of send refusals in the trailing 24h: a cron turn's EXTERNAL_SEND tool call that did not end ok, a broker CONFIRM_SEND_FAILED, or a wake that carried needs-you items and dispatched nothing to a person. 0 is the load-bearing value (the seat looked and found none), so the sample is 0 and the probe asserts the column is written, not truthy.",
+      "name": "send_refusals",
+      "column": "send_refusals",
+      "sample": 0
+    },
+    {
+      "_comment": "ss#2547. ISO ts of the newest refusal or unsent wake in the window. The fleet-alerts Worker pages when this ADVANCES past the marker it last paged on (event-shaped, never a RECOVERED), so a routine refused daily pages daily.",
+      "name": "send_refusals_last_ts",
+      "column": "send_refusals_last_ts",
+      "sample": "2026-08-19T14:01:20.362Z"
+    },
+    {
+      "_comment": "ss#2547. Newest five events, {ts, kind: refused|unsent, routine, tool, reason}; reason is the gate's refusal text (kinds only, never a value) or the broker outcome. The page body lists these.",
+      "name": "send_refusals_json",
+      "column": "send_refusals_json",
+      "sample": [
+        {
+          "ts": "2026-08-19T14:01:20.362Z",
+          "kind": "refused",
+          "routine": "op-managed:operator:deadline-miss-escalator",
+          "tool": "smd_send_message",
+          "reason": "Refused: this content contains identifier(s) not traceable to anything read this session (date)."
+        },
+        {
+          "ts": "2026-08-24T14:00:26.000Z",
+          "kind": "degraded",
+          "routine": "op-managed:operator:deadline-miss-escalator",
+          "reason": "12 deadline(s) withheld: 0 matter numbers resolved, 12 lookup(s) failed"
+        }
+      ]
     }
-  ]
+  ],
+  "note": "2026-08-18 re-stamp 20518e86 -> 0716dc17: heartbeat.py untouched in the range (compare API file list), build_payload unchanged, field set re-read as identical. 2026-08-18 re-stamp af0c8a0f -> 0088352a: heartbeat.py untouched in the range (single commit, msgraph poller/replay/consumes/tests only), build_payload unchanged, field set re-read as identical. 2026-08-19 re-stamp 0088352a -> eeeac283 (overlay#281, ss#2444 Hermes v0.20.4 promotion PR-1): heartbeat.py untouched in the range (bootstrap/translate.py + tests only), build_payload unchanged, field set re-read as identical. 2026-08-19 re-stamp eeeac283 -> ab352d5b (overlay#282+#283): shared/heartbeat.py untouched in the range, build_payload unchanged, field set re-read as identical. 2026-08-20 re-stamp ab352d5b -> 88f6daa (overlay#284+#285+#286): shared/heartbeat.py untouched in the range (bootstrap/mcp_registry.py, contracts/consumes.yaml, tests/test_connector_platform.py, tests/test_matter_mixing_wire_names.py), build_payload unchanged, field set re-read as identical. 2026-08-20 re-stamp 88f6daa -> 78c2544 (overlay#287): shared/heartbeat.py untouched in the range (shared/inbound.py, plugins/hermes-smd-establishment/__init__.py, tests/test_inbound.py, tests/test_establishment_plugin.py), build_payload unchanged, field set re-read as identical. 2026-08-20 re-stamp 78c2544 -> 16770d3 (overlay#288, ss#2489): shared/heartbeat.py untouched in the range (plugins/hermes-smd-reply/__init__.py, shared/msgraph_broker.py, tests/test_msgraph_transports.py - the full file list, read from git diff --name-only at both refs), build_payload unchanged, field set re-read as identical. 2026-08-20 re-stamp 16770d3 -> 7a8ba42 (overlay#290, ss#2489 follow-on): shared/heartbeat.py untouched in the range (shared/report_render.py, tests/test_report_render.py - the full file list, read from git diff --name-only at both refs), build_payload unchanged, field set re-read as identical. 2026-08-24: re-stamped for f16d4920 (overlay#318). build_payload keys are unchanged; the send_refusals_json sample gains a 'degraded' event (new kind counted by count_send_refusals for withheld degraded digests, ss#2390) \u2014 same three columns, no new field. 2026-08-25 re-stamp f16d4920 -> 99c62699 (overlay#319, the runaway-loop arms): shared/heartbeat.py untouched in the range (plugins/hermes-smd-audit/__init__.py, shared/cost_breaker.py, tests/test_loop_brake_arms.py \u2014 the full file list, read from git diff --name-only at both refs), build_payload unchanged, field set re-read as identical. 2026-09-01 re-stamp 727f3f5b -> 799647d1 (overlay#338 + overlay#339): shared/heartbeat.py byte-identical across the range (cc8c23d8...) and absent from the merge-range file list, build_payload re-extracted at the new ref by the parity test's own local-checkout path, field set re-read as identical. NOT a no-op re-stamp, though: overlay#339 widens gateway_supervisor_state's VALUE vocabulary from five words to seven (adds starting, never-healthy) without touching the field set, and the ingest's own GATEWAY_SUPERVISOR_STATES had NOT been widened by ss#2677 \u2014 so both new words were being dropped to NULL in transit. Fixed in the same PR as this pin, with a parity test that reads SUPERVISOR_STATES out of the overlay checkout and asserts the ingest stores every word in it."
 }

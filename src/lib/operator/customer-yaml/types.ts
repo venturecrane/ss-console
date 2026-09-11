@@ -219,8 +219,6 @@ export const SEND_ACTION_CLASSES = [
   'external_send_client',
   'external_send_vendor',
 ] as const
-export type SendActionClass = (typeof SEND_ACTION_CLASSES)[number]
-
 /**
  * Closed vocabulary for a `scope.outbound_roster` entry's `class` (ADR 0075).
  * A typed outbound-roster address is the firm's own `client`, a `records_vendor`,
@@ -535,12 +533,24 @@ export interface PersonaCron {
   wake_policy: WakePolicy
 }
 
+/**
+ * Optional authored signature block for outbound chase mail (outbound-quality
+ * track; consumed by the chase skills' rendered signature per
+ * operator/verticals/law-firm/addons/pi/references/_shared-chase-voice.md).
+ * Authored per engagement when the firm wants more than its `customer_name`
+ * on the sign-off; unauthored degrades to `customer_name` alone, which is
+ * authored data, not invention (ADR 0035 -- no imposed defaults).
+ */
+export type PersonaSignature = { firm_line: string | null; closing: string | null }
+
 export interface Persona {
   slug: string
   status: PersonaStatus
   name: string
   title: string | null
   signature_html: string | null
+  /** Authored chase-mail signature block; null when unauthored. */
+  signature: PersonaSignature | null
   avatar_url: string | null
   tone: string[]
   pronouns: Pronouns | null
@@ -606,14 +616,6 @@ export const MSGRAPH_GUID_PATTERN =
  * must be a valid environment-variable identifier.
  */
 export const MSGRAPH_SECRET_REF_PATTERN = /^fly-secret:[A-Za-z_][A-Za-z0-9_]*$/
-
-/**
- * Delta-poll cadence default (seconds) for the msgraph inbound poller
- * (spec D1/D5). Applied by the overlay poller when `poll_seconds` is unauthored.
- *
- * @public Consumed by the hermes-smd-overlay poller, not by this repo.
- */
-export const DEFAULT_MSGRAPH_POLL_SECONDS = 45
 
 /**
  * Microsoft Graph app-only mail auth (email-channel-seam spec D5). Parallel in
@@ -774,6 +776,16 @@ export interface WebhookTrigger {
    * integrity control); `cooldown_minutes: 0` disables for this trigger.
    */
   throttle: WebhookTriggerThrottle | null
+  /**
+   * Whether the VENDOR emits this event_type (unauthored ⇒ true). `false`
+   * marks a SYNTHETIC trigger the gate routes but the vendor never sends, so
+   * the egress reconciler must keep it OUT of the vendor subscription's
+   * eventTypes. A vendor validates eventTypes as a set, so one synthetic
+   * sibling fails the whole POST and takes every real event type on that
+   * adapter down with it — see operator/bin/webhook_reconcile.py
+   * build_intents for the 2026-08-28 → 09-02 pilot-smokeball outage.
+   */
+  vendor_emitted: boolean | null
 }
 
 export interface WebhookTriggerExclude {
@@ -783,10 +795,8 @@ export interface WebhookTriggerExclude {
   actors: string[]
 }
 
-export interface WebhookTriggerThrottle {
-  /** Non-negative integer minutes; 0 disables; null = block authored empty (gate default). */
-  cooldown_minutes: number | null
-}
+/** Non-negative integer minutes; 0 disables; null = block authored empty (gate default). */
+export type WebhookTriggerThrottle = { cooldown_minutes: number | null }
 
 export interface Scope {
   email_folders_visible: string[]
@@ -812,6 +822,53 @@ export interface Scope {
    * Not portal-editable.
    */
   admins: string[]
+  /**
+   * Who receives REQUEST TRAFFIC when a non-admin states a firm-level rule
+   * (ss-console#2546). A subset of {@link admins}, and nothing more than that:
+   * this list carries no authority of its own.
+   *
+   * The split it draws. `admins` says who MAY apply a firm rule — every one of
+   * them, unchanged. This says who gets EMAILED when somebody who is not an
+   * admin asks for one. A firm with a partner and an office manager on the
+   * admin list does not want the partner paged every time a paralegal asks for
+   * a different sign-off, and before this key the only way to spare him was to
+   * take his authority away.
+   *
+   * Every entry must also appear in `admins`. The validator enforces it, and
+   * the reason is not tidiness: the broker's recipient fence admits admins, the
+   * inbound roster, and the typed outbound roster, so an address here that is
+   * not an admin would be a recipient the seat is asked to write to and refused
+   * at the fence — a request that silently reaches nobody.
+   *
+   * Person addresses only; an `@domain` grant is refused for the same reason it
+   * is on `admins`. Empty when unauthored, which is fail-closed in the honest
+   * direction: no admin is emailed, and the Operator says so rather than
+   * claiming somebody was asked.
+   */
+  rule_requests_to: string[]
+  /**
+   * ss-console#2546. Whose reply, quoting an `[ops XXXX]` tag, ANSWERS an
+   * operations request — a routine, a schedule, a channel, a memory setting, an
+   * autonomy level, an on/off. ADR 0085's 2026-08-22 amendment places those
+   * changes with SMD rather than with the firm, so the answer comes from SMD and
+   * this is the list of addresses whose answer counts.
+   *
+   * The grant is exactly one act: resolving a request the Operator itself
+   * raised, identified by the eight-hex tag that request carries, whose whole
+   * effect is one templated notice to the person who asked. It is NOT inbound
+   * trust — an address here is not on `inbound_allow_from`, is not an admin, and
+   * a message from it quoting no tag is as untrusted as any other.
+   *
+   * The tag is the capability, and the spoof class is identical for every entry:
+   * no seat gets an SPF or DKIM verdict on inbound mail (ADR 0085 §5), so naming
+   * one SMD address rather than another buys nothing. What bounds the risk is
+   * the effect.
+   *
+   * Person addresses only, at an SMD domain. Empty when unauthored, which is
+   * fail-closed: no reply resolves anything and the request lapses at seven
+   * days, with the person who asked told so.
+   */
+  ops_reply_from: string[]
   /**
    * Typed outbound roster (ADR 0075) — the firm's own clients / records vendors,
    * each resolving to the `external_send_client` / `external_send_vendor` action
@@ -1340,6 +1397,12 @@ export type ValidationErrorCode =
   | 'InvalidActionCeiling'
   | 'InvalidOutboundRoster'
   | 'InvalidAdminList'
+  /** ss-console#2546: `scope.rule_requests_to` is not person-shaped, repeats an
+   * address, or names somebody who is not on `scope.admins`. */
+  | 'InvalidRuleRequestsTo'
+  /** ss-console#2546: `scope.ops_reply_from` is not person-shaped, repeats an
+   * address, or sits outside SMD's own mail domains. */
+  | 'InvalidOpsReplyFrom'
   | 'LegacyEntitlementField'
   | 'UnknownAuthorityDomain'
   | 'DuplicateRelationshipPersonId'

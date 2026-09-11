@@ -127,8 +127,7 @@ def test_every_bound_class_exists() -> None:
             assert artifact.get("artifact"), f"{skill}: an internal entry has no artifact slug"
             assert artifact.get("seam"), f"{skill}: artifact {artifact.get('artifact')!r} names no seam"
             assert artifact["class"] in classes, (
-                f"{skill}: artifact {artifact['artifact']!r} references unknown class "
-                f"{artifact['class']!r}"
+                f"{skill}: artifact {artifact['artifact']!r} references unknown class {artifact['class']!r}"
             )
 
 
@@ -189,3 +188,50 @@ def test_work_product_drafts_have_a_declared_destination() -> None:
             "draft leaves by email (mediation-brief-drafter does; the other three drafters mail a "
             "citation-free pointer instead, because the citation gate would refuse the draft)."
         )
+
+
+# ---------------------------------------------------------------------------
+# The seat's copy of this list (ss-console#2546 follow-up)
+# ---------------------------------------------------------------------------
+
+
+def test_the_class_list_is_the_one_the_seat_refuses_against() -> None:
+    """The overlay pins these same six in ``shared/output_classes.py``.
+
+    WHY THE SEAT HAS A COPY AT ALL. Live on the pilot, 2026-08-22, four firm
+    rules were recorded against classes that are not here: one on
+    ``demand_letter`` and three on ``letter``, one of which was explicitly about
+    "internal emails to our own staff" and so belonged to ``staff``. The broker
+    validates that a slug is well-formed and the intake writes wherever the slug
+    points, so each one produced a real file in a directory nothing reads, a
+    real install, and a real "your rule is in effect" letter about a rule that
+    can never bind to any output. Membership is a question about THIS file, so
+    the seat carries the answer and refuses.
+
+    WHY THE GUARD LIVES HERE rather than in the overlay's CI. The overlay has no
+    ss-console checkout, so its own drift test can only run where the registry
+    happens to be reachable. This side always has the file, and a class added or
+    renamed here is exactly the change that must not ship without moving the
+    overlay's copy. If this fails, update
+    ``hermes-smd-overlay:shared/output_classes.py`` (the slug AND its plain-words
+    meaning) in the same wave, then this list.
+    """
+    assert set(_registry()["classes"]) == {
+        "staff",
+        "work_product",
+        "record",
+        "outbound_client",
+        "outbound_vendor",
+        "outbound_external",
+    }
+
+
+def test_workspace_is_a_skill_binding_and_not_a_seventh_class() -> None:
+    """THE PLAUSIBLE SEVENTH. ``workspace`` is a key under ``skill_bindings:``
+    naming the workspace skill. Reading this file's keys without reading its
+    structure produces a class that does not exist, which is the same error the
+    model made with ``letter``, one level up. Pinned so that a future reader
+    checking "is workspace a class" gets an answer instead of a guess."""
+    registry = _registry()
+    assert "workspace" not in registry["classes"]
+    assert "workspace" in registry["skill_bindings"]

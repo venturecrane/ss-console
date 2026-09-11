@@ -42,6 +42,20 @@ CASE_NAME_RE = re.compile(
     re.IGNORECASE,
 )
 
+# "Palsgraf versus Long Island Railroad": the spelled-out separator, which
+# CASE_NAME_RE's `v(?:s)?\.?` never reached. Found in the 2026-08-21 welcome
+# rehearsal: an Operator that had learned "v." trips the gate reaches for
+# "versus" and produces the same caption in words.
+#
+# Deliberately NOT IGNORECASE on the parties, unlike CASE_NAME_RE. Only the
+# separator is folded, via the scoped `(?i:versus)` inline group. The reason
+# is that "versus" is ordinary English between ordinary nouns ("apples versus
+# oranges", "version two versus version three") in a way "v." is not, so
+# folding the parties here would refuse the Operator's own prose several times
+# a turn. Requiring both parties to be capitalized keeps the false-positive
+# rate where the rest of the filter sits while still catching the real shape.
+CASE_NAME_VERSUS_RE = re.compile(rf"\b{_PARTY}\s+(?i:versus)\s+{_PARTY}\b")
+
 # ---------- Reporter cite patterns (volume + reporter + page) ----------
 # Federal: U.S. Reports, Supreme Court Reporter, Federal Reporter (1d, 2d, 3d, 4th),
 # Federal Supplement (1st, 2d, 3d), Federal Appendix, Federal Rules Decisions.
@@ -118,6 +132,7 @@ class Hit:
 
 PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("case-name", CASE_NAME_RE),
+    ("case-name", CASE_NAME_VERSUS_RE),
     ("reporter-cite", REPORTER_CITE_RE),
     ("federal-statute", STATUTE_RE),
     ("state-statute", STATE_STATUTE_RE),
@@ -163,6 +178,15 @@ def _normalize_encoding_bypass(text: str) -> str:
     # Collapse "U . S . " -> "U.S. " — single letters glued by dots and spaces.
     text = re.sub(r"\b([A-Z])\s*\.\s*([A-Z])\s*\.\s*", r"\1.\2. ", text)
     # Collapse "v . " -> "v. " for case-name separators (and similar).
+    #
+    # "versus" is deliberately NOT folded to "v." here, though it IS folded in
+    # canonical_caption. The two are different jobs. This function's output is
+    # scanned as a second source by scan(), and CASE_NAME_RE is IGNORECASE, so
+    # folding here would turn "apples versus oranges" into "apples v. oranges"
+    # and refuse it, defeating the whole reason CASE_NAME_VERSUS_RE keeps its
+    # parties case-sensitive. There is also nothing here for this function to
+    # do: "versus" carries no dot, so it has no adversarial dot-and-space form
+    # to collapse, and CASE_NAME_VERSUS_RE's own `\s+` already absorbs padding.
     text = re.sub(r"\b(v|vs)\s*\.\s*", r"\1. ", text, flags=re.IGNORECASE)
     return text
 
@@ -172,13 +196,17 @@ def canonical_caption(text: str) -> str:
 
     Applies the same anti-evasion normalization the scanner uses, then folds
     case, collapses whitespace, and normalizes the party separator so
-    "ALVAREZ V DRAPER", "Alvarez vs. Draper", and "Alvarez v. Draper" all
-    compare equal. Used by :func:`scan`'s ``allowed_case_names`` and by
-    callers building a provenance register of captions actually read.
+    "ALVAREZ V DRAPER", "Alvarez vs. Draper", "Alvarez versus Draper", and
+    "Alvarez v. Draper" all compare equal. Used by :func:`scan`'s
+    ``allowed_case_names`` and by callers building a provenance register of
+    captions actually read.
+
+    The separator alternation puts "ersus" before "s" so "versus" is consumed
+    whole rather than leaving "ersus" behind.
     """
     s = _normalize_encoding_bypass(text or "")
     s = re.sub(r"\s+", " ", s).strip().casefold()
-    return re.sub(r"\bv(?:s)?\.?\s", "v. ", s)
+    return re.sub(r"\bv(?:ersus|s)?\.?\s", "v. ", s)
 
 
 def _canonical_allowlist(

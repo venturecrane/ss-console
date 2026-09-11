@@ -147,7 +147,8 @@ the skill surfaces the proposed setup and asks; it does not choose one for the f
 
 The Smokeball write path is **unverified against a live tenant**: `create_folder` and
 `create_task` were cut 2026-06-25 with bodies matching the OpenAPI DTOs but **not yet
-round-tripped** on a real tenant, `add_file` currently 403s on staging, and the
+round-tripped** on a real tenant (`create_folder` and `add_file` have since
+delivered chronology packages into the A&P production tenant, August 2026), and the
 `create_memo` body is ASSUMED (see `smokeball-surface.md` and
 `operator/verticals/law-firm/addons/pi/references/_shared-write-posture.md`). Per the
 shared write posture, **ALL writes are unverified-at-connect** - this covers every write
@@ -347,13 +348,14 @@ refusal is a stalled deliverable and a full-context redraft — write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.
-- In email and task text, refer to the matter by its NUMBER, taken ONLY from
-  the `matterNumber` field of a record you read this turn. Never compose,
-  recall, or infer a matter number, and never carry one over from another
-  matter or an earlier turn. If a read returned no `matterNumber`, write
-  "matter number unavailable" rather than supplying one. Never refer to the
-  matter by its case caption. The matter's own caption is acceptable inside
-  matter memos; cited case law is never acceptable anywhere.
+- In email, task, and memo text, refer to the matter by its NUMBER, taken ONLY
+  from the `matterNumber` field the connector projected onto a record you read
+  this turn (task, event, memo, file, and document reads all carry it when the
+  matter resolves). Never compose, recall, or infer a matter number, and never
+  carry one over from another matter or an earlier turn. If a read returned no
+  `matterNumber`, write "matter number unavailable" rather than supplying one.
+  Never refer to the matter by its case caption. The matter's own caption is
+  acceptable inside matter memos; cited case law is never acceptable anywhere.
 - State a specific dollar figure only when it exists in an authored source
   on the matter, and name that source in the same sentence ("per the MedFin
   payoff letter dated..."). Never total, estimate, or round figures into

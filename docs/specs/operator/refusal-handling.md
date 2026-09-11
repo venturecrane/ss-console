@@ -250,8 +250,8 @@ These two mechanisms are deliberately separate:
 - **Sticky-stop** is per-state-machine. Tracks an envelope of
   observations (consecutive tool failures, refusal cascades, time
   budget, cost) and transitions the dispatch path through
-  WARN / SOFT_STOP / HARD_STOP. Only Captain `clear()` decreases the
-  level.
+  OK -> HARD_STOP at the threshold (two states since 2026-09-02). Only
+  Captain `clear()` decreases the level.
 
 The refusal handler does NOT directly transition sticky-stop states.
 The dispatch path is free to call sticky-stop's `record_refusal()`

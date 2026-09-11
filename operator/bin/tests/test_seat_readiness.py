@@ -45,10 +45,9 @@ SMOKEBALL_CFG = {
 # retyping it here would rebuild the exact defect this tool exists to catch.
 DECLARED = {
     s["runtime_env"]
-    for s in __import__("tomllib")
-    .loads((_BIN.parents[1] / "operator/connectors/smokeball/manifest.toml").read_text())["connector"][
-        "required_secrets"
-    ]
+    for s in __import__("tomllib").loads((_BIN.parents[1] / "operator/connectors/smokeball/manifest.toml").read_text())[
+        "connector"
+    ]["required_secrets"]
 }
 
 
@@ -65,9 +64,7 @@ def test_manifest_declares_more_than_the_two_that_were_checked() -> None:
 def test_credentials_fail_when_a_declared_secret_is_missing() -> None:
     """The A&P case, reproduced: client id + secret staged, API key absent."""
     rep = _report()
-    sr.check_connector_credentials(
-        rep, SMOKEBALL_CFG, {"SMOKEBALL_CLIENT_ID", "SMOKEBALL_CLIENT_SECRET"}
-    )
+    sr.check_connector_credentials(rep, SMOKEBALL_CFG, {"SMOKEBALL_CLIENT_ID", "SMOKEBALL_CLIENT_SECRET"})
     row = next(r for r in rep.rows if r.section == "credentials")
     assert row.status == sr.FAIL
     assert "SMOKEBALL_API_KEY" in row.detail
@@ -100,7 +97,9 @@ def test_empty_seat_is_a_failure_not_an_unknown() -> None:
 
 
 def test_disabled_connector_is_not_checked() -> None:
-    cfg = {"connectors": {"PracticeManagement": {**SMOKEBALL_CFG["connectors"]["PracticeManagement"], "enabled": False}}}
+    cfg = {
+        "connectors": {"PracticeManagement": {**SMOKEBALL_CFG["connectors"]["PracticeManagement"], "enabled": False}}
+    }
     rep = _report()
     sr.check_connector_credentials(rep, cfg, set())
     assert not [r for r in rep.rows if r.status == sr.FAIL]

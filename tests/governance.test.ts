@@ -21,18 +21,47 @@ import path from 'node:path'
 import { POST } from '../src/pages/api/admin/operator/[customer]/governance'
 import { env as testEnv } from 'cloudflare:workers'
 import { readGovernanceConfig, resolveCell, resolveSkillCells } from '../src/lib/admin/governance'
-import {
-  listConfigChangeAudit,
-  VERTICAL_FLOORS,
-} from '../src/lib/portal/operator/config-governance'
+import { VERTICAL_FLOORS } from '../src/lib/portal/operator/config-governance'
 import type { ActionClass } from '../src/lib/operator/customer-yaml/types'
 import { getCustomerConfig } from '../src/lib/portal/customer-config'
 import type { AuthoredExposureActionClass } from '../src/lib/operator/customer-yaml/types'
-import type { Ceiling } from '../src/lib/portal/operator/config-governance'
+import type {
+  Ceiling,
+  ChangeDirection,
+  ConfigChangeOutcome,
+  ConfigChangeType,
+} from '../src/lib/portal/operator/config-governance'
+
+interface ConfigChangeAuditRow {
+  id: number
+  created_at: string
+  source: string
+  actor_email: string
+  change_type: ConfigChangeType
+  persona_slug: string | null
+  skill_name: string | null
+  action_class: string | null
+  old_value: string | null
+  new_value: string | null
+  outcome: ConfigChangeOutcome
+  outcome_reason: string | null
+  direction: ChangeDirection
+}
 
 installWorkerdPolyfills()
 
 const migrationsDir = path.resolve(__dirname, '../migrations')
+
+async function configChangeAudit(entityId: string): Promise<ConfigChangeAuditRow[]> {
+  const result = await testEnv.DB.prepare(
+    'SELECT id, created_at, source, actor_email, change_type, persona_slug, skill_name, ' +
+      'action_class, old_value, new_value, outcome, outcome_reason, direction ' +
+      'FROM config_change_audit WHERE entity_id = ? ORDER BY created_at DESC, id DESC LIMIT 50'
+  )
+    .bind(entityId)
+    .all<ConfigChangeAuditRow>()
+  return result.results ?? []
+}
 const ORG_ID = 'org-1'
 const ENTITY_ID = 'ent-gov'
 const SLUG = 'acme-law'
@@ -307,7 +336,7 @@ describe('POST /api/admin/operator/[customer]/governance', () => {
       })
     )
     expect(locationOf(res)).toContain('status=saved')
-    const audit = await listConfigChangeAudit(testEnv.DB, ENTITY_ID)
+    const audit = await configChangeAudit(ENTITY_ID)
     expect(audit).toHaveLength(1)
     expect(audit[0].outcome).toBe('accepted')
     expect(audit[0].direction).toBe('raise')
@@ -334,7 +363,7 @@ describe('POST /api/admin/operator/[customer]/governance', () => {
       )
       expect(locationOf(res)).toContain('status=floor_blocked')
       // The rejected attempt is itself an audited compliance event.
-      const audit = await listConfigChangeAudit(testEnv.DB, ENTITY_ID)
+      const audit = await configChangeAudit(ENTITY_ID)
       expect(audit).toHaveLength(1)
       expect(audit[0].outcome).toBe('rejected_floor')
     } finally {
@@ -357,7 +386,7 @@ describe('POST /api/admin/operator/[customer]/governance', () => {
       })
     )
     expect(locationOf(res)).toContain('status=saved')
-    const audit = await listConfigChangeAudit(testEnv.DB, ENTITY_ID)
+    const audit = await configChangeAudit(ENTITY_ID)
     expect(audit[0].outcome).toBe('accepted')
     expect(audit[0].change_type).toBe('entitlement_exposure')
     expect(audit[0].new_value).toBe('draft_for_review')

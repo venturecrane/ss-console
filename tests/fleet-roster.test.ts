@@ -243,6 +243,31 @@ describe('rosterHealth', () => {
     expect(rosterHealth('green', '5s ago', 'yellow', 'HARD_STOP').note).toMatch(/hard stop/)
   })
 
+  it('the stop note names the meter that tripped, and no meter when none was reported', () => {
+    // Four meters drive this ladder. On 2026-09-01 ashton-price stopped on a
+    // bad credential and this note read "cost breaker hard stop" -- naming a
+    // meter the roster had never measured.
+    const withCause = rosterHealth('green', '5s ago', null, 'HARD_STOP', {
+      ok: null,
+      maxOverdueSeconds: null,
+      stickyStopCondition: 'consecutive_tool_failures',
+    })
+    expect(withCause.note).toBe('hard stop: consecutive tool failures')
+
+    const soft = rosterHealth('green', '5s ago', null, 'SOFT_STOP', {
+      ok: null,
+      maxOverdueSeconds: null,
+      stickyStopCondition: 'cost_threshold',
+    })
+    expect(soft.note).toBe('soft stop: cost threshold')
+
+    // A seat still running a pre-cause overlay reports no condition. The note
+    // must degrade to the level and assert nothing about why.
+    const noCause = rosterHealth('green', '5s ago', null, 'HARD_STOP')
+    expect(noCause.note).toBe('hard stop')
+    expect(noCause.note).not.toMatch(/cost|refusal|runtime|tool/)
+  })
+
   it('the scheduler self-check escalates: ok=0 → red, overdue past threshold → yellow (WP-2)', () => {
     // scheduler_ok === 0 is a broken cron store: red, on an otherwise-live seat.
     const broken = rosterHealth('green', '5s ago', null, null, { ok: 0, maxOverdueSeconds: null })
@@ -371,5 +396,90 @@ describe('connector health signals (ADR 0080)', () => {
     })
     expect(health.note).toBe('cron scheduler broken')
     expect(health.color).toBe('red')
+  })
+})
+
+describe('gateway loop + supervisor signals (ss#2488 part 2)', () => {
+  const base = { ok: 1, maxOverdueSeconds: null, connectorCheckOk: 1, cronContainment: 0 }
+
+  it('a wedged loop is red and outranks every other note, including the breaker', () => {
+    // The Operator is not answering on any channel. That is worse than a
+    // breaker stop, which at least leaves a seat that can explain itself.
+    const health = rosterHealth('green', '20s ago', null, 'HARD_STOP', {
+      ...base,
+      gatewayLoopOk: 1,
+      gatewayLoopAgeSeconds: 400,
+    })
+    expect(health.color).toBe('red')
+    expect(health.note).toBe('gateway loop wedged (Operator not answering)')
+  })
+
+  it('ok=1 with a NULL age is NOT a wedge (arming latch / boot suppression)', () => {
+    const health = rosterHealth('green', '20s ago', null, null, {
+      ...base,
+      gatewayLoopOk: 1,
+      gatewayLoopAgeSeconds: null,
+    })
+    expect(health.color).toBe('green')
+    expect(health.note).toBeNull()
+  })
+
+  it('a fresh beat leaves the dot green', () => {
+    const health = rosterHealth('green', '20s ago', null, null, {
+      ...base,
+      gatewayLoopOk: 1,
+      gatewayLoopAgeSeconds: 7,
+    })
+    expect(health.color).toBe('green')
+  })
+
+  it('ok=0 is attention-yellow, named as unreadable, never as a wedge', () => {
+    const health = rosterHealth('green', '20s ago', null, null, {
+      ...base,
+      gatewayLoopOk: 0,
+      gatewayLoopAgeSeconds: 5,
+    })
+    expect(health.color).toBe('yellow')
+    expect(health.note).toBe('gateway loop heartbeat unreadable')
+  })
+
+  it('a refusing supervisor is red and names the human', () => {
+    const health = rosterHealth('green', '20s ago', null, null, {
+      ...base,
+      gatewaySupervisorState: 'refusing',
+    })
+    expect(health.color).toBe('red')
+    expect(health.note).toBe('seat supervisor stopped restarting (needs a human)')
+  })
+
+  it('inert and not-watching are attention-yellow: self-recovery is silently absent', () => {
+    for (const state of ['inert', 'not-watching']) {
+      const health = rosterHealth('green', '20s ago', null, null, {
+        ...base,
+        gatewaySupervisorState: state,
+      })
+      expect(health.color, state).toBe('yellow')
+      expect(health.note, state).toBe('seat supervisor cannot act (a wedge would not self-recover)')
+    }
+  })
+
+  it('armed / not-armed / NULL participate in nothing', () => {
+    for (const state of ['armed', 'not-armed', null]) {
+      const health = rosterHealth('green', '20s ago', null, null, {
+        ...base,
+        gatewaySupervisorState: state,
+      })
+      expect(health.color, String(state)).toBe('green')
+      expect(health.note, String(state)).toBeNull()
+    }
+  })
+
+  it('escalate-only: a wedge cannot be calmed, and NULL cannot calm a red seat', () => {
+    const red = rosterHealth('red', 'stale 12m', null, null, {
+      ...base,
+      gatewayLoopOk: 1,
+      gatewayLoopAgeSeconds: 7,
+    })
+    expect(red.color).toBe('red')
   })
 })

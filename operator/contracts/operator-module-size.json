@@ -1,0 +1,23 @@
+{
+  "_comment": "Logical-line census of non-test operator/**/*.py modules over the ceiling. Generated and enforced by tests/operator-module-size.test.ts — do not hand-edit. Regenerate with UPDATE_OPERATOR_MODULE_SIZE_BASELINE=1 npx vitest run tests/operator-module-size.test.ts. A module leaves this file by getting smaller; nothing may enter it by getting bigger.",
+  "ceiling": 500,
+  "modules": {
+    "operator/adapter/evidence/packet.py": 1055,
+    "operator/adapter/voice/transform.py": 669,
+    "operator/bin/lib/decommission.py": 586,
+    "operator/bin/reconcile-sends.py": 523,
+    "operator/bin/voice-survey-corpus.py": 711,
+    "operator/connectors/smokeball/smokeball_connector/server.py": 1073,
+    "operator/customers/pilot-smokeball/seed/seed_data.py": 590,
+    "operator/customers/pilot-smokeball/seed/seed_voice_letters.py": 628,
+    "operator/runners/medchron/medchron/daemon.py": 537,
+    "operator/runners/medchron/medchron/llm.py": 510,
+    "operator/safety-substrate/sticky_stop.py": 521,
+    "operator/skills/client-verification-tracker/pre_run.py": 626,
+    "operator/skills/deadline-miss-escalator/pre_run.py": 786,
+    "operator/skills/lien-ledger-tracker/pre_run.py": 930,
+    "operator/skills/medical-records-chaser/pre_run.py": 661,
+    "operator/templates/drafting/drafting_gate_check.py": 1135,
+    "operator/workspace_broker/establishment_store.py": 1286
+  }
+}

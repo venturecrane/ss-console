@@ -95,8 +95,6 @@ def test_metadata_roundtrips_and_is_agent_readable(tmp_path: Path) -> None:
     )
     # A separate read-only connection (the agent-uid read-seam shape) sees it.
     ro = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
-    rows = ro.execute(
-        "SELECT action_type, skill_name, metadata FROM audit_log"
-    ).fetchall()
+    rows = ro.execute("SELECT action_type, skill_name, metadata FROM audit_log").fetchall()
     ro.close()
     assert rows == [("TOOL_CALL_COMPLETED", "inbox-triage", '{"k":"v"}')]

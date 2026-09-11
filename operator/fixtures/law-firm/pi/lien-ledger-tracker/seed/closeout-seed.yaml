@@ -1,0 +1,299 @@
+# closeout-seed.yaml - the single authored source for the Settlement Closeout
+# proving data (ss #2455).
+#
+# WHY ONE SOURCE. Two artifacts are generated from this file by render_seed.py:
+#
+#   1. KEYING-SHEET.md   - what a person enters into the Smokeball STAGING sandbox
+#                          by hand. layouts/write is not a granted scope
+#                          (vfy_01M0DVZGZVTHN6G911NZFP136A), so settlement detail
+#                          cannot be seeded through the API by any path.
+#   2. wire/*.json       - canned GET /matters/{id}/layouts payloads for the
+#                          offline tests.
+#
+# Because both come from here, the sandbox and the test fixtures cannot drift
+# apart, and the read-back reconciliation probe can report per-field differences
+# and say whether a mismatch was a misread or a keying slip.
+#
+# SHAPE PROVENANCE. Every key name below was observed on A&P production layouts
+# in a read-only probe (vfy_01M0DXZ33QCTE7R58GF2WJ1ZB1), never invented. That
+# matters: an invented field once taught a skill to gate on a branch that could
+# never fire, which is why the connector fixtures carry the same rule.
+#
+# DISPOSITION. These are permanent fixture matters in a staging tenant SMD
+# controls, not probe artifacts in a client tenant, so the ss #2403
+# stamp-and-teardown contract does not apply. Stated explicitly because silence
+# on that question is the thing the contract exists to prevent.
+#
+# NOT REPRESENTED HERE, ON PURPOSE. Real A&P matter numbers are bare digits
+# (201537, 4853) which do NOT match the connector's _MATTER_NUMBER_RE, so its
+# cross-matter write guard cannot fire on that tenant at all. That is a defect
+# with its own issue, not a shape this seed should imitate; the sandbox uses the
+# hyphenated format so the guard behaves here the way it is meant to.
+
+version: 1
+tenant: smokeball-staging
+seat: pilot-smokeball
+issue: 2455
+
+# Providers referenced by matters below. MatterEntityId is the stable per-provider
+# identifier the obligation ledger keys on. A misspelled provider is a DIFFERENT
+# contact record in the practice-management system and therefore carries a
+# DIFFERENT entity id - which is exactly why cross-matter provider rollup cannot
+# be done on the id alone, and why the near-duplicate pass is a proposal a person
+# confirms rather than a silent merge.
+providers:
+  valley_health:
+    display_name: Valley Health Plan
+    matter_entity_id: e1a4c0d2-7b31-4a90-9c55-2f8d61b0a331
+  valley_health_typo:
+    display_name: Valley Helath Plan # the firm's typo, on purpose
+    matter_entity_id: 9f77b512-0cc8-4d16-8a24-51e3ba97dd04
+  sierra_imaging:
+    display_name: Sierra Imaging
+    matter_entity_id: 4c20e8aa-1d63-42f7-b8e1-77a5c9042196
+  open_sierra_imaging:
+    display_name: Open Sierra Imaging # genuinely a different business
+    matter_entity_id: b6d1039f-5e48-4c2a-93bb-0ae7fd21c580
+  cedar_ortho:
+    display_name: Cedar Ridge Orthopedics
+    matter_entity_id: 27fa66c1-9b0d-4e35-a71c-c4802ef5d9b3
+  mercy_er:
+    display_name: Mercy General ER
+    matter_entity_id: 8e5b12d7-33af-4c68-9d02-6b1fa7c8e450
+  lakeside_chiro:
+    display_name: Lakeside Chiropractic
+    matter_entity_id: d4093c6e-2fa1-4b57-85dc-93e60b7a1128
+
+matters:
+  # ---------------------------------------------------------------- S-01
+  - seed_id: S-01
+    number: 2026-SC-201
+    title: 2026-SC-201 - HALVERSON, DEAN - Motor Vehicle Accident - Plaintiff
+    status: Pending
+    opened: 2021-03-15
+    closed: 2023-08-02
+    clients: [Dean Halverson]
+    responsible_staff: staff-042
+    last_activity: 2026-07-28
+    shape: the modal case - several providers, all outstanding, single plaintiff
+    proves: the modal read end to end
+    plaintiffs:
+      - index: 0
+        firm_fee: '33333.33'
+        firm_costs: '4120.55'
+        settlement_amount: '100000.00'
+        providers:
+          - ref: cedar_ortho
+            invoice_initial: '18400.00'
+            invoice_balance: '18400.00'
+            lien_asserted: true
+            lien_amount: '18400.00'
+            final_amount: '0.0'
+            service_start: 2021-03-20
+            service_end: 2021-09-14
+          - ref: mercy_er
+            invoice_initial: '7215.40'
+            invoice_balance: '7215.40'
+            lien_asserted: false
+            service_start: 2021-03-15
+            service_end: 2021-03-15
+          - ref: lakeside_chiro
+            invoice_initial: '4980.00'
+            invoice_balance: '2490.00'
+            lien_asserted: false
+            service_start: 2021-04-02
+            service_end: 2022-01-11
+          # the typo'd payer lives here: same business as valley_health on S-04
+          # and S-05, different contact record, different entity id
+          - ref: valley_health_typo
+            note: >-
+              KEY THIS MISSPELLING EXACTLY AS WRITTEN. It is the point of this row.
+              Create it as its OWN new contact, not the Valley Health Plan contact.
+            invoice_initial: '12750.00'
+            invoice_balance: '12750.00'
+            lien_asserted: true
+            lien_amount: '12750.00'
+            service_start: 2021-03-15
+            service_end: 2021-11-30
+
+  # ---------------------------------------------------------------- S-02
+  - seed_id: S-02
+    number: 2026-SC-202
+    title: 2026-SC-202 - OKONKWO, ADAEZE - Personal Injury - Plaintiff
+    status: Pending
+    opened: 2007-06-11
+    closed: null # 55 of 165 real Pending matters carry no closed date
+    clients: [Adaeze Okonkwo]
+    responsible_staff: staff-042
+    last_activity: 2018-04-09
+    shape: the 62% case - Medicals section never filled in, old and quiet
+    proves: >-
+      ranks on age and quiet time with obligation columns BLANK, never zero, and
+      renders in the status-only band because no corroborating signal exists
+    plaintiffs:
+      - index: 0
+        providers: [] # deliberately empty; the layout item exists, the collection does not
+
+  # ---------------------------------------------------------------- S-03
+  - seed_id: S-03
+    number: 2026-SC-203
+    title: 2026-SC-203 - REYES, MARISOL and REYES, TOMAS - Motor Vehicle Accident - Plaintiff
+    status: Pending
+    opened: 2022-09-01
+    closed: 2024-11-19
+    clients: [Marisol Reyes, Tomas Reyes]
+    responsible_staff: staff-017
+    last_activity: 2026-05-30
+    shape: two plaintiffs, providers split across them
+    proves: >-
+      the per-plaintiff layout items are not flattened into one dict - the defect
+      that collapsed multi-plaintiff provider detail in the one-off generator
+    plaintiffs:
+      - index: 0
+        firm_fee: '20000.00'
+        settlement_amount: '60000.00'
+        providers:
+          - ref: mercy_er
+            invoice_initial: '9330.00'
+            invoice_balance: '9330.00'
+            lien_asserted: false
+            service_start: 2022-09-01
+            service_end: 2022-09-02
+      - index: 1
+        firm_fee: '15000.00'
+        settlement_amount: '45000.00'
+        providers:
+          - ref: cedar_ortho
+            invoice_initial: '6100.00'
+            invoice_balance: '6100.00'
+            lien_asserted: false
+            service_start: 2022-09-05
+            service_end: 2023-02-20
+
+  # ---------------------------------------------------------------- S-04
+  - seed_id: S-04
+    number: 2026-SC-204
+    title: 2026-SC-204 - BRANNIGAN, PHILIP - Motor Vehicle Accident - Plaintiff
+    status: Pending
+    opened: 2023-01-30
+    closed: 2025-04-14
+    clients: [Philip Brannigan]
+    responsible_staff: staff-017
+    last_activity: 2026-02-11
+    keying_note: >-
+      Valley Health Plan here and on S-05 must be the SAME contact record picked
+      twice, not two contacts with the same name. The rollup proof depends on it.
+    shape: shares one payer with S-05 - SAME entity id
+    proves: >-
+      provider rollup groups deterministically on MatterEntityId and produces ONE
+      chase naming both matters
+    plaintiffs:
+      - index: 0
+        firm_fee: '25000.00'
+        settlement_amount: '75000.00'
+        providers:
+          - ref: valley_health
+            invoice_initial: '21400.00'
+            invoice_balance: '21400.00'
+            lien_asserted: true
+            lien_amount: '21400.00'
+            service_start: 2023-02-01
+            service_end: 2023-10-06
+
+  # ---------------------------------------------------------------- S-05
+  - seed_id: S-05
+    number: 2026-SC-205
+    title: 2026-SC-205 - DELACROIX, YVETTE - Personal Injury - Plaintiff
+    status: Pending
+    opened: 2023-07-22
+    closed: 2025-09-30
+    clients: [Yvette Delacroix]
+    responsible_staff: staff-042
+    last_activity: 2026-08-14 # recently active: must NOT flag as stalled
+    keying_note: >-
+      Pick the SAME Valley Health Plan contact used on S-04. Open Sierra Imaging on
+      S-06 and Sierra Imaging here are two DIFFERENT businesses; keep them separate.
+    shape: shares the S-04 payer, and is the recently-active false-positive guard
+    proves: >-
+      one chase covers S-04 and S-05 together, and this matter does not appear in
+      the stalled band
+    plaintiffs:
+      - index: 0
+        firm_fee: '16666.67'
+        settlement_amount: '50000.00'
+        providers:
+          - ref: valley_health
+            invoice_initial: '8900.00'
+            invoice_balance: '8900.00'
+            lien_asserted: false
+            service_start: 2023-08-01
+            service_end: 2024-01-15
+          - ref: sierra_imaging
+            invoice_initial: '3200.00'
+            invoice_balance: '3200.00'
+            lien_asserted: false
+            service_start: 2023-08-03
+            service_end: 2023-08-03
+
+  # ---------------------------------------------------------------- S-06
+  - seed_id: S-06
+    number: 2026-SC-206
+    title: 2026-SC-206 - VANTERPOOL, GRACE - Motor Vehicle Accident - Plaintiff
+    status: Pending
+    opened: 2024-02-05
+    closed: 2026-01-08
+    clients: [Grace Vanterpool]
+    responsible_staff: staff-017
+    last_activity: 2026-06-19
+    keying_note: >-
+      Open Sierra Imaging is a different business from the Sierra Imaging on S-05.
+      Create it as its own contact. Both balances here are a real zero, not blank.
+    shape: every provider balance is zero, and one is a genuinely distinct near-name
+    proves: >-
+      a fully-cleared obligation set surfaces as a CLOSURE CANDIDATE and closure is
+      still not asserted (no trust ledger is fed); and Open Sierra Imaging is NOT
+      merged with Sierra Imaging on S-05
+    plaintiffs:
+      - index: 0
+        firm_fee: '13333.33'
+        settlement_amount: '40000.00'
+        providers:
+          - ref: open_sierra_imaging
+            invoice_initial: '2750.00'
+            invoice_balance: '0.0'
+            invoice_amount_paid: '2750.00'
+            lien_asserted: false
+            service_start: 2024-02-06
+            service_end: 2024-02-06
+          - ref: lakeside_chiro
+            invoice_initial: '5400.00'
+            invoice_balance: '0.0'
+            invoice_amount_paid: '5400.00'
+            lien_asserted: false
+            service_start: 2024-03-01
+            service_end: 2024-07-22
+
+# Shapes deliberately NOT keyed by hand. Each is exercised by an offline fixture
+# generated from this same file, because none of them needs a live tenant to be
+# true and each is a data-entry slip waiting to happen.
+fixture_only:
+  - id: F-negative-balance
+    note: a provider whose InvoiceBalance is negative; 2 exist in the real portfolio
+  - id: F-blank-service-dates
+    note: service dates absent on every provider row; 71% of real rows
+  - id: F-lien-and-final-populated
+    note: LienAmount and FinalAmount both set; 7 of 347 real rows
+  - id: F-page-truncation
+    note: >-
+      a 500-row listing page, asserting the truncation fail-open fires and is
+      stated on the register rather than silently trusted
+  - id: F-caption-budget
+    note: >-
+      a listing with more than 40 distinct client contacts, asserting the
+      caption-coverage shortfall is counted and reported (the connector bounds
+      caption enrichment at 40 per response and a truncated list is
+      byte-identical to a complete one)
+  - id: F-typo-fixed-after-chase-3
+    note: >-
+      a provider name corrected after three chases; the identity migration must
+      carry the attempt count forward rather than restart at chase 1

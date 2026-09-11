@@ -77,9 +77,7 @@ def text_pdf(lines: list[str]) -> bytes:
     out += b"0000000000 65535 f \n"
     for off in offsets[1:]:
         out += f"{off:010d} 00000 n \n".encode()
-    out += (
-        f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n"
-    ).encode()
+    out += (f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n").encode()
     return bytes(out)
 
 
@@ -139,7 +137,7 @@ class Api:
         href = resp.get("href") if isinstance(resp, dict) else None
         if not href:
             raise RuntimeError(f"{what}: no href in 202 response")
-        poll_path = href[len(API_HOST):] if href.startswith(API_HOST) else href
+        poll_path = href[len(API_HOST) :] if href.startswith(API_HOST) else href
         for _ in range(20):
             time.sleep(2)
             code, resource = self.call("GET", poll_path)

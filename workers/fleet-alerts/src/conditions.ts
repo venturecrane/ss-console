@@ -16,6 +16,8 @@
  * and derives the offset with `length(?) + 1`. There is no third place to update.
  */
 
+import type { FleetCondition } from './index'
+
 /** Per-MCP-server outage (ADR 0080 / ss#1990). Payload: the server name. */
 export const CONNECTOR_DOWN_PREFIX = 'connector_down:'
 
@@ -29,8 +31,11 @@ export const SPEC_CONTROL_BROKEN_PREFIX = 'spec_control_broken:'
 export const WEBHOOK_SURFACE_MISSING_PREFIX = 'webhook_surface_missing:'
 
 /**
- * Every prefixed class. Used by the stale-holds SQL builder and by the guard test
- * that asserts no caller has reintroduced a hardcoded offset.
+ * Every prefixed class, for the guard test that asserts no caller has
+ * reintroduced a hardcoded offset.
+ *
+ * @public Guard surface. workers/fleet-alerts/src/stale-holds.test.ts imports it to assert no
+ * caller reintroduced a hardcoded offset. No runtime caller, by design.
  */
 export const CONDITION_PREFIXES = [
   CONNECTOR_DOWN_PREFIX,
@@ -45,4 +50,83 @@ export const CONDITION_PREFIXES = [
  */
 export function conditionPayload(condition: string, prefix: string): string | null {
   return condition.startsWith(prefix) ? condition.slice(prefix.length) : null
+}
+
+/**
+ * Human labels for the unprefixed conditions; the prefixed classes are labelled
+ * in conditionLabel() from their payload. Moved here from index.ts when that
+ * file crossed the 500-line ceiling (ss#2488 part 2) -- the labels depend on
+ * the prefix constants above, so this is where they belong anyway.
+ */
+const CONDITION_LABEL: Record<string, string> = {
+  heartbeat_red: 'Machine not heartbeating',
+  // NOT "Cost breaker": this condition fires on the sticky-stop ladder, which
+  // four meters drive (consecutive tool failures, refusal cascade, runtime
+  // budget, cost threshold). Naming one of them in the subject asserts a cause
+  // the condition never measured -- on 2026-09-01 ashton-price stopped on a
+  // bad credential and the SEV1 subject said "Cost breaker". The actual cause
+  // now travels on the beat and is rendered in the detail line instead.
+  hard_stop: 'Seat stopped itself (HARD_STOP)',
+  scheduler_error: 'Cron scheduler broken/unreadable',
+  work_overdue: 'Scheduled work not firing',
+  connector_check_error: 'Connector health check broken (outages not counted)',
+  spec_control_unprovable: 'Authored-spec manifest unreadable (spec health unknown)',
+  webhook_surface_unprovable: 'Webhook tool surface unresolvable (warn-tier health unknown)',
+  gateway_loop_wedged: 'Gateway event loop wedged (Operator not answering)',
+  gateway_loop_unprovable: 'Gateway loop heartbeat unreadable (loop health unknown)',
+  gateway_restarted: 'Seat supervisor restarted the gateway',
+  gateway_supervisor_refusing: 'Seat supervisor STOPPED restarting (budget spent, needs a human)',
+  gateway_supervisor_inert: 'Seat supervisor cannot act (wedge would not self-recover)',
+  send_refused:
+    "a routine's outbound send was refused by a gate, or a wake with needs-you items sent nothing",
+}
+
+/**
+ * The hard_stop detail line, which is the only place the reader learns WHY.
+ *
+ * The subject deliberately names no meter (see CONDITION_LABEL.hard_stop), so
+ * if the cause is on the row it has to appear here. A seat not yet
+ * reprovisioned onto the cause-carrying overlay (hermes-smd-overlay#341)
+ * reports the level alone, and this degrades to exactly what it always said
+ * rather than claiming a cause it does not have.
+ *
+ * Takes the structural fields rather than a FleetStatusRow so this file stays
+ * free of an import from index.ts, which imports the labels from here.
+ *
+ * The line always ends with the clear surface and its runbook: on 2026-09-01
+ * a responder who never saw either cleared a HARD_STOP by raw sqlite on the
+ * seat while the admin form sat built and unused
+ * (docs/runbooks/operator/incidents/2026-09-01-sticky-stop-raw-sqlite-bypass.md).
+ * The page is where a responder actually looks, so the page hands them the
+ * path.
+ */
+export function hardStopDetail(stop: {
+  customer_slug: string
+  sticky_stop_level: string | null
+  sticky_stop_reason: string | null
+  sticky_stop_condition: string | null
+}): string {
+  const parts = [`sticky_stop_level=${stop.sticky_stop_level ?? 'null'}`]
+  if (stop.sticky_stop_condition) parts.push(`condition=${stop.sticky_stop_condition}`)
+  if (stop.sticky_stop_reason) parts.push(stop.sticky_stop_reason)
+  parts.push(
+    `clear: admin.smd.services/admin/operator/${stop.customer_slug} ` +
+      '(runbook docs/runbooks/operator/sticky-stop-clear.md)'
+  )
+  // Joined with a pipe, not an em dash: this string is rendered into the alert
+  // email, and em dashes are banned in shipped copy (tests/forbidden-strings).
+  return parts.join(' | ')
+}
+
+/** Label lookup with the per-connector prefix form (ADR 0080). */
+export function conditionLabel(condition: FleetCondition): string {
+  const down = conditionPayload(condition, CONNECTOR_DOWN_PREFIX)
+  if (down !== null) return `Connector failing: ${down}`
+  const expiring = conditionPayload(condition, CONNECTOR_TOKEN_EXPIRING_PREFIX)
+  if (expiring !== null) return `Connector credential expiring: ${expiring}`
+  const spec = conditionPayload(condition, SPEC_CONTROL_BROKEN_PREFIX)
+  if (spec !== null) return `Authored spec declared but not installed: ${spec}`
+  const tool = conditionPayload(condition, WEBHOOK_SURFACE_MISSING_PREFIX)
+  if (tool !== null) return `Webhook tool expected but not offered: ${tool}`
+  return CONDITION_LABEL[condition] ?? condition
 }

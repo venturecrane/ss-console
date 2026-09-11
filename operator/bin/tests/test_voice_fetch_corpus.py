@@ -32,9 +32,7 @@ _OPERATOR = _HERE.parents[2]
 sys.path.insert(0, str(_OPERATOR))
 
 # The script is hyphenated (a CLI, not a module), so load it by path.
-_spec = importlib.util.spec_from_file_location(
-    "voice_fetch_corpus", _OPERATOR / "bin" / "voice-fetch-corpus.py"
-)
+_spec = importlib.util.spec_from_file_location("voice_fetch_corpus", _OPERATOR / "bin" / "voice-fetch-corpus.py")
 assert _spec and _spec.loader
 vfc = importlib.util.module_from_spec(_spec)
 # Register before exec: @dataclass resolves its class's module out of
@@ -226,7 +224,9 @@ def test_write_corpus_splits_per_cohort_in_ingester_format(tmp_path: Path):
     docs = [
         vfc.FetchedDoc("id-1", "client", "Dear Errol, one.", "Nakashima", "m-1", "a.docx", "f-1", "smokeball:m-1/f-1"),
         vfc.FetchedDoc("id-2", "client", "Dear Marguerite, two.", "Boyle", "m-2", "b.docx", "f-2", "smokeball:m-2/f-2"),
-        vfc.FetchedDoc("id-3", "adjuster", "Dear Adjuster, three.", "Duarte", "m-3", "c.docx", "f-3", "smokeball:m-3/f-3"),
+        vfc.FetchedDoc(
+            "id-3", "adjuster", "Dear Adjuster, three.", "Duarte", "m-3", "c.docx", "f-3", "smokeball:m-3/f-3"
+        ),
     ]
     written = vfc.write_corpus(docs, str(tmp_path / "corpus.jsonl"))
     assert set(written) == {"client", "adjuster"}

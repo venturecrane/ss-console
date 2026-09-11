@@ -39,8 +39,9 @@ export interface Engagement {
   /**
    * Context-row id (type='signal') that this engagement is attributed to (#589).
    * NULL when the entity had no signals at engagement creation time, or when
-   * the admin explicitly cleared the attribution. Powers the per-pipeline ROI
-   * roll-up via `getEngagementsBySourcePipeline` in `signal-attribution.ts`.
+   * the admin explicitly cleared the attribution. Recorded for per-pipeline
+   * ROI attribution; no roll-up reads it yet (the read helper was removed
+   * 2026-09-09 as uncalled, and comes back with the surface that needs it).
    */
   originating_signal_id: string | null
   created_at: string

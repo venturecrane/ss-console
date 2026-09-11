@@ -79,6 +79,15 @@ The agent MUST NOT: send to a client autonomously; give legal advice or predict 
 4. **No internal leakage.** Billing internals, strategy, and other firm-only detail never enter a client-facing draft.
 5. **No uncontracted promise.** The draft states status; it does not promise timelines or outcomes the engagement has not authored.
 
+## Matter identifiers (projected, never composed)
+
+- In email, task, and memo text, refer to the matter by its NUMBER, taken ONLY
+  from the `matterNumber` field the connector projected onto a record you read
+  this turn (task, event, memo, file, and document reads all carry it when the
+  matter resolves). Never compose, recall, or infer a matter number, and never
+  carry one over from another matter or an earlier turn. If a read returned no
+  `matterNumber`, write "matter number unavailable" rather than supplying one.
+
 ## Pitfalls
 
 Drifting from "here's where things stand" into "here's what we expect / what you should do" (advice/prediction — the cardinal error); manufacturing progress to fill a quiet update; leaking internal notes or billing detail into a client message; an over-reassuring tone that implies an outcome; letting a draft send without human review.

@@ -7,7 +7,7 @@ description: >-
   connective chase for the firm's most-slipped discovery step. Never decides which responses need
   verification, never sends to the signer without authenticated attorney approval, never signs,
   and never asserts a signature it cannot see.
-version: 0.3.0
+version: 0.4.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -279,6 +279,44 @@ Two ledger raise events matter for the chase:
   fires **once**, not on every wake. A `resolved` event (written on a confident
   signed-document close) is likewise terminal.
 
+**The hold (ss #2402): a surfaced blocker is ledger state, never just an email.**
+When a turn finds a matter **unsafe to chase** — the founding case is an
+unresolvable signer (e.g. conflicting Minor/Deceased sub-roles on the plaintiff),
+but any surface-and-ask condition qualifies — it does three things in that turn:
+(1) appends a `fired` event on the **matter's hold sentinel** (derive with
+`matter_id` = the matter, `source_id` = the literal `__hold__`, `label` =
+`chase-hold`, `authored_date` = null — these literals are the cross-side
+contract with `pre_run.py`'s `HOLD_SOURCE_ID`), (2) surfaces the blocker to a
+person, and (3) sends **no chase**. The hold is **matter-level by design**: the
+blocker is a fact about the matter's roles, so it must survive the tracking
+task being completed, deleted, or recreated, and on a multi-plaintiff matter it
+holds every verification chase rather than guessing which siblings are safe.
+From then on the gate refuses to plan a chase **or a hand-off** for any item on
+that matter and re-surfaces the hold every `escalation.refire_days` instead —
+the hold cannot be forgotten by the next wake, because the next wake reads it.
+**Each re-surface turn appends a fresh `fired` on the hold sentinel in the same
+turn** — that raise is what starts the next quiet window; a re-surface without
+the raise would fire again on every wake. On 2026-08-11 this hold lived only in
+an email, and the 2026-08-14 wake staged a chase to the very signer the seat
+had declared unconfirmed. Releasing the hold is itself an observed fact, never
+an assumption: only when a turn has **confirmation from a person or from the
+matter record** (the roles now resolve to one signer, or the responsible
+attorney named the signer) does it append `resolved` on the hold sentinel —
+same derive-then-handle — after which the chase plans again on the normal
+cadence. **Releasing a hold always records the determination that justifies
+it** — the append carries `resolution_note` (what was determined and how it
+was verified; when confirmed by a person, name who and when),
+`role_snapshot_sha256` (COPIED verbatim from the wake-line plan's
+`current_role_snapshot_sha256`; never computed, never recalled — a plan whose
+value is null means the snapshot pull failed this run, and the release waits
+for a run where it succeeds), and `confirmed_via` (`matter_record` or
+`person`). The `escalation_append` tool refuses a bare hold release. A fresh
+`fired` on the hold sentinel later **re-activates** the hold (the release is
+terminal only until the alarm rings again); the recorded determination
+survives and remains consultable while its snapshot hash matches the live
+roles. An `acked` hold stays blocking (ack means "seen", not "fixed"); it
+only snoozes the re-surface.
+
 The **internal escalation-to-a-person** (both the ceiling hand-off and the
 "cadence/attempt-count not authored" surface) therefore follows the same
 fire-once + re-fire-window, terminal-aware rule the deadline lane uses — it
@@ -301,8 +339,18 @@ surface), never a silent default.
 1. **Resolve** — read the matter (`get_matter` → `personResponsibleStaffId`,
    `clientIds[]`) and the roles/relationships (`get_roles_on_matter`,
    `get_relationships_on_matter`) to determine, for each plaintiff, the correct
-   **signer** (party / GAL / successor). Do not proceed on a matter whose signer is
-   ambiguous — surface and ask.
+   **signer** (party / GAL / successor). Re-derive fresh every turn. If the
+   fresh derivation is unambiguous, proceed — the recorded determination is
+   not consulted. If it is ambiguous, consult the wake line's `determination`
+   stamp (or `escalation_state`): `status: "current"` → adopt the recorded
+   determination as the signer conclusion and cite it in the memo (its note
+   plus the `resolved` event's date); `stale` / `unknown` / absent → do not
+   proceed on either reading — **write the hold** (a `fired` on the matter's
+   hold sentinel; see "The hold" above) and surface the discrepancy as a
+   decision with both readings on the table (the recorded determination, and
+   what the live roles now show); never silently prefer either. A surfaced
+   blocker with no hold event is the ss #2402 defect: the next wake will not
+   know it exists.
 2. **Prepare** — for each plaintiff/response-set the attorney has flagged for
    verification, draft the plain-language verification request in the firm's voice
    from the pack template (`verification-request.md`). Connective artifact, not work
@@ -317,43 +365,121 @@ surface), never a silent default.
    responsible staff, keyed to the plaintiff/response-set/version, dated to the
    authored `chase_cadence_days` cadence).
 5. **Track + chase** — the bespoke `pre_run.py` gates the wake off the ledger +
-   authored cadence/ceiling (see "The state ledger" above). **The wake line in
-   the Script Output block is the turn's work list (#2226):** when it carries
-   `plans`, each entry names the `matter_id`, `task_id`, and `action`
-   (`chase` / `handoff` / `surface_config_missing`) the gate found due, with
-   the attempt number a chase carries. Start from those entries — verify each
-   live (`list_tasks(matter_id, is_completed=false)`, `get_files_on_matter`)
-   and act per the branches below. The gate sees every open verification task
+   authored cadence/ceiling (see "The state ledger" above).
+
+   **The internal escalations are dispatched FOR you, deterministically
+   (WS-RENDER).** When the Script Output shows `dispatch_expected: true`, the
+   gate rendered the hold surfaces, the ceiling hand-off alert, the
+   config-missing note, and the degraded chase-due note into a dispatch
+   envelope; the seat delivers them out of turn through the full gate before
+   your first tool call and records the `fired` / `handed_off` appends itself.
+   You compose none of those alerts and append none of those events. Your
+   residual duties on a dispatch wake are exactly:
+   - **Unroutable or fallback-routed matters** (named in the dispatch note or
+     wake line): `create_memo` on each such matter naming the alert and the
+     unassigned state (case-alert-routing steps 5-6). Memo, not task.
+   - **Hold RELEASE judgment** (the one branch that stays yours): for each
+     `surface_hold` plan, re-check the blocking fact live per the
+     `surface_hold` branch below, and append `resolved` with the determination
+     when it genuinely resolves. Never a chase, never a hand-off, on a held
+     matter.
+   - **Shape C confident close** per the matched-with-confidence branch below.
+   - **Failure note.** If `dispatch_expected: true` and NO dispatch note was
+     injected, or the note says delivery failed: send the alert recipients this
+     one line with `smd_send_message`, exactly, and nothing else: "The
+     verification tracker run failed and needs attention; no alert was
+     delivered this run. The items are in Smokeball and the tracker view."
+
+   A wake whose plans are all `chase` entries and whose Script Output carries
+   NO `dispatch_expected` is a degraded-chase tick inside the throttle window
+   (the client reminder's `settings.return_link` is not authored, so no client
+   chase can render): end the turn without composing anything — the surface
+   already went to a person on the re-fire window.
+
+   A wake whose plans include any OTHER action (`surface_hold` / `handoff` /
+   `surface_config_missing`) with NO `dispatch_expected` means the gate could
+   not build the rendered dispatch at all: send the failure note above and end
+   the turn. Never compose the alert to cover the gap.
+
+   **The wake line in the Script Output block is the turn's work list
+   (#2226):** each `plans` entry names the `matter_id`, the code-projected
+   `matter_number`, `task_id`, and `action` (`chase` / `handoff` /
+   `surface_config_missing` / `surface_hold`) the gate found due, with the
+   attempt number a chase carries. The gate sees every open verification task
    through a global pull; the escalation ledger only knows items that have
    already been raised — so a plan naming a matter with no ledger history is
    the expected shape for a NEW item, not an anomaly to discard.
-   When the wake line carries **no plans** (a fail-open `decision_basis`), the
+   **A blind wake now normally carries `dispatch_expected: true` with
+   `dispatch_variant: failure_note` (2026-09-02).** The gate renders the failure
+   note itself and dispatches it out of turn, so you compose and send NOTHING.
+   This changed because on 2026-09-02 the Smokeball credential expired, this
+   skill woke blind, and the enumeration instruction below could not run either
+   (every `list_matters` call failed) — the sibling escalator, given the same
+   gap, composed an alert out of nothing and sent it. An instruction to you is
+   not a control; a rendered envelope is. When `dispatch_variant: failure_note`
+   shows, the note has already gone: do not also enumerate, and do not send.
+
+   When the wake line carries **no plans** and no `dispatch_expected` (the
+   narrow floor where the gate could not render the note either — no authored
+   red-flag or fallback recipient, or `render.py` unavailable), the
    gate woke blind: enumerate ALL matters (`list_matters`, then
    `list_tasks(matter_id, is_completed=false)` on each) and subset the
    verification-marked tasks yourself. Never scan only the matters the ledger
    already names, and never report "no verification tasks on other matters"
    unless the turn actually listed those matters' tasks.
-   These are metadata reads only; the turn reads no message body, so a chase
-   send stays un-fenced (see the taint-safe rule above):
+   These are metadata reads only; the turn reads no message body (see the
+   taint-safe rule above). The branches below describe the SYSTEM's behavior
+   per action; the deliveries and raise appends marked "dispatched" happen out
+   of turn:
    - matched with confidence (only once the firm's convention is confirmed) → close
-     (`update_task`), log (`create_memo`), append a `resolved` ledger event, let it
-     fall into the daily digest.
-   - not found / ambiguous / convention-unconfirmed, and the attempt count (the
-     `chased` raises in the ledger) is **below `escalate_after_attempts`**, and
-     `chase_cadence_days` is authored → chase the signer with
-     `mcp_agentmail_send_message` (never `reply_to_message`) on the authored cadence;
-     after the send succeeds, log the attempt (`create_memo`) AND append a `chased`
-     ledger event (attempt = the new count); tell the attorney only if it stalls
-     (quiet by design). Never auto-close on an ambiguous match.
-   - attempt count **has reached `escalate_after_attempts`** → **stop chasing the
-     client** and red-flag the matter's assigned staff (Shape D) — delivery per the
-     case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md);
-     append a `handed_off` ledger event so the hand-off fires once; the client chase
-     is done, the open item moves to a person.
-   - `chase_cadence_days` or `escalate_after_attempts` unauthored → send no chase;
-     surface the missing-config note (append a `fired` event on the ledger config
-     sentinel so the raise is remembered), hold quiet through the re-fire window,
-     and re-surface every `escalation.refire_days` until the dials are authored.
+     (`update_task`), log (`create_memo`), and append a `resolved` ledger event —
+     but **only when the ledger holds a raise for the item**: a never-raised item
+     needs no ledger row (closing the task is the state change; the broker refuses
+     a release with no prior raise — write nothing and move on). Let it fall into
+     the daily digest.
+   - plan action `surface_hold` → the matter is held (signer unresolved or another
+     surfaced blocker). Before re-surfacing, re-check the blocking fact live
+     (`get_roles_on_matter`): if it now resolves cleanly, append `resolved` on the
+     hold sentinel instead, **with the determination** (`resolution_note`,
+     `confirmed_via`, and the plan's `current_role_snapshot_sha256` copied
+     verbatim) — the chase resumes on the next wake. Live roles still ambiguous
+     but the plan's `determination` stamp is `status: "current"` → the hold may be
+     resolved on its strength, recording a fresh determination that cites it.
+     Still ambiguous with no current determination → the re-surface to a
+     person and its fresh `fired` on the hold sentinel are dispatched out of
+     turn when `dispatch_expected` shows (the raise starts the next quiet
+     window; without the flag, the failure-note branch above applies); your
+     part is only the release judgment above. A plan carrying `reason: "determination_stale"`
+     is this same branch with the stakes named: the roles moved since the hold
+     was released — the dispatched surface says so, and you never chase on
+     either reading. Send **no chase and no hand-off**. Never re-verify the
+     signer from memory **without a ledger determination**: the only memory a
+     turn may rely on is a `determination` recorded on the hold ledger whose
+     `role_snapshot_sha256` matches the current roles (the plan's
+     `status: "current"`) — anything else (an earlier turn's prose, an email,
+     this turn's recollection) is not a source.
+   - plan action `chase` (cadence due, ceiling not reached, no hold) → the
+     client reminder renders ONLY from the authored template with its two
+     slots filled from authored/read values (`render.py` `render_chase`;
+     verification-request.md Draft 2 verbatim). While `settings.return_link`
+     is unauthored — the live state — no client chase can render: the gate
+     dispatched one throttled seat-level surface instead ("a person should
+     send the reminder"), no `chased` event is recorded (no client was
+     nudged), and YOU compose no reminder. Never auto-close on an ambiguous
+     match.
+   - attempt count **has reached `escalate_after_attempts`** → the client
+     chase stops and the hand-off alert to the matter's assigned staff (Shape
+     D) is dispatched out of turn per the case-alert routing rule
+     (deadline-miss-escalator/references/case-alert-routing.md), with its
+     `handed_off` ledger event appended post-send so the hand-off fires once;
+     the open item moves to a person. No `dispatch_expected` → the
+     failure-note branch above applies.
+   - `chase_cadence_days` or `escalate_after_attempts` unauthored → no chase;
+     the missing-config note and its `fired` event on the ledger config
+     sentinel are dispatched out of turn on the same terms; the surface holds
+     quiet through the re-fire window and re-surfaces every
+     `escalation.refire_days` until the dials are authored.
+
 6. **Escalate** — two independent triggers, either of which fires on its own; the
    chase's own trigger is the attempt count, and it points to the deadline lane for
    the other rather than duplicating it:
@@ -391,6 +517,11 @@ not an immutable invariant.
   surfaced.
 - **Never chase on an unauthored cadence** — no `chase_cadence_days`, no chase;
   surface "chase cadence not authored" and hold.
+- **Never chase a held item, and never hold an item in prose only** — a blocker a
+  turn surfaces (unresolved signer above all) is written to the ledger as the
+  item's hold (`fired` on the hold sentinel) in the same turn, and only an
+  observed resolution writes the `resolved` that releases it (ss #2402) — always
+  with its determination (a bare hold release is refused by the tool).
 - **Never nag indefinitely** — once unanswered attempts reach `escalate_after_attempts`,
   stop chasing the client and red-flag the responsible attorney (once — the ledger
   `handed_off` event makes the hand-off terminal, so it does not repeat on later wakes).
@@ -454,13 +585,14 @@ refusal is a stalled deliverable and a full-context redraft — write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.
-- In email and task text, refer to the matter by its NUMBER, taken ONLY from
-  the `matterNumber` field of a record you read this turn. Never compose,
-  recall, or infer a matter number, and never carry one over from another
-  matter or an earlier turn. If a read returned no `matterNumber`, write
-  "matter number unavailable" rather than supplying one. Never refer to the
-  matter by its case caption. The matter's own caption is acceptable inside
-  matter memos; cited case law is never acceptable anywhere.
+- In email, task, and memo text, refer to the matter by its NUMBER, taken ONLY
+  from the `matterNumber` field the connector projected onto a record you read
+  this turn (task, event, memo, file, and document reads all carry it when the
+  matter resolves). Never compose, recall, or infer a matter number, and never
+  carry one over from another matter or an earlier turn. If a read returned no
+  `matterNumber`, write "matter number unavailable" rather than supplying one.
+  Never refer to the matter by its case caption. The matter's own caption is
+  acceptable inside matter memos; cited case law is never acceptable anywhere.
 - State a specific dollar figure only when it exists in an authored source
   on the matter, and name that source in the same sentence ("per the MedFin
   payoff letter dated..."). Never total, estimate, or round figures into

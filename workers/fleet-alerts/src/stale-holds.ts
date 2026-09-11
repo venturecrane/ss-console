@@ -84,6 +84,21 @@ export const STALE_HOLDS_SQL = `SELECT s.customer_slug AS customer_slug, s.condi
             -- auto-resolves through openWebhookSurfaceKeys. Only a whole-map
             -- NULL strands it.
             OR (s.condition LIKE ? || '%' AND f.webhook_surface_json IS NULL)
+            -- ss#2488 part 2. Five conditions, one source column each. An alert
+            -- stranded here is a seat that stopped reporting the field: an
+            -- overlay rollback to a pre-part-2 ref, a reprovision to a Hermes
+            -- pin with no loop heartbeat, or a gate that died. The NULL-hold
+            -- means it will never auto-resolve; surface it for the manual path.
+            OR (s.condition = 'gateway_loop_wedged' AND f.gateway_loop_age_seconds IS NULL)
+            OR (s.condition = 'gateway_loop_unprovable' AND f.gateway_loop_ok IS NULL)
+            OR (s.condition = 'gateway_restarted' AND f.gateway_restarts_last_hour IS NULL)
+            OR (s.condition = 'gateway_supervisor_refusing' AND f.gateway_supervisor_state IS NULL)
+            OR (s.condition = 'gateway_supervisor_inert' AND f.gateway_supervisor_state IS NULL)
+            -- ss#2547 has NO clause here on purpose. send_refused is
+            -- event-shaped: its row is written with status='resolved' the
+            -- moment it pages and is never open, so the s.status = 'open'
+            -- filter above already excludes it. A clause of its own would be
+            -- dead code that reads as coverage. See ./send-refused.
           )
         ORDER BY s.customer_slug ASC, s.condition ASC`
 

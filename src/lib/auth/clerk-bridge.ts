@@ -44,7 +44,13 @@ export interface PortalUserRow {
 }
 
 export interface ClerkUserProfile {
-  email: string
+  /**
+   * Clerk's VERIFIED PRIMARY email, or null when Clerk holds no verified
+   * primary address (see src/lib/auth/clerk-profile.ts). Null disables
+   * email-based auto-linking and JIT creation in ensureLocalUser — an
+   * unverified address must never bind a Clerk identity to a local row.
+   */
+  email: string | null
   name: string
 }
 
@@ -66,12 +72,17 @@ export interface PortalContext {
  * role='admin'. That path never JIT-creates a row, so admin cannot be
  * self-provisioned through this bridge. Magic-link auth survives only as
  * a legacy portal fallback for in-flight client invitations.
+ *
+ * Returns null when the Clerk user has no existing binding AND no trusted
+ * (verified primary) email: with nothing to key on, auto-linking would
+ * trust an unverified address and JIT creation would fabricate an
+ * identity. Callers treat null as "no portal access".
  */
 export async function ensureLocalUser(
   db: D1Database,
   clerkUserId: string,
   profile: ClerkUserProfile
-): Promise<PortalUserRow> {
+): Promise<PortalUserRow | null> {
   const existing = await db
     .prepare('SELECT * FROM users WHERE clerk_user_id = ?')
     .bind(clerkUserId)
@@ -79,13 +90,20 @@ export async function ensureLocalUser(
 
   if (existing) return existing
 
+  // No trusted email → no email-based linking, no JIT creation. An
+  // already-bound user resolved above regardless; a new-to-SS Clerk user
+  // without a verified primary address gets the explicit "no access"
+  // state, never a fabricated or mis-linked row.
+  if (!profile.email) return null
+
   // Auto-link path: a users row may already exist for this email from
   // before the Clerk migration (or from an admin-created client invite
   // that hasn't been redeemed via Clerk yet). UNIQUE(org_id, email) means
   // we cannot INSERT a duplicate row; we must bind the existing row to
   // this Clerk identity instead. Only links when clerk_user_id IS NULL
   // so we never overwrite an existing binding. Email comes from Clerk's
-  // verified primary email, which is the trust anchor.
+  // verified primary email, which is the trust anchor — ENFORCED by the
+  // null-guard above + clerk-profile.ts (unverified addresses never get here).
   //
   // Matched through the shared identity normalization (src/lib/identity/email.ts):
   // trimmed and lowercased on the input side, `lower()` on the column side.
@@ -192,6 +210,11 @@ async function resolveEntityByUserBinding(
  * The two paths coexist because Operator features still need Clerk
  * Organizations for multi-user matter access; direct binding via
  * entity_id is the simpler path for single-user portal access.
+ *
+ * Also returns null when ensureLocalUser cannot establish a local row
+ * (unbound Clerk user with no verified primary email) — the caller's
+ * sign-in redirect converges on the no_subscription state via
+ * /auth/after-sign-in.
  */
 export async function resolveClerkPortalContext(
   db: D1Database,
@@ -202,6 +225,7 @@ export async function resolveClerkPortalContext(
   if (!auth.userId) return null
 
   const user = await ensureLocalUser(db, auth.userId, profile)
+  if (!user) return null
 
   let client: Entity | null = null
   if (user.entity_id) {

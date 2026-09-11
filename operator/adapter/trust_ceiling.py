@@ -188,6 +188,17 @@ def enforce(
     # autonomous sensitive action (the injection-ingress → action-egress tie).
     # READ and INTERNAL_WRITE (drafts) stay allowed. Mirrors the overlay's live
     # pre_tool_call gate; here for parity (the two cores must agree).
+    #
+    # WHAT IS ACTUALLY GATED, and what is not. `tests/operator-taint-gate.test.ts`
+    # pins THIS tuple to the ActionClass enum: every class except READ and
+    # INTERNAL_WRITE must appear below, so a class added to the enum and not
+    # added here fails CI rather than silently becoming sendable on a tainted
+    # turn. That is an in-repo check. It does NOT prove the overlay's live
+    # pre_tool_call gate withholds the same set — this file is a
+    # re-implementation, not a byte-identical twin, so it is deliberately not in
+    # `operator/contracts/overlay-pairs.json` (that manifest gates byte-equality
+    # and would certify a hand-edited hash here). The cross-repo half stays a
+    # human reconciliation, the same limit `test_guard_hook_parity.py` names.
     if inbound_trust_class != _TRUST_CLASS_INTERNAL and action in (
         ActionClass.EXTERNAL_SEND,
         ActionClass.EXTERNAL_SEND_INTERNAL,

@@ -54,9 +54,7 @@ Party 1 statement: He said he always signals and could not say for certain that
 he had on this occasion.
 """
 
-ANSWER_QUOTE = (
-    "No, I cannot. I could not tell you for sure about that particular lane change"
-)
+ANSWER_QUOTE = "No, I cannot. I could not tell you for sure about that particular lane change"
 
 CLEAN_DRAFT = f"""# DRAFT FOR ATTORNEY REVIEW
 
@@ -155,9 +153,7 @@ class GateTestCase(unittest.TestCase):
 class TestCleanDraft(GateTestCase):
     def test_clean_draft_passes(self) -> None:
         code, payload = self.run_gate(self.write_draft(CLEAN_DRAFT))
-        self.assertEqual(
-            code, 0, msg=f"unexpected failures: {self.failures(payload)}"
-        )
+        self.assertEqual(code, 0, msg=f"unexpected failures: {self.failures(payload)}")
         self.assertEqual(payload["result"], "pass")
         self.assertEqual(self.failures(payload), [])
 
@@ -173,9 +169,7 @@ class TestCleanDraft(GateTestCase):
 class TestQuoteContiguity(GateTestCase):
     def test_spliced_quote_fails(self) -> None:
         draft = self.write_draft(
-            "# DRAFT\n\n"
-            'He testified, "I would have. That is what I do. No, I cannot"\n'
-            "(Draper 23:15 to 23:23).\n"
+            '# DRAFT\n\nHe testified, "I would have. That is what I do. No, I cannot"\n(Draper 23:15 to 23:23).\n'
         )
         code, payload = self.run_gate(draft)
         self.assertEqual(code, 1)
@@ -202,9 +196,7 @@ class TestQuoteContiguity(GateTestCase):
 
     def test_quoted_text_inside_a_marker_is_not_checked(self) -> None:
         draft = self.write_draft(
-            "# DRAFT\n\n"
-            '{{FILL: transmission method, for example "Via Certified Mail and '
-            'Email" | transmission log}}\n'
+            '# DRAFT\n\n{{FILL: transmission method, for example "Via Certified Mail and Email" | transmission log}}\n'
         )
         code, payload = self.run_gate(draft)
         self.assertEqual(self.findings(payload, "2a"), [])
@@ -226,13 +218,11 @@ class TestQuoteContiguity(GateTestCase):
 
     def test_nested_quotation_punctuation_is_tolerated(self) -> None:
         (self.sources / "witness.md").write_text(
-            "Lindqvist stated she heard him say something like, 'I thought I had "
-            "room.' He said it more than once.\n",
+            "Lindqvist stated she heard him say something like, 'I thought I had room.' He said it more than once.\n",
             encoding="utf-8",
         )
         draft = self.write_draft(
-            "# DRAFT\n\nShe heard him say \"something like, 'I thought I had "
-            "room,'\" as he walked back.\n"
+            "# DRAFT\n\nShe heard him say \"something like, 'I thought I had room,'\" as he walked back.\n"
         )
         code, payload = self.run_gate(draft)
         self.assertEqual(self.findings(payload, "2a", "FAIL"), [])
@@ -281,9 +271,7 @@ class TestQuoteContiguity(GateTestCase):
         self.assertIn("spans an intervening question", fails[0]["message"])
 
     def test_curly_quotes_are_normalized(self) -> None:
-        draft = self.write_draft(
-            "# DRAFT\n\nHe answered, “" + ANSWER_QUOTE + ".”\n"
-        )
+        draft = self.write_draft("# DRAFT\n\nHe answered, “" + ANSWER_QUOTE + ".”\n")
         code, payload = self.run_gate(draft)
         self.assertEqual(self.findings(payload, "2a", "FAIL"), [])
         self.assertEqual(code, 0)
@@ -291,17 +279,13 @@ class TestQuoteContiguity(GateTestCase):
 
 class TestQuestionPairing(GateTestCase):
     def test_range_including_the_question_passes(self) -> None:
-        draft = self.write_draft(
-            f'# DRAFT\n\nHe answered, "{ANSWER_QUOTE}" (Draper 23:20 to 23:23).\n'
-        )
+        draft = self.write_draft(f'# DRAFT\n\nHe answered, "{ANSWER_QUOTE}" (Draper 23:20 to 23:23).\n')
         code, payload = self.run_gate(draft)
         self.assertEqual(self.findings(payload, "2b", "FAIL"), [])
         self.assertEqual(code, 0)
 
     def test_range_excluding_the_question_fails(self) -> None:
-        draft = self.write_draft(
-            f'# DRAFT\n\nHe answered, "{ANSWER_QUOTE}" (Draper 23:22 to 23:23).\n'
-        )
+        draft = self.write_draft(f'# DRAFT\n\nHe answered, "{ANSWER_QUOTE}" (Draper 23:22 to 23:23).\n')
         code, payload = self.run_gate(draft)
         self.assertEqual(code, 1)
         pairing = self.findings(payload, "2b", "FAIL")
@@ -310,9 +294,7 @@ class TestQuestionPairing(GateTestCase):
         self.assertIn("23:20", pairing[0]["message"])
 
     def test_quote_absent_from_the_cited_range_fails(self) -> None:
-        draft = self.write_draft(
-            f'# DRAFT\n\nHe answered, "{ANSWER_QUOTE}" (Draper 15:1 to 15:5).\n'
-        )
+        draft = self.write_draft(f'# DRAFT\n\nHe answered, "{ANSWER_QUOTE}" (Draper 15:1 to 15:5).\n')
         code, payload = self.run_gate(draft)
         self.assertEqual(code, 1)
         fails = self.findings(payload, "2b", "FAIL")
@@ -333,9 +315,7 @@ class TestQuestionPairing(GateTestCase):
         alt = self.root / "alt-sources"
         alt.mkdir()
         (alt / "depo-nopages.md").write_text(stripped, encoding="utf-8")
-        draft = self.write_draft(
-            f'# DRAFT\n\nHe answered, "{ANSWER_QUOTE}" (Draper 23:22 to 23:23).\n'
-        )
+        draft = self.write_draft(f'# DRAFT\n\nHe answered, "{ANSWER_QUOTE}" (Draper 23:22 to 23:23).\n')
         code, payload = self.run_gate(draft, sources=str(alt))
         self.assertEqual(self.findings(payload, "2b", "FAIL"), [])
         notes = self.findings(payload, "2b", "INFO")
@@ -344,9 +324,7 @@ class TestQuestionPairing(GateTestCase):
         self.assertEqual(code, 0)
 
     def test_single_point_cite_is_a_note_not_a_failure(self) -> None:
-        draft = self.write_draft(
-            f'# DRAFT\n\nHe answered, "{ANSWER_QUOTE}" (Draper 23:22).\n'
-        )
+        draft = self.write_draft(f'# DRAFT\n\nHe answered, "{ANSWER_QUOTE}" (Draper 23:22).\n')
         code, payload = self.run_gate(draft)
         self.assertEqual(self.findings(payload, "2b", "FAIL"), [])
         notes = self.findings(payload, "2b", "INFO")
@@ -378,9 +356,7 @@ class TestHeldOutAndWall(GateTestCase):
             "Firm analysis: settlement posture and authority discussion, wholly "
             "distinct in wording from anything in the draft body.\n",
         )
-        code, payload = self.run_gate(
-            self.write_draft(CLEAN_DRAFT), held_out=str(held)
-        )
+        code, payload = self.run_gate(self.write_draft(CLEAN_DRAFT), held_out=str(held))
         self.assertEqual(self.findings(payload, "1", "FAIL"), [])
         self.assertEqual(code, 0)
 
@@ -433,17 +409,12 @@ class TestSelfCertification(GateTestCase):
     def test_each_seed_pattern_fires(self) -> None:
         cases = {
             "all responsive documents": (
-                "Responding party has produced all responsive documents in its "
-                "possession, custody, or control."
+                "Responding party has produced all responsive documents in its possession, custody, or control."
             ),
             "fully complies": "This response fully complies with the request.",
-            "complete and accurate": (
-                "The foregoing responses are complete and accurate."
-            ),
+            "complete and accurate": ("The foregoing responses are complete and accurate."),
             "no responsive documents exist": "No responsive documents exist.",
-            "this draft is complete": (
-                "This draft is complete. Nothing further is outstanding."
-            ),
+            "this draft is complete": ("This draft is complete. Nothing further is outstanding."),
         }
         for label, sentence in cases.items():
             with self.subTest(pattern=label):
@@ -467,8 +438,7 @@ class TestSelfCertification(GateTestCase):
 
     def test_cited_nonexistence_is_permitted(self) -> None:
         draft = self.write_draft(
-            "# DRAFT\n\nNo responsive documents exist (Alvarez 38:4 to 38:7). "
-            "The search is described above.\n"
+            "# DRAFT\n\nNo responsive documents exist (Alvarez 38:4 to 38:7). The search is described above.\n"
         )
         code, payload = self.run_gate(draft)
         self.assertEqual(self.findings(payload, "3"), [])
@@ -484,9 +454,7 @@ class TestCoverage(GateTestCase):
 
     def test_missing_item_fails(self) -> None:
         items = self.write_file("items.txt", "RFP 1\nRFP 2\nSROG 3\n")
-        code, payload = self.run_gate(
-            self.write_draft(self.DRAFT), propounded=str(items)
-        )
+        code, payload = self.run_gate(self.write_draft(self.DRAFT), propounded=str(items))
         self.assertEqual(code, 1)
         missing = self.findings(payload, "7", "FAIL")
         self.assertEqual(len(missing), 1)
@@ -494,17 +462,13 @@ class TestCoverage(GateTestCase):
 
     def test_full_coverage_passes(self) -> None:
         items = self.write_file("items.txt", "RFP 1\n# a comment\n\nRFP 2\n")
-        code, payload = self.run_gate(
-            self.write_draft(self.DRAFT), propounded=str(items)
-        )
+        code, payload = self.run_gate(self.write_draft(self.DRAFT), propounded=str(items))
         self.assertEqual(self.findings(payload, "7", "FAIL"), [])
         self.assertEqual(code, 0)
 
     def test_extra_response_heading_warns(self) -> None:
         items = self.write_file("items.txt", "RFP 1\n")
-        code, payload = self.run_gate(
-            self.write_draft(self.DRAFT), propounded=str(items)
-        )
+        code, payload = self.run_gate(self.write_draft(self.DRAFT), propounded=str(items))
         warns = self.findings(payload, "7", "WARN")
         self.assertTrue(warns)
         self.assertIn("NO. 2", warns[0]["message"])
@@ -553,9 +517,7 @@ class TestSprogLint(GateTestCase):
         self.assertEqual(code, 0)
 
     def test_lint_does_not_run_without_the_flag(self) -> None:
-        draft = self.write_draft(
-            "# DRAFT\n\n### SPECIAL INTERROGATORY NO. 5\n\n(a) one;\n(b) two.\n"
-        )
+        draft = self.write_draft("# DRAFT\n\n### SPECIAL INTERROGATORY NO. 5\n\n(a) one;\n(b) two.\n")
         code, payload = self.run_gate(draft)
         self.assertEqual(self.findings(payload, "8"), [])
         self.assertEqual(code, 0)
@@ -569,9 +531,7 @@ class TestSprogLint(GateTestCase):
 
 class TestVisibleMarkers(GateTestCase):
     def test_marker_inside_html_comment_fails(self) -> None:
-        draft = self.write_draft(
-            "# DRAFT\n\n<!-- {{ATTORNEY: whether to demand limits}} -->\n"
-        )
+        draft = self.write_draft("# DRAFT\n\n<!-- {{ATTORNEY: whether to demand limits}} -->\n")
         code, payload = self.run_gate(draft)
         self.assertEqual(code, 1)
         fails = self.findings(payload, "9", "FAIL")
@@ -579,9 +539,7 @@ class TestVisibleMarkers(GateTestCase):
         self.assertIn("HTML comment", fails[0]["message"])
 
     def test_unclosed_marker_fails(self) -> None:
-        draft = self.write_draft(
-            "# DRAFT\n\n{{NOT IN RECORD: the date of loss age, searched intake\n"
-        )
+        draft = self.write_draft("# DRAFT\n\n{{NOT IN RECORD: the date of loss age, searched intake\n")
         code, payload = self.run_gate(draft)
         self.assertEqual(code, 1)
         fails = self.findings(payload, "9", "FAIL")
@@ -600,10 +558,7 @@ class TestVisibleMarkers(GateTestCase):
         self.assertEqual(code, 0)
 
     def test_marker_inside_code_fence_warns(self) -> None:
-        draft = self.write_draft(
-            "# DRAFT\n\n```\nCaption: {{FILL: case number | operative pleading}}\n"
-            "```\n"
-        )
+        draft = self.write_draft("# DRAFT\n\n```\nCaption: {{FILL: case number | operative pleading}}\n```\n")
         code, payload = self.run_gate(draft)
         self.assertEqual(self.findings(payload, "9", "FAIL"), [])
         self.assertTrue(self.findings(payload, "9", "WARN"))
@@ -623,9 +578,7 @@ class TestCliBehavior(GateTestCase):
         self.assertEqual(payload, {})
 
     def test_missing_sources_exit_two(self) -> None:
-        code, _ = self.run_gate(
-            self.write_draft(CLEAN_DRAFT), sources=str(self.root / "nowhere")
-        )
+        code, _ = self.run_gate(self.write_draft(CLEAN_DRAFT), sources=str(self.root / "nowhere"))
         self.assertEqual(code, 2)
 
     def test_empty_source_directory_exits_two(self) -> None:
@@ -636,8 +589,7 @@ class TestCliBehavior(GateTestCase):
 
     def test_malformed_draft_does_not_crash(self) -> None:
         draft = self.write_draft(
-            '# DRAFT\n\nUnbalanced " quote character and a stray {{ and \x00 byte '
-            "and a lone “ curly open.\n"
+            '# DRAFT\n\nUnbalanced " quote character and a stray {{ and \x00 byte and a lone “ curly open.\n'
         )
         code, payload = self.run_gate(draft)
         self.assertIn(code, (0, 1))
@@ -666,9 +618,7 @@ class TestCliBehavior(GateTestCase):
 
 class TestNormalization(unittest.TestCase):
     def test_smart_characters_collapse(self) -> None:
-        self.assertEqual(
-            gate.normalize("“A’s”  — \n b"), '"A\'s" - b'
-        )
+        self.assertEqual(gate.normalize("“A’s”  — \n b"), '"A\'s" - b')
 
     def test_quote_variants_cover_fold_and_trailing_punctuation(self) -> None:
         variants = gate.quote_variants("Right around when I moved over,")

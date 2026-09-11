@@ -45,7 +45,7 @@
 #                                 sentry-sdk init picks it up (overlay PR O1).
 #                                 Pulled from operator env. Deliberately NOT
 #                                 sourced from SENTRY_DSN (that key is ss-web's).
-#   MACHINE_HEARTBEAT_KEY       — shared bearer for POST /api/internal/heartbeat
+#   MACHINE_HEARTBEAT_KEY       — NOT read from env since 0114: minted per seat below
 #                                 (Wave 1 single-key model per ADR 0023 §10).
 #                                 SAME value as the Cloudflare Worker secret on
 #                                 ss-web; staged to every Machine.
@@ -278,6 +278,12 @@ FLY_REGION="${FIELDS[1]}"
 MACHINE_SIZE="${FIELDS[2]}"
 MEMORY_MB="${FIELDS[3]}"
 HERMES_REF="${FIELDS[4]}"
+# cpu_kind + cpus come from the size name (ss#2612); an unrecognised size dies
+# here rather than rendering a one-vCPU Machine by fallback.
+# shellcheck source=lib/machine-size.sh
+source "${REPO_ROOT}/operator/bin/lib/machine-size.sh"
+MACHINE_CPU_KIND="$(machine_cpu_kind "${MACHINE_SIZE}")" || die "machine.size '${MACHINE_SIZE}' is not a Fly size this template can render"
+MACHINE_CPUS="$(machine_cpus "${MACHINE_SIZE}")" || die "machine.size '${MACHINE_SIZE}' is not a Fly size this template can render"
 
 [ "${CUSTOMER_ID}" = "${SLUG}" ] || die "customer.yaml customer_id (${CUSTOMER_ID}) does not match slug (${SLUG})"
 APP_NAME="hermes-${SLUG}"
@@ -314,6 +320,127 @@ AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
   || die "R2 upload failed; bootstrap.sh would not be able to fetch customer.yaml"
 log "R2 upload OK"
 
+# ---------- Step 2b: upload the chronology runner's firm config (ss#2614) ----------
+# The runner's per-firm posture (provider tables, exclusions, caps) lives in
+# the PRIVATE engagements repo, never in this one (ADR 0087: a value authored
+# here is world-readable). The entrypoint fetches it from the same vault
+# prefix as customer.yaml into the root-owned config dir. Absent on a seat that
+# runs no chronology routine; the runner refuses every job until it is there.
+MEDCHRON_FIRM_YAML="${SS_ENGAGEMENTS_DIR:-${HOME}/dev/engagements}/operator/customers/${SLUG}/medchron/firm.yaml"
+if [ -f "${MEDCHRON_FIRM_YAML}" ]; then
+  # >>> medchron-firm-validate
+  # Validate against THIS CHECKOUT's runner schema before the bytes leave for
+  # R2. The runner's key set is closed and its cost controls are required, so a
+  # firm.yaml the seat cannot load makes every chronology job defer until
+  # someone notices. Catching it here turns a silent stall into a refusal at
+  # the moment a person is watching. The schema comes from the invoking
+  # checkout, which is why the rollout note says to reprovision from a SYNCED
+  # primary: a stale checkout validates against a stale schema.
+  #
+  # The interpreter is `uv run --with pyyaml`, the same one every other
+  # python block in this script uses, NOT the bare `python3`: the runner's
+  # config module imports PyYAML, which the laptop's system python does not
+  # carry. Live-caught 2026-09-09 on the first reprovision after ss#2718: the
+  # bare interpreter died on `import yaml` and the die line below blamed the
+  # config ("does not validate"), so a validator that could not run read as a
+  # config that was wrong. The two outcomes now carry different exit codes
+  # and different sentences.
+  rc=0
+  PYTHONPATH="${REPO_ROOT}/operator/runners/medchron" \
+    uv run --quiet --with pyyaml python3 - "${MEDCHRON_FIRM_YAML}" <<'PY' || rc=$?
+import sys
+try:
+    from medchron import config
+except Exception as exc:  # the validator itself could not start
+    print(f"medchron firm validator could not run: {exc}", file=sys.stderr)
+    sys.exit(3)
+
+try:
+    cfg = config.load(sys.argv[1])
+except config.ConfigError as exc:
+    print(f"medchron firm config: {exc}", file=sys.stderr)
+    sys.exit(1)
+print(f"medchron firm config OK ({cfg.slug})")
+PY
+  case "${rc}" in
+    0) ;;
+    1) die "medchron firm config for ${SLUG} does not validate against this checkout's runner schema (see the line above); not uploading it. Fix the config in the engagements repo, or 'git pull' the primary if the schema is newer than this checkout" ;;
+    *) die "medchron firm config for ${SLUG} could not be validated (the validator did not run, rc=${rc}); not uploading it. Install uv or fix the interpreter; the config itself was not judged" ;;
+  esac
+  # <<< medchron-firm-validate
+  log "Uploading medchron-firm.yaml to R2: s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/medchron-firm.yaml"
+  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" \
+  AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
+    aws s3 cp "${MEDCHRON_FIRM_YAML}" "s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/medchron-firm.yaml" \
+      --endpoint-url "${R2_ENDPOINT_URL}" \
+      --only-show-errors \
+    || die "R2 upload of medchron-firm.yaml failed"
+  log "R2 upload OK (medchron-firm.yaml)"
+else
+  log "No medchron firm config for ${SLUG} (${MEDCHRON_FIRM_YAML}); the chronology runner will refuse jobs"
+fi
+
+# ---------- Step 2c: stage the chronology runner's install-level tree (2026-09-04) ----------
+# The scanned-page classifier's authored control pages (controls.json + the
+# PDFs it names) are client-derived and live beside firm.yaml in the PRIVATE
+# engagements repo: operator/customers/<slug>/medchron/controls/. The ICD
+# tables are public CMS data, vendored HERE on the console by the runner's own
+# icd_fetch.vendor() and staged alongside. Both land under
+# vaults/<slug>/medchron-controls/, which the entrypoint pulls into a
+# root-owned 0750 tree on every boot. That tree is read-only to the medchron
+# uid by design (a classifier that can edit its own controls measures
+# nothing), so a seat can never fetch the tables for itself; only a laptop
+# install (install_root == data_root) does. A seat that authors a firm config
+# but no controls would refuse every job at classify_scanned: that is a
+# FATAL here, not a WARN on the seat. The block is sentinel-delimited so
+# tests/provisioner-medchron-controls.test.ts drives it verbatim.
+# >>> medchron-controls-stage
+MEDCHRON_CONTROLS_DIR="$(dirname "${MEDCHRON_FIRM_YAML}")/controls"
+MEDCHRON_CONTROLS_PREFIX="s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/medchron-controls"
+r2_cp() {
+  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
+    aws s3 cp "$@" --endpoint-url "${R2_ENDPOINT_URL}" --only-show-errors
+}
+r2_has() {
+  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
+    aws s3 ls "$1" --endpoint-url "${R2_ENDPOINT_URL}" 2>/dev/null | grep -q .
+}
+if [ -f "${MEDCHRON_FIRM_YAML}" ]; then
+  [ -f "${MEDCHRON_CONTROLS_DIR}/controls.json" ] \
+    || die "medchron firm config is authored for ${SLUG} but ${MEDCHRON_CONTROLS_DIR}/controls.json is not; the scanned-page classifier has no falsifier and every job would refuse at classify_scanned"
+  # Every page controls.json names must be in the authored set: paths are
+  # relative to the install root (controls/<file>), exactly as the seat reads.
+  python3 - "${MEDCHRON_CONTROLS_DIR}" <<'PY' \
+    || die "medchron controls.json names a page that is not in ${MEDCHRON_CONTROLS_DIR}"
+import json, os, sys
+d = sys.argv[1]
+rows = json.load(open(os.path.join(d, "controls.json")))
+bad = [r for r in rows if not (isinstance(r, dict) and r.get("label") and r.get("page")
+                               and os.path.isfile(os.path.join(os.path.dirname(d), str(r.get("pdf")))))]
+for r in bad:
+    print(f"medchron controls: unresolvable entry {r!r}", file=sys.stderr)
+sys.exit(1 if bad or not rows else 0)
+PY
+  log "Uploading medchron controls to R2: ${MEDCHRON_CONTROLS_PREFIX}/"
+  r2_cp "${MEDCHRON_CONTROLS_DIR}" "${MEDCHRON_CONTROLS_PREFIX}/" --recursive \
+    || die "R2 upload of medchron controls failed"
+  if r2_has "${MEDCHRON_CONTROLS_PREFIX}/icd/VERSION.json"; then
+    log "R2 upload OK (medchron controls); ICD tables already staged at ${MEDCHRON_CONTROLS_PREFIX}/icd/"
+  else
+    MEDCHRON_ICD_SCRATCH="$(mktemp -d)/icd"
+    log "Vendoring the CMS ICD tables on the console for ${SLUG} (the seat's controls tree is read-only; it cannot fetch its own)"
+    "${BIN_DIR}/lib/medchron-vendor-icd.sh" "${MEDCHRON_ICD_SCRATCH}" \
+      || die "ICD table vendoring failed; the chronology runner would fail every job at icd_tables"
+    r2_cp "${MEDCHRON_ICD_SCRATCH}" "${MEDCHRON_CONTROLS_PREFIX}/icd/" --recursive \
+      || die "R2 upload of the ICD tables failed"
+    rm -rf "$(dirname "${MEDCHRON_ICD_SCRATCH}")"
+    log "R2 upload OK (medchron controls + ICD tables)"
+  fi
+else
+  log "No medchron controls staged for ${SLUG} (no firm config authored)"
+fi
+# <<< medchron-controls-stage
+
 # ---------- Step 3: render fly.toml ----------
 log "Rendering fly.toml..."
 mkdir -p "${RENDERED_DIR}"
@@ -326,6 +453,8 @@ sed -e "s/{{CUSTOMER_SLUG}}/${SLUG}/g" \
     -e "s/{{FLY_REGION}}/${FLY_REGION}/g" \
     -e "s/{{MACHINE_SIZE}}/${MACHINE_SIZE}/g" \
     -e "s/{{MEMORY_MB}}/${MEMORY_MB}/g" \
+    -e "s/{{MACHINE_CPU_KIND}}/${MACHINE_CPU_KIND}/g" \
+    -e "s/{{MACHINE_CPUS}}/${MACHINE_CPUS}/g" \
     -e "s/{{HERMES_REF}}/${HERMES_REF}/g" \
     -e "s/{{HERMES_UPSTREAM_TAG}}/${HERMES_UPSTREAM_TAG}/g" \
     -e "s/{{HERMES_UPSTREAM_SHA}}/${HERMES_UPSTREAM_SHA}/g" \
@@ -447,6 +576,17 @@ prompt_and_set() {
 # (Infisical /ss via `infisical run`), warn-and-skip when unset. Defined here so
 # both Step 6 (R2 skill-bodies) and Step 6b (observability / connector) can use
 # it — bash needs the definition before the first call.
+# Names and values already staged this run, kept in lockstep for the reuse check
+# below. Never logged, never exported; lives only for the length of the process.
+#
+# TWO INDEXED ARRAYS, NOT AN ASSOCIATIVE ONE. `declare -A` is bash 4+, and macOS
+# ships bash 3.2.57 -- which is the shell that runs this script, on the laptop
+# that provisions seats. The first cut used `declare -A` and died with
+# "declare: -A: invalid option" the moment it was exercised. Indexed arrays are
+# bash 3.2 and portable.
+_STAGED_NAMES=()
+_STAGED_VALS=()
+
 stage_secret_from_env() {
   local secret_name="$1"
   local env_value="$2"
@@ -455,8 +595,44 @@ stage_secret_from_env() {
     log "WARN: ${secret_name} not set in operator env (${description}) — skipping stage"
     return 0
   fi
+
+  # SHAPE GATE (ss#2423). Every other custody check in this tree reads secret
+  # NAMES: secret_custody.py classifies ownership by name, and seat-readiness
+  # reports presence, which is all it CAN do since Fly returns names without
+  # values. The blind spot cost a paying client: an OAuth client secret sat in
+  # SMOKEBALL_PROD_API_KEY and 403'd A&P's connector twice, staging secret then
+  # prod secret, with every presence check green throughout.
+  #
+  # This is the only place the value exists. The check refuses values that
+  # CANNOT be right (wrong length and character class for the key family, or
+  # byte-identical to another secret staged this run) and stays silent on
+  # everything else, because a false refusal here blocks a seat from being
+  # built. It is not a validity check: a well-shaped key can still be revoked or
+  # for the wrong tenant.
+  #
+  # The value is piped in on stdin, never passed as an argv element, so it
+  # cannot surface in a process listing (ss#2218's lesson applied here).
+  # stdin is NUL-delimited name/value pairs: the candidate first, then every
+  # secret already staged this run. NUL because a secret may contain anything a
+  # line-based format would treat as a delimiter.
+  local _shape_err _i
+  if _shape_err="$(
+    {
+      printf '%s\0%s\0' "${secret_name}" "${env_value}"
+      for ((_i = 0; _i < ${#_STAGED_NAMES[@]}; _i++)); do
+        printf '%s\0%s\0' "${_STAGED_NAMES[_i]}" "${_STAGED_VALS[_i]}"
+      done
+    } | python3 "${BIN_DIR}/lib/stage_shape_gate.py"
+  )"; [ -n "${_shape_err}" ]; then
+    log "FATAL: refusing to stage a malformed credential"
+    log "  ${_shape_err}"
+    exit 1
+  fi
+
   printf '%s=%s\n' "${secret_name}" "${env_value}" \
     | fly secrets import --stage -a "${APP_NAME}" >/dev/null
+  _STAGED_NAMES+=("${secret_name}")
+  _STAGED_VALS+=("${env_value}")
   log "Staged ${secret_name} (value never logged)"
 }
 
@@ -550,19 +726,60 @@ fi
 #                             kill-test (vfy_01KZ1T07TGPKZ61M6KV97KMXQ6). One
 #                             key with two consumers in different projects is
 #                             the bug; the split name is the fix.
-#   MACHINE_HEARTBEAT_KEY   — single value shared across the fleet for
-#                             Wave 1. SAME key the Cloudflare Worker
-#                             receives; Wave 1's auth is "you know the
-#                             key + you carry an X-Tenant-Slug header."
-#                             Per-tenant upgrade path documented in
-#                             ADR 0023 §"Cross-cutting calls" #10.
+#   MACHINE_HEARTBEAT_KEY   — PER-SEAT bearer since migration 0114
+#                             (2026-09-10, the ADR 0023 §"Cross-cutting
+#                             calls" #10 upgrade). Minted below by
+#                             lib/machine_credential.py: the console stores
+#                             only HMAC-SHA256(salt, key) in
+#                             machine_credentials, this Machine holds the
+#                             plaintext, and the key verifies for THIS slug
+#                             only. A reprovision ROTATES: the previous key
+#                             stays valid 24h, so the D1 write landing before
+#                             the Fly secret never 401s the seat. Not sourced
+#                             from operator env any more; the fleet-wide
+#                             shared key is the Worker's fallback for seats
+#                             with no row, retired by unsetting it there.
 #
-# Missing either is non-fatal in dev (warn + skip); in prod the Machine's
-# Sentry init silently no-ops and heartbeat POSTs will 401 — both visible
-# as "no signal yet" on the admin dashboard, which is the empty-state we
-# want anyway.
+# A missing SENTRY_DSN_OPERATOR is non-fatal in dev (warn + skip); in prod the
+# Machine's Sentry init silently no-ops, visible as "no signal yet" on the
+# admin dashboard. The credential mint is NOT skippable: a seat staged with a
+# key the console cannot verify would 401 on every heartbeat, and the failure
+# would read as an outage rather than a provisioning defect.
 stage_secret_from_env SENTRY_DSN            "${SENTRY_DSN_OPERATOR:-}"   "smd-operator project DSN (from SENTRY_DSN_OPERATOR; never the console's SENTRY_DSN)"
-stage_secret_from_env MACHINE_HEARTBEAT_KEY "${MACHINE_HEARTBEAT_KEY:-}" "shared bearer for POST /api/internal/heartbeat"
+
+log "Minting the per-seat Machine credential for ${SLUG} (migration 0114)..."
+_MK_SQL="$(mktemp)"
+# The plaintext arrives on stdout and lives only in this variable: never argv,
+# never the SQL file, never a log line (ss#2218).
+if ! _MK_KEY="$(python3 "${BIN_DIR}/lib/machine_credential.py" --slug "${SLUG}" --sql-out "${_MK_SQL}")"; then
+  log "FATAL: could not mint the Machine credential (see stderr above)"
+  rm -f "${_MK_SQL}"
+  exit 1
+fi
+# stderr captured and reported, never discarded (#2286 lesson, same as the
+# fleet_status seed below).
+if _MK_ERR=$( cd "${REPO_ROOT}" && npx --quiet wrangler d1 execute ss-console-db --remote --file "${_MK_SQL}" 2>&1 >/dev/null ); then
+  rm -f "${_MK_SQL}"
+else
+  rm -f "${_MK_SQL}"
+  log "FATAL: machine_credentials upsert failed; refusing to stage a key the console cannot verify"
+  log "  wrangler stderr: ${_MK_ERR}"
+  exit 1
+fi
+# The upsert selects entity_id FROM customer_configs, so a slug the console has
+# not projected yet inserts nothing and the seat would 401 forever. Prove the
+# row exists before staging.
+_MK_COUNT=$( cd "${REPO_ROOT}" && npx --quiet wrangler d1 execute ss-console-db --remote --json \
+  --command "SELECT COUNT(*) AS n FROM machine_credentials WHERE customer_slug = '${SLUG}'" 2>/dev/null \
+  | python3 -c 'import json, sys; print(json.load(sys.stdin)[0]["results"][0]["n"])' 2>/dev/null || echo "?")
+if [ "${_MK_COUNT}" != "1" ]; then
+  log "FATAL: no machine_credentials row for ${SLUG} after the upsert (count=${_MK_COUNT})"
+  log "  The console has no customer_configs projection for this slug. Merge customer.yaml,"
+  log "  let ci-sync-customer-configs project it, then re-run provisioning."
+  exit 1
+fi
+stage_secret_from_env MACHINE_HEARTBEAT_KEY "${_MK_KEY}" "per-seat bearer for POST /api/internal/heartbeat (console holds only the hash)"
+unset _MK_KEY
 
 # OPERATOR_RUNTIME_READ_KEY — PER-CUSTOMER bearer for the console→Machine runtime
 # read endpoint (ADR 0043 path A). Unlike the shared heartbeat key, this is
@@ -652,8 +869,44 @@ stage_secret_from_env CLIO_TOKENS_ENC_B64    "${CLIO_TOKENS_ENC_B64:-}"    "base
 # overwrites a customer's own webhook secret with the global one and inbound email
 # silently stops verifying — the 2026-06-12 inbound failure, generalized to every
 # multi-customer AgentMail seat.
-if grep -qE 'adapter:[[:space:]]*agentmail|backend:[[:space:]]*mcp:agentmail' \
-    "${CUSTOMER_DIR}/customer.yaml" 2>/dev/null; then
+
+# ---------- authored-connector facts: parse once, comments are not authoring ----
+# Every channel gate below used to `grep -qE` the RAW customer.yaml, which reads
+# COMMENTS as config. That fired live on 2026-08-18: ashton-price authors no
+# agentmail connector, but its history comment contains the literal string
+# `adapter: agentmail`, so every reprovision re-staged the org-wide AgentMail
+# key onto a seat with no AgentMail channel — the exact credential shape behind
+# the ss#2258 incident, resurrected by prose. Parse the yaml once and let every
+# gate consume the DERIVED facts; a comment cannot reach them.
+#
+# The heredoc body stays free of apostrophes (macOS bash 3.2 heredoc-in-$()
+# hazard — see the manifest-loop note below).
+# >>> authored-channel-facts
+_AUTHORED_CHANNELS="$(
+  uv run --quiet --with pyyaml python3 - "${CUSTOMER_YAML}" <<'PY'
+import sys
+
+import yaml
+
+with open(sys.argv[1]) as f:
+    c = yaml.safe_load(f) or {}
+for conn in (c.get("connectors") or {}).values():
+    if not isinstance(conn, dict):
+        continue
+    for key in ("adapter", "backend", "webhook_url"):
+        value = str(conn.get(key) or "").strip()
+        if value:
+            print(f"{key}={value}")
+PY
+)"
+authored_channel() {
+  # authored_channel <ERE> — true iff a REAL connector field matches. Gates test
+  # this derived list, never the raw yaml.
+  printf '%s\n' "${_AUTHORED_CHANNELS}" | grep -qE "$1"
+}
+# <<< authored-channel-facts
+
+if authored_channel '^adapter=agentmail$|^backend=mcp:agentmail$'; then
   # PER-SEAT, and it has to be. Both keys are scoped to ONE inbox at the vendor
   # (ss#2258), so a single shared value is no longer merely untidy — staging one
   # seat's key onto another gives that seat a credential for a mailbox it does
@@ -693,8 +946,7 @@ fi
 # preferring the per-customer <NAME>__<CUSTOMER_ID> so a reprovision of one seat
 # never pulls another tenant's secret. The connector reads all four as env vars
 # (MSGRAPH_TENANT_ID / MSGRAPH_CLIENT_ID / MSGRAPH_CLIENT_SECRET / MSGRAPH_MAILBOX).
-if grep -qE 'adapter:[[:space:]]*msgraph|backend:[[:space:]]*mcp:msgraph-mail' \
-    "${CUSTOMER_DIR}/customer.yaml" 2>/dev/null; then
+if authored_channel '^adapter=msgraph$|^backend=mcp:msgraph-mail$'; then
   MSG_PARSE_PY="
 import yaml
 with open('${CUSTOMER_YAML}') as f:
@@ -809,7 +1061,7 @@ fi
 # bill is Anthropic" true). Staged ONLY for a customer whose customer.yaml binds a
 # native:brave-* backend. Missing at boot => the provider stays unavailable
 # (Hermes falls back / no web search), fail-closed, no crashloop.
-if grep -qE 'backend:[[:space:]]*.?native:brave' "${CUSTOMER_DIR}/customer.yaml" 2>/dev/null; then
+if authored_channel '^backend=native:brave'; then
   stage_secret_from_env BRAVE_SEARCH_API_KEY "${BRAVE_SEARCH_API_KEY:-}" "Brave Search API key (native brave-free provider; web search)"
 fi
 
@@ -845,7 +1097,7 @@ stage_secret_from_env GOOGLE_SERVICE_ACCOUNT_JSON "${GOOGLE_SERVICE_ACCOUNT_JSON
 # directly. A prod seat whose SMOKEBALL_PROD_* creds are not yet in the operator env
 # simply warns+skips → the connector is unwired this boot (boot-before-token), and
 # wires once the creds land.
-if grep -qE 'backend:[[:space:]]*mcp:smokeball' "${CUSTOMER_DIR}/customer.yaml" 2>/dev/null; then
+if authored_channel '^backend=mcp:smokeball$'; then
   SB_PARSE_PY="
 import yaml
 with open('${CUSTOMER_YAML}') as f:
@@ -883,6 +1135,12 @@ print(str(sb.get('account_id') or '').strip())
   stage_secret_from_env SMOKEBALL_CLIENT_ID     "${_sb_cid}" "Smokeball OAuth client id (from ${_sb_src}_CLIENT_ID)"
   stage_secret_from_env SMOKEBALL_CLIENT_SECRET "${_sb_sec}" "Smokeball OAuth client secret (from ${_sb_src}_CLIENT_SECRET)"
   stage_secret_from_env SMOKEBALL_API_KEY       "${_sb_key}" "Smokeball x-api-key per-request app key (from ${_sb_src}_API_KEY)"
+  # Scanned-document vision read (ss#2464) stages NOTHING here: the connector
+  # transcribes with the seat's OWN per-seat Anthropic workspace key, already
+  # staged above as ANTHROPIC_API_KEY (ADR 0062 §2 — per-customer workspaces are
+  # the cost-attribution and revocation boundary). The overlay registry delivers
+  # that same name into the connector subprocess. No second credential exists to
+  # stage, rotate, or forget.
   # Required per-seat — value is always present (default staging), never silently prod-as-staging.
   stage_secret_from_env SMOKEBALL_ENVIRONMENT   "${SB_ENV}"  "Smokeball host environment (staging|production)"
   # Optional per-seat. client_credentials is the connector default, so stage AUTH_MODE
@@ -917,7 +1175,7 @@ print(str(sb.get('account_id') or '').strip())
   #     ${_sb_cid}); a per-customer override exists only for the rare case the signing
   #     ClientId differs in byte form from the OAuth client id (confirm vs a real
   #     delivery). Without these the smokeball route fail-closes (gate 401).
-  if grep -qE 'webhook_url:.*/webhooks/smokeball' "${CUSTOMER_DIR}/customer.yaml" 2>/dev/null; then
+  if authored_channel '^webhook_url=.*/webhooks/smokeball$'; then
     _SB_WH_KEY="WEBHOOK_SECRET_SMOKEBALL__$(printf '%s' "${CUSTOMER_ID}" | tr '[:lower:]-' '[:upper:]_' | tr -cd 'A-Z0-9_')"
     _SB_WH_SECRET="${!_SB_WH_KEY:-${WEBHOOK_SECRET_SMOKEBALL:-}}"
     stage_secret_from_env WEBHOOK_SECRET_SMOKEBALL "${_SB_WH_SECRET}" "Smokeball webhook HMAC key == subscription key, raw bytes (per-customer ${_SB_WH_KEY}, else global)"
@@ -955,13 +1213,28 @@ import pathlib
 import sys
 import tomllib
 
-# Connectors whose operator-env credential NAMES differ from their runtime names
-# (a remap the flat loop cannot do) are staged by a dedicated block above; skip
-# them here so the loop does not warn that the runtime name is unset.
+# Connectors staged by a dedicated block above are SKIPPED here, for two
+# different reasons that end the same way:
+#   smokeball     the operator-env credential NAMES differ from the runtime
+#                 names (a remap this flat loop cannot do).
+#   msgraph-mail  the values are PER-CUSTOMER, sourced from msgraph_auth in
+#                 customer.yaml and the per-seat vault keys. This loop stages by
+#                 PLAIN NAME from the operator env, where /ss also carries
+#                 account-level MSGRAPH_CLIENT_ID / MSGRAPH_CLIENT_SECRET (the
+#                 smd-staging pair). Running msgraph-mail through the loop
+#                 OVERWROTE the correct per-customer staging with those globals
+#                 on the first client seat (ashton-price, 2026-08-18): the seat
+#                 booted with its own tenant + mailbox but the staging app id
+#                 and secret, and the poller 401ed (AADSTS7000229) every cycle.
+#                 The manifest itself says these four are per-customer; a flat
+#                 by-name loop structurally cannot honor that, so the dedicated
+#                 block is the only legal stager for this connector.
+# The loop must never stage a name whose value is per-customer. If a future
+# connector authors per-customer credentials, add it here in the same breath.
 # NOTE: keep this heredoc body free of apostrophes. macOS bash 3.2 mis-parses a
 # stray apostrophe inside a heredoc-in-command-substitution and consumes to EOF
 # (that aborted a reprovision on 2026-06-23).
-REMAP_HANDLED = {"smokeball"}
+REMAP_HANDLED = {"smokeball", "msgraph-mail"}
 root = pathlib.Path(sys.argv[1])
 for manifest in sorted(root.glob("*/manifest.toml")):
     if manifest.parent.name in REMAP_HANDLED:

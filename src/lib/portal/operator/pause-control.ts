@@ -155,14 +155,57 @@ export interface PauseEventRow {
  */
 export async function readPausePosture(db: D1Database, customerSlug: string): Promise<boolean> {
   try {
-    const row = await db
-      .prepare('SELECT sticky_stop_level FROM fleet_status WHERE customer_slug = ?')
-      .bind(customerSlug)
-      .first<{ sticky_stop_level: string | null }>()
-    return row?.sticky_stop_level === 'HARD_STOP'
+    const [mirror, latest] = await Promise.all([
+      db
+        .prepare('SELECT sticky_stop_level, updated_at FROM fleet_status WHERE customer_slug = ?')
+        .bind(customerSlug)
+        .first<{ sticky_stop_level: string | null; updated_at: string | null }>(),
+      db
+        .prepare(
+          'SELECT action, created_at FROM operator_pause_events WHERE customer_slug = ? ORDER BY created_at DESC LIMIT 1'
+        )
+        .bind(customerSlug)
+        .first<{ action: PauseAction; created_at: string }>(),
+    ])
+    return reconcilePausePosture(mirror, latest)
   } catch {
     return false
   }
+}
+
+/** SQLite `datetime('now')` text and ISO strings both parse; the former is UTC with no marker. */
+function parseDbTime(value: string): number {
+  const iso = value.includes('T') ? value : value.replace(' ', 'T')
+  return Date.parse(/[zZ]$|[+-]\d{2}:\d{2}$/.test(iso) ? iso : `${iso}Z`)
+}
+
+/**
+ * The posture the settings card renders, from the two sources that know it.
+ *
+ * `fleet_status.sticky_stop_level` is the Machine's word, but it arrives on
+ * the heartbeat cadence, so in the seconds after a portal pause/resume it
+ * still says the OLD level. The governance row in `operator_pause_events`
+ * is written only after the Machine acknowledged the change (pause.ts:
+ * Machine first, record second), so a pause event NEWER than the mirror's
+ * last beat is a fact the mirror has not caught up to yet. Rule: the newer
+ * of the two wins. Once the next heartbeat lands, the mirror is newer again
+ * and the Machine's own report takes over (#2206: the render right after a
+ * submit now matches the render a fresh load gives).
+ *
+ * Pure; unit-tested in isolation.
+ */
+export function reconcilePausePosture(
+  mirror: { sticky_stop_level: string | null; updated_at: string | null } | null,
+  latestEvent: { action: PauseAction; created_at: string } | null
+): boolean {
+  const mirrorPaused = mirror?.sticky_stop_level === 'HARD_STOP'
+  if (!latestEvent) return mirrorPaused
+  const eventPaused = latestEvent.action === 'pause'
+  if (!mirror?.updated_at) return eventPaused
+  const eventMs = parseDbTime(latestEvent.created_at)
+  const mirrorMs = parseDbTime(mirror.updated_at)
+  if (Number.isNaN(eventMs) || Number.isNaN(mirrorMs)) return mirrorPaused
+  return eventMs > mirrorMs ? eventPaused : mirrorPaused
 }
 
 /** Read the pause/resume history for one customer, newest first (audit union feed). */

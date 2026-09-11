@@ -30,6 +30,23 @@ provides two crane MCP tools for exactly this:
 Raw `infisical secrets set` from Bash is blocked for this reason; pasting a value into chat
 is prohibited.
 
+### Process-listing flags are exfiltration primitives on a seat
+
+`pgrep -a`, `pgrep -af`, `ps e`, and `ps auxe` print a process's command line or
+environment. On an Operator seat both carry live credentials, so these are never
+debugging conveniences there.
+
+`operator/bin/seat-probe.sh` reaches the seat by re-execing the probe as
+`runuser -- env ${ENVV} ...`, which puts the gateway's whole environment on the wrapper's
+own argv. That is by design and it is how the probe gets the credentials it needs. It also
+means the wrapper matches loose process patterns. On 2026-08-10 a probe ran
+`pgrep -af establish_intake`, matched its own wrapper, and printed
+`ANTHROPIC_API_KEY`, the Smokeball client id and secret, and more into a session transcript
+(ss#2218, P1).
+
+Match on a pattern that cannot match the wrapper, and print pids only. The script carries
+the same warning at the line where the env is assembled.
+
 ## Where secrets live
 
 | Store | Holds | Notes |

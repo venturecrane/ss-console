@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   createStripeInvoice,
-  getStripeInvoice,
+  finalizeStripeInvoice,
   sendStripeInvoice,
   voidStripeInvoice,
 } from './client'
@@ -168,7 +168,7 @@ describe('createStripeInvoice', () => {
         days_until_due: 3,
         collection_method: 'send_invoice',
         metadata: { invoice_id: 'inv-1', engagement_id: 'eng-1' },
-        payment_settings: { payment_method_types: ['ach_debit', 'card'] },
+        payment_settings: { payment_method_types: ['us_bank_account', 'card'] },
       })
     )
 
@@ -177,7 +177,24 @@ describe('createStripeInvoice', () => {
     expect(body.get('days_until_due')).toBe('3')
     expect(body.get('metadata[invoice_id]')).toBe('inv-1')
     expect(body.get('metadata[engagement_id]')).toBe('eng-1')
-    expect(body.getAll('payment_settings[payment_method_types][]')).toEqual(['ach_debit', 'card'])
+    expect(body.getAll('payment_settings[payment_method_types][]')).toEqual([
+      'us_bank_account',
+      'card',
+    ])
+  })
+
+  it('sends an exact due_date instead of days_until_due when one is given', async () => {
+    queue(
+      json({ data: [{ id: 'cus_1' }] }),
+      json({ id: 'in_7', hosted_invoice_url: null, status: 'draft' }),
+      json({ id: 'ii_1' })
+    )
+
+    await createStripeInvoice(KEY, baseParams({ due_date: 1789023599, days_until_due: 30 }))
+
+    const body = bodyParams(calls[1])
+    expect(body.get('due_date')).toBe('1789023599')
+    expect(body.get('days_until_due')).toBeNull()
   })
 
   it('posts one /invoiceitems request per line item with amount, currency, and description', async () => {
@@ -269,6 +286,40 @@ describe('createStripeInvoice', () => {
 // sendStripeInvoice
 // ---------------------------------------------------------------------------
 
+describe('finalizeStripeInvoice (present without email)', () => {
+  it('finalizes with auto_advance=false and never calls /send', async () => {
+    queue(json({ id: 'in_7', hosted_invoice_url: 'https://pay.stripe.com/final', status: 'open' }))
+
+    const result = await finalizeStripeInvoice(KEY, 'in_7')
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0].url).toBe(`${API}/invoices/in_7/finalize`)
+    expect(calls[0].init?.method).toBe('POST')
+    expect(headersOf(calls[0]).Authorization).toBe(`Bearer ${KEY}`)
+    // auto_advance=false is the whole point: Stripe emails a finalized
+    // send_invoice invoice automatically UNLESS automatic collection is off.
+    expect(bodyParams(calls[0]).get('auto_advance')).toBe('false')
+    expect(calls.some((c) => c.url.endsWith('/send'))).toBe(false)
+
+    expect(result).toEqual({
+      id: 'in_7',
+      hosted_invoice_url: 'https://pay.stripe.com/final',
+      status: 'open',
+    })
+  })
+
+  it('throws on finalize failure', async () => {
+    queue(json({ error: { message: 'nope' } }, 400))
+    await expect(finalizeStripeInvoice(KEY, 'in_8')).rejects.toThrow(/finalize failed 400/)
+  })
+
+  it('dev mode (no API key): returns an open stub without any network call', async () => {
+    const result = await finalizeStripeInvoice(undefined, 'in_9')
+    expect(calls).toHaveLength(0)
+    expect(result.status).toBe('open')
+  })
+})
+
 describe('sendStripeInvoice', () => {
   it('finalizes then sends, preferring the send response fields', async () => {
     queue(
@@ -325,7 +376,7 @@ describe('sendStripeInvoice', () => {
 })
 
 // ---------------------------------------------------------------------------
-// voidStripeInvoice / getStripeInvoice
+// voidStripeInvoice
 // ---------------------------------------------------------------------------
 
 describe('voidStripeInvoice', () => {
@@ -345,38 +396,5 @@ describe('voidStripeInvoice', () => {
   it('dev mode: no network call', async () => {
     await voidStripeInvoice(undefined, 'in_1')
     expect(calls).toHaveLength(0)
-  })
-})
-
-describe('getStripeInvoice', () => {
-  it('GETs the invoice and maps id, hosted url, and status', async () => {
-    queue(
-      json({
-        id: 'in_9',
-        object: 'invoice',
-        status: 'open',
-        hosted_invoice_url: 'https://pay.stripe.com/in_9',
-      })
-    )
-    const result = await getStripeInvoice(KEY, 'in_9')
-    expect(calls[0].url).toBe(`${API}/invoices/in_9`)
-    expect(calls[0].init?.method).toBe('GET')
-    expect(headersOf(calls[0]).Authorization).toBe(`Bearer ${KEY}`)
-    expect(result).toEqual({
-      id: 'in_9',
-      hosted_invoice_url: 'https://pay.stripe.com/in_9',
-      status: 'open',
-    })
-  })
-
-  it('throws on failure with the status code', async () => {
-    queue(json({ error: 'missing' }, 404))
-    await expect(getStripeInvoice(KEY, 'in_9')).rejects.toThrow(/Stripe invoice get failed 404/)
-  })
-
-  it('dev mode: returns a draft stub without any network call', async () => {
-    const result = await getStripeInvoice(undefined, 'in_dev')
-    expect(calls).toHaveLength(0)
-    expect(result).toEqual({ id: 'in_dev', hosted_invoice_url: '#dev-mode', status: 'draft' })
   })
 })

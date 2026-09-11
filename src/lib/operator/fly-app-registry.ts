@@ -6,7 +6,8 @@
  * is a cross-tenant action (setting a secret on the wrong Machine, or reading
  * the wrong Machine's runtime), so an unlisted customer is **rejected** rather
  * than guessed (ADR 0036). Graduates to a customer.yaml/D1 lookup as customers
- * are added (ADR 0012). customer-zero ("smd") → `hermes-smd`.
+ * are added (ADR 0012). The first entry was customer-zero ("smd") →
+ * `hermes-smd`, retired 2026-09-03.
  *
  * Both the OAuth token relay (`src/lib/oauth/store.ts`, ADR 0036) and the
  * console→Machine runtime read transport (`runtime-read-transport.ts`, ADR
@@ -38,7 +39,12 @@
  */
 
 const CUSTOMER_FLY_APPS: Readonly<Record<string, string>> = Object.freeze({
-  smd: 'hermes-smd',
+  // `smd` (customer-zero, `hermes-smd`) was retired 2026-09-03 by Captain
+  // directive: a June bring-up test with nothing running on it since 07-13,
+  // still billing as a started Machine and still holding the morning
+  // audit-chain run once stopped. Fly app, volume, D1 projection, R2 vault and
+  // the healthchecks ping are all gone; its customer.yaml stays in git history
+  // for when it is stood up again. See tests/customer-slug-pattern.test.ts.
   // Smokeball Operator seats (ADR 0053). pilot-smokeball = our own staging
   // rehearsal rig; ashton-price = the production pilot firm.
   'pilot-smokeball': 'hermes-pilot-smokeball',
@@ -60,21 +66,24 @@ const CUSTOMER_FLY_APPS: Readonly<Record<string, string>> = Object.freeze({
  *
  * `customer.yaml` cannot answer this question itself: it carries no lifecycle
  * field, deliberately ("a state field is a claim an agent can write, and a
- * claim an agent can write is one that rots" — `operator/customers/pilot-law/
+ * claim an agent can write is one that rots" — `operator/customers/<slug>/
  * customer.yaml`), and `seat.kind` does not separate provisioned from not
- * (pilot-law is `sandbox` and has no app; pilot-smokeball is `proving` and
+ * (pilot-law, retired 2026-08-25, was `sandbox` with no app; pilot-smokeball is `proving` and
  * does). So the decision is authored here and reviewed like any other code.
+ *
+ * @public Drift-guard surface, imported by tests/fly-app-registry-drift.test.ts. No runtime
+ * caller, by design: resolution goes through resolveCustomerFlyApp only.
  */
-export const UNPROVISIONED_CUSTOMERS: Readonly<Record<string, string>> = Object.freeze({
-  'pilot-law':
-    'Clio-sandbox law-wedge seat authored for ADR 0038 §6 but never stood up: no hermes-pilot-law Fly app exists and no customer_configs row was ever seeded. Register it when it is provisioned.',
-})
+export const UNPROVISIONED_CUSTOMERS: Readonly<Record<string, string>> = Object.freeze({})
 
 /**
  * The registry itself, for the drift guard in
  * `tests/fly-app-registry-drift.test.ts`. Runtime callers must go through
  * {@link resolveCustomerFlyApp} — it is the one place the fail-closed default
  * lives.
+ *
+ * @public Drift-guard surface, imported by tests/fly-app-registry-drift.test.ts. No runtime
+ * caller, by design: resolution goes through resolveCustomerFlyApp only.
  */
 export const REGISTERED_CUSTOMER_FLY_APPS: Readonly<Record<string, string>> = CUSTOMER_FLY_APPS
 

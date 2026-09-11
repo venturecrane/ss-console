@@ -139,8 +139,10 @@ The configuration file is long. Read it, then anchor on these regions by name
 and work from them: `personas:` (identity), `skills:` (the routine roster and
 each entry's `initiation:` and `enabled:`), `cron:` (the scheduled entries),
 `webhooks:` (the event routing), `routine_names:` (firm-legible names, if
-authored), `output_classes:` (which kinds of writing declare a voice), and
-`voice_cohorts:` (the authorized audience vocabulary).
+authored), `output_classes:` (which kinds of writing declare a voice),
+`voice_cohorts:` (the authorized audience vocabulary), and
+`self_initiation.document_library:` (whether a library location has been
+blessed, and the templates authored into it).
 
 **The reply prints the counts it read.** One line, every time, in both depths:
 how many skill entries, how many are enabled, how many scheduled entries, how
@@ -240,9 +242,26 @@ Translate the class slug into the firm's words where you can: `work_product` is
 "your work product", `staff` is "your staff-facing writing". For any slug you
 cannot translate, use the slug and say it is the internal name for that class.
 
-**Document library.** Say plainly that it is not established: "I haven't learned
-your document library. I don't have a record of the kinds of documents your firm
-produces or what your versions of them look like."
+**Document library.** Read from the configuration's
+`self_initiation.document_library:`, the same way voice status is read from the
+manifest. The blessing that establishes a library is recorded there by PR, so
+that block is the record of it; the folder living in the practice-management
+system is not something this reply claims to have looked at.
+
+- `matter_number:` present — "I've learned your document library. My templates
+  live on [the matter, by its number] in [the folder name]." If `templates:` is
+  authored, add how many and name the document classes they cover.
+- `matter_number:` absent — "I haven't learned your document library. I don't
+  have a record of the kinds of documents your firm produces or what your
+  versions of them look like." A `folder_name:` on its own is a proposed name,
+  not an established library, and must never be reported as one.
+
+**This sentence is not optional.** It appears in every introduction, in both
+states, whichever way the read came out. It was silently dropped from a live
+introduction on 2026-08-20 because it was the one establishment item with prose
+and no verification line behind it (ss#2489), while the reply's voice half —
+which has a read, a per-class rule, and a verification item — came through
+intact. The gap the firm cannot see is the one they most need named.
 
 **What to do about it.** Only point the reader at the fix if the fix is bound on
 this seat. If the configuration's `skills:` list carries a voice establishment
@@ -290,13 +309,13 @@ N routines: X on a schedule, Y that start when something happens, Z when you
 ask. Ask me to walk through them and I'll list every one with the state it's in.
 
 How I work:
-- [Send posture, from `working_rules.send_posture` — one sentence per outbound
+- [Send posture, from `working_rules.send_posture` | one sentence per outbound
   class, in the firm's words. Never a blanket review promise when the classes
   disagree, and never "I send nothing outward" when the reason is that no class
   is authored: that reads as freedom when it is a refusal.]
 - I read deadlines from your systems. I never calculate them myself.
 - [The identifier sentence, verbatim from `working_rules.identifier_gate.says`
-  — it differs between a seat that refuses and a seat running the gate in
+ | it differs between a seat that refuses and a seat running the gate in
   report mode.]
 - I don't give legal advice or opinions on the merits.
 
@@ -399,7 +418,9 @@ were the live one after `jobs.json` would not read; reconciling a
 config-versus-scheduler discrepancy into whichever layer reads better instead of
 reporting the disagreement; treating the specification directory's existence as
 proof a specification is installed; collapsing per-class voice status into a
-single "voice: established"; inventing a friendly name for a slug because the
+single "voice: established"; dropping the document-library sentence because the
+voice sentence already reported a gap and one gap felt like enough; reading a
+proposed `folder_name` as an established library; inventing a friendly name for a slug because the
 slug is ugly; paraphrasing a cron expression outside the three translatable
 shapes; letting `last_status` leak into a state line because it was right there
 in the same object; giving the full routine walkthrough to someone who asked for
@@ -420,9 +441,12 @@ introduction went well.
 5. Voice status is stated once per declared output class, each one keyed on a
    manifest entry that was read, and no class is described as established on any
    other basis.
-6. The reply contains no run-history claim, no forbidden phrasing, and no tenant
+6. Document library status is stated, in one sentence, keyed on whether
+   `self_initiation.document_library.matter_number` was read as present — never
+   omitted, and never reported as established on a `folder_name` alone.
+7. The reply contains no run-history claim, no forbidden phrasing, and no tenant
    identifier.
-7. The reader can state, from the reply alone, what this Operator will do
+8. The reader can state, from the reply alone, what this Operator will do
    tomorrow morning without opening anything.
 
 ## Related

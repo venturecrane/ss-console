@@ -7,12 +7,14 @@
 # built, tested, merged — and never wired into the live dispatch path on the
 # Machine. Tests pass because they exercise the function in isolation; nothing
 # proves it is invoked on a real turn. The motivating specimen:
-# `safety-substrate/sticky_stop.py` is complete and fully tested (cost cap,
-# tool-failure / refusal / time-budget circuit breakers) yet has ZERO callers in
-# ss-console and ZERO references in the overlay where dispatch runs. The circuit
-# breaker named in PRD §7.5 does not exist at runtime. ADR 0050 records the same
-# fact in its honesty banner ("There is no verified live cost circuit-breaker
-# (B3)").
+# `safety-substrate/sticky_stop.py` was complete and fully tested (cost cap,
+# tool-failure / refusal / time-budget circuit breakers) yet for two months had
+# ZERO callers in ss-console and ZERO references in the overlay where dispatch
+# runs; the circuit breaker named in PRD §7.5 did not exist at runtime. ADR 0062
+# then vendored it into the overlay as shared/sticky_stop.py and wired the cost
+# arm through shared/cost_breaker.py (see sticky_stop_cost_cap below). Since
+# 2026-09-10 the two copies are a tracked pair in overlay-pairs.json, so the
+# ss-console file can no longer drift silently from what seats run.
 #
 # WHAT THIS REGISTRY GUARANTEES (the "wires-nothing" subset). It does NOT wire
 # any control. It makes a control's live status EXPLICIT and OWNED, and — via
@@ -25,13 +27,25 @@
 #   * well-formedness: `enforced` ⇒ names a live_probe + wired_via; `unprobed`
 #     and `inert` ⇒ carry owner + tracking + note (cannot rot undocumented).
 #
-# WHAT IS DEFERRED. The live negative-fire PROBE suite (boot-time / staging
-# "exceeding the caps actually halts") is Component 3 of the harness design and
-# overlaps ADR 0050 **B3** ("Confirm sticky-stop is live in the dispatch path …
-# verify on staging that exceeding the caps actually halts"). Per Captain
-# decision 2026-06-18 it folds into B3's mandated design review, NOT this change.
-# `live_probe` / `probe_surface` fields are recorded here so the registry is the
-# shared spec that review navigates by; the probe MECHANISM is not built here.
+# COMPONENT 3 NOW EXISTS (ss#2387, 2026-08-17), and this paragraph replaces the
+# deferral that stood here. The negative-fire probe suite is
+# operator/bin/control-probes.py, and its per-control specs are the sibling file
+# operator/contracts/runtime-control-probes.yaml. Every probe name this registry
+# cites (`live_probe`, `candidate_probe`) must resolve to an entry there, which
+# is what stops a status from resting on a string.
+#
+# The suite STILL WIRES NOTHING, which is why an inert row stays inert: its probe
+# asks whether anything on a dispatch path calls the arm, gets no, and records
+# EXPECTED_FAIL. That is the honest reading of a control nobody calls, not a hole
+# in the probe. The reverse is a finding: an inert row whose probe FIRES means
+# this registry is wrong and the run goes red.
+#
+# WHAT IS STILL DEFERRED. Local probes run against the in-repo substrate and
+# prove the substrate refuses; they cannot prove the live dispatch path invokes
+# it. Every overlay-resident control is therefore probed only by a `seat` entry,
+# and no seat driver is authored yet, so those probes HOLD (loud, exit 2) rather
+# than reporting a status nobody measured. Authoring the drivers is the remaining
+# half of ADR 0050 B3, and no status below moves on the strength of this file.
 #
 # RELATIONSHIP TO ADR 0050. ADR 0050 locks the task-execution taxonomy (7
 # archetypes; execution classes N/C/R/D/A/O; the cross-cutting safety guard).
@@ -77,9 +91,18 @@
 #                          way this registry exists to expose.
 #                      Empty ONLY for a root-side process outside dispatch entirely
 #                      (see spec_applier), which has neither.
-#   live_probe       — name of the negative-fire probe that proves it fires.
-#                      Recorded for the B3 review; the probe itself is not built
-#                      here. Empty for unprobed/inert.
+#   live_probe       — name of the negative-fire probe that PROVES it fires; must
+#                      resolve to an entry in runtime-control-probes.yaml. Empty
+#                      for unprobed/inert.
+#   candidate_probe  — for unprobed/inert ONLY: the probe authored for this
+#                      control that has not yet come back green. Deliberately a
+#                      different field from live_probe, because naming a probe
+#                      must never be mistakable for having passed one. Also
+#                      resolves against runtime-control-probes.yaml.
+#   risk_review      — for unprobed/inert ONLY: a dated, Captain-visible sentence
+#                      on what is unproven and what it would cost. Dated because
+#                      an undated risk note is indistinguishable from one nobody
+#                      has looked at since it was written.
 #   probe_surface    — staging | prod-boot. Where the probe is permitted to run.
 #                      prod-boot is EARNED (a probe earns os._exit boot-gate
 #                      privilege only after a staging flakiness bar). Empty for
@@ -138,6 +161,12 @@ controls:
     status: unprobed
     owner: SMDurgan
     tracking: ADR-0050:B3
+    candidate_probe: seat_inbound_boundary_withholds
+    risk_review: >-
+      2026-08-17 (ss#2387): probe authored, driver NOT authored, so it holds. The
+      exposure while it holds is that an inbound payload from an unverified
+      sender could reach the autonomous path and nothing would say so until a
+      client noticed the reply. Owner SMDurgan, tracked at ADR-0050:B3.
     note: >-
       Safety-critical hook (routes inbound webhook payloads + applies the inbound
       trust boundary, ADR 0027/0032). It IS registered, but no negative-fire probe
@@ -155,6 +184,14 @@ controls:
     status: unprobed
     owner: SMDurgan
     tracking: '#2079'
+    candidate_probe: seat_voice_gate_downgrades
+    risk_review: >-
+      2026-08-17 (ss#2387): probe authored, driver NOT authored, so it holds. The
+      gate is fail-closed today, so the live exposure is the opposite of unsafe:
+      every autonomous outside send is downgrading to draft for a reason nobody
+      chose, and no probe would tell us the day that stops. ADR 0083 repoints it,
+      and a driver authored against mechanism B would have to be rewritten with
+      that change. Owner SMDurgan, tracked at #2079.
     note: >-
       ADR 0028's outbound voice gate. Registered here BEFORE it is rewritten,
       because its absence from this registry was itself an instance of the class
@@ -190,6 +227,13 @@ controls:
     status: unprobed
     owner: SMDurgan
     tracking: '#2084'
+    candidate_probe: seat_spec_applier_refuses_bad_hash
+    risk_review: >-
+      2026-08-17 (ss#2387): probe authored, driver NOT authored, so it holds.
+      Note the probe shape this control needs is fail-STATIC, not fail-closed:
+      the pass condition includes that the previously installed tree keeps
+      serving, so a refusal-only driver would miss half of it. Owner SMDurgan,
+      tracked at #2084.
     note: >-
       ss ADR 0083. Pulls the portal-written vaults/<slug>/output-classes.json,
       verifies each body against its declared sha256, and installs a root-owned
@@ -361,6 +405,13 @@ controls:
     status: unprobed
     owner: SMDurgan
     tracking: ADR-0050:B0
+    candidate_probe: seat_taint_blocks_autonomous_send
+    risk_review: >-
+      2026-08-17 (ss#2387): probe authored, driver NOT authored, so it holds. The
+      verified hole (untrusted content read through the code-execution channel)
+      is closed in code and unproven at runtime; the residual delegate_task
+      result-laundering path is not covered by the authored probe at all and
+      needs design before it can be. Owner SMDurgan, tracked at ADR-0050:B0.
     note: >-
       Sticky SessionTaint gate (an untrusted-fed turn cannot autonomously
       send/destroy/exec). ADR 0050 B0's MAIN bypass is now CLOSED + LIVE: the
@@ -377,11 +428,12 @@ controls:
       code but no negative-fire probe proves the taint blocks on a real turn —
       that probe is Component 3, folded into the B3 review.
 
-  # ---- inert: NOT wired into dispatch at all (the motivating class) ----
-  # All four arms live in safety-substrate/sticky_stop.py: complete, fully
-  # tested, ZERO callers in ss-console, ZERO references in the overlay. One
-  # wiring effort (ADR 0050 B3) wires the StickyStopError-raising dispatch
-  # integration that covers every arm.
+  # ---- the sticky-stop arms (the motivating class, now partly wired) ----
+  # All four arms live in safety-substrate/sticky_stop.py, vendored into the
+  # overlay as shared/sticky_stop.py (a tracked pair in overlay-pairs.json since
+  # 2026-09-10). The cost arm is enforced through shared/cost_breaker.py; the
+  # tool-failure and refusal arms are unprobed; the time-budget arm is inert.
+  # Nothing in ss-console calls the module; the overlay is where it runs.
   sticky_stop_cost_cap:
     control: sticky_stop_cost_cap
     class: circuit-breaker
@@ -418,20 +470,43 @@ controls:
       c85b0ddb (ss#1719) and booted healthy through the probe twice (deploy +
       restart, VERSION 128, 1/1 checks). Also manually trip-proven end to end on
       prod smd 2026-07-04 (#1701): meter -> WARN -> SOFT_STOP -> HARD_STOP ->
-      gate 503 -> fleet dot red -> Captain clear -> recovery.
+      gate 503 -> fleet dot red -> Captain clear -> recovery. (That trip record
+      is left as it was witnessed. Anyone reproducing it today sees two rungs,
+      not four: 2026-09-02 collapsed the ladder to OK and HARD_STOP, because
+      WARN and SOFT_STOP restricted nothing and only named a cause. The
+      meter -> stop -> 503 -> red dot -> clear -> recovery path is unchanged.)
 
   sticky_stop_tool_failure:
     control: sticky_stop_tool_failure
     class: circuit-breaker
     substrate_module: safety-substrate/sticky_stop.py
-    wired_via: ''
+    wired_via: 'post_tool_call / hermes-smd-audit'
     live_probe: ''
     probe_surface: ''
-    status: inert
+    status: unprobed
     owner: SMDurgan
     tracking: ADR-0050:B3
+    candidate_probe: tool_failure_arm_has_no_dispatch_caller
+    risk_review: >-
+      2026-08-25: inert -> UNPROBED. The arm IS fed as of overlay 99c62699
+      (overlay#319), which is the ref this repo pins, so `inert` had stopped being
+      true — it said the control does not fire while the control fires on every
+      seat provisioned from the pin. Nothing automated caught that: the candidate
+      probe's caller search is ss-console-only and its own `limits` field says an
+      overlay-side wiring "flips the registry row, not this probe."
+      NOT `enforced`, because no probe observes it firing on a seat. A per-boot
+      self-check was built for exactly that and abandoned the same day after three
+      broken lookups, a wrong harm tier, and a 29-minute crash-loop of
+      hermes-smd-staging; the branches are overlay#320/#321/#322/#325 if it is ever
+      picked up again. Exposure now: a seat provisioned from the pin HAS the brake
+      (proven on staging, vfy_01M0WNVF6KDHP8YW2EJGYEMKMY); a seat on an older ref
+      does not, and as of today that is both client seats — hermes-ashton-price on
+      f16d4920 and hermes-smd on 0f84a625, each verified absent with a positive
+      control. Owner SMDurgan, tracked at ADR-0050:B3.
     note: >-
-      record_tool_failure() consecutive-failure ladder (WARN/SOFT_STOP/HARD_STOP).
+      record_tool_failure() consecutive-failure meter: 8 consecutive failures ->
+      HARD_STOP (two states since 2026-09-02; the WARN and SOFT_STOP rungs it
+      used to pass through restricted nothing and were removed).
       Built + tested; no dispatch caller. Wired by B3 (StickyStopError integration
       covers all sticky_stop arms).
 
@@ -439,15 +514,24 @@ controls:
     control: sticky_stop_refusal_cascade
     class: circuit-breaker
     substrate_module: safety-substrate/sticky_stop.py
-    wired_via: ''
+    wired_via: 'post_tool_call / hermes-smd-audit'
     live_probe: ''
     probe_surface: ''
-    status: inert
+    status: unprobed
     owner: SMDurgan
     tracking: ADR-0050:B3
+    candidate_probe: refusal_cascade_arm_has_no_dispatch_caller
+    risk_review: >-
+      2026-08-25: inert -> UNPROBED, same reasoning as sticky_stop_tool_failure.
+      Fed from post_tool_call as of overlay 99c62699 (overlay#319) when a trust
+      refusal arrives as status=blocked / error_type=plugin_block; no probe
+      observes it firing on a seat, so not `enforced`. Worth keeping from the
+      2026-08-17 entry: the first version of the candidate probe reported a caller
+      in safety-substrate/refusal.py and was wrong — it had grepped a docstring
+      sentence. Owner SMDurgan, tracked at ADR-0050:B3.
     note: >-
-      record_refusal() refusal-cascade ladder. Built + tested; no dispatch caller.
-      Wired by B3.
+      record_refusal() refusal-cascade ladder. Fed from post_tool_call in
+      hermes-smd-audit as of overlay#319; unprobed on any seat.
 
   sticky_stop_time_budget:
     control: sticky_stop_time_budget
@@ -459,9 +543,22 @@ controls:
     status: inert
     owner: SMDurgan
     tracking: ADR-0050:B3
+    candidate_probe: time_budget_arm_has_no_dispatch_caller
+    risk_review: >-
+      2026-08-17 (ss#2387): probed as inert, EXPECTED_FAIL. Exposure unchanged: a
+      single run has no wall-clock brake, and the only backstop is the cost cap,
+      which is a different question asked slowly. Owner SMDurgan, tracked at
+      ADR-0050:B3.
     note: >-
-      record_runtime_seconds() 3600s wall-clock single-run cap → SOFT_STOP. Built
-      + tested; no dispatch caller. Wired by B3.
+      record_runtime_seconds() 3600s wall-clock single-run cap. Built + tested;
+      no dispatch caller. Wired by B3. Since the 2026-09-02 two-state collapse
+      this arm RECORDS the overrun and changes no level: SOFT_STOP was its only
+      outcome and SOFT_STOP restricted nothing, so promoting it to HARD_STOP
+      would be a new brake that can halt a client mid-run — a deliberate call,
+      not a side effect of deleting two unused words. The audit row still lands
+      (observation=True), and it is the evidence any decision to enforce the
+      budget would rest on. The risk_review above is unchanged by this: a single
+      run still has no wall-clock brake.
 
   operator_pause:
     control: operator_pause
@@ -499,6 +596,61 @@ controls:
       real plugin + real state db) and has no live exercise yet precisely
       because no live wake path survives to reach it.
 
+  read_volume_gate:
+    control: read_volume_gate
+    class: dispatch-guard
+    # Overlay-resident (born there, no vendored twin): register + fence live in
+    # hermes-smd-overlay (shared/read_volume.py, fence in trust enforce).
+    substrate_module: 'overlay:shared/read_volume.py'
+    wired_via: 'pre_tool_call / hermes-smd-trust'
+    live_probe: seat_review_suspends_past_threshold
+    probe_surface: staging
+    status: enforced
+    owner: SMDurgan
+    tracking: 'https://github.com/venturecrane/engagements/pull/92'
+    risk_review: >-
+      2026-08-28 night (overlay#327..#331 / ss#2622..#2626): ENFORCED, proven
+      by live rehearsal on pilot-smokeball at overlay 29eac2c7. OVER
+      (vfy_01M15KHR2XVQB6S57W33D2AVZF): crossing at exactly threshold, 5
+      further reads refused in code with observed-numbers directive, refusals
+      never accumulate, model delivered the surface note. UNDER
+      (vfy_01M15KTZFHKMYTJD16DGJ9TTB2): marked review below threshold
+      completed with zero gate rows (discriminating against a dead gate).
+      REPORT (vfy_01M15QGMS4YPHKK0KWSBP2GK4K): proceeds unblocked past
+      crossings; KNOWN GAP overlay#332 - the report audit row is overwritten
+      by the allow-path record (behavior correct, trace journal still shows
+      crossings; fix rides the next pin). Rehearsal surfaced and fixed three
+      live wiring defects no unit test could reach: skill_view marker (#328),
+      nested-JSON envelope (#329), inbound-fence unwrap under the v0.20.4
+      inverted hook order (#331, diagnosed in one turn by the #330 trace
+      journal). A&P seat still runs pre-gate pin 349d86b3-era code: the gate
+      reaches A&P at its NEXT reprovision (deferred to Sept 1+ - boot smoke
+      needs the capped SMD org key; the gate is dormant there regardless: no
+      webhook route to the review skill is authored and every routine is off;
+      the 250-page threshold value is already live via config applier).
+    note: >-
+      Agreement §2.8 routine 5 (overlay#327, 2026-08-28): meters pages of
+      documents read in the course of an opposing-response review and refuses
+      the crossing read past the client-authored
+      settings.review_threshold_pages (A&P: 250, engagements PR #92; census
+      basis vfy_01M14QV1CP6DAJ78XHY881S63G). Review sessions are marked by the
+      webhook route to the skill or by the session reading the skill's
+      SKILL.md (the matter-inbox-router spine path). Unauthored threshold =
+      inert; config unreadable = inert + warn (billing-scope contract term,
+      not a safety floor). DECIDED v1 posture, recorded here on purpose:
+      per-session in-memory accumulation — a seat restart or webhook
+      redelivery grants a fresh budget; compensating controls are the webhook
+      throttle, one audit row per crossing (reason READ_VOLUME_GATE), and
+      §2.7 usage monitoring; the named follow-up if retries show up is an
+      SQLite accumulator keyed (matter, window) beside the sticky-stop store.
+      Rollback runbook: `fly secrets set SMD_READ_VOLUME_GATE_MODE=off -a
+      hermes-<slug>` + restart (report also available; unset or garbage =
+      block); config-side, deleting the settings key goes inert on the next
+      live read, no restart. Flip to enforced only with rehearsal vfy ids:
+      over-set suspends + surfaces with observed numbers, under-set completes,
+      unauthored proceeds, report records exactly once, spine path gates.
+      Rehearsal currently BLOCKED by the org API spend pause (until Sept 1 or
+      a tier raise).
   entitlement_dial:
     control: entitlement_dial
     class: dispatch-guard
@@ -511,6 +663,13 @@ controls:
     status: unprobed
     owner: SMDurgan
     tracking: '#2003'
+    candidate_probe: seat_entitlement_lowered_downgrades
+    risk_review: >-
+      2026-08-17 (ss#2387): probe authored, driver NOT authored, so it holds.
+      This is the one on the list a client touches directly: a Named
+      Administrator lowering a routine's level has no proof the next execution
+      obeys it, and the promotion path in the note below is still the only route
+      to enforced. Owner SMDurgan, tracked at #2003.
     note: >-
       Portal entitlement dial (ss#2003 Q7, agreement §2.4-2.5): Named
       Administrator changes a routine's tier in the portal -> console compiles
@@ -529,3 +688,108 @@ controls:
       ids. The write-clamp arm (409 on an above-ceiling set) and read-clamp
       arm are pinned by overlay tests (test_exposure_override.py) pending the
       live exercise.
+
+  # ---- routine 11 chronology package: the runner's gates ARE the content ----
+  # control (ADR 0087, ss#2611). The package is built by the SMD runner and
+  # filed through the connector out of band of any agent turn, so the trust
+  # plugin's draft gates never see it. These four gates ran on every package
+  # delivered in August 2026 from the Captain's laptop, unregistered; the rows
+  # exist so that fact is on paper. Code lives in the PRIVATE engagements repo
+  # beside the pipeline it audits; the driver lands on the firm's Machine in
+  # ss#2614, and the probes HOLD until then.
+  medchron_claim_audit:
+    control: medchron_claim_audit
+    class: dispatch-guard
+    substrate_module: runners/medchron/medchron/gates/claim_audit.py
+    wired_via: 'runner / runners/medchron/medchron/gates/claim_audit.py'
+    live_probe: runner_claim_audit_refuses_unsupported_claim
+    probe_surface: prod-boot
+    status: enforced
+    owner: SMDurgan
+    tracking: '#2611'
+    risk_review: >-
+      2026-08-31 (ss#2614 slice 5): the planted violation was refused by the
+      installed package on the live seat (hermes-ashton-price, image at main
+      6b6d9b8a): vfy_01M1CAMC273NV2F07PCKX3B2KB. The same probe now runs in boot smoke step 14b on
+      every provision, so the row's status is re-earned per deploy.
+    note: >-
+      Every dated claim in the chronology document is checked against a
+      rendering of the page it cites (audit_citations.py, image mode, full
+      coverage, never sampled); unsupported claims are repaired or dropped by
+      audit_repair_loop.py and the document is not delivered while a claim is
+      unresolved past the repair cap. Registered `unprobed` because the code is
+      real and ran, and `enforced` requires a driver that plants an unsupported
+      claim and observes the refusal (ss#2614). Target home once the audit
+      moves in-process (ss#2613 PR 7): runners/medchron/medchron/gates/claim_audit.py;
+      the row repoints in the PR that creates that file, never before.
+
+  medchron_extractive_gate:
+    control: medchron_extractive_gate
+    class: dispatch-guard
+    substrate_module: runners/medchron/medchron/gates/extractive.py
+    wired_via: 'runner / runners/medchron/medchron/gates/extractive.py'
+    live_probe: runner_extractive_gate_refuses_characterization
+    probe_surface: prod-boot
+    status: enforced
+    owner: SMDurgan
+    tracking: '#2611'
+    risk_review: >-
+      2026-08-31 (ss#2614 slice 5): the planted violation was refused by the
+      installed package on the live seat (hermes-ashton-price, image at main
+      6b6d9b8a): vfy_01M1CAME158FRJF0EXK3Q1RGQ4. The same probe now runs in boot smoke step 14b on
+      every provision, so the row's status is re-earned per deploy.
+    note: >-
+      The package carries no causation, severity, or valuation language as the
+      runner's own finding and no totals; charges appear exactly as the source
+      states them, cited (prompts/map-system.md floor; strip_nonrecord.py
+      removes vendor order forms, request letters, and vendor AI summaries
+      from the exhibits). Promotion requires a driver that plants a valuation
+      sentence and observes the sweep refuse it. Target home (ss#2613 PR 9):
+      runners/medchron/medchron/gates/extractive.py; repointed in that PR.
+
+  medchron_cross_client_gate:
+    control: medchron_cross_client_gate
+    class: dispatch-guard
+    substrate_module: runners/medchron/medchron/gates/cross_client.py
+    wired_via: 'runner / runners/medchron/medchron/gates/cross_client.py'
+    live_probe: runner_cross_client_gate_refuses_foreign_page
+    probe_surface: prod-boot
+    status: enforced
+    owner: SMDurgan
+    tracking: '#2611'
+    risk_review: >-
+      2026-08-31 (ss#2614 slice 5): the planted violation was refused by the
+      installed package on the live seat (hermes-ashton-price, image at main
+      6b6d9b8a): vfy_01M1CAMGPWRPFYVM429NTFP2XE. The same probe now runs in boot smoke step 14b on
+      every provision, so the row's status is re-earned per deploy.
+    note: >-
+      Per-unit identity check (the text says whose record it is: surname and
+      DOB counts against every unit on the matter) and per-unit billing
+      quarantine; a record that names another client and not the unit's own
+      is moved and disclosed in the document's limitations section. Promotion
+      requires a driver that plants a foreign page in a unit and observes the
+      quarantine. Target home (ss#2613 PR 9):
+      runners/medchron/medchron/gates/cross_client.py; repointed in that PR.
+
+  medchron_provenance_gate:
+    control: medchron_provenance_gate
+    class: dispatch-guard
+    substrate_module: runners/medchron/medchron/gates/provenance.py
+    wired_via: 'runner / runners/medchron/medchron/gates/provenance.py'
+    live_probe: runner_provenance_gate_halts_unexplained_file
+    probe_surface: prod-boot
+    status: enforced
+    owner: SMDurgan
+    tracking: '#2611'
+    risk_review: >-
+      2026-08-31 (ss#2614 slice 5): the planted violation was refused by the
+      installed package on the live seat (hermes-ashton-price, image at main
+      6b6d9b8a): vfy_01M1CAMM8X83SEE6HF016WD43X. The same probe now runs in boot smoke step 14b on
+      every provision, so the row's status is re-earned per deploy.
+    note: >-
+      Every file the package pulled is owned by a unit, byte-duplicate,
+      name-excluded, or an explained orphan; an unexplained residue halts
+      delivery and the document's records-reviewed section names exclusions.
+      Promotion requires a driver that plants an unowned record and observes
+      the halt. Target home (ss#2613 PR 9):
+      runners/medchron/medchron/gates/provenance.py; repointed in that PR.

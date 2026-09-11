@@ -35,6 +35,15 @@ compute or approve, a disbursement request to handle, a disputed amount, a payof
 stalling near settlement). It never proposes the reduction figure and never implies
 the skill computed one.
 
+## Salutation and signature (payoff chase only)
+
+The outbound payoff chase follows the shared "Salutation and signature" section
+(`_shared-chase-voice.md`): salutation down the ladder (named contact from the
+lien or request record, then role-addressed at the holder, then none), closing
+with "Thank you." plus the authored firm name (`customer_name`, or the persona
+`signature:` override). Authored data only. The internal note to the attorney
+carries no signature block.
+
 ## Hard rules (both)
 
 - No em dashes.
@@ -55,7 +64,10 @@ the skill computed one.
 > Hi <name>, following up on the lien payoff for <patient> on the <matter> settlement.
 > We show the final payoff figure still outstanding on our end. Could you confirm the
 > current figure, or an expected date for it? Happy to resend the lien-resolution
-> authorization if that helps. Thank you.
+> authorization if that helps.
+>
+> Thank you.
+> <firm name from customer_name>
 
 **Good - internal note to the attorney:**
 

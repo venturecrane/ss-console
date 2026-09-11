@@ -27,7 +27,6 @@ import { env } from 'cloudflare:workers'
 
 import type { OAuthProvider, ProviderTokenResponse } from '../providers.js'
 
-const MS_GRAPH_AUTHORIZE_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize'
 const MS_GRAPH_TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/token'
 
 /**
@@ -83,38 +82,6 @@ async function postFormForToken(
 }
 
 /**
- * Build the Microsoft Entra authorize URL for a customer's initial
- * consent flow. The `state` parameter MUST be the signed token from
- * `src/lib/oauth/state.ts` so the callback verifies provenance.
- */
-export function buildMicrosoftGraphAuthorizeUrl(args: {
-  client_id: string
-  redirect_uri: string
-  state: string
-  login_hint?: string
-  scopes?: readonly string[]
-}): string {
-  if (!args.client_id) throw new Error('client_id is required')
-  if (!args.redirect_uri) throw new Error('redirect_uri is required')
-  if (!args.state) throw new Error('state is required')
-  const scopes = args.scopes ?? MS_GRAPH_PHASE_1_SCOPES
-  // Defense-in-depth: refuse to emit a URL that requests Mail.Send.
-  if (scopes.some((s) => s.toLowerCase() === 'mail.send')) {
-    throw new Error('Mail.Send is a wave-2 scope (issue #881); refusing to emit authorize URL')
-  }
-  const params = new URLSearchParams({
-    client_id: args.client_id,
-    response_type: 'code',
-    redirect_uri: args.redirect_uri,
-    response_mode: 'query',
-    scope: scopes.join(' '),
-    state: args.state,
-  })
-  if (args.login_hint) params.set('login_hint', args.login_hint)
-  return `${MS_GRAPH_AUTHORIZE_URL}?${params.toString()}`
-}
-
-/**
  * Provider registry entry. Plugs into the registry in
  * `src/lib/oauth/providers.ts`. The callback handler reads
  * `client_id` / `client_secret` from Workers env at exchange time;
@@ -146,4 +113,4 @@ export const microsoftGraphProvider: OAuthProvider = {
   },
 }
 
-export { MS_GRAPH_AUTHORIZE_URL, MS_GRAPH_TOKEN_URL }
+export { MS_GRAPH_TOKEN_URL }

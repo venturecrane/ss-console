@@ -181,6 +181,19 @@ describe('invoices: portal detail view', () => {
     expect(code).toContain('getInvoiceForEntity')
     expect(code).toContain('listLineItemsForInvoice')
   })
+
+  it('carries no "Payment details" section (removed 2026-09-09)', () => {
+    // The section restated the due date already in the header and caption,
+    // and described Stripe's payment methods on SMD's own page. Captain
+    // direction: the page is the line items, the total, and the Pay card.
+    const code = source()
+    expect(code).not.toContain('Payment details')
+    expect(code).not.toContain('InvoicePaymentDetails')
+    expect(code).not.toContain('Card or bank transfer')
+    expect(existsSync(resolve('src/components/portal/InvoicePaymentDetails.astro'))).toBe(false)
+    const preview = readFileSync(resolve('src/components/portal/InvoiceDetail.astro'), 'utf-8')
+    expect(preview).not.toContain('Payment details')
+  })
 })
 
 describe('invoices: admin API routes', () => {
@@ -203,8 +216,8 @@ describe('invoices: admin API routes', () => {
       expect(source()).toContain('requireAdminSession')
     })
 
-    it('validates invoice type', () => {
-      expect(source()).toContain('VALID_TYPES')
+    it('validates invoice type against the shared vocabulary', () => {
+      expect(source()).toContain('isInvoiceType')
     })
 
     it('validates amount is positive', () => {
@@ -239,6 +252,40 @@ describe('invoices: admin API routes', () => {
       expect(code).toContain("action === 'void'")
       expect(code).toContain('voidStripeInvoice')
       expect(code).toContain('updateInvoiceStatus')
+    })
+
+    it('restricts ACH invoices to us_bank_account, never the legacy ach_debit type', () => {
+      // ach_debit is Stripe's Sources-era ACH: it only charges a bank account
+      // already verified on the customer and the hosted invoice page collects
+      // nothing for it. On 2026-09-09 the A&P implementation invoice rendered
+      // with no way to pay because of it. us_bank_account collects and
+      // verifies the bank account on the page (what the subscription checkout
+      // already uses in src/lib/stripe/subscriptions.ts).
+      const files = [
+        'src/pages/api/admin/invoices/[id].ts',
+        'src/lib/db/milestones.ts',
+        'src/lib/stripe/client.ts',
+      ]
+      for (const file of files) {
+        const code = readFileSync(resolve(file), 'utf-8')
+        expect(code, file).not.toContain("'ach_debit'")
+      }
+      expect(source()).toContain("['us_bank_account']")
+    })
+
+    it('handles reschedule action — re-issues in Stripe before voiding the original', () => {
+      const code = source()
+      expect(code).toContain("action === 'reschedule'")
+      expect(code).toContain('dueDateToStripeTimestamp')
+      // Replacement first, row repointed second, original voided last, so the
+      // row never references a voided invoice with nothing payable behind it.
+      const create = code.indexOf('createStripeInvoice(env.STRIPE_API_KEY, params)')
+      const repoint = code.indexOf('stripe_invoice_id: created.id')
+      const voidOld = code.indexOf('voidStripeInvoice(env.STRIPE_API_KEY, previousStripeId)')
+      expect(create).toBeGreaterThan(-1)
+      expect(repoint).toBeGreaterThan(create)
+      expect(voidOld).toBeGreaterThan(repoint)
+      expect(code).toContain('error=stale_stripe_invoice')
     })
 
     it('handles mark_paid action — manual override for offline payments', () => {

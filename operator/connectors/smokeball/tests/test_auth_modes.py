@@ -64,9 +64,7 @@ def test_client_credentials_mint_body_is_unchanged() -> None:
 
 def test_authorization_code_mints_via_refresh_token() -> None:
     captured: list[httpx.Request] = []
-    client = _mock_client(
-        _token_handler(captured), auth_mode="authorization_code", refresh_token="rt-123"
-    )
+    client = _mock_client(_token_handler(captured), auth_mode="authorization_code", refresh_token="rt-123")
     client.auth_status()
     token_req = next(r for r in captured if r.url.path.endswith("/oauth2/token"))
     form = parse_qs(token_req.content.decode())
@@ -153,13 +151,9 @@ def test_auth_status_reports_mode_not_token() -> None:
 
 def test_mint_failure_does_not_echo_grant() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            401, json={"error": "invalid_grant", "secret_echo": "rt-123"}
-        )
+        return httpx.Response(401, json={"error": "invalid_grant", "secret_echo": "rt-123"})
 
-    client = _mock_client(
-        handler, auth_mode="authorization_code", refresh_token="rt-123"
-    )
+    client = _mock_client(handler, auth_mode="authorization_code", refresh_token="rt-123")
     with pytest.raises(SmokeballAuthError) as exc:
         client.auth_status()
     assert "rt-123" not in str(exc.value)
@@ -182,9 +176,7 @@ def test_auth_status_decodes_granted_scopes() -> None:
     jwt = _make_jwt({"scope": "documents/read documents/write matters/read"})
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200, json={"access_token": jwt, "expires_in": 3600, "token_type": "Bearer"}
-        )
+        return httpx.Response(200, json={"access_token": jwt, "expires_in": 3600, "token_type": "Bearer"})
 
     client = _mock_client(handler, auth_mode="authorization_code", refresh_token="rt-1")
     status = client.auth_status()
@@ -207,9 +199,7 @@ def test_mint_logs_granted_scopes_once(capsys) -> None:
     jwt = _make_jwt({"scope": "documents/read documents/write matters/read"})
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200, json={"access_token": jwt, "expires_in": 3600, "token_type": "Bearer"}
-        )
+        return httpx.Response(200, json={"access_token": jwt, "expires_in": 3600, "token_type": "Bearer"})
 
     client = _mock_client(handler, auth_mode="authorization_code", refresh_token="rt-1")
     client._mint_token()
@@ -234,6 +224,25 @@ def test_authorization_code_persists_rotated_token_to_file(tmp_path) -> None:
     assert client._refresh_token == "rt-ROTATED"
     assert token_file.read_text() == "rt-ROTATED"
     assert (token_file.stat().st_mode & 0o777) == 0o600
+
+
+def test_rotation_keeps_a_group_shared_mode(tmp_path) -> None:
+    # ss#2614: on a seat with the chronology runner the token is group-shared
+    # (0660) between two uids; a rotation by either must not narrow it back to
+    # 0600, or the other uid is locked out of Smokeball at the next mint.
+    token_file = tmp_path / "refresh_token"
+    token_file.write_text("rt-OLD")
+    token_file.chmod(0o660)
+    captured: list[httpx.Request] = []
+    client = _mock_client(
+        _token_handler(captured, rotate="rt-ROTATED"),
+        auth_mode="authorization_code",
+        refresh_token="rt-OLD",
+        refresh_token_file=str(token_file),
+    )
+    client.auth_status()
+    assert token_file.read_text() == "rt-ROTATED"
+    assert (token_file.stat().st_mode & 0o777) == 0o660
 
 
 def test_no_rotation_does_not_touch_file(tmp_path) -> None:

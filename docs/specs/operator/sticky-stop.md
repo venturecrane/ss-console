@@ -9,6 +9,20 @@ The mechanism is named in platform PRD §11.5 and §7.5 invariant #4 but
 had no emission or enforcement points before this issue. Without it, a
 runaway agent loop has no circuit breaker.
 
+> **Amended 2026-09-02 — the ladder is two states, OK and HARD_STOP.**
+> As originally specified below it had four. `WARN` and `SOFT_STOP` were
+> removed because neither ever restricted anything: `SOFT_STOP`'s documented
+> effect (pin every `trust_ceiling` to `draft_for_review`) was never
+> implemented on any enforcement arm, and `assert_allowed()` passed straight
+> through both. What they did do was name a cause — and a rung that names a
+> cause without changing behaviour reads to an operator as a brake that is
+> holding, which is worse than no rung at all. The cause is now carried
+> explicitly on the state (`reason` / `condition`) and surfaced in the
+> heartbeat, so nothing is lost by dropping the rungs. The stop thresholds
+> are unchanged: every meter halts at exactly the count it always halted at.
+> The one arm with no `HARD_STOP` threshold is the time budget — see
+> [§3](#3-time-budget-exceeded).
+
 ## Source
 
 - platform-prd.md §7.5 ("Safety substrate invariants") — invariant #4
@@ -36,8 +50,9 @@ blocked or pinned to draft-for-review). The differences are:
 
 - **Audit tagging.** Operator pauses write `AGENT_STOPPED` with
   metadata `actor_role=principal|operator`. System stops write
-  `AGENT_STOPPED` (HARD_STOP) or `INVARIANT_VIOLATION` (WARN /
-  SOFT_STOP) with `actor=agent`, `actor_role=agent`.
+  `AGENT_STOPPED` (HARD_STOP) with `actor=agent`, `actor_role=agent`.
+  `INVARIANT_VIOLATION` is still written, but now only for an observation
+  that changes no level — see [Audit emission](#audit-emission).
 - **Recovery actor.** Operator pauses clear via the dashboard pause
   control. System stops clear via Captain investigation through the
   control plane.
@@ -48,13 +63,13 @@ The persistence layer (D1 table `sticky_stop_state`) is shared.
 
 ## State machine
 
-Four states, forward-only by default:
+Two states, forward-only by default:
 
 ```
-  OK ----> WARN ----> SOFT_STOP ----> HARD_STOP
-   ^                                       |
-   |                                       |
-   +--- Captain clear() -------------------+
+  OK ----------------------------> HARD_STOP
+   ^                                    |
+   |                                    |
+   +--- Captain clear() ----------------+
 ```
 
 `clear()` is the only path backwards. There is no autonomous downgrade.
@@ -65,12 +80,20 @@ investigation.
 
 ### State semantics
 
-| State       | Effect on dispatch                                                                                                                         | UI                                                  |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
-| `OK`        | Normal operation                                                                                                                           | No banner                                           |
-| `WARN`      | Normal operation; substrate is watching                                                                                                    | Yellow banner: "Substrate flagged X; investigating" |
-| `SOFT_STOP` | Every skill's `trust_ceiling` pinned to `draft_for_review`. No autonomous escalation. No auto-actions. Drafts continue, queued for review. | Orange banner: "Auto-actions paused; drafts only"   |
-| `HARD_STOP` | Every skill invocation refused. Dispatch entrypoint raises `StickyStopError`.                                                              | Red banner: "Agent paused. Captain investigating"   |
+| State       | Effect on dispatch                                                            | UI                                                |
+| ----------- | ----------------------------------------------------------------------------- | ------------------------------------------------- |
+| `OK`        | Normal operation                                                              | No banner                                         |
+| `HARD_STOP` | Every skill invocation refused. Dispatch entrypoint raises `StickyStopError`. | Red banner: "Agent paused. Captain investigating" |
+
+A seat below its stop threshold is `OK` and says so plainly. Observations
+that used to raise the level to `WARN` or `SOFT_STOP` still land as audit
+rows and still populate the state's `reason`/`condition`; they simply do
+not pretend to restrict anything they never restricted.
+
+**Reading a legacy row.** Rows written before 2026-09-02 may still hold
+`WARN` or `SOFT_STOP` in the `level` column. The module normalises them on
+read (`LEGACY_LEVELS`): both map to `OK`, because that is what they meant
+operationally. No migration rewrites stored history.
 
 The dashboard surface for these banners is a separate issue. This spec
 covers the state-machine module and its persistence; UI is downstream.
@@ -86,12 +109,10 @@ to recover from a tighter-than-needed loop that ran for hours.
 
 A tool call returns a failure within a rolling time window.
 
-| Threshold                     | Default      | Transition               |
-| ----------------------------- | ------------ | ------------------------ |
-| `tool_failure_warn`           | 3            | `OK -> WARN`             |
-| `tool_failure_soft_stop`      | 5            | `WARN -> SOFT_STOP`      |
-| `tool_failure_hard_stop`      | 8            | `SOFT_STOP -> HARD_STOP` |
-| `tool_failure_window_seconds` | 600 (10 min) | window for streak        |
+| Threshold                     | Default      | Transition        |
+| ----------------------------- | ------------ | ----------------- |
+| `tool_failure_hard_stop`      | 8            | `OK -> HARD_STOP` |
+| `tool_failure_window_seconds` | 600 (10 min) | window for streak |
 
 A successful tool call resets the streak. A failure outside the window
 resets the streak to 1 and starts a new window.
@@ -103,22 +124,30 @@ Counts within a rolling window. A skill spamming `refused` responses is
 itself a runaway signal — either the prompt drifted in an unsafe direction
 or the operator's ceiling is incompatible with the skill's request shape.
 
-| Threshold                | Default       | Transition               |
-| ------------------------ | ------------- | ------------------------ |
-| `refusal_warn`           | 5             | `OK -> WARN`             |
-| `refusal_soft_stop`      | 10            | `WARN -> SOFT_STOP`      |
-| `refusal_hard_stop`      | 20            | `SOFT_STOP -> HARD_STOP` |
-| `refusal_window_seconds` | 1800 (30 min) | window for cascade       |
+| Threshold                | Default       | Transition         |
+| ------------------------ | ------------- | ------------------ |
+| `refusal_hard_stop`      | 20            | `OK -> HARD_STOP`  |
+| `refusal_window_seconds` | 1800 (30 min) | window for cascade |
 
 ### 3. Time budget exceeded
 
-Wall-clock seconds for a single agent run. If observed runtime exceeds
-the budget, the machine single-steps to `SOFT_STOP` — the agent has
-already exceeded its envelope; we do not wait for a second data point.
+Wall-clock seconds for a single agent run.
 
-| Threshold             | Default       | Transition       |
-| --------------------- | ------------- | ---------------- |
-| `time_budget_seconds` | 3600 (1 hour) | `* -> SOFT_STOP` |
+**This arm records and stops nothing, deliberately.** `SOFT_STOP` was its
+only outcome, and `SOFT_STOP` restricted nothing, so its real effect has
+always been "write a row". Promoting it to `HARD_STOP` in the collapse
+would have introduced a brake that can halt a client mid-run — a deliberate
+call to make on its own evidence, not a side effect of deleting two unused
+words. So the overrun is recorded (`observation=True`, `transitioned=False`)
+and the level is left alone.
+
+| Threshold             | Default       | Transition                       |
+| --------------------- | ------------- | -------------------------------- |
+| `time_budget_seconds` | 3600 (1 hour) | none — records an audit row only |
+
+A single run therefore has no wall-clock brake; the daily cost cap is the
+only backstop, and it asks a different question slowly. That exposure is
+recorded against this control in `operator/contracts/runtime-controls.yaml`.
 
 Callers feed `record_runtime_seconds()` per turn or per minute (poll).
 The machine itself has no async wakeup.
@@ -128,12 +157,17 @@ The machine itself has no async wakeup.
 Daily $ cap on LLM costs in cents (so cost_telemetry's integer-cents
 convention applies). Resets at UTC date rollover.
 
-| Threshold            | Default        | Transition                           |
-| -------------------- | -------------- | ------------------------------------ |
-| `cost_daily_cents`   | 5000 ($50/day) | per-day cap                          |
-| `cost_warn_pct`      | 80             | `OK -> WARN` (at 80% of cap)         |
-| `cost_soft_stop_pct` | 100            | `WARN -> SOFT_STOP` (at cap)         |
-| `cost_hard_stop_pct` | 200            | `SOFT_STOP -> HARD_STOP` (at 2x cap) |
+| Threshold            | Default        | Transition                    |
+| -------------------- | -------------- | ----------------------------- |
+| `cost_daily_cents`   | 5000 ($50/day) | per-day cap                   |
+| `cost_hard_stop_pct` | 200            | `OK -> HARD_STOP` (at 2x cap) |
+
+Note what this means in practice, because the removed rungs made it look
+otherwise: the seat stops at **twice** the daily cap, not at the cap. Hitting
+100% of `cost_daily_cents` never stopped anything — it moved the level to
+`SOFT_STOP`, which restricted nothing. If the cap is meant to be a brake, the
+lever is `cost_hard_stop_pct`, and lowering it to 100 is a real change in
+behaviour that belongs to whoever authors the engagement.
 
 Cost is fed in via `record_cost_cents()` as LLM-cost events fire. The
 cost-telemetry pipeline (cost-telemetry-events.md) is the natural source.
@@ -169,11 +203,16 @@ Every state transition writes exactly one row to `audit_log` via the
 (`ACCEPTED_ACTION_TYPES`) so this module does not need to extend the
 audit-log contract:
 
-| Transition kind                | `action_type`         | `actor`      | `actor_role` |
-| ------------------------------ | --------------------- | ------------ | ------------ |
-| Entry to `HARD_STOP`           | `AGENT_STOPPED`       | `agent`      | `agent`      |
-| Entry to `WARN` or `SOFT_STOP` | `INVARIANT_VIOLATION` | `agent`      | `agent`      |
-| Captain `clear()`              | `AGENT_RESUMED`       | `captain_id` | `captain`    |
+| Transition kind                   | `action_type`         | `actor`      | `actor_role` |
+| --------------------------------- | --------------------- | ------------ | ------------ |
+| Entry to `HARD_STOP`              | `AGENT_STOPPED`       | `agent`      | `agent`      |
+| Observation that changes no level | `INVARIANT_VIOLATION` | `agent`      | `agent`      |
+| Captain `clear()`                 | `AGENT_RESUMED`       | `captain_id` | `captain`    |
+
+The middle row is the time-budget overrun (§3). It carries
+`sticky_stop_transition: false` and `level_unchanged_by_design: true`, so a
+reader — human or query — can tell an observation from a stop without
+inferring it from the level pair.
 
 The transition-specific detail lives in the `metadata` column as JSON:
 
@@ -182,13 +221,13 @@ The transition-specific detail lives in the `metadata` column as JSON:
   "sticky_stop_transition": true,
   "customer": "acme",
   "persona": "marcus",
-  "from_state": "WARN",
-  "to_state": "SOFT_STOP",
+  "from_state": "OK",
+  "to_state": "HARD_STOP",
   "condition_triggered": "consecutive_tool_failures",
-  "reason": "consecutive_tool_failures=5 (window=600s, skill=inbox-triage)",
-  "consecutive_tool_failures": 5,
+  "reason": "consecutive_tool_failures=8 (window=600s, skill=inbox-triage)",
+  "consecutive_tool_failures": 8,
   "window_seconds": 600,
-  "thresholds": { "warn": 3, "soft_stop": 5, "hard_stop": 8 }
+  "thresholds": { "hard_stop": 8 }
 }
 ```
 
@@ -203,24 +242,31 @@ metadata keys to render the sticky-stop section.
 safety:
   sticky_stop:
     tool_failure:
-      warn: 3
-      soft_stop: 5
       hard_stop: 8
       window_seconds: 600
     refusal:
-      warn: 5
-      soft_stop: 10
       hard_stop: 20
       window_seconds: 1800
     time_budget_seconds: 3600
     cost:
       daily_cents: 5000
-      warn_pct: 80
-      soft_stop_pct: 100
       hard_stop_pct: 200
 ```
 
 All keys optional; module-level defaults apply when absent.
+
+The `warn` / `soft_stop` / `warn_pct` / `soft_stop_pct` keys were removed with
+their states on 2026-09-02. A customer.yaml still carrying one is not an error
+and changes nothing: every reader pulls named keys out of the block with
+`.get()` and ignores the rest (overlay `shared/cost_breaker.thresholds_from_config`).
+
+**The live seat authors a different, narrower block.** What a real
+`customer.yaml` carries today is `safety.sticky_stop.cost_cap_daily_cents`
+(plus `inbound_daily_cap` and `web_search_daily_cap`, which are separate
+controls), read by the overlay at runtime per ADR 0044. Only the daily cap is
+customer-authorable; the 200% hard-stop percentage is platform semantics. The
+richer block above is the substrate module's own construction shape — see
+`operator/contracts/customer-yaml-blocks.yaml` for the authored contract.
 
 The `customer-yaml-schema.md` schema does not yet have a `safety` top-level
 section. When the schema picks one up (under a future ADR), the sticky-stop
@@ -236,20 +282,20 @@ composite primary key enforces uniqueness.
 
 Schema in `operator/migrations/0004_sticky_stop_state.sql`. Columns:
 
-| Column                           | Type                       | Notes                                            |
-| -------------------------------- | -------------------------- | ------------------------------------------------ |
-| `customer`                       | TEXT NOT NULL              | customer_id slug; equals the D1 binding's tenant |
-| `persona`                        | TEXT NOT NULL              | `customer.yaml.personas[].slug`                  |
-| `level`                          | TEXT NOT NULL DEFAULT 'OK' | one of OK / WARN / SOFT_STOP / HARD_STOP         |
-| `updated_at`                     | TEXT NOT NULL              | ISO 8601 UTC                                     |
-| `reason`                         | TEXT                       | snapshot at last transition                      |
-| `condition`                      | TEXT                       | last condition that drove a transition           |
-| `consecutive_tool_failures`      | INTEGER NOT NULL DEFAULT 0 | rolling counter                                  |
-| `tool_failure_window_started_at` | TEXT                       | ISO; NULL when no streak                         |
-| `refusal_count`                  | INTEGER NOT NULL DEFAULT 0 | rolling counter                                  |
-| `refusal_window_started_at`      | TEXT                       | ISO                                              |
-| `cost_cents_today`               | INTEGER NOT NULL DEFAULT 0 | resets on UTC day rollover                       |
-| `cost_date`                      | TEXT                       | YYYY-MM-DD                                       |
+| Column                           | Type                       | Notes                                                                                    |
+| -------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------- |
+| `customer`                       | TEXT NOT NULL              | customer_id slug; equals the D1 binding's tenant                                         |
+| `persona`                        | TEXT NOT NULL              | `customer.yaml.personas[].slug`                                                          |
+| `level`                          | TEXT NOT NULL DEFAULT 'OK' | `OK` or `HARD_STOP`; legacy rows may hold `WARN`/`SOFT_STOP`, normalised to `OK` on read |
+| `updated_at`                     | TEXT NOT NULL              | ISO 8601 UTC                                                                             |
+| `reason`                         | TEXT                       | snapshot at last transition                                                              |
+| `condition`                      | TEXT                       | last condition that drove a transition                                                   |
+| `consecutive_tool_failures`      | INTEGER NOT NULL DEFAULT 0 | rolling counter                                                                          |
+| `tool_failure_window_started_at` | TEXT                       | ISO; NULL when no streak                                                                 |
+| `refusal_count`                  | INTEGER NOT NULL DEFAULT 0 | rolling counter                                                                          |
+| `refusal_window_started_at`      | TEXT                       | ISO                                                                                      |
+| `cost_cents_today`               | INTEGER NOT NULL DEFAULT 0 | resets on UTC day rollover                                                               |
+| `cost_date`                      | TEXT                       | YYYY-MM-DD                                                                               |
 
 Index: `idx_sticky_stop_active` on `updated_at DESC WHERE level != 'OK'`,
 for the dashboard's "is anything stuck?" indicator.
@@ -259,18 +305,20 @@ for the dashboard's "is anything stuck?" indicator.
 `operator/safety-substrate/tests/test_sticky_stop.py` exercises:
 
 - Initial state is `OK` and read alone does not persist
-- Each of the four conditions drives the WARN -> SOFT_STOP -> HARD_STOP
-  ladder
+- Three of the four conditions drive `OK -> HARD_STOP` at their threshold,
+  and stay `OK` at every count below it
 - Tool success resets the failure counter
 - Tool success does NOT downgrade level (forward-only invariant)
 - Failures outside the rolling window reset the streak to 1
-- Time-budget overrun single-steps to SOFT_STOP
-- Cost threshold ladder respects the three percentages and resets on
-  UTC day rollover
+- Time-budget overrun leaves the level `OK`, leaves `condition` unset on a
+  healthy seat, and still writes its audit row (`sticky_stop_transition:
+false`, `level_unchanged_by_design: true`)
+- Cost threshold stays `OK` at 80% and at 100% of the cap, stops at 200%,
+  and the daily counter resets on UTC day rollover while the level does not
 - Negative cost amounts raise `ValueError`
 - State is forward-only — autonomous downgrade is impossible
-- Dispatch guard `assert_allowed()` passes through at SOFT_STOP and
-  raises `StickyStopError` at HARD_STOP
+- Dispatch guard `assert_allowed()` passes through one count below the stop
+  threshold and raises `StickyStopError` at HARD_STOP
 - Captain `clear()` resets level to OK, zeros counters, and emits an
   `AGENT_RESUMED` audit row carrying the prior state and clear reason
 - `clear()` requires non-empty captain_id and reason

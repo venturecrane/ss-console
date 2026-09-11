@@ -1,0 +1,84 @@
+{
+  "captured_by": "infisical run --env=prod --path=/ss -- python3 operator/bin/reconcile-sends.py --json --inbox pilot-smokeball@agentmail.to",
+  "captured_at": "2026-08-17T18:28Z",
+  "why": "ss#2386. The baseline and its falsifier are built from what the reconciler actually found in production, not from a find list somebody typed. The same 11 sends appear in the body of #2382 (and of #2344, #2373, #2380, #2381, which are copies of the same finding).",
+  "redaction": "One edit to the captured output: recipient addresses on the client's own domain are replaced with client-principal@firm.example, per tests/client-identity-gate.test.ts. Message ids and timestamps, which are what the reconciler matches on, are verbatim.",
+  "reports": [
+    {
+      "inbox": "pilot-smokeball@agentmail.to",
+      "slug": "pilot-smokeball",
+      "sent_total": 153,
+      "matched_exact": 124,
+      "matched_tool_path": 18,
+      "held": null,
+      "unaccounted": [
+        {
+          "message_id": "<0100019f63dcd747-1dab819f-dcdc-40ac-93e1-2821e8e42071-000000@email.amazonses.com>",
+          "timestamp": "2026-07-15T03:40:45.216Z",
+          "to": ["scott@smd.services"],
+          "subject": "[Deadlines] 16 need you, 2026-07-14"
+        },
+        {
+          "message_id": "<0100019f6bb7f699-2ac95881-401b-4880-a62f-d7870d4203d6-000000@email.amazonses.com>",
+          "timestamp": "2026-07-16T16:17:26.125Z",
+          "to": ["scott@smd.services"],
+          "subject": "[Deadlines] 4 need you, 2026-07-16"
+        },
+        {
+          "message_id": "<0100019fbebabfc6-490e2e42-b75e-4500-9e35-3eae1e16c657-000000@email.amazonses.com>",
+          "timestamp": "2026-08-01T19:08:57.591Z",
+          "to": ["scott@smd.services"],
+          "subject": "[Deadlines] 8 need you, 2026-08-01"
+        },
+        {
+          "message_id": "<0100019fc7ee738f-142dc94b-98cb-4579-9e83-a6dd8d5e3a9d-000000@email.amazonses.com>",
+          "timestamp": "2026-08-03T14:02:00.937Z",
+          "to": ["client-principal@firm.example"],
+          "subject": "[Deadlines] 6 items need you, 2026-08-03"
+        },
+        {
+          "message_id": "<0100019fc8141333-5a6d9859-be62-458e-9141-60edaed71611-000000@email.amazonses.com>",
+          "timestamp": "2026-08-03T14:43:06.651Z",
+          "to": ["scott@smd.services"],
+          "subject": "Client Verification Tracker: chase cadence not authored (ACK-7M1DBW)"
+        },
+        {
+          "message_id": "<0100019fd25f992e-5b075b3b-bc68-4486-b5b3-6e6fbf186d5a-000000@email.amazonses.com>",
+          "timestamp": "2026-08-05T14:41:48.262Z",
+          "to": ["client-principal@firm.example"],
+          "subject": "Client Verification Tracker: Chase configuration not authored (ACK-7M1DBW)"
+        },
+        {
+          "message_id": "<0100019fdc873861-0b720aa8-e882-4866-a8e9-9a6cf50fea7c-000000@email.amazonses.com>",
+          "timestamp": "2026-08-07T14:01:17.132Z",
+          "to": ["client-principal@firm.example"],
+          "subject": "[Deadlines] 6 items unacknowledged, 2026-08-07"
+        },
+        {
+          "message_id": "<0100019fe6d4312d-5f574146-d3e6-44ce-ab59-a402dceb256e-000000@email.amazonses.com>",
+          "timestamp": "2026-08-09T14:01:33.716Z",
+          "to": ["client-principal@firm.example"],
+          "subject": "[Deadlines] 6 unacknowledged items need you, 2026-08-09"
+        },
+        {
+          "message_id": "<0100019ff1227315-c18b8697-3bda-4a75-ba5a-310c7af4a54b-000000@email.amazonses.com>",
+          "timestamp": "2026-08-11T14:03:14.543Z",
+          "to": ["scott@smd.services"],
+          "subject": "[Deadlines] Escalator woke but Smokeball connector unavailable, 2026-08-11"
+        },
+        {
+          "message_id": "<0100019ff3559f60-d2a59344-02be-4c17-b7d2-a136f69cf452-000000@email.amazonses.com>",
+          "timestamp": "2026-08-12T00:18:22.645Z",
+          "to": ["pilot-smokeball@agentmail.to"],
+          "subject": "ss#2258 permission probe (expect refusal on the no-send key)"
+        },
+        {
+          "message_id": "<0100019ff87c75d4-52514dc9-0f8f-49aa-a77e-654d1269849f-000000@email.amazonses.com>",
+          "timestamp": "2026-08-13T00:18:54.002Z",
+          "to": ["scott@smd.services"],
+          "subject": "[UNAUDITED-KILLTEST-2258] deliberate unaudited send — reconciler kill test"
+        }
+      ]
+    }
+  ]
+}

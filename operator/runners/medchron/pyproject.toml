@@ -1,0 +1,52 @@
+[project]
+name = "medchron"
+version = "0.1.0"
+description = "The chronology-package runner (routine 11, ADR 0087): a fixed-DAG driver with a run-level state file, a cents cap, and machine verdicts over the medical-chronology pipeline. NOT published; installed from this path into a root-owned venv on the seat (ss#2614) and into a CI venv."
+requires-python = ">=3.11"
+dependencies = [
+    # The driver invokes the not-yet-ported pipeline scripts as subprocesses;
+    # each port adds that stage's own dependencies here, with the stage.
+    "pyyaml>=6",
+    # PR 2: seat access (httpx streams the presigned pulls), the three $0
+    # stages in-process: pypdf + python-docx for extract, extract-msg +
+    # pymupdf for the Outlook containers and image shape.
+    "httpx>=0.27",
+    # PR 3: the paid doorway (anthropic 1.1 is what the oracle venv ran the
+    # August deliveries on).
+    "anthropic>=1.1",
+    "pypdf>=4",
+    "python-docx>=1.1",
+    "extract-msg>=0.48",
+    "pymupdf>=1.24",
+    # PR 9: the timeline visuals.
+    "matplotlib>=3.8",
+    # Seat access rides the Smokeball connector's plain client (stdlib + httpx),
+    # never the MCP tool layer. The sdk is an unpublished transitive dep of the
+    # connector; both are named under [tool.uv.sources] so `uv pip install
+    # ./runners/medchron` resolves, and the load-bearing install stays the
+    # explicit three-path form the tree already uses:
+    #   uv pip install ./connectors/_sdk ./connectors/smokeball ./runners/medchron
+    "smokeball-connector",
+]
+
+[project.scripts]
+medchron = "medchron.__main__:main"
+
+[tool.uv.sources]
+smokeball-connector = { path = "../../connectors/smokeball" }
+operator-connector-sdk = { path = "../../connectors/_sdk" }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["medchron"]
+
+[tool.pytest.ini_options]
+# The runner owns its pytest config: the CI step runs from operator/, whose
+# pytest.ini selects importlib mode and whose tests/ package shadows the bare
+# name `tests`. Pass `-c` to this file so rootdir is the package and the test
+# helpers module resolves from tests/.
+pythonpath = ["tests"]
+testpaths = ["tests"]

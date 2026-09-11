@@ -46,13 +46,13 @@ _HERE = Path(__file__).resolve()
 # operator/ on sys.path so `from adapter.evidence import ...` resolves.
 sys.path.insert(0, str(_HERE.parents[2]))
 
-from adapter.evidence import (  # noqa: E402
+from adapter.evidence import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     EvidencePacketBuilder,
     EvidencePacketError,
     PacketActor,
     PacketRequest,
 )
-from adapter.evidence.packet import SqliteReadExecutor  # noqa: E402
+from adapter.evidence.packet import SqliteReadExecutor  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 log = logging.getLogger("aie.bin.evidence")
 
@@ -179,13 +179,23 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         ),
     )
     p.add_argument(
+        "--pinned-head",
+        default=None,
+        help=(
+            "A chain head recorded off the Machine before this export -- the "
+            "newest audit_head_history row for this seat on the control plane. "
+            "The ledger must still contain it; if it does not, rows that existed "
+            "when it was recorded are gone and the build HALTS (exit 3). There "
+            "is no acknowledge flag for that case. Without this flag the packet "
+            "states on its face that its audit section was not checked for "
+            "truncation."
+        ),
+    )
+    p.add_argument(
         "--customer-yaml",
         type=Path,
         default=None,
-        help=(
-            "Path to customer.yaml; default: "
-            "operator/customers/<slug>/customer.yaml"
-        ),
+        help=("Path to customer.yaml; default: operator/customers/<slug>/customer.yaml"),
     )
     p.add_argument(
         "--audit-db",
@@ -235,13 +245,13 @@ async def _run(args: argparse.Namespace) -> int:
 
     try:
         audit_writer, audit_conn = _build_local_audit_writer(audit_db)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - audit writer init failure is exit 4 with the reason printed; the CLI's contract is exit codes, not traces
         print(f"[preflight] audit writer init failed: {exc}", file=sys.stderr)
         return 4
 
     try:
         read_executor, read_conn = _build_local_read_executor(read_db)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - read executor init failure is exit 4 with the reason printed; the CLI's contract is exit codes, not traces
         print(f"[preflight] read executor init failed: {exc}", file=sys.stderr)
         audit_conn.close()
         return 4
@@ -252,12 +262,9 @@ async def _run(args: argparse.Namespace) -> int:
         import yaml  # type: ignore
 
         yaml_loader = yaml.safe_load
-        yaml_dumper = lambda data: yaml.safe_dump(data, sort_keys=True)  # noqa: E731
+        yaml_dumper = lambda data: yaml.safe_dump(data, sort_keys=True)  # noqa: E731 - a one-line dumper alias bound beside its loader; a def adds only a name
     except ImportError:
-        log.warning(
-            "pyyaml not installed; falling back to JSON-shaped yaml. "
-            "Install pyyaml for full fidelity."
-        )
+        log.warning("pyyaml not installed; falling back to JSON-shaped yaml. Install pyyaml for full fidelity.")
 
     builder = EvidencePacketBuilder(
         reader=read_executor,
@@ -276,6 +283,7 @@ async def _run(args: argparse.Namespace) -> int:
         actor=args.actor,
         actor_role=PacketActor(args.actor_role),
         acknowledge_unattributed_gap=args.acknowledge_unattributed_gap,
+        pinned_head=args.pinned_head,
     )
 
     try:
@@ -283,7 +291,7 @@ async def _run(args: argparse.Namespace) -> int:
     except EvidencePacketError as exc:
         print(f"[build] HALTED: {exc}", file=sys.stderr)
         return 3
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - an unexpected build failure is exit 4 with the type named; the CLI's contract is exit codes, not traces
         print(
             f"[build] UNEXPECTED ERROR: {type(exc).__name__}: {exc}",
             file=sys.stderr,
@@ -292,11 +300,11 @@ async def _run(args: argparse.Namespace) -> int:
     finally:
         try:
             audit_conn.close()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 - closing the audit connection in finally must not replace the build's own exit code
             pass
         try:
             read_conn.close()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 - closing the read connection in finally must not replace the build's own exit code
             pass
 
     summary = {
@@ -306,6 +314,7 @@ async def _run(args: argparse.Namespace) -> int:
         "bytes_written": result.bytes_written,
         "counts": dict(result.counts),
         "coverage": result.coverage.to_dict(),
+        "chain_pin": result.chain_pin.to_dict(),
     }
     print(json.dumps(summary, sort_keys=True, indent=2))
 
@@ -315,6 +324,13 @@ async def _run(args: argparse.Namespace) -> int:
     if result.coverage.has_unattributed_rows or not result.coverage.table_present:
         for line in result.coverage.narrative_lines():
             print(f"[coverage] {line}", file=sys.stderr)
+
+    # Same reason, one layer down. A packet built without a pin cannot speak to
+    # truncation, and the operator forwarding it should see that before they
+    # send it, not discover it in the README afterwards.
+    if not result.chain_pin.was_checked:
+        for line in result.chain_pin.narrative_lines():
+            print(f"[chain] {line}", file=sys.stderr)
     return 0
 
 

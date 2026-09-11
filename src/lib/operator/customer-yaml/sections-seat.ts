@@ -88,22 +88,3 @@ function checkEnumField(
   }
   return raw
 }
-
-/**
- * True when this seat carries a real customer's real data.
- *
- * The distinction blast-radius decisions key on. A merged config change now
- * reaches live seats on the next poll (git → R2 auto-publish), so "which of
- * these is a firm's production Operator" stopped being cosmetic. Absence reads
- * as NOT a customer seat, deliberately: an unauthored descriptor must never
- * cause a proving seat to be treated with production caution it does not need,
- * and must never let an unauthored seat CLAIM customer status it has not been
- * granted. Callers needing the stricter posture check for `kind === 'customer'`
- * explicitly rather than relying on this helper's fallback.
- *
- * @public Seat-kind predicate on the customer.yaml public surface; callers
- * live in the overlay and in provisioning tooling, not in this repo.
- */
-export function isCustomerSeat(seat: Seat | null): boolean {
-  return seat?.kind === 'customer'
-}

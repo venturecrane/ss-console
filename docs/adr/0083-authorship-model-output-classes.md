@@ -172,3 +172,50 @@ Amended acceptance criteria:
 - [ ] (repo) `work_product` and `record` still refuse on a broken control; `staff` proceeds; outbound drafts
 - [ ] (runtime) A staff-class send reaches its recipient on a seat whose declared staff spec is not installed, observed as the recipient
 - [ ] (runtime) The broken control raises an alert that reaches a person, once, and resolves when a spec is installed
+
+## Amendment — 2026-08-19: format provenance realized as the firm's Word template (ss#2448)
+
+Decision 3 said the typography tier is code's, not the model's, and named #2068's
+deterministic `.docx` renderer as the design. It is now built, with one refinement to
+where the authored format LIVES: **in the firm's own Word template, in the firm's
+Document Library in its practice-management system, and nowhere else.** A drafting
+skill files a draft through `mcp_smokeball_render_docx_draft` with a `document_class`;
+the tool resolves the class template deterministically from the seat's authored
+library location (`self_initiation.document_library.{matter_number, folder_name,
+templates}`, read off the live customer.yaml by the connector; the model never picks a
+template), opens it as the base document (page setup, headers and footers, styles
+survive; body cleared), writes the content in using a small contract of named
+paragraph styles (`SMD Body`, `SMD Item Label`, `SMD Item Text`, `SMD Heading 1-3`,
+`SMD Caption`, `SMD Signature`), and reports what it applied (`formatApplied`). A
+template that lacks a named style gets the class's product default applied inline, and
+the fallback is named in the delivery note. No firm template authored: the starter, a
+Times New Roman 12 base with the named styles defined, self-described in its document
+properties, which the establishment turn files into the library for the firm to edit.
+
+Two provenances, equally: the firm's own template or letterhead dropped into the folder
+under the class's file name, or the starter we file for them. A style edited in Word
+takes effect on the next draft; there is no config publish and no reboot, because
+typography is not config. customer.yaml carries the library location and an optional
+per-class file-name override only, never a font or a spacing.
+
+The critique that shaped this (three independent reviews, 2026-08-19) removed every
+place the renderer would have invented legal content: it numbers nothing, labels
+nothing, and inserts no declaration. Item numbers come from the propounded set; the
+35-interrogatory rule is an aggregate across the matter and attorney-reserved; a
+statute-bound declaration is jurisdiction-specific, and inserting one for a firm in
+another state would be fabricated client-facing content. The sentence in Decision 3
+that called that declaration "a mechanically checkable condition" stands as a statement
+about the CONDITION; the TEXT is the firm's, authored into its skeleton, never the
+renderer's. The model writes labels, numerals, caption, signature block, and proof of
+service as content, exactly as the skeletons show; the renderer styles them.
+
+`output_classes.<class>.format_spec` (the text-shape assertion set) is unchanged and
+stays `none` on the seats that author it so: that system checks the shape of staff mail
+and digests; Word format is the drafting lane's renderer, which is what those seats'
+authored comment already said owns work-product shape.
+
+Evidence: PR #2449 (renderer, merged e1297712), #2452 (observed wire shape), #2454
+(the five drafters deliver through the tool); pilot-smokeball v138 booted on the build
+(vfy_01M0DTETJ7SKV5DKJ5YH33T2SG), a class-rendered document filed on a rehearsal matter,
+downloaded byte-identical and opened by the Captain (vfy_01M0DTM2EGQZP9FZTM53S17CJ7,
+vfy_01M0DW05DHTTK09MP4PRDEXNBC).

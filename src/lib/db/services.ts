@@ -43,6 +43,13 @@ export interface Service {
   status: ServiceStatus
   /** REAL to match invoices.amount/quotes.total_price. NULL for one_time; authored per-quote for operator. */
   recurring_price: number | null
+  /**
+   * The rail the recurring fee is collected by (migration 0113). Authored
+   * per client next to the price; `ach` for every row that predates it.
+   * `card` adds the 3% processing fee line (agreement §3.8) to the checkout
+   * and to every monthly invoice. Read through `operatorPaymentMethod`.
+   */
+  payment_method: string
   started_at: string | null
   ended_at: string | null
   created_at: string
@@ -54,21 +61,31 @@ export type ServiceCadence = 'one_time' | 'recurring'
 export type ServiceStatus = 'proposed' | 'active' | 'completed' | 'churned'
 
 /**
- * Commercial-lifecycle transitions — deliberately coarser than the delivery
- * lifecycle on the child (engagement/subscription). `engagements.status` and
- * `subscriptions.status` remain authoritative; `services.status` is a rollup.
+ * How the Operator retainer is collected (Operator Service Agreement §3.8;
+ * Captain, 2026-08-29 for the fee, 2026-09-10 for the first card client).
+ * `ach` is bank account at checkout with no fee; `card` is a card at
+ * checkout plus the 3% processing fee on every monthly charge.
  */
-export const SERVICE_VALID_TRANSITIONS: Record<ServiceStatus, ServiceStatus[]> = {
-  proposed: ['active', 'churned'],
-  active: ['completed', 'churned'],
-  completed: [],
-  churned: [],
+export type OperatorPaymentMethod = 'ach' | 'card'
+
+export function isOperatorPaymentMethod(value: unknown): value is OperatorPaymentMethod {
+  return value === 'ach' || value === 'card'
+}
+
+/** The stored rail, parsed; anything unrecognised reads as ACH (no fee, the safe default). */
+export function operatorPaymentMethod(
+  service: Pick<Service, 'payment_method'> | null | undefined
+): OperatorPaymentMethod {
+  return isOperatorPaymentMethod(service?.payment_method) ? service.payment_method : 'ach'
 }
 
 /**
  * Project a consulting engagement's delivery status onto the commercial
  * rollup. MUST stay in lockstep with the CASE in
  * migrations/0069_service_spine_backfill_consulting.sql (asserted in tests).
+ *
+ * @public Readable twin of the SQL CASE in migrations/0069_service_spine_backfill_consulting.sql.
+ * tests/services.test.ts imports it and pins the mapping. The projection itself runs in SQL.
  */
 export function projectConsultingStatus(engagementStatus: string): ServiceStatus {
   switch (engagementStatus) {
@@ -86,6 +103,9 @@ export function projectConsultingStatus(engagementStatus: string): ServiceStatus
  * Project an operator subscription's status onto the commercial rollup. MUST
  * stay in lockstep with the CASE in
  * migrations/0070_service_spine_backfill_operator.sql (asserted in tests).
+ *
+ * @public Readable twin of the SQL CASE in migrations/0070_service_spine_backfill_operator.sql.
+ * tests/services.test.ts imports it and pins the mapping. The projection itself runs in SQL.
  */
 export function projectOperatorStatus(subscriptionStatus: string): ServiceStatus {
   switch (subscriptionStatus) {
@@ -185,54 +205,6 @@ export async function listServices(
   return result.results
 }
 
-export async function getServicesForEntity(
-  db: D1Database,
-  orgId: string,
-  entityId: string
-): Promise<Service[]> {
-  const result = await db
-    .prepare('SELECT * FROM services WHERE org_id = ? AND entity_id = ? ORDER BY created_at DESC')
-    .bind(orgId, entityId)
-    .all<Service>()
-  return result.results
-}
-
-export async function updateServiceStatus(
-  db: D1Database,
-  orgId: string,
-  serviceId: string,
-  newStatus: ServiceStatus
-): Promise<Service | null> {
-  const existing = await getService(db, orgId, serviceId)
-  if (!existing) {
-    return null
-  }
-
-  const validNext = SERVICE_VALID_TRANSITIONS[existing.status] ?? []
-  if (!validNext.includes(newStatus)) {
-    throw new Error(
-      `Invalid service status transition: ${existing.status} -> ${newStatus}. Valid transitions: ${validNext.join(', ') || 'none (terminal state)'}`
-    )
-  }
-
-  // Terminal commercial states stamp ended_at.
-  const stampEnded = newStatus === 'completed' || newStatus === 'churned'
-  const updates = ['status = ?', "updated_at = datetime('now')"]
-  const params: (string | number | null)[] = [newStatus]
-  if (stampEnded) {
-    updates.push('ended_at = ?')
-    params.push(new Date().toISOString())
-  }
-  params.push(serviceId, orgId)
-
-  await db
-    .prepare(`UPDATE services SET ${updates.join(', ')} WHERE id = ? AND org_id = ?`)
-    .bind(...params)
-    .run()
-
-  return getService(db, orgId, serviceId)
-}
-
 // ===========================================================================
 // Operator commercial record (ADR 0046, operator arc)
 // ===========================================================================
@@ -290,6 +262,30 @@ export async function setOperatorPrice(
     recurring_price: price,
     started_at: new Date().toISOString(),
   })
+}
+
+/**
+ * Author the rail the retainer is collected by (migration 0113). Same
+ * forward writer as the price: the commercial record only, never the
+ * provisioning row. Creates the operator service (unpriced) if none exists,
+ * so a rail authored before a price is not lost.
+ */
+export async function setOperatorPaymentMethod(
+  db: D1Database,
+  orgId: string,
+  entityId: string,
+  method: OperatorPaymentMethod
+): Promise<Service> {
+  const existing =
+    (await getOperatorServiceForEntity(db, orgId, entityId)) ??
+    (await setOperatorPrice(db, orgId, entityId, null))
+  await db
+    .prepare(`UPDATE services SET payment_method = ?, updated_at = ? WHERE id = ? AND org_id = ?`)
+    .bind(method, new Date().toISOString(), existing.id, orgId)
+    .run()
+  const updated = await getService(db, orgId, existing.id)
+  if (!updated) throw new Error(`Failed to update operator service ${existing.id}`)
+  return updated
 }
 
 // ===========================================================================

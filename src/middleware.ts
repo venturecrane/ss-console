@@ -4,7 +4,9 @@ import type { APIContext, MiddlewareNext } from 'astro'
 import { clerkMiddleware } from '@clerk/astro/server'
 import { resolveAdminSessionFromClerk } from './lib/auth/admin-session-shim'
 import { parseSessionToken, validateSession, renewSession } from './lib/auth/session'
-import { withSentryRequestHandler } from './lib/observability/sentry'
+import { captureError, withSentryRequestHandler } from './lib/observability/sentry'
+import { applySecurityHeaders } from './lib/security/response-headers'
+import { classifyCrossSite } from './lib/security/cross-site'
 import {
   PRE_REWRITE_REDIRECTS,
   POST_REWRITE_REDIRECTS,
@@ -83,10 +85,19 @@ async function resolveLegacyPortalSession(
   const sessionData = await validateSession(env.DB, env.SESSIONS, token)
   if (sessionData && sessionData.role === 'client') {
     context.locals.session = sessionData
-    // Fire-and-forget sliding-window renewal: a KV/D1 write failure here must
-    // not fail an otherwise-authenticated request. The session stays valid off
-    // its existing expiry; the next request retries the renewal.
-    renewSession(env.DB, env.SESSIONS, token, sessionData).catch(() => {})
+    // Sliding-window renewal, off the response path: a KV/D1 write failure
+    // here must not fail an otherwise-authenticated request. The session stays
+    // valid off its existing expiry; the next request retries the renewal.
+    //
+    // Two things the 2026-09-09 review found on the old one-liner and this
+    // fixes. The promise is handed to `waitUntil`, because Workers cancels
+    // pending work when the response returns, so a bare fire-and-forget may
+    // never run. And the failure is reported, not swallowed: a renewal that
+    // fails every time is the kind of quiet degrade captureError exists for.
+    const renewal = renewSession(env.DB, env.SESSIONS, token, sessionData).catch((err: unknown) =>
+      captureError(err, 'middleware.renew-session')
+    )
+    context.locals.cfContext?.waitUntil(renewal)
     return token
   }
   return null
@@ -227,6 +238,14 @@ async function handleRequest(context: APIContext, next: NextFn): Promise<Respons
   const authDenial = enforceAuth(context, pathname)
   if (authDenial) return authDenial
 
+  // After auth, not before: an unauthenticated cross-site POST should read as
+  // the auth failure it is (a redirect or 401), and the CSRF refusal is for the
+  // case the cookie DID come along. See src/lib/security/cross-site.ts.
+  const crossSite = classifyCrossSite(context.request)
+  if (crossSite.crossSite) {
+    return jsonResponse(403, { error: 'cross_site_request', detail: crossSite.reason })
+  }
+
   return await next()
 }
 
@@ -238,8 +257,14 @@ async function handleRequest(context: APIContext, next: NextFn): Promise<Respons
 //                         admin session shim, and auth enforcement
 //                         (Clerk for both portal and admin; admin gated
 //                         on role='admin' via the shim).
+//   3. security headers — set on EVERY response leaving this Worker, including
+//      the redirects and 401/403 denials that `handleRequest` returns before
+//      ever calling `next()`. Wrapping here rather than inside `handleRequest`
+//      is what makes that true: a header applied only around `next()` would
+//      miss every early return, which is most of the auth surface.
 const ssMiddleware = defineMiddleware(async (context: APIContext, next: NextFn) => {
-  return withSentryRequestHandler(context, () => handleRequest(context, next))
+  const response = await withSentryRequestHandler(context, () => handleRequest(context, next))
+  return applySecurityHeaders(response, context.request.url)
 })
 
 export const onRequest = sequence(clerkMiddleware(), ssMiddleware)

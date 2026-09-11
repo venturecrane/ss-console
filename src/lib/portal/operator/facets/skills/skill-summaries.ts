@@ -68,7 +68,7 @@ export const SKILL_SUMMARIES: Record<string, string> = {
   'intake-to-system-sync':
     'Syncs a converted lead from your intake CRM into Smokeball, with dedupe and conflict checks.',
   'lien-ledger-tracker':
-    'Keeps the matter lien ledger current and chases open payoffs. Logs figures you provide, never computes a reduction or moves money.',
+    'Tracks every provider balance blocking disbursement and chases the open ones, one contact per provider. Never computes a reduction or moves money.',
   'matter-document-review':
     "Reads a matter's documents and surfaces highlights, timelines, and gaps for an attorney. Never drafts legal work product.",
   'matter-inbox-router':
@@ -86,7 +86,7 @@ export const SKILL_SUMMARIES: Record<string, string> = {
   'mediation-settlement-tracker':
     'Assembles the input packet for a mediation or settlement brief and tracks settlement deadlines. Never writes the brief, never asserts a deadline as final.',
   'medical-chronology-maintainer':
-    'Keeps a cited medical chronology current on a PI matter as records land. Extractive only, never characterizes causation.',
+    'Keeps a cited medical chronology current on a PI matter, and turns an administrator request into a chronology package built on the seat. Extractive only, never characterizes causation.',
   'medical-records-chaser':
     "Watches for the plaintiff's medical records to land and chases outstanding providers. Never diagnoses, never drafts a demand.",
   'meet-and-confer-drafter':

@@ -2,15 +2,25 @@
 import PortalShell from '../../../../layouts/PortalShell.astro'
 import { getPortalClient } from '../../../../lib/portal/session'
 import { loadPortalInvoiceDetail } from '../../../../lib/portal/invoice-detail'
+import { invoiceTypeLabel } from '../../../../lib/db/invoices'
 import PortalPageHead from '../../../../components/portal/PortalPageHead.astro'
+import PortalDetailTable from '../../../../components/portal/PortalDetailTable.astro'
+import PortalDetailRow from '../../../../components/portal/PortalDetailRow.astro'
+import PortalActionLink from '../../../../components/portal/PortalActionLink.astro'
 import MoneyDisplay from '../../../../components/portal/MoneyDisplay.astro'
-import InvoicePaymentDetails from '../../../../components/portal/InvoicePaymentDetails.astro'
 import { resolveInvoiceState } from '../../../../lib/portal/states'
 import { formatShortDate } from '../../../../lib/portal/formatters'
 import { env } from 'cloudflare:workers'
 
 /**
- * Invoice landing — deep-link surface per .design/portal-ux-brief.md.
+ * Invoice detail: the Billing ledger row, opened up. Same shape as the
+ * subscription page (src/pages/portal/billing/subscriptions/[instance].astro):
+ * page head with the dates in the meta column, one ink-bordered fact table,
+ * one primary action with a mono caption under it. Until 2026-09-09 this
+ * page wore the calm card register (rounded light-border rail, sentence-case
+ * heading, hairline dividers, icon-led captions) that ADR 0082 retired, and
+ * the Captain read it beside the subscription page as two designs made
+ * without knowledge of each other. Nothing about the data changed.
  *
  * Route param `id` → invoices.id, scoped to the portal entity via
  * getInvoiceForEntity (which also filters to portal-visible statuses).
@@ -19,9 +29,6 @@ import { env } from 'cloudflare:workers'
  * Money rule: all figures render as dollar amounts via MoneyDisplay. The
  * invoices.amount column is REAL (dollars) so we convert to cents for the
  * component. Line items are stored in cents directly.
- *
- * Paid state: hides the Pay CTA and replaces the pill/amount with a paid
- * caption. Full error/edge design (voided, refunded, etc.) lives in #365.
  */
 
 const { id: invoiceId } = Astro.params
@@ -52,21 +59,19 @@ if (!invoiceDetail) {
 
 const { invoice, lineItems, engagement } = invoiceDetail
 
-// Line items drive the "What's included" section. We never fabricate
-// invoice content — no generic placeholder rows, no borrow from
-// scope_summary or invoice.description. See CLAUDE.md "No fabricated
-// client-facing content" (#398). A sent invoice without line items
-// renders no breakdown; the Total line still renders. Admin send-gate
-// should prevent this state reaching a client, but the page degrades
-// cleanly if it does.
+// Line items drive the "What's included" table. We never fabricate invoice
+// content — no generic placeholder rows, no borrow from scope_summary or
+// invoice.description. See CLAUDE.md "No fabricated client-facing content"
+// (#398). A sent invoice without line items renders no breakdown; the Total
+// row still renders. Admin send-gate should prevent this state reaching a
+// client, but the page degrades cleanly if it does.
 
 // Money — invoices.amount is dollars (REAL); convert to cents for display.
-const amountCents = Math.round(invoice.amount * 100)
-// Show the invoice's own amount as Total so rounding always matches the CTA.
-const totalCents = amountCents
+// The invoice's own amount is the Total so rounding always matches the CTA.
+const totalCents = Math.round(invoice.amount * 100)
 
-// Consultant first name is needed early so we can thread it into the state
-// resolver's next-step copy. Null when the engagement has no consultant.
+// Consultant first name threads into the state resolver's next-step copy.
+// Null when the engagement has no consultant.
 const consultantFirstEarly = engagement?.consultant_name
   ? engagement.consultant_name.trim().split(/\s+/)[0] || engagement.consultant_name
   : null
@@ -90,64 +95,31 @@ const stripeUrl =
     : null
 const isPayable = stripeUrl !== null
 
-// Formatting
-// Long-form "Monday, April 20" — local because it's wrapped in "Due {X}" /
-// "Paid {X}" etc. below. The shared lib has a different composer
-// (`formatRelativeDueCaption`) that bakes the "Due/Overdue" into the string;
-// keeping the wrapping local here preserves the authored sentence shape.
-const formatDueCaption = (iso: string | null): string | null => {
-  if (!iso) return null
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return null
-  return d.toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  })
-}
-
-const daysUntil = (iso: string | null): number | null => {
-  if (!iso) return null
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return null
-  const diff = d.getTime() - Date.now()
-  return Math.ceil(diff / (1000 * 60 * 60 * 24))
-}
-
 // Title + period
-const typeLabelMap: Record<string, string> = {
-  deposit: 'Deposit invoice',
-  completion: 'Completion invoice',
-  milestone: 'Milestone invoice',
-  assessment: 'Assessment invoice',
-  retainer: 'Retainer invoice',
-}
-const invoiceTitle = typeLabelMap[invoice.type] ?? 'Invoice'
+const typeLabel = invoiceTypeLabel(invoice.type)
+const invoiceTitle = typeLabel ? `${typeLabel} invoice` : 'Invoice'
 // Subtitle comes only from the invoice's own authored description. We never
 // borrow `engagement.scope_summary` — that is an internal operations field,
 // not client-facing authored content. Pattern B per CLAUDE.md (#398).
 const periodSubtitle = invoice.description ? `For ${invoice.description}` : null
 
-const dueCaption = formatDueCaption(invoice.due_date)
-const daysRemaining = daysUntil(invoice.due_date)
-const paidShortDate = formatShortDate(invoice.paid_at)
-const dueShortDate = formatShortDate(invoice.due_date)
+const actionLabel = isDeclined
+  ? 'Try again'
+  : isCardExpired
+    ? 'Update payment method'
+    : 'Pay invoice'
+const errorTitle = isDeclined ? 'Payment declined' : isCardExpired ? 'Card expired' : 'Link expired'
 
-// Pill label for the right-rail action card
-let pillLabel = 'Invoice'
-if (isPaid) {
-  pillLabel = 'Paid'
-} else if (daysRemaining !== null) {
-  if (daysRemaining < 0) pillLabel = 'Overdue'
-  else if (daysRemaining === 0) pillLabel = 'Due today'
-  else pillLabel = `Due in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`
-}
-
-// A "deposit already received" note must come from an authoritative payment
-// record, never inferred from the line-items/amount delta — asserting a payment
-// fact from arithmetic is a fabrication (Pattern B). Left null until a real
-// deposit-payment source exists to render it from.
-const depositNote = null
+// The head meta is the one place the dates live (Rule 2): issued, then due
+// or paid. No calendar caption restating it below.
+const headMeta =
+  [
+    invoice.sent_at ? `Issued ${formatShortDate(invoice.sent_at)}` : null,
+    isPaid && invoice.paid_at ? `Paid ${formatShortDate(invoice.paid_at)}` : null,
+    !isPaid && invoice.due_date ? `Due ${formatShortDate(invoice.due_date)}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n') || null
 ---
 
 <PortalShell
@@ -162,253 +134,58 @@ const depositNote = null
     crumbLabel="Billing"
     tag={`Invoice № ${invoice.id.slice(0, 2).toUpperCase()}${isPaid ? ' · Paid' : ''}`}
     h1={invoiceTitle}
-    meta={[
-      invoice.sent_at ? `Issued ${formatShortDate(invoice.sent_at)}` : null,
-      isPaid && invoice.paid_at ? `Paid ${formatShortDate(invoice.paid_at)}` : null,
-      !isPaid && invoice.due_date ? `Due ${formatShortDate(invoice.due_date)}` : null,
-    ]
-      .filter(Boolean)
-      .join('\n') || null}
+    meta={headMeta}
   />
 
-  <div class="mt-10 grid grid-cols-1 md:grid-cols-[720px_1fr] gap-10 md:gap-12 items-start">
-    <!-- Main column -->
-    <section class="flex flex-col gap-8 min-w-0">
-      <!-- Subtitle -->
-      <div>
-        {
-          periodSubtitle && (
-            <p class="text-body-lg text-[color:var(--ss-color-text-secondary)]">{periodSubtitle}</p>
-          )
-        }
-        {
-          !isPaid && dueCaption && (
-            <p class="mt-4 inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--ss-color-text-muted)]">
-              <span class="material-symbols-outlined text-[18px]" aria-hidden="true">
-                calendar_today
-              </span>
-              Due {dueCaption}
-            </p>
-          )
-        }
-        {
-          isPaid && paidShortDate && (
-            <p class="mt-4 inline-flex items-center gap-2 text-label uppercase font-semibold text-[color:var(--ss-color-complete)]">
-              <span class="material-symbols-outlined text-[18px]" aria-hidden="true">
-                check_circle
-              </span>
-              Paid {paidShortDate}
-            </p>
-          )
-        }
-      </div>
+  {
+    periodSubtitle && (
+      <p class="mt-6 font-body text-base text-[color:var(--ss-color-text-secondary)]">
+        {periodSubtitle}
+      </p>
+    )
+  }
 
-      <!-- Mobile-only hero card: accent-barred surface with amount + CTA.
-               The right rail ActionCard covers this on desktop. -->
-      <div class="md:hidden">
-        {
-          isErrorState && (
-            <div
-              class="mb-card rounded-lg border border-[color:var(--ss-color-attention)]/30 bg-[color:var(--ss-color-attention)]/5 p-stack"
-              role="status"
-            >
-              <div class="flex items-start gap-row">
-                <span class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-attention)] mt-0.5">
-                  error
-                </span>
-                <div class="min-w-0">
-                  <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
-                    {isDeclined
-                      ? 'Payment declined'
-                      : isCardExpired
-                        ? 'Card expired'
-                        : 'Link expired'}
-                  </p>
-                  <p class="mt-1 text-body text-[color:var(--ss-color-text-secondary)]">
-                    {surface.next}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )
-        }
-        <div
-          class="relative overflow-hidden rounded-lg border border-[color:var(--ss-color-border)] bg-[color:var(--ss-color-surface)] p-card"
+  {
+    isErrorState && (
+      <div
+        role="status"
+        class="mt-6 border-[3px] border-[color:var(--ss-color-error)] px-5 py-3 font-mono text-label uppercase tracking-[0.14em] font-bold text-[color:var(--ss-color-error)]"
+      >
+        {errorTitle}. {surface.next}
+      </div>
+    )
+  }
+
+  <PortalDetailTable eyebrow="What's included" label="Invoice lines">
+    {
+      lineItems.map((li) => (
+        <PortalDetailRow label={li.description} align="end">
+          <MoneyDisplay amountCents={li.amount_cents} size="body" emphasize />
+        </PortalDetailRow>
+      ))
+    }
+    <PortalDetailRow label="Total" align="end" emphasis>
+      <MoneyDisplay amountCents={totalCents} size="row" />
+    </PortalDetailRow>
+  </PortalDetailTable>
+
+  {
+    !isPaid &&
+      !isLinkExpired &&
+      (isPayable ? (
+        <div class="mt-8" aria-label={actionLabel}>
+          <PortalActionLink href={stripeUrl} label={actionLabel} tone="primary" />
+          <p class="mt-3 font-mono text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
+            Opens secure payment on Stripe.
+          </p>
+        </div>
+      ) : (
+        <p
+          class="mt-8 font-mono text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]"
+          aria-label="Payment link pending"
         >
-          <div
-            class="absolute left-0 top-0 h-full w-1 bg-[color:var(--ss-color-primary)]"
-            aria-hidden="true"
-          >
-          </div>
-          <MoneyDisplay amountCents={amountCents} size="display" />
-          {
-            !isPaid && (
-              <p class="mt-1 text-label uppercase text-[color:var(--ss-color-text-muted)]">
-                Remaining balance
-              </p>
-            )
-          }
-          {
-            !isPaid &&
-              !isLinkExpired &&
-              (isPayable ? (
-                <>
-                  <a
-                    href={stripeUrl}
-                    class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2"
-                  >
-                    {isDeclined
-                      ? 'Try again'
-                      : isCardExpired
-                        ? 'Update payment method'
-                        : 'Pay invoice'}
-                  </a>
-                  <div class="mt-3 flex items-center justify-center gap-2 text-label uppercase font-semibold text-[color:var(--ss-color-text-muted)]">
-                    <span class="material-symbols-outlined text-[16px]" aria-hidden="true">
-                      lock
-                    </span>
-                    <span>Secure payment via Stripe</span>
-                  </div>
-                </>
-              ) : (
-                <div class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--ss-color-surface-muted)] text-[color:var(--ss-color-text-secondary)] font-semibold">
-                  Payment link pending
-                </div>
-              ))
-          }
-        </div>
-      </div>
-
-      <!-- What's included -->
-      <div>
-        <h2 class="font-body font-bold text-title text-[color:var(--ss-color-text-primary)]">
-          What's included
-        </h2>
-        <ul class="mt-stack flex flex-col">
-          {
-            lineItems.map((li) => (
-              <li class="flex justify-between items-baseline gap-card py-5 border-b border-[color:var(--ss-color-border)]/60">
-                <span class="text-body text-[color:var(--ss-color-text-secondary)] max-w-[480px]">
-                  {li.description}
-                </span>
-                <MoneyDisplay amountCents={li.amount_cents} size="body" emphasize />
-              </li>
-            ))
-          }
-        </ul>
-        <div class="mt-card pt-5 flex justify-between items-baseline">
-          <span class="font-body font-bold text-title text-[color:var(--ss-color-text-primary)]"
-            >Total</span
-          >
-          <MoneyDisplay amountCents={totalCents} size="h2" />
-        </div>
-      </div>
-
-      <InvoicePaymentDetails
-        dueShortDate={dueShortDate}
-        isPaid={isPaid}
-        paidShortDate={paidShortDate}
-        depositNote={depositNote}
-      />
-    </section>
-
-    <!-- Desktop right rail (sticky) -->
-    <aside class="hidden md:flex md:flex-col gap-card md:sticky md:top-8">
-      {
-        isPaid ? (
-          <div class="bg-[color:var(--ss-color-surface)] rounded-lg border border-[color:var(--ss-color-border)] p-section">
-            <p class="text-label uppercase text-[color:var(--ss-color-complete)]">Paid</p>
-            <div class="mt-3">
-              <MoneyDisplay amountCents={amountCents} size="display" />
-            </div>
-            {paidShortDate && (
-              <p class="mt-4 text-caption font-medium text-[color:var(--ss-color-complete)]">
-                Paid {paidShortDate}.
-              </p>
-            )}
-          </div>
-        ) : isLinkExpired ? (
-          <div class="bg-[color:var(--ss-color-surface)] rounded-lg border border-[color:var(--ss-color-border)] p-section">
-            <p class="text-label uppercase text-[color:var(--ss-color-attention)]">Link expired</p>
-            <div class="mt-3">
-              <MoneyDisplay amountCents={amountCents} size="display" />
-              <p class="mt-2 text-label uppercase text-[color:var(--ss-color-text-muted)]">
-                Remaining balance
-              </p>
-            </div>
-            <p class="mt-6 text-body text-[color:var(--ss-color-text-secondary)]">{surface.next}</p>
-          </div>
-        ) : (
-          <>
-            {isErrorState && (
-              <div
-                class="rounded-lg border border-[color:var(--ss-color-attention)]/30 bg-[color:var(--ss-color-attention)]/5 p-stack"
-                role="status"
-              >
-                <div class="flex items-start gap-row">
-                  <span class="material-symbols-outlined text-[20px] text-[color:var(--ss-color-attention)] mt-0.5">
-                    error
-                  </span>
-                  <div class="min-w-0">
-                    <p class="text-body font-semibold text-[color:var(--ss-color-text-primary)]">
-                      {isDeclined ? 'Payment declined' : 'Card expired'}
-                    </p>
-                    <p class="mt-1 text-body text-[color:var(--ss-color-text-secondary)]">
-                      {surface.next}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-            {isPayable ? (
-              <section
-                class="bg-[color:var(--ss-color-surface)] rounded-lg border border-[color:var(--ss-color-border)] p-section"
-                aria-label={
-                  isDeclined ? 'Try again' : isCardExpired ? 'Update payment method' : pillLabel
-                }
-              >
-                <p class="text-label uppercase text-[color:var(--ss-color-text-muted)]">
-                  Remaining balance
-                </p>
-                <div class="mt-1">
-                  <MoneyDisplay amountCents={amountCents} size="display" />
-                </div>
-                <a
-                  href={stripeUrl}
-                  class="mt-6 inline-flex w-full items-center justify-center gap-2 min-h-[52px] px-6 py-4 rounded-lg bg-[color:var(--ss-color-primary)] hover:bg-[color:var(--ss-color-primary-hover)] text-white font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ss-color-action)] focus-visible:ring-offset-2"
-                >
-                  {isDeclined
-                    ? 'Try again'
-                    : isCardExpired
-                      ? 'Update payment method'
-                      : 'Pay invoice'}
-                </a>
-                <div class="mt-4 flex items-center justify-center gap-2 text-label uppercase font-semibold text-[color:var(--ss-color-text-muted)]">
-                  <span class="material-symbols-outlined text-[16px]" aria-hidden="true">
-                    lock
-                  </span>
-                  <span>Secure payment via Stripe</span>
-                </div>
-              </section>
-            ) : (
-              <section
-                class="bg-[color:var(--ss-color-surface)] rounded-lg border border-[color:var(--ss-color-border)] p-section"
-                aria-label="Payment link pending"
-              >
-                <p class="text-label uppercase text-[color:var(--ss-color-text-muted)]">
-                  Payment link pending
-                </p>
-                <div class="mt-3">
-                  <MoneyDisplay amountCents={amountCents} size="display" />
-                  <p class="mt-2 text-label uppercase text-[color:var(--ss-color-text-muted)]">
-                    Remaining balance
-                  </p>
-                </div>
-              </section>
-            )}
-          </>
-        )
-      }
-    </aside>
-  </div>
+          Payment link pending. We will let you know the moment it is ready.
+        </p>
+      ))
+  }
 </PortalShell>

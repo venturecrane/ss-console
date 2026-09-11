@@ -519,21 +519,24 @@ log "Disabled skill guard passed"
 # race), under a 300s ceiling. A rehydration later than 300s would still win;
 # boot smoke's own --check step remains the arbiter either way (Law 12 — the
 # gate can still fail, and did, which is how this defect was found).
-(
-  # SEC-23: strip the account-wide R2 key from THIS subshell's environ. The
-  # subshell is forked here, ~300 lines before the parent's `unset` (below), so
-  # without this its /proc/<pid>/environ would expose the account-wide key to a
-  # same-uid code-executing agent while it lives. ensure-disabled-skills.py
-  # operates on local HERMES_HOME skill dirs and never needs R2.
-  unset R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY
+# SEC-23, corrected (ss#2420): run the converge loop in an EXEC'd shell with the
+# account-wide R2 key scrubbed. The original `( ... ) &` fork carried the key in
+# /proc/<pid>/environ for its whole 120-300s life REGARDLESS of the `unset`
+# inside it — a fork is never exec'd, so its environ stays the exec-time
+# snapshot (the same mechanism the webhook-gate launch below documents). That
+# lingering fork is what the r2-account-key-strip probe caught on every cold
+# boot, misread four times as a gateway-up race. `env -u … bash -c` EXECs,
+# rebuilding a fresh environ without the key; ensure-disabled-skills.py
+# operates on local HERMES_HOME skill dirs and never needs R2.
+env -u R2_ACCESS_KEY_ID -u R2_SECRET_ACCESS_KEY bash -c '
   _clean_streak=0
   _ticks=0
   while [ "${_ticks}" -lt 60 ]; do
     _ticks=$((_ticks + 1))
     sleep 5
-    /opt/hermes/.venv/bin/python3 /app/ensure-disabled-skills.py "${CUSTOMER_YAML}" "${HERMES_HOME}" \
+    /opt/hermes/.venv/bin/python3 /app/ensure-disabled-skills.py "$1" "$2" \
       || true
-    if /opt/hermes/.venv/bin/python3 /app/ensure-disabled-skills.py --check "${CUSTOMER_YAML}" "${HERMES_HOME}" \
+    if /opt/hermes/.venv/bin/python3 /app/ensure-disabled-skills.py --check "$1" "$2" \
       > /dev/null 2>&1; then
       _clean_streak=$((_clean_streak + 1))
       [ "${_clean_streak}" -ge 3 ] && [ "${_ticks}" -ge 24 ] && break
@@ -541,7 +544,7 @@ log "Disabled skill guard passed"
       _clean_streak=0
     fi
   done
-) &
+' _ "${CUSTOMER_YAML}" "${HERMES_HOME}" &
 
 # Step 7c: fail closed if Telegram would run without an allowlist (ADR 0033).
 # TELEGRAM_BOT_TOKEN alone auto-enables Hermes' Telegram platform, and the pinned
@@ -900,13 +903,14 @@ fi
 # authenticates the seam while the agent cannot self-issue.
 #
 # Same pattern for the ADR 0023 heartbeat secrets (they too are read only by the
-# gate's emitter, forked above): MACHINE_HEARTBEAT_KEY is the SHARED fleet bearer,
-# so with the attacker-controlled X-Tenant-Slug header a code-executing agent
-# holding it could forge heartbeats for ANOTHER tenant's slug — writing a false
-# "green"/uptime, or masking a dead peer (the Wave-1 shared-key weakness, ADR 0023
-# locked-decision #10). HEALTHCHECKS_PING_URL is the external dead-man ping target;
-# an agent holding it could spoof liveness at healthchecks.io. Neither has any use
-# in the agent; the gate keeps its inherited copies.
+# gate's emitter, forked above): MACHINE_HEARTBEAT_KEY is this seat's own bearer
+# since migration 0114 (per-seat, verified for this slug only), so a code-executing
+# agent holding it could no longer forge ANOTHER tenant's heartbeat, but it could
+# still write a false "green" for its own seat or mask its own death. Before 0114
+# it was the fleet-wide shared key and the cross-tenant forge was live (the Wave-1
+# weakness, ADR 0023 locked-decision #10). HEALTHCHECKS_PING_URL is the external
+# dead-man ping target; an agent holding it could spoof liveness at healthchecks.io.
+# Neither has any use in the agent; the gate keeps its inherited copies.
 unset OPERATOR_RUNTIME_READ_KEY MACHINE_HEARTBEAT_KEY HEALTHCHECKS_PING_URL
 log "Launching Hermes gateway for profile '${ACTIVE_PROFILE}' (overlay plugins enabled)..."
 

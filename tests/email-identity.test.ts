@@ -125,8 +125,8 @@ describe('ensureLocalUser — auto-link tolerates surrounding whitespace', () =>
       name: 'Seeded Client',
     })
 
-    expect(result.id).toBe(PRE_CLERK_USER_ID)
-    expect(result.entity_id).toBe(PRE_CLERK_ENTITY_ID)
+    expect(result?.id).toBe(PRE_CLERK_USER_ID)
+    expect(result?.entity_id).toBe(PRE_CLERK_ENTITY_ID)
 
     // No second, entity-less row was minted alongside the seeded one. Scoped
     // to the address: migrations/0005_seed_admin_user.sql seeds an unrelated

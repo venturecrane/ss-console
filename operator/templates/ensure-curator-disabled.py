@@ -32,6 +32,7 @@ Usage:
   ensure-curator-disabled.py [--check] [HERMES_HOME]
   (HERMES_HOME defaults to the $HERMES_HOME env var, then /opt/data.)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -81,11 +82,15 @@ def disable(path: Path) -> bool:
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Disable the Hermes curator per profile.")
-    parser.add_argument("--check", action="store_true",
-                        help="verify-only; exit non-zero if any profile config is not disabled")
-    parser.add_argument("hermes_home", nargs="?",
-                        default=os.environ.get("HERMES_HOME", "/opt/data"),
-                        help="Hermes home dir (default: $HERMES_HOME or /opt/data)")
+    parser.add_argument(
+        "--check", action="store_true", help="verify-only; exit non-zero if any profile config is not disabled"
+    )
+    parser.add_argument(
+        "hermes_home",
+        nargs="?",
+        default=os.environ.get("HERMES_HOME", "/opt/data"),
+        help="Hermes home dir (default: $HERMES_HOME or /opt/data)",
+    )
     args = parser.parse_args(argv[1:])
 
     home = Path(args.hermes_home)
@@ -101,8 +106,7 @@ def main(argv: list[str]) -> int:
     if args.check:
         bad = [str(p) for p in configs if not is_disabled(p)]
         if bad:
-            print(f"[{tag}] CHECK FAILED: curator not disabled in: {', '.join(bad)}",
-                  file=sys.stderr)
+            print(f"[{tag}] CHECK FAILED: curator not disabled in: {', '.join(bad)}", file=sys.stderr)
             return 1
         print(f"[{tag}] CHECK OK: curator disabled in {len(configs)} profile(s)")
         return 0

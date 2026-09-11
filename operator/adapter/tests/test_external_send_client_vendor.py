@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from adapter.trust_ceiling import ActionClass, Ceiling, enforce  # noqa: E402
+from adapter.trust_ceiling import ActionClass, Ceiling, enforce
 
 CLIENT = ActionClass.EXTERNAL_SEND_CLIENT
 VENDOR = ActionClass.EXTERNAL_SEND_VENDOR
