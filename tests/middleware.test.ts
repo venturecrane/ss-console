@@ -1,188 +1,164 @@
+/**
+ * The legacy redirect table (src/lib/routing/legacy-redirects.ts), driven
+ * as data, plus the two middleware facts no runtime test can observe.
+ *
+ * Until 2026-09-11 this file matched src/middleware.ts source text for the
+ * subdomain rewrites, the auth gates, and the redirect rules. The rewrites
+ * and gates are exercised at runtime in tests/middleware-behavior.test.ts
+ * (which drives the exported onRequest against a migrated D1) and
+ * tests/middleware-cross-site.test.ts; those assertions were deleted here
+ * rather than duplicated (review 2026-09-10, Testing 3). What remains: the
+ * redirect rules evaluated through the same `firstRedirect` the middleware
+ * calls, and two drift guards explained inline.
+ */
+
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
+import {
+  firstRedirect,
+  POST_REWRITE_REDIRECTS,
+  PRE_REWRITE_REDIRECTS,
+  type RedirectContext,
+} from '../src/lib/routing/legacy-redirects'
 
-/**
- * Source-level guards for src/middleware.ts.
- *
- * The middleware runs against D1/KV bindings at request time. Integration
- * tests would need a full runtime harness. These tests enforce the
- * architectural invariants at the source level: the three-subdomain
- * routing, strict hostname equality on the legacy redirect, and the
- * cookie-refresh guard that keeps admin cookies off the apex.
- */
-describe('middleware: admin subdomain rewrite', () => {
-  const source = () => readFileSync(resolve('src/middleware.ts'), 'utf-8')
+function ctx(href: string): RedirectContext {
+  const url = new URL(href)
+  return { hostname: url.hostname, pathname: url.pathname, url }
+}
 
-  it('detects admin subdomain with startsWith("admin.")', () => {
-    expect(source()).toContain("hostname.startsWith('admin.')")
-  })
+const post = (href: string) => firstRedirect(POST_REWRITE_REDIRECTS, ctx(href))
+const pre = (href: string) => firstRedirect(PRE_REWRITE_REDIRECTS, ctx(href))
 
-  it('admin rewrite exempts paths already under /admin', () => {
-    const code = source()
-    expect(code).toMatch(/isAdminSubdomain[\s\S]*!pathname\.startsWith\('\/admin'\)/)
-  })
-
-  it('admin rewrite exempts /api/admin', () => {
-    const code = source()
-    expect(code).toMatch(/isAdminSubdomain[\s\S]*!pathname\.startsWith\('\/api\/admin'\)/)
-  })
-
-  it('admin rewrite exempts /auth and /api/auth', () => {
-    const code = source()
-    expect(code).toMatch(/isAdminSubdomain[\s\S]*!pathname\.startsWith\('\/auth'\)/)
-    expect(code).toMatch(/isAdminSubdomain[\s\S]*!pathname\.startsWith\('\/api\/auth'\)/)
-  })
-
-  it('admin rewrite prepends /admin to non-admin paths', () => {
-    const code = source()
-    expect(code).toMatch(
-      /adminPath\s*=\s*pathname\s*===\s*'\/'\s*\?\s*'\/admin'\s*:\s*`\/admin\$\{pathname\}`/
+describe('legacy redirects: host canonicalization', () => {
+  it('apex /admin and /admin/* move to the admin subdomain, keeping path and query', () => {
+    expect(post('https://smd.services/admin')).toEqual({
+      location: 'https://admin.smd.services/admin',
+      status: 301,
+    })
+    expect(post('https://smd.services/admin/entities?stage=engaged')?.location).toBe(
+      'https://admin.smd.services/admin/entities?stage=engaged'
     )
   })
 
-  it('admin rewrite uses context.rewrite, not redirect', () => {
-    const code = source()
-    // Rewrite is transparent — user stays on admin.smd.services in the URL bar.
-    const adminBlock = code.slice(code.indexOf('isAdminSubdomain'))
-    expect(adminBlock).toContain('context.rewrite(')
+  it('does not loop: the same paths on the admin subdomain match no rule', () => {
+    expect(post('https://admin.smd.services/admin/entities')).toBeNull()
+    expect(post('https://admin.smd.services/admin')).toBeNull()
+  })
+
+  it('a hostname that merely ends with the apex is not the apex', () => {
+    expect(post('https://notsmd.services/admin')).toBeNull()
+  })
+
+  it('apex /portal/* moves to the portal subdomain the same way', () => {
+    expect(post('https://smd.services/portal/billing')?.location).toBe(
+      'https://portal.smd.services/portal/billing'
+    )
+    expect(post('https://portal.smd.services/portal/billing')).toBeNull()
   })
 })
 
-describe('legacy redirects: apex + auth rules (src/lib/routing/legacy-redirects.ts)', () => {
-  // The redirect rule table was extracted from middleware.ts (code review
-  // 2026-07-02 §1.3). These source guards follow the logic to its new home and
-  // keep asserting the invariants that matter (loop safety, apex admin
-  // canonicalization, legacy auth targets, permanent status).
-  const source = () => readFileSync(resolve('src/lib/routing/legacy-redirects.ts'), 'utf-8')
-
-  it('uses strict hostname equality for the apex admin redirect (no endsWith/startsWith loop)', () => {
-    // CRITICAL: startsWith/endsWith on the host would also match
-    // admin.smd.services and loop. The rule matches on strict equality.
-    const code = source()
-    expect(code).toContain("hostname === 'smd.services'")
-    expect(code).not.toContain("hostname.endsWith('smd.services')")
-    expect(code).not.toContain("hostname.startsWith('smd.services')")
+describe('legacy redirects: retired paths', () => {
+  it('the dual-auth-era sign-in paths land on the unified sign-in and sign-up, query preserved', () => {
+    expect(post('https://smd.services/auth/login?status=signed_out')?.location).toBe(
+      'https://smd.services/auth/sign-in?status=signed_out'
+    )
+    expect(post('https://portal.smd.services/auth/portal-sign-in')?.location).toBe(
+      'https://portal.smd.services/auth/sign-in'
+    )
+    expect(post('https://portal.smd.services/auth/portal-sign-up')?.location).toBe(
+      'https://portal.smd.services/auth/sign-up'
+    )
+    expect(post('https://portal.smd.services/auth/portal-login')?.location).toBe(
+      'https://portal.smd.services/auth/sign-in'
+    )
+    expect(post('https://smd.services/auth/sign-in')).toBeNull()
   })
 
-  it('redirects apex /admin/* to admin subdomain', () => {
-    const code = source()
-    expect(code).toMatch(/pathname\.startsWith\('\/admin\/'\)/)
-    expect(code).toContain("next.hostname = 'admin.smd.services'")
-  })
-
-  it('301s legacy auth paths to unified /auth/sign-in|sign-up', () => {
-    const code = source()
-    // The unified-auth migration funnels all legacy auth URLs to the new
-    // /auth/sign-in (and /auth/sign-up) entry points.
-    expect(code).toMatch(/'\/auth\/login':\s*'\/auth\/sign-in'/)
-    expect(code).toMatch(/'\/auth\/portal-sign-in':\s*'\/auth\/sign-in'/)
-    expect(code).toMatch(/'\/auth\/portal-sign-up':\s*'\/auth\/sign-up'/)
-    expect(code).toMatch(/'\/auth\/portal-login':\s*'\/auth\/sign-in'/)
-  })
-
-  it('every legacy redirect is permanent (301, never 302/307)', () => {
-    const code = source()
-    expect(code).toMatch(/status:\s*301/)
-    expect(code).not.toMatch(/status:\s*30[27]/)
-  })
-
-  it('the middleware issues the redirect through context.redirect with the rule status', () => {
-    const mw = readFileSync(resolve('src/middleware.ts'), 'utf-8')
-    expect(mw).toMatch(/context\.redirect\(\s*\w+\.location,\s*\w+\.status\s*\)/)
-  })
-})
-
-describe('middleware: unified Clerk auth invariants', () => {
-  const source = () => readFileSync(resolve('src/middleware.ts'), 'utf-8')
-
-  it('admin session resolution is admin-paths-only', () => {
-    // The shim must not fire on portal/marketing paths — admin role lookups
-    // on a portal-only request would be wasted DB work and leak admin
-    // session data into wrong contexts.
-    const code = source()
-    expect(code).toMatch(/resolveAdminSession[\s\S]*?startsWith\('\/admin'\)/)
-  })
-
-  it('admin auth enforcement requires Clerk userId + admin role', () => {
-    // Two-stage check: must be Clerk-authenticated AND have role='admin'
-    // in the local users row resolved via the shim.
-    const code = source()
-    expect(code).toContain('locals.auth()')
-    expect(code).toMatch(/session\.role\s*!==\s*'admin'/)
-  })
-
-  it('portal accepts legacy magic-link sessions as a Clerk fallback', () => {
-    // In-flight invitation emails still produce session_token cookies via
-    // /auth/verify. The portal must keep accepting those until they expire.
-    const code = source()
-    expect(code).toContain('resolveLegacyPortalSession')
-    expect(code).toMatch(/session\?\.role\s*===\s*'client'/)
-  })
-
-  it('Clerk middleware is composed before SS middleware', () => {
-    // Clerk must populate locals.auth() before SS middleware reads it.
-    const code = source()
-    expect(code).toMatch(/sequence\(\s*clerkMiddleware\(\),\s*ssMiddleware\s*\)/)
-  })
-})
-
-describe('middleware: portal rewrite preserved (regression)', () => {
-  const source = () => readFileSync(resolve('src/middleware.ts'), 'utf-8')
-
-  it('still detects portal subdomain', () => {
-    expect(source()).toContain("hostname.startsWith('portal.')")
-  })
-
-  it('still rewrites non-portal paths on the portal subdomain', () => {
-    const code = source()
-    expect(code).toMatch(
-      /portalPath\s*=\s*pathname\s*===\s*'\/'\s*\?\s*'\/portal'\s*:\s*`\/portal\$\{pathname\}`/
+  it('the portal IA rebuild: old list paths land on the new roots, old detail paths map into the subtree', () => {
+    expect(post('https://portal.smd.services/portal/quotes')?.location).toBe(
+      'https://portal.smd.services/portal/engagement'
+    )
+    expect(post('https://portal.smd.services/portal/quotes/q-1')?.location).toBe(
+      'https://portal.smd.services/portal/engagement/proposals/q-1'
+    )
+    expect(post('https://portal.smd.services/portal/invoices')?.location).toBe(
+      'https://portal.smd.services/portal/billing'
+    )
+    expect(post('https://portal.smd.services/portal/invoices/i-1')?.location).toBe(
+      'https://portal.smd.services/portal/billing/invoices/i-1'
+    )
+    expect(post('https://portal.smd.services/portal/documents')?.location).toBe(
+      'https://portal.smd.services/portal/engagement/documents'
     )
   })
+
+  it('retired marketing surfaces go home; /why goes to the operator comparison; /contact is not retired', () => {
+    for (const path of [
+      '/scan',
+      '/consulting',
+      '/ai',
+      '/scorecard/x',
+      '/outside-view',
+      '/consulting/a',
+    ]) {
+      expect(post(`https://smd.services${path}`)?.location, path).toBe('/')
+    }
+    expect(post('https://smd.services/why')?.location).toBe('/operator#compare')
+    expect(post('https://smd.services/book/thanks')?.location).toBe('/get-started?booked=1')
+    expect(post('https://smd.services/contact')).toBeNull()
+  })
+
+  it('bare /get-started goes home, but the post-booking form of it stays', () => {
+    expect(post('https://smd.services/get-started')?.location).toBe('/')
+    expect(post('https://smd.services/get-started?booked=1')).toBeNull()
+  })
+
+  it('the product rename runs before the rewrite and covers every surface, first occurrence only', () => {
+    expect(pre('https://smd.services/ai-employee')?.location).toBe('/operator')
+    expect(pre('https://smd.services/products/ai-employee/pricing')?.location).toBe(
+      '/products/operator/pricing'
+    )
+    expect(pre('https://portal.smd.services/portal/products/ai-employee')?.location).toBe(
+      '/portal/products/operator'
+    )
+    expect(pre('https://smd.services/operator')).toBeNull()
+  })
+
+  it('every rule is permanent, and none targets its own source (no self-loop)', () => {
+    for (const rule of [...PRE_REWRITE_REDIRECTS, ...POST_REWRITE_REDIRECTS]) {
+      expect(rule.status, rule.label).toBe(301)
+    }
+    for (const href of [
+      'https://admin.smd.services/admin/entities',
+      'https://smd.services/auth/sign-in',
+      'https://portal.smd.services/portal/engagement/proposals/q-1',
+      'https://smd.services/operator',
+      'https://smd.services/',
+    ]) {
+      expect(post(href), href).toBeNull()
+      expect(pre(href), href).toBeNull()
+    }
+  })
 })
 
-describe('middleware: 404 route must be SSR (regression lock-in)', () => {
-  // If 404.astro is prerendered, Astro's renderError fallback serves the
-  // static dist/client/404.html via the ASSETS binding and BYPASSES
-  // middleware. That breaks subdomain rewrite for every path that doesn't
-  // match a concrete Astro route (admin.smd.services/analytics etc.) and
-  // users see the marketing-layout 404 instead of the intended admin
-  // redirect. Keep 404 server-rendered — middleware must always run.
-  const source = () => readFileSync(resolve('src/pages/404.astro'), 'utf-8')
-
-  it('404.astro must have prerender = false', () => {
-    const code = source()
+// Two facts a runtime test cannot observe, kept as drift guards with the
+// reason each exists.
+describe('middleware: facts outside the runtime tests (drift guards)', () => {
+  it('404.astro is server-rendered, because a prerendered 404 is served from ASSETS and bypasses the middleware', () => {
+    // A static dist/client/404.html would answer every path with no concrete
+    // route (admin.smd.services/analytics, say) BEFORE the subdomain rewrite
+    // ran, so the admin redirect would never fire for those paths.
+    const code = readFileSync(resolve('src/pages/404.astro'), 'utf-8')
     expect(code).toMatch(/export\s+const\s+prerender\s*=\s*false/)
     expect(code).not.toMatch(/export\s+const\s+prerender\s*=\s*true/)
   })
-})
 
-describe('middleware: session resolution gating', () => {
-  // The admin-shim / legacy-portal gating invariants used to be asserted here by
-  // matching the middleware SOURCE TEXT. That coupled the test to a specific
-  // literal condition — and a source-regex "guard" like that locks in whatever
-  // condition is written, so it would have blocked (not caught) the fleet-health
-  // carve-out fix. These invariants are now covered BEHAVIORALLY in
-  // tests/middleware-behavior.test.ts, which drives the real `onRequest`:
-  //   - admin shim only populates locals.session on admin paths
-  //   - legacy portal session only resolves on portal paths
-  //   - every /api/admin path is Clerk-gated (the fleet/health carve-out was ripped 2026-07-24)
-  // Runtime assertions verify the consequence, not the phrasing of the source.
-
-  it('still has both session resolvers wired into the pipeline', () => {
-    // A minimal structural smoke check: the resolvers exist and are referenced.
-    // Behavior (which paths they fire on) is asserted at runtime elsewhere.
+  it('Clerk runs before the SS middleware, so locals.auth() is populated when the gates read it', () => {
+    // tests/middleware-behavior.test.ts replaces clerkMiddleware with a
+    // pass-through to drive ssMiddleware, so the composition order is the one
+    // thing it cannot see.
     const code = readFileSync(resolve('src/middleware.ts'), 'utf-8')
-    expect(code).toContain('resolveAdminSession')
-    expect(code).toContain('resolveLegacyPortalSession')
+    expect(code).toMatch(/sequence\(\s*clerkMiddleware\(\),\s*ssMiddleware\s*\)/)
   })
 })
-
-// Legacy `admin login host guard` and `login page shows wrong_host error`
-// suites were removed in PR #1059 (Clerk-unified auth decommission). The
-// guarded files — src/pages/api/auth/login.ts and src/pages/auth/login.astro
-// — no longer exist. The functional protection they enforced (admins must
-// authenticate on the admin subdomain) is now provided by Clerk's session
-// being scoped to *.smd.services + enforceAdminAuth requiring role='admin'
-// from the local users row.

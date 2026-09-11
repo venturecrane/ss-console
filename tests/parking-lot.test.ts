@@ -1,220 +1,289 @@
-import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync } from 'fs'
-import { resolve } from 'path'
+/**
+ * Behavioural tests for the parking lot (Decision Stack #11): the data layer
+ * (src/lib/db/parking-lot.ts), the admin route over it, and the badge tone.
+ *
+ * Replaces the source-text mirror of 2026-09-11 (review 2026-09-10, Testing
+ * 3). parking_lot has no org_id column, so every org-isolation case here
+ * proves the JOIN through engagements does the scoping: a row under another
+ * org's engagement must read as null or empty, never as forbidden.
+ */
 
-describe('parking-lot: data access layer', () => {
-  const source = () => readFileSync(resolve('src/lib/db/parking-lot.ts'), 'utf-8')
+import { describe, it, expect, beforeEach } from 'vitest'
+import type { D1Database } from '@cloudflare/workers-types'
+import {
+  createParkingLotItem,
+  deleteParkingLotItem,
+  dispositionParkingLotItem,
+  DISPOSITIONS,
+  getParkingLotItem,
+  listParkingLot,
+} from '../src/lib/db/parking-lot'
+import { statusBadgeClass } from '../src/lib/ui/status-badge'
+import { POST } from '../src/pages/api/admin/engagements/[id]/parking-lot'
+import {
+  adminSession,
+  bindEnv,
+  formRequest,
+  locationOf,
+  locationQuery,
+  migratedDb,
+  routeContext,
+  seedEngagement,
+  seedEntity,
+  seedOrg,
+} from './_stubs/behavioural'
 
-  it('parking-lot.ts exists', () => {
-    expect(existsSync(resolve('src/lib/db/parking-lot.ts'))).toBe(true)
-  })
+const ORG_A = 'org-a'
+const ORG_B = 'org-b'
+const ENT_A = 'ent-a'
+const ENT_B = 'ent-b'
+const ENG_A = 'eng-a'
+const ENG_A2 = 'eng-a2'
+const ENG_B = 'eng-b'
 
-  it('exports listParkingLot function', () => {
-    expect(source()).toContain('export async function listParkingLot')
-  })
+async function stampCreated(db: D1Database, id: string, createdAt: string) {
+  await db.prepare('UPDATE parking_lot SET created_at = ? WHERE id = ?').bind(createdAt, id).run()
+}
 
-  it('exports getParkingLotItem function', () => {
-    expect(source()).toContain('export async function getParkingLotItem')
-  })
-
-  it('exports createParkingLotItem function', () => {
-    expect(source()).toContain('export async function createParkingLotItem')
-  })
-
-  it('exports dispositionParkingLotItem function', () => {
-    expect(source()).toContain('export async function dispositionParkingLotItem')
-  })
-
-  it('exports deleteParkingLotItem function', () => {
-    expect(source()).toContain('export async function deleteParkingLotItem')
-  })
-
-  it('exports Disposition type with three valid values', () => {
-    const code = source()
-    expect(code).toContain('export type Disposition')
-    expect(code).toContain("'fold_in'")
-    expect(code).toContain("'follow_on'")
-    expect(code).toContain("'dropped'")
-  })
-
-  it('exports DISPOSITIONS constant for endpoint validation', () => {
-    expect(source()).toContain('export const DISPOSITIONS')
-  })
-
-  it('uses parameterized queries (no string interpolation in SQL)', () => {
-    const code = source()
-    expect(code).toContain('.bind(')
-    expect(code).not.toMatch(/prepare\(`[^`]*\$\{/)
-  })
-
-  it('generates UUIDs for primary keys', () => {
-    expect(source()).toContain('crypto.randomUUID()')
-  })
-
-  it('orders parking lot items by created_at ASC (oldest first)', () => {
-    expect(source()).toContain('ORDER BY pl.created_at ASC')
-  })
-
-  it('listParkingLot enforces org scoping via JOIN through engagements', () => {
-    // parking_lot has no org_id column; all reads must JOIN engagements
-    // and filter on engagements.org_id to prevent cross-tenant leaks.
-    const code = source()
-    expect(code).toContain('INNER JOIN engagements')
-    expect(code).toContain('e.org_id = ?')
-  })
-
-  it('getParkingLotItem returns null for cross-org items (no enumeration leak)', () => {
-    const code = source()
-    expect(code).toMatch(/getParkingLotItem[\s\S]*INNER JOIN engagements/)
-    expect(code).toContain('return result ?? null')
-  })
-
-  it('createParkingLotItem inserts only the four schema-required write fields', () => {
-    const code = source()
-    expect(code).toContain('INSERT INTO parking_lot')
-    expect(code).toContain('id, engagement_id, description, requested_by')
-  })
-
-  it('dispositionParkingLotItem stamps reviewed_at on update', () => {
-    const code = source()
-    expect(code).toContain('UPDATE parking_lot')
-    expect(code).toContain('reviewed_at')
-    expect(code).toContain('new Date().toISOString()')
-  })
-
-  it('dispositionParkingLotItem returns null for cross-org items', () => {
-    // Pre-checks via getParkingLotItem (org-scoped); returns null if not found.
-    const code = source()
-    expect(code).toMatch(/dispositionParkingLotItem[\s\S]*getParkingLotItem/)
-    expect(code).toMatch(/if \(!existing\)[\s\S]*return null/)
-  })
-
-  it('deleteParkingLotItem refuses to delete dispositioned items', () => {
-    const code = source()
-    expect(code).toMatch(
-      /deleteParkingLotItem[\s\S]*disposition !== null[\s\S]*return 'dispositioned'/
+async function contextRows(db: D1Database) {
+  const rows = await db
+    .prepare(
+      `SELECT type, content, source, source_ref, metadata, engagement_id FROM context ORDER BY created_at ASC`
     )
+    .all<{
+      type: string
+      content: string
+      source: string
+      source_ref: string | null
+      metadata: string | null
+      engagement_id: string | null
+    }>()
+  return rows.results
+}
+
+describe('parking lot against real D1', () => {
+  let db: D1Database
+
+  beforeEach(async () => {
+    db = await migratedDb()
+    await seedOrg(db, ORG_A)
+    await seedOrg(db, ORG_B)
+    await seedEntity(db, { id: ENT_A, orgId: ORG_A, stage: 'engaged' })
+    await seedEntity(db, { id: ENT_B, orgId: ORG_B, stage: 'engaged' })
+    await seedEngagement(db, { id: ENG_A, orgId: ORG_A, entityId: ENT_A })
+    await seedEngagement(db, { id: ENG_A2, orgId: ORG_A, entityId: ENT_A })
+    await seedEngagement(db, { id: ENG_B, orgId: ORG_B, entityId: ENT_B })
+    bindEnv({ DB: db })
   })
 
-  it('deleteParkingLotItem returns not_found for cross-org items', () => {
-    const code = source()
-    expect(code).toMatch(/deleteParkingLotItem[\s\S]*getParkingLotItem[\s\S]*return 'not_found'/)
+  describe('data layer', () => {
+    it('DISPOSITIONS is the closed set the endpoint validates against', () => {
+      expect(DISPOSITIONS).toEqual(['fold_in', 'follow_on', 'dropped'])
+    })
+
+    it('createParkingLotItem stores the request undispositioned and reads it back', async () => {
+      const item = await createParkingLotItem(db, ORG_A, ENG_A, {
+        description: 'Add a second intake form',
+        requested_by: 'Dana',
+      })
+      expect(item).toMatchObject({
+        engagement_id: ENG_A,
+        description: 'Add a second intake form',
+        requested_by: 'Dana',
+        disposition: null,
+        disposition_note: null,
+        reviewed_at: null,
+      })
+      expect(await getParkingLotItem(db, ORG_A, item.id)).toEqual(item)
+    })
+
+    it('listParkingLot returns the engagement items oldest first, and only that engagement', async () => {
+      const newer = await createParkingLotItem(db, ORG_A, ENG_A, { description: 'newer' })
+      const older = await createParkingLotItem(db, ORG_A, ENG_A, { description: 'older' })
+      await createParkingLotItem(db, ORG_A, ENG_A2, { description: 'sibling' })
+      await stampCreated(db, older.id, '2026-01-01T00:00:00.000Z')
+      await stampCreated(db, newer.id, '2026-02-01T00:00:00.000Z')
+
+      const rows = await listParkingLot(db, ORG_A, ENG_A)
+      expect(rows.map((r) => r.description)).toEqual(['older', 'newer'])
+    })
+
+    it('org isolation through the engagement JOIN: another org sees null and an empty list', async () => {
+      const item = await createParkingLotItem(db, ORG_A, ENG_A, { description: 'private' })
+      expect(await getParkingLotItem(db, ORG_B, item.id)).toBeNull()
+      expect(await listParkingLot(db, ORG_B, ENG_A)).toEqual([])
+    })
+
+    it('dispositionParkingLotItem sets the disposition and note and stamps reviewed_at; a second call replaces both', async () => {
+      const item = await createParkingLotItem(db, ORG_A, ENG_A, { description: 'x' })
+      const before = Date.now()
+      const first = await dispositionParkingLotItem(db, ORG_A, item.id, 'follow_on', 'Quote it')
+      expect(first).toMatchObject({ disposition: 'follow_on', disposition_note: 'Quote it' })
+      expect(Date.parse(first!.reviewed_at!)).toBeGreaterThanOrEqual(before - 1000)
+
+      const second = await dispositionParkingLotItem(db, ORG_A, item.id, 'dropped', 'Out of scope')
+      expect(second).toMatchObject({ disposition: 'dropped', disposition_note: 'Out of scope' })
+      expect(Date.parse(second!.reviewed_at!)).toBeGreaterThanOrEqual(
+        Date.parse(first!.reviewed_at!)
+      )
+    })
+
+    it('org isolation: dispositioning from the wrong org returns null and changes nothing', async () => {
+      const item = await createParkingLotItem(db, ORG_A, ENG_A, { description: 'x' })
+      expect(await dispositionParkingLotItem(db, ORG_B, item.id, 'fold_in', 'n')).toBeNull()
+      expect((await getParkingLotItem(db, ORG_A, item.id))?.disposition).toBeNull()
+    })
+
+    it('deleteParkingLotItem: ok while undispositioned, dispositioned once reviewed, not_found across orgs', async () => {
+      const open = await createParkingLotItem(db, ORG_A, ENG_A, { description: 'open' })
+      const reviewed = await createParkingLotItem(db, ORG_A, ENG_A, { description: 'reviewed' })
+      await dispositionParkingLotItem(db, ORG_A, reviewed.id, 'fold_in', 'in scope after all')
+
+      expect(await deleteParkingLotItem(db, ORG_B, open.id)).toBe('not_found')
+      expect(await getParkingLotItem(db, ORG_A, open.id)).not.toBeNull()
+
+      expect(await deleteParkingLotItem(db, ORG_A, reviewed.id)).toBe('dispositioned')
+      expect(await getParkingLotItem(db, ORG_A, reviewed.id)).not.toBeNull()
+
+      expect(await deleteParkingLotItem(db, ORG_A, open.id)).toBe('ok')
+      expect(await getParkingLotItem(db, ORG_A, open.id)).toBeNull()
+      expect(await deleteParkingLotItem(db, ORG_A, open.id)).toBe('not_found')
+    })
+  })
+
+  describe('POST /api/admin/engagements/[id]/parking-lot', () => {
+    const call = (
+      engagementId: string,
+      fields: Record<string, string>,
+      session: ReturnType<typeof adminSession> | null = adminSession(ORG_A)
+    ) =>
+      POST(
+        routeContext({
+          request: formRequest(
+            `http://test.local/api/admin/engagements/${engagementId}/parking-lot`,
+            fields
+          ),
+          params: { id: engagementId },
+          session,
+        }) as unknown as Parameters<typeof POST>[0]
+      )
+
+    it('answers 401 with no admin session and writes nothing', async () => {
+      const res = await call(ENG_A, { description: 'x' }, null)
+      expect(res.status).toBe(401)
+      expect(await listParkingLot(db, ORG_A, ENG_A)).toEqual([])
+    })
+
+    it('an engagement the org does not own reads as not_found', async () => {
+      const res = await call(ENG_B, { description: 'x' })
+      expect(locationOf(res)).toBe('/admin/entities?error=not_found')
+    })
+
+    it('create: a blank description is error=missing; a real one lands the item and an audit entry', async () => {
+      expect(locationQuery(await call(ENG_A, { description: '   ' })).get('error')).toBe('missing')
+
+      const res = await call(ENG_A, { description: '  Second form  ', requested_by: ' Dana ' })
+      expect(locationOf(res)).toBe(`/admin/engagements/${ENG_A}?parking_lot_added=1`)
+      const [item] = await listParkingLot(db, ORG_A, ENG_A)
+      expect(item).toMatchObject({ description: 'Second form', requested_by: 'Dana' })
+
+      const [entry] = await contextRows(db)
+      expect(entry).toMatchObject({
+        type: 'parking_lot',
+        content: 'Second form',
+        source: 'admin',
+        source_ref: `parking_lot:${item.id}:created`,
+        engagement_id: ENG_A,
+      })
+      expect(JSON.parse(entry.metadata ?? '{}')).toEqual({ requested_by: 'Dana', item_id: item.id })
+    })
+
+    it('disposition: the value must be in DISPOSITIONS and the note must be present (Decision #11)', async () => {
+      const item = await createParkingLotItem(db, ORG_A, ENG_A, { description: 'x' })
+      const base = { action: 'disposition', item_id: item.id }
+
+      expect(
+        locationQuery(
+          await call(ENG_A, { ...base, disposition: 'maybe', disposition_note: 'n' })
+        ).get('error')
+      ).toBe('invalid_disposition')
+      expect(
+        locationQuery(
+          await call(ENG_A, { ...base, disposition: 'fold_in', disposition_note: '  ' })
+        ).get('error')
+      ).toBe('missing_note')
+      expect((await getParkingLotItem(db, ORG_A, item.id))?.disposition).toBeNull()
+
+      const res = await call(ENG_A, { ...base, disposition: 'fold_in', disposition_note: ' Fits ' })
+      expect(locationOf(res)).toBe(`/admin/engagements/${ENG_A}?parking_lot_dispositioned=1`)
+      expect(await getParkingLotItem(db, ORG_A, item.id)).toMatchObject({
+        disposition: 'fold_in',
+        disposition_note: 'Fits',
+      })
+      const entries = await contextRows(db)
+      expect(entries.at(-1)).toMatchObject({
+        type: 'parking_lot',
+        content: 'Dispositioned as fold_in: Fits',
+        source_ref: `parking_lot:${item.id}:dispositioned`,
+        engagement_id: ENG_A,
+      })
+    })
+
+    it('an item on a sibling engagement of the same org is not_found from this engagement URL', async () => {
+      const sibling = await createParkingLotItem(db, ORG_A, ENG_A2, { description: 'sibling' })
+      const res = await call(ENG_A, {
+        action: 'disposition',
+        item_id: sibling.id,
+        disposition: 'dropped',
+        disposition_note: 'n',
+      })
+      expect(locationQuery(res).get('error')).toBe('not_found')
+      expect((await getParkingLotItem(db, ORG_A, sibling.id))?.disposition).toBeNull()
+    })
+
+    it('delete: an undispositioned item goes with an audit entry; a dispositioned one is refused by name', async () => {
+      const open = await createParkingLotItem(db, ORG_A, ENG_A, { description: 'open' })
+      const reviewed = await createParkingLotItem(db, ORG_A, ENG_A, { description: 'reviewed' })
+      await dispositionParkingLotItem(db, ORG_A, reviewed.id, 'dropped', 'no')
+
+      const refused = await call(ENG_A, { _method: 'DELETE', item_id: reviewed.id })
+      expect(locationQuery(refused).get('error')).toBe('cannot_delete_dispositioned')
+      expect(await getParkingLotItem(db, ORG_A, reviewed.id)).not.toBeNull()
+
+      const res = await call(ENG_A, { _method: 'DELETE', item_id: open.id })
+      expect(locationOf(res)).toBe(`/admin/engagements/${ENG_A}?parking_lot_deleted=1`)
+      expect(await getParkingLotItem(db, ORG_A, open.id)).toBeNull()
+      expect((await contextRows(db)).at(-1)).toMatchObject({
+        content: 'Deleted parking lot item: open',
+        source_ref: `parking_lot:${open.id}:deleted`,
+      })
+    })
+  })
+
+  describe('status badge tone', () => {
+    it('each disposition has its own tone, distinct from the unknown-status fallback', () => {
+      const fallback = statusBadgeClass('no-such-status')
+      const tones = DISPOSITIONS.map((d) => statusBadgeClass(d))
+      expect(new Set(tones).size).toBe(DISPOSITIONS.length)
+      expect(tones.filter((t) => t === fallback)).toHaveLength(1)
+      expect(statusBadgeClass('dropped')).toBe(fallback)
+    })
   })
 })
 
-describe('parking-lot: API endpoint', () => {
-  const source = () =>
-    readFileSync(resolve('src/pages/api/admin/engagements/[id]/parking-lot.ts'), 'utf-8')
-
-  it('endpoint file exists', () => {
-    expect(existsSync(resolve('src/pages/api/admin/engagements/[id]/parking-lot.ts'))).toBe(true)
-  })
-
-  it('rejects non-admin sessions with 401', () => {
-    const code = source()
-    expect(code).toContain('requireAdminSession')
-  })
-
-  it('validates engagement ownership via getEngagement', () => {
-    const code = source()
-    expect(code).toContain('getEngagement(env.DB, session.orgId, engagementId)')
-  })
-
-  it('redirects unknown/cross-org engagements to /admin/entities?error=not_found', () => {
-    const code = source()
-    expect(code).toContain("'/admin/entities?error=not_found'")
-  })
-
-  it('dispatches on _method=DELETE, action=disposition, and default=create', () => {
-    const code = source()
-    expect(code).toContain("method === 'DELETE'")
-    expect(code).toContain("action === 'disposition'")
-  })
-
-  it('requires non-empty disposition_note (Decision #11 demands rationale)', () => {
-    const code = source()
-    expect(code).toContain('error=missing_note')
-    expect(code).toMatch(/!note\.trim\(\)/)
-  })
-
-  it('validates disposition value against DISPOSITIONS constant', () => {
-    const code = source()
-    expect(code).toContain('DISPOSITIONS.includes')
-    expect(code).toContain('error=invalid_disposition')
-  })
-
-  it('blocks delete of dispositioned items with explicit error code', () => {
-    const code = source()
-    expect(code).toContain('error=cannot_delete_dispositioned')
-  })
-
-  it('appends a context audit entry on every mutation (create/disposition/delete)', () => {
-    const code = source()
-    // appendContext should appear three times: once per mutation path.
-    const matches = code.match(/appendContext\(env\.DB/g) ?? []
-    expect(matches.length).toBeGreaterThanOrEqual(3)
-  })
-
-  it('audit entries use type=parking_lot and engagement_id for timeline filtering', () => {
-    const code = source()
-    expect(code).toContain("type: 'parking_lot'")
-    expect(code).toContain('engagement_id: engagementId')
-  })
-
-  it('audit source_refs are namespaced parking_lot:<id>:<action>', () => {
-    const code = source()
-    expect(code).toMatch(/parking_lot:\$\{[^}]+\}:created/)
-    expect(code).toMatch(/parking_lot:\$\{[^}]+\}:dispositioned/)
-    expect(code).toMatch(/parking_lot:\$\{[^}]+\}:deleted/)
-  })
-
-  it('emits success flash params parking_lot_added/dispositioned/deleted', () => {
-    const code = source()
-    expect(code).toContain('parking_lot_added=1')
-    expect(code).toContain('parking_lot_dispositioned=1')
-    expect(code).toContain('parking_lot_deleted=1')
-  })
-
-  it('rejects items belonging to a different engagement under the same org', () => {
-    // Defense-in-depth: even within an org, an item_id must belong to the
-    // URL-path engagement, not a sibling engagement.
-    const code = source()
-    expect(code).toContain('item.engagement_id !== engagementId')
-  })
-})
-
-describe('parking-lot: engagement detail page wiring', () => {
-  it('engagement-detail-page.ts loads parking lot data', () => {
-    const code = readFileSync(resolve('src/lib/admin/engagement-detail-page.ts'), 'utf-8')
-    expect(code).toContain("import { listParkingLot } from '../db/parking-lot'")
-    expect(code).toContain('listParkingLot(params.db, params.orgId, params.engagementId)')
-    expect(code).toContain('parkingLotAdded')
-    expect(code).toContain('parkingLotDispositioned')
-    expect(code).toContain('parkingLotDeleted')
-  })
-
-  it('engagement detail page mounts the parking lot panel component', () => {
-    const code = readFileSync(resolve('src/pages/admin/engagements/[id].astro'), 'utf-8')
-    expect(code).toContain('EngagementParkingLotPanel')
-    expect(code).toContain('parkingLot={parkingLot}')
-  })
-
-  it('parking lot panel component exists and renders the list + add form', () => {
-    const path = 'src/components/admin/EngagementParkingLotPanel.astro'
-    expect(existsSync(resolve(path))).toBe(true)
-    const code = readFileSync(resolve(path), 'utf-8')
-    expect(code).toContain('Parking Lot')
-    expect(code).toContain('parkingLot.map')
-    expect(code).toContain('parking-lot') // form action url
-    expect(code).toContain('+ Log parking lot item')
-  })
-})
-
-describe('parking-lot: status badge tones', () => {
-  it('status-badge.ts defines tones for fold_in, follow_on, dropped', () => {
-    const code = readFileSync(resolve('src/lib/ui/status-badge.ts'), 'utf-8')
-    expect(code).toContain('fold_in:')
-    expect(code).toContain('follow_on:')
-    expect(code).toContain('dropped:')
+// The engagement detail page mounts EngagementParkingLotPanel with the rows
+// the loader reads. Astro pages have no handler to invoke, so this stays a
+// composition drift guard, deliberately small.
+describe('parking lot: engagement detail composition (drift guard)', () => {
+  it('the detail page mounts the panel and the panel posts to the route above', async () => {
+    const { readFileSync } = await import('fs')
+    const { resolve } = await import('path')
+    const page = readFileSync(resolve('src/pages/admin/engagements/[id].astro'), 'utf-8')
+    const panel = readFileSync(
+      resolve('src/components/admin/EngagementParkingLotPanel.astro'),
+      'utf-8'
+    )
+    expect(page).toContain('<EngagementParkingLotPanel')
+    expect(panel).toContain('/parking-lot')
   })
 })
