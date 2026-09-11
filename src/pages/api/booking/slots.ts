@@ -14,15 +14,14 @@ import { env } from 'cloudflare:workers'
 
 const FALLBACK_EMAIL = 'team@smd.services'
 
-/**
- * Per-IP ceiling on availability reads, per hour. Generous, because a booking
- * page polls this as the visitor changes timezone or reloads, and shared-NAT
- * offices share one address; tight enough that a scraper hammering the
- * Google freeBusy call behind it (every request is one upstream call) is
- * held at the edge rather than billed upstream. Added 2026-09-11: this was
- * the one public booking route with no limiter, contrary to the 2026-09-09
- * review's reading of the booking surface.
- */
+// Per-IP ceiling on availability reads, per hour. Generous, because a booking
+// page polls this as the visitor changes timezone or reloads, and shared-NAT
+// offices share one address; tight enough that a scraper hammering the
+// Google freeBusy call behind it (every request is one upstream call) is
+// held at the edge rather than billed upstream. Added 2026-09-11: this was
+// the one public booking route with no limiter, contrary to the 2026-09-09
+// review's reading of the booking surface. (A line comment on purpose: the
+// API inventory takes a file's first doc block as the route summary.)
 const SLOTS_PER_IP_PER_HOUR = 120
 
 /**
