@@ -49,6 +49,38 @@ from pathlib import Path
 from typing import Protocol, Sequence
 
 
+def _load_skill_helpers():
+    """The shared helpers vendored beside this file (canonical: operator/templates/skill_helpers.py).
+
+    Looked up beside pre_run.py first, then under /opt/data/skills and /app/skills,
+    the two places the seat image and the volume seed put this skill's files.
+    A missing copy is a packaging defect, not a runtime condition to tolerate.
+    """
+    import importlib.util
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    candidates = [_Path(__file__).resolve().parent]
+    for base in ("/opt/data/skills", "/app/skills"):
+        candidates.append(_Path(base) / _SKILL_DIRNAME)
+    for cand in candidates:
+        module_path = cand / "skill_helpers.py"
+        if not module_path.is_file():
+            continue
+        spec = importlib.util.spec_from_file_location("skill_helpers_" + _SKILL_DIRNAME.replace("-", "_"), module_path)
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        _sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        return module
+    raise RuntimeError("skill_helpers.py is missing beside pre_run.py for " + _SKILL_DIRNAME)
+
+
+_SKILL_DIRNAME = "deadline-miss-escalator"
+_H = _load_skill_helpers()
+
+
 # ---------------------------------------------------------------------------
 # Deadline source protocol — the real adapter reads Smokeball (list_tasks
 # due_date) + the mail/calendar binding (list_calendar_entries) and the firm's
@@ -143,14 +175,7 @@ _PACK_DEFAULT_WINDOWS = EscalationWindows()
 _PACK_DEFAULT_FIRE_POLICY = FirePolicy()
 
 
-def _pos_int(value, fallback: int) -> int:
-    """A positive int override, else the pack default. Any junk → default
-    (never crash, never silently suppress)."""
-    if isinstance(value, bool):
-        return fallback
-    if isinstance(value, int) and value > 0:
-        return value
-    return fallback
+_pos_int = _H.pos_int
 
 
 def load_escalation_config(
@@ -580,8 +605,7 @@ def decide(
 # ---------------------------------------------------------------------------
 
 
-def _next_scheduled_at(now: datetime, schedule_hours: int = 24) -> str:
-    return (now + timedelta(hours=schedule_hours)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+_next_scheduled_at = _H.next_scheduled_at
 
 
 # At most this many plans are serialized onto the wake line. A prompt-injected
@@ -618,23 +642,10 @@ _HANDOFF_SKILL = "deadline-miss-escalator"
 _HANDOFF_STARTED_AT = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _handoff_values(node, key: str, out: list) -> list:
-    """Every ``key`` string in a nested payload, deduped, first-seen order."""
-    if isinstance(node, dict):
-        value = node.get(key)
-        if isinstance(value, str) and value and value not in out:
-            out.append(value)
-        for child in node.values():
-            _handoff_values(child, key, out)
-    elif isinstance(node, list):
-        for child in node:
-            _handoff_values(child, key, out)
-    return out
+_handoff_values = _H.handoff_values
 
 
-def _is_iso_day(value: str) -> bool:
-    """YYYY-MM-DD and nothing else. The register must never learn a non-date."""
-    return len(value) == 10 and value[4] == "-" and value[7] == "-" and value.replace("-", "").isdigit()
+_is_iso_day = _H.is_iso_day
 
 
 #: Per-item date fields whose values a digest line renders BESIDE the matter
@@ -790,9 +801,7 @@ def _emit_wake(
     return 0
 
 
-def _emit_suppress() -> int:
-    print(json.dumps({"wakeAgent": False}))
-    return 0
+_emit_suppress = _H.emit_suppress
 
 
 def _deadline_to_dict(d: MatterDeadline) -> dict:
@@ -1142,50 +1151,18 @@ def _extract_items(payload) -> list | None:
     return None
 
 
-def _parse_iso_date(value) -> date | None:
-    if not isinstance(value, str) or len(value) < 10:
-        return None
-    try:
-        return date.fromisoformat(value[:10])
-    except ValueError:
-        return None
+_parse_iso_date = _H.parse_iso_date
 
 
-def _first_date(item: dict, keys: Sequence[str]) -> date | None:
-    for key in keys:
-        parsed = _parse_iso_date(item.get(key))
-        if parsed is not None:
-            return parsed
-    return None
+_first_date = _H.first_date
 
 
 def _matter_id_of(item: dict) -> str:
-    # The live Smokeball /tasks payload carries the matter as a NESTED link
-    # object ({"matter": {"id": ..., "href": ...}}), not a flat matterId —
-    # found by the WP-D probe (ss #1915). The flat keys stay as fallbacks; the
-    # bare "id" fallback is last (it is the TASK's own id, kept only for the
-    # calendar-entry shapes that flatten differently).
-    matter = item.get("matter") or item.get("Matter")
-    if isinstance(matter, dict):
-        nested = matter.get("id") or matter.get("Id")
-        if isinstance(nested, str) and nested:
-            return nested
-    for key in _MATTER_ID_KEYS:
-        value = item.get(key)
-        if isinstance(value, str) and value:
-            return value
-    return "unknown-matter"
+    return _H.matter_id_of(item, _MATTER_ID_KEYS)
 
 
 def _source_id_of(item: dict) -> str | None:
-    """The item's own stable Smokeball id, or None. Never falls back to the
-    matter id — a per-item ack token keyed on the matter would silence every
-    item on that matter."""
-    for key in _SOURCE_ID_KEYS:
-        value = item.get(key)
-        if isinstance(value, (str, int)) and str(value).strip():
-            return str(value)
-    return None
+    return _H.source_id_of(item, _SOURCE_ID_KEYS)
 
 
 # A probe artifact older than this is stale: its rehearsal is over and its
@@ -1215,24 +1192,7 @@ def _probe_stamp_of(item: dict) -> datetime | None:
 
 
 def _matter_number_of(item: dict) -> tuple[str | None, str | None]:
-    """``(matter_number, absent_reason)`` — exactly one is non-None.
-
-    The number is the connector's code-projected ``matterNumber`` (ss #2390),
-    never derived here. The absence reasons are the connector's typed ones
-    (``matterNumberAbsent``); an item with neither annotation came from a pull
-    where the enrichment step itself never ran or crashed wholesale, which for
-    the degraded-run judgment IS a resolution failure — with one carve: an item
-    that names no matter at all can only ever be "no_matter_link".
-    """
-    number = item.get("matterNumber")
-    if isinstance(number, str) and number:
-        return number, None
-    absent = item.get("matterNumberAbsent")
-    if isinstance(absent, str) and absent:
-        return None, absent
-    if _matter_id_of(item) == "unknown-matter":
-        return None, "no_matter_link"
-    return None, "lookup_failed"
+    return _H.matter_number_of(item, _MATTER_ID_KEYS)
 
 
 def parse_pull(raw: dict, *, now: datetime | None = None) -> tuple[list[MatterDeadline], str | None, dict]:

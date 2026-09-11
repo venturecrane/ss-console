@@ -25,7 +25,7 @@ import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 import { verifyMachineRequest } from '../../../lib/auth/machine-key'
 import type { SummaryStatus } from '../../../lib/admin/runtime-summary'
-import { jsonResponse } from '../../../lib/api/helpers'
+import { jsonResponse, errorResponse } from '../../../lib/api/helpers'
 
 const STATUSES: ReadonlySet<string> = new Set(['green', 'yellow', 'red', 'unknown'])
 
@@ -37,27 +37,23 @@ interface SummaryBody {
   pushed_at?: unknown
 }
 
-function json(body: unknown, status: number): Response {
-  return jsonResponse(status, body)
-}
-
 function nonNegInt(v: unknown): number | null {
   return typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : null
 }
 
 export const POST: APIRoute = async ({ request }) => {
   const auth = await verifyMachineRequest(request, env.MACHINE_HEARTBEAT_KEY, env.DB)
-  if (!auth.ok) return json({ error: 'unauthorized' }, 401)
+  if (!auth.ok) return errorResponse(401, 'unauthorized')
 
   let body: SummaryBody
   try {
     body = await request.json<SummaryBody>()
   } catch {
-    return json({ error: 'invalid_json' }, 400)
+    return errorResponse(400, 'invalid_json')
   }
 
   if (typeof body.pushed_at !== 'string' || body.pushed_at.length === 0) {
-    return json({ error: 'missing_pushed_at' }, 400)
+    return errorResponse(400, 'missing_pushed_at')
   }
 
   const status: SummaryStatus =
@@ -88,5 +84,5 @@ export const POST: APIRoute = async ({ request }) => {
     .bind(auth.entityId, auth.slug, status, openAlerts, draftDepth, lastActivity, body.pushed_at)
     .run()
 
-  return json({ ok: true }, 200)
+  return jsonResponse(200, { ok: true })
 }

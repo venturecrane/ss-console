@@ -1,4 +1,10 @@
-import { escapeHtml, isValidEmail, jsonResponse, trimString } from '../../lib/api/helpers'
+import {
+  escapeHtml,
+  isValidEmail,
+  jsonResponse,
+  trimString,
+  errorResponse,
+} from '../../lib/api/helpers'
 import type { APIContext, APIRoute } from 'astro'
 import { sendEmail } from '../../lib/email/resend'
 import { rateLimitByIp } from '../../lib/booking/rate-limit'
@@ -64,14 +70,14 @@ async function handlePost({ request }: APIContext): Promise<Response> {
   const clientIp = request.headers.get('cf-connecting-ip') ?? undefined
   const rateLimitResult = await rateLimitByIp(env.BOOKING_CACHE, 'contact', clientIp, 3)
   if (!rateLimitResult.allowed) {
-    return jsonResponse(429, { error: 'Too many requests, please try again later.' })
+    return errorResponse(429, 'rate_limited')
   }
 
   let body: Record<string, unknown>
   try {
     body = await request.json()
   } catch {
-    return jsonResponse(400, { error: 'Invalid JSON' })
+    return errorResponse(400, 'invalid_json')
   }
 
   // Honeypot check — bots fill this hidden field, humans don't
@@ -81,7 +87,7 @@ async function handlePost({ request }: APIContext): Promise<Response> {
 
   const validated = validateContactBody(body)
   if ('errors' in validated) {
-    return jsonResponse(400, { error: 'Validation failed', fields: validated.errors })
+    return errorResponse(400, 'validation_failed', undefined, { fields: validated.errors })
   }
 
   const { name, email, message } = validated
@@ -101,13 +107,13 @@ async function handlePost({ request }: APIContext): Promise<Response> {
 
     if (!result.success) {
       console.error('[api/contact] Resend error:', result.error)
-      return jsonResponse(500, { error: 'Failed to send message' })
+      return errorResponse(500, 'unavailable', 'The message could not be sent.')
     }
 
     return jsonResponse(200, { ok: true })
   } catch (err) {
     console.error('[api/contact] Error:', err)
-    return jsonResponse(500, { error: 'Failed to send message' })
+    return errorResponse(500, 'unavailable', 'The message could not be sent.')
   }
 }
 

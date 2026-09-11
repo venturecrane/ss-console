@@ -348,7 +348,7 @@ async function handlePost({ request, locals, redirect, params }: APIContext): Pr
 
   const invoiceId = params.id
   if (!invoiceId) {
-    return errorResponse(400, 'Invoice ID required')
+    return errorResponse(400, 'validation_failed', 'Invoice ID required.')
   }
 
   try {

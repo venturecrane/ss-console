@@ -1,4 +1,4 @@
-import { jsonResponse } from '../../../../../lib/api/helpers'
+import { jsonResponse, errorResponse } from '../../../../../lib/api/helpers'
 import type { APIRoute } from 'astro'
 import { appendContext, listContext, type ContextType } from '../../../../../lib/db/context'
 import { getEntity } from '../../../../../lib/db/entities'
@@ -20,20 +20,20 @@ export const GET: APIRoute = async ({ params, locals }) => {
 
   const entityId = params.id
   if (!entityId) {
-    return jsonResponse(400, { error: 'Missing entity ID' })
+    return errorResponse(400, 'validation_failed', 'Missing entity ID.')
   }
 
   try {
     const entity = await getEntity(env.DB, session.orgId, entityId)
     if (!entity) {
-      return jsonResponse(404, { error: 'Entity not found' })
+      return errorResponse(404, 'not_found', 'Entity not found.')
     }
 
     const entries = await listContext(env.DB, entityId)
     return jsonResponse(200, { entity_id: entityId, entries })
   } catch (err) {
     console.error('[api/admin/entities/context] GET Error:', err)
-    return jsonResponse(500, { error: 'Internal server error' })
+    return errorResponse(500, 'internal_error')
   }
 }
 

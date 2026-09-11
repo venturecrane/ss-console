@@ -93,6 +93,38 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Protocol, Sequence
 
+
+def _load_skill_helpers():
+    """The shared helpers vendored beside this file (canonical: operator/templates/skill_helpers.py).
+
+    Looked up beside pre_run.py first, then under /opt/data/skills and /app/skills,
+    the two places the seat image and the volume seed put this skill's files.
+    A missing copy is a packaging defect, not a runtime condition to tolerate.
+    """
+    import importlib.util
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    candidates = [_Path(__file__).resolve().parent]
+    for base in ("/opt/data/skills", "/app/skills"):
+        candidates.append(_Path(base) / _SKILL_DIRNAME)
+    for cand in candidates:
+        module_path = cand / "skill_helpers.py"
+        if not module_path.is_file():
+            continue
+        spec = importlib.util.spec_from_file_location("skill_helpers_" + _SKILL_DIRNAME.replace("-", "_"), module_path)
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        _sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        return module
+    raise RuntimeError("skill_helpers.py is missing beside pre_run.py for " + _SKILL_DIRNAME)
+
+
+_SKILL_DIRNAME = "client-verification-tracker"
+_H = _load_skill_helpers()
+
 SKILL_NAME = "client-verification-tracker"
 
 # The config-missing surface is seat-level, not per-item. It is remembered in the
@@ -206,45 +238,14 @@ class ChaseConfig:
 _DEFAULT_REFIRE_DAYS = 3
 
 
-def _pos_int_or_none(value):
-    """A positive int, else None. Any junk (bool, str, <=0, missing) -> None so
-    the caller treats the dial as unauthored (fail-closed), never as a default."""
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int) and value > 0:
-        return value
-    return None
+_pos_int_or_none = _H.pos_int_or_none
 
 
-def _pos_int(value, fallback: int) -> int:
-    if isinstance(value, bool):
-        return fallback
-    if isinstance(value, int) and value > 0:
-        return value
-    return fallback
+_pos_int = _H.pos_int
 
 
 def _find_skill_settings(data) -> dict:
-    """Return this skill's per-skill ``settings:`` block from the materialized
-    customer.yaml, searching every persona's ``skills:`` list. Empty dict when
-    the entry or its settings are absent/malformed (-> unauthored)."""
-    if not isinstance(data, dict):
-        return {}
-    personas = data.get("personas")
-    if not isinstance(personas, list):
-        return {}
-    for persona in personas:
-        if not isinstance(persona, dict):
-            continue
-        skills = persona.get("skills")
-        if not isinstance(skills, list):
-            continue
-        for entry in skills:
-            if not isinstance(entry, dict) or entry.get("name") != SKILL_NAME:
-                continue
-            settings = entry.get("settings")
-            return settings if isinstance(settings, dict) else {}
-    return {}
+    return _H.find_skill_settings(data, SKILL_NAME)
 
 
 def load_chase_config(customer_yaml_path: str | None = None) -> tuple[ChaseConfig, int]:
@@ -376,20 +377,7 @@ class WakeDecision:
     extra_metadata: dict = field(default_factory=dict)
 
 
-def _hold_active(hold_state) -> bool:
-    """True iff the item's hold sentinel blocks the chase.
-
-    A hold is open once it has any raise and is not ``resolved``. An ``acked``
-    hold stays BLOCKING — ack means "a person saw the surface", not "the
-    condition is fixed"; it only snoozes the re-surface (``should_fire``
-    handles that). ``handed_off`` likewise blocks and additionally ends
-    autonomous re-surfacing: a person owns the item. Only ``resolved`` —
-    written by the turn that confirmed the condition is fixed (e.g. the signer
-    is confirmed) — releases the chase.
-    """
-    if hold_state is None or hold_state.attempts == 0:
-        return False
-    return not hold_state.resolved
+_hold_active = _H.hold_active
 
 
 def _chase_due(
@@ -682,13 +670,10 @@ def _write_pre_run_handoff(payload: dict) -> None:
     writer.write_pre_run_handoff(payload, skill=_HANDOFF_SKILL, started_at=_HANDOFF_STARTED_AT)
 
 
-def _emit_suppress() -> int:
-    print(json.dumps({"wakeAgent": False}))
-    return 0
+_emit_suppress = _H.emit_suppress
 
 
-def _next_scheduled_at(now: datetime, schedule_hours: int = 24) -> str:
-    return (now + timedelta(hours=schedule_hours)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+_next_scheduled_at = _H.next_scheduled_at
 
 
 def _parse():
@@ -961,40 +946,15 @@ _MATTER_ID_KEYS = ("matterId", "MatterId", "matter_id")
 _SOURCE_ID_KEYS = ("id", "Id", "taskId", "TaskId")
 
 
-def _extract_items(payload) -> list | None:
-    if isinstance(payload, list):
-        return payload
-    if isinstance(payload, dict):
-        for key in ("items", "value", "results", "tasks", "data"):
-            value = payload.get(key)
-            if isinstance(value, list):
-                return value
-    return None
+_extract_items = _H.extract_items
 
 
 def _matter_id_of(item: dict) -> str:
-    # The live Smokeball /tasks payload carries the matter as a NESTED link
-    # object ({"matter": {"id": ..., "href": ...}}), not a flat matterId —
-    # found by the WP-D probe when the flat-key miss put "unknown-matter" into
-    # every item identity and forked the ledger join (ss #1915).
-    matter = item.get("matter") or item.get("Matter")
-    if isinstance(matter, dict):
-        nested = matter.get("id") or matter.get("Id")
-        if isinstance(nested, str) and nested:
-            return nested
-    for key in _MATTER_ID_KEYS:
-        value = item.get(key)
-        if isinstance(value, str) and value:
-            return value
-    return "unknown-matter"
+    return _H.matter_id_of(item, _MATTER_ID_KEYS)
 
 
 def _source_id_of(item: dict) -> str | None:
-    for key in _SOURCE_ID_KEYS:
-        value = item.get(key)
-        if isinstance(value, (str, int)) and str(value).strip():
-            return str(value)
-    return None
+    return _H.source_id_of(item, _SOURCE_ID_KEYS)
 
 
 # Rehearsal/self-test artifacts carry "[SMD-PROBE <stamp>]" at the start of
@@ -1007,10 +967,7 @@ _PROVENANCE_MARK = "[Operator]"
 
 
 def _is_probe_subject(subject: str) -> bool:
-    text = subject.lstrip()
-    if text.upper().startswith(_PROVENANCE_MARK.upper()):
-        text = text[len(_PROVENANCE_MARK) :].lstrip()
-    return text.upper().startswith(_PROBE_MARK.upper())
+    return _H.is_probe_subject(subject, _PROBE_MARK, _PROVENANCE_MARK)
 
 
 def _is_verification_task(subject: str) -> bool:
@@ -1020,18 +977,7 @@ def _is_verification_task(subject: str) -> bool:
 
 
 def _matter_number_of(item: dict) -> tuple[str | None, str | None]:
-    """``(matter_number, absent_reason)`` — exactly one is non-None. The
-    number is the connector's code-projected ``matterNumber`` (ss #2390);
-    never derived here. Same reading as the escalator's."""
-    number = item.get("matterNumber")
-    if isinstance(number, str) and number:
-        return number, None
-    absent = item.get("matterNumberAbsent")
-    if isinstance(absent, str) and absent:
-        return None, absent
-    if _matter_id_of(item) == "unknown-matter":
-        return None, "no_matter_link"
-    return None, "lookup_failed"
+    return _H.matter_number_of(item, _MATTER_ID_KEYS)
 
 
 def parse_pull(raw: dict, *, today: date) -> tuple[list[VerificationItem], str | None]:

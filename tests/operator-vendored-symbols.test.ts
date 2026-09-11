@@ -14,13 +14,23 @@ import { execFileSync } from 'node:child_process'
  * (`decide_and_emit`, `write_suppressed_wake_heartbeat`, `_append_wake_row`,
  * `probe_open_matter_count`, `_skill_name`) copy-pasted into eight skills.
  *
- * WHY THE DUPLICATION IS NOT THE DEFECT. The Hermes scheduler stages
- * `pre_run.py` ALONE into `<profile>/scripts/<skill>/pre_run.py` and runs it
- * there (`operator/templates/pre_run_gate.py:35`). A sibling module extracted
- * next to it is not staged, so importing it fails on a live client seat. These
- * files CANNOT import a shared module today. Vendoring is forced by the
- * staging mechanism, and a gate demanding deduplication would be a gate nobody
- * can satisfy — which is a gate that gets deleted.
+ * WHY THE DUPLICATION WAS NOT THE DEFECT (as written 2026-08-23). The Hermes
+ * scheduler stages `pre_run.py` ALONE into `<profile>/scripts/<skill>/pre_run.py`
+ * and runs it there (`operator/templates/pre_run_gate.py:35`). A sibling module
+ * extracted next to it is not staged, so importing it fails on a live client
+ * seat. Vendoring was read as forced by the staging mechanism.
+ *
+ * WHAT CHANGED (2026-09-11, code review 2026-09-10, Architecture 4). The
+ * reading was already false for the skills that resolve siblings through
+ * `_load_sibling_module` (beside `pre_run.py`, then `/opt/data/skills/<skill>`
+ * and `/app/skills/<skill>`, where the seat image and the volume seed put the
+ * skill's files). The shared library bodies now live ONCE, in
+ * `operator/templates/skill_helpers.py`, vendored byte-for-byte per skill and
+ * gated by `operator/tests/test_skill_helpers_sync.py`. What this contract
+ * still pins is what remains legitimately duplicated in `pre_run.py` itself:
+ * the eight stamps of the empty-seat gate template, the two inline
+ * `BrokerSuppressedWakeWriter` classes, and the one-line wrappers that keep
+ * the old private names so call sites and tests did not move.
  *
  * WHAT IS THE DEFECT: the copies can diverge silently. Eight copies of
  * `decide_and_emit` agree today. Nothing said so, and nothing would say if one
@@ -232,10 +242,11 @@ json.dump({
         JSON.stringify(
           {
             _comment:
-              'Symbols vendored identically into multiple operator/skills/*/pre_run.py. ' +
-              'The Hermes scheduler stages pre_run.py ALONE (operator/templates/pre_run_gate.py:35), ' +
-              'so these files cannot import a shared module — the copies are forced, and this ' +
-              'contract is what keeps them honest. Hashes are over a docstring-stripped ast.dump, ' +
+              'Symbols vendored identically into multiple operator/skills/*/pre_run.py: the eight ' +
+              'stamps of templates/pre_run_gate.py, the inline heartbeat writer classes, and the ' +
+              'one-line wrappers over templates/skill_helpers.py (the shared library bodies live ' +
+              'there since 2026-09-11, gated by operator/tests/test_skill_helpers_sync.py). This ' +
+              'contract is what keeps the remaining copies honest. Hashes are over a docstring-stripped ast.dump, ' +
               'so prose and formatting are ignored and structure is not. Generated and enforced by ' +
               'tests/operator-vendored-symbols.test.ts — do not hand-edit. Regenerate with ' +
               'UPDATE_PRE_RUN_SHARED_SYMBOLS=1 after changing a shared symbol in EVERY copy.',
@@ -276,9 +287,10 @@ json.dump({
         problems.push(
           `${name}: vendored into ${Object.keys(copies).length} skill(s) and no longer identical. ` +
             `Versions: ${shape}. ` +
-            `These copies exist because the scheduler stages pre_run.py alone ` +
-            `(operator/templates/pre_run_gate.py:35) — a change to one MUST be made to all, ` +
-            `or the skills behave differently on a live seat. Apply the change to every copy. ` +
+            `A contracted symbol is one every carrying skill must run identically (a template ` +
+            `stamp, an inline writer class, or a wrapper over skill_helpers.py) — a change to one ` +
+            `MUST be made to all, or the skills behave differently on a live seat. Apply the change ` +
+            `to every copy, or move the body into operator/templates/skill_helpers.py. ` +
             `No regeneration is needed: the contract records names and copy counts, not ` +
             `content, so a change made consistently everywhere passes on its own.`
         )
@@ -297,9 +309,12 @@ json.dump({
 
   it('the contract is non-empty and every entry is genuinely shared', () => {
     // A contract that emptied itself would make the sync test above vacuous
-    // while still passing. Pin the floor.
+    // while still passing. Pin the floor. 23 entries on 2026-08-23; 16 on
+    // 2026-09-11 after the shared library bodies moved into
+    // operator/templates/skill_helpers.py (they are gated there, by
+    // operator/tests/test_skill_helpers_sync.py, not lost).
     const entries = Object.entries(loadContract().symbols)
-    expect(entries.length).toBeGreaterThanOrEqual(20)
+    expect(entries.length).toBeGreaterThanOrEqual(15)
     for (const [name, entry] of entries) {
       expect(entry.copies, `${name} contracted with fewer than 2 copies`).toBeGreaterThan(1)
     }

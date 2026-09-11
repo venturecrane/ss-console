@@ -243,6 +243,18 @@ export default tseslint.config(
           message:
             'Call errorResponse(status, message) from src/lib/api/helpers directly — jsonError was a one-line alias of it in seven files (2026-09-10 review).',
         },
+        // Error bodies are built only by errorResponse(status, code, message?,
+        // extra?), so `error` is always a code from src/lib/api/errors.ts and
+        // `message` is always the prose. Before 2026-09-11 the same key carried
+        // 36 codes and 33 sentences (review 2026-09-10, Architecture 5);
+        // tests/api-error-vocabulary.test.ts pins the catalog membership, this
+        // rule stops a hand-built `{ error: ... }` body from reappearing.
+        {
+          selector:
+            "CallExpression[callee.name='jsonResponse'] > ObjectExpression > Property[key.name='error']",
+          message:
+            'Build error bodies with errorResponse(status, code, message?, extra?) from src/lib/api/helpers; `error` must be a code from src/lib/api/errors.ts and the prose goes in `message` (2026-09-11 vocabulary).',
+        },
         {
           selector:
             "NewExpression[callee.name='Response'] CallExpression[callee.object.name='JSON'][callee.property.name='stringify']",

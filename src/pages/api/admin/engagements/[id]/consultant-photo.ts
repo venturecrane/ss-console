@@ -29,23 +29,24 @@ function extensionFor(mime: string): string {
   return 'jpg'
 }
 
-function json(status: number, body: unknown): Response {
-  return jsonResponse(status, body)
-}
-
 function validatePhotoFile(file: FormDataEntryValue | null): Response | File {
-  if (!file || !(file instanceof File)) return json(400, { error: 'Photo file required' })
+  if (!file || !(file instanceof File))
+    return errorResponse(400, 'validation_failed', 'A photo file is required.')
   if (!ACCEPTED_TYPES.has(file.type)) {
-    return json(415, {
-      error: `Unsupported image type: ${file.type || 'unknown'}. Expected WebP, JPEG, or PNG.`,
-    })
+    return errorResponse(
+      415,
+      'validation_failed',
+      `Unsupported image type: ${file.type || 'unknown'}. Expected WebP, JPEG, or PNG.`
+    )
   }
   if (file.size > MAX_BYTES) {
-    return json(413, {
-      error: `Photo exceeds 5 MB limit (received ${(file.size / (1024 * 1024)).toFixed(2)} MB)`,
-    })
+    return errorResponse(
+      413,
+      'validation_failed',
+      `Photo exceeds 5 MB limit (received ${(file.size / (1024 * 1024)).toFixed(2)} MB)`
+    )
   }
-  if (file.size === 0) return json(400, { error: 'Photo file is empty' })
+  if (file.size === 0) return errorResponse(400, 'validation_failed', 'The photo file is empty.')
   return file
 }
 
@@ -56,12 +57,12 @@ async function handlePost({ request, locals, params }: APIContext): Promise<Resp
 
   const engagementId = params.id
   if (!engagementId) {
-    return errorResponse(400, 'Engagement ID required')
+    return errorResponse(400, 'validation_failed', 'Engagement ID required.')
   }
 
   try {
     const engagement = await getEngagement(env.DB, session.orgId, engagementId)
-    if (!engagement) return json(404, { error: 'Engagement not found' })
+    if (!engagement) return errorResponse(404, 'not_found', 'Engagement not found.')
 
     const formData = await request.formData()
     const fileOrError = validatePhotoFile(formData.get('photo'))
@@ -86,10 +87,10 @@ async function handlePost({ request, locals, params }: APIContext): Promise<Resp
     const photoUrl = publicBase ? `${publicBase}/${key}` : `/api/portal/consultants/photo/${key}`
     await updateEngagement(env.DB, session.orgId, engagementId, { consultant_photo_url: photoUrl })
 
-    return json(201, { key, url: photoUrl })
+    return jsonResponse(201, { key, url: photoUrl })
   } catch (err) {
     console.error('[api/admin/engagements/[id]/consultant-photo] Upload error:', err)
-    return json(500, { error: 'Internal server error' })
+    return errorResponse(500, 'internal_error')
   }
 }
 
@@ -102,13 +103,13 @@ async function handleDelete({ locals, params }: APIContext): Promise<Response> {
 
   const engagementId = params.id
   if (!engagementId) {
-    return errorResponse(400, 'Engagement ID required')
+    return errorResponse(400, 'validation_failed', 'Engagement ID required.')
   }
 
   try {
     const engagement = await getEngagement(env.DB, session.orgId, engagementId)
     if (!engagement) {
-      return errorResponse(404, 'Engagement not found')
+      return errorResponse(404, 'not_found', 'Engagement not found.')
     }
 
     const currentUrl = engagement.consultant_photo_url
@@ -137,7 +138,7 @@ async function handleDelete({ locals, params }: APIContext): Promise<Response> {
     return jsonResponse(200, { ok: true })
   } catch (err) {
     console.error('[api/admin/engagements/[id]/consultant-photo] Delete error:', err)
-    return errorResponse(500, 'Internal server error')
+    return errorResponse(500, 'internal_error')
   }
 }
 

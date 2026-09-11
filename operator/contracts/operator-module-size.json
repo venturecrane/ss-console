@@ -12,10 +12,10 @@
     "operator/runners/medchron/medchron/daemon.py": 531,
     "operator/runners/medchron/medchron/llm.py": 510,
     "operator/safety-substrate/sticky_stop.py": 521,
-    "operator/skills/client-verification-tracker/pre_run.py": 626,
-    "operator/skills/deadline-miss-escalator/pre_run.py": 786,
-    "operator/skills/lien-ledger-tracker/pre_run.py": 930,
-    "operator/skills/medical-records-chaser/pre_run.py": 661,
+    "operator/skills/client-verification-tracker/pre_run.py": 583,
+    "operator/skills/deadline-miss-escalator/pre_run.py": 756,
+    "operator/skills/lien-ledger-tracker/pre_run.py": 880,
+    "operator/skills/medical-records-chaser/pre_run.py": 575,
     "operator/templates/drafting/drafting_gate_check.py": 1135,
     "operator/workspace_broker/establishment_store.py": 1286
   }

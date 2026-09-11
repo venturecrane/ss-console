@@ -16,7 +16,7 @@
  * 400 rather than silently widening the query.
  */
 
-import { jsonResponse } from '../../../../../lib/api/helpers'
+import { errorResponse } from '../../../../../lib/api/helpers'
 import type { APIContext, APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 import {
@@ -36,29 +36,29 @@ async function handleGet({ request, locals }: APIContext): Promise<Response> {
   const url = new URL(request.url)
   const customerSlug = url.searchParams.get('customer_slug')
   if (!customerSlug) {
-    return jsonResponse(400, { error: 'customer_slug query param is required' })
+    return errorResponse(400, 'validation_failed', 'customer_slug query param is required.')
   }
 
   const defaults = defaultWindow()
   const start = url.searchParams.get('start') ?? defaults.start
   const end = url.searchParams.get('end') ?? defaults.end
   if (!DATE_RE.test(start) || !DATE_RE.test(end)) {
-    return jsonResponse(400, { error: 'start and end must be YYYY-MM-DD' })
+    return errorResponse(400, 'validation_failed', 'start and end must be YYYY-MM-DD.')
   }
   if (start >= end) {
-    return jsonResponse(400, { error: 'start must be before end' })
+    return errorResponse(400, 'validation_failed', 'start must be before end.')
   }
 
   const customers = await listCostCustomers(env.DB)
   const customer = customers.find((c) => c.customer_slug === customerSlug)
   if (!customer) {
-    return jsonResponse(404, { error: 'customer not found' })
+    return errorResponse(404, 'not_found', 'customer not found.')
   }
 
   // Central cost_telemetry read via the D1 binding (ADR 0062).
   const result = await fetchCustomerCostRows(env.DB, customerSlug, start, end)
   if (result.error) {
-    return jsonResponse(502, { error: result.error })
+    return errorResponse(502, 'upstream_failed', result.error)
   }
 
   const csv = rowsToCsv(customerSlug, result.rows)

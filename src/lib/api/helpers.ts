@@ -8,6 +8,8 @@
  * existing import surface keeps working.
  */
 
+import { apiErrorBody, type ApiErrorCode } from './errors'
+
 export function trimString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
@@ -47,10 +49,18 @@ export function jsonResponse(status: number, data: unknown): Response {
 }
 
 /**
- * Standard error response: a JSON body of `{ error: message }` at the given
- * status. The single canonical shape for API-route error bodies, so error
- * responses across `src/pages/api/**` are uniform (code review 2026-07-02 §1.7).
+ * Standard error response: `{ error: <code>, message: <prose>, ...extra }` at
+ * the given status. The single canonical shape for API-route error bodies
+ * (code review 2026-07-02 §1.7), with the vocabulary fixed on 2026-09-11 so
+ * `error` is always a machine code from `API_ERROR_CATALOG` and `message` is
+ * always the sentence a person can be shown (the site's wording, else the
+ * catalog default). Extra keys (`fields`, `detail`) ride alongside.
  */
-export function errorResponse(status: number, message: string): Response {
-  return jsonResponse(status, { error: message })
+export function errorResponse(
+  status: number,
+  code: ApiErrorCode,
+  message?: string,
+  extra?: Record<string, unknown>
+): Response {
+  return jsonResponse(status, apiErrorBody(code, message, extra))
 }

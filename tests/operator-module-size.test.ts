@@ -244,21 +244,34 @@ describe('operator module-size ratchet', () => {
             `Split it, or if this is a deliberate carry-over, regenerate the baseline and say why in the PR.`
         )
       } else if (lines > recorded) {
-        // A naive split BREAKS THE RUNTIME for skills/<name>/pre_run.py. The
-        // Hermes scheduler stages that one file to <profile>/scripts/<skill>/
-        // pre_run.py and runs it there (operator/templates/pre_run_gate.py:35);
-        // a sibling module extracted next to it is simply not staged, so the
-        // import fails on a live client seat. Say so where the advice is given,
-        // rather than leaving a correct-sounding instruction that is wrong for
-        // this one shape.
-        const stagedAlone = /skills\/[^/]+\/pre_run\.py$/.test(path)
+        // A naive split BREAKS THE RUNTIME for a skills/<name>/pre_run.py that
+        // has no sibling loader. The Hermes scheduler stages that one file to
+        // <profile>/scripts/<skill>/pre_run.py and runs it there
+        // (operator/templates/pre_run_gate.py:35); a sibling module extracted
+        // next to it is simply not staged, so a bare import fails on a live
+        // client seat. A skill that carries `_load_sibling_module` (or the
+        // `_load_skill_helpers` bootstrap) resolves siblings from the synced
+        // skill dir and /app/skills, so for it the advice is the opposite:
+        // extract, the way escalation_ledger.py and skill_helpers.py are
+        // vendored. The review of 2026-09-10 found the old unconditional NOTE
+        // steering exactly the skills that should split away from splitting.
+        const isPreRun = /skills\/[^/]+\/pre_run\.py$/.test(path)
+        const hasSiblingLoader =
+          isPreRun &&
+          /_load_sibling_module|_load_skill_helpers/.test(
+            readFileSync(join(REPO_ROOT, path), 'utf8')
+          )
         problems.push(
           `${path}: grew ${recorded} -> ${lines} logical lines. The ratchet only tightens — ` +
             `split the module rather than raising its baseline.` +
-            (stagedAlone
+            (isPreRun && !hasSiblingLoader
               ? ` NOTE: the scheduler stages this file ALONE (see operator/templates/pre_run_gate.py:35), ` +
-                `so a naive split breaks the runtime — keep pre_run.py self-contained, or extend the ` +
-                `staging to carry its siblings first.`
+                `so a naive split breaks the runtime — give it a sibling loader first (see ` +
+                `_load_sibling_module in skills/client-verification-tracker/pre_run.py), then extract.`
+              : '') +
+            (isPreRun && hasSiblingLoader
+              ? ` This skill resolves siblings at run time, so extract into a sibling module the way ` +
+                `skill_helpers.py is vendored (operator/tests/test_skill_helpers_sync.py gates the copies).`
               : '')
         )
       }

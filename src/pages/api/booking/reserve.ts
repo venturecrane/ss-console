@@ -17,7 +17,7 @@ import {
 import { syncGoogleCalendarAndPromote } from '../../../lib/booking/calendar-sync'
 import { formatSlotLabelLong, parseOptionalInt } from '../../../lib/booking/reserve-helpers'
 import { requireAppBaseUrl } from '../../../lib/config/app-url'
-import { trimString, isValidEmail, jsonResponse } from '../../../lib/api/helpers'
+import { trimString, isValidEmail, jsonResponse, errorResponse } from '../../../lib/api/helpers'
 import { env } from 'cloudflare:workers'
 
 const FALLBACK_EMAIL = 'team@smd.services'
@@ -48,14 +48,15 @@ function deriveBusinessNameFromEmail(email: string): string {
 function validateSlotTiming(slotStartUtc: string): { slotEndUtc: string } | Response {
   const slotStart = new Date(slotStartUtc)
   if (isNaN(slotStart.getTime())) {
-    return jsonResponse(400, { error: 'validation_failed', message: 'Invalid slot_start_utc' })
+    return errorResponse(400, 'validation_failed', 'Invalid slot_start_utc')
   }
   const earliest = Date.now() + BOOKING_CONFIG.min_notice_minutes * 60_000
   if (slotStart.getTime() < earliest) {
-    return jsonResponse(400, {
-      error: 'slot_unavailable',
-      message: 'This slot is no longer available. Please choose a later time.',
-    })
+    return errorResponse(
+      400,
+      'slot_unavailable',
+      'This slot is no longer available. Please choose a later time.'
+    )
   }
   return {
     slotEndUtc: new Date(slotStart.getTime() + BOOKING_CONFIG.slot_minutes * 60_000).toISOString(),
@@ -70,14 +71,11 @@ function validateReserveInput(body: Record<string, unknown>): ReserveInput | Res
   const slotStartUtc = trimString(body.slot_start_utc)
 
   if (!name || !email || !slotStartUtc) {
-    return jsonResponse(400, {
-      error: 'validation_failed',
-      message: 'name, email, and slot_start_utc are required',
-    })
+    return errorResponse(400, 'validation_failed', 'name, email, and slot_start_utc are required')
   }
 
   if (!isValidEmail(email)) {
-    return jsonResponse(400, { error: 'validation_failed', message: 'Invalid email address' })
+    return errorResponse(400, 'validation_failed', 'Invalid email address')
   }
 
   // business_name and phone are optional for web intakes. The V3 unified
@@ -128,21 +126,22 @@ async function resolvePreSeeded(prefillTokenRaw: string | null): Promise<PreSeed
 }
 
 function calendarSyncFailedJson(): Response {
-  return jsonResponse(503, {
-    error: 'calendar_sync_failed',
-    message: 'We could not create the calendar event. Please try again or email us directly.',
-    fallback: {
-      type: 'email',
-      email: FALLBACK_EMAIL,
-      message: `Please email ${FALLBACK_EMAIL} to schedule your call.`,
-    },
-  })
+  return errorResponse(
+    503,
+    'calendar_sync_failed',
+    'We could not create the calendar event. Please try again or email us directly.',
+    {
+      fallback: {
+        type: 'email',
+        email: FALLBACK_EMAIL,
+        message: `Please email ${FALLBACK_EMAIL} to schedule your call.`,
+      },
+    }
+  )
 }
 
 function calendarUnavailableJson(): Response {
-  return jsonResponse(503, {
-    error: 'calendar_unavailable',
-    message: 'Online booking is temporarily unavailable.',
+  return errorResponse(503, 'calendar_unavailable', 'Online booking is temporarily unavailable.', {
     fallback: {
       type: 'email',
       email: FALLBACK_EMAIL,
@@ -156,17 +155,14 @@ async function handlePost({ request, locals }: APIContext): Promise<Response> {
   try {
     body = await request.json()
   } catch {
-    return jsonResponse(400, { error: 'Invalid JSON' })
+    return errorResponse(400, 'invalid_json')
   }
 
   // Phase 1a: IP rate limiting
   const clientIp = request.headers.get('cf-connecting-ip') ?? undefined
   const rateLimitResult = await rateLimitByIp(env.BOOKING_CACHE, 'reserve', clientIp)
   if (!rateLimitResult.allowed) {
-    return jsonResponse(429, {
-      error: 'rate_limited',
-      message: 'Too many booking attempts. Please try again later.',
-    })
+    return errorResponse(429, 'rate_limited', 'Too many booking attempts. Please try again later.')
   }
 
   // Phase 1b: Input validation
@@ -187,10 +183,11 @@ async function handlePost({ request, locals }: APIContext): Promise<Response> {
   // Phase 2: DB commit
   const holdResult = await acquireHold(env.DB, ORG_ID, validated.slotStartUtc, validated.email)
   if (!holdResult.acquired) {
-    return jsonResponse(409, {
-      error: 'slot_taken',
-      message: 'This time slot was just taken. Please choose another time.',
-    })
+    return errorResponse(
+      409,
+      'slot_taken',
+      'This time slot was just taken. Please choose another time.'
+    )
   }
 
   // First-touch ad attribution, set by middleware on the landing request
@@ -203,7 +200,7 @@ async function handlePost({ request, locals }: APIContext): Promise<Response> {
   } catch (err) {
     console.error('[api/booking/reserve] DB commit failed:', err)
     await releaseHold(env.DB, holdResult.id!)
-    return jsonResponse(500, { error: 'Internal server error' })
+    return errorResponse(500, 'internal_error')
   }
 
   // Build the manage URL once, up front, so we can thread it through the
