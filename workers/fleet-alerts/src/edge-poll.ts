@@ -298,9 +298,57 @@ function conditionFor(
   }
 }
 
+export const LIST_EDGE_TARGETS_SQL = 'SELECT target FROM edge_poll_state'
+export const DELETE_EDGE_COUNTERS_SQL = 'DELETE FROM edge_poll_state WHERE target = ?'
+export const LIST_OPEN_EDGE_ALERTS_SQL =
+  "SELECT customer_slug FROM fleet_alert_state WHERE condition = ? AND status = 'open'"
+
+/**
+ * A target that leaves EDGE_POLL_TARGETS must not leave anything behind. Two
+ * things outlive the config line otherwise: its counters row, and, if it was
+ * down when it was removed, an OPEN edge_down alert that nothing evaluates any
+ * more. stale-holds.ts excludes edge_down on purpose (the target has no
+ * fleet_status row by construction), so that stranded row would be invisible
+ * forever. Found 2026-09-11 while removing the alert-path proof target.
+ *
+ * So each tick: counters for unconfigured targets are deleted, and an open
+ * edge_down row for an unconfigured target is pushed INACTIVE with a detail
+ * that says why, which sends the recovery notice and resolves the row through
+ * the usual machinery. Skipped entirely when the config had parse errors: a
+ * typo must not read as "retire every target" and resolve a real outage.
+ */
+export async function retireUnconfiguredTargets(
+  db: D1Database,
+  configured: ReadonlySet<string>
+): Promise<{ conditions: ConditionState[]; retired: string[] }> {
+  const retired: string[] = []
+  const conditions: ConditionState[] = []
+  const { results: rows } = await db.prepare(LIST_EDGE_TARGETS_SQL).all<{ target: unknown }>()
+  for (const row of rows) {
+    if (typeof row.target !== 'string' || configured.has(row.target)) continue
+    await db.prepare(DELETE_EDGE_COUNTERS_SQL).bind(row.target).run()
+    retired.push(row.target)
+  }
+  const { results: open } = await db
+    .prepare(LIST_OPEN_EDGE_ALERTS_SQL)
+    .bind(EDGE_DOWN_CONDITION)
+    .all<{ customer_slug: unknown }>()
+  for (const row of open) {
+    if (typeof row.customer_slug !== 'string' || configured.has(row.customer_slug)) continue
+    conditions.push({
+      customer_slug: row.customer_slug,
+      condition: EDGE_DOWN_CONDITION,
+      active: false,
+      detail: `${row.customer_slug} was removed from EDGE_POLL_TARGETS and is no longer probed; its counters are gone`,
+    })
+  }
+  return { conditions, retired }
+}
+
 /**
  * Probe every configured target once and turn the counted runs into
- * ConditionStates for the transition machinery. Fail-soft per target.
+ * ConditionStates for the transition machinery. Fail-soft per target. Then
+ * retire whatever the config no longer names.
  */
 export async function runEdgePolls(
   env: Env,
@@ -331,6 +379,15 @@ export async function runEdgePolls(
       if (condition) conditions.push(condition)
     } catch (err) {
       console.error('[fleet-alerts] edge poll failed:', target.name, err)
+    }
+  }
+  if (errors.length === 0) {
+    try {
+      const gone = await retireUnconfiguredTargets(env.DB, new Set(targets.map((t) => t.name)))
+      for (const name of gone.retired) console.log(`[fleet-alerts] edge target retired: ${name}`)
+      conditions.push(...gone.conditions)
+    } catch (err) {
+      console.error('[fleet-alerts] edge target retirement failed:', err)
     }
   }
   return { conditions, polls }

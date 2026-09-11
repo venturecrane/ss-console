@@ -289,6 +289,12 @@ function makeEnv(state: FakeState, withResend = true, extra: Partial<Env> = {}):
           if (sql.includes('FROM fleet_status')) {
             return Promise.resolve({ results: state.fleet })
           }
+          if (sql.includes('FROM edge_poll_state')) {
+            // Retirement lists every counters row (wave 8.2 follow-up).
+            return Promise.resolve({
+              results: [...(state.edge?.keys() ?? [])].map((target) => ({ target })),
+            })
+          }
           throw new Error(`unexpected all(): ${sql}`)
         },
         bind(...args: unknown[]) {
@@ -311,6 +317,13 @@ function makeEnv(state: FakeState, withResend = true, extra: Partial<Env> = {}):
               }
               if (sql.includes("condition LIKE ? || '%'")) {
                 return Promise.resolve({ results: openKeysForPrefix(state, String(args[0])) })
+              }
+              if (sql.includes("status = 'open'") && sql.includes('FROM fleet_alert_state')) {
+                // Retirement's open-edge_down lookup, bound on the condition.
+                const results = [...state.alertState.entries()]
+                  .filter(([k, status]) => status === 'open' && k.endsWith(`:${args[0]}`))
+                  .map(([k]) => ({ customer_slug: k.slice(0, k.lastIndexOf(':')) }))
+                return Promise.resolve({ results })
               }
               if (!sql.includes('FROM cost_anomaly_alerts')) {
                 throw new Error(`unexpected bound all(): ${sql}`)
@@ -350,6 +363,9 @@ function makeEnv(state: FakeState, withResend = true, extra: Partial<Env> = {}):
                   consecutive_successes: Number(args[3]),
                 })
                 state.writes.push(`edge:${args[0]}:${args[2]}/${args[3]}`)
+              } else if (sql.includes('DELETE FROM edge_poll_state')) {
+                state.edge?.delete(String(args[0]))
+                state.writes.push(`edge-retire:${args[0]}`)
               } else {
                 throw new Error(`unexpected run(): ${sql}`)
               }
@@ -1597,6 +1613,36 @@ describe('edge poll through runOnce (wave 8.2)', () => {
     }
     const summary = await runOnce(edgeEnv(state), NOW)
     expect(summary.stale_holds).toEqual([])
+  })
+
+  it('a target removed from the config while down: counters dropped, one RECOVERED notice, row resolved', async () => {
+    // The 2026-09-11 proof target: down, open, then deleted from
+    // EDGE_POLL_TARGETS. Without retirement its open row would outlive the
+    // config forever, and the stale-holds exclusion above would hide it.
+    const fetchMock = stubEdge(['ok'])
+    const state: FakeState = {
+      fleet: [],
+      alertState: new Map([['probe:edge_down', 'open']]),
+      writes: [],
+      edge: new Map([['probe', { consecutive_failures: 9, consecutive_successes: 0 }]]),
+    }
+    const summary = await runOnce(edgeEnv(state), NOW)
+    expect(summary.transitions.map((t) => `${t.kind}:${t.customer_slug}:${t.condition}`)).toEqual([
+      'resolved:probe:edge_down',
+    ])
+    expect(state.alertState.get('probe:edge_down')).toBe('resolved')
+    expect(state.edge?.has('probe')).toBe(false)
+    expect(state.writes).toContain('edge-retire:probe')
+    const resendCalls = fetchMock.mock.calls.filter(
+      ([url]) => String(url) === 'https://api.resend.com/emails'
+    )
+    expect(resendCalls).toHaveLength(1)
+    const recovered = JSON.parse(String(resendCalls[0]?.[1]?.body))
+    expect(recovered.subject).toContain('RECOVERED probe')
+    expect(recovered.html).toContain('removed from EDGE_POLL_TARGETS')
+    // A second tick is silent: nothing left to retire, nothing open.
+    const again = await runOnce(edgeEnv(state), NOW + 120_000)
+    expect(again.transitions).toEqual([])
   })
 
   it('no targets configured: the summary carries an empty edge_polls and nothing is fetched but Resend', async () => {
