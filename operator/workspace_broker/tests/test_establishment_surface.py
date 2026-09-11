@@ -5,7 +5,12 @@ WHY THIS EXISTS. `establishment.py` was split into four modules
 `establishment_store`) with `establishment.py` kept as the import surface, so
 that all five import sites in the repo — and anything on a live seat — keep
 working untouched. This test is what makes "kept working" a fact rather than a
-hope.
+hope. On 2026-09-11 `establishment_store` was split again, along its four
+proposal lifecycles (`establishment_lifecycle`, `establishment_rules`,
+`establishment_notify`, `establishment_ops`, `establishment_acts`), with the
+store kept as the facade every verb is still called on; the recorded member
+list of `EstablishmentStore` shrank to the facade's members and the fixture
+was regenerated for that reason.
 
 WHY NOT ``dir()`` EQUALITY. Comparing name sets is a check that cannot fail on
 the two failures a module split actually produces: a constant whose literal was
@@ -45,6 +50,11 @@ OWN_MODULES = {
     "workspace_broker.establishment_validation",
     "workspace_broker.pending_rule_store",
     "workspace_broker.establishment_store",
+    "workspace_broker.establishment_lifecycle",
+    "workspace_broker.establishment_rules",
+    "workspace_broker.establishment_notify",
+    "workspace_broker.establishment_ops",
+    "workspace_broker.establishment_acts",
 }
 
 VALUE_TYPES = (str, int, float, bool)
@@ -129,4 +139,7 @@ def test_the_fixture_is_not_vacuous() -> None:
     assert {"EstablishmentStore", "PendingRuleStore", "EstablishmentValidationError"} <= classes
 
     store = expected["EstablishmentStore"]
-    assert len(store["members"]) > 30, "EstablishmentStore member list looks truncated"
+    # 39 members before the 2026-09-11 lifecycle split, 27 after it: the
+    # lifecycle helpers moved to their collaborators and the facade keeps the
+    # verbs, the spool, and one private claim the submit path shares.
+    assert len(store["members"]) > 25, "EstablishmentStore member list looks truncated"
