@@ -100,8 +100,7 @@ def to_json(run: Run) -> dict:
                         "outcome": leg.outcome,
                         "reason": leg.reason,
                         "expectations": [
-                            {"kind": e.kind, "verdict": e.verdict, "detail": e.detail}
-                            for e in leg.results
+                            {"kind": e.kind, "verdict": e.verdict, "detail": e.detail} for e in leg.results
                         ],
                     }
                     for leg in result.legs
@@ -148,8 +147,7 @@ def to_markdown(run: Run, scenarios_by_id: dict[str, dict]) -> str:
             lines.append(f"- **{leg.leg_id}** = {leg.outcome}: {' '.join(str(leg.reason).split())}")
             for expectation in leg.results:
                 lines.append(
-                    f"  - `{expectation.kind}` {expectation.verdict}: "
-                    f"{' '.join(str(expectation.detail).split())}"
+                    f"  - `{expectation.kind}` {expectation.verdict}: {' '.join(str(expectation.detail).split())}"
                 )
         lines.append("")
     if run.notes:

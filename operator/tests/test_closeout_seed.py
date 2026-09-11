@@ -109,10 +109,7 @@ def test_multi_plaintiff_matter_keeps_its_items_separate():
     items = _items("2026-SC-203")
     assert len(items) == 2, "S-03 is the multi-plaintiff case and must render two items"
     assert {i["parentIndex"] for i in items} == {0, 1}
-    names = [
-        {v["value"] for v in i["values"] if v["key"].endswith("/Provider/DisplayName")}
-        for i in items
-    ]
+    names = [{v["value"] for v in i["values"] if v["key"].endswith("/Provider/DisplayName")} for i in items]
     assert names[0] and names[1], "each plaintiff carries its own providers"
     assert names[0].isdisjoint(names[1]), "the two plaintiffs' providers must not overlap here"
 
@@ -152,8 +149,7 @@ def test_the_shared_payer_shares_one_entity_id_and_the_typo_does_not():
         ids: set[str] = set()
         for item in _items(number):
             ids |= {
-                v["value"] for v in item["values"]
-                if v["key"].endswith("/Provider/MatterEntityId") and "value" in v
+                v["value"] for v in item["values"] if v["key"].endswith("/Provider/MatterEntityId") and "value" in v
             }
         return ids
 
@@ -169,9 +165,7 @@ def test_near_named_but_distinct_providers_stay_distinct():
     a = seed["providers"]["sierra_imaging"]
     b = seed["providers"]["open_sierra_imaging"]
     assert a["matter_entity_id"] != b["matter_entity_id"]
-    assert a["display_name"] in b["display_name"], (
-        "the pair must be near-named, or it does not test what it claims to"
-    )
+    assert a["display_name"] in b["display_name"], "the pair must be near-named, or it does not test what it claims to"
 
 
 def test_render_is_deterministic():

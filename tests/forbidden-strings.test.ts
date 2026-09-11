@@ -125,7 +125,7 @@ const FORBIDDEN_PATTERNS: Array<{ label: string; pattern: RegExp | string }> = [
     // as discussed during assessment.'`). Invoice/SOW/PDF descriptions must come
     // from authored quote content, never a template scope phrase.
     // Case-SENSITIVE on purpose: the lowercase "operations cleanup engagements"
-    // in LLM system prompts (assessment-to-quote.ts, dossier.ts) describes the
+    // in LLM system prompts (dossier.ts) describes the
     // business to the model and is not client-rendered content — matching the
     // title-case rendered label avoids those false positives.
     label: 'Pattern B: hardcoded "Operations Cleanup Engagement" scope label (invoices/SOW/PDF)',

@@ -66,7 +66,9 @@ const migrationsDir = resolve(process.cwd(), 'migrations')
 
 const CORRECTIONS_MODULE = source('../src/lib/portal/operator/voice-corrections.ts')
 const BROKER_CORRECTIONS = source('../operator/workspace_broker/corrections.py')
-const BROKER_SERVER = source('../operator/workspace_broker/server.py')
+// The verb body lives in audit_verbs.py since the broker's dispatcher became
+// a verb table (2026-09-10); server.py no longer carries any verb body.
+const BROKER_AUDIT_VERBS = source('../operator/workspace_broker/audit_verbs.py')
 const ENDPOINT = source('../src/pages/api/portal/operator/settings/output-class-specs.ts')
 const MIGRATION = source('../migrations/0102_operator_voice_corrections.sql')
 
@@ -90,11 +92,11 @@ describe('no path from an agent-originated record to a spec file', () => {
   })
 
   it('the broker verb appends to the ledger and touches no other store', () => {
-    const verb = BROKER_SERVER.slice(
-      BROKER_SERVER.indexOf('if action == "correction_propose"'),
-      BROKER_SERVER.indexOf('# ss-console #1791')
-    )
-    expect(verb).toContain('self.ledger.append(row)')
+    const start = BROKER_AUDIT_VERBS.indexOf('def correction_propose(')
+    expect(start).toBeGreaterThan(0)
+    const next = BROKER_AUDIT_VERBS.indexOf('\ndef ', start + 1)
+    const verb = BROKER_AUDIT_VERBS.slice(start, next > 0 ? next : undefined)
+    expect(verb).toContain('ledger.append(row)')
     expect(verb).not.toContain('open(')
     expect(verb).not.toContain('vaults')
   })

@@ -84,9 +84,7 @@ def test_suppression_rejected_when_peer_uid_missing(tmp_path: Path) -> None:
     """Two-arg handle() callers (legacy wire) cannot reach the verb."""
     broker = _broker(tmp_path)
     with pytest.raises(PermissionError):
-        broker.handle(
-            {"action": "webhook_suppressed_append", "row": _row()}, peer_pid=GATEWAY_PID
-        )
+        broker.handle({"action": "webhook_suppressed_append", "row": _row()}, peer_pid=GATEWAY_PID)
     assert broker.ledger.count() == 0
 
 
@@ -145,9 +143,7 @@ def test_suppression_row_joins_the_hash_chain(tmp_path: Path) -> None:
     import sqlite3
 
     conn = sqlite3.connect(str(tmp_path / "audit.db"))
-    rows = conn.execute(
-        "SELECT action_type, prev_hash, row_hash FROM audit_log ORDER BY rowid"
-    ).fetchall()
+    rows = conn.execute("SELECT action_type, prev_hash, row_hash FROM audit_log ORDER BY rowid").fetchall()
     conn.close()
     assert [r[0] for r in rows] == ["TOOL_CALL_COMPLETED", "WEBHOOK_SUPPRESSED"]
     assert rows[1][1] == rows[0][2]  # chains off the prior row's hash

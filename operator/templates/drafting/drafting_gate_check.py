@@ -140,9 +140,7 @@ _HELD_OUT_HEADING_RE = re.compile(r"^#{1,6}\s+.*held\s+out", re.IGNORECASE)
 _FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
 
 # "22:15 to 22:17", "39:22 to 40:13", "23:15-24", "23:15 - 23:24"
-_RANGE_RE = re.compile(
-    r"(\d{1,4}):(\d{1,3})\s*(?:to|through|thru|-|--)\s*(\d{1,4})(?::(\d{1,3}))?"
-)
+_RANGE_RE = re.compile(r"(\d{1,4}):(\d{1,3})\s*(?:to|through|thru|-|--)\s*(\d{1,4})(?::(\d{1,3}))?")
 _POINT_RE = re.compile(r"(\d{1,4}):(\d{1,3})")
 
 # "..." after normalization, and the spaced legal form ". . ."
@@ -151,9 +149,7 @@ _ELLIPSIS_SPLIT_RE = re.compile(r"\.\s*\.\s*\.")
 _FILL_RE = re.compile(r"\{\{FILL:(.*?)\}\}", re.DOTALL)
 _VISIBLE_MARKER_TOKENS = ("{{NOT IN RECORD", "{{FILL", "{{ATTORNEY")
 
-_SPROG_ITEM_RE = re.compile(
-    r"SPECIAL\s+INTERROGATOR(?:Y|IES)(?:\s+NO\.?)?\s*(\d+(?:\.\d+)?)", re.IGNORECASE
-)
+_SPROG_ITEM_RE = re.compile(r"SPECIAL\s+INTERROGATOR(?:Y|IES)(?:\s+NO\.?)?\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
 _SPROG_SCOPE_RE = re.compile(r"SPECIAL\s+INTERROGATOR(?:Y|IES)", re.IGNORECASE)
 _LETTERED_LEAD_RE = re.compile(r"^\s*\(([a-h])\)\s+\S")
 _LETTERED_INLINE_RE = re.compile(r"\(([a-h])\)")
@@ -367,14 +363,8 @@ class Draft:
         self.text = text
         self.lines = text.splitlines()
         self.held_out_start = self._find_held_out()
-        self.body_lines = (
-            self.lines
-            if self.held_out_start is None
-            else self.lines[: self.held_out_start - 1]
-        )
-        self.held_out_lines = (
-            [] if self.held_out_start is None else self.lines[self.held_out_start - 1 :]
-        )
+        self.body_lines = self.lines if self.held_out_start is None else self.lines[: self.held_out_start - 1]
+        self.held_out_lines = [] if self.held_out_start is None else self.lines[self.held_out_start - 1 :]
         self.body_text = "\n".join(self.body_lines)
         self.held_out_text = "\n".join(self.held_out_lines)
         self.fenced = self._fenced_lines()
@@ -580,10 +570,7 @@ def check_elision(quote: Quote, docs: list[SourceDoc]) -> Finding | None:
                 cursor = located + length
             if len(bounds) != len(segments):
                 continue
-            gaps = [
-                view.text[bounds[i][1] : bounds[i + 1][0]].strip()
-                for i in range(len(bounds) - 1)
-            ]
+            gaps = [view.text[bounds[i][1] : bounds[i + 1][0]].strip() for i in range(len(bounds) - 1)]
             if any(len(gap) > _MAX_ELISION_CHARS for gap in gaps):
                 continue
 
@@ -612,8 +599,7 @@ def check_elision(quote: Quote, docs: list[SourceDoc]) -> Finding | None:
                 "2a",
                 SEVERITY_WARN,
                 quote.line,
-                "quoted passage elides source text with an ellipsis; confirm no "
-                f'hedge was cut: "{quote.normalized}"',
+                f'quoted passage elides source text with an ellipsis; confirm no hedge was cut: "{quote.normalized}"',
                 f"{view.path.name} omits: " + " / ".join(f'"{g}"' for g in gaps),
             )
     return None
@@ -664,9 +650,7 @@ def closest_region(quote: str, docs: list[SourceDoc]) -> tuple[float, str, str] 
 # ---------------------------------------------------------------------------
 
 
-def gate_quote_contiguity(
-    draft: Draft, docs: list[SourceDoc]
-) -> tuple[list[Finding], list[tuple[Quote, QuoteHit]]]:
+def gate_quote_contiguity(draft: Draft, docs: list[SourceDoc]) -> tuple[list[Finding], list[tuple[Quote, QuoteHit]]]:
     findings: list[Finding] = []
     hits: list[tuple[Quote, QuoteHit]] = []
     if not docs:
@@ -774,9 +758,7 @@ def transcript_occurrences(quote: Quote, docs: list[SourceDoc]) -> list[Occurren
     return found
 
 
-def gate_question_pairing(
-    draft: Draft, docs: list[SourceDoc], hits: list[tuple[Quote, QuoteHit]]
-) -> list[Finding]:
+def gate_question_pairing(draft: Draft, docs: list[SourceDoc], hits: list[tuple[Quote, QuoteHit]]) -> list[Finding]:
     """Gate 2b. Fail-open by design wherever the record cannot answer the question.
 
     The only FAIL class is an explicit cited range that excludes the line of the
@@ -790,15 +772,12 @@ def gate_question_pairing(
         findings.append(Finding("2b", SEVERITY_INFO, quote.line, message))
 
     def question_pin_for(occurrence: Occurrence) -> tuple[tuple[int, int], str] | None:
-        line_no = occurrence.doc.governing_question_line(
-            occurrence.view.line_at(occurrence.offset)
-        )
+        line_no = occurrence.doc.governing_question_line(occurrence.view.line_at(occurrence.offset))
         if line_no is None or line_no not in occurrence.doc.page_line:
             return None
         return (
             occurrence.doc.page_line[line_no],
-            f"{occurrence.doc.path.name} line {line_no}: "
-            f"{occurrence.doc.stripped.get(line_no, '')}",
+            f"{occurrence.doc.path.name} line {line_no}: {occurrence.doc.stripped.get(line_no, '')}",
         )
 
     for quote, hit in hits:
@@ -829,11 +808,7 @@ def gate_question_pairing(
         kind, start_pin, end_pin = cite
         if kind != "range":
             pinned = question_pin_for(occurrences[0])
-            where = (
-                f"; the question it answered is at {pinned[0][0]}:{pinned[0][1]}"
-                if pinned
-                else ""
-            )
+            where = f"; the question it answered is at {pinned[0][0]}:{pinned[0][1]}" if pinned else ""
             note(
                 quote,
                 f"quote cites a single point {start_pin[0]}:{start_pin[1]} rather "
@@ -843,9 +818,7 @@ def gate_question_pairing(
 
         in_range = [o for o in occurrences if start_pin <= o.pin <= end_pin]
         if not in_range:
-            elsewhere = ", ".join(
-                f"{o.doc.path.name} {o.pin[0]}:{o.pin[1]}" for o in occurrences[:4]
-            )
+            elsewhere = ", ".join(f"{o.doc.path.name} {o.pin[0]}:{o.pin[1]}" for o in occurrences[:4])
             if hit.doc not in {o.doc for o in occurrences}:
                 # The quote's contiguous home is a document without transcript
                 # structure, so the cite may point there instead. Fail open.
@@ -934,10 +907,7 @@ def _overlap_findings(
         window = tuple(tokens[index : index + _HELD_OUT_NGRAM])
         if window in other_grams:
             end = index + _HELD_OUT_NGRAM
-            while (
-                end < len(tokens)
-                and tuple(tokens[end - _HELD_OUT_NGRAM + 1 : end + 1]) in other_grams
-            ):
+            while end < len(tokens) and tuple(tokens[end - _HELD_OUT_NGRAM + 1 : end + 1]) in other_grams:
                 end += 1
             run = " ".join(tokens[index:end])
             findings.append(
@@ -945,8 +915,7 @@ def _overlap_findings(
                     gate,
                     SEVERITY_FAIL,
                     lines[index],
-                    f"draft body reproduces {end - index} consecutive words from "
-                    f"{label}",
+                    f"draft body reproduces {end - index} consecutive words from {label}",
                     run[:300],
                 )
             )
@@ -956,9 +925,7 @@ def _overlap_findings(
     return findings
 
 
-def gate_held_out_and_wall(
-    draft: Draft, held_out_docs: list[tuple[Path, str]]
-) -> list[Finding]:
+def gate_held_out_and_wall(draft: Draft, held_out_docs: list[tuple[Path, str]]) -> list[Finding]:
     findings: list[Finding] = []
 
     for path, text in held_out_docs:
@@ -991,9 +958,7 @@ def gate_held_out_and_wall(
         shown = ", ".join(str(n) for n in lines[:12])
         if len(lines) > 12:
             shown += f", and {len(lines) - 12} more"
-        occurrences = (
-            "1 occurrence" if len(lines) == 1 else f"{len(lines)} occurrences"
-        )
+        occurrences = "1 occurrence" if len(lines) == 1 else f"{len(lines)} occurrences"
         findings.append(
             Finding(
                 "6",
@@ -1119,8 +1084,7 @@ def gate_coverage(draft: Draft, items: list[str]) -> list[Finding]:
                     "7",
                     SEVERITY_FAIL,
                     None,
-                    f"propounded item received no response heading in the draft: "
-                    f"{item}",
+                    f"propounded item received no response heading in the draft: {item}",
                 )
             )
 
@@ -1159,11 +1123,7 @@ def _sprog_items(draft: Draft) -> list[SprogItem]:
             starts.append((index, normalize(raw_line).strip("#* ")))
     items: list[SprogItem] = []
     for position, (line_no, label) in enumerate(starts):
-        end = (
-            starts[position + 1][0] - 1
-            if position + 1 < len(starts)
-            else len(draft.body_lines)
-        )
+        end = starts[position + 1][0] - 1 if position + 1 < len(starts) else len(draft.body_lines)
         body = "\n".join(draft.body_lines[line_no - 1 : end])
         items.append(SprogItem(line_no, label, body))
     return items
@@ -1177,8 +1137,7 @@ def gate_sprog_lint(draft: Draft) -> list[Finding]:
                 "8",
                 SEVERITY_INFO,
                 None,
-                "no special interrogatory sections found, so the subpart lint "
-                "did not run",
+                "no special interrogatory sections found, so the subpart lint did not run",
             )
         ]
     items = _sprog_items(draft)
@@ -1240,14 +1199,11 @@ def gate_sprog_lint(draft: Draft) -> list[Finding]:
                     "8",
                     SEVERITY_WARN,
                     item.line,
-                    "conjunctive 'each and every ... and ...' pattern; likely "
-                    "compound",
+                    "conjunctive 'each and every ... and ...' pattern; likely compound",
                     item.label,
                 )
             )
-        directives = re.findall(
-            r"\b(state|identify|describe|list|set forth)\b", flat, re.IGNORECASE
-        )
+        directives = re.findall(r"\b(state|identify|describe|list|set forth)\b", flat, re.IGNORECASE)
         if len(directives) >= 2:
             findings.append(
                 Finding(
@@ -1282,8 +1238,7 @@ def gate_visible_markers(draft: Draft) -> list[Finding]:
                         "9",
                         SEVERITY_FAIL,
                         line,
-                        f"{token}" + "}} marker is inside an HTML comment, so it "
-                        "vanishes on render",
+                        f"{token}" + "}} marker is inside an HTML comment, so it vanishes on render",
                         normalize(inner)[:200],
                     )
                 )
@@ -1311,8 +1266,7 @@ def gate_visible_markers(draft: Draft) -> list[Finding]:
                         "9",
                         SEVERITY_WARN,
                         index,
-                        f"{token}" + "}} marker sits inside a code fence, where it may "
-                        "not read as a reservation",
+                        f"{token}" + "}} marker sits inside a code fence, where it may not read as a reservation",
                         normalize(raw_line)[:200],
                     )
                 )
@@ -1332,8 +1286,7 @@ def gate_marker_integrity(draft: Draft) -> list[Finding]:
                 "MI",
                 SEVERITY_WARN,
                 line,
-                "FILL marker carries no source note; the skeleton convention is "
-                "{{FILL: what goes here | source}}",
+                "FILL marker carries no source note; the skeleton convention is {{FILL: what goes here | source}}",
                 normalize(match.group(0))[:200],
             )
         )
@@ -1405,10 +1358,7 @@ def render_report(
         lines.append("  no findings")
     for finding in findings:
         where = f"line {finding.line}" if finding.line is not None else "document"
-        lines.append(
-            f"  {finding.severity:<4}  gate {finding.gate:<3} {where:<12} "
-            f"{finding.message}"
-        )
+        lines.append(f"  {finding.severity:<4}  gate {finding.gate:<3} {where:<12} {finding.message}")
         if finding.detail:
             lines.append(f"          {finding.detail}")
 
@@ -1417,9 +1367,7 @@ def render_report(
     infos = sum(1 for f in findings if f.severity == SEVERITY_INFO)
     lines.append("")
     verdict = "FAIL" if fails else "PASS"
-    lines.append(
-        f"RESULT: {verdict} ({fails} failure(s), {warns} warning(s), {infos} note(s))"
-    )
+    lines.append(f"RESULT: {verdict} ({fails} failure(s), {warns} warning(s), {infos} note(s))")
     return "\n".join(lines)
 
 
@@ -1532,18 +1480,14 @@ def main(argv: list[str] | None = None) -> int:
             raise GateUsageError(f"no readable source files under: {args.sources}")
         docs = [SourceDoc(p, read_text(p)) for p in source_paths]
 
-        held_out_paths = (
-            collect_files(args.held_out, "held-out") if args.held_out else []
-        )
+        held_out_paths = collect_files(args.held_out, "held-out") if args.held_out else []
         held_out_docs = [(p, read_text(p)) for p in held_out_paths]
 
         propounded: list[str] | None = None
         if args.propounded:
             propounded_path = Path(args.propounded).expanduser()
             if not propounded_path.is_file():
-                raise GateUsageError(
-                    f"propounded items file not found: {propounded_path}"
-                )
+                raise GateUsageError(f"propounded items file not found: {propounded_path}")
             propounded = parse_propounded(propounded_path)
     except GateUsageError as exc:
         sys.stderr.write(f"[drafting-gate] {exc}\n")

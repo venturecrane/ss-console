@@ -86,7 +86,10 @@ def run() -> tuple[bool, str]:
             f"FAIL: legitimate authored-autonomous send was blocked ({decision.reason})",
         )
 
-    return (True, "PASS: invariant 5 holds — ceiling read from authoring, prompt cannot escalate; legitimate flows still work")
+    return (
+        True,
+        "PASS: invariant 5 holds — ceiling read from authoring, prompt cannot escalate; legitimate flows still work",
+    )
 
 
 if __name__ == "__main__":

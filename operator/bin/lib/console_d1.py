@@ -87,9 +87,7 @@ class ConsoleD1:
         self._run = runner
 
     def execute(self, sql: str) -> list[dict]:
-        proc = self._run(
-            ["npx", "wrangler", "d1", "execute", self._db, "--remote", "--json", "--command", sql]
-        )
+        proc = self._run(["npx", "wrangler", "d1", "execute", self._db, "--remote", "--json", "--command", sql])
         if proc.returncode != 0:
             raise RuntimeError(f"d1 execute failed: {proc.stderr.strip() or proc.stdout.strip()}")
         return first_result_set(proc.stdout)
@@ -113,9 +111,7 @@ class ConsoleD1:
         read as "no seats" would turn an unreachable D1 into a quiet green run.
         """
         rows = self.execute("SELECT customer_slug FROM fleet_status")
-        return sorted(
-            str(r["customer_slug"]) for r in rows if isinstance(r.get("customer_slug"), str)
-        )
+        return sorted(str(r["customer_slug"]) for r in rows if isinstance(r.get("customer_slug"), str))
 
     def fleet_boot_rows(self) -> dict[str, dict]:
         """Per-seat heartbeat + uptime, the reprovision/boot artifact
@@ -123,9 +119,7 @@ class ConsoleD1:
         suppress the boot window: boot = last_heartbeat_ts - uptime. A constant
         statement, nothing interpolated. Failure RAISES for the same reason
         provisioned_slugs does."""
-        rows = self.execute(
-            "SELECT customer_slug, last_heartbeat_ts, process_uptime_seconds FROM fleet_status"
-        )
+        rows = self.execute("SELECT customer_slug, last_heartbeat_ts, process_uptime_seconds FROM fleet_status")
         return {
             str(r["customer_slug"]): {
                 "last_heartbeat_ts": r.get("last_heartbeat_ts"),
@@ -134,6 +128,32 @@ class ConsoleD1:
             for r in rows
             if isinstance(r.get("customer_slug"), str)
         }
+
+    def count_where_slug(self, table: str, slug: str) -> int:
+        """How many rows ``table`` holds for ``slug`` -- the negative probe.
+
+        A DELETE through ``wrangler d1 execute --json`` comes back with an empty
+        ``results`` array whether it removed a row or matched nothing, so a
+        caller that wants to REPORT a removal has to read the table again. This
+        is that read. ``table`` is a code-controlled identifier (refused unless
+        it is one); ``slug`` travels as ``sql_text``'s hex literal.
+
+        Failure RAISES rather than returning 0, for the same reason
+        ``provisioned_slugs`` does: an unreachable D1 read as "nothing left"
+        would turn a failed cleanup into a reported success.
+        """
+        if not table.isidentifier():
+            raise ValueError(f"count_where_slug refuses a non-identifier table: {table!r}")
+        # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query — table is a checked identifier; the slug is sql_text's hex blob literal, which has no escape sequence.
+        # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query — not SQLAlchemy; the only interpolations are an identifier check and a fixed-alphabet hex literal.
+        sql = f"SELECT COUNT(*) AS n FROM {table} WHERE customer_slug = {sql_text(slug)}"
+        rows = self.execute(sql)
+        if not rows or "n" not in rows[0]:
+            raise RuntimeError(f"d1 count on {table} returned no row")
+        n = rows[0]["n"]
+        if isinstance(n, bool) or not isinstance(n, int):
+            raise RuntimeError(f"d1 count on {table} returned a non-integer: {n!r}")
+        return n
 
     def entity_id(self, slug: str) -> Optional[str]:
         # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query — see sql_text: no parameter binding exists on this CLI path; the interpolated text is a hex blob literal.
@@ -209,11 +229,7 @@ class ConsoleD1:
         so no pattern character in a slug can widen it.
         """
         # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
-        self.execute(
-            "DELETE FROM cost_anomaly_alerts WHERE driver = "
-            f"{sql_text(f'{REHEARSAL_DRIVER_PREFIX}{slug}')}"
-        )
-
+        self.execute(f"DELETE FROM cost_anomaly_alerts WHERE driver = {sql_text(f'{REHEARSAL_DRIVER_PREFIX}{slug}')}")
 
 
 def first_result_set(stdout: str) -> list[dict]:

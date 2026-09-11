@@ -217,9 +217,7 @@ def _handler(captured: list[httpx.Request]):
         captured.append(request)
         path = request.url.path
         if path.endswith("/oauth2/token"):
-            return httpx.Response(
-                200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"}
-            )
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 3600, "token_type": "Bearer"})
         if request.method == "POST" and path.endswith("/documents/files"):
             return httpx.Response(202, json={"fileId": "file-77", "uploadUrl": _UPLOAD_URL})
         if str(request.url) == _UPLOAD_URL:
@@ -325,9 +323,7 @@ def test_tool_refuses_and_uploads_nothing_when_the_record_check_fails(monkeypatc
     assert out["recordCheck"] == "fail_findings"
     assert any("not contiguous" in r for r in out["refusals"])
     assert not [r for r in captured if r.method == "PUT"]
-    assert not [
-        r for r in captured if r.method == "POST" and r.url.path.endswith("/documents/files")
-    ]
+    assert not [r for r in captured if r.method == "POST" and r.url.path.endswith("/documents/files")]
 
 
 def test_the_content_gate_runs_BEFORE_the_record_check(monkeypatch) -> None:
@@ -339,9 +335,7 @@ def test_the_content_gate_runs_BEFORE_the_record_check(monkeypatch) -> None:
     document on the matter), so a content violation must short-circuit it.
     """
     called: list[str] = []
-    monkeypatch.setattr(
-        server, "_collect_matter_sources", lambda _m: called.append("collected") or ([], [], [])
-    )
+    monkeypatch.setattr(server, "_collect_matter_sources", lambda _m: called.append("collected") or ([], [], []))
     out = server.render_docx_draft("m-104", "Bad", "Body — dash.\n")
     assert out["fileId"] is None
     assert any("em dash" in r for r in out["refusals"])

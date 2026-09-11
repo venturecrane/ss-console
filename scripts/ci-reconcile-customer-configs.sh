@@ -139,6 +139,10 @@ while IFS=$'\t' read -r slug entity_id row_sha; do
     echo "::warning::${slug} looks like a template dir but holds a customer_configs row; skipping."
     continue
   fi
+  if [[ "$slug" == *.decommissioned.* ]]; then
+    echo "::warning::${slug} is a decommissioned seat dir but holds a customer_configs row; skipping."
+    continue
+  fi
   # The slug arrives from the database and becomes both a filesystem path and a
   # SQL literal downstream. Constrain it here, on the way in.
   if [[ ! "$slug" =~ ^[a-z0-9-]+$ ]]; then

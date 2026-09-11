@@ -95,8 +95,8 @@ class CandidateMessage:
 
     body_text: str
     word_count: int
-    likely_agent_drafted: Optional[bool]   # None when the adapter cannot tell
-    body_digest: str                       # SHA-256 hex of body_text
+    likely_agent_drafted: Optional[bool]  # None when the adapter cannot tell
+    body_digest: str  # SHA-256 hex of body_text
 
 
 def compute_body_digest(body_text: Optional[str]) -> str:
@@ -134,9 +134,7 @@ class PartnerAuthoredFilter:
         # adapter could not determine provenance (None) or said False
         # but we want a second check.
         try:
-            digest_match = await self._audit_lookup.has_draft_with_digest(
-                candidate.body_digest
-            )
+            digest_match = await self._audit_lookup.has_draft_with_digest(candidate.body_digest)
         except Exception as e:  # noqa: BLE001 — defensive against D1 hiccups
             log.warning(
                 "audit_log digest lookup failed for body digest %s: %s",

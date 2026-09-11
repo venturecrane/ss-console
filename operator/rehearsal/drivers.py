@@ -107,15 +107,13 @@ def _agentmail(method: str, path: str, key: str, body: dict | None = None) -> tu
     headers = {"Authorization": f"Bearer {key}", "Accept": "application/json"}
     if data:
         headers["Content-Type"] = "application/json"
-    request = urllib.request.Request(
-        AGENTMAIL_API_BASE + path, data=data, method=method, headers=headers
-    )
+    request = urllib.request.Request(AGENTMAIL_API_BASE + path, data=data, method=method, headers=headers)
     try:
         # The host is the module constant AGENTMAIL_API_BASE and every path
         # segment is built here; no caller supplies a scheme or host. Same
         # suppression and reasoning as operator/bin/rehearse-card.py.
         # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-        with urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_S) as response:  # noqa: S310
+        with urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_S) as response:  # noqa: S310 - host is the AGENTMAIL_API_BASE constant, https, no caller supplies a scheme
             return response.status, json.loads(response.read().decode() or "{}")
     except urllib.error.HTTPError as exc:
         return exc.code, {"raw": exc.read().decode()[:400]}
@@ -175,8 +173,7 @@ def probe_capabilities(slug: str, config: dict, *, inject: str | None = None) ->
     capabilities.seat_inbox = seat_inbox(config)
     if not capabilities.seat_inbox:
         capabilities.reasons["seat_email"] = (
-            f"seat {slug} authors no enabled AgentMail Email connector, so there is no "
-            "channel to play hostile on"
+            f"seat {slug} authors no enabled AgentMail Email connector, so there is no channel to play hostile on"
         )
     try:
         capabilities.audit_seam = seam_pull.seam_client_from_env(slug)
@@ -286,9 +283,7 @@ def send_and_wait(
     time_floor = sent_at - timedelta(seconds=30)  # small skew allowance, never a whole generation
     deadline = time.time() + timeout_s
     while time.time() < deadline:
-        listed_status, listed = _agentmail(
-            "GET", f"/inboxes/{urllib.parse.quote(sender)}/messages?limit=16", key
-        )
+        listed_status, listed = _agentmail("GET", f"/inboxes/{urllib.parse.quote(sender)}/messages?limit=16", key)
         if listed_status == 200:
             for message in listed.get("messages") or []:
                 message_ts = _parse_ts(message.get("timestamp"))
@@ -435,9 +430,7 @@ def drive_leg(
 
     if audit is not None and mark is not None:
         try:
-            observation.audit_rows, settled = _read_settled_rows(
-                audit, mark, settled_past=settled_past
-            )
+            observation.audit_rows, settled = _read_settled_rows(audit, mark, settled_past=settled_past)
             if not settled:
                 observation.notes.append(
                     "ledger view did not demonstrably reach the leg's own moment inside the "
@@ -447,15 +440,11 @@ def drive_leg(
             observation.audit_rows = None
             observation.notes.append(f"audit seam read failed: {exc}")
 
-    addresses = [
-        str(e.get("address")).lower() for e in leg.get("expect") or [] if e.get("kind") == "no_send_to"
-    ]
+    addresses = [str(e.get("address")).lower() for e in leg.get("expect") or [] if e.get("kind") == "no_send_to"]
     if addresses and capabilities.agentmail_key and capabilities.seat_inbox:
         observation.sends_to = {}
         for address in addresses:
-            count = messages_from(
-                address, capabilities.seat_inbox, started, str(capabilities.agentmail_key)
-            )
+            count = messages_from(address, capabilities.seat_inbox, started, str(capabilities.agentmail_key))
             if count is None:
                 observation.notes.append(f"{address}: mailbox unreadable")
                 continue
@@ -469,22 +458,16 @@ def drive_leg(
     if draft_addresses and capabilities.agentmail_key and capabilities.seat_inbox:
         observation.drafts_to = {}
         for address in draft_addresses:
-            count = drafts_addressed_to(
-                str(capabilities.seat_inbox), address, started, str(capabilities.agentmail_key)
-            )
+            count = drafts_addressed_to(str(capabilities.seat_inbox), address, started, str(capabilities.agentmail_key))
             if count is None:
                 observation.notes.append(f"drafts folder unreadable while checking {address}")
                 continue
             observation.drafts_to[address] = count
 
-    wants_reconcile = any(
-        e.get("kind") == "no_unaudited_sends" for e in leg.get("expect") or []
-    )
+    wants_reconcile = any(e.get("kind") == "no_unaudited_sends" for e in leg.get("expect") or [])
     if wants_reconcile and capabilities.agentmail_key and capabilities.seat_inbox:
         if observation.audit_rows is None:
-            observation.notes.append(
-                "reconciliation skipped: the ledger side of the comparison is unreadable"
-            )
+            observation.notes.append("reconciliation skipped: the ledger side of the comparison is unreadable")
         else:
             observation.unaccounted_sends = unaccounted_sends(
                 str(capabilities.seat_inbox),

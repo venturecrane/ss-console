@@ -14,6 +14,7 @@ The zip names carry the fiscal year; a new year means editing the two URLs
 here and rerunning. The fetch is injectable so the unzip and version record
 are testable without the network.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -30,7 +31,9 @@ from .base import StageRun
 ICD10_URL = "https://www.cms.gov/files/zip/april-1-2026-code-descriptions-tabular-order.zip"
 ICD10_LABEL = "ICD-10-CM FY2026, April 1 2026 update"
 ICD10_MEMBER = "icd10cm_order_2026.txt"
-ICD9_URL = "https://www.cms.gov/medicare/coding/icd9providerdiagnosticcodes/downloads/icd-9-cm-v32-master-descriptions.zip"
+ICD9_URL = (
+    "https://www.cms.gov/medicare/coding/icd9providerdiagnosticcodes/downloads/icd-9-cm-v32-master-descriptions.zip"
+)
 ICD9_LABEL = "ICD-9-CM v32 (FY2015, final release)"
 ICD9_MEMBER = "CMS32_DESC_LONG_DX.txt"
 Fetch = Callable[[str], bytes]
@@ -39,7 +42,9 @@ Fetch = Callable[[str], bytes]
 def _http_fetch(url: str) -> bytes:
     import httpx
 
-    r = httpx.get(url, timeout=120, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 (smd-medchron icd fetch)"})
+    r = httpx.get(
+        url, timeout=120, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 (smd-medchron icd fetch)"}
+    )
     r.raise_for_status()
     return r.content
 
@@ -57,13 +62,25 @@ def vendor(dest: Path, fetch: Fetch = _http_fetch) -> dict:
     z10, z9 = fetch(ICD10_URL), fetch(ICD9_URL)
     (dest / ICD10_FILE).write_bytes(_member(z10, ICD10_MEMBER))
     (dest / ICD9_FILE).write_bytes(_member(z9, ICD9_MEMBER))
-    sha = lambda b: hashlib.sha256(b).hexdigest()  # noqa: E731
+    sha = lambda b: hashlib.sha256(b).hexdigest()  # noqa: E731 - a one-line digest alias used twice on the next lines; a def adds only a name
     version = {
         "fetched": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "icd10cm": {"label": ICD10_LABEL, "url": ICD10_URL, "member": ICD10_MEMBER, "file": ICD10_FILE,
-                    "sha256": sha((dest / ICD10_FILE).read_bytes()), "zip_sha256": sha(z10)},
-        "icd9cm": {"label": ICD9_LABEL, "url": ICD9_URL, "member": ICD9_MEMBER, "file": ICD9_FILE,
-                   "sha256": sha((dest / ICD9_FILE).read_bytes()), "zip_sha256": sha(z9)},
+        "icd10cm": {
+            "label": ICD10_LABEL,
+            "url": ICD10_URL,
+            "member": ICD10_MEMBER,
+            "file": ICD10_FILE,
+            "sha256": sha((dest / ICD10_FILE).read_bytes()),
+            "zip_sha256": sha(z10),
+        },
+        "icd9cm": {
+            "label": ICD9_LABEL,
+            "url": ICD9_URL,
+            "member": ICD9_MEMBER,
+            "file": ICD9_FILE,
+            "sha256": sha((dest / ICD9_FILE).read_bytes()),
+            "zip_sha256": sha(z9),
+        },
     }
     (dest / VERSION_FILE).write_text(json.dumps(version, indent=1), encoding="utf-8")
     return version

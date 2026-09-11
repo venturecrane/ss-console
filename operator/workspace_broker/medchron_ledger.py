@@ -131,7 +131,16 @@ _DEBITS_SQL_EXCLUDING = (
 # The console projection (the ``medchron_jobs`` runtime-read kind and the
 # agent's status verb both read this): counts and states, never the envelope.
 PROJECTION = (
-    "id", "created_at", "updated_at", "state", "matter_number", "documents", "pages", "cents", "reason", "folder_id",
+    "id",
+    "created_at",
+    "updated_at",
+    "state",
+    "matter_number",
+    "documents",
+    "pages",
+    "cents",
+    "reason",
+    "folder_id",
 )
 
 
@@ -152,7 +161,11 @@ def validate_envelope(req: dict[str, Any]) -> dict[str, Any]:
     check them again on the other side. Returns the envelope to queue (only
     known keys, in a fixed shape)."""
     matter = req.get("matter")
-    if not isinstance(matter, dict) or not str(matter.get("id") or "").strip() or not str(matter.get("number") or "").strip():
+    if (
+        not isinstance(matter, dict)
+        or not str(matter.get("id") or "").strip()
+        or not str(matter.get("number") or "").strip()
+    ):
         raise EnvelopeError("matter.id and matter.number are required")
     units = req.get("units")
     if not isinstance(units, list) or not units:
@@ -173,8 +186,13 @@ def validate_envelope(req: dict[str, Any]) -> dict[str, Any]:
         if not _UNIT_RE.match(unit) or unit in seen:
             raise EnvelopeError(f"unit slug {unit!r} is invalid or repeated")
         seen.add(unit)
-        row = {"unit": unit, "client_name": name, "name_token": str(u.get("name_token") or surname),
-               "surname": surname, "dob": dob}
+        row = {
+            "unit": unit,
+            "client_name": name,
+            "name_token": str(u.get("name_token") or surname),
+            "surname": surname,
+            "dob": dob,
+        }
         if u.get("folder_prefix"):
             row["folder_prefix"] = str(u["folder_prefix"])
         out_units.append(row)
@@ -186,8 +204,11 @@ def validate_envelope(req: dict[str, Any]) -> dict[str, Any]:
     if str(incident.get("source") or "") not in INCIDENT_SOURCES:
         raise EnvelopeError(f"incident.source must be one of {sorted(INCIDENT_SOURCES)}")
     env: dict[str, Any] = {
-        "matter": {"id": str(matter["id"]).strip(), "number": str(matter["number"]).strip(),
-                   "title": str(matter.get("title") or "")},
+        "matter": {
+            "id": str(matter["id"]).strip(),
+            "number": str(matter["number"]).strip(),
+            "title": str(matter.get("title") or ""),
+        },
         "units": out_units,
         "incident": {"date": str(incident["date"]), "source": str(incident["source"])},
     }
@@ -291,8 +312,9 @@ class MedchronLedger:
     def documents_used(self, month: str, exclude_job_id: str | None = None) -> int:
         return self.debits(month, exclude_job_id)["documents"]
 
-    def allowance(self, allowance: int | None, now: str | None = None,
-                  exclude_job_id: str | None = None) -> dict[str, Any]:
+    def allowance(
+        self, allowance: int | None, now: str | None = None, exclude_job_id: str | None = None
+    ) -> dict[str, Any]:
         """The month's allowance state, in PAGES.
 
         `used`/`remaining` are the allowance's own unit and `unit` says which
@@ -311,11 +333,25 @@ class MedchronLedger:
             "cents_used": self.cents_used(month, exclude_job_id),
         }
         if allowance is None:
-            return {"month": month, "allowance": None, "used": pages, "remaining": 0, "authored": False,
-                    "pages_remaining": 0, **extra}
+            return {
+                "month": month,
+                "allowance": None,
+                "used": pages,
+                "remaining": 0,
+                "authored": False,
+                "pages_remaining": 0,
+                **extra,
+            }
         remaining = max(0, allowance - pages)
-        return {"month": month, "allowance": allowance, "used": pages, "remaining": remaining,
-                "authored": True, "pages_remaining": remaining, **extra}
+        return {
+            "month": month,
+            "allowance": allowance,
+            "used": pages,
+            "remaining": remaining,
+            "authored": True,
+            "pages_remaining": remaining,
+            **extra,
+        }
 
     # -- intake ------------------------------------------------------------
     def submit(self, envelope: dict[str, Any], *, remaining: int) -> str:
@@ -338,8 +374,17 @@ class MedchronLedger:
             conn.execute(
                 "INSERT INTO medchron_jobs (id, created_at, updated_at, state, matter_id, matter_number, requester, "
                 "request_ref, envelope_digest) VALUES (?,?,?,?,?,?,?,?,?)",
-                (job_id, now, now, "submitted", envelope["matter"]["id"], envelope["matter"]["number"],
-                 envelope.get("requested_by"), envelope.get("request_ref"), digest(envelope)),
+                (
+                    job_id,
+                    now,
+                    now,
+                    "submitted",
+                    envelope["matter"]["id"],
+                    envelope["matter"]["number"],
+                    envelope.get("requested_by"),
+                    envelope.get("request_ref"),
+                    digest(envelope),
+                ),
             )
             conn.commit()
         finally:

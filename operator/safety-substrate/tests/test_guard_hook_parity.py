@@ -50,7 +50,6 @@ from __future__ import annotations
 
 import ast
 import json
-import re
 from pathlib import Path
 
 _HERE = Path(__file__).resolve()
@@ -59,9 +58,7 @@ _REPO = _OP.parent  # repo root
 _CONTRACT = _OP / "contracts" / "overlay-hook-surface.json"
 _INVARIANT_8 = _HERE.parent / "test_invariant_8_overlay_activation.py"
 _SPEC = _REPO / "docs" / "specs" / "operator" / "aie-adapter-register.md"
-_WEBHOOK_TRIGGERS = (
-    _REPO / "src" / "lib" / "operator" / "customer-yaml" / "sections-webhook-triggers.ts"
-)
+_WEBHOOK_TRIGGERS = _REPO / "src" / "lib" / "operator" / "customer-yaml" / "sections-webhook-triggers.ts"
 
 
 def _contract() -> dict:
@@ -137,13 +134,9 @@ def test_every_required_hook_names_a_known_functional_plugin():
     contract = _contract()
     plugins = set(contract["functionalPlugins"])
     orphans = {
-        hook: meta["plugin"]
-        for hook, meta in contract["requiredHooks"].items()
-        if meta["plugin"] not in plugins
+        hook: meta["plugin"] for hook, meta in contract["requiredHooks"].items() if meta["plugin"] not in plugins
     }
-    assert not orphans, (
-        f"these required hooks name a plugin absent from functionalPlugins: {orphans}"
-    )
+    assert not orphans, f"these required hooks name a plugin absent from functionalPlugins: {orphans}"
 
 
 # ---------------------------------------------------------------------------

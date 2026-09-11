@@ -29,7 +29,7 @@ _OPERATOR = _HERE.parents[2]
 sys.path.insert(0, str(_OPERATOR))
 sys.path.insert(0, str(_OPERATOR / "workspace_broker"))
 
-from bin.lib.chain_pin import (  # noqa: E402
+from bin.lib.chain_pin import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     PIN_ABSENT,
     PIN_DESCENDS,
     PIN_MALFORMED,
@@ -37,7 +37,7 @@ from bin.lib.chain_pin import (  # noqa: E402
     PIN_UNCHANGED,
     check_pinned_head,
 )
-from chain import CHAIN_COLUMNS, GENESIS, compute_row_hash, verify_chain  # noqa: E402
+from chain import CHAIN_COLUMNS, GENESIS, compute_row_hash, verify_chain  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 _VERIFIER = _OPERATOR / "bin" / "verify-audit-chain.py"
 
@@ -87,7 +87,9 @@ def test_truncated_tail_passes_without_a_pin(full_chain):
     for keep in (len(full_chain) - 1, len(full_chain) - 20):
         truncated = full_chain[:keep]
         report = verify_chain(truncated)
-        assert report["ok"] is True, "the chain walk alone should still pass; if it does not, this file's other tests prove nothing"
+        assert report["ok"] is True, (
+            "the chain walk alone should still pass; if it does not, this file's other tests prove nothing"
+        )
         assert report["breaks"] == []
         # And the head it reports is simply the new last row -- nothing about
         # the report says rows are missing.
@@ -109,9 +111,7 @@ def test_rehash_after_mutation_passes_without_a_pin(full_chain):
     assert verify_chain(rows)["ok"] is True
     # ...and the pin catches it, because the post-mutation re-hash necessarily
     # produced a different tip than the one that was pinned.
-    pin = check_pinned_head(
-        rows, pinned_head=full_chain[-1]["row_hash"], current_head=verify_chain(rows)["head"]
-    )
+    pin = check_pinned_head(rows, pinned_head=full_chain[-1]["row_hash"], current_head=verify_chain(rows)["head"])
     assert pin["ok"] is False
     assert pin["verdict"] == PIN_ABSENT
 
@@ -125,9 +125,7 @@ def test_truncated_tail_with_the_pre_truncation_head_is_a_break(full_chain):
     """THE falsifier named in ss#2500. Fails before chain_pin.py exists."""
     pinned = full_chain[-1]["row_hash"]
     truncated = full_chain[:-1]
-    pin = check_pinned_head(
-        truncated, pinned_head=pinned, current_head=verify_chain(truncated)["head"]
-    )
+    pin = check_pinned_head(truncated, pinned_head=pinned, current_head=verify_chain(truncated)["head"])
     assert pin["ok"] is False
     assert pin["verdict"] == PIN_ABSENT
     assert "truncated" in pin["reason"]
@@ -136,9 +134,7 @@ def test_truncated_tail_with_the_pre_truncation_head_is_a_break(full_chain):
 def test_a_descending_head_passes(full_chain):
     """The healthy shape: the ledger grew past the pin."""
     pinned = full_chain[20]["row_hash"]
-    pin = check_pinned_head(
-        full_chain, pinned_head=pinned, current_head=verify_chain(full_chain)["head"]
-    )
+    pin = check_pinned_head(full_chain, pinned_head=pinned, current_head=verify_chain(full_chain)["head"])
     assert pin["ok"] is True
     assert pin["verdict"] == PIN_DESCENDS
 
@@ -163,17 +159,13 @@ def test_a_regressed_head_fails(full_chain):
     """
     later_pin = full_chain[-1]["row_hash"]
     older_export = full_chain[:15]
-    pin = check_pinned_head(
-        older_export, pinned_head=later_pin, current_head=verify_chain(older_export)["head"]
-    )
+    pin = check_pinned_head(older_export, pinned_head=later_pin, current_head=verify_chain(older_export)["head"])
     assert pin["ok"] is False
     assert pin["verdict"] == PIN_ABSENT
 
 
 def test_no_pin_is_reported_not_assumed(full_chain):
-    pin = check_pinned_head(
-        full_chain, pinned_head=None, current_head=verify_chain(full_chain)["head"]
-    )
+    pin = check_pinned_head(full_chain, pinned_head=None, current_head=verify_chain(full_chain)["head"])
     assert pin["ok"] is True
     assert pin["verdict"] == PIN_NOT_SUPPLIED
     assert "not detectable" in pin["reason"]
@@ -186,9 +178,7 @@ def test_a_malformed_pin_is_an_instrument_failure_not_a_finding(full_chain):
     human read the row. It gets its own verdict so the watcher can tell "the
     record was tampered with" apart from "we stored garbage".
     """
-    pin = check_pinned_head(
-        full_chain, pinned_head="not-a-hash", current_head=verify_chain(full_chain)["head"]
-    )
+    pin = check_pinned_head(full_chain, pinned_head="not-a-hash", current_head=verify_chain(full_chain)["head"])
     assert pin["ok"] is False
     assert pin["verdict"] == PIN_MALFORMED
     assert "instrument" in pin["reason"]

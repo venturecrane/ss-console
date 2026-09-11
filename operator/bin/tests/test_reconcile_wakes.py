@@ -22,7 +22,7 @@ import pytest
 _BIN = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_BIN / "lib"))
 
-import cron_slots  # noqa: E402 -- path injected above
+import cron_slots  # noqa: E402 -- path injected above; the import must follow the sys.path shim
 
 _spec = importlib.util.spec_from_file_location("reconcile_wakes", _BIN / "reconcile-wakes.py")
 wakes = importlib.util.module_from_spec(_spec)
@@ -232,9 +232,7 @@ def test_reconcile_seat_covered_slot_is_clean(tmp_path, monkeypatch):
         since=now - timedelta(days=3),
         boot_info=None,
         outcomes=_outcomes(),
-        rows=[
-            _wake("SUPPRESSED_WAKE", "medical-records-chaser", slot_utc + timedelta(minutes=1))
-        ],
+        rows=[_wake("SUPPRESSED_WAKE", "medical-records-chaser", slot_utc + timedelta(minutes=1))],
     )
     assert report.missing == [] and not report.is_finding
 
@@ -247,9 +245,7 @@ def test_the_silent_wake_split_annotated_here_found_there(tmp_path, monkeypatch)
     _write_seat(tmp_path, "pilot", _CRON_SEAT)
     now = datetime(2026, 8, 26, 0, 0, tzinfo=UTC)
     slot_utc = datetime(2026, 8, 25, 15, 9, tzinfo=UTC)
-    wake_row = _wake(
-        "EMITTED_WAKE", "medical-records-chaser", slot_utc + timedelta(minutes=1), row_id="w-1"
-    )
+    wake_row = _wake("EMITTED_WAKE", "medical-records-chaser", slot_utc + timedelta(minutes=1), row_id="w-1")
     report = wakes.reconcile_seat(
         "pilot",
         now=now,
@@ -310,8 +306,12 @@ def test_an_empty_cron_seat_is_na(tmp_path, monkeypatch):
     _write_seat(tmp_path, "quiet", _EMPTY_SEAT)
     now = datetime(2026, 8, 26, 0, 0, tzinfo=UTC)
     report = wakes.reconcile_seat(
-        "quiet", now=now, since=now - timedelta(days=3), boot_info=None,
-        outcomes=_outcomes(), rows=[],
+        "quiet",
+        now=now,
+        since=now - timedelta(days=3),
+        boot_info=None,
+        outcomes=_outcomes(),
+        rows=[],
     )
     assert report.empty_cron and not report.is_finding
     assert "n/a   quiet: cron []" in wakes.render([report])
@@ -320,9 +320,7 @@ def test_an_empty_cron_seat_is_na(tmp_path, monkeypatch):
 def test_render_carries_the_series_marker_and_digest():
     now = datetime(2026, 8, 26, 0, 0, tzinfo=UTC)
     report = wakes.SeatWakeReport(slug="pilot")
-    report.verdicts = [
-        cron_slots.SlotVerdict(slot=_slot("medical-records-chaser", now))
-    ]
+    report.verdicts = [cron_slots.SlotVerdict(slot=_slot("medical-records-chaser", now))]
     rendered = wakes.render([report])
     assert "reconcile-series: cron-slot-watchdog" in rendered
     assert "reconcile-findings:" in rendered
@@ -362,16 +360,12 @@ class _FakeD1:
         return self._boot
 
 
-def test_authored_unprovisioned_seat_skips_and_provisioned_evaluates(
-    tmp_path, monkeypatch, capsys
-):
+def test_authored_unprovisioned_seat_skips_and_provisioned_evaluates(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(wakes, "customers_dir", lambda: tmp_path)
     _write_seat(tmp_path, "ghost", _CRON_SEAT)  # authored, NOT in fleet_status
     _write_seat(tmp_path, "quiet", _EMPTY_SEAT)  # authored, empty cron
     monkeypatch.setenv("OPERATOR_RUNTIME_READ_SECRET", "x")
-    monkeypatch.setattr(
-        wakes.console_d1, "ConsoleD1", lambda **kwargs: _FakeD1(boot_rows={})
-    )
+    monkeypatch.setattr(wakes.console_d1, "ConsoleD1", lambda **kwargs: _FakeD1(boot_rows={}))
     code = wakes.main(["--days", "1", "--now", "2026-08-26T00:00:00Z"])
     out = capsys.readouterr().out
     assert "SKIP  ghost: authored but not provisioned" in out
@@ -384,9 +378,7 @@ def test_d1_unreachable_is_the_loud_hold(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(wakes, "customers_dir", lambda: tmp_path)
     _write_seat(tmp_path, "pilot", _CRON_SEAT)
     monkeypatch.setenv("OPERATOR_RUNTIME_READ_SECRET", "x")
-    monkeypatch.setattr(
-        wakes.console_d1, "ConsoleD1", lambda **kwargs: _FakeD1(explode=True)
-    )
+    monkeypatch.setattr(wakes.console_d1, "ConsoleD1", lambda **kwargs: _FakeD1(explode=True))
     code = wakes.main(["--days", "1"])
     assert code == wakes.EXIT_HOLD
     assert "HOLD: fleet_status read failed" in capsys.readouterr().err
@@ -417,10 +409,7 @@ def test_offline_extract_drives_a_full_offline_grade(tmp_path, monkeypatch, caps
     _write_seat(tmp_path, "pilot", _CRON_SEAT)
     extract = tmp_path / "rows.json"
     extract.write_text(json.dumps([]))
-    code = wakes.main(
-        ["--rows", str(extract), "--slug", "pilot", "--days", "1", "--now",
-         "2026-08-26T00:00:00Z"]
-    )
+    code = wakes.main(["--rows", str(extract), "--slug", "pilot", "--days", "1", "--now", "2026-08-26T00:00:00Z"])
     out = capsys.readouterr().out
     assert code == wakes.EXIT_FINDING
     assert "MISSING" in out

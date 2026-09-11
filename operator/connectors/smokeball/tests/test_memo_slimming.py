@@ -7,7 +7,6 @@ context reduction on the seat (~half a ~20k-token memo list is RTF markup).
 
 from __future__ import annotations
 
-import pytest
 
 from smokeball_connector import server as srv
 

@@ -64,12 +64,15 @@ def test_block_without_a_number_falls_back_to_the_operator_library_convention(tm
     a number, and ``fallback_number`` carries the distinction into the report:
     "the firm's library matter is missing" and "the matter we would have created
     is not there yet" are different sentences to an admin."""
-    path = _write_yaml(tmp_path, """
+    path = _write_yaml(
+        tmp_path,
+        """
         self_initiation:
           document_library:
             matter_hint: '2026-OPS-001 (the internal operations matter)'
             folder_name: 'Document Library'
-    """)
+    """,
+    )
     cfg = load_library_config(path)
     assert cfg.authored is True
     assert cfg.matter_number == OPERATOR_LIBRARY_NUMBER
@@ -79,7 +82,9 @@ def test_block_without_a_number_falls_back_to_the_operator_library_convention(tm
 
 
 def test_the_authored_operator_matter_number_wins_over_the_convention(tmp_path) -> None:
-    path = _write_yaml(tmp_path, """
+    path = _write_yaml(
+        tmp_path,
+        """
         self_initiation:
           document_library:
             folder_name: 'Document Library'
@@ -88,7 +93,8 @@ def test_the_authored_operator_matter_number_wins_over_the_convention(tmp_path) 
               description: 'Operator Library'
               client_contact_id: 'c-1'
               matter_type_id: 't-1'
-    """)
+    """,
+    )
     cfg = load_library_config(path)
     assert cfg.matter_number == "2026-OPS-LIBRARY"
     assert cfg.fallback_number is False
@@ -97,7 +103,9 @@ def test_the_authored_operator_matter_number_wins_over_the_convention(tmp_path) 
 def test_an_authored_matter_number_wins_over_the_operator_matter_block(tmp_path) -> None:
     """The firm's own library matter is the first answer, always. A seat that
     already keeps templates somewhere does not get moved by this feature."""
-    path = _write_yaml(tmp_path, """
+    path = _write_yaml(
+        tmp_path,
+        """
         self_initiation:
           document_library:
             matter_number: '2026-OPS-001'
@@ -107,7 +115,8 @@ def test_an_authored_matter_number_wins_over_the_operator_matter_block(tmp_path)
               description: 'Operator Library'
               client_contact_id: 'c-1'
               matter_type_id: 't-1'
-    """)
+    """,
+    )
     cfg = load_library_config(path)
     assert cfg.matter_number == "2026-OPS-001"
     assert cfg.fallback_number is False
@@ -124,24 +133,30 @@ def test_an_absent_block_is_still_not_authored(tmp_path) -> None:
 
 
 def test_a_block_without_a_folder_name_uses_the_proposed_default(tmp_path) -> None:
-    path = _write_yaml(tmp_path, """
+    path = _write_yaml(
+        tmp_path,
+        """
         self_initiation:
           document_library:
             matter_number: '2026-OPS-001'
-    """)
+    """,
+    )
     cfg = load_library_config(path)
     assert cfg.folder_name == DEFAULT_FOLDER_NAME
 
 
 def test_authored_block_and_template_name_convention_and_override(tmp_path) -> None:
-    path = _write_yaml(tmp_path, """
+    path = _write_yaml(
+        tmp_path,
+        """
         self_initiation:
           document_library:
             matter_number: '2026-OPS-001'
             folder_name: 'Document Library'
             templates:
               letter: 'Firm Letterhead'
-    """)
+    """,
+    )
     cfg = load_library_config(path)
     assert cfg.authored is True and cfg.matter_number == "2026-OPS-001"
     assert cfg.template_name("discovery_set") == "Template - Discovery Set.docx"
@@ -149,7 +164,9 @@ def test_authored_block_and_template_name_convention_and_override(tmp_path) -> N
 
 
 def test_env_override_points_the_loader_at_a_file(tmp_path, monkeypatch) -> None:
-    path = _write_yaml(tmp_path, "self_initiation:\n  document_library:\n    matter_number: 'M-1'\n    folder_name: 'Lib'\n")
+    path = _write_yaml(
+        tmp_path, "self_initiation:\n  document_library:\n    matter_number: 'M-1'\n    folder_name: 'Lib'\n"
+    )
     monkeypatch.setenv(CUSTOMER_YAML_ENV, path)
     assert load_library_config().authored is True
 
@@ -197,14 +214,18 @@ def test_resolves_the_class_template_in_the_library_folder() -> None:
 
 
 def test_not_authored_is_reported_not_raised() -> None:
-    out = resolve_template(_FakeClient(matters=[], folders=[], files=[]), LibraryConfig(authored=False, source="x"), "memo")
+    out = resolve_template(
+        _FakeClient(matters=[], folders=[], files=[]), LibraryConfig(authored=False, source="x"), "memo"
+    )
     assert isinstance(out, NotResolved) and "not authored" in out.reason
 
 
 def test_missing_matter_folder_and_file_each_name_their_reason() -> None:
     no_matter = _FakeClient(matters=[{"id": "m", "number": "OTHER"}], folders=[], files=[])
     assert "not found" in resolve_template(no_matter, _CFG, "memo").reason
-    no_file = _FakeClient(matters=[{"id": "m", "number": "2026-OPS-001"}], folders=[{"id": "f", "name": "Document Library"}], files=[])
+    no_file = _FakeClient(
+        matters=[{"id": "m", "number": "2026-OPS-001"}], folders=[{"id": "f", "name": "Document Library"}], files=[]
+    )
     out = resolve_template(no_file, _CFG, "memo")
     assert isinstance(out, NotResolved) and "Template - Memo.docx" in out.reason and out.folder_id == "f"
     no_folder = _FakeClient(matters=[{"id": "m", "number": "2026-OPS-001"}], folders=[], files=[])
@@ -217,8 +238,14 @@ _LIVE_ENTRY_IN_FOLDER = {
     "href": "https://stagingapi.smokeball.com/matters/3c19.../documents/files/1410...",
     "id": "14105616-27d2-45f3-b212-40a12714060a",
     "versionId": "14105616-27d2-45f3-b212-40a12714060a36F5...",
-    "folder": {"id": "9898f74a-3ad9-4b79-b209-a2f0f0c3d7d8", "href": "https://stagingapi.smokeball.com/matters/3c19.../documents/folders/9898..."},
-    "matter": {"id": "3c191bed-cdda-48b9-a6ed-a51a349f3f94", "href": "https://stagingapi.smokeball.com/matters/3c19..."},
+    "folder": {
+        "id": "9898f74a-3ad9-4b79-b209-a2f0f0c3d7d8",
+        "href": "https://stagingapi.smokeball.com/matters/3c19.../documents/folders/9898...",
+    },
+    "matter": {
+        "id": "3c191bed-cdda-48b9-a6ed-a51a349f3f94",
+        "href": "https://stagingapi.smokeball.com/matters/3c19...",
+    },
     "name": "Template - Demand Letter (Policy Limits)",
     "fileExtension": ".docx",
     "dateCreated": "2026-08-11T20:11:06.264423Z",
@@ -404,7 +431,15 @@ def _handler(captured: list[httpx.Request], *, template: bytes | None = None, li
         if request.method == "GET" and path.endswith("/documents/files"):
             return httpx.Response(200, json={"value": listing_files or []})
         if request.method == "GET" and path.endswith("/download"):
-            return httpx.Response(200, json={"downloadUrl": _DOWNLOAD_URL, "name": "Template - Memo.docx", "fileExtension": ".docx", "sizeBytes": len(template or b"")})
+            return httpx.Response(
+                200,
+                json={
+                    "downloadUrl": _DOWNLOAD_URL,
+                    "name": "Template - Memo.docx",
+                    "fileExtension": ".docx",
+                    "sizeBytes": len(template or b""),
+                },
+            )
         if str(request.url) == _DOWNLOAD_URL:
             return httpx.Response(200, content=template or b"")
         if request.method == "POST" and path.endswith("/documents/files"):
@@ -420,11 +455,18 @@ def _stub_record_check(monkeypatch) -> None:
     from smokeball_connector import record_check as rc
 
     monkeypatch.setattr(server, "_collect_matter_sources", lambda _m: ([("Src", "text")], [], []))
-    monkeypatch.setattr(rc, "run_record_check", lambda *a, **k: rc.RecordCheckResult(passed=True, disposition="pass", refusals=[], checked_sources=1))
+    monkeypatch.setattr(
+        rc,
+        "run_record_check",
+        lambda *a, **k: rc.RecordCheckResult(passed=True, disposition="pass", refusals=[], checked_sources=1),
+    )
 
 
 def _authored(tmp_path, monkeypatch) -> None:
-    path = _write_yaml(tmp_path, "self_initiation:\n  document_library:\n    matter_number: '2026-OPS-001'\n    folder_name: 'Document Library'\n")
+    path = _write_yaml(
+        tmp_path,
+        "self_initiation:\n  document_library:\n    matter_number: '2026-OPS-001'\n    folder_name: 'Document Library'\n",
+    )
     monkeypatch.setenv(CUSTOMER_YAML_ENV, path)
 
 
@@ -491,11 +533,17 @@ def test_firm_template_resolves_and_the_draft_renders_into_it(monkeypatch, tmp_p
     template = make_firm_template(header_text="ACME LAW, LLP")
     listing = [{"id": "tpl-1", "name": "Template - Memo.docx", "folderId": "f-lib"}]
     captured: list[httpx.Request] = []
-    monkeypatch.setattr(server, "_get_client", lambda: _mock_client(_handler(captured, template=template, listing_files=listing)))
+    monkeypatch.setattr(
+        server, "_get_client", lambda: _mock_client(_handler(captured, template=template, listing_files=listing))
+    )
     _stub_record_check(monkeypatch)
     out = server.render_docx_draft("m-1", "Draft", "Body.", document_class="memo")
     fa = out["formatApplied"]
-    assert fa["templateUsed"] == {"name": "Template - Memo.docx", "fileId": "tpl-1", "sha256": hashlib.sha256(template).hexdigest()}
+    assert fa["templateUsed"] == {
+        "name": "Template - Memo.docx",
+        "fileId": "tpl-1",
+        "sha256": hashlib.sha256(template).hexdigest(),
+    }
     assert "ACME LAW, LLP" in fa["baseHeaderFooterText"]
     doc = Document(io.BytesIO(_put_bytes(captured)))
     assert doc.sections[0].header.paragraphs[0].text.startswith("ACME LAW, LLP")
@@ -507,7 +555,9 @@ def test_multi_section_firm_template_is_refused_and_nothing_uploads(monkeypatch,
     template = make_firm_template(sections=2)
     listing = [{"id": "tpl-1", "name": "Template - Memo.docx", "folderId": "f-lib"}]
     captured: list[httpx.Request] = []
-    monkeypatch.setattr(server, "_get_client", lambda: _mock_client(_handler(captured, template=template, listing_files=listing)))
+    monkeypatch.setattr(
+        server, "_get_client", lambda: _mock_client(_handler(captured, template=template, listing_files=listing))
+    )
     _stub_record_check(monkeypatch)
     out = server.render_docx_draft("m-1", "Draft", "Body.", document_class="memo")
     assert out["fileId"] is None
@@ -541,9 +591,17 @@ def test_template_tool_required_params_are_unchanged() -> None:
     import inspect
 
     sig = inspect.signature(server.render_docx_template)
-    assert [n for n, p in sig.parameters.items() if p.default is inspect.Parameter.empty] == ["matter_id", "file_name", "skeleton_markdown"]
+    assert [n for n, p in sig.parameters.items() if p.default is inspect.Parameter.empty] == [
+        "matter_id",
+        "file_name",
+        "skeleton_markdown",
+    ]
     sig = inspect.signature(server.render_docx_draft)
-    assert [n for n, p in sig.parameters.items() if p.default is inspect.Parameter.empty] == ["matter_id", "file_name", "draft_markdown"]
+    assert [n for n, p in sig.parameters.items() if p.default is inspect.Parameter.empty] == [
+        "matter_id",
+        "file_name",
+        "draft_markdown",
+    ]
 
 
 def test_collect_matter_sources_skips_library_templates(monkeypatch, tmp_path) -> None:
@@ -567,7 +625,15 @@ def test_collect_matter_sources_skips_library_templates(monkeypatch, tmp_path) -
         if request.method == "GET" and path.endswith("/documents/files"):
             return httpx.Response(200, json={"value": listing})
         if request.method == "GET" and path.endswith("/download"):
-            return httpx.Response(200, json={"downloadUrl": _DOWNLOAD_URL, "name": "Police Report.txt", "fileExtension": ".txt", "sizeBytes": 11})
+            return httpx.Response(
+                200,
+                json={
+                    "downloadUrl": _DOWNLOAD_URL,
+                    "name": "Police Report.txt",
+                    "fileExtension": ".txt",
+                    "sizeBytes": 11,
+                },
+            )
         if str(request.url) == _DOWNLOAD_URL:
             return httpx.Response(200, content=b"REPORT TEXT")
         return httpx.Response(200, json={"ok": True})
@@ -637,7 +703,9 @@ def test_filing_a_class_template_under_a_name_the_renderer_will_not_open_is_refu
     _authored_with_override(tmp_path, monkeypatch)
     captured: list[httpx.Request] = []
     monkeypatch.setattr(server, "_get_client", lambda: _mock_client(_handler(captured)))
-    out = server.render_docx_template("m-1", "Template - Demand Letter.docx", "# Shell\n", document_class="demand_letter")
+    out = server.render_docx_template(
+        "m-1", "Template - Demand Letter.docx", "# Shell\n", document_class="demand_letter"
+    )
     assert out["fileId"] is None
     assert out["refusals"] and "Firm Demand Shell.docx" in out["refusals"][0]
     # The falsifier that matters: NOTHING was uploaded. A warning-only fix would
@@ -649,7 +717,9 @@ def test_the_convention_name_is_accepted_when_no_override_is_authored(monkeypatc
     _authored(tmp_path, monkeypatch)
     captured: list[httpx.Request] = []
     monkeypatch.setattr(server, "_get_client", lambda: _mock_client(_handler(captured)))
-    out = server.render_docx_template("m-1", "Template - Demand Letter.docx", "# Shell\n", document_class="demand_letter")
+    out = server.render_docx_template(
+        "m-1", "Template - Demand Letter.docx", "# Shell\n", document_class="demand_letter"
+    )
     assert out["refusals"] == [] and out["fileId"] == "file-88"
 
 
@@ -670,6 +740,7 @@ def test_no_document_class_means_no_name_opinion(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(server, "_get_client", lambda: _mock_client(_handler(captured)))
     out = server.render_docx_template("m-1", "Anything At All.docx", "# Shell\n")
     assert out["refusals"] == [] and "formatApplied" not in out
+
 
 # ---- the three-state matter lookup (ss-console#2536) ---------------------------------
 #
@@ -716,23 +787,15 @@ def test_an_incomplete_enumeration_is_a_failure_and_not_an_empty_answer() -> Non
 
 
 def test_lookup_matches_the_description_and_client_pair_too() -> None:
-    client = _ListClient(
-        [{"id": "m-4", "number": "OTHER", "description": "Operator Library", "clientIds": ["c-1"]}]
-    )
-    result = lookup_matter(
-        client, number="OPS-1", description="Operator Library", client_contact_id="c-1"
-    )
+    client = _ListClient([{"id": "m-4", "number": "OTHER", "description": "Operator Library", "clientIds": ["c-1"]}])
+    result = lookup_matter(client, number="OPS-1", description="Operator Library", client_contact_id="c-1")
     assert result.matter_id == "m-4"
     assert result.matched_on == "description and client"
 
 
 def test_the_description_pair_needs_both_halves() -> None:
-    client = _ListClient(
-        [{"id": "m-4", "number": "OTHER", "description": "Operator Library", "clientIds": ["c-2"]}]
-    )
-    result = lookup_matter(
-        client, number="OPS-1", description="Operator Library", client_contact_id="c-1"
-    )
+    client = _ListClient([{"id": "m-4", "number": "OTHER", "description": "Operator Library", "clientIds": ["c-2"]}])
+    result = lookup_matter(client, number="OPS-1", description="Operator Library", client_contact_id="c-1")
     assert result.state == LOOKUP_NOT_FOUND
 
 

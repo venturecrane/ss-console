@@ -17,6 +17,7 @@ The heading menu comes from the firm config (`format.subsections`), the same
 list the map prompt is filled from, so the falsifier and the prompt agree on
 what a heading line is.
 """
+
 from __future__ import annotations
 
 import re
@@ -107,13 +108,22 @@ def parse_clusters(text: str) -> list[dict[str, Any]]:
         head, _, body = block.partition("\n")
         m = CLUSTER_HEAD.match(head.strip())
         if not m:
-            clusters.append({"date": None, "key": None, "n": 0, "head": head.strip(), "body": body,
-                             "fragments": [body.strip()]})
+            clusters.append(
+                {"date": None, "key": None, "n": 0, "head": head.strip(), "body": body, "fragments": [body.strip()]}
+            )
             continue
         body = CONTINUE.sub("", body)
         frags = [f.strip() for f in body.split("---FRAGMENT-BREAK---")]
-        clusters.append({"date": m.group(1), "key": m.group(2), "n": int(m.group(3)), "head": head.strip(),
-                         "body": body, "fragments": [f for f in frags if f]})
+        clusters.append(
+            {
+                "date": m.group(1),
+                "key": m.group(2),
+                "n": int(m.group(3)),
+                "head": head.strip(),
+                "body": body,
+                "fragments": [f for f in frags if f],
+            }
+        )
     return clusters
 
 
@@ -124,8 +134,9 @@ def parse_entries(text: str) -> list[dict[str, str]]:
         if not e or not DATE_LINE.match(e.splitlines()[0]):
             continue
         lines = e.splitlines()
-        entries.append({"date_line": lines[0].strip(), "provider_line": lines[1].strip() if len(lines) > 1 else "",
-                        "body": e})
+        entries.append(
+            {"date_line": lines[0].strip(), "provider_line": lines[1].strip() if len(lines) > 1 else "", "body": e}
+        )
     return entries
 
 
@@ -163,8 +174,10 @@ def check(clusters_text: str, merged_text: str, hd: Headings) -> tuple[int, list
         n_collapse += containment_collapses(pairs)
     n_out = sum(len(distinct_paragraphs(e["body"], hd)) for e in entries)
     floor = n_in - n_collapse
-    rep.append(f"paragraphs: {n_in} distinct in, {n_collapse} same-cite containment collapse(s) allowed, "
-               f"floor {floor}, {n_out} out")
+    rep.append(
+        f"paragraphs: {n_in} distinct in, {n_collapse} same-cite containment collapse(s) allowed, "
+        f"floor {floor}, {n_out} out"
+    )
     if n_out < floor:
         rep.append(f"   LOST {floor - n_out} paragraph(s)")
         rc = rc or 4

@@ -239,9 +239,7 @@ def normalize_graph_message(message: dict) -> dict:
     }
 
 
-def list_sent_msgraph(
-    seat: MsGraphSeat, token: str, *, since=None, opener=None
-) -> list[dict]:
+def list_sent_msgraph(seat: MsGraphSeat, token: str, *, since=None, opener=None) -> list[dict]:
     """Every message in this seat's Sent Items, newest-first, paged and bounded.
 
     Ordered newest-first so a ``--since`` window can stop paging as soon as it
@@ -292,10 +290,7 @@ def fetch_graph_body(seat: MsGraphSeat, token: str, graph_id: str, *, opener=Non
     """
     if not graph_id:
         return None
-    url = (
-        f"{GRAPH_API_BASE}/users/{seat.mailbox}/messages/"
-        f"{urllib.parse.quote(graph_id)}?$select=body"
-    )
+    url = f"{GRAPH_API_BASE}/users/{seat.mailbox}/messages/{urllib.parse.quote(graph_id)}?$select=body"
     payload = _graph_get(url, token, opener=opener)
     body = payload.get("body")
     if not isinstance(body, dict):

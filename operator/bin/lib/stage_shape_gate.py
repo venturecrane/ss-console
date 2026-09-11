@@ -20,9 +20,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-_SPEC = importlib.util.spec_from_file_location(
-    "secret_shape", Path(__file__).resolve().parent / "secret_shape.py"
-)
+_SPEC = importlib.util.spec_from_file_location("secret_shape", Path(__file__).resolve().parent / "secret_shape.py")
 assert _SPEC and _SPEC.loader
 secret_shape = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(secret_shape)

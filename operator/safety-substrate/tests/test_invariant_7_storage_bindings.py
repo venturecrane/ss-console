@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # safety-substrate/
 
-from invariants.invariant_7 import run as _invariant_run  # noqa: E402
+from invariants.invariant_7 import run as _invariant_run
 
 
 def run() -> tuple[bool, str]:

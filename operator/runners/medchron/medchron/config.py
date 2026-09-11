@@ -11,6 +11,7 @@ Resolution order: `MEDCHRON_FIRM_CONFIG` env, else the fixed root-owned path the
 seat's other config-as-data uses. A missing file is a refusal; there is no
 built-in firm.
 """
+
 from __future__ import annotations
 
 import os
@@ -102,12 +103,18 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
     "budget": {
         "per_job_cap_usd": ("float", True),
         "usd_per_million_chars": ("float", True),
-        # The routine-11 cost controls (2026-09-09). All four are REQUIRED, not
-        # defaulted: a stale firm.yaml that predates them must refuse to run
-        # rather than run unmetered, which is exactly the state a 3,312-page
-        # package ran in when it crossed no limit anything enforced.
+        # The routine-11 cost controls (2026-09-09). REQUIRED, not defaulted: a
+        # stale firm.yaml that predates them must refuse to run rather than run
+        # unmetered, which is exactly the state a 3,312-page package ran in when
+        # it crossed no limit anything enforced.
+        #
+        # `single_matter_page_threshold` was removed 2026-09-10 (Captain): the
+        # firm buys a CYCLE allowance and spends it as it likes, so a per-matter
+        # page line only rationed the firm's own pool back to it. The key stays
+        # OUT of this closed set on purpose -- a firm.yaml still carrying it
+        # refuses to load, which is louder than silently ignoring a number a
+        # human believes is enforcing something.
         "monthly_budget_usd": ("float", True),
-        "single_matter_page_threshold": ("int", True),
         # The measured rates the pre-stage projections are built from: the
         # transcription cost of one scanned page, and the audit cost of one
         # claim. Firm posture, so they live here and never on the seat.
@@ -151,10 +158,6 @@ class FirmConfig:
     @property
     def monthly_budget_usd(self) -> float:
         return float(self.get("budget", "monthly_budget_usd"))
-
-    @property
-    def single_matter_page_threshold(self) -> int:
-        return int(self.get("budget", "single_matter_page_threshold"))
 
     @property
     def usd_per_scanned_page(self) -> float:
@@ -254,10 +257,11 @@ def _semantic_checks(data: dict[str, Any]) -> list[str]:
     # A zero or negative control is not a control: it either refuses every job
     # or meters nothing. Each is named separately so the validator's message
     # points at the key the firm has to fix.
-    for key, what in (("monthly_budget_usd", "a zero budget refuses every job"),
-                      ("single_matter_page_threshold", "a zero threshold refuses every matter"),
-                      ("usd_per_scanned_page", "a zero rate projects every page at no cost"),
-                      ("usd_per_audit_claim", "a zero rate projects every claim at no cost")):
+    for key, what in (
+        ("monthly_budget_usd", "a zero budget refuses every job"),
+        ("usd_per_scanned_page", "a zero rate projects every page at no cost"),
+        ("usd_per_audit_claim", "a zero rate projects every claim at no cost"),
+    ):
         if key in budget and float(budget.get(key) or 0) <= 0:
             out.append(f"budget.{key}: must be > 0 ({what})")
     return out

@@ -45,14 +45,8 @@ _MAX_ERROR_BODY = 600
 # The bounded field set the delta poll selects — metadata + body, so an inbound
 # message normalizes from the delta payload without a separate full-body fetch,
 # while still keeping the payload off Graph's full (much larger) message shape.
-_DELTA_SELECT = (
-    "id,subject,from,toRecipients,ccRecipients,"
-    "receivedDateTime,bodyPreview,conversationId,body"
-)
-_LIST_SELECT = (
-    "id,subject,from,toRecipients,ccRecipients,"
-    "receivedDateTime,bodyPreview,conversationId"
-)
+_DELTA_SELECT = "id,subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,conversationId,body"
+_LIST_SELECT = "id,subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,conversationId"
 
 
 def _clean(params: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -68,11 +62,7 @@ def _truncate_body(text: str | None) -> str:
     if not text:
         return ""
     text = text.strip()
-    return (
-        text
-        if len(text) <= _MAX_ERROR_BODY
-        else text[:_MAX_ERROR_BODY] + "...(truncated)"
-    )
+    return text if len(text) <= _MAX_ERROR_BODY else text[:_MAX_ERROR_BODY] + "...(truncated)"
 
 
 def _recipients(addrs: str | list[str] | None) -> list[dict[str, Any]] | None:
@@ -84,11 +74,7 @@ def _recipients(addrs: str | list[str] | None) -> list[dict[str, Any]] | None:
     if addrs is None:
         return None
     items = [addrs] if isinstance(addrs, str) else list(addrs)
-    out = [
-        {"emailAddress": {"address": str(a).strip()}}
-        for a in items
-        if str(a).strip()
-    ]
+    out = [{"emailAddress": {"address": str(a).strip()}} for a in items if str(a).strip()]
     return out or None
 
 
@@ -128,9 +114,7 @@ class MsGraphApiError(RuntimeError):
         self.url = url
         self.status = status
         self.body = body
-        super().__init__(
-            f"MSGraph {method} {url} -> HTTP {status}: {body or '(empty body)'}"
-        )
+        super().__init__(f"MSGraph {method} {url} -> HTTP {status}: {body or '(empty body)'}")
 
 
 class MsGraphClient:
@@ -188,14 +172,11 @@ class MsGraphClient:
                 },
             )
         except httpx.HTTPError as exc:
-            raise MsGraphAuthError(
-                f"token request to {self._token_host()} failed: {exc}"
-            ) from exc
+            raise MsGraphAuthError(f"token request to {self._token_host()} failed: {exc}") from exc
         if resp.status_code != 200:
             # Never include the response body verbatim — it can echo the request.
             raise MsGraphAuthError(
-                f"token mint (client_credentials) rejected with HTTP "
-                f"{resp.status_code} at {self._token_host()}"
+                f"token mint (client_credentials) rejected with HTTP {resp.status_code} at {self._token_host()}"
             )
         body = resp.json()
         token = body.get("access_token")
@@ -203,9 +184,7 @@ class MsGraphClient:
             raise MsGraphAuthError("token response had no access_token")
         expires_in = int(body.get("expires_in", 3600))
         self._token = token
-        self._token_deadline = time.monotonic() + max(
-            expires_in - _TOKEN_SKEW_SECONDS, 0
-        )
+        self._token_deadline = time.monotonic() + max(expires_in - _TOKEN_SKEW_SECONDS, 0)
         return expires_in
 
     def _token_host(self) -> str:
@@ -238,9 +217,7 @@ class MsGraphClient:
                 "Authorization": f"Bearer {self._bearer()}",
                 "Accept": "application/json",
             }
-            last = self._http.request(
-                method, url, params=_clean(params), json=json, headers=headers
-            )
+            last = self._http.request(method, url, params=_clean(params), json=json, headers=headers)
             if last.status_code == 429:
                 time.sleep(min(2**attempt, 8))
                 continue
@@ -249,9 +226,7 @@ class MsGraphClient:
                 refreshed = True
                 continue
             if last.status_code >= 400:
-                raise MsGraphApiError(
-                    method, url, last.status_code, _truncate_body(last.text)
-                )
+                raise MsGraphApiError(method, url, last.status_code, _truncate_body(last.text))
             if last.status_code in (202, 204) or not last.content:
                 return None
             return last.json()
@@ -277,9 +252,7 @@ class MsGraphClient:
         poller falls back to when a delta item omits the body)."""
         return self.request("GET", self._mail_url(f"messages/{message_id}"))
 
-    def poll_delta(
-        self, delta_link: str | None = None
-    ) -> tuple[list[Any], str | None, bool]:
+    def poll_delta(self, delta_link: str | None = None) -> tuple[list[Any], str | None, bool]:
         """Drain the inbox delta query, following ``@odata.nextLink`` pages, and
         return ``(raw_messages, delta_link, cursor_reset)``.
 
@@ -346,9 +319,7 @@ class MsGraphClient:
             "POST",
             self._mail_url("sendMail"),
             json={
-                "message": _message_payload(
-                    to=to, subject=subject, body_text=body_text, cc=cc
-                ),
+                "message": _message_payload(to=to, subject=subject, body_text=body_text, cc=cc),
                 "saveToSentItems": save_to_sent_items,
             },
         )

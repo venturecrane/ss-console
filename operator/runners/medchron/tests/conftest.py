@@ -1,5 +1,6 @@
 """pytest fixtures for the medchron runner tests. Data and helpers live in
 medchron_testkit.py (see its docstring for why they are not here)."""
+
 from __future__ import annotations
 
 import json
@@ -10,6 +11,7 @@ import pytest
 import yaml
 
 from medchron_testkit import FIRM_CONFIG, PRICING, job_yaml
+
 
 @pytest.fixture
 def firm_config_path(tmp_path: Path) -> Path:
@@ -73,12 +75,32 @@ def fake_pipeline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "sys.exit(0)\n"
     )
     names = [
-        "download.py", "extract.py", "index_msg.py", "vision_scan.py", "billing_extract.py",
-        "build_units.py", "check_unit_identity.py", "map_run.py", "repair_truncated.py", "assemble.py",
-        "merge_code.py", "group_providers.py", "filter_preincident.py", "build_exhibits.py",
-        "condense_entries.py", "summarize_preincident.py", "build_doc.py", "classify_nonrecord.py",
-        "classify_scanned.py", "strip_nonrecord.py", "coverage_gate.py", "billing_chart.py",
-        "billing_docx.py", "audit_repair_loop.py", "md_to_docx_v4.py", "make_manifest.py",
+        "download.py",
+        "extract.py",
+        "index_msg.py",
+        "vision_scan.py",
+        "billing_extract.py",
+        "build_units.py",
+        "check_unit_identity.py",
+        "map_run.py",
+        "repair_truncated.py",
+        "assemble.py",
+        "merge_code.py",
+        "group_providers.py",
+        "filter_preincident.py",
+        "build_exhibits.py",
+        "condense_entries.py",
+        "summarize_preincident.py",
+        "build_doc.py",
+        "classify_nonrecord.py",
+        "classify_scanned.py",
+        "strip_nonrecord.py",
+        "coverage_gate.py",
+        "billing_chart.py",
+        "billing_docx.py",
+        "audit_repair_loop.py",
+        "md_to_docx_v4.py",
+        "make_manifest.py",
     ]
     for n in names:
         (pdir / n).write_text(script, encoding="utf-8")

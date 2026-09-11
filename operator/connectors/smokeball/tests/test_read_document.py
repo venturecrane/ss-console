@@ -48,16 +48,12 @@ def _tiny_pdf(lines: list[str]) -> bytes:
     out += f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n".encode()
     for off in offsets:
         out += f"{off:010d} 00000 n \n".encode()
-    out += (
-        f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n"
-    ).encode()
+    out += (f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n").encode()
     return bytes(out)
 
 
 def _mock_client(handler) -> SmokeballClient:
-    client = SmokeballClient(
-        region="us", environment="staging", client_id="cid", client_secret="sec", api_key="apikey"
-    )
+    client = SmokeballClient(region="us", environment="staging", client_id="cid", client_secret="sec", api_key="apikey")
     client._http = httpx.Client(transport=httpx.MockTransport(handler))
     return client
 

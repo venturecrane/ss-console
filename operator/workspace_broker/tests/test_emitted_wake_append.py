@@ -93,15 +93,11 @@ def test_wake_row_rejected_when_peer_uid_missing(tmp_path: Path) -> None:
     """Two-arg handle() callers (legacy wire) cannot reach this verb."""
     broker = _broker(tmp_path)
     with pytest.raises(PermissionError):
-        broker.handle(
-            {"action": "emitted_wake_append", "row": _row()}, peer_pid=GATEWAY_PID
-        )
+        broker.handle({"action": "emitted_wake_append", "row": _row()}, peer_pid=GATEWAY_PID)
     assert broker.ledger.count() == 0
 
 
-@pytest.mark.parametrize(
-    "forged", ["SUPPRESSED_WAKE", "REPLY_SENT", "WEBHOOK_SUPPRESSED", "TRUST_PROMOTED"]
-)
+@pytest.mark.parametrize("forged", ["SUPPRESSED_WAKE", "REPLY_SENT", "WEBHOOK_SUPPRESSED", "TRUST_PROMOTED"])
 def test_action_type_is_locked_to_emitted_wake(tmp_path: Path, forged: str) -> None:
     """The verb cannot forge any other audit row — including its own sibling's.
 
@@ -172,9 +168,7 @@ def test_wake_row_joins_the_hash_chain(tmp_path: Path) -> None:
     import sqlite3
 
     conn = sqlite3.connect(str(tmp_path / "audit.db"))
-    rows = conn.execute(
-        "SELECT action_type, prev_hash, row_hash FROM audit_log ORDER BY rowid"
-    ).fetchall()
+    rows = conn.execute("SELECT action_type, prev_hash, row_hash FROM audit_log ORDER BY rowid").fetchall()
     conn.close()
     assert [r[0] for r in rows] == ["SUPPRESSED_WAKE", "EMITTED_WAKE"]
     assert rows[1][1] == rows[0][2]  # chains off the prior row's hash

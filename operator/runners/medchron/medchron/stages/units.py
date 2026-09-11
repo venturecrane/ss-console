@@ -18,6 +18,7 @@ Exit 2 when a scan-queued file has no transcription (vision has not finished)
 or when billing_docs.json exists without billing_extract.jsonl: marking on a
 guess would drop those files from every read.
 """
+
 from __future__ import annotations
 
 import json
@@ -69,8 +70,10 @@ def compose_skip_reason(rec: dict[str, Any] | None) -> str | None:
     # file by its first page, and pages 2-3 may hold the clinical report.
     if set(range(1, pages + 1)) - evidenced:
         return None
-    return (f"billing-only source ({'/'.join(sorted(types))}), {len(chunks)} chunk(s) fully captured by "
-            f"billing_extract (a line item or printed total on every one of {pages} page(s), no failed page)")
+    return (
+        f"billing-only source ({'/'.join(sorted(types))}), {len(chunks)} chunk(s) fully captured by "
+        f"billing_extract (a line item or printed total on every one of {pages} page(s), no failed page)"
+    )
 
 
 def mark_compose_skips(d: Path, units: dict[str, list[dict[str, Any]]], log) -> list[tuple[str, str, int]] | None:
@@ -79,8 +82,10 @@ def mark_compose_skips(d: Path, units: dict[str, list[dict[str, Any]]], log) -> 
     if not bp.is_file():
         return []
     if not ep.is_file():
-        log(f"REFUSING: {bp.name} exists but {ep.name} does not; run billing_extract first so the billing files "
-            f"are marked from evidence rather than a guess")
+        log(
+            f"REFUSING: {bp.name} exists but {ep.name} does not; run billing_extract first so the billing files "
+            f"are marked from evidence rather than a guess"
+        )
         return None
     rows = {r["file"]: r for r in read_jsonl(ep) if r.get("file")}
     skipped: list[tuple[str, str, int]] = []
@@ -105,8 +110,9 @@ def _excluder(patterns: list[str]):
     return lambda name: any(c.search(name or "") for c in compiled)
 
 
-def _route(usable: list[dict[str, Any]], spec: dict[str, dict[str, Any]] | None, slug: str, is_excluded
-           ) -> tuple[dict[str, list], list[str], list[dict[str, Any]]]:
+def _route(
+    usable: list[dict[str, Any]], spec: dict[str, dict[str, Any]] | None, slug: str, is_excluded
+) -> tuple[dict[str, list], list[str], list[dict[str, Any]]]:
     excluded: list[str] = []
     unassigned: list[dict[str, Any]] = []
     if spec is None or len(spec) == 1:
@@ -123,11 +129,19 @@ def _route(usable: list[dict[str, Any]], spec: dict[str, dict[str, Any]] | None,
         if is_excluded(r["name"]):
             excluded.append(r["name"])
             continue
-        hit = next((u for u, rule in spec.items()
-                    if rule.get("folder_prefix") and (r.get("folder") or "").startswith(rule["folder_prefix"])), None)
+        hit = next(
+            (
+                u
+                for u, rule in spec.items()
+                if rule.get("folder_prefix") and (r.get("folder") or "").startswith(rule["folder_prefix"])
+            ),
+            None,
+        )
         if not hit:
-            hit = next((u for u, rule in spec.items() if rule.get("name_token") and token_hit(rule["name_token"], r["name"])),
-                       None)
+            hit = next(
+                (u for u, rule in spec.items() if rule.get("name_token") and token_hit(rule["name_token"], r["name"])),
+                None,
+            )
         (units[hit].append(r) if hit else unassigned.append(r))
     return units, excluded, unassigned
 
@@ -158,7 +172,9 @@ def run(sr: StageRun) -> int:
 
     if unassigned:
         (d / "units" / "_unassigned.json").write_text(
-            json.dumps([{k: r.get(k) for k in ("id", "name", "folder")} for r in unassigned], indent=1), encoding="utf-8")
+            json.dumps([{k: r.get(k) for k in ("id", "name", "folder")} for r in unassigned], indent=1),
+            encoding="utf-8",
+        )
         sr.log(f"UNASSIGNED files: {len(unassigned)}; every one must be assigned or excluded before composition")
         for r in unassigned:
             sr.log(f"  ? {r['name'][:70]} | {r.get('folder')}")
@@ -174,8 +190,10 @@ def run(sr: StageRun) -> int:
                     if u2 != u and token_hit(t2, r["name"]) and not (own and token_hit(own, r["name"])):
                         crossed += 1
                         sr.log(f"CROSS-UNIT? '{r['name'][:60]}' sits in {u} but names {u2}")
-        sr.log(f"cross-unit name check: {crossed} flag(s) across {sum(len(f) for f in units.values())} routed files "
-               f"(filename-visible misrouting only)")
+        sr.log(
+            f"cross-unit name check: {crossed} flag(s) across {sum(len(f) for f in units.values())} routed files "
+            f"(filename-visible misrouting only)"
+        )
     skipped = mark_compose_skips(d, units, sr.log)
     if skipped is None:
         return 2
@@ -183,9 +201,13 @@ def run(sr: StageRun) -> int:
         (d / "units" / f"{u}.json").write_text(json.dumps(files, indent=1), encoding="utf-8")
         chars = sum(int(r.get("chars") or 0) for r in files)
         n_skip = sum(1 for r in files if not r.get("compose", True))
-        sr.log(f"{u}: {len(files)} files, {chars / 1000:.0f}k chars" + (f" ({n_skip} compose-skipped)" if n_skip else ""))
+        sr.log(
+            f"{u}: {len(files)} files, {chars / 1000:.0f}k chars" + (f" ({n_skip} compose-skipped)" if n_skip else "")
+        )
     if skipped:
-        sr.log(f"compose-skipped (billing fully extracted): {len(skipped)} file(s), {sum(p for _, _, p in skipped)} pages")
+        sr.log(
+            f"compose-skipped (billing fully extracted): {len(skipped)} file(s), {sum(p for _, _, p in skipped)} pages"
+        )
         for u, name, pages in skipped:
             sr.log(f"  - {name[:62]:62s} {pages:>4} p  [{u}]")
     sr.log(f"excluded: {len(excluded)}")

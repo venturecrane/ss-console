@@ -10,6 +10,7 @@ and pages at completion, plus the pipeline sha the run was made with.
 Writes are atomic (temp file + os.replace) so a kill between two stages never
 leaves a half-written state.
 """
+
 from __future__ import annotations
 
 import json
@@ -60,7 +61,7 @@ class RunState:
     runner_version: str | None = None
     created: str = field(default_factory=_now)
     updated: str = field(default_factory=_now)
-    outcome: str | None = None          # one of TERMINAL_OUTCOMES when the run ends
+    outcome: str | None = None  # one of TERMINAL_OUTCOMES when the run ends
     outcome_reason: str | None = None
     stages: dict[str, StageRecord] = field(default_factory=dict)
 
@@ -112,8 +113,16 @@ class RunState:
         rec.input_sha = input_sha
         self.save()
 
-    def finish(self, name: str, *, status: str, exit_code: int | None, dollars: float | None,
-               pages: int | None, note: str | None = None) -> None:
+    def finish(
+        self,
+        name: str,
+        *,
+        status: str,
+        exit_code: int | None,
+        dollars: float | None,
+        pages: int | None,
+        note: str | None = None,
+    ) -> None:
         if status not in STATUSES:
             raise ValueError(f"unknown stage status {status!r}")
         rec = self.stage(name)

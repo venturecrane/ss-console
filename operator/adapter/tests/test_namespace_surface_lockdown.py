@@ -32,7 +32,6 @@ import importlib
 import sys
 from pathlib import Path
 
-import pytest
 
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[2]))  # operator/ on sys.path
@@ -67,7 +66,7 @@ def test_adapter_star_import_does_not_pull_raw_executors():
     test catches it.
     """
     namespace: dict = {}
-    exec("from adapter import *", namespace)  # noqa: S102 — controlled exec
+    exec("from adapter import *", namespace)  # noqa: S102 — the test exercises star-import on purpose, into a throwaway namespace
     forbidden = {
         "HttpD1Executor",
         "SqliteExecutor",
@@ -108,7 +107,7 @@ def test_audit_log_raw_executors_still_importable_by_explicit_name():
     removes them from `__all__` but does NOT remove the classes — that
     rename is deferred to a follow-on once consumers migrate.
     """
-    from adapter.audit_log import HttpD1Executor, SqliteExecutor  # noqa: F401
+    from adapter.audit_log import HttpD1Executor, SqliteExecutor  # noqa: F401 - the import IS the assertion: the back-compat names must still resolve
 
     # If either import raises ImportError, the lockdown went too far.
     # The test passing means back-compat is preserved.
@@ -116,9 +115,7 @@ def test_audit_log_raw_executors_still_importable_by_explicit_name():
 
 def test_audit_log_star_import_does_not_pull_raw_executors():
     namespace: dict = {}
-    exec("from adapter.audit_log import *", namespace)  # noqa: S102
+    exec("from adapter.audit_log import *", namespace)  # noqa: S102 - the test exercises star-import on purpose, into a throwaway namespace
     forbidden = {"HttpD1Executor", "SqliteExecutor"}
     leaked = forbidden & set(namespace)
-    assert not leaked, (
-        f"`from adapter.audit_log import *` leaked raw executors: {leaked}"
-    )
+    assert not leaked, f"`from adapter.audit_log import *` leaked raw executors: {leaked}"

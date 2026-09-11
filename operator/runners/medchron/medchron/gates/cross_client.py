@@ -7,6 +7,7 @@ the input to a decision. DOB counts as much as surname: a claim form renders
 it unpunctuated. Registered probe: a page naming the other client's DOB and
 none of its own is flagged.
 """
+
 from __future__ import annotations
 
 import re
@@ -22,7 +23,9 @@ def dob_variants(dob: str | None) -> list[str]:
         return []
     mo, dy, yr = m.groups()
     mo2, dy2 = mo.zfill(2), dy.zfill(2)
-    return sorted({f"{mo2}/{dy2}/{yr}", f"{int(mo)}/{int(dy)}/{yr}", f"{mo2}-{dy2}-{yr}", f"{yr}-{mo2}-{dy2}", f"{mo2}{dy2}{yr}"})
+    return sorted(
+        {f"{mo2}/{dy2}/{yr}", f"{int(mo)}/{int(dy)}/{yr}", f"{mo2}-{dy2}-{yr}", f"{yr}-{mo2}-{dy2}", f"{mo2}{dy2}{yr}"}
+    )
 
 
 def score(text: str, ident: dict[str, Any]) -> int:
@@ -34,8 +37,10 @@ def score(text: str, ident: dict[str, Any]) -> int:
 
 
 def identities(units: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    return {u: {"surname": rule.get("surname") or rule.get("name_token"), "dob_variants": dob_variants(rule.get("dob"))}
-            for u, rule in units.items()}
+    return {
+        u: {"surname": rule.get("surname") or rule.get("name_token"), "dob_variants": dob_variants(rule.get("dob"))}
+        for u, rule in units.items()
+    }
 
 
 def flags(slug_dir: Path) -> tuple[list[dict[str, Any]], int, list[str]]:
@@ -60,5 +65,14 @@ def flags(slug_dir: Path) -> tuple[list[dict[str, Any]], int, list[str]]:
                     continue
                 other = score(text, idents[u2])
                 if other > own and other > 0:
-                    out.append({"unit": u, "names": u2, "file": r.get("name"), "folder": r.get("folder"), "other": other, "own": own})
+                    out.append(
+                        {
+                            "unit": u,
+                            "names": u2,
+                            "file": r.get("name"),
+                            "folder": r.get("folder"),
+                            "other": other,
+                            "own": own,
+                        }
+                    )
     return out, checked, [u for u, i in idents.items() if not i["dob_variants"]]

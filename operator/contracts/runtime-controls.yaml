@@ -7,12 +7,14 @@
 # built, tested, merged — and never wired into the live dispatch path on the
 # Machine. Tests pass because they exercise the function in isolation; nothing
 # proves it is invoked on a real turn. The motivating specimen:
-# `safety-substrate/sticky_stop.py` is complete and fully tested (cost cap,
-# tool-failure / refusal / time-budget circuit breakers) yet has ZERO callers in
-# ss-console and ZERO references in the overlay where dispatch runs. The circuit
-# breaker named in PRD §7.5 does not exist at runtime. ADR 0050 records the same
-# fact in its honesty banner ("There is no verified live cost circuit-breaker
-# (B3)").
+# `safety-substrate/sticky_stop.py` was complete and fully tested (cost cap,
+# tool-failure / refusal / time-budget circuit breakers) yet for two months had
+# ZERO callers in ss-console and ZERO references in the overlay where dispatch
+# runs; the circuit breaker named in PRD §7.5 did not exist at runtime. ADR 0062
+# then vendored it into the overlay as shared/sticky_stop.py and wired the cost
+# arm through shared/cost_breaker.py (see sticky_stop_cost_cap below). Since
+# 2026-09-10 the two copies are a tracked pair in overlay-pairs.json, so the
+# ss-console file can no longer drift silently from what seats run.
 #
 # WHAT THIS REGISTRY GUARANTEES (the "wires-nothing" subset). It does NOT wire
 # any control. It makes a control's live status EXPLICIT and OWNED, and — via
@@ -426,11 +428,12 @@ controls:
       code but no negative-fire probe proves the taint blocks on a real turn —
       that probe is Component 3, folded into the B3 review.
 
-  # ---- inert: NOT wired into dispatch at all (the motivating class) ----
-  # All four arms live in safety-substrate/sticky_stop.py: complete, fully
-  # tested, ZERO callers in ss-console, ZERO references in the overlay. One
-  # wiring effort (ADR 0050 B3) wires the StickyStopError-raising dispatch
-  # integration that covers every arm.
+  # ---- the sticky-stop arms (the motivating class, now partly wired) ----
+  # All four arms live in safety-substrate/sticky_stop.py, vendored into the
+  # overlay as shared/sticky_stop.py (a tracked pair in overlay-pairs.json since
+  # 2026-09-10). The cost arm is enforced through shared/cost_breaker.py; the
+  # tool-failure and refusal arms are unprobed; the time-budget arm is inert.
+  # Nothing in ss-console calls the module; the overlay is where it runs.
   sticky_stop_cost_cap:
     control: sticky_stop_cost_cap
     class: circuit-breaker

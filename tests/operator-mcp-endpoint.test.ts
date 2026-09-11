@@ -442,6 +442,29 @@ describe('loadMcpCustomer and migration 0072', () => {
     })
   })
 
+  it('resolves a granted subject that has a users row to that users.id', async () => {
+    await db
+      .prepare(
+        'INSERT INTO users (id, org_id, email, name, role, entity_id, clerk_user_id) ' +
+          'VALUES (?, ?, ?, ?, ?, ?, ?)'
+      )
+      .bind('user-granted-portal', ORG_ID, 'gp@example.com', 'GP', 'client', ENTITY_ID, 'user_gp')
+      .run()
+    await insertGrant(db, {
+      clerk_user_id: 'user_gp',
+      email: 'gp@example.com',
+      profile: 'operator',
+      expires_at: '2999-01-01T00:00:00.000Z',
+    })
+    const customer = await loadMcpCustomer(db, 'smd')
+    expect(customer?.principals).toContainEqual({
+      localUserId: 'user-granted-portal',
+      clerkUserId: 'user_gp',
+      email: 'gp@example.com',
+      profile: 'operator',
+    })
+  })
+
   it('does not authorize an expired grant', async () => {
     await insertGrant(db, {
       clerk_user_id: 'user_expired',
@@ -670,6 +693,54 @@ describe('MCP route authorization and audit', () => {
       clerk_user_id: 'user_new',
       profile: 'crane',
     })
+  })
+
+  it('open policy: a JIT grant for a portal user of the firm is audited under their users.id', async () => {
+    // A firm employee who is ALSO a portal user (has a users row for this
+    // entity) connects over MCP before being authored. The grant is minted
+    // under their Clerk subject; the audit actor is their local users.id, the
+    // same id the grant read-back path resolves on the next request.
+    await db
+      .prepare(
+        'INSERT INTO users (id, org_id, email, name, role, entity_id, clerk_user_id) ' +
+          'VALUES (?, ?, ?, ?, ?, ?, ?)'
+      )
+      .bind('user-portal-two', ORG_ID, 'two@firm.com', 'Two', 'client', ENTITY_ID, 'user_two')
+      .run()
+    const res = await postAs(openCustomer(), {
+      sub: 'user_two',
+      email: 'two@firm.com',
+      email_verified: true,
+    })
+    expect(res.status).toBe(200)
+    const audit = await db
+      .prepare(
+        "SELECT local_user_id FROM operator_mcp_audit WHERE clerk_subject = ? AND event_type = 'auth' AND decision = 'allow'"
+      )
+      .bind('user_two')
+      .first<{ local_user_id: string }>()
+    expect(audit?.local_user_id).toBe('user-portal-two')
+    // And the read-back path agrees on the very next request.
+    const reloaded = await loadMcpCustomer(db, 'smd')
+    expect(reloaded?.principals).toContainEqual(
+      expect.objectContaining({ clerkUserId: 'user_two', localUserId: 'user-portal-two' })
+    )
+  })
+
+  it('open policy: a JIT grant for a grant-only newcomer is audited under the Clerk subject', async () => {
+    const res = await postAs(openCustomer(), {
+      sub: 'user_new3',
+      email: 'new3@firm.com',
+      email_verified: true,
+    })
+    expect(res.status).toBe(200)
+    const audit = await db
+      .prepare(
+        "SELECT local_user_id FROM operator_mcp_audit WHERE clerk_subject = ? AND event_type = 'auth' AND decision = 'allow'"
+      )
+      .bind('user_new3')
+      .first<{ local_user_id: string }>()
+    expect(audit?.local_user_id).toBe('user_new3')
   })
 
   it('open policy: denies a non-matching domain and mints nothing', async () => {

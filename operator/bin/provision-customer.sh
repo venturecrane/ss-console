@@ -45,7 +45,7 @@
 #                                 sentry-sdk init picks it up (overlay PR O1).
 #                                 Pulled from operator env. Deliberately NOT
 #                                 sourced from SENTRY_DSN (that key is ss-web's).
-#   MACHINE_HEARTBEAT_KEY       — shared bearer for POST /api/internal/heartbeat
+#   MACHINE_HEARTBEAT_KEY       — NOT read from env since 0114: minted per seat below
 #                                 (Wave 1 single-key model per ADR 0023 §10).
 #                                 SAME value as the Cloudflare Worker secret on
 #                                 ss-web; staged to every Machine.
@@ -726,19 +726,60 @@ fi
 #                             kill-test (vfy_01KZ1T07TGPKZ61M6KV97KMXQ6). One
 #                             key with two consumers in different projects is
 #                             the bug; the split name is the fix.
-#   MACHINE_HEARTBEAT_KEY   — single value shared across the fleet for
-#                             Wave 1. SAME key the Cloudflare Worker
-#                             receives; Wave 1's auth is "you know the
-#                             key + you carry an X-Tenant-Slug header."
-#                             Per-tenant upgrade path documented in
-#                             ADR 0023 §"Cross-cutting calls" #10.
+#   MACHINE_HEARTBEAT_KEY   — PER-SEAT bearer since migration 0114
+#                             (2026-09-10, the ADR 0023 §"Cross-cutting
+#                             calls" #10 upgrade). Minted below by
+#                             lib/machine_credential.py: the console stores
+#                             only HMAC-SHA256(salt, key) in
+#                             machine_credentials, this Machine holds the
+#                             plaintext, and the key verifies for THIS slug
+#                             only. A reprovision ROTATES: the previous key
+#                             stays valid 24h, so the D1 write landing before
+#                             the Fly secret never 401s the seat. Not sourced
+#                             from operator env any more; the fleet-wide
+#                             shared key is the Worker's fallback for seats
+#                             with no row, retired by unsetting it there.
 #
-# Missing either is non-fatal in dev (warn + skip); in prod the Machine's
-# Sentry init silently no-ops and heartbeat POSTs will 401 — both visible
-# as "no signal yet" on the admin dashboard, which is the empty-state we
-# want anyway.
+# A missing SENTRY_DSN_OPERATOR is non-fatal in dev (warn + skip); in prod the
+# Machine's Sentry init silently no-ops, visible as "no signal yet" on the
+# admin dashboard. The credential mint is NOT skippable: a seat staged with a
+# key the console cannot verify would 401 on every heartbeat, and the failure
+# would read as an outage rather than a provisioning defect.
 stage_secret_from_env SENTRY_DSN            "${SENTRY_DSN_OPERATOR:-}"   "smd-operator project DSN (from SENTRY_DSN_OPERATOR; never the console's SENTRY_DSN)"
-stage_secret_from_env MACHINE_HEARTBEAT_KEY "${MACHINE_HEARTBEAT_KEY:-}" "shared bearer for POST /api/internal/heartbeat"
+
+log "Minting the per-seat Machine credential for ${SLUG} (migration 0114)..."
+_MK_SQL="$(mktemp)"
+# The plaintext arrives on stdout and lives only in this variable: never argv,
+# never the SQL file, never a log line (ss#2218).
+if ! _MK_KEY="$(python3 "${BIN_DIR}/lib/machine_credential.py" --slug "${SLUG}" --sql-out "${_MK_SQL}")"; then
+  log "FATAL: could not mint the Machine credential (see stderr above)"
+  rm -f "${_MK_SQL}"
+  exit 1
+fi
+# stderr captured and reported, never discarded (#2286 lesson, same as the
+# fleet_status seed below).
+if _MK_ERR=$( cd "${REPO_ROOT}" && npx --quiet wrangler d1 execute ss-console-db --remote --file "${_MK_SQL}" 2>&1 >/dev/null ); then
+  rm -f "${_MK_SQL}"
+else
+  rm -f "${_MK_SQL}"
+  log "FATAL: machine_credentials upsert failed; refusing to stage a key the console cannot verify"
+  log "  wrangler stderr: ${_MK_ERR}"
+  exit 1
+fi
+# The upsert selects entity_id FROM customer_configs, so a slug the console has
+# not projected yet inserts nothing and the seat would 401 forever. Prove the
+# row exists before staging.
+_MK_COUNT=$( cd "${REPO_ROOT}" && npx --quiet wrangler d1 execute ss-console-db --remote --json \
+  --command "SELECT COUNT(*) AS n FROM machine_credentials WHERE customer_slug = '${SLUG}'" 2>/dev/null \
+  | python3 -c 'import json, sys; print(json.load(sys.stdin)[0]["results"][0]["n"])' 2>/dev/null || echo "?")
+if [ "${_MK_COUNT}" != "1" ]; then
+  log "FATAL: no machine_credentials row for ${SLUG} after the upsert (count=${_MK_COUNT})"
+  log "  The console has no customer_configs projection for this slug. Merge customer.yaml,"
+  log "  let ci-sync-customer-configs project it, then re-run provisioning."
+  exit 1
+fi
+stage_secret_from_env MACHINE_HEARTBEAT_KEY "${_MK_KEY}" "per-seat bearer for POST /api/internal/heartbeat (console holds only the hash)"
+unset _MK_KEY
 
 # OPERATOR_RUNTIME_READ_KEY — PER-CUSTOMER bearer for the console→Machine runtime
 # read endpoint (ADR 0043 path A). Unlike the shared heartbeat key, this is

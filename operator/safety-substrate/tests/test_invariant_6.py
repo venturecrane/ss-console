@@ -32,7 +32,7 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[1]))  # safety-substrate/ on path
 
-from invariants.invariant_6 import (  # noqa: E402
+from invariants.invariant_6 import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
     FIELD_TAG_FACT_BEARING,
     FIELD_TAG_NONE,
     Citation,

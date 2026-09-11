@@ -447,13 +447,15 @@ def test_a_refused_send_is_recorded_as_no_reply(
 
     def refuse(req: object, timeout: int = 45) -> _FakeResponse:
         raise rc.urllib.error.HTTPError(
-            req.full_url, 403, "Forbidden", {}, io.BytesIO(b"error code: 1010")  # type: ignore[attr-defined,arg-type]
+            req.full_url,
+            403,
+            "Forbidden",
+            {},
+            io.BytesIO(b"error code: 1010"),  # type: ignore[attr-defined,arg-type]
         )
 
     monkeypatch.setattr(rc.urllib.request, "urlopen", refuse)
-    out = rc.ask_msgraph(
-        "scott@smd.services", "operator@example.test", "Card 1 - x", "say", "k", _ExplodingToken(), 5
-    )
+    out = rc.ask_msgraph("scott@smd.services", "operator@example.test", "Card 1 - x", "say", "k", _ExplodingToken(), 5)
     assert out is None
     assert "SEND REFUSED" in capsys.readouterr().out
 
@@ -474,9 +476,7 @@ def test_the_reply_comes_back_from_the_seats_sent_items(monkeypatch: pytest.Monk
         return _FakeResponse(200, json.dumps(payload))
 
     monkeypatch.setattr(rc.urllib.request, "urlopen", fake)
-    out = rc.ask_msgraph(
-        "scott@smd.services", "operator@example.test", "Card 1 - x", "say", "k", _StubToken(), 30
-    )
+    out = rc.ask_msgraph("scott@smd.services", "operator@example.test", "Card 1 - x", "say", "k", _StubToken(), 30)
 
     assert out == "The matter is open."
     assert urls[0] == rc.RESEND_URL
@@ -494,9 +494,7 @@ def test_a_wire_sized_token_grant_survives_open(monkeypatch: pytest.MonkeyPatch)
     back whole; only an error body is capped.
     """
     jwt = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9." + "a" * 1400 + ".sig"
-    grant = json.dumps(
-        {"token_type": "Bearer", "expires_in": 3599, "ext_expires_in": 3599, "access_token": jwt}
-    )
+    grant = json.dumps({"token_type": "Bearer", "expires_in": 3599, "ext_expires_in": 3599, "access_token": jwt})
     assert grant.index('"access_token"') < 400 < len(grant)
 
     def fake(req: object, timeout: int = 45) -> _FakeResponse:

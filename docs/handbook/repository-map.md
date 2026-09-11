@@ -67,7 +67,7 @@ src/
 | `auth/` | Identity: Clerk bridge, the admin-session shim, legacy magic-link sessions, machine and API keys, health read key. |
 | `booking/` | The Calendly-replacement booking system: availability, holds, Google Calendar sync, ICS generation, intake questionnaire, encryption, rate limiting. |
 | `category.ts` | The single Operator category constant ("Managed Operator"). |
-| `claude/` | LLM-backed business flows: assessment, assessment-to-quote, extraction. |
+| `claude/` | LLM-backed business flows: assessment extraction and the live assessment. (The assessment-to-quote generator was removed 2026-09-10; no route called it.) |
 | `config/` | Canonical app URLs (`app-url.ts`), brand and firm-contact constants. |
 | `db/` | D1 data access, one file per domain (entities, engagements, contacts, assessments, analytics, quotes, invoices, milestones, and more). The query layer over `ss-console-db`. |
 | `email/` | Resend transactional email, templates, booking and follow-up emails. |
@@ -76,7 +76,7 @@ src/
 | `llm/` | Model id constants (`models.ts`). |
 | `oauth/` | OAuth provider plumbing for the console's own integrations: state, store, audit, providers. |
 | `observability/` | Sentry wiring (`sentry.ts`), no-op when `SENTRY_DSN` is unset. |
-| `operator/` | The console side of the Operator plane: `output-class-specs.ts` (write the customer's authored output-class specs to `vaults/<slug>/output-classes.json` in R2 - the console's only writer into that bucket, and never `customer.yaml`, which CI publishes from git), `runtime-read.ts` (the read seam), `customer-yaml/` (authoring and validation, one file per `customer.yaml` section), `capabilities/` (typed capability adapters), `mcp/` (the MCP route and audit), `authority.ts`, credential custody and secret transport, the Fly app registry. |
+| `operator/` | The console side of the Operator plane: `output-class-specs.ts` (write the customer's authored output-class specs to `vaults/<slug>/output-classes.json` in R2 - the console's only writer into that bucket, and never `customer.yaml`, which CI publishes from git), `runtime-read.ts` (the read seam), `customer-yaml/` (authoring and validation, one file per `customer.yaml` section), `capabilities/types.ts` (the closed capability-name vocabulary; the typed adapter layer that once sat beside it was superseded by the connector platform, ADR 0053, and removed 2026-09-10), `mcp/` (the MCP route and audit), `authority.ts`, credential custody and secret transport, the Fly app registry. |
 | `operator-packs/` | Shared vertical-pack helpers (`shared.ts`). |
 | `pdf/` | PDF rendering and the SOW template (`sow-template.tsx`). |
 | `portal/` | Client-portal logic: states, ledger, formatters, product access, the operator-access and customer-config projections. |

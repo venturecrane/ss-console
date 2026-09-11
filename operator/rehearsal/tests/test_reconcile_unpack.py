@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from rehearsal import drivers  # noqa: E402 -- path injected above
+from rehearsal import drivers
 
 
 def test_reconcile_unpack_matches_the_reconciler(monkeypatch) -> None:
@@ -24,11 +24,12 @@ def test_reconcile_unpack_matches_the_reconciler(monkeypatch) -> None:
     sent = [{"message_id": "m-unaccounted", "timestamp": "2026-09-04T14:00:00Z"}]
     # A stub list_sent so the leg never touches AgentMail; reconcile() is real.
     monkeypatch.setattr(reconciler, "list_sent", lambda inbox, key, since=None: sent)
-    monkeypatch.setattr(
-        drivers, "_load_bin_module", lambda name, filename: reconciler
-    )
+    monkeypatch.setattr(drivers, "_load_bin_module", lambda name, filename: reconciler)
     unmatched = drivers.unaccounted_sends(
-        "rig@example.com", rows=[], since=None, key="k"  # type: ignore[arg-type]
+        "rig@example.com",
+        rows=[],
+        since=None,
+        key="k",  # type: ignore[arg-type]
     )
     assert unmatched is not None
     assert [m["message_id"] for m in unmatched] == ["m-unaccounted"]

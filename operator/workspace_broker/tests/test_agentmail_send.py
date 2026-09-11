@@ -87,7 +87,7 @@ class FakeHTTP:
         self.calls: list[tuple[str, str, dict | None]] = []
         self.responses = responses or {}
 
-    def __call__(self, request, timeout=None):  # noqa: ANN001 - urllib signature
+    def __call__(self, request, timeout=None):
         body = json.loads(request.data.decode()) if request.data else None
         self.calls.append((request.method, request.full_url, body))
         payload = {"inboxes": [{"inbox_id": SEAT_INBOX}]}
@@ -288,12 +288,7 @@ def test_the_block_test_above_can_actually_fail(tmp_path: Path) -> None:
     Without this, a refusal coming from the allow set rather than the block would
     be indistinguishable from the control working.
     """
-    allow_only = (
-        "scope:\n"
-        "  inbound_allow_from:\n"
-        f"    - '@{_NFC_DOMAIN}'\n"
-        f"    - '@{_NFD_DOMAIN}'\n"
-    )
+    allow_only = f"scope:\n  inbound_allow_from:\n    - '@{_NFC_DOMAIN}'\n    - '@{_NFD_DOMAIN}'\n"
     policy = authored_policy(_seat(tmp_path, allow_only)[0])
     assert policy.allows_recipient(f"a@{_NFD_DOMAIN}")
 
@@ -350,20 +345,14 @@ def test_either_agentmail_id_spelling_reaches_the_audit_row(tmp_path: Path) -> N
     exact-match join — the backstop for this entire control.
     """
     camel = FakeHTTP({"/messages/send": {"messageId": "msg_camel"}})
-    assert _ops(tmp_path, camel).send({"to": ["scott@smd.services"], "text": "x"})[
-        "message_id"
-    ] == "msg_camel"
+    assert _ops(tmp_path, camel).send({"to": ["scott@smd.services"], "text": "x"})["message_id"] == "msg_camel"
     snake = FakeHTTP({"/messages/send": {"message_id": "msg_snake"}})
-    assert _ops(tmp_path, snake).send({"to": ["scott@smd.services"], "text": "x"})[
-        "message_id"
-    ] == "msg_snake"
+    assert _ops(tmp_path, snake).send({"to": ["scott@smd.services"], "text": "x"})["message_id"] == "msg_snake"
 
 
 def test_reply_parses_a_display_name_sender(tmp_path: Path) -> None:
     ops = _ops(tmp_path, _reply_http('"Scott" <scott@smd.services>'))
-    assert ops.reply({"message_id": "m1", "text": "answer"})["recipients"] == [
-        "scott@smd.services"
-    ]
+    assert ops.reply({"message_id": "m1", "text": "answer"})["recipients"] == ["scott@smd.services"]
 
 
 def test_a_lookalike_domain_is_not_the_authored_domain(tmp_path: Path) -> None:
@@ -407,9 +396,7 @@ def test_an_inbox_absent_from_the_listing_fails_closed(tmp_path: Path) -> None:
 
 def test_seat_inbox_address_prefers_authored_over_convention(tmp_path: Path) -> None:
     customer = tmp_path / "c.yaml"
-    customer.write_text(
-        "connectors:\n  Email:\n    inbox_address: PINNED@agentmail.to\nscope: {}\n"
-    )
+    customer.write_text("connectors:\n  Email:\n    inbox_address: PINNED@agentmail.to\nscope: {}\n")
     assert seat_inbox_address(customer, SEAT) == "pinned@agentmail.to"
     customer.write_text("scope: {}\n")
     assert seat_inbox_address(customer, SEAT) == SEAT_INBOX
@@ -493,6 +480,50 @@ def _meta(broker: Broker, index: int = 0) -> dict:
     return json.loads(broker.ledger.rows[index]["metadata"])
 
 
+def test_reply_verb_answers_an_authored_sender_and_keeps_the_sender_key_in_the_row(
+    tmp_path: Path,
+) -> None:
+    """agentmail_reply through the verb table: gateway-gated like send, the
+    original sender fetched by the broker (never taken from the caller), the
+    dispatched row naming who it answered as a hash, and that hash never
+    travelling back to the agent. This verb had no test before the table
+    enumerated it (2026-09-10); the registry test now names it."""
+    http = FakeHTTP(
+        {
+            "/messages/msg_in/reply": {"message_id": "msg_reply"},
+            "/messages/msg_in": {"from": "scott@smd.services"},
+        }
+    )
+    broker = _broker(tmp_path, http)
+    with pytest.raises(PermissionError):
+        broker.handle(
+            {"action": "agentmail_reply", "payload": {"message_id": "msg_in", "text": "sure"}},
+            peer_pid=GATEWAY_PID + 1,
+            peer_uid=AGENT_UID,
+        )
+    assert broker.ledger.rows == []
+    response = broker.handle(
+        {"action": "agentmail_reply", "payload": {"message_id": "msg_in", "text": "sure"}},
+        peer_pid=GATEWAY_PID,
+        peer_uid=AGENT_UID,
+    )
+    assert response["ok"] is True
+    assert response["message_id"] == "msg_reply"
+    assert response["recipients"] == ["scott@smd.services"]
+    assert "sender_key" not in response
+    meta = _meta(broker)
+    assert broker.ledger.rows[0]["action_type"] == "CONFIRM_SEND_DISPATCHED"
+    assert meta["verb"] == "agentmail_reply"
+    assert meta["recipients"] == ["scott@smd.services"]
+    assert meta["sender_key"] and "scott" not in meta["sender_key"]
+    # The broker fetched the source message itself (one GET) before replying
+    # (one POST to the reply path); a caller-supplied sender was never trusted.
+    touched = [(m, u) for m, u, _ in http.calls if "msg_in" in u]
+    assert [m for m, _ in touched] == ["GET", "POST"]
+    assert touched[0][1].endswith("/messages/msg_in")
+    assert touched[1][1].endswith("/messages/msg_in/reply")
+
+
 def test_verb_is_unreachable_from_a_non_gateway_pid(tmp_path: Path) -> None:
     """Not agent-uid gated, by design: a cron child must not be able to send."""
     broker = _broker(tmp_path, FakeHTTP())
@@ -541,7 +572,7 @@ def test_a_transport_failure_is_not_recorded_as_a_refusal(tmp_path: Path) -> Non
     """The seat was permitted to write; saying otherwise would misread the ledger."""
 
     class Boom(FakeHTTP):
-        def __call__(self, request, timeout=None):  # noqa: ANN001
+        def __call__(self, request, timeout=None):
             if request.method == "POST":
                 raise OSError("connection reset")
             return super().__call__(request, timeout)
@@ -631,7 +662,7 @@ def test_caller_audit_extra_rides_the_row_through_a_closed_allowlist(tmp_path: P
     # B3 (claims review 2026-09-04): the routine name lands on the COLUMN the
     # console's wake<->confirm join reads, and nowhere else. FALSIFIER: drop
     # "skill_name" from _CALLER_AUDIT_KEYS and the column assertion fails; leave
-    # the pop out of _append_send_row and the metadata assertion fails.
+    # the pop out of transmit_verbs.append_send_row and the metadata assertion fails.
     assert broker.ledger.rows[0]["skill_name"] == "deadline-miss-escalator"
     assert "skill_name" not in meta
 
@@ -683,7 +714,7 @@ def test_audit_extra_rides_the_refusal_row_too(tmp_path: Path) -> None:
     assert meta["body_variant"] == "full"
     assert meta["routing_leg"] == "fallback"
     # A refused templated send is still that routine's send: the column rides
-    # every row _dispatch_transmit writes, not only the dispatched one.
+    # every row transmit_verbs.dispatch_transmit writes, not only the dispatched one.
     assert broker.ledger.rows[0]["skill_name"] == "deadline-miss-escalator"
     assert "skill_name" not in meta
 

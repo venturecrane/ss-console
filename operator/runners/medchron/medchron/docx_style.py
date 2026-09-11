@@ -2,6 +2,7 @@
 billing worksheet), so the two look like they came from the same firm.
 Layout only; every character of content comes from the assembled markdown or
 the chart JSON. The base font is the firm's (`format.font`)."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -68,7 +69,7 @@ def set_widths(table: Any, widths: list[float]) -> None:
     tblW.set(qn("w:w"), str(int(sum(widths) * 1440)))
     tblW.set(qn("w:type"), "dxa")
     table._tbl.tblPr.append(tblW)
-    for j, w in enumerate(widths[:len(table.columns)]):
+    for j, w in enumerate(widths[: len(table.columns)]):
         table.columns[j].width = Inches(w)
         for cell in table.columns[j].cells:
             cell.width = Inches(w)
@@ -93,8 +94,11 @@ def page_number_footer(doc: Any, font: str) -> None:
     p = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = p.add_run()
-    for tag, attrs, text in (("w:fldChar", {"w:fldCharType": "begin"}, None), ("w:instrText", {"xml:space": "preserve"}, " PAGE "),
-                             ("w:fldChar", {"w:fldCharType": "end"}, None)):
+    for tag, attrs, text in (
+        ("w:fldChar", {"w:fldCharType": "begin"}, None),
+        ("w:instrText", {"xml:space": "preserve"}, " PAGE "),
+        ("w:fldChar", {"w:fldCharType": "end"}, None),
+    ):
         el = OxmlElement(tag)
         for k, v in attrs.items():
             el.set(qn(k), v)

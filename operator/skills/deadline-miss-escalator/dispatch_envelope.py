@@ -121,14 +121,10 @@ def split_digest(digest: dict, matter_ids: set[str], today_iso: str) -> dict:
         filtered = _filter_grouped(elsewhere, matter_ids)
         if filtered:
             out["under_active_escalation_elsewhere"] = filtered
-    clearance = [
-        i for i in (digest.get("awaiting_clearance") or []) if i.get("matter_id") in matter_ids
-    ]
+    clearance = [i for i in (digest.get("awaiting_clearance") or []) if i.get("matter_id") in matter_ids]
     if clearance:
         out["awaiting_clearance"] = clearance
-    blanket = [
-        i for i in (digest.get("blanket_ack_only") or []) if i.get("matter_id") in matter_ids
-    ]
+    blanket = [i for i in (digest.get("blanket_ack_only") or []) if i.get("matter_id") in matter_ids]
     if blanket:
         out["blanket_ack_only"] = blanket
     probe = digest.get("probe_artifacts")
@@ -227,9 +223,7 @@ def write_failure_note_envelope(
             return {}
         routing_block = esc.get("case_alert_routing") or {}
         recipients = [
-            str(r).strip()
-            for r in (esc.get("red_flag_recipients") or [])
-            if isinstance(r, str) and str(r).strip()
+            str(r).strip() for r in (esc.get("red_flag_recipients") or []) if isinstance(r, str) and str(r).strip()
         ]
         leg = "central"
         if not recipients and isinstance(routing_block, dict):
@@ -339,11 +333,7 @@ def build_and_write(
             if item.get("matter_id") not in matter_ids:
                 matter_ids.append(item["matter_id"])
 
-        esc = (
-            customer_yaml.get("escalation")
-            if isinstance(customer_yaml.get("escalation"), dict)
-            else {}
-        )
+        esc = customer_yaml.get("escalation") if isinstance(customer_yaml.get("escalation"), dict) else {}
         routing_block = esc.get("case_alert_routing")
         mode = routing_block.get("mode") if isinstance(routing_block, dict) else None
         matter_staff: dict[str, dict] = {}
@@ -364,9 +354,7 @@ def build_and_write(
         wake_items: list[dict] = []
         legs: dict[str, int] = {}
         overflow_matters: set[str] = set()
-        for (emails, leg), group in sorted(
-            by_recipients.items(), key=lambda kv: (kv[0][1], kv[0][0])
-        ):
+        for (emails, leg), group in sorted(by_recipients.items(), key=lambda kv: (kv[0][1], kv[0][0])):
             if len(dispatches) >= _MAX_DISPATCHES:
                 # Never a silent drop: an over-cap recipient group's matters
                 # land in the unroutable + memo lists so a person learns the
@@ -380,9 +368,7 @@ def build_and_write(
                 # sent at all (output-format rule 8 generalized: a recipient
                 # set whose only content is informational bands gets nothing).
                 continue
-            full_body = render.render_digest(
-                sub, ack_snooze_days=ack_snooze_days, rekey_count=rekey
-            )
+            full_body = render.render_digest(sub, ack_snooze_days=ack_snooze_days, rekey_count=rekey)
             skeleton_body = render.render_skeleton(sub)
             appends = []
             for item in firing[:_MAX_APPENDS_PER_DISPATCH]:
@@ -434,14 +420,7 @@ def build_and_write(
             number_by_matter.setdefault(item.get("matter_id"), item.get("matter_number"))
         undelivered = set(result.unroutable) | overflow_matters
         memo_matters = sorted(
-            (
-                {
-                    m
-                    for m, routed in result.routed.items()
-                    if routed.routing_leg == routing.LEG_FALLBACK
-                }
-                | undelivered
-            )
+            ({m for m, routed in result.routed.items() if routed.routing_leg == routing.LEG_FALLBACK} | undelivered)
             - {routing.UNKNOWN_MATTER}
         )
         unroutable = [
@@ -461,9 +440,7 @@ def build_and_write(
             "dispatches": dispatches,
             "unroutable": unroutable,
             "memo_matters": memo_matters,
-            "in_turn": [
-                {"name": "failure_note", "template": render.FAILURE_NOTE, "slots": {}}
-            ],
+            "in_turn": [{"name": "failure_note", "template": render.FAILURE_NOTE, "slots": {}}],
         }
         if not dispatches and not memo_matters and not unroutable:
             # Genuinely nothing to say: no envelope, no dispatch_expected, and
@@ -472,9 +449,7 @@ def build_and_write(
             # to reach. Sending "the run failed" here would page on success.
             return {}
         if not _write_envelope(envelope):
-            return write_failure_note_envelope(
-                reason="envelope_write_failed", customer_yaml_path=customer_yaml_path
-            )
+            return write_failure_note_envelope(reason="envelope_write_failed", customer_yaml_path=customer_yaml_path)
         return {
             "render_mode": "templated",
             "body_sha256": wake_hashes,
@@ -489,6 +464,4 @@ def build_and_write(
         # A build fault is exactly the 2026-09-02 case: the turn wakes with a
         # digest it cannot dispatch, and left undecorated it composes one. Give
         # it a rendered note to deliver instead of a gap to fill.
-        return write_failure_note_envelope(
-            reason="envelope_build_failed", customer_yaml_path=customer_yaml_path
-        )
+        return write_failure_note_envelope(reason="envelope_build_failed", customer_yaml_path=customer_yaml_path)

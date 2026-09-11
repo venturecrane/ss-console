@@ -148,7 +148,9 @@ def test_starter_base_defines_every_named_style_and_honors_them() -> None:
     data, report = render_document(DISCOVERY_MD, "discovery_set", None)
     r = report.to_dict()
     assert r["fallbacks"] == []
-    assert {"SMD Item Label", "SMD Item Text", "SMD Heading 1", "SMD Heading 2", "SMD Body", "SMD Caption"} <= set(r["stylesHonored"])
+    assert {"SMD Item Label", "SMD Item Text", "SMD Heading 1", "SMD Heading 2", "SMD Body", "SMD Caption"} <= set(
+        r["stylesHonored"]
+    )
     assert r["blocksStyled"] == {"labels": 2, "tables": 2, "headings": 2}  # "## DEFINITIONS" is a heading
 
 
@@ -294,7 +296,11 @@ def test_multi_section_base_is_refused_and_nothing_is_rendered() -> None:
 
 
 def test_report_round_trips_template_used_and_expected_flags() -> None:
-    report = FormatReport(document_class="memo", template_used={"name": "Template - Memo.docx", "fileId": "f1", "sha256": "abc"}, template_expected=True)
+    report = FormatReport(
+        document_class="memo",
+        template_used={"name": "Template - Memo.docx", "fileId": "f1", "sha256": "abc"},
+        template_expected=True,
+    )
     _, out = render_document("Body.", "memo", None, report)
     d = out.to_dict()
     assert d["templateUsed"]["name"] == "Template - Memo.docx" and d["templateExpected"] is True
