@@ -32,7 +32,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from workspace_broker.cycle_window import (  # noqa: E402
+from workspace_broker.cycle_window import (
     AnchorInvalid,
     cycle_window,
     resolve_anchor,

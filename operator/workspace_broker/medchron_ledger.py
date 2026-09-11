@@ -44,7 +44,7 @@ from pathlib import Path
 from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
-from .cycle_window import AnchorInvalid, Window, cycle_window, resolve_anchor, resolve_effective_from
+from .cycle_window import Window, cycle_window, resolve_anchor, resolve_effective_from
 
 STATES = ("submitted", "running", "held", "delivered", "failed")
 TERMINAL = frozenset({"delivered", "failed"})

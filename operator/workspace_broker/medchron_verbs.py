@@ -24,13 +24,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from .cycle_window import AnchorInvalid
 from .medchron_ledger import (
     ALLOWANCE_KEY,
     AUDIT_TYPE,
     STATES,
     EnvelopeError,
     MedchronLedger,
-    AnchorInvalid,
     allowance_from_customer_yaml,
     cycle_from_customer_yaml,
     validate_envelope,
