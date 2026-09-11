@@ -12,7 +12,7 @@ import type { D1Database } from '@cloudflare/workers-types'
 import type { SubscriptionRow } from './product-access'
 import type { Tone } from './status'
 import { parseCancelAt } from '../db/subscriptions'
-import { cardProcessingFeeCents } from '../db/invoices'
+import { cardProcessingFeeCents } from '../pricing/card-fee'
 import { operatorPaymentMethod } from '../db/services'
 import type { OperatorPaymentMethod, Service } from '../db/services'
 

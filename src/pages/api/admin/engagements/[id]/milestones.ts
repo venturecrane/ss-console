@@ -5,9 +5,9 @@ import {
   getMilestone,
   updateMilestone,
   updateMilestoneStatus,
-  completeMilestoneWithInvoicing,
   deleteMilestone,
 } from '../../../../../lib/db/milestones'
+import { completeMilestoneWithInvoicing } from '../../../../../lib/stripe/milestone-invoicing'
 import type { MilestoneStatus } from '../../../../../lib/db/milestones'
 import { env } from 'cloudflare:workers'
 import { requireAdminSession } from '../../../../../lib/auth/admin-session'

@@ -1,10 +1,12 @@
 /**
  * Pure utility functions and Google Calendar event creation for the booking
- * reserve endpoint. Extracted to keep reserve.ts within the 500-line ceiling.
+ * reserve endpoint. Lived under src/pages/api/booking/ until 2026-09-10, where
+ * Astro's file-based routing registered it as a public URL with no handler
+ * (code review 2026-09-10, Architecture 2).
  */
 
 import { formatInTimeZone } from 'date-fns-tz'
-import { BOOKING_CONFIG } from '../../../lib/booking/config'
+import { BOOKING_CONFIG } from './config'
 
 // ---------------------------------------------------------------------------
 // Google Calendar event creation
@@ -91,11 +93,6 @@ export function buildEventDescription(
 export function formatSlotLabelLong(slotStartUtc: string, tz: string): string {
   return formatInTimeZone(new Date(slotStartUtc), tz, "EEEE, MMMM d 'at' h:mm a (zzz)")
 }
-
-// trimString / isValidEmail / jsonResponse moved to the shared
-// lib/api/helpers module (2026-06-12 code review dedup); re-exported here
-// so the existing reserve.ts import surface keeps working.
-export { trimString, isValidEmail, jsonResponse } from '../../../lib/api/helpers'
 
 export function parseOptionalInt(value: unknown): number | null {
   if (typeof value === 'number') return Math.floor(value)

@@ -40,8 +40,6 @@ import {
 } from '../src/lib/db/subscriptions'
 import { handleRetainerInvoicePaid } from '../src/lib/webhooks/stripe-subscription-handler'
 import {
-  CARD_FEE_LINE_DESCRIPTION,
-  cardProcessingFeeCents,
   createInvoice,
   invoiceIsCardPayable,
   invoiceTypeLabel,
@@ -49,6 +47,7 @@ import {
   listLineItemsForInvoice,
   updateInvoiceStatus,
 } from '../src/lib/db/invoices'
+import { CARD_FEE_LINE_DESCRIPTION, cardProcessingFeeCents } from '../src/lib/pricing/card-fee'
 import {
   handleOperatorCheckoutAsyncPaymentFailed,
   handleOperatorCheckoutCompleted,
