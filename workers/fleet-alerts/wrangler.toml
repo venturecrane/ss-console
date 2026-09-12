@@ -79,11 +79,12 @@ ADMIN_BASE_URL = "https://admin.smd.services"
 # the auth redirect (HTTP 302, probed 2026-09-11), and all three ride the same
 # Worker anyway. Counters live in edge_poll_state (migration 0115); the
 # open/recovered row is the usual fleet_alert_state row. See src/edge-poll.ts.
-# 2026-09-11 alert-path proof, step 2 of 3: `probe` paged on its deliberate 404
-# (#2776, once migration 0116 admitted the condition); it now points at the
-# healthy route so two good ticks send the recovery notice. Step 3 removes the
-# entry, which is what retireUnconfiguredTargets in src/edge-poll.ts exists for.
-EDGE_POLL_TARGETS = "smd.services=https://smd.services/api/health,probe=https://smd.services/api/health"
+# The alert path was proven live on 2026-09-11 with a second, deliberately
+# failing target beside this one: one page when it went down (#2776, after
+# migration 0116 admitted the condition), one recovery notice when it came back
+# (#2779), then the entry was removed and retireUnconfiguredTargets in
+# src/edge-poll.ts dropped its counters on the next tick.
+EDGE_POLL_TARGETS = "smd.services=https://smd.services/api/health"
 # Consecutive failed probes before edge_down opens (3 ticks is about 6 minutes),
 # consecutive good probes before it resolves, and the per-probe deadline. A
 # single sample in either direction changes nothing, so a flapping edge pages
