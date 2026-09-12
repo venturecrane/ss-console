@@ -22,6 +22,7 @@ never the envelope, never a name.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from .cycle_window import AnchorInvalid
@@ -31,10 +32,17 @@ from .medchron_ledger import (
     STATES,
     EnvelopeError,
     MedchronLedger,
+    admins_from_customer_yaml,
     allowance_from_customer_yaml,
     cycle_from_customer_yaml,
     validate_envelope,
 )
+
+#: Addresses inside a free-text ``requested_by`` ("Christa Barrera
+#: <christa@example.com>", "christa@example.com", "Christa, Firm LLP"). The
+#: field is prose composed by the agent from the asking message, so the address
+#: is extracted rather than assumed to be the whole value.
+_EMAIL_RE = re.compile(r"[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}")
 
 VERBS = ("medchron_job_submit", "medchron_job_status", "medchron_allowance", "medchron_job_list", "medchron_job_record")
 
@@ -84,6 +92,20 @@ class MedchronVerbs:
             resolve_agent_uid=broker._resolve_agent_uid,
         )
 
+    @property
+    def _db(self) -> MedchronLedger:
+        """The ledger, narrowed.
+
+        ``handle`` refuses before any of these methods run when the ledger is
+        absent (a job that cannot be recorded must not be queued), but that
+        guard does not narrow ``self.ledger`` for a type checker across a method
+        call, so every use read as an attribute on ``None``. Raising here keeps
+        the fail-closed behaviour identical if one is ever reached another way.
+        """
+        if self.ledger is None:
+            raise ValueError("medchron ledger not configured on this broker")
+        return self.ledger
+
     # -- gates ---------------------------------------------------------------
     def _is_agent(self, peer_uid: int | None) -> bool:
         agent_uid = self._resolve_agent_uid()
@@ -130,7 +152,7 @@ class MedchronVerbs:
                 return {"ok": True, "authored": False, "invalid": True, "reason": str(exc)}
             return {
                 "ok": True,
-                **self.ledger.allowance(
+                **self._db.allowance(
                     allowance_from_customer_yaml(self.customer_yaml),
                     exclude_job_id=exclude,
                     anchor_day=anchor,
@@ -140,11 +162,11 @@ class MedchronVerbs:
         if action == "medchron_job_status":
             job_id = str(request.get("job_id") or "")
             if job_id:
-                row = self.ledger.read(job_id)
-                return {"ok": True, "job": self.ledger.project(row) if row else None}
-            return {"ok": True, "jobs": [self.ledger.project(r) for r in self.ledger.list_recent(20)]}
+                row = self._db.read(job_id)
+                return {"ok": True, "job": self._db.project(row) if row else None}
+            return {"ok": True, "jobs": [self._db.project(r) for r in self._db.list_recent(20)]}
         if action == "medchron_job_list":
-            return {"ok": True, "jobs": [self.ledger.project(r) for r in self.ledger.list_recent(200)]}
+            return {"ok": True, "jobs": [self._db.project(r) for r in self._db.list_recent(200)]}
         if action == "medchron_job_submit":
             return self._submit(request)
         if action == "medchron_job_record":
@@ -160,7 +182,7 @@ class MedchronVerbs:
             anchor, effective_from = cycle_from_customer_yaml(self.customer_yaml)
         except AnchorInvalid as exc:
             return {"ok": True, "accepted": False, "reason": str(exc)}
-        state = self.ledger.allowance(
+        state = self._db.allowance(
             allowance_from_customer_yaml(self.customer_yaml),
             anchor_day=anchor,
             effective_from=effective_from,
@@ -174,6 +196,29 @@ class MedchronVerbs:
                 "accepted": False,
                 "reason": f"no page allowance is authored for this seat ({ALLOWANCE_KEY}); nothing can be submitted",
             }
+        # Order is deliberate. The two checks above say "this seat cannot do
+        # this at all", which is ours or the firm's to fix and is worth naming
+        # before anything about the requester. These two say "not you" and "not
+        # twice". None of the four spends anything.
+        refusal = self._requester_refusal(envelope)
+        if refusal is not None:
+            return {"ok": True, "accepted": False, "reason": refusal}
+        twin = self._db.active_duplicate(envelope)
+        if twin is not None:
+            twin_id, twin_state = twin
+            where = {
+                "submitted": f"already queued as job {twin_id} and has not started yet",
+                "running": f"already running as job {twin_id}",
+                "held": f"already submitted as job {twin_id}, which is HELD and waiting on a decision",
+            }.get(twin_state, f"already submitted as job {twin_id} (state {twin_state})")
+            return {
+                "ok": True,
+                "accepted": False,
+                "reason": f"this chronology package is {where}; nothing new was queued and the "
+                "allowance was not charged twice",
+                "job_id": twin_id,
+                "job_state": twin_state,
+            }
         if state["remaining"] <= 0:
             return {
                 "ok": True,
@@ -182,7 +227,7 @@ class MedchronVerbs:
                 f"{state['allowance']:,} pages in {state['month']}); the Operator stops here "
                 "and surfaces the item",
             }
-        job_id = self.ledger.submit(envelope, remaining=state["remaining"])
+        job_id = self._db.submit(envelope, remaining=state["remaining"])
         self._audit(
             AUDIT_TYPE["submitted"],
             {
@@ -208,6 +253,52 @@ class MedchronVerbs:
             "allowance_remaining_documents": state["remaining"],
         }
 
+    def _requester_refusal(self, envelope: dict[str, Any]) -> str | None:
+        """None when a Named Administrator asked for this; a prose reason otherwise.
+
+        WHY THIS IS HERE AND NOT ONLY IN THE SKILL BODY. The seat's initiation
+        authority reaches the agent as a ``pre_llm_call`` prompt injection, not
+        as a gate -- the overlay's initiation plugin says so in its own words,
+        because there is no runtime skill identity at any tool boundary. For the
+        self-test that is proportionate: the worst case is a wasted turn. This
+        verb spends the firm's authored page allowance under a signed
+        agreement, so the authorization has to hold against a model that did not
+        follow the sentence, and that means checking it here.
+
+        This is a check on a field the agent supplies, so it is defence in
+        depth, not proof of identity: an agent that writes someone else's
+        address still passes. What it buys is that the common failure -- a
+        non-administrator's request carried faithfully into ``requested_by`` --
+        refuses instead of billing, and the audit row carries the address that
+        was claimed.
+        """
+        claimed = str(envelope.get("requested_by") or "").strip().lower()
+        admins = admins_from_customer_yaml(self.customer_yaml)
+        if admins is None:
+            return (
+                "the seat's administrator list (scope.admins) could not be read, so who may "
+                "request a chronology package cannot be established; nothing was queued"
+            )
+        if not admins:
+            return (
+                "no Named Administrator is authored for this seat (scope.admins is empty), so "
+                "no one may request a chronology package yet; nothing was queued"
+            )
+        found = _EMAIL_RE.findall(claimed)
+        if not found:
+            return (
+                "requested_by must carry the requesting administrator's email address; "
+                "a chronology package spends the firm's page allowance and the broker will not "
+                "queue one it cannot attribute"
+            )
+        if not any(addr in admins for addr in found):
+            return (
+                "a chronology package may only be requested by one of the firm's Named "
+                "Administrators, and the requester on this submission is not one of them; "
+                "nothing was queued"
+            )
+        return None
+
     def _record(self, request: dict[str, Any]) -> dict[str, Any]:
         job_id = str(request.get("job_id") or "")
         state = str(request.get("state") or "")
@@ -215,7 +306,7 @@ class MedchronVerbs:
         if not job_id or state not in STATES or not isinstance(fields, dict):
             raise ValueError("medchron_job_record requires job_id, a known state, and a fields object")
         wake = fields.pop("wake", None)  # audit-only metadata (a lost deliver wake), never a column
-        row = self.ledger.record(job_id, state, fields)
+        row = self._db.record(job_id, state, fields)
         meta = {
             "job_id": job_id,
             "state": state,
@@ -235,4 +326,4 @@ class MedchronVerbs:
                 if isinstance(f, dict)
             ][:50]
         self._audit(AUDIT_TYPE[state], meta, row["matter_id"])
-        return {"ok": True, "job": self.ledger.project(row)}
+        return {"ok": True, "job": self._db.project(row)}

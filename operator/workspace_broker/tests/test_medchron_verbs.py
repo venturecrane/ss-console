@@ -27,6 +27,10 @@ AGENT_UID = 10000
 ROOT = 0
 
 CUSTOMER_YAML = """
+scope:
+  admins:
+    - admin@example.test
+    - Other.Admin@Example.test
 personas:
   - slug: operator
     skills:
@@ -89,7 +93,15 @@ def test_submit_is_gateway_or_root_only(verbs):
     with pytest.raises(PermissionError):
         call(v, "medchron_job_submit", peer_pid=999, peer_uid=AGENT_UID, envelope=envelope())
     assert call(v, "medchron_job_submit", envelope=envelope())["accepted"]
-    assert call(v, "medchron_job_submit", peer_pid=999, peer_uid=ROOT, envelope=envelope())["accepted"]
+    # A different matter, because the same one twice is now a duplicate refusal
+    # and this test is about WHO may call, not about how often.
+    assert call(
+        v,
+        "medchron_job_submit",
+        peer_pid=999,
+        peer_uid=ROOT,
+        envelope=envelope(matter={"id": "m-root", "number": "2026-PI-777", "title": "Root v. Root"}),
+    )["accepted"]
 
 
 def test_record_is_root_only_and_list_is_agent_or_root(verbs):
@@ -230,7 +242,13 @@ def test_a_job_debits_the_month_whenever_it_recorded_cents(verbs):
     read pages and spent real money left no mark when it held or failed after
     the money had moved. Each case below is a separate falsifier of that."""
     v, _, _ = verbs
-    held = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+
+    def other(n):
+        """A distinct matter per case: this test is about which STATES debit,
+        and the same matter three times is now a duplicate refusal."""
+        return envelope(matter={"id": f"m-{n}", "number": f"2026-PI-{n}", "title": "Example v. Example"})
+
+    held = call(v, "medchron_job_submit", envelope=other(201))["job_id"]
     call(v, "medchron_job_record", peer_uid=ROOT, job_id=held, state="running", fields={})
     call(
         v,
@@ -242,12 +260,12 @@ def test_a_job_debits_the_month_whenever_it_recorded_cents(verbs):
     )
     assert call(v, "medchron_allowance")["used"] == 120  # a HELD job with cents debits
 
-    failed = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    failed = call(v, "medchron_job_submit", envelope=other(202))["job_id"]
     call(v, "medchron_job_record", peer_uid=ROOT, job_id=failed, state="running", fields={})
     call(v, "medchron_job_record", peer_uid=ROOT, job_id=failed, state="failed", fields={"pages": 30, "cents": 90})
     assert call(v, "medchron_allowance")["used"] == 150  # a FAILED job with cents debits
 
-    free = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    free = call(v, "medchron_job_submit", envelope=other(203))["job_id"]
     call(v, "medchron_job_record", peer_uid=ROOT, job_id=free, state="running", fields={})
     call(v, "medchron_job_record", peer_uid=ROOT, job_id=free, state="held", fields={"pages": 9_000, "cents": 0})
     a = call(v, "medchron_allowance")
@@ -258,8 +276,14 @@ def test_exclude_job_id_leaves_out_exactly_that_row(verbs):
     """What a resume needs: the run must not be metered against the cents it
     already recorded, and must still be metered against every other job."""
     v, _, _ = verbs
+    # Two DIFFERENT matters: one envelope submitted twice is a duplicate and
+    # the broker now refuses the second, which is a separate test below.
     a = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
-    b = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    b = call(
+        v,
+        "medchron_job_submit",
+        envelope=envelope(matter={"id": "m-2", "number": "2026-PI-103", "title": "Other v. Other"}),
+    )["job_id"]
     _deliver(v, a, pages=100, cents=500)
     _deliver(v, b, pages=200, cents=700)
     assert call(v, "medchron_allowance")["used"] == 300
@@ -476,3 +500,124 @@ def test_submit_sanitizes_selection_to_known_keys(verbs):
     assert r["accepted"]
     q = json.loads(next(queue.glob("*.json")).read_text())
     assert q["selection"] == {"include_file_ids": ["f-1", "f-2"]}
+
+
+# -- who may spend the allowance, and how many times --------------------------
+#
+# These cover the two controls the seat CANNOT enforce for itself. The firm's
+# initiation authority reaches the agent as a prompt injection, not a gate, so
+# "only a Named Administrator may ask" holds here or nowhere; and nothing
+# de-duplicated a submission before this release, so an administrator who asked
+# twice bought the same package twice.
+
+
+def test_a_non_administrator_cannot_buy_a_chronology_package(verbs):
+    v, _, queue = verbs
+    r = call(v, "medchron_job_submit", envelope=envelope(requested_by="paralegal@example.test"))
+    assert r["accepted"] is False
+    assert "Named Administrator" in r["reason"]
+    assert list(queue.glob("*.json")) == [], "a refused submission must queue nothing"
+
+
+def test_an_administrator_is_matched_case_insensitively_inside_prose(verbs):
+    v, _, _ = verbs
+    r = call(v, "medchron_job_submit", envelope=envelope(requested_by="Other Admin <OTHER.ADMIN@example.TEST>"))
+    assert r["accepted"] is True
+
+
+def test_a_requester_with_no_address_is_refused(verbs):
+    """The field is agent-composed prose. A display name is not an identity, and
+    the broker will not queue paid work it cannot attribute."""
+    v, _, _ = verbs
+    r = call(v, "medchron_job_submit", envelope=envelope(requested_by="Christa, Example Firm"))
+    assert r["accepted"] is False and "email address" in r["reason"]
+
+
+def _yaml_with_admins(admins_block: str) -> str:
+    """The fixture config with only the admins half varied, so a refusal about
+    the admin list cannot be the allowance check firing first."""
+    head, _, tail = CUSTOMER_YAML.partition("personas:")
+    del head
+    return admins_block + "personas:" + tail
+
+
+def test_an_unreadable_admin_list_refuses_rather_than_admitting_everyone(verbs, tmp_path):
+    v, _, _ = verbs
+    (tmp_path / "customer.yaml").write_text(_yaml_with_admins(""))  # no scope.admins at all
+    r = call(v, "medchron_job_submit", envelope=envelope())
+    assert r["accepted"] is False and "scope.admins" in r["reason"]
+
+
+def test_an_empty_admin_list_refuses_and_says_so_distinctly(verbs, tmp_path):
+    v, _, _ = verbs
+    (tmp_path / "customer.yaml").write_text(_yaml_with_admins("scope:\n  admins: []\n"))
+    r = call(v, "medchron_job_submit", envelope=envelope())
+    assert r["accepted"] is False and "empty" in r["reason"]
+
+
+def test_the_same_package_asked_for_twice_is_refused_and_names_the_twin(verbs):
+    v, _, queue = verbs
+    first = call(v, "medchron_job_submit", envelope=envelope())
+    assert first["accepted"] is True
+    second = call(v, "medchron_job_submit", envelope=envelope())
+    assert second["accepted"] is False
+    assert second["job_id"] == first["job_id"]
+    assert second["job_state"] == "submitted"
+    assert first["job_id"] in second["reason"]
+    assert len(list(queue.glob("*.json"))) == 1, "the duplicate must not queue a second job"
+
+
+@pytest.mark.parametrize(
+    ("state", "phrase"),
+    [
+        ("submitted", "has not started yet"),
+        ("running", "already running"),
+        ("held", "waiting on a decision"),
+    ],
+)
+def test_the_refusal_says_what_is_true_of_THAT_job(verbs, state, phrase):
+    """'Already running' about a job that stopped hours ago for a spend decision
+    is the kind of confident wrong sentence somebody then relays to a client."""
+    v, _, _ = verbs
+    first = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    if state != "submitted":
+        call(v, "medchron_job_record", peer_uid=ROOT, job_id=first, state="running", fields={})
+    if state == "held":
+        call(v, "medchron_job_record", peer_uid=ROOT, job_id=first, state="held", fields={"reason": "cap"})
+    again = call(v, "medchron_job_submit", envelope=envelope())
+    assert again["accepted"] is False and phrase in again["reason"]
+
+
+def test_provenance_does_not_make_it_a_different_job(verbs):
+    """The duplicate key is the WORK, not who asked or how they worded it. An
+    administrator who asks again in the same thread produces a different
+    request_ref, and that must not read as a new package."""
+    v, _, _ = verbs
+    first = call(v, "medchron_job_submit", envelope=envelope(request_ref="first ask"))["job_id"]
+    again = call(
+        v,
+        "medchron_job_submit",
+        envelope=envelope(requested_by="Other.Admin@Example.test", request_ref="following up"),
+    )
+    assert again["accepted"] is False and again["job_id"] == first
+
+
+def test_a_finished_package_may_be_rebuilt(verbs):
+    """Terminal jobs are not duplicates: a delivered package the firm wants
+    rebuilt, or a failed one worth retrying, is a legitimate second ask."""
+    v, _, _ = verbs
+    first = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    _deliver(v, first, pages=10, cents=100)
+    again = call(v, "medchron_job_submit", envelope=envelope())
+    assert again["accepted"] is True and again["job_id"] != first
+
+
+def test_a_different_matter_is_not_a_duplicate(verbs):
+    v, _, _ = verbs
+    call(v, "medchron_job_submit", envelope=envelope())
+    other = call(
+        v,
+        "medchron_job_submit",
+        envelope=envelope(matter={"id": "m-9", "number": "2026-PI-999", "title": "Other v. Other"}),
+    )
+    assert other["accepted"] is True
