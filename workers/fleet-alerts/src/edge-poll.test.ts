@@ -14,6 +14,7 @@ import {
   evaluateEdgePoll,
   parseEdgeTargets,
   probeEdge,
+  retireUnconfiguredTargets,
   runEdgePolls,
   type EdgeCounters,
   type FetchLike,
@@ -28,14 +29,34 @@ const NOW = Date.parse('2026-09-11T22:00:00.000Z')
 const HEALTH = 'https://smd.services/api/health'
 const THRESHOLDS = { failThreshold: 3, recoverThreshold: 2, timeoutMs: 10_000 }
 
+/**
+ * fleet_alert_state as migration 0116 leaves it (the columns retirement reads
+ * and the CHECK that admits edge_down). The real chain is pinned by
+ * tests/fleet-alert-conditions-migrated.test.ts; this mirror exists so the
+ * retirement SQL runs against real SQLite here too.
+ */
+const ALERT_TABLE = `CREATE TABLE fleet_alert_state (
+  customer_slug TEXT NOT NULL,
+  condition TEXT NOT NULL CHECK (condition IN ('heartbeat_red', 'edge_down')),
+  status TEXT NOT NULL CHECK (status IN ('open', 'resolved')),
+  opened_at TEXT NOT NULL,
+  resolved_at TEXT,
+  last_alert_id TEXT,
+  last_seen_marker TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (customer_slug, condition)
+)`
+
 /** A D1-shaped adapter over node:sqlite, just wide enough for edge-poll.ts. */
 function realDb(): { d1: D1Database; raw: DatabaseSync } {
   const raw = new DatabaseSync(':memory:')
   raw.exec(readFileSync(MIGRATION, 'utf8'))
+  raw.exec(ALERT_TABLE)
   const d1 = {
     prepare(sql: string) {
       const stmt = raw.prepare(sql)
       return {
+        all: () => Promise.resolve({ results: stmt.all() }),
         bind(...args: unknown[]) {
           const bound = args as Array<string | number | null>
           return {
@@ -292,5 +313,113 @@ describe('runEdgePolls against the real migration', () => {
     }
     const out = await runEdgePolls(env({}, d1 as unknown as D1Database), NOW, dbDown)
     expect(out).toEqual({ conditions: [], polls: [] })
+  })
+})
+
+describe('retiring targets that leave the config', () => {
+  function openAlert(raw: DatabaseSync, slug: string): void {
+    raw
+      .prepare(
+        `INSERT INTO fleet_alert_state (customer_slug, condition, status, opened_at) VALUES (?, ?, 'open', ?)`
+      )
+      .run(slug, EDGE_DOWN_CONDITION, '2026-09-11T23:46:36Z')
+  }
+  function targets(raw: DatabaseSync): string[] {
+    return (
+      raw.prepare('SELECT target FROM edge_poll_state ORDER BY target').all() as {
+        target: string
+      }[]
+    ).map((r) => r.target)
+  }
+
+  it('a removed target loses its counters, and its open alert is pushed inactive with the reason', async () => {
+    const { d1, raw } = realDb()
+    // Two targets probed once each, then `probe` leaves the config while down.
+    await runEdgePolls(
+      env({ EDGE_POLL_TARGETS: `web=${HEALTH},probe=${HEALTH}x` }, d1),
+      NOW,
+      dbDown
+    )
+    expect(targets(raw)).toEqual(['probe', 'web'])
+    openAlert(raw, 'probe')
+
+    const out = await retireUnconfiguredTargets(d1, new Set(['web']))
+    expect(out.retired).toEqual(['probe'])
+    expect(targets(raw)).toEqual(['web'])
+    expect(out.conditions).toEqual([
+      {
+        customer_slug: 'probe',
+        condition: EDGE_DOWN_CONDITION,
+        active: false,
+        detail: expect.stringContaining('probe was removed from EDGE_POLL_TARGETS'),
+      },
+    ])
+  })
+
+  it('configured targets, resolved rows, and other conditions are untouched', async () => {
+    const { d1, raw } = realDb()
+    await runEdgePolls(env({}, d1), NOW, ok)
+    openAlert(raw, 'web')
+    raw
+      .prepare(
+        `INSERT INTO fleet_alert_state (customer_slug, condition, status, opened_at) VALUES ('old', 'edge_down', 'resolved', 'x')`
+      )
+      .run()
+    raw
+      .prepare(
+        `INSERT INTO fleet_alert_state (customer_slug, condition, status, opened_at) VALUES ('seat', 'heartbeat_red', 'open', 'x')`
+      )
+      .run()
+    const out = await retireUnconfiguredTargets(d1, new Set(['web']))
+    expect(out).toEqual({ conditions: [], retired: [] })
+    expect(targets(raw)).toEqual(['web'])
+  })
+
+  it('runEdgePolls retires on the tick the target disappears; the transition machinery gets the inactive state', async () => {
+    const { d1, raw } = realDb()
+    await runEdgePolls(
+      env({ EDGE_POLL_TARGETS: `web=${HEALTH},probe=${HEALTH}x` }, d1),
+      NOW,
+      dbDown
+    )
+    openAlert(raw, 'probe')
+    const out = await runEdgePolls(env({}, d1), NOW + 120_000, ok)
+    expect(out.polls.map((p) => p.target)).toEqual(['web'])
+    expect(out.conditions).toEqual([
+      expect.objectContaining({
+        customer_slug: 'probe',
+        condition: EDGE_DOWN_CONDITION,
+        active: false,
+      }),
+    ])
+    expect(targets(raw)).toEqual(['web'])
+  })
+
+  it('a config with a parse error retires nothing: a typo must not resolve a real outage', async () => {
+    const { d1, raw } = realDb()
+    await runEdgePolls(
+      env({ EDGE_POLL_TARGETS: `web=${HEALTH},probe=${HEALTH}x` }, d1),
+      NOW,
+      dbDown
+    )
+    openAlert(raw, 'probe')
+    // `probe` is now malformed rather than absent; `web` still parses.
+    const out = await runEdgePolls(
+      env({ EDGE_POLL_TARGETS: `web=${HEALTH},probe=http://insecure` }, d1),
+      NOW + 120_000,
+      ok
+    )
+    expect(out.polls.map((p) => p.target)).toEqual(['web'])
+    expect(out.conditions).toEqual([])
+    expect(targets(raw)).toEqual(['probe', 'web'])
+  })
+
+  it('an empty config polls nothing and forgets everything, so unset means gone', async () => {
+    const { d1, raw } = realDb()
+    await runEdgePolls(env({}, d1), NOW, dbDown)
+    expect(targets(raw)).toEqual(['web'])
+    const out = await runEdgePolls(env({ EDGE_POLL_TARGETS: '' }, d1), NOW + 120_000, ok)
+    expect(out).toEqual({ conditions: [], polls: [] })
+    expect(targets(raw)).toEqual([])
   })
 })
