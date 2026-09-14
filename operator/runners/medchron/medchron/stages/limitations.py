@@ -98,7 +98,24 @@ def _unread_lines(d: Path, failed: list, log: Callable[[str], None]) -> list[str
     if unread:
         o += ["", "The following documents could not be read, and nothing from them appears in this chronology:\n"]
         o += [f'* "{name}"{f" ({where})" if where else ""} - {why}' for name, where, why in sorted(unread)]
-    ill = [r for r in read_jsonl(d / "ocr_results.jsonl") if (r.get("illegible_marks") or 0) > 0]
+    ocr = read_jsonl(d / "ocr_results.jsonl")
+    # `failed_pages` was computed on every scanned document and read by nobody,
+    # so a page the reader could not transcribe at all was disclosed to the
+    # client exactly nowhere. An unread page belongs in the section above this
+    # one -- that section is the whole point of this stage.
+    failed = [r for r in ocr if (r.get("failed_pages") or 0) > 0]
+    if failed:
+        total = sum(r["failed_pages"] for r in failed)
+        o += [
+            "",
+            f"The following documents were scanned images. {_plural(total, 'page')} could not be transcribed at "
+            f"all, and nothing from those pages appears in this chronology:\n",
+        ]
+        o += [
+            f'* "{r.get("name", "?")}" - {_plural(r["failed_pages"], "page")} of {r.get("pages", "?")}'
+            for r in sorted(failed, key=lambda x: -x["failed_pages"])
+        ]
+    ill = [r for r in ocr if (r.get("illegible_marks") or 0) > 0]
     if ill:
         total = sum(r["illegible_marks"] for r in ill)
         o += [

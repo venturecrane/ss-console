@@ -11,6 +11,7 @@ import pytest
 
 from medchron import config as config_mod, decisions, job as job_mod
 from medchron.stages import billing as billing_stage, units as units_stage, vision as vision_stage
+from medchron.stages import transcript
 from medchron.stages.base import StageRun
 from medchron_testkit import FakeSeat, make_pdf
 
@@ -354,3 +355,109 @@ def test_render_doc_returns_base64_per_page(tmp_path: Path, dpi: int) -> None:
     p.write_bytes(make_pdf(["", ""]))
     imgs, n = billing_stage.render_doc(str(p))
     assert n == 2 and set(imgs) == {1, 2} and all(isinstance(v, str) and len(v) > 100 for v in imgs.values())
+
+
+# -- read, but carrying nothing -----------------------------------------------
+#
+# On 2026-09-11 a firm's chronology refused over four phone screenshots the
+# Operator had read correctly and in full: `[illegible]`, `View motion photo`
+# twice, and a phone status bar. Each transcription was 41-47 bytes, the gate
+# tested `> 50`, and the refusal said "NO transcription yet" about documents
+# that were transcribed. The run stopped for four days and two sessions went
+# looking for an image-rendering fault that did not exist.
+
+
+def _scan_rec(rec_id: str = "s1", name: str = "IMG_0001") -> dict:
+    return {"id": rec_id, "name": name, "folder": "/Beta_Example", "ext": ".jpg", "scan": True}
+
+
+def _recorded(sr, rec_id: str = "s1", name: str = "IMG_0001", **over) -> None:
+    """The row vision writes when it completes a document."""
+    row = {"id": rec_id, "name": name, "pages": 1, "pages_out": 1, "failed_pages": 0, "illegible_marks": 0}
+    row.update(over)
+    with (sr.slug_dir / "ocr_results.jsonl").open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row) + "\n")
+
+
+def test_a_read_but_contentless_scan_is_carried_with_a_reason_not_refused(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """The regression this file exists for. A screenshot with nothing on it is
+    a DISPOSITION, not a halt: it rides into the composition set carrying the
+    reason the coverage gate needs."""
+    sr = _sr(job_dir, firm_config_path, data_root, None)
+    _extracted(sr, [_scan_rec()])
+    (sr.slug_dir / "text" / "s1.txt").write_text("[p.1] (machine transcription)\nView motion photo")
+    _recorded(sr)
+
+    assert units_stage.run(sr) == 0, "a document that was read must not refuse the run"
+    rows = [
+        r
+        for f in sorted((sr.slug_dir / "units").glob("*.json"))
+        for r in json.loads(f.read_text())
+        if isinstance(r, dict) and r.get("id") == "s1"
+    ]
+    assert rows, "the document was read, so it must appear in the composition set somewhere"
+    row = rows[0]
+    assert row["text_path"], "it was read; it belongs in the set"
+    assert row["compose_skip"], "and it must carry the reason the coverage gate asks for"
+    assert "no citable clinical content" in row["compose_skip"]
+    assert str(row["chars"]) in row["compose_skip"], "the reason states what was measured"
+
+
+def test_a_scan_with_no_transcription_still_refuses(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+    """The case the gate was written for, which must survive the fix."""
+    sr = _sr(job_dir, firm_config_path, data_root, None)
+    _extracted(sr, [_scan_rec()])
+    assert units_stage.run(sr) == 2
+
+
+def test_a_truncated_transcription_refuses_rather_than_passing_as_read(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """A kill mid-write used to leave a zero-length file. Bare existence would
+    accept it and the document would enter the chronology empty."""
+    sr = _sr(job_dir, firm_config_path, data_root, None)
+    _extracted(sr, [_scan_rec()])
+    (sr.slug_dir / "text" / "s1.txt").write_text("")
+    _recorded(sr)
+    assert units_stage.run(sr) == 2
+
+
+def test_a_transcription_the_reader_never_recorded_refuses(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """Text on disk with no ocr_results row: the pass died between the two
+    writes. A resume completes it cheaply; treating it as read does not."""
+    sr = _sr(job_dir, firm_config_path, data_root, None)
+    _extracted(sr, [_scan_rec(), _scan_rec("s2", "other")])
+    (sr.slug_dir / "text" / "s1.txt").write_text("[p.1] (machine transcription)\n" + PROSE)
+    (sr.slug_dir / "text" / "s2.txt").write_text("[p.1] (machine transcription)\n" + PROSE)
+    _recorded(sr, "s2", "other")  # s1's row is missing
+    assert units_stage.run(sr) == 2
+
+
+def test_the_refusal_states_what_it_observed(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+    """The old wording asserted a conclusion ("NO transcription yet") that was
+    false, and it cost four days. It must report the state it measured."""
+    lines: list[str] = []
+    sr = _sr(job_dir, firm_config_path, data_root, None)
+    sr.log = lines.append
+    _extracted(sr, [_scan_rec()])
+    assert units_stage.run(sr) == 2
+    blob = " ".join(lines)
+    assert "absent" in blob and "s1.txt" in blob
+    assert "NO transcription yet" not in blob
+
+
+def test_vision_does_not_re_transcribe_a_contentless_page(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """The same constant made vision re-read, and re-PAY for, every short
+    transcription on every resume."""
+    sr = _sr(job_dir, firm_config_path, data_root, None)
+    _extracted(sr, [_scan_rec()])
+    (sr.slug_dir / "text" / "s1.txt").write_text("[p.1] (machine transcription)\nView motion photo")
+    _recorded(sr)
+    state, _ = transcript.transcript_state(sr.slug_dir, "s1", transcript.recorded_ids(sr.slug_dir))
+    assert state not in transcript.UNREAD, "vision must treat this as already read"

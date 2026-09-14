@@ -76,7 +76,6 @@
     "runners/medchron/medchron/stages/merge.py::merge_cluster": 20,
     "runners/medchron/medchron/stages/merge.py::parse_fragment": 16,
     "runners/medchron/medchron/stages/strip.py::_run": 31,
-    "runners/medchron/medchron/stages/units.py::run": 18,
     "skills/client-verification-tracker/dispatch_envelope.py::build_and_write": 23,
     "skills/client-verification-tracker/escalation_ledger.py::validate_append": 27,
     "skills/daily-needs-you-digest/escalation_ledger.py::validate_append": 27,

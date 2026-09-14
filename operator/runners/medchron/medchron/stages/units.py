@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from .base import StageRun, read_json, read_jsonl
+from .transcript import CONTENTLESS, UNREAD, contentless_reason, recorded_ids, transcript_state
 
 BILLING_ONLY_TYPES = {"MEDICAL_BILL", "LEDGER", "LIEN_SUBROGATION", "VENDOR_INVOICE"}
 
@@ -146,6 +147,37 @@ def _route(
     return units, excluded, unassigned
 
 
+def _attach_transcripts(d: Path, recs: list[dict[str, Any]]) -> list[tuple[dict[str, Any], str, int]]:
+    """Give every read document its ``text_path``; return the ones not read yet.
+
+    A vision-scanned file has no ``text_path`` in ``extracted.jsonl`` -- the
+    vision stage writes ``text/<id>.txt`` afterwards and does not patch the
+    record -- so selecting on ``text_path`` alone silently drops every scanned
+    document.
+
+    The disposition is the point of this function. A document that was READ but
+    carries nothing citable gets a ``compose_skip`` rather than stopping the
+    run: on 2026-09-11 four phone screenshots the Operator had read correctly
+    halted a firm's chronology for four days, because "short" was being read as
+    "not read".
+    """
+    recorded = recorded_ids(d)
+    awaiting: list[tuple[dict[str, Any], str, int]] = []
+    for r in recs:
+        if r.get("text_path"):
+            continue
+        state, size = transcript_state(d, r["id"], recorded)
+        if state in UNREAD:
+            if r.get("scan"):
+                awaiting.append((r, state, size))
+            continue
+        r["text_path"] = str(d / "text" / f"{r['id']}.txt")
+        r["chars"] = size
+        if state == CONTENTLESS:
+            r["compose_skip"] = contentless_reason(size)
+    return awaiting
+
+
 def run(sr: StageRun) -> int:
     d = sr.slug_dir
     (d / "units").mkdir(parents=True, exist_ok=True)
@@ -153,18 +185,15 @@ def run(sr: StageRun) -> int:
     # A vision-scanned file has no text_path in extracted.jsonl; the vision
     # stage writes text/<id>.txt afterwards and does not patch the record.
     # Selecting on text_path alone silently drops every scanned document.
-    for r in recs:
-        if not r.get("text_path"):
-            tp = d / "text" / f"{r['id']}.txt"
-            if tp.is_file() and tp.stat().st_size > 50:
-                r["text_path"] = str(tp)
-                r["chars"] = tp.stat().st_size
+    awaiting = _attach_transcripts(d, recs)
     usable = [r for r in recs if r.get("text_path")]
-    awaiting = [r for r in recs if r.get("scan") and not r.get("text_path")]
     if awaiting:
-        sr.log(f"!! {len(awaiting)} scan-queued file(s) have NO transcription yet; vision has not finished:")
-        for r in awaiting:
-            sr.log(f"   ! {(r.get('name') or '')[:70]}")
+        # Say what was OBSERVED. The old wording asserted "NO transcription
+        # yet" about documents that were transcribed, and two sessions spent
+        # four days looking for an image-rendering fault it had invented.
+        sr.log(f"!! {len(awaiting)} scan-queued file(s) are not readable yet:")
+        for r, state, size in awaiting:
+            sr.log(f"   ! {(r.get('name') or '')[:60]} | text/{r['id']}.txt: {state} ({size}B)")
         return 2
     is_excluded = _excluder([str(p) for p in (sr.cfg.get("units", "exclude_name_patterns") or [])])
     spec = read_json(d / "units.json", None)
