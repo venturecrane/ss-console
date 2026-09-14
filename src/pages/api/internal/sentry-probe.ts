@@ -23,7 +23,7 @@ import { env } from 'cloudflare:workers'
 import { verifyMachineRequest } from '../../../lib/auth/machine-key'
 
 export const POST: APIRoute = async ({ request }) => {
-  const auth = await verifyMachineRequest(request, env.MACHINE_HEARTBEAT_KEY, env.DB)
+  const auth = await verifyMachineRequest(request, env.DB)
   if (!auth.ok) {
     return errorResponse(auth.status, 'unauthorized')
   }

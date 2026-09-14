@@ -20,6 +20,7 @@ import {
   runMigrations,
   installWorkerdPolyfills,
 } from '@venturecrane/crane-test-harness'
+import { seedMachineCredential } from './helpers/machine-credential'
 import path from 'node:path'
 import { readFileSync } from 'node:fs'
 import { POST } from '../src/pages/api/internal/heartbeat'
@@ -171,7 +172,7 @@ describe('POST /api/internal/heartbeat — connector fields (ADR 0080)', () => {
     await runMigrations(db, { files: allMigrations() })
     await seedOrgEntityConfig(db, 'alpha')
     ;(testEnv as unknown as Record<string, unknown>).DB = db
-    ;(testEnv as unknown as Record<string, unknown>).MACHINE_HEARTBEAT_KEY = MACHINE_KEY
+    await seedMachineCredential(db, 'alpha', MACHINE_KEY)
   })
 
   it('stores a valid connectors map and connector_check_ok', async () => {
@@ -426,7 +427,7 @@ describe('POST /api/internal/heartbeat — connector_token_age (ss#2148)', () =>
     await runMigrations(db, { files: allMigrations() })
     await seedOrgEntityConfig(db, 'alpha')
     ;(testEnv as unknown as Record<string, unknown>).DB = db
-    ;(testEnv as unknown as Record<string, unknown>).MACHINE_HEARTBEAT_KEY = MACHINE_KEY
+    await seedMachineCredential(db, 'alpha', MACHINE_KEY)
   })
 
   async function readTokenAge(slug: string): Promise<unknown> {

@@ -18,6 +18,7 @@ import {
   runMigrations,
   installWorkerdPolyfills,
 } from '@venturecrane/crane-test-harness'
+import { seedMachineCredential } from './helpers/machine-credential'
 import path from 'node:path'
 import { POST } from '../src/pages/api/internal/heartbeat'
 import { runOnce, type Env as WorkerEnv } from '../workers/fleet-alerts/src/index'
@@ -199,7 +200,9 @@ describe('POST /api/internal/heartbeat — scheduler fields + re-key', () => {
     await seedConfig(db, ENTITY_A, 'alpha')
     await seedConfig(db, ENTITY_A, 'beta')
     for (const k of Object.keys(testEnv)) delete (testEnv as unknown as Record<string, unknown>)[k]
-    Object.assign(testEnv, { DB: db, MACHINE_HEARTBEAT_KEY: MACHINE_KEY })
+    Object.assign(testEnv, { DB: db })
+    await seedMachineCredential(db, 'alpha', MACHINE_KEY)
+    await seedMachineCredential(db, 'beta', MACHINE_KEY)
   })
 
   it('two slugs sharing one entity_id produce TWO rows (re-key regression)', async () => {

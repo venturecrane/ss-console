@@ -23,6 +23,7 @@ import {
   runMigrations,
   installWorkerdPolyfills,
 } from '@venturecrane/crane-test-harness'
+import { seedMachineCredential } from './helpers/machine-credential'
 import path from 'node:path'
 import { POST } from '../src/pages/api/internal/heartbeat'
 import { env as testEnv } from 'cloudflare:workers'
@@ -84,7 +85,8 @@ describe('degraded send-refusal ingest', () => {
     await runMigrations(db, { files: discoverNumericMigrations(migrationsDir) })
     await seed(db)
     for (const k of Object.keys(testEnv)) delete (testEnv as unknown as Record<string, unknown>)[k]
-    Object.assign(testEnv, { DB: db, MACHINE_HEARTBEAT_KEY: MACHINE_KEY })
+    Object.assign(testEnv, { DB: db })
+    await seedMachineCredential(db, SLUG, MACHINE_KEY)
   })
 
   async function row(): Promise<Record<string, unknown> | null> {
