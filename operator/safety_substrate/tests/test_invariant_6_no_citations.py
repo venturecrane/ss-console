@@ -22,11 +22,9 @@ citations, and clean outputs that should NOT trigger.
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from citation_filter import contains_citation, scan, refusal_message
+from safety_substrate.citation_filter import contains_citation, scan, refusal_message
 
 
 # ---------- Adversarial fixtures: each should be REFUSED ----------

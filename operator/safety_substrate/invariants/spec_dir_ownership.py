@@ -24,7 +24,7 @@ hold.
 
 WHY IT CARRIES NO INVARIANT NUMBER
 ----------------------------------
-The numbered invariants (1-7, ``safety-substrate/README.md``) are the platform's
+The numbered invariants (1-7, ``safety_substrate/README.md``) are the platform's
 irreducible behavioural promises, enumerated in the PRD. This is not one of
 them; it is a structural precondition of the substrate, in the same family as
 the keystone relocation, and inventing an eighth PRD invariant to house it would

@@ -11,7 +11,7 @@ probing.
 
 What survives in this package is the control-plane substrate —
 modules used by operator-side tools (`bin/lib/decommission.py`,
-`bin/lib/evidence.py`) and by the safety-substrate invariant tests.
+`bin/lib/evidence.py`) and by the safety_substrate invariant tests.
 (The ADR-0008 memory/voice ingestion + retention plane — `memory/`,
 `voice/pipeline.py`, `bin/cron-retention.py`, `bin/lib/export.py` —
 was removed by #1355: it read a per-customer control-plane Cloudflare
@@ -33,7 +33,7 @@ ADR-0043 runtime-read seam; see `bin/lib/seam_pull.py`.) Specifically:
 * Cost telemetry (`cost_ingest.py`, `cost_rollup.py`,
   `cost_telemetry/`) — billing rollup against per-customer Machines.
 * Trust-ceiling enforcement primitive (`trust_ceiling.py`) — pure-data
-  module imported by the safety-substrate invariant #5 test fixture;
+  module imported by the safety_substrate invariant #5 test fixture;
   the runtime path lives in `hermes-smd-trust`.
 * Customer.yaml schema validator (`validate_customer_yaml.py`) — see
   the in-flight follow-up that replaces this with the overlay's

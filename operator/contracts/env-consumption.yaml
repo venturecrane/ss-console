@@ -13,7 +13,7 @@
 # a live incident.
 #
 # ENFORCEMENT (all derived from THIS file):
-#   1. Boot-time, fail-closed (operator/safety-substrate/tests/test_invariant_9_*):
+#   1. Boot-time, fail-closed (operator/safety_substrate/tests/test_invariant_9_*):
 #      the headline guard — NO var marked `stage: agent` may be `agent_env:
 #      stripped`. You cannot strip a credential the agent needs. Runs in the
 #      image (where this contract is COPY'd) at bootstrap Step 8, before the

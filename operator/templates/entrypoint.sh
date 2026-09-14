@@ -1257,12 +1257,12 @@ chmod 0700 "${CONNECTOR_HEALTH_DIR}"
 # a missing OR unimportable invariant module is itself a refusal (exit 3), never
 # a silent skip — no stub/NoOp path reports a false pass (the standing
 # fail-closed posture, e.g. bootstrap.sh's harness-less-gateway gates).
-INVARIANT7_BOOT_CHECK="/app/safety-substrate/invariants/invariant_7.py"
+INVARIANT7_BOOT_CHECK="/app/safety_substrate/invariants/invariant_7.py"
 if [ ! -f "${INVARIANT7_BOOT_CHECK}" ]; then
   log "FATAL: cross-machine isolation boot check module missing (${INVARIANT7_BOOT_CHECK}); refusing to boot (ADR 0009 / SEC-22)"
   exit 3
 fi
-if /opt/hermes/.venv/bin/python3 "${INVARIANT7_BOOT_CHECK}"; then
+if PYTHONPATH=/app /opt/hermes/.venv/bin/python3 "${INVARIANT7_BOOT_CHECK}"; then
   log "Cross-machine isolation boot check PASSED (ADR 0009 / SEC-22)"
 else
   log "FATAL: INVARIANT_BOOT_CHECK_FAILED — cross-machine isolation boot check refused boot (ADR 0009 / SEC-22); see stderr for the offending binding or a module import error (both fail closed)"
@@ -1289,12 +1289,12 @@ fi
 # nothing any consumer reads. Same fail-closed posture as the invariant_7 gate
 # above: a missing or unimportable module is itself a refusal (exit 3), never a
 # silent skip.
-SPEC_OWNERSHIP_CHECK="/app/safety-substrate/invariants/spec_dir_ownership.py"
+SPEC_OWNERSHIP_CHECK="/app/safety_substrate/invariants/spec_dir_ownership.py"
 if [ ! -f "${SPEC_OWNERSHIP_CHECK}" ]; then
   log "FATAL: authored-spec ownership boot check module missing (${SPEC_OWNERSHIP_CHECK}); refusing to boot (ss ADR 0083)"
   exit 3
 fi
-if /opt/hermes/.venv/bin/python3 "${SPEC_OWNERSHIP_CHECK}"; then
+if PYTHONPATH=/app /opt/hermes/.venv/bin/python3 "${SPEC_OWNERSHIP_CHECK}"; then
   log "Authored-spec tree ownership check PASSED (ss ADR 0083)"
 else
   log "FATAL: SPEC_DIR_OWNERSHIP_CHECK_FAILED — the authored-spec tree is writable by the agent uid, or reaches outside itself; refusing to boot (ss ADR 0083); see stderr for the offending paths"

@@ -94,7 +94,7 @@ The 10GB Fly volume mounts at `/opt/data` and hosts everything stateful. `custom
 2. Fetch `customer.yaml` from R2 if `/opt/data/customer.yaml` is missing; otherwise use the volume copy.
    3–6. **Honcho data plane (Postgres / Redis / migrations / FastAPI) — deferred to Phase 2.** Phase 1 runs on Hermes' flat-file memory core.
 3. Run `hermes-smd bootstrap` from the overlay repo — translates `customer.yaml.personas[]` into N profile directories under `/opt/data/profiles/`, writes each profile's `config.yaml` and `SOUL.md`.
-4. Run the safety-substrate invariant checks (`/app/safety-substrate/run_invariants.py`).
+4. Run the safety_substrate invariant checks (`/app/safety_substrate/run_invariants.py`).
 5. Pause-guard check.
 6. Start the `hermes-smd customer-sync` sidecar in the background (R2 polling).
 7. `exec hermes gateway run` — the unattended gateway daemon (listens for cron + webhook triggers and drives them through the agent + overlay plugins). NOT `hermes chat`, which is an interactive REPL that would exit on EOF as PID-1's child.

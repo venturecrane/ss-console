@@ -191,7 +191,6 @@ class ClientSeat:
 # so the transport can find it inside whatever the ssh session also prints.
 _SEAT_SCRIPT = r"""
 import json, sys, time
-sys.path.insert(0, "/opt/connectors/smokeball")
 from smokeball_connector.client import build_client_from_env
 def items(r):
     if isinstance(r, dict):

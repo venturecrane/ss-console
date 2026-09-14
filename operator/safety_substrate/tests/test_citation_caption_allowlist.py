@@ -11,12 +11,8 @@ session. Only bare case-name hits are exempt; fabricated-authority patterns
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from citation_filter import canonical_caption, contains_citation, scan
+from safety_substrate.citation_filter import canonical_caption, contains_citation, scan
 
 CAPTION = "Alvarez v. Draper"
 

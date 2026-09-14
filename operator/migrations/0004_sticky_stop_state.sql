@@ -5,13 +5,13 @@
 -- The sticky-stop circuit breaker pins the agent's dispatch path when the
 -- substrate observes runaway-loop signals: consecutive tool failures,
 -- refusal cascades, time-budget overruns, or cost-threshold breaches. The
--- state machine itself lives at operator/safety-substrate/sticky_stop.py.
+-- state machine itself lives at operator/safety_substrate/sticky_stop.py.
 -- This migration adds the D1 row it persists to.
 --
 -- Source spec:    docs/specs/operator/sticky-stop.md
 -- Applied by:     operator/adapter/run_migrations.py (invoked from
 --                 bin/provision-customer.sh during customer provisioning)
--- Owns the row:   operator/safety-substrate/sticky_stop.py
+-- Owns the row:   operator/safety_substrate/sticky_stop.py
 --
 -- Per-customer isolation: the table lives in the per-customer D1
 -- (hermes-{slug}-d1) per ADR 0008. The `customer` column is the

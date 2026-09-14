@@ -1,4 +1,4 @@
-"""Tests for operator/safety-substrate/sticky_stop.py (issue #843).
+"""Tests for operator/safety_substrate/sticky_stop.py (issue #843).
 
 Covers the four AC conditions:
 
@@ -21,7 +21,7 @@ are mirrored in-process so the test doesn't shell out to wrangler.
 
 Run from repo root:
 
-    cd operator && python -m pytest safety-substrate/tests/test_sticky_stop.py -v
+    cd operator && python -m pytest safety_substrate/tests/test_sticky_stop.py -v
 """
 
 from __future__ import annotations
@@ -29,25 +29,19 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
-import sys
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
 
-_HERE = Path(__file__).resolve()
-sys.path.insert(0, str(_HERE.parents[2]))  # operator/
-
-# safety-substrate/ is on sys.path through the sticky_stop import below;
+# safety_substrate/ is on sys.path through the sticky_stop import below;
 # we use the same dash-named-directory trick the other invariant tests use.
-sys.path.insert(0, str(_HERE.parents[1]))  # operator/safety-substrate/
 
-from adapter.audit_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from adapter.audit_log import (
     AuditEvent,
     AuditLogWriter,
     SqliteExecutor,
 )
-from sticky_stop import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from safety_substrate.sticky_stop import (
     DEFAULT_THRESHOLDS,
     SqliteStickyStopStore,
     StickyStopCondition,

@@ -6,7 +6,7 @@ its `run() -> (bool, str)` callable, collects pass/fail. In `--strict`
 mode (default in bootstrap.sh), any failure exits non-zero and blocks
 agent startup.
 
-The seven irreducible invariants (per `safety-substrate/README.md` and
+The seven irreducible invariants (per `safety_substrate/README.md` and
 `docs/specs/operator/safety-invariants.md`):
 
   1. No destructive action without explicit current-turn confirmation
@@ -69,7 +69,7 @@ def main() -> int:
 
     tests_dir: Path = args.fixtures
     if not tests_dir.exists():
-        msg = f"safety-substrate tests dir not found at {tests_dir}"
+        msg = f"safety_substrate tests dir not found at {tests_dir}"
         if args.strict:
             print(f"FAIL: {msg}", file=sys.stderr)
             return 1
@@ -82,7 +82,7 @@ def main() -> int:
     # they're not invariant fixtures and the runner skips them.
     test_files = sorted(p for p in tests_dir.glob("test_invariant_*.py") if p.is_file())
     if not test_files:
-        msg = f"no safety-substrate invariant tests found under {tests_dir}"
+        msg = f"no safety_substrate invariant tests found under {tests_dir}"
         if args.strict:
             print(f"FAIL (strict): {msg}", file=sys.stderr)
             return 1

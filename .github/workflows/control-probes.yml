@@ -42,7 +42,7 @@ on:
       - 'operator/bin/tests/test_control_probes.py'
       - 'operator/contracts/runtime-control-probes.yaml'
       - 'operator/contracts/runtime-controls.yaml'
-      - 'operator/safety-substrate/sticky_stop.py'
+      - 'operator/safety_substrate/sticky_stop.py'
       - '.github/workflows/control-probes.yml'
 
 permissions:

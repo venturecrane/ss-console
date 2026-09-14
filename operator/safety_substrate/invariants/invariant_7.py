@@ -108,7 +108,7 @@ Module shape
 
 ::
 
-    from invariants.invariant_7 import (
+    from safety_substrate.invariants.invariant_7 import (
         BindingSnapshot,
         collect_snapshot_from_env,
         verify_storage_bindings,
@@ -135,7 +135,6 @@ from pathlib import Path
 from typing import Mapping, Optional
 
 _HERE = Path(__file__).resolve()
-sys.path.insert(0, str(_HERE.parents[2]))  # operator/ on sys.path
 
 log = logging.getLogger("aie.invariants.invariant_7")
 

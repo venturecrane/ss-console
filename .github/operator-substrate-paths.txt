@@ -17,7 +17,7 @@
 
 operator/adapter/**
 operator/bin/**
-operator/safety-substrate/**
+operator/safety_substrate/**
 operator/connectors/**
 # EFF-05: a customer.yaml-only change must trigger the block-conformance
 # gate (test_customer_yaml_block_conformance.py); otherwise an unclassified

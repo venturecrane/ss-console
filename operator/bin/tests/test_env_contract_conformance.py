@@ -1,6 +1,6 @@
 """Conformance: the env-consumption contract MATCHES the scripts' reality.
 
-Invariant 9 (operator/safety-substrate) checks the contract is internally
+Invariant 9 (operator/safety_substrate) checks the contract is internally
 consistent (no agent-consumed var marked stripped). THIS CI-side check verifies
 the contract is not merely aspirational: bootstrap.sh's REQUIRED_ENV /
 OPTIONAL_ENV arrays and the actual `unset` strip sites must agree with the

@@ -1,6 +1,6 @@
 # Safety Invariants #6 and #7
 
-**Spec for issue [#865](https://github.com/venturecrane/ss-console/issues/865).** Runtime implementation of two platform PRD §7.5 invariants. Base invariants #1-#5 ship from PR #812 and are exercised by per-fixture tests under `operator/safety-substrate/tests/`. Invariant #6 is partially shipped as `citation_filter.py` (law-vertical refusal layer) plus the citation-enforcement layer documented here. Invariant #7 is shipped here for the first time. Invariant #8 (fabrication discipline) lives in [fabrication-filter.md](fabrication-filter.md) (issue #798).
+**Spec for issue [#865](https://github.com/venturecrane/ss-console/issues/865).** Runtime implementation of two platform PRD §7.5 invariants. Base invariants #1-#5 ship from PR #812 and are exercised by per-fixture tests under `operator/safety_substrate/tests/`. Invariant #6 is partially shipped as `citation_filter.py` (law-vertical refusal layer) plus the citation-enforcement layer documented here. Invariant #7 is shipped here for the first time. Invariant #8 (fabrication discipline) lives in [fabrication-filter.md](fabrication-filter.md) (issue #798).
 
 ## Source
 
@@ -12,7 +12,7 @@
 
 ## Invariant #6 - citation enforcement for fact-bearing fields
 
-Platform PRD §7.5 invariant #6 names a "citation-refusal layer." The law-firm vertical implements that as **refusal on fabricated legal citations** in any output (case names, reporter cites, statute references, court rules). That layer is `operator/safety-substrate/citation_filter.py`, shipped with PR #812 and exercised by `tests/test_invariant_6_no_citations.py`.
+Platform PRD §7.5 invariant #6 names a "citation-refusal layer." The law-firm vertical implements that as **refusal on fabricated legal citations** in any output (case names, reporter cites, statute references, court rules). That layer is `operator/safety_substrate/citation_filter.py`, shipped with PR #812 and exercised by `tests/test_invariant_6_no_citations.py`.
 
 The complement shipped here is **citation enforcement on fact-bearing fields**. Every fact a skill renders into a declared fact-bearing field must carry a `Citation` attached to a real source. The two layers cover the two failure modes:
 
@@ -25,7 +25,7 @@ Both layers ship together. Either failing on its own is a single-layer enforceme
 
 ### Module shape
 
-`operator/safety-substrate/invariants/invariant_6.py`. Pure-function contract.
+`operator/safety_substrate/invariants/invariant_6.py`. Pure-function contract.
 
 ```python
 from invariants.invariant_6 import (
@@ -156,7 +156,7 @@ The invariant runs once at Machine startup before any request is served. Fly/Clo
 
 ### Module shape
 
-`operator/safety-substrate/invariants/invariant_7.py`.
+`operator/safety_substrate/invariants/invariant_7.py`.
 
 ```python
 from invariants.invariant_7 import (
@@ -262,7 +262,7 @@ The exit code `3` is reserved for invariant-boot-check failures per [r2-vectoriz
 
 ## Where invariant #6 enforcement plugs into the dispatch path
 
-> **TARGET STATE — not yet wired.** The flow below is the intended call-site contract, not a live control. `enforce_citations` is a pure function defined and tested in this repo's safety-substrate; nothing calls it from the Hermes skill-output dispatch path today. See "Open items deferred" below ("Wiring `enforce_citations` into the dispatch path") — that surface lives in the Hermes runtime, not in this repo, and is tracked as a separate wiring task. Do not read this diagram as evidence that citation enforcement runs in production.
+> **TARGET STATE — not yet wired.** The flow below is the intended call-site contract, not a live control. `enforce_citations` is a pure function defined and tested in this repo's safety_substrate; nothing calls it from the Hermes skill-output dispatch path today. See "Open items deferred" below ("Wiring `enforce_citations` into the dispatch path") — that surface lives in the Hermes runtime, not in this repo, and is tracked as a separate wiring task. Do not read this diagram as evidence that citation enforcement runs in production.
 
 Skill output flows (target):
 
@@ -285,22 +285,22 @@ The order is intentional. Citation enforcement runs first because its violation 
 
 | Test file                                             | Coverage                                                                                                                   |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `operator/safety-substrate/tests/test_invariant_6.py` | 18 cases. Citation constructor contract, passing cases, `none`-edge case, missing-citation, partial coverage, audit shape. |
-| `operator/safety-substrate/tests/test_invariant_7.py` | 14 cases. Snapshot contract, passing case, cross-Machine, wrong-suffix, empty, malformed slug, audit shape, refusal text.  |
+| `operator/safety_substrate/tests/test_invariant_6.py` | 18 cases. Citation constructor contract, passing cases, `none`-edge case, missing-citation, partial coverage, audit shape. |
+| `operator/safety_substrate/tests/test_invariant_7.py` | 14 cases. Snapshot contract, passing case, cross-Machine, wrong-suffix, empty, malformed slug, audit shape, refusal text.  |
 
 Run from repo root:
 
 ```bash
 cd operator && uv run --with pytest python -m pytest \
-    safety-substrate/tests/test_invariant_6.py \
-    safety-substrate/tests/test_invariant_7.py -v
+    safety_substrate/tests/test_invariant_6.py \
+    safety_substrate/tests/test_invariant_7.py -v
 ```
 
-Each invariant module also exports a `run() -> (bool, str)` callable consumed by the substrate runner at `safety-substrate/run_invariants.py` for boot-time smoke fixtures. Comprehensive coverage is the pytest path.
+Each invariant module also exports a `run() -> (bool, str)` callable consumed by the substrate runner at `safety_substrate/run_invariants.py` for boot-time smoke fixtures. Comprehensive coverage is the pytest path.
 
 ## Open items deferred
 
-- **Wiring `enforce_citations` into the dispatch path.** This spec defines the function and contract. Plugging the call site into the Hermes skill-output path is tracked separately because that surface lives in the Hermes runtime, not in this repo's safety-substrate.
+- **Wiring `enforce_citations` into the dispatch path.** This spec defines the function and contract. Plugging the call site into the Hermes skill-output path is tracked separately because that surface lives in the Hermes runtime, not in this repo's safety_substrate.
 - **Wiring `verify_storage_bindings` into `bootstrap.sh`.** The function is ready; the bootstrap-shell integration (reading customer.yaml, collecting the snapshot from Fly env metadata, writing the audit row) is a separate boot-script change tracked under the invariant-7 boot-check rollout.
 - **Closed-set audit action type for citation violations.** This spec reuses `INVARIANT_VIOLATION` with `metadata.invariant=6`. If the compliance-evidence packet's roll-up needs first-class bucketing, a dedicated `CITATION_VIOLATION` action type can be added under a follow-on ADR.
 

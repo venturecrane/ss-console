@@ -23,7 +23,7 @@ uv run --with pyyaml python3 operator/bin/lib/secret_custody.py classify SMOKEBA
 
 ## Phase A — keyless build (no real customer secret in scope)
 
-Validate + materialize `customer.yaml`, render `fly.toml`, create app/volume/bucket, deploy, boot smoke test, safety-substrate invariants, overlay activation gate — all with **placeholder** customer-owned values and real (or emulated) infra creds. The Machine comes up fully governed and **inert on every customer capability**; connectors bound to placeholders fail closed at the connector boundary (existing posture).
+Validate + materialize `customer.yaml`, render `fly.toml`, create app/volume/bucket, deploy, boot smoke test, safety_substrate invariants, overlay activation gate — all with **placeholder** customer-owned values and real (or emulated) infra creds. The Machine comes up fully governed and **inert on every customer capability**; connectors bound to placeholders fail closed at the connector boundary (existing posture).
 
 The live, exercised form of Phase A today is **staging**:
 

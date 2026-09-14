@@ -302,7 +302,7 @@ for the dashboard's "is anything stuck?" indicator.
 
 ## Verification
 
-`operator/safety-substrate/tests/test_sticky_stop.py` exercises:
+`operator/safety_substrate/tests/test_sticky_stop.py` exercises:
 
 - Initial state is `OK` and read alone does not persist
 - Three of the four conditions drive `OK -> HARD_STOP` at their threshold,
@@ -330,7 +330,7 @@ false`, `level_unchanged_by_design: true`)
 Run locally:
 
 ```
-cd operator && uv run --with pytest python -m pytest safety-substrate/tests/test_sticky_stop.py -v
+cd operator && uv run --with pytest python -m pytest safety_substrate/tests/test_sticky_stop.py -v
 ```
 
 ## Failure modes
@@ -360,9 +360,9 @@ cd operator && uv run --with pytest python -m pytest safety-substrate/tests/test
 
 ## Implementation notes
 
-- Module: `operator/safety-substrate/sticky_stop.py`
+- Module: `operator/safety_substrate/sticky_stop.py`
 - Migration: `operator/migrations/0004_sticky_stop_state.sql`
-- Tests: `operator/safety-substrate/tests/test_sticky_stop.py`
+- Tests: `operator/safety_substrate/tests/test_sticky_stop.py`
 - The module follows the same pure-Python + injectable-store shape as
   `audit_log.py`. Production wiring uses a D1 HTTP executor (when the
   Hermes-side `HttpD1StickyStopStore` lands; not in this PR).

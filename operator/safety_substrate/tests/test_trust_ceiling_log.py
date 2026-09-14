@@ -1,4 +1,4 @@
-"""Tests for operator/safety-substrate/trust_ceiling_log.py (issue #864).
+"""Tests for operator/safety_substrate/trust_ceiling_log.py (issue #864).
 
 Covers the audit row contract for every (Decision, DecisionReason) combo
 plus the validation surface (closed enums, missing required fields,
@@ -10,7 +10,7 @@ test does not shell out to wrangler.
 
 Run from the repo root:
 
-    cd operator && python -m pytest safety-substrate/tests/test_trust_ceiling_log.py -v
+    cd operator && python -m pytest safety_substrate/tests/test_trust_ceiling_log.py -v
 """
 
 from __future__ import annotations
@@ -18,21 +18,15 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
-import sys
-from pathlib import Path
 
 import pytest
 
-_HERE = Path(__file__).resolve()
-sys.path.insert(0, str(_HERE.parents[2]))  # operator/
-sys.path.insert(0, str(_HERE.parents[1]))  # operator/safety-substrate/
-
-from adapter.audit_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from adapter.audit_log import (
     AuditLogWriter,
     AuditWriteError,
     SqliteExecutor,
 )
-from trust_ceiling_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from safety_substrate.trust_ceiling_log import (
     ActionClassName,
     CeilingLevel,
     Decision,

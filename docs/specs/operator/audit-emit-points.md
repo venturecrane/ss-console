@@ -162,7 +162,7 @@ Per the compaction hook from PR [#981], transient per-call state must not live i
 
 ## 9. Send is classified and gated, not banned
 
-Nothing in this module _originates_ an action — it only classifies and times tool calls for audit. Send tools are classified `EXTERNAL_SEND` and gated downstream by `trust_ceiling.enforce()` per the authored ceiling (autonomous / draft / refused; fail-closed when unauthored). There is **no** `test_no_send_tool_appears_in_registry` merge gate — that asserted the dead autonomous-send-forbidden default (ADR 0035 struck it). The send-related merge gate is instead `operator/safety-substrate/tests/test_invariant_2_no_external_send_without_confirmation.py`, which verifies the configured-ceiling behavior (unauthored = fail-closed; authored autonomous = send; vertical floor narrows).
+Nothing in this module _originates_ an action — it only classifies and times tool calls for audit. Send tools are classified `EXTERNAL_SEND` and gated downstream by `trust_ceiling.enforce()` per the authored ceiling (autonomous / draft / refused; fail-closed when unauthored). There is **no** `test_no_send_tool_appears_in_registry` merge gate — that asserted the dead autonomous-send-forbidden default (ADR 0035 struck it). The send-related merge gate is instead `operator/safety_substrate/tests/test_invariant_2_no_external_send_without_confirmation.py`, which verifies the configured-ceiling behavior (unauthored = fail-closed; authored autonomous = send; vertical floor narrows).
 
 ## 10. Acceptance criteria mapping
 

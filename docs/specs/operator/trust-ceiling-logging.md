@@ -28,7 +28,7 @@ This spec describes the audit-row contract that fixes that gap.
 
 ## Module + integration point
 
-The emission module is `operator/safety-substrate/trust_ceiling_log.py`.
+The emission module is `operator/safety_substrate/trust_ceiling_log.py`.
 The public surface is one function:
 
 ```python
@@ -56,7 +56,7 @@ the pending action, same invariant as the audit log writer itself.
 
 > **TARGET STATE — not yet wired.** The integration described here is the
 > intended call-site contract, not a live control. `log_decision()` is
-> defined and tested in this repo's safety-substrate, but no Hermes
+> defined and tested in this repo's safety_substrate, but no Hermes
 > dispatch-path code calls it today, so `trust_ceiling_decision` audit rows
 > do not yet emit in production. The Hermes dispatch integration is the
 > adapter team's work and is tracked separately — see "Out of scope (filed
@@ -309,7 +309,7 @@ the dispatch path; this module passes it through unchanged.
 
 ## Verification
 
-`operator/safety-substrate/tests/test_trust_ceiling_log.py` exercises:
+`operator/safety_substrate/tests/test_trust_ceiling_log.py` exercises:
 
 - One happy-path row exercises every canonical metadata key
 - Each of three decisions maps to the correct action_type
@@ -336,7 +336,7 @@ Run locally:
 
 ```
 cd operator && uv run --with pytest python -m pytest \
-  safety-substrate/tests/test_trust_ceiling_log.py -v
+  safety_substrate/tests/test_trust_ceiling_log.py -v
 ```
 
 ## Out of scope (filed elsewhere)

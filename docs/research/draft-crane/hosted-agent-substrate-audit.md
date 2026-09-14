@@ -383,7 +383,7 @@ principal_subject}` (`webhook_gate.py:796-812`); the agent picks its own skill f
 `operator/contracts/overlay-hook-surface.json` declares the **closed set of 7 hooks** the
 overlay must register for governance to be real, plus 5 `functionalPlugins` whose
 activation IS the guarantee. Parity is CI-enforced against the runtime activation gate
-(`operator/safety-substrate/tests/test_guard_hook_parity.py`).
+(`operator/safety_substrate/tests/test_guard_hook_parity.py`).
 
 | Hook                   | Plugin                    | Safety-critical | Purpose                                                          |
 | ---------------------- | ------------------------- | --------------- | ---------------------------------------------------------------- |

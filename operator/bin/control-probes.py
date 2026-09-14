@@ -67,7 +67,7 @@ HOLD = "HOLD"
 #: Trees a dispatch caller could plausibly live in, for the caller-search
 #: probes. Tests are excluded on purpose: a test calling a circuit breaker is
 #: exactly the evidence that fooled everyone about sticky_stop for two months.
-CALLER_SEARCH_DIRS = ("adapter", "safety-substrate", "workspace_broker", "bin", "connectors")
+CALLER_SEARCH_DIRS = ("adapter", "safety_substrate", "workspace_broker", "bin", "connectors")
 CALLER_SEARCH_EXCLUDE_PARTS = {"tests", "__pycache__", ".pytest_cache", ".ruff_cache"}
 #: The substrate that DEFINES the arm, and this runner itself, are not callers.
 CALLER_SEARCH_EXCLUDE_FILES = {"sticky_stop.py", "control-probes.py"}
@@ -86,7 +86,7 @@ class ProbeContext:
     red, and a check that cannot fail has measured nothing.
     """
 
-    substrate_dir: Path = OPERATOR / "safety-substrate"
+    substrate_dir: Path = OPERATOR / "safety_substrate"
     search_root: Path = OPERATOR
     seat: str | None = None
     run_seat: Callable[[str, list[str]], tuple[int, str]] | None = None
@@ -306,7 +306,7 @@ def find_callers(ctx: ProbeContext, symbol: str) -> list[str]:
     """Every non-test, non-defining file under the searched tree that CALLS `symbol`.
 
     Parsed, not grepped. The first grep version of this reported
-    safety-substrate/refusal.py as a caller of record_refusal on the strength of
+    safety_substrate/refusal.py as a caller of record_refusal on the strength of
     a docstring sentence about it, which is precisely the false green a probe
     suite must not manufacture: a control declared live because prose mentions
     it. An ast walk sees calls and nothing else.

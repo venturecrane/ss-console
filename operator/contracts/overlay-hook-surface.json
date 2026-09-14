@@ -18,7 +18,7 @@
     "typed integration surface in the overlay's hermes_hook.py, per",
     "docs/specs/operator/aie-adapter-register.md) so a rename on the abstract side is visible.",
     "",
-    "ENFORCEMENT (operator/safety-substrate/tests/test_guard_hook_parity.py):",
+    "ENFORCEMENT (operator/safety_substrate/tests/test_guard_hook_parity.py):",
     "  1. ACTIVATION-GATE PARITY: test_invariant_8_overlay_activation.py::_REQUIRED_HOOKS must",
     "     equal requiredHooks here, and its _FUNCTIONAL must equal functionalPlugins here. The",
     "     runtime activation gate cannot silently drop a hook or a plugin without failing CI.",

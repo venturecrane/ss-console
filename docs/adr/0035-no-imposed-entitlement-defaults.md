@@ -69,7 +69,7 @@ The vertical-floor mechanism (`vertical_floors` + `_most_restrictive` in `trust_
 **Negative / accepted.**
 
 - An engagement that enables an external-send-capable capability but forgets to author its `EXTERNAL_SEND` ceiling gets `REFUSED`, not a draft. This is intended: it surfaces the missing grant loudly instead of papering over it with an assumed posture. The validator follow-on (below) makes the omission a config-time error rather than a runtime surprise.
-- The safety-substrate invariant set changes: assertions of "unauthored external_send ⇒ draft" become "unauthored external_send ⇒ refused."
+- The safety_substrate invariant set changes: assertions of "unauthored external_send ⇒ draft" become "unauthored external_send ⇒ refused."
 
 **Customer-zero impact: none.** `operator/customers/smd/customer.yaml` authors `action_ceilings.external_send: autonomous` explicitly, so Crane's autonomous AgentMail send is an authored grant and is unaffected by the fail-closed change.
 

@@ -109,11 +109,11 @@ exclude = [
     "adapter/namespace_assertion.py",
     "adapter/d1_env.py",
     "workspace_broker/chain.py",
-    "safety-substrate/citation_filter.py",
-    "safety-substrate/identifier_filter.py",
+    "safety_substrate/citation_filter.py",
+    "safety_substrate/identifier_filter.py",
     "adapter/recipient_classifier.py",
     "workspace_broker/escalation_ledger.py",
-    "safety-substrate/sticky_stop.py",
+    "safety_substrate/sticky_stop.py",
     "skills/*/escalation_ledger.py",
 ]
 quote-style = "double"

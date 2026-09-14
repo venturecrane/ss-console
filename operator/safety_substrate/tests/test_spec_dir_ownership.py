@@ -16,21 +16,18 @@ modes, real stat, real symlinks.
 Run from repo root:
 
     cd operator && uv run --with pytest python -m pytest \\
-        safety-substrate/tests/test_spec_dir_ownership.py -v
+        safety_substrate/tests/test_spec_dir_ownership.py -v
 """
 
 from __future__ import annotations
 
 import getpass
 import os
-import sys
-from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "invariants"))
 
-import spec_dir_ownership as sdo
+from safety_substrate.invariants import spec_dir_ownership as sdo
 
 ME = getpass.getuser()
 

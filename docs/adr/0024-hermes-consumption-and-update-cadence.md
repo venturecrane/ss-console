@@ -76,7 +76,7 @@ Once provisioning consumes upstream-by-SHA via the base-image pipeline, the fork
 
 ### 5. Track continuously, deploy deliberately
 
-- **Track (automated, per upstream release).** A CI job watches the upstream releases endpoint. On each new tag: build a candidate base image at that SHA, run the `hermes-smd-hook-probe` plugin + the overlay test suite + the safety-substrate invariants, and emit a green/red compatibility signal plus an auto-diff of the hook surface. This replaces hand archaeology and keeps `hook-surface.md` honest automatically.
+- **Track (automated, per upstream release).** A CI job watches the upstream releases endpoint. On each new tag: build a candidate base image at that SHA, run the `hermes-smd-hook-probe` plugin + the overlay test suite + the safety_substrate invariants, and emit a green/red compatibility signal plus an auto-diff of the hook surface. This replaces hand archaeology and keeps `hook-surface.md` honest automatically.
 - **Deploy (deliberate).** A green candidate becomes eligible for promotion. Promotion to the fleet is a Captain decision triggered by a wanted capability, an accumulated set of fixes, or a security fix — not automatic on every green.
 
 ### 6. One blessed fleet version

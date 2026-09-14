@@ -30,17 +30,26 @@
 # project first. rehearsal/drivers.py still loads the dashed scripts by path,
 # because a dash is not an importable name, but no longer edits sys.path.
 #
+# STAGE 4 (2026-09-14): the seat side. `safety-substrate/` became the package
+# `safety_substrate/` (the hyphen had kept every module in it on bare-name
+# imports behind a shim); its modules and tests import each other and adapter
+# by package name. On the seat, bootstrap.sh and entrypoint.sh run the three
+# invariant invocations with PYTHONPATH=/app, which is where this tree and
+# adapter/ are copied. The two /opt/connectors/smokeball shims (medchron
+# seat.py's ssh script, drafting/corpus_measure.py) were inert: that path
+# holds only the connector's venv, and both already run under an interpreter
+# that has the connector installed. Proven by a reprovision (boot smoke step 8
+# is the invariant run).
+#
 # STILL SHIMMED, on purpose, and why:
 #   * bin/voice-fetch-corpus.py and bin/voice-survey-corpus.py put
 #     connectors/smokeball on the path for the real extractor: that is a
 #     separate distributable (connectors/smokeball/pyproject.toml), not this
 #     project, so those two go with the connector install story.
-#   * The seat side: safety-substrate/ (not a package name; the hyphen),
-#     runners/medchron/medchron/seat.py and templates/drafting/corpus_measure.py
-#     (/opt/connectors/smokeball), customers/pilot-smokeball's sibling-script
-#     imports. These change what runs on the image (templates/Dockerfile
-#     installs each subtree by path into its own venv) and are proven by a
-#     reprovision, not by CI.
+#   * customers/pilot-smokeball's seed and l2 scripts insert their own
+#     directory to import a sibling: the ordinary run-as-a-file idiom under a
+#     dashed customer directory that cannot be a package path, not a packaging
+#     gap in this project.
 
 [project]
 name = "smd-operator"
@@ -54,7 +63,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["adapter", "workspace_broker", "bin", "rehearsal"]
+packages = ["adapter", "workspace_broker", "bin", "rehearsal", "safety_substrate"]
 
 # pyright, basic mode, ratcheted. bin/pyright-ratchet.py compares a
 # `pyright --outputjson` report against contracts/operator-pyright-baseline.json
@@ -65,7 +74,7 @@ packages = ["adapter", "workspace_broker", "bin", "rehearsal"]
 # httpx, boto3, the Hermes runtime) report as warnings, not errors, so the
 # error count measures our code, not the venv.
 [tool.pyright]
-include = ["adapter", "safety-substrate", "workspace_broker", "bin", "skills", "runners", "templates", "rehearsal"]
+include = ["adapter", "safety_substrate", "workspace_broker", "bin", "skills", "runners", "templates", "rehearsal"]
 exclude = ["**/.venv", "**/__pycache__", "**/tests", "**/test_*.py", "**/.rendered", "**/node_modules"]
 typeCheckingMode = "basic"
 pythonVersion = "3.11"

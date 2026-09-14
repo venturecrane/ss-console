@@ -11,7 +11,7 @@
 #   3-6. Honcho data plane — deferred to Phase 2 (no Postgres/Redis/Honcho).
 #   7.  Run `hermes-smd bootstrap` (customer.yaml -> per-profile config + SOUL.md).
 #   7b. Disable the Hermes curator in each profile config (ADR 0017).
-#   8.  Run the safety-substrate invariant checks (Phase A.5 gate).
+#   8.  Run the safety_substrate invariant checks (Phase A.5 gate).
 #   9.  Pause guard.
 #   10. customer-sync sidecar (R2 poller) — NOT launched in Phase 1 (the overlay
 #       reload path is unimplemented; see that step).
@@ -36,7 +36,7 @@
 #   - missing required env vars
 #   - customer.yaml missing AND not fetchable from R2
 #   - `hermes-smd bootstrap` error (bad customer.yaml structure)
-#   - safety-substrate invariant test failures
+#   - safety_substrate invariant test failures
 
 set -euo pipefail
 
@@ -756,7 +756,7 @@ log "Overlay materialized + enabled in active profile"
 # drives a REAL pre_tool_call dispatch self-check and fails closed (os._exit) if the
 # operator is not actually governed. This closes ss-console#1285 — registered hooks
 # were inert on the live gateway because its plugin singleton was cached (idempotent
-# discovery) WITHOUT the overlay; the pre-gateway safety-substrate invariant could
+# discovery) WITHOUT the overlay; the pre-gateway safety_substrate invariant could
 # not catch it (it runs in a different process and asserts its own singleton).
 #
 # Hermes' `-p <profile>` handling rewrites HERMES_HOME before gateway/hooks.py
@@ -804,12 +804,12 @@ fi
 # prompt injection, and ceiling-escalation attempts; re-run every boot so a
 # Hermes SHA bump can't regress the floor (OpenClaw mitigation).
 log "Running safety substrate invariant checks (Phase A.5 gate)..."
-if ! /opt/hermes/.venv/bin/python3 /app/safety-substrate/run_invariants.py \
+if ! PYTHONPATH=/app /opt/hermes/.venv/bin/python3 /app/safety_substrate/run_invariants.py \
        --customer "${CUSTOMER_SLUG}" \
-       --fixtures /app/safety-substrate/tests \
+       --fixtures /app/safety_substrate/tests \
        --strict ; then
   die "Safety substrate invariant check FAILED — agent will not start. \
-Inspect /app/safety-substrate/logs/$(date -u +%Y%m%d).log for which invariant failed."
+Inspect /app/safety_substrate/logs/$(date -u +%Y%m%d).log for which invariant failed."
 fi
 log "Safety substrate invariants PASSED"
 

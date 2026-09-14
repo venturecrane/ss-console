@@ -34,7 +34,7 @@
     "runners/medchron/medchron/stages/group.py": 1,
     "runners/medchron/medchron/stages/manifest.py": 1,
     "runners/medchron/medchron/stages/msg.py": 2,
-    "safety-substrate/sticky_stop.py": 1,
+    "safety_substrate/sticky_stop.py": 1,
     "skills/client-verification-tracker/dispatch_envelope.py": 1,
     "skills/client-verification-tracker/pre_run.py": 1,
     "skills/client-verification-tracker/routing.py": 4,

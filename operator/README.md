@@ -40,7 +40,7 @@ ADR 0020 (Connector Strategy, locked 2026-05-24) governs this. Three rules:
 operator/
 ├── README.md                       # this file
 ├── adapter/                        # Hermes hook surface — Operator.register()
-├── safety-substrate/               # citation refusal, fabrication filter, adversarial tests
+├── safety_substrate/               # citation refusal, fabrication filter, adversarial tests
 ├── skills/                         # canonical SKILL.md library
 ├── connectors/                     # BUILD wrappers — only filevine/, lawpay/, no_pm/ per ADR 0020
 ├── templates/                      # Dockerfile, fly.toml.template, bootstrap.sh

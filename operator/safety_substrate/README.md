@@ -32,18 +32,18 @@ Each invariant is exercised against four failure-mode fixtures. Test files at `t
 Inside the customer container (during `bootstrap.sh`):
 
 ```
-python3 /app/safety-substrate/run_invariants.py \
+python3 /app/safety_substrate/run_invariants.py \
   --customer "${CUSTOMER_SLUG}" \
-  --fixtures /app/safety-substrate/tests \
+  --fixtures /app/safety_substrate/tests \
   --strict
 ```
 
 From the repo root for development:
 
 ```
-uv run --with pyyaml python3 operator/safety-substrate/run_invariants.py \
+uv run --with pyyaml python3 operator/safety_substrate/run_invariants.py \
   --customer smd \
-  --fixtures operator/safety-substrate/tests
+  --fixtures operator/safety_substrate/tests
 ```
 
 (Omit `--strict` when developing; add it when committing the substrate as a gate.)

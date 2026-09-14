@@ -17,7 +17,7 @@ proven-live, all routed here:
   `unprobed` entry's verified bypass). B0 "fixed first; blocks B2" per ADR 0050;
   designed here, shipped ahead of B3.
 
-**Sources.** `operator/safety-substrate/sticky_stop.py` (the breaker, fully
+**Sources.** `operator/safety_substrate/sticky_stop.py` (the breaker, fully
 tested), `operator/migrations/0004_sticky_stop_state.sql` (state table), the
 overlay `hooks/smd-overlay-activation/handler.py` (the proven activation
 self-check pattern), `overlay-hook-surface.json`, ADR 0050 + the backing

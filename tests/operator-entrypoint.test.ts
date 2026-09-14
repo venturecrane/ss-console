@@ -261,7 +261,7 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
  * the agent runtime, and must fail closed — including when the invariant module
  * itself is missing or unimportable (SEC-22).
  *
- * @see operator/safety-substrate/invariants/invariant_7.py
+ * @see operator/safety_substrate/invariants/invariant_7.py
  * @see docs/adr/0009-cross-machine-query-prohibition.md
  */
 describe('Operator customer Machine entrypoint — sftp staging directory', () => {
@@ -294,7 +294,7 @@ describe('Operator customer Machine entrypoint — sftp staging directory', () =
 
 describe('Operator customer Machine entrypoint — ADR 0009 / SEC-22 isolation boot check', () => {
   it('invokes the invariant_7 boot check', () => {
-    expect(ENTRYPOINT_CODE).toMatch(/safety-substrate\/invariants\/invariant_7\.py/)
+    expect(ENTRYPOINT_CODE).toMatch(/safety_substrate\/invariants\/invariant_7\.py/)
     // Runs the module directly (its __main__ shim == verify_at_boot).
     expect(ENTRYPOINT_CODE).toMatch(/python3\s+"\$\{INVARIANT7_BOOT_CHECK\}"/)
   })
@@ -311,7 +311,9 @@ describe('Operator customer Machine entrypoint — ADR 0009 / SEC-22 isolation b
     // so an unimportable module (non-zero exit, no verify_at_boot pass) also
     // fails closed rather than falling through to the exec-drop.
     expect(ENTRYPOINT_CODE).toMatch(
-      /if\s+\/opt\/hermes\/\.venv\/bin\/python3\s+"\$\{INVARIANT7_BOOT_CHECK\}";\s*then[\s\S]*?else[\s\S]*?exit 3[\s\S]*?fi/
+      // PYTHONPATH=/app: the check imports adapter.* and safety_substrate.* by
+      // package name (packaging stage 4), and /app is where the image copies both.
+      /if\s+PYTHONPATH=\/app\s+\/opt\/hermes\/\.venv\/bin\/python3\s+"\$\{INVARIANT7_BOOT_CHECK\}";\s*then[\s\S]*?else[\s\S]*?exit 3[\s\S]*?fi/
     )
   })
 

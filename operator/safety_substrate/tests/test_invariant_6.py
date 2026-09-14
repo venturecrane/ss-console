@@ -18,21 +18,17 @@ Coverage:
 Run from repo root:
 
     cd operator && uv run --with pytest python -m pytest \
-        safety-substrate/tests/test_invariant_6.py -v
+        safety_substrate/tests/test_invariant_6.py -v
 """
 
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 import pytest
 
 # Allow running from repo root or from operator/.
-_HERE = Path(__file__).resolve()
-sys.path.insert(0, str(_HERE.parents[1]))  # safety-substrate/ on path
-
-from invariants.invariant_6 import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from safety_substrate.invariants.invariant_6 import (
     FIELD_TAG_FACT_BEARING,
     FIELD_TAG_NONE,
     Citation,
@@ -329,7 +325,7 @@ def test_module_run_callable_returns_pass_on_clean_state():
 # ---------------------------------------------------------------------------
 # Substrate-runner shape (run_invariants.py compatibility)
 #
-# The substrate runner at safety-substrate/run_invariants.py looks for a
+# The substrate runner at safety_substrate/run_invariants.py looks for a
 # module-level run() callable. Provide one that aggregates the suite.
 # ---------------------------------------------------------------------------
 
