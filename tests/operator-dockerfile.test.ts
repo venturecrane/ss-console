@@ -1265,7 +1265,24 @@ describe('Operator customer Machine Dockerfile', () => {
     // (verify-overlay-pairs.py 10/10 PASS at the new ref) and only overlayRef
     // moves. Vocabulary and heartbeat fields re-read as identical: schemas.py and
     // heartbeat.py are both absent from the range.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="1653f0631f4bfc4405bc931198dc0816063be50d"')
+    // 1653f063 -> 510f0dc9 (2026-09-14, overlay#352; this PR). The chronology
+    // tools now EXIST. hermes-smd-medchron shipped without a plugin.yaml -- the only
+    // plugin directory in the overlay missing one -- and Hermes discovers plugins by
+    // manifest, so register() never ran and medchron_job_submit / medchron_job_status
+    // / medchron_allowance were never on any surface, on any platform, since the
+    // plugin landed. Nothing failed: no registration line, no check_fn warning, no
+    // error. Found when an administrator's emailed chronology request on a client
+    // seat resolved the matter, sized the selection, read the procedure and then
+    // could not submit; WEBHOOK_EXPECTED_TOOLS named both tools offered:false
+    // against operator_seat_facts offered:true, which is what made it a one-line
+    // diagnosis. #352 adds the manifest plus tests/test_plugin_manifests.py, which
+    // fails on the CAUSE (a register() with no manifest) rather than the symptom.
+    // It also de-rots two outbound-gate date tests that had aged into the gate's
+    // own today-is-known carve-out and were reddening every overlay merge. No
+    // tracked .py twin moves (verify-overlay-pairs.py 10/10 PASS at the new ref);
+    // vocabulary and heartbeat fields re-read as identical -- schemas.py and
+    // heartbeat.py are both absent from the range.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="510f0dc9f134ed5e62cf3fa799b62245c95b607e"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
