@@ -83,7 +83,7 @@ describe('machine credentials: Python mint, TypeScript verify', () => {
   it('a minted key verifies for its slug and resolves the entity', async () => {
     const { plaintext, sql } = mintWithPython('seat-a')
     await db.prepare(sql).run()
-    expect(await verifyMachineRequest(req(plaintext, 'seat-a'), undefined, db)).toEqual({
+    expect(await verifyMachineRequest(req(plaintext, 'seat-a'), db)).toEqual({
       ok: true,
       entityId: 'ent-a',
       slug: 'seat-a',
@@ -95,11 +95,11 @@ describe('machine credentials: Python mint, TypeScript verify', () => {
     const b = mintWithPython('seat-b')
     await db.prepare(a.sql).run()
     await db.prepare(b.sql).run()
-    expect(await verifyMachineRequest(req(a.plaintext, 'seat-b'), undefined, db)).toEqual({
+    expect(await verifyMachineRequest(req(a.plaintext, 'seat-b'), db)).toEqual({
       ok: false,
       status: 401,
     })
-    expect(await verifyMachineRequest(req(b.plaintext, 'seat-b'), undefined, db)).toMatchObject({
+    expect(await verifyMachineRequest(req(b.plaintext, 'seat-b'), db)).toMatchObject({
       ok: true,
       entityId: 'ent-b',
     })
@@ -111,16 +111,12 @@ describe('machine credentials: Python mint, TypeScript verify', () => {
     const second = mintWithPython('seat-a', 1)
     await db.prepare(second.sql).run()
 
-    expect(
-      await verifyMachineRequest(req(second.plaintext, 'seat-a'), undefined, db)
-    ).toMatchObject({
+    expect(await verifyMachineRequest(req(second.plaintext, 'seat-a'), db)).toMatchObject({
       ok: true,
     })
-    expect(await verifyMachineRequest(req(first.plaintext, 'seat-a'), undefined, db)).toMatchObject(
-      {
-        ok: true,
-      }
-    )
+    expect(await verifyMachineRequest(req(first.plaintext, 'seat-a'), db)).toMatchObject({
+      ok: true,
+    })
 
     await db
       .prepare(
@@ -128,13 +124,11 @@ describe('machine credentials: Python mint, TypeScript verify', () => {
       )
       .bind('seat-a')
       .run()
-    expect(await verifyMachineRequest(req(first.plaintext, 'seat-a'), undefined, db)).toEqual({
+    expect(await verifyMachineRequest(req(first.plaintext, 'seat-a'), db)).toEqual({
       ok: false,
       status: 401,
     })
-    expect(
-      await verifyMachineRequest(req(second.plaintext, 'seat-a'), undefined, db)
-    ).toMatchObject({
+    expect(await verifyMachineRequest(req(second.plaintext, 'seat-a'), db)).toMatchObject({
       ok: true,
     })
   })
@@ -149,17 +143,19 @@ describe('machine credentials: Python mint, TypeScript verify', () => {
     expect(row?.n).toBe(0)
   })
 
-  it('the shared key is refused for a seat that has a row, and accepted only for one that does not', async () => {
-    const shared = 's'.repeat(64)
+  it('a seat with no credential row fails closed: there is no shared key to fall back to', async () => {
+    // seat-b is projected in customer_configs and never minted. Until
+    // 2026-09-14 the Wave 1 fleet-wide key would have been accepted here.
+    const wouldBeShared = 's'.repeat(64)
     const { sql } = mintWithPython('seat-a')
     await db.prepare(sql).run()
-    expect(await verifyMachineRequest(req(shared, 'seat-a'), shared, db)).toEqual({
+    expect(await verifyMachineRequest(req(wouldBeShared, 'seat-a'), db)).toEqual({
       ok: false,
       status: 401,
     })
-    expect(await verifyMachineRequest(req(shared, 'seat-b'), shared, db)).toMatchObject({
-      ok: true,
-      entityId: 'ent-b',
+    expect(await verifyMachineRequest(req(wouldBeShared, 'seat-b'), db)).toEqual({
+      ok: false,
+      status: 401,
     })
   })
 

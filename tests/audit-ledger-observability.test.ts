@@ -23,6 +23,7 @@ import {
   runMigrations,
   installWorkerdPolyfills,
 } from '@venturecrane/crane-test-harness'
+import { seedMachineCredential } from './helpers/machine-credential'
 import path from 'node:path'
 
 installWorkerdPolyfills()
@@ -103,7 +104,8 @@ describe('#2498 the heartbeat carries what the ledger says about itself', () => 
     await runMigrations(db, { files: discoverNumericMigrations(migrationsDir) })
     await seed(db)
     for (const k of Object.keys(testEnv)) delete (testEnv as unknown as Record<string, unknown>)[k]
-    Object.assign(testEnv, { DB: db, MACHINE_HEARTBEAT_KEY: MACHINE_KEY })
+    Object.assign(testEnv, { DB: db })
+    await seedMachineCredential(db, SLUG, MACHINE_KEY)
     captureWarning.mockClear()
     captureError.mockClear()
   })
@@ -181,7 +183,8 @@ describe('#2498 a rise in lost rows reaches a person', () => {
     await runMigrations(db, { files: discoverNumericMigrations(migrationsDir) })
     await seed(db)
     for (const k of Object.keys(testEnv)) delete (testEnv as unknown as Record<string, unknown>)[k]
-    Object.assign(testEnv, { DB: db, MACHINE_HEARTBEAT_KEY: MACHINE_KEY })
+    Object.assign(testEnv, { DB: db })
+    await seedMachineCredential(db, SLUG, MACHINE_KEY)
     captureWarning.mockClear()
     captureError.mockClear()
   })
@@ -279,7 +282,8 @@ describe('#2498 the admin page shows the counter beside the last-audit time', ()
     const db = createTestD1()
     await runMigrations(db, { files: discoverNumericMigrations(migrationsDir) })
     await seed(db)
-    Object.assign(testEnv, { DB: db, MACHINE_HEARTBEAT_KEY: MACHINE_KEY })
+    Object.assign(testEnv, { DB: db })
+    await seedMachineCredential(db, SLUG, MACHINE_KEY)
     await POST(beat({ audit_write_failures: 6 }))
     const [row] = await listFleetStatus(db)
     expect(row.audit_write_failures).toBe(6)
