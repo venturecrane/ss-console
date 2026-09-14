@@ -68,7 +68,7 @@ function materialise(settings: Record<string, unknown>): Record<string, unknown>
 }
 
 const raw = readFileSync(FIXTURE_PATH)
-const fixture = JSON.parse(raw.toString('utf-8')) as {
+const fixture = JSON.parse(new TextDecoder().decode(raw)) as {
   reader: ReaderCase[]
   effective_from: ReaderCase[]
   window: WindowCase[]
