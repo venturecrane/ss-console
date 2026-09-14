@@ -14,8 +14,6 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
 from rehearsal import scope
 
 _BIN = Path(__file__).resolve().parents[2] / "bin"
@@ -23,7 +21,6 @@ _BIN = Path(__file__).resolve().parents[2] / "bin"
 
 def _reconciler():
     """The ss#2258 reconciler, loaded for its own seat-less inbox allowlist."""
-    sys.path.insert(0, str(_BIN / "lib"))
     spec = importlib.util.spec_from_file_location("reconcile_sends_scope_check", _BIN / "reconcile-sends.py")
     module = importlib.util.module_from_spec(spec)
     sys.modules["reconcile_sends_scope_check"] = module

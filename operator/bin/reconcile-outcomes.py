@@ -70,10 +70,8 @@ from typing import Any, Iterable, Optional
 
 import yaml
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
-
-import seam_pull
-from sender_class import (
+from bin.lib import seam_pull
+from bin.lib.sender_class import (
     CUSTOMERS_DIR,  # noqa: F401 - re-exported: test_reconcile_outcomes reads it as a module attribute
     SENDER_FIRM,  # noqa: F401 - re-exported: test_reconcile_outcomes reads it as a module attribute
     SENDER_PROBE,  # noqa: F401 - re-exported: test_reconcile_outcomes reads it as a module attribute

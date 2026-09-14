@@ -140,10 +140,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
-
-import seam_pull
-import send_verify
+from bin.lib import seam_pull, send_verify
 
 #: ``_usable_ids`` -- every exact join key a row's metadata offers -- moved to
 #: lib/send_attribution.py (claims review 2026-09-04, B7) so the verifier's
@@ -151,11 +148,11 @@ import send_verify
 #: constants it reads (``ID_KEY_SUBSTRING``, ``AUDIT_TOKEN_KEY``,
 #: ``UNRESOLVED_ID_PREFIX``) live there too, documented beside it; this script
 #: keeps only ``_AUDIT_TOKEN_KEY`` (from msgraph_channel) for its own exact pass.
-from send_attribution import _usable_ids
+from bin.lib.send_attribution import _usable_ids
 
 #: ss#2499 -- the msgraph half, factored verbatim into lib/msgraph_channel.py
 #: (module-size ratchet). Re-exported here so tests and callers read unchanged.
-from msgraph_channel import (
+from bin.lib.msgraph_channel import (
     _GRAPH_MAX_PAGES,  # noqa: F401 — re-export: tests and callers read it from this module (tests pin the page cap)
     AUDIT_ROW_HEADER,  # noqa: F401 — re-export: tests and callers read it from this module
     MsGraphSeat,
@@ -166,7 +163,7 @@ from msgraph_channel import (
     msgraph_seats,
     normalize_graph_message,  # noqa: F401 — re-export: tests and callers read it from this module (tests drive the matcher through it)
 )
-from msgraph_channel import AUDIT_TOKEN_KEY as _AUDIT_TOKEN_KEY
+from bin.lib.msgraph_channel import AUDIT_TOKEN_KEY as _AUDIT_TOKEN_KEY
 
 AGENTMAIL_API_BASE = "https://api.agentmail.to/v0"
 _HTTP_TIMEOUT_S = 30.0

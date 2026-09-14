@@ -25,12 +25,7 @@ from pathlib import Path
 
 import pytest
 
-_HERE = Path(__file__).resolve()
-_OPERATOR = _HERE.parents[2]
-sys.path.insert(0, str(_OPERATOR))
-sys.path.insert(0, str(_OPERATOR / "workspace_broker"))
-
-from bin.lib.chain_pin import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from bin.lib.chain_pin import (
     PIN_ABSENT,
     PIN_DESCENDS,
     PIN_MALFORMED,
@@ -38,7 +33,10 @@ from bin.lib.chain_pin import (  # noqa: E402 - the import needs the sys.path sh
     PIN_UNCHANGED,
     check_pinned_head,
 )
-from chain import CHAIN_COLUMNS, GENESIS, compute_row_hash, verify_chain  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from workspace_broker.chain import CHAIN_COLUMNS, GENESIS, compute_row_hash, verify_chain
+
+_HERE = Path(__file__).resolve()
+_OPERATOR = _HERE.parents[2]
 
 _VERIFIER = _OPERATOR / "bin" / "verify-audit-chain.py"
 

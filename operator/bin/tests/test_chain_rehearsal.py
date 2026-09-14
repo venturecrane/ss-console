@@ -19,18 +19,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-_HERE = Path(__file__).resolve()
-_OPERATOR = _HERE.parents[2]
-sys.path.insert(0, str(_OPERATOR))
-sys.path.insert(0, str(_OPERATOR / "workspace_broker"))
-
-from bin.lib import chain_rehearsal  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
-from bin.lib.console_d1 import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from bin.lib import chain_rehearsal
+from bin.lib.console_d1 import (
     ALERT_DRIVER_PREFIX,
     REHEARSAL_DRIVER_PREFIX,
     ConsoleD1,
 )
-from chain import CHAIN_COLUMNS, GENESIS, compute_row_hash  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from workspace_broker.chain import CHAIN_COLUMNS, GENESIS, compute_row_hash
+
+_HERE = Path(__file__).resolve()
+_OPERATOR = _HERE.parents[2]
 
 # The script has a dash in its name, so it is loaded by path. The drill borrows
 # its real `evaluate_export`: a stub there would test the stub.

@@ -22,13 +22,19 @@
 # `python3 -m pip install -e operator` (docs/handbook/building-the-platform).
 # `rehearsal` joined the package list for the same reason.
 #
+# STAGE 3 (2026-09-14): bin/lib's bare-name family is imported as
+# `bin.lib.*` everywhere (the reconcilers, overlay-ref-drift, gen-env-arrays,
+# seed-staging-matter, sender_class via `workspace_broker.recipient_policy`,
+# send_verify's siblings by relative import), the tests import the same
+# names, and the three scheduled workflows that run a reconciler install the
+# project first. rehearsal/drivers.py still loads the dashed scripts by path,
+# because a dash is not an importable name, but no longer edits sys.path.
+#
 # STILL SHIMMED, on purpose, and why:
-#   * bin/lib's bare-name family (seam_pull, console_d1, cron_slots,
-#     send_verify, sender_class, msgraph_channel, env_arrays, seed_fixtures):
-#     the reconcilers and their tests import these by bare name with bin/lib
-#     on sys.path, and send_verify imports its siblings the same way. Moving
-#     them to `bin.lib.*` is one change across the scripts, the modules and
-#     ~40 tests, and it is the next stage.
+#   * bin/voice-fetch-corpus.py and bin/voice-survey-corpus.py put
+#     connectors/smokeball on the path for the real extractor: that is a
+#     separate distributable (connectors/smokeball/pyproject.toml), not this
+#     project, so those two go with the connector install story.
 #   * The seat side: safety-substrate/ (not a package name; the hyphen),
 #     runners/medchron/medchron/seat.py and templates/drafting/corpus_measure.py
 #     (/opt/connectors/smokeball), customers/pilot-smokeball's sibling-script

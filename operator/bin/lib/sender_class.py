@@ -8,23 +8,13 @@ reconciler, it only reads and stamps attributes on its Obligation rows.
 
 from __future__ import annotations
 
-import os
-import sys
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-sys.path.insert(
-    0,
-    os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        "workspace_broker",
-    ),
-)
-
-from recipient_policy import sender_key as _sender_key
+from workspace_broker.recipient_policy import sender_key as _sender_key
 
 CUSTOMERS_DIR = Path(__file__).resolve().parents[2] / "customers"
 
