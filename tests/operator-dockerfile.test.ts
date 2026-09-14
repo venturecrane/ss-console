@@ -1250,7 +1250,22 @@ describe('Operator customer Machine Dockerfile', () => {
     // (matter_gate + hermes-smd-establishment), NEITHER a tracked .py twin, so
     // every overlaySha256 is unchanged (verify-overlay-pairs.py 9/9 PASS at the
     // new ref); only overlayRef moves.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="5770b79fea3206f01df343489d232daf2fdc4a2b"')
+    // 5770b79f -> 1653f063 (2026-09-14, overlay#349 + #350; console half ss#2777
+    // + this PR). An administrator's emailed chronology request now reads a tool
+    // description that says PAGES and the firm's BILLING CYCLE; it said "monthly
+    // document allowance" while the skill body said pages-in-the-cycle, and on the
+    // mail channel that description is the whole of what the model knows before it
+    // fetches the skill. The same commit widens WEBHOOK_EXPECTED_TOOLS from one
+    // name to three, so a seat that does not offer medchron_allowance /
+    // medchron_job_submit now SAYS so in its heartbeat instead of being
+    // indistinguishable from a model that chose not to act. #349 is tests only
+    // (an inbound-injection corpus), shipping nothing to a seat. NEITHER commit
+    // touches a tracked .py twin -- checked the range's 16 files against the 10
+    // pairs in overlay-pairs.json -- so every overlaySha256 is unchanged
+    // (verify-overlay-pairs.py 10/10 PASS at the new ref) and only overlayRef
+    // moves. Vocabulary and heartbeat fields re-read as identical: schemas.py and
+    // heartbeat.py are both absent from the range.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="1653f0631f4bfc4405bc931198dc0816063be50d"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

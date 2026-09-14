@@ -23,6 +23,7 @@ from typing import Any
 
 from .. import llm
 from .base import StageRun, append_jsonl, read_jsonl
+from .transcript import UNREAD, recorded_ids, transcript_state
 
 PAGE_TIMEOUT = 180.0
 MAX_TOKENS = 8000
@@ -86,6 +87,15 @@ def page_item(rec: dict[str, Any], pno: int, b64: str) -> llm.Item:
     )
 
 
+def _write_transcript(out: Path, body: str) -> None:
+    """Atomic, the way state.py writes. A kill during a bare ``write_text``
+    leaves a truncated file, and a truncated file reads as a completed one to
+    anything that only asks whether it exists."""
+    tmp = out.with_suffix(".txt.tmp")
+    tmp.write_text(body, encoding="utf-8")
+    tmp.replace(out)
+
+
 def _gather(
     sr: StageRun, queue: list[dict[str, Any]], src: dict[str, str], log_path: Path
 ) -> tuple[dict[str, dict[str, Any]], list[tuple[dict[str, Any], int, str]]]:
@@ -94,9 +104,14 @@ def _gather(
     d = sr.slug_dir
     files: dict[str, dict[str, Any]] = {}
     pending: list[tuple[dict[str, Any], int, str]] = []
+    recorded = recorded_ids(d)
     for rec in queue:
-        out_path = d / "text" / f"{rec['id']}.txt"
-        if out_path.is_file() and out_path.stat().st_size > 50:
+        # The SAME reader build_units uses. These two asked the same question
+        # with two copies of the same literal and drew opposite conclusions:
+        # a short transcription was "not read" there and "already read" here,
+        # so four screenshots halted a chronology AND were re-transcribed, and
+        # re-paid for, on every resume.
+        if transcript_state(d, rec["id"], recorded)[0] not in UNREAD:
             continue
         path = src.get(rec["id"])
         if not path:
@@ -183,7 +198,7 @@ def run(sr: StageRun) -> int:
             sr.log(f"  {rec['name'][:40]}: {len(missing)} page(s) never returned; file left incomplete for a resume")
             continue
         body = "\n".join(f"[p.{n}] (machine transcription)\n{done.get(n, '')}" for n in range(1, npages + 1))
-        (d / "text" / f"{rec['id']}.txt").write_text(body, encoding="utf-8")
+        _write_transcript(d / "text" / f"{rec['id']}.txt", body)
         # Failure markers are counted like illegible marks, so pages_out ==
         # pages cannot report CLEAN over a page that transcribed to nothing.
         append_jsonl(
