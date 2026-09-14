@@ -115,7 +115,7 @@ jobs:
       - name: Install pytest
         # pyyaml: the msgraph half reads each seat's customer.yaml to learn which
         # mailboxes it must cover (ss#2499).
-        run: python3 -m pip install --quiet pytest pyyaml
+        run: python3 -m pip install --quiet pytest pyyaml -e ./operator
 
       # The unit tests gate the scheduled run: a reconciler whose matcher is
       # broken would report either nothing or everything, and both are worse

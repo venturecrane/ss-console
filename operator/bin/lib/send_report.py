@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from send_attribution import attribution_counts
+from .send_attribution import attribution_counts
 
 
 def has_findings(verdicts: list, invariants: list) -> bool:

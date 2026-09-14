@@ -55,11 +55,7 @@ from typing import Optional
 
 import yaml
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
-
-import console_d1
-import cron_slots
-import seam_pull
+from bin.lib import console_d1, cron_slots, seam_pull
 
 EXIT_CLEAN = 0
 EXIT_FINDING = 1

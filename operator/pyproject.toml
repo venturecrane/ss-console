@@ -8,19 +8,39 @@
 # here; this file extends it to the root so CI installs the tree as packages
 # and pyright has a project to check.
 #
-# THE SAFE HALF ONLY (this PR). `uv pip install -e .` in the substrate job
-# makes `adapter`, `workspace_broker`, `bin` importable as packages in CI. The
-# sys.path shims STAY in place: they are harmless once the package is
-# installed, and removing them changes what runs on the seat image (which
-# installs each subtree by path into its own venv, templates/Dockerfile:
-# workspace_broker at :1015, connectors at :1228, medchron at :1247). That
-# removal is the follow-up, proven by a reprovision, not by CI:
-#   1. Dockerfile installs this project into the broker venv,
-#   2. the shims and their E402 suppressions are deleted,
-#   3. a reprovisioned seat boots and its broker answers (boot-smoke-test.sh).
-# `safety-substrate/` is not a package name (the hyphen); its modules are
-# reached by bare name after a shim today, and renaming the directory is part
-# of the same follow-up.
+# STAGE 1 (2026-09-10): `uv pip install -e .` in the substrate job makes
+# `adapter`, `workspace_broker`, `bin` importable as packages in CI; the shims
+# stayed.
+#
+# STAGE 2 (2026-09-14): the shims that only put THIS tree's root on sys.path
+# so a package import would resolve are gone (audit-chain-watch, verify-audit-
+# chain, the voice corpus CLIs, bin/lib/evidence, bin/lib/decommission_cli,
+# rehearsal/run), together with their E402 suppressions. Three things carry
+# what the shims carried: this project installed editable (CI's substrate job
+# and every workflow that runs one of those CLIs), `pythonpath = .` in
+# pytest.ini for a bare local pytest, and, on a laptop, one
+# `python3 -m pip install -e operator` (docs/handbook/building-the-platform).
+# `rehearsal` joined the package list for the same reason.
+#
+# STAGE 3 (2026-09-14): bin/lib's bare-name family is imported as
+# `bin.lib.*` everywhere (the reconcilers, overlay-ref-drift, gen-env-arrays,
+# seed-staging-matter, sender_class via `workspace_broker.recipient_policy`,
+# send_verify's siblings by relative import), the tests import the same
+# names, and the three scheduled workflows that run a reconciler install the
+# project first. rehearsal/drivers.py still loads the dashed scripts by path,
+# because a dash is not an importable name, but no longer edits sys.path.
+#
+# STILL SHIMMED, on purpose, and why:
+#   * bin/voice-fetch-corpus.py and bin/voice-survey-corpus.py put
+#     connectors/smokeball on the path for the real extractor: that is a
+#     separate distributable (connectors/smokeball/pyproject.toml), not this
+#     project, so those two go with the connector install story.
+#   * The seat side: safety-substrate/ (not a package name; the hyphen),
+#     runners/medchron/medchron/seat.py and templates/drafting/corpus_measure.py
+#     (/opt/connectors/smokeball), customers/pilot-smokeball's sibling-script
+#     imports. These change what runs on the image (templates/Dockerfile
+#     installs each subtree by path into its own venv) and are proven by a
+#     reprovision, not by CI.
 
 [project]
 name = "smd-operator"
@@ -34,7 +54,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["adapter", "workspace_broker", "bin"]
+packages = ["adapter", "workspace_broker", "bin", "rehearsal"]
 
 # pyright, basic mode, ratcheted. bin/pyright-ratchet.py compares a
 # `pyright --outputjson` report against contracts/operator-pyright-baseline.json

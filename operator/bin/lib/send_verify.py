@@ -125,7 +125,7 @@ from typing import Callable, Optional
 
 # One physical line on purpose: this module sits at the size ratchet's ceiling
 # (tests/operator-module-size.test.ts counts physical non-comment lines).
-from send_attribution import (
+from .send_attribution import (
     ATTRIBUTED_BY_HASH,
     _usable_ids,
     attribution_counts,
@@ -135,7 +135,7 @@ from send_attribution import (
     plain_stamp_edge,
     stamps_plain_at,
 )
-from send_invariants import (  # noqa: F401 -- re-exports; callers and tests read unchanged
+from .send_invariants import (  # noqa: F401 -- re-exports; callers and tests read unchanged
     DEFAULT_INVARIANTS_PATH,
     InvariantFinding,
     InvariantProposal,
@@ -760,7 +760,7 @@ def verifier_from_contract(
 # ---------------------------------------------------------------------------
 
 
-from send_report import as_dicts, digest_keys, has_findings, has_holds, render_lines  # noqa: E402 -- re-exports; callers and tests read unchanged
+from .send_report import as_dicts, digest_keys, has_findings, has_holds, render_lines  # noqa: E402 -- re-exports; callers and tests read unchanged
 
 __all__ = [
     "BodyVerdict",

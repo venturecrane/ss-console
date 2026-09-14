@@ -81,8 +81,10 @@ jobs:
         with:
           python-version: '>=3.11'
 
-      - name: Install pytest
-        run: python3 -m pip install --quiet pytest
+      - name: Install pytest and the operator tree as packages
+        # audit-chain-watch.py and verify-audit-chain.py import bin.lib.* and
+        # workspace_broker.* as packages (their sys.path shims are gone).
+        run: python3 -m pip install --quiet pytest -e ./operator
 
       # The falsifier gates the scheduled run. test_chain_pin.py contains a
       # NEGATIVE CONTROL that asserts a truncated export still passes the chain

@@ -38,9 +38,6 @@ _BIN = Path(__file__).resolve().parents[1]
 _OPERATOR = _BIN.parent
 _FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
-sys.path.insert(0, str(_BIN / "lib"))
-sys.path.insert(0, str(_OPERATOR))
-
 _spec = importlib.util.spec_from_file_location("reconcile_outcomes", _BIN / "reconcile-outcomes.py")
 rec = importlib.util.module_from_spec(_spec)
 # Register BEFORE exec: @dataclass resolves its own module out of sys.modules.
@@ -650,7 +647,7 @@ def test_absent_seats_are_named_in_the_report_not_filtered_away():
 # mistaken for them.
 # ---------------------------------------------------------------------------
 
-from recipient_policy import sender_key as _sk  # noqa: E402 - mid-module import beside the tests that use it; the shim at the top puts lib on the path
+from workspace_broker.recipient_policy import sender_key as _sk  # noqa: E402 - mid-module import beside the tests that use it
 
 _FIRM = "christa@example-firm.test"
 _SMD = "operator@smd.services"

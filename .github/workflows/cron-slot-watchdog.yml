@@ -62,7 +62,7 @@ jobs:
           python-version: '>=3.11'
 
       - name: Install pytest
-        run: python3 -m pip install --quiet pytest pyyaml
+        run: python3 -m pip install --quiet pytest pyyaml -e ./operator
 
       # The unit tests gate the scheduled run. A watchdog whose expander is
       # wrong pages on healthy slots or sleeps through dead ones, and both are
