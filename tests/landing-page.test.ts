@@ -63,6 +63,7 @@ function readMarketingFiles(): string[] {
     join(componentsDir, 'About.astro'),
     join(componentsDir, 'Footer.astro'),
     join(componentsDir, 'JsonLd.astro'),
+    join(componentsDir, 'booking/IntakeIntroCard.astro'),
   ]
 }
 
@@ -98,7 +99,7 @@ describe('voice standard', () => {
   // The About founder bio uses Scott's first-person voice; the rest of the page
   // stays in firm-level "we" voice. See CLAUDE.md "Voice standard" practitioner-firm
   // exception.
-  const marketingComponents = ['OperatorHero.astro']
+  const marketingComponents = ['OperatorHero.astro', 'booking/IntakeIntroCard.astro']
 
   // Operator-forward home and the /why manifesto carry the lead argument as
   // long-form page prose, not components. They must hold the same firm-level
@@ -408,6 +409,114 @@ describe('proof and case study (2026-09-14)', () => {
     expect(INDUSTRIES.map((i) => i.slug).sort()).toEqual(Object.keys(PACK_META).sort())
     for (const i of INDUSTRIES) {
       expect(i.seat.toLowerCase()).toBe(PACK_META[i.slug].seat.toLowerCase())
+    }
+  })
+})
+
+// Follow-ups from the 2026-09-14 competitor review, recorded in
+// docs/marketing/positioning-spine.md. Titles carry search intent; /book sets
+// expectations with no price, no "free" (Decision #13), and no in-person promise
+// (the booked call is a video call, src/lib/booking/config.ts meeting_url); and the
+// /operator approval list says only what the overlay enforces: commitments and
+// destructive acts always need a person's approval (hermes-smd-overlay
+// plugins/hermes-smd-trust/enforce.py _decide_approval_class), and an outside message
+// about money, a contract, scope, or a legal matter is held back (shared/content_floor,
+// applied in the same enforce.py). Change that runtime, change this copy.
+describe('competitor review follow-ups (2026-09-14)', () => {
+  const flat = (s: string) => s.replace(/\s+/g, ' ').toLowerCase()
+  // Repo-relative literals only; vitest runs from the repo root.
+  const read = (repoRelative: string) => readFileSync(repoRelative, 'utf-8')
+  const TITLED_PAGES = [
+    'src/pages/index.astro',
+    'src/pages/operator.astro',
+    'src/pages/about.astro',
+    'src/pages/book.astro',
+    'src/pages/industries.astro',
+    'src/pages/security.astro',
+    'src/pages/case-studies/personal-injury-law-firm.astro',
+    ...readdirSync(resolve('src/pages/packs'))
+      .filter((n) => n.endsWith('.astro'))
+      .map((n) => `src/pages/packs/${n}`),
+  ]
+  const extractTitle = (src: string) => src.match(/<(?:Base|PackLayout)\s+title="([^"]+)"/)?.[1]
+  const isBareTitle = (t: string) => /^[A-Za-z]+ \| SMD Services$/.test(t)
+  const mentionsFree = (s: string) => /\bfree\b/i.test(s)
+
+  it('the helpers catch what they claim to catch', () => {
+    expect(isBareTitle('Operator | SMD Services')).toBe(true)
+    expect(isBareTitle('AI Operator For Med Spas | SMD Services')).toBe(false)
+    expect(extractTitle('<Base\n  title="X | SMD Services"\n>')).toBe('X | SMD Services')
+    expect(extractTitle('<PackLayout\n  title="Y | SMD Services"\n>')).toBe('Y | SMD Services')
+    expect(extractTitle('<Nav title="Z" />')).toBeUndefined()
+    expect(mentionsFree('a free assessment')).toBe(true)
+    expect(mentionsFree('freedom to change it')).toBe(false)
+  })
+
+  it('every titled marketing page has a descriptive, unique title within 70 characters', () => {
+    const titles = TITLED_PAGES.map((p) => ({ p, t: extractTitle(read(p)) }))
+    expect(TITLED_PAGES.length).toBeGreaterThanOrEqual(19)
+    for (const { p, t } of titles) {
+      expect(t, `no title extracted from ${p}`).toBeTruthy()
+      expect(isBareTitle(t!), `${p} has a bare label title: ${t}`).toBe(false)
+      expect(t!.length, `${p} title is over 70 characters: ${t}`).toBeLessThanOrEqual(70)
+    }
+    expect(new Set(titles.map((x) => x.t)).size, 'page titles must be unique').toBe(titles.length)
+  })
+
+  it('the /book card sets expectations without a free offer or an in-person promise', () => {
+    const card = flat(read('src/components/booking/IntakeIntroCard.astro'))
+    expect(card).toContain('you walk away with a clear recommendation either way')
+    expect(card).toContain('based in phoenix')
+    expect(card).toContain('video call')
+    expect(mentionsFree(card), 'Decision #13: never publicize a free assessment').toBe(false)
+    expect(card, 'the booked call is a video call; do not promise in person').not.toContain(
+      'in person'
+    )
+  })
+
+  it('/operator names what waits for a person, as the overlay enforces it', () => {
+    const operator = flat(read('src/pages/operator.astro'))
+    for (const phrase of [
+      'agreeing to something on your behalf',
+      'anything it cannot undo',
+      "always wait for a person's approval",
+      'money, a contract, the scope of work, or a legal matter',
+    ]) {
+      expect(operator, `/operator must say "${phrase}"`).toContain(phrase)
+    }
+    expect(
+      operator,
+      'commitments and destructive acts are not a per-kind client dial'
+    ).not.toContain('for each kind of work, you choose')
+  })
+
+  it('every "you decide what waits" claim names the lines a client cannot move', () => {
+    // The /operator FAQ doubles as FAQPage schema, so an overclaim there reaches
+    // search results; the home authority pillar is the same claim in short form.
+    const operatorSrc = read('src/pages/operator.astro')
+    const faqAnswer = operatorSrc.match(
+      /q: 'Is it safe to let it work on its own\?',\s*a: '([^']+)'/
+    )?.[1]
+    expect(faqAnswer, 'the safety FAQ answer must be found').toBeTruthy()
+    expect(flat(faqAnswer!)).toContain('anything it cannot undo, always wait for a person')
+    const homePillar = read('src/pages/index.astro').match(
+      /b: '(You decide what it does on its own[^']+)'/
+    )?.[1]
+    expect(homePillar, 'the home authority pillar must be found').toBeTruthy()
+    expect(flat(homePillar!)).toContain('anything it cannot undo always wait for a person')
+  })
+
+  it('/security does not say an unconfigured Operator can draft (unauthored is refused)', () => {
+    const security = flat(read('src/pages/security.astro'))
+    expect(security).toContain('can read but cannot act on the world')
+    expect(security).not.toContain('can read and draft')
+  })
+
+  it('home and /about say where we are', () => {
+    for (const page of ['src/pages/index.astro', 'src/pages/about.astro']) {
+      expect(flat(read(page)), `${page} must say we are based in Phoenix`).toContain(
+        'based in phoenix'
+      )
     }
   })
 })

@@ -204,3 +204,10 @@ skills:
   status-report-assembler:
     render: compositional
     note: Per-client report drafts on the SMD-internal seat; wave-1 authored state.
+  open-house-visitor-capture:
+    render: compositional
+    note: >-
+      Real estate open-house POC. The daily email to the rostered agent lists
+      the follow-up drafts that are due; each draft is composed from the
+      visitor record's name, property, stated intent, and contact. Authored
+      compositional for the POC; a template comes with the vertical pack.
