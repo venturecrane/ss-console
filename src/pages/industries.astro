@@ -9,25 +9,7 @@ import Base from '../layouts/Base.astro'
 import Nav from '../components/Nav.astro'
 import Footer from '../components/Footer.astro'
 import CtaButton from '../components/CtaButton.astro'
-
-const industries = [
-  { name: 'Law firms', seat: 'Intake and matter coordination', slug: 'law-firm' },
-  { name: 'Insurance agencies', seat: 'The service and renewal desk', slug: 'insurance' },
-  { name: 'Accounting firms', seat: 'The document chase through busy season', slug: 'accounting' },
-  { name: 'Advisory firms', seat: 'Client service and operations', slug: 'ria' },
-  { name: 'Mortgage brokers', seat: 'The pipeline through clear-to-close', slug: 'mortgage' },
-  { name: 'Veterinary clinics', seat: 'The front desk', slug: 'veterinary' },
-  { name: 'Dental practices', seat: 'The front office', slug: 'dental' },
-  { name: 'Med spas', seat: 'Booking, membership, and rebooking', slug: 'med-spa' },
-  { name: 'Title and escrow', seat: 'The closing desk', slug: 'title' },
-  {
-    name: 'Property management',
-    seat: 'Resident and owner coordination',
-    slug: 'property-management',
-  },
-  { name: 'Marketing agencies', seat: 'Account coordination', slug: 'marketing-agency' },
-  { name: 'Home services', seat: 'Answering and booking the call', slug: 'home-services' },
-]
+import { INDUSTRIES } from '../lib/operator-packs/shared'
 ---
 
 <Base
@@ -68,7 +50,7 @@ const industries = [
           class="grid grid-cols-1 md:grid-cols-3 gap-0 border-t-[3px] border-[color:var(--ss-color-text-primary)]"
         >
           {
-            industries.map((industry, i) => (
+            INDUSTRIES.map((industry, i) => (
               <a
                 href={`/packs/${industry.slug}`}
                 data-ev={`industries-${industry.slug}`}

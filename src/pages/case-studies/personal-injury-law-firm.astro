@@ -1,0 +1,237 @@
+---
+export const prerender = false
+
+// The first case study. Anonymized by Captain decision (2026-09-14): no firm name,
+// no people, no matters, no quotes, no figures read out of the firm's files. Every
+// claim here is our own work or the firm's written acknowledgment of it, and every
+// figure has a row in docs/marketing/proof-ledger.md (guarded in
+// tests/landing-page.test.ts). Shape per Decision #30: situation, what we did,
+// outcome. No price, no methodology, no "about us".
+import Base from '../../layouts/Base.astro'
+import Nav from '../../components/Nav.astro'
+import Footer from '../../components/Footer.astro'
+import CtaButton from '../../components/CtaButton.astro'
+
+const workstreams = [
+  {
+    title: 'Medical chronologies, on request',
+    body: 'An administrator at the firm asks by email, and a cited chronology is filed back into the case along with the records it relies on. Each entry cites the page of the record it came from, and every claim is checked against that page before delivery. Where a record cannot be read, the chronology says so instead of guessing.',
+  },
+  {
+    title: 'First drafts for the attorneys',
+    body: 'The firm asked for more than chronologies: a demand letter, a case evaluation memo, a mediation brief. Each went to an attorney as a first draft, built from the record, for the attorney to judge and finish.',
+  },
+  {
+    title: 'A working view of settled cases',
+    body: 'A working list of settled cases and the provider balances still open on each, so the firm can see what stands between a settlement and the money going out. The firm negotiates the balances and disburses.',
+  },
+  {
+    title: "Under the firm's authority",
+    body: 'When an administrator asks it to open a new file, it names exactly what it will create and waits for a yes. The lines the firm set, like anything bound for opposing counsel or the court, stay with its attorneys.',
+  },
+]
+
+// Each value must appear in docs/marketing/proof-ledger.md with its source.
+const outcomeStats = [
+  { value: '18', label: 'Medical chronologies delivered' },
+  { value: '29,000+', label: 'Pages of medical records read' },
+  { value: 'A small fraction', label: 'Of what outsourced chronology services charge per page' },
+]
+---
+
+<Base
+  title="Case Study: A Personal Injury Firm | SMD Services"
+  description="How a plaintiff personal injury firm works with the Operator: cited medical chronologies on request, first drafts for its attorneys, and a working view of its settled cases. It starts with an assessment."
+>
+  <Nav />
+  <main id="main" role="main">
+    <!-- Hero -->
+    <section class="bg-[color:var(--ss-color-background)] px-6 pt-24 pb-24">
+      <div class="mx-auto max-w-5xl">
+        <p
+          class="mb-6 font-mono text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--ss-color-text-secondary)]"
+        >
+          Case Study
+        </p>
+        <h1
+          class="mb-8 font-body text-5xl md:text-7xl font-black uppercase leading-[1.05] tracking-[-0.03em] text-[color:var(--ss-color-text-primary)]"
+        >
+          A Personal Injury Firm, And Its Records.
+        </h1>
+        <p class="max-w-2xl text-xl leading-relaxed text-[color:var(--ss-color-text-secondary)]">
+          A plaintiff personal injury firm runs on medical records. Every case needs them read,
+          organized, and cited before anyone can value it, write the demand, or prepare for
+          mediation. Here is the work the Operator took on.
+        </p>
+      </div>
+    </section>
+
+    <!-- The situation -->
+    <section class="bg-white px-6 py-24">
+      <div class="mx-auto max-w-5xl">
+        <p
+          class="mb-5 font-mono text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--ss-color-text-secondary)]"
+        >
+          The Situation
+        </p>
+        <h2
+          class="mb-10 font-body text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
+        >
+          More Reading Than Hours.
+        </h2>
+        <div class="space-y-8 text-lg leading-relaxed text-[color:var(--ss-color-text-secondary)]">
+          <p>
+            The firm's cases turn on medical records, often thousands of pages for a single client.
+            It had been buying medical chronologies from outside services. It had settled cases
+            still waiting on provider balances before the money could go out. And its attorneys had
+            more drafting in front of them than hours to do it.
+          </p>
+          <p>
+            None of that is legal judgment. All of it stands between the attorneys and the work only
+            they can do.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- What we did -->
+    <section class="bg-[color:var(--ss-color-background)] px-6 py-24">
+      <div class="mx-auto max-w-5xl">
+        <p
+          class="mb-5 font-mono text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--ss-color-text-secondary)]"
+        >
+          What We Did
+        </p>
+        <h2
+          class="mb-12 font-body text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
+        >
+          The Heavy Middle Of Every Case.
+        </h2>
+        <div
+          class="grid grid-cols-1 md:grid-cols-2 gap-0 border-t-[3px] border-[color:var(--ss-color-text-primary)]"
+        >
+          {
+            workstreams.map((w, i) => (
+              <div
+                class:list={[
+                  'flex flex-col gap-4 p-8 border-b-[3px] border-[color:var(--ss-color-text-primary)]',
+                  i % 2 === 0 && 'md:border-r-[3px] md:border-[color:var(--ss-color-text-primary)]',
+                ]}
+              >
+                <p class="font-mono text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--ss-color-primary)]">
+                  {w.title}
+                </p>
+                <p class="font-body text-base leading-relaxed text-[color:var(--ss-color-text-secondary)]">
+                  {w.body}
+                </p>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- The outcome -->
+    <section class="bg-white px-6 py-24">
+      <div class="mx-auto max-w-5xl">
+        <p
+          class="mb-5 font-mono text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--ss-color-text-secondary)]"
+        >
+          The Outcome
+        </p>
+        <h2
+          class="mb-12 font-body text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
+        >
+          The Next Request Keeps Coming.
+        </h2>
+        <div
+          class="mb-12 grid grid-cols-1 md:grid-cols-3 gap-0 border-t-[3px] border-[color:var(--ss-color-text-primary)]"
+        >
+          {
+            outcomeStats.map((s, i) => (
+              <div
+                class:list={[
+                  'flex flex-col gap-3 p-8 border-b-[3px] border-[color:var(--ss-color-text-primary)]',
+                  i % 3 !== 2 && 'md:border-r-[3px] md:border-[color:var(--ss-color-text-primary)]',
+                ]}
+              >
+                <p class="font-body text-3xl md:text-4xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-primary)]">
+                  {s.value}
+                </p>
+                <p class="font-body text-base leading-relaxed text-[color:var(--ss-color-text-secondary)]">
+                  {s.label}
+                </p>
+              </div>
+            ))
+          }
+        </div>
+        <div class="space-y-8 text-lg leading-relaxed text-[color:var(--ss-color-text-secondary)]">
+          <p>
+            The firm's early feedback shaped the format. Since then, its word on each delivery has
+            been that it looks good, and the next request has kept arriving.
+          </p>
+          <p>
+            The firm's principal wrote that it was time to start paying, and offered to pay more
+            when the volume runs high. Then the firm brought us a second, separate project.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- The line -->
+    <section class="bg-[color:var(--ss-color-background)] px-6 py-24">
+      <div class="mx-auto max-w-5xl">
+        <p
+          class="mb-5 font-mono text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--ss-color-text-secondary)]"
+        >
+          The Line
+        </p>
+        <h2
+          class="mb-10 font-body text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
+        >
+          The Judgment Stayed With The Attorneys.
+        </h2>
+        <div class="space-y-8 text-lg leading-relaxed text-[color:var(--ss-color-text-secondary)]">
+          <p>
+            The Operator did the reading, the organizing, and the first draft, and put its work back
+            into the firm's own systems. Every draft is the attorneys' to judge, change, and sign.
+          </p>
+          <p>
+            <a
+              href="/packs/law-firm"
+              data-ev="case-study-law-pack"
+              class="inline-flex items-center gap-2 font-mono text-sm font-semibold uppercase tracking-[0.12em] text-[color:var(--ss-color-primary)] hover:text-[color:var(--ss-color-primary-hover)]"
+            >
+              <span>See how the Operator works for law firms</span>
+              <span aria-hidden="true">→</span>
+            </a>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Close -->
+    <section class="bg-[color:var(--ss-color-surface-inverse)] px-6 py-24">
+      <div class="mx-auto max-w-5xl text-center">
+        <p
+          class="mb-6 font-mono text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--ss-color-text-muted)]"
+        >
+          Start Here
+        </p>
+        <h2
+          class="mb-6 font-body text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-white"
+        >
+          It Starts With An Assessment.
+        </h2>
+        <p class="mx-auto mb-10 max-w-2xl text-lg text-[color:var(--ss-color-text-muted)]">
+          We learn how your firm actually runs, find where the time goes, and shape the Operator to
+          fit. If it is not the right fit, we will tell you.
+        </p>
+        <CtaButton variant="outline-white" interest="law-firm" data-ev="case-study-final-cta"
+          >Start with an assessment</CtaButton
+        >
+      </div>
+    </section>
+  </main>
+  <Footer />
+</Base>

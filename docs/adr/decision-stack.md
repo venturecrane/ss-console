@@ -887,7 +887,7 @@ The console validator compounds it: `src/lib/operator/customer-yaml/sections-sco
 
 **Already live, not to be rebuilt.** Overlay#240 (`658169e`, an ancestor of the pinned `ec3fb713`) makes the matter gate's exemption ignore an inbound-roster INTERNAL when the typed roster says CLIENT. The gate is deployed and has never had a configuration that lets it fire.
 
-**Existing configs must not regress.** A&P today is `@ashtonandprice.com` plus `scott@smd.services` with no `outbound_roster` authored, which ss#2263 records as correct for them.
+**Existing configs must not regress.** A&P today is the firm's own email domain plus `scott@smd.services` with no `outbound_roster` authored, which ss#2263 records as correct for them.
 
 **Cross-layer impact (Layer 6 - Delivery).** Posture change across three safety controls. An ADR follows from the implementing design rather than preceding it.
 
@@ -933,6 +933,8 @@ The August 2026 sprint delivered sixteen chronology packages from a laptop, at a
 - No engagement price
 - No "about SMD Services" section
 - No methodology description
+
+**Amendment 2026-09-14 (Captain):** an anonymized case study (no client name, people, matters, or quotes; built only from our own work and the client's written acknowledgments of it) needs no client sign-off. The approval process above applies to case studies that name or quote the client.
 
 ---
 

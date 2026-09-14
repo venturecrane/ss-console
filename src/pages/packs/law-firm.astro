@@ -17,7 +17,7 @@ const productSchema = {
   '@type': 'Product',
   name: 'Operator for Law Firms',
   description:
-    'The Operator is a worker you hire, not software you buy. It works inside your case management system and alongside the tools your attorneys use to draft, carrying a matter through its life: the deadlines, the documents, the follow-ups, and the chase. Every piece of work goes to an attorney to review; the Operator never sends to another party and never signs on its own.',
+    'The Operator is a worker you hire, not software you buy. For a personal injury practice it works inside your case management system and carries a case from records to settlement: cited medical chronologies, the billing picture, first drafts for your attorneys, and settled cases tracked until the money goes out. You set the lines it works within, and it never signs on its own.',
   brand: { '@type': 'Brand', name: 'SMD Services' },
   offers: {
     '@type': 'Offer',
@@ -26,63 +26,67 @@ const productSchema = {
   },
 }
 
-// Section 04: the lifecycle walk. One real stretch of a matter (responding to
-// discovery) carried start to finish, each step in the standard's three-line shape
-// (Operator does / your part / if it stalls). De-identified and brand-generic:
-// general civil-litigation process, not the jurisdiction- or tool-specific specifics
-// of the internal template-of-record. The section framing (illustrative + the
-// fail-closed honesty in section 07) carries the truthfulness, per the kit-grammar guard.
+// Section 04: the lifecycle walk. One stretch of a personal injury case (from the
+// records arriving to the money going out) carried start to finish, each step in the
+// standard's three-line shape (Operator does / your part / if it stalls). Generic and
+// brand-free: the shape of plaintiff PI work, not any one firm's tools or rules. The
+// section framing (illustrative + the fail-closed honesty in section 07) carries the
+// truthfulness, per the kit-grammar guard. PI leads this pack by Captain decision
+// 2026-09-14 (docs/marketing/pack-standard.md amendment of that date).
 const lifecycleSteps = [
   {
-    title: 'Discovery is served',
+    title: 'The records arrive',
     operator:
-      'Spots the served document in the matter, identifies the type, reads the service date and method, and tells the responsible attorney it arrived.',
-    your: 'Nothing, unless it asks you to confirm.',
-    stalls: 'Re-flags if it goes unacknowledged.',
+      'Notices new medical records and bills as they land in the case, logs what came in, and checks it against what was ordered.',
+    your: 'Nothing.',
+    stalls: 'Flags a provider whose records have not arrived.',
   },
   {
-    title: 'The response deadline',
+    title: 'The chronology',
     operator:
-      'Computes the response deadline and the downstream dates, calendars them, and emails the attorney a one-click confirm.',
-    your: 'Confirm, or correct the date.',
+      'When someone asks, reads the records into a chronology: every visit, diagnosis, and treatment in order, each entry cited to the page it came from, every claim checked against that page. Files it back into the case with the records it relied on.',
+    your: 'Read it, and use it.',
+    stalls:
+      'Says plainly what it could not read, like a missing bill or an unreadable scan, instead of guessing.',
+  },
+  {
+    title: 'The billing picture',
+    operator:
+      'Pulls the provider bills into one worksheet, reconciled to the records, and marks it incomplete where a bill is missing.',
+    your: 'Review the totals.',
+    stalls: 'Lists the bills still outstanding.',
+  },
+  {
+    title: 'The demand',
+    operator:
+      'Prepares a first draft of the demand from the record and the chronology, and routes it to the attorney.',
+    your: 'The attorney judges the case, sets the number, and finishes the letter.',
+    stalls: 'Reminds the attorney the draft is waiting.',
+  },
+  {
+    title: 'Mediation and case review',
+    operator:
+      'Prepares first drafts of the documents a case needs along the way, like a mediation brief or a case evaluation memo, from the same record.',
+    your: 'The attorney decides what goes in, what comes out, and what gets signed.',
+  },
+  {
+    title: 'The deadlines',
+    operator:
+      'Reads the dates a case depends on, proposes the deadline where one has to be worked out, and asks the attorney to confirm.',
+    your: 'Confirm or correct. The confirmation is logged with your name and the time.',
     stalls: 'Reminds before the date.',
   },
   {
-    title: 'Drafting the response',
+    title: 'Settlement to disbursement',
     operator:
-      'Gathers the served request and the supporting documents into the place your drafting tool draws from, then sends a ready-to-go nudge with the link.',
-    your: 'Generate the draft in your tool.',
-    stalls: 'Follows up if the draft has not landed back in the matter.',
-  },
-  {
-    title: 'Client verification',
-    operator:
-      'Drafts the verification request and sends the attorney an approve-and-send button. Once approved, it sends, then tracks the signature.',
-    your: 'Approve, and the client signs.',
-    stalls: 'Chases the client for the signature, and tells you only if it stalls.',
-  },
-  {
-    title: "The other side's responses",
-    operator:
-      'Reviews them for gaps (boilerplate objections, non-answers, missing verifications), drafts the meet-and-confer letter, and sends it for review with the deadline noted.',
-    your: 'Review, send, or edit.',
-    stalls: 'Reminds as the deadline nears.',
-  },
-  {
-    title: 'Motion to compel, if needed',
-    operator:
-      'Assembles the supporting pieces, including the item-by-item statement courts require.',
-    your: 'The attorney finalizes and files.',
-    stalls: 'Reminds before the deadline.',
-  },
-  {
-    title: 'The record',
-    operator: 'Keeps a running case timeline and chronology as records and events arrive.',
-    your: 'Use it for the work ahead: demands, mediation, valuation.',
+      'Keeps a working list of settled cases and the provider balances still open on each, so nothing sits unnoticed between a settlement and a payout.',
+    your: 'Negotiate the balances and disburse.',
+    stalls: 'Surfaces the settled case that has gone quiet.',
   },
   {
     title: 'What needs you',
-    operator: 'Sends one short summary of what needs attention: due soon, unsigned, deadline near.',
+    operator:
+      'Sends one short summary of what needs attention: a draft waiting, a deadline near, a balance still open.',
     your: 'React to the few items.',
     stalls: 'Re-surfaces anything missed.',
   },
@@ -91,36 +95,37 @@ const lifecycleSteps = [
 
 <PackLayout
   title="Operator for Law Firms | SMD Services"
-  description="A worker you hire, not software you buy. The Operator works inside your case management system and alongside your drafting tools, carrying a matter through its life so nothing slips. Every piece of work goes to an attorney. It starts with an assessment."
+  description="A worker you hire, not software you buy. For personal injury firms, the Operator carries a case from records to settlement: cited chronologies, the billing picture, first drafts for your attorneys, and settled cases tracked to payout. It starts with an assessment."
   schema={productSchema}
 >
   <!-- 01 Hero -->
   <PackHero slug="law-firm">
-    <Fragment slot="heading">The Matter, Carried End To End.</Fragment>
+    <Fragment slot="heading">The Case, From Records To Settlement.</Fragment>
     <Fragment slot="lede">
-      The Operator is a worker you hire, not software you buy. It works inside your case management
-      system and alongside the tools your attorneys already use to draft, carrying a matter through
-      its life: the deadlines, the documents, the follow-ups, the chase, so your team does not have
-      to hold it all in their heads. Every piece of work goes to an attorney to review. It never
-      sends to another party, and it never signs on its own.
+      The Operator is a worker you hire, not software you buy. For a personal injury practice it
+      works inside your case management system and carries the heavy middle of every case: the
+      medical records, the chronology, the billing picture, the first drafts, and the settled cases
+      still waiting to pay out. You set the lines it works within, like anything bound for opposing
+      counsel or the court, and it never signs on its own.
     </Fragment>
   </PackHero>
 
   <!-- 02 The problem -->
   <PackSection bg="white">
     <PackEyebrow>The Problem</PackEyebrow>
-    <PackHeading variant="prose">Every Open Matter, At Once.</PackHeading>
+    <PackHeading variant="prose">Every Case Runs On Records.</PackHeading>
     <PackProse>
       <p>
-        The hard part of a practice is not answering the phone. It is carrying every open matter at
-        once: the response deadline on a served discovery request, the document that has not come
-        back, the other side's answers that need a closer read, the matter that has gone quiet, the
-        signature still outstanding.
+        A personal injury case is only as strong as its medical records, and there are a lot of
+        them: visits, imaging, therapy, bills, often thousands of pages for one client. Before
+        anyone can value the case, write the demand, or prepare for mediation, someone has to read
+        all of it and put it in order.
       </p>
       <p>
-        Each one is small. Together they are a caseload, and they live in your people's heads, where
-        things slip. When a deadline is missed or a response stalls, that is not an inconvenience.
-        In a matter, it is the matter itself, at risk.
+        That reading is slow, it is expensive to send out, and it never stops arriving. Meanwhile
+        settled cases wait on provider balances before the money can go out, and the attorneys have
+        more drafting in front of them than hours. None of it is legal judgment. All of it stands
+        between your attorneys and the work only they can do.
       </p>
     </PackProse>
   </PackSection>
@@ -128,25 +133,22 @@ const lifecycleSteps = [
   <!-- 03 What the Operator does -->
   <PackSection bg="background">
     <PackEyebrow>What It Does</PackEyebrow>
-    <PackHeading variant="prose">An Always-On Member Of The Team.</PackHeading>
+    <PackHeading variant="prose">An Always-On Member Of The Case Team.</PackHeading>
     <PackProse>
       <p>
-        The Operator is an always-on team member that works inside your case management system and
-        alongside the tools your attorneys already use to draft. Its job is to carry the process so
-        your people do not have to hold it in their heads: it watches every matter, knows every
-        deadline, prepares the documents, and chases what is outstanding.
+        The Operator works inside your case management system, where your records already land. Its
+        job is to carry the heavy middle of a case so your people do not have to: it reads the
+        records, builds the chronology, pulls the bills together, prepares first drafts, and keeps
+        track of what still stands between a settlement and a payout.
       </p>
       <p>
-        When it needs a person to do their part, it comes to them with everything already prepared,
-        so their part is usually a single reply or a one-click confirm. If a step does not get done,
-        it follows up rather than letting it slip. Every piece of work product goes to an attorney
-        to review and finalize. It never sends anything to another party, and it never signs on its
-        own.
+        When it needs a person, it comes to them with the work already prepared, so their part is
+        usually a read, a correction, or a yes. Every piece of work product goes to an attorney to
+        review and finish. It never signs on its own.
       </p>
       <p>
-        It does not replace your drafting tools. Those are the engines that produce the document.
-        The Operator prepares their inputs, routes their outputs, and does the work between and
-        around them.
+        It does not replace your drafting tools or your records vendors. It takes what they deliver,
+        does the work between them, and puts the result back where your team already looks.
       </p>
     </PackProse>
   </PackSection>
@@ -154,25 +156,49 @@ const lifecycleSteps = [
   <!-- 04 The lifecycle, step by step -->
   <PackSection bg="white">
     <PackEyebrow>The Lifecycle</PackEyebrow>
-    <PackHeading variant="grid">One Matter, Step By Step.</PackHeading>
+    <PackHeading variant="grid">One Case, Step By Step.</PackHeading>
     <PackIntro>
-      Here is one stretch of a matter's life, responding to discovery, carried start to finish. This
-      is the shape of the work, not a fixed script; we build it around how your firm actually runs.
+      Here is one stretch of a case's life, from the records arriving to the money going out,
+      carried start to finish. This is the shape of the work, not a fixed script; we build it around
+      how your firm actually runs.
     </PackIntro>
     <PackLifecycle steps={lifecycleSteps} />
   </PackSection>
 
-  <!-- 05 How it connects -->
+  <!-- 05 In use today: the proof, routed to the case study -->
   <PackSection bg="background">
+    <PackEyebrow>In Use Today</PackEyebrow>
+    <PackHeading variant="prose">Already Carrying Real Cases.</PackHeading>
+    <PackProse>
+      <p>
+        The walk above is the shape of the work. Here is some of it in practice: for a plaintiff
+        personal injury firm, the Operator has delivered 18 medical chronologies from more than
+        29,000 pages of records, along with first drafts of a demand letter, a case evaluation memo,
+        and a mediation brief.
+      </p>
+      <p>
+        <a
+          href="/case-studies/personal-injury-law-firm"
+          data-ev="law-firm-case-study"
+          class="inline-flex items-center gap-2 font-mono text-sm font-semibold uppercase tracking-[0.12em] text-[color:var(--ss-color-primary)] hover:text-[color:var(--ss-color-primary-hover)]"
+        >
+          <span>Read the case study</span>
+          <span aria-hidden="true">→</span>
+        </a>
+      </p>
+    </PackProse>
+  </PackSection>
+
+  <!-- 06 How it connects -->
+  <PackSection bg="white">
     <PackEyebrow>How It Connects</PackEyebrow>
     <PackHeading variant="prose">Through The Systems You Already Run.</PackHeading>
     <PackProse>
       <p>
-        The Operator hands off to your drafting tools the way those tools already connect to your
-        case management system. It places the request and the supporting documents where the draft
-        is generated, and when the finished draft lands back in the matter, it picks it up there,
-        files it, and routes it to an attorney to review. Nothing has to be emailed around or
-        re-uploaded by hand.
+        Your records vendors already deliver into your case management system, and your attorneys
+        already draft in the tools they trust. The Operator works in the same place: it reads what
+        lands in the case, puts its chronologies and drafts back into the case, and routes them to
+        the right person. Nothing has to be emailed around or re-uploaded by hand.
       </p>
       <p>
         It works on your own accounts, inside the systems you already pay for. It is the connective
@@ -182,8 +208,8 @@ const lifecycleSteps = [
     <PackSectionCta slug="law-firm" />
   </PackSection>
 
-  <!-- 06 Quiet by design -->
-  <PackSection bg="white">
+  <!-- 07 Quiet by design -->
+  <PackSection bg="background">
     <PackEyebrow>Quiet By Design</PackEyebrow>
     <PackHeading variant="prose">It Takes Load Off. It Does Not Add It.</PackHeading>
     <PackProse>
@@ -196,35 +222,35 @@ const lifecycleSteps = [
     </PackProse>
   </PackSection>
 
-  <!-- 07 The line, and what we prove first -->
-  <PackSection bg="background">
+  <!-- 08 The line, and what we prove first -->
+  <PackSection bg="white">
     <PackEyebrow>The Line</PackEyebrow>
     <PackHeading variant="prose">The Lawyer's Work Stays The Lawyer's.</PackHeading>
     <PackProse spaced>
       <p>
-        The Operator does the coordination and brings the law to a lawyer. The legal judgment stays
-        with your attorneys: the strategy, the call on a matter, the substance of an argument. Some
-        lines are not settings anyone moves. A conflict check is captured and routed to a person to
-        clear. Trust balances are read-only, reported but never moved. Anything that leaves the firm
-        goes to an attorney first. Every action it takes is logged where you can see it.
+        The Operator does the reading, the organizing, and the first draft, and brings it to a
+        lawyer. The judgment stays with your attorneys: what a case is worth, the strategy, the call
+        on a matter, what gets signed. You set the lines it works within, like anything bound for
+        opposing counsel or the court, and you can move them. Trust balances are read, never moved.
+        Every action it takes is logged where you can see it.
       </p>
       <p>
         And we are honest about what we prove before we rely on it. The parts that depend on reading
-        your documents and matching your firm's rules, like a deadline read off a served document or
-        a gap in an opposing response, we validate on your real matters first. Where accuracy is not
-        yet proven, the Operator surfaces what it found and asks, rather than acting on its own. It
-        earns more autonomy only as it proves accurate on your work. Your files stay private,
-        including from us, and the configuration, the logs, and the off switch stay with you.
+        your records and matching your firm's rules, like a date read off a document or a bill
+        matched to a visit, we validate on your real cases first. Where accuracy is not yet proven,
+        the Operator surfaces what it found and asks, rather than acting on its own. It earns more
+        autonomy only as it proves accurate on your work. The configuration, the logs, and the off
+        switch stay with you.
       </p>
     </PackProse>
   </PackSection>
 
-  <!-- 08 Close -->
+  <!-- 09 Close -->
   <PackClosing slug="law-firm">
     <Fragment slot="pitch">
-      We learn how your firm actually runs a matter, find where the time goes and where things slip,
-      and shape the Operator to fit: what it watches, how much it does on its own, where a person
-      stays in the loop. If it is not the right fit, we will tell you.
+      We learn how your firm actually runs a case, find where the time goes and where things slip,
+      and shape the Operator to fit: what it reads, what it drafts, how much it does on its own,
+      where a person stays in the loop. If it is not the right fit, we will tell you.
     </Fragment>
   </PackClosing>
 </PackLayout>

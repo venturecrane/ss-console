@@ -13,6 +13,7 @@ describe('sitemap filter (astro.config.mjs)', () => {
       '/industries/',
       '/operator/',
       '/packs/law-firm/',
+      '/case-studies/personal-injury-law-firm/',
       '/packs/home-services/',
       '/privacy/',
       '/terms/',

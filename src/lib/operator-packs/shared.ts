@@ -31,7 +31,7 @@ export interface PackMeta {
 }
 
 export const PACK_META: Record<string, PackMeta> = {
-  'law-firm': { vertical: 'law firms', seat: 'intake and matter coordination' },
+  'law-firm': { vertical: 'law firms', seat: 'the PI caseload, records to settlement' },
   insurance: { vertical: 'insurance agencies', seat: 'the service and renewal desk' },
   accounting: { vertical: 'accounting firms', seat: 'the document chase through busy season' },
   ria: { vertical: 'advisory firms', seat: 'client service and operations' },
@@ -71,3 +71,29 @@ export function packFaqs(slug: string): { q: string; a: string }[] {
     },
   ]
 }
+
+// The industries index shown on /industries and /operator. Display names are
+// title-case nouns; the seat phrase is PACK_META's, capitalized, so the tiles,
+// the pack FAQ, and the answer-engine copy are one string (2026-09-14; the two
+// pages previously carried hand-copied arrays that could drift).
+const INDUSTRY_NAMES: Array<{ name: string; slug: string }> = [
+  { name: 'Law firms', slug: 'law-firm' },
+  { name: 'Insurance agencies', slug: 'insurance' },
+  { name: 'Accounting firms', slug: 'accounting' },
+  { name: 'Advisory firms', slug: 'ria' },
+  { name: 'Mortgage brokers', slug: 'mortgage' },
+  { name: 'Veterinary clinics', slug: 'veterinary' },
+  { name: 'Dental practices', slug: 'dental' },
+  { name: 'Med spas', slug: 'med-spa' },
+  { name: 'Title and escrow', slug: 'title' },
+  { name: 'Property management', slug: 'property-management' },
+  { name: 'Marketing agencies', slug: 'marketing-agency' },
+  { name: 'Home services', slug: 'home-services' },
+]
+
+export const INDUSTRIES: Array<{ name: string; seat: string; slug: string }> = INDUSTRY_NAMES.map(
+  ({ name, slug }) => {
+    const seat = PACK_META[slug].seat
+    return { name, slug, seat: seat.charAt(0).toUpperCase() + seat.slice(1) }
+  }
+)

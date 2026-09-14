@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'fs'
 import { resolve, join } from 'path'
 
 // Truthfulness P0: the pack config is largely aspirational (only one connector is
-// runtime-live, and there are no customers yet), so a pack must never read as a
+// runtime-live, and most packs have no customer yet), so a pack must never read as a
 // delivered, running capability. Two pack generations carry this truth differently,
 // and during the one-at-a-time migration to the lifecycle standard both must stay
 // enforced:

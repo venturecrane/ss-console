@@ -7,6 +7,7 @@ import Footer from '../components/Footer.astro'
 import CtaButton from '../components/CtaButton.astro'
 import { CATEGORY_NAME, CATEGORY_ARTICLE } from '../lib/category'
 import { serializeJsonLd } from '../lib/seo/json-ld'
+import { INDUSTRIES } from '../lib/operator-packs/shared'
 
 const productSchema = {
   '@context': 'https://schema.org',
@@ -69,27 +70,8 @@ const roleLenses = [
   },
   {
     title: 'Recurring client communication',
-    body: 'The questions you answer the same way every time. Status updates, scheduling, the routine back-and-forth. Drafts go to a reviewer on your team until you trust the Operator to handle a kind of message on its own.',
+    body: 'The questions you answer the same way every time. Status updates, scheduling, the routine back-and-forth. For each kind of message, you choose whether its draft goes to a reviewer on your team or it goes out on its own.',
   },
-]
-
-const industries = [
-  { name: 'Law firms', seat: 'Intake and matter coordination', slug: 'law-firm' },
-  { name: 'Insurance agencies', seat: 'The service and renewal desk', slug: 'insurance' },
-  { name: 'Accounting firms', seat: 'The document chase through busy season', slug: 'accounting' },
-  { name: 'Advisory firms', seat: 'Client service and operations', slug: 'ria' },
-  { name: 'Mortgage brokers', seat: 'The pipeline through clear-to-close', slug: 'mortgage' },
-  { name: 'Veterinary clinics', seat: 'The front desk', slug: 'veterinary' },
-  { name: 'Dental practices', seat: 'The front office', slug: 'dental' },
-  { name: 'Med spas', seat: 'Booking, membership, and rebooking', slug: 'med-spa' },
-  { name: 'Title and escrow', seat: 'The closing desk', slug: 'title' },
-  {
-    name: 'Property management',
-    seat: 'Resident and owner coordination',
-    slug: 'property-management',
-  },
-  { name: 'Marketing agencies', seat: 'Account coordination', slug: 'marketing-agency' },
-  { name: 'Home services', seat: 'Answering and booking the call', slug: 'home-services' },
 ]
 ---
 
@@ -213,6 +195,41 @@ const industries = [
       </div>
     </section>
 
+    <!-- In practice: the first Operator's real work, anonymized, routed to the case study.
+         Figures come from docs/marketing/proof-ledger.md. -->
+    <section class="bg-white px-6 py-24">
+      <div class="mx-auto max-w-5xl">
+        <p
+          class="mb-5 font-mono text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--ss-color-text-secondary)]"
+        >
+          In Practice
+        </p>
+        <h2
+          class="mb-10 font-body text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
+        >
+          Already Doing The Heavy Reading.
+        </h2>
+        <div class="space-y-8 text-lg leading-relaxed text-[color:var(--ss-color-text-secondary)]">
+          <p>
+            For a plaintiff personal injury firm, the Operator reads medical records into cited
+            chronologies whenever the firm asks: 18 delivered, from more than 29,000 pages of
+            records, each entry tied to the page it came from. An administrator asks by email, and
+            the chronology lands back in the case.
+          </p>
+          <p>
+            <a
+              href="/case-studies/personal-injury-law-firm"
+              data-ev="operator-case-study"
+              class="inline-flex items-center gap-2 font-mono text-sm font-semibold uppercase tracking-[0.12em] text-[color:var(--ss-color-primary)] hover:text-[color:var(--ss-color-primary-hover)]"
+            >
+              <span>Read the case study</span>
+              <span aria-hidden="true">→</span>
+            </a>
+          </p>
+        </div>
+      </div>
+    </section>
+
     <!-- § 05 One Operator, one memory, all yours -->
     <section class="bg-[color:var(--ss-color-background)] px-6 py-24">
       <div class="mx-auto max-w-5xl">
@@ -274,16 +291,32 @@ const industries = [
           </p>
           <p>
             It starts by watching. We sit it next to the work, let it learn how your team handles
-            real situations, and check its judgment against yours. When you sign off on a kind of
-            work, it takes that over. Until then, its drafts go to a reviewer on your team, who
-            sends them. The Operator cannot give itself more authority. Only you can. Every action
-            it takes is recorded where you can see it: what it did, when, and why.
+            real situations, and check its judgment against yours. For each kind of work, you choose
+            whether its drafts wait for a reviewer on your team or it acts on its own, and you can
+            move that line either way. The Operator cannot give itself more authority. Only you can.
+            Every action it takes is recorded where you can see it: what it did, when, and why.
           </p>
           <p>
             Your data stays yours. The Operator runs on its own isolated infrastructure, on your own
-            accounts. We watch that it is healthy and we can see the record of what it did, but we
-            do not see what is inside your files and messages. The configuration, the logs, and the
-            off switch stay with you.
+            accounts. We watch that it is healthy and we can see the record of what it did, and we
+            do not keep copies of your files and messages. The configuration, the logs, and the off
+            switch stay with you.
+          </p>
+          <p>
+            Accountability is built in, not promised. When it works in your mailbox, reading and
+            sending run on separate credentials where your mail system supports it. Its record of
+            what it did is tamper-evident, and anyone you hand an evidence packet to can check it on
+            our <a
+              href="/trust"
+              class="underline underline-offset-4 hover:text-[color:var(--ss-color-primary)]"
+              >trust page</a
+            > without asking us. You can pause it from your client portal. And we carry technology errors
+            and omissions and cyber coverage, including coverage written for AI. The details are on our
+            <a
+              href="/security"
+              class="underline underline-offset-4 hover:text-[color:var(--ss-color-primary)]"
+              >security page</a
+            >.
           </p>
           <p>
             And keeping it running is our job, not yours. We wire it into your tools, we watch that
@@ -395,7 +428,7 @@ const industries = [
           class="grid grid-cols-1 md:grid-cols-3 gap-0 border-t-[3px] border-[color:var(--ss-color-text-primary)]"
         >
           {
-            industries.map((industry, i) => (
+            INDUSTRIES.map((industry, i) => (
               <a
                 href={`/packs/${industry.slug}`}
                 data-ev={`operator-industry-${industry.slug}`}
@@ -468,9 +501,9 @@ const industries = [
           figure out where a dedicated Operator fits. If the fit is not right, we say so.
         </p>
         <p class="mx-auto mb-10 max-w-2xl text-lg text-[color:var(--ss-color-text-muted)]">
-          Pricing is a flat monthly subscription, scoped to the role we build together, and we walk
-          through it before any setup begins. No hourly billing, no usage meter, no surprise line
-          items.
+          Pricing is a flat monthly subscription, scoped to the role we build together, with a clear
+          allowance for the heavy work set in your agreement, and we walk through it before any
+          setup begins. No hourly billing, and nothing on an invoice you did not agree to first.
         </p>
         <CtaButton variant="outline-white" interest="operator" data-ev="operator-final-cta"
           >Start with an assessment</CtaButton
