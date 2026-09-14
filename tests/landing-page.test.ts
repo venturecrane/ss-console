@@ -490,6 +490,22 @@ describe('competitor review follow-ups (2026-09-14)', () => {
     ).not.toContain('for each kind of work, you choose')
   })
 
+  it('every "you decide what waits" claim names the lines a client cannot move', () => {
+    // The /operator FAQ doubles as FAQPage schema, so an overclaim there reaches
+    // search results; the home authority pillar is the same claim in short form.
+    const operatorSrc = read('src/pages/operator.astro')
+    const faqAnswer = operatorSrc.match(
+      /q: 'Is it safe to let it work on its own\?',\s*a: '([^']+)'/
+    )?.[1]
+    expect(faqAnswer, 'the safety FAQ answer must be found').toBeTruthy()
+    expect(flat(faqAnswer!)).toContain('anything it cannot undo, always wait for a person')
+    const homePillar = read('src/pages/index.astro').match(
+      /b: '(You decide what it does on its own[^']+)'/
+    )?.[1]
+    expect(homePillar, 'the home authority pillar must be found').toBeTruthy()
+    expect(flat(homePillar!)).toContain('anything it cannot undo always wait for a person')
+  })
+
   it('/security does not say an unconfigured Operator can draft (unauthored is refused)', () => {
     const security = flat(read('src/pages/security.astro'))
     expect(security).toContain('can read but cannot act on the world')

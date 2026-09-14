@@ -166,6 +166,7 @@ A lock in §2, §3, or §4 changes only by a Captain decision recorded as a date
     - An outside message about money, a contract, the scope of work, or a legal matter is held back for review (ADR 0031, `shared/content_floor`).
     - Only outside sends are the client's draft-or-send dial (ADR 0073). The earlier "for each kind of work, you choose" overstated that dial for commitments and destructive acts, so it is replaced.
     - The session taint gate is deliberately not claimed: it has a documented empty-session gap.
+    - The same correction reaches the two short forms of the claim: the `/operator` safety FAQ answer (which doubles as `FAQPage` schema) and the home "Your authority" pillar now say commitments and anything it cannot undo always wait for a person.
   - **`/security` is corrected:** an unconfigured Operator "can read but cannot act on the world", not "can read and draft", because unauthored drafting is refused too.
   - **Where we are:** home, `/about`, `/book`, and the home and `/book` descriptions say "based in Phoenix". The Operator is sold nationally, so the home line reads "in the Valley and beyond".
 - **Guards changed in the same PR.** `tests/landing-page.test.ts` gains the competitor-review describe, with the falsifiers built into the test:
