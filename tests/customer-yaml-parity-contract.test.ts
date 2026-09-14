@@ -47,7 +47,7 @@ interface Fixture {
 }
 
 const rawManifest = readFileSync(MANIFEST_PATH)
-const manifest = JSON.parse(rawManifest.toString('utf8')) as {
+const manifest = JSON.parse(new TextDecoder().decode(rawManifest)) as {
   fixtures: Fixture[]
 }
 

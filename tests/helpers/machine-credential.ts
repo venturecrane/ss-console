@@ -21,7 +21,9 @@ export async function seedMachineCredential(
   slug: string,
   plaintext: string
 ): Promise<void> {
-  const salt = randomBytes(16).toString('hex')
+  // Hex by hand: under workers-types 5 the global Buffer is typed `any` and its
+  // encoding-taking toString is not on the Node Buffer type the checker picks.
+  const salt = Array.from(randomBytes(16), (b) => b.toString(16).padStart(2, '0')).join('')
   await db
     .prepare(
       `INSERT INTO machine_credentials (customer_slug, entity_id, key_hash, salt, created_at)
