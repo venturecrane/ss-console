@@ -34,8 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
-import seam_pull
+from bin.lib import seam_pull
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_DOCKERFILE = _REPO_ROOT / "operator" / "templates" / "Dockerfile"

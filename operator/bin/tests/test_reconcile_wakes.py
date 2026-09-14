@@ -19,10 +19,9 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-_BIN = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(_BIN / "lib"))
+from bin.lib import cron_slots
 
-import cron_slots  # noqa: E402 -- path injected above; the import must follow the sys.path shim
+_BIN = Path(__file__).resolve().parents[1]
 
 _spec = importlib.util.spec_from_file_location("reconcile_wakes", _BIN / "reconcile-wakes.py")
 wakes = importlib.util.module_from_spec(_spec)

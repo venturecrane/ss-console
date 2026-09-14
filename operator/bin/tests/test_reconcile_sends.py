@@ -19,7 +19,6 @@ from pathlib import Path
 import pytest
 
 _BIN = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(_BIN / "lib"))
 _spec = importlib.util.spec_from_file_location("reconcile_sends", _BIN / "reconcile-sends.py")
 rec = importlib.util.module_from_spec(_spec)
 # Register BEFORE exec: @dataclass resolves its own module out of sys.modules,

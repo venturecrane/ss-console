@@ -13,11 +13,8 @@ Usage:
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
-
-import env_arrays as ea
+from bin.lib import env_arrays as ea
 
 
 def main(argv: list[str]) -> int:

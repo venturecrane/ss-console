@@ -91,8 +91,6 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
 GRAPH_API_BASE = "https://graph.microsoft.com/v1.0"
 GRAPH_TOKEN_HOST = "https://login.microsoftonline.com"
 GRAPH_SCOPE = "https://graph.microsoft.com/.default"

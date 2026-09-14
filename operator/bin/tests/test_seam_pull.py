@@ -17,16 +17,12 @@ import asyncio
 import csv
 import json
 import sqlite3
-import sys
 from pathlib import Path
 from typing import Optional
 
 import pytest
 
-_HERE = Path(__file__).resolve()
-sys.path.insert(0, str(_HERE.parents[2]))
-
-from bin.lib.seam_pull import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from bin.lib.seam_pull import (
     AUDIT_COLUMNS,
     MEMORY_EXPORT_TABLES,
     SeamAuditLogPreserver,
@@ -34,6 +30,8 @@ from bin.lib.seam_pull import (  # noqa: E402 - the import needs the sys.path sh
     derive_runtime_read_key,
     seam_client_from_env,
 )
+
+_HERE = Path(__file__).resolve()
 
 
 # ---------------------------------------------------------------------------

@@ -56,9 +56,6 @@ def _load_bin_module(module_name: str, filename: str):
     deliberate: two implementations of "is this send audited" would drift, and
     the drifted one would be the one nobody watched.
     """
-    lib = str(BIN_DIR / "lib")
-    if lib not in sys.path:
-        sys.path.insert(0, lib)
     spec = importlib.util.spec_from_file_location(module_name, BIN_DIR / filename)
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
