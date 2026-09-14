@@ -323,6 +323,19 @@
   max-width: 36rem;
 }
 
+.ss-expect {
+  list-style: disc;
+  padding-left: 1.25rem;
+  margin-top: 0.75rem;
+  color: var(--ss-color-text-secondary);
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  max-width: 36rem;
+}
+.ss-expect li + li {
+  margin-top: 0.25rem;
+}
+
 .ss-helper {
   font-size: 0.8125rem;
   color: var(--ss-color-text-secondary);
