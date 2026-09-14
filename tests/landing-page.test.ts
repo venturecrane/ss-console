@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { resolve, join } from 'path'
+import { INDUSTRIES, PACK_META } from '../src/lib/operator-packs/shared'
 
 const srcDir = resolve('src')
 const componentsDir = resolve('src/components')
@@ -46,6 +47,7 @@ function readMarketingFiles(): string[] {
     resolve('src/pages/about.astro'),
     resolve('src/pages/book.astro'),
     resolve('src/pages/packs/law-firm.astro'),
+    resolve('src/pages/case-studies/personal-injury-law-firm.astro'),
     resolve('src/pages/packs/insurance.astro'),
     resolve('src/pages/packs/veterinary.astro'),
     resolve('src/pages/packs/title.astro'),
@@ -107,6 +109,7 @@ describe('voice standard', () => {
   const marketingPages = [
     'src/pages/index.astro',
     'src/pages/operator.astro',
+    'src/pages/case-studies/personal-injury-law-firm.astro',
     // The Hosted Agent storefront is price-exempt (see readMarketingFiles)
     // but holds firm "we" voice like every other marketing page.
     'src/pages/agent.astro',
@@ -194,6 +197,7 @@ describe('marketing structure: firm-with-flagship (locked)', () => {
       'src/pages/operator.astro',
       'src/pages/about.astro',
       'src/pages/book.astro',
+      'src/pages/case-studies/personal-injury-law-firm.astro',
     ]) {
       const c = flat(readFileSync(resolve(page), 'utf-8'))
       expect(c, `"start with an assessment" missing from ${page}`).toContain(
@@ -342,6 +346,68 @@ describe('decision compliance', () => {
       if (!filePath.endsWith('.astro')) continue
       const content = readFileSync(filePath, 'utf-8').toLowerCase()
       expect(content, `"the consultant" found in ${filePath}`).not.toContain('the consultant')
+    }
+  })
+})
+
+// Proof and the first case study. Captain decision 2026-09-14, recorded in
+// docs/marketing/positioning-spine.md. Every published figure traces to a row in
+// docs/marketing/proof-ledger.md, the pricing line tells the truth about the
+// allowance, and the law pack's seat label is one string everywhere it renders.
+describe('proof and case study (2026-09-14)', () => {
+  const CASE_STUDY = 'src/pages/case-studies/personal-injury-law-firm.astro'
+  const CASE_STUDY_HREF = '/case-studies/personal-injury-law-firm'
+  const flat = (s: string) => s.replace(/\s+/g, ' ').toLowerCase()
+
+  it('the case study page exists', () => {
+    expect(existsSync(resolve(CASE_STUDY))).toBe(true)
+  })
+
+  it('home, /operator, and the law pack link the case study', () => {
+    for (const page of [
+      'src/pages/index.astro',
+      'src/pages/operator.astro',
+      'src/pages/packs/law-firm.astro',
+    ]) {
+      expect(readFileSync(resolve(page), 'utf-8'), `${page} must link the case study`).toContain(
+        CASE_STUDY_HREF
+      )
+    }
+  })
+
+  it('/operator no longer promises "no usage meter" (the allowance is real)', () => {
+    const operator = flat(readFileSync(resolve('src/pages/operator.astro'), 'utf-8'))
+    expect(operator).not.toContain('no usage meter')
+    expect(operator).toContain('clear allowance')
+  })
+
+  it('every proof-tile value has a row in the proof ledger', () => {
+    const ledger = readFileSync(resolve('docs/marketing/proof-ledger.md'), 'utf-8')
+    const values: string[] = []
+    for (const page of ['src/pages/index.astro', CASE_STUDY]) {
+      const src = readFileSync(resolve(page), 'utf-8')
+      for (const m of src.matchAll(/\{ value: '([^']+)', label:/g)) values.push(m[1])
+    }
+    // Non-vacuous: three home tiles plus three case study stats.
+    expect(values.length).toBeGreaterThanOrEqual(6)
+    for (const v of values) {
+      expect(ledger, `proof value "${v}" has no backticked row in proof-ledger.md`).toContain(
+        '`' + v + '`'
+      )
+    }
+  })
+
+  it('/industries and /operator render the one INDUSTRIES list, which covers every pack', () => {
+    for (const page of ['src/pages/industries.astro', 'src/pages/operator.astro']) {
+      const src = readFileSync(resolve(page), 'utf-8')
+      expect(src, `${page} must render INDUSTRIES`).toContain('INDUSTRIES.map(')
+      expect(src, `${page} must not carry its own industries array`).not.toContain(
+        'const industries = ['
+      )
+    }
+    expect(INDUSTRIES.map((i) => i.slug).sort()).toEqual(Object.keys(PACK_META).sort())
+    for (const i of INDUSTRIES) {
+      expect(i.seat.toLowerCase()).toBe(PACK_META[i.slug].seat.toLowerCase())
     }
   })
 })

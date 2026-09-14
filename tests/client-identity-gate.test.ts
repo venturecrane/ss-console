@@ -43,10 +43,13 @@ const OUR_DOMAINS = new Set([
 /**
  * Roots scanned for leaked identity: source, tests, fixtures, scripts.
  *
- * `docs/` is deliberately absent -- prose may name a client (see header).
+ * `docs/` and `.stitch/` are scanned for identity DATA only (emails and roster
+ * domains), which is all this gate matches; prose may still name a client (see
+ * header). Added 2026-09-14 after a client domain was found in the decision stack
+ * and two backlog snapshots, where the old roots could not see it.
  * `operator/customers/` is absent because that IS the authored config.
  */
-const SCAN_ROOTS = ['src', 'tests', 'scripts', 'workers', 'bin', 'operator']
+const SCAN_ROOTS = ['src', 'tests', 'scripts', 'workers', 'bin', 'operator', 'docs', '.stitch']
 const SCAN_EXCLUDE = [
   resolve('operator/customers'),
   resolve('tests/client-identity-gate.test.ts'), // this file names the allowlist

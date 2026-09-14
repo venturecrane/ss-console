@@ -3,10 +3,11 @@
 // and rewrite them to /portal. The prerendered static file would bypass the Worker entirely.
 export const prerender = false
 
-// Home: the firm's face, flagship-forward. Eight beats — firm wraps flagship:
+// Home: the firm's face, flagship-forward. Nine beats — firm wraps flagship:
 // hero (orient) -> the gap -> the reframe (category claim) -> the Operator (the
-// cradled flagship, condensed) -> solution-first (the firm reasserts) -> find your
-// trade (proof by specificity) -> who runs it (Scott, condensed) -> the assessment.
+// cradled flagship, condensed) -> in practice (real proof, routed to the case study;
+// added 2026-09-14) -> solution-first (the firm reasserts) -> find your trade (proof
+// by specificity) -> who runs it (Scott, condensed) -> the assessment.
 // The deep Operator pitch is on /operator; the firm's operating model is on /book.
 // Structure locked in docs/marketing/positioning-spine.md. One door: the assessment.
 import Base from '../layouts/Base.astro'
@@ -34,6 +35,15 @@ const firmSchema = {
     },
   },
 }
+
+// Beat 5 proof tiles. Each value must appear in docs/marketing/proof-ledger.md with
+// its source (guarded in tests/landing-page.test.ts), so a figure cannot drift or be
+// invented here.
+const proofTiles = [
+  { value: '18', label: 'Medical chronologies delivered' },
+  { value: '29,000+', label: 'Pages of medical records read' },
+  { value: 'Every entry', label: 'Cited to the page it came from' },
+]
 ---
 
 <Base
@@ -177,7 +187,62 @@ const firmSchema = {
       </div>
     </section>
 
-    <!-- Beat 5: solution-first. The firm reasserts. The AI-tension line. -->
+    <!-- Beat 5: in practice. Real proof from the first Operator, anonymized, routed
+         to the case study. Figures come from docs/marketing/proof-ledger.md. -->
+    <section class="bg-[color:var(--ss-color-background)] px-6 py-24">
+      <div class="mx-auto max-w-5xl">
+        <p
+          class="mb-5 font-mono text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--ss-color-text-secondary)]"
+        >
+          In Practice
+        </p>
+        <h2
+          class="mb-10 font-body text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
+        >
+          In Use On Real Work.
+        </h2>
+        <p
+          class="mb-12 max-w-3xl text-lg leading-relaxed text-[color:var(--ss-color-text-secondary)]"
+        >
+          An Operator works today for a plaintiff personal injury firm. Among its jobs: reading
+          medical records into cited chronologies whenever the firm asks, at a small fraction of
+          what outsourced chronology services charge per page.
+        </p>
+        <div
+          class="grid grid-cols-1 md:grid-cols-3 gap-0 border-t-[3px] border-[color:var(--ss-color-text-primary)]"
+        >
+          {
+            proofTiles.map((t, i) => (
+              <div
+                class:list={[
+                  'flex flex-col gap-3 p-8 border-b-[3px] border-[color:var(--ss-color-text-primary)]',
+                  i % 3 !== 2 && 'md:border-r-[3px] md:border-[color:var(--ss-color-text-primary)]',
+                ]}
+              >
+                <p class="font-body text-3xl md:text-4xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-primary)]">
+                  {t.value}
+                </p>
+                <p class="font-body text-base leading-relaxed text-[color:var(--ss-color-text-secondary)]">
+                  {t.label}
+                </p>
+              </div>
+            ))
+          }
+        </div>
+        <p class="mt-12">
+          <a
+            href="/case-studies/personal-injury-law-firm"
+            data-ev="home-case-study"
+            class="inline-flex items-center gap-2 font-mono text-sm font-semibold uppercase tracking-[0.12em] text-[color:var(--ss-color-primary)] hover:text-[color:var(--ss-color-primary-hover)]"
+          >
+            <span>Read the case study</span>
+            <span aria-hidden="true">→</span>
+          </a>
+        </p>
+      </div>
+    </section>
+
+    <!-- Beat 6: solution-first. The firm reasserts. The AI-tension line. -->
     <section class="bg-[color:var(--ss-color-background)] px-6 py-24">
       <div class="mx-auto max-w-5xl">
         <p
@@ -204,7 +269,7 @@ const firmSchema = {
       </div>
     </section>
 
-    <!-- Beat 6: find your trade. Proof by specificity, routed to the packs index. -->
+    <!-- Beat 7: find your trade. Proof by specificity, routed to the packs index. -->
     <section class="bg-white px-6 py-24">
       <div class="mx-auto max-w-5xl">
         <p
@@ -230,7 +295,7 @@ const firmSchema = {
       </div>
     </section>
 
-    <!-- Beat 7: who runs it. Scott, condensed, firm "we" voice (full bio on /about). -->
+    <!-- Beat 8: who runs it. Scott, condensed, firm "we" voice (full bio on /about). -->
     <section class="bg-[color:var(--ss-color-background)] px-6 py-24">
       <div class="mx-auto max-w-5xl">
         <p
@@ -267,7 +332,7 @@ const firmSchema = {
       </div>
     </section>
 
-    <!-- Beat 8: the assessment. The one close. -->
+    <!-- Beat 9: the assessment. The one close. -->
     <section class="bg-[color:var(--ss-color-surface-inverse)] px-6 py-24">
       <div class="mx-auto max-w-5xl text-center">
         <p

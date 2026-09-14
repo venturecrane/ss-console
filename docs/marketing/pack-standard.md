@@ -81,3 +81,9 @@ never publish the firm name, the person, the specific tool combination, or
 jurisdiction-specific specifics.** The _shape_ and _altitude_ are reusable; the engagement
 is not. See `project_pack_core_lifecycle_strategy` (memory), ADR 0037 (thesis), ADR 0038
 (delivery method).
+
+## Amendment 2026-09-14: PI leads the law pack, and a pack may point at real proof
+
+Captain decision. The law pack's lifecycle moves from responding to discovery to the personal injury stretch from records to settlement (records, chronology, billing picture, demand, mediation and case review, deadlines, settlement to disbursement), because that is where the first Operator client proves the work. Its seat label is "The PI caseload, records to settlement" everywhere it renders (`PACK_META`, `/industries`, `/operator`; parity is guarded).
+
+A pack may now carry one **In Use Today** section that states anonymized, ledgered figures (`docs/marketing/proof-ledger.md`) and links the case study. The Provenance rule still holds: the engagement itself is never published, and the walk stays illustrative ("the shape of the work, not a fixed script") with the fail-closed honesty intact. Lines a firm sets (for example, anything bound for opposing counsel or the court) are described as the firm's settings, not as fixed product floors (ADR 0073).

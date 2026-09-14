@@ -13,6 +13,7 @@
 import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, statSync, existsSync } from 'fs'
 import { resolve, join, extname } from 'path'
+import { createHash } from 'crypto'
 
 const SRC_ROOT = resolve('src')
 const PAGES_ROOT = resolve('src/pages')
@@ -1448,5 +1449,66 @@ describe('the venturecrane mail domain appears nowhere in SMD code (CLAUDE.md co
       'SMD addresses are team@smd.services and scott@smd.services; examples use @example.com:\n' +
         offenders.join('\n')
     ).toEqual([])
+  })
+})
+
+// Client identity on the public marketing surface, checked without naming anyone.
+// The repo is public, so the denylist is stored as SHA-256 hashes of lowercase
+// tokens (firm name words, staff names, matter surnames, the client's vendor
+// stack), never as the names themselves. Every alphabetic token in the marketing
+// pages and the marketing docs is hashed and must not be in the set. The probe
+// token proves the matcher fires. Added 2026-09-14 with the first case study.
+describe('marketing surface names no client (hashed denylist)', () => {
+  const DENY = new Set([
+    '127278762a70fea92147a0c32c8baec2bd8f0cf8b6597613ba5c17c6263e886f',
+    '1f73a0817399d9e819b5ece2537d22483c6a517c8086d76f461b6b96f5551473',
+    '20a78962eb6cd928e7bb3bf33eae5ea5a919885c236b15a1646310bfc5d3b63b',
+    '3c23186120f678d5325665af3a3f46da8a9f4cd4bf4c6c9d86de6200fd9df6f2',
+    '4268574f6f4b8e637c23e8d2278d368c1d36d5fb1d3fbd26e6f495ee0dea55c6',
+    '455c87b2424b7ea7837c345d576ab6feac138787f1a4b4bd0201f4e1f640fd6e',
+    '5b90be7023a42dbe8f3d8d69a2635d39ed8dde7bd1e0ea02472485c696d617d3',
+    '683a44b0c859aff7e19c57f35d2355a2a9b6a1feef52b4c27bf7a95975c50350',
+    '690215e3169bc895afdbe090ea8f862f8721029153a23d36e8f7d78c81842992',
+    '6e7aa72406268d83d15949cef1d20ea07e82bee4e078326b27c945ab21e5528c',
+    '7b02d3c5063f27897b2803ca64a9f4992591e5552ca817fea2b2c413efd6d56a',
+    '8cbf2e459e086f4a7acc4b71b0028375fada812f986800fe8766f0dad9dabfb6',
+    '8db16b13c8873ae241acc9fc37c17777516955621e43c7ed02382177568253d3',
+    '90be0995aa2c8b9e273ce6b3ce732ba1d325245dd1d4547b843127649c435777',
+    '9fc51be3a62d2abcc4fab0e3d9c63db82921f910774599535b6e6f4f55f83cc6',
+    'a365d48f64828104616cb76a32ce5716eb0d4bd49c46cc02f36f3a1bff82828c',
+    'b0aecbbfd6db757a752c91b98775e212497dc7bb5a8ac12a5fa0d468fd1964db',
+    'b9ee491a6030fd7d24e2efbf5de7029ddeb291eabe8f520843be43156c6e278e',
+    'ceaa9749b0471a8bcd157a4b16ad02dbc319a0422d4900245d3ae368bb72e75e',
+    'dfb26d24ab0f8e4d8591538235bf417d7e2c79151fedf9b85ec91d7d9f9f9d37',
+    'e886e18a0fdb389a9ed692eae23667a1db1e4c1a8c1e787a05e757ff05d25882',
+    'f855c34a93006564538c25729584fe56bdbb6198540956c95813733900bfa132',
+  ])
+  const sha = (t: string) => createHash('sha256').update(t).digest('hex')
+  const offenders = (text: string) =>
+    [...new Set(text.toLowerCase().match(/[a-z]+/g) ?? [])].filter((t) => DENY.has(sha(t)))
+
+  const files = [
+    'src/pages/index.astro',
+    'src/pages/operator.astro',
+    'src/pages/industries.astro',
+    'src/pages/about.astro',
+    'src/pages/security.astro',
+    'src/pages/trust.astro',
+    'src/components/OperatorHero.astro',
+    'src/components/Footer.astro',
+    'src/components/About.astro',
+    'src/lib/operator-packs/shared.ts',
+    'docs/marketing/elevator-pitch.md',
+    'docs/marketing/proof-ledger.md',
+    ...readdirSync(resolve('src/pages/packs')).map((n) => `src/pages/packs/${n}`),
+    ...readdirSync(resolve('src/pages/case-studies')).map((n) => `src/pages/case-studies/${n}`),
+  ]
+
+  it('the matcher fires on a denylisted token (probe)', () => {
+    expect(offenders('a sentence with ZZSMDPROBETOKEN inside')).toEqual(['zzsmdprobetoken'])
+  })
+
+  it.each(files)('%s carries no denylisted client token', (rel) => {
+    expect(offenders(readFileSync(resolve(rel), 'utf-8')), rel).toEqual([])
   })
 })
