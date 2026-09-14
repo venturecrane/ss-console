@@ -18,6 +18,7 @@ import { syncGoogleCalendarAndPromote } from '../../../lib/booking/calendar-sync
 import { formatSlotLabelLong, parseOptionalInt } from '../../../lib/booking/reserve-helpers'
 import { requireAppBaseUrl } from '../../../lib/config/app-url'
 import { trimString, isValidEmail, jsonResponse, errorResponse } from '../../../lib/api/helpers'
+import { failedResponse, misconfiguredResponse } from '../../../lib/api/failures'
 import { env } from 'cloudflare:workers'
 
 const FALLBACK_EMAIL = 'team@smd.services'
@@ -125,28 +126,31 @@ async function resolvePreSeeded(prefillTokenRaw: string | null): Promise<PreSeed
   return null
 }
 
-function calendarSyncFailedJson(): Response {
-  return errorResponse(
-    503,
-    'calendar_sync_failed',
-    'We could not create the calendar event. Please try again or email us directly.',
-    {
-      fallback: {
-        type: 'email',
-        email: FALLBACK_EMAIL,
-        message: `Please email ${FALLBACK_EMAIL} to schedule your call.`,
-      },
-    }
-  )
+const EMAIL_FALLBACK = {
+  fallback: {
+    type: 'email',
+    email: FALLBACK_EMAIL,
+    message: `Please email ${FALLBACK_EMAIL} to schedule your call.`,
+  },
 }
 
-function calendarUnavailableJson(): Response {
-  return errorResponse(503, 'calendar_unavailable', 'Online booking is temporarily unavailable.', {
-    fallback: {
-      type: 'email',
-      email: FALLBACK_EMAIL,
-      message: `Please email ${FALLBACK_EMAIL} to schedule your call.`,
-    },
+/** Google answered badly while the booking was being placed on the calendar: an upstream failure, captured. */
+function calendarSyncFailedJson(failure: unknown): Response {
+  return failedResponse(failure, 'api/booking/reserve', {
+    status: 503,
+    code: 'calendar_sync_failed',
+    message: 'We could not create the calendar event. Please try again or email us directly.',
+    extra: EMAIL_FALLBACK,
+  })
+}
+
+/** The calendar integration is not there to use: a configuration state, captured as a warning. */
+function calendarUnavailableJson(missing: string): Response {
+  return misconfiguredResponse('api/booking/reserve', missing, {
+    status: 503,
+    code: 'calendar_unavailable',
+    message: 'Online booking is temporarily unavailable.',
+    extra: EMAIL_FALLBACK,
   })
 }
 
@@ -175,10 +179,10 @@ async function handlePost({ request, locals }: APIContext): Promise<Response> {
 
   // Phase 1c: Verify Google integration before doing any DB work
   const integration = await getIntegration(env.DB, ORG_ID, 'google_calendar')
-  if (!integration) return calendarUnavailableJson()
+  if (!integration) return calendarUnavailableJson('google_calendar integration')
 
   const accessToken = await getGoogleAccessToken(env.DB, integration, env)
-  if (!accessToken) return calendarUnavailableJson()
+  if (!accessToken) return calendarUnavailableJson('google_calendar access token')
 
   // Phase 2: DB commit
   const holdResult = await acquireHold(env.DB, ORG_ID, validated.slotStartUtc, validated.email)
@@ -198,9 +202,8 @@ async function handlePost({ request, locals }: APIContext): Promise<Response> {
   try {
     dbResult = await commitBookingToDb({ input: validated, preSeeded, attribution })
   } catch (err) {
-    console.error('[api/booking/reserve] DB commit failed:', err)
     await releaseHold(env.DB, holdResult.id!)
-    return errorResponse(500, 'internal_error')
+    return failedResponse(err, 'api/booking/reserve')
   }
 
   // Build the manage URL once, up front, so we can thread it through the
@@ -225,7 +228,7 @@ async function handlePost({ request, locals }: APIContext): Promise<Response> {
     preSeeded,
     manageUrl,
   })
-  if (!googleSyncResult.ok) return calendarSyncFailedJson()
+  if (!googleSyncResult.ok) return calendarSyncFailedJson(googleSyncResult)
   const googleMeetUrl = googleSyncResult.meetUrl
 
   // Release the hold — the live assessment row is now the lock

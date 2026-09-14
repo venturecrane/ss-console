@@ -7,6 +7,7 @@ import { env } from 'cloudflare:workers'
 import { requireAdminSession } from '../../../lib/auth/admin-session'
 import { normalizeEmail } from '../../../lib/identity/email'
 import { errorResponse, jsonResponse } from '../../../lib/api/helpers'
+import { failedResponse } from '../../../lib/api/failures'
 
 interface UserRow {
   id: string
@@ -117,8 +118,11 @@ async function handlePost({ request, locals }: APIContext): Promise<Response> {
     })
 
     if (!result.success) {
-      console.error(`[resend-invitation] Failed to send to ${targetEmail}: ${result.error}`)
-      return errorResponse(502, 'unavailable', 'The email could not be sent.')
+      return failedResponse(result.error, 'api/admin/resend-invitation', {
+        status: 502,
+        code: 'unavailable',
+        message: 'The email could not be sent.',
+      })
     }
 
     return jsonResponse(200, {
@@ -127,8 +131,7 @@ async function handlePost({ request, locals }: APIContext): Promise<Response> {
       sentTo: targetEmail,
     })
   } catch (err) {
-    console.error('[resend-invitation] Error:', err)
-    return errorResponse(500, 'internal_error')
+    return failedResponse(err, 'resend-invitation')
   }
 }
 

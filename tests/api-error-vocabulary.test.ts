@@ -38,6 +38,13 @@ const isApiErrorCode = (value: string): boolean => Object.hasOwn(API_ERROR_CATAL
 
 const CODE_ARG = /errorResponse\(\s*[\w.]+\s*,\s*'([^']*)'/g
 const HAND_BUILT = /jsonResponse\(\s*[\w.]+\s*,\s*\{[^}]*\berror\s*:/g
+/**
+ * A 5xx handed to errorResponse directly is a failure that never reaches
+ * Sentry (2026-09-10 review, Code Quality 4). Routes answer a caught failure
+ * with failedResponse and a missing secret with misconfiguredResponse; both
+ * capture before they respond.
+ */
+const DIRECT_5XX = /errorResponse\(\s*5\d\d\b/g
 
 describe('API error vocabulary', () => {
   it('every catalog code is snake_case with a non-empty default message', () => {
@@ -71,6 +78,26 @@ describe('API error vocabulary', () => {
       HAND_BUILT.lastIndex = 0
     }
     expect(offenders).toEqual([])
+  })
+
+  it('no route hands a 5xx to errorResponse: the 5xx path captures to Sentry first', () => {
+    const offenders: string[] = []
+    for (const file of FILES) {
+      const src = readFileSync(file, 'utf8')
+      for (const m of src.matchAll(DIRECT_5XX)) {
+        offenders.push(`${file.slice(API_ROOT.length + 1)}: ${m[0]}`)
+      }
+    }
+    expect(
+      offenders,
+      'use failedResponse(err, area, code?) or misconfiguredResponse(area, missing) so the failure is captured'
+    ).toEqual([])
+  })
+
+  it('the 5xx scanner can fail: a direct 500 and a direct 503 are both caught, a 400 is not', () => {
+    const bad =
+      "errorResponse(500, 'internal_error') errorResponse(503, 'unavailable') errorResponse(400, 'invalid_json')"
+    expect([...bad.matchAll(DIRECT_5XX)]).toHaveLength(2)
   })
 
   it('the scanner can fail: a non-catalog literal and a hand-built body are both caught', () => {

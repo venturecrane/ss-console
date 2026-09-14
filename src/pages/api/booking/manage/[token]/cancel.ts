@@ -1,4 +1,5 @@
 import { escapeHtml, jsonResponse, errorResponse } from '../../../../../lib/api/helpers'
+import { failedResponse } from '../../../../../lib/api/failures'
 import type { APIContext, APIRoute } from 'astro'
 import { ORG_ID } from '../../../../../lib/constants'
 import { hashManageToken } from '../../../../../lib/booking/tokens'
@@ -221,8 +222,7 @@ async function handlePost({ params, request }: APIContext): Promise<Response> {
 
     return jsonResponse(200, { ok: true, cancelled: true })
   } catch (err) {
-    console.error('[api/booking/manage/cancel] Error:', err)
-    return errorResponse(500, 'internal_error')
+    return failedResponse(err, 'api/booking/manage/cancel')
   }
 }
 

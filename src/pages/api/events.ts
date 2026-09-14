@@ -1,6 +1,7 @@
 import type { APIContext, APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 import { errorResponse } from '../../lib/api/helpers'
+import { failedResponse } from '../../lib/api/failures'
 import { rateLimitByIp } from '../../lib/booking/rate-limit'
 
 /**
@@ -195,8 +196,7 @@ async function handlePost({ request }: APIContext): Promise<Response> {
   try {
     await persistEventRows(rows, eventCtx)
   } catch (err) {
-    console.error('[api/events] D1 insert failed:', err)
-    return errorResponse(500, 'internal_error', 'The events could not be recorded.')
+    return failedResponse(err, 'api/events', { message: 'The events could not be recorded.' })
   }
 
   return buildResponse(204, cookieSidOrNull, request)

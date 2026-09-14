@@ -14,6 +14,7 @@ import { env } from 'cloudflare:workers'
 import { draftFindings, type Turn } from '../../../lib/claude/assessment'
 import { rateLimitByIp } from '../../../lib/booking/rate-limit'
 import { jsonResponse, errorResponse } from '../../../lib/api/helpers'
+import { failedResponse, misconfiguredResponse } from '../../../lib/api/failures'
 
 const RATE_LIMIT_PER_HOUR = 40
 const MAX_TURNS = 60
@@ -45,7 +46,11 @@ export const POST: APIRoute = async ({ request, clientAddress }: APIContext) => 
   if (!rate.allowed) return errorResponse(429, 'rate_limited')
 
   if (!env.ANTHROPIC_API_KEY)
-    return errorResponse(503, 'unavailable', 'Findings are temporarily unavailable.')
+    return misconfiguredResponse('api/assessment/findings', 'ANTHROPIC_API_KEY', {
+      status: 503,
+      code: 'unavailable',
+      message: 'Findings are temporarily unavailable.',
+    })
 
   let body: unknown
   try {
@@ -60,7 +65,11 @@ export const POST: APIRoute = async ({ request, clientAddress }: APIContext) => 
   try {
     const findings = await draftFindings(env.ANTHROPIC_API_KEY, turns)
     return jsonResponse(200, { findings })
-  } catch {
-    return errorResponse(502, 'unavailable', 'The findings could not be drafted. Please try again.')
+  } catch (err) {
+    return failedResponse(err, 'api/assessment/findings', {
+      status: 502,
+      code: 'unavailable',
+      message: 'The findings could not be drafted. Please try again.',
+    })
   }
 }

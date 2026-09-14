@@ -4,6 +4,7 @@ import { streamDocument } from '../../../../../../lib/storage/r2'
 import { env } from 'cloudflare:workers'
 import { requireAdminSession } from '../../../../../../lib/auth/admin-session'
 import { errorResponse } from '../../../../../../lib/api/helpers'
+import { failedResponse } from '../../../../../../lib/api/failures'
 
 export const GET: APIRoute = async ({ locals, params }) => {
   const auth = requireAdminSession(locals)
@@ -34,7 +35,6 @@ export const GET: APIRoute = async ({ locals, params }) => {
       },
     })
   } catch (err) {
-    console.error('[api/admin/engagements/[id]/deliverables/[...key]] Stream error:', err)
-    return errorResponse(500, 'internal_error')
+    return failedResponse(err, 'api/admin/engagements/[id]/deliverables/[...key]')
   }
 }

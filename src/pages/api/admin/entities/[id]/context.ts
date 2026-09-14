@@ -1,4 +1,5 @@
 import { jsonResponse, errorResponse } from '../../../../../lib/api/helpers'
+import { failedResponse } from '../../../../../lib/api/failures'
 import type { APIRoute } from 'astro'
 import { appendContext, listContext, type ContextType } from '../../../../../lib/db/context'
 import { getEntity } from '../../../../../lib/db/entities'
@@ -32,8 +33,7 @@ export const GET: APIRoute = async ({ params, locals }) => {
     const entries = await listContext(env.DB, entityId)
     return jsonResponse(200, { entity_id: entityId, entries })
   } catch (err) {
-    console.error('[api/admin/entities/context] GET Error:', err)
-    return errorResponse(500, 'internal_error')
+    return failedResponse(err, 'api/admin/entities/context')
   }
 }
 
