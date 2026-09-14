@@ -153,3 +153,26 @@ A lock in §2, §3, or §4 changes only by a Captain decision recorded as a date
   - **A privacy claim is corrected, not softened by accident.** `/operator` said "we do not see what is inside your files and messages" and the law pack said "your files stay private, including from us" (both from the June positioning passes). Delivering the first client's chronologies and drafts meant our team read the records through the authorized connection, so "we do not see" is no longer true. `/operator` now says "we do not keep copies of your files and messages", which matches the no-warehousing term in the service agreement and `/security`; the law pack's clause is removed. Any future vendor-blind claim needs a delivery model that actually keeps us out of the content.
   - The short forms of this positioning live in `docs/marketing/elevator-pitch.md`.
 - **Guards changed in the same PR.** `tests/landing-page.test.ts` gains the proof-and-case-study describe (case study exists and is linked, no "no usage meter", every proof tile in the ledger, seat-label parity with `PACK_META`) and enrolls the case study in the no-dollar, voice, and single-verb checks. `tests/forbidden-strings.test.ts` gains a hashed client-token denylist over the marketing surface.
+
+**2026-09-14 — Competitor-review follow-ups: search titles, `/book` expectations, the named approval list, and where we are.** Captain picked four recommendations from a review of a local AI-services firm's site.
+
+- **Why.** Page titles read as bare labels ("Operator | SMD Services") that nobody searches. `/book` asked for details before saying what the assessment is. `/operator` said "you decide what waits for a person" without naming anything. No page said where the firm is except the footer.
+- **What changed.**
+  - **Titles** carry search intent: "The Operator: A Managed AI Worker For Small Business", "AI Operator For {vertical}" on the packs, "Medical Chronologies For Personal Injury Firms" on the law pack, plus `/about`, `/industries`, `/security`, and the case study. **Vocabulary note:** "AI worker" and "AI Operator" appear as search descriptors in titles only. The category name stays "Managed Operator" (`src/lib/category.ts`) and on-page copy keeps "a new kind of worker". The product name "Operator" stays in every title it was in.
+  - **`/book`** gains a short expectations list under the lede. It reuses production copy (we learn how the business runs; if an Operator is not the fit we say so; you walk away with a clear recommendation either way) and says we are based in Phoenix and the first conversation is a video call. No "free" (Decision #13), no durations, no follow-up promises, and no in-person promise, because the booked call carries a video link (`src/lib/booking/config.ts`) and in-person is an internal Phase 1 default.
+  - **`/operator` names what waits for a person**, written from runtime enforcement, not prose:
+    - Unauthored consequential actions are refused (fail-closed, ADR 0035).
+    - Agreeing to something on the client's behalf and anything it cannot undo always wait for a person's approval, even when authorized (overlay `plugins/hermes-smd-trust/enforce.py` `_decide_approval_class`; ADR 0056).
+    - An outside message about money, a contract, the scope of work, or a legal matter is held back for review (ADR 0031, `shared/content_floor`).
+    - Only outside sends are the client's draft-or-send dial (ADR 0073). The earlier "for each kind of work, you choose" overstated that dial for commitments and destructive acts, so it is replaced.
+    - The session taint gate is deliberately not claimed: it has a documented empty-session gap.
+  - **`/security` is corrected:** an unconfigured Operator "can read but cannot act on the world", not "can read and draft", because unauthored drafting is refused too.
+  - **Where we are:** home, `/about`, `/book`, and the home and `/book` descriptions say "based in Phoenix". The Operator is sold nationally, so the home line reads "in the Valley and beyond".
+- **Guards changed in the same PR.** `tests/landing-page.test.ts` gains the competitor-review describe, with the falsifiers built into the test:
+  - titles are extracted from every titled page and each is non-bare, unique, and at most 70 characters;
+  - the `/book` card carries the expectations, has no "free", and makes no in-person promise;
+  - `/operator` carries the four approval phrases and not the per-kind-of-work dial;
+  - `/security` no longer claims drafting;
+  - home and `/about` name Phoenix.
+
+  The booking card is enrolled in the no-dollar and voice scans.
