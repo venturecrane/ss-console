@@ -18,6 +18,7 @@ import {
 import { OPERATOR_CHECKOUT_PRODUCT_SLUG } from '../../../lib/stripe/subscriptions'
 import { env } from 'cloudflare:workers'
 import { errorResponse, jsonResponse } from '../../../lib/api/helpers'
+import { misconfiguredResponse } from '../../../lib/api/failures'
 import { getAdminBaseUrl, getPortalBaseUrl } from '../../../lib/config/app-url'
 
 /**
@@ -308,8 +309,7 @@ function parseStripeWebhookEvent(rawBody: string): ParseStripeWebhookEventResult
 export const POST: APIRoute = async ({ request }) => {
   const webhookSecret = env.STRIPE_WEBHOOK_SECRET
   if (!webhookSecret) {
-    console.error('[webhook/stripe] STRIPE_WEBHOOK_SECRET not configured')
-    return errorResponse(500, 'server_misconfigured')
+    return misconfiguredResponse('webhook/stripe', 'STRIPE_WEBHOOK_SECRET')
   }
 
   // --- Signature verification ---

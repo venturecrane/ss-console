@@ -3,6 +3,7 @@ import { getEngagement, updateEngagement } from '../../../../../lib/db/engagemen
 import { env } from 'cloudflare:workers'
 import { requireAdminSession } from '../../../../../lib/auth/admin-session'
 import { errorResponse, jsonResponse } from '../../../../../lib/api/helpers'
+import { failedResponse } from '../../../../../lib/api/failures'
 
 /**
  * Consultant photo upload endpoint.
@@ -89,8 +90,7 @@ async function handlePost({ request, locals, params }: APIContext): Promise<Resp
 
     return jsonResponse(201, { key, url: photoUrl })
   } catch (err) {
-    console.error('[api/admin/engagements/[id]/consultant-photo] Upload error:', err)
-    return errorResponse(500, 'internal_error')
+    return failedResponse(err, 'api/admin/engagements/[id]/consultant-photo')
   }
 }
 
@@ -137,8 +137,7 @@ async function handleDelete({ locals, params }: APIContext): Promise<Response> {
 
     return jsonResponse(200, { ok: true })
   } catch (err) {
-    console.error('[api/admin/engagements/[id]/consultant-photo] Delete error:', err)
-    return errorResponse(500, 'internal_error')
+    return failedResponse(err, 'api/admin/engagements/[id]/consultant-photo')
   }
 }
 

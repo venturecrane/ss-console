@@ -78,6 +78,27 @@ values and the like) so only real secrets are pushed.
 outbound admin links - strict, no fallback), and `PORTAL_BASE_URL`
 (`https://portal.smd.services`, portal links, falling back to `APP_BASE_URL`).
 
+## Merge gates, and why no human approval is required
+
+Every change to main goes through a pull request, and the gate is mechanical. The
+legacy branch protection requires the verify workflow (`Typecheck, Lint, Format,
+Test`), the repository ruleset requires `Security Summary` and `substrate`, and
+branches must be up to date with main, so one merge lands at a time.
+
+Required approving reviews are zero on both, and that is a decision rather than an
+oversight. The venture is one Captain plus agent sessions: the agents open and
+merge the pull requests, and the Captain is not a reviewer (the `/ship` contract
+merges, confirms, and reports). A human-approval requirement would either stall
+every merge on the Captain or be satisfied by the same session that wrote the
+change, which is no review at all. The substitute is evidence rather than
+eyeballs: runtime claims carry `crane_verify` ids, the runtime-AC gate refuses an
+acceptance criterion marked met without one, and the doctrine's "report is a
+probe" law makes a program's own completion claim insufficient. Admin enforcement
+is also off on purpose, so the Captain can bypass a stuck required check during an
+incident. The periodic code reviews under `docs/reviews/` grade this as an
+accepted gap each time, so it stays visible; revisit when a second human
+maintainer exists.
+
 ## Path B: the Operator (per-customer Fly Machine)
 
 The Operator runs as a per-customer Fly.io Machine hosting the Hermes runtime;

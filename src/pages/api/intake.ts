@@ -7,6 +7,7 @@ import {
   jsonResponse,
   errorResponse,
 } from '../../lib/api/helpers'
+import { failedResponse } from '../../lib/api/failures'
 import { rateLimitByIp } from '../../lib/booking/rate-limit'
 import { sendEmail } from '../../lib/email/resend'
 import { ORG_ID } from '../../lib/constants'
@@ -134,8 +135,7 @@ async function handlePost({ request, clientAddress }: APIContext): Promise<Respo
     await notifyTeam(validated, result.entityId, result.intakeLines)
     return jsonResponse(201, { ok: true })
   } catch (err) {
-    console.error('[api/intake] Error:', err)
-    return errorResponse(500, 'internal_error')
+    return failedResponse(err, 'api/intake')
   }
 }
 

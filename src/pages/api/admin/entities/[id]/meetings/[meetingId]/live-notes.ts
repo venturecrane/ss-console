@@ -1,4 +1,5 @@
 import { jsonResponse, errorResponse } from '../../../../../../../lib/api/helpers'
+import { failedResponse } from '../../../../../../../lib/api/failures'
 import type { APIRoute } from 'astro'
 import { getMeeting, updateMeeting } from '../../../../../../../lib/db/meetings'
 import { env } from 'cloudflare:workers'
@@ -45,7 +46,6 @@ export const PUT: APIRoute = async ({ request, locals, params }) => {
 
     return jsonResponse(200, { ok: true })
   } catch (err) {
-    console.error('[api/admin/entities/[id]/meetings/[meetingId]/live-notes] Error:', err)
-    return errorResponse(500, 'internal_error')
+    return failedResponse(err, 'api/admin/entities/[id]/meetings/[meetingId]/live-notes')
   }
 }

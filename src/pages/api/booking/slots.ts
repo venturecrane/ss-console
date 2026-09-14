@@ -1,4 +1,5 @@
 import { jsonResponse, errorResponse } from '../../../lib/api/helpers'
+import { failedResponse, misconfiguredResponse } from '../../../lib/api/failures'
 import type { APIRoute } from 'astro'
 import { ORG_ID } from '../../../lib/constants'
 import { BOOKING_CONFIG } from '../../../lib/booking/config'
@@ -23,6 +24,23 @@ const FALLBACK_EMAIL = 'team@smd.services'
 // review's reading of the booking surface. (A line comment on purpose: the
 // API inventory takes a file's first doc block as the route summary.)
 const SLOTS_PER_IP_PER_HOUR = 120
+
+// The calendar integration is not there to use: a configuration state, captured
+// as a warning. (A line comment: the API inventory takes the first doc block.)
+function calendarUnavailable(missing: string): Response {
+  return misconfiguredResponse('api/booking/slots', missing, {
+    status: 503,
+    code: 'calendar_unavailable',
+    message: 'Online booking is temporarily unavailable.',
+    extra: {
+      fallback: {
+        type: 'email',
+        email: FALLBACK_EMAIL,
+        message: `Please email ${FALLBACK_EMAIL} to schedule your call.`,
+      },
+    },
+  })
+}
 
 /**
  * GET /api/booking/slots
@@ -59,36 +77,14 @@ export const GET: APIRoute = async ({ url, request }) => {
     const integration = await getIntegration(env.DB, ORG_ID, 'google_calendar')
 
     if (!integration) {
-      return errorResponse(
-        503,
-        'calendar_unavailable',
-        'Online booking is temporarily unavailable.',
-        {
-          fallback: {
-            type: 'email',
-            email: FALLBACK_EMAIL,
-            message: `Please email ${FALLBACK_EMAIL} to schedule your call.`,
-          },
-        }
-      )
+      return calendarUnavailable('google_calendar integration')
     }
 
     // 2. Get a valid access token (refreshes if needed)
     const accessToken = await getGoogleAccessToken(env.DB, integration, env)
 
     if (!accessToken) {
-      return errorResponse(
-        503,
-        'calendar_unavailable',
-        'Online booking is temporarily unavailable.',
-        {
-          fallback: {
-            type: 'email',
-            email: FALLBACK_EMAIL,
-            message: `Please email ${FALLBACK_EMAIL} to schedule your call.`,
-          },
-        }
-      )
+      return calendarUnavailable('google_calendar access token')
     }
 
     // 3. Compute the time window
@@ -125,8 +121,7 @@ export const GET: APIRoute = async ({ url, request }) => {
       meeting_label: BOOKING_CONFIG.meeting_label,
     })
   } catch (err) {
-    console.error('[api/booking/slots] Error:', err)
-    return errorResponse(500, 'internal_error')
+    return failedResponse(err, 'api/booking/slots')
   }
 }
 

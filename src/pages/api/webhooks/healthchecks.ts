@@ -37,6 +37,7 @@
  */
 
 import { jsonResponse, errorResponse } from '../../../lib/api/helpers'
+import { misconfiguredResponse } from '../../../lib/api/failures'
 import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 
@@ -50,8 +51,7 @@ interface HealthchecksWebhookPayload {
 export const POST: APIRoute = async ({ request }) => {
   const expected = env.HEALTHCHECKS_WEBHOOK_SECRET
   if (!expected) {
-    console.error('[webhook/healthchecks] HEALTHCHECKS_WEBHOOK_SECRET not configured')
-    return errorResponse(500, 'server_misconfigured')
+    return misconfiguredResponse('webhook/healthchecks', 'HEALTHCHECKS_WEBHOOK_SECRET')
   }
 
   if (!bearerMatches(request, expected)) {
