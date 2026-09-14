@@ -28,6 +28,7 @@
  */
 
 import { jsonResponse, errorResponse } from '../../../lib/api/helpers'
+import { misconfiguredResponse } from '../../../lib/api/failures'
 import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 
@@ -44,8 +45,7 @@ interface SentryWebhookPayload {
 export const POST: APIRoute = async ({ request }) => {
   const secret = env.SENTRY_WEBHOOK_SECRET
   if (!secret) {
-    console.error('[webhook/sentry] SENTRY_WEBHOOK_SECRET not configured')
-    return errorResponse(500, 'server_misconfigured')
+    return misconfiguredResponse('webhook/sentry', 'SENTRY_WEBHOOK_SECRET')
   }
 
   const rawBody = await request.text()

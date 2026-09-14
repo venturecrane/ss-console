@@ -11,6 +11,7 @@ import {
   jsonResponse,
   errorResponse,
 } from '../../../lib/api/helpers'
+import { failedResponse } from '../../../lib/api/failures'
 import { sendEmail } from '../../../lib/email/resend'
 import { buildAdminUrl } from '../../../lib/config/app-url'
 import {
@@ -149,8 +150,7 @@ async function handlePost({ request, clientAddress, locals }: APIContext): Promi
       { source: 'website_intake_send' }
     )
   } catch (err) {
-    console.error('[api/intake/send] processIntakeSubmission failed:', err)
-    return errorResponse(500, 'internal_error')
+    return failedResponse(err, 'api/intake/send')
   }
 
   // Meta CAPI Lead event (ADR 0066 gate 2, #1723) — server half of the

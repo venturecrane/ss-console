@@ -35,6 +35,7 @@ import {
   verifyAssessmentSession,
 } from '../../../lib/assessment/session'
 import { jsonResponse, errorResponse } from '../../../lib/api/helpers'
+import { failedResponse, misconfiguredResponse } from '../../../lib/api/failures'
 
 const RATE_LIMIT_PER_HOUR = 200
 const MAX_TURNS = 60
@@ -156,12 +157,20 @@ export const POST: APIRoute = async ({ request, clientAddress }: APIContext) => 
 
   // Only continuing turns invoke the model, so the API-key gate lives here.
   if (!env.ANTHROPIC_API_KEY)
-    return errorResponse(503, 'unavailable', 'Assessment is temporarily unavailable.')
+    return misconfiguredResponse('api/assessment/turn', 'ANTHROPIC_API_KEY', {
+      status: 503,
+      code: 'unavailable',
+      message: 'Assessment is temporarily unavailable.',
+    })
 
   try {
     const result = await assessmentTurn(env.ANTHROPIC_API_KEY, parsed.turns)
     return jsonResponse(200, result)
-  } catch {
-    return errorResponse(502, 'unavailable', 'The operator could not respond. Please try again.')
+  } catch (err) {
+    return failedResponse(err, 'api/assessment/turn', {
+      status: 502,
+      code: 'unavailable',
+      message: 'The operator could not respond. Please try again.',
+    })
   }
 }

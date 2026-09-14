@@ -1,4 +1,5 @@
 import { jsonResponse, errorResponse } from '../../../../lib/api/helpers'
+import { failedResponse } from '../../../../lib/api/failures'
 import type { APIRoute } from 'astro'
 import { hashManageToken } from '../../../../lib/booking/tokens'
 import { getScheduleByManageToken, isManageTokenExpired } from '../../../../lib/booking/schedule'
@@ -65,7 +66,6 @@ export const GET: APIRoute = async ({ params }) => {
       meeting_label: BOOKING_CONFIG.meeting_label,
     })
   } catch (err) {
-    console.error('[api/booking/manage] Error:', err)
-    return errorResponse(500, 'internal_error')
+    return failedResponse(err, 'api/booking/manage')
   }
 }

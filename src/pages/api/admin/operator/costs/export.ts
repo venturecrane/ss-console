@@ -17,6 +17,7 @@
  */
 
 import { errorResponse } from '../../../../../lib/api/helpers'
+import { failedResponse } from '../../../../../lib/api/failures'
 import type { APIContext, APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 import {
@@ -58,7 +59,11 @@ async function handleGet({ request, locals }: APIContext): Promise<Response> {
   // Central cost_telemetry read via the D1 binding (ADR 0062).
   const result = await fetchCustomerCostRows(env.DB, customerSlug, start, end)
   if (result.error) {
-    return errorResponse(502, 'upstream_failed', result.error)
+    return failedResponse(result.error, 'api/admin/operator/costs/export', {
+      status: 502,
+      code: 'upstream_failed',
+      message: result.error,
+    })
   }
 
   const csv = rowsToCsv(customerSlug, result.rows)
