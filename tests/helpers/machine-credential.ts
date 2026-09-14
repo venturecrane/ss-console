@@ -12,8 +12,15 @@
 import { createHmac, randomBytes } from 'node:crypto'
 import type { D1Database } from '@cloudflare/workers-types'
 
+/** Hex to bytes without Buffer, which workers-types 5 declares as `any`. */
+function hexToBytes(hex: string): Uint8Array {
+  const out = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+  return out
+}
+
 export function machineKeyHashHex(plaintext: string, saltHex: string): string {
-  return createHmac('sha256', Buffer.from(saltHex, 'hex')).update(plaintext, 'utf8').digest('hex')
+  return createHmac('sha256', hexToBytes(saltHex)).update(plaintext, 'utf8').digest('hex')
 }
 
 export async function seedMachineCredential(
