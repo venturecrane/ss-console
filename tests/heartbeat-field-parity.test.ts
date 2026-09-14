@@ -53,6 +53,7 @@ import {
   runMigrations,
   installWorkerdPolyfills,
 } from '@venturecrane/crane-test-harness'
+import { seedMachineCredential } from './helpers/machine-credential'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import os from 'node:os'
@@ -164,7 +165,8 @@ describe('heartbeat field parity — every emitted field has a reader (ss#2287)'
     await runMigrations(db, { files: discoverNumericMigrations(migrationsDir) })
     await seed(db)
     for (const k of Object.keys(testEnv)) delete (testEnv as unknown as Record<string, unknown>)[k]
-    Object.assign(testEnv, { DB: db, MACHINE_HEARTBEAT_KEY: MACHINE_KEY })
+    Object.assign(testEnv, { DB: db })
+    await seedMachineCredential(db, SLUG, MACHINE_KEY)
   })
 
   it('the manifest is non-trivial and internally well-formed', () => {

@@ -18,13 +18,14 @@
  * probing caller whether the slug exists. Every failure returns the same
  * `{ ok: false, status: 401 }`.
  *
- * Shared-key fallback (transitional): a seat whose slug has a customer row
- * but no credential row is accepted against the Worker's shared
- * MACHINE_HEARTBEAT_KEY, exactly as Wave 1 did, and the fallback is logged
- * so it is visible in Worker logs. Unsetting that Worker secret retires the
- * fallback; until then a seat still on the shared key can still forge a
- * slug that has no credential row. Minting: operator/bin/lib/machine_credential.py
- * (run by provision-customer.sh and rotate-machine-credential.sh).
+ * There is no shared key. Wave 1's fleet-wide MACHINE_HEARTBEAT_KEY on the
+ * Worker was accepted as a transitional fallback for a slug with no
+ * credential row until 2026-09-14, when the last two seats were rotated
+ * (all four seats had rows; the Worker secret protected nothing). A slug
+ * with a customer row and no credential row now fails closed, exactly like
+ * an unknown slug. Minting: operator/bin/lib/machine_credential.py (run by
+ * provision-customer.sh and rotate-machine-credential.sh); a seat cannot
+ * heartbeat until it has been provisioned or rotated through one of them.
  */
 
 import type { D1Database } from '@cloudflare/workers-types'
@@ -55,13 +56,10 @@ interface CredentialRow {
  * Verify an inbound Machine request carries a valid bearer for its slug.
  * Returns the resolved entity_id on success, 401 otherwise.
  *
- * `sharedKey` is the Worker's transitional MACHINE_HEARTBEAT_KEY. Pass
- * `undefined` once every seat has a credential row; from then on a slug
- * without a row fails closed.
+ * A slug without a credential row fails closed.
  */
 export async function verifyMachineRequest(
   request: Request,
-  sharedKey: string | undefined,
   db: D1Database
 ): Promise<VerifyResult> {
   const auth = request.headers.get('Authorization') ?? ''
@@ -98,14 +96,11 @@ export async function verifyMachineRequest(
     return FAIL
   }
 
-  // No credential row yet: transitional shared-key path (Wave 1 shape).
+  // Customer row but no credential row: the seat has never been provisioned
+  // or rotated through the minter. Same cost and same answer as an unknown
+  // slug, so the two are indistinguishable from outside.
   await hmacMatches(provided, SENTINEL_SALT_HEX, SENTINEL_HASH)
-  if (!sharedKey) return FAIL
-  if (!constantTimeEqual(provided, sharedKey)) return FAIL
-  console.warn(
-    `[machine-key] shared-key fallback used; no machine_credentials row for slug=${slug}`
-  )
-  return { ok: true, entityId: row.entity_id, slug }
+  return FAIL
 }
 
 function previousStillValid(

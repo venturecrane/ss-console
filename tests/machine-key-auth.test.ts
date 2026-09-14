@@ -89,7 +89,6 @@ describe('verifyMachineRequest: per-tenant credentials', () => {
     const db = mockDb({ 'seat-v': vectorRow })
     const r = await verifyMachineRequest(
       req({ Authorization: 'Bearer test-plaintext-key', 'X-Tenant-Slug': 'seat-v' }),
-      undefined,
       db
     )
     expect(r).toEqual({ ok: true, entityId: 'ent-v', slug: 'seat-v' })
@@ -99,7 +98,6 @@ describe('verifyMachineRequest: per-tenant credentials', () => {
     const db = mockDb({ 'seat-a': credentialed('ent-a', KEY_A, SALT_A) })
     const r = await verifyMachineRequest(
       req({ Authorization: `Bearer ${KEY_A}`, 'X-Tenant-Slug': 'seat-a' }),
-      SHARED,
       db
     )
     expect(r).toEqual({ ok: true, entityId: 'ent-a', slug: 'seat-a' })
@@ -112,7 +110,6 @@ describe('verifyMachineRequest: per-tenant credentials', () => {
     })
     const r = await verifyMachineRequest(
       req({ Authorization: `Bearer ${KEY_A}`, 'X-Tenant-Slug': 'seat-b' }),
-      SHARED,
       db
     )
     expect(r).toEqual({ ok: false, status: 401 })
@@ -122,7 +119,6 @@ describe('verifyMachineRequest: per-tenant credentials', () => {
     const db = mockDb({ 'seat-a': credentialed('ent-a', KEY_A, SALT_A) })
     const r = await verifyMachineRequest(
       req({ Authorization: `Bearer ${SHARED}`, 'X-Tenant-Slug': 'seat-a' }),
-      SHARED,
       db
     )
     expect(r).toEqual({ ok: false, status: 401 })
@@ -138,7 +134,6 @@ describe('verifyMachineRequest: per-tenant credentials', () => {
     })
     const r = await verifyMachineRequest(
       req({ Authorization: `Bearer ${OLD_A}`, 'X-Tenant-Slug': 'seat-a' }),
-      undefined,
       db
     )
     expect(r).toEqual({ ok: true, entityId: 'ent-a', slug: 'seat-a' })
@@ -154,24 +149,22 @@ describe('verifyMachineRequest: per-tenant credentials', () => {
     })
     const r = await verifyMachineRequest(
       req({ Authorization: `Bearer ${OLD_A}`, 'X-Tenant-Slug': 'seat-a' }),
-      undefined,
       db
     )
     expect(r).toEqual({ ok: false, status: 401 })
   })
 
-  it('works with the shared key unset once the seat has a row (retired fallback)', async () => {
+  it('accepts the seat key with no other secret configured anywhere', async () => {
     const db = mockDb({ 'seat-a': credentialed('ent-a', KEY_A, SALT_A) })
     const r = await verifyMachineRequest(
       req({ Authorization: `Bearer ${KEY_A}`, 'X-Tenant-Slug': 'seat-a' }),
-      undefined,
       db
     )
     expect(r).toEqual({ ok: true, entityId: 'ent-a', slug: 'seat-a' })
   })
 })
 
-describe('verifyMachineRequest: transitional shared-key fallback', () => {
+describe('verifyMachineRequest: no shared key exists (retired 2026-09-14)', () => {
   const uncredentialed: JoinRow = {
     entity_id: 'ent-legacy',
     key_hash: null,
@@ -181,45 +174,37 @@ describe('verifyMachineRequest: transitional shared-key fallback', () => {
     prev_expires_at: null,
   }
 
-  it('accepts the shared key for a slug with no credential row, and says so in the log', async () => {
+  it('fails closed for a slug with a customer row and no credential row, whatever bearer is sent', async () => {
+    // Before 2026-09-14 this row was accepted against the Worker's fleet-wide
+    // MACHINE_HEARTBEAT_KEY and logged as a fallback. The Wave 1 value was a
+    // 64-hex string; presenting it, or anything else, is now a 401 and no
+    // log line, because no such secret is read any more.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const db = mockDb({ legacy: uncredentialed })
-    const r = await verifyMachineRequest(
-      req({ Authorization: `Bearer ${SHARED}`, 'X-Tenant-Slug': 'legacy' }),
-      SHARED,
-      db
-    )
-    expect(r).toEqual({ ok: true, entityId: 'ent-legacy', slug: 'legacy' })
-    expect(warn).toHaveBeenCalledTimes(1)
-    expect(String(warn.mock.calls[0]?.[0])).toContain('shared-key fallback')
-    expect(String(warn.mock.calls[0]?.[0])).not.toContain(SHARED)
+    for (const bearer of [SHARED, 'f'.repeat(64), KEY_A]) {
+      const r = await verifyMachineRequest(
+        req({ Authorization: `Bearer ${bearer}`, 'X-Tenant-Slug': 'legacy' }),
+        db
+      )
+      expect(r).toEqual({ ok: false, status: 401 })
+    }
+    expect(warn).not.toHaveBeenCalled()
   })
 
-  it('fails closed for a slug with no row once the shared key is unset', async () => {
+  it('an uncredentialed slug costs the same round trip as a credentialed one (one query, one HMAC)', async () => {
     const db = mockDb({ legacy: uncredentialed })
-    const r = await verifyMachineRequest(
+    await verifyMachineRequest(
       req({ Authorization: `Bearer ${SHARED}`, 'X-Tenant-Slug': 'legacy' }),
-      undefined,
       db
     )
-    expect(r).toEqual({ ok: false, status: 401 })
-  })
-
-  it('refuses a wrong shared key', async () => {
-    const db = mockDb({ legacy: uncredentialed })
-    const r = await verifyMachineRequest(
-      req({ Authorization: `Bearer ${'f'.repeat(64)}`, 'X-Tenant-Slug': 'legacy' }),
-      SHARED,
-      db
-    )
-    expect(r).toEqual({ ok: false, status: 401 })
+    expect(db.prepare).toHaveBeenCalledTimes(1)
   })
 })
 
 describe('verifyMachineRequest: uniform 401 on malformed input', () => {
   it('rejects a missing Authorization header', async () => {
     const db = mockDb({ 'seat-a': credentialed('ent-a', KEY_A, SALT_A) })
-    expect(await verifyMachineRequest(req({ 'X-Tenant-Slug': 'seat-a' }), SHARED, db)).toEqual({
+    expect(await verifyMachineRequest(req({ 'X-Tenant-Slug': 'seat-a' }), db)).toEqual({
       ok: false,
       status: 401,
     })
@@ -230,24 +215,17 @@ describe('verifyMachineRequest: uniform 401 on malformed input', () => {
     expect(
       await verifyMachineRequest(
         req({ Authorization: `Basic ${KEY_A}`, 'X-Tenant-Slug': 'seat-a' }),
-        SHARED,
         db
       )
     ).toEqual({ ok: false, status: 401 })
     expect(
-      await verifyMachineRequest(
-        req({ Authorization: 'Bearer ', 'X-Tenant-Slug': 'seat-a' }),
-        SHARED,
-        db
-      )
+      await verifyMachineRequest(req({ Authorization: 'Bearer ', 'X-Tenant-Slug': 'seat-a' }), db)
     ).toEqual({ ok: false, status: 401 })
   })
 
   it('rejects a missing slug without touching the database', async () => {
     const db = mockDb({ 'seat-a': credentialed('ent-a', KEY_A, SALT_A) })
-    expect(
-      await verifyMachineRequest(req({ Authorization: `Bearer ${KEY_A}` }), SHARED, db)
-    ).toEqual({
+    expect(await verifyMachineRequest(req({ Authorization: `Bearer ${KEY_A}` }), db)).toEqual({
       ok: false,
       status: 401,
     })
@@ -259,7 +237,6 @@ describe('verifyMachineRequest: uniform 401 on malformed input', () => {
     expect(
       await verifyMachineRequest(
         req({ Authorization: `Bearer ${KEY_A}`, 'X-Tenant-Slug': 'nope' }),
-        SHARED,
         db
       )
     ).toEqual({ ok: false, status: 401 })

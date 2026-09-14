@@ -42,7 +42,7 @@ function nonNegInt(v: unknown): number | null {
 }
 
 export const POST: APIRoute = async ({ request }) => {
-  const auth = await verifyMachineRequest(request, env.MACHINE_HEARTBEAT_KEY, env.DB)
+  const auth = await verifyMachineRequest(request, env.DB)
   if (!auth.ok) return errorResponse(401, 'unauthorized')
 
   let body: SummaryBody

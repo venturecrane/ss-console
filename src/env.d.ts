@@ -184,18 +184,6 @@ declare namespace Cloudflare {
      */
     FLY_API_TOKEN?: string
     /**
-     * TRANSITIONAL shared bearer for the Machine -> control-plane paths
-     * (`POST /api/internal/heartbeat`, `/runtime-summary`, `/sentry-probe`).
-     * Since migration 0114 each seat authenticates with its own credential
-     * (`machine_credentials`, HMAC-SHA256 with a per-row salt, minted by
-     * operator/bin/lib/machine_credential.py); this secret is accepted only
-     * for a slug that has NO credential row yet, and every such use is
-     * logged as `[machine-key] shared-key fallback`. Once every shipped seat
-     * has a row, unset this secret on the Worker: that is the retirement of
-     * the Wave 1 shared key (ADR 0023 §"Cross-cutting calls" #10).
-     */
-    MACHINE_HEARTBEAT_KEY?: string
-    /**
      * Per-customer secret-relay endpoint base for the write-only static-secret
      * entry path (ADR 0042 / ADR 0036). When set, the client credential-entry
      * endpoint relays a client-entered API key into the customer's per-customer

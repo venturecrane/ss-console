@@ -13,16 +13,28 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { APIContext } from 'astro'
 import { env as testEnv } from 'cloudflare:workers'
 import { POST } from '../src/pages/api/internal/sentry-probe'
+import { machineKeyHashHex } from './helpers/machine-credential'
 
 const KEY = '0'.repeat(64)
+const SALT = '11'.repeat(16)
 
+/** The join row the verifier selects, credentialed for KEY (no shared key exists). */
 function mockDb(slugToEntity: Record<string, string>) {
   return {
     prepare: vi.fn((_sql: string) => ({
       bind: (slug: string) => ({
         first: async <T>(): Promise<T | null> => {
           const entityId = slugToEntity[slug]
-          return entityId ? ({ entity_id: entityId } as unknown as T) : null
+          return entityId
+            ? ({
+                entity_id: entityId,
+                key_hash: machineKeyHashHex(KEY, SALT),
+                salt: SALT,
+                prev_key_hash: null,
+                prev_salt: null,
+                prev_expires_at: null,
+              } as unknown as T)
+            : null
         },
       }),
     })),
@@ -40,7 +52,7 @@ function ctx(headers: Record<string, string>): APIContext {
 
 beforeEach(() => {
   for (const k of Object.keys(testEnv)) delete (testEnv as unknown as Record<string, unknown>)[k]
-  Object.assign(testEnv, { MACHINE_HEARTBEAT_KEY: KEY, DB: mockDb({ smd: 'ent-smd' }) })
+  Object.assign(testEnv, { DB: mockDb({ smd: 'ent-smd' }) })
 })
 
 describe('POST /api/internal/sentry-probe', () => {

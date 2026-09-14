@@ -21,6 +21,7 @@ import {
   runMigrations,
   installWorkerdPolyfills,
 } from '@venturecrane/crane-test-harness'
+import { seedMachineCredential } from './helpers/machine-credential'
 import path from 'node:path'
 import { POST } from '../src/pages/api/internal/heartbeat'
 import { rosterHealth } from '../src/lib/admin/fleet-roster'
@@ -88,7 +89,8 @@ describe('POST /api/internal/heartbeat — cron_containment (ss#2276)', () => {
     await runMigrations(db, { files: discoverNumericMigrations(migrationsDir) })
     await seed(db)
     for (const k of Object.keys(testEnv)) delete (testEnv as unknown as Record<string, unknown>)[k]
-    Object.assign(testEnv, { DB: db, MACHINE_HEARTBEAT_KEY: MACHINE_KEY })
+    Object.assign(testEnv, { DB: db })
+    await seedMachineCredential(db, SLUG, MACHINE_KEY)
   })
 
   it('stores 1 and 0, coercing booleans', async () => {

@@ -26,6 +26,7 @@ import {
   runMigrations,
   installWorkerdPolyfills,
 } from '@venturecrane/crane-test-harness'
+import { seedMachineCredential } from './helpers/machine-credential'
 import path from 'node:path'
 import { POST } from '../src/pages/api/internal/heartbeat'
 import { runOnce, type Env as WorkerEnv } from '../workers/fleet-alerts/src/index'
@@ -180,7 +181,7 @@ describe('POST /api/internal/heartbeat — spec-control fields (ss#2234)', () =>
     await runMigrations(db, { files: allMigrations() })
     await seedOrgEntityConfig(db, 'alpha')
     ;(testEnv as unknown as Record<string, unknown>).DB = db
-    ;(testEnv as unknown as Record<string, unknown>).MACHINE_HEARTBEAT_KEY = MACHINE_KEY
+    await seedMachineCredential(db, 'alpha', MACHINE_KEY)
   })
 
   it('stores a valid spec_control map and spec_control_ok', async () => {
