@@ -71,6 +71,14 @@ named contract files), and it does not run as part of `npm run verify`. A
 still turn main red on the substrate workflow - so Operator config changes get
 the pytest suite run locally before merge (`cd operator && python3 -m pytest ...`).
 
+The Operator tree is one Python project (`operator/pyproject.toml`). Its CLIs
+(`operator/bin/*.py`, `operator/rehearsal/run.py`) import `bin.lib.*`,
+`adapter.*`, `workspace_broker.*` and `rehearsal.*` as packages and no longer
+put the tree on `sys.path` themselves, so a laptop that runs them needs the
+project installed once: `python3 -m pip install -e operator`. CI's substrate
+job and the scheduled workflows that run those CLIs do the same install; a bare
+local `pytest` gets the tree root from `pythonpath = .` in `operator/pytest.ini`.
+
 ## Worktree isolation for parallel sessions
 
 Parallel sessions do not share a working tree. Each runs in its own git worktree -

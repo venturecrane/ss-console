@@ -63,8 +63,6 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 from rehearsal import drivers, registry, report, scope
 from rehearsal.scoring import FAIL, PASS, SKIPPED, LegObservation, score_scenario
 

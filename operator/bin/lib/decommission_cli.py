@@ -66,21 +66,14 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-_HERE = Path(__file__).resolve()
-# Make the operator package importable when this module is run as a
-# script from inside the repo. operator/ becomes the path root so
-# `from adapter.audit_log import ...` resolves.
-sys.path.insert(0, str(_HERE.parents[2]))
-
-# Imported after sys.path tweak.
-from bin.lib.decommission import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from bin.lib.decommission import (
     DecommissionPipeline,
     DecommissionStepFailed,
     StepResult,
     _load_customer_yaml,
 )
-from bin.lib.decommission_backends import BACKEND_REQUIREMENTS, backends_from_env  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
-from bin.lib.seam_pull import SeamAuditLogPreserver, seam_client_from_env  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from bin.lib.decommission_backends import BACKEND_REQUIREMENTS, backends_from_env
+from bin.lib.seam_pull import SeamAuditLogPreserver, seam_client_from_env
 
 log = logging.getLogger("aie.bin.decommission_cli")
 

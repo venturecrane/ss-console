@@ -66,7 +66,6 @@ import hashlib
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import urllib.request
 from dataclasses import dataclass, field
@@ -74,13 +73,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
-_HERE = Path(__file__).resolve()
-_OPERATOR = _HERE.parents[1]
-_REPO = _HERE.parents[2]
-sys.path.insert(0, str(_OPERATOR))
-sys.path.insert(0, str(_OPERATOR / "workspace_broker"))
-
-from bin.lib.chain_pin import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from bin.lib.chain_pin import (
     PIN_ABSENT,
     PIN_MALFORMED,
     PIN_NOT_SUPPLIED,
@@ -90,18 +83,18 @@ from bin.lib.chain_pin import (  # noqa: E402 - the import needs the sys.path sh
 #: The wrangler-backed D1 client moved verbatim to bin/lib/console_d1.py when
 #: the cron-slot watchdog became its second consumer (same behavior, one
 #: client). Re-exported here so tests and callers read unchanged.
-from bin.lib.r2_lock_probe import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from bin.lib.r2_lock_probe import (
     LOCK_MIN_SECONDS,  # noqa: F401 — re-export: tests and callers read it from this module (tests pin the commitment)
     LockFetcher,  # noqa: F401 — re-export: tests and callers read it from this module
     bucket_lock_url,  # noqa: F401 — re-export: tests and callers read it from this module
     evaluate_lock_payload,  # noqa: F401 — re-export: tests and callers read it from this module
     probe_bucket_lock,
 )
-from bin.lib.chain_rehearsal import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from bin.lib.chain_rehearsal import (
     EXIT_REHEARSAL_FAILED,  # noqa: F401 — re-export: tests and callers read it from this module (tests pin the codes)
     rehearse_mismatch as _rehearse_mismatch,
 )
-from bin.lib.console_d1 import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from bin.lib.console_d1 import (
     ALERT_DRIVER_PREFIX,
     DEFAULT_DB,
     ConsoleD1,
@@ -112,8 +105,10 @@ from bin.lib.console_d1 import (  # noqa: E402 - the import needs the sys.path s
     utc_date,  # noqa: F401 — re-export: tests and callers read it from this module
     utc_now,
 )
-from bin.lib.seam_pull import seam_client_from_env  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
-from chain import verify_chain  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from bin.lib.seam_pull import seam_client_from_env
+from workspace_broker.chain import verify_chain
+
+_REPO = Path(__file__).resolve().parents[2]
 
 EXIT_CLEAN = 0
 EXIT_FINDING = 1
