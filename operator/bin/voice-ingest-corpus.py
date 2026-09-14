@@ -30,10 +30,7 @@ import os
 import sys
 from pathlib import Path
 
-_HERE = Path(__file__).resolve()
-sys.path.insert(0, str(_HERE.parents[1]))  # operator/ on sys.path
-
-from bin.lib.voice_corpus import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from bin.lib.voice_corpus import (
     VoiceLeakError,
     build_sample,
     load_cohort_vocabulary,

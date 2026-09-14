@@ -42,17 +42,13 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-_HERE = Path(__file__).resolve()
-# operator/ on sys.path so `from adapter.evidence import ...` resolves.
-sys.path.insert(0, str(_HERE.parents[2]))
-
-from adapter.evidence import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from adapter.evidence import (
     EvidencePacketBuilder,
     EvidencePacketError,
     PacketActor,
     PacketRequest,
 )
-from adapter.evidence.packet import SqliteReadExecutor  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from adapter.evidence.packet import SqliteReadExecutor
 
 log = logging.getLogger("aie.bin.evidence")
 

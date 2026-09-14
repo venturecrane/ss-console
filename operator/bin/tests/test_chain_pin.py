@@ -18,6 +18,7 @@ keep passing after a canonicalization change that broke every real ledger.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -197,6 +198,9 @@ def _run_verifier(tmp_path: Path, rows: list[dict], *args: str) -> subprocess.Co
         capture_output=True,
         text=True,
         check=False,
+        # The verifier imports bin.lib.* and workspace_broker.* as packages; a
+        # subprocess does not inherit pytest's pythonpath, so hand it the root.
+        env={**os.environ, "PYTHONPATH": str(_OPERATOR)},
     )
 
 
