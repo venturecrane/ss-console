@@ -99,6 +99,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Assembles and stages a law-and-motion filing package from components already drafted in the matter. Never drafts the motion, never reserves a hearing date.',
   'new-matter-intake':
     'Turns a new-client inquiry into a structured matter draft and a non-committal acknowledgment, after a read-only conflict check.',
+  'open-house-visitor-capture':
+    'Stores the visitors you describe after an open house, answers who you met, and emails you follow-up drafts on a fixed cadence. Never contacts a visitor.',
   'operator-introduce':
     'Introduces itself on request: connections, matter count, voice-establishment status per kind of writing, and every routine with its schedule and on/off state. States only what it observed or read.',
   'operator-self-initiation':
