@@ -1,4 +1,5 @@
 import { escapeHtml, jsonResponse, errorResponse } from '../../../../../lib/api/helpers'
+import { failedResponse } from '../../../../../lib/api/failures'
 import type { APIContext, APIRoute } from 'astro'
 import { ORG_ID } from '../../../../../lib/constants'
 import { hashManageToken, computeManageTokenExpiry } from '../../../../../lib/booking/tokens'
@@ -276,13 +277,12 @@ async function commitRescheduleAndNotify(
   try {
     await updateGoogleCalendarEvent(schedule, newSlotStartUtc, newSlotEndUtc)
   } catch (err) {
-    console.error('[api/booking/manage/reschedule] Google Calendar update failed:', err)
     await releaseHold(env.DB, holdId)
-    return errorResponse(
-      503,
-      'calendar_sync_failed',
-      'We could not update the calendar event. Please try again.'
-    )
+    return failedResponse(err, 'api/booking/manage/reschedule', {
+      status: 503,
+      code: 'calendar_sync_failed',
+      message: 'We could not update the calendar event. Please try again.',
+    })
   }
 
   const newManageTokenExpiresAt = computeManageTokenExpiry(
@@ -380,8 +380,7 @@ async function handlePost({ params, request }: APIContext): Promise<Response> {
       rawToken
     )
   } catch (err) {
-    console.error('[api/booking/manage/reschedule] Error:', err)
-    return errorResponse(500, 'internal_error')
+    return failedResponse(err, 'api/booking/manage/reschedule')
   }
 }
 

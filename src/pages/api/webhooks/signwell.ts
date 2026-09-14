@@ -4,6 +4,7 @@ import type { SignWellWebhookPayload } from '../../../lib/signwell/types'
 import { handleDocumentCompleted } from '../../../lib/webhooks/signwell-handler'
 import { env } from 'cloudflare:workers'
 import { errorResponse, jsonResponse } from '../../../lib/api/helpers'
+import { misconfiguredResponse } from '../../../lib/api/failures'
 
 /**
  * POST /api/webhooks/signwell
@@ -84,8 +85,7 @@ const SignWellVerificationFieldsSchema = z.object({
 export const POST: APIRoute = async ({ request }) => {
   const webhookSecret = env.SIGNWELL_WEBHOOK_SECRET
   if (!webhookSecret) {
-    console.error('[webhook/signwell] SIGNWELL_WEBHOOK_SECRET not configured')
-    return errorResponse(500, 'server_misconfigured')
+    return misconfiguredResponse('webhook/signwell', 'SIGNWELL_WEBHOOK_SECRET')
   }
 
   // --- Parse body (required — SignWell puts the hash inside the JSON) ---
@@ -130,8 +130,7 @@ export const POST: APIRoute = async ({ request }) => {
   if (payload.event.type === 'document_completed') {
     const apiKey = env.SIGNWELL_API_KEY
     if (!apiKey) {
-      console.error('[webhook/signwell] SIGNWELL_API_KEY not configured')
-      return errorResponse(500, 'server_misconfigured')
+      return misconfiguredResponse('webhook/signwell', 'SIGNWELL_API_KEY')
     }
 
     return handleDocumentCompleted(

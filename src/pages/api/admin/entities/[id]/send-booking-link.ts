@@ -1,4 +1,5 @@
 import { jsonResponse, errorResponse } from '../../../../../lib/api/helpers'
+import { failedResponse } from '../../../../../lib/api/failures'
 import type { APIContext, APIRoute } from 'astro'
 import { getEntity, transitionStage } from '../../../../../lib/db/entities'
 import { createMeetingWithLegacyAssessment } from '../../../../../lib/db/meetings'
@@ -171,9 +172,9 @@ async function provisionMeetingAndToken(args: ProvisionArgs): Promise<ProvisionR
   try {
     await transitionStage(env.DB, orgId, entityId, 'meetings', 'Booking link sent to prospect.')
   } catch (err) {
-    console.error('[api/admin/entities/send-booking-link] stage transition failed:', err)
-    return errorResponse(500, 'stage_transition_failed', undefined, {
-      message: err instanceof Error ? err.message : 'Stage transition failed.',
+    return failedResponse(err, 'api/admin/entities/send-booking-link', {
+      code: 'stage_transition_failed',
+      extra: { message: err instanceof Error ? err.message : 'Stage transition failed.' },
     })
   }
 
@@ -187,8 +188,10 @@ async function provisionMeetingAndToken(args: ProvisionArgs): Promise<ProvisionR
       meeting_type: meetingType,
     })
   } catch (err) {
-    console.error('[api/admin/entities/send-booking-link] signing failed:', err)
-    return errorResponse(500, 'signing_failed', 'Server is not configured to issue booking links.')
+    return failedResponse(err, 'api/admin/entities/send-booking-link', {
+      code: 'signing_failed',
+      message: 'Server is not configured to issue booking links.',
+    })
   }
 
   let appBaseUrl: string
@@ -423,9 +426,8 @@ async function handlePost({ params, request, locals }: APIContext): Promise<Resp
       send_error: emailResult.sendError,
     })
   } catch (err) {
-    console.error('[api/admin/entities/send-booking-link] Error:', err)
-    return errorResponse(500, 'internal_error', undefined, {
-      message: err instanceof Error ? err.message : 'server',
+    return failedResponse(err, 'api/admin/entities/send-booking-link', {
+      extra: { message: err instanceof Error ? err.message : 'server' },
     })
   }
 }

@@ -4,6 +4,7 @@ import { env } from 'cloudflare:workers'
 import { handleResendEvent, type ResendWebhookPayload } from '../../../lib/webhooks/resend-handler'
 import { handleBookingEmailDeliveryFailure } from '../../../lib/webhooks/booking-email-failure'
 import { errorResponse, jsonResponse } from '../../../lib/api/helpers'
+import { failedResponse, misconfiguredResponse } from '../../../lib/api/failures'
 import { captureError } from '../../../lib/observability/sentry'
 import { constantTimeEqual } from '../../../lib/auth/constant-time'
 
@@ -112,8 +113,7 @@ async function verifySvixHeaders(
 async function handlePost({ request }: APIContext): Promise<Response> {
   const webhookSecret = env.RESEND_WEBHOOK_SECRET
   if (!webhookSecret) {
-    console.error('[webhook/resend] RESEND_WEBHOOK_SECRET not configured')
-    return errorResponse(500, 'server_misconfigured')
+    return misconfiguredResponse('webhook/resend', 'RESEND_WEBHOOK_SECRET')
   }
 
   // Read the raw body BEFORE parsing — Svix signs the exact bytes.
@@ -155,10 +155,8 @@ async function handlePost({ request }: APIContext): Promise<Response> {
       ...(bookingFailure.handled ? { booking_alert: true } : {}),
     })
   } catch (err) {
-    console.error('[webhook/resend] handler failed:', err)
-    captureError(err, 'webhook.resend')
     // 500 → Svix retries with backoff.
-    return errorResponse(500, 'internal_error')
+    return failedResponse(err, 'webhook.resend')
   }
 }
 

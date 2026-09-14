@@ -30,6 +30,7 @@ import {
   type OpenAIChatMessage,
 } from '../../../lib/claude/assessment-llm'
 import { errorResponse } from '../../../lib/api/helpers'
+import { misconfiguredResponse } from '../../../lib/api/failures'
 import { constantTimeEqual } from '../../../lib/auth/constant-time'
 
 /** Normalize OpenAI content, which may arrive as a string OR an array of parts (ElevenLabs/OpenAI multimodal). */
@@ -83,13 +84,21 @@ export const POST: APIRoute = async ({ request }: APIContext) => {
   const expected = env.ELEVENLABS_LLM_SECRET
   // Fail closed: no secret configured ⇒ refuse, never serve open. An open proxy
   // would let anyone spend our Anthropic budget.
-  if (!expected) return errorResponse(503, 'unavailable')
+  if (!expected)
+    return misconfiguredResponse('api/assessment/llm', 'ELEVENLABS_LLM_SECRET', {
+      status: 503,
+      code: 'unavailable',
+    })
   const auth = request.headers.get('authorization') ?? ''
   // Constant-time like every other shared-secret check in the tree; this is
   // the one public endpoint whose compromise spends the Anthropic budget.
   if (!constantTimeEqual(auth, `Bearer ${expected}`)) return errorResponse(401, 'unauthorized')
 
-  if (!env.ANTHROPIC_API_KEY) return errorResponse(503, 'unavailable')
+  if (!env.ANTHROPIC_API_KEY)
+    return misconfiguredResponse('api/assessment/llm', 'ANTHROPIC_API_KEY', {
+      status: 503,
+      code: 'unavailable',
+    })
 
   let body: unknown
   try {

@@ -4,6 +4,7 @@ import { getEngagementDocumentKey, listDocuments } from '../../../../../lib/stor
 import { env } from 'cloudflare:workers'
 import { requireAdminSession } from '../../../../../lib/auth/admin-session'
 import { errorResponse, jsonResponse } from '../../../../../lib/api/helpers'
+import { failedResponse } from '../../../../../lib/api/failures'
 
 export const POST: APIRoute = async ({ request, locals, params }) => {
   const auth = requireAdminSession(locals)
@@ -35,8 +36,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     })
     return jsonResponse(201, { key, name: safeName })
   } catch (err) {
-    console.error('[api/admin/engagements/[id]/deliverables] Upload error:', err)
-    return errorResponse(500, 'internal_error')
+    return failedResponse(err, 'api/admin/engagements/[id]/deliverables')
   }
 }
 
@@ -63,7 +63,6 @@ export const GET: APIRoute = async ({ locals, params }) => {
     }))
     return jsonResponse(200, { files })
   } catch (err) {
-    console.error('[api/admin/engagements/[id]/deliverables] List error:', err)
-    return errorResponse(500, 'internal_error')
+    return failedResponse(err, 'api/admin/engagements/[id]/deliverables')
   }
 }

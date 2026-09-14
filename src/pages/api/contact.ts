@@ -5,6 +5,7 @@ import {
   trimString,
   errorResponse,
 } from '../../lib/api/helpers'
+import { failedResponse } from '../../lib/api/failures'
 import type { APIContext, APIRoute } from 'astro'
 import { sendEmail } from '../../lib/email/resend'
 import { rateLimitByIp } from '../../lib/booking/rate-limit'
@@ -106,14 +107,18 @@ async function handlePost({ request }: APIContext): Promise<Response> {
     })
 
     if (!result.success) {
-      console.error('[api/contact] Resend error:', result.error)
-      return errorResponse(500, 'unavailable', 'The message could not be sent.')
+      return failedResponse(result.error, 'api/contact', {
+        code: 'unavailable',
+        message: 'The message could not be sent.',
+      })
     }
 
     return jsonResponse(200, { ok: true })
   } catch (err) {
-    console.error('[api/contact] Error:', err)
-    return errorResponse(500, 'unavailable', 'The message could not be sent.')
+    return failedResponse(err, 'api/contact', {
+      code: 'unavailable',
+      message: 'The message could not be sent.',
+    })
   }
 }
 
