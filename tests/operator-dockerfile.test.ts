@@ -1282,7 +1282,32 @@ describe('Operator customer Machine Dockerfile', () => {
     // tracked .py twin moves (verify-overlay-pairs.py 10/10 PASS at the new ref);
     // vocabulary and heartbeat fields re-read as identical -- schemas.py and
     // heartbeat.py are both absent from the range.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="510f0dc9f134ed5e62cf3fa799b62245c95b607e"')
+    // 510f0dc9 -> fd616ed7 (2026-09-14, overlay#353 + #351; this PR). THE
+    // CHRONOLOGY TOOLS NOW LOAD. plugin.yaml enumerates the plugins the overlay
+    // loads and hermes-smd-medchron was never in it -- twenty plugin directories,
+    // nineteen listed -- so its register() was never called and
+    // medchron_job_submit / medchron_job_status / medchron_allowance never existed
+    // on any surface, on any platform, since the plugin shipped. Nothing failed:
+    // complete register(), correct tool definitions, action-class rows, a passing
+    // unit suite, and its own manifest as of #352. Every one of those inspects the
+    // plugin; none asks whether anything loads it.
+    //
+    // Settled by elimination on the client seat, after three wrong diagnoses: NOT
+    // requires_env (establish_* and job_status declare the identical
+    // SMD_WORKSPACE_BROKER_SOCKET and have both run there), NOT toolset membership
+    // (establishment and jobs are equally absent from platform_toolsets.webhook),
+    // NOT the missing per-plugin manifest (#352, a real inconsistency but no plugin
+    // keeps its manifest in the installed copy). WEBHOOK_EXPECTED_TOOLS (#350) is
+    // what made it decidable at all: it named both tools offered:false against
+    // operator_seat_facts offered:true, and without that control a tool that never
+    // registered is indistinguishable from a model that chose not to call one.
+    //
+    // #353 adds the line plus tests/test_overlay_manifest_lists_every_plugin.py,
+    // which fails on the cause. #351 is tests only (three fixtures move to a
+    // synthetic firm domain), shipping nothing to a seat. No tracked .py twin moves
+    // (verify-overlay-pairs.py 10/10 PASS at the new ref); vocabulary and heartbeat
+    // fields re-read as identical, both sources absent from the range.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="fd616ed74969667706ec7e126c164c0d3936d935"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
