@@ -32,13 +32,46 @@ So the states are named, and each one names the act it licenses:
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
-#: Below this, a transcription carries no citable clinical content. It is the
-#: constant that was already here -- `units.py` and `vision.py` each had their
-#: own copy of the literal 50 -- kept because the measurement was sound, and
-#: moved here so the two can never again disagree about what it means.
-CONTENTLESS_BYTES = 50
+#: Fewer WORDS than this and a transcription carries no citable clinical
+#: content. Words, not bytes, because transcription is not byte-identical
+#: between runs and the byte cutoff sat inside the noise: one phone screenshot
+#: came back at 44, 53 and 57 bytes on three runs of the SAME document against
+#: a threshold of 50, so it was disposed of once and unexplained twice.
+#:
+#: Measured on a real matter's 82 scanned documents (2026-09-15), counting
+#: words of three or more letters after page headers and illegibility markers
+#: are removed:
+#:
+#:     0 words   5 documents   (phone status bars, a bare [illegible])
+#:     3 words   2 documents   ("View motion photo")
+#:     --- nothing at all between 4 and 24 ---
+#:    25 words   1 document    (a photograph with a real description)
+#:    38+ words  74 documents  (records)
+#:
+#: 10 sits in an empty gap eight times wider than either cluster, and a word
+#: count moves by ones where a byte count moves by tens.
+#:
+#: A false positive is cheap BY CONSTRUCTION: this disposition sets only
+#: `compose_skip`, never `compose`, so the document is still composed and still
+#: citable, and `coverage.py` tests CITED before it reads the explanation. The
+#: reason only ever applies to a document nothing cited.
+CONTENTLESS_WORDS = 10
+
+#: Page headers (`[p.3] (machine transcription)`) and illegibility markers are
+#: the transcriber's own furniture, not the document's content, so neither
+#: counts toward the words a chronology could cite.
+_PAGE_HEADER = re.compile(r"\[p\.\d+\][^\n]*")
+_ILLEGIBLE = re.compile(r"\[illegible\]", re.IGNORECASE)
+_WORD = re.compile(r"[A-Za-z]{3,}")
+
+
+def citable_words(text: str) -> int:
+    """Words of three or more letters, ignoring the transcriber's furniture."""
+    return len(_WORD.findall(_ILLEGIBLE.sub(" ", _PAGE_HEADER.sub(" ", text))))
+
 
 ABSENT = "absent"
 EMPTY = "empty"
@@ -76,7 +109,11 @@ def recorded_ids(slug_dir: Path) -> set[str]:
 
 
 def transcript_state(slug_dir: Path, rec_id: str, recorded: set[str] | None = None) -> tuple[str, int]:
-    """``(state, size_in_bytes)`` for one document's transcription.
+    """``(state, measure)`` for one document's transcription.
+
+    ``measure`` is the CITABLE WORD COUNT once the document has been read, and
+    the byte size for the unread states (where there is no text to count and
+    the size is what a refusal message needs to report).
 
     ``recorded`` is the id set from :func:`recorded_ids`, passed in when
     checking many documents so the results file is read once. Omit it for a
@@ -98,14 +135,19 @@ def transcript_state(slug_dir: Path, rec_id: str, recorded: set[str] | None = No
     ids = recorded_ids(slug_dir) if recorded is None else recorded
     if ids and rec_id not in ids:
         return UNRECORDED, size
-    return (CONTENTLESS if size <= CONTENTLESS_BYTES else PRESENT), size
+    words = citable_words(path.read_text(encoding="utf-8", errors="replace"))
+    return (CONTENTLESS if words < CONTENTLESS_WORDS else PRESENT), words
 
 
-def contentless_reason(size: int) -> str:
+def contentless_reason(words: int) -> str:
     """The `compose_skip` a contentless scan carries into the coverage gate.
 
     Measured, never authored: it states what was found and nothing else. It
     quotes no part of the document, because this text reaches a client-facing
     limitations section and the document's content is the firm's, not ours.
     """
-    return f"read in full; {size} bytes of text, no citable clinical content"
+    plural = "" if words == 1 else "s"
+    # Measured, never inferred. "No citable clinical content" was an inference,
+    # and it reaches a client's limitations section: a six-word prescription
+    # label that happened to go uncited would have carried a false sentence.
+    return f"read in full; {words} word{plural} of text; nothing in it was cited"

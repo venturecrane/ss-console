@@ -370,6 +370,162 @@ def test_merge_routes_a_disagreement_to_the_model_and_falsifies_its_answer(
     assert merge_stage.run(sr2) == 1
 
 
+REWORDED = """##### CLUSTER 2023-05-10 | healingtouch (2 fragments)
+05/10/2023
+Healing Touch | Patient Complaints & Limitations
+
+Palpation of the cervical, thoracic, and lumbar spines revealed pain, tenderness, and trigger points with multiple fixations. (Exhibit 2 - p. 14)
+---FRAGMENT-BREAK---
+05/10/2023
+Healing Touch | Patient Complaints & Limitations
+
+Palpation revealed pain, tenderness and trigger points of the cervical, thoracic and lumbar spines with multiple fixations. (Exhibit 2 - p. 14)
+
+"""
+
+
+def _no_model() -> Scripted:
+    return Scripted(lambda p, n: (_ for _ in ()).throw(AssertionError("the model must not be called")))
+
+
+def test_a_same_citation_rewording_collapses_in_code_by_the_shared_rule(
+    job_dir: Path, firm_headings: Path, data_root: Path
+) -> None:
+    """The pair is a real shape from matter 200454 (2026-09-15): the same
+    chiropractic finding composed twice with its commas moved, J=0.86, same
+    page, no numbers. Before this rule the router sent it to the model, the
+    prompt told the model to collapse it, and the falsifier refused the
+    collapse -- 29 clusters, $62, no chronology. Now code collapses it by
+    `merge_falsify.yields_to`, the falsifier credits that same function, and
+    the model is never asked.
+
+    Falsifier: restoring the reworded-pair route in merge_cluster makes
+    `routed` non-empty and this goes red.
+    """
+    sr = _sr(job_dir, firm_headings, data_root, client=_no_model())
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "clusters.md").write_text(REWORDED)
+    assert merge_stage.run(sr) == 0
+    merged = (d / "merged.md").read_text()
+    assert merged.count("Palpation") == 1, merged
+    assert "Palpation of the cervical, thoracic, and lumbar spines" in merged, "the longer wording is the one kept"
+    route = json.loads((d / "merge_route.json").read_text())
+    assert route["code"] == [1] and route["routed"] == []
+
+
+def test_a_rewording_with_a_differing_number_is_kept_and_routed_to_be_marked(
+    job_dir: Path, firm_headings: Path, data_root: Path
+) -> None:
+    """The number-set guard is what makes code collapse defensible on a legal
+    record. Same words, same page, but 6 of 10 against 8 of 10: not the same
+    fact. Code keeps both and routes the pair; the model marks the
+    disagreement and keeps both; the count is preserved and the falsifier
+    passes.
+
+    Falsifier: dropping the number-set comparison from `same_fact` collapses
+    this pair in code before the router sees it, `routed` is empty, and the
+    merged entry carries one paragraph where the record carries two.
+    """
+    cluster = REWORDED.replace(
+        "trigger points with multiple fixations. (Exhibit 2 - p. 14)\n---FRAGMENT",
+        "trigger points with multiple fixations, pain rated 6 of 10. (Exhibit 2 - p. 14)\n---FRAGMENT",
+    ).replace(
+        "spines with multiple fixations. (Exhibit 2 - p. 14)",
+        "spines with multiple fixations, pain rated 8 of 10. (Exhibit 2 - p. 14)",
+    )
+    assert cluster.count("of 10") == 2
+    marked = (
+        "05/10/2023\nHealing Touch | Patient Complaints & Limitations\n\n"
+        "Palpation of the cervical, thoracic, and lumbar spines revealed pain, tenderness, and trigger points "
+        "with multiple fixations, pain rated 6 of 10. (Exhibit 2 - p. 14)\n\n"
+        "Palpation revealed pain, tenderness and trigger points of the cervical, thoracic and lumbar spines "
+        "with multiple fixations, pain rated 8 of 10. The records differ on this point. (Exhibit 2 - p. 14)\n"
+    )
+    client = Scripted(lambda p, n: _msg(marked))
+    log: list[str] = []
+    sr = _sr(job_dir, firm_headings, data_root, client, log=log)
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "clusters.md").write_text(cluster)
+    assert merge_stage.run(sr) == 0
+    route = json.loads((d / "merge_route.json").read_text())
+    assert len(route["routed"]) == 1 and "near-duplicate" in route["routed"][0]["reasons"][0]
+    assert len(client.calls) == 1
+    merged = (d / "merged.md").read_text()
+    assert merged.count("of 10") == 2 and "The records differ on this point." in merged
+
+
+def test_the_falsifier_credits_exactly_what_code_collapses(firm_headings: Path) -> None:
+    """One rule, two readers. For a cluster holding a same_fact pair AND a
+    containment pair, the floor the falsifier computes equals the paragraph
+    count the code merge emits, so the code merge passes its own falsifier
+    with nothing to spare.
+
+    Falsifier: making `containment_collapses` credit only `t in o` (the
+    2026-09-15 defect) raises the floor by one and `check` returns 4. The
+    exact mutation: replace `any(yields_to(t, o) for o in texts)` with
+    `any(o != t and t in o for o in texts)`.
+    """
+    hd = mf.Headings.from_config(config_mod.load(str(firm_headings)))
+    cluster = REWORDED.replace(
+        "spines with multiple fixations. (Exhibit 2 - p. 14)\n",
+        "spines with multiple fixations. (Exhibit 2 - p. 14)\n\n"
+        "Medical Diagnoses\n\nCervical strain. (Exhibit 2 - p. 15)\n\n"
+        "Cervical strain with radiculopathy. (Exhibit 2 - p. 15)\n",
+    )
+    parsed = mf.parse_clusters(cluster)
+    assert len(parsed) == 1
+    text, reasons = merge_stage.merge_cluster(parsed[0], hd)
+    assert text is not None and reasons == [], reasons
+    rc, rep = mf.check(cluster, text, hd)
+    assert rc == 0, rep
+    line = next(ln for ln in rep if ln.startswith("paragraphs:"))
+    assert "4 distinct in, 2 same-cite containment collapse(s) allowed, floor 2, 2 out" in line, line
+
+
+def test_a_model_that_fuses_two_paragraphs_is_refused(job_dir: Path, firm_headings: Path, data_root: Path) -> None:
+    """The prompt now forbids fusion as well as collapse, because joining two
+    cited sentences into one paragraph drops the distinct count exactly as a
+    deletion does. A cluster routed for a PARSE reason (an unknown heading)
+    still reaches the model; a model that fuses is refused, bisected to one
+    cluster, cannot split, and the stage exits 1 rather than ship it.
+
+    Falsifier: removing the paragraph-count check from `mf.check` lets the
+    fused answer through and the run returns 0.
+    """
+    routed = CLUSTER.replace("Treatment Recommendations", "Discontinuation in Care")
+    assert routed != CLUSTER
+    fused = (
+        "01/02/2026\nExample Clinic | Patient Complaints & Limitations\n\n"
+        "The patient reports neck pain rated 6 of 10. (Exhibit 1 - p. 1)\n\nMedical Diagnoses\n\n"
+        "Cervical strain. Physical therapy twice weekly. (Exhibit 1 - p. 2)\n"
+    )
+    client = Scripted(lambda p, n: _msg(fused))
+    log: list[str] = []
+    sr = _sr(job_dir, firm_headings, data_root, client, log=log)
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "clusters.md").write_text(routed)
+    assert merge_stage.run(sr) == 1
+    assert any("unknown heading" in line for line in log), "it was routed for the parse reason, not a rewording"
+    assert any("LOST 1 paragraph" in line for line in log), log
+    assert not (d / "merged.md").exists()
+
+
+def test_the_prompt_forbids_rewording_collapse_and_fusion(firm_headings: Path) -> None:
+    """Prompt and falsifier cannot share code, so they share words, pinned
+    here. The 2026-09-15 line licensed collapsing "the same fact from the
+    SAME source file and pages" -- the collapse the falsifier cannot credit.
+
+    Falsifier: restoring that sentence goes red on the third assertion.
+    """
+    text = prompts.load("merge-system", config_mod.load(str(firm_headings)))
+    assert "A rewording is never a duplicate" in text
+    assert "its own cited paragraph" in text
+    assert "same fact" not in text.lower()
+
+
 def test_falsifier_exit_codes(firm_headings: Path) -> None:
     hd = mf.Headings.from_config(config_mod.load(str(firm_headings)))
     merged_ok = (
