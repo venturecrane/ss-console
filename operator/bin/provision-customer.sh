@@ -267,7 +267,7 @@ print(c['customer_id'])
 print(c['fly_region'])
 print(m.get('size', 'shared-cpu-2x'))
 print(m.get('memory_mb', 2048))
-print(c.get('hermes_ref', 'v2026.8.18@e624e9fde561e1add9388384012b295fde669ade'))
+print(c.get('hermes_ref', 'v2026.9.14@345cd2b057a452236de401d3534b8502a7465e8d'))
 "
 # Portable line-array read (macOS bash 3.2 doesn't have mapfile)
 FIELDS=()

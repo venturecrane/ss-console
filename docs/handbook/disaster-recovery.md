@@ -37,6 +37,7 @@ The written runbooks today are Operator-focused and live in `docs/runbooks/opera
 | `ms-graph-azure-ad-setup.md` | Microsoft Graph / Azure AD OAuth setup for document storage |
 | `hermes-v0.18-upgrade-plan.md` | The first deliberate Hermes fleet promotion (v0.14.0 to v0.18.0, July 2026): hook-surface diff, staged rollout, bless, release-watch |
 | `hermes-v0.20-upgrade-plan.md` | The second promotion (v0.18.0 to v0.20.4, August 2026): the staged procedure to repeat at every pin bump, including the defaults-diff step and the rollback rehearsal |
+| `hermes-v0.21-upgrade-plan.md` | The third promotion (v0.20.4 to v0.21.3, September 2026): the loop-watchdog budget the 09-01 incident asked for, and the mcp 2.x tool-error defect the pilot's first live routine exposed |
 
 ## Known failure modes and recovery
 
