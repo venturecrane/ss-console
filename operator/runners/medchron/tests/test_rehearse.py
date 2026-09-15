@@ -98,6 +98,7 @@ def test_free_stages_run_in_the_copy_and_the_first_paid_stage_stops_with_a_proje
     sd = data_root / "example-matter"
     _truncate(sd, "extract_after_fold", drop={"decide_selection", "decide_fold"})
     (sd / "include.json").unlink()  # the cleared decision must re-author it -- in the copy
+    (sd / "runs" / "alpha" / "final-chronology.md").unlink()  # a real dead tree has none this early
     before = _snapshot(sd)
     calls = len(client.calls)
     copy, outs = _rehearse(job_dir, firm_config_path, pricing_path, client=client)
@@ -109,6 +110,12 @@ def test_free_stages_run_in_the_copy_and_the_first_paid_stage_stops_with_a_proje
     assert not (sd / "include.json").exists(), "and NOT in the real tree"
     assert _snapshot(sd) == before, "real state.json and every real artifact byte-identical"
     assert len(client.calls) == calls
+    # no chronology yet, so the audit has no count: it must read as unprojected,
+    # never as "audit 0.00" (a zero here would be the costliest late stage
+    # printed as free)
+    unproj = [n for n in o.notes if n.startswith("rehearse summary: unprojected")]
+    assert unproj and "audit" in unproj[0], o.notes
+    assert not any("audit 0.00" in n for n in o.notes), o.notes
 
 
 def test_merge_reports_its_routing_without_the_model(

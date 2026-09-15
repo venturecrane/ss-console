@@ -262,19 +262,23 @@ class Driver:
                 budget_mod.extracted_chars(extracted)
             )
         if stage.name == "audit":
-            return self._claims(ctx) * self.limits.usd_per_audit_claim
+            n = self._claims(ctx)
+            return None if n is None else n * self.limits.usd_per_audit_claim
         return None
 
-    def _claims(self, ctx: dag.Ctx) -> int:
+    def _claims(self, ctx: dag.Ctx) -> int | None:
         """Claims in the built chronology, counted with the audit gate's OWN
         extractor, so the projection counts what the audit will actually call
-        on rather than a remembered ratio from some other matter."""
+        on rather than a remembered ratio from some other matter. None before
+        the chronology exists: no document is "no count yet", not zero claims
+        (a rehearsal that stops before build_doc would otherwise print the
+        costliest late stage as $0)."""
         from .audit import claims as claims_mod
         from .audit.page_text import exhibit_paths
 
         doc = self.slug_dir / "runs" / ctx.unit.unit / "final-chronology.md"
         if not doc.is_file():
-            return 0
+            return None
         keep = set(exhibit_paths(self.slug_dir / "out" / ctx.unit.unit))
         body = claims_mod.body_of(doc.read_text(encoding="utf-8"))
         return len(claims_mod.extract_claims(body, keep))

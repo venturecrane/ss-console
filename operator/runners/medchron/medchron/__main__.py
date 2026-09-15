@@ -1,6 +1,7 @@
 """CLI: `medchron run <job_dir> [--from STAGE] [--dry-run] [--firm-config PATH]
 [--pricing PATH] [--json]`, `medchron rehearse <job_dir> [--redo STAGE,...]
-[--json]`, `medchron dag`, `medchron validate-config PATH`."""
+[--firm-config PATH] [--pricing PATH] [--json]`, `medchron dag`,
+`medchron validate-config PATH`."""
 
 from __future__ import annotations
 
