@@ -1307,7 +1307,18 @@ describe('Operator customer Machine Dockerfile', () => {
     // synthetic firm domain), shipping nothing to a seat. No tracked .py twin moves
     // (verify-overlay-pairs.py 10/10 PASS at the new ref); vocabulary and heartbeat
     // fields re-read as identical, both sources absent from the range.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="fd616ed74969667706ec7e126c164c0d3936d935"')
+    // fd616ed7 -> a01e68d0 (2026-09-15, overlay#355; ss#2789 step 4). THE LOOP
+    // WATCHDOG BUDGET IS SIZED TO THE SEAT. Hermes arms its liveness watchdog
+    // before the startup plugin crawl and exits 75 after three missed probes,
+    // about two minutes at the shipped defaults; a 1 GB seat's synchronous
+    // imports take about four, which is the 2026-09-01 pilot crash loop. The
+    // knobs exist from Hermes v2026.9.14; translate now writes gateway.
+    // loop_watchdog_* from machine.memory_mb (<=1 GB: 30s x 12 strikes, 15s
+    // timeout; larger: 30s x 6, 10s), inert on a v2026.8.18 seat. Range touches
+    // bootstrap/translate.py and its test only: no tracked .py twin moves
+    // (verify-overlay-pairs.py 10/10 PASS at the new ref); vocabulary and
+    // heartbeat fields re-read as identical, both sources absent from the range.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="a01e68d01fff5a455c443f9e859cad0af38e39e3"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

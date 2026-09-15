@@ -419,6 +419,20 @@ ssh_exec "gateway-liveness-files-readable-by-gate" "setpriv --reuid=hermes --reg
 # --wait-gateway-s flag the R2 strip probe below uses.
 ssh_exec "gateway-loop-heartbeat-fresh" "n=0; while [ \$n -lt 36 ]; do for f in /opt/data/profiles/*/state/gateway.heartbeat; do [ -f \$f ] || continue; [ \$(( \$(date -u +%s) - \$(stat -c %Y \$f) )) -lt 120 ] && exit 0; done; n=\$((n+1)); sleep 5; done; exit 1"
 
+# ---------- Step 11d: the loop-watchdog budget is sized to this seat (#2789) ----------
+# Hermes arms its event-loop liveness watchdog before the startup plugin crawl
+# and exits 75 after max_strikes missed probes. At the shipped defaults that is
+# about two minutes; a 1 GB seat's synchronous imports take about four, which is
+# the 2026-09-01 pilot crash loop (docs/runbooks/operator/incidents/). From Hermes
+# v2026.9.14 the budget is config, and the overlay's translate writes
+# gateway.loop_watchdog_* into every profile's config.yaml from machine.memory_mb
+# (<= 1024 MB: 12 strikes; larger: 6). This reads the rendered file back against
+# the authored size, so a seat that would crash-loop on a cold start fails the
+# provision here instead of paging at 02:00. Inert on an older Hermes pin, which
+# ignores the keys; the read-back is still what proves translate wrote them.
+# (No single quotes: ssh_exec wraps the command in sh -c '...'.)
+ssh_exec "gateway-loop-watchdog-budget-authored" "/opt/hermes/.venv/bin/python3 -c \"import sys, yaml, pathlib; c = yaml.safe_load(open(\\\"/var/lib/smd-config/customer.yaml\\\")) or {}; mb = int((c.get(\\\"machine\\\") or {}).get(\\\"memory_mb\\\") or 0); want = 12 if mb <= 1024 else 6; got = {str(p): ((yaml.safe_load(open(p)) or {}).get(\\\"gateway\\\") or {}).get(\\\"loop_watchdog_max_strikes\\\") for p in pathlib.Path(\\\"/opt/data/profiles\\\").glob(\\\"*/config.yaml\\\")}; bad = {k: v for k, v in got.items() if v != want}; sys.stderr.write(f\\\"loop-watchdog budget drift: want max_strikes={want} for {mb} MB, got {bad}\\n\\\") if (bad or not got) else None; sys.exit(1 if (bad or not got) else 0)\""
+
 # ---------- Step 12: /app governance artifacts are root-owned, not agent-writable (SEC-31) ----------
 # The activation-gate source the gateway:startup hook force-loads
 # (/app/overlay-pack, incl. hooks/smd-overlay-activation/handler.py) must be owned
