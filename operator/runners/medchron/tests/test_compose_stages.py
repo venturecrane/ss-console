@@ -521,9 +521,10 @@ def test_the_prompt_forbids_rewording_collapse_and_fusion(firm_headings: Path) -
     Falsifier: restoring that sentence goes red on the third assertion.
     """
     text = prompts.load("merge-system", config_mod.load(str(firm_headings)))
+    assert "Drop nothing" in text, "the model never deletes; what may be collapsed is decided in code"
     assert "A rewording is never a duplicate" in text
-    assert "its own cited paragraph" in text
-    assert "same fact" not in text.lower()
+    assert "its own cited paragraph" in text and "Never join two cited sentences" in text
+    assert "same fact" not in text.lower() and "Drop a sentence" not in text
 
 
 def test_falsifier_exit_codes(firm_headings: Path) -> None:
