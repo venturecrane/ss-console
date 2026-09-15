@@ -65,6 +65,13 @@ personas:
       exposure:
         internal_write: autonomous
         external_send: confirm
+        # Sends to a ROSTERED address (scope.inbound_allow_from) are their own
+        # class. Autonomous here lets the open-house follow-up drafts reach the
+        # seat's own principal on a scheduled turn without a Telegram approval
+        # round trip; nothing outside the roster is touched by this line (the
+        # recipient classifier decides the class at send time). The owner
+        # promoting trust on their own seat is ADR 0071 decision 5.
+        external_send_internal: autonomous
     skills:
       - name: inbox-triage
         version: pending
@@ -87,11 +94,27 @@ personas:
           scheduled: true
           webhook: false
         enabled: true
+      # Real estate open-house POC (the Captain plays the agent from the
+      # allowlisted address). Woken by the inbound-email trigger below for
+      # capture and recall, and by cron for the follow-up drafts.
+      - name: open-house-visitor-capture
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: true
+        enabled: true
     cron:
       # Named day-one job: the morning digest at 7:00 MST (Phoenix has no
       # DST, so 7am is 14:00 UTC year-round).
       - skill: status-report-assembler
         schedule: '0 14 * * *'
+        wake_policy: always
+      # Open-house follow-up drafts at 8:00 MST (15:00 UTC). `always`: the
+      # skill reads a small records directory and exits silently when nothing
+      # is due; a pre_run gate would add a second process root for a POC.
+      - skill: open-house-visitor-capture
+        schedule: '0 15 * * *'
         wake_policy: always
 
 # ---- CONNECTORS ----
@@ -103,10 +126,34 @@ connectors:
     webhook_url: 'https://hermes-scott.fly.dev/webhooks/agentmail'
 
 webhook_triggers:
+  # One trigger per (source, event); it names ONE skill. Re-pointed from
+  # inbox-triage to the open-house skill for the POC: every inbound email on
+  # this seat now lands there, and its SKILL.md carries an "anything else"
+  # branch that answers as the assistant would. inbox-triage keeps its
+  # scheduled and manual initiation. Reverting is this one line, applied live.
   - source: agentmail
     event_type: message.received
-    skill: inbox-triage
+    skill: open-house-visitor-capture
     persona: agent-crane
+
+# ---- SEND POLICY ----
+# The reply relay's platform default is 3 replies per sender per 10 minutes.
+# The only sender here is the seat's own principal; a capture, a correction,
+# and a recall inside ten minutes must not go quiet mid-thread. Same authored
+# values as the paid seats (ashton-price): rostered senders exempt, held
+# replies auto-release, non-roster bounds unchanged.
+send_policy:
+  reply:
+    internal_exempt: true
+    per_sender_max: 3
+    per_sender_window_seconds: 600
+    global_max: 20
+    global_window_seconds: 3600
+    backstop_max: 60
+    backstop_window_seconds: 3600
+  held_release:
+    enabled: true
+    ttl_seconds: 86400
 
 # ---- SCOPE ----
 scope:

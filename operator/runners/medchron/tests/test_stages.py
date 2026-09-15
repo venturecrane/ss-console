@@ -123,6 +123,56 @@ def test_download_exits_1_when_a_target_is_still_not_pulled(
     assert any("1 of 4 targets are not pulled" in line for line in log)
 
 
+def test_download_continues_when_the_vendor_no_longer_has_the_object(
+    job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
+) -> None:
+    """A 404 on a freshly minted URL is the one failure a retry cannot fix, and
+    halting on it means the firm never gets a chronology for that matter. The
+    row stays not-ok, so every downstream stage skips it and the delivered
+    document names it under Records Reviewed and Limitations."""
+    seat.gone.add("f2")
+    seed_seat_files(data_root, seat)
+    log: list[str] = []
+    sr = _sr(job_dir, firm_config_path, data_root, seat, log=log)
+    decisions.selection(sr.job, sr.cfg, sr.slug_dir, dry_run=False)
+    assert download_stage.run(sr) == 0
+    rows = {r["id"]: r for r in map(json.loads, (sr.slug_dir / "raw_manifest.jsonl").read_text().splitlines())}
+    assert rows["f2"]["ok"] is False and rows["f2"]["http_status"] == 404
+    assert not (sr.slug_dir / "raw" / "f2.pdf").exists()
+    assert any("NOT IN THE VENDOR'S STORAGE (404)" in line for line in log)
+    assert any("absent from the vendor's storage" in line for line in log)
+
+
+def test_download_still_exits_1_when_an_absent_object_sits_beside_a_retryable_failure(
+    job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
+) -> None:
+    """The exit code is decided by the kind of failure, not the count. One
+    unfixable failure must not buy a pass for a fixable one sitting next to it."""
+    seat.gone.add("f2")
+    seat.fail_mint.add("f1")
+    seed_seat_files(data_root, seat)
+    log: list[str] = []
+    sr = _sr(job_dir, firm_config_path, data_root, seat, log=log)
+    decisions.selection(sr.job, sr.cfg, sr.slug_dir, dry_run=False)
+    assert download_stage.run(sr) == 1
+    assert any("1 of 4 targets are not pulled for a reason a retry can fix" in line for line in log)
+
+
+def test_download_exits_1_when_the_vendor_has_none_of_the_objects(
+    job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
+) -> None:
+    """Disclosure is what makes an absent document safe to continue past, and
+    disclosure needs a document to sit in. Nothing pulled is not a chronology
+    with holes; it is an empty file on the firm's matter."""
+    seat.gone.update({"f1", "f2", "f3", "f5"})
+    seed_seat_files(data_root, seat)
+    log: list[str] = []
+    sr = _sr(job_dir, firm_config_path, data_root, seat, log=log)
+    decisions.selection(sr.job, sr.cfg, sr.slug_dir, dry_run=False)
+    assert download_stage.run(sr) == 1
+    assert any("there is nothing to chronicle" in line for line in log)
+
+
 def test_download_size_mismatch_is_a_failed_row_not_a_silent_file(
     job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
 ) -> None:

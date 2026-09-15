@@ -494,6 +494,12 @@ skill_bindings:
       - { artifact: triage_note, seam: local_file, class: staff }
     outbound: derived # real drafts into the managed mailbox
 
+  # ---- real estate: open-house POC (scott seat) ----
+  open-house-visitor-capture:
+    internal:
+      - { artifact: visitor_record, seam: local_file, class: record }
+    outbound: derived # the follow-up drafts email and the in-thread replies go to the rostered agent only
+
   # ---- SMD's own vertical (the venture operating on itself) ----
   ar-chaser:
     internal:

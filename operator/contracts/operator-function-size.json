@@ -28,7 +28,7 @@
     "runners/medchron/medchron/stages/billing_docx.py::run": 154,
     "runners/medchron/medchron/stages/classify.py::run_scanned": 86,
     "runners/medchron/medchron/stages/coverage.py::run": 98,
-    "runners/medchron/medchron/stages/download.py::run": 85,
+    "runners/medchron/medchron/stages/download.py::run": 84,
     "runners/medchron/medchron/stages/exhibits.py::run": 111,
     "runners/medchron/medchron/stages/render.py::run": 95,
     "runners/medchron/medchron/stages/strip.py::_run": 147,
