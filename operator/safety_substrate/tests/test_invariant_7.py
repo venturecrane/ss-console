@@ -32,7 +32,7 @@ Coverage:
 Run from repo root:
 
     cd operator && uv run --with pytest python -m pytest \
-        safety-substrate/tests/test_invariant_7.py -v
+        safety_substrate/tests/test_invariant_7.py -v
 """
 
 from __future__ import annotations
@@ -42,14 +42,10 @@ import os
 import socket
 import sys
 import threading
-from pathlib import Path
 
 import pytest
 
-_HERE = Path(__file__).resolve()
-sys.path.insert(0, str(_HERE.parents[1]))  # safety-substrate/ on path
-
-from invariants.invariant_7 import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from safety_substrate.invariants.invariant_7 import (
     BindingKind,
     BindingSnapshot,
     collect_snapshot_from_env,
@@ -591,12 +587,12 @@ def test_verify_at_boot_imports_without_pytest():
         del sys.modules[k]
     sys.modules["pytest"] = None  # poison: any `import pytest` now raises
     try:
-        mod = importlib.reload(importlib.import_module("invariants.invariant_7"))
+        mod = importlib.reload(importlib.import_module("safety_substrate.invariants.invariant_7"))
         assert mod.verify_at_boot(_ok_env()) == 0
     finally:
         sys.modules.pop("pytest", None)
         sys.modules.update(saved)
-        importlib.reload(importlib.import_module("invariants.invariant_7"))
+        importlib.reload(importlib.import_module("safety_substrate.invariants.invariant_7"))
 
 
 # ---------------------------------------------------------------------------

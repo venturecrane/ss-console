@@ -11,7 +11,7 @@
     "operator/customers/pilot-smokeball/seed/seed_voice_letters.py": 628,
     "operator/runners/medchron/medchron/daemon.py": 531,
     "operator/runners/medchron/medchron/llm.py": 510,
-    "operator/safety-substrate/sticky_stop.py": 521,
+    "operator/safety_substrate/sticky_stop.py": 521,
     "operator/skills/client-verification-tracker/pre_run.py": 583,
     "operator/skills/deadline-miss-escalator/pre_run.py": 756,
     "operator/skills/lien-ledger-tracker/pre_run.py": 880,

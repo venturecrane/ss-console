@@ -143,7 +143,7 @@ The consequence: raising the ceiling makes autonomous send real on the **MCP-con
 
 - This overturns the "architectural, not configurable" framing that ADR 0005 leaned on as a competitive claim. The mitigation is the vertical floor + the accountability invariant: the defensible claim shifts from "we never let the AI send" to "trust is configurable, code-enforced, audited, and floored by your vertical's compliance constraints" — a stronger and more honest claim, but a different one.
 - Removing a hardcoded safety refusal raises the stakes on the config-governance work. Until ADR 0026 lands, the ceiling map must ship with the secure default and **no portal path to raise `EXTERNAL_SEND`** — i.e., the axis is configurable in `customer.yaml` (Captain-authored, git-reviewed) before it is configurable via any self-serve surface. Sequencing below enforces this.
-- The safety-substrate invariant set changes shape. Invariant 2 stops asserting "always refuse autonomous external send" and starts asserting "enforce the configured `EXTERNAL_SEND` ceiling, and never exceed the vertical floor." That is a more complex property and needs fixtures for each ceiling value plus a floor-violation case.
+- The safety_substrate invariant set changes shape. Invariant 2 stops asserting "always refuse autonomous external send" and starts asserting "enforce the configured `EXTERNAL_SEND` ceiling, and never exceed the vertical floor." That is a more complex property and needs fixtures for each ceiling value plus a floor-violation case.
 
 **Out of scope.**
 
@@ -190,6 +190,6 @@ How we know we are following this decision:
 - [ADR 0026 — Config surface is a security boundary](./0026-config-surface-is-a-security-boundary.md) (companion; governs how a ceiling raise is persisted and audited)
 - Strategy notes: `note_01KSS3TCTKWYVF6EZ04482X389` (harness thesis), `note_01KSTYSNC9CYPKYFJZ3TJ7F6RM` (build audit)
 - `operator/adapter/trust_ceiling.py` (the `enforce()` logic and `ActionClass` enum)
-- `operator/safety-substrate/tests/test_invariant_2_no_external_send_without_confirmation.py` (the invariant being reshaped)
+- `operator/safety_substrate/tests/test_invariant_2_no_external_send_without_confirmation.py` (the invariant being reshaped)
 - `src/lib/operator/customer-yaml/types.ts`, `sections-personas.ts` (the ceiling vocabulary and validator)
 - [Issue #828](https://github.com/venturecrane/ss-console/issues/828) (external-send identity origin)

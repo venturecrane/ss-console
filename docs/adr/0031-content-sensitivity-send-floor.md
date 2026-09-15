@@ -88,7 +88,7 @@ floor can only narrow (send → draft); it never widens.**
   The pattern set is tuned over time against real drafts.
 - **Not yet a boot invariant.** The floor is enforced in the live fail-closed
   hook and covered by unit + integration tests, but it is not (yet) one of the
-  safety-substrate boot invariants that re-run on every Hermes SHA bump. Adding a
+  safety_substrate boot invariants that re-run on every Hermes SHA bump. Adding a
   boot invariant for the floor is reasonable future hardening (defense-in-depth
   against a SHA-bump regression); it is tracked, not done here.
 - **`send_draft` / bodyless forward are conservatively blocked** under an

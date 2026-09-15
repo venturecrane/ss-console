@@ -137,17 +137,12 @@ from __future__ import annotations
 
 import enum
 import logging
-import sys
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Callable, Deque, Optional, Protocol
 
-_HERE = Path(__file__).resolve()
-sys.path.insert(0, str(_HERE.parents[1]))  # operator/
-
-from adapter.audit_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from adapter.audit_log import (
     ActorRole,
     AuditEvent,
     AuditLogWriter,
@@ -155,7 +150,7 @@ from adapter.audit_log import (  # noqa: E402 - the import needs the sys.path sh
 
 # Sibling module from PR #953. Read-only; this module delegates the
 # canonical audit row write to log_decision() and never duplicates it.
-from trust_ceiling_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from .trust_ceiling_log import (
     ActionClassName,
     CeilingLevel,
     Decision,
@@ -236,7 +231,7 @@ def _message_for(reason: DecisionReason) -> CustomerMessage:
     log.warning(
         "refusal: no CustomerMessage mapping for DecisionReason=%s; "
         "falling back to GENERIC_REFUSED. Update _REASON_TO_MESSAGE in "
-        "operator/safety-substrate/refusal.py.",
+        "operator/safety_substrate/refusal.py.",
         reason.value,
     )
     return CustomerMessage.GENERIC_REFUSED

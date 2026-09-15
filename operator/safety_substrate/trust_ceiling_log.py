@@ -119,14 +119,9 @@ shape is in `docs/specs/operator/trust-ceiling-logging.md` §Aggregation.
 from __future__ import annotations
 
 import enum
-import sys
-from pathlib import Path
 from typing import Optional
 
-_HERE = Path(__file__).resolve()
-sys.path.insert(0, str(_HERE.parents[1]))  # operator/ on sys.path
-
-from adapter.audit_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from adapter.audit_log import (
     ActorRole,
     AuditEvent,
     AuditLogWriter,
@@ -229,7 +224,7 @@ class DecisionReason(str, enum.Enum):
 # ---------------------------------------------------------------------------
 # Action-type mapping
 #
-# Per the safety-substrate scope rules (issue brief), this module reuses
+# Per the safety_substrate scope rules (issue brief), this module reuses
 # the audit_log writer's closed-set `ACCEPTED_ACTION_TYPES` rather than
 # extending it. Mapping is per-Decision:
 #

@@ -153,7 +153,7 @@ export const CLIENT_ACTIVITY_CATEGORIES: readonly ClientActivityCategory[] = [
  *               Tracked in ss#2320; these are the promotion candidates.
  */
 export const SUPPRESSED_ACTION_REASONS: Readonly<Record<string, string>> = {
-  // --- INSTRUMENT: safety-substrate gates measuring their own routine work ---
+  // --- INSTRUMENT: safety_substrate gates measuring their own routine work ---
   INVARIANT_VIOLATION:
     'INSTRUMENT. Substrate invariant tripped, including every WARN/SOFT_STOP transition. Ours to act on, and a client cannot repair it.',
   INVARIANT_BOOT_CHECK_FAILED:

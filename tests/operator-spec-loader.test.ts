@@ -16,7 +16,7 @@
  * agent-writable volume "for convenience".
  *
  * @see operator/templates/entrypoint.sh
- * @see operator/safety-substrate/invariants/spec_dir_ownership.py
+ * @see operator/safety_substrate/invariants/spec_dir_ownership.py
  */
 
 import { describe, it, expect } from 'vitest'
@@ -91,7 +91,8 @@ describe('Operator entrypoint — spec-dir ownership boot gate', () => {
 
   it('refuses to boot when the check itself fails', () => {
     expect(CODE).toMatch(
-      /if \/opt\/hermes\/\.venv\/bin\/python3 "\$\{SPEC_OWNERSHIP_CHECK\}"[\s\S]{0,600}?exit 3/
+      // PYTHONPATH=/app: the check imports by package name (packaging stage 4).
+      /if PYTHONPATH=\/app \/opt\/hermes\/\.venv\/bin\/python3 "\$\{SPEC_OWNERSHIP_CHECK\}"[\s\S]{0,600}?exit 3/
     )
   })
 

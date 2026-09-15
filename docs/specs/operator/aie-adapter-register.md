@@ -177,7 +177,7 @@ These are filed as separate issues against ADR 0015's overlay-implementation wor
 
 - Fork-side overlay layer that constructs the `HookRegistry`, exposes it via the adapter loader, and wires the four hooks into Hermes' actual `tool_guardrails.py` dispatch path.
 - Substrate-side compaction context-injection (the part of the compaction hook that actually re-materializes pinned slots in the post-compaction context).
-- Per-tool cost telemetry emission (#804). The post-tool hook is the natural place to emit cost rows; deferred so this PR stays in safety-substrate scope.
+- Per-tool cost telemetry emission (#804). The post-tool hook is the natural place to emit cost rows; deferred so this PR stays in safety_substrate scope.
 - Sticky-stop integration in the pre-hook. The sticky-stop machine (PR #948) is already on main; lifting its `assert_allowed()` check into the pre-hook is a follow-on so this PR keeps the trust-ceiling and sticky-stop paths independently testable.
 - First upstream PR for the generic tool-dispatch hook surface (per ADR 0015 follow-on #5).
 

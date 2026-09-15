@@ -53,7 +53,7 @@
     },
     "DRAFT_REJECTED": {
       "side": "ss-console",
-      "producerFile": "operator/safety-substrate/refusal.py",
+      "producerFile": "operator/safety_substrate/refusal.py",
       "note": "the refusal handler writes DRAFT_REJECTED when a draft is refused by the substrate."
     },
     "DRAFT_EXPIRED": {
@@ -108,12 +108,12 @@
     },
     "AGENT_STOPPED": {
       "side": "ss-console",
-      "producerFile": "operator/safety-substrate/sticky_stop.py",
+      "producerFile": "operator/safety_substrate/sticky_stop.py",
       "note": "HARD_STOP transition emits AGENT_STOPPED."
     },
     "AGENT_RESUMED": {
       "side": "ss-console",
-      "producerFile": "operator/safety-substrate/sticky_stop.py",
+      "producerFile": "operator/safety_substrate/sticky_stop.py",
       "note": "sticky-stop clear emits AGENT_RESUMED."
     },
     "CONNECTOR_BOUND": {
@@ -153,12 +153,12 @@
     },
     "INVARIANT_VIOLATION": {
       "side": "ss-console",
-      "producerFile": "operator/safety-substrate/sticky_stop.py",
+      "producerFile": "operator/safety_substrate/sticky_stop.py",
       "note": "WARN/SOFT_STOP transition emits INVARIANT_VIOLATION; invariant_6 also routes here at runtime."
     },
     "INVARIANT_BOOT_CHECK_FAILED": {
       "side": "ss-console",
-      "producerFile": "operator/safety-substrate/invariants/invariant_7.py",
+      "producerFile": "operator/safety_substrate/invariants/invariant_7.py",
       "note": "boot-time binding mismatch emits INVARIANT_BOOT_CHECK_FAILED."
     },
     "INBOUND_RECEIVED": {
@@ -204,7 +204,7 @@
     },
     "ESCALATION_FIRED": {
       "side": "ss-console",
-      "producerFile": "operator/safety-substrate/refusal.py",
+      "producerFile": "operator/safety_substrate/refusal.py",
       "note": "the refusal handler fires the Captain escalation cascade."
     },
     "ESCALATION_ACKNOWLEDGED": {

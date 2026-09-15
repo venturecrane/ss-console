@@ -924,7 +924,7 @@ describe('operator send-posture doctrine guard (recipient-aware send; ADR 0025/0
   const DOCTRINE_ROOTS = [
     resolve('operator/skills'),
     resolve('operator/references'),
-    resolve('operator/safety-substrate'),
+    resolve('operator/safety_substrate'),
     resolve('operator/verticals'),
     resolve('docs/specs/operator'),
   ]

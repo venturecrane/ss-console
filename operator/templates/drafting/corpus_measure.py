@@ -166,7 +166,6 @@ def _walk(client, matter_id):
 
 
 def measure(matter_id, budget_seconds=900.0):
-    sys.path.insert(0, "/opt/connectors/smokeball")
     from smokeball_connector.client import build_client_from_env
     from smokeball_connector.extract import UnsupportedDocumentError, extract_text
 

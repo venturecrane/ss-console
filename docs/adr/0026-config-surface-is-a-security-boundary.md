@@ -26,7 +26,7 @@ The thesis note states this precisely: _"once exposure is configurable, the conf
 Today's reality, verified in code:
 
 - The portal endpoint authenticates a **principal** and forbids operators/compliance (`trust-ceiling.ts:48-54`) — the access gate is correct.
-- But the handler **does not persist** the change and **does not audit** it: it emits `console.info('settings.trust_ceiling.intent', …)` (`:68`) and returns an `ack` banner. A `console.info` line in Worker logs is not the append-only customer audit ledger (`operator/safety-substrate/` audit log, the one that is legal-hold-grade per the audit).
+- But the handler **does not persist** the change and **does not audit** it: it emits `console.info('settings.trust_ceiling.intent', …)` (`:68`) and returns an `ack` banner. A `console.info` line in Worker logs is not the append-only customer audit ledger (`operator/safety_substrate/` audit log, the one that is legal-hold-grade per the audit).
 
 So the surface that will, under ADR 0025, raise an agent's exposure ceiling currently has no durable record and no audit entry. A ceiling change is the highest-privilege configuration act in the product, and it is the least recorded.
 

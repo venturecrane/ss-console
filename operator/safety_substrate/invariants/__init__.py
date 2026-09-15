@@ -3,7 +3,7 @@
 Each module in this package implements one runtime invariant from platform
 PRD §7.5. The base 5 invariants (no destructive without approval, no external
 send, no autonomous commitment, sticky stop, code-enforced trust ceilings) are
-exercised by the per-fixture tests under `safety-substrate/tests/` and routed
+exercised by the per-fixture tests under `safety_substrate/tests/` and routed
 through the trust-ceiling adapter and the sticky-stop machine. This package
 holds the remaining two:
 
@@ -13,7 +13,7 @@ holds the remaining two:
   of record, or a verbatim quote from the source). Output containing an
   unsourced fact in such a field blocks emission with a structured error.
 
-  This is distinct from ``safety-substrate/citation_filter.py``. That module
+  This is distinct from ``safety_substrate/citation_filter.py``. That module
   detects FABRICATED legal citations (case names, reporter cites, statutory
   references) in any law-vertical output and refuses on detection - it is
   the law-firm-vertical implementation of invariant #6's refusal semantics.
@@ -34,7 +34,7 @@ Action types are drawn from the existing closed set
 ``docs/specs/operator/safety-invariants.md`` for the spec.
 """
 
-from invariants.invariant_6 import (
+from .invariant_6 import (
     Citation,
     CitationViolation,
     CitationViolations,
@@ -42,7 +42,7 @@ from invariants.invariant_6 import (
     SourceRegistry,
     enforce_citations,
 )
-from invariants.invariant_7 import (
+from .invariant_7 import (
     BindingMismatch,
     BindingSnapshot,
     Invariant7Violation,

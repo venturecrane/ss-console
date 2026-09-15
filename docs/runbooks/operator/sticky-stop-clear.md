@@ -8,7 +8,7 @@ it. This runbook is that pointer.
 
 ## What the sticky stop is
 
-The seat's automated circuit breaker (ADR 0062; `operator/safety-substrate/sticky_stop.py`,
+The seat's automated circuit breaker (ADR 0062; `operator/safety_substrate/sticky_stop.py`,
 vendored into the overlay). Two states, `OK -> HARD_STOP`, driven by recorded
 conditions - cost spend, consecutive tool failures, refusal cascades, time
 budget (`operator/contracts/runtime-controls.yaml`, the

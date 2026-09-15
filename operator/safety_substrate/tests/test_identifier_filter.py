@@ -15,14 +15,11 @@ audit metadata redacts values, money is out of scope (content floor's domain).
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from identifier_filter import (
+from safety_substrate.identifier_filter import (
     _CASE_RE,
     IdKind,
     Mode,

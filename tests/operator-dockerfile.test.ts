@@ -551,7 +551,7 @@ describe('Operator customer Machine Dockerfile', () => {
     // associations ONE RECORD AT A TIME - never per blob, because a tool result is
     // a collection and pairing everything in it registers the cross-product,
     // verifying precisely the defect this catches.
-    // This bump ALSO adds a 9th pair: operator/safety-substrate/identifier_filter.py
+    // This bump ALSO adds a 9th pair: operator/safety_substrate/identifier_filter.py
     // <-> shared/identifier_filter.py. It should always have been one - its sibling
     // citation_filter.py is - and because it was not, the copies diverged in BOTH
     // directions unseen: ss-console ahead on _CASE_RE matter numbers, the
@@ -1216,7 +1216,7 @@ describe('Operator customer Machine Dockerfile', () => {
     // Legacy WARN/SOFT_STOP rows read as OK, which also releases a seat
     // latched at SOFT_STOP with no Captain clear.
     // Vocabulary identical; the canonical twin
-    // operator/safety-substrate/sticky_stop.py moves in the SAME change (this
+    // operator/safety_substrate/sticky_stop.py moves in the SAME change (this
     // repo is where it lands first per the vendoring header).
     // c557f8c0 -> 9951fbf8 (2026-09-02c, overlay#344; canonical half ss#2690).
     // Every fabrication marker now carries a `remedy` appended to the refusal

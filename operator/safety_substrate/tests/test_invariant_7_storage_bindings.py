@@ -22,11 +22,9 @@ the boot runner executes the invariant. Detailed coverage lives in
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # safety-substrate/
 
-from invariants.invariant_7 import run as _invariant_run
+from safety_substrate.invariants.invariant_7 import run as _invariant_run
 
 
 def run() -> tuple[bool, str]:

@@ -43,7 +43,7 @@ reconciled by a human (the same shape ``overlay-pairs.json`` uses).
 Run::
 
     cd operator && python3 -m pytest \
-        safety-substrate/tests/test_guard_hook_parity.py -v
+        safety_substrate/tests/test_guard_hook_parity.py -v
 """
 
 from __future__ import annotations

@@ -14,7 +14,7 @@
  *   sticky_stop — the safety substrate has pinned the agent: HARD_STOP in
  *                 `sticky_stop_state`. Captain escalation is required to
  *                 clear (recovery contract in
- *                 `operator/safety-substrate/sticky_stop.py`). WARN and
+ *                 `operator/safety_substrate/sticky_stop.py`). WARN and
  *                 SOFT_STOP used to reach this signal too, which showed a
  *                 CLIENT a constrained agent on a seat nothing was
  *                 constraining; both were removed 2026-09-02.
@@ -151,7 +151,7 @@ export interface AlivenessBridgeReading {
   /**
    * The forward-only sticky-stop level. 'OK' means not pinned;
    * anything else means the agent is constrained. The level vocabulary
-   * mirrors `operator/safety-substrate/sticky_stop.py::StickyStopLevel`.
+   * mirrors `operator/safety_substrate/sticky_stop.py::StickyStopLevel`.
    * Unknown values surface as 'OK' rather than collapsing to
    * sticky_stop — under-reporting is preferable to false-positive
    * "agent is stopped" copy.
@@ -368,7 +368,7 @@ export async function resolveAlivenessSignal(
 
 /**
  * Non-OK sticky-stop ladder values the Machine can report (mirrors
- * `operator/safety-substrate/sticky_stop.py::StickyStopLevel`).
+ * `operator/safety_substrate/sticky_stop.py::StickyStopLevel`).
  *
  * HARD_STOP only since the 2026-09-02 two-state collapse. WARN and SOFT_STOP
  * used to be in this set, which meant a CLIENT was shown a "constrained" chip

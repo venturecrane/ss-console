@@ -2,7 +2,7 @@
 #
 # Builds Hermes from upstream at a pinned ref, installs the hermes-smd
 # overlay plugins + companion CLI, layers in our Operator adapter / skill
-# library / connectors / safety-substrate tests.
+# library / connectors / safety_substrate tests.
 #
 # Memory (ADR 0016, revised 2026-05-30): Phase 1 runs on Hermes' always-on
 # flat-file core (MEMORY.md/USER.md). Honcho — the inferred-memory engine —
@@ -24,7 +24,7 @@
 #   - operator/adapter/         (Operator adapter — Python)
 #   - operator/skills/          (canonical skill library — markdown)
 #   - operator/connectors/      (Tier-1 custom MCP wrappers)
-#   - operator/safety-substrate/ (Phase A.5 invariant fixtures + runner)
+#   - operator/safety_substrate/ (Phase A.5 invariant fixtures + runner)
 #   - operator/templates/bootstrap.sh
 
 # ---------- Build args ----------
@@ -1282,10 +1282,10 @@ RUN set -eu; \
     chmod -R a+rX /opt/medchron
 
 # Safety-substrate tests — bootstrap.sh runs these on container start
-COPY operator/safety-substrate/ /app/safety-substrate/
+COPY operator/safety_substrate/ /app/safety_substrate/
 
 # Env-consumption contract — the single source of truth the boot-time invariant
-# (safety-substrate/tests/test_invariant_9) reads to enforce that no var the
+# (safety_substrate/tests/test_invariant_9) reads to enforce that no var the
 # agent consumes is stripped from its env (the voice-class regression guard).
 COPY operator/contracts/ /app/contracts/
 
@@ -1359,7 +1359,7 @@ RUN chmod -R a+rX /opt/hermes /app \
 # volume and the gateway loads from THERE; it execs the *.sh; it runs the *.py as
 # scripts) — none are imported in place, so no __pycache__ write depends on the
 # agent owning them. They stay world-readable/executable (a+rX from the chmod
-# above). NOTE: /app/safety-substrate is intentionally NOT re-owned — its
+# above). NOTE: /app/safety_substrate is intentionally NOT re-owned — its
 # run_invariants.py writes a boot log under that tree, so it must stay
 # hermes-writable (a smaller, separately-tracked residual).
 #

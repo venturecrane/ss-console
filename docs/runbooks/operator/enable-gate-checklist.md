@@ -129,7 +129,7 @@ The Operator is fail-closed by default (ADR 0056): an unconfigured capability is
 - **Risk.** A provisioning bug could bind a Machine to another tenant's storage, and nothing at runtime catches it.
 - **Status update.** ADR 0009 records this as **wired on 2026-07-13** (`docs/adr/0009-cross-machine-query-prohibition.md:84`): `operator/templates/entrypoint.sh` runs the `invariant_7` `__main__` shim as the last root gate before the `setpriv` drop, exiting `3` on any non-zero result, and a missing or unimportable module is itself a fail-closed refusal rather than a silent skip. The earlier text on this line, which said the check was hardcoded to slug `"smoke"` and validated nothing real, described the state as of 2026-07-03 and is superseded by that entry. **The wiring has not been re-probed by this file's author**; treat the ADR entry as the claim of record and re-probe the running Machine before citing it as live (Law 10).
 - **Green.** The boot check runs against the real slug on the deployed Machine, observed, with the fatal path exercised.
-- **Where.** `operator/safety-substrate/invariants/invariant_7.py`, `operator/templates/entrypoint.sh`.
+- **Where.** `operator/safety_substrate/invariants/invariant_7.py`, `operator/templates/entrypoint.sh`.
 
 #### C2. SEC-31: root-own `run_invariants.py`
 

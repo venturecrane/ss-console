@@ -2,7 +2,7 @@
 
 THE INERT-CONTROL CLASS THIS CLOSES
 -----------------------------------
-The boot-time safety gate is ``safety-substrate/run_invariants.py``. It
+The boot-time safety gate is ``safety_substrate/run_invariants.py``. It
 discovers ``tests/test_invariant_*.py`` files, imports each, and invokes a
 module-level ``run() -> (bool, str)`` callable. Any failure in ``--strict``
 mode blocks agent startup.
@@ -52,7 +52,7 @@ pytest, and asserts the classifier flags it inert.
 Run::
 
     cd operator && python3 -m pytest \
-        safety-substrate/tests/test_guard_pytest_skip_boot_inert.py -v
+        safety_substrate/tests/test_guard_pytest_skip_boot_inert.py -v
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ from collections import defaultdict
 from pathlib import Path
 
 _HERE = Path(__file__).resolve()
-_TESTS_DIR = _HERE.parent  # safety-substrate/tests/
+_TESTS_DIR = _HERE.parent  # safety_substrate/tests/
 
 # Matches the boot runner's discovery glob: test_invariant_<N>...py, where N is
 # the leading integer of the invariant number. run_invariants.py globs

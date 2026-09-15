@@ -226,12 +226,12 @@ describe('audit action_type consumer-without-producer guard', () => {
   // enum mirror, never as a written row, so it is classified `deferred`.)
   it('producer-existence predicate distinguishes real emit from comment-only mention', () => {
     // A genuine ss-console producer: token written in code.
-    expect(fileEmitsToken('operator/safety-substrate/sticky_stop.py', 'AGENT_STOPPED')).toBe(true)
+    expect(fileEmitsToken('operator/safety_substrate/sticky_stop.py', 'AGENT_STOPPED')).toBe(true)
     // A type that exists ONLY in comments + the enum mirror, never written as a
     // row in rbac-audit.ts — the predicate must NOT count it as produced there.
     expect(fileEmitsToken('src/lib/portal/operator/rbac-audit.ts', 'RBAC_EVENT')).toBe(false)
     // A token absent from a file is not produced there.
-    expect(fileEmitsToken('operator/safety-substrate/sticky_stop.py', 'VOICE_GATE_PASSED')).toBe(
+    expect(fileEmitsToken('operator/safety_substrate/sticky_stop.py', 'VOICE_GATE_PASSED')).toBe(
       false
     )
   })
@@ -241,7 +241,7 @@ describe('audit action_type consumer-without-producer guard', () => {
  * Dashboard-consumed-field check: the aliveness header consumes
  * `stickyStopLevel` (OK or HARD_STOP) from the Hermes
  * bridge. That vocabulary mirrors the substrate's StickyStopLevel
- * (operator/safety-substrate/sticky_stop.py). If a level is renamed on the
+ * (operator/safety_substrate/sticky_stop.py). If a level is renamed on the
  * substrate side without updating the consumer, the chip silently stops
  * recognising a stopped agent (a renamed level falls through to 'OK'). The
  * guard anchors the consumer vocabulary to the producer enum.
@@ -254,7 +254,7 @@ describe('dashboard sticky-stop consumer is anchored to its producer enum', () =
     expect(m, 'stickyStopLevel union not found in aliveness.ts').toBeTruthy()
     const consumerLevels = [...m![1].matchAll(/'([A-Z_]+)'/g)].map((x) => x[1]).sort()
 
-    const py = readFileSync(resolve('operator/safety-substrate/sticky_stop.py'), 'utf-8')
+    const py = readFileSync(resolve('operator/safety_substrate/sticky_stop.py'), 'utf-8')
     // Read the StickyStopLevel enum body: members declared as NAME = "VALUE".
     const enumStart = py.indexOf('class StickyStopLevel(')
     expect(enumStart, 'StickyStopLevel enum not found in sticky_stop.py').toBeGreaterThan(-1)

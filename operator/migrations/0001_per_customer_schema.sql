@@ -127,7 +127,7 @@ CREATE TABLE cost_telemetry (
 );
 
 -- ---------- 7. Invariant boot-check log ----------
--- Every container start runs the 8 safety invariants (see safety-substrate/
+-- Every container start runs the 8 safety invariants (see safety_substrate/
 -- run_invariants.py). Pass/fail logged here. invariant_num 1-8 per
 -- platform-prd §7.5.
 CREATE TABLE invariant_boot_checks (

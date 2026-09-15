@@ -7,7 +7,7 @@
 # built, tested, merged — and never wired into the live dispatch path on the
 # Machine. Tests pass because they exercise the function in isolation; nothing
 # proves it is invoked on a real turn. The motivating specimen:
-# `safety-substrate/sticky_stop.py` was complete and fully tested (cost cap,
+# `safety_substrate/sticky_stop.py` was complete and fully tested (cost cap,
 # tool-failure / refusal / time-budget circuit breakers) yet for two months had
 # ZERO callers in ss-console and ZERO references in the overlay where dispatch
 # runs; the circuit breaker named in PRD §7.5 did not exist at runtime. ADR 0062
@@ -429,7 +429,7 @@ controls:
       that probe is Component 3, folded into the B3 review.
 
   # ---- the sticky-stop arms (the motivating class, now partly wired) ----
-  # All four arms live in safety-substrate/sticky_stop.py, vendored into the
+  # All four arms live in safety_substrate/sticky_stop.py, vendored into the
   # overlay as shared/sticky_stop.py (a tracked pair in overlay-pairs.json since
   # 2026-09-10). The cost arm is enforced through shared/cost_breaker.py; the
   # tool-failure and refusal arms are unprobed; the time-budget arm is inert.
@@ -437,7 +437,7 @@ controls:
   sticky_stop_cost_cap:
     control: sticky_stop_cost_cap
     class: circuit-breaker
-    substrate_module: safety-substrate/sticky_stop.py
+    substrate_module: safety_substrate/sticky_stop.py
     # Enforcement spans the job-worker thread + the webhook gate, but the
     # DOMINANT (interactive) path is metered at post_llm_call, which is the hook
     # named here for the hook-surface check. Full wiring is in the note.
@@ -479,7 +479,7 @@ controls:
   sticky_stop_tool_failure:
     control: sticky_stop_tool_failure
     class: circuit-breaker
-    substrate_module: safety-substrate/sticky_stop.py
+    substrate_module: safety_substrate/sticky_stop.py
     wired_via: 'post_tool_call / hermes-smd-audit'
     live_probe: ''
     probe_surface: ''
@@ -513,7 +513,7 @@ controls:
   sticky_stop_refusal_cascade:
     control: sticky_stop_refusal_cascade
     class: circuit-breaker
-    substrate_module: safety-substrate/sticky_stop.py
+    substrate_module: safety_substrate/sticky_stop.py
     wired_via: 'post_tool_call / hermes-smd-audit'
     live_probe: ''
     probe_surface: ''
@@ -527,7 +527,7 @@ controls:
       refusal arrives as status=blocked / error_type=plugin_block; no probe
       observes it firing on a seat, so not `enforced`. Worth keeping from the
       2026-08-17 entry: the first version of the candidate probe reported a caller
-      in safety-substrate/refusal.py and was wrong — it had grepped a docstring
+      in safety_substrate/refusal.py and was wrong — it had grepped a docstring
       sentence. Owner SMDurgan, tracked at ADR-0050:B3.
     note: >-
       record_refusal() refusal-cascade ladder. Fed from post_tool_call in
@@ -536,7 +536,7 @@ controls:
   sticky_stop_time_budget:
     control: sticky_stop_time_budget
     class: circuit-breaker
-    substrate_module: safety-substrate/sticky_stop.py
+    substrate_module: safety_substrate/sticky_stop.py
     wired_via: ''
     live_probe: ''
     probe_surface: ''
@@ -563,7 +563,7 @@ controls:
   operator_pause:
     control: operator_pause
     class: dispatch-guard
-    substrate_module: safety-substrate/sticky_stop.py
+    substrate_module: safety_substrate/sticky_stop.py
     # The pause rides the SAME persisted ladder as sticky_stop_cost_cap:
     # pin_hard_stops (overlay#188) writes HARD_STOP rows; every enforcement arm
     # of that control (gate 503s, wake-guard park, job dead-letter) fires for a

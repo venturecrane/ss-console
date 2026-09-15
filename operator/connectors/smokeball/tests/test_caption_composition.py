@@ -172,7 +172,7 @@ def test_list_shared_contacts_dedupe() -> None:
 
 
 def _load_citation_filter():
-    path = Path(__file__).resolve().parents[3] / "safety-substrate" / "citation_filter.py"
+    path = Path(__file__).resolve().parents[3] / "safety_substrate" / "citation_filter.py"
     spec = importlib.util.spec_from_file_location("ss_citation_filter", path)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)

@@ -13,7 +13,7 @@
 >    `pre_tool_call` outbound gate (`FABRICATION_FILTER_TRIGGERED`, overlay#121,
 >    `shared/fabrication_markers.py`).
 > 2. **Fabricated citations** — legal-citation-shaped output refused in law skills
->    (invariant #6, `operator/safety-substrate/citation_filter.py`) and fabricated
+>    (invariant #6, `operator/safety_substrate/citation_filter.py`) and fabricated
 >    citations blocked outbound (overlay#121).
 > 3. **Unverified identifiers** — asserted identifiers (account/case/phone-shaped
 >    values) require provenance (`operator/adapter/identifier_filter.py`, 481 lines;
@@ -174,7 +174,7 @@ Severity mapping:
 > universal markers (`fabrication_markers.json`, every vertical) + Tier-2
 > citation filter (law-vertical only). See `docs/adr/0028-outbound-integrity-gates-provenance-and-voice.md`.
 
-- The marker registry is `operator/safety-substrate/fabrication_markers.json`
+- The marker registry is `operator/safety_substrate/fabrication_markers.json`
   (the single source of truth); the overlay vendors a copy with a CI hash-check.
   Updates require PR + Captain sign-off.
 - Filter implementation (overlay): `shared/outbound_gate.py` + `shared/fabrication_markers.py`.

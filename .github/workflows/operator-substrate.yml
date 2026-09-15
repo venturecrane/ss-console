@@ -1,6 +1,6 @@
 # Operator safety substrate CI.
 #
-# Closes the gap the harness-pivot review flagged: the Python safety-substrate
+# Closes the gap the harness-pivot review flagged: the Python safety_substrate
 # invariants (trust-ceiling enforcement incl. the ADR 0025 exposure rules, the
 # citation/no-fabrication invariants, sticky-stop, isolation) and the adapter
 # tests (audit log, trust-gate injection, namespace assertion) were NOT run
@@ -151,7 +151,7 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           fail=0
-          for f in safety-substrate/tests/test_invariant_*.py; do
+          for f in safety_substrate/tests/test_invariant_*.py; do
             # Only the pure run()-style files (top-level def run(), no pytest
             # import); pytest-style invariants are covered by the pytest step.
             if grep -q '^def run()' "$f" && ! grep -q 'import pytest' "$f"; then
@@ -178,7 +178,7 @@ jobs:
         # per-connector venv conformance step further down.
         # bin/tests/test_ci_coverage_conformance.py asserts this invocation
         # covers every test_*.py under operator/ (connectors excepted).
-        run: python3 -m pytest adapter/tests adapter/evidence/tests adapter/voice/tests safety-substrate/tests bin/tests rehearsal/tests workspace_broker/tests templates/tests templates/drafting/tests tests skills -q
+        run: python3 -m pytest adapter/tests adapter/evidence/tests adapter/voice/tests safety_substrate/tests bin/tests rehearsal/tests workspace_broker/tests templates/tests templates/drafting/tests tests skills -q
 
       # SEC-32: overlay-RUNTIME side of the adapter <-> overlay drift gate.
       #

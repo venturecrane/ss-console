@@ -20,7 +20,7 @@ related-note: note_01KSS3TCTKWYVF6EZ04482X389, note_01KSTYSNC9CYPKYFJZ3TJ7F6RM
 
 Two functions, one shared defect.
 
-**Provenance / no-fabrication.** The venture's hardest rule is that no client-facing content may be fabricated (CLAUDE.md "No fabricated client-facing content," a P0 with merge-gate enforcement on committed copy). For agent-_generated_ output the corresponding runtime control is `operator/safety-substrate/citation_filter.py` — it refuses output containing citation-shaped strings that aren't backed by a real source. It is real code. But its only references are itself and `invariants/invariant_6.py` (a boot-time invariant test) — verified: **no live-output call site exists.** So today an agent could emit a fabricated citation into a real deliverable and the filter would never see it; the only thing exercising the filter is a self-test at startup.
+**Provenance / no-fabrication.** The venture's hardest rule is that no client-facing content may be fabricated (CLAUDE.md "No fabricated client-facing content," a P0 with merge-gate enforcement on committed copy). For agent-_generated_ output the corresponding runtime control is `operator/safety_substrate/citation_filter.py` — it refuses output containing citation-shaped strings that aren't backed by a real source. It is real code. But its only references are itself and `invariants/invariant_6.py` (a boot-time invariant test) — verified: **no live-output call site exists.** So today an agent could emit a fabricated citation into a real deliverable and the filter would never see it; the only thing exercising the filter is a self-test at startup.
 
 **Voice fidelity.** The product promise (thesis note) includes an employee that writes in _the principal's_ voice. The overlay injects voice _samples_ into the prompt live (`pre_llm_call`, per the audit), which primes the model — but the deterministic output _transform_ (`operator/adapter/voice/transform.py`, a real 1,200-line module) is not wired onto live deliverables, and the quality _gate_ (`operator/voice-gate/cli.ts`) runs synthetic-only: live mode is explicitly "not yet implemented" (`cli.ts:~174`), gated behind per-customer Hermes D1 binding (#800) and a sample-ingestion store. Voice is _primed_ but not _gated_. Issue #855 (Voice Layer 2 — sample-driven draft transformation) is the open P0 for this.
 
@@ -96,7 +96,7 @@ The voice transform rewrites tone and phrasing; it may never introduce facts, cl
 - [ADR 0005 — External-send identity](./0005-external-send-identity.md) (the incidental human integrity check that autonomous configs remove)
 - [ADR 0025 — Autonomy ceilings are configurable](./0025-autonomy-ceilings-configurable-exposure-vs-initiation.md) (why the gates must run in code once a reviewer is optional)
 - CLAUDE.md "No fabricated client-facing content" (the P0 provenance rule these gates enforce at runtime)
-- `operator/safety-substrate/citation_filter.py` + `invariants/invariant_6.py` (built provenance filter; boot-test-only today)
+- `operator/safety_substrate/citation_filter.py` + `invariants/invariant_6.py` (built provenance filter; boot-test-only today)
 - `operator/adapter/voice/transform.py`, `operator/voice-gate/cli.ts` (built voice transform + synthetic-only gate)
 - [Issue #855](https://github.com/venturecrane/ss-console/issues/855) (Voice Layer 2 — sample-driven draft transformation), Issue #800 (per-customer Hermes D1 binding)
 - `project_operator_fail_open_antipattern` (fail-closed posture)

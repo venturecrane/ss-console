@@ -19,9 +19,9 @@ the skill MUST abort.
 - platform-prd.md §7.5: safety substrate invariants
   - invariant #5 (ceiling enforced in code, not in prompt)
 - `operator/adapter/trust_ceiling.py` (`enforce()` decision tree)
-- `operator/safety-substrate/trust_ceiling_log.py` (sibling module
+- `operator/safety_substrate/trust_ceiling_log.py` (sibling module
   from PR #953; canonical audit row writer this module delegates to)
-- `operator/safety-substrate/sticky_stop.py` (sibling module from
+- `operator/safety_substrate/sticky_stop.py` (sibling module from
   PR #948; provides the per-state-machine refusal counter that the
   dispatch path may wire in for sticky-stop transition decisions)
 - `operator/adapter/audit_log.py` (PR #942): writer +
@@ -33,7 +33,7 @@ the skill MUST abort.
 
 ## Module + integration point
 
-The module is `operator/safety-substrate/refusal.py`. The public
+The module is `operator/safety_substrate/refusal.py`. The public
 surface:
 
 ```python
@@ -290,7 +290,7 @@ module. The notification feed is internal to the dashboard.
 
 ## Verification
 
-`operator/safety-substrate/tests/test_refusal.py` exercises:
+`operator/safety_substrate/tests/test_refusal.py` exercises:
 
 - Happy path: one refusal emits exactly one decision row + one
   notification row, aborted=True, customer-facing message present
@@ -320,7 +320,7 @@ Run locally:
 
 ```
 cd operator && uv run --with pytest python -m pytest \
-  safety-substrate/tests/test_refusal.py -v
+  safety_substrate/tests/test_refusal.py -v
 ```
 
 ## Out of scope (filed elsewhere)

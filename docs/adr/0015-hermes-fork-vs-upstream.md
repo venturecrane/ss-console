@@ -79,7 +79,7 @@ Track upstream `NousResearch/hermes-agent` at a pinned ref directly, no SMD fork
 
 ### Pattern 2: Thin vendored fork with overlay layer (prior ADR version)
 
-The prior ADR specified an SMD overlay layer (`smd/` subpackage in the fork) hosting safety-substrate hooks, with the option to modify upstream files where a hook didn't exist.
+The prior ADR specified an SMD overlay layer (`smd/` subpackage in the fork) hosting safety_substrate hooks, with the option to modify upstream files where a hook didn't exist.
 
 **Rejected.** Teknium's May 2026 plugin policy forbids exactly this pattern in upstream-acceptable extensions. PR #5295 demonstrates the enforcement. Building the overlay this way means our quarterly rebases compound conflicts, and our proposed upstream PRs for "expand the plugin surface" arguments get rejected because we've already done the work as a fork patch. The dependency direction goes the wrong way over time.
 

@@ -2,7 +2,7 @@
 
 Per platform PRD §7.5, invariant #6 governs how facts surface in skill
 output. The law-firm vertical implements it as REFUSAL on fabricated legal
-citations (handled by ``safety-substrate/citation_filter.py``). This module
+citations (handled by ``safety_substrate/citation_filter.py``). This module
 implements the platform-universal complement: every fact a skill renders
 into a client-facing fact-bearing field must carry a Citation attached to
 a real source.
@@ -80,7 +80,7 @@ Module shape
 
 ::
 
-    from invariants.invariant_6 import (
+    from safety_substrate.invariants.invariant_6 import (
         Citation,
         SourceKind,
         enforce_citations,
@@ -116,7 +116,7 @@ Module shape
         raise CitationEnforcementError(result)
 
 The ``run()`` callable at the bottom of this module is the per-fixture
-shape that ``safety-substrate/run_invariants.py`` invokes at container
+shape that ``safety_substrate/run_invariants.py`` invokes at container
 boot. The pytest file at ``tests/test_invariant_6.py`` covers the
 unit-level cases.
 """
@@ -131,7 +131,6 @@ from pathlib import Path
 from typing import Mapping, Optional
 
 _HERE = Path(__file__).resolve()
-sys.path.insert(0, str(_HERE.parents[2]))  # operator/ on sys.path
 
 log = logging.getLogger("aie.invariants.invariant_6")
 

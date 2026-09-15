@@ -1,4 +1,4 @@
-"""Tests for operator/safety-substrate/refusal.py (issue #866).
+"""Tests for operator/safety_substrate/refusal.py (issue #866).
 
 Refusal-handling runtime semantics on top of `trust_ceiling_log` (PR #953).
 Verifies:
@@ -18,7 +18,7 @@ Verifies:
 
 Run from the repo root:
 
-    cd operator && python -m pytest safety-substrate/tests/test_refusal.py -v
+    cd operator && python -m pytest safety_substrate/tests/test_refusal.py -v
 """
 
 from __future__ import annotations
@@ -26,28 +26,22 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
-import sys
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
 
-_HERE = Path(__file__).resolve()
-sys.path.insert(0, str(_HERE.parents[2]))  # operator/
-sys.path.insert(0, str(_HERE.parents[1]))  # operator/safety-substrate/
-
-from adapter.audit_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from adapter.audit_log import (
     AuditLogWriter,
     AuditWriteError,
     SqliteExecutor,
 )
-from refusal import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from safety_substrate.refusal import (
     CustomerMessage,
     InMemoryRefusalCounter,
     RefusalHandler,
     RefusalOutcome,
 )
-from trust_ceiling_log import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from safety_substrate.trust_ceiling_log import (
     ActionClassName,
     CeilingLevel,
     DecisionReason,
