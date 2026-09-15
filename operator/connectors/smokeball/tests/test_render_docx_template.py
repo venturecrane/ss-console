@@ -436,7 +436,7 @@ def test_manifest_classifies_the_renderer_as_an_internal_write() -> None:
 
 def test_tool_is_on_the_served_surface() -> None:
     tool = next(t for t in server.server.tool_surface() if t.name == "render_docx_template")
-    assert set(tool.inputSchema.get("required", [])) == {
+    assert set(tool.input_schema.get("required", [])) == {
         "matter_id",
         "file_name",
         "skeleton_markdown",

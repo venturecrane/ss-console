@@ -241,9 +241,9 @@ def test_add_file_schema_offers_content_text_and_requires_neither_content() -> N
     from smokeball_connector.server import server as srv
 
     tool = next(t for t in srv.tool_surface() if t.name == "add_file")
-    props = tool.inputSchema["properties"]
+    props = tool.input_schema["properties"]
     assert "content_text" in props
     assert "content_base64" in props
-    assert set(tool.inputSchema.get("required", [])) == {"matter_id", "file_name"}
+    assert set(tool.input_schema.get("required", [])) == {"matter_id", "file_name"}
     assert "content_text" in (tool.description or "")
     assert "hand-encode" in (tool.description or "")

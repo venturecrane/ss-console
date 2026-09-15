@@ -49,7 +49,7 @@ WHAT IT REFUSES TO DO, and why each one is load-bearing:
   is markedly worse at verbatim transcription, and disabling it is the
   documented cause of stray control-tag leakage into the text.
 
-COST AND CONCURRENCY. ``read_document`` is a sync tool on FastMCP's thread pool
+COST AND CONCURRENCY. ``read_document`` is a sync tool on the MCP server's thread pool
 and parallel tool calls are on by default, so N concurrent scans would be N
 concurrent transcription runs on a 1 vCPU / 1 GB seat. A module-level semaphore
 serialises them, held across a whole document so two documents never interleave
@@ -102,7 +102,7 @@ PAGE_MAX_TOKENS = 6000
 #: not going to.
 TIMEOUT_SECONDS = 90
 
-#: Serialises transcriptions across FastMCP's thread pool (see module docstring).
+#: Serialises transcriptions across the MCP server's thread pool (see module docstring).
 #: Held for a whole document, so two documents never interleave page calls.
 _LOCK = threading.Semaphore(1)
 
