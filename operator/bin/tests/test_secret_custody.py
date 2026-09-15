@@ -25,6 +25,7 @@ import secret_custody as sc
 
 _OP = Path(__file__).resolve().parents[2]
 _PROVISION = _OP / "bin" / "provision-customer.sh"
+_STAGE_SMOKEBALL = _OP / "bin" / "lib" / "stage-smokeball.sh"
 
 # Secrets a reader can see are unambiguously a customer's own credential — the
 # set that MUST classify as customer or the keyless/staging isolation leaks.
@@ -51,7 +52,9 @@ def _staged_secret_names() -> set[str]:
     `prompt_and_set NAME`, and literal `printf '%s=%s\\n' "NAME"` piped to
     `fly secrets import`. Dynamic (manifest-driven) names are not literals and
     are intentionally out of this static parse."""
-    text = _PROVISION.read_text(encoding="utf-8")
+    # The Smokeball staging block is a sourced library since ss#2425; it stages
+    # names in the same shell, so it is part of the surface this parse must see.
+    text = _PROVISION.read_text(encoding="utf-8") + "\n" + _STAGE_SMOKEBALL.read_text(encoding="utf-8")
     names: set[str] = set()
     for m in re.finditer(r"\bstage_secret_from_env\s+([A-Z_][A-Z0-9_]*)", text):
         names.add(m.group(1))
@@ -103,6 +106,7 @@ def test_infra_secrets_classify_infra() -> None:
         "WEBHOOK_SECRET_MCP",
         "SMOKEBALL_OAUTH_STATE_KEY",
         "SMOKEBALL_ENVIRONMENT",
+        "SMOKEBALL_REGION",
         "R2_BUCKET_CONFIG",
     ):
         assert sc.classify(name) == sc.INFRA, f"{name} must be infra"

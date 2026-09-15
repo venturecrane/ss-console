@@ -62,10 +62,6 @@ capability = "PracticeManagement"
 auth_model = "client_credentials"
 description = "Smokeball practice-management API connector (law wedge system of record)."
 
-[connector.env_static]
-SMOKEBALL_REGION = "us"
-SMOKEBALL_ENVIRONMENT = "staging"
-
 [[connector.required_secrets]]
 runtime_env = "SMOKEBALL_CLIENT_ID"
 purpose = "OAuth client id (client_credentials grant). Remapped from SMOKEBALL_STAGING_CLIENT_ID."

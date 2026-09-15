@@ -12,9 +12,6 @@ capability = "Reference"
 auth_model = "static"
 description = "Synthetic platform self-test connector. Not a vendor integration."
 
-[connector.env_static]
-REFERENCE_MODE = "selftest"
-
 [connector.tool_classes]
 echo = "read"
 record = "internal_write"

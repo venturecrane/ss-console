@@ -2,7 +2,13 @@
 
 A connector ships a ``manifest.toml`` declaring the facts the platform needs to
 wire it: the capability it serves, the NAMES of the secrets it requires at
-runtime, its auth model, any static launch env, and ``tool_classes``.
+runtime, its auth model, and ``tool_classes``. It does not carry launch env
+values: the overlay registry (``bootstrap/mcp_registry.py``) is the one wiring
+spec, and the provisioner stages every per-seat value. A manifest key nothing
+reads is a declaration that looks binding and is not (ss#2425: an
+``env_static`` table once said ``SMOKEBALL_ENVIRONMENT = "staging"`` for a
+connector whose production seats stage ``production``), so unknown keys are
+rejected at load rather than ignored.
 
 ``tool_classes`` is the **conformance oracle, not a runtime input.** The enforced
 tool->ActionClass mapping is the hand-authored literal in the overlay
@@ -19,7 +25,7 @@ import enum
 import tomllib
 from pathlib import Path
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # The action-class vocabulary, mirrored from the overlay's ActionClass enum
 # (shared/action_classes.py). REFUSED is deliberately excluded — it is the
@@ -73,13 +79,17 @@ class SecretSpec(BaseModel):
 
 
 class ConnectorManifest(BaseModel):
-    """Self-description loaded from a connector's ``manifest.toml``."""
+    """Self-description loaded from a connector's ``manifest.toml``.
+
+    ``extra="forbid"``: a key this model does not know is a load error, never a
+    silently dropped table (see the module docstring)."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., min_length=1)
     capability: str = Field(..., min_length=1)
     auth_model: AuthModel
     required_secrets: list[SecretSpec] = Field(default_factory=list)
-    env_static: dict[str, str] = Field(default_factory=dict)
     # Bare-tool-name -> ActionClass string. Oracle only (see module docstring).
     # A tool the connector intends to leave UNCLASSIFIED (to prove fail-closed
     # refusal) is simply omitted here.

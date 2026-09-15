@@ -162,6 +162,7 @@ _INFRA_EXACT: frozenset[str] = frozenset(
         "HEALTHCHECKS_PING_URL",  # derived ping URL, staged (:720)
         # Non-secret Smokeball config strings staged as secrets for uniformity.
         "SMOKEBALL_ENVIRONMENT",  # 'staging' | 'production' (:577)
+        "SMOKEBALL_REGION",  # 'us' | 'au' | 'uk' regional gateway (ss#2425)
         "SMOKEBALL_AUTH_MODE",  # grant mode literal (:581)
         "SMOKEBALL_ACCOUNT_ID",  # multi-account URL prefix (:595)
     }
