@@ -506,7 +506,7 @@ def test_a_transcript_that_varies_by_bytes_keeps_its_disposition(
     job_dir: Path, firm_config_path: Path, data_root: Path
 ) -> None:
     """Transcription is not byte-identical between runs. The SAME phone
-    screenshot came back at 44, 53 and 57 bytes on three runs of one matter
+    screenshot came back at 44, 53 and 57 bytes on three runs of one client matter
     (2026-09-15) against a byte threshold of 50: disposed of once, unexplained
     twice, and the second and third runs held at the coverage gate on a
     document that had been read correctly. Words move by ones where bytes

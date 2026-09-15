@@ -370,14 +370,14 @@ def test_merge_routes_a_disagreement_to_the_model_and_falsifies_its_answer(
     assert merge_stage.run(sr2) == 1
 
 
-REWORDED = """##### CLUSTER 2023-05-10 | healingtouch (2 fragments)
+REWORDED = """##### CLUSTER 2023-05-10 | examplechiropractic (2 fragments)
 05/10/2023
-Healing Touch | Patient Complaints & Limitations
+Example Chiropractic | Patient Complaints & Limitations
 
 Palpation of the cervical, thoracic, and lumbar spines revealed pain, tenderness, and trigger points with multiple fixations. (Exhibit 2 - p. 14)
 ---FRAGMENT-BREAK---
 05/10/2023
-Healing Touch | Patient Complaints & Limitations
+Example Chiropractic | Patient Complaints & Limitations
 
 Palpation revealed pain, tenderness and trigger points of the cervical, thoracic and lumbar spines with multiple fixations. (Exhibit 2 - p. 14)
 
@@ -391,7 +391,7 @@ def _no_model() -> Scripted:
 def test_a_same_citation_rewording_collapses_in_code_by_the_shared_rule(
     job_dir: Path, firm_headings: Path, data_root: Path
 ) -> None:
-    """The pair is a real shape from matter 200454 (2026-09-15): the same
+    """The pair is a real shape from a client matter (2026-09-15): the same
     chiropractic finding composed twice with its commas moved, J=0.86, same
     page, no numbers. Before this rule the router sent it to the model, the
     prompt told the model to collapse it, and the falsifier refused the
@@ -436,7 +436,7 @@ def test_a_rewording_with_a_differing_number_is_kept_and_routed_to_be_marked(
     )
     assert cluster.count("of 10") == 2
     marked = (
-        "05/10/2023\nHealing Touch | Patient Complaints & Limitations\n\n"
+        "05/10/2023\nExample Chiropractic | Patient Complaints & Limitations\n\n"
         "Palpation of the cervical, thoracic, and lumbar spines revealed pain, tenderness, and trigger points "
         "with multiple fixations, pain rated 6 of 10. (Exhibit 2 - p. 14)\n\n"
         "Palpation revealed pain, tenderness and trigger points of the cervical, thoracic and lumbar spines "
