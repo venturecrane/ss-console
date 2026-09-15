@@ -44,7 +44,7 @@ def test_full_surface_present() -> None:
 
 def test_every_tool_has_nonempty_input_schema() -> None:
     for tool in server.tool_surface():
-        props = tool.inputSchema["properties"]
+        props = tool.input_schema["properties"]
         assert props, f"{tool.name}: empty inputSchema.properties"
 
 

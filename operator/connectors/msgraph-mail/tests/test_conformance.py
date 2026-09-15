@@ -10,8 +10,7 @@ from pathlib import Path
 
 import anyio
 import pytest
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from mcp import Client, StdioServerParameters
 from msgraph_mail_connector.server import server
 from operator_connector_sdk import conformance
 from operator_connector_sdk.manifest import AuthModel, ConnectorManifest
@@ -84,15 +83,10 @@ def test_write_surface_is_draft_and_two_sends() -> None:
 @pytest.mark.skipif(_SCRIPT is None, reason="msgraph-mail-mcp console-script not on PATH")
 def test_stdio_serves_over_console_script() -> None:
     async def _roundtrip() -> None:
-        async with stdio_client(StdioServerParameters(command=_SCRIPT)) as (
-            read,
-            write,
-        ):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                listed = await session.list_tools()
-                assert {t.name for t in listed.tools} == EXPECTED_TOOLS
-                for t in listed.tools:
-                    assert t.inputSchema.get("type") == "object"
+        async with Client(StdioServerParameters(command=_SCRIPT)) as client:
+            listed = await client.list_tools()
+            assert {t.name for t in listed.tools} == EXPECTED_TOOLS
+            for t in listed.tools:
+                assert t.input_schema.get("type") == "object"
 
     anyio.run(_roundtrip)

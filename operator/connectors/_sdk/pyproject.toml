@@ -4,12 +4,15 @@ version = "0.1.0"
 description = "Minimal SDK + conformance contract for author-built MCP connectors (the Operator connector platform). NOT published — installed from this path into each connector's venv."
 requires-python = ">=3.11"
 dependencies = [
-    # <2 is load-bearing: mcp 2.0.0 (2026-07) renamed mcp.server.fastmcp ->
-    # mcp.server.mcpserver, which breaks server.py's import in every venv that
-    # resolves latest — CI conformance AND the seat image (Dockerfile installs
-    # this SDK from source). Migrating to the 2.x layout is its own change;
-    # until then the 1.x line is the contract.
-    "mcp>=1.2,<2",
+    # The 2.x line is the contract (migrated 2026-09-15). 2.0 renamed
+    # mcp.server.fastmcp.FastMCP -> mcp.server.mcpserver.MCPServer and moved the
+    # wire-model attributes to snake_case (Tool.input_schema; the JSON key is
+    # still inputSchema), which is what server.py, conformance.py and the
+    # connectors' tests are written against. <3 is load-bearing for the same
+    # reason <2 was: the next major will rename again, and every venv that
+    # resolves latest (CI conformance, the seat image's per-connector venvs and
+    # the medchron runner) would break at the import.
+    "mcp>=2,<3",
     "pydantic>=2.6",
 ]
 

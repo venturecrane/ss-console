@@ -27,6 +27,12 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OPERATOR="$(cd "${HERE}/.." && pwd)"
 PY=3.13
 PLATFORM=linux
+# Compile from the repo root with repo-relative inputs, so the "# via" annotations
+# uv writes name the same path whoever runs this and from wherever: uv relativises
+# them to the invoking cwd, and the committed files used to carry one
+# workstation's absolute worktree path.
+ROOT="$(cd "${OPERATOR}/.." && pwd)"
+cd "${ROOT}"
 
 overrides="$(mktemp)"
 trap 'rm -f "${overrides}"' EXIT
@@ -50,11 +56,11 @@ compile() {
   echo "wrote requirements/${out} ($(grep -cE '^[a-z0-9]' "${HERE}/${out}") pins)"
 }
 
-compile broker.txt "${HERE}/broker.in"
-for cdir in "${OPERATOR}"/connectors/*/; do
+compile broker.txt operator/requirements/broker.in
+for cdir in operator/connectors/*/; do
   name="$(basename "${cdir}")"
   [ "${name}" = "_sdk" ] && continue
   [ -f "${cdir}pyproject.toml" ] || continue
   compile "connector-${name}.txt" "${cdir}pyproject.toml"
 done
-compile medchron.txt "${OPERATOR}/runners/medchron/pyproject.toml"
+compile medchron.txt operator/runners/medchron/pyproject.toml

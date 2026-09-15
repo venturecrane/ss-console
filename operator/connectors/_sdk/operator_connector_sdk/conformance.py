@@ -31,7 +31,7 @@ def check_tool_schemas(server: ConnectorServer) -> list[str]:
     if not tools:
         raise AssertionError(f"{server.name}: exposes no tools")
     for t in tools:
-        schema = t.inputSchema
+        schema = t.input_schema
         if not isinstance(schema, dict):
             raise AssertionError(f"{server.name}.{t.name}: inputSchema is not a dict")
         if schema.get("type") != "object":

@@ -73,7 +73,7 @@ def test_governance_never_raises_on_unserializable() -> None:
     assert isinstance(out, dict) and "value" in out  # passed through, no raise
 
 
-# ---- integration: the tool() wrapper preserves the FastMCP inputSchema ----
+# ---- integration: the tool() wrapper preserves the MCPServer inputSchema ----
 
 
 def test_tool_wrapper_preserves_input_schema() -> None:
@@ -85,9 +85,9 @@ def test_tool_wrapper_preserves_input_schema() -> None:
         return {"value": [1, 2, 3, 4, 5]}
 
     tool = next(t for t in srv.tool_surface() if t.name == "list_things")
-    props = tool.inputSchema["properties"]
+    props = tool.input_schema["properties"]
     assert "matter_id" in props and "limit" in props
-    assert tool.inputSchema.get("required") == ["matter_id"]
+    assert tool.input_schema.get("required") == ["matter_id"]
 
 
 def test_undeclared_tool_registers_and_keeps_schema() -> None:
@@ -99,4 +99,4 @@ def test_undeclared_tool_registers_and_keeps_schema() -> None:
         return {"id": matter_id}
 
     tool = next(t for t in srv.tool_surface() if t.name == "get_one")
-    assert "matter_id" in tool.inputSchema["properties"]
+    assert "matter_id" in tool.input_schema["properties"]

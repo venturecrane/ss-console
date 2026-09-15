@@ -1,9 +1,9 @@
 """ConnectorServer — the stdio MCP server base every author-built connector uses.
 
-Thin wrapper over the MCP SDK's FastMCP. Two jobs:
+Thin wrapper over the MCP SDK's MCPServer (mcp 2.x; FastMCP before 2.0). Two jobs:
 
 1. Guarantee tools register with a well-formed, non-empty ``inputSchema`` placed
-   where Hermes' MCP client reads it. (FastMCP derives the schema from the tool
+   where Hermes' MCP client reads it. (MCPServer derives the schema from the tool
    signature and type hints and emits it under the correct ``inputSchema`` key,
    so this avoids the historical bug where tools shipped with empty param
    schemas and the model could not call them.)
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import anyio
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from mcp.types import Tool
 
 logger = logging.getLogger("operator_connector_sdk")
@@ -99,23 +99,23 @@ def _govern_result(result: Any, bound: ResultBound | None, connector: str, tool_
 class ConnectorServer:
     def __init__(self, name: str) -> None:
         self.name = name
-        self._mcp = FastMCP(name)
+        self._mcp = MCPServer(name)
 
     def tool(self, *args, bound: ResultBound | None = None, **kwargs):
-        """Register a tool. Delegates to FastMCP; the input schema is derived from
+        """Register a tool. Delegates to MCPServer; the input schema is derived from
         the function signature and type hints. Optional ``bound`` declares the list
         result safe to bound to recent-N (see :class:`ResultBound`) — fail-closed:
         omit it and the result is never truncated, only observed if oversized."""
-        fastmcp_register = self._mcp.tool(*args, **kwargs)
+        mcp_register = self._mcp.tool(*args, **kwargs)
 
         def register(fn):
             wrapped = self._wrap_result(fn, bound)
-            return fastmcp_register(wrapped)
+            return mcp_register(wrapped)
 
         return register
 
     def _wrap_result(self, fn, bound: ResultBound | None):
-        # Preserve signature/annotations via functools.wraps so FastMCP still
+        # Preserve signature/annotations via functools.wraps so MCPServer still
         # derives the inputSchema from the ORIGINAL function (inspect.signature
         # follows __wrapped__). Handle sync AND async tools.
         tool_name = getattr(fn, "__name__", "?")
@@ -135,7 +135,7 @@ class ConnectorServer:
 
     def tool_surface(self) -> list[Tool]:
         """The exact set of tools this server exposes, with their inputSchemas.
-        Synchronous convenience over FastMCP's async ``list_tools`` — call from
+        Synchronous convenience over MCPServer's async ``list_tools`` — call from
         sync code (tests, conformance), not from inside a running event loop."""
         return anyio.run(self._mcp.list_tools)
 
