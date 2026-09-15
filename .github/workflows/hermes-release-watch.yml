@@ -43,7 +43,7 @@ jobs:
           # Read it with retries, then from a SECOND endpoint, before giving up.
           # Run #6 (2026-08-17) died on one bad second: a single `gh api` call came
           # back empty, the job exited 1, and a weekly signal became a critical
-          # alert for a GitHub hiccup. The identical call returns v2026.8.18 today.
+          # alert for a GitHub hiccup. The identical call returns v2026.9.14 today.
           #
           # This still fails loudly when upstream is genuinely unreadable — a
           # renamed repo, a revoked token, a changed response shape — because that

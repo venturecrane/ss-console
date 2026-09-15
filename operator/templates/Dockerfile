@@ -37,16 +37,16 @@
 # directly; the venturecrane/hermes-agent fork was retired by ADR 0024.
 #
 # HERMES_REF is the full pin string, retained for provenance and logging.
-ARG HERMES_REF=v2026.8.18@e624e9fde561e1add9388384012b295fde669ade
+ARG HERMES_REF=v2026.9.14@345cd2b057a452236de401d3534b8502a7465e8d
 
 # Upstream date-tag to clone (the part before '@').
-ARG HERMES_UPSTREAM_TAG=v2026.8.18
+ARG HERMES_UPSTREAM_TAG=v2026.9.14
 
 # Upstream commit SHA (the part after '@'). The post-clone assertion verifies
 # the cloned HEAD matches this exactly; any divergence (upstream re-tag, stale
 # pin) fails the build. This is the integrity check proving we ship unmodified
 # upstream Hermes.
-ARG HERMES_UPSTREAM_SHA=e624e9fde561e1add9388384012b295fde669ade
+ARG HERMES_UPSTREAM_SHA=345cd2b057a452236de401d3534b8502a7465e8d
 
 # hermes-smd overlay (venturecrane/hermes-smd-overlay): plugin pack + CLI
 # (`hermes-smd bootstrap`, `hermes-smd customer-sync`) + the importable
