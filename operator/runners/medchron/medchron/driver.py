@@ -34,6 +34,7 @@ from . import (
     icd_tables,
     job as job_mod,
     limits as limits_mod,
+    rehearsal,
     seat as seat_mod,
 )
 from .stages.base import StageRefusal, StageRun
@@ -49,7 +50,7 @@ class DriverError(RuntimeError):
 @dataclass
 class Outcome:
     unit: str
-    outcome: str  # delivered | held | refused | failed | dry_run
+    outcome: str  # delivered | held | refused | failed | dry_run | rehearsed (driver-level, never in state.json)
     reason: str | None
     stage: str | None
     dollars: float
@@ -167,12 +168,30 @@ class Driver:
         log=print,
         seat_factory=None,
         client=None,
+        rehearse: bool = False,
+        redo: tuple[str, ...] = (),
     ) -> None:
         self.job = job_mod.load(job_dir)
         self.cfg = config_mod.load(firm_config)
         self.dry_run = dry_run
         self.start = start
         self.log = log
+        # `medchron rehearse`: walk from the top with done-skipping ON, execute
+        # only $0 in-process stages and decisions, stop at the first paid or
+        # external stage that is not done. `--from` would disable done-skipping
+        # (line ~304) and turn every done paid stage into a stop, so they are
+        # exclusive. `redo` reopens named $0 stages in the (copied) state so a
+        # fix can be seen without editing the real state by hand.
+        self.rehearse = rehearse
+        self.redo = tuple(redo)
+        if rehearse and start:
+            raise DriverError("rehearse walks from the top; --from would re-run every done stage")
+        for name in self.redo:
+            s = dag.BY_NAME.get(name)
+            if s is None:
+                raise DriverError(f"--redo {name!r}: unknown stage")
+            if s.paid or s.external:
+                raise DriverError(f"--redo {name!r}: a paid or external stage cannot be rehearsed")
         # The seat is opened lazily by the first stage that reads the matter,
         # so a dry run and a resume past the pull never touch the firm's system.
         # One seat and one SDK client per run, opened lazily by the first stage
@@ -181,7 +200,7 @@ class Driver:
         self._seat_factory = seat_factory or (lambda: seat_mod.open_seat(str(self.cfg.get("firm", "slug"))))
         self._seat = None
         self._client = client
-        self.pipeline = None if dry_run else _pipeline_dir()
+        self.pipeline = None if (dry_run or rehearse) else _pipeline_dir()
         pricing_path = Path(pricing or os.environ.get(budget_mod.PRICING_ENV) or budget_mod.PRICING_DEFAULT)
         self.pricing = budget_mod.Pricing.load(pricing_path)
         # The envelope can only LOWER the firm's cap. It used to win outright,
@@ -233,28 +252,33 @@ class Driver:
             allowance_cycle_label=job.allowance_cycle_label,
         )
 
-    def _projection(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> float:
+    def _projection(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> float | None:
         """What this paid stage is projected to add, in dollars, from THIS
-        matter's own artifacts. Zero for a stage with no measured rate: the
-        limits still catch a run that already reached a line."""
+        matter's own artifacts. None for a stage with no measured rate -- never
+        0.0, which a report would print as "$0" (the limits treat None as 0 and
+        still catch a run that already reached a line)."""
         if stage.name == "vision":
             return budget_mod.scanned_pages(extracted) * self.limits.usd_per_scanned_page + self.budget.projection(
                 budget_mod.extracted_chars(extracted)
             )
         if stage.name == "audit":
-            return self._claims(ctx) * self.limits.usd_per_audit_claim
-        return 0.0
+            n = self._claims(ctx)
+            return None if n is None else n * self.limits.usd_per_audit_claim
+        return None
 
-    def _claims(self, ctx: dag.Ctx) -> int:
+    def _claims(self, ctx: dag.Ctx) -> int | None:
         """Claims in the built chronology, counted with the audit gate's OWN
         extractor, so the projection counts what the audit will actually call
-        on rather than a remembered ratio from some other matter."""
+        on rather than a remembered ratio from some other matter. None before
+        the chronology exists: no document is "no count yet", not zero claims
+        (a rehearsal that stops before build_doc would otherwise print the
+        costliest late stage as $0)."""
         from .audit import claims as claims_mod
         from .audit.page_text import exhibit_paths
 
         doc = self.slug_dir / "runs" / ctx.unit.unit / "final-chronology.md"
         if not doc.is_file():
-            return 0
+            return None
         keep = set(exhibit_paths(self.slug_dir / "out" / ctx.unit.unit))
         body = claims_mod.body_of(doc.read_text(encoding="utf-8"))
         return len(claims_mod.extract_claims(body, keep))
@@ -263,7 +287,7 @@ class Driver:
         """Before a paid stage. The first paid stage of the process also asks
         the two page questions, which cost nothing to answer."""
         spent = self.budget.refresh()
-        projected = self._projection(stage, ctx, extracted)
+        projected = self._projection(stage, ctx, extracted) or 0.0
         if not self._first_paid_checked:
             self._first_paid_checked = True
             self.limits.check_before_first_paid(
@@ -298,10 +322,13 @@ class Driver:
         ctx = dag.Ctx(job=self.job, unit=unit, date_stamp=self.date_stamp)
         notes: list[str] = []
         extracted = self.slug_dir / "extracted.jsonl"
+        if self.rehearse and self.redo:
+            st.invalidate(list(self.redo))
         for stage in dag.stages_from(self.start):
             if stage.scope == "slug" and stage.name in slug_done:
                 continue
             if st.is_done(stage.name) and self.start is None:
+                self._note_skip(stage, slug_done, notes)
                 continue
             if stage.decision:
                 out = self._decide(stage, unit, st, notes)
@@ -310,14 +337,27 @@ class Driver:
             if stage.scope == "slug" and out is None:
                 slug_done.add(stage.name)
             if out is not None:
-                return out
+                return rehearsal.summary(self, ctx, out) if self.rehearse else out
+            if self.rehearse:
+                notes.append(f"rehearse {stage.name}: ok")
         pages = budget_mod.pages_read(extracted)
-        if self.dry_run:
-            st_outcome = "dry_run"
+        if self.dry_run or self.rehearse:
+            st_outcome = "dry_run" if self.dry_run else "rehearsed"
         else:
             st.end("delivered", "every stage done; package staged under out/")
             st_outcome = "delivered"
-        return Outcome(unit.unit, st_outcome, None, None, self.budget.refresh(), pages, notes)
+        out = Outcome(unit.unit, st_outcome, None, None, self.budget.refresh(), pages, notes)
+        return rehearsal.summary(self, ctx, out) if self.rehearse else out
+
+    def _note_skip(self, stage: dag.Stage, slug_done: set[str], notes: list[str]) -> None:
+        """A done stage is skipped. A done SLUG-scope stage is done for every
+        unit, so it joins `slug_done` here too: before this, a joint matter's
+        second unit found `list_matter` not done in its own state and re-ran it
+        -- and paid `vision` -- for that unit, on every resume."""
+        if stage.scope == "slug":
+            slug_done.add(stage.name)
+        if self.rehearse:
+            notes.append(f"rehearse {stage.name}: skipped (done)")
 
     def _decide(self, stage: dag.Stage, unit: job_mod.Unit, st: RunState, notes: list[str]) -> Outcome | None:
         hook_name = stage.decision or ""
@@ -369,6 +409,8 @@ class Driver:
         if stage.once_per_machine and (icd_tables.icd_dir(self.job.install_root) / icd_tables.VERSION_FILE).is_file():
             st.finish(stage.name, status="skipped", exit_code=0, dollars=None, pages=None, note="present")
             return None
+        if self.rehearse and (stage.paid or stage.external):
+            return rehearsal.stop(self, stage, ctx, extracted, notes)
         if stage.paid:
             try:
                 self._check_limits(stage, ctx, extracted)
@@ -444,16 +486,35 @@ class Driver:
         return Outcome(unit.unit, "held", hold.reason, stage.name, self.budget.spent(), pages, notes)
 
     def _open_seat(self):
+        if self.rehearse:
+            raise DriverError("rehearsal: a stage asked for the seat; nothing external runs in a rehearsal")
         if self._seat is None:
             self._seat = self._seat_factory()
         return self._seat
 
     def _sdk_client(self):
+        if self.rehearse:
+            raise DriverError("rehearsal: a stage asked for the model; nothing is spent in a rehearsal")
         if self._client is None:
             import anthropic
 
             self._client = anthropic.Anthropic(timeout=600.0, max_retries=0)
         return self._client
+
+    def _stage_run(self, unit: job_mod.Unit, log) -> StageRun:
+        return StageRun(
+            job=self.job,
+            cfg=self.cfg,
+            unit=unit,
+            slug_dir=self.slug_dir,
+            decided=self.decided,
+            log=log,
+            seat_factory=self._open_seat,
+            client_factory=self._sdk_client,
+            date_stamp=self.date_stamp,
+            before_request=self._before_request,
+            before_batch=self._before_batch,
+        )
 
     def _execute_in_process(
         self, stage: dag.Stage, ctx: dag.Ctx, st: RunState, extracted: Path, notes: list[str]
@@ -467,19 +528,7 @@ class Driver:
             lines.append(msg)
             self.log(f"  {msg}")
 
-        sr = StageRun(
-            job=self.job,
-            cfg=self.cfg,
-            unit=unit,
-            slug_dir=self.slug_dir,
-            decided=self.decided,
-            log=log,
-            seat_factory=self._open_seat,
-            client_factory=self._sdk_client,
-            date_stamp=self.date_stamp,
-            before_request=self._before_request,
-            before_batch=self._before_batch,
-        )
+        sr = self._stage_run(unit, log)
         st.start(stage.name, input_sha=_stage_input_sha(self.slug_dir, stage))
         self.log(f"[run] {stage.name}: in-process")
         refusal: str | None = None

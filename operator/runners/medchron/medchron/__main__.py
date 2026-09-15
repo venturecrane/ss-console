@@ -1,5 +1,7 @@
 """CLI: `medchron run <job_dir> [--from STAGE] [--dry-run] [--firm-config PATH]
-[--pricing PATH] [--json]`, `medchron dag`, `medchron validate-config PATH`."""
+[--pricing PATH] [--json]`, `medchron rehearse <job_dir> [--redo STAGE,...]
+[--firm-config PATH] [--pricing PATH] [--json]`, `medchron dag`,
+`medchron validate-config PATH`."""
 
 from __future__ import annotations
 
@@ -7,7 +9,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import config as config_mod, dag, driver as driver_mod
+from . import config as config_mod, dag, driver as driver_mod, rehearsal
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
@@ -32,14 +34,40 @@ def _cmd_run(args: argparse.Namespace) -> int:
         print(f"medchron: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
     print(driver_mod.to_json(outcomes) if args.json else driver_mod.report(outcomes))
-    worst = {"delivered": 0, "dry_run": 0, "held": 3, "refused": 4, "failed": 1}
+    return _exit_code(outcomes)
+
+
+def _exit_code(outcomes) -> int:
+    worst = {"delivered": 0, "dry_run": 0, "rehearsed": 0, "held": 3, "refused": 4, "failed": 1}
     return max(worst.get(o.outcome, 1) for o in outcomes) if outcomes else 1
+
+
+def _cmd_rehearse(args: argparse.Namespace) -> int:
+    """Every $0 gate against a COPY of the job's workdir; nothing spent, nothing
+    real touched. The workdir path goes to stderr; the verdict is stdout."""
+    redo = tuple(x.strip() for x in (args.redo or "").split(",") if x.strip())
+    try:
+        _copy, outcomes = rehearsal.run(
+            Path(args.job_dir),
+            firm_config=args.firm_config,
+            pricing=args.pricing,
+            log=lambda m: print(m, file=sys.stderr),
+            redo=redo,
+        )
+    except (driver_mod.DriverError, config_mod.ConfigError, rehearsal.RehearsalError) as exc:
+        print(f"medchron: {exc}", file=sys.stderr)
+        return 2
+    except Exception as exc:  # noqa: BLE001 - same contract as run: a sentence, never a trace
+        print(f"medchron: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 2
+    print(driver_mod.to_json(outcomes) if args.json else driver_mod.report(outcomes))
+    return _exit_code(outcomes)
 
 
 def _cmd_dag(_args: argparse.Namespace) -> int:
     problems = dag.validate_dag()
     for s in dag.STAGES:
-        kind = "decide" if s.decision else ("paid" if s.paid else "free")
+        kind = "decide" if s.decision else ("paid" if s.paid else ("ext" if s.external else "free"))
         print(f"{s.name:24s} {kind:6s} {s.scope:5s} {s.script}")
     if problems:
         print("\n".join(problems), file=sys.stderr)
@@ -68,6 +96,13 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--pricing", default=None)
     r.add_argument("--json", action="store_true")
     r.set_defaults(fn=_cmd_run)
+    rh = sub.add_parser("rehearse", help="run every $0 gate against a copy of the workdir; spend nothing")
+    rh.add_argument("job_dir")
+    rh.add_argument("--redo", default="", help="comma-separated $0 stages to reopen in the copy before the walk")
+    rh.add_argument("--firm-config", default=None)
+    rh.add_argument("--pricing", default=None)
+    rh.add_argument("--json", action="store_true")
+    rh.set_defaults(fn=_cmd_rehearse)
     d = sub.add_parser("dag", help="print the stage order and validate it")
     d.set_defaults(fn=_cmd_dag)
     v = sub.add_parser("validate-config", help="validate a firm config file")

@@ -156,3 +156,25 @@ def test_paid_stages_are_the_model_stages() -> None:
         "classify_scanned",
         "audit",
     }
+
+
+def test_external_stages_are_the_seat_network_and_matter_stages() -> None:
+    """The stages a rehearsal never executes. Pinned like the paid set: adding
+    one here is a decision that a rehearsal will stop there; forgetting one
+    means a rehearsal would touch the firm's system."""
+    assert {s.name for s in dag.STAGES if s.external} == {
+        "list_matter",
+        "download",
+        "index_msg",
+        "fold_msg",
+        "icd_tables",
+        "upload",
+    }
+    assert not any(s.paid and s.external for s in dag.STAGES)
+
+
+def test_the_gates_behind_the_paid_merge_carry_standalone_probes() -> None:
+    """merge routing, the coverage verdict and the audit claim count are the
+    three questions a dead tree could not answer without paying; each has a
+    $0 half a rehearsal runs from whatever exists."""
+    assert {s.name for s in dag.STAGES if s.rehearse is not None} == {"merge", "coverage_gate", "audit"}
