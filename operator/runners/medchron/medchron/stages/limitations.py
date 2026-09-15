@@ -26,7 +26,7 @@ def _plural(n: int, word: str) -> str:
     return f"{n} {word}{'' if n == 1 else 's'}"
 
 
-def _scope_lines(d: Path, byid: dict, ok: list, folded: list) -> list[str]:
+def _scope_lines(d: Path, byid: dict, ok: list, folded: list, failed: list) -> list[str]:
     o: list[str] = []
     n_file = len(ok) - len(folded)
     line = f"This chronology was prepared from {_plural(n_file, 'document')} in the matter file"
@@ -38,6 +38,16 @@ def _scope_lines(d: Path, byid: dict, ok: list, folded: list) -> list[str]:
     if pages:
         line += f", totalling approximately {pages:,} pages"
     o.append(line + ".")
+    # The count belongs in the opening sentence, not only in the list further
+    # down. A run that could retrieve a fraction of the file still produces a
+    # document that looks like a chronology, and the reader who skims section 6
+    # is the one who most needs to know how much of the file is behind it.
+    if failed:
+        o.append(
+            f"{_plural(len(failed), 'document')} in the reviewed folders could not be retrieved at all "
+            f"and {'is' if len(failed) == 1 else 'are'} not reflected anywhere in this chronology; "
+            f"each is named below."
+        )
     inc = read_json(d / "include.json", {}) or {}
     prefixes = inc.get("include_prefixes") or []
     if prefixes:
@@ -197,7 +207,7 @@ def section(slug_dir: Path, unit: str | None, log: Callable[[str], None]) -> lis
     failed = [r for r in byid.values() if not r.get("ok")]
     dupes = [r for r in byid.values() if r.get("duplicate_of")]
     folded = [r for r in ok if str(r.get("id", "")).startswith("msgatt-")]
-    o += _scope_lines(slug_dir, byid, ok, folded)
+    o += _scope_lines(slug_dir, byid, ok, folded, failed)
     o += _unread_lines(slug_dir, failed, log)
     o += _duplicate_lines(slug_dir, byid, dupes, unit, log)
     if len(o) == 2:

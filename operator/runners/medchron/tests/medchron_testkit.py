@@ -120,6 +120,10 @@ class FakeSeat:
     ) -> None:
         self.docs, self.folders, self.blobs = docs, folders, blobs
         self.fail_mint = fail_mint or set()
+        # Ids whose mint succeeds and whose GET 404s: the vendor's index still
+        # carries the file row, its storage no longer carries the object. Two
+        # of Ashton & Price's 196 were in exactly this state on 2026-09-14.
+        self.gone: set[str] = set()
         self.mints: list[list[str]] = []
         # ss#2614 upload: folders created and files sent by the runner; a
         # sent file shows in list_files only after `lag` further list calls
@@ -183,6 +187,15 @@ class FakeSeat:
 
     def fetch(self, url: str, dest: Path, expected_size: int | None) -> int:
         fid = url.rsplit("/", 1)[1]
+        if fid in self.gone:
+            # A real httpx error, so the code under test reads the same
+            # attribute production hands it rather than a stand-in shape.
+            import httpx
+
+            req = httpx.Request("GET", url)
+            raise httpx.HTTPStatusError(
+                f"Client error '404 Not Found' for url '{url}'", request=req, response=httpx.Response(404, request=req)
+            )
         data = self.blobs[fid]
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
