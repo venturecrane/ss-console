@@ -9,6 +9,17 @@ Thin wrapper over the MCP SDK's MCPServer (mcp 2.x; FastMCP before 2.0). Two job
    schemas and the model could not call them.)
 2. Expose the tool surface synchronously (``tool_surface``) so the conformance
    harness can enumerate exactly what the server offers.
+3. Keep a failing tool's own words in front of the agent. mcp 2.x forwards the
+   text of a raised ``ToolError`` and masks every other exception as a bare
+   ``Error executing tool <name>`` (a "crash"; the text stays on the server).
+   Our connectors raise ordinary exceptions whose text IS the diagnosis:
+   ``SmokeballApiError`` carries the HTTP status and response body precisely so
+   the agent sees WHY a write failed and stops instead of retrying. mcp 1.x
+   forwarded that text; the 2.x migration (#2796) silently dropped it, and the
+   pilot's first live turn on 2.x retried a failing ``create_memo`` four times
+   into Hermes' breaker with nothing but the tool's name to go on. The wrapper
+   below re-raises as ``ToolError`` with the type and text, and logs the
+   traceback itself so nothing is lost on the server side either.
 """
 
 from __future__ import annotations
@@ -22,6 +33,8 @@ from typing import Any
 
 import anyio
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
+from mcp.shared.exceptions import MCPError
 from mcp.types import Tool
 
 logger = logging.getLogger("operator_connector_sdk")
@@ -96,6 +109,15 @@ def _govern_result(result: Any, bound: ResultBound | None, connector: str, tool_
         return result
 
 
+def _as_tool_error(exc: Exception, connector: str, tool_name: str) -> ToolError:
+    """Translate a tool's exception into the anticipated-failure form mcp 2.x
+    forwards to the model, keeping the exception type and text. The traceback
+    goes to the server log at ERROR here because the SDK logs a ToolError at
+    INFO without one."""
+    logger.error("tool %s.%s raised %s: %s", connector, tool_name, type(exc).__name__, exc, exc_info=exc)
+    return ToolError(f"{type(exc).__name__}: {exc}")
+
+
 class ConnectorServer:
     def __init__(self, name: str) -> None:
         self.name = name
@@ -105,12 +127,19 @@ class ConnectorServer:
         """Register a tool. Delegates to MCPServer; the input schema is derived from
         the function signature and type hints. Optional ``bound`` declares the list
         result safe to bound to recent-N (see :class:`ResultBound`) — fail-closed:
-        omit it and the result is never truncated, only observed if oversized."""
+        omit it and the result is never truncated, only observed if oversized.
+
+        The decorator hands back the ORIGINAL function. The MCP boundary (result
+        governance, exception translation) lives on the registered wrapper only;
+        Python callers of the decorated name (the connector's own helpers, its
+        tests, the medchron runner) keep the plain Python contract: complete
+        results and the connector's own exception types, which their ``except``
+        clauses are written against."""
         mcp_register = self._mcp.tool(*args, **kwargs)
 
         def register(fn):
-            wrapped = self._wrap_result(fn, bound)
-            return mcp_register(wrapped)
+            mcp_register(self._wrap_result(fn, bound))
+            return fn
 
         return register
 
@@ -123,13 +152,25 @@ class ConnectorServer:
 
             @functools.wraps(fn)
             async def awrapper(*a, **k):
-                return _govern_result(await fn(*a, **k), bound, self.name, tool_name)
+                try:
+                    result = await fn(*a, **k)
+                except (ToolError, MCPError):
+                    raise  # already in the form the SDK forwards / a protocol error
+                except Exception as exc:
+                    raise _as_tool_error(exc, self.name, tool_name) from exc
+                return _govern_result(result, bound, self.name, tool_name)
 
             return awrapper
 
         @functools.wraps(fn)
         def wrapper(*a, **k):
-            return _govern_result(fn(*a, **k), bound, self.name, tool_name)
+            try:
+                result = fn(*a, **k)
+            except (ToolError, MCPError):
+                raise
+            except Exception as exc:
+                raise _as_tool_error(exc, self.name, tool_name) from exc
+            return _govern_result(result, bound, self.name, tool_name)
 
         return wrapper
 
