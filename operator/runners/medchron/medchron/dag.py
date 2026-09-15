@@ -89,6 +89,14 @@ class Stage:
     decision: str | None = None  # decisions.py hook name for authoring stages
     once_per_machine: bool = False  # e.g. ICD table fetch
     runner: Callable[..., int] | None = None  # in-process stage; `script` is then ""
+    # `medchron rehearse` (ss#2616). `external`: the stage touches the seat, the
+    # network, or the firm's matter, so a rehearsal never runs it. `rehearse`:
+    # the stage's $0 half -- reads whatever artifacts exist, returns report
+    # lines, calls no model, writes nothing -- run by the rehearsal at and past
+    # the stage where the walk stops, so the gates BEHIND a paid stage are
+    # answered for free instead of at the price of reaching them.
+    external: bool = False
+    rehearse: Callable[..., list[str]] | None = None
 
 
 def _slug(ctx: Ctx) -> list[str]:
@@ -105,7 +113,7 @@ def _slug_unit_date(ctx: Ctx) -> list[str]:
 
 STAGES: tuple[Stage, ...] = (
     # ---- $0: selection, pull, extract ------------------------------------
-    Stage("list_matter", "", lambda c: [c.job.matter_id], scope="slug", runner=_listing.run),
+    Stage("list_matter", "", lambda c: [c.job.matter_id], scope="slug", runner=_listing.run, external=True),
     Stage("decide_selection", "", _slug, scope="slug", requires=("list_matter",), decision="selection"),
     Stage(
         "download",
@@ -114,6 +122,7 @@ STAGES: tuple[Stage, ...] = (
         scope="slug",
         requires=("decide_selection",),
         runner=_download.run,
+        external=True,
         exit_map={
             1: (FAILED, "download: targets are still not pulled after the pass"),
             2: (HELD, "append: a named document id is not on the matter"),
@@ -121,7 +130,13 @@ STAGES: tuple[Stage, ...] = (
     ),
     Stage("extract", "", _slug, scope="slug", requires=("download",), runner=_extract.run),
     Stage(
-        "index_msg", "", lambda c: [c.slug, c.job.matter_id], scope="slug", requires=("extract",), runner=_msg.run_index
+        "index_msg",
+        "",
+        lambda c: [c.slug, c.job.matter_id],
+        scope="slug",
+        requires=("extract",),
+        runner=_msg.run_index,
+        external=True,
     ),
     Stage("decide_fold", "", _slug, scope="slug", requires=("index_msg",), decision="fold"),
     Stage(
@@ -131,6 +146,7 @@ STAGES: tuple[Stage, ...] = (
         scope="slug",
         requires=("decide_fold",),
         runner=_msg.run_fold,
+        external=True,
     ),
     Stage("extract_after_fold", "", _slug, scope="slug", requires=("fold_msg",), runner=_extract.run),
     # ---- paid: transcription, units, billing -----------------------------
@@ -212,6 +228,7 @@ STAGES: tuple[Stage, ...] = (
         paid=True,
         requires=("assemble",),
         runner=_merge.run,
+        rehearse=_merge.rehearse,
         exit_map={
             1: (FAILED, "merge: the model could not merge a routed cluster"),
             3: (REFUSED, "merge falsifier: a citation was lost"),
@@ -258,6 +275,7 @@ STAGES: tuple[Stage, ...] = (
         once_per_machine=True,
         requires=("summarize",),
         runner=_icd.run,
+        external=True,
         exit_map={1: (FAILED, "the CMS ICD tables could not be fetched")},
     ),
     Stage(
@@ -326,6 +344,7 @@ STAGES: tuple[Stage, ...] = (
         _slug_unit,
         requires=("decide_orphans",),
         runner=_coverage.run,
+        rehearse=_coverage.rehearse,
         exit_map={1: (HELD, "coverage gate: a pulled file is neither cited nor explained")},
     ),
     Stage(
@@ -356,6 +375,7 @@ STAGES: tuple[Stage, ...] = (
         paid=True,
         requires=("billing_docx",),
         runner=_audit.run,
+        rehearse=_audit.rehearse,
         exit_map={
             1: (HELD, "audit coverage: a live claim is not finally SUPPORTED"),
             2: (
@@ -395,6 +415,7 @@ STAGES: tuple[Stage, ...] = (
         lambda c: [c.slug, c.unit.unit],
         requires=("manifest",),
         runner=_upload.run,
+        external=True,
         exit_map={
             1: (FAILED, "upload: refused (a folder of that name is not ours, or the local bytes changed)"),
             2: (
@@ -426,6 +447,9 @@ def validate_dag() -> list[str]:
                 problems.append(f"{s.name}: invalidates unknown stage {inv!r}")
             elif pos[inv] <= pos[s.name]:
                 problems.append(f"{s.name}: invalidates {inv!r} which comes earlier")
+    for s in STAGES:
+        if s.paid and s.external:
+            problems.append(f"{s.name}: paid and external (a rehearsal must know which it is)")
     if len(set(ORDER)) != len(ORDER):
         problems.append("duplicate stage names")
     return problems

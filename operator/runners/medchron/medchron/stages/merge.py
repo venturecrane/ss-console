@@ -29,6 +29,7 @@ exits 0; a lost citation, paragraph or entry is exit 3, 4 or 5.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from . import merge_falsify as mf, merge_model
@@ -185,6 +186,36 @@ def merge_all(clusters_text: str, hd: mf.Headings) -> tuple[list[dict], dict[int
         else:
             code[i] = entry
     return clusters, code, route
+
+
+def rehearse(sr: StageRun) -> list[str]:
+    """The $0 half, for `medchron rehearse`: what the code merge decides and
+    what would go to the model, read off `clusters.md`. Calls nothing, writes
+    nothing (not even merge_route.json). The reason histogram is keyed with
+    the quoted fragments and numbers blanked, so it counts kinds, not clusters.
+    """
+    p = sr.slug_dir / "runs" / sr.unit.unit / "clusters.md"
+    if not p.is_file():
+        return ["no clusters.md yet (assemble has not run)"]
+    src = p.read_text(encoding="utf-8")
+    if not src.strip():
+        return ["no clusters to merge"]
+    clusters, code, route = merge_all(src, mf.Headings.from_config(sr.cfg))
+    n = len(clusters)
+    out = [
+        f"{n} clusters: {len(code)} merged in code, {len(route)} routed to the model ({100 * len(route) // max(n, 1)}%)"
+    ]
+    hist: dict[str, int] = {}
+    for r in route:
+        for reason in r.get("reasons") or []:
+            k = _reason_key(str(reason))
+            hist[k] = hist.get(k, 0) + 1
+    out += [f"  {v}x {k}" for k, v in sorted(hist.items(), key=lambda kv: -kv[1])[:10]]
+    return out
+
+
+def _reason_key(reason: str) -> str:
+    return re.sub(r"'[^']*'|\d+(?:\.\d+)?", "_", reason)[:110]
 
 
 def run(sr: StageRun) -> int:

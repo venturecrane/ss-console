@@ -61,6 +61,39 @@ def cited_exhibits(body: str) -> tuple[set[int], set[int]]:
     return cited, hollow - cited
 
 
+def rehearse(sr: StageRun) -> list[str]:
+    """The $0 half, for `medchron rehearse`: for every file in this unit, what
+    the gate would say if NOTHING cited it (composition may not have run yet).
+    A "needs a citation" line is a file that has neither a disposition, a
+    billing-set membership, nor an exclusion class -- the exact hold this gate
+    raises when the composer does not cite it. On the tree that died at merge
+    this is the answer the run would otherwise have paid four stages to reach.
+    """
+    d = sr.slug_dir
+    uf = d / "units" / f"{sr.unit.unit}.json"
+    if not uf.is_file():
+        return ["no units file yet (build_units has not run)"]
+    in_unit = {file_key(f): f for f in read_json(uf, [])}
+    rules = exclusions(sr.cfg)
+    spec = read_json(d / "billing_docs.json", []) or []
+    billing_names = {b["name"] for b in (spec.get("docs") if isinstance(spec, dict) else spec) or []}
+    explained = 0
+    needs: list[str] = []
+    for name in sorted(in_unit):
+        if in_unit[name].get("compose_skip"):
+            reason: str | None = f"compose skipped: {in_unit[name]['compose_skip']}"
+        elif billing_stem(name) in billing_names or name in billing_names:
+            reason = "in the authored billing-chart set"
+        else:
+            reason = classify_name(name, rules)
+        if reason:
+            explained += 1
+        else:
+            needs.append(f"  needs a citation: {name[:70]}")
+    head = f"{len(in_unit)} unit file(s); with nothing cited: {explained} explained, {len(needs)} would need a citation"
+    return [head, *needs[:25]]
+
+
 def run(sr: StageRun) -> int:
     d = sr.slug_dir
     unit = sr.unit.unit

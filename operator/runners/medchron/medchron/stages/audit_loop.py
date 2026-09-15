@@ -46,6 +46,44 @@ def _rekey(sr: StageRun, paths: AuditPaths) -> None:
     sr.log(f"rekey: carried {carried} verdict(s) across the strip's page remap")
 
 
+def rehearse(sr: StageRun) -> list[str]:
+    """The $0 half, for `medchron rehearse`: the claim count the audit would
+    call on, times the firm's per-claim rate. Counted with the audit's OWN
+    extractor. From the built chronology when build_doc has run; otherwise an
+    UPPER BOUND from the composed entries (pre-filter, pre-strip), labelled as
+    such, keeping every exhibit the text cites. This is the cap answer, at $0,
+    before a single paid stage past composition has run.
+    """
+    import re
+
+    from ..audit import claims as claims_mod
+    from ..audit.page_text import exhibit_paths
+
+    rd = sr.slug_dir / "runs" / sr.unit.unit
+    doc = rd / "final-chronology.md"
+    keep = set(exhibit_paths(sr.slug_dir / "out" / sr.unit.unit))
+    if doc.is_file():
+        body, label = claims_mod.body_of(doc.read_text(encoding="utf-8")), "from the built chronology"
+    else:
+        names = [
+            n
+            for n in ("entries_scoped_final.md", "entries_scoped.md", "entries_final.md", "merged.md")
+            if (rd / n).is_file()
+        ]
+        maps = sorted(rd.glob("map-*.md"))
+        if names:
+            body, label = (rd / names[0]).read_text(encoding="utf-8"), f"UPPER BOUND from {names[0]} (pre-strip)"
+        elif maps:
+            body = "\n\n".join(m.read_text(encoding="utf-8") for m in maps)
+            label = f"UPPER BOUND from {len(maps)} composed chunk(s) (pre-merge, pre-filter, pre-strip)"
+        else:
+            return ["no composed entries yet (map has not run); audit cost unprojectable"]
+        keep = keep or {int(m) for m in re.findall(r"\(Exhibit (\d+)", body)}
+    n = len(claims_mod.extract_claims(body, keep))
+    rate = float(sr.cfg.usd_per_audit_claim)
+    return [f"{n} claims {label} x {rate:.2f} USD/claim = ~{n * rate:.2f} USD"]
+
+
 def run(sr: StageRun) -> int:
     paths = AuditPaths(sr.slug_dir, sr.unit.unit)
     audit_model = llm.model_for(sr.cfg, "audit")
