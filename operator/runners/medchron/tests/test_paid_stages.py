@@ -401,8 +401,9 @@ def test_a_read_but_contentless_scan_is_carried_with_a_reason_not_refused(
     row = rows[0]
     assert row["text_path"], "it was read; it belongs in the set"
     assert row["compose_skip"], "and it must carry the reason the coverage gate asks for"
-    assert "no citable clinical content" in row["compose_skip"]
-    assert str(row["chars"]) in row["compose_skip"], "the reason states what was measured"
+    assert "nothing in it was cited" in row["compose_skip"], "measured, never inferred"
+    assert "3 words of text" in row["compose_skip"], "the reason states what was measured (View motion photo = 3)"
+    assert row["chars"] > 3, "chars stays CHARACTERS (budget reads it); the word count is a separate measure"
 
 
 def test_a_contentless_disposition_survives_the_billing_pass(
@@ -457,7 +458,7 @@ def test_a_contentless_disposition_survives_the_billing_pass(
         "the contentless scan must STILL carry its reason after the billing pass; "
         "without it the coverage gate holds the run on a document that was read"
     )
-    assert "no citable clinical content" in rows["s1"]["compose_skip"]
+    assert "nothing in it was cited" in rows["s1"]["compose_skip"]
     assert "compose" not in rows["s1"], "it is composed as usual; only the explanation rides along"
 
 
@@ -499,6 +500,40 @@ def test_a_stale_billing_mark_is_cleared_when_the_evidence_stops_supporting_it(
     assert contentless["compose_skip"] == "read in full; 41 bytes of text", (
         "another stage's disposition is not this pass's to drop"
     )
+
+
+def test_a_transcript_that_varies_by_bytes_keeps_its_disposition(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """Transcription is not byte-identical between runs. The SAME phone
+    screenshot came back at 44, 53 and 57 bytes on three runs of one client matter
+    (2026-09-15) against a byte threshold of 50: disposed of once, unexplained
+    twice, and the second and third runs held at the coverage gate on a
+    document that had been read correctly. Words move by ones where bytes
+    move by tens, and on 82 real scans the contentless cluster sat at 0-3
+    words against a next value of 25.
+
+    Falsifier: counting bytes instead of words turns the 53B and 57B variants
+    PRESENT and this goes red.
+    """
+    from medchron.stages.transcript import CONTENTLESS, PRESENT, transcript_state
+
+    sr = _sr(job_dir, firm_config_path, data_root, None)
+    variants = {
+        "v44": "[p.1] (machine transcription)\n11:56 M M 75%",
+        "v53": "[p.1] (machine transcription)\n11:56 [illegible] MM \u00b7",
+        "v57": "[p.1] (machine transcription)\n11:56 M M | 75% | [illegible]",
+        "photo": "[p.1] (machine transcription)\n[illegible] The image shows a photograph of a garage floor with "
+        "an epoxy spill near the entry, a visible trip hazard along the seam, and standing water at the drain.",
+    }
+    (sr.slug_dir / "text").mkdir(parents=True, exist_ok=True)
+    for rid, body in variants.items():
+        (sr.slug_dir / "text" / f"{rid}.txt").write_text(body)
+        _recorded(sr, rid, rid)
+    states = {rid: transcript_state(sr.slug_dir, rid)[0] for rid in variants}
+    assert states == {"v44": CONTENTLESS, "v53": CONTENTLESS, "v57": CONTENTLESS, "photo": PRESENT}, states
+    sizes = {rid: len(variants[rid].encode()) for rid in variants}
+    assert sizes["v44"] < 50 < sizes["v53"] < sizes["v57"], "the fixture straddles the old byte cutoff on purpose"
 
 
 def test_a_scan_with_no_transcription_still_refuses(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:

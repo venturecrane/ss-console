@@ -73,7 +73,7 @@
     "runners/medchron/medchron/stages/classify.py::run_scanned": 18,
     "runners/medchron/medchron/stages/coverage.py::run": 24,
     "runners/medchron/medchron/stages/exhibits.py::run": 20,
-    "runners/medchron/medchron/stages/merge.py::merge_cluster": 20,
+    "runners/medchron/medchron/stages/merge.py::merge_cluster": 19,
     "runners/medchron/medchron/stages/merge.py::parse_fragment": 16,
     "runners/medchron/medchron/stages/strip.py::_run": 31,
     "skills/client-verification-tracker/dispatch_envelope.py::build_and_write": 23,

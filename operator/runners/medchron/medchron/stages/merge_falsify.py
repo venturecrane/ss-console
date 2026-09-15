@@ -144,13 +144,91 @@ def distinct_paragraphs(block: str, hd: Headings) -> set[tuple[str, str]]:
     return {(norm_text(p), c) for p, c in paragraphs(block, hd) if c}
 
 
+# ---- THE ONE RULE for what code may collapse -------------------------------------
+# Held here, in the falsifier, because the falsifier is the reader that must agree
+# with it. `merge.merge_cluster` imports `yields_to` for its code merge, and
+# `containment_collapses` below credits exactly what `yields_to` drops, so the
+# floor the falsifier enforces and the collapse code performs cannot drift.
+#
+# 2026-09-15: they had drifted. The router sent a cluster to the model BECAUSE
+# it held a same-citation reworded pair, the prompt licensed the model to
+# collapse it, and this function credited only substring containment -- so a
+# compliant model was refused for "losing" a paragraph, every retry could only
+# repeat that, and a client's chronology failed at $62. Twenty-nine of fifty-five
+# routed clusters on that matter were routed for that reason alone. The five
+# inspected were the same boilerplate sentence with its commas moved.
+NUMBER = re.compile(r"\d+(?:[./:\-]\d+)*")
+WORD = re.compile(r"[a-z0-9]+")
+#: The only words two sentences may differ by and still be ONE sentence with
+#: its punctuation and connectives moved. Closed and deliberately small: a word
+#: not listed here is a content word, and a content-word difference keeps both
+#: sentences. Negations, laterality and qualifiers are content words on purpose
+#: ("no", "not", "left", "right", "active", "passive" are never in this set).
+FUNCTION_WORDS = frozenset(
+    "a an the of and with in on at to for or by as is was were are be from that this these those it its".split()
+)
+
+
+def tokens(prose: str) -> set[str]:
+    return set(WORD.findall(prose.lower()))
+
+
+def jaccard(a: set, b: set) -> float:
+    return 1.0 if not a and not b else len(a & b) / len(a | b)
+
+
+def same_fact(a: str, b: str) -> bool:
+    """Two same-citation sentences that are ONE sentence reworded: identical
+    number set and identical CONTENT-WORD set; only function words may differ.
+
+    This is the rule code can state truthfully. The first draft guarded on
+    numbers alone (plus token Jaccard >= 0.8) and was measured against the 47
+    same-citation pairs on a real matter before it shipped: only 3 had identical
+    content words. The other 44 differed by "active" vs "passive" range of
+    motion, "positive", "bilateral", "spinal" vs "spines" -- clinically distinct
+    findings that a number-only guard would have deleted from a legal record,
+    silently, 44 times. Laterality and negation are the same class: "left" vs
+    "right", "no" vs a bare finding. A word not in FUNCTION_WORDS keeps both
+    sentences; that is the safe direction, and it is what "fidelity over
+    reconciliation" means. Exact repeats are not this function's business: the
+    caller's set already absorbed them.
+    """
+    if a == b:
+        return False
+    if set(NUMBER.findall(a)) != set(NUMBER.findall(b)):
+        return False
+    return (tokens(a) ^ tokens(b)) <= FUNCTION_WORDS
+
+
+def yields_to(t: str, o: str) -> bool:
+    """`t` is dropped in favour of `o` (both normalised, same citation).
+
+    Either `t` is a strict substring of `o`, or the two are `same_fact` and
+    `t` is the shorter (ties broken by text, so a chain of three collapses to
+    exactly one and both callers agree which one).
+    """
+    if t == o:
+        return False
+    if t in o:
+        return True
+    return same_fact(t, o) and (len(t), t) < (len(o), o)
+
+
 def containment_collapses(pairs: set[tuple[str, str]]) -> int:
+    """How many paragraphs the code merge is CREDITED for dropping.
+
+    Pools by citation only, while `merge_cluster` collapses per heading. That
+    asymmetry is deliberate and safe-direction: the floor here can only be at
+    or below what the code merge actually emits, never above it, so a
+    cross-heading pair the code keeps can never be reported as lost. It is
+    named so nobody "fixes" it into a fourth private definition.
+    """
     n = 0
     by_cite: dict[str, list[str]] = {}
     for text, cite in pairs:
         by_cite.setdefault(cite, []).append(text)
     for texts in by_cite.values():
-        n += sum(1 for t in texts if any(o != t and t in o for o in texts))
+        n += sum(1 for t in texts if any(yields_to(t, o) for o in texts))
     return n
 
 
