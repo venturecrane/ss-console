@@ -35,7 +35,7 @@
 # SMOKEBALL_ENVIRONMENT is a REQUIRED runtime secret (the overlay fail-closes the
 # connector if it is unset) so a prod seat can never silently default to staging.
 # The authorization_code refresh token is NOT staged here — it is obtained at the
-# connect step (operator/bin/connect-smokeball.sh) and set as SMOKEBALL_REFRESH_TOKEN
+# connect step (bin/connect-smokeball.sh, repo root; ADR 0054) and set as SMOKEBALL_REFRESH_TOKEN
 # directly. A prod seat whose SMOKEBALL_PROD_* creds are not yet in the operator env
 # simply warns+skips → the connector is unwired this boot (boot-before-token), and
 # wires once the creds land.
