@@ -405,6 +405,102 @@ def test_a_read_but_contentless_scan_is_carried_with_a_reason_not_refused(
     assert str(row["chars"]) in row["compose_skip"], "the reason states what was measured"
 
 
+def test_a_contentless_disposition_survives_the_billing_pass(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """The test above ran the whole stage and still missed this, because
+    `mark_compose_skips` returns at its first line when `billing_docs.json` is
+    absent -- so the branch that clears marks never executed. On 2026-09-15 a
+    live chronology reached `build_units` with billing authored, the four
+    screenshots got their disposition in `_attach_transcripts`, and the billing
+    pass popped it eleven lines later. The coverage gate then has nothing to
+    read and holds the run on documents that were read correctly.
+
+    The falsifier: without billing_docs.json + billing_extract.jsonl present,
+    this test passes against the bug. Both are written below for that reason.
+    """
+    sr = _sr(job_dir, firm_config_path, data_root, None)
+    decisions.units(sr.job, sr.cfg, sr.slug_dir, dry_run=False)
+    _extracted(
+        sr,
+        [
+            _scan_rec(),
+            {"id": "a1", "name": "full bill", "folder": "/MEDICAL", "ext": ".pdf", "text": PROSE, "pages": 1},
+        ],
+    )
+    (sr.slug_dir / "text" / "s1.txt").write_text("[p.1] (machine transcription)\nView motion photo")
+    _recorded(sr)
+    # Billing authored AND extracted: this is what makes the clearing branch run.
+    (sr.slug_dir / "billing_docs.json").write_text(json.dumps({"docs": []}))
+    (sr.slug_dir / "billing_extract.jsonl").write_text(
+        json.dumps(
+            {
+                "file": "full bill",
+                "pages": 1,
+                "failures": [],
+                "chunks": [{"doc_type": "LEDGER", "line_items": [{"page": 1}], "printed_totals": []}],
+            }
+        )
+        + "\n"
+    )
+
+    assert units_stage.run(sr) == 0
+    rows = {
+        r["id"]: r
+        for f in sorted((sr.slug_dir / "units").glob("*.json"))
+        if not f.name.startswith("_")
+        for r in json.loads(f.read_text())
+        if isinstance(r, dict)
+    }
+    assert rows["a1"]["compose"] is False, "the billing pass still marks a billing-only source"
+    assert rows["s1"].get("compose_skip"), (
+        "the contentless scan must STILL carry its reason after the billing pass; "
+        "without it the coverage gate holds the run on a document that was read"
+    )
+    assert "no citable clinical content" in rows["s1"]["compose_skip"]
+    assert "compose" not in rows["s1"], "it is composed as usual; only the explanation rides along"
+
+
+def test_a_stale_billing_mark_is_cleared_when_the_evidence_stops_supporting_it(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """The clearing branch's OWN job, which had no test of its own: narrowing it
+    to protect another stage's disposition must not stop it clearing a mark it
+    wrote on an earlier pass. Found by mutation on 2026-09-15 -- deleting the
+    two pops left the whole file green, so nothing was watching this.
+
+    A file marked billing-only must lose the mark once billing_extract no longer
+    evidences every page; otherwise it silently stays out of the chronology.
+    """
+    sr = _sr(job_dir, firm_config_path, data_root, None)
+    d = sr.slug_dir
+    (d / "billing_docs.json").write_text(json.dumps({"docs": []}))
+    # A failed page: the billing chart no longer carries the whole file, so
+    # composition must take it back and the mark must go.
+    (d / "billing_extract.jsonl").write_text(
+        json.dumps(
+            {
+                "file": "full bill",
+                "pages": 1,
+                "failures": [1],
+                "chunks": [{"doc_type": "LEDGER", "line_items": [{"page": 1}], "printed_totals": []}],
+            }
+        )
+        + "\n"
+    )
+    # `run` rebuilds every record from extracted.jsonl, so a mark can only reach
+    # this branch through a direct call -- which is where the contract lives.
+    billing_marked = {"id": "a1", "name": "full bill", "ext": ".pdf", "compose": False, "compose_skip": "stale reason"}
+    contentless = {"id": "s1", "name": "IMG_0001", "ext": ".jpg", "compose_skip": "read in full; 41 bytes of text"}
+    units = {"alpha": [billing_marked, contentless]}
+    assert units_stage.mark_compose_skips(d, units, lambda _m: None) == []
+    assert "compose" not in billing_marked, "a mark whose evidence is gone must be cleared"
+    assert "compose_skip" not in billing_marked, "and its reason with it"
+    assert contentless["compose_skip"] == "read in full; 41 bytes of text", (
+        "another stage's disposition is not this pass's to drop"
+    )
+
+
 def test_a_scan_with_no_transcription_still_refuses(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
     """The case the gate was written for, which must survive the fix."""
     sr = _sr(job_dir, firm_config_path, data_root, None)
