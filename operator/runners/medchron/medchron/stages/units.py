@@ -98,7 +98,15 @@ def mark_compose_skips(d: Path, units: dict[str, list[dict[str, Any]]], log) -> 
                 r["compose"] = False
                 r["compose_skip"] = reason
                 skipped.append((u, r["name"], int((rec or {}).get("pages") or r.get("pages") or 0)))
-            else:
+            elif r.get("compose") is False:
+                # Clear only a mark THIS pass wrote (it always writes the pair),
+                # so a stale billing mark still goes when billing_docs changes.
+                # A `compose_skip` another stage authored -- a scan read in full
+                # that carries nothing citable -- is not ours to drop: popping it
+                # sends that file to the coverage gate with no explanation, which
+                # is a HOLD this pass has no view of. Live on 2026-09-15: four
+                # phone screenshots got their disposition in _attach_transcripts
+                # and lost it eleven lines later, here.
                 r.pop("compose", None)
                 r.pop("compose_skip", None)
     return skipped
