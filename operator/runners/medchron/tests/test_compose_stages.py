@@ -456,6 +456,84 @@ def test_a_rewording_with_a_differing_number_is_kept_and_routed_to_be_marked(
     assert merged.count("of 10") == 2 and "The records differ on this point." in merged
 
 
+def _pair_cluster(a: str, b: str, cite: str = "(Exhibit 2 - p. 14)") -> str:
+    """Two fragments, same date/provider/heading, one cited sentence each."""
+    head = "05/10/2023\nExample Chiropractic | Patient Complaints & Limitations\n\n"
+    return (
+        "##### CLUSTER 2023-05-10 | examplechiropractic (2 fragments)\n"
+        + head
+        + f"{a} {cite}\n---FRAGMENT-BREAK---\n"
+        + head
+        + f"{b} {cite}\n\n"
+    )
+
+
+def test_a_content_word_difference_is_never_collapsed_in_code(firm_headings: Path) -> None:
+    """The review of this change caught the first draft: a rule that guarded on
+    NUMBERS alone would have collapsed "active" range of motion into "passive"
+    (measured: 44 of 47 same-citation pairs on a real matter differed by a
+    content word -- active/passive, positive, bilateral -- and only 3 were one
+    sentence with its commas moved). Laterality and negation are the same
+    class. Code may only claim two sentences are one when their content words
+    are identical; a word not in FUNCTION_WORDS keeps both.
+
+    Falsifier: replacing the content-word test in `same_fact` with a token
+    Jaccard >= 0.8 collapses every pair below and this goes red.
+    """
+    hd = mf.Headings.from_config(config_mod.load(str(firm_headings)))
+    base = (
+        "Range of motion of the cervical, thoracic, and lumbar spine was measured and recorded as restricted with pain"
+    )
+    distinct = [
+        (
+            base.replace("Range of motion", "Active range of motion"),
+            base.replace("Range of motion", "Passive range of motion"),
+        ),
+        (
+            "Tenderness was noted over the left knee on palpation.",
+            "Tenderness was noted over the right knee on palpation.",
+        ),
+        (
+            "Straight leg raise was positive on the left at 45 degrees.",
+            "Straight leg raise was negative on the left at 45 degrees.",
+        ),
+        (
+            "There was no swelling of the ankle on examination today.",
+            "There was swelling of the ankle on examination today.",
+        ),
+    ]
+    for a, b in distinct:
+        na, nb = mf.norm_text(a), mf.norm_text(b)
+        assert mf.jaccard(mf.tokens(na), mf.tokens(nb)) >= 0.8, "the fixture must be the case the weak rule got wrong"
+        assert not mf.same_fact(na, nb) and not mf.yields_to(na, nb) and not mf.yields_to(nb, na), (a, b)
+        text, reasons = merge_stage.merge_cluster(mf.parse_clusters(_pair_cluster(a, b))[0], hd)
+        assert text is not None and reasons == [], reasons
+        assert a in text and b in text, "both findings survive, each with its citation"
+    # and the one shape code MAY collapse: identical content words, only connectives moved
+    same = (
+        "Palpation of the cervical, thoracic, and lumbar spines revealed pain, tenderness, and trigger points.",
+        "Palpation revealed pain, tenderness and trigger points of the cervical, thoracic and lumbar spines.",
+    )
+    assert mf.same_fact(mf.norm_text(same[0]), mf.norm_text(same[1]))
+
+
+def test_a_one_sided_number_difference_keeps_both_and_routes_nothing(firm_headings: Path) -> None:
+    """A same-citation pair where one sentence carries a number the other lacks
+    (no two-sided conflict) is neither `same_fact` (number sets differ) nor a
+    near-duplicate route (`conflict` needs a difference on BOTH sides). Before
+    this change that pair hit the reworded route and the model was told to
+    collapse it. Now it is kept as two paragraphs, unmarked: nothing is lost
+    and nothing is adjudicated. Pinned so the next reader knows it is a
+    decision, not a gap.
+    """
+    hd = mf.Headings.from_config(config_mod.load(str(firm_headings)))
+    a = "Cervical flexion was measured and found to be restricted with pain at end range."
+    b = "Cervical flexion was measured at 30 degrees and found to be restricted with pain at end range."
+    text, reasons = merge_stage.merge_cluster(mf.parse_clusters(_pair_cluster(a, b))[0], hd)
+    assert reasons == [], "not routed: no two-sided number conflict"
+    assert text is not None and a in text and b in text and "differ on this point" not in text
+
+
 def test_the_falsifier_credits_exactly_what_code_collapses(firm_headings: Path) -> None:
     """One rule, two readers. For a cluster holding a same_fact pair AND a
     containment pair, the floor the falsifier computes equals the paragraph

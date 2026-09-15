@@ -159,7 +159,14 @@ def distinct_paragraphs(block: str, hd: Headings) -> set[tuple[str, str]]:
 # inspected were the same boilerplate sentence with its commas moved.
 NUMBER = re.compile(r"\d+(?:[./:\-]\d+)*")
 WORD = re.compile(r"[a-z0-9]+")
-SAME_FACT_JACCARD = 0.8
+#: The only words two sentences may differ by and still be ONE sentence with
+#: its punctuation and connectives moved. Closed and deliberately small: a word
+#: not listed here is a content word, and a content-word difference keeps both
+#: sentences. Negations, laterality and qualifiers are content words on purpose
+#: ("no", "not", "left", "right", "active", "passive" are never in this set).
+FUNCTION_WORDS = frozenset(
+    "a an the of and with in on at to for or by as is was were are be from that this these those it its".split()
+)
 
 
 def tokens(prose: str) -> set[str]:
@@ -171,22 +178,26 @@ def jaccard(a: set, b: set) -> float:
 
 
 def same_fact(a: str, b: str) -> bool:
-    """Two same-citation sentences that are one fact reworded.
+    """Two same-citation sentences that are ONE sentence reworded: identical
+    number set and identical CONTENT-WORD set; only function words may differ.
 
-    Identical NUMBER SET is the guard that makes this defensible on a legal
-    record: what changes between two records is nearly always a number -- a
-    date, a dose, a measurement -- so a pair whose numbers match, on the same
-    page, at 80% shared tokens, is the same sentence written twice. A pair
-    with any number difference is never collapsed here; the router sends it
-    to the model to be MARKED ("The records differ on this point."), never
-    removed. Exact repeats are not this function's business: the caller's set
-    already absorbed them.
+    This is the rule code can state truthfully. The first draft guarded on
+    numbers alone (plus token Jaccard >= 0.8) and was measured against the 47
+    same-citation pairs on a real matter before it shipped: only 3 had identical
+    content words. The other 44 differed by "active" vs "passive" range of
+    motion, "positive", "bilateral", "spinal" vs "spines" -- clinically distinct
+    findings that a number-only guard would have deleted from a legal record,
+    silently, 44 times. Laterality and negation are the same class: "left" vs
+    "right", "no" vs a bare finding. A word not in FUNCTION_WORDS keeps both
+    sentences; that is the safe direction, and it is what "fidelity over
+    reconciliation" means. Exact repeats are not this function's business: the
+    caller's set already absorbed them.
     """
     if a == b:
         return False
     if set(NUMBER.findall(a)) != set(NUMBER.findall(b)):
         return False
-    return jaccard(tokens(a), tokens(b)) >= SAME_FACT_JACCARD
+    return (tokens(a) ^ tokens(b)) <= FUNCTION_WORDS
 
 
 def yields_to(t: str, o: str) -> bool:

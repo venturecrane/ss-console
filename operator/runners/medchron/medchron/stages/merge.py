@@ -2,7 +2,8 @@
 what is set arithmetic over text the map pass already wrote (union the
 paragraphs, keep every citation verbatim, collapse only what
 `merge_falsify.yields_to` says -- an exact repeat, a strict substring, or a
-`same_fact` rewording with an identical number set, same citation -- headings
+`same_fact` rewording with identical numbers AND identical content words, same
+citation -- headings
 in canonical order, fullest provider wording), and routes to the model only
 the clusters code will not decide:
 
@@ -150,9 +151,11 @@ def merge_cluster(cluster: dict[str, Any], hd: mf.Headings) -> tuple[str | None,
                         f"{h}: near-duplicate (J={jac:.2f}, numbers J={njac:.2f}) with different "
                         f"numbers/dates ({ca} vs {cb})"
                     )
-                # A same-citation rewording with matching numbers never reaches
-                # here: `yields_to` already collapsed it above. One that survives
-                # is below the rule's threshold and is kept as two paragraphs.
+                # A same-citation pair that is one sentence reworded never reaches
+                # here: `yields_to` collapsed it above. Any other same-citation
+                # pair -- a content word differs, or one carries a number the
+                # other lacks with no two-sided conflict -- is kept as two
+                # paragraphs, unmarked. Nothing is lost; nothing is adjudicated.
     if reasons:
         return None, reasons
     provider = max((f["provider"] for f in frags), key=len)
