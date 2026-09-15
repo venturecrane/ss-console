@@ -32,7 +32,15 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 
 const SCRIPT = fileURLToPath(new URL('../operator/bin/provision-customer.sh', import.meta.url))
-const src = readFileSync(SCRIPT, 'utf8')
+// The Smokeball staging block is a library the provisioner sources in the same
+// shell (ss#2425, the shell size ratchet). Its two gates consume the same facts
+// block, so the structural checks read the provisioner and the sourced file as
+// one text; the provisioner comes first so "defined before its first consumer"
+// still measures the real order.
+const SOURCED_LIBS = [
+  fileURLToPath(new URL('../operator/bin/lib/stage-smokeball.sh', import.meta.url)),
+]
+const src = [SCRIPT, ...SOURCED_LIBS].map((p) => readFileSync(p, 'utf8')).join('\n')
 
 describe('structural: gates no longer grep the raw yaml', () => {
   it('no channel gate greps customer.yaml for adapter/backend/webhook_url', () => {
