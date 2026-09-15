@@ -807,7 +807,7 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # schemas.py absent from the range). shared/heartbeat.py byte-identical
 # (cc8c23d8...) -- #339 changes a heartbeat field's VALUE vocabulary, not the
 # field set, so the manifest's field list is unaffected.
-ARG OVERLAY_REF="a01e68d01fff5a455c443f9e859cad0af38e39e3"
+ARG OVERLAY_REF="df181f68edbce5f92b51016c5429e59dcaca71ab"
 
 ARG CUSTOMER_SLUG=customer-zero
 

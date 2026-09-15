@@ -929,7 +929,8 @@ if authored_channel '^adapter=agentmail$|^backend=mcp:agentmail$'; then
   _AGENTMAIL_WH_SECRET="${!_AGENTMAIL_WH_KEY:-${WEBHOOK_SECRET_AGENTMAIL:-}}"
   stage_secret_from_env WEBHOOK_SECRET_AGENTMAIL "${_AGENTMAIL_WH_SECRET}" "AgentMail Svix webhook signing secret (per-customer ${_AGENTMAIL_WH_KEY}, else global)"
   # SMD_WEBHOOK_SIGNING_SECRET is what the Hermes-side router verifies the gate's
-  # forwarded X-Webhook-Signature with. The gate re-signs its forward hop with the
+  # forwarded signature with (HMAC V2 over "<timestamp>.<bytes>", overlay
+  # shared/forward_signature.py). The gate re-signs its forward hop with the
   # ROUTE secret (webhook_gate.py: "same secret"), so the router's signing secret IS
   # the agentmail route secret — stage them equal, or inbound never routes to a skill.
   stage_secret_from_env SMD_WEBHOOK_SIGNING_SECRET "${_AGENTMAIL_WH_SECRET}" "router forward-verify secret (== agentmail route secret)"
