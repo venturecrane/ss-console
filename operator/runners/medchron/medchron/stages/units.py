@@ -174,15 +174,21 @@ def _attach_transcripts(d: Path, recs: list[dict[str, Any]]) -> list[tuple[dict[
     for r in recs:
         if r.get("text_path"):
             continue
-        state, size = transcript_state(d, r["id"], recorded)
+        state, measure = transcript_state(d, r["id"], recorded)
         if state in UNREAD:
             if r.get("scan"):
-                awaiting.append((r, state, size))
+                # `measure` is the byte size for an unread state; there is no
+                # text to count words in, and bytes are what the refusal reports.
+                awaiting.append((r, state, measure))
             continue
-        r["text_path"] = str(d / "text" / f"{r['id']}.txt")
-        r["chars"] = size
+        tp = d / "text" / f"{r['id']}.txt"
+        r["text_path"] = str(tp)
+        # `chars` is CHARACTERS everywhere it is read -- budget.py sizes the run
+        # from it -- so it is not the disposition's word count. Two different
+        # measurements of the same file, kept apart on purpose.
+        r["chars"] = len(tp.read_text(encoding="utf-8", errors="replace"))
         if state == CONTENTLESS:
-            r["compose_skip"] = contentless_reason(size)
+            r["compose_skip"] = contentless_reason(measure)
     return awaiting
 
 

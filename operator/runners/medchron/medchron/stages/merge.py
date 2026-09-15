@@ -1,16 +1,25 @@
 """`merge`: same-date, same-provider fragments become one entry. Code merges
 what is set arithmetic over text the map pass already wrote (union the
-paragraphs, keep every citation verbatim, collapse only same-citation exact
-text or exact containment, headings in canonical order, fullest provider
-wording), and routes to the model only the clusters code will not decide:
+paragraphs, keep every citation verbatim, collapse only what
+`merge_falsify.yields_to` says -- an exact repeat, a strict substring, or a
+`same_fact` rewording with identical numbers AND identical content words, same
+citation -- headings
+in canonical order, fullest provider wording), and routes to the model only
+the clusters code will not decide:
 
   * a cluster it cannot parse exactly (unknown heading, uncited paragraph, a
     fragment whose date or provider disagrees with the cluster header, a
     fragment count that disagrees, date labels that disagree);
   * two same-subsection paragraphs that read as the same sentence but carry
     different numbers or dates (the disagreement the prompt marks; code never
-    writes that marker);
-  * two same-citation paragraphs that read as the same sentence reworded.
+    writes that marker).
+
+THE MODEL NEVER DELETES TEXT. It arranges and marks. The one rule for what may
+be dropped lives in `merge_falsify`, imported here for the code merge and used
+there to credit the floor, so the two cannot disagree. They did once
+(2026-09-15): a same-citation reworded pair was routed to the model, the
+prompt told it to collapse, the falsifier refused the collapse, and a client's
+run died at $62 on twenty-nine such clusters.
 
 Thirteen ledgers priced the model doing all of this at 8% of a run. Whatever
 merged the cluster, the falsifier proves nothing was lost before the stage
@@ -20,18 +29,18 @@ exits 0; a lost citation, paragraph or entry is exit 3, 4 or 5.
 from __future__ import annotations
 
 import json
-import re
 from typing import Any
 
 from . import merge_falsify as mf, merge_model
 from .assemble import norm_provider
 from .base import StageRun
 
+# Routing thresholds are the ROUTER's: they decide what the model is asked to
+# mark. The collapse rule (what code may drop) is `merge_falsify.yields_to`.
 JACCARD_ROUTE = 0.8
 NUMBER_ROUTE = 0.5  # number-set Jaccard that marks two paragraphs as the
 NUMBER_SHARED = 3  # same measurements, when they share this many
-NUMBER = re.compile(r"\d+(?:[./:\-]\d+)*")
-WORD = re.compile(r"[a-z0-9]+")
+NUMBER = mf.NUMBER
 
 
 class RouteError(Exception):
@@ -94,14 +103,6 @@ def parse_fragment(text: str, cluster: dict[str, Any], hd: mf.Headings) -> dict[
     return {"label": label, "provider": provider, "first_heading": first_h, "paras": paras}
 
 
-def _tokens(prose: str) -> set[str]:
-    return set(WORD.findall(prose.lower()))
-
-
-def _jaccard(a: set, b: set) -> float:
-    return 1.0 if not a and not b else len(a & b) / len(a | b)
-
-
 def merge_cluster(cluster: dict[str, Any], hd: mf.Headings) -> tuple[str | None, list[str]]:
     """(entry_text, reasons); entry_text is None when routed to the model."""
     reasons: list[str] = []
@@ -130,28 +131,31 @@ def merge_cluster(cluster: dict[str, Any], hd: mf.Headings) -> tuple[str | None,
                 continue
             seen.add(k)
             by_heading.setdefault(h, []).append((prose, cite, k[0]))
-    for h, plist in by_heading.items():  # containment collapse, same citation only
+    for h, plist in by_heading.items():  # the one collapse rule, same citation only
         by_heading[h] = [
             (prose, cite, n)
             for i, (prose, cite, n) in enumerate(plist)
-            if not any(j != i and c2 == cite and n != n2 and n in n2 for j, (_, c2, n2) in enumerate(plist))
+            if not any(j != i and c2 == cite and mf.yields_to(n, n2) for j, (_, c2, n2) in enumerate(plist))
         ]
     for h, plist in by_heading.items():  # near-duplicates the code will not adjudicate
         for i in range(len(plist)):
             for j in range(i + 1, len(plist)):
                 pa, ca, _ = plist[i]
                 pb, cb, _ = plist[j]
-                jac = _jaccard(_tokens(pa), _tokens(pb))
+                jac = mf.jaccard(mf.tokens(pa), mf.tokens(pb))
                 na, nb = set(NUMBER.findall(pa)), set(NUMBER.findall(pb))
-                njac = _jaccard(na, nb) if (na or nb) else 1.0
+                njac = mf.jaccard(na, nb) if (na or nb) else 1.0
                 conflict = bool(na - nb) and bool(nb - na)
                 if conflict and (jac >= JACCARD_ROUTE or (njac >= NUMBER_ROUTE and len(na & nb) >= NUMBER_SHARED)):
                     reasons.append(
                         f"{h}: near-duplicate (J={jac:.2f}, numbers J={njac:.2f}) with different "
                         f"numbers/dates ({ca} vs {cb})"
                     )
-                elif jac >= JACCARD_ROUTE and ca == cb:
-                    reasons.append(f"{h}: same-citation reworded pair (J={jac:.2f}) {ca}")
+                # A same-citation pair that is one sentence reworded never reaches
+                # here: `yields_to` collapsed it above. Any other same-citation
+                # pair -- a content word differs, or one carries a number the
+                # other lacks with no two-sided conflict -- is kept as two
+                # paragraphs, unmarked. Nothing is lost; nothing is adjudicated.
     if reasons:
         return None, reasons
     provider = max((f["provider"] for f in frags), key=len)
