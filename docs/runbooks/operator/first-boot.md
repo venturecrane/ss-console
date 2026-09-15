@@ -63,7 +63,9 @@ To verify presence: `crane_secret_check({ path: '/ss', env: 'prod', names: ['R2_
 
 ```
 # Optional (warn-and-skip if unset): CF_API_TOKEN + CF_ACCOUNT_ID (per-customer skill-bodies
-# bucket auto-create), SENTRY_DSN, MACHINE_HEARTBEAT_KEY, HEALTHCHECKS_API_KEY (ADR 0023 Wave 1).
+# bucket auto-create), SENTRY_DSN_OPERATOR, HEALTHCHECKS_API_KEY (ADR 0023 Wave 1).
+# MACHINE_HEARTBEAT_KEY is not an input: the provisioner mints it per seat (migration 0114)
+# and the console keeps only its hash.
 ```
 
 ### Overlay plugins are volume-shadowed (handled in bootstrap)

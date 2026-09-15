@@ -46,9 +46,10 @@
 #                                 Pulled from operator env. Deliberately NOT
 #                                 sourced from SENTRY_DSN (that key is ss-web's).
 #   MACHINE_HEARTBEAT_KEY       — NOT read from env since 0114: minted per seat below
-#                                 (Wave 1 single-key model per ADR 0023 §10).
-#                                 SAME value as the Cloudflare Worker secret on
-#                                 ss-web; staged to every Machine.
+#                                 and staged to THIS Machine only. The console
+#                                 holds the salted hash in machine_credentials;
+#                                 there is no Worker-side copy (the Wave 1
+#                                 fleet-wide key was retired in #2781).
 #   HEALTHCHECKS_API_KEY        — healthchecks.io project API key. Used to
 #                                 create the per-customer check during
 #                                 provisioning, and to cancel it during
