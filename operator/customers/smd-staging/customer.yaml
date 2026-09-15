@@ -79,7 +79,7 @@ model: claude-opus-4-8
 # pin: v2026.7.1@7c1a029553d87c43ecff8a3821336bc95872213b (uv.lock + uv sync --frozen
 # make the Python rebuild reproducible; proven to build on the Node-26 image by
 # the staging rollback rehearsal). See docs/runbooks/operator/hermes-v0.20-upgrade-plan.md.
-hermes_ref: v2026.8.18@e624e9fde561e1add9388384012b295fde669ade
+hermes_ref: v2026.9.14@345cd2b057a452236de401d3534b8502a7465e8d
 
 machine:
   size: shared-cpu-1x
