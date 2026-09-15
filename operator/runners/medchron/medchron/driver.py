@@ -34,6 +34,7 @@ from . import (
     icd_tables,
     job as job_mod,
     limits as limits_mod,
+    rehearsal,
     seat as seat_mod,
 )
 from .stages.base import StageRefusal, StageRun
@@ -332,7 +333,7 @@ class Driver:
             if stage.scope == "slug" and out is None:
                 slug_done.add(stage.name)
             if out is not None:
-                return self._rehearse_summary(ctx, out) if self.rehearse else out
+                return rehearsal.summary(self, ctx, out) if self.rehearse else out
             if self.rehearse:
                 notes.append(f"rehearse {stage.name}: ok")
         pages = budget_mod.pages_read(extracted)
@@ -342,7 +343,7 @@ class Driver:
             st.end("delivered", "every stage done; package staged under out/")
             st_outcome = "delivered"
         out = Outcome(unit.unit, st_outcome, None, None, self.budget.refresh(), pages, notes)
-        return self._rehearse_summary(ctx, out) if self.rehearse else out
+        return rehearsal.summary(self, ctx, out) if self.rehearse else out
 
     def _note_skip(self, stage: dag.Stage, slug_done: set[str], notes: list[str]) -> None:
         """A done stage is skipped. A done SLUG-scope stage is done for every
@@ -405,7 +406,7 @@ class Driver:
             st.finish(stage.name, status="skipped", exit_code=0, dollars=None, pages=None, note="present")
             return None
         if self.rehearse and (stage.paid or stage.external):
-            return self._rehearse_stop(stage, ctx, st, extracted, notes)
+            return rehearsal.stop(self, stage, ctx, extracted, notes)
         if stage.paid:
             try:
                 self._check_limits(stage, ctx, extracted)
@@ -495,63 +496,6 @@ class Driver:
 
             self._client = anthropic.Anthropic(timeout=600.0, max_retries=0)
         return self._client
-
-    # ---- rehearse -----------------------------------------------------------
-    def _rehearse_stop(
-        self, stage: dag.Stage, ctx: dag.Ctx, st: RunState, extracted: Path, notes: list[str]
-    ) -> Outcome:
-        """A paid or external stage that is not done ends the walk. Before it
-        does: the limits are probed (a note, never a hold), the projection is
-        stated or declared unprojected, and every standalone probe from this
-        stage onward runs against whatever artifacts exist. Coverage and audit
-        sit behind the paid merge on every real dead tree, and they are the
-        gates that matter -- so they are answered here, for free, instead of
-        at the price of reaching them."""
-        kind = "paid" if stage.paid else "external"
-        if stage.paid:
-            try:
-                self._check_limits(stage, ctx, extracted)
-            except limits_mod.LimitHold as hold:
-                notes.append(f"WOULD HOLD at {stage.name}: {hold.reason}")
-            proj = self._projection(stage, ctx, extracted)
-            money = "unprojected" if proj is None else f"~{proj:.2f} USD"
-        else:
-            money = "would write to the firm's matter" if stage.name == "upload" else "would touch the seat or network"
-        notes.append(f"rehearse {stage.name}: STOP {kind}, not done ({money})")
-        sr = self._stage_run(ctx.unit, lambda _m: None)
-        for s in dag.stages_from(stage.name):
-            if s.rehearse is None:
-                continue
-            try:
-                notes.extend(f"rehearse {s.name}: {line}" for line in s.rehearse(sr))
-            except Exception as exc:  # noqa: BLE001 - a probe that cannot read its inputs is a line, not a crash
-                notes.append(f"rehearse {s.name}: probe could not run: {type(exc).__name__}: {str(exc)[:120]}")
-        pages = budget_mod.pages_read(extracted)
-        reason = f"{kind} stage not done; the walk ends here"
-        return Outcome(ctx.unit.unit, "rehearsed", reason, stage.name, self.budget.refresh(), pages, notes)
-
-    def _rehearse_summary(self, ctx: dag.Ctx, out: Outcome) -> Outcome:
-        """The block a person reads: where it stopped, what the ledger says was
-        spent against the cap, what is projected and what has no rate. Dollar
-        figures live in notes only; `Outcome.reason` is relayed by the daemon
-        and must carry none (limits.py)."""
-        ext = self.slug_dir / "extracted.jsonl"
-        where = f"stopped at {out.stage} ({out.outcome})" if out.stage else "walk complete: every stage done or $0"
-        projected: list[str] = []
-        unprojected: list[str] = []
-        for s in dag.STAGES:
-            if not s.paid:
-                continue
-            p = self._projection(s, ctx, ext)
-            (unprojected.append(s.name) if p is None else projected.append(f"{s.name} {p:.2f}"))
-        out.notes += [
-            f"rehearse summary: {where}",
-            f"rehearse summary: spent {self.budget.refresh():.2f} USD from the ledger; cap {self.limits.cap_usd:.2f}",
-            "rehearse summary: projected " + (" | ".join(projected) or "nothing"),
-            "rehearse summary: unprojected (no measured rate): " + (", ".join(unprojected) or "none"),
-            "rehearse summary: allowance figures are as stamped in job.yaml when that job was last run",
-        ]
-        return out
 
     def _stage_run(self, unit: job_mod.Unit, log) -> StageRun:
         return StageRun(

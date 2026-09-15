@@ -36,7 +36,7 @@ from typing import Any
 
 import yaml
 
-from . import driver as driver_mod, job as job_mod
+from . import budget as budget_mod, dag, job as job_mod, limits as limits_mod
 
 
 class RehearsalError(RuntimeError):
@@ -86,7 +86,9 @@ def run(
     log=print,
     redo: tuple[str, ...] = (),
     **driver_kw: Any,
-) -> tuple[Path, list[driver_mod.Outcome]]:
+) -> tuple[Path, list[Any]]:
+    from . import driver as driver_mod  # lazy: driver imports this module
+
     copy = prepare(Path(job_dir))
     log(f"[rehearse] workdir {copy}")
     d = driver_mod.Driver(
@@ -96,3 +98,62 @@ def run(
     for o in outcomes:
         o.notes.append(f"rehearse summary: workdir {copy}")
     return copy, outcomes
+
+
+# ---- the driver's rehearse half, kept here so driver.py stays under the 500-line module ceiling ----
+def stop(drv: Any, stage: dag.Stage, ctx: dag.Ctx, extracted: Path, notes: list[str]) -> Any:
+    """A paid or external stage that is not done ends the walk. Before it
+    does: the limits are probed (a note, never a hold), the projection is
+    stated or declared unprojected, and every standalone probe from this
+    stage onward runs against whatever artifacts exist. Coverage and audit
+    sit behind the paid merge on every real dead tree, and they are the
+    gates that matter -- so they are answered here, for free, instead of
+    at the price of reaching them."""
+    kind = "paid" if stage.paid else "external"
+    if stage.paid:
+        try:
+            drv._check_limits(stage, ctx, extracted)
+        except limits_mod.LimitHold as hold:
+            notes.append(f"WOULD HOLD at {stage.name}: {hold.reason}")
+        proj = drv._projection(stage, ctx, extracted)
+        money = "unprojected" if proj is None else f"~{proj:.2f} USD"
+    else:
+        money = "would write to the firm's matter" if stage.name == "upload" else "would touch the seat or network"
+    notes.append(f"rehearse {stage.name}: STOP {kind}, not done ({money})")
+    sr = drv._stage_run(ctx.unit, lambda _m: None)
+    for s in dag.stages_from(stage.name):
+        if s.rehearse is None:
+            continue
+        try:
+            notes.extend(f"rehearse {s.name}: {line}" for line in s.rehearse(sr))
+        except Exception as exc:  # noqa: BLE001 - a probe that cannot read its inputs is a line, not a crash
+            notes.append(f"rehearse {s.name}: probe could not run: {type(exc).__name__}: {str(exc)[:120]}")
+    pages = budget_mod.pages_read(extracted)
+    reason = f"{kind} stage not done; the walk ends here"
+    from .driver import Outcome  # lazy: driver imports this module
+
+    return Outcome(ctx.unit.unit, "rehearsed", reason, stage.name, drv.budget.refresh(), pages, notes)
+
+
+def summary(drv: Any, ctx: dag.Ctx, out: Any) -> Any:
+    """The block a person reads: where it stopped, what the ledger says was
+    spent against the cap, what is projected and what has no rate. Dollar
+    figures live in notes only; `Outcome.reason` is relayed by the daemon
+    and must carry none (limits.py)."""
+    ext = drv.slug_dir / "extracted.jsonl"
+    where = f"stopped at {out.stage} ({out.outcome})" if out.stage else "walk complete: every stage done or $0"
+    projected: list[str] = []
+    unprojected: list[str] = []
+    for s in dag.STAGES:
+        if not s.paid:
+            continue
+        p = drv._projection(s, ctx, ext)
+        (unprojected.append(s.name) if p is None else projected.append(f"{s.name} {p:.2f}"))
+    out.notes += [
+        f"rehearse summary: {where}",
+        f"rehearse summary: spent {drv.budget.refresh():.2f} USD from the ledger; cap {drv.limits.cap_usd:.2f}",
+        "rehearse summary: projected " + (" | ".join(projected) or "nothing"),
+        "rehearse summary: unprojected (no measured rate): " + (", ".join(unprojected) or "none"),
+        "rehearse summary: allowance figures are as stamped in job.yaml when that job was last run",
+    ]
+    return out
