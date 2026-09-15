@@ -282,10 +282,13 @@ vars:
     stage: mcp-subprocess
     requirement: optional
     agent_env: held
-    custody: customer
+    custody: infra
     note: >-
-      Connector-optional, defaults to "us". NOTHING STAGES IT TODAY — declared so
-      the gap is visible rather than discovered by a non-US firm.
+      us|au|uk. Staged per seat from customer.yaml connectors.<cap>.region
+      (default us) since ss#2425; before that nothing staged it and the
+      connector's own default carried every seat. INFRA for the same reason as
+      SMOKEBALL_ENVIRONMENT: it selects which Smokeball gateway the seat talks
+      to, an SMD deployment choice, not a firm credential.
   SMOKEBALL_OAUTH_STATE_KEY:
     stage: agent
     requirement: optional
