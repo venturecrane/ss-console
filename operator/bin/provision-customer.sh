@@ -863,13 +863,15 @@ stage_secret_from_env CLIO_TOKENS_ENC_B64    "${CLIO_TOKENS_ENC_B64:-}"    "base
 # WEBHOOK_SECRET_AGENTMAIL is the Svix signing secret the webhook gate verifies. It
 # is PER-CUSTOMER, NOT account-wide: each customer's inbox is wired to its own
 # webhook (created out of band via the AgentMail dashboard/API), and that webhook
-# carries its own secret that only verifies THAT customer's inbound. So prefer the
-# per-customer value staged in /ss as WEBHOOK_SECRET_AGENTMAIL__<CUSTOMER_ID>
-# (uppercased; non-alnum -> _), and fall back to the global WEBHOOK_SECRET_AGENTMAIL
-# only for legacy single-webhook setups. Without the per-customer source a reprovision
+# carries its own secret that only verifies THAT customer's inbound. So the value
+# comes ONLY from the per-customer key staged in /ss as
+# WEBHOOK_SECRET_AGENTMAIL__<CUSTOMER_ID> (uppercased; non-alnum -> _). There is
+# no fallback to the global WEBHOOK_SECRET_AGENTMAIL: with one, a reprovision
 # overwrites a customer's own webhook secret with the global one and inbound email
-# silently stops verifying — the 2026-06-12 inbound failure, generalized to every
-# multi-customer AgentMail seat.
+# silently stops verifying — the 2026-06-12 inbound failure, and again on scott
+# for weeks up to 2026-09-15 with boot smoke green throughout. The fence below
+# refuses the seat instead; boot smoke's agentmail-webhook-secret-matches-vendor
+# check proves the staged value against the vendor after boot.
 
 # ---------- authored-connector facts: parse once, comments are not authoring ----
 # Every channel gate below used to `grep -qE` the RAW customer.yaml, which reads
@@ -925,9 +927,19 @@ if authored_channel '^adapter=agentmail$|^backend=mcp:agentmail$'; then
   stage_secret_from_env AGENTMAIL_API_KEY "${!_AGENTMAIL_READ_NAME:-${AGENTMAIL_API_KEY:-}}" "AgentMail read/draft credential for the gateway (inbox-scoped, NO send permission; per-seat ${_AGENTMAIL_READ_NAME}, else global)"
   stage_secret_from_env AGENTMAIL_SEND_API_KEY "${!_AGENTMAIL_SEND_NAME:-${AGENTMAIL_SEND_API_KEY:-}}" "AgentMail send credential for the broker ONLY (inbox-scoped, message_send; stripped from agent env; per-seat ${_AGENTMAIL_SEND_NAME}, else global)"
   unset _AGENTMAIL_CID _AGENTMAIL_READ_NAME _AGENTMAIL_SEND_NAME
-  _AGENTMAIL_WH_KEY="WEBHOOK_SECRET_AGENTMAIL__$(printf '%s' "${CUSTOMER_ID}" | tr '[:lower:]-' '[:upper:]_' | tr -cd 'A-Z0-9_')"
-  _AGENTMAIL_WH_SECRET="${!_AGENTMAIL_WH_KEY:-${WEBHOOK_SECRET_AGENTMAIL:-}}"
-  stage_secret_from_env WEBHOOK_SECRET_AGENTMAIL "${_AGENTMAIL_WH_SECRET}" "AgentMail Svix webhook signing secret (per-customer ${_AGENTMAIL_WH_KEY}, else global)"
+  # The sentinels below delimit the block tests/agentmail-webhook-secret-fence.test.ts
+  # drives in a bash harness; keep them, and keep the block self-contained.
+  # >>> agentmail-webhook-secret-fence
+  # NO GLOBAL FALLBACK. The fallback that used to sit here staged the global
+  # secret onto scott (no per-seat key vaulted) and every inbound email to that
+  # seat was rejected 401 for weeks while boot smoke passed (2026-09-15,
+  # vfy_01M2HXT17Q32RX6TCV5NVZA9D6). Its own comment above already named the
+  # 2026-06-12 failure it caused; a fallback that can only produce a silently
+  # dead inbound path is not an affordance. Refuse, and name the key to vault.
+  _AGENTMAIL_WH_KEY="WEBHOOK_SECRET_AGENTMAIL__$(printf '%s' "${CUSTOMER_ID}" | tr '[:lower:]-' '[:upper:]_' | tr -cd 'A-Z0-9_')"; _AGENTMAIL_WH_SECRET="${!_AGENTMAIL_WH_KEY:-}"
+  [ -n "${_AGENTMAIL_WH_SECRET}" ] || die "agentmail-webhook-secret-fence: ${_AGENTMAIL_WH_KEY} is not vaulted in Infisical /ss (prod). This seat binds the agentmail adapter, so its webhook gate needs the signing secret of ITS OWN vendor webhook; the global WEBHOOK_SECRET_AGENTMAIL is never used for it. Copy the secret from the AgentMail dashboard webhook for hermes-${CUSTOMER_ID}.fly.dev and vault it as ${_AGENTMAIL_WH_KEY} (crane_secret_set from clipboard), then re-run."
+  # <<< agentmail-webhook-secret-fence
+  stage_secret_from_env WEBHOOK_SECRET_AGENTMAIL "${_AGENTMAIL_WH_SECRET}" "AgentMail Svix webhook signing secret (per-customer ${_AGENTMAIL_WH_KEY}; no global fallback)"
   # SMD_WEBHOOK_SIGNING_SECRET is what the Hermes-side router verifies the gate's
   # forwarded signature with (HMAC V2 over "<timestamp>.<bytes>", overlay
   # shared/forward_signature.py). The gate re-signs its forward hop with the

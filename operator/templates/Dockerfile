@@ -1313,6 +1313,9 @@ COPY operator/templates/audit-write-fail-probe.py /app/audit-write-fail-probe.py
 # OP-P2-1 affirmative proof: boot-smoke runs this as root to confirm NO agent-uid
 # process (gateway or same-uid child) still carries the account-wide R2 key.
 COPY operator/templates/r2-account-key-strip-probe.py /app/r2-account-key-strip-probe.py
+# Boot-smoke proof that the staged AgentMail webhook secret is the vendor's
+# (scott 2026-09-15: the global value was staged, every inbound rejected 401).
+COPY operator/templates/agentmail-webhook-secret-probe.py /app/agentmail-webhook-secret-probe.py
 # ADR 0053: boot-smoke asserts every baked author-built connector's declared
 # tool_classes agree with the overlay's enforced action-class map (the cross-repo
 # manifest<=map check, run where both the baked manifest and the installed overlay
