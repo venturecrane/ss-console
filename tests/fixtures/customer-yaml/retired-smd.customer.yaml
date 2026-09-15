@@ -49,7 +49,7 @@ escalation_model: claude-opus-4-8
 # Hermes v0.18.0 → v0.20.4 promotion (Step 4: Crane, SMD-own production seat,
 # last of the SMD-own four before the A&P checkpoint, ss#2444).
 # Rollback pin: v2026.7.1@7c1a029553d87c43ecff8a3821336bc95872213b. See docs/runbooks/operator/hermes-v0.20-upgrade-plan.md.
-hermes_ref: v2026.8.18@e624e9fde561e1add9388384012b295fde669ade
+hermes_ref: v2026.9.14@345cd2b057a452236de401d3534b8502a7465e8d
 
 machine:
   size: shared-cpu-1x

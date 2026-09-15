@@ -99,7 +99,7 @@ escalation_model: claude-opus-4-8
 # has never run on v0.20 anywhere — pilot is inbound-by-webhook, this seat is
 # inbound-by-poll. Cursor resume is proven by delta-state.json's post-boot mtime
 # plus zero duplicate inbound rows, not by boot-smoke.
-hermes_ref: v2026.8.18@e624e9fde561e1add9388384012b295fde669ade
+hermes_ref: v2026.9.14@345cd2b057a452236de401d3534b8502a7465e8d
 
 # ss#2612 / ADR 0087: the chronology-package runner runs on this Machine beside
 # the gateway. Memory is the binding constraint (vision and billing render

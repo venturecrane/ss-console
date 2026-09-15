@@ -207,8 +207,12 @@ async function recordSentSignatureRequest(args: {
     signerSnapshot,
     signRequest,
   } = args
-  const sentAt = new Date().toISOString()
-  const expiresAt = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString()
+  // One clock read: expires_at is defined as sent_at + 5 days exactly (the quote
+  // layer's contract, src/lib/db/quotes.ts), and two reads can straddle a
+  // millisecond (Verify on main, 2026-09-15: 432000001 ms).
+  const sentMs = Date.now()
+  const sentAt = new Date(sentMs).toISOString()
+  const expiresAt = new Date(sentMs + 5 * 24 * 60 * 60 * 1000).toISOString()
   const request = await createSignatureRequest(db, {
     org_id: orgId,
     quote_id: quote.id,
