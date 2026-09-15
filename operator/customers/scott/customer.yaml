@@ -124,6 +124,15 @@ connectors:
     backend: 'mcp:agentmail'
     enabled: true
     webhook_url: 'https://hermes-scott.fly.dev/webhooks/agentmail'
+    # The seat's OWN inbox. The workspace broker pins every outbound send to
+    # this address (operator/workspace_broker/agentmail_auth.py
+    # seat_inbox_address) and, absent this line, derives `<slug>@agentmail.to`.
+    # This seat's inbox was created as agentcrane@ (the persona name), not
+    # scott@, so the derived address is not in the account listing and the
+    # broker refuses every send from this seat, fail-closed (proven 2026-09-15:
+    # the account lists agentcrane@agentmail.to with the hermes-scott webhook
+    # bound to it, and no scott@agentmail.to). Authored, not derived.
+    inbox_address: agentcrane@agentmail.to
 
 webhook_triggers:
   # One trigger per (source, event); it names ONE skill. Re-pointed from
