@@ -47,8 +47,10 @@ bytes the broker hashed are the bytes the document yields", not "the extractor
 is right", and a second extractor would produce a different-but-equally-valid
 text and make the comparison meaningless. The channel is what is independent.
 
-Required env: SMOKEBALL_SEED_CLIENT_ID / SMOKEBALL_SEED_CLIENT_SECRET /
-SMOKEBALL_STAGING_API_KEY (App 1) and AGENTMAIL_API_KEY (email commands).
+Required env: SMOKEBALL_SEED_CLIENT_ID / SMOKEBALL_SEED_CLIENT_SECRET (App 1's
+OAuth pair) / SMOKEBALL_STAGING_API_KEY (account-scoped: the one US staging
+x-api-key, shared by App 1 and the seat's app; not an App 1 credential) and
+AGENTMAIL_API_KEY (email commands).
 Pure stdlib on purpose: runs anywhere without the operator venv.
 """
 
