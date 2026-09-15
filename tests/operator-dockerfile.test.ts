@@ -1318,7 +1318,20 @@ describe('Operator customer Machine Dockerfile', () => {
     // bootstrap/translate.py and its test only: no tracked .py twin moves
     // (verify-overlay-pairs.py 10/10 PASS at the new ref); vocabulary and
     // heartbeat fields re-read as identical, both sources absent from the range.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="a01e68d01fff5a455c443f9e859cad0af38e39e3"')
+    // a01e68d0 -> df181f68 (2026-09-15, overlay#356). THE FORWARD HOP SIGNS WITH
+    // THE ADAPTER'S HMAC V2. Hermes v0.21 warns once per route that the gate's
+    // body-only X-Webhook-Signature "is vulnerable to replay attacks"; every
+    // forwarder into the loopback adapter (the gate's vendor routes, handoff,
+    // mcp, the Graph mail poller, the dead-letter replay) now sends
+    // X-Webhook-Signature-V2 over "<timestamp>.<body>" plus X-Webhook-Timestamp
+    // from one shared signer, and nothing the adapter could fall back to. V2
+    // exists at v2026.8.18 too, so a pin rollback keeps forwarding. Range
+    // touches webhook_gate.py, shared/msgraph_poller.py, shared/msgraph_replay.py,
+    // shared/forward_signature.py (new), the router plugin's header read and
+    // translate's docstring: no tracked .py twin moves (verify-overlay-pairs.py
+    // 10/10 PASS at the new ref); vocabulary and heartbeat fields re-read as
+    // identical, both sources absent from the range.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="df181f68edbce5f92b51016c5429e59dcaca71ab"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
