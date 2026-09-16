@@ -24,6 +24,7 @@ Return codes: 0 clean, 1 problems (repair), 2 invalid, 3 guard.
 from __future__ import annotations
 
 import random
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -38,6 +39,32 @@ from .render import img_block, render
 
 SEED = 20260820
 REVERSE_EVERY = 8
+EXHIBIT_PROVIDER = re.compile(r"^Exhibit \d+ - (.+?) - \d{2}-\d{2}-\d{4}")
+
+
+def institution(path: Path) -> str:
+    """The first two words of an exhibit's provider, from its file name: the
+    part two exhibits of one institution share ("example va" for the
+    medical center, its dental clinic and its pharmacy)."""
+    m = EXHIBIT_PROVIDER.match(path.name)
+    return " ".join((m.group(1) if m else path.stem).lower().split()[:2])
+
+
+def control_exhibit(claim_exhibit: int, pdfs: dict[int, Path]) -> int | None:
+    """The exhibit a control is verified against. A control is a control only
+    when its page plausibly cannot carry the claim: a VA pharmacy claim shown
+    the VA medical center exhibit's first pages met the same VA medication list
+    and was SUPPORTED, and that one accepted control invalidated a round of
+    1,998 verdicts that had discriminated 278 times (live 2026-09-16). So the
+    other exhibit is the first from a DIFFERENT institution; only a matter
+    with a single institution falls back to any other exhibit."""
+    if claim_exhibit not in pdfs:
+        return next((o for o in sorted(pdfs) if o != claim_exhibit), None)
+    mine = institution(pdfs[claim_exhibit])
+    others = [o for o in sorted(pdfs) if o != claim_exhibit]
+    return next((o for o in others if institution(pdfs[o]) != mine), others[0] if others else None)
+
+
 WINDOW_CAP = 12
 TEXT_MIN_CHARS = 80
 ERROR = {"verdict": "ERROR", "unsupported_assertions": [], "contradictions": []}
@@ -132,7 +159,7 @@ class Round:
             do_ctl = self.counter["n"] % self.control_every == 0
         if not do_ctl:
             return
-        other = next((o for o in sorted(pdfs) if o != c["exhibit"]), None)
+        other = control_exhibit(int(c["exhibit"]), pdfs)
         if other is None:
             return
         text_ctl = None
