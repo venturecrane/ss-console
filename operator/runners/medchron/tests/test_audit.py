@@ -189,6 +189,33 @@ def test_verify_parses_the_tool_result_and_never_assumes_its_shape() -> None:
     assert VF.text_verdict({"verdict": "SUPPORTED", "supporting_pages": [2, 4]}, [2])["verdict"] == "SUPPORTED"
 
 
+def test_a_control_is_verified_against_a_different_institution(tmp_path: Path) -> None:
+    """Live 2026-09-16: a VA Pharmacy claim was 'controlled' against the
+    Sacramento VA exhibit's first pages, which carry the same VA medication
+    list; the verifier said SUPPORTED, truthfully, and one such control voided
+    a round that had discriminated 278 times. The other exhibit must belong to
+    a different institution when the matter has one."""
+    from medchron.audit.run import control_exhibit, institution
+
+    def ex(n: int, provider: str) -> Path:
+        return tmp_path / f"Exhibit {n} - {provider} - 01-02-2026 (Medical Records).pdf"
+
+    pdfs = {
+        1: ex(1, "Sacramento VA Medical Center"),
+        2: ex(2, "Sacramento VA Dental Clinic, Huy Nguyen"),
+        3: ex(3, "Healing Touch"),
+        19: ex(19, "Sacramento VA Medical Center, Pharmacy (Pang)"),
+    }
+    assert institution(pdfs[19]) == "sacramento va" == institution(pdfs[2])
+    assert control_exhibit(19, pdfs) == 3, "not Ex1: same institution"
+    assert control_exhibit(3, pdfs) == 1, "Healing Touch controls against the first VA exhibit"
+    assert control_exhibit(1, pdfs) == 3
+    # a single-institution matter still gets a control, from any other exhibit
+    va_only = {k: v for k, v in pdfs.items() if k != 3}
+    assert control_exhibit(19, va_only) == 1 and control_exhibit(1, va_only) == 2
+    assert control_exhibit(7, {7: ex(7, "Alone")}) is None
+
+
 # ---- one round, image mode, with controls -------------------------------------------------------
 def _write_doc(sr: StageRun, body_entries: str) -> None:
     rd = sr.slug_dir / "runs" / "alpha"
