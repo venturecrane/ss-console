@@ -9,9 +9,11 @@ what a duplicate is ($62). Every one of those was decidable from artifacts
 already on disk. This is the command that decides them before a paid stage
 spends.
 
-WHAT IT DOES. Copies the slug dir (raw/ symlinked: read-only inputs, 100 MB+;
-text/ and out/ byte-copied: extract writes under text/, and page_map.json is
-written with write_text, which would truncate a shared inode), rewrites the
+WHAT IT DOES. Copies the slug dir (raw/, msg_raw/ and msg_pdfs/ symlinked:
+read-only inputs and most of the bytes; text/ and out/ byte-copied: extract
+writes under text/, and page_map.json is written with write_text, which would
+truncate a shared inode; refused outright when the volume cannot hold twice
+the copy, because a full volume stalls the live daemon too), rewrites the
 envelope's data_root to the copy, keeps install_root real (controls and ICD
 are read there, never written), and runs the real Driver in rehearse mode:
 walk from the top, done-skipping on, execute every $0 in-process stage and
@@ -43,6 +45,27 @@ class RehearsalError(RuntimeError):
     pass
 
 
+# Read-only inputs, linked rather than copied: the matter's downloaded files,
+# the Outlook containers and the PDFs folded out of them. No $0 stage writes
+# under any of them, and together they are most of a job (1.2 GB on a
+# 3,568-page matter, 2026-09-16). Copying them filled the seat's 10 GB volume
+# to zero, which also stalls the live daemon.
+LINKED_INPUTS = ("raw", "msg_raw", "msg_pdfs")
+
+
+def _copy_bytes(slug_dir: Path) -> int:
+    """What the copy will actually write: everything except the linked inputs."""
+    total = 0
+    for root, dirs, files in os.walk(slug_dir):
+        if Path(root) == slug_dir:
+            dirs[:] = [d for d in dirs if d not in LINKED_INPUTS]
+        for f in files:
+            p = Path(root) / f
+            if not p.is_symlink():
+                total += p.stat().st_size
+    return total
+
+
 def prepare(job_dir: Path) -> Path:
     """The copied job dir: `<job_dir>/rehearsal/<UTC stamp>/` with its own
     job.yaml pointing at its own data/. Returns that dir."""
@@ -63,9 +86,17 @@ def prepare(job_dir: Path) -> Path:
     real_slug = job.data_root / job.slug
     dst_slug = copy_root / job.slug
     if real_slug.is_dir():
-        shutil.copytree(real_slug, dst_slug, ignore=shutil.ignore_patterns("raw"), symlinks=True)
-        if (real_slug / "raw").is_dir():
-            os.symlink(real_slug / "raw", dst_slug / "raw", target_is_directory=True)
+        need = _copy_bytes(real_slug)
+        free = shutil.disk_usage(job_dir).free
+        if free < need * 2:
+            raise RehearsalError(
+                f"the volume holds {free // 2**20} MB free and the rehearsal copy needs about "
+                f"{need // 2**20} MB plus room to run; free space first (a full volume stalls the live daemon too)"
+            )
+        shutil.copytree(real_slug, dst_slug, ignore=shutil.ignore_patterns(*LINKED_INPUTS), symlinks=True)
+        for name in LINKED_INPUTS:
+            if (real_slug / name).is_dir():
+                os.symlink(real_slug / name, dst_slug / name, target_is_directory=True)
     else:
         dst_slug.mkdir(parents=True)
     orphan = job.data_root / "usage-ledger-orphan.jsonl"
