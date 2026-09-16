@@ -122,9 +122,10 @@ export function parseJobRow(raw: unknown): MedchronJobRow | null {
 }
 
 /** Group the debited rows the way the seat's `_DEBITS_SQL` does: one group per
- * work digest (a row without one stands alone), pages and documents as the
- * group's MAX, cents as its SUM. A chronology that took three launches is one
- * debit of its pages and three of its cents. */
+ * work digest (a row without one stands alone), pages as the group's MAX,
+ * cents as its SUM. (The seat also takes MAX(documents); the console carries
+ * no debited-documents figure, so it is not computed here.) A chronology that
+ * took three launches is one debit of its pages and three of its cents. */
 function groupedDebits(debited: MedchronJobRow[]): { pages: number; cents: number } {
   const groups = new Map<string, { pages: number; cents: number }>()
   for (const j of debited) {

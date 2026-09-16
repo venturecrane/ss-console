@@ -263,7 +263,12 @@ used or left gets the `medchron_allowance` figures verbatim, never a remembered
 number. The firm has no other surface for the count by design; the portal is for
 starting, changing and ending the Service, not for reading its meter.
 
-**Open.** A `relaunch_of` column written by the hand-launch path would hold the
+**Open.** Period-of-charge keying, queued on 2026-09-11 for "the next `OVERLAY_REF`
+bump", is still not built after five bumps (this one addressed the grouping
+defect instead); it stays open with no bump promised. The laptop pipeline in the
+private engagements repo meters its own runs from one calibration row per
+delivered unit and skips the running slug, so it never double-counted a relaunch
+and needs no companion change; it is not a contract surface. A `relaunch_of` column written by the hand-launch path would hold the
 promise even when an envelope drifts between launches; not needed while the
 relaunch procedure re-submits the same envelope file. The runtime-read kind for
 the allowance (console as pure display) remains queued for a later bump.

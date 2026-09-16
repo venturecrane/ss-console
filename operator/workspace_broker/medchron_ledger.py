@@ -129,8 +129,9 @@ _ACTIVE_TWIN_SQL = (
 #   the old one on the console -- the two surfaces disagreeing about the same
 #   period, which is the one thing this rule exists to prevent. Created-time
 #   keying is a figure every surface can compute from a column every surface
-#   already has. Moving to period-of-charge is the next OVERLAY_REF bump's
-#   business (ADR 0087 amendment).
+#   already has. Period-of-charge keying was queued for "the next OVERLAY_REF
+#   bump" on 2026-09-11 and has not been built through five bumps since; it
+#   stays on ADR 0087's open list, and no bump is promised for it here.
 #
 # Since 2026-09-11 the period is the firm's BILLING CYCLE when one is authored
 # (`cycle_window.py`), and the calendar month when none is. The predicate is a
@@ -440,8 +441,12 @@ class MedchronLedger:
         the group's MAX, cents its SUM. The window is half-open on a job's
         CREATED time, and the console computes it from the same fixture-pinned
         algorithm (`cycle_window.py`) and groups on the same projected digest,
-        so the two surfaces cannot disagree about a period's figure.
-        `exclude_job_id` leaves out that job's whole work group."""
+        so the two surfaces cannot disagree about a period's figure. The
+        laptop pipeline (the private engagements repo) meters its own runs
+        from one calibration row per delivered unit and already skips the
+        running slug, so it has never counted a relaunch twice; it is not a
+        contract surface. `exclude_job_id` leaves out that job's whole work
+        group."""
         conn = self._connect()
         try:
             if exclude_job_id:
@@ -474,7 +479,7 @@ class MedchronLedger:
         `used`/`remaining` are the allowance's own unit and `unit` says which
         it is, so a caller can never read a page count as a document count.
         The document and cents figures ride alongside for the console and the
-        runner's cost limits. `exclude_job_id` leaves one job's own row out,
+        runner's cost limits. `exclude_job_id` leaves out that job's whole work group,
         which is what a resume needs so it is not metered against itself.
 
         `anchor_day` is the firm's billing-cycle day; without one the window is
