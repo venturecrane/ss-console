@@ -226,6 +226,35 @@ def test_rehearse_refuses_while_the_seat_is_running_a_job(
     assert outs[0].outcome == "rehearsed"
 
 
+def test_the_copy_links_the_input_folders_and_refuses_a_volume_that_cannot_hold_it(
+    tmp_path: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Live 2026-09-16: copying msg_pdfs/ and msg_raw/ (most of a 1.2 GB job)
+    filled the seat's 10 GB volume to zero, which stalls the daemon too. The
+    inputs are linked, and a volume that cannot hold twice the copy refuses
+    before a byte is written."""
+    job_dir, _client = _delivered(tmp_path, data_root, firm_config_path, pricing_path)
+    sd = data_root / "example-matter"
+    for name in ("msg_pdfs", "msg_raw"):
+        (sd / name).mkdir(exist_ok=True)
+        (sd / name / "big.bin").write_bytes(b"\0" * 4096)
+    before = _snapshot(sd)
+    copy, outs = _rehearse(job_dir, firm_config_path, pricing_path)
+    assert outs[0].outcome == "rehearsed"
+    cs = copy / "data" / "example-matter"
+    assert all((cs / n).is_symlink() for n in ("raw", "msg_pdfs", "msg_raw")), sorted(p.name for p in cs.iterdir())
+    assert (cs / "text").is_dir() and not (cs / "text").is_symlink(), "text/ is written by extract; copied"
+    assert _snapshot(sd) == before
+    # the refusal: free space below twice what the copy would write
+    need = rehearsal._copy_bytes(sd)
+    assert need > 0
+    monkeypatch.setattr(rehearsal.shutil, "disk_usage", lambda _p: type("U", (), {"free": need * 2 - 1})())
+    n_before = len(list((job_dir / "rehearsal").iterdir()))
+    with pytest.raises(rehearsal.RehearsalError, match="free space first"):
+        _rehearse(job_dir, firm_config_path, pricing_path)
+    assert len(list((job_dir / "rehearsal").iterdir())) == n_before, "nothing written under rehearsal/"
+
+
 def test_rehearse_and_from_are_exclusive(
     job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path
 ) -> None:
