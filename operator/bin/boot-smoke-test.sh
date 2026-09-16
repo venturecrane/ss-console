@@ -476,6 +476,21 @@ ssh_exec "r2-account-key-stripped-from-agent" "/opt/hermes/.venv/bin/python3 /ap
 ssh_exec "agentmail-send-key-stripped-from-agent" \
   "/opt/hermes/.venv/bin/python3 /app/r2-account-key-strip-probe.py hermes AGENTMAIL_SEND_API_KEY"
 
+# The staged AgentMail webhook secret is the VENDOR's, for THIS seat's webhook.
+#
+# WHY (scott, 2026-09-15, vfy_01M2HXT17Q32RX6TCV5NVZA9D6): with no per-seat
+# Infisical key the provisioner staged the global WEBHOOK_SECRET_AGENTMAIL, which
+# was not the secret of the seat's own webhook. Every inbound email was rejected
+# 401 at warning level while every check here passed. The probe reads the
+# gateway's environ as root, asks the vendor for the webhook naming this seat's
+# hostname, and compares signing secrets by value, printing hash prefixes only.
+#
+# What makes it able to FAIL: stage the wrong secret and it exits 1 naming both
+# hash prefixes; no vendor webhook for the host, or two, also exits 1. A seat
+# with no AgentMail channel passes vacuously and says so.
+ssh_exec "agentmail-webhook-secret-matches-vendor" \
+  "/opt/hermes/.venv/bin/python3 /app/agentmail-webhook-secret-probe.py ${APP_NAME}.fly.dev hermes"
+
 # The same proof for the Graph SEND app credential (ss#2258 msgraph wave).
 #
 # READ WHAT THIS CHECK DOES AND DOES NOT COVER. It proves the BROKER'S copy never
