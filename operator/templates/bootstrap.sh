@@ -863,13 +863,21 @@ log "Reconciling egress webhook subscriptions (boot backstop)..."
 /opt/hermes/.venv/bin/python3 /app/webhook_reconcile.py "${CUSTOMER_YAML}" --trigger boot \
   || log "WARN: egress webhook reconcile non-fatal failure (retries at connect / next boot)"
 
-# Inbound webhook front-door gate (overlay `hermes-smd-webhook-gate`). It binds
-# the public port (8643), verifies the vendor signature (AgentMail), and forwards
-# to the gateway's machine-local :8644 with the Generic header. FAIL-CLOSED: only
-# launched when a per-vendor webhook secret is present — no public webhook surface
-# without a verifying secret. Runs as a supervised background child under tini; a
-# restart loop keeps it up, while the gateway exec below stays PID-1's foreground.
-if [ -n "${WEBHOOK_SECRET_AGENTMAIL:-}" ]; then
+# Front-door gate (overlay `hermes-smd-webhook-gate`). It binds the public port
+# (8643) and serves EVERYTHING that reaches the seat from outside: the Fly health
+# check, vendor webhooks (each verified against its own WEBHOOK_SECRET_<ROUTE>
+# and refused when that secret is absent), the Smokeball OAuth callback, the
+# console proxy (/sticky-stop, /entitlement, /mcp/turn, /runtime/* reads, all
+# under WEBHOOK_SECRET_MCP), and forwards to the gateway's machine-local :8644
+# with the Generic header. FAIL-CLOSED per route, not per seat: the gate is
+# launched when the seat carries any verifying secret it serves. Until
+# 2026-09-16 the launch keyed on WEBHOOK_SECRET_AGENTMAIL alone, so removing a
+# stale AgentMail secret from an msgraph seat (the first client seat) took down
+# its health check, its OAuth callback and every console control with it, while
+# the gateway itself ran on. WEBHOOK_SECRET_MCP is staged on every seat by the
+# provisioner. Runs as a supervised background child under tini; a restart loop
+# keeps it up, while the gateway exec below stays PID-1's foreground.
+if [ -n "${WEBHOOK_SECRET_MCP:-}" ] || [ -n "${WEBHOOK_SECRET_AGENTMAIL:-}" ]; then
   # Run the respawn loop in an EXEC'd shell with the account-wide R2 key scrubbed
   # from its environment (OP-P2-1). The `unset` above removed the key from THIS
   # bash's variables, but a forked `( ) &` subshell is NOT exec'd — its
@@ -887,9 +895,9 @@ if [ -n "${WEBHOOK_SECRET_AGENTMAIL:-}" ]; then
       sleep 2
     done
   ' &
-  log "Inbound webhook gate launched (public :8643 -> gateway :8644)"
+  log "Front-door gate launched (public :8643 -> gateway :8644; agentmail route $([ -n "${WEBHOOK_SECRET_AGENTMAIL:-}" ] && echo armed || echo absent))"
 else
-  log "WEBHOOK_SECRET_AGENTMAIL unset; webhook gate NOT launched (no inbound webhook)"
+  log "no WEBHOOK_SECRET_MCP and no WEBHOOK_SECRET_AGENTMAIL; front-door gate NOT launched (no public surface)"
 fi
 
 # (R2 account-wide key already stripped above, before the webhook-gate launch —
