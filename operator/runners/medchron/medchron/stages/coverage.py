@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 from .base import StageRun, read_json, read_jsonl
@@ -42,6 +43,34 @@ def exclusions(cfg: Any) -> list[tuple[re.Pattern, str]]:
 
 def classify_name(name: str, rules: list[tuple[re.Pattern, str]]) -> str | None:
     return next((reason for rx, reason in rules if rx.search(name)), None)
+
+
+SEEN_LINE = re.compile(
+    r"=== FILE: (?P<name>.+?)(?: \(fileId (?P<id>[\w.-]+)[^)]*\))?(?: \[part \d+/\d+\])?(?: \[continued\])? ===\s*\|?\s*"
+    r"(?P<what>nothing extractable: [^\n]+|billing-dates: \d+|entries: \d+[^\n]*)"
+)
+
+
+def composer_dispositions(run_dir: Path, unit_files: list[dict[str, Any]]) -> dict[str, str]:
+    """Per unit file, the composer's own account of it from the maps' FILES-SEEN
+    blocks: a file it read and found nothing citable in says why (`nothing
+    extractable: <reason>`), and a file that fed only the billing chart says
+    `billing-dates: N`. That is the record's own statement, written by the
+    stage that read every page, and it is the reason this gate lacked on
+    2026-09-16: 97 pleadings, filings, photos and letters, each with a stated
+    reason, held the run because the firm's name table had never met them.
+    `entries: 0` with no reason explains nothing, so it is not returned."""
+    id_to_name = {f["id"]: file_key(f) for f in unit_files}
+    out: dict[str, str] = {}
+    for p in sorted(run_dir.glob("map-*.md")):
+        for m in SEEN_LINE.finditer(p.read_text(encoding="utf-8")):
+            name = id_to_name.get(m.group("id") or "", m.group("name").strip())
+            what = m.group("what").strip()
+            if what.startswith("nothing extractable:"):
+                out.setdefault(name, "composer: " + what[len("nothing extractable:") :].strip())
+            elif what.startswith("billing-dates:") and what != "billing-dates: 0":
+                out.setdefault(name, "evidenced billing dates only; the billing chart carries them")
+    return out
 
 
 def cited_exhibits(body: str) -> tuple[set[int], set[int]]:
@@ -73,10 +102,12 @@ def rehearse(sr: StageRun) -> list[str]:
     uf = d / "units" / f"{sr.unit.unit}.json"
     if not uf.is_file():
         return ["no units file yet (build_units has not run)"]
-    in_unit = {file_key(f): f for f in read_json(uf, [])}
+    unit_files = read_json(uf, [])
+    in_unit = {file_key(f): f for f in unit_files}
     rules = exclusions(sr.cfg)
     spec = read_json(d / "billing_docs.json", []) or []
     billing_names = {b["name"] for b in (spec.get("docs") if isinstance(spec, dict) else spec) or []}
+    said = composer_dispositions(d / "runs" / sr.unit.unit, unit_files)
     explained = 0
     needs: list[str] = []
     for name in sorted(in_unit):
@@ -85,7 +116,7 @@ def rehearse(sr: StageRun) -> list[str]:
         elif billing_stem(name) in billing_names or name in billing_names:
             reason = "in the authored billing-chart set"
         else:
-            reason = classify_name(name, rules)
+            reason = classify_name(name, rules) or said.get(name)
         if reason:
             explained += 1
         else:
@@ -105,11 +136,8 @@ def run(sr: StageRun) -> int:
 
     pulled: dict[str, dict[str, Any]] = {}
     dupes: set[str] = set()
-    for r in read_jsonl(d / "raw_manifest.jsonl"):
-        if not r.get("ok"):
-            continue
-        key = file_key(r)
-        (dupes.add(key) if r.get("duplicate_of") else pulled.__setitem__(key, r))
+    for r in (x for x in read_jsonl(d / "raw_manifest.jsonl") if x.get("ok")):
+        (dupes.add(file_key(r)) if r.get("duplicate_of") else pulled.__setitem__(file_key(r), r))
     owners: dict[str, set[str]] = {}
     udir = d / "units"
     for p in sorted(udir.glob("*.json")) if udir.is_dir() else []:
@@ -153,6 +181,7 @@ def run(sr: StageRun) -> int:
 
     spec = read_json(d / "billing_docs.json", [])
     billing_names = {b["name"] for b in (spec.get("docs") if isinstance(spec, dict) else spec) or []}
+    said = composer_dispositions(rd, unit_files)
     body = ""
     for cand in ("entries_scoped_final.md", "entries_scoped.md", "entries_final.md"):
         if (rd / cand).is_file():
@@ -179,11 +208,11 @@ def run(sr: StageRun) -> int:
         elif billing_stem(name) in billing_names or name in billing_names:
             reason = "in the authored billing-chart set (billing chart carries it)"
         else:
-            reason = classify_name(name, rules)
+            reason = classify_name(name, rules) or said.get(name)
         (explained.append((name, reason)) if reason else unexplained.append(name))
+    cited_n = len(cited_files & set(in_unit))
     sr.log(
-        f"{unit}: {len(in_unit)} source file(s) in the composition set; cited {len(cited_files & set(in_unit))}; "
-        f"excluded with reason {len(explained)}; UNEXPLAINED {len(unexplained)}"
+        f"{unit}: {len(in_unit)} file(s); cited {cited_n}; excluded with reason {len(explained)}; UNEXPLAINED {len(unexplained)}"
     )
     for name, reason in explained:
         sr.log(f"    ~ {name[:62]:62s} {reason[:48]}")
