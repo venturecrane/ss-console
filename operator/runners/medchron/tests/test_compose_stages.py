@@ -209,6 +209,40 @@ def test_compose_splits_an_emptied_chunk_once(
     assert any(r.get("empty") for r in compose_stage.read_usage(d))
 
 
+def test_compose_keeps_a_short_but_complete_half_after_the_split(
+    job_dir: Path, firm_headings: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Live 2026-09-16: a 78-page property inspection report drew a correct,
+    short answer ("none in this chunk" plus its FILES-SEEN line); the emptiness
+    heuristic split the chunk, the half answered the same way, and the answer
+    was thrown away, so the coverage gate later found the file unaccounted for."""
+    short = (
+        "## ENTRIES\nnone in this chunk\n\n## INDEX\n\n## BILLING-DATES\nnone in this chunk\n\n"
+        "## CONFLICTS / REFERENCED-BUT-ABSENT\nnone observed\n\n## FILES-SEEN\n"
+        "=== FILE: inspection report.pdf (fileId inspection_report) === nothing extractable: property inspection\n"
+    )
+
+    def reply(p, n):
+        return _msg(short) if n <= 2 else _msg(MAP_OUT)  # whole chunk short, first half short, second half fine
+
+    client = Scripted(reply)
+    sr = _sr(job_dir, firm_headings, data_root, client)
+    body = "".join(f"[p.{k}] " + "inspection text " * 40 + "\n" for k in range(1, 30))
+    _unit_files(sr, {"inspection report": body, "mri report": body})
+    monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
+    assert compose_stage.run(sr) == 0
+    d = sr.slug_dir / "runs" / "alpha"
+    assert (d / "map-01-1.md").read_text() == short, "the short half is kept as the file's account"
+    assert (d / "map-01-2.md").is_file() and len(client.calls) == 3
+    # a half that is short AND shapeless is still dropped
+    client2 = Scripted(lambda p, n: _msg("x"))
+    sr2 = _sr(job_dir, firm_headings, data_root, client2)
+    for p in d.glob("*"):
+        p.unlink()
+    assert compose_stage.run(sr2) == 1
+    assert not (d / "map-01-1.md").exists()
+
+
 # ---- repair ----------------------------------------------------------------------
 def test_repair_rewrites_a_truncated_chunk_as_parts_and_sets_the_original_aside(
     job_dir: Path, firm_headings: Path, data_root: Path

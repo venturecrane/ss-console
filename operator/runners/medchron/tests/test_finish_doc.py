@@ -393,6 +393,59 @@ def test_coverage_gate_accounts_for_every_pulled_file(job_dir: Path, firm: Path,
     assert any("engagement document" in line for line in log) and any("GATE PASS" in line for line in log)
 
 
+def test_coverage_gate_takes_the_composers_own_account_of_an_uncited_file(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """Live 2026-09-16: 97 pleadings, filings, photos and letters, each with the
+    composer's `nothing extractable: <reason>` in FILES-SEEN, held the run
+    because the firm's name table had never met them. The composer read every
+    page; its reason is the record's own statement. `entries: 0` with no reason
+    still explains nothing, and a renamed duplicate is found by its file id."""
+    sr = _sr(job_dir, firm, data_root)
+    d = sr.slug_dir
+    (d / "units").mkdir(parents=True)
+    files = [
+        {"id": "a", "name": "clinic note", "ext": ".pdf"},
+        {"id": "p", "name": "COMPLAINT", "ext": ".pdf"},
+        {"id": "b", "name": "EXHIBIT B", "ext": ".pdf"},
+        {"id": "s", "name": "silent scan", "ext": ".pdf"},
+        {"id": "msgatt-2", "name": "image001 (2)", "ext": ".jpg"},
+    ]
+    (d / "units" / "alpha.json").write_text(json.dumps(files))
+    (d / "raw_manifest.jsonl").write_text("".join(json.dumps({**f, "ok": True}) + "\n" for f in files))
+    rd = d / "runs" / "alpha"
+    rd.mkdir(parents=True)
+    (rd / "entries_final.md").write_text(
+        "01/02/2026\nExample Clinic | Medical Diagnoses\n\nStrain. (Exhibit 1 - p. 1)\n"
+    )
+    (rd / "map-01.md").write_text(
+        "## ENTRIES\nnone in this chunk\n\n## INDEX\n\n## BILLING-DATES\nnone in this chunk\n\n"
+        "## CONFLICTS / REFERENCED-BUT-ABSENT\nnone observed\n\n## FILES-SEEN\n"
+        "=== FILE: clinic note.pdf (fileId a) === entries: 1\n"
+        "=== FILE: COMPLAINT.pdf (fileId p) === | nothing extractable: pleading, no treatment record\n"
+        "=== FILE: EXHIBIT B.pdf (fileId b) === billing-dates: 29\n"
+        "=== FILE: silent scan.pdf (fileId s) === entries: 0\n"
+        "=== FILE: image001.jpg (fileId msgatt-2) === nothing extractable: photo of an insurance card\n"
+    )
+    (d / "out" / "alpha").mkdir(parents=True)
+    (d / "out" / "alpha" / "page_map.json").write_text(
+        json.dumps([{"exhibit": 1, "files": [{"file": "clinic note.pdf"}]}])
+    )
+    log: list[str] = []
+    sr = _sr(job_dir, firm, data_root, log=log)
+    assert coverage.run(sr) == 1
+    assert json.loads((rd / "coverage_unexplained.json").read_text()) == ["silent scan.pdf"], log
+    assert any("COMPLAINT.pdf" in line and "composer: pleading" in line for line in log), log
+    assert any("EXHIBIT B.pdf" in line and "billing dates only" in line for line in log), log
+    assert any("image001 (2).jpg" in line and "composer: photo" in line for line in log), "found by id after the rename"
+    # the rehearsal answers from the same source
+    lines = coverage.rehearse(
+        sr
+    )  # "with nothing cited": the clinic note and the silent scan, never the explained three
+    assert lines[0].endswith("2 would need a citation") and any("silent scan" in ln for ln in lines), lines
+    assert not any("COMPLAINT" in ln or "EXHIBIT B" in ln or "image001" in ln for ln in lines), lines
+
+
 # ---- billing chart and worksheet -------------------------------------------------------------------
 def test_money_parses_printed_shapes_and_flags_lost_decimals() -> None:
     sus: list = []

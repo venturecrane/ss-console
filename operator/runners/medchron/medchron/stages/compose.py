@@ -28,6 +28,15 @@ from .. import llm, prompts
 from .base import StageRun, append_jsonl, read_json
 from .chunking import build_chunks, chunk_size, sha, split_chunk
 
+# The five blocks the prompt demands (prompts/map-system.md "OUTPUT SHAPE").
+BLOCKS = ("## ENTRIES", "## INDEX", "## BILLING-DATES", "## CONFLICTS / REFERENCED-BUT-ABSENT", "## FILES-SEEN")
+
+
+def well_formed(text: str) -> bool:
+    """A map in the house shape, however short: every block heading present."""
+    return all(b in text for b in BLOCKS)
+
+
 REFUSAL_ATTEMPTS = 3
 
 
@@ -113,10 +122,17 @@ class _Composer:
             "sha": sha(c.text),
             "max_tokens": self.max_tokens,
         }
-        if r.empty:
+        if r.empty and not (c.part is not None and well_formed(r.text)):
             self.log_usage(empty=True, **row)
             self.sr.log(f"chunk {c.label} EMPTY: {len(r.text)}B from {len(c.text)}B of source")
             return "empty"
+        if r.empty:
+            # A half that is short because its source holds nothing to extract
+            # (a 78-page property inspection report, live 2026-09-16) still
+            # answered in the house shape, and that answer is the only account
+            # downstream will ever have of the file. Dropping it left the file
+            # unexplained at the coverage gate. Short and complete is kept.
+            self.sr.log(f"chunk {c.label} short ({len(r.text)}B from {len(c.text)}B) but complete; kept")
         (self.d / c.out_name).write_text(r.text, encoding="utf-8")
         self.log_usage(**row)
         if r.stop_reason == "max_tokens":
