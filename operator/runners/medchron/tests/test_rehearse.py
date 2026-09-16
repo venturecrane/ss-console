@@ -192,6 +192,36 @@ def test_the_audit_is_projected_from_the_built_chronology(
     aud = [n for n in o.notes if n.startswith("rehearse audit: ") and "from the built chronology" in n]
     assert aud, o.notes
     assert any(n.startswith("rehearse summary: projected ") and "audit " in n for n in o.notes)
+    # a resume projects only what is still unverified: verdicts on disk for THIS
+    # body cost nothing again (live 2026-09-16: a resume with 1,998 paid
+    # verdicts was held at the cap on a projection that re-counted them all)
+    import re
+
+    from medchron.audit import claims as CL
+    from medchron.audit.page_text import exhibit_paths
+
+    def projected(notes: list[str]) -> float:
+        m = next(re.search(r"STOP paid, not done \(~([0-9.]+) USD\)", n) for n in notes if "rehearse audit: STOP" in n)
+        return float(m.group(1))
+
+    # the delivered fixture's own audit verdicts are on disk, so the first rehearsal
+    # above already projected 0; remove them to see the full projection
+    results = sd / "out" / "alpha" / "audit-results.jsonl"
+    assert projected(o.notes) == 0.0 and results.is_file()
+    results.unlink()
+    _copy1, outs1 = _rehearse(job_dir, firm_config_path, pricing_path, client=client)
+    full = projected(outs1[0].notes)
+    body = CL.body_of((sd / "runs" / "alpha" / "final-chronology.md").read_text(encoding="utf-8"))
+    claims = CL.extract_claims(body, set(exhibit_paths(sd / "out" / "alpha")))
+    assert claims and full > 0
+    rows = [{"key": c["key"], "kind": "real", "verdict": "SUPPORTED", "doc_sha": CL.doc_sha_of(body)} for c in claims]
+    results.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    _copy2, outs2 = _rehearse(job_dir, firm_config_path, pricing_path, client=client)
+    assert projected(outs2[0].notes) == 0.0, "every claim already verified for this body: nothing to re-bill"
+    # verdicts for a DIFFERENT body do not count
+    results.write_text("".join(json.dumps({**r, "doc_sha": "another-body"}) + "\n" for r in rows))
+    _copy3, outs3 = _rehearse(job_dir, firm_config_path, pricing_path, client=client)
+    assert projected(outs3[0].notes) == full
 
 
 def test_redo_reopens_a_free_stage_in_the_copy_only_and_refuses_paid_or_external(

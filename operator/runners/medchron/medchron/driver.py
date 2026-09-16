@@ -267,21 +267,30 @@ class Driver:
         return None
 
     def _claims(self, ctx: dag.Ctx) -> int | None:
-        """Claims in the built chronology, counted with the audit gate's OWN
-        extractor, so the projection counts what the audit will actually call
-        on rather than a remembered ratio from some other matter. None before
-        the chronology exists: no document is "no count yet", not zero claims
-        (a rehearsal that stops before build_doc would otherwise print the
-        costliest late stage as $0)."""
+        """Claims in the built chronology STILL TO VERIFY, counted with the
+        audit gate's OWN extractor, so the projection counts what the audit
+        will actually call on rather than a remembered ratio from some other
+        matter. The audit resumes by key, so a claim with a real verdict on
+        disk for this very body costs nothing again: live 2026-09-16 a resume
+        with 1,998 verdicts already paid for was held at the cap on a
+        projection that re-counted all 1,998. None before the chronology
+        exists: no document is "no count yet", not zero claims (a rehearsal
+        that stops before build_doc would otherwise print the costliest late
+        stage as $0)."""
         from .audit import claims as claims_mod
         from .audit.page_text import exhibit_paths
 
         doc = self.slug_dir / "runs" / ctx.unit.unit / "final-chronology.md"
         if not doc.is_file():
             return None
-        keep = set(exhibit_paths(self.slug_dir / "out" / ctx.unit.unit))
+        out = self.slug_dir / "out" / ctx.unit.unit
         body = claims_mod.body_of(doc.read_text(encoding="utf-8"))
-        return len(claims_mod.extract_claims(body, keep))
+        claims = claims_mod.extract_claims(body, set(exhibit_paths(out)))
+        sha = claims_mod.doc_sha_of(body)
+        results = out / "audit-results.jsonl"
+        rows = claims_mod.read_rows(results) if results.is_file() else []
+        verified = {r["key"] for r in rows if r.get("kind") == "real" and r.get("doc_sha") == sha}
+        return sum(1 for c in claims if c["key"] not in verified)
 
     def _check_limits(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> None:
         """Before a paid stage. The first paid stage of the process also asks
