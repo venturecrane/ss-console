@@ -178,6 +178,24 @@ def index_rows(run_dir, id_to_name: dict[str, str] | None = None) -> tuple[dict[
     return idx_dates, idx_prov
 
 
+# The composer's own "I could not tell" phrasings. A provider cell reading like
+# this is a statement about the chunk, not a name; it must never title an
+# exhibit (live 2026-09-16: "Exhibit 18 - Provider not identified in this
+# chunk (per client letter)" on a delivered package, from a two-row tie).
+PLACEHOLDER = re.compile(r"(?i)not identified|not stated|unknown provider|unattributed|illegible|not legible")
+
+
+def lane_name(provs: list[str], canon: Canon) -> str:
+    """The provider a file's INDEX rows name. A facility brand beats a bare
+    clinician, a real name beats a placeholder, the most-voted wins, and a tie
+    goes to the row seen FIRST (document order), never to set iteration."""
+    named = [p for p in provs if not PLACEHOLDER.search(p)] or provs
+    branded = [p for p in named if canon.brand(p)]
+    pool = branded or named
+    first = {p: i for i, p in reversed(list(enumerate(pool)))}
+    return max(first, key=lambda p: (pool.count(p), -first[p]))
+
+
 def _folder_provider(f: dict[str, Any], canon: Canon, unit_prefixes: list[str]) -> str:
     segs = [s for s in (f.get("folder") or "").split("/") if s and s != "(root)"]
     for s in reversed(segs):
@@ -208,9 +226,7 @@ def run(sr: StageRun) -> int:
         if provs:
             # Facility identity beats individual clinician: the exhibit belongs
             # to the facility that produced the record set.
-            facility_hits = [p for p in provs if canon.brand(p)]
-            pool = facility_hits or provs
-            prov = canon(max(set(pool), key=pool.count))
+            prov = canon(lane_name(provs, canon))
         else:
             prov = _folder_provider(f, canon, unit_prefixes) or canon.unresolved
             unattributed.append(f["name"])

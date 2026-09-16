@@ -136,6 +136,47 @@ def test_group_attributes_by_index_then_folder_then_sentinel(job_dir: Path, firm
     assert groups["Carrier (Policy) 250"]["file_ids"] == ["e"]  # the numeric leaf "500" is skipped
 
 
+def test_a_lane_is_never_named_by_the_composers_placeholder_and_a_tie_goes_to_the_first_row(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """Live 2026-09-16: a client letter holding an ED record drew two INDEX rows,
+    'Emergency Department, Deepa Japra, MD' and 'Provider not identified in this
+    chunk (per client letter)'; the tie broke by set order and the delivered
+    package carried the placeholder as an exhibit title."""
+    canon = group_stage.Canon(config_mod.load(str(firm)))
+    # the placeholder first AND in the majority: a name still wins
+    assert (
+        group_stage.lane_name(
+            [
+                "Provider not identified in this chunk (per client letter)",
+                "Provider not identified in this chunk (per client letter)",
+                "Riverside Emergency Department, Jane Doe, MD",
+            ],
+            canon,
+        )
+        == "Riverside Emergency Department, Jane Doe, MD"
+    )
+    assert group_stage.lane_name(
+        ["Provider not identified in this chunk", "Provider not identified in this chunk"], canon
+    ).startswith("Provider not identified"), "only placeholders: the truth is still reported"
+    # a tie between two real names goes to the row seen first, whatever set order says
+    assert group_stage.lane_name(["Clinic B", "Clinic A"], canon) == "Clinic B"
+    assert group_stage.lane_name(["Clinic A", "Clinic B", "Clinic B"], canon) == "Clinic B", "the majority still wins"
+    sr = _sr(job_dir, firm, data_root)
+    _seed_unit(
+        sr,
+        [{"id": "q", "name": "update letter from client", "ext": ".pdf", "folder": "/CORRESPONDENCE"}],
+        [
+            "2026-02-10 | Provider not identified in this chunk (per client letter) | -- | update letter from client.pdf",
+            "2026-02-11 | Riverside Emergency Department, Jane Doe, MD | -- | update letter from client.pdf",
+            "2026-02-12 | Provider not identified in this chunk (per client letter) | -- | update letter from client.pdf",
+        ],
+    )
+    assert group_stage.run(sr) == 0
+    groups = {g["provider"]: g for g in json.loads((sr.slug_dir / "groups" / "alpha.json").read_text())}
+    assert list(groups) == ["Riverside Emergency Department"], groups
+
+
 def test_group_reads_an_index_cell_naming_several_files_and_an_id_marker_names_that_file(
     job_dir: Path, firm: Path, data_root: Path
 ) -> None:
