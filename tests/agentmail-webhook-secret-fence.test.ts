@@ -91,6 +91,32 @@ describe('agentmail-webhook-secret-fence', () => {
     expect(r.output).toContain('WEBHOOK_SECRET_AGENTMAIL__SCOTT is not vaulted')
   })
 
+  it('a seat that binds no agentmail adapter unsets every AgentMail secret the Machine may still carry', () => {
+    // 2026-09-16: the first client seat (msgraph, no agentmail) failed boot
+    // smoke because a global WEBHOOK_SECRET_AGENTMAIL staged by a provision
+    // before the fence persisted on the Machine. The else branch of the
+    // agentmail block converges the Machine on the authored state. The
+    // falsifier: drop the unset line and this reads the fence's own name
+    // only inside the `if`.
+    const text = readFileSync(SCRIPT, 'utf8')
+    const start = text.indexOf(
+      "if authored_channel '^adapter=agentmail$|^backend=mcp:agentmail$'; then"
+    )
+    expect(start, 'agentmail block missing').toBeGreaterThan(-1)
+    const elseAt = text.indexOf('\nelse\n', start)
+    const fiAt = text.indexOf('\nfi\n', start)
+    expect(elseAt, 'the agentmail block has no else branch').toBeGreaterThan(-1)
+    expect(elseAt, 'the else branch is outside the agentmail block').toBeLessThan(fiAt)
+    const branch = text.slice(elseAt, fiAt)
+    expect(branch).toMatch(
+      /fly secrets unset --stage -a "\$\{APP_NAME\}" \\\n\s+WEBHOOK_SECRET_AGENTMAIL AGENTMAIL_API_KEY AGENTMAIL_SEND_API_KEY/
+    )
+    expect(
+      branch,
+      'the router signing secret belongs to the msgraph block on an msgraph seat'
+    ).not.toContain('SMD_WEBHOOK_SIGNING_SECRET AGENTMAIL')
+  })
+
   it('derives the key name from a hyphenated slug the same way the read/send keys do', () => {
     const r = runFence({
       CUSTOMER_ID: 'pilot-smokeball',

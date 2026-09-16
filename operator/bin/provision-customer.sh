@@ -947,6 +947,23 @@ if authored_channel '^adapter=agentmail$|^backend=mcp:agentmail$'; then
   # the agentmail route secret — stage them equal, or inbound never routes to a skill.
   stage_secret_from_env SMD_WEBHOOK_SIGNING_SECRET "${_AGENTMAIL_WH_SECRET}" "router forward-verify secret (== agentmail route secret)"
   unset _AGENTMAIL_WH_KEY _AGENTMAIL_WH_SECRET
+else
+  # A seat that binds no agentmail adapter must carry NO AgentMail secret. Fly
+  # secrets persist across deploys, so a value staged by an earlier provision
+  # (before the per-seat fence, when the global WEBHOOK_SECRET_AGENTMAIL went
+  # onto every seat) outlives the config that stopped staging it. That is how
+  # the first client seat, an msgraph seat, failed boot smoke on 2026-09-16:
+  # `agentmail-webhook-secret-matches-vendor` found the stale global secret in
+  # the agent env with no API key beside it, and the reprovision reported
+  # FATAL on a Machine that was otherwise healthy. Same shape as the
+  # R2_SKILL_BODIES_* removal above: converge the Machine on the authored
+  # state, never on what a previous run happened to leave behind.
+  # SMD_WEBHOOK_SIGNING_SECRET is NOT touched here: the msgraph block below
+  # stages its own value on an msgraph seat.
+  log "no agentmail adapter authored — removing any stale AgentMail secret from the Machine so a value an earlier provision staged cannot linger in the agent env"
+  fly secrets unset --stage -a "${APP_NAME}" \
+    WEBHOOK_SECRET_AGENTMAIL AGENTMAIL_API_KEY AGENTMAIL_SEND_API_KEY >/dev/null 2>&1 \
+    || log "AgentMail secrets already absent on the Machine (nothing to unset)"
 fi
 
 # Microsoft Graph app-only mail (adapter: msgraph, backend: mcp:msgraph-mail —
