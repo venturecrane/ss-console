@@ -807,7 +807,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # schemas.py absent from the range). shared/heartbeat.py byte-identical
 # (cc8c23d8...) -- #339 changes a heartbeat field's VALUE vocabulary, not the
 # field set, so the manifest's field list is unaffected.
-ARG OVERLAY_REF="df181f68edbce5f92b51016c5429e59dcaca71ab"
+# 2026-09-16 (ea5aa816, overlay #357): `_MEDCHRON_JOBS_COLUMNS` gains
+# `work_digest` so the console can group launches of one chronology the way
+# the seat's debit does (ADR 0087 amendment 2026-09-16). One tuple entry, no
+# other runtime file moves; the broker's PROJECTION on this side gains the same
+# column in the same change.
+ARG OVERLAY_REF="ea5aa8161a5dddf8074644969c67efa4772c487a"
 
 ARG CUSTOMER_SLUG=customer-zero
 

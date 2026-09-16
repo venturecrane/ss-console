@@ -78,6 +78,10 @@ describe('customer-config projection: real smd yaml', () => {
     expect(skills.find((s) => s.name === 'medical-chronology-maintainer')?.settings).toEqual({
       treatment_gap_flag_days: 45,
       chronology_package_page_allowance_per_month: 15000,
+      // The billing cycle the paper names (Exhibit A row 11, 2026-09-16):
+      // begins on the 15th, first metered cycle from the 16th.
+      chronology_package_cycle_anchor_day: 15,
+      chronology_package_cycle_effective_from: '2026-09-16',
     })
     // Skills without authored settings must project WITHOUT the key (byte-stable).
     expect('settings' in (skills.find((s) => s.name === 'discovery-served-watch') ?? {})).toBe(
