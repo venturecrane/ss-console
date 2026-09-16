@@ -44,9 +44,14 @@ def _reader(path: str, ext: str) -> Any:
 
     if ext == ".pdf":
         return PdfReader(path)
-    import fitz
+    # `import pymupdf`, never `import fitz`: the alias prints a deprecation
+    # notice to STDOUT, and the daemon reads the runner's stdout as its JSON
+    # verdict. Live 2026-09-16: one such line turned a recoverable refusal
+    # into "exited without a verdict", which the ledger records as failed,
+    # a state with no way back (tests/test_runner_stdout_is_the_verdict.py).
+    import pymupdf
 
-    with fitz.open(path) as img:
+    with pymupdf.open(path) as img:
         return PdfReader(BytesIO(img.convert_to_pdf()))
 
 
