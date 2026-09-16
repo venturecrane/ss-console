@@ -200,10 +200,15 @@ def test_allowance_counts_the_cycles_pages_and_submit_stops_at_the_crossing(verb
     a = call(v, "medchron_allowance")
     assert (a["used"], a["remaining"]) == (600, 400)
     assert (a["pages_used"], a["pages_remaining"], a["documents_used"], a["cents_used"]) == (600, 400, 60, 4100)
-    r = call(v, "medchron_job_submit", envelope=envelope())
+    # Distinct matters from here: since 2026-09-16 the same work debits once
+    # per cycle, so a second delivery of the FIRST envelope would not add to
+    # `used`. That case has its own tests below; this one is about the sum.
+    second = envelope(matter={"id": "m-2", "number": "2026-PI-103", "title": "Second v. Second"})
+    third = envelope(matter={"id": "m-3", "number": "2026-PI-104", "title": "Third v. Third"})
+    r = call(v, "medchron_job_submit", envelope=second)
     assert r["accepted"] and r["allowance_remaining_pages"] == 400 and r["unit"] == "pages"
     _deliver(v, r["job_id"], documents=45, pages=450, cents=100)
-    r = call(v, "medchron_job_submit", envelope=envelope())
+    r = call(v, "medchron_job_submit", envelope=third)
     assert r["accepted"] is False
     assert "page allowance is spent (1,050 of 1,000 pages in" in r["reason"]
 
@@ -292,6 +297,29 @@ def test_exclude_job_id_leaves_out_exactly_that_row(verbs):
     only_a = call(v, "medchron_allowance", exclude_job_id=b)
     assert only_a["used"] == 100 and only_a["cents_used"] == 500
     assert call(v, "medchron_allowance", exclude_job_id="not-a-job")["used"] == 300
+
+
+def test_exclude_job_id_leaves_out_that_jobs_whole_work_group(verbs):
+    """A resume of attempt two of a chronology is metered against OTHER work
+    only. Excluding one id would leave attempt one's pages in the figure and
+    refuse the resume for pages it is itself re-reading. Falsifier: the old
+    `id <> ?` form returns 300 here, not 200."""
+    v, _, _ = verbs
+    first = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=first, state="running", fields={})
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=first, state="failed", fields={"pages": 100, "cents": 500})
+    second = call(v, "medchron_job_submit", envelope=envelope())["job_id"]  # same work, relaunched
+    other = call(
+        v,
+        "medchron_job_submit",
+        envelope=envelope(matter={"id": "m-2", "number": "2026-PI-103", "title": "Other v. Other"}),
+    )["job_id"]
+    _deliver(v, other, pages=200, cents=700)
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=second, state="running", fields={})
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=second, state="held", fields={"pages": 100, "cents": 40})
+    without_second = call(v, "medchron_allowance", exclude_job_id=second)
+    assert without_second["used"] == 200, "attempt one's pages are the same work and must go with attempt two"
+    assert without_second["cents_used"] == 700
 
 
 def test_a_job_debits_the_month_it_was_created_in_not_the_month_its_cents_landed(verbs):
@@ -604,12 +632,100 @@ def test_provenance_does_not_make_it_a_different_job(verbs):
 
 def test_a_finished_package_may_be_rebuilt(verbs):
     """Terminal jobs are not duplicates: a delivered package the firm wants
-    rebuilt, or a failed one worth retrying, is a legitimate second ask."""
+    rebuilt, or a failed one worth retrying, is a legitimate second ask. And
+    since 2026-09-16 the second row is the same WORK, so the cycle's pages
+    count it once (cents still sum: both launches spent money)."""
     v, _, _ = verbs
     first = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
     _deliver(v, first, pages=10, cents=100)
     again = call(v, "medchron_job_submit", envelope=envelope())
     assert again["accepted"] is True and again["job_id"] != first
+    _deliver(v, again["job_id"], pages=10, cents=100)
+    a = call(v, "medchron_allowance")
+    assert a["used"] == 10, "the rule before 2026-09-16 read 20 here"
+    assert a["cents_used"] == 200
+
+
+def test_a_relaunch_of_the_same_work_debits_its_pages_once(verbs):
+    """The live incident (first client seat, matter 200454): one 3,568-page
+    chronology, three `cents > 0` rows, month read 10,704. Falsifier: the old
+    SUM rule returns 7,136 here."""
+    v, _, _ = verbs
+    first = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=first, state="running", fields={})
+    # 356 pages against the fixture's 1,000-page allowance (the live figure was
+    # 3,568 of 15,000; same ratio, so the relaunch clears the pre-flight).
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=first, state="failed", fields={"pages": 356, "cents": 900})
+    relaunch = call(v, "medchron_job_submit", envelope=envelope())
+    assert relaunch["accepted"] is True and relaunch["job_id"] != first
+    _deliver(v, relaunch["job_id"], pages=356, cents=900)
+    a = call(v, "medchron_allowance")
+    assert a["used"] == 356 and a["pages_used"] == 356, "the SUM rule read 712 here"
+    assert a["cents_used"] == 1800
+    listed = call(v, "medchron_job_list")
+    assert {j["id"] for j in listed["jobs"]} >= {first, relaunch["job_id"]}, "both rows stay in the ledger"
+
+
+def test_the_larger_attempt_wins_in_a_group(verbs):
+    """An attempt that died partway read fewer pages than the one that
+    delivered; the work read the file once and the largest attempt is that
+    read. Falsifier: a MIN or a first-row rule returns 1,200."""
+    v, _, _ = verbs
+    first = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=first, state="running", fields={})
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=first, state="failed", fields={"pages": 120, "cents": 300})
+    second = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    _deliver(v, second, pages=356, cents=900)
+    assert call(v, "medchron_allowance")["used"] == 356
+
+
+def test_an_update_with_a_different_selection_is_its_own_debit(verbs):
+    """An UPDATE names the new document ids in `selection`, which changes the
+    work digest, so it debits exactly its own pages on top of the run's.
+    Guards over-grouping: a rule that grouped by matter would return 600."""
+    v, _, _ = verbs
+    run = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    _deliver(v, run, pages=600, cents=900)
+    update = call(
+        v,
+        "medchron_job_submit",
+        envelope=envelope(selection={"include_file_ids": ["doc-new-1", "doc-new-2"]}),
+    )
+    assert update["accepted"] is True
+    _deliver(v, update["job_id"], pages=40, cents=20)
+    assert call(v, "medchron_allowance")["used"] == 640
+
+
+def test_a_row_without_a_work_digest_is_its_own_group(verbs):
+    """Rows written before the digest column exist on live seats. They are
+    never guessed into another row's group: two twins with one digest blanked
+    out sum, exactly as before 2026-09-16."""
+    v, _, _ = verbs
+    first = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    _deliver(v, first, pages=100, cents=50)
+    second = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    _deliver(v, second, pages=100, cents=50)
+    assert call(v, "medchron_allowance")["used"] == 100
+    import sqlite3
+
+    conn = sqlite3.connect(v._db._db_path)
+    conn.execute("UPDATE medchron_jobs SET work_digest = NULL WHERE id = ?", (first,))
+    conn.commit()
+    conn.close()
+    assert call(v, "medchron_allowance")["used"] == 200
+
+
+def test_units_order_does_not_change_the_work_digest():
+    """A joint matter re-asked with the clients listed in a different order
+    is the same chronology. Falsifier: hashing the list as given differs."""
+    from workspace_broker.medchron_ledger import work_digest
+
+    a = {"client_name": "Alpha Example", "surname": "Example", "dob": "01/02/1980", "folder_prefix": "/ALPHA"}
+    b = {"client_name": "Beta Other", "surname": "Other", "dob": "03/04/1982", "folder_prefix": "/BETA"}
+    e1 = validate_envelope(envelope(units=[a, b]))
+    e2 = validate_envelope(envelope(units=[b, a]))
+    assert work_digest(e1) == work_digest(e2)
+    assert work_digest(e1) != work_digest(validate_envelope(envelope(units=[a])))
 
 
 def test_a_different_matter_is_not_a_duplicate(verbs):

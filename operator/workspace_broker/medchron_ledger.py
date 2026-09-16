@@ -96,6 +96,7 @@ CREATE_SQL = (
     ")"
 )
 CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_medchron_jobs_created ON medchron_jobs(created_at)"
+CREATE_WORK_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_medchron_jobs_work ON medchron_jobs(work_digest)"
 
 # The duplicate lookup, with its placeholders written out rather than composed.
 # Composing them from ``TERMINAL`` reads as string-built SQL (ruff S608) even
@@ -136,18 +137,42 @@ _ACTIVE_TWIN_SQL = (
 # half-open range rather than a `substr(...)` prefix, which also lets it use
 # `idx_medchron_jobs_created` -- the prefix form could not.
 #
+# Since 2026-09-16 a piece of WORK is debited once per window, however many
+# launches it took (ADR 0087 amendment 2026-09-16). One chronology on the first
+# client seat sat in the ledger as three `cents > 0` rows (a launch that died
+# on a lost vendor document, then two relaunches while the runner's gates were
+# fixed), so the month read 10,704 pages used for one 3,568-page package. The
+# firm buys the chronology, not our launches. Rows group by `work_digest` (the
+# matter, units, incident, injuries and selection of the envelope), with a row
+# that predates the digest column standing as its own group -- never guessed
+# into someone else's. Pages and documents take the group's MAX: the work read
+# the file once, and the largest attempt is the one that read it. Cents SUM:
+# every launch moved real money and SMD's cost telemetry must see all of it.
+# An UPDATE (a different `selection`) is a different digest, so it debits its
+# own pages and no more, which is what Exhibit A promises.
+#
+# The excluding form drops the whole work group of the named job, not one id:
+# a resume of attempt two must not be metered against attempt one's pages any
+# more than against its own.
+#
 # Both forms are written out in full rather than composed: a query built by
 # concatenation reads as an injection risk to every scanner and every reviewer,
 # even when every part is a literal.
 _DEBITS_SQL = (
-    "SELECT COALESCE(SUM(pages), 0) AS pages, COALESCE(SUM(documents), 0) AS documents, "
-    "COALESCE(SUM(cents), 0) AS cents FROM medchron_jobs "
-    "WHERE cents > 0 AND created_at >= ? AND created_at < ?"
+    "SELECT COALESCE(SUM(p), 0) AS pages, COALESCE(SUM(d), 0) AS documents, "
+    "COALESCE(SUM(c), 0) AS cents FROM ("
+    "SELECT MAX(pages) AS p, MAX(documents) AS d, SUM(cents) AS c FROM medchron_jobs "
+    "WHERE cents > 0 AND created_at >= ? AND created_at < ? "
+    "GROUP BY COALESCE(work_digest, id))"
 )
 _DEBITS_SQL_EXCLUDING = (
-    "SELECT COALESCE(SUM(pages), 0) AS pages, COALESCE(SUM(documents), 0) AS documents, "
-    "COALESCE(SUM(cents), 0) AS cents FROM medchron_jobs "
-    "WHERE cents > 0 AND created_at >= ? AND created_at < ? AND id <> ?"
+    "SELECT COALESCE(SUM(p), 0) AS pages, COALESCE(SUM(d), 0) AS documents, "
+    "COALESCE(SUM(c), 0) AS cents FROM ("
+    "SELECT MAX(pages) AS p, MAX(documents) AS d, SUM(cents) AS c FROM medchron_jobs "
+    "WHERE cents > 0 AND created_at >= ? AND created_at < ? "
+    "AND COALESCE(work_digest, id) NOT IN "
+    "(SELECT COALESCE(work_digest, id) FROM medchron_jobs WHERE id = ?) "
+    "GROUP BY COALESCE(work_digest, id))"
 )
 
 # The console projection (the ``medchron_jobs`` runtime-read kind and the
@@ -163,6 +188,10 @@ PROJECTION = (
     "cents",
     "reason",
     "folder_id",
+    # 2026-09-16: the console groups attempts of one piece of work the way the
+    # seat's debit does, so it needs the key. Byte-pinned to the overlay's
+    # `_MEDCHRON_JOBS_COLUMNS`; bumped together (OVERLAY_REF).
+    "work_digest",
 )
 
 
@@ -186,7 +215,16 @@ _WORK_KEYS = ("matter", "units", "incident", "injuries", "selection")
 
 
 def work_digest(envelope: dict[str, Any]) -> str:
-    return digest({k: envelope[k] for k in _WORK_KEYS if k in envelope})
+    """The same work, whatever order the units were listed in. A joint matter
+    re-asked with the clients named in a different order is one chronology,
+    not two; sorting the units by their canonical JSON before hashing keeps
+    the digest the same. Rows written before 2026-09-16 keep the digest they
+    carry (a multi-unit matter's earlier rows may differ from a new ask's)."""
+    work = {k: envelope[k] for k in _WORK_KEYS if k in envelope}
+    units = work.get("units")
+    if isinstance(units, list):
+        work["units"] = sorted(units, key=lambda u: json.dumps(u, sort_keys=True, separators=(",", ":")))
+    return digest(work)
 
 
 def validate_envelope(req: dict[str, Any]) -> dict[str, Any]:
@@ -380,24 +418,30 @@ class MedchronLedger:
             have = {r["name"] for r in conn.execute("PRAGMA table_info(medchron_jobs)")}
             if "work_digest" not in have:
                 conn.execute("ALTER TABLE medchron_jobs ADD COLUMN work_digest TEXT")
+            # After the column exists (the debit groups on it).
+            conn.execute(CREATE_WORK_INDEX_SQL)
             conn.commit()
         finally:
             conn.close()
 
-    # -- the month's debits ------------------------------------------------
-    # ONE rule for pages, documents and cents: a job DEBITS THE MONTH when it
-    # recorded cents, whatever state it ended in. Counting delivered jobs only
-    # (the rule before 2026-09-09) let a run that read 3,000 pages and spent
-    # real money against the vendor leave no mark, because it held or failed
-    # after the money moved. Held-at-zero jobs are not debits: nothing was read
-    # and nothing was spent.
+    # -- the window's debits -----------------------------------------------
+    # ONE rule for pages, documents and cents: a job DEBITS THE WINDOW when it
+    # recorded cents, whatever state it ended in, and one piece of WORK debits
+    # once however many jobs it took. Counting delivered jobs only (the rule
+    # before 2026-09-09) let a run that read 3,000 pages and spent real money
+    # against the vendor leave no mark, because it held or failed after the
+    # money moved. Counting every launch (the rule before 2026-09-16) charged
+    # one chronology three times. Held-at-zero jobs are not debits: nothing was
+    # read and nothing was spent.
     def debits(self, window: Window, exclude_job_id: str | None = None) -> dict[str, int]:
         """The window's debited pages, documents and cents, in one read so the
-        three can never disagree about which rows they counted. The window is
-        half-open on a job's CREATED time, and the console and the laptop
-        pipeline compute it from the same fixture-pinned algorithm
-        (`cycle_window.py`), so no two surfaces can disagree about which rows a
-        period holds."""
+        three can never disagree about which rows they counted. Rows group by
+        `work_digest` (a NULL digest is its own group); pages and documents are
+        the group's MAX, cents its SUM. The window is half-open on a job's
+        CREATED time, and the console computes it from the same fixture-pinned
+        algorithm (`cycle_window.py`) and groups on the same projected digest,
+        so the two surfaces cannot disagree about a period's figure.
+        `exclude_job_id` leaves out that job's whole work group."""
         conn = self._connect()
         try:
             if exclude_job_id:

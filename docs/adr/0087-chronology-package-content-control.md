@@ -192,3 +192,78 @@ above: have the seat report its window and the console _display_ it rather than
 recomputing one. That removes the second and third implementations from the
 critical path entirely, and needs a new runtime-read kind, which is what makes it
 a bump rather than part of this change.
+
+## Amendment, 2026-09-16 (Captain): a chronology is debited once per cycle, however many launches it took; the first client seat is anchored; routine 11 is one product
+
+**What forced it.** One chronology on the first client seat (matter 200454,
+3,568 pages) sat in the ledger as three `cents > 0` rows: a launch that died on
+two documents Smokeball's storage no longer held, then two relaunches while the
+runner's gates were fixed. The debit rule of 2026-09-09 summed every row, so the
+month read 10,704 pages used for one package, 71 percent of the cycle. The firm
+never asked twice; the firm buys the chronology, not our launches. The office
+manager's pre-markup question of 2026-09-15 ("do re-runs count pages again in
+full?") had, that day, the answer "yes, and wrongly".
+
+**The rule.** Within the window, rows group by `work_digest` (the envelope's
+matter, units, incident, injuries and selection). Pages and documents are the
+group's MAX: the work read the file once, and the largest attempt is that read.
+Cents are the group's SUM: every launch moved real money, and SMD's own cost
+telemetry must see all of it. A row with no digest (written before the column
+existed) stands as its own group and is never guessed into another. `units` are
+sorted before hashing, so a joint matter re-asked with the clients in a different
+order is the same work; rows already on disk keep the digest they carry.
+`exclude_job_id` now excludes the job's whole work group, so a resume of attempt
+two is not metered against attempt one's pages.
+
+**What an update is.** An update names the new document ids in `selection`, so it
+has its own digest and debits exactly the pages it reads: the records the
+delivered chronology's own records-reviewed section shows it did not cover.
+The paper says the same in the same words (Exhibit A row 11, signature draft
+2026-09-16). A relaunch on SMD's side is the same digest and is never counted.
+
+**Why the read side, not row reuse.** Reopening a `failed` row was considered and
+rejected: it fixes nothing already on the seat, `record` overwrites `cents` so
+attempt one's spend would vanish from telemetry, the job directory is wiped 72
+hours after failure so a relaunch is a resume or a fresh run depending on the
+clock, and a package rebuilt after delivery would still mint a second row. The
+grouped read fixes the live rows and every future one in one SQL pair.
+
+**The console.** The overlay's projection now carries `work_digest`
+(`_MEDCHRON_JOBS_COLUMNS`, bumped with `OVERLAY_REF`), and the admin tile groups
+the projected rows by it exactly as the seat does. The console is still a mirror
+of the seat's rule, not a reader of the seat's figure; the runtime-read kind that
+would make it a pure display stays queued. An overlay that has not yet projected
+the column reads every row as its own group, which is the pre-amendment figure,
+never a wrong one.
+
+**The first client seat is anchored.** `ashton-price` now authors
+`chronology_package_cycle_anchor_day: 15` (the Firm started the Service in the
+portal on 2026-09-15) and `chronology_package_cycle_effective_from: '2026-09-16'`.
+The 16th is deliberate: the 200454 chronology was requested and run before the
+Service started and is pilot work inside the fee, so the first paid cycle starts
+at zero. The first cycle is one day short; every later cycle runs the 15th to the
+14th. Exhibit A row 11 says "per billing cycle" in whole days from the same
+signature draft, which closes the 09-11 amendment's "not until the paper does it"
+hold. The broker reads a boot-time copy of `customer.yaml`, so the anchor reaches
+the meter on the next reprovision, not on the config poller.
+
+**Routine 11 is one product.** The paper's "running chronology" (the memo the seat
+agent would keep as records land; refused by the outbound gates on 2026-08-19,
+never scheduled, never a client deliverable) is removed from Exhibit A and
+Schedule A-1. Routine 11 is the medical chronology, built on request (a run) and
+brought current on request (an update), under one page allowance. The treatment
+gap flag the firm confirmed lives inside the package (`timeline.py`, `render.py`).
+Quoted work above the allowance is invoiced separately, runs outside the metered
+path, and is not counted against the allowance; the ledger carries no
+"quoted" mark, so a quoted package must not be submitted through the seat.
+
+**A usage question is answerable by email.** The inbox router gains an
+admin-reserved class: a Named Administrator asking how much of the allowance is
+used or left gets the `medchron_allowance` figures verbatim, never a remembered
+number. The firm has no other surface for the count by design; the portal is for
+starting, changing and ending the Service, not for reading its meter.
+
+**Open.** A `relaunch_of` column written by the hand-launch path would hold the
+promise even when an envelope drifts between launches; not needed while the
+relaunch procedure re-submits the same envelope file. The runtime-read kind for
+the allowance (console as pure display) remains queued for a later bump.

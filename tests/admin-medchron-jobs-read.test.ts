@@ -126,6 +126,48 @@ describe('monthTotals', () => {
     expect(monthTotals([spanning], monthOf('2026-09')).pagesUsed).toBe(0)
     expect(monthTotals([spanning], monthOf('2026-09')).centsUsed).toBe(0)
   })
+
+  // 2026-09-16: the grouping half of the debit rule, shared with the seat's
+  // `_DEBITS_SQL`. The live incident: one 3,568-page chronology on the first
+  // client seat sat as three cents>0 rows and the tile read 10,704 of 15,000.
+  it('counts one piece of work once however many launches it took, and sums their cents', () => {
+    const digest = 'sha256:46a30e67'
+    const jobs = [
+      parseJobRow(
+        row({ id: '01', state: 'failed', pages: 3568, cents: 1323, work_digest: digest })
+      )!,
+      parseJobRow(
+        row({ id: '02', state: 'failed', pages: 3568, cents: 6201, work_digest: digest })
+      )!,
+      parseJobRow(
+        row({ id: '03', state: 'delivered', pages: 3568, cents: 6280, work_digest: digest })
+      )!,
+    ]
+    const m = monthTotals(jobs, monthOf('2026-08'))
+    expect(m.pagesUsed, 'the SUM rule read 10,704 here').toBe(3568)
+    expect(m.centsUsed, 'every launch spent money').toBe(13804)
+  })
+
+  it("takes the largest attempt as the work's pages, and an update is its own debit", () => {
+    const jobs = [
+      parseJobRow(
+        row({ id: '01', state: 'failed', pages: 1200, cents: 300, work_digest: 'sha256:run' })
+      )!,
+      parseJobRow(row({ id: '02', pages: 3568, cents: 900, work_digest: 'sha256:run' }))!,
+      // The update names new document ids in its selection: a different digest.
+      parseJobRow(row({ id: '03', pages: 40, cents: 20, work_digest: 'sha256:update' }))!,
+    ]
+    expect(monthTotals(jobs, monthOf('2026-08')).pagesUsed).toBe(3608)
+  })
+
+  it('treats a row without a work digest as its own group, never guessed into another', () => {
+    const jobs = [
+      parseJobRow(row({ id: '01', pages: 100, cents: 50, work_digest: null }))!,
+      parseJobRow(row({ id: '02', pages: 100, cents: 50, work_digest: null }))!,
+      parseJobRow(row({ id: '03', pages: 100, cents: 50 }))!, // an overlay that does not project the column
+    ]
+    expect(monthTotals(jobs, monthOf('2026-08')).pagesUsed).toBe(300)
+  })
 })
 
 describe('allowanceFromPersonas', () => {
