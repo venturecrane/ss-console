@@ -37,12 +37,17 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
 PAGE_SOURCES = IMAGE_EXTS | {".pdf"}
 
 
-def _image_pdf(path: str) -> bytes:
-    """One PDF page carrying the image at its own size (pymupdf, already a runtime dependency)."""
+def _reader(path: str, ext: str) -> Any:
+    """Pages of a source file: the PDF itself, or an image as one PDF page
+    at its own size (pymupdf, already a runtime dependency)."""
+    from pypdf import PdfReader
+
+    if ext == ".pdf":
+        return PdfReader(path)
     import fitz
 
     with fitz.open(path) as img:
-        return img.convert_to_pdf()
+        return PdfReader(BytesIO(img.convert_to_pdf()))
 
 
 BILL = re.compile(r"(?i)\bbill|ledger|invoice|statement|charges\b")
@@ -87,7 +92,7 @@ def remap_citations(text: str, remap: dict[int, tuple[int, int]]) -> tuple[str, 
 
 
 def run(sr: StageRun) -> int:
-    from pypdf import PdfReader, PdfWriter
+    from pypdf import PdfWriter
 
     d = sr.slug_dir
     unit = sr.unit.unit
@@ -146,11 +151,10 @@ def run(sr: StageRun) -> int:
         cursor = 1
         for _first, name, old, f in gfiles:
             rec = raw.get(f["id"])
-            ext = (f.get("ext") or "").lower()
-            if not rec or ext not in PAGE_SOURCES:
+            if not rec or (f.get("ext") or "").lower() not in PAGE_SOURCES:
                 continue
             try:
-                r = PdfReader(rec["path"]) if ext == ".pdf" else PdfReader(BytesIO(_image_pdf(rec["path"])))
+                r = _reader(rec["path"], (f.get("ext") or "").lower())
             except Exception as exc:  # noqa: BLE001 - an unreadable file is recorded as that file's error in the exhibit list and the loop continues
                 entries.append({"file": name, "error": str(exc)[:100]})
                 continue

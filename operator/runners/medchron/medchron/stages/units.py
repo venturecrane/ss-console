@@ -133,6 +133,11 @@ def unique_names(files: list[dict[str, Any]]) -> list[tuple[str, str]]:
     return renamed
 
 
+def _rename_duplicates(files: list[dict[str, Any]], log) -> None:
+    for old, new in unique_names(files):
+        log(f"  two files named '{old[:50]}': the later one is '{new[:50]}' from here on")
+
+
 def _excluder(patterns: list[str]):
     """One compiled pattern per config row (each may carry its own inline
     flags, which a single joined expression would reject)."""
@@ -262,8 +267,7 @@ def run(sr: StageRun) -> int:
     if skipped is None:
         return 2
     for u, files in units.items():
-        for old, new in unique_names(files):
-            sr.log(f"  two files named '{old[:50]}': the later one is '{new[:50]}' from here on")
+        _rename_duplicates(files, sr.log)
         (d / "units" / f"{u}.json").write_text(json.dumps(files, indent=1), encoding="utf-8")
         chars = sum(int(r.get("chars") or 0) for r in files)
         n_skip = sum(1 for r in files if not r.get("compose", True))
