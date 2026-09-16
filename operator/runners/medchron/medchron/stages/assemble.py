@@ -21,6 +21,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from . import fileref
 from .base import StageRun, read_json
 from .compose import read_usage
 
@@ -58,13 +59,18 @@ class Resolver:
     nothing, so they match by longest common prefix, and what cannot be
     resolved is reported rather than kept as a phantom."""
 
-    def __init__(self, real_names: list[str]) -> None:
+    def __init__(self, real_names: list[str], ids: dict[str, str] | None = None) -> None:
         self.real = list(real_names)
         self.norm = {_norm_name(n): n for n in self.real}
+        # id -> name: a citation carrying `[fileId X]` names THAT file, which is
+        # how the model tells two same-named attachments apart (fileref.py)
+        self.ids = dict(ids or {})
         self.unresolved: set[str] = set()
 
     def __call__(self, cited: str) -> str | None:
-        cited = cited.strip()
+        cited, fid = fileref.parse(cited, set(self.ids))
+        if fid:
+            return self.ids[fid]
         if cited in self.real:
             return cited
         c = _norm_name(cited)
@@ -180,10 +186,9 @@ def run(sr: StageRun) -> int:
         sr.log(f"REFUSING TO ASSEMBLE: chunk(s) {refused} were refused and carry no entries")
         return 1
     entries, buckets = parse_maps(d, maps)
-    real_names = [
-        f["name"] + (f.get("ext") or "") for f in read_json(sr.slug_dir / "units" / f"{sr.unit.unit}.json", [])
-    ]
-    resolve = Resolver(real_names)
+    unit_files = read_json(sr.slug_dir / "units" / f"{sr.unit.unit}.json", [])
+    real_names = [f["name"] + (f.get("ext") or "") for f in unit_files]
+    resolve = Resolver(real_names, {f["id"]: n for f, n in zip(unit_files, real_names)})
     exhibit = exhibit_numbers(entries, resolve)
     (d / "exhibit_map.json").write_text(json.dumps(exhibit, indent=1), encoding="utf-8")
 

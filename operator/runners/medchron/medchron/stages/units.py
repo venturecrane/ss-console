@@ -112,6 +112,27 @@ def mark_compose_skips(d: Path, units: dict[str, list[dict[str, Any]]], log) -> 
     return skipped
 
 
+def unique_names(files: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    """Two files with one name are two files. Every stage after this one keys
+    on `name + ext` (the chunk header the model cites, the exhibit map, the
+    exhibit builder's file lookup), so a duplicate name collapses two records
+    into one exhibit slot and a citation to the second lands on the first's
+    page. Live-caught 2026-09-15: four email attachments named image001.jpg.
+    The later file becomes `name (2)`, `(3)`, in list order; ids never change.
+    Returns the (old, new) renames for the log."""
+    seen: dict[str, int] = {}
+    renamed: list[tuple[str, str]] = []
+    for f in files:
+        full = f["name"] + (f.get("ext") or "")
+        n = seen.get(full, 0) + 1
+        seen[full] = n
+        if n > 1:
+            new = f"{f['name']} ({n})"
+            renamed.append((full, new + (f.get("ext") or "")))
+            f["name"] = new
+    return renamed
+
+
 def _excluder(patterns: list[str]):
     """One compiled pattern per config row (each may carry its own inline
     flags, which a single joined expression would reject)."""
@@ -241,6 +262,8 @@ def run(sr: StageRun) -> int:
     if skipped is None:
         return 2
     for u, files in units.items():
+        for old, new in unique_names(files):
+            sr.log(f"  two files named '{old[:50]}': the later one is '{new[:50]}' from here on")
         (d / "units" / f"{u}.json").write_text(json.dumps(files, indent=1), encoding="utf-8")
         chars = sum(int(r.get("chars") or 0) for r in files)
         n_skip = sum(1 for r in files if not r.get("compose", True))

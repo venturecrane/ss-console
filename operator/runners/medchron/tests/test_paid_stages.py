@@ -294,6 +294,39 @@ def test_build_units_routes_by_folder_then_token_and_excludes_by_config(
     assert [r["id"] for r in unassigned] == ["u1"]
 
 
+def test_build_units_gives_two_files_with_one_name_two_names(
+    tmp_path: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """Four email attachments named image001.jpg (live 2026-09-15): every later
+    stage keys on the name, so the later file becomes `image001 (2)`; ids stay."""
+    from medchron_testkit import job_yaml
+
+    jd = tmp_path / "job"
+    jd.mkdir()
+    (jd / "job.yaml").write_text(job_yaml(data_root, joint=True))
+    log: list[str] = []
+    sr = _sr(jd, firm_config_path, data_root, None, log)
+    decisions.units(sr.job, sr.cfg, sr.slug_dir, dry_run=False)
+    _extracted(
+        sr,
+        [
+            {"id": "msgatt-1", "name": "image001", "folder": "/Alpha_Example/MEDICAL", "ext": ".jpg", "text": PROSE},
+            {"id": "a1", "name": "clinic note", "folder": "/Alpha_Example/MEDICAL", "ext": ".pdf", "text": PROSE},
+            {"id": "msgatt-2", "name": "image001", "folder": "/Alpha_Example/MEDICAL", "ext": ".jpg", "text": PROSE},
+            {"id": "msgatt-3", "name": "image001", "folder": "/Alpha_Example/MEDICAL", "ext": ".jpg", "text": PROSE},
+        ],
+    )
+    assert units_stage.run(sr) == 0
+    alpha = json.loads((sr.slug_dir / "units" / "alpha.json").read_text())
+    assert [(r["id"], r["name"]) for r in alpha] == [
+        ("msgatt-1", "image001"),
+        ("a1", "clinic note"),
+        ("msgatt-2", "image001 (2)"),
+        ("msgatt-3", "image001 (3)"),
+    ]
+    assert sum("two files named 'image001.jpg'" in line for line in log) == 2
+
+
 def test_build_units_refuses_on_an_untranscribed_scan_and_on_missing_billing_extract(
     job_dir: Path, firm_config_path: Path, data_root: Path
 ) -> None:

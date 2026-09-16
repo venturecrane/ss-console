@@ -136,6 +136,67 @@ def test_group_attributes_by_index_then_folder_then_sentinel(job_dir: Path, firm
     assert groups["Carrier (Policy) 250"]["file_ids"] == ["e"]  # the numeric leaf "500" is skipped
 
 
+def test_group_reads_an_index_cell_naming_several_files_and_an_id_marker_names_that_file(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """The composer lists every file an entry drew on in one INDEX cell, `;`
+    separated, and tells two same-named attachments apart with the file id in
+    parentheses. Live 2026-09-15: keying on the raw cell attributed none of
+    them and 28 cited records fell to the sentinel lane."""
+    sr = _sr(job_dir, firm, data_root)
+    _seed_unit(
+        sr,
+        [
+            {"id": "a", "name": "clinic note", "ext": ".pdf", "folder": "/MEDICAL"},
+            {"id": "msgatt-1", "name": "image001", "ext": ".jpg", "folder": "/(email attachment)"},
+            {"id": "msgatt-2", "name": "image001 (2)", "ext": ".jpg", "folder": "/(email attachment)"},
+            {"id": "q", "name": "letter from client", "ext": ".pdf", "folder": "/CORRESPONDENCE"},
+        ],
+        [
+            "2026-01-02 | Example Clinic (Jane Doe, MD) | -- | clinic note.pdf; image001.jpg (msgatt-2); letter from client.pdf"
+        ],
+    )
+    assert group_stage.run(sr) == 0
+    groups = {g["provider"]: g for g in json.loads((sr.slug_dir / "groups" / "alpha.json").read_text())}
+    lane = groups["Example Clinic"]
+    assert sorted(lane["file_ids"]) == ["a", "msgatt-2", "q"], lane
+    assert lane["exhibit"] is True and lane["first"] == "2026-01-02"
+    assert "msgatt-1" not in lane["file_ids"], "the bare name is the first file; the marker named the second"
+
+
+def test_group_attributes_a_cited_but_unindexed_file_to_the_citing_entry_never_over_the_index(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """A client's letter carrying a copy of an MRI report is cited inside the
+    imaging facility's entry and has no INDEX row of its own; that entry is the
+    record's own statement of who produced it. An INDEX row still outvotes a
+    citation."""
+    sr = _sr(job_dir, firm, data_root)
+    _seed_unit(
+        sr,
+        [
+            {"id": "m", "name": "mri report", "ext": ".pdf", "folder": "/MEDICAL"},
+            {"id": "q", "name": "letter from client", "ext": ".pdf", "folder": "/CORRESPONDENCE"},
+            {"id": "r", "name": "rad note", "ext": ".pdf", "folder": "/MEDICAL"},
+        ],
+        [],
+    )
+    (sr.slug_dir / "runs" / "alpha" / "map-01.md").write_text(
+        "## ENTRIES\n01/09/2026\nExample Imaging | Medical Diagnoses\n\n"
+        "MRI of the cervical spine shows a disc bulge. (FILE: mri report.pdf, p. 1)\n\n"
+        "A further copy of the same report appears in the client's letter. (FILE: letter from client.pdf, p. 4-5)\n\n"
+        "The radiology note repeats the impression. (FILE: rad note.pdf, p. 2)\n\n"
+        "## INDEX\n2026-01-09 | Example Imaging | -- | mri report.pdf\n"
+        "2026-01-11 | Riverside Imaging | -- | rad note.pdf\n\n## FILES-SEEN\n"
+    )
+    assert group_stage.run(sr) == 0
+    groups = {g["provider"]: g for g in json.loads((sr.slug_dir / "groups" / "alpha.json").read_text())}
+    assert sorted(groups["Example Imaging"]["file_ids"]) == ["m", "q"], groups
+    assert groups["Example Imaging"]["exhibit"] is True and groups["Example Imaging"]["last"] == "2026-01-09"
+    assert groups["Riverside Imaging"]["file_ids"] == ["r"], "the INDEX row wins over the citing entry"
+    assert not any(p.startswith("(unattributed") for p in groups), groups
+
+
 # ---- scope (filter) ------------------------------------------------------------------
 E_PRE_ROUTINE = "06/01/2025\nExample Clinic | Medical Diagnoses\n\nSeasonal allergies. (Exhibit 1 - p. 1)\n"
 E_PRE_MATERIAL = "09/01/2025\nExample Clinic | Medical Diagnoses\n\nChronic neck pain. (Exhibit 1 - p. 2)\n"
@@ -220,6 +281,47 @@ def test_exhibits_merges_a_providers_files_and_remaps_citations(job_dir: Path, f
     final = (rd / "entries_final.md").read_text()
     assert "(Exhibit 1 - p. 2)" in final and "(Exhibit 1 - p. 4-5)" in final
     assert [p.name for p in (d / "out" / "alpha").glob("Exhibit *.pdf")] == [page_map[0]["title"] + ".pdf"]
+
+
+def test_exhibits_renders_a_cited_image_as_an_exhibit_page(job_dir: Path, firm: Path, data_root: Path) -> None:
+    """A client's phone photo of a consent form is a record the chronology
+    cites. Skipped, the exhibit had no page for it and the citation could not
+    be remapped (live 2026-09-15: twelve cited photos, zero pages, refused)."""
+    import fitz
+
+    sr = _sr(job_dir, firm, data_root)
+    d = sr.slug_dir
+    raw = d / "raw"
+    raw.mkdir(parents=True)
+    (raw / "a.pdf").write_bytes(make_pdf(["", ""]))
+    fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 6, 6), False).save(str(raw / "photo.png"))
+    (d / "raw_manifest.jsonl").write_text(
+        json.dumps({"id": "a", "ok": True, "path": str(raw / "a.pdf")})
+        + "\n"
+        + json.dumps({"id": "p", "ok": True, "path": str(raw / "photo.png")})
+        + "\n"
+    )
+    _seed_unit(
+        sr,
+        [
+            {"id": "a", "name": "clinic note", "ext": ".pdf", "folder": "/MEDICAL"},
+            {"id": "p", "name": "photo", "ext": ".png", "folder": "/(email attachment)"},
+        ],
+        ["2026-01-02 | Example Clinic | -- | clinic note.pdf", "2026-01-09 | Example Clinic | -- | photo.png"],
+    )
+    rd = d / "runs" / "alpha"
+    (rd / "exhibit_map.json").write_text(json.dumps({"clinic note.pdf": 1, "photo.png": 2}))
+    (rd / "entries_scoped.md").write_text(
+        "01/02/2026\nExample Clinic | Medical Diagnoses\n\nStrain. (Exhibit 1 - p. 2)\n\n"
+        "01/09/2026\nExample Clinic | Medical Diagnoses\n\nConsent photographed. (Exhibit 2 - p. 1)\n"
+    )
+    assert group_stage.run(sr) == 0
+    assert exhibits_stage.run(sr) == 0
+    page_map = json.loads((d / "out" / "alpha" / "page_map.json").read_text())
+    assert len(page_map) == 1 and page_map[0]["total_pages"] == 3, page_map
+    assert [f["file"] for f in page_map[0]["files"]] == ["clinic note.pdf", "photo.png"]
+    final = (rd / "entries_final.md").read_text()
+    assert "(Exhibit 1 - p. 2)" in final and "(Exhibit 1 - p. 3)" in final, final
 
 
 def test_exhibits_refuses_a_citation_it_cannot_remap(job_dir: Path, firm: Path, data_root: Path) -> None:
