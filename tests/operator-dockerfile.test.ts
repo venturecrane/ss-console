@@ -1400,6 +1400,30 @@ describe('Operator Machine first-boot build/runtime fixes', () => {
     // PG_BIN/17 reference moved out of bootstrap.sh — see the Honcho-deferral
     // suite below. Postgres 17 stays INSTALLED in the Dockerfile (asserted above).
   })
+
+  it('bootstrap.sh launches the front-door gate on WEBHOOK_SECRET_MCP, not only on the AgentMail secret', () => {
+    // 2026-09-16: removing a stale WEBHOOK_SECRET_AGENTMAIL from the first
+    // client seat (msgraph, no agentmail) took public :8643 down with it —
+    // Fly health check critical, Smokeball OAuth callback and every console
+    // control unreachable — while the gateway on :8644 ran on. The gate serves
+    // the whole public surface, so it launches whenever the seat carries any
+    // secret it verifies. WEBHOOK_SECRET_MCP is staged on every seat by the
+    // provisioner. The falsifier: revert the condition to the AgentMail-only
+    // form and the first assertion fails.
+    const launch = BOOTSTRAP_CODE.match(
+      /if \[ -n "\$\{WEBHOOK_SECRET_MCP:-\}" \] \|\| \[ -n "\$\{WEBHOOK_SECRET_AGENTMAIL:-\}" \]; then/
+    )
+    expect(
+      launch,
+      'gate launch must key on WEBHOOK_SECRET_MCP or WEBHOOK_SECRET_AGENTMAIL'
+    ).not.toBeNull()
+    expect(BOOTSTRAP_CODE).not.toMatch(/if \[ -n "\$\{WEBHOOK_SECRET_AGENTMAIL:-\}" \]; then/)
+    // The launch sits before the gateway exec, as a supervised child.
+    const launchAt = BOOTSTRAP_CODE.indexOf(launch![0])
+    const execAt = BOOTSTRAP_CODE.indexOf('hermes -p "${ACTIVE_PROFILE}" gateway run')
+    expect(execAt, 'gateway exec missing').toBeGreaterThan(-1)
+    expect(launchAt).toBeLessThan(execAt)
+  })
 })
 
 /**

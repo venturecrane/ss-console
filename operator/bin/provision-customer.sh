@@ -113,6 +113,10 @@ BIN_DIR="${REPO_ROOT}/operator/bin"
 
 log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [provision/${SLUG}] $*"; }
 die() { log "FATAL: $*"; exit 1; }
+# Converge the Machine on the authored state: a secret a previous provision
+# staged and this one does not is REMOVED, never left to linger in the agent
+# env (Fly secrets persist across deploys). Usage: unset_stale "<why>" NAME...
+unset_stale() { local why="$1"; shift; log "${why} — removing any stale value from the Machine: $*"; fly secrets unset --stage -a "${APP_NAME}" "$@" >/dev/null 2>&1 || log "already absent on the Machine (nothing to unset): $*"; }
 
 # ---------- Step 0-: the build source is what you think it is ----------
 #
@@ -699,10 +703,9 @@ if [ -n "${R2_SKILL_BODIES_ACCESS_KEY_ID:-}" ] && [ -n "${R2_SKILL_BODIES_SECRET
     "${R2_SKILL_BODIES_SECRET_ACCESS_KEY}" \
     "bucket-scoped R2 secret access key for ${R2_SKILL_BODIES_BUCKET} (never the account-wide pair)"
 else
-  log "R2_SKILL_BODIES_* not authored in /ss — removing any stale value from the Machine so the account-wide key cannot linger in the agent env (agent-authored skill persistence stays off; OP-P0-2)"
-  fly secrets unset --stage -a "${APP_NAME}" \
-    R2_SKILL_BODIES_ACCESS_KEY_ID R2_SKILL_BODIES_SECRET_ACCESS_KEY >/dev/null 2>&1 \
-    || log "R2_SKILL_BODIES_* already absent on the Machine (nothing to unset)"
+  # The account-wide key must not linger in the agent env (agent-authored
+  # skill persistence stays off; OP-P0-2).
+  unset_stale "R2_SKILL_BODIES_* not authored in /ss" R2_SKILL_BODIES_ACCESS_KEY_ID R2_SKILL_BODIES_SECRET_ACCESS_KEY
 fi
 
 # HONCHO_API_KEY — DEFERRED to Phase 2 (ADR 0016 revised). No in-Machine Honcho
@@ -947,6 +950,20 @@ if authored_channel '^adapter=agentmail$|^backend=mcp:agentmail$'; then
   # the agentmail route secret — stage them equal, or inbound never routes to a skill.
   stage_secret_from_env SMD_WEBHOOK_SIGNING_SECRET "${_AGENTMAIL_WH_SECRET}" "router forward-verify secret (== agentmail route secret)"
   unset _AGENTMAIL_WH_KEY _AGENTMAIL_WH_SECRET
+else
+  # A seat that binds no agentmail adapter must carry NO AgentMail secret. Fly
+  # secrets persist across deploys, so a value staged by an earlier provision
+  # (before the per-seat fence, when the global WEBHOOK_SECRET_AGENTMAIL went
+  # onto every seat) outlives the config that stopped staging it. That is how
+  # the first client seat, an msgraph seat, failed boot smoke on 2026-09-16:
+  # `agentmail-webhook-secret-matches-vendor` found the stale global secret in
+  # the agent env with no API key beside it, and the reprovision reported
+  # FATAL on a Machine that was otherwise healthy. Same shape as the
+  # R2_SKILL_BODIES_* removal above: converge the Machine on the authored
+  # state, never on what a previous run happened to leave behind.
+  # SMD_WEBHOOK_SIGNING_SECRET is NOT touched here: the msgraph block below
+  # stages its own value on an msgraph seat.
+  unset_stale "no agentmail adapter authored" WEBHOOK_SECRET_AGENTMAIL AGENTMAIL_API_KEY AGENTMAIL_SEND_API_KEY
 fi
 
 # Microsoft Graph app-only mail (adapter: msgraph, backend: mcp:msgraph-mail —
