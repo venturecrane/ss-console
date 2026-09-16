@@ -109,7 +109,12 @@ describe('agentmail-webhook-secret-fence', () => {
     expect(elseAt, 'the else branch is outside the agentmail block').toBeLessThan(fiAt)
     const branch = text.slice(elseAt, fiAt)
     expect(branch).toMatch(
-      /fly secrets unset --stage -a "\$\{APP_NAME\}" \\\n\s+WEBHOOK_SECRET_AGENTMAIL AGENTMAIL_API_KEY AGENTMAIL_SEND_API_KEY/
+      /unset_stale "[^"]+" WEBHOOK_SECRET_AGENTMAIL AGENTMAIL_API_KEY AGENTMAIL_SEND_API_KEY/
+    )
+    // The helper itself is the removal: a stale value is unset --stage so the
+    // deploy that follows carries the authored state.
+    expect(text).toMatch(
+      /unset_stale\(\) \{[^\n]*fly secrets unset --stage -a "\$\{APP_NAME\}" "\$@"/
     )
     expect(
       branch,

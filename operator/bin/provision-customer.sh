@@ -113,6 +113,10 @@ BIN_DIR="${REPO_ROOT}/operator/bin"
 
 log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [provision/${SLUG}] $*"; }
 die() { log "FATAL: $*"; exit 1; }
+# Converge the Machine on the authored state: a secret a previous provision
+# staged and this one does not is REMOVED, never left to linger in the agent
+# env (Fly secrets persist across deploys). Usage: unset_stale "<why>" NAME...
+unset_stale() { local why="$1"; shift; log "${why} — removing any stale value from the Machine: $*"; fly secrets unset --stage -a "${APP_NAME}" "$@" >/dev/null 2>&1 || log "already absent on the Machine (nothing to unset): $*"; }
 
 # ---------- Step 0-: the build source is what you think it is ----------
 #
@@ -699,10 +703,9 @@ if [ -n "${R2_SKILL_BODIES_ACCESS_KEY_ID:-}" ] && [ -n "${R2_SKILL_BODIES_SECRET
     "${R2_SKILL_BODIES_SECRET_ACCESS_KEY}" \
     "bucket-scoped R2 secret access key for ${R2_SKILL_BODIES_BUCKET} (never the account-wide pair)"
 else
-  log "R2_SKILL_BODIES_* not authored in /ss — removing any stale value from the Machine so the account-wide key cannot linger in the agent env (agent-authored skill persistence stays off; OP-P0-2)"
-  fly secrets unset --stage -a "${APP_NAME}" \
-    R2_SKILL_BODIES_ACCESS_KEY_ID R2_SKILL_BODIES_SECRET_ACCESS_KEY >/dev/null 2>&1 \
-    || log "R2_SKILL_BODIES_* already absent on the Machine (nothing to unset)"
+  # The account-wide key must not linger in the agent env (agent-authored
+  # skill persistence stays off; OP-P0-2).
+  unset_stale "R2_SKILL_BODIES_* not authored in /ss" R2_SKILL_BODIES_ACCESS_KEY_ID R2_SKILL_BODIES_SECRET_ACCESS_KEY
 fi
 
 # HONCHO_API_KEY — DEFERRED to Phase 2 (ADR 0016 revised). No in-Machine Honcho
@@ -960,10 +963,7 @@ else
   # state, never on what a previous run happened to leave behind.
   # SMD_WEBHOOK_SIGNING_SECRET is NOT touched here: the msgraph block below
   # stages its own value on an msgraph seat.
-  log "no agentmail adapter authored — removing any stale AgentMail secret from the Machine so a value an earlier provision staged cannot linger in the agent env"
-  fly secrets unset --stage -a "${APP_NAME}" \
-    WEBHOOK_SECRET_AGENTMAIL AGENTMAIL_API_KEY AGENTMAIL_SEND_API_KEY >/dev/null 2>&1 \
-    || log "AgentMail secrets already absent on the Machine (nothing to unset)"
+  unset_stale "no agentmail adapter authored" WEBHOOK_SECRET_AGENTMAIL AGENTMAIL_API_KEY AGENTMAIL_SEND_API_KEY
 fi
 
 # Microsoft Graph app-only mail (adapter: msgraph, backend: mcp:msgraph-mail —
