@@ -24,8 +24,11 @@ from __future__ import annotations
 import base64
 import json
 import re
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
+
+from anthropic import RequestTooLargeError
 
 from .. import llm, prompts
 from .base import StageRun, read_json
@@ -33,6 +36,8 @@ from .base import StageRun, read_json
 LABELS = ("ORDER", "REQUEST", "AUTH", "CERT", "INDEX", "RECORD", "BLANK")
 NONRECORD_LABELS = {"ORDER", "REQUEST", "AUTH", "CERT", "INDEX"}
 BATCH = 12
+# The API caps a request at 32 MB; base64 page images are what fill it.
+MAX_BATCH_BYTES = 20 * 2**20
 HEAD_PAGES = 3
 MIN_TEXT = 40
 
@@ -171,6 +176,59 @@ def file_heads(page_map: list[dict[str, Any]], n: int = HEAD_PAGES) -> dict[int,
     return heads
 
 
+def _batches(pages: Iterable[tuple[str, str]]) -> Iterator[list[tuple[str, str]]]:
+    """(label, png) pages grouped for one request each, bounded by BYTES as
+    well as by count: twelve scanned pages at 110 dpi passed the API's request
+    limit (413, live 2026-09-16), and the limit is on the request, not on the
+    page count."""
+    batch: list[tuple[str, str]] = []
+    size = 0
+    for lbl, png in pages:
+        if batch and (len(batch) >= BATCH or size + len(png) > MAX_BATCH_BYTES):
+            yield batch
+            batch, size = [], 0
+        batch.append((lbl, png))
+        size += len(png)
+    if batch:
+        yield batch
+
+
+def _classify_batch(
+    sr: StageRun, labels: list[tuple[str, str]], model: str, system: str, results: dict[str, str]
+) -> None:
+    """One call for these (label, png) pages. A request the API refuses as too
+    large is split in half and both halves sent; a single page the API refuses
+    is left unclassifiable rather than ending the run."""
+    content: list[dict[str, Any]] = []
+    for lbl, png in labels:
+        content.append({"type": "text", "text": f"page {lbl}:"})
+        content.append({"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": png}})
+    try:
+        r = sr.doorway.call(
+            "classify",
+            model=model,
+            max_tokens=800,
+            system=system,
+            messages=[{"role": "user", "content": content}],
+            timeout=300.0,
+            custom_id=f"classify-{labels[0][0]}",
+        )
+    except RequestTooLargeError:
+        if len(labels) == 1:
+            sr.log(f"  page {labels[0][0]} is too large for one request even alone; left unclassifiable")
+            return
+        half = len(labels) // 2
+        sr.log(f"  batch of {len(labels)} refused as too large; sending as {half} + {len(labels) - half}")
+        _classify_batch(sr, labels[:half], model, system, results)
+        _classify_batch(sr, labels[half:], model, system, results)
+        return
+    for line in r.text.strip().splitlines():
+        m = re.match(r"\s*(\S+)\s*=\s*([A-Z]+)", line)
+        if m:
+            results[m.group(1)] = m.group(2)
+    sr.log(f"  batch of {len(labels)} -> {r.usage.input_tokens} in / {r.usage.output_tokens} out")
+
+
 def run_scanned(sr: StageRun) -> int:
     import pymupdf
 
@@ -211,41 +269,11 @@ def run_scanned(sr: StageRun) -> int:
 
     model, system = llm.model_for(sr.cfg, "transcription"), prompts.load("classify-system", sr.cfg)
     results: dict[str, str] = {}
-
-    def flush(labels: list[tuple[str, Path, int]]) -> None:
-        if not labels:
-            return
-        content: list[dict[str, Any]] = []
-        for lbl, path, p in labels:
-            content.append({"type": "text", "text": f"page {lbl}:"})
-            content.append(
-                {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": _png(get(path), p)}}
-            )
-        r = sr.doorway.call(
-            "classify",
-            model=model,
-            max_tokens=800,
-            system=system,
-            messages=[{"role": "user", "content": content}],
-            timeout=300.0,
-            custom_id=f"classify-{labels[0][0]}",
-        )
-        for line in r.text.strip().splitlines():
-            m = re.match(r"\s*(\S+)\s*=\s*([A-Z]+)", line)
-            if m:
-                results[m.group(1)] = m.group(2)
-        sr.log(f"  batch of {len(labels)} -> {r.usage.input_tokens} in / {r.usage.output_tokens} out")
-
     allpages = [(f"Ex{e}p{p}", paths[e], p) for e, p in targets] + [
         (f"CTL{i}", path, p) for i, (path, p, _) in enumerate(controls)
     ]
-    batch: list[tuple[str, Path, int]] = []
-    for item in allpages:
-        batch.append(item)
-        if len(batch) >= BATCH:
-            flush(batch)
-            batch = []
-    flush(batch)
+    for batch in _batches((lbl, _png(get(path), p)) for lbl, path, p in allpages):
+        _classify_batch(sr, batch, model, system, results)
     for doc in docs.values():
         doc.close()
     ok = True
