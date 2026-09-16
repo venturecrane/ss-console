@@ -200,6 +200,77 @@ def test_classify_nonrecord_fingerprints_classes_and_reports_collisions(
     assert json.loads((sr.slug_dir / "nonrecord.json").read_text())["1"]["cited_collision"] == [2]
 
 
+def _scanned_setup(sr: StageRun, unknown: list[int]) -> None:
+    """An exhibit whose listed pages are unclassifiable by text, with controls authored."""
+    _exhibit(sr, [PROSE, PROSE, PROSE, ""])
+    _doc(sr, DOC_3)
+    (sr.slug_dir / "nonrecord.json").write_text(
+        json.dumps({"1": {"pages": 4, "blocks": [], "drop_pages": [], "unknown": unknown, "cited_collision": []}})
+    )
+    ctl = sr.job.data_root / "controls"
+    ctl.mkdir(parents=True, exist_ok=True)
+    (ctl / "control-order.pdf").write_bytes(make_pdf([ORDER_PAGE]))
+    (ctl / "control-index.pdf").write_bytes(make_pdf([INDEX_PAGE]))
+    (ctl / "controls.json").write_text(
+        json.dumps(
+            [
+                {"pdf": "controls/control-order.pdf", "page": 1, "label": "ORDER"},
+                {"pdf": "controls/control-index.pdf", "page": 1, "label": "INDEX"},
+            ]
+        )
+    )
+    (sr.slug_dir / "record_control.json").write_text(json.dumps({"exhibit": 1, "page": 2}))
+
+
+def _label_reply(p, n):
+    labels = [b["text"].split()[1].rstrip(":") for b in p["messages"][0]["content"] if b["type"] == "text"]
+    answer = {"CTL0": "ORDER", "CTL1": "INDEX", "CTL2": "RECORD"}
+    return NS(
+        content=[NS(type="text", text="\n".join(f"{lb} = {answer.get(lb, 'RECORD')}" for lb in labels))],
+        stop_reason="end_turn",
+        usage=Usage(),
+    )
+
+
+def test_classify_scanned_batches_are_bounded_by_bytes_and_a_too_large_request_is_split(
+    job_dir: Path, firm: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Live 2026-09-16: twelve scanned pages at 110 dpi passed the API's request
+    limit (413) and the stage died with them. The limit is on bytes, not pages;
+    and a refusal is split, never fatal."""
+    import httpx
+    from anthropic import RequestTooLargeError
+
+    client = Scripted(_label_reply)
+    sr = _sr(job_dir, firm, data_root, client)
+    _scanned_setup(sr, unknown=[1, 2, 3])
+    # every page image "weighs" 11 MB: with a 20 MB cap, no two share a request
+    monkeypatch.setattr(classify, "_png", lambda doc, p, dpi=110: "x" * (11 * 2**20))
+    assert classify.run_scanned(sr) == 0
+    sizes = [sum(1 for b in c["messages"][0]["content"] if b["type"] == "image") for c in client.calls]
+    assert sizes == [1] * 6, sizes  # 3 pages + 3 controls, one per request
+    labels = json.loads((sr.slug_dir / "scanned_labels.json").read_text())
+    assert labels["controls_ok"] is True and set(labels["labels"]) >= {"Ex1p1", "Ex1p2", "Ex1p3"}
+
+    # the API refuses any request carrying more than one image: halve until it takes them
+    def refuse_multi(p, n):
+        if sum(1 for b in p["messages"][0]["content"] if b["type"] == "image") > 1:
+            raise RequestTooLargeError(
+                "too large", response=httpx.Response(413, request=httpx.Request("POST", "https://x")), body=None
+            )
+        return _label_reply(p, n)
+
+    client2 = Scripted(refuse_multi)
+    sr2 = _sr(job_dir, firm, data_root, client2)
+    monkeypatch.setattr(classify, "_png", lambda doc, p, dpi=110: "x" * 10)
+    assert classify.run_scanned(sr2) == 0
+    sizes2 = [sum(1 for b in c["messages"][0]["content"] if b["type"] == "image") for c in client2.calls]
+    # one refused batch of six, halves refused in turn, every page finally sent alone
+    assert sizes2[0] == 6 and sizes2.count(1) == 6 and len(sizes2) < 12, sizes2
+    labels2 = json.loads((sr2.slug_dir / "scanned_labels.json").read_text())
+    assert labels2["controls_ok"] is True and set(labels2["labels"]) >= {"Ex1p1", "Ex1p2", "Ex1p3"}
+
+
 def test_classify_scanned_labels_head_pages_and_needs_its_controls(job_dir: Path, firm: Path, data_root: Path) -> None:
     def reply(p, n):
         labels = [b["text"].split()[1].rstrip(":") for b in p["messages"][0]["content"] if b["type"] == "text"]
