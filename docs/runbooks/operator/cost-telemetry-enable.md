@@ -44,11 +44,11 @@ Per-seat attribution comes from per-customer Anthropic workspaces (ADR 0062 deci
 
 ### Current workspace state (2026-07-03)
 
-| Seat            | Workspace id                      | Key vaulted                          | Mapping authored                                                                                    |
-| --------------- | --------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| smd             | `wrkspc_01EREm6fdTwbARsru1a1rsHk` | `ANTHROPIC_API_KEY__SMD`             | yes                                                                                                 |
-| pilot-smokeball | `wrkspc_01Ajk5RBWQ7CpzRGhjf5LTyk` | `ANTHROPIC_API_KEY__PILOT_SMOKEBALL` | yes                                                                                                 |
-| ashton-price    | `wrkspc_01SyLY6WC1c1Y5PGEMdpn1NG` | `ANTHROPIC_API_KEY__ASHTON_PRICE`    | pending (no `customer_configs` row until the seat is provisioned; author this id at provision time) |
+| Seat            | Workspace id                      | Key vaulted                          | Mapping authored                                                                                                                                                                                 |
+| --------------- | --------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| smd             | `wrkspc_01EREm6fdTwbARsru1a1rsHk` | `ANTHROPIC_API_KEY__SMD`             | yes                                                                                                                                                                                              |
+| pilot-smokeball | `wrkspc_01Ajk5RBWQ7CpzRGhjf5LTyk` | `ANTHROPIC_API_KEY__PILOT_SMOKEBALL` | yes                                                                                                                                                                                              |
+| ashton-price    | `wrkspc_01SyLY6WC1c1Y5PGEMdpn1NG` | `ANTHROPIC_API_KEY__ASHTON_PRICE`    | authored 2026-09-16 by the step 2 UPDATE (it had been pending since provisioning; 48 `_unmapped` day-rows since 2026-08-19 were the symptom; rows land under the slug from the next nightly run) |
 
 ## How to read the data
 

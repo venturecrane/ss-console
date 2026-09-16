@@ -1331,7 +1331,14 @@ describe('Operator customer Machine Dockerfile', () => {
     // translate's docstring: no tracked .py twin moves (verify-overlay-pairs.py
     // 10/10 PASS at the new ref); vocabulary and heartbeat fields re-read as
     // identical, both sources absent from the range.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="df181f68edbce5f92b51016c5429e59dcaca71ab"')
+    // df181f68 -> ea5aa816 (2026-09-16, overlay#357). The medchron_jobs
+    // projection carries the broker's work_digest so the console can group
+    // launches of one chronology the way the seat's debit does (ADR 0087
+    // amendment 2026-09-16). One tuple entry in shared/runtime_read.py and its
+    // test; no tracked .py twin moves (verify-overlay-pairs.py 10/10 PASS at
+    // the new ref); vocabulary and heartbeat fields re-read as identical, both
+    // sources absent from the range.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="ea5aa8161a5dddf8074644969c67efa4772c487a"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

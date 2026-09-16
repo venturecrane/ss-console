@@ -254,10 +254,26 @@ describe('pilot-smokeball commitments contract (ADR 0075)', () => {
     ).toBeUndefined()
     for (const key of Object.keys(byName('medical-chronology-maintainer')?.settings ?? {})) {
       expect(
-        ['treatment_gap_flag_days', 'chronology_package_page_allowance_per_month'],
+        [
+          'treatment_gap_flag_days',
+          'chronology_package_page_allowance_per_month',
+          // Exhibit A row 11 says "per billing cycle" from the 2026-09-16
+          // signature draft; the seat meters the same window (ADR 0087, 09-11).
+          'chronology_package_cycle_anchor_day',
+          'chronology_package_cycle_effective_from',
+        ],
         `medical-chronology-maintainer.settings.${key}: only contract-derived keys are authored on the client seat (ADR 0087)`
       ).toContain(key)
     }
+    // The cycle the paper names: begins on the 15th (the Firm started the
+    // Service 2026-09-15), first metered cycle from the 16th so the pilot's
+    // last chronology (run before the Service started) stays inside the fee.
+    expect(
+      byName('medical-chronology-maintainer')?.settings?.['chronology_package_cycle_anchor_day']
+    ).toBe(15)
+    expect(
+      byName('medical-chronology-maintainer')?.settings?.['chronology_package_cycle_effective_from']
+    ).toBe('2026-09-16')
   })
 
   // (h) A&P GRID TRACEABILITY. The (c) gate above checks the pilot seat

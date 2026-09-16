@@ -41,6 +41,11 @@ export interface MedchronJobRow {
   cents: number
   reason: string | null
   folderId: string | null
+  /** The seat's work key (matter + units + incident + injuries + selection).
+   * Two rows with one digest are two launches of one chronology. Null on
+   * rows written before the seat carried the column, or on an overlay that
+   * does not yet project it; either way that row is its own group. */
+  workDigest: string | null
 }
 
 export interface MedchronMonthTotals {
@@ -68,7 +73,9 @@ export interface MedchronMonthTotals {
    * shape is pinned by the overlay this release, so a job created on the 31st
    * whose cents land on the 1st would be debited to one month on the seat and
    * shown in the other here. `pages`/`cents` above stay delivered-only: what
-   * actually reached the firm. */
+   * actually reached the firm. Since 2026-09-16 the rows also GROUP by the
+   * seat's work digest (ADR 0087): one chronology relaunched three times is
+   * one debit of its pages, three of its cents. */
   pagesUsed: number
   centsUsed: number
 }
@@ -110,7 +117,31 @@ export function parseJobRow(raw: unknown): MedchronJobRow | null {
     cents: asCount(r['cents']),
     reason: asText(r['reason']),
     folderId: asText(r['folder_id']),
+    workDigest: asText(r['work_digest']),
   }
+}
+
+/** Group the debited rows the way the seat's `_DEBITS_SQL` does: one group per
+ * work digest (a row without one stands alone), pages as the group's MAX,
+ * cents as its SUM. (The seat also takes MAX(documents); the console carries
+ * no debited-documents figure, so it is not computed here.) A chronology that
+ * took three launches is one debit of its pages and three of its cents. */
+function groupedDebits(debited: MedchronJobRow[]): { pages: number; cents: number } {
+  const groups = new Map<string, { pages: number; cents: number }>()
+  for (const j of debited) {
+    const key = j.workDigest ?? `id:${j.id}`
+    const g = groups.get(key) ?? { pages: 0, cents: 0 }
+    g.pages = Math.max(g.pages, j.pages)
+    g.cents += j.cents
+    groups.set(key, g)
+  }
+  let pages = 0
+  let cents = 0
+  for (const g of groups.values()) {
+    pages += g.pages
+    cents += g.cents
+  }
+  return { pages, cents }
 }
 
 /** The billing cycle's roll-up (or the calendar month when none is authored). Documents and cents count DELIVERED jobs only
@@ -126,7 +157,7 @@ export function monthTotals(
   // window and is excluded.
   const inMonth = jobs.filter((j) => j.createdAt >= window.start && j.createdAt < window.end)
   const delivered = inMonth.filter((j) => j.state === 'delivered')
-  const debited = inMonth.filter((j) => j.cents > 0)
+  const debited = groupedDebits(inMonth.filter((j) => j.cents > 0))
   return {
     month: window.label,
     cycleStart: window.start,
@@ -138,8 +169,8 @@ export function monthTotals(
     documents: delivered.reduce((s, j) => s + j.documents, 0),
     pages: delivered.reduce((s, j) => s + j.pages, 0),
     cents: delivered.reduce((s, j) => s + j.cents, 0),
-    pagesUsed: debited.reduce((s, j) => s + j.pages, 0),
-    centsUsed: debited.reduce((s, j) => s + j.cents, 0),
+    pagesUsed: debited.pages,
+    centsUsed: debited.cents,
   }
 }
 

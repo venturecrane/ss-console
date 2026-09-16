@@ -487,19 +487,32 @@ personas:
         # a one-line settings change here when she asks.
         settings:
           treatment_gap_flag_days: 45
-          # Agreement 2.8 / Exhibit A row 11 as sent 2026-09-09 (engagements #107,
-          # #112): PAGES of medical records read to produce requested chronology
-          # PACKAGES per calendar month. The running chronology (this skill's memo)
-          # is unmetered; the allowance governs the package the runner builds
-          # (ADR 0087, amended 2026-09-09). Read by the runner's allowance
-          # pre-flight, never by the agent; the Operator surfaces and stops at
-          # the crossing, it never carries on past it on its own. A document is
-          # not a unit of work: the delivered packages ran from a one-page bill
-          # to a 700-page hospital chart, and the cost of a package tracks its
-          # pages. The earlier document key was carried for one release and
-          # removed once both seats were reprovisioned onto the page key
-          # (2026-09-09, vfy_01M23V6QKNRHN4SB1ZPRBWZ1V9).
+          # Agreement 2.8 / Exhibit A row 11: PAGES of medical records read to
+          # produce requested chronology packages per BILLING CYCLE (signature
+          # draft 2026-09-16; sent in pages 2026-09-09, engagements #107, #112).
+          # Routine 11 is one product since 2026-09-16: the chronology, built on
+          # request (a run) and brought current on request (an update that reads
+          # only what the delivered package did not cover). The July memo form
+          # is gone from the paper; this skill's memo is not a metered product.
+          # Read by the runner's allowance pre-flight, never by the agent; the
+          # Operator surfaces and stops at the crossing, it never carries on
+          # past it on its own. A document is not a unit of work: the delivered
+          # packages ran from a one-page bill to a 700-page hospital chart, and
+          # the cost of a package tracks its pages. The earlier document key was
+          # carried for one release and removed once both seats were
+          # reprovisioned onto the page key (2026-09-09, vfy_01M23V6QKNRHN4SB1ZPRBWZ1V9).
           chronology_package_page_allowance_per_month: 15000
+          # The firm's billing cycle (ADR 0087 amendment 2026-09-11): the Firm
+          # started the Service in the portal on 2026-09-15 (Stripe
+          # sub_1UG43GD43NPjtHDKWCE9fYM4, 21:38Z), so each cycle begins on the
+          # 15th. `effective_from` is the 16th on purpose: the 200454 chronology
+          # (matter 200454) was requested and run before the Service started and
+          # is pilot work inside the fee, so the first paid cycle starts at zero.
+          # The first cycle is one day short by design; every later cycle runs
+          # the 15th to the 14th. The broker reads a boot-time copy of this
+          # file, so the anchor reaches the meter on the next reprovision.
+          chronology_package_cycle_anchor_day: 15
+          chronology_package_cycle_effective_from: '2026-09-16'
       # motions
       - name: motion-calendar-tracker # keeps motion deadlines/hearings current
         version: pending
