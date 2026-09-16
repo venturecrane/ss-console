@@ -24,6 +24,7 @@ import re
 from collections import defaultdict
 from typing import Any
 
+from . import fileref
 from .base import StageRun, read_json
 
 # Generic filing-convention folder names: a document kind, never a provider.
@@ -118,20 +119,62 @@ class Canon:
         return n.title() if n.isupper() else n
 
 
-def index_rows(run_dir) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+def index_rows(run_dir, id_to_name: dict[str, str] | None = None) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """Per file name: the dates and providers the map attributes to it.
+
+    The INDEX is the source: one row per entry, and a row's file cell may name
+    several files (`a.pdf; b.jpg (msgatt-…)`), each of which the row attributes.
+    A file the INDEX never names but an entry CITES takes the citing entry's
+    provider and date: the model wrote "a further copy of the same MRI report
+    appears in the client's letter" under the imaging facility's entry, and
+    that entry is the record's own statement of who produced it. Citation
+    attribution is the fallback only; it never outvotes an INDEX row.
+    """
+    from . import assemble  # the entry and citation grammar lives there; one definition
+
+    ids = id_to_name or {}
+    known = set(ids)
+
+    def key(ref: str) -> str:
+        name, fid = fileref.parse(ref, known)
+        return ids[fid] if fid else name
+
     idx_dates: dict[str, list[str]] = defaultdict(list)
     idx_prov: dict[str, list[str]] = defaultdict(list)
+    cite_dates: dict[str, list[str]] = defaultdict(list)
+    cite_prov: dict[str, list[str]] = defaultdict(list)
     for p in sorted(run_dir.iterdir()):
         if not MAP_FILE.match(p.name):
             continue
-        m = re.search(r"##\s*INDEX\s*\n(.*?)(?=\n##\s|\Z)", p.read_text(encoding="utf-8"), re.S)
-        if not m:
-            continue
-        for line in m.group(1).splitlines():
+        txt = p.read_text(encoding="utf-8")
+        m = re.search(r"##\s*INDEX\s*\n(.*?)(?=\n##\s|\Z)", txt, re.S)
+        for line in m.group(1).splitlines() if m else []:
             parts = [x.strip() for x in line.split("|")]
             if len(parts) >= 4 and INDEX_DATE.match(parts[0]):
-                idx_dates[parts[3]].append(parts[0])
-                idx_prov[parts[3]].append(parts[1])
+                for name, fid in fileref.split_cell(parts[3], known):
+                    k = ids[fid] if fid else name
+                    idx_dates[k].append(parts[0])
+                    idx_prov[k].append(parts[1])
+        body = assemble.section(txt, "ENTRIES")
+        for chunk in assemble.ENTRY_SPLIT.split(body):
+            dm = assemble.DATE_HEAD.match(chunk.strip())
+            if dm is None:
+                continue
+            lines = chunk.strip().splitlines()
+            head = lines[1] if len(lines) > 1 else ""
+            prov = head.split("|")[0].strip() if "|" in head else ""
+            if not prov:
+                continue
+            date = f"{dm.group(3)}-{dm.group(1)}-{dm.group(2)}"
+            cited = [fname for fname, _ in assemble.CITE.findall(chunk)]
+            cited += [f for f in assemble.CITE_NOPAGE.findall(chunk) if ", p." not in f]
+            for k in {key(c) for c in cited}:
+                cite_dates[k].append(date)
+                cite_prov[k].append(prov)
+    for k in cite_prov:
+        if k not in idx_prov:
+            idx_prov[k] = cite_prov[k]
+            idx_dates[k] = cite_dates[k]
     return idx_dates, idx_prov
 
 
@@ -153,7 +196,9 @@ def run(sr: StageRun) -> int:
     (d / "groups").mkdir(parents=True, exist_ok=True)
     files = read_json(d / "units" / f"{sr.unit.unit}.json", [])
     canon = Canon(sr.cfg)
-    idx_dates, idx_prov = index_rows(d / "runs" / sr.unit.unit)
+    idx_dates, idx_prov = index_rows(
+        d / "runs" / sr.unit.unit, {f["id"]: f["name"] + (f.get("ext") or "") for f in files}
+    )
     unit_prefixes = [u.folder_prefix for u in sr.job.units if getattr(u, "folder_prefix", None)]
     groups: dict[str, dict[str, list]] = defaultdict(lambda: {"file_ids": [], "dates": []})
     unattributed: list[str] = []

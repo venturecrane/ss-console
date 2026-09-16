@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import re
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,27 @@ from .base import StageRun, read_json, read_jsonl
 from .group import index_rows
 
 CITE = re.compile(r"\(Exhibit (\d+)(?: - p\. ([0-9,\s\-]+))?\)")
+# What can become exhibit pages: a PDF as it is, an image as one page. A
+# client's phone photo of a consent form or a lab header IS a record the
+# chronology cites; skipping it left the citation pointing at nothing
+# (live-caught 2026-09-15: twelve cited photos, zero exhibit pages).
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
+PAGE_SOURCES = IMAGE_EXTS | {".pdf"}
+
+
+def _reader(path: str, ext: str) -> Any:
+    """Pages of a source file: the PDF itself, or an image as one PDF page
+    at its own size (pymupdf, already a runtime dependency)."""
+    from pypdf import PdfReader
+
+    if ext == ".pdf":
+        return PdfReader(path)
+    import fitz
+
+    with fitz.open(path) as img:
+        return PdfReader(BytesIO(img.convert_to_pdf()))
+
+
 BILL = re.compile(r"(?i)\bbill|ledger|invoice|statement|charges\b")
 CERT = re.compile(r"(?i)certif")
 EXHIBIT_FILE = re.compile(r"Exhibit \d+ - .*\.pdf(\.orig|\.stripped)?$")
@@ -70,7 +92,7 @@ def remap_citations(text: str, remap: dict[int, tuple[int, int]]) -> tuple[str, 
 
 
 def run(sr: StageRun) -> int:
-    from pypdf import PdfReader, PdfWriter
+    from pypdf import PdfWriter
 
     d = sr.slug_dir
     unit = sr.unit.unit
@@ -83,7 +105,7 @@ def run(sr: StageRun) -> int:
     files = read_json(d / "units" / f"{unit}.json", [])
     byname = {f["name"] + (f.get("ext") or ""): f for f in files}
     raw = {r["id"]: r for r in read_jsonl(d / "raw_manifest.jsonl") if r.get("ok")}
-    idx_dates, _ = index_rows(rd)
+    idx_dates, _ = index_rows(rd, {f["id"]: name for name, f in byname.items()})
     scoped, merged = rd / "entries_scoped.md", rd / "merged.md"
     if not scoped.is_file() and merged.is_file() and merged.stat().st_size > 50:
         sr.log("REFUSING TO BUILD: merged.md holds merged cluster entries but entries_scoped.md does not exist")
@@ -129,11 +151,11 @@ def run(sr: StageRun) -> int:
         cursor = 1
         for _first, name, old, f in gfiles:
             rec = raw.get(f["id"])
-            if not rec or (f.get("ext") or "").lower() != ".pdf":
+            if not rec or (f.get("ext") or "").lower() not in PAGE_SOURCES:
                 continue
             try:
-                r = PdfReader(rec["path"])
-            except Exception as exc:  # noqa: BLE001 - an unreadable PDF is recorded as that file's error in the exhibit list and the loop continues
+                r = _reader(rec["path"], (f.get("ext") or "").lower())
+            except Exception as exc:  # noqa: BLE001 - an unreadable file is recorded as that file's error in the exhibit list and the loop continues
                 entries.append({"file": name, "error": str(exc)[:100]})
                 continue
             for pg in r.pages:

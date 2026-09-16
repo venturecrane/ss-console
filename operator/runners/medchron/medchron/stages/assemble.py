@@ -21,6 +21,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from . import fileref
 from .base import StageRun, read_json
 from .compose import read_usage
 
@@ -31,6 +32,8 @@ from .compose import read_usage
 # the first ", p." and every following page group is captured together.
 CITE = re.compile(r"\(FILE:\s*((?:(?!,\s*p\.).)+?)((?:,\s*p\.\s*[0-9,\s\-]+)+)\)")
 CITE_NOPAGE = re.compile(r"\(FILE:\s*(.+?)\)")
+# the chunk header as the model echoes it (chunking.py writes it; FILES-SEEN repeats it verbatim)
+FILE_HEADER = re.compile(r"=== FILE: (.+?) \(fileId ([\w.-]+)[,)]")
 ENTRY_SPLIT = re.compile(r"(?m)^(?=\d{2}/\d{2}/\d{4}\s*(?:\(|$))")
 DATE_HEAD = re.compile(r"^(\d{2})/(\d{2})/(\d{4})")
 MAP_FILE = re.compile(r"map-0*(\d+)(?:-(\d+))?\.md$")
@@ -58,13 +61,25 @@ class Resolver:
     nothing, so they match by longest common prefix, and what cannot be
     resolved is reported rather than kept as a phantom."""
 
-    def __init__(self, real_names: list[str]) -> None:
+    def __init__(self, real_names: list[str], ids: dict[str, str] | None = None) -> None:
         self.real = list(real_names)
         self.norm = {_norm_name(n): n for n in self.real}
+        # id -> name: a citation carrying `[fileId X]` names THAT file, which is
+        # how the model tells two same-named attachments apart (fileref.py)
+        self.ids = dict(ids or {})
+        # name -> ids the CURRENT chunk carried (its `=== FILE:` headers). A bare
+        # citation of a name two files share means the one this chunk held --
+        # the model saw only that copy and had no reason to mark it.
+        self.scope: dict[str, set[str]] = {}
         self.unresolved: set[str] = set()
 
     def __call__(self, cited: str) -> str | None:
-        cited = cited.strip()
+        cited, fid = fileref.parse(cited, set(self.ids))
+        if fid:
+            return self.ids[fid]
+        held = self.scope.get(cited) or set()
+        if len(held) == 1 and next(iter(held)) in self.ids:
+            return self.ids[next(iter(held))]
         if cited in self.real:
             return cited
         c = _norm_name(cited)
@@ -89,6 +104,9 @@ def parse_maps(d: Path, maps: list[str]) -> tuple[list[dict[str, Any]], dict[str
     )
     for fn in maps:
         txt = (d / fn).read_text(encoding="utf-8")
+        seen: dict[str, set[str]] = defaultdict(set)
+        for name, fid in FILE_HEADER.findall(txt):
+            seen[name.strip()].add(fid)
         body = section(txt, "ENTRIES")
         if body and "none in this chunk" not in body.lower():
             for chunk in ENTRY_SPLIT.split(body):
@@ -109,6 +127,7 @@ def parse_maps(d: Path, maps: list[str]) -> tuple[list[dict[str, Any]], dict[str
                         "key": norm_provider(prov),
                         "text": chunk,
                         "src": fn,
+                        "seen": seen,
                     }
                 )
         for name, out in names:
@@ -122,6 +141,7 @@ def exhibit_numbers(entries: list[dict[str, Any]], resolve: Resolver) -> dict[st
     """Exhibit numbers by the first date each source file is cited on."""
     first_seen: dict[str, str] = {}
     for e in sorted(entries, key=lambda x: x["date"]):
+        resolve.scope = e.get("seen") or {}
         for fname, _ in CITE.findall(e["text"]):
             r = resolve(fname)
             if r:
@@ -156,6 +176,12 @@ def substitute(text: str, exhibit: dict[str, int], resolve: Resolver) -> str:
     return CITE_NOPAGE.sub(one_np, CITE.sub(one, text))
 
 
+def _substitute_entry(e: dict[str, Any], exhibit: dict[str, int], resolve: Resolver) -> str:
+    """Citations resolve in the scope of the chunk that wrote them."""
+    resolve.scope = e.get("seen") or {}
+    return substitute(e["text"], exhibit, resolve)
+
+
 def run(sr: StageRun) -> int:
     d = sr.slug_dir / "runs" / sr.unit.unit
     maps = sorted(p.name for p in d.iterdir() if MAP_FILE.match(p.name))
@@ -180,10 +206,9 @@ def run(sr: StageRun) -> int:
         sr.log(f"REFUSING TO ASSEMBLE: chunk(s) {refused} were refused and carry no entries")
         return 1
     entries, buckets = parse_maps(d, maps)
-    real_names = [
-        f["name"] + (f.get("ext") or "") for f in read_json(sr.slug_dir / "units" / f"{sr.unit.unit}.json", [])
-    ]
-    resolve = Resolver(real_names)
+    unit_files = read_json(sr.slug_dir / "units" / f"{sr.unit.unit}.json", [])
+    real_names = [f["name"] + (f.get("ext") or "") for f in unit_files]
+    resolve = Resolver(real_names, {f["id"]: n for f, n in zip(unit_files, real_names)})
     exhibit = exhibit_numbers(entries, resolve)
     (d / "exhibit_map.json").write_text(json.dumps(exhibit, indent=1), encoding="utf-8")
 
@@ -195,11 +220,11 @@ def run(sr: StageRun) -> int:
         (singles.append(grp[0]) if len(grp) == 1 else clusters.append((dt, key, grp)))
     with (d / "entries.md").open("w", encoding="utf-8") as fh:
         for e in sorted(singles, key=lambda x: x["date"]):
-            fh.write(substitute(e["text"], exhibit, resolve) + "\n\n")
+            fh.write(_substitute_entry(e, exhibit, resolve) + "\n\n")
     with (d / "clusters.md").open("w", encoding="utf-8") as fh:
         for dt, key, grp in clusters:
             fh.write(f"##### CLUSTER {dt} | {key} ({len(grp)} fragments)\n")
-            fh.write("\n---FRAGMENT-BREAK---\n".join(substitute(g["text"], exhibit, resolve) for g in grp) + "\n\n")
+            fh.write("\n---FRAGMENT-BREAK---\n".join(_substitute_entry(g, exhibit, resolve) for g in grp) + "\n\n")
     for fname, bucket in buckets.items():
         (d / fname).write_text("\n\n".join(bucket), encoding="utf-8")
     sr.log(f"{sr.unit.unit}: {len(maps)} map files, {len(entries)} entry fragments")

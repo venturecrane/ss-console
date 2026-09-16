@@ -274,6 +274,51 @@ def test_assemble_numbers_exhibits_substitutes_citations_and_keeps_both_page_gro
     assert (d / "clusters.md").read_text() == "" and "none observed" not in (d / "conflicts.md").read_text()
 
 
+def test_assemble_resolves_a_citation_carrying_a_file_id_to_that_file_not_its_namesake(
+    job_dir: Path, firm_headings: Path, data_root: Path
+) -> None:
+    """Two email attachments named image001.jpg: the model cites the second as
+    `image001.jpg [fileId msgatt-2]`. Name matching gave both one exhibit
+    number and the second's citation landed on the first's page."""
+    sr = _sr(job_dir, firm_headings, data_root)
+    text = MAP_OUT.replace("(FILE: mri report.pdf, p. 1, p. 3)", "(FILE: image001.jpg [fileId msgatt-2], p. 1)")
+    d = _seed_map(sr, text=text, usage=[{"chunk": 1, "stop": "end_turn"}])
+    (sr.slug_dir / "units" / "alpha.json").write_text(
+        json.dumps(
+            [
+                {"id": "a", "name": "clinic note", "ext": ".pdf"},
+                {"id": "msgatt-1", "name": "image001", "ext": ".jpg"},
+                {"id": "msgatt-2", "name": "image001 (2)", "ext": ".jpg"},
+            ]
+        )
+    )
+    assert assemble_stage.run(sr) == 0
+    assert json.loads((d / "exhibit_map.json").read_text()) == {"clinic note.pdf": 1, "image001 (2).jpg": 2}
+    assert "(Exhibit 2 - p. 1)" in (d / "entries.md").read_text()
+
+
+def test_assemble_resolves_a_bare_citation_of_a_shared_name_to_the_copy_the_chunk_held(
+    job_dir: Path, firm_headings: Path, data_root: Path
+) -> None:
+    """Two copies of a 51-page record with one name, each composed in its own
+    chunk (live 2026-09-15: 149 + 152 bare citations). The chunk's own
+    `=== FILE:` header says which copy it held; the model never saw the other."""
+    sr = _sr(job_dir, firm_headings, data_root)
+    d = _seed_map(sr, usage=[{"chunk": 1, "stop": "end_turn"}])
+    (sr.slug_dir / "units" / "alpha.json").write_text(
+        json.dumps(
+            [
+                {"id": "clinic_note", "name": "clinic note", "ext": ".pdf"},
+                {"id": "first_copy", "name": "mri report", "ext": ".pdf"},
+                {"id": "mri_report", "name": "mri report (2)", "ext": ".pdf"},
+            ]
+        )
+    )
+    assert assemble_stage.run(sr) == 0
+    # MAP_OUT's FILES-SEEN carries `=== FILE: mri report.pdf (fileId mri_report) ===`
+    assert json.loads((d / "exhibit_map.json").read_text()) == {"clinic note.pdf": 1, "mri report (2).pdf": 2}
+
+
 def test_assemble_clusters_same_date_same_provider_and_refuses_over_truncation(
     job_dir: Path, firm_headings: Path, data_root: Path
 ) -> None:
