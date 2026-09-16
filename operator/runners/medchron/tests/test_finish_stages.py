@@ -140,7 +140,7 @@ def test_a_lane_is_never_named_by_the_composers_placeholder_and_a_tie_goes_to_th
     job_dir: Path, firm: Path, data_root: Path
 ) -> None:
     """Live 2026-09-16: a client letter holding an ED record drew two INDEX rows,
-    'Emergency Department, Deepa Japra, MD' and 'Provider not identified in this
+    'Emergency Department, Jane Doe, MD' and 'Provider not identified in this
     chunk (per client letter)'; the tie broke by set order and the delivered
     package carried the placeholder as an exhibit title."""
     canon = group_stage.Canon(config_mod.load(str(firm)))

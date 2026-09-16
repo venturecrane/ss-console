@@ -44,7 +44,7 @@ EXHIBIT_PROVIDER = re.compile(r"^Exhibit \d+ - (.+?) - \d{2}-\d{2}-\d{4}")
 
 def institution(path: Path) -> str:
     """The first two words of an exhibit's provider, from its file name: the
-    part two exhibits of one institution share ("sacramento va" for the
+    part two exhibits of one institution share ("example va" for the
     medical center, its dental clinic and its pharmacy)."""
     m = EXHIBIT_PROVIDER.match(path.name)
     return " ".join((m.group(1) if m else path.stem).lower().split()[:2])
@@ -52,8 +52,8 @@ def institution(path: Path) -> str:
 
 def control_exhibit(claim_exhibit: int, pdfs: dict[int, Path]) -> int | None:
     """The exhibit a control is verified against. A control is a control only
-    when its page plausibly cannot carry the claim: a VA Pharmacy claim shown
-    the Sacramento VA exhibit's first pages met the same VA medication list
+    when its page plausibly cannot carry the claim: a VA pharmacy claim shown
+    the VA medical center exhibit's first pages met the same VA medication list
     and was SUPPORTED, and that one accepted control invalidated a round of
     1,998 verdicts that had discriminated 278 times (live 2026-09-16). So the
     other exhibit is the first from a DIFFERENT institution; only a matter
