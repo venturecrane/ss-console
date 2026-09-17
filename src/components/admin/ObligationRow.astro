@@ -1,0 +1,94 @@
+---
+import { closesWhen, type ObligationRow } from '../../lib/admin/obligations-view'
+
+/**
+ * One obligation, as rendered on both the client page and /admin/obligations.
+ *
+ * Shared rather than duplicated (UI-PATTERNS R7): the two surfaces show the
+ * same facts and must not drift into disagreeing about what an obligation
+ * looks like. `showCloses` is the only difference — the fleet view has room
+ * for the evidence line, the client page section does not.
+ *
+ * Every field here is conditional on the row actually carrying it. Nothing
+ * renders a placeholder: an obligation with no quote shows no quote, and one
+ * with no due date shows no date, because a confident-looking default in a
+ * register of commitments is a claim we cannot support.
+ */
+interface Props {
+  row: ObligationRow
+  showCloses?: boolean
+}
+
+const { row, showCloses = false } = Astro.props
+
+const TONE_CLASSES: Record<string, string> = {
+  good: 'bg-green-100 text-green-800',
+  warn: 'bg-amber-100 text-amber-800',
+  bad: 'bg-red-100 text-red-800',
+  neutral: 'bg-gray-100 text-gray-700',
+}
+
+const closes = showCloses ? closesWhen(row) : null
+---
+
+<li class="py-3 first:pt-0 last:pb-0">
+  <div class="flex items-start justify-between gap-4">
+    <div class="min-w-0 flex-1">
+      <div class="flex flex-wrap items-center gap-2">
+        <span
+          class={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${TONE_CLASSES[row.tone]}`}
+        >
+          {row.stateLabel}
+        </span>
+        <span class="text-xs text-[color:var(--ss-color-text-muted)]">
+          {row.kind.replace(/_/g, ' ')}
+        </span>
+        {
+          row.daysOverdue !== null && (
+            <span class="text-xs font-semibold text-[color:var(--ss-color-error)]">
+              {row.daysOverdue}d overdue
+            </span>
+          )
+        }
+      </div>
+
+      <p class="mt-1 text-sm text-[color:var(--ss-color-text-primary)]">{row.what}</p>
+
+      {
+        row.source_quote && (
+          <blockquote class="mt-1 border-l-2 border-[color:var(--ss-color-border)] pl-2 text-xs italic text-[color:var(--ss-color-text-secondary)]">
+            {row.source_quote}
+          </blockquote>
+        )
+      }
+
+      {
+        showCloses && (
+          <p class="mt-1 text-xs text-[color:var(--ss-color-text-muted)]">
+            {row.origin === 'captured' ? 'from' : 'imported from'} {row.source_ref}
+          </p>
+        )
+      }
+
+      {
+        closes && (
+          <p class="text-xs text-[color:var(--ss-color-text-muted)]">closes when {closes}</p>
+        )
+      }
+
+      {
+        row.park_reason && (
+          <p class="mt-1 text-xs text-[color:var(--ss-color-error)]">parked: {row.park_reason}</p>
+        )
+      }
+    </div>
+
+    {
+      row.due_at && (
+        <p class="whitespace-nowrap text-xs text-[color:var(--ss-color-text-secondary)]">
+          due {row.due_at}
+        </p>
+      )
+    }
+  </div>
+</li>

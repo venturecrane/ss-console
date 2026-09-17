@@ -1,0 +1,190 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro'
+import ObligationRow from '../../../components/admin/ObligationRow.astro'
+import { listOpenObligations, OBLIGATION_KINDS } from '../../../lib/db/obligations'
+import {
+  countByUrgency,
+  decorate,
+  distinctCustomers,
+  filterObligations,
+  groupByCustomer,
+  sortObligations,
+} from '../../../lib/admin/obligations-view'
+import { env } from 'cloudflare:workers'
+
+/**
+ * The obligation register — what SMD owes every client (ADR 0088).
+ *
+ * The answer to "what's on our plate", in one place. Rows arrive two ways:
+ * imported each run by scripts/ci-reconcile-obligations.mjs from the sources a
+ * machine can enumerate, and captured by an agent from a client letter with a
+ * verbatim quote the CLI string-matched before the row was allowed to exist.
+ *
+ * Read-only on purpose. Rows change state through the CLI and the reconciler,
+ * never from here: an obligation moves to `verified` only on a probe of the
+ * real surface, and a button on this page would be exactly the self-certified
+ * closure the register was built to prevent.
+ *
+ * Honest scope, the fleet-alerts idiom: the census line below reports which
+ * sources produced rows THIS cycle. A source that stopped producing them shows
+ * as a gap in the reconciler's run rather than as silence here.
+ */
+
+const session = Astro.locals.session!
+if (session.role !== 'admin') {
+  return Astro.redirect('/auth/sign-in')
+}
+
+const allOpen = await listOpenObligations(env.DB)
+const decorated = decorate(allOpen, new Date())
+const customers = distinctCustomers(decorated)
+
+const curCustomer = Astro.url.searchParams.get('customer') ?? 'all'
+const curKind = Astro.url.searchParams.get('kind') ?? 'all'
+const curUrgency = Astro.url.searchParams.get('urgency') ?? 'all'
+
+const filtered = sortObligations(
+  filterObligations(decorated, { customer: curCustomer, kind: curKind, urgency: curUrgency })
+)
+const counts = countByUrgency(filtered)
+const grouped = groupByCustomer(filtered)
+
+const URGENCY_OPTIONS = [
+  { value: 'all', label: 'Any urgency' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'due-soon', label: 'Due within a week' },
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'undated', label: 'No date' },
+]
+
+function kindLabel(kind: string): string {
+  return kind.replace(/_/g, ' ')
+}
+---
+
+<AdminLayout title="Obligations">
+  <section class="space-y-6">
+    <header class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-heading font-semibold text-[color:var(--ss-color-text-primary)]">
+          What we owe
+        </h2>
+        <p class="text-sm text-[color:var(--ss-color-text-secondary)] mt-1">
+          Every obligation across every client. Imported from the systems that already know, and
+          captured from client letters with the sentence that created it.
+        </p>
+      </div>
+      <div class="text-right">
+        <p class="text-xs uppercase tracking-wide text-[color:var(--ss-color-text-muted)]">Open</p>
+        <p class="text-2xl font-bold text-[color:var(--ss-color-text-primary)]">{counts.total}</p>
+        {
+          counts.overdue > 0 && (
+            <p class="text-xs text-[color:var(--ss-color-error)] font-semibold">
+              {counts.overdue} overdue
+            </p>
+          )
+        }
+      </div>
+    </header>
+
+    <form method="get" class="flex flex-wrap items-end gap-3">
+      <label class="text-xs text-[color:var(--ss-color-text-secondary)]">
+        <span class="block mb-1">Client</span>
+        <select
+          name="customer"
+          class="rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] bg-white px-2 py-1 text-sm"
+        >
+          <option value="all" selected={curCustomer === 'all'}>All clients</option>
+          {
+            customers.map((c) => (
+              <option value={c} selected={c === curCustomer}>
+                {c}
+              </option>
+            ))
+          }
+        </select>
+      </label>
+      <label class="text-xs text-[color:var(--ss-color-text-secondary)]">
+        <span class="block mb-1">Kind</span>
+        <select
+          name="kind"
+          class="rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] bg-white px-2 py-1 text-sm"
+        >
+          <option value="all" selected={curKind === 'all'}>Any kind</option>
+          {
+            OBLIGATION_KINDS.map((k) => (
+              <option value={k} selected={k === curKind}>
+                {kindLabel(k)}
+              </option>
+            ))
+          }
+        </select>
+      </label>
+      <label class="text-xs text-[color:var(--ss-color-text-secondary)]">
+        <span class="block mb-1">Urgency</span>
+        <select
+          name="urgency"
+          class="rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] bg-white px-2 py-1 text-sm"
+        >
+          {
+            URGENCY_OPTIONS.map((o) => (
+              <option value={o.value} selected={o.value === curUrgency}>
+                {o.label}
+              </option>
+            ))
+          }
+        </select>
+      </label>
+      <button
+        type="submit"
+        class="rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] bg-white px-3 py-1.5 text-sm text-[color:var(--ss-color-text-primary)] hover:border-[color:var(--ss-color-primary)]"
+      >
+        Apply
+      </button>
+    </form>
+
+    <div
+      class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card"
+    >
+      {
+        allOpen.length === 0 ? (
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)]">
+            Nothing outstanding across any client.
+          </p>
+        ) : filtered.length === 0 ? (
+          <p class="text-sm text-[color:var(--ss-color-text-secondary)]">
+            No obligations match the current filters.{' '}
+            <a
+              href="/admin/obligations"
+              class="text-[color:var(--ss-color-action)] hover:underline"
+            >
+              Clear filters
+            </a>
+            .
+          </p>
+        ) : (
+          <div class="space-y-6">
+            {[...grouped.entries()].map(([slug, rows]) => (
+              <section>
+                <h3 class="text-xs font-mono uppercase tracking-wide text-[color:var(--ss-color-text-muted)] mb-2">
+                  {slug} ({rows.length})
+                </h3>
+                <ul class="divide-y divide-[color:var(--ss-color-border-subtle)]">
+                  {rows.map((row) => (
+                    <ObligationRow row={row} showCloses />
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+        )
+      }
+    </div>
+
+    <p class="text-xs text-[color:var(--ss-color-text-muted)]">
+      Rows change state through the reconciler, which probes the real surface, and through
+      <code>.claude/bin/register</code>. Nothing is marked done from this page: an obligation
+      reaches verified only when something observed the far end.
+    </p>
+  </section>
+</AdminLayout>

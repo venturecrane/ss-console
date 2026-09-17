@@ -237,7 +237,15 @@ export function pickTopDriverByDelta(
  *   `details_json` for drill-down) and carry 0 sentinels for the
  *   cost-specific columns. The dashboard reader switches on `source`.
  */
-export type AlertSource = 'cost' | 'sentry' | 'healthchecks' | 'audit_integrity'
+export type AlertSource =
+  | 'cost'
+  | 'sentry'
+  | 'healthchecks'
+  | 'audit_integrity'
+  // Written by scripts/ci-reconcile-obligations.mjs: client work that is
+  // overdue, certified by no CI run, or a source class that stopped producing
+  // obligations (ADR 0088, migration 0118).
+  | 'obligation'
 
 export interface CostAnomalyAlertRow {
   entity_id: string

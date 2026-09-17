@@ -44,8 +44,31 @@ export function alertSeverity(row: CostAnomalyAlertRow): AlertSeverity {
     case 'sentry':
     case 'healthchecks':
       return 'warning'
+    case 'obligation':
+      // The reconciler already decided this — an obligation a week past due is
+      // critical, a fresh one is a warning, an unwitnessed certification is
+      // always critical. Re-deriving it here from the columns would guess at
+      // what the writer already knew; reading a malformed payload falls back to
+      // warning rather than inventing a severity.
+      return obligationSeverity(row.details_json)
     default:
       return 'info'
+  }
+}
+
+function obligationSeverity(detailsJson: string | null): AlertSeverity {
+  if (!detailsJson) return 'warning'
+  try {
+    const parsed: unknown = JSON.parse(detailsJson)
+    const severity =
+      typeof parsed === 'object' && parsed !== null
+        ? (parsed as { severity?: unknown }).severity
+        : undefined
+    return severity === 'critical' || severity === 'warning' || severity === 'info'
+      ? severity
+      : 'warning'
+  } catch {
+    return 'warning'
   }
 }
 
@@ -57,6 +80,10 @@ export function alertSeverity(row: CostAnomalyAlertRow): AlertSeverity {
 export function alertLink(row: CostAnomalyAlertRow): string {
   const slug = encodeURIComponent(row.customer_slug)
   if (row.source === 'cost') return `/admin/operator/costs/${slug}`
+  // An obligation alert is about work owed, not about the seat: it belongs on
+  // the register filtered to that client, where the row's source quote and the
+  // evidence that would close it are visible.
+  if (row.source === 'obligation') return `/admin/obligations?customer=${slug}`
   return `/admin/operator/${slug}`
 }
 

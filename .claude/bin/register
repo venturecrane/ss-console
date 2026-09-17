@@ -1,0 +1,26 @@
+#!/bin/bash
+#
+# register -- record an obligation SMD owes a client (ADR 0088).
+#
+#   .claude/bin/register add --client <slug> --kind <kind> --key <stable-key> \
+#       --what "<sentence>" --source <ref> --quote "<verbatim from the source>" \
+#       [--due <date> --date-quote "<verbatim containing that date>"]
+#   .claude/bin/register add --kind none --client <slug> --why "<why nothing was owed>"
+#   .claude/bin/register sync
+#   .claude/bin/register list [--client <slug>]
+#
+# Use this for an obligation stated in a CLIENT LETTER. Everything else --
+# GitHub issues, alert state, ledger rows, change requests -- is imported by
+# scripts/ci-reconcile-obligations.sh each run, and recording those by hand
+# just creates a second copy that drifts.
+#
+# The quote is checked against the source file and the row is REFUSED if it is
+# not there. That is not a formality: it is the only mechanical defence against
+# an obligation that reads plausibly and was never actually promised.
+set -u
+DIR=$(cd "$(dirname "$0")/.." && pwd)   # .claude/
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "register: not in a git tree" >&2; exit 1; }
+LIB="$DIR/hooks/lib/register.mjs"
+[ -f "$LIB" ] || LIB="$ROOT/.claude/hooks/lib/register.mjs"
+
+exec node "$LIB" "$@"

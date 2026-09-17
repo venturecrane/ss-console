@@ -1,0 +1,458 @@
+/**
+ * The obligation reconciler's controls (ADR 0088).
+ *
+ * The house pattern from tests/config-reconcile.test.ts: run the real script,
+ * with its D1 and gh calls replaced by stubs on disk, and inject faults by env.
+ * Testing extracted pure functions alone would prove the logic and miss the
+ * thing that actually breaks — a script that exits 0 on a read it never made.
+ *
+ * Every control here gets a case that would FAIL if the control were removed.
+ * The three that carry the design:
+ *
+ *   - An empty register exits 1 ONCE A PRIOR RUN SAW ROWS, and exits 0 before
+ *     that. Both halves matter: the first catches a broken selector, the second
+ *     stops the reconciler crying wolf from the day it ships, which is how the
+ *     cadence engine trained everyone to ignore it.
+ *   - A probeable surface that will not answer is a BROKEN CONTROL (exit 1),
+ *     never a finding. "I could not look" and "it is not there" demand opposite
+ *     responses, and conflating them is how an unprobeable class grows behind a
+ *     green build.
+ *   - A source class holding artifacts and producing zero obligations raises a
+ *     capture gap. This is the only assertion in the suite that can catch the
+ *     register's own silence.
+ */
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { execFileSync } from 'child_process'
+import { mkdtempSync, writeFileSync, rmSync, chmodSync, readFileSync, existsSync } from 'fs'
+import { tmpdir } from 'os'
+import { join, resolve } from 'path'
+
+const SCRIPT = resolve(process.cwd(), 'scripts/ci-reconcile-obligations.ts')
+
+let dir: string
+let statePath: string
+
+/**
+ * A stand-in for `wrangler d1 execute`, backed by a JSON file the test mutates.
+ * It answers the handful of SELECTs the reconciler issues and records every
+ * write, so a test can assert what the run DID, not merely what it printed.
+ */
+const D1_STUB = `#!/usr/bin/env node
+const fs = require('fs')
+const state = JSON.parse(fs.readFileSync(process.env.STATE_PATH, 'utf8'))
+const sql = process.argv[3] || ''
+
+if (process.env.FAKE_D1_UNREADABLE === '1') { process.exit(3) }
+if (process.env.FAKE_D1_GARBAGE === '1') { process.stdout.write('not json'); process.exit(0) }
+
+function out(results) { process.stdout.write(JSON.stringify([{ results, success: true }])) }
+
+if (/^INSERT|^UPDATE/i.test(sql.trim())) {
+  state.writes.push(sql)
+  fs.writeFileSync(process.env.STATE_PATH, JSON.stringify(state, null, 2))
+  return out([])
+}
+if (/FROM customer_configs/i.test(sql)) return out(state.seats)
+if (/FROM fleet_alert_state/i.test(sql) && /status = 'open'/i.test(sql)) return out(state.alert_state)
+if (/FROM fleet_alert_state/i.test(sql)) return out(state.alert_probe ?? [])
+if (/FROM operator_change_requests/i.test(sql)) return out(state.change_requests ?? [])
+if (/AS total/i.test(sql)) return out([{ total: state.obligations.length, universe: state.obligations.filter(o => !['closed','cancelled','void'].includes(o.state)).length }])
+if (/MAX\\(total_rows\\)/i.test(sql)) return out([{ hwm: state.high_water_mark ?? null }])
+if (/LEFT JOIN reconcile_runs/i.test(sql)) return out(state.unwitnessed ?? [])
+if (/GROUP BY origin_source/i.test(sql)) return out(state.census ?? [])
+if (/FROM client_obligations/i.test(sql)) return out(state.obligations.filter(o => !['closed','cancelled','void'].includes(o.state)))
+out([])
+`
+
+/**
+ * A stand-in for `gh`. The two faults are separate on purpose: an unreachable
+ * ISSUE LIST fails during import, an unreachable ISSUE VIEW fails during the
+ * per-row probe. Collapsing them into one switch makes the probe test pass for
+ * the wrong reason — it exits 1 at import and never reaches the probe at all,
+ * which is exactly what the first draft of this stub did.
+ */
+const GH_STUB = `#!/usr/bin/env node
+const fs = require('fs')
+const state = JSON.parse(fs.readFileSync(process.env.STATE_PATH, 'utf8'))
+const args = process.argv.slice(2)
+if (args[1] === 'list') {
+  if (process.env.FAKE_GH_LIST_UNREACHABLE === '1') { process.exit(4) }
+  process.stdout.write(JSON.stringify(state.github_issues ?? [])); process.exit(0)
+}
+if (args[1] === 'view') {
+  if (process.env.FAKE_GH_VIEW_UNREACHABLE === '1') { process.exit(4) }
+  process.stdout.write(state.github_issue_state ?? 'OPEN'); process.exit(0)
+}
+process.stdout.write('')
+`
+
+interface State {
+  seats: { customer_slug: string; entity_id: string }[]
+  obligations: Record<string, unknown>[]
+  alert_state: { customer_slug: string; condition: string }[]
+  alert_probe?: { status: string }[]
+  change_requests?: Record<string, unknown>[]
+  github_issues?: { number: number; title: string }[]
+  github_issue_state?: string
+  census?: { customer_slug: string; origin_source: string; n: number }[]
+  unwitnessed?: Record<string, unknown>[]
+  high_water_mark?: number | null
+  writes: string[]
+}
+
+function setState(state: Partial<State>): void {
+  const full: State = {
+    seats: [{ customer_slug: 'ashton-price', entity_id: 'e-ap' }],
+    obligations: [],
+    alert_state: [],
+    writes: [],
+    ...state,
+  }
+  writeFileSync(statePath, JSON.stringify(full, null, 2))
+}
+
+function readState(): State {
+  return JSON.parse(readFileSync(statePath, 'utf8'))
+}
+
+function run(env: Record<string, string> = {}): { code: number; stdout: string } {
+  try {
+    const stdout = execFileSync('npx', ['tsx', SCRIPT], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        STATE_PATH: statePath,
+        SS_RECONCILE_D1_CMD: join(dir, 'd1-stub.cjs'),
+        SS_RECONCILE_GH_CMD: join(dir, 'gh-stub.cjs'),
+        ...env,
+      },
+    })
+    return { code: 0, stdout }
+  } catch (err) {
+    const e = err as { status: number; stdout: string; stderr: string }
+    return { code: e.status, stdout: `${e.stdout ?? ''}${e.stderr ?? ''}` }
+  }
+}
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'obl-reconcile-'))
+  statePath = join(dir, 'state.json')
+  for (const [name, body] of [
+    ['d1-stub.cjs', D1_STUB],
+    ['gh-stub.cjs', GH_STUB],
+  ]) {
+    const path = join(dir, name)
+    writeFileSync(path, body)
+    chmodSync(path, 0o755)
+  }
+  setState({})
+})
+
+afterEach(() => rmSync(dir, { recursive: true, force: true }))
+
+describe('the reconciler exists and is wired', () => {
+  it('ships the script the workflow invokes', () => {
+    expect(existsSync(SCRIPT)).toBe(true)
+  })
+
+  it('is actually scheduled, with the bash -e guard the house protocol needs', () => {
+    // A reconciler nobody runs is a reconciler that cannot fail. This asserts
+    // the workflow exists, has a cron, and keeps the `|| STATUS=$?` guard whose
+    // removal silently skips the issue-opening step (ss#2307).
+    const workflow = readFileSync(
+      resolve(process.cwd(), '.github/workflows/obligation-reconcile.yml'),
+      'utf8'
+    )
+    expect(workflow).toMatch(/schedule:/)
+    expect(workflow).toMatch(/cron:/)
+    expect(workflow).toMatch(/\|\| STATUS=\$\?/)
+    expect(workflow).toMatch(/reconcile-series:/)
+  })
+})
+
+describe('denominators and the empty register', () => {
+  it('exits 0 on an empty register before any run has seen rows', () => {
+    setState({ high_water_mark: null })
+    const result = run()
+    expect(result.code).toBe(0)
+    expect(result.stdout).toMatch(/obligations total:\s+0/)
+  })
+
+  it('exits 1 on an empty register once a prior run saw rows', () => {
+    // The broken-selector case. Without the high-water mark this is
+    // indistinguishable from a quiet week.
+    setState({ high_water_mark: 42 })
+    const result = run()
+    expect(result.code).toBe(1)
+    expect(result.stdout).toMatch(/prior run saw 42 rows/)
+  })
+
+  it('prints both denominators, not one', () => {
+    setState({
+      obligations: [
+        {
+          obligation_id: 'o1',
+          customer_slug: 'ashton-price',
+          entity_id: 'e-ap',
+          kind: 'request',
+          what: 'x',
+          state: 'open',
+          evidence_surface: null,
+          evidence_locator: null,
+        },
+      ],
+    })
+    const result = run()
+    expect(result.stdout).toMatch(/obligations total:\s+1/)
+    expect(result.stdout).toMatch(/universe \(non-terminal\):\s+1/)
+  })
+
+  it('exits 1 when D1 cannot be read at all', () => {
+    const result = run({ FAKE_D1_UNREADABLE: '1' })
+    expect(result.code).toBe(1)
+    expect(result.stdout).toMatch(/cannot evaluate/)
+  })
+
+  it('exits 1 rather than 0 when D1 returns garbage', () => {
+    // Falsifier: an unparseable response must not read as an empty result set,
+    // which would look exactly like a converged run.
+    const result = run({ FAKE_D1_GARBAGE: '1' })
+    expect(result.code).toBe(1)
+  })
+
+  it('exits 1 when there are no seats, instead of reporting converged', () => {
+    setState({ seats: [] })
+    const result = run()
+    expect(result.code).toBe(1)
+  })
+})
+
+describe('findings', () => {
+  const overdueRow = {
+    obligation_id: 'o-late',
+    customer_slug: 'ashton-price',
+    entity_id: 'e-ap',
+    kind: 'deliverable',
+    what: 'Send the signature copies.',
+    state: 'active',
+    due_at: '2026-01-01',
+    evidence_surface: null,
+    evidence_locator: null,
+    evidence_class: 'probeable',
+  }
+
+  it('exits 2 and names the overdue row', () => {
+    setState({ obligations: [overdueRow] })
+    const result = run()
+    expect(result.code).toBe(2)
+    expect(result.stdout).toMatch(/overdue/)
+    expect(result.stdout).toMatch(/o-late/)
+  })
+
+  it('writes an alert row keyed per obligation, not per client', () => {
+    // Two overdue obligations for one client on one day must stay two rows:
+    // the composite key would otherwise collapse them and the second would
+    // vanish.
+    setState({
+      obligations: [
+        overdueRow,
+        { ...overdueRow, obligation_id: 'o-late-2', what: 'Second thing.' },
+      ],
+    })
+    run()
+    const alertWrites = readState().writes.filter((w) => w.includes('cost_anomaly_alerts'))
+    expect(alertWrites).toHaveLength(2)
+    expect(alertWrites[0]).toContain("'obligation'")
+    expect(alertWrites[0]).toContain('obligation:o-late:obligation_overdue')
+    expect(alertWrites[1]).toContain('obligation:o-late-2:obligation_overdue')
+  })
+
+  it('does not alarm on an undated obligation', () => {
+    // Quote-grounding protects the citation, not the interpretation, so a row
+    // with no grounded date must never page anyone.
+    setState({ obligations: [{ ...overdueRow, due_at: null }] })
+    const result = run()
+    expect(result.code).toBe(0)
+    expect(readState().writes.filter((w) => w.includes('cost_anomaly_alerts'))).toHaveLength(0)
+  })
+
+  it('flags a certification no CI workflow stands behind', () => {
+    setState({
+      unwitnessed: [
+        {
+          obligation_id: 'o-forged',
+          customer_slug: 'ashton-price',
+          entity_id: 'e-ap',
+          kind: 'deliverable',
+          what: 'Closed by hand.',
+          due_at: null,
+          source_ref: 'x',
+        },
+      ],
+    })
+    const result = run()
+    expect(result.code).toBe(2)
+    expect(result.stdout).toMatch(/no CI workflow stands behind/)
+  })
+})
+
+describe('cannot-evaluate splits by evidence class', () => {
+  it('treats an unreadable probeable surface as a broken control, exit 1', () => {
+    setState({
+      obligations: [
+        {
+          obligation_id: 'o-probe',
+          customer_slug: 'ashton-price',
+          entity_id: 'e-ap',
+          kind: 'product_defect',
+          what: 'Blocked by a defect.',
+          state: 'active',
+          due_at: null,
+          evidence_class: 'probeable',
+          evidence_surface: 'github',
+          evidence_locator: 'venturecrane/ss-console#999',
+        },
+      ],
+    })
+    // The LIST call must still succeed, or this exits during import and never
+    // reaches the probe it is meant to test.
+    const result = run({ FAKE_GH_VIEW_UNREACHABLE: '1' })
+    expect(result.code).toBe(1)
+    expect(result.stdout).toMatch(/control broken/)
+    expect(result.stdout).toMatch(/attested: 0, probeable: 1/)
+  })
+
+  it('treats a missing attestation as a finding, exit 2', () => {
+    // The Smokeball class: CI holds no credential for it, so a stale receipt is
+    // something to report, not a broken control.
+    setState({
+      obligations: [
+        {
+          obligation_id: 'o-attest',
+          customer_slug: 'ashton-price',
+          entity_id: 'e-ap',
+          kind: 'deliverable',
+          what: 'Filed into Smokeball.',
+          state: 'delivered',
+          due_at: null,
+          evidence_class: 'attested',
+          evidence_surface: 'smokeball',
+          evidence_locator: 'matter/201094/doc/7',
+          evidence_last_verified_at: null,
+        },
+      ],
+    })
+    const result = run()
+    expect(result.code).toBe(2)
+    expect(result.stdout).toMatch(/attested: 1, probeable: 0/)
+  })
+})
+
+describe('import', () => {
+  it('derives obligations from client-labelled GitHub issues', () => {
+    setState({ github_issues: [{ number: 2794, title: 'Chronology gate rejects a scanned PDF' }] })
+    run()
+    const writes = readState().writes.filter((w) => w.includes('client_obligations'))
+    expect(writes.some((w) => w.includes('gh-2794'))).toBe(true)
+    expect(writes.some((w) => w.includes('product_defect'))).toBe(true)
+  })
+
+  it('derives a renewal from an expiring connector token', () => {
+    setState({
+      alert_state: [
+        { customer_slug: 'ashton-price', condition: 'connector_token_expiring:smokeball' },
+      ],
+    })
+    run()
+    const writes = readState().writes.filter((w) => w.includes('client_obligations'))
+    expect(writes.some((w) => w.includes("'renewal'"))).toBe(true)
+    expect(writes.some((w) => w.includes('smokeball'))).toBe(true)
+  })
+
+  it('derives an incident from any other open seat condition', () => {
+    setState({ alert_state: [{ customer_slug: 'ashton-price', condition: 'scheduler_error' }] })
+    run()
+    const writes = readState().writes.filter((w) => w.includes('client_obligations'))
+    expect(writes.some((w) => w.includes("'incident'"))).toBe(true)
+  })
+
+  it('re-import upserts instead of duplicating', () => {
+    setState({ github_issues: [{ number: 2794, title: 'Same issue' }] })
+    run()
+    const writes = readState().writes.filter((w) => w.includes('client_obligations'))
+    expect(writes[0]).toContain('ON CONFLICT(customer_slug, kind, stable_key) DO UPDATE SET')
+    // State is deliberately absent from the update list: re-importing proves an
+    // obligation is still stated, and must never reopen one somebody closed.
+    expect(writes[0]).not.toContain('state =')
+  })
+
+  it('exits 1 when GitHub cannot be read, rather than importing nothing quietly', () => {
+    const result = run({ FAKE_GH_LIST_UNREACHABLE: '1' })
+    expect(result.code).toBe(1)
+  })
+})
+
+describe('the coverage census', () => {
+  it('raises a gap when a source holds artifacts and produced no obligations', () => {
+    // The register's own silence, made visible. Without this, capture could
+    // stop entirely and every other control would still report healthy.
+    setState({
+      github_issues: [
+        { number: 1, title: 'a' },
+        { number: 2, title: 'b' },
+      ],
+      census: [],
+    })
+    const result = run()
+    expect(result.stdout).toMatch(/GAP/)
+    expect(result.stdout).toMatch(/capture gap: github holds 2 artifacts/)
+    expect(result.code).toBe(2)
+  })
+
+  it('does not raise a gap when the source is represented', () => {
+    // Falsifier for the census: if it flagged regardless of counts, the test
+    // above would pass while the control was meaningless.
+    setState({
+      github_issues: [{ number: 1, title: 'a' }],
+      census: [{ customer_slug: 'ashton-price', origin_source: 'github', n: 1 }],
+    })
+    const result = run()
+    expect(result.stdout).not.toMatch(/GAP/)
+  })
+
+  it('prints the census with both sides of every comparison', () => {
+    setState({
+      github_issues: [{ number: 1, title: 'a' }],
+      census: [{ customer_slug: 'ashton-price', origin_source: 'github', n: 1 }],
+    })
+    const result = run()
+    expect(result.stdout).toMatch(/coverage census:/)
+    expect(result.stdout).toMatch(/github\s+artifacts\s+1\s+obligations\s+1/)
+  })
+})
+
+describe('dry run', () => {
+  it('classifies and reports without writing anything', () => {
+    setState({
+      obligations: [
+        {
+          obligation_id: 'o1',
+          customer_slug: 'ashton-price',
+          entity_id: 'e-ap',
+          kind: 'deliverable',
+          what: 'x',
+          state: 'active',
+          due_at: '2026-01-01',
+          evidence_class: 'probeable',
+          evidence_surface: null,
+          evidence_locator: null,
+        },
+      ],
+      github_issues: [{ number: 7, title: 'y' }],
+    })
+    const result = run({ SS_RECONCILE_DRY_RUN: '1' })
+    expect(result.code).toBe(2)
+    expect(readState().writes).toHaveLength(0)
+  })
+})
