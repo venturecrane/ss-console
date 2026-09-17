@@ -737,3 +737,77 @@ def test_a_different_matter_is_not_a_duplicate(verbs):
         envelope=envelope(matter={"id": "m-9", "number": "2026-PI-999", "title": "Other v. Other"}),
     )
     assert other["accepted"] is True
+
+
+# ---- the covered/uncovered record (2026-09-17) --------------------------------
+def _submitted(v):
+    """One accepted job id, the way the other tests get one."""
+    resp = call(v, "medchron_job_submit", peer_uid=AGENT_UID, envelope=envelope())
+    assert resp["accepted"], resp
+    return resp["job_id"]
+
+
+def test_a_delivery_records_what_it_covered_and_what_it_did_not(verbs):
+    """Routine 11's UPDATE reads only what a delivery did not cover (agreement
+    Exhibit A), so the delivery has to write that down. Before 2026-09-17 no
+    layer did, and an update either re-read the whole file or guessed at a delta."""
+    v, _ledger, _queue = verbs
+    job_id = _submitted(v)
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=job_id, state="running", fields={})
+    resp = call(
+        v,
+        "medchron_job_record",
+        peer_uid=ROOT,
+        job_id=job_id,
+        state="delivered",
+        fields={
+            "documents": 4,
+            "pages": 40,
+            "cents": 100,
+            "covered": {"covered": ["b", "a"], "uncovered": ["c"], "pulled": 3},
+        },
+    )
+    assert resp["ok"], resp
+
+    job = call(v, "medchron_job_status", job_id=job_id)["job"]
+    assert job["covered_document_ids"] == ["a", "b"]
+    assert job["uncovered_document_ids"] == ["c"]
+
+
+def test_a_job_with_no_record_reads_as_unknown_not_as_nothing_covered(verbs):
+    """Nothing-was-covered and nobody-wrote-it-down send an update in opposite
+    directions, so an absent record stays absent rather than reading empty."""
+    v, _ledger, _queue = verbs
+    job_id = _submitted(v)
+    job = call(v, "medchron_job_status", job_id=job_id)["job"]
+    assert job["covered_document_ids"] is None
+    assert job["uncovered_document_ids"] is None
+
+
+def test_a_coverage_payload_that_does_not_add_up_is_refused(verbs):
+    """The set arithmetic is the falsifier: an overlap lets an update decide
+    either way, and a total that disagrees with what the run pulled means a
+    stage dropped rows between the coverage gate and this record."""
+    v, _ledger, _queue = verbs
+    job_id = _submitted(v)
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=job_id, state="running", fields={})
+
+    for bad, why in [
+        ({"covered": ["a"], "uncovered": ["a"]}, "share"),
+        ({"covered": ["a", "a"], "uncovered": []}, "repeats"),
+        ({"covered": ["a"], "uncovered": ["b"], "pulled": 5}, "pulled"),
+        ({"covered": "a", "uncovered": []}, "list"),
+        ({"covered": [""], "uncovered": []}, "document id"),
+    ]:
+        with pytest.raises(ValueError) as exc:
+            call(
+                v,
+                "medchron_job_record",
+                peer_uid=ROOT,
+                job_id=job_id,
+                state="delivered",
+                fields={"covered": bad},
+            )
+        assert why in str(exc.value), (bad, str(exc.value))
+
+    assert call(v, "medchron_job_status", job_id=job_id)["job"]["covered_document_ids"] is None

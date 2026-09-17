@@ -38,6 +38,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from .covered import delivery_fields
+
 from . import config as config_mod, job as job_mod
 
 logger = logging.getLogger("medchron.daemon")
@@ -453,8 +455,9 @@ class Daemon:
             if reason:
                 fields["reason"] = str(reason)[:500]
             if state == "delivered":
-                fields["folder_id"] = worst.get("folder_id")
-                fields["delivery"] = {"files": list(worst.get("files") or [])}
+                # The delivery's own fields, including the covered/uncovered
+                # document id sets a later UPDATE reads its delta from.
+                fields.update(delivery_fields(worst, outcomes))
         try:
             self.broker.record(job_id, state, fields)
         except BrokerError as exc:
