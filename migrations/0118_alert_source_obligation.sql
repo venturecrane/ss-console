@@ -25,7 +25,7 @@
 -- carries a different meaning for the Captain. Borrowing a source tag to dodge
 -- a rebuild is how an alert feed stops meaning anything.
 --
--- Written by: scripts/ci-reconcile-obligations.sh (obligation_overdue,
+-- Written by: scripts/ci-reconcile-obligations.ts (obligation_overdue,
 --             obligation_unverifiable, obligation_capture_gap).
 -- Read by:    src/lib/admin/fleet-alerts.ts, workers/fleet-alerts/src/sink-notify.ts.
 

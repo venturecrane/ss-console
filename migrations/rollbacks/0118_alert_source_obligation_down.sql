@@ -2,7 +2,7 @@
 -- cost_anomaly_alerts.source back to the pre-obligation vocabulary.
 --
 -- WHAT BREAKS IF YOU RUN THIS WHILE THE CODE IS STILL DEPLOYED:
--- scripts/ci-reconcile-obligations.sh writes source='obligation' rows and will
+-- scripts/ci-reconcile-obligations.ts writes source='obligation' rows and will
 -- fail its INSERT against the narrowed CHECK, so the reconciler exits non-zero
 -- and its workflow goes red. That is the loud failure, and it is preferable to
 -- the alternative: overdue client work silently ceasing to reach the Captain.

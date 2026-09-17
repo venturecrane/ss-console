@@ -47,6 +47,20 @@ export const STATE_TONE: Record<ObligationState, 'neutral' | 'good' | 'warn' | '
   void: 'neutral',
 }
 
+/**
+ * The status-badge key for an obligation state.
+ *
+ * The badge map in src/lib/ui/status-badge.ts is shared across every admin
+ * lifecycle, and two of its keys already mean something else: `active` is an
+ * ONGOING ENGAGEMENT and renders complete-green. An obligation that is merely
+ * being worked would then wear the colour of one that is finished, which is the
+ * exact claim-vs-observation blur this register exists to remove. It borrows
+ * `in_progress` instead, which is already registered and means precisely that.
+ */
+export function badgeStatusFor(state: ObligationState): string {
+  return state === 'active' ? 'in_progress' : state
+}
+
 export interface ObligationRow extends Obligation {
   urgency: Urgency
   daysOverdue: number | null

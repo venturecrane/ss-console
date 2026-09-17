@@ -56,7 +56,10 @@ if (/^INSERT|^UPDATE/i.test(sql.trim())) {
 if (/FROM customer_configs/i.test(sql)) return out(state.seats)
 if (/FROM fleet_alert_state/i.test(sql) && /status = 'open'/i.test(sql)) return out(state.alert_state)
 if (/FROM fleet_alert_state/i.test(sql)) return out(state.alert_probe ?? [])
-if (/FROM operator_change_requests/i.test(sql)) return out(state.change_requests ?? [])
+if (/FROM operator_change_requests/i.test(sql)) {
+  if (process.env.FAKE_D1_CR_UNREADABLE === '1') { process.exit(5) }
+  return out(state.change_requests ?? [])
+}
 if (/AS total/i.test(sql)) return out([{ total: state.obligations.length, universe: state.obligations.filter(o => !['closed','cancelled','void'].includes(o.state)).length }])
 if (/MAX\\(total_rows\\)/i.test(sql)) return out([{ hwm: state.high_water_mark ?? null }])
 if (/LEFT JOIN reconcile_runs/i.test(sql)) return out(state.unwitnessed ?? [])
@@ -454,5 +457,72 @@ describe('dry run', () => {
     const result = run({ SS_RECONCILE_DRY_RUN: '1' })
     expect(result.code).toBe(2)
     expect(readState().writes).toHaveLength(0)
+  })
+})
+
+describe('regressions found in review', () => {
+  it('records a converged run as converged, not as findings', () => {
+    // The run row was stamped before the convergence check, so a healthy pass
+    // was written to reconcile_runs as exit_code 2 forever. A ledger that
+    // disagrees with the process is the failure this register exists to end;
+    // it does not get an exemption in the register's own history table.
+    setState({
+      census: [{ customer_slug: 'ashton-price', origin_source: 'github', n: 1 }],
+      github_issues: [{ number: 1, title: 'a' }],
+    })
+    const result = run()
+    expect(result.code).toBe(0)
+
+    const stamp = readState().writes.find((w) => w.includes('UPDATE reconcile_runs'))
+    expect(stamp).toBeTruthy()
+    expect(stamp).toMatch(/exit_code\s*=\s*0/)
+  })
+
+  it('records a findings run as findings', () => {
+    // Falsifier for the assertion above: if exit_code were hardcoded either
+    // way, one of these two tests would fail.
+    setState({
+      obligations: [
+        {
+          obligation_id: 'o-late',
+          customer_slug: 'ashton-price',
+          entity_id: 'e-ap',
+          kind: 'deliverable',
+          what: 'late thing',
+          state: 'active',
+          due_at: '2026-01-01',
+          evidence_class: 'probeable',
+          evidence_surface: null,
+          evidence_locator: null,
+        },
+      ],
+    })
+    const result = run()
+    expect(result.code).toBe(2)
+    const stamp = readState().writes.find((w) => w.includes('UPDATE reconcile_runs'))
+    expect(stamp).toMatch(/exit_code\s*=\s*2/)
+  })
+
+  it('raises a capture gap as an ALERT, not only as a log line', () => {
+    // The handbook and the migration header both say a capture gap reaches the
+    // Captain. It previously only reached the Actions log, which would have made
+    // the one control that catches this design's own silence the one control he
+    // never sees.
+    setState({ github_issues: [{ number: 1, title: 'a' }], census: [] })
+    const result = run()
+    expect(result.code).toBe(2)
+
+    const alertWrites = readState().writes.filter((w) => w.includes('cost_anomaly_alerts'))
+    expect(alertWrites.some((w) => w.includes('obligation_capture_gap'))).toBe(true)
+  })
+
+  it('treats an unreadable change-request source as a control failure', () => {
+    // Its two sibling import reads escalate; this one used to swallow the
+    // error, which would let the census read "this source produced nothing"
+    // when the truth was "we never looked".
+    setState({})
+    const result = run({ FAKE_D1_CR_UNREADABLE: '1' })
+    expect(result.code).toBe(1)
+    expect(result.stdout).toMatch(/operator_change_requests unreadable/)
   })
 })

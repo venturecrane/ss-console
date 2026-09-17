@@ -222,7 +222,7 @@ export function validateCapture(args, opts = {}) {
   if (args.due) {
     const dateCheck = checkQuote(source.text, args['date-quote'])
     if (!dateCheck.ok) return { ok: false, error: 'date_quote_not_found', nearest: dateCheck.nearest }
-    if (!normalize(args['date-quote']).includes(normalizeDateForMatch(args.due))) {
+    if (!dateQuoteAnchorsDate(args['date-quote'], args.due)) {
       return { ok: false, error: 'date_quote_lacks_date' }
     }
   }
@@ -230,16 +230,63 @@ export function validateCapture(args, opts = {}) {
   return { ok: true, sourceKind, resolved: source.resolved }
 }
 
+const MONTHS = [
+  'january',
+  'february',
+  'march',
+  'april',
+  'may',
+  'june',
+  'july',
+  'august',
+  'september',
+  'october',
+  'november',
+  'december',
+]
+
 /**
- * Does the date quote actually mention the date?
+ * The forms a letter might legitimately use to state one date.
  *
- * Accepts an ISO date, a written month-day, or a recurring anchor phrasing
- * ("the 15th"), because that is how letters really state deadlines. The point
- * is that SOME textual anchor for the date exists in the source -- not that
- * the client wrote ISO 8601.
+ * A client writes "before October 15th", not "2026-10-15". An earlier version
+ * required the raw --due string to appear verbatim in the quote, which refused
+ * every properly-grounded obligation whose letter used ordinary English -- a
+ * false refusal on exactly the cases this gate exists to admit. The gate must
+ * be strict about whether the date is ANCHORED in the source, never about the
+ * client's formatting.
+ *
+ * Returns the accepted spellings; the caller passes if the quote contains any.
+ * A non-ISO --due (a recurring anchor like "the 15th") is matched literally,
+ * which is the right behaviour for a duty with no calendar date.
  */
-export function normalizeDateForMatch(due) {
-  return normalize(due)
+export function dateQuoteForms(due) {
+  const raw = normalize(due)
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw)
+  if (!iso) return [raw]
+
+  const month = MONTHS[Number(iso[2]) - 1]
+  const day = String(Number(iso[3]))
+  const year = iso[1]
+  if (!month) return [raw]
+
+  return [
+    raw, // 2026-10-15
+    `${month} ${day}`, // october 15
+    `${month} ${day}st`,
+    `${month} ${day}nd`,
+    `${month} ${day}rd`,
+    `${month} ${day}th`, // october 15th
+    `${day} ${month}`, // 15 october
+    `${month} ${day}, ${year}`, // october 15, 2026
+    `${iso[2]}/${day}/${year}`, // 10/15/2026
+    `${iso[2]}/${iso[3]}/${year}`,
+  ]
+}
+
+/** Does the date quote anchor the due date in the source's own words? */
+export function dateQuoteAnchorsDate(dateQuote, due) {
+  const quote = normalize(dateQuote)
+  return dateQuoteForms(due).some((form) => quote.includes(form))
 }
 
 export function inferSourceKind(ref) {
@@ -280,11 +327,18 @@ export function journalEntries() {
 
 /** Unsynced journal lines, newest state per obligation key. */
 export function unsyncedEntries() {
+  // The journal is append-only and ordered, so the LAST entry for a key is the
+  // current state of that obligation: a later unsynced write supersedes an
+  // earlier one, and a synced marker supersedes whatever it confirms.
+  //
+  // An earlier version only overwrote when the incoming entry was synced, which
+  // silently dropped a correction: journal "Old text" offline, correct it to
+  // "New text" while still offline, and sync would write the stale row and then
+  // mark the key done — losing the correction with no error. Last-wins is the
+  // only rule consistent with an append-only log.
   const byKey = new Map()
   for (const entry of journalEntries()) {
-    const key = `${entry.client}/${entry.kind}/${entry.key}`
-    const prior = byKey.get(key)
-    if (!prior || entry.synced) byKey.set(key, entry.synced ? { ...entry, synced: true } : entry)
+    byKey.set(`${entry.client}/${entry.kind}/${entry.key}`, entry)
   }
   return [...byKey.values()].filter((e) => !e.synced)
 }

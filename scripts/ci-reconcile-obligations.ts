@@ -513,7 +513,15 @@ export async function main(): Promise<number> {
       .all<{ id: string; customer_slug: string; summary: string | null }>()
     return res.results
   })
-  if (crRead.ok) imported.push(...importChangeRequests(crRead.rows, seatsBySlug))
+  if (!crRead.ok) {
+    // Consistent with the other two import reads: a source we cannot read is a
+    // control failure, not an empty source. Swallowing it would let the census
+    // conclude "this source produced nothing" when the truth is "we never
+    // looked" — the exact conflation the evidence-class split exists to stop.
+    console.error('cannot evaluate: operator_change_requests unreadable')
+    return EXIT_CANNOT_EVALUATE
+  }
+  imported.push(...importChangeRequests(crRead.rows, seatsBySlug))
 
   let importedWritten = 0
   if (!DRY_RUN) {
@@ -639,6 +647,26 @@ export async function main(): Promise<number> {
       findings.push(
         `::warning::capture gap: ${source} holds ${verdict.artifacts} artifacts and produced no obligations`
       )
+      // A capture gap means the register may have gone quiet on a whole source.
+      // Leaving it in the Actions log only would make the ONE control that can
+      // catch this design's own silence the one control the Captain never sees.
+      // It is raised per seat because the alert key is per entity.
+      for (const seat of seats) {
+        alerts.push({
+          entity_id: seat.entity_id,
+          customer_slug: seat.customer_slug,
+          alert_date: today,
+          driver: `obligation:${source}:obligation_capture_gap`,
+          summary: `Capture gap: ${source} holds ${verdict.artifacts} artifacts and produced no obligations.`,
+          details_json: JSON.stringify({
+            condition: 'obligation_capture_gap',
+            source,
+            artifacts: verdict.artifacts,
+            obligations: verdict.obligations,
+            severity: 'warning',
+          }),
+        })
+      }
     }
   }
 
@@ -660,6 +688,15 @@ export async function main(): Promise<number> {
     console.log(line)
   }
 
+  // Decide the outcome BEFORE recording it. An earlier version stamped the run
+  // row with "findings" unless a probe broke, so a converged run was recorded as
+  // a finding forever and reconcile_runs could never show a healthy pass — the
+  // ledger disagreeing with the process is the failure this whole register is
+  // built to prevent, and it does not get an exemption here.
+  const findingCount = overdue + cannotAttested + unwitnessed.rows.length + gaps
+  const exitCode =
+    cannotProbeable > 0 ? EXIT_CANNOT_EVALUATE : findingCount > 0 ? EXIT_FINDINGS : EXIT_CONVERGED
+
   if (!DRY_RUN) {
     for (const alert of alerts) await writeAlert(db, alert)
     try {
@@ -669,7 +706,7 @@ export async function main(): Promise<number> {
         verified,
         overdue,
         cannotEvaluate: cannotProbeable + cannotAttested,
-        exitCode: cannotProbeable > 0 ? EXIT_CANNOT_EVALUATE : EXIT_FINDINGS,
+        exitCode,
       })
     } catch {
       /* the run row is provenance, not the result; a failed stamp must not mask findings */
@@ -678,12 +715,11 @@ export async function main(): Promise<number> {
 
   // A broken probeable surface is the control failing, not a finding about the
   // work -- it must not be reported as "everything is fine except some rows".
-  if (cannotProbeable > 0) {
+  if (exitCode === EXIT_CANNOT_EVALUATE) {
     console.error(`reconcile: ${cannotProbeable} probeable surface(s) unreadable — control broken`)
     return EXIT_CANNOT_EVALUATE
   }
-  const findingCount = overdue + cannotAttested + unwitnessed.rows.length + gaps
-  if (findingCount > 0) {
+  if (exitCode === EXIT_FINDINGS) {
     console.log(
       `reconcile findings: ${overdue} overdue, ${cannotAttested} stale attestations, ${unwitnessed.rows.length} unwitnessed, ${gaps} capture gaps.`
     )

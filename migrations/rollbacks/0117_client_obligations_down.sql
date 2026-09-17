@@ -2,7 +2,7 @@
 --
 -- WHAT BREAKS IF YOU RUN THIS WHILE THE CODE IS STILL DEPLOYED: the admin
 -- client page's obligations section and /admin/obligations both query
--- client_obligations and will 500; scripts/ci-reconcile-obligations.sh will
+-- client_obligations and will 500; scripts/ci-reconcile-obligations.ts will
 -- exit 1 (cannot evaluate) on its first read, which fails its workflow loudly
 -- rather than silently — that is the intended failure shape.
 --

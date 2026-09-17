@@ -288,3 +288,55 @@ describe('the journal', () => {
     expect(sql).toContain("'the firm''s task set'")
   })
 })
+
+describe('regressions found in review', () => {
+  it('syncs the LATEST unsynced write for a key, not the first', async () => {
+    // An append-only journal means last-wins. The original dedupe only accepted
+    // an overwrite when the incoming entry was synced, so correcting an
+    // obligation while still offline silently lost the correction: sync wrote
+    // the stale row and then marked the key done.
+    const { journalAppend, unsyncedEntries } = await loadLib()
+    const base = { client: 'ashton-price', kind: 'deliverable', key: 'k', synced: false }
+    journalAppend({ ...base, ts: '2026-09-17T01:00:00Z', row: { what: 'Old text' } })
+    journalAppend({ ...base, ts: '2026-09-17T02:00:00Z', row: { what: 'Corrected text' } })
+
+    const pending = unsyncedEntries()
+    expect(pending).toHaveLength(1)
+    expect(pending[0].row.what).toBe('Corrected text')
+  })
+
+  it('stops reporting a key once its sync is journaled', async () => {
+    // Falsifier for the rule above: if last-wins ignored the synced marker,
+    // every key would look pending forever.
+    const { journalAppend, unsyncedEntries } = await loadLib()
+    const base = { client: 'ashton-price', kind: 'deliverable', key: 'k' }
+    journalAppend({ ...base, ts: '2026-09-17T01:00:00Z', synced: false, row: { what: 'x' } })
+    journalAppend({ ...base, ts: '2026-09-17T02:00:00Z', synced: true, row: { what: 'x' } })
+
+    expect(unsyncedEntries()).toHaveLength(0)
+  })
+
+  it('accepts a letter that states the due date in ordinary English', async () => {
+    // The gate must be strict about whether the date is ANCHORED in the source,
+    // never about the client's formatting. Requiring the ISO string verbatim
+    // refused exactly the well-grounded rows this exists to admit.
+    const { dateQuoteAnchorsDate } = await loadLib()
+    for (const quote of [
+      'we will file before October 15th',
+      'due October 15, 2026',
+      'by 15 October',
+      'on 10/15/2026',
+      'the deadline is 2026-10-15',
+    ]) {
+      expect(dateQuoteAnchorsDate(quote, '2026-10-15')).toBe(true)
+    }
+  })
+
+  it('still refuses a date quote that anchors a different date', async () => {
+    // Falsifier: if the forms matched loosely, an invented date would pass and
+    // the Captain would be paged about work nobody owes.
+    const { dateQuoteAnchorsDate } = await loadLib()
+    expect(dateQuoteAnchorsDate('we will file before October 15th', '2026-11-30')).toBe(false)
+    expect(dateQuoteAnchorsDate('no date at all in this sentence', '2026-10-15')).toBe(false)
+  })
+})

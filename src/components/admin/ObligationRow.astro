@@ -1,5 +1,6 @@
 ---
-import { closesWhen, type ObligationRow } from '../../lib/admin/obligations-view'
+import { badgeStatusFor, closesWhen, type ObligationRow } from '../../lib/admin/obligations-view'
+import { statusBadgeClass } from '../../lib/ui/status-badge'
 
 /**
  * One obligation, as rendered on both the client page and /admin/obligations.
@@ -21,13 +22,6 @@ interface Props {
 
 const { row, showCloses = false } = Astro.props
 
-const TONE_CLASSES: Record<string, string> = {
-  good: 'bg-green-100 text-green-800',
-  warn: 'bg-amber-100 text-amber-800',
-  bad: 'bg-red-100 text-red-800',
-  neutral: 'bg-gray-100 text-gray-700',
-}
-
 const closes = showCloses ? closesWhen(row) : null
 ---
 
@@ -35,11 +29,7 @@ const closes = showCloses ? closesWhen(row) : null
   <div class="flex items-start justify-between gap-4">
     <div class="min-w-0 flex-1">
       <div class="flex flex-wrap items-center gap-2">
-        <span
-          class={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${TONE_CLASSES[row.tone]}`}
-        >
-          {row.stateLabel}
-        </span>
+        <span class={statusBadgeClass(badgeStatusFor(row.state))}>{row.stateLabel}</span>
         <span class="text-xs text-[color:var(--ss-color-text-muted)]">
           {row.kind.replace(/_/g, ' ')}
         </span>

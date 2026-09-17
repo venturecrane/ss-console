@@ -242,7 +242,7 @@ export type AlertSource =
   | 'sentry'
   | 'healthchecks'
   | 'audit_integrity'
-  // Written by scripts/ci-reconcile-obligations.mjs: client work that is
+  // Written by scripts/ci-reconcile-obligations.ts: client work that is
   // overdue, certified by no CI run, or a source class that stopped producing
   // obligations (ADR 0088, migration 0118).
   | 'obligation'

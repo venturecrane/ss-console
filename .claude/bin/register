@@ -11,7 +11,7 @@
 #
 # Use this for an obligation stated in a CLIENT LETTER. Everything else --
 # GitHub issues, alert state, ledger rows, change requests -- is imported by
-# scripts/ci-reconcile-obligations.sh each run, and recording those by hand
+# scripts/ci-reconcile-obligations.ts each run, and recording those by hand
 # just creates a second copy that drifts.
 #
 # The quote is checked against the source file and the row is REFUSED if it is

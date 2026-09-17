@@ -47,7 +47,7 @@
 -- human-readable slug the agent assigns ('smokeball-task-cleanup').
 --
 -- Written by: .claude/hooks/lib/register.mjs (captured, letter-derived rows)
---             scripts/ci-reconcile-obligations.sh (imported rows; every
+--             scripts/ci-reconcile-obligations.ts (imported rows; every
 --             state change to verified/closed; evidence stamps).
 -- Read by:    src/lib/db/obligations.ts -> the admin client page and
 --             /admin/obligations.

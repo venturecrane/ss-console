@@ -50,17 +50,44 @@ export function sqlLiteral(value: unknown): string {
   return `'${String(value).replaceAll("'", "''")}'`
 }
 
-/** Substitute `?` placeholders left to right. */
+/**
+ * Substitute `?` placeholders left to right, ignoring any inside a string
+ * literal.
+ *
+ * A naive global replace treats the `?` in `WHERE note = 'why?'` as a
+ * placeholder, which corrupts the statement AND desynchronises the value count
+ * so every later binding lands in the wrong column. No query in this repo
+ * embeds one today, which is exactly why it would be found the hard way: the
+ * first person to write one gets silently wrong data rather than an error.
+ *
+ * Only single-quoted literals matter — SQLite's string delimiter, with `''` as
+ * the escape, which this walk handles by simply toggling back and forth.
+ */
 export function bindSql(sql: string, values: readonly unknown[]): string {
+  let out = ''
   let index = 0
-  const bound = sql.replace(/\?/g, () => {
-    if (index >= values.length) throw new Error('more ? placeholders than bound values')
-    return sqlLiteral(values[index++])
-  })
+  let inString = false
+
+  for (let i = 0; i < sql.length; i += 1) {
+    const char = sql[i]
+    if (char === "'") {
+      inString = !inString
+      out += char
+      continue
+    }
+    if (char === '?' && !inString) {
+      if (index >= values.length) throw new Error('more ? placeholders than bound values')
+      out += sqlLiteral(values[index++])
+      continue
+    }
+    out += char
+  }
+
+  if (inString) throw new Error('unterminated string literal in SQL')
   if (index !== values.length) {
     throw new Error(`bound ${values.length} values but the statement has ${index} placeholders`)
   }
-  return bound
+  return out
 }
 
 export function parseWranglerJson(stdout: string): Record<string, unknown>[] {
