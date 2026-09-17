@@ -12,9 +12,7 @@ import json
 from pathlib import Path
 
 from medchron import config as config_mod, job as job_mod
-from medchron.covered import covered_payload, covered_sets
-from medchron.covered import merge_covered
-from medchron_testkit import job_yaml
+from medchron.covered import covered_payload, covered_sets, merge_covered
 
 
 def _cfg(firm_config_path: Path):
