@@ -37,6 +37,7 @@ from . import (
     rehearsal,
     seat as seat_mod,
 )
+from .covered import covered_sets
 from .stages.base import StageRefusal, StageRun
 from .state import RunState, state_path
 
@@ -62,6 +63,13 @@ class Outcome:
     documents: int = 0
     folder_id: str | None = None
     files: list[dict[str, Any]] = field(default_factory=list)
+    # 2026-09-17: what this unit's delivery COVERED, in document ids, from the
+    # coverage gate's own accounting (`covered.py`). The ledger stores it so a
+    # later UPDATE can read only what the delivery did not cover, which is what
+    # the agreement's definition of an update requires. None when the run left
+    # no coverage artifacts: nothing is guessed, and the skill says the record
+    # is unknown rather than approximating a delta.
+    covered: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return self.__dict__.copy()
@@ -594,6 +602,14 @@ class Driver:
                     o.files = list(d.get("files") or [])
                 except (OSError, ValueError):
                     pass
+            if o.outcome in ("delivered", "dry_run"):
+                try:
+                    o.covered = covered_sets(self.slug_dir, unit.unit, self.cfg)
+                except (OSError, ValueError, KeyError) as exc:
+                    # A coverage record we could not derive is reported absent,
+                    # never approximated: an over-inclusive covered set drops
+                    # records from every later update, silently.
+                    self.log(f"[run] covered: no record derived for {unit.unit}: {exc}")
             outcomes.append(o)
         return outcomes
 

@@ -121,6 +121,25 @@ describe('ADR 0045 Workspace capability broker', () => {
     expect(bootSmoke).toContain('r2-account-key-strip-probe.py hermes AGENTMAIL_SEND_API_KEY')
   })
 
+  // 2026-09-17. The webhook-READ key is ORG-scoped — it has to be, because
+  // AgentMail webhooks are org-level objects and an inbox-scoped key lists zero
+  // of them even when granted webhook_read. Org scope is precisely why it must
+  // die with root's environment: it is the one AgentMail credential on the seat
+  // that reaches past this inbox. Boot smoke reads it from the root-only file.
+  it('keeps the org-scoped webhook-read key out of the agent, and proves it live', () => {
+    // Stripped on the same line as the send key, which is also why this costs the
+    // entrypoint no new logical line under the shell size ratchet.
+    expect(entrypoint).toContain('unset AGENTMAIL_SEND_API_KEY AGENTMAIL_WEBHOOK_READ_API_KEY')
+    // The strip must precede the exec-drop, or it is cosmetic (ADR 0044 Decision 8).
+    expect(
+      entrypoint.indexOf('unset AGENTMAIL_SEND_API_KEY AGENTMAIL_WEBHOOK_READ_API_KEY')
+    ).toBeLessThan(entrypoint.indexOf('exec setpriv'))
+    expect(bootSmoke).toContain('agentmail-webhook-read-key-stripped-from-agent')
+    expect(bootSmoke).toContain(
+      'r2-account-key-strip-probe.py hermes AGENTMAIL_WEBHOOK_READ_API_KEY'
+    )
+  })
+
   // ss#2258 msgraph wave. Same custody shape for the Graph SEND app credential —
   // and one deliberate asymmetry that these tests pin so it cannot be "tidied"
   // into symmetry by someone who reads the block above and assumes an omission.

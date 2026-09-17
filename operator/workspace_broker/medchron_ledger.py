@@ -92,7 +92,8 @@ CREATE_SQL = (
     "cents INTEGER NOT NULL DEFAULT 0, "
     "reason TEXT, "
     "folder_id TEXT, "
-    "delivery_json TEXT"
+    "delivery_json TEXT, "
+    "covered_json TEXT"
     ")"
 )
 CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_medchron_jobs_created ON medchron_jobs(created_at)"
@@ -193,6 +194,13 @@ PROJECTION = (
     # seat's debit does, so it needs the key. Byte-pinned to the overlay's
     # `_MEDCHRON_JOBS_COLUMNS`; bumped together (OVERLAY_REF).
     "work_digest",
+    # 2026-09-17: the covered/uncovered document id sets (routine 11's UPDATE
+    # reads its delta from them). Ids and counts only, never a document and
+    # never a page of text, so the ADR 0052 management-surface line holds. The
+    # overlay's own console read filters to its narrower column tuple, so this
+    # key reaches the SKILL through the broker socket and does not widen the
+    # console seam.
+    "covered_json",
 )
 
 
@@ -419,6 +427,14 @@ class MedchronLedger:
             have = {r["name"] for r in conn.execute("PRAGMA table_info(medchron_jobs)")}
             if "work_digest" not in have:
                 conn.execute("ALTER TABLE medchron_jobs ADD COLUMN work_digest TEXT")
+            # Same reason, 2026-09-17: the covered/uncovered document id sets an
+            # UPDATE reads its delta from. Nullable on purpose — a job delivered
+            # before this release covered documents nobody recorded, and a guess
+            # would silently drop records from the next update (which is the
+            # whole defect this column exists to close). The skill treats NULL
+            # as "unknown", says so, and submits nothing.
+            if "covered_json" not in have:
+                conn.execute("ALTER TABLE medchron_jobs ADD COLUMN covered_json TEXT")
             # After the column exists (the debit groups on it).
             conn.execute(CREATE_WORK_INDEX_SQL)
             conn.commit()
@@ -612,7 +628,27 @@ class MedchronLedger:
 
     @staticmethod
     def project(row: dict[str, Any]) -> dict[str, Any]:
-        return {k: row.get(k) for k in PROJECTION}
+        """The row as its readers see it, with the covered sets parsed.
+
+        `covered_document_ids` / `uncovered_document_ids` are None (not empty)
+        when the row carries no record at all, because "nothing was covered" and
+        "nobody wrote down what was covered" lead an update to opposite actions.
+        """
+        out = {k: row.get(k) for k in PROJECTION}
+        raw = row.get("covered_json")
+        covered: Any = None
+        uncovered: Any = None
+        if raw:
+            try:
+                parsed = json.loads(raw)
+                covered = list(parsed.get("covered") or [])
+                uncovered = list(parsed.get("uncovered") or [])
+            except (ValueError, AttributeError):
+                covered = None
+                uncovered = None
+        out["covered_document_ids"] = covered
+        out["uncovered_document_ids"] = uncovered
+        return out
 
     # -- the runner's report ----------------------------------------------
     def record(self, job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any]:
@@ -645,6 +681,9 @@ class MedchronLedger:
             if "folder_id" in fields:
                 sets.append("folder_id=?")
                 vals.append(str(fields["folder_id"] or "") or None)
+            if "covered" in fields:
+                sets.append("covered_json=?")
+                vals.append(validate_covered(fields["covered"]))
             if "delivery" in fields and isinstance(fields["delivery"], dict):
                 sets.append("delivery_json=?")
                 vals.append(json.dumps(fields["delivery"], sort_keys=True))
@@ -655,6 +694,62 @@ class MedchronLedger:
             return dict(row)
         finally:
             conn.close()
+
+
+_MAX_COVERED_IDS = 20_000
+_MAX_ID_LEN = 200
+
+
+def validate_covered(payload: Any) -> str:
+    """The covered/uncovered document id sets, as JSON, or raise ValueError.
+
+    Ids only: this record exists so an UPDATE can read what a delivered
+    chronology did not cover, and nothing else about the documents belongs on a
+    ledger row. Two invariants, both cheap and both load-bearing:
+
+    * The two sets are DISJOINT. A document is either accounted for in the
+      delivered document (cited, or excluded with a stated reason) or it is not.
+      An id in both would let an update decide either way.
+    * `total` equals their combined size, and the runner sends the count it
+      pulled. A mismatch means a stage dropped rows between the coverage gate
+      and this call, which is the failure species the gate itself exists for,
+      so it is refused here rather than stored as a coverage claim nobody
+      checked.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("covered must be an object")
+    out: dict[str, Any] = {}
+    sets: dict[str, list[str]] = {}
+    for key in ("covered", "uncovered"):
+        raw = payload.get(key)
+        if not isinstance(raw, list):
+            raise ValueError(f"covered.{key} must be a list of document ids")
+        ids: list[str] = []
+        for item in raw:
+            if not isinstance(item, str) or not item.strip() or len(item) > _MAX_ID_LEN:
+                raise ValueError(f"covered.{key} holds a value that is not a document id")
+            ids.append(item.strip())
+        if len(set(ids)) != len(ids):
+            raise ValueError(f"covered.{key} repeats an id")
+        sets[key] = sorted(ids)
+        out[key] = sets[key]
+    overlap = set(sets["covered"]) & set(sets["uncovered"])
+    if overlap:
+        raise ValueError(f"covered and uncovered share {len(overlap)} id(s), e.g. {sorted(overlap)[0]}")
+    total = len(sets["covered"]) + len(sets["uncovered"])
+    if total > _MAX_COVERED_IDS:
+        raise ValueError(f"covered holds {total} ids, above the {_MAX_COVERED_IDS} ceiling")
+    pulled = payload.get("pulled")
+    if pulled is not None:
+        if not isinstance(pulled, int) or isinstance(pulled, bool) or pulled < 0:
+            raise ValueError("covered.pulled must be a non-negative int")
+        if pulled != total:
+            raise ValueError(
+                f"covered accounts for {total} document(s) but the run pulled {pulled}: "
+                "a stage dropped rows between the coverage gate and this record"
+            )
+        out["pulled"] = pulled
+    return json.dumps(out, sort_keys=True)
 
 
 def now_utc() -> datetime:

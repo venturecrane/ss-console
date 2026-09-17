@@ -20,6 +20,7 @@ import {
 import {
   compileTierChange,
   liveTierOf,
+  resolveLiveTier,
   selectableTiers,
   sendActionClassOf,
   type LiveExposure,
@@ -61,6 +62,61 @@ describe('send-class discovery + live tier', () => {
     const row = rowNamed(grid(), 'Served discovery caught')
     expect(sendActionClassOf(row)).toBeNull()
     expect(liveTierOf(row, liveExposure())).toBe('flag-only')
+  })
+
+  it('a dial-less row stands at its authored level wherever it may write, and is no level at all where it may not', () => {
+    // 2026-09-17, three readings of the same rows, in the order they happened.
+    // (1) Every row without a send class resolved to flag-only, so five
+    // prepare-and-route work-product routines and the internal-record
+    // chronology read as "Surfaces it" on a client page. (2) Returning the
+    // grid's authored tier unconditionally is the opposite error and worse: it
+    // would claim "Handles it" while the seat refused the write. (3) Capping
+    // the row whenever `internal_write` was not `autonomous` invented a middle
+    // state the gate does not have -- at the enforcement point an internal
+    // write either executes or is refused, and `draft_for_review` executes.
+    const g = grid()
+    const dialLess = g.rows.filter((r) => sendActionClassOf(r) === null)
+    expect(
+      dialLess.filter((r) => r.start_tier !== 'flag-only').length,
+      'grid must carry dial-less rows above flag-only'
+    ).toBeGreaterThan(0)
+
+    const writing = (ceiling: string): LiveExposure => ({
+      personaSlug: 'operator',
+      exposure: { internal_write: ceiling },
+    })
+
+    for (const row of dialLess) {
+      // Authorized to write on its own: the authored level stands.
+      expect(liveTierOf(row, writing('autonomous')), row.routine).toBe(row.start_tier)
+      // `draft_for_review` on internal_write EXECUTES the write (the overlay's
+      // _enforce_resolved; the 2026-08-21 create_memo that landed on a real
+      // matter while its audit row read "draft"), so the authored tier stands.
+      // A&P authors exactly this value, and capping it at prepare-and-route
+      // understated six of its routines on the client's page.
+      const held = resolveLiveTier(row, writing('draft_for_review'))
+      expect(held.notAuthorized, row.routine).toBe(false)
+      expect(held.tier, `${row.routine} writes under draft_for_review`).toBe(row.start_tier)
+      // Refused, and unauthored, are not levels at all.
+      for (const off of [writing('refused'), { personaSlug: 'operator', exposure: {} }]) {
+        expect(resolveLiveTier(row, off).notAuthorized, row.routine).toBe(true)
+      }
+      expect(selectableTiers(row), row.routine).toEqual([row.start_tier])
+    }
+
+    expect(liveTierOf(rowNamed(g, 'Medical chronology'), writing('autonomous'))).toBe('auto-handle')
+    // The seat's real value. The chronology is auto-handle here, not capped.
+    expect(liveTierOf(rowNamed(g, 'Medical chronology'), writing('draft_for_review'))).toBe(
+      'auto-handle'
+    )
+    expect(liveTierOf(rowNamed(g, 'Medical chronology'), liveExposure())).toBe('auto-handle')
+    const lowered = compileTierChange(g, liveExposure(), {
+      routine: 'Medical chronology',
+      targetTier: 'flag-only',
+      vertical: 'law-firm',
+    })
+    expect(lowered.ok).toBe(false)
+    if (!lowered.ok) expect(lowered.rejections.map((r) => r.code)).toContain('no_graduation_path')
   })
 
   it('a graduating row authors its own send class', () => {

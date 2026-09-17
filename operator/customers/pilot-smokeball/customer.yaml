@@ -491,11 +491,13 @@ personas:
         # (ss #2404; same contract as client-verification-tracker's dials).
         settings:
           chase_cadence_days: 7 # PLACEHOLDER(christa): days between records chases
-      - name: medical-chronology-maintainer # checks for newly landed records
+      - name: medical-chronology-maintainer # routine 11: a run or an update, on request
         version: pending
         initiation:
           manual: true
-          scheduled: true
+          # false since 2026-09-17, mirroring the client seat: the weekday sweep that
+          # kept the retired running note current is removed from cron below.
+          scheduled: false
           webhook: false
         enabled: true
         # PLACEHOLDER(christa): the treatment-gap flag length awaits the firm's
@@ -684,10 +686,6 @@ personas:
         wake_policy: pre_run_decides
       - skill: service-confirmation-watcher
         schedule: '51 7 * * 1-5' # weekday 0751 seat-local
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      - skill: medical-chronology-maintainer
-        schedule: '33 8 * * 1-5' # weekday 0833 seat-local — after records imports land
         pre_run: pre_run.py
         wake_policy: pre_run_decides
       - skill: medical-records-chaser

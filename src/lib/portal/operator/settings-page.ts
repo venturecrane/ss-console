@@ -8,14 +8,11 @@
  * every read and every write.
  */
 
-// Client language for the tier vocabulary. The internal terms (flag-only /
-// prepare-and-route / auto-handle) are ours; the client reads what the level
-// DOES, in the letter's own framing.
-export const TIER_LABELS: Record<string, string> = {
-  'flag-only': 'Surfaces it for you',
-  'prepare-and-route': 'Prepares it for someone to send',
-  'auto-handle': 'Handles it end to end',
-}
+import { CLIENT_TIER_SENTENCE } from './tier-language'
+
+// Client language for the tier vocabulary: the ONE shared map (tier-language.ts),
+// so Settings, the Duties grid, and the Activity feed say the same words.
+export const TIER_LABELS: Readonly<Record<string, string>> = CLIENT_TIER_SENTENCE
 
 export type Banner = { text: string; tone: 'success' | 'error' | 'info' }
 

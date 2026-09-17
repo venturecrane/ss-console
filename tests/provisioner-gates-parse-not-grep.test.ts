@@ -39,6 +39,10 @@ const SCRIPT = fileURLToPath(new URL('../operator/bin/provision-customer.sh', im
 // still measures the real order.
 const SOURCED_LIBS = [
   fileURLToPath(new URL('../operator/bin/lib/stage-smokeball.sh', import.meta.url)),
+  // The AgentMail block left the provisioner the same way and for the same
+  // reason on 2026-09-17, when the webhook-read credential pushed the script
+  // past the ratchet. Its gate is the `agentmail` one counted below.
+  fileURLToPath(new URL('../operator/bin/lib/stage-agentmail.sh', import.meta.url)),
 ]
 const src = [SCRIPT, ...SOURCED_LIBS].map((p) => readFileSync(p, 'utf8')).join('\n')
 
