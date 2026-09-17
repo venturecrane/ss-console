@@ -15,6 +15,9 @@
 
 DELETE FROM cost_anomaly_alerts WHERE source = 'obligation';
 
+-- Same FK-bearing rebuild shape as the up-migration; same pragma.
+PRAGMA defer_foreign_keys = ON;
+
 CREATE TABLE cost_anomaly_alerts_old (
   entity_id            TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   customer_slug        TEXT NOT NULL,

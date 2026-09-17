@@ -169,3 +169,45 @@ describe('severityBadge', () => {
     expect(severityBadge('info').label).toBe('Info')
   })
 })
+
+describe('the obligation source (ADR 0088)', () => {
+  const obligation = (details: Record<string, unknown> | null) =>
+    row({
+      source: 'obligation',
+      driver: 'obligation:o-1:obligation_overdue',
+      summary: 'Overdue 11d: send the signature copies',
+      details_json: details === null ? null : JSON.stringify(details),
+      // An obligation row carries the same 0-sentinels every non-cost writer
+      // uses; severity must not fall out of the cost columns.
+      daily_cents: 0,
+      rolling_avg_cents: 0,
+      ratio_bps: 0,
+      threshold_bps: 0,
+    })
+
+  it('takes severity from what the reconciler decided, not from the cost columns', () => {
+    expect(alertSeverity(obligation({ severity: 'critical' }))).toBe('critical')
+    expect(alertSeverity(obligation({ severity: 'warning' }))).toBe('warning')
+  })
+
+  it('falls back to warning rather than inventing a severity from a bad payload', () => {
+    // Falsifier for the reader above: with the zeroed cost columns, a naive
+    // ratio >= threshold comparison would read 0 >= 0 and call every
+    // obligation critical.
+    expect(alertSeverity(obligation(null))).toBe('warning')
+    expect(alertSeverity(obligation({ severity: 'nonsense' }))).toBe('warning')
+    expect(alertSeverity(row({ source: 'obligation', details_json: '{oops' }))).toBe('warning')
+  })
+
+  it('links to the register filtered to that client, not to the seat', () => {
+    expect(alertLink(obligation({ severity: 'warning' }))).toBe('/admin/obligations?customer=acme')
+  })
+
+  it('is selectable in the source filter', () => {
+    // The gap history flagged: a fifth source added after the feed existed, with
+    // the filter list silently falling back to showing everything.
+    const rows = [obligation({ severity: 'warning' }), row({ source: 'cost' })]
+    expect(filterAlerts(rows, { source: 'obligation' })).toHaveLength(1)
+    expect(filterAlerts(rows, { source: 'cost' })).toHaveLength(1)
+  })
+})

@@ -29,6 +29,21 @@
 --             obligation_unverifiable, obligation_capture_gap).
 -- Read by:    src/lib/admin/fleet-alerts.ts, workers/fleet-alerts/src/sink-notify.ts.
 
+-- PRAGMA, not decoration. cost_anomaly_alerts carries two outgoing foreign
+-- keys (entity_id -> entities, acknowledged_by -> users), which makes this the
+-- same rebuild shape as fleet_status in 0093, whose comment states the reason:
+-- defer_foreign_keys keeps a table's own outgoing FKs satisfied across the
+-- INSERT..SELECT + drop/rename. Every FK-bearing rebuild in this repo sets it
+-- (0047, 0090, 0093, 0094, 0110); the fleet_alert_state chain omits it only
+-- because that table declares no FK columns.
+--
+-- 0047:37 records that D1 does not currently set `PRAGMA foreign_keys=ON` per
+-- connection, so these FKs are not runtime-enforced today and this is
+-- defensive. That is an argument for keeping the convention, not for being the
+-- first rebuild to break it: the day enforcement is turned on, the migration
+-- that skipped it is the one that fails.
+PRAGMA defer_foreign_keys = ON;
+
 CREATE TABLE cost_anomaly_alerts_new (
   entity_id            TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   customer_slug        TEXT NOT NULL,
