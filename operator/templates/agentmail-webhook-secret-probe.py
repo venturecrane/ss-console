@@ -11,16 +11,34 @@ row read green. The first client-shaped email to the seat in two months was the
 instrument that found it.
 
 WHAT THIS DOES. Runs as ROOT under boot-smoke. Reads the agent-uid gateway's
-environ for AGENTMAIL_API_KEY (the inbox-scoped read key, which may list the
-account's webhooks) and WEBHOOK_SECRET_AGENTMAIL, asks the vendor for the one
-webhook whose URL names this seat's hostname, fetches that webhook's signing
-secret, and compares. Only sha256 PREFIXES are printed; no value ever reaches
-the transcript.
+environ for WEBHOOK_SECRET_AGENTMAIL, reads AGENTMAIL_WEBHOOK_READ_API_KEY from
+PID 1's environ (Fly's init, root-only, where the Fly secret lives and where
+entrypoint.sh's strip cannot reach), asks the vendor for the one webhook whose
+URL names this seat's hostname, fetches that webhook's signing secret, and
+compares. Only sha256 PREFIXES are printed; no value ever reaches the transcript.
+
+WHY THE KEY COMES FROM PID 1 AND NOT THE AGENT'S ENVIRON (2026-09-17). The
+first version asked the vendor with the agent's own AGENTMAIL_API_KEY. That key
+is INBOX-SCOPED by design (ss#2258: the vendor itself refuses to let the agent
+transmit), and AgentMail's webhooks are ORG-level objects carrying an inbox_ids
+filter. Measured that day against the live vendor: the seat key returns 403
+missing_permission, and a replacement key minted on the same inbox WITH
+webhook_read returns 200 and ZERO webhooks -- permissions are intersected with
+scope, so no inbox-scoped key can ever see the seat's webhook. The check could
+therefore never pass on any seat whose agent key is correctly narrow; it was
+unfalsifiable in the failing direction only, which is the worst kind. The fix is
+a credential with the right SCOPE and nothing else: an org-scoped key holding
+webhook_read ALONE, staged as AGENTMAIL_WEBHOOK_READ_API_KEY, read here from
+PID 1, and unset by entrypoint.sh before the gateway exec so the agent never
+holds an org-scoped credential just to satisfy a test.
 
 WHAT MAKES IT ABLE TO FAIL. Stage the global secret onto a seat whose webhook
 carries its own (the scott shape) and this exits 1 naming both hash prefixes.
 Point the seat at a hostname with no vendor webhook and it exits 1. Two webhooks
-for one host is a provisioning mistake and exits 1 rather than guessing.
+for one host is a provisioning mistake and exits 1 rather than guessing. A seat
+that carries the webhook secret while PID 1 carries no webhook-read key exits 1
+saying so, because "cannot ask the vendor" must never read as "the value is
+fine" -- that equivalence is what hid the scott outage for two months.
 
 VACUOUS PASS, STATED. A seat whose agent env carries no WEBHOOK_SECRET_AGENTMAIL
 (no AgentMail channel authored: ashton-price, smd-staging) passes with a line
@@ -45,7 +63,11 @@ from collections.abc import Callable
 _DEFAULT_USER = "hermes"
 _API_BASE = "https://api.agentmail.to/v0"
 _SECRET_VAR = "WEBHOOK_SECRET_AGENTMAIL"
-_KEY_VAR = "AGENTMAIL_API_KEY"
+# The org-scoped webhook_read key, read from PID 1 (Fly's init). entrypoint.sh
+# strips it from its own environment before the gateway exec, so it is reachable
+# here and nowhere agent-side: see WHY THE KEY COMES FROM PID 1, above.
+_KEY_VAR = "AGENTMAIL_WEBHOOK_READ_API_KEY"
+_INIT_PID = "1"
 
 Fetch = Callable[[str, str], dict]
 
@@ -124,7 +146,18 @@ def _urllib_fetch(path: str, key: str) -> dict:
         return json.load(resp)
 
 
-def run(host: str, user: str, proc_root: str = "/proc", fetch: Fetch = _urllib_fetch) -> int:
+def read_init_key(proc_root: str, pid: str = _INIT_PID) -> str:
+    """The org-scoped webhook_read key from PID 1's environ, or "" when absent."""
+    env = _environ(proc_root, pid)
+    return (env or {}).get(_KEY_VAR, "").strip()
+
+
+def run(
+    host: str,
+    user: str,
+    proc_root: str = "/proc",
+    fetch: Fetch = _urllib_fetch,
+) -> int:
     try:
         uid = pwd.getpwnam(user).pw_uid
     except KeyError:
@@ -134,9 +167,13 @@ def run(host: str, user: str, proc_root: str = "/proc", fetch: Fetch = _urllib_f
     if env is None:
         print(f"vacuous: no {user}-uid process carries {_SECRET_VAR} (seat authors no AgentMail webhook)")
         return 0
-    key = env.get(_KEY_VAR, "")
+    key = read_init_key(proc_root)
     if not key:
-        print(f"FAIL: agent env carries {_SECRET_VAR} but no {_KEY_VAR}; cannot ask the vendor")
+        print(
+            f"FAIL: agent env carries {_SECRET_VAR} but PID 1 carries no {_KEY_VAR}; "
+            "cannot ask the vendor. Provisioning stages it as a Fly secret (org-scoped, "
+            "webhook_read only) - an inbox-scoped key cannot read this seat's webhook."
+        )
         return 1
     try:
         listing = fetch("/webhooks", key)
