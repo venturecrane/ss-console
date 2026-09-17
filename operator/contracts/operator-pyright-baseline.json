@@ -1,6 +1,6 @@
 {
   "_comment": "pyright errors per file at adoption, generated and enforced by bin/pyright-ratchet.py. Do not hand-edit. Regenerate with `pyright --outputjson > r.json; python3 bin/pyright-ratchet.py r.json --update`. A file leaves this list by reaching zero; no count may grow.",
-  "total": 105,
+  "total": 104,
   "files": {
     "adapter/voice/transform.py": 3,
     "bin/control-probes.py": 5,
@@ -23,7 +23,7 @@
     "runners/medchron/medchron/audit/anchors.py": 2,
     "runners/medchron/medchron/audit/diag.py": 2,
     "runners/medchron/medchron/audit/run.py": 3,
-    "runners/medchron/medchron/daemon.py": 2,
+    "runners/medchron/medchron/daemon.py": 1,
     "runners/medchron/medchron/decisions.py": 6,
     "runners/medchron/medchron/llm.py": 1,
     "runners/medchron/medchron/probes.py": 1,
