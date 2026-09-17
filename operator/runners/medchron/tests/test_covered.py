@@ -93,7 +93,9 @@ def test_no_coverage_artifacts_reports_no_record_rather_than_an_empty_one(
     assert covered_payload(d, ["alpha"], _cfg(firm_config_path)) is None
 
 
-def test_the_union_across_units_keeps_the_uncovered_reading(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+def test_the_union_across_units_keeps_the_uncovered_reading(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
     merged = merge_covered(
         [
             {"outcome": "delivered", "covered": {"covered": ["a", "b"], "uncovered": ["c"]}},

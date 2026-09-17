@@ -99,9 +99,7 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
         pulled[key] = row
 
     orphans = {
-        o.get("name")
-        for o in (read_json(slug_dir / "orphans.json", {}) or {}).get("orphans") or []
-        if o.get("name")
+        o.get("name") for o in (read_json(slug_dir / "orphans.json", {}) or {}).get("orphans") or [] if o.get("name")
     }
     billing_spec = read_json(slug_dir / "billing_docs.json", [])
     billing_names = {
@@ -184,6 +182,7 @@ def covered_payload(slug_dir: Path, units: list[str], cfg: Any) -> dict[str, Any
 def write_debug(path: Path, payload: dict[str, Any]) -> None:
     """The payload as sent, beside the run, for a later hand-reconstruction."""
     path.write_text(json.dumps(payload, indent=1, sort_keys=True), encoding="utf-8")
+
 
 def merge_covered(outcomes: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Union the units' coverage records from a job's outcomes, or None when no
