@@ -50,9 +50,7 @@ def _init_env(tmp_path: Path, value: str | None = ORG_KEY) -> None:
     pid1 = tmp_path / "1"
     pid1.mkdir(exist_ok=True)
     env = {} if value is None else {probe._KEY_VAR: value}
-    pid1.joinpath("environ").write_bytes(
-        b"".join(f"{k}={v}".encode() + b"\x00" for k, v in env.items())
-    )
+    pid1.joinpath("environ").write_bytes(b"".join(f"{k}={v}".encode() + b"\x00" for k, v in env.items()))
 
 
 def _fake_proc(tmp_path: Path, env: dict[str, str] | None) -> str:
