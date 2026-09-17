@@ -1,0 +1,165 @@
+# Reconcile the obligation register against the world (ADR 0088).
+#
+# WHY. The register records every piece of work SMD owes a client. A register
+# that only grows is one nobody reads by week three, and a reminder queue with
+# no forcing function decays: the enterprise cadence engine stood at 7 of 16
+# items overdue, one of them by 134 days, while looking perfectly healthy. This
+# run is the forcing function.
+#
+# WHAT IT DOES each pass: imports obligations from the sources a machine can
+# enumerate (client-labelled GitHub issues, open fleet_alert_state conditions,
+# operator change requests); re-probes the real surface behind every open row;
+# counts artifacts per source class against obligations derived from each; and
+# writes overdue, unverifiable and capture-gap findings into cost_anomaly_alerts,
+# which already emails the ops inbox for any non-cost source.
+#
+# HOLDS vs FINDS, the same discipline as customer-config-reconcile and
+# unaudited-send-reconcile: exit 1 means the control could not evaluate (D1 or
+# GitHub unreadable, a probeable surface that would not answer, an empty
+# register after a prior run saw rows) and fails the run on its own. Exit 2
+# means it evaluated and found something, and updates the rolling issue. A
+# control that pages on its own blips gets muted within a week.
+#
+# WHY A ROLLING ISSUE rather than one per day: terminal-state-reconcile's
+# reasoning applies unchanged. Dated titles defeat title-based dedupe and the
+# GitHub search index lags, so the series marker lives in the issue BODY and the
+# open issues are LISTED, not searched.
+#
+# WHY CERTIFICATION NEEDS THIS RUN: client_obligations.reconcile_run_id is a
+# foreign key, so a row can only reach `verified` or `closed` naming a run that
+# exists — and only CI supplies workflow_run_url. A certification with no URL
+# behind it is surfaced here as obligation_unverifiable.
+
+name: obligation-reconcile
+
+on:
+  schedule:
+    # 07:53 UTC daily — off the hour, and clear of the 06:41 / 07:23 / 09:41
+    # slots the other reconcilers already hold.
+    - cron: '53 7 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Classify and report only; write nothing (any value = on)'
+        required: false
+  # The control is exercised by tests/obligation-reconcile.test.ts; run it on a
+  # PR touching any side so a broken control cannot merge green.
+  pull_request:
+    paths:
+      - 'scripts/ci-reconcile-obligations.ts'
+      - 'tests/obligation-reconcile.test.ts'
+      - 'src/lib/db/obligations.ts'
+      - '.github/workflows/obligation-reconcile.yml'
+
+permissions:
+  contents: read
+  # Findings update a rolling issue rather than annotating a log nobody reads.
+  issues: write
+  # Required so npm ci can fetch @venturecrane/crane-test-harness from
+  # GitHub Packages via the workflow's GITHUB_TOKEN.
+  packages: read
+
+concurrency:
+  group: obligation-reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@venturecrane'
+
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm ci
+
+      # The unit tests gate the scheduled run: a reconciler whose detection is
+      # broken must not be trusted to report the world converged.
+      - name: Test the reconciler
+        run: npx vitest run tests/obligation-reconcile.test.ts
+
+      # On pull_request there are no secrets and no live D1 — the test above is
+      # the whole job.
+      - name: Reconcile the register against the world
+        if: github.event_name != 'pull_request'
+        id: reconcile
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          # The URL is what makes a certification witnessed. Its absence is the
+          # signal findUnwitnessedCertifications looks for, so this is not
+          # cosmetic provenance.
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # Via env, never interpolated into the script body: a
+          # workflow_dispatch input is user-supplied and would otherwise be a
+          # shell-injection seam.
+          SS_RECONCILE_DRY_RUN: ${{ github.event.inputs.dry_run && '1' || '' }}
+        run: |
+          set -u
+          # Redirect rather than pipe: `$?` after `| tee` reports TEE's status,
+          # not the script's, and this control would then never fire.
+          #
+          # `|| STATUS=$?` is load-bearing, not style (ss#2307). GitHub runs
+          # this body under `bash -e`, so an unguarded non-zero exit aborts the
+          # step HERE — before the report is printed and before `status` reaches
+          # GITHUB_OUTPUT — which silently skips the issue step below. The
+          # findings path is the one path that exits non-zero, so the control
+          # would be mute in exactly the case it exists for.
+          STATUS=0
+          npx tsx scripts/ci-reconcile-obligations.ts > reconcile.txt 2>&1 || STATUS=$?
+          cat reconcile.txt
+          echo "status=${STATUS}" >> "$GITHUB_OUTPUT"
+          # Exit 2 is a finding, handled by the next step. Anything else that is
+          # not 0 is the control failing, and must fail the run.
+          if [ "${STATUS}" -ne 0 ] && [ "${STATUS}" -ne 2 ]; then exit "${STATUS}"; fi
+
+      - name: Update the rolling findings issue
+        if: github.event_name != 'pull_request' && steps.reconcile.outputs.status == '2'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -u
+          MARKER="reconcile-series: obligation-register"
+          {
+            echo "The obligation reconciler found work that is overdue, unverifiable, or uncaptured."
+            echo
+            echo '```'
+            cat reconcile.txt
+            echo '```'
+            echo
+            echo "Run: ${RUN_URL}"
+            echo
+            echo "<!-- ${MARKER} -->"
+          } > body.md
+
+          # List, never search: the GitHub search index lags behind reality by
+          # minutes to hours, and a reconciler that cannot find its own issue
+          # opens a second one every day until someone notices the pile.
+          EXISTING=$(gh issue list --state open --label prio:P1 --limit 200 \
+            --json number,body \
+            --jq "[.[] | select(.body | contains(\"${MARKER}\"))] | .[0].number // empty")
+
+          if [ -n "${EXISTING}" ]; then
+            gh issue edit "${EXISTING}" --body-file body.md
+            echo "updated issue #${EXISTING}"
+          else
+            gh issue create \
+              --title "Obligation register: overdue or unverifiable work" \
+              --label prio:P1 --label type:bug \
+              --body-file body.md
+          fi

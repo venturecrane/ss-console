@@ -30,6 +30,9 @@ import { getOperatorServiceForEntity, operatorPaymentMethod } from '../../../lib
 import { getSubscriptionForBilling, parseCancelAt } from '../../../lib/db/subscriptions'
 import { listOperatorAgreementDocumentsForEntity } from '../../../lib/db/operator-agreements'
 import { statusBadgeClass } from '../../../lib/ui/status-badge'
+import { listObligationsForCustomer } from '../../../lib/db/obligations'
+import { decorate, sortObligations } from '../../../lib/admin/obligations-view'
+import ClientObligationsPanel from '../../../components/admin/ClientObligationsPanel.astro'
 import { env } from 'cloudflare:workers'
 
 const session = Astro.locals.session!
@@ -92,6 +95,15 @@ const clientSince = formatDate(earliestStart ?? entity.created_at)
 
 const overdueInvoices = invoices.filter((i) => i.status === 'overdue')
 const sentInvoices = invoices.filter((i) => i.status === 'sent')
+
+// What we owe this client (ADR 0088). Keyed on the seat slug, because the
+// register hangs off customer_configs — a client with no seat has no
+// obligations surface yet, and renders nothing rather than an empty promise.
+const obligations = operator
+  ? sortObligations(
+      decorate(await listObligationsForCustomer(env.DB, operator.customer_slug), new Date())
+    )
+  : []
 
 const SECTION_LABEL =
   'font-mono text-[12px] font-bold uppercase tracking-[0.16em] text-[color:var(--ss-color-text-primary)]'
@@ -351,6 +363,13 @@ const LINK_ACT =
           >
         </form>
       </section>
+
+      <ClientObligationsPanel
+        rows={obligations}
+        customerSlug={operator?.customer_slug ?? null}
+        sectionLabelClass={SECTION_LABEL}
+        linkClass={LINK_ACT}
+      />
 
       <!-- billing -->
       <section class="border-t border-[color:var(--ss-color-text-primary)] pt-4 pb-6">
