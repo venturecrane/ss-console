@@ -66,6 +66,20 @@ The `*/17` proof cadence (ss #1854) awaited an in-gateway autonomous **outside**
 
 **Risk 4 (still stands, #1878).** A verification chase body that says "please **sign and return** the **verification**" trips the content floor's `contract` category and is **held** — on the **gate** send path too (the gate re-applies the content floor to the typed send classes), so this is independent of the removed relay. Fix at the template layer: author chase bodies floor-clean, never loosen the floor.
 
+## Amendment 2026-09-17 — the agreement supersedes the letter as the grid's source, and the mapping is pinned too
+
+Three changes, all from one finding: the firm's portal described a form of routine 11 the agreement had retired the day before, and routine 5's §2.8 review threshold had been stale on the portal since the 08-28 amendment. The grid was pinned to the July 9 letter, so an amendment to the paper reached no check.
+
+1. **Source of record.** A grid may declare `source_agreement` (a path inside the private engagements repo). Where it does, that agreement's Exhibit A / Schedule A-1 is the definition of record and `source_letter` becomes history. Every row's `routine`, `start_verbatim` and `ceiling_verbatim` equals the agreement row verbatim, in the agreement's order.
+
+2. **The gate lives in the engagements repo.** ss-console is public and engagements is private, so this repo's CI cannot read the agreement, while engagements CI can read this repo with no credential. `tests/routine-grid-parity.test.ts` there reads ss-console at a SHA recorded in engagements and compares the rows. Divergence during an open amendment is declared in `agreements/pending-amendments.yaml` rather than tolerated, so the gate stays meaningful while paper is in flight instead of going red for its duration.
+
+3. **The normalization is pinned, not only the quote.** `start_tier` is what the client's page renders as the routine's level, and mapping the agreement's prose onto the closed tier vocabulary is a judgment (the chronology's "On request ..." to auto-handle; the lien ledger's dual start to its lower bound). A row whose `start_verbatim` is not a plain tier name now requires a `start_tier_note` quoting the phrase the mapping rests on, and the parser refuses the row without it. The parser also refuses a `start_tier` above its own `ceiling_tier`, which was previously unchecked.
+
+**Two portal defects fixed with it, both in the level reader (`src/lib/operator/entitlement-compiler.ts`).** A routine with no send action class resolved to flag-only, so five prepare-and-route work-product routines and the internal-record chronology read one or two levels below the agreement on the client's Settings page. The first correction returned the grid's authored tier instead, which is the worse error in the other direction: it would claim "Handles it" from a historical field while the seat held `internal_write: refused`. The resolved level is now the lower of the authored tier and what the live writing ceiling permits, an absent or refused write reads as "not currently authorized", and a level the Machine did not confirm is marked unconfirmed per row rather than asserted. The Duties grid, Settings and the Activity feed now share one client vocabulary (`src/lib/portal/operator/tier-language.ts`) instead of three copies.
+
+Lifecycle for all of it, including retirement: `docs/runbooks/operator/routine-lifecycle.md`.
+
 ## Consequences
 
 - A&P go-live inherits `routine-grid.yaml` + `commitments.json` + the probe ladder; Christa's two numbers and the grid-delta review swap the placeholders (config-only).

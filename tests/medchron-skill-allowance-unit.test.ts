@@ -50,10 +50,10 @@ describe('medical-chronology-maintainer: the allowance unit', () => {
   })
 
   it('models no dollar figure in the sections that say what to write back', () => {
-    // From BUILD onward: the request, append, and deliver turns, plus the
+    // From RUN onward: the run, update, and deliver turns, plus the
     // boundaries. The earlier "Inputs" section deliberately quotes a figure as
     // an example of untrusted record CONTENT, which is the opposite lesson.
-    const start = body.indexOf('## BUILD')
+    const start = body.indexOf('## RUN')
     expect(start).toBeGreaterThan(-1)
     const figures = body.slice(start).match(/\$\s?\d|\bUSD\b/g) ?? []
     expect(figures, `the reply guidance models a dollar figure: ${figures.join(', ')}`).toEqual([])

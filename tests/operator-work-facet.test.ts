@@ -78,8 +78,24 @@ function grid(rows: RoutineGridRow[]): RoutineGrid {
 }
 
 /** Grid-mode config: only routine_grid is read in this branch. */
+/**
+ * Grid-mode config. The grid persona carries `internal_write: autonomous`
+ * because a dial-less routine's level is the lower of its authored tier and its
+ * live writing ceiling (see resolveLiveTier): with no writing permission the row
+ * correctly reads "not currently authorized", which is a different assertion
+ * than the tier mapping these fixtures exercise.
+ */
 function gridConfig(rows: RoutineGridRow[]): CustomerConfigRow {
-  return { routine_grid: grid(rows), personas: [] } as unknown as CustomerConfigRow
+  return {
+    routine_grid: grid(rows),
+    personas: [
+      {
+        slug: 'test-persona',
+        status: 'active',
+        entitlements: { exposure: { internal_write: 'autonomous' } },
+      },
+    ],
+  } as unknown as CustomerConfigRow
 }
 
 // --- gridless-mode fixtures (mirror the skills resolver's inputs) -------------
@@ -163,6 +179,86 @@ describe('resolveOperatorWork — grid mode', () => {
     if (model.mode !== 'grid') throw new Error('expected grid mode')
     const today = model.sections[0].routines.map((r) => r.todaySentence)
     expect(today).toEqual(['Surfaces it', 'Prepares it for you', 'Handles it'])
+  })
+
+  it('renders the LIVE level, not the grid start, when a client has moved the dial', () => {
+    // 2026-09-17: Duties rendered `start_tier` while Settings rendered the live
+    // override, so the two pages contradicted each other after a client change.
+    const sendRow = row({
+      routine: 'Client chase',
+      start_tier: 'prepare-and-route',
+      ceiling_tier: 'auto-handle',
+      ceiling_verbatim: 'Auto-handle (once you are comfortable)',
+      enforcement: enforcement({ exposure_keys: { external_send_client: 'draft_for_review' } }),
+    })
+    const config = {
+      routine_grid: grid([sendRow]),
+      personas: [
+        {
+          slug: 'test-persona',
+          status: 'active',
+          entitlements: { exposure: { external_send_client: 'draft_for_review' } },
+        },
+      ],
+    } as unknown as CustomerConfigRow
+
+    const authored = resolveOperatorWork(config, { confirmed: true, overrides: {} })
+    if (authored.mode !== 'grid') throw new Error('expected grid mode')
+    expect(authored.sections[0].routines[0].todaySentence).toBe('Prepares it for you')
+    expect(authored.sections[0].routines[0].canBecomeSentence).toBe('Handles it')
+    expect(authored.sections[0].routines[0].levelUnconfirmed).toBe(false)
+
+    const raised = resolveOperatorWork(config, {
+      confirmed: true,
+      overrides: { external_send_client: 'autonomous' },
+    })
+    if (raised.mode !== 'grid') throw new Error('expected grid mode')
+    // The client raised it: Duties says so, and there is no headroom left.
+    expect(raised.sections[0].routines[0].todaySentence).toBe('Handles it')
+    expect(raised.sections[0].routines[0].canBecomeSentence).toBeNull()
+  })
+
+  it('marks each row unconfirmed when the Machine did not answer, and never invents a level', () => {
+    const config = gridConfig([row({ start_tier: 'auto-handle' })])
+    const unreached = resolveOperatorWork(config, { confirmed: false, overrides: {} })
+    if (unreached.mode !== 'grid') throw new Error('expected grid mode')
+    expect(unreached.levelsConfirmed).toBe(false)
+    expect(unreached.sections[0].routines[0].levelUnconfirmed).toBe(true)
+
+    // No live read supplied at all (the admin config surface): no claim either way.
+    const authoredOnly = resolveOperatorWork(config)
+    if (authoredOnly.mode !== 'grid') throw new Error('expected grid mode')
+    expect(authoredOnly.levelsConfirmed).toBeNull()
+    expect(authoredOnly.sections[0].routines[0].levelUnconfirmed).toBe(false)
+  })
+
+  it('says a routine is not authorized when its writing permission is off', () => {
+    const noWrite = {
+      routine_grid: grid([row({ routine: 'Chronology', start_tier: 'auto-handle' })]),
+      personas: [{ slug: 'test-persona', status: 'active', entitlements: { exposure: {} } }],
+    } as unknown as CustomerConfigRow
+    const model = resolveOperatorWork(noWrite, { confirmed: true, overrides: {} })
+    if (model.mode !== 'grid') throw new Error('expected grid mode')
+    expect(model.sections[0].routines[0].todaySentence).toBe('Not currently authorized')
+    expect(model.sections[0].routines[0].canBecomeSentence).toBeNull()
+  })
+
+  it('shows the starting setting verbatim only when it says more than the tier name', () => {
+    const model = resolveOperatorWork(
+      gridConfig([
+        row({ routine: 'plain', start_tier: 'flag-only', start_verbatim: 'Flag-only' }),
+        row({
+          routine: 'defined',
+          start_tier: 'auto-handle',
+          start_verbatim: 'On request (a run builds it, an update brings it current)',
+          start_tier_note: 'Normalizes to auto-handle: no per-item human step after the request.',
+        }),
+      ])
+    )
+    if (model.mode !== 'grid') throw new Error('expected grid mode')
+    const [plain, defined] = model.sections[0].routines
+    expect(plain.startDetail).toBeNull()
+    expect(defined.startDetail).toBe('On request (a run builds it, an update brings it current)')
   })
 
   it('surfaces a Can-become sentence + verbatim when the ceiling exceeds the start (headroom)', () => {
