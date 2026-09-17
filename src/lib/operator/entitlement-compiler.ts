@@ -205,21 +205,27 @@ export function resolveLiveTier(row: RoutineGridRow, live: LiveExposure): LiveTi
   //     error and the worse one: it would claim "Handles it" on a client page
   //     from a historical field while the seat held `internal_write: refused`.
   //
-  // So the live writing class decides. Authorized to write on its own gives the
-  // authored tier; absent or refused is not a level at all.
+  //   - Capping such a row at prepare-and-route whenever `internal_write` was
+  //     not `autonomous` was a THIRD error, and the one that shipped first: it
+  //     invented a middle state the enforcement point does not have.
+  //
+  // `internal_write` has two outcomes where it is decided: the write EXECUTES,
+  // or it is refused. BOTH `autonomous` and `draft_for_review` execute — see the
+  // overlay's `_enforce_resolved` (plugins/hermes-smd-trust/enforce.py), whose
+  // comment records the 2026-08-21 case where a `create_memo` landed on a real
+  // matter in the firm's production Smokeball while its audit row read "draft".
+  // Unlike an external send, an internal write is never withheld for review, so
+  // there is no third level to render. A&P authors `draft_for_review` and its
+  // routines act.
+  //
+  // So: wherever the routine may write, its authored tier stands; an absent or
+  // refused class is not a level at all.
   if (sendClass === null) {
     const write = asCeiling(live.exposure['internal_write'])
-    // Absent or refused: the routine cannot write, so it has no level at all.
-    if (write === null || write === 'refused') {
-      return { tier: 'flag-only', unknownActionClass: null, notAuthorized: true }
+    if (write === 'autonomous' || write === 'draft_for_review') {
+      return { tier: row.start_tier, unknownActionClass: null, notAuthorized: false }
     }
-    // Otherwise the level is the LOWER of what the agreement authored and what
-    // the writing ceiling permits, so the page can understate but never
-    // over-claim: `autonomous` permits the authored tier, and anything held for
-    // a person caps the row at prepare-and-route however the grid reads.
-    const permitted: RoutineTier = write === 'autonomous' ? 'auto-handle' : 'prepare-and-route'
-    const tier = TIER_RANK[row.start_tier] <= TIER_RANK[permitted] ? row.start_tier : permitted
-    return { tier, unknownActionClass: null, notAuthorized: false }
+    return { tier: 'flag-only', unknownActionClass: null, notAuthorized: true }
   }
   if (!isHonoredActionClass(sendClass)) {
     // Fail closed AND say so. The authored value (if any) is deliberately not
