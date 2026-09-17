@@ -1,12 +1,17 @@
 # routine-grid.yaml — the compiled traceability artifact for the Ashton & Price
 # routine-settings grid (ADR 0075).
 #
-# SOURCE OF TRUTH: operator/customers/ashton-price/correspondence/
-#   07_2026-07-09_scott-to-christa_responses-and-routine-matrix.md
-# Every `start_tier`, `ceiling_tier`, and `*_verbatim` value below traces verbatim
-# to the grid at the bottom of that letter (the client commitment). This file does
-# NOT author new client-facing content; it maps the letter's 19 rows onto the seat's
-# skills and records how each tier is actually made real in config + enforcement.
+# SOURCE OF TRUTH (since 2026-09-17): the agreement named by `source_agreement`
+#   below (Exhibit A, Schedule A-1), in the private engagements repo. Before that the
+#   July 9 letter (07, `source_letter`) was the source; the agreement restates it
+#   verbatim except where an amendment changed a row (rows 5 and 11 so far).
+# Every `routine`, `start_verbatim`, and `ceiling_verbatim` value below equals the
+# agreement's row verbatim, in the agreement's order. The engagements repo enforces
+# that (tests/routine-grid-parity.test.ts there reads this file from ss-console main),
+# because this repo's CI cannot read the private one. This file does NOT author
+# client-facing content; it maps the agreement's 19 rows onto the seat's skills and
+# records how each tier is made real in config + enforcement. Lifecycle (define,
+# change, add, retire): docs/runbooks/operator/routine-lifecycle.md.
 #
 # WHY THIS EXISTS: the letter makes a three-tier promise per routine (auto-handle /
 # prepare-and-route / flag-only) with named permanent caps (deadline, money, opposing
@@ -15,8 +20,11 @@
 # that NARROW the letter — those caveats are the point of the artifact.
 #
 # TIER VOCABULARY (normalized, closed set): flag-only | prepare-and-route | auto-handle.
-#   The letter's "Runs on its own" normalizes to auto-handle (medical chronology);
-#   its "Internal record only" cap keeps that auto-handle scoped to internal_write.
+#   The medical chronology's "On request (a run builds it, an update brings it
+#   current)" normalizes to auto-handle: once a Named Administrator asks, it runs with
+#   no per-item human step. Its "Internal record only" cap keeps that auto-handle
+#   scoped to internal_write. (The July letter said "Runs on its own"; the agreement
+#   restated the row 2026-09-16 when the running-note form was retired.)
 #   The letter's "Flag-only / prepare-and-route" dual start (lien ledger) normalizes
 #   to its lower bound, flag-only (a judgment call, noted on that row).
 #
@@ -41,6 +49,7 @@ adr: '0075'
 seat: ashton-price
 persona: operator
 source_letter: operator/customers/ashton-price/correspondence/07_2026-07-09_scott-to-christa_responses-and-routine-matrix.md
+source_agreement: operator/customers/ashton-price/agreements/service-agreement.md
 
 rows:
   # ---------------------------------------------------------------- DISCOVERY
@@ -137,7 +146,12 @@ rows:
     skills: [opposing-response-deficiency-review]
     start_tier: flag-only
     ceiling_tier: flag-only
-    start_verbatim: 'Flag-only'
+    start_verbatim: 'Flag-only, up to the review threshold (§2.8)'
+    start_tier_note: >-
+      Normalizes to flag-only on the agreement's own word "Flag-only". The §2.8
+      clause adds a page threshold to the same tier rather than changing it:
+      "The Operator suspends the review, surfaces the served set with the pages
+      and documents observed so far, and does not read further".
     ceiling_verbatim: 'Flag-only (an assist, not an authority)'
     enforcement:
       initiation: 'manual + webhook (served responses routed in by the matter-inbox-router spine)'
@@ -265,30 +279,34 @@ rows:
     skills: [medical-chronology-maintainer]
     start_tier: auto-handle
     ceiling_tier: auto-handle
-    start_verbatim: 'Runs on its own'
+    start_verbatim: 'On request (a run builds it, an update brings it current), up to the cycle allowance (§2.8, Exhibit A)'
+    start_tier_note: >-
+      Normalizes to auto-handle on Schedule A-1's own preamble definition, that
+      "means the routine runs without a per-item human step, within the permanent
+      caps": once a Named Administrator asks, the run or the update proceeds with no
+      further human step. The request itself is the initiation, which is why the row
+      is manual-only.
     ceiling_verbatim: 'Internal record only (never characterizes)'
     enforcement:
-      initiation: 'manual + scheduled (records-driven; package build on administrator request via the on-seat runner)'
+      initiation: 'manual (a Named Administrator requests a run or an update; the on-seat runner builds it)'
       exposure_keys:
         internal_write: autonomous
       content_floor: false
       banned_tools: []
       notes: >-
-        "Runs on its own" normalizes to auto-handle, but scoped to INTERNAL RECORD ONLY:
-        it keeps the running chronology current as records land (internal_write) and
-        flags treatment gaps beyond the authored treatment_gap_flag_days setting. It
-        never characterizes: it records what is in the file, it does not compute or
-        opine. The "internal record only" cap means no draft, no send, no
-        characterization; internal_write is the only governing exposure.
-        Exhibit A (engagements #89) defines two forms of this record: the running
-        chronology is this skill's memo and stays unmetered; the requested
-        chronology package is built by the SMD runner on this seat and filed through
-        the connector, governed by the seat's chronology_package_page_allowance_per_month
-        setting and the runner's registered gates (ADR 0087). Since ss#2616 the skill
-        carries the request path: a Named Administrator's ask becomes a submitted
-        runner job (allowance pre-flight, dual-probe matter resolution), and the
-        runner's completion wakes the skill's deliver mode (memo pointer, review
-        task, reply to the requester through the seat's authored mail posture).
+        One product since 2026-09-16 (agreement Exhibit A, "The medical chronology
+        (routine 11)"); the July running-note form is retired and nothing schedules it.
+        A run reads a designated matter's medical records and delivers the chronology
+        document, the records-only exhibits, and the billing worksheet where the file
+        holds ledgers; an update reads only what the delivered chronology did not cover.
+        Both are built by the SMD runner on this seat and filed through the connector,
+        metered in pages per billing cycle by chronology_package_page_allowance_per_month
+        and the cycle anchor settings (ADR 0087). A Named Administrator's ask becomes a
+        submitted runner job (allowance pre-flight, dual-probe matter resolution), and
+        the runner's completion wakes the skill's deliver mode (review task, reply to the
+        requester through the seat's authored mail posture). Auto-handle scoped to
+        INTERNAL RECORD ONLY: it transcribes what is in the file and never characterizes
+        causation, severity, or value; internal_write is the only governing exposure.
 
   # ------------------------------------------------------------------- MOTIONS
   - routine: 'Motion calendar'
@@ -404,6 +422,11 @@ rows:
     start_tier: flag-only
     ceiling_tier: prepare-and-route
     start_verbatim: 'Flag-only / prepare-and-route'
+    start_tier_note: >-
+      Normalizes to its LOWER bound, flag-only, because the agreement states a dual
+      start, "Flag-only / prepare-and-route", without splitting the actions between
+      them. The lower bound is the only reading that cannot over-claim; the ceiling
+      row carries the graduation.
     ceiling_verbatim: 'Prepare-and-route (capped: money)'
     enforcement:
       initiation: 'manual + scheduled (weekly open-payoff chase)'

@@ -121,7 +121,11 @@ describe('resolveOperatorOverview', () => {
             gridRow({ routine: 'Three', start_tier: 'flag-only' }),
           ],
         },
-        personas: [persona({ entitlements: { exposure: { internal_write: 'draft_for_review' } } })],
+        // `autonomous` writing, so the dial-less rows in this fixture resolve to
+        // their authored tiers; a held write caps them at prepare-and-route.
+        personas: [
+          persona({ slug: 'p', entitlements: { exposure: { internal_write: 'autonomous' } } }),
+        ],
         connectors: { PracticeManagement: { adapter: 'x' }, Email: { adapter: 'y' } },
         scope: {
           inbound_allow_from: ['@firm.example'],
@@ -138,7 +142,7 @@ describe('resolveOperatorOverview', () => {
       surfaces: 1,
     })
     expect(model.authority).toEqual([
-      { label: 'Writing inside your systems', sentence: 'Prepares it for a person' },
+      { label: 'Writing inside your systems', sentence: 'Handles it on its own' },
     ])
     expect(model.systems).toEqual(['Email', 'Practice management'])
     expect(model.respondsTo).toEqual(['@firm.example'])

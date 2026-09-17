@@ -417,6 +417,12 @@ else
   log "AGENTMAIL_SEND_API_KEY unset; broker transmit verbs stay fail-closed"
 fi
 
+# ss 2026-09-17: AGENTMAIL_WEBHOOK_READ_API_KEY, the credential boot smoke's
+# agentmail-webhook-secret-matches-vendor check asks the vendor with, needs NO
+# materialization here. Fly injects it into the Machine's init environment, where
+# the probe reads it as root from /proc/1/environ; the only thing this script owes
+# it is the strip below, so the ORG-scoped key never reaches the agent.
+
 # ss#2258 (msgraph wave): the Graph SEND credential, same custody shape again.
 #
 # Read the next paragraph before "fixing" the missing unset at the bottom of this
@@ -551,7 +557,12 @@ unset GOOGLE_IMPERSONATE_SUBJECT GOOGLE_OAUTH_SCOPES GOOGLE_TOKEN_PATH
 # credential out of /proc/<pid>/environ, so a strip that happens after the first
 # fork is cosmetic. What the gateway inherits is AGENTMAIL_API_KEY, the
 # inbox-scoped key the vendor refuses to let transmit.
-unset AGENTMAIL_SEND_API_KEY
+# The webhook-READ key dies at the same moment and for the same reason, on the
+# same line. It is ORG-scoped — it has to be, since AgentMail webhooks are
+# org-level objects an inbox-scoped key cannot list — which makes it the one
+# AgentMail credential here that reaches past this inbox. Boot smoke reads it as
+# root from /proc/1/environ, where Fly keeps it; nothing agent-side needs it.
+unset AGENTMAIL_SEND_API_KEY AGENTMAIL_WEBHOOK_READ_API_KEY
 # The Graph SEND app credential dies here too, for the same reason and at the same
 # moment. Since 2026-08-13 it carries a DIFFERENT app registration from the
 # MSGRAPH_* the gateway keeps for reads — provisioning refuses the seat otherwise

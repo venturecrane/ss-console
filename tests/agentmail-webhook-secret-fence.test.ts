@@ -12,7 +12,7 @@
  * names the key to vault.
  *
  * WHAT THIS TEST DRIVES. The real fence text, extracted from
- * `operator/bin/provision-customer.sh` between its `agentmail-webhook-secret-fence`
+ * `operator/bin/lib/stage-agentmail.sh` between its `agentmail-webhook-secret-fence`
  * sentinels, run in a bash harness with a stub `die`. Same shape as
  * tests/msgraph-two-app-fence.test.ts. The falsifier is the first case: with
  * the per-seat key vaulted the fence passes and stages that value, so a fence
@@ -23,14 +23,17 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-const SCRIPT = fileURLToPath(new URL('../operator/bin/provision-customer.sh', import.meta.url))
+const SCRIPT = fileURLToPath(new URL('../operator/bin/lib/stage-agentmail.sh', import.meta.url))
+// The block moved to the lib on 2026-09-17 (shell size ratchet); `unset_stale`
+// and the rest of the provisioner's helpers still live in the caller.
+const PROVISIONER = fileURLToPath(new URL('../operator/bin/provision-customer.sh', import.meta.url))
 
 function fenceSource(): string {
   const text = readFileSync(SCRIPT, 'utf8')
   const start = text.indexOf('# >>> agentmail-webhook-secret-fence')
   const end = text.indexOf('# <<< agentmail-webhook-secret-fence')
-  expect(start, 'opening fence sentinel missing from provision-customer.sh').toBeGreaterThan(-1)
-  expect(end, 'closing fence sentinel missing from provision-customer.sh').toBeGreaterThan(start)
+  expect(start, 'opening fence sentinel missing from lib/stage-agentmail.sh').toBeGreaterThan(-1)
+  expect(end, 'closing fence sentinel missing from lib/stage-agentmail.sh').toBeGreaterThan(start)
   const block = text.slice(start, end)
   expect(block).toContain('die ')
   // The whole point: the global name must not be consulted inside the fence.
@@ -112,8 +115,10 @@ describe('agentmail-webhook-secret-fence', () => {
       /unset_stale "[^"]+" WEBHOOK_SECRET_AGENTMAIL AGENTMAIL_API_KEY AGENTMAIL_SEND_API_KEY/
     )
     // The helper itself is the removal: a stale value is unset --stage so the
-    // deploy that follows carries the authored state.
-    expect(text).toMatch(
+    // deploy that follows carries the authored state. It is DEFINED in the
+    // provisioner and called from the sourced block, so this assertion reads the
+    // provisioner even though the block above now lives in lib/stage-agentmail.sh.
+    expect(readFileSync(PROVISIONER, 'utf8')).toMatch(
       /unset_stale\(\) \{[^\n]*fly secrets unset --stage -a "\$\{APP_NAME\}" "\$@"/
     )
     expect(

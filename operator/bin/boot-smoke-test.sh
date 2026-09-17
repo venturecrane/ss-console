@@ -476,6 +476,14 @@ ssh_exec "r2-account-key-stripped-from-agent" "/opt/hermes/.venv/bin/python3 /ap
 ssh_exec "agentmail-send-key-stripped-from-agent" \
   "/opt/hermes/.venv/bin/python3 /app/r2-account-key-strip-probe.py hermes AGENTMAIL_SEND_API_KEY"
 
+# The webhook-READ key is the one AgentMail credential on the seat with ORG scope
+# (2026-09-17). It exists so boot smoke can ask the vendor about this seat's
+# webhook; it must never be reachable from the agent, where org scope would mean
+# reach beyond this inbox. Same instrument, same failure mode: remove the unset in
+# entrypoint.sh and this exits non-zero naming the pid, printing no value.
+ssh_exec "agentmail-webhook-read-key-stripped-from-agent" \
+  "/opt/hermes/.venv/bin/python3 /app/r2-account-key-strip-probe.py hermes AGENTMAIL_WEBHOOK_READ_API_KEY"
+
 # The staged AgentMail webhook secret is the VENDOR's, for THIS seat's webhook.
 #
 # WHY (scott, 2026-09-15, vfy_01M2HXT17Q32RX6TCV5NVZA9D6): with no per-seat
@@ -485,9 +493,18 @@ ssh_exec "agentmail-send-key-stripped-from-agent" \
 # gateway's environ as root, asks the vendor for the webhook naming this seat's
 # hostname, and compares signing secrets by value, printing hash prefixes only.
 #
+# The vendor lookup uses the ORG-scoped webhook_read key from PID 1's environ,
+# NOT the agent's AgentMail key (2026-09-17, vfy_01M2RD3EH4GDBH5SN2K16B0RRH).
+# The first version asked with the agent's key, which is inbox-scoped by design;
+# AgentMail webhooks are org-level objects, so that key returns 403, and even a
+# replacement minted on the same inbox WITH webhook_read lists zero webhooks.
+# The check could not pass on a correctly-scoped seat — it reported a credential
+# defect where none existed. Scope, not permission, was the missing thing.
+#
 # What makes it able to FAIL: stage the wrong secret and it exits 1 naming both
-# hash prefixes; no vendor webhook for the host, or two, also exits 1. A seat
-# with no AgentMail channel passes vacuously and says so.
+# hash prefixes; no vendor webhook for the host, or two, also exits 1; a seat
+# carrying the secret with no key file exits 1 naming the path. A seat with no
+# AgentMail channel passes vacuously and says so.
 ssh_exec "agentmail-webhook-secret-matches-vendor" \
   "/opt/hermes/.venv/bin/python3 /app/agentmail-webhook-secret-probe.py ${APP_NAME}.fly.dev hermes"
 

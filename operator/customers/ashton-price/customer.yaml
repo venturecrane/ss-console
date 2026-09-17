@@ -474,11 +474,15 @@ personas:
           scheduled: true
           webhook: false
         enabled: true
-      - name: medical-chronology-maintainer # checks for newly landed records
+      - name: medical-chronology-maintainer # routine 11: a run or an update, on request
         version: pending
         initiation:
           manual: true
-          scheduled: true
+          # false since 2026-09-17: the running note a schedule kept current was
+          # retired with the one-product agreement row (Exhibit A, 2026-09-16), so
+          # no cron may name this skill. The runner's completion wake arrives on the
+          # authenticated handoff route and needs no scheduled grant.
+          scheduled: false
           webhook: false
         enabled: true
         # Christa's confirmed number (correspondence 09, 2026-07-23; pinned by
@@ -657,10 +661,6 @@ personas:
     #   wake_policy: pre_run_decides
     # - skill: service-confirmation-watcher
     #   schedule: '51 7 * * 1-5' # weekday 0751 seat-local
-    #   pre_run: pre_run.py
-    #   wake_policy: pre_run_decides
-    # - skill: medical-chronology-maintainer
-    #   schedule: '33 8 * * 1-5' # weekday 0833 seat-local — after records imports land
     #   pre_run: pre_run.py
     #   wake_policy: pre_run_decides
     # - skill: medical-records-chaser

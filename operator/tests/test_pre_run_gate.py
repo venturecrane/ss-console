@@ -36,9 +36,13 @@ _TEMPLATE = _OPERATOR_ROOT / "templates" / "pre_run_gate.py"
 # moment it is written. Until 2026-09-11 this was a hand-maintained tuple
 # (code review 2026-09-10, Architecture 5).
 #
-# Eight stamps as of 2026-09-11. A skill graduating to a bespoke gate lowers
+# Eight stamps as of 2026-09-11; SEVEN since 2026-09-17, when routine 11's
+# running-note form was retired and nothing schedules medical-chronology-maintainer
+# any more, so its stamped gate was deleted rather than left as a gate for a cron
+# that cannot exist (its skill authors `initiation.scheduled: false` on both
+# seats). A skill graduating to a bespoke gate, or losing its schedule, lowers
 # the floor in the same change, on purpose.
-_STAMP_FLOOR = 8
+_STAMP_FLOOR = 7
 
 
 def _load_gate():
