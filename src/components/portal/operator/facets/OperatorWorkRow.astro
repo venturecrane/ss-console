@@ -38,7 +38,19 @@ const microLabel =
     <p class="font-body text-sm text-[color:var(--color-text-primary)]">
       <span class={microLabel}>Autonomy</span>
       <span class="font-semibold">{r.todaySentence}</span>
+      {
+        r.levelUnconfirmed && (
+          <span class="text-[color:var(--color-text-secondary)]">
+            {' · '}the level on file, not confirmed with the Operator just now
+          </span>
+        )
+      }
     </p>
+    {
+      r.startDetail && (
+        <p class="font-body text-sm text-[color:var(--color-text-secondary)]">{r.startDetail}</p>
+      )
+    }
     {
       r.canBecomeSentence && (
         <p class="font-body text-sm text-[color:var(--color-text-primary)]">

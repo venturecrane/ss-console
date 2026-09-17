@@ -1,0 +1,52 @@
+# routine-grid.yaml — the compiled traceability artifact for [FIRM]'s routine
+# grid (ADR 0075). Copy this file with the rest of `_template/` and replace every
+# bracketed value. Delete this scaffold's example row once real rows exist.
+#
+# SOURCE OF TRUTH: the engagement letter that committed the matrix
+# (`source_letter`) until an agreement exists, then the agreement's Exhibit A /
+# Schedule A-1 (`source_agreement`, a path inside the private engagements repo).
+# Every `routine`, `start_verbatim` and `ceiling_verbatim` below is that source's
+# text VERBATIM, in its order. Once `source_agreement` is set, the engagements
+# repo's tests/routine-grid-parity.test.ts holds the two in step.
+#
+# This file authors NO client-facing content. It maps the source's rows onto this
+# seat's skills and records how each tier is made real in config + enforcement.
+# Lifecycle (define, change, add, retire): docs/runbooks/operator/routine-lifecycle.md.
+#
+# TIER VOCABULARY (closed set): flag-only | prepare-and-route | auto-handle.
+#   flag-only         the Operator surfaces the item and takes no further action
+#   prepare-and-route the Operator prepares the work and routes it to a person
+#   auto-handle       the routine runs with no per-item human step, within the caps
+# A `start_verbatim` that is not one of those three names is prose the source
+# wrote, so the row MUST carry a `start_tier_note` quoting the phrase its mapping
+# rests on. The parser refuses the row without one: `start_tier` is what the
+# client's portal renders as the routine's level.
+
+adr: '0075'
+seat: '[firm-slug]'
+persona: operator
+source_letter: operator/customers/[firm-slug]/correspondence/[NN]_[date]_[subject].md
+# source_agreement: operator/customers/[firm-slug]/agreements/service-agreement.md
+
+rows:
+  # ------------------------------------------------------------ [SECTION NAME]
+  - routine: '[The routine name, in the words the firm uses]'
+    letter_section: '[THE SECTION HEADING THE SOURCE USES]'
+    skills: ['[skill-slug]']
+    start_tier: flag-only
+    ceiling_tier: flag-only
+    start_verbatim: 'Flag-only'
+    ceiling_verbatim: 'Flag-only (only surfaces)'
+    enforcement:
+      # How the routine starts: manual (a person asks), scheduled (a cron entry
+      # in customer.yaml), webhook (an event). Say which, in prose.
+      initiation: 'manual'
+      # The persona exposure action class(es) that gate this routine's OUTPUT,
+      # pinned to their live customer.yaml values.
+      exposure_keys:
+        internal_write: autonomous
+      content_floor: false
+      banned_tools: []
+      notes: >-
+        [How this tier is actually enforced, including any caveat that NARROWS
+        the source. The caveats are the point of this artifact.]

@@ -32,6 +32,7 @@ import {
   resolveOperatorOverview,
 } from '../../../../../lib/portal/operator/facets/overview/overview'
 import { resolveOperatorWork } from '../../../../../lib/portal/operator/facets/work/work'
+import { readLiveOverrides } from '../../../../../lib/portal/operator/entitlement-change'
 import { resolveOperatorPeople } from '../../../../../lib/portal/operator/facets/people/people'
 import { resolveOperatorScope } from '../../../../../lib/portal/operator/facets/scope/scope'
 import { buildConnectionRows } from '../../../../../lib/portal/operator/connections'
@@ -157,7 +158,32 @@ const overview = resolveOperatorOverview(customerConfig)
 const job = jobLines(overview.job)
 
 // DUTIES — the full routine grid (or the gridless skills inventory), inline.
-const workModel = access ? resolveOperatorWork(customerConfig) : null
+// Levels come from the same live read the Settings page uses, so the two pages
+// cannot disagree after a Named Administrator moves a dial (found 2026-09-17:
+// Duties rendered the grid's starting level while Settings rendered the live
+// one). No grid, no read.
+const gridPersona = customerConfig?.routine_grid?.persona ?? ''
+const liveRead =
+  access && gridPersona
+    ? await readLiveOverrides(
+        {
+          OPERATOR_RUNTIME_READ_SECRET: env.OPERATOR_RUNTIME_READ_SECRET,
+          OPERATOR_RUNTIME_READ_URL: env.OPERATOR_RUNTIME_READ_URL,
+        },
+        instance,
+        gridPersona
+      )
+    : null
+const workModel = access
+  ? resolveOperatorWork(
+      customerConfig,
+      liveRead === null
+        ? null
+        : liveRead.status === 'ok'
+          ? { confirmed: true, overrides: liveRead.overrides }
+          : { confirmed: false, overrides: {} }
+    )
+  : null
 
 // Business-hours header line (Lock 2): ONLY the timezone materializes on the
 // seat today, so only the timezone renders. The display name is a

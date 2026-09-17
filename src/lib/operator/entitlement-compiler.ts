@@ -174,6 +174,15 @@ export interface LiveTierResolution {
   tier: RoutineTier
   /** The grid key the seat cannot honor, or null when the key is fine. */
   unknownActionClass: string | null
+  /**
+   * True when a DIAL-LESS routine's own writing class is not authorized in the
+   * live exposure (absent, or an explicit `refused`). Such a routine cannot do
+   * anything, so neither its authored tier nor a send-derived tier describes it;
+   * a caller renders "not currently authorized" rather than a level. Always
+   * false for a routine that has a send dial, where the ceiling itself is the
+   * answer.
+   */
+  notAuthorized: boolean
 }
 
 /**
@@ -184,26 +193,57 @@ export interface LiveTierResolution {
  */
 export function resolveLiveTier(row: RoutineGridRow, live: LiveExposure): LiveTierResolution {
   const sendClass = sendActionClassOf(row)
-  // No send class at all is structural, not a defect: the row's skills carry
-  // no draft or send tool, so flag-only is the only tier it HAS.
-  if (sendClass === null) return { tier: 'flag-only', unknownActionClass: null }
+  // A routine with no send class has no dial: nothing at runtime can move it,
+  // and ADR 0075 composes its tier from person-invoked initiation plus
+  // `internal_write` ("prepare-and-route (work product)", and the medical
+  // chronology's internal-record auto-handle). Two corrections meet here:
+  //
+  //   - Collapsing every dial-less row to flag-only rendered six A&P routines
+  //     one or two levels BELOW their agreement row on the Settings page
+  //     (found 2026-09-17).
+  //   - Returning the authored `start_tier` unconditionally was the opposite
+  //     error and the worse one: it would claim "Handles it" on a client page
+  //     from a historical field while the seat held `internal_write: refused`.
+  //
+  // So the live writing class decides. Authorized to write on its own gives the
+  // authored tier; absent or refused is not a level at all.
+  if (sendClass === null) {
+    const write = asCeiling(live.exposure['internal_write'])
+    // Absent or refused: the routine cannot write, so it has no level at all.
+    if (write === null || write === 'refused') {
+      return { tier: 'flag-only', unknownActionClass: null, notAuthorized: true }
+    }
+    // Otherwise the level is the LOWER of what the agreement authored and what
+    // the writing ceiling permits, so the page can understate but never
+    // over-claim: `autonomous` permits the authored tier, and anything held for
+    // a person caps the row at prepare-and-route however the grid reads.
+    const permitted: RoutineTier = write === 'autonomous' ? 'auto-handle' : 'prepare-and-route'
+    const tier = TIER_RANK[row.start_tier] <= TIER_RANK[permitted] ? row.start_tier : permitted
+    return { tier, unknownActionClass: null, notAuthorized: false }
+  }
   if (!isHonoredActionClass(sendClass)) {
     // Fail closed AND say so. The authored value (if any) is deliberately not
     // consulted — a key the Machine cannot index has no enforced meaning, and
     // reading one would be inventing a posture from a string.
-    return { tier: 'flag-only', unknownActionClass: sendClass }
+    return { tier: 'flag-only', unknownActionClass: sendClass, notAuthorized: false }
   }
   const authored = asCeiling(live.exposure[sendClass])
-  if (authored === null) return { tier: 'flag-only', unknownActionClass: null }
-  if (authored === 'autonomous') return { tier: 'auto-handle', unknownActionClass: null }
+  if (authored === null) {
+    return { tier: 'flag-only', unknownActionClass: null, notAuthorized: false }
+  }
+  if (authored === 'autonomous') {
+    return { tier: 'auto-handle', unknownActionClass: null, notAuthorized: false }
+  }
   // `refused` IS flag-only: the runtime dial expresses a flag-only target as
   // an explicit refused override (the store has no delete verb), which is
   // enforcement-equivalent to the unauthored key. Mapping it to
   // prepare-and-route rendered a lowered routine one tier too high — found by
   // the ss#2003 live probe (portal set flag-only; page re-rendered
   // prepare-and-route while the Machine correctly held refused).
-  if (authored === 'refused') return { tier: 'flag-only', unknownActionClass: null }
-  return { tier: 'prepare-and-route', unknownActionClass: null }
+  if (authored === 'refused') {
+    return { tier: 'flag-only', unknownActionClass: null, notAuthorized: false }
+  }
+  return { tier: 'prepare-and-route', unknownActionClass: null, notAuthorized: false }
 }
 
 /**
@@ -265,10 +305,10 @@ function guardRequest(
     })
   }
   const sendClass = sendActionClassOf(row)
-  if (sendClass === null && TIER_RANK[target] > TIER_RANK['flag-only']) {
+  if (sendClass === null && target !== row.start_tier) {
     rejections.push({
       code: 'no_graduation_path',
-      message: `"${row.routine}" authors no send action class — its skills carry no draft or send tool, so there is no path above flag-only`,
+      message: `"${row.routine}" authors no send action class, so its level is fixed at ${row.start_tier} by its composition and cannot be changed from this path`,
     })
   }
   // A key the Machine cannot index is refused BEFORE anything is posted
@@ -312,8 +352,8 @@ export function compileTierChange(
     }
   }
 
-  // sendClass is non-null here: a null sendClass forces fromTier === 'flag-only'
-  // and rejects any target above it, so an equal-tier no-op already returned.
+  // sendClass is non-null here: a null sendClass forces fromTier === start_tier
+  // and rejects any other target, so an equal-tier no-op already returned.
   const actionClass = sendClass as string
   const fromValue = asCeiling(live.exposure[actionClass])
   const toValue = TIER_SEND_CEILING[target]
@@ -364,10 +404,16 @@ export function compileTierChange(
  * option list so a client is never offered a choice the compiler will reject.
  */
 export function selectableTiers(row: RoutineGridRow): readonly RoutineTier[] {
-  const hasSend = sendActionClassOf(row) !== null
-  return ROUTINE_TIERS.filter((t) => {
-    if (TIER_RANK[t] > TIER_RANK[row.ceiling_tier]) return false
-    if (!hasSend && TIER_RANK[t] > TIER_RANK['flag-only']) return false
-    return true
-  })
+  // A dial-less routine offers exactly its fixed level (see resolveLiveTier),
+  // and never above the committed ceiling even if a grid authored it that way
+  // (the parser now rejects that, and this is the belt to its braces).
+  if (sendActionClassOf(row) === null) {
+    return TIER_RANK[row.start_tier] <= TIER_RANK[row.ceiling_tier] ? [row.start_tier] : []
+  }
+  return ROUTINE_TIERS.filter((t) => TIER_RANK[t] <= TIER_RANK[row.ceiling_tier])
+}
+
+/** True when the routine has no runtime dial: its level is fixed by composition. */
+export function isFixedLevel(row: RoutineGridRow): boolean {
+  return sendActionClassOf(row) === null
 }

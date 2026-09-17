@@ -40,6 +40,20 @@ export const ROUTINE_TIERS: readonly RoutineTier[] = [
   'auto-handle',
 ]
 
+/** Tier vocabulary low to high — the order the start/ceiling pair is checked in. */
+const TIER_ORDER: readonly RoutineTier[] = ROUTINE_TIERS
+
+/**
+ * The agreement's plain names for the three levels. A `start_verbatim` equal to
+ * one of these (case-insensitively) needs no normalization note; anything else
+ * is prose that a human mapped onto the tier vocabulary.
+ */
+const PLAIN_TIER_NAMES: readonly string[] = ['flag-only', 'prepare-and-route', 'auto-handle']
+
+function isPlainTierName(verbatim: string): boolean {
+  return PLAIN_TIER_NAMES.includes(verbatim.trim().toLowerCase())
+}
+
 export interface RoutineGridEnforcement {
   initiation: string
   /**
@@ -63,6 +77,14 @@ export interface RoutineGridRow {
   ceiling_tier: RoutineTier
   start_verbatim: string
   ceiling_verbatim: string
+  /**
+   * Required when `start_verbatim` is not a plain tier name: the agreement
+   * phrase the mapping onto `start_tier` rests on, quoted, plus the reading.
+   * `start_tier` is what a client page renders as the routine's level, so the
+   * judgment behind it is recorded beside the row and pinned by the engagements
+   * parity gate. Absent on a row whose starting setting is a plain tier name.
+   */
+  start_tier_note?: string
   enforcement: RoutineGridEnforcement
 }
 
@@ -71,6 +93,18 @@ export interface RoutineGrid {
   seat: string
   persona: string
   source_letter: string
+  /**
+   * The signed (or signature-draft) agreement whose Schedule A-1 this grid
+   * mirrors, as a path inside the private engagements repo. Once a grid
+   * names one, the agreement is the definition of record: every row's
+   * `routine`, `start_verbatim`, and `ceiling_verbatim` must equal the
+   * agreement's row verbatim, enforced from the engagements side
+   * (tests/routine-grid-parity.test.ts there reads this public repo), because
+   * this repo's CI cannot read the private one. Absent on a pre-agreement
+   * grid, where `source_letter` is the source. See
+   * docs/runbooks/operator/routine-lifecycle.md.
+   */
+  source_agreement?: string
   rows: RoutineGridRow[]
 }
 
@@ -82,6 +116,7 @@ export type RoutineGridErrorCode =
   | 'EnumViolation'
   | 'InvalidActionClass'
   | 'InvalidActionCeiling'
+  | 'StartAboveCeiling'
 
 export interface RoutineGridValidationError {
   code: RoutineGridErrorCode
@@ -114,6 +149,26 @@ function reqString(
   if (v.length === 0) {
     errors.push({ code: 'EmptyField', path, message: `${path} must not be empty` })
     return ''
+  }
+  return v
+}
+
+/** Optional non-empty string: absent is fine, present-but-wrong is an error. */
+function optString(
+  rec: Record<string, unknown>,
+  key: string,
+  path: string,
+  errors: Errors
+): string | undefined {
+  const v = rec[key]
+  if (v === undefined || v === null) return undefined
+  if (typeof v !== 'string') {
+    errors.push({ code: 'TypeMismatch', path, message: `${path} must be a string` })
+    return undefined
+  }
+  if (v.length === 0) {
+    errors.push({ code: 'EmptyField', path, message: `${path} must not be empty` })
+    return undefined
   }
   return v
 }
@@ -301,14 +356,43 @@ function checkRow(raw: unknown, path: string, errors: Errors): RoutineGridRow {
       },
     }
   }
+  const start_tier = reqTier(raw, 'start_tier', `${path}.start_tier`, errors)
+  const ceiling_tier = reqTier(raw, 'ceiling_tier', `${path}.ceiling_tier`, errors)
+  // The two tiers were parsed independently, so a grid could author a start
+  // ABOVE the committed ceiling and the portal's level control would offer it.
+  // The pair is a contract, so it is checked as one.
+  if (TIER_ORDER.indexOf(start_tier) > TIER_ORDER.indexOf(ceiling_tier)) {
+    errors.push({
+      code: 'StartAboveCeiling',
+      path: `${path}.start_tier`,
+      message: `${path}.start_tier (${start_tier}) is above ${path}.ceiling_tier (${ceiling_tier}); a starting setting may never exceed the committed ceiling`,
+    })
+  }
+  const start_verbatim = reqString(raw, 'start_verbatim', `${path}.start_verbatim`, errors)
+  // A starting setting that is not one of the three plain tier names is a
+  // NORMALIZATION: prose the agreement wrote, mapped by a human onto the closed
+  // tier vocabulary. That judgment has to be written down next to the row it
+  // governs, because `start_tier` is what the client's page renders as the
+  // routine's level. The engagements parity gate asserts the quoted phrase is
+  // still in the agreement.
+  const normalized = start_verbatim !== '' && !isPlainTierName(start_verbatim)
+  const start_tier_note = optString(raw, 'start_tier_note', `${path}.start_tier_note`, errors)
+  if (normalized && start_tier_note === undefined) {
+    errors.push({
+      code: 'MissingField',
+      path: `${path}.start_tier_note`,
+      message: `${path}.start_tier_note is required: start_verbatim is not a plain tier name, so the mapping onto ${start_tier} is a judgment that must quote the agreement phrase it rests on`,
+    })
+  }
   return {
     routine: reqString(raw, 'routine', `${path}.routine`, errors),
     letter_section: reqString(raw, 'letter_section', `${path}.letter_section`, errors),
     skills: reqStringList(raw, 'skills', `${path}.skills`, errors, false),
-    start_tier: reqTier(raw, 'start_tier', `${path}.start_tier`, errors),
-    ceiling_tier: reqTier(raw, 'ceiling_tier', `${path}.ceiling_tier`, errors),
-    start_verbatim: reqString(raw, 'start_verbatim', `${path}.start_verbatim`, errors),
+    start_tier,
+    ceiling_tier,
+    start_verbatim,
     ceiling_verbatim: reqString(raw, 'ceiling_verbatim', `${path}.ceiling_verbatim`, errors),
+    ...(start_tier_note === undefined ? {} : { start_tier_note }),
     enforcement: checkEnforcement(raw, path, errors),
   }
 }
@@ -349,7 +433,18 @@ export function validateRoutineGrid(input: unknown): RoutineGridValidationResult
   const seat = reqString(input, 'seat', 'seat', errors)
   const persona = reqString(input, 'persona', 'persona', errors)
   const source_letter = reqString(input, 'source_letter', 'source_letter', errors)
+  const source_agreement = optString(input, 'source_agreement', 'source_agreement', errors)
   const rows = checkRows(input, errors)
   if (errors.length > 0) return { ok: false, errors }
-  return { ok: true, value: { adr, seat, persona, source_letter, rows } }
+  return {
+    ok: true,
+    value: {
+      adr,
+      seat,
+      persona,
+      source_letter,
+      ...(source_agreement === undefined ? {} : { source_agreement }),
+      rows,
+    },
+  }
 }

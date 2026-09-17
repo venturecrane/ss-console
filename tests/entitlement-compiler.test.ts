@@ -20,6 +20,7 @@ import {
 import {
   compileTierChange,
   liveTierOf,
+  resolveLiveTier,
   selectableTiers,
   sendActionClassOf,
   type LiveExposure,
@@ -61,6 +62,53 @@ describe('send-class discovery + live tier', () => {
     const row = rowNamed(grid(), 'Served discovery caught')
     expect(sendActionClassOf(row)).toBeNull()
     expect(liveTierOf(row, liveExposure())).toBe('flag-only')
+  })
+
+  it('a dial-less row reads its writing ceiling, never collapsed to flag-only and never over-claimed', () => {
+    // 2026-09-17, two corrections in one place. Every row without a send class
+    // used to resolve to flag-only, so prepare-and-route work-product routines
+    // and the internal-record chronology read as "Surfaces it" on a client
+    // page. The first fix returned the grid's authored tier unconditionally,
+    // which is the worse error in the other direction: it would claim
+    // "Handles it" while the seat held `internal_write: refused`. The level is
+    // the lower of the two.
+    const g = grid()
+    const dialLess = g.rows.filter((r) => sendActionClassOf(r) === null)
+    expect(
+      dialLess.filter((r) => r.start_tier !== 'flag-only').length,
+      'grid must carry dial-less rows above flag-only'
+    ).toBeGreaterThan(0)
+
+    const writing = (ceiling: string): LiveExposure => ({
+      personaSlug: 'operator',
+      exposure: { internal_write: ceiling },
+    })
+
+    for (const row of dialLess) {
+      // Authorized to write on its own: the authored level stands.
+      expect(liveTierOf(row, writing('autonomous')), row.routine).toBe(row.start_tier)
+      // Held for a person: never above prepare-and-route, whatever the grid says.
+      const held = resolveLiveTier(row, writing('draft_for_review'))
+      expect(held.notAuthorized, row.routine).toBe(false)
+      expect(held.tier === 'auto-handle', `${row.routine} must not claim auto-handle`).toBe(false)
+      // Refused, and unauthored, are not levels at all.
+      for (const off of [writing('refused'), { personaSlug: 'operator', exposure: {} }]) {
+        expect(resolveLiveTier(row, off).notAuthorized, row.routine).toBe(true)
+      }
+      expect(selectableTiers(row), row.routine).toEqual([row.start_tier])
+    }
+
+    expect(liveTierOf(rowNamed(g, 'Medical chronology'), writing('autonomous'))).toBe('auto-handle')
+    expect(liveTierOf(rowNamed(g, 'Medical chronology'), writing('draft_for_review'))).toBe(
+      'prepare-and-route'
+    )
+    const lowered = compileTierChange(g, liveExposure(), {
+      routine: 'Medical chronology',
+      targetTier: 'flag-only',
+      vertical: 'law-firm',
+    })
+    expect(lowered.ok).toBe(false)
+    if (!lowered.ok) expect(lowered.rejections.map((r) => r.code)).toContain('no_graduation_path')
   })
 
   it('a graduating row authors its own send class', () => {

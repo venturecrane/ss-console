@@ -39,18 +39,9 @@ import {
 import { humanizeSkillName, resolveOperatorSkills, type OperatorSkillView } from '../skills/skills'
 import { scheduleDetailBySkill } from '../schedule/schedule'
 import { SKILL_SUMMARIES } from '../skills/skill-summaries'
-
-/**
- * Closed tier → plain-sentence map (locked, Captain 2026-07-14). The reader is a
- * colleague, not a technician: the internal token names never reach the page and
- * may change freely in code. The letter's own verbatim phrasing stays available
- * per row (start/ceiling verbatim) as the contract language.
- */
-const TIER_SENTENCE: Record<RoutineTier, string> = {
-  'flag-only': 'Surfaces it',
-  'prepare-and-route': 'Prepares it for you',
-  'auto-handle': 'Handles it',
-}
+import { ROUTINE_TIERS } from '../../../../operator/routine-grid'
+import { resolveLiveTier } from '../../../../operator/entitlement-compiler'
+import { AGREEMENT_TIER_NAME, CLIENT_TIER_SENTENCE } from '../../tier-language'
 
 /**
  * THE AUTHORITY VIEW (console blueprint §4 — the "entitlements as one honest
@@ -127,13 +118,32 @@ export interface WorkRoutineView {
   startsLabels: string[]
   /** The full authored initiation string — shown at the row's detail level. */
   initiationDetail: string
-  /** `start_tier` as the locked plain sentence — the row's "Today" line. */
+  /**
+   * The routine's CURRENT level as the shared plain sentence: the level the
+   * Settings page shows and the Machine enforces (authored exposure overlaid
+   * with the live override store when it answered), never the grid's recorded
+   * starting point after a client has moved the dial. "Needs our attention" when
+   * the row names an action class the Operator cannot enforce.
+   */
   todaySentence: string
-  /** `start_verbatim` — the letter's contract language for today's tier. */
+  /**
+   * True when the Machine did not answer the level read, so this row's level is
+   * the one on file rather than an observed one. Per row, not per page: the
+   * client sees the caveat next to the sentence it qualifies.
+   */
+  levelUnconfirmed: boolean
+  /** `start_verbatim` — the agreement's contract language for the starting setting. */
   startVerbatim: string
   /**
-   * `ceiling_tier` as the plain sentence, ONLY when the ceiling differs from the
-   * start (a real graduation headroom exists). Null when ceiling equals start.
+   * `start_verbatim` when it says more than the bare level name ("On request (a
+   * run builds it, ...)"), so the Duties row shows the routine's contracted
+   * definition. Null when it is just "Flag-only" / "Prepare-and-route" /
+   * "Auto-handle", which the level sentence already says.
+   */
+  startDetail: string | null
+  /**
+   * `ceiling_tier` as the plain sentence, ONLY when the ceiling is above the
+   * current level (real headroom exists). Null when it is at the ceiling.
    */
   canBecomeSentence: string | null
   /** `ceiling_verbatim` — shown alongside canBecomeSentence. Null when no headroom. */
@@ -172,6 +182,12 @@ export type OperatorWorkModel =
       sections: WorkSection[]
       authority: WorkAuthorityRow[]
       standingCaps: string[]
+      /**
+       * True when the Machine answered the live level read, false when it was
+       * asked and did not (the levels shown are the ones on file), null when
+       * no live read was supplied (a caller that only renders authored state).
+       */
+      levelsConfirmed: boolean | null
     }
   | {
       mode: 'gridless'
@@ -233,8 +249,36 @@ export function startsLabels(initiation: string): string[] {
   return labels
 }
 
-function toRoutineView(row: RoutineGridRow, schedules: Map<string, string>): WorkRoutineView {
-  const graduates = row.ceiling_tier !== row.start_tier
+/** Live level inputs for the Duties grid: what the Settings page reads, passed through. */
+export interface WorkLiveLevels {
+  /** Whether the Machine answered the override read for the grid's persona. */
+  confirmed: boolean
+  /** Override-store ceilings by action class (empty when not confirmed). */
+  overrides: Readonly<Record<string, string>>
+}
+
+const tierRank = (t: RoutineTier): number => ROUTINE_TIERS.indexOf(t)
+
+function levelSentence(level: {
+  tier: RoutineTier
+  unknownActionClass: string | null
+  notAuthorized: boolean
+}): string {
+  // Three honest answers before a level: a key the Operator cannot enforce, a
+  // routine whose own writing is not authorized, and otherwise the level itself.
+  if (level.unknownActionClass !== null) return 'Needs our attention'
+  if (level.notAuthorized) return 'Not currently authorized'
+  return CLIENT_TIER_SENTENCE[level.tier]
+}
+
+function toRoutineView(
+  row: RoutineGridRow,
+  schedules: Map<string, string>,
+  exposure: { personaSlug: string; exposure: Readonly<Record<string, string>> },
+  unconfirmed: boolean
+): WorkRoutineView {
+  const level = resolveLiveTier(row, exposure)
+  const graduates = !level.notAuthorized && tierRank(row.ceiling_tier) > tierRank(level.tier)
   const scheduleProse = row.skills
     .map((slug) => schedules.get(slug))
     .filter((s): s is string => !!s)
@@ -242,9 +286,12 @@ function toRoutineView(row: RoutineGridRow, schedules: Map<string, string>): Wor
     routine: row.routine,
     startsLabels: startsLabels(row.enforcement.initiation),
     initiationDetail: row.enforcement.initiation,
-    todaySentence: TIER_SENTENCE[row.start_tier],
+    todaySentence: levelSentence(level),
+    levelUnconfirmed: unconfirmed,
     startVerbatim: row.start_verbatim,
-    canBecomeSentence: graduates ? TIER_SENTENCE[row.ceiling_tier] : null,
+    startDetail:
+      row.start_verbatim === AGREEMENT_TIER_NAME[row.start_tier] ? null : row.start_verbatim,
+    canBecomeSentence: graduates ? CLIENT_TIER_SENTENCE[row.ceiling_tier] : null,
     canBecomeVerbatim: graduates ? row.ceiling_verbatim : null,
     capVerbatim: graduates ? null : row.ceiling_verbatim,
     skills: row.skills.map((slug) => ({
@@ -263,7 +310,12 @@ function toRoutineView(row: RoutineGridRow, schedules: Map<string, string>): Wor
  * insertion order for its keys; `order` records first appearance explicitly for
  * clarity.
  */
-function group(rows: readonly RoutineGridRow[], schedules: Map<string, string>): WorkSection[] {
+function group(
+  rows: readonly RoutineGridRow[],
+  schedules: Map<string, string>,
+  exposure: { personaSlug: string; exposure: Readonly<Record<string, string>> },
+  unconfirmed: boolean
+): WorkSection[] {
   const order: string[] = []
   const bySection = new Map<string, WorkRoutineView[]>()
   for (const row of rows) {
@@ -271,9 +323,28 @@ function group(rows: readonly RoutineGridRow[], schedules: Map<string, string>):
       bySection.set(row.letter_section, [])
       order.push(row.letter_section)
     }
-    bySection.get(row.letter_section)!.push(toRoutineView(row, schedules))
+    bySection.get(row.letter_section)!.push(toRoutineView(row, schedules, exposure, unconfirmed))
   }
   return order.map((name) => ({ name, routines: bySection.get(name)! }))
+}
+
+/**
+ * The exposure the levels resolve from: the SAME thing the Settings page reads,
+ * so the two surfaces cannot disagree. The grid persona's authored map, overlaid
+ * with the Machine's live override store only when the Machine answered — an
+ * unanswered read leaves the authored map, and the rows are marked unconfirmed.
+ */
+function levelExposure(
+  config: CustomerConfigRow | null,
+  personaSlug: string,
+  live: WorkLiveLevels | null
+): { personaSlug: string; exposure: Readonly<Record<string, string>> } {
+  const gridPersona = config?.personas.find((p) => p.slug === personaSlug) ?? null
+  const authored = (gridPersona?.entitlements.exposure ?? {}) as Record<string, string>
+  return {
+    personaSlug,
+    exposure: live?.confirmed ? { ...authored, ...live.overrides } : authored,
+  }
 }
 
 /**
@@ -283,7 +354,10 @@ function group(rows: readonly RoutineGridRow[], schedules: Map<string, string>):
  * (gridless mode), reusing the Skills resolver so the fallback is identical to
  * today's Skills page.
  */
-export function resolveOperatorWork(config: CustomerConfigRow | null): OperatorWorkModel {
+export function resolveOperatorWork(
+  config: CustomerConfigRow | null,
+  live: WorkLiveLevels | null = null
+): OperatorWorkModel {
   const authority = resolveAuthority(config)
   const grid = config?.routine_grid ?? null
   if (!grid) {
@@ -296,10 +370,12 @@ export function resolveOperatorWork(config: CustomerConfigRow | null): OperatorW
   }
   const persona = config?.personas.find((p) => p.status === 'active') ?? null
   const schedules = scheduleDetailBySkill(persona?.cron ?? [])
+  const exposure = levelExposure(config, grid.persona, live)
   return {
     mode: 'grid',
-    sections: group(grid.rows, schedules),
+    sections: group(grid.rows, schedules, exposure, live !== null && !live.confirmed),
     authority,
     standingCaps: resolveStandingCaps(grid.rows),
+    levelsConfirmed: live === null ? null : live.confirmed,
   }
 }

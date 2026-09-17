@@ -34,6 +34,7 @@
  */
 
 import type { AuditEntry } from './audit'
+import { CLIENT_TIER_SENTENCE } from './tier-language'
 
 export interface ClientActivityCategory {
   /** Stable filter value used in URLs. */
@@ -245,23 +246,17 @@ const withSkill = (base: string) => (entry: AuditEntry) =>
   entry.skill ? `${base}: ${entry.skill}` : base
 
 /**
- * Client-language names for the routine autonomy tiers (mirror of the settings
- * page's TIER_LABELS — the internal flag-only / prepare-and-route /
- * auto-handle vocabulary stays ours and never renders on a client surface).
+ * Client-language names for the routine autonomy tiers come from the ONE shared
+ * map (tier-language.ts): the internal flag-only / prepare-and-route /
+ * auto-handle vocabulary stays ours and never renders on a client surface.
  * Applied to the ENTITLEMENT_CHANGED target string, which the ledger stores
  * in internal vocabulary ("Client verification: prepare-and-route →
  * auto-handle"); any token without a mapping passes through unchanged.
  */
-const CLIENT_TIER_LABELS: Record<string, string> = {
-  'flag-only': 'Surfaces it for you',
-  'prepare-and-route': 'Prepares it for someone to send',
-  'auto-handle': 'Handles it end to end',
-}
-
 function clientTierPhrase(target: string): string {
   return target.replace(
     /flag-only|prepare-and-route|auto-handle/g,
-    (tier) => CLIENT_TIER_LABELS[tier] ?? tier
+    (tier) => (CLIENT_TIER_SENTENCE as Record<string, string>)[tier] ?? tier
   )
 }
 

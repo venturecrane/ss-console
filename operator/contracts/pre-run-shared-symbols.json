@@ -1,17 +1,17 @@
 {
-  "_comment": "Symbols vendored identically into multiple operator/skills/*/pre_run.py: the eight stamps of templates/pre_run_gate.py, the inline heartbeat writer classes, and the one-line wrappers over templates/skill_helpers.py (the shared library bodies live there since 2026-09-11, gated by operator/tests/test_skill_helpers_sync.py). This contract is what keeps the remaining copies honest. Hashes are over a docstring-stripped ast.dump, so prose and formatting are ignored and structure is not. Generated and enforced by tests/operator-vendored-symbols.test.ts — do not hand-edit. Regenerate with UPDATE_PRE_RUN_SHARED_SYMBOLS=1 after changing a shared symbol in EVERY copy.",
+  "_comment": "Symbols vendored identically into multiple operator/skills/*/pre_run.py: the seven stamps of templates/pre_run_gate.py (eight until 2026-09-17, when routine 11 lost its schedule and medical-chronology-maintainer/pre_run.py was deleted), the inline heartbeat writer classes, and the one-line wrappers over templates/skill_helpers.py (the shared library bodies live there since 2026-09-11, gated by operator/tests/test_skill_helpers_sync.py). This contract is what keeps the remaining copies honest. Hashes are over a docstring-stripped ast.dump, so prose and formatting are ignored and structure is not. Generated and enforced by tests/operator-vendored-symbols.test.ts — do not hand-edit. Regenerate with UPDATE_PRE_RUN_SHARED_SYMBOLS=1 after changing a shared symbol in EVERY copy.",
   "symbols": {
     "BrokerSuppressedWakeWriter": {
       "copies": 2
     },
     "_append_wake_row": {
-      "copies": 8
+      "copies": 7
     },
     "_capped_plan_counts": {
       "copies": 2
     },
     "_emit": {
-      "copies": 8
+      "copies": 7
     },
     "_find_skill_settings": {
       "copies": 3
@@ -29,7 +29,7 @@
       "copies": 2
     },
     "_skill_name": {
-      "copies": 8
+      "copies": 7
     },
     "_source_id_of": {
       "copies": 3
@@ -38,16 +38,16 @@
       "copies": 2
     },
     "decide_and_emit": {
-      "copies": 8
+      "copies": 7
     },
     "probe_open_matter_count": {
-      "copies": 8
+      "copies": 7
     },
     "write_emitted_wake_heartbeat": {
-      "copies": 8
+      "copies": 7
     },
     "write_suppressed_wake_heartbeat": {
-      "copies": 8
+      "copies": 7
     }
   }
 }
