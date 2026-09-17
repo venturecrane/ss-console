@@ -264,30 +264,46 @@ schedule or a signal. In replies, call it a run, never a "re-run" or a "refresh"
    about timing: the delivery lands on the matter in its own dated folder, and
    this skill reports when it does.
 
-## UPDATE - only the records not yet covered (the router's APPEND mode)
+## UPDATE - only the records the delivery did not cover (the router's UPDATE mode)
 
 A Named Administrator asks to bring a delivered chronology current ("update the
 chronology on 12345", "add the new records to that chronology"). UPDATE runs RUN's
 steps with one difference: the document set is the matter's current listing MINUS
-the covered document ids the delivery ledger records for that matter's delivered
-jobs. Submit with `selection.include_file_ids` naming exactly those uncovered ids;
-the runner pulls nothing else, and holds if a named id is not on the matter. In
-replies, call it an update, never an "append" or a "re-run".
+what the delivery covered. Submit with `selection.include_file_ids` naming exactly
+those ids; the runner pulls nothing else, and holds if a named id is not on the
+matter. In replies, call it an update, never an "append" or a "re-run".
 
-- **The ledger is the delta instrument.** The agreement measures an update against
-  what the delivered chronology covered; the ledger is where this seat records that,
-  per job, at delivery. A job's timestamp is a cross-check only, never the source:
-  never approximate a delta from dates alone.
-- **No ledger entry for the delivered chronology** (a delivery made before the
-  ledger existed, or one completed outside this skill): say so plainly, name the
-  delivered folder you can see on the matter, and do not submit. Tell the requester
-  SMD will confirm what that chronology covered before the update runs, and surface
-  it to SMD through the seat's ordinary operations route. Never offer a full run as
-  a substitute without saying it reads, and counts, the whole file.
-- **Nothing uncovered:** say that every document on the matter is already covered by
-  the delivered chronology, submit nothing, and stop.
-- The allowance pre-flight, the dual-probe resolution, and the identity-field rules
-  apply unchanged.
+**Where the delta comes from, in order.**
+
+1. **The job's own coverage record.** `medchron_job_status` on the matter's
+   delivered job returns `covered_document_ids` (accounted for in the delivered
+   chronology: cited in it, a byte-duplicate of something cited, in the billing
+   chart, or excluded by an authored rule) and `uncovered_document_ids` (read and
+   found to carry nothing citable, contentless or unreadable, retrieval failed, or
+   a documented orphan). The set to submit is **the matter's current listing minus
+   `covered_document_ids`**, which therefore includes every previously uncovered
+   document as well as everything that has landed since. A scan that arrived
+   without a text layer is NOT covered, and an update reads it again.
+2. **The ledger memo as cross-check.** The covered-set header this skill writes at
+   delivery should name the same job ids. Where the two disagree, take the job
+   record and say in your reply that the memo and the job record disagreed.
+3. **A job timestamp is never the source.** Never approximate a delta from dates.
+
+**When there is no coverage record** (`covered_document_ids` is null: a delivery
+made before this record existed, or one completed outside this skill, which is the
+case on any chronology delivered before 2026-09-17): say so plainly, name the
+delivered folder you can see on the matter, and **do not submit**. Tell the
+requester SMD will confirm what that chronology covered before the update runs, and
+surface it to SMD through the seat's ordinary operations route. Never offer a full
+run as a quiet substitute: a run reads, and counts against the allowance, the whole
+file, so say that in the same sentence if you mention it at all.
+
+**Nothing left to read:** when the listing minus the covered set is empty, say that
+the delivered chronology already covers every document on the matter, submit
+nothing, and stop.
+
+The allowance pre-flight, the dual-probe resolution, and the identity-field rules
+apply unchanged.
 
 ## DELIVER - on the handoff wake (ss#2616)
 
