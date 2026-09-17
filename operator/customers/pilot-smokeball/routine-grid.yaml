@@ -141,10 +141,10 @@ rows:
     ceiling_tier: flag-only
     start_verbatim: 'Flag-only, up to the review threshold (§2.8)'
     start_tier_note: >-
-      Normalizes to flag-only on the agreement's own word "Flag-only"; the
-      §2.8 clause adds a page threshold to the same tier, it does not change it
-      ("The Operator suspends the review, surfaces the served set ... and does not
-      read further").
+      Normalizes to flag-only on the agreement's own word "Flag-only". The §2.8
+      clause adds a page threshold to the same tier rather than changing it:
+      "The Operator suspends the review, surfaces the served set with the pages
+      and documents observed so far, and does not read further".
     ceiling_verbatim: 'Flag-only (an assist, not an authority)'
     enforcement:
       initiation: 'manual + webhook (served responses routed in by the matter-inbox-router spine)'
@@ -274,8 +274,8 @@ rows:
     ceiling_tier: auto-handle
     start_verbatim: 'On request (a run builds it, an update brings it current), up to the cycle allowance (§2.8, Exhibit A)'
     start_tier_note: >-
-      Normalizes to auto-handle on Schedule A-1's preamble definition, "auto-handle
-      means the routine runs without a per-item human step, within the permanent
+      Normalizes to auto-handle on Schedule A-1's own preamble definition, that
+      "means the routine runs without a per-item human step, within the permanent
       caps": once a Named Administrator asks, the run or the update proceeds with no
       further human step. The request itself is the initiation, which is why the row
       is manual-only.
@@ -410,7 +410,7 @@ rows:
     start_verbatim: 'Flag-only / prepare-and-route'
     start_tier_note: >-
       Normalizes to its LOWER bound, flag-only, because the agreement states a dual
-      start ("Flag-only / prepare-and-route") without splitting the actions between
+      start, "Flag-only / prepare-and-route", without splitting the actions between
       them. The lower bound is the only reading that cannot over-claim; the ceiling
       row carries the graduation.
     ceiling_verbatim: 'Prepare-and-route (capped: money)'
