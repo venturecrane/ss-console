@@ -31,7 +31,6 @@ import {
   findUnwitnessedCertifications,
   finishReconcileRun,
   getObligation,
-  listObligationsForCustomer,
   listOpenObligations,
   priorHighWaterMark,
   startReconcileRun,
@@ -421,29 +420,6 @@ describe('register reads', () => {
       })
     )
     expect(await countByOriginSource(db, SLUG)).toEqual({ letter: 1, github: 1 })
-  })
-
-  it('sorts dated obligations ahead of undated ones', async () => {
-    await upsertObligation(db, input({ stable_key: 'undated' }))
-    await upsertObligation(
-      db,
-      input({
-        stable_key: 'dated',
-        due_at: '2026-10-15',
-        date_quote: 'once per billing cycle from the 15th',
-      })
-    )
-    const rows = await listObligationsForCustomer(db, SLUG)
-    expect(rows.map((r) => r.stable_key)).toEqual(['dated', 'undated'])
-  })
-
-  it('scopes reads to one client', async () => {
-    await seedSeat(db, 'pilot-smokeball', ENTITY)
-    await upsertObligation(db, input({ stable_key: 'theirs', customer_slug: 'pilot-smokeball' }))
-    await upsertObligation(db, input({ stable_key: 'ours' }))
-
-    const rows = await listObligationsForCustomer(db, SLUG)
-    expect(rows.map((r) => r.stable_key)).toEqual(['ours'])
   })
 
   it('tracks a high-water mark so an empty register is quiet only on day one', async () => {

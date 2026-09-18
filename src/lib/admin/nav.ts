@@ -8,16 +8,9 @@
  *
  *   Home      the cockpit — what needs the Captain today
  *   Clients   the roster; delivery + operators + billing drill in per-client
- *   Owed      every obligation SMD owes a client, across all clients (ADR 0088)
  *   Fleet     running products across all clients (Operator + Hosted Agent)
  *   Billing   money across all clients
  *   Playbook  the venture handbook (reference)
- *
- * "Owed" is a spine word because it answers a question none of the others can:
- * what work is outstanding, as opposed to what is running (Fleet), who it is
- * for (Clients), or what it is worth (Billing). It was added the day the
- * register shipped, after the page went live with no way to reach it — the
- * built-but-not-wired failure the register itself exists to catch.
  *
  * Settings is NOT a spine word — it is an account affordance in the header.
  * Section anchors are assigned sequentially so there is no conditional-anchor
@@ -37,7 +30,6 @@ export function buildAdminNav(): AdminNavDestination[] {
   const destinations: Omit<AdminNavDestination, 'anchor'>[] = [
     { href: '/admin', label: 'Home', matchPrefix: '/admin', exact: true },
     { href: '/admin/clients', label: 'Clients', matchPrefix: '/admin/clients' },
-    { href: '/admin/obligations', label: 'Owed', matchPrefix: '/admin/obligations' },
     // "Fleet" is the operational lens over both running products. It seeds from
     // the existing operator fleet page; folding the Hosted Agent view in is a
     // later surface rebuild (ADR 0077 §3).

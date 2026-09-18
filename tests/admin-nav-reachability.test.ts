@@ -1,11 +1,11 @@
 /**
  * Every top-level admin surface is reachable from the admin nav.
  *
- * WHY THIS EXISTS. On 2026-09-17 the obligation register shipped with a working
- * page at /admin/obligations, correct data in production, and no link to it
- * anywhere. The Captain opened the console and could not find it. That is the
- * built-but-not-wired failure (Law 9) — and it happened in the PR that built a
- * system whose entire purpose is catching work that exists but reaches nobody.
+ * WHY THIS EXISTS. On 2026-09-17 a new admin page shipped with correct data in
+ * production and no link to it anywhere; the Captain opened the console and
+ * could not find it. That is the built-but-not-wired failure (Law 9). The page
+ * itself was then deleted — it served a surface the Captain does not use — but
+ * the guard is worth keeping, because the next orphan will not announce itself.
  *
  * A page nobody can navigate to is not shipped. This test is the mechanical
  * version of that sentence: it enumerates the top-level admin routes on disk and
@@ -49,14 +49,6 @@ function topLevelSections(): string[] {
 
 describe('admin nav reachability', () => {
   const nav = buildAdminNav()
-
-  it('exposes the obligation register on the spine', () => {
-    // The specific regression: the register shipped with no way in.
-    const owed = nav.find((d) => d.href === '/admin/obligations')
-    expect(owed, '/admin/obligations must be a top-level admin destination').toBeTruthy()
-    expect(owed?.label).toBe('Owed')
-    expect(isAdminNavActive(owed!, '/admin/obligations')).toBe(true)
-  })
 
   it('every top-level admin section is either on the spine or documented as reached elsewhere', () => {
     const sections = topLevelSections()

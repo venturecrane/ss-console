@@ -2,7 +2,7 @@
 title: What We Owe Clients
 section: operations
 order: 10
-summary: The obligation register - how every piece of work SMD owes a client gets recorded without anyone maintaining a list, how it gets closed only by a probe of the real system, and what it deliberately cannot see
+summary: The obligation register - how every piece of work SMD owes a client gets recorded without anyone maintaining a list, how it is read from the terminal, how it gets closed only by a probe of the real system, and what it deliberately cannot see
 sources:
   - label: docs/adr/0088-obligation-register.md (the decision)
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0088-obligation-register.md
@@ -12,13 +12,25 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/scripts/ci-reconcile-obligations.ts
   - label: .claude/bin/register (letter capture)
     href: https://github.com/venturecrane/ss-console/blob/main/.claude/bin/register
-  - label: src/pages/admin/obligations/index.astro (the fleet view)
-    href: https://github.com/venturecrane/ss-console/blob/main/src/pages/admin/obligations/index.astro
+  - label: src/lib/db/obligations.ts (the reader the reconciler and CLI share)
+    href: https://github.com/venturecrane/ss-console/blob/main/src/lib/db/obligations.ts
 ---
 
 ## The question this answers
 
 "What do we owe Ashton & Price?" - and "what's on our plate?" across every client.
+
+**You read it from a terminal**, by asking an agent, or directly:
+
+```
+.claude/bin/register list --client ashton-price
+.claude/bin/register list
+```
+
+There is deliberately no web page. One shipped on 2026-09-17 and was deleted the
+same day: the Captain works in terminal sessions and does not open the admin
+console to look things up, so a page there would have decayed into a surface
+nobody read and nothing checked. The register is queried where the work happens.
 
 Before the register, neither question had an answer. For one client, the work of keeping them served lived in nine different places: a task cleanup promised in correspondence letters 26/27/28, a per-cycle duty recorded in an agent memory file, a vendor consent expiring in March 2027, a delivered chronology whose ledger row still read `failed`, a pending vendor approval visible only as one session's mission line, and four unshipped fixes in GitHub.
 

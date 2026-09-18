@@ -80,10 +80,6 @@ function obligationSeverity(detailsJson: string | null): AlertSeverity {
 export function alertLink(row: CostAnomalyAlertRow): string {
   const slug = encodeURIComponent(row.customer_slug)
   if (row.source === 'cost') return `/admin/operator/costs/${slug}`
-  // An obligation alert is about work owed, not about the seat: it belongs on
-  // the register filtered to that client, where the row's source quote and the
-  // evidence that would close it are visible.
-  if (row.source === 'obligation') return `/admin/obligations?customer=${slug}`
   return `/admin/operator/${slug}`
 }
 

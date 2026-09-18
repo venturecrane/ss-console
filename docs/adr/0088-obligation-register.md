@@ -1,6 +1,9 @@
 # ADR 0088: The work SMD owes a client is a register, derived from the systems that already know, and closed only by a probe
 
-Status: Accepted (Captain decision 2026-09-17)
+Status: Accepted (Captain decision 2026-09-17), amended the same day
+
+**Amendment, 2026-09-17.** As first built, the register carried two admin pages: a per-client panel on the client hub and a fleet-wide `/admin/obligations`. Both were deleted hours later on the Captain's instruction. He works in terminal sessions and does not open the admin console to look things up, so the pages answered a question nobody was going to ask there — and one of them shipped with no nav entry at all, which is how the mismatch surfaced. The register is read from the terminal (`.claude/bin/register list`). Nothing else changed: the table, the grounded capture, the reconciler, and the alerting into `cost_anomaly_alerts` are unaffected. The design error was mine, not the Captain's: "queryable and visible on demand" was read as "a web page" without asking where the reading happens.
+
 Related: ADR 0075 (commitments pinned from a letter), ADR 0083 (output classes), migrations `0117_client_obligations.sql` / `0118_alert_source_obligation.sql`, `scripts/ci-reconcile-obligations.ts`, `.claude/bin/register`, Law 9 (done means the client can do it), Law 12 (a check that cannot fail has measured nothing), Law 14 (a program's report about the world is a claim)
 
 ## Context
@@ -42,7 +45,7 @@ A source that stops listing a row does **not** close it. Import proves an obliga
 
 Extraction faithfulness tops out around 0.83 — roughly one statement in six is unsupported by its source. Prompting does not fix that, so the CLI requires a verbatim quote, normalizes both sides (NFKC, whitespace, smart punctuation, markdown), string-matches it against the source file, and **refuses** a row whose quote is not found. There is no `--force`. When the engagements repo is absent the CLI fails closed, on the Law 2 discriminator: "cannot evaluate" must never read as "permitted".
 
-That grounds the **citation**, never the **interpretation**. A hallucinated sentence attached to a real quote still passes. Therefore only **dated** obligations generate alerts, and a due date requires its own `date_quote` containing that date (schema CHECK). The residual error stays on a page the Captain reads deliberately instead of arriving in his inbox.
+That grounds the **citation**, never the **interpretation**. A hallucinated sentence attached to a real quote still passes. Therefore only **dated** obligations generate alerts, and a due date requires its own `date_quote` containing that date (schema CHECK). The residual error stays in a list the Captain reads deliberately instead of arriving in his inbox.
 
 ### 4. There is no failure state
 
@@ -72,7 +75,7 @@ So each run prints a **coverage census**: artifacts per source class against obl
 
 ## Consequences
 
-- The Captain can ask "what do we owe A&P" on the admin client page, and "what's on our plate" at `/admin/obligations`. Both are read-only; a button that marked something done from a page would be exactly the self-certified closure this ADR forbids.
+- The Captain reads the register from a terminal — `.claude/bin/register list [--client <slug>]` — or by asking an agent in the session he is already in. It is read-only there for the same reason a page would have been: a control that marked something done by hand is exactly the self-certified closure this ADR forbids.
 - An agent adding an obligation writes to production D1 from its session. This is deliberate and its trade-off is named: no human reviews row content before it lands. The grounding gate, the journal, and the register's internal-only status are what make that acceptable; a bad row costs a correction, not a client.
 - **Two obligation classes remain structurally uncapturable**: one created in a phone call, and correspondence read and acted on without any write. Neither is solved here, and neither should be reported as covered.
 - Recurrence stores the rule and materializes one instance ahead, so "what is due" stays a query rather than a computation, and the register cannot go quiet because nobody ran a generator.

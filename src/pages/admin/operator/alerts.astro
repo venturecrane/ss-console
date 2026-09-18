@@ -25,13 +25,14 @@ import { env } from 'cloudflare:workers'
  *
  * Honest scope (foundations §7): the feed shows the sources that flow into the
  * store today (cost anomalies, Sentry spikes, heartbeat grace, audit-integrity
- * drift, and obligations owed to a client — ADR 0088). Sticky-stop transitions,
- * connector auth-expired, boot-check failures, and structural-config-deferred
- * (design §4.2) light up here as their writer paths land — the footnote says so
- * rather than fabricating rows.
+ * drift, and obligations owed to a client). Sticky-stop transitions, connector
+ * auth-expired, boot-check failures, and structural-config-deferred (design
+ * §4.2) light up here as their writer paths land — the footnote says so rather
+ * than fabricating rows.
  *
  * This note and the footnote below are only honest if they move when a writer
- * lands. The obligation source was added in the same PR that wired its writer.
+ * lands. The obligation source writes here; it has no page of its own — the
+ * register is read from the terminal (.claude/bin/register list).
  */
 
 const session = Astro.locals.session!
@@ -60,7 +61,6 @@ const SOURCE_OPTIONS = [
   { value: 'sentry', label: 'Sentry' },
   { value: 'healthchecks', label: 'Heartbeat' },
   { value: 'audit_integrity', label: 'Audit integrity' },
-  { value: 'obligation', label: 'Owed to a client' },
 ]
 const SEVERITY_OPTIONS = [
   { value: 'all', label: 'All severities' },

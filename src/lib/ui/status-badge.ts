@@ -47,17 +47,6 @@ const TONE: Record<string, string> = {
   in_progress: 'bg-[color:var(--ss-color-primary)] text-white',
   skipped: 'bg-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-secondary)]',
 
-  // Obligation register (ADR 0088). `delivered` is deliberately attention, not
-  // complete: it means we believe the work is done and no probe has confirmed
-  // it, which is the one state most worth looking at. A complete-toned pill
-  // there would erase the difference between a claim and an observation.
-  open: 'bg-[color:var(--ss-color-border)] text-[color:var(--ss-color-text-secondary)]',
-  awaiting_external: 'bg-[color:var(--ss-color-attention)] text-white',
-  delivered: 'bg-[color:var(--ss-color-attention)] text-white',
-  verified: 'bg-[color:var(--ss-color-complete)] text-white',
-  closed: 'bg-[color:var(--ss-color-complete)] text-white',
-  parked: 'bg-[color:var(--ss-color-error)] text-white',
-
   // Parking lot disposition (Decision #11)
   fold_in: 'bg-[color:var(--ss-color-complete)] text-white',
   follow_on: 'bg-[color:var(--ss-color-primary)] text-white',
