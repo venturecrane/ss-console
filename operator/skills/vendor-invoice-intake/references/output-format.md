@@ -37,10 +37,23 @@ Staged but not confirmed: Acme Records invoice INV-2026-001 on matter <matterNum
 ```
 Flagged: Acme Records invoice INV-2026-001: already entered on matter <matterNumber>. Nothing entered.
 Flagged: Acme Records invoice INV-2026-014: a similar entry already exists on matter <matterNumber> (same vendor and amount, different date); please decide whether this is a second invoice. Nothing entered.
-Flagged: Ridgeline Reporting invoice 7781: could not be placed on one matter (two matters match the client name, and no second fact on the invoice separates them). Nothing entered.
+Flagged: Ridgeline Reporting invoice 7781: two matters match the client named on it, 2026-PI-101 and 2026-PI-107; please say which. Nothing entered.
+Flagged: Ridgeline Reporting invoice 7782: could not be placed on one matter (one matter matched the client name, and no second fact on the invoice corroborates it). Nothing entered.
+Flagged: Ridgeline Reporting invoice 7783: I could not search the matters to place it. Nothing entered.
 Flagged: scan_0042.pdf: a scanned PDF with no text layer; it needs a person to enter it. Nothing entered.
 Flagged: Acme Records statement: a statement of several invoices, not one invoice. Nothing entered.
 ```
+
+An `ambiguous` verdict names the candidate **matter numbers** and asks. It never
+names a candidate by its title or case caption, and it never says which of them
+looks right: picking between them is the firm's act, and a line that leans is a
+pick. A candidate with no number on its record is written "matter number
+unavailable", never filled in from the title.
+
+A `search_failed` verdict is reported as a step that failed, in the shape every
+other failed tool call takes here: what was being attempted, and that nothing
+was entered. Never "no matter matches" and never "this invoice does not belong
+to any matter": the tenant was not read, so nothing was learned about it.
 
 ## What a line never contains
 

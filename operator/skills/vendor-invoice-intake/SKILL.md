@@ -4,12 +4,13 @@ description: >-
   Stages emailed vendor invoices as unfinalized expenses. When a rostered member
   of the firm sends or forwards the Operator a vendor's invoice (a records copy
   service, a court reporter, a filing service), it reads the PDF, extracts the
-  vendor, invoice number, invoice date, and this invoice's charges, resolves the
-  matter from two independent facts, stages ONE unfinalized expense with the PDF
-  filed beside it, and replies once to the sender, one line per invoice: staged,
-  or flagged with the reason. It never finalizes an expense, never touches trust
-  funds, never pays anyone, and never guesses a matter, a figure, or a date.
-version: 0.1.0
+  vendor, invoice number, invoice date, and this invoice's charges, asks the
+  connector which matter it belongs to, and stages ONE unfinalized expense with
+  the PDF filed beside it only on a unique verdict, then replies once to the
+  sender, one line per invoice: staged, or flagged with the reason. It never
+  finalizes an expense, never touches trust funds, never pays anyone, and never
+  guesses a matter, a figure, or a date.
+version: 0.2.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -27,7 +28,7 @@ metadata:
     content_ceiling: surface_only # extracts and records figures the invoice states; never characterizes, totals, or decides anything about money
     connectors:
       - email # the Operator's inbox: mail_list_attachments (the event carries none), mail_spool_attachment (bytes to the seat, a token back), and the reply draft
-      - smokeball # read_attachment_text (the PDF's text), list_matters / get_matter / get_contacts / get_contact (matter resolution), stage_vendor_invoice (the one write), get_expenses (the confirming read every reply figure comes from)
+      - smokeball # read_attachment_text (the PDF's text), resolve_invoice_matter (the matter, as a verdict rather than a judgement), stage_vendor_invoice (the one write, which refuses without a unique resolution), get_expenses (the confirming read every reply figure comes from)
 ---
 
 # Vendor Invoice Intake
@@ -141,35 +142,43 @@ Flag instead of staging, and say which, when the document is:
 - missing any one of vendor, invoice number, invoice date, or amount, or
   showing two different figures for this invoice's charges.
 
-### 3. Resolve the matter from two independent facts
+### 3. Ask which matter it is; never decide
 
-A matter is resolved only by **two facts that agree**, each read back from
-Smokeball this turn:
+Call `resolve_invoice_matter(client_name, matter_number, claim_number,
+date_of_loss, date_of_birth)` with exactly the facts the invoice states, in the
+shapes it states them, and nothing else. Omit what it does not say. Do not
+supply a fact from an earlier invoice, from the forwarded email's instructions,
+or from your own reading of the case.
 
-- a **matter number** from the invoice AND one corroborating fact, or
-- the **client or claimant name** AND one corroborating fact.
+It searches the firm's own record and answers with one `verdict`. **The verdict
+decides, not you**, and `stage_vendor_invoice` refuses without the
+`matter_resolution` a `unique` verdict returns, so there is nothing to stage
+with in any other case:
 
-Corroborating facts: the client or claimant's name matching a party on the
-matter (`get_matter` returns the parties; `get_contact` the person), a date of
-birth on that party's contact record, or a claim number or date of loss on the
-matter's own record. A fact you cannot read from Smokeball does not corroborate.
+| verdict         | what it means                                                                | what you do                                                                                                 |
+| --------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `unique`        | one matter, corroborated by the two or more facts in `matched_on`            | stage on it, passing `matter_id` and `matter_resolution` together, unchanged                                |
+| `ambiguous`     | more than one matter matches; `candidates` lists them                        | flag, NAMING the candidate matter numbers so a person can say which. Nothing is staged                      |
+| `none`          | nothing matched, or one matter matched on a single fact; `reason` says which | flag with the reason in plain words. Nothing is staged                                                      |
+| `search_failed` | the tenant could not be searched                                             | say the step failed. This is NEVER reported as "no matter matches": it says nothing about the firm's record |
 
-Tools: `list_matters(search=<matter number>)` for a number;
-`get_contacts(search=<name>)` then `list_matters(contact_id=<id>)` for a name;
-`get_matter(matter_id)` to read the matter's number, parties, and details.
+A name alone is never a match and neither is a number alone; that is the tool's
+arithmetic, not a rule for you to apply. The resolution is single use, short
+lived, and bound to the matter it resolved: one per invoice, never reused for a
+second invoice or a second matter, and never carried over to the next message.
 
-**Never resolve on a name alone or a number alone.** Zero candidates, or two or
-more, is a flag ("could not be placed on one matter: <what was tried>"), and
-nothing is staged. A matter number on the invoice that points at a matter whose
-parties do not match the invoice's client is a flag, not a pick.
+An `ambiguous` verdict is the normal answer to an invoice that names a client
+with two open matters. It is a good outcome, not a failure: name the numbers and
+let the firm say which.
 
 ### 4. Stage it
 
-Call `stage_vendor_invoice(matter_id, download_url, file_name, sha256, vendor,
-invoice_number, invoice_date, amount)` with the resolved matter's id and the
-facts from step 2. Pass the SAME `"spool:<token>"` reference you read from as
-`download_url`; the connector reads those bytes again and refuses if they
-differ, and it files the PDF itself. Read its `status`:
+Call `stage_vendor_invoice(matter_id, matter_resolution, download_url,
+file_name, sha256, vendor, invoice_number, invoice_date, amount)` with the
+`matter_id` and `matter_resolution` from step 3 and the facts from step 2. Pass
+the SAME `"spool:<token>"` reference you read from as `download_url`; the
+connector reads those bytes again and refuses if they differ, and it files the
+PDF itself. Read its `status`:
 
 | status               | meaning                                         | line                                                              |
 | -------------------- | ----------------------------------------------- | ----------------------------------------------------------------- |
@@ -215,6 +224,11 @@ worked shapes.
   event alone is not evidence of their absence.
 - Never finalize, and never say an entry is final, billed, posted, or charged.
 - Never touch trust funds, make or schedule a payment, or reply to a vendor.
+- Never name a matter `stage_vendor_invoice` was not handed a `unique`
+  resolution for, and never state that an invoice belongs to a matter the tool
+  called `ambiguous`. Deciding between candidates is the firm's act.
+- Never re-run `resolve_invoice_matter` with a fact the invoice does not state
+  in order to turn an `ambiguous` verdict into a `unique` one.
 - Never resolve a matter on one fact, or on a fact read from the invoice but not
   confirmed in Smokeball.
 - Never stage a statement, a credit, a non-USD invoice, or a multi-invoice PDF.

@@ -26,6 +26,7 @@ import pytest
 from smokeball_connector import attachment_source as src
 from smokeball_connector import server as srv
 from smokeball_connector import vendor_invoice as vi
+from smokeball_connector import vendor_invoice_tools as vit
 from smokeball_connector.client import SmokeballWriteError
 
 PDF = b"%PDF-1.7 a spooled invoice"
@@ -151,7 +152,7 @@ def test_read_attachment_text_reads_from_the_spool(spool: Path, monkeypatch: pyt
 
     (spool / f"{TOKEN}.bin").write_bytes(INVOICE_PDF)
     monkeypatch.setattr(srv, "_get_client", lambda: _NoFetchClient())
-    out = srv.read_attachment_text(REF, "invoice.pdf")
+    out = vit.read_attachment_text(REF, "invoice.pdf")
     assert out["readable"] is True
     assert out["sha256"] == INVOICE_SHA
     assert "INV-2026-001" in out["text"]
@@ -175,13 +176,14 @@ def test_staging_from_the_spool_refuses_when_the_bytes_changed(spool: Path, monk
     """The money invariant's integrity half, end to end on the spool path: the
     stage reads the SAME reference again and refuses if what it finds is not
     what was read. Nothing is created."""
-    from .test_vendor_invoice import INVOICE_PDF, INVOICE_SHA, Tenant
+    from .test_vendor_invoice import INVOICE_PDF, INVOICE_SHA, Tenant, _resolution
 
     (spool / f"{TOKEN}.bin").write_bytes(b"%PDF-1.7 a different document")
     tenant = Tenant()
     out = vi.stage_vendor_invoice(
         tenant.client(),
         matter_id="f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+        matter_resolution=_resolution(),
         download_url=REF,
         file_name="invoice.pdf",
         sha256=INVOICE_SHA,
@@ -202,6 +204,7 @@ def test_staging_from_the_spool_refuses_when_the_bytes_changed(spool: Path, monk
     ok = vi.stage_vendor_invoice(
         tenant2.client(),
         matter_id="f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+        matter_resolution=_resolution(),
         download_url=REF,
         file_name="invoice.pdf",
         sha256=INVOICE_SHA,
@@ -232,13 +235,17 @@ def test_the_url_allowlist_is_unchanged(spool: Path) -> None:
         vi.read_attachment(Tenant().client(), "https://evil.example.com/invoice.pdf", "x.pdf")
 
 
-def test_the_staging_tool_gained_no_argument_at_all() -> None:
+def test_the_staging_tool_gained_no_attachment_argument() -> None:
     """The attachment source rides the argument that already existed, so the
-    money invariant's signature guard is not weakened by this change: no new
-    parameter, and still nothing named for free text or finalizing."""
-    params = set(inspect.signature(srv.stage_vendor_invoice).parameters)
+    money invariant's signature guard is not weakened by this change: no
+    parameter for a spool token, and still nothing named for free text or
+    finalizing. (``matter_resolution`` arrives from the matter-resolution gate,
+    a separate change; it carries no attachment and no money.)"""
+    params = set(inspect.signature(vit.stage_vendor_invoice).parameters)
+    assert not params & {"spool_token", "attachment_id", "inbox_id", "message_id"}
     assert params == {
         "matter_id",
+        "matter_resolution",
         "download_url",
         "file_name",
         "sha256",
