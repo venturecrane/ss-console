@@ -402,9 +402,7 @@ class MedchronVerbs:
         source = str(request.get("source") or "")
         covered = request.get("covered")
         if not matter_id or not matter_number or not delivered_at or not source:
-            raise ValueError(
-                "medchron_backfill_covered requires matter_id, matter_number, delivered_at and source"
-            )
+            raise ValueError("medchron_backfill_covered requires matter_id, matter_number, delivered_at and source")
         if not _BACKFILL_DATE_RE.match(delivered_at[:10]):
             # The real delivery date is load-bearing: it keeps the ledger
             # chronologically honest AND puts the row outside the current billing

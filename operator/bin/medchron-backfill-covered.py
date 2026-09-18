@@ -355,7 +355,6 @@ def _delivered_exhibit_count(matter_id: str, files: dict[str, str]) -> int | Non
     over-claim detector available at no cost.
     """
 
-
     from smokeball_connector.server import get_download_url
 
     import io
@@ -499,7 +498,7 @@ def main() -> int:
 
     d = sub.add_parser("from-document", help="laptop: coverage from a delivered .docx (pre-pipeline)")
     d.add_argument("--document", required=True)
-    d.add_argument("--smokeball-names", required=True, help='JSON {file_id: name} for the matter')
+    d.add_argument("--smokeball-names", required=True, help="JSON {file_id: name} for the matter")
     d.add_argument("--slug", required=True)
     d.add_argument("--matter-id", required=True)
     d.add_argument("--matter-number", required=True)

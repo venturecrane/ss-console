@@ -635,9 +635,7 @@ class MedchronLedger:
         # instead. It identifies the historical delivery the same way an
         # envelope digest identifies a request, and it is what makes the
         # idempotency key derivable rather than matched on prose.
-        descriptor = digest(
-            {"backfill": source, "matter_id": str(matter_id), "delivered_at": delivered_at}
-        )
+        descriptor = digest({"backfill": source, "matter_id": str(matter_id), "delivered_at": delivered_at})
         conn = self._connect()
         try:
             existing = conn.execute(
@@ -650,8 +648,7 @@ class MedchronLedger:
                 # safe to repeat.
                 job_id = str(existing["id"])
                 conn.execute(
-                    "UPDATE medchron_jobs SET updated_at=?, created_at=?, matter_number=?, covered_json=? "
-                    "WHERE id=?",
+                    "UPDATE medchron_jobs SET updated_at=?, created_at=?, matter_number=?, covered_json=? WHERE id=?",
                     (now, delivered_at, str(matter_number), payload, job_id),
                 )
             else:
@@ -748,8 +745,7 @@ class MedchronLedger:
         conn = self._connect()
         try:
             rows = conn.execute(
-                "SELECT * FROM medchron_jobs WHERE matter_id=? AND state='delivered' "
-                "ORDER BY created_at ASC",
+                "SELECT * FROM medchron_jobs WHERE matter_id=? AND state='delivered' ORDER BY created_at ASC",
                 (str(matter_id),),
             ).fetchall()
         finally:
