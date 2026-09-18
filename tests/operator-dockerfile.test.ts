@@ -1359,7 +1359,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // shared/action_classes.py, plugins/hermes-smd-inbound/__init__.py and the
     // new plugins/hermes-smd-mail-attachments; no tracked twin moves, and
     // vocabulary and heartbeat fields are untouched by the range.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="7860146354da70efa3d72eae93f7ea262e5333b9"')
+    // 78601463 -> 2bc61f71 (2026-09-18, overlay#361). The mail attachment tools
+    // take no inbox argument; the seat resolves its own from its own key.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="2bc61f717abff90c1d86160f5c2363355cf8c06d"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

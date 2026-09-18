@@ -90,7 +90,12 @@ describe('vendor-invoice-intake: the skill body', () => {
     // correct. A body that still told the model to find a URL would leave the
     // skill unreachable with every other test here green.
     const b = body()
-    expect(b).toContain('`mail_list_attachments(inbox_id, message_id)`')
+    // 2026-09-18, second live run: the model passed the SENDER's inbox and the
+    // vendor answered 404. The tools take no inbox argument now -- the seat
+    // resolves its own -- so the body must not teach one.
+    expect(b).toContain('`mail_list_attachments(message_id)`')
+    expect(b).not.toContain('mail_list_attachments(inbox_id')
+    expect(b).not.toContain('mail_spool_attachment(inbox_id')
     expect(b).toContain('`mail_spool_attachment(')
     expect(b).toContain('`read_attachment_text("spool:<token>", file_name)`')
     expect(b).toContain('Pass the SAME `"spool:<token>"` reference you read from as `download_url`')

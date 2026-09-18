@@ -103,8 +103,9 @@ Discovery reaches the firm two ways, and this body accepts either source:
   same `fails` class as a silent halt). On this path, in order:
   1. **File the served document to the matter first.** The inbound event
      carries NO attachments key, so start by asking:
-     `mail_list_attachments(inbox_id, message_id)`, then
-     `mail_spool_attachment(inbox_id, message_id, attachment_id)` for each
+     `mail_list_attachments(message_id)` (the seat reads its own mailbox; there
+     is no inbox argument), then
+     `mail_spool_attachment(message_id, attachment_id)` for each
      served document, then
      `file_attachment_to_matter(matter_id, "spool:<token>", file_name)` (the
      server-side transfer, #1744; the agent never shuttles the bytes itself).
