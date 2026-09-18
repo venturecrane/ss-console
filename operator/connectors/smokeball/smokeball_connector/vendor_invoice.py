@@ -299,8 +299,7 @@ def compose_entry(facts: InvoiceFacts, file_name: str, stamp: Callable[[str], st
     ledger can tell the Operator's entry from a colleague's."""
     subject = f"{facts.vendor} invoice {facts.invoice_number}"
     description = stamp(
-        f"Vendor invoice dated {facts.invoice_date}, source file {file_name}. "
-        "Staged unfinalized for review."
+        f"Vendor invoice dated {facts.invoice_date}, source file {file_name}. Staged unfinalized for review."
     )
     return subject, description or ""
 
