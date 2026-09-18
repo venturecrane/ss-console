@@ -855,7 +855,14 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # read then called the invoice unreadable. A length disagreeing with the
 # vendor's stated size now refuses. One runtime file, shared/agentmail_broker.py,
 # not a tracked twin, so only overlayRef moves.
-ARG OVERLAY_REF="dc315de47a75f3c76a670f79944c619cb2d5f382"
+# 2026-09-18 (5a0f2773, overlay #363 + #364): a pre-call check that TIMES OUT
+# counts as a failure, not a policy refusal -- twenty such timeouts under a
+# four-email burst hard-stopped the seat mid-rehearsal citing a refusal cascade
+# on a tool that refused nothing. And the invoice matter resolver is classified
+# (firm-record read, provenance-seeding); unclassified it would refuse, failing
+# the whole invoice path closed. Runtime files: plugins/hermes-smd-audit,
+# shared/action_classes.py, shared/provenance.py; no tracked twin moves.
+ARG OVERLAY_REF="5a0f27737836343457d759819e85a01d11c1579f"
 
 ARG CUSTOMER_SLUG=customer-zero
 
