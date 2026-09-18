@@ -104,7 +104,7 @@ was the per-job cost cap wearing client-facing clothes, and because both were
 sized off the same measured rate it refused matters the cycle allowance could
 plainly afford. `limits.py` made this concrete by checking the per-matter line
 BEFORE consulting the allowance at all -- a firm sitting on its full pool was
-refused for a matter 3% over a per-matter line. Measured instance: matter 200454
+refused for a matter 3% over a per-matter line. Measured instance: one real matter
 is 3,098+ pages of PDF against a 3,000-page line, with all 15,000 pages unused.
 
 **Why removing it does not expose margin.** `monthly_budget_usd` binds
@@ -195,7 +195,7 @@ a bump rather than part of this change.
 
 ## Amendment, 2026-09-16 (Captain): a chronology is debited once per cycle, however many launches it took; the first client seat is anchored; routine 11 is one product
 
-**What forced it.** One chronology on the first client seat (matter 200454,
+**What forced it.** One chronology on the first client seat (one matter,
 3,568 pages) sat in the ledger as three `cents > 0` rows: a launch that died on
 two documents Smokeball's storage no longer held, then two relaunches while the
 runner's gates were fixed. The debit rule of 2026-09-09 summed every row, so the
@@ -239,7 +239,7 @@ never a wrong one.
 **The first client seat is anchored.** `ashton-price` now authors
 `chronology_package_cycle_anchor_day: 15` (the Firm started the Service in the
 portal on 2026-09-15) and `chronology_package_cycle_effective_from: '2026-09-16'`.
-The 16th is deliberate: the 200454 chronology was requested and run before the
+The 16th is deliberate: that chronology was requested and run before the
 Service started and is pilot work inside the fee, so the first paid cycle starts
 at zero. The first cycle is one day short; every later cycle runs the 15th to the
 14th. Exhibit A row 11 says "per billing cycle" in whole days from the same
@@ -275,7 +275,7 @@ the allowance (console as pure display) remains queued for a later bump.
 
 ## Amendment, 2026-09-17: a delivery records what it covered, so an update can read only the rest
 
-Routine 11 became one product on 2026-09-16, and Exhibit A defines an update as reading only the records the delivered chronology's own records-reviewed section shows it did not cover. No layer held that record. The ledger row carried counts, the runner stored the files it DELIVERED, and the delivered document's review note names unread documents by name rather than by id, so an update could only re-read the whole file or guess at a delta. Evans 200454, delivered by hand, is the standing case.
+Routine 11 became one product on 2026-09-16, and Exhibit A defines an update as reading only the records the delivered chronology's own records-reviewed section shows it did not cover. No layer held that record. The ledger row carried counts, the runner stored the files it DELIVERED, and the delivered document's review note names unread documents by name rather than by id, so an update could only re-read the whole file or guess at a delta. A chronology delivered by hand is the standing case.
 
 **What the record is.** `medchron_jobs.covered_json`, written at `delivered`, holding two id sets and nothing else: `covered` (accounted for in the delivered chronology) and `uncovered` (not in it, so an update reads it again). The broker projects them as `covered_document_ids` and `uncovered_document_ids`, and `medchron_job_status` returns them to the skill. Ids and counts only, never a document and never a page of text, so the ADR 0052 management-surface line holds. The console's own read filters to the overlay's narrower column tuple, so this reaches the SKILL through the broker socket and does not widen the console seam: no overlay change was needed.
 

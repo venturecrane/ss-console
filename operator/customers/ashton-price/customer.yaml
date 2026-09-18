@@ -509,8 +509,8 @@ personas:
           # The firm's billing cycle (ADR 0087 amendment 2026-09-11): the Firm
           # started the Service in the portal on 2026-09-15 (Stripe
           # sub_1UG43GD43NPjtHDKWCE9fYM4, 21:38Z), so each cycle begins on the
-          # 15th. `effective_from` is the 16th on purpose: the 200454 chronology
-          # (matter 200454) was requested and run before the Service started and
+          # 15th. `effective_from` is the 16th on purpose: that chronology
+          # was requested and run before the Service started and
           # is pilot work inside the fee, so the first paid cycle starts at zero.
           # The first cycle is one day short by design; every later cycle runs
           # the 15th to the 14th. The broker reads a boot-time copy of this

@@ -34,7 +34,7 @@ def test_one_matter_may_consume_the_whole_cycle_allowance() -> None:
     matter that eats all of it is a legitimate use, not a refusal.
 
     The falsifier: reintroduce ANY per-matter page ceiling below 15,000 and the
-    first call raises instead of returning. Matter 200454 measured 3,098+ pages
+    first call raises instead of returning. One matter measured 3,098+ pages
     against the 3,000-page line this replaces, with the firm's full allowance
     unused -- that refusal is what this test now forbids.
     """

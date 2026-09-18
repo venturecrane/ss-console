@@ -261,7 +261,7 @@ describe('obligation state machine', () => {
   })
 
   it('parks with a reason and resumes', async () => {
-    const id = await upsertObligation(db, input({ kind: 'incident', stable_key: 'evans-run' }))
+    const id = await upsertObligation(db, input({ kind: 'incident', stable_key: 'matter-a-run' }))
     await transitionObligation(db, { obligationId: id, to: 'active' })
     const parked = await transitionObligation(db, {
       obligationId: id,
@@ -298,7 +298,7 @@ describe('obligation state machine', () => {
       to: 'verified',
       reconcileRunId: runId,
       evidenceSurface: 'r2',
-      evidenceLocator: 'r2://deliverables/evans.pdf',
+      evidenceLocator: 'r2://deliverables/matter-a.pdf',
     })
     const verified = await getObligation(db, id)
     expect(verified?.evidence_last_verified_at).not.toBeNull()

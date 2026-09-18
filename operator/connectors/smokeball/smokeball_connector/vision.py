@@ -10,7 +10,7 @@ WHY ONE PAGE PER CALL — the defect that produced this design
 (vfy_01M0ES31GSRBGH3T4KFQ44WE7N, first real-world run, 2026-08-19). The first
 implementation sent the whole PDF in one request with citations enabled and
 derived ``[p.N]`` provenance from the API's ``page_location`` citations. Run
-against all 20 genuinely scanned files on the Robertus matter it refused 20 of
+against all 20 genuinely scanned files on the census matter it refused 20 of
 20 with ``incomplete_transcription``, including five ONE-PAGE files. A raw SSE
 tap on a single-page file showed the reason: 31 ``text_delta`` events, a clean
 ``end_turn``, a perfectly good transcription — and ZERO ``citations_delta``
@@ -84,7 +84,7 @@ API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
 
 DEFAULT_MODEL = "claude-opus-5"
-#: Robertus' scanned set tops out at 27 pages (the medical records at 14), so 40
+#: that matter's scanned set tops out at 27 pages (the medical records at 14), so 40
 #: covers the live record with margin and still fences a 300-page deposition
 #: bundle that would cost a fortune to transcribe by accident. It is now also
 #: the ceiling on API CALLS per document: one per page.

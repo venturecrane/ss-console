@@ -647,7 +647,7 @@ def test_a_finished_package_may_be_rebuilt(verbs):
 
 
 def test_a_relaunch_of_the_same_work_debits_its_pages_once(verbs):
-    """The live incident (first client seat, matter 200454): one 3,568-page
+    """The live incident (first client seat): one 3,568-page
     chronology, three `cents > 0` rows, month read 10,704. Falsifier: the old
     SUM rule returns 7,136 here."""
     v, _, _ = verbs
