@@ -11,8 +11,8 @@ about money it was not handed and never finalizes anything.
 THE MONEY INVARIANT IS STRUCTURAL, NOT A RULE THE MODEL FOLLOWS.
 
 * ``finalized`` is always ``False``. No tool argument, no config key, and no
-  environment variable reaches it. A finalized expense is a billed one, and
-  billing is the firm's act.
+  environment variable reaches it. Finalizing an entry is the firm's act,
+  never the Operator's.
 * ``costType``, ``isBillable``, ``activityCode`` and ``staffId`` come ONLY from
   the seat's authored ``vendor_invoice_intake`` block in its live customer.yaml
   (the same config-as-data read ``library.py`` does for the document library).
@@ -300,7 +300,7 @@ def compose_entry(facts: InvoiceFacts, file_name: str, stamp: Callable[[str], st
     subject = f"{facts.vendor} invoice {facts.invoice_number}"
     description = stamp(
         f"Vendor invoice dated {facts.invoice_date}, source file {file_name}. "
-        "Staged unfinalized for review; nothing is billed until someone at the firm finalizes it."
+        "Staged unfinalized for review."
     )
     return subject, description or ""
 
