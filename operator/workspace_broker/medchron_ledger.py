@@ -45,6 +45,13 @@ from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
 from .cycle_window import Window, cycle_window, resolve_anchor, resolve_effective_from
+from .medchron_coverage import parse_covered, union_coverage, validate_covered
+
+# Re-exported: `validate_covered` moved to medchron_coverage at ss#2834 when this
+# module crossed the size ceiling, and the runner, the verbs and the tests all
+# import it from here. Keeping the name reachable at its old home makes the split
+# a refactor rather than a rename every caller has to follow.
+__all__ = ["validate_covered"]
 
 STATES = ("submitted", "running", "held", "delivered", "failed")
 TERMINAL = frozenset({"delivered", "failed"})
@@ -584,6 +591,96 @@ class MedchronLedger:
         tmp.replace(self.queue_dir / f"{job_id}.json")
         return job_id
 
+    def backfill_delivered(
+        self,
+        *,
+        matter_id: str,
+        matter_number: str,
+        covered: dict[str, Any],
+        delivered_at: str,
+        source: str,
+    ) -> dict[str, Any]:
+        """Record a chronology that was delivered before this ledger held a
+        coverage record. Returns the row.
+
+        **This deliberately does not go through `submit()`.** `submit()` writes a
+        queue envelope, and the runner daemon globs that directory and CLAIMS
+        what it finds (`daemon.py` `claim_next`), so submitting synthetic jobs to
+        register history would launch that many real, paid chronology runs. There
+        is a test asserting this method leaves the queue directory empty, and it
+        is there to stop exactly that regression.
+
+        It inserts straight at `delivered` rather than walking
+        `submitted -> running -> delivered`, because `_ALLOWED_NEXT` forbids the
+        direct step and walking it would write three audit rows describing a run
+        that never happened on this machine.
+
+        This stays inside the append-only rule for live state
+        (`docs/runbooks/operator/hold-ledger-remediation.md`): it ADDS a row for a
+        delivery that really happened and never edits or deletes one. The failed
+        and held rows already on a seat are left exactly as they are;
+        `delivered_coverage` ignores them by state.
+
+        `pages`, `cents` and `documents` are all zero, so the row is invisible to
+        the meter twice over: `_DEBITS_SQL` counts only rows with `cents > 0`, and
+        `created_at` is the REAL delivery date, which puts these rows outside the
+        current billing cycle's window entirely. The firm is not billed for
+        history being written down.
+        """
+        payload = validate_covered(covered)
+        job_id = _ulid()
+        now = _iso_utc()
+        # No envelope exists for a delivery that predates this record, and the
+        # column is NOT NULL, so the descriptor of the backfill itself is hashed
+        # instead. It identifies the historical delivery the same way an
+        # envelope digest identifies a request, and it is what makes the
+        # idempotency key derivable rather than matched on prose.
+        descriptor = digest(
+            {"backfill": source, "matter_id": str(matter_id), "delivered_at": delivered_at}
+        )
+        conn = self._connect()
+        try:
+            existing = conn.execute(
+                "SELECT id FROM medchron_jobs WHERE envelope_digest=? AND state='delivered' LIMIT 1",
+                (descriptor,),
+            ).fetchone()
+            if existing is not None:
+                # Idempotent: a re-run corrects the record instead of adding a
+                # second history row for the same delivery, so a partial run is
+                # safe to repeat.
+                job_id = str(existing["id"])
+                conn.execute(
+                    "UPDATE medchron_jobs SET updated_at=?, created_at=?, matter_number=?, covered_json=? "
+                    "WHERE id=?",
+                    (now, delivered_at, str(matter_number), payload, job_id),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO medchron_jobs (id, created_at, updated_at, state, matter_id, matter_number, "
+                    "requester, envelope_digest, documents, pages, cents, reason, covered_json) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        job_id,
+                        delivered_at,
+                        now,
+                        "delivered",
+                        str(matter_id),
+                        str(matter_number),
+                        "smd-backfill",
+                        descriptor,
+                        0,
+                        0,
+                        0,
+                        source,
+                        payload,
+                    ),
+                )
+            conn.commit()
+            row = conn.execute("SELECT * FROM medchron_jobs WHERE id=?", (job_id,)).fetchone()
+        finally:
+            conn.close()
+        return dict(row)
+
     def active_duplicate(self, envelope: dict[str, Any]) -> tuple[str, str] | None:
         """``(job_id, state)`` of a job already doing THIS work and not yet
         finished, or None.
@@ -626,6 +723,39 @@ class MedchronLedger:
         finally:
             conn.close()
 
+    def delivered_coverage(self, matter_id: str) -> dict[str, Any] | None:
+        """What EVERY delivered chronology on this matter has covered, or None
+        when the matter has no delivered row carrying a record.
+
+        Cumulative, not latest, and that is the whole point. A delivery's own
+        record covers only the units of that one job (`covered.py` merges across
+        a job's units and nothing merges across jobs), so reading the newest row
+        alone would tell the second update that the FIRST chronology's documents
+        were never covered -- and it would re-read the entire matter, thousands
+        of pages against a cycle allowance, on every matter, forever.
+
+        `uncovered` wins the union, the same direction `merge_covered` takes: a
+        document one delivery could not use and another cited is re-read, because
+        re-reading costs pages and a dropped record cannot be recovered from a
+        filed chronology.
+
+        Only `delivered` rows are considered. That is what makes a `failed` or
+        `held` row harmless without touching it -- those rows cannot transition
+        out of their state (`_ALLOWED_NEXT`), so filtering is the only cleanup
+        available, and it is also the correct one: a job that failed covered
+        nothing.
+        """
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM medchron_jobs WHERE matter_id=? AND state='delivered' "
+                "ORDER BY created_at ASC",
+                (str(matter_id),),
+            ).fetchall()
+        finally:
+            conn.close()
+        return union_coverage([dict(r) for r in rows])
+
     @staticmethod
     def project(row: dict[str, Any]) -> dict[str, Any]:
         """The row as its readers see it, with the covered sets parsed.
@@ -635,17 +765,7 @@ class MedchronLedger:
         "nobody wrote down what was covered" lead an update to opposite actions.
         """
         out = {k: row.get(k) for k in PROJECTION}
-        raw = row.get("covered_json")
-        covered: Any = None
-        uncovered: Any = None
-        if raw:
-            try:
-                parsed = json.loads(raw)
-                covered = list(parsed.get("covered") or [])
-                uncovered = list(parsed.get("uncovered") or [])
-            except (ValueError, AttributeError):
-                covered = None
-                uncovered = None
+        covered, uncovered = parse_covered(row.get("covered_json"))
         out["covered_document_ids"] = covered
         out["uncovered_document_ids"] = uncovered
         return out
@@ -694,62 +814,6 @@ class MedchronLedger:
             return dict(row)
         finally:
             conn.close()
-
-
-_MAX_COVERED_IDS = 20_000
-_MAX_ID_LEN = 200
-
-
-def validate_covered(payload: Any) -> str:
-    """The covered/uncovered document id sets, as JSON, or raise ValueError.
-
-    Ids only: this record exists so an UPDATE can read what a delivered
-    chronology did not cover, and nothing else about the documents belongs on a
-    ledger row. Two invariants, both cheap and both load-bearing:
-
-    * The two sets are DISJOINT. A document is either accounted for in the
-      delivered document (cited, or excluded with a stated reason) or it is not.
-      An id in both would let an update decide either way.
-    * `total` equals their combined size, and the runner sends the count it
-      pulled. A mismatch means a stage dropped rows between the coverage gate
-      and this call, which is the failure species the gate itself exists for,
-      so it is refused here rather than stored as a coverage claim nobody
-      checked.
-    """
-    if not isinstance(payload, dict):
-        raise ValueError("covered must be an object")
-    out: dict[str, Any] = {}
-    sets: dict[str, list[str]] = {}
-    for key in ("covered", "uncovered"):
-        raw = payload.get(key)
-        if not isinstance(raw, list):
-            raise ValueError(f"covered.{key} must be a list of document ids")
-        ids: list[str] = []
-        for item in raw:
-            if not isinstance(item, str) or not item.strip() or len(item) > _MAX_ID_LEN:
-                raise ValueError(f"covered.{key} holds a value that is not a document id")
-            ids.append(item.strip())
-        if len(set(ids)) != len(ids):
-            raise ValueError(f"covered.{key} repeats an id")
-        sets[key] = sorted(ids)
-        out[key] = sets[key]
-    overlap = set(sets["covered"]) & set(sets["uncovered"])
-    if overlap:
-        raise ValueError(f"covered and uncovered share {len(overlap)} id(s), e.g. {sorted(overlap)[0]}")
-    total = len(sets["covered"]) + len(sets["uncovered"])
-    if total > _MAX_COVERED_IDS:
-        raise ValueError(f"covered holds {total} ids, above the {_MAX_COVERED_IDS} ceiling")
-    pulled = payload.get("pulled")
-    if pulled is not None:
-        if not isinstance(pulled, int) or isinstance(pulled, bool) or pulled < 0:
-            raise ValueError("covered.pulled must be a non-negative int")
-        if pulled != total:
-            raise ValueError(
-                f"covered accounts for {total} document(s) but the run pulled {pulled}: "
-                "a stage dropped rows between the coverage gate and this record"
-            )
-        out["pulled"] = pulled
-    return json.dumps(out, sort_keys=True)
 
 
 def now_utc() -> datetime:

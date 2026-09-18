@@ -101,6 +101,7 @@
     "MEDCHRON_JOB_RUNNING": "ss#2614. Broker-written on the runner daemon's medchron_job_record(running); also the release after a seat-pause hold.",
     "MEDCHRON_JOB_HELD": "ss#2614. Broker-written when the runner holds (a seat at HARD_STOP, an unexplained file, an unmatched folder) or refuses (the cents cap, the allowance); the reason travels in metadata as prose, never a document.",
     "MEDCHRON_JOB_DELIVERED": "ss#2614. Broker-written on delivery: documents read, pages, cents, the folder id, and the file names with sha256 and byte counts read back from the matter.",
-    "MEDCHRON_JOB_FAILED": "ss#2614. Broker-written when the runner exits without a verdict or a stage fails; the reason is the runner's sentence."
+    "MEDCHRON_JOB_FAILED": "ss#2614. Broker-written when the runner exits without a verdict or a stage fails; the reason is the runner's sentence.",
+    "MEDCHRON_COVERAGE_BACKFILLED": "ss#2834. Broker-written when a chronology delivered BEFORE the coverage record existed gets one, recomputed from that delivery's own artifacts. Root-only verb, no agent tool: an update skips whatever the record says was covered, so a path the agent could reach is a path a client conversation could use to make a chronology omit records. Metadata carries counts, the source, and the delivery date, never the document ids -- the audit log is not a second copy of the record. A live-state write with no governance trail is the 2026-09-01 sticky-stop incident; this type is that trail."
   }
 }

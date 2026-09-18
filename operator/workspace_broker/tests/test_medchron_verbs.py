@@ -811,3 +811,192 @@ def test_a_coverage_payload_that_does_not_add_up_is_refused(verbs):
         assert why in str(exc.value), (bad, str(exc.value))
 
     assert call(v, "medchron_job_status", job_id=job_id)["job"]["covered_document_ids"] is None
+
+
+# ---- a matter's cumulative coverage, and the backfill (ss#2834) ---------------
+def _backfill(v, matter_id, number, covered, uncovered, delivered_at, source="backfill"):
+    return call(
+        v,
+        "medchron_backfill_covered",
+        peer_uid=ROOT,
+        matter_id=matter_id,
+        matter_number=number,
+        delivered_at=delivered_at,
+        source=source,
+        covered={"covered": covered, "uncovered": uncovered},
+    )
+
+
+def test_a_matters_coverage_is_cumulative_so_a_second_update_does_not_reread_the_first(verbs):
+    """The reason this is `delivered_coverage` and not `latest_delivered`.
+
+    A delivery's record covers only its own units; nothing unions it with the
+    delivery before it. Read the newest row alone and the SECOND update is told
+    the FIRST chronology's documents were never covered -- so it re-reads the
+    whole matter, thousands of pages against the cycle allowance, on every
+    matter, every time. This fails on a newest-row read: `a` and `b` are only in
+    the original delivery's covered set.
+    """
+    v, _ledger, _queue = verbs
+    mid = "m-cumulative"
+    _backfill(v, mid, "201588", ["a", "b"], ["x"], "2026-08-28")
+    _backfill(v, mid, "201588", ["c"], ["y"], "2026-09-10", source="update-1")
+
+    matter = call(v, "medchron_job_status", matter_id=mid)["matter"]
+    assert matter["covered_document_ids"] == ["a", "b", "c"]
+    assert matter["uncovered_document_ids"] == ["x", "y"]
+    assert matter["deliveries"] == 2
+
+
+def test_uncovered_wins_the_union_across_deliveries(verbs):
+    """A document one delivery cited and another could not use is re-read.
+
+    Re-reading costs pages. A record dropped from a filed litigation chronology
+    cannot be recovered, so the union breaks toward reading again.
+    """
+    v, _ledger, _queue = verbs
+    mid = "m-conflict"
+    _backfill(v, mid, "202033", ["shared"], [], "2026-08-27")
+    _backfill(v, mid, "202033", [], ["shared"], "2026-09-01", source="update-1")
+
+    matter = call(v, "medchron_job_status", matter_id=mid)["matter"]
+    assert matter["covered_document_ids"] == []
+    assert matter["uncovered_document_ids"] == ["shared"]
+
+
+def test_failed_rows_contribute_nothing_to_a_matters_coverage(verbs):
+    """Seeded with the shape the live A&P seat actually carries: every row on the
+    matter failed or held, none delivered. A job that failed covered nothing, and
+    `failed` has no transition out of it, so filtering by state is both the only
+    cleanup available and the correct one."""
+    v, _ledger, _queue = verbs
+    job_id = _submitted(v)
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=job_id, state="running", fields={})
+    call(
+        v,
+        "medchron_job_record",
+        peer_uid=ROOT,
+        job_id=job_id,
+        state="failed",
+        fields={"covered": {"covered": ["ghost"], "uncovered": []}},
+    )
+    matter_id = envelope()["matter"]["id"]
+    assert call(v, "medchron_job_status", matter_id=matter_id)["matter"] is None
+
+    _backfill(v, matter_id, "200454", ["real"], [], "2026-09-16")
+    matter = call(v, "medchron_job_status", matter_id=matter_id)["matter"]
+    assert matter["covered_document_ids"] == ["real"]
+    assert matter["deliveries"] == 1
+
+
+def test_a_backfill_writes_no_queue_file_so_it_cannot_launch_a_paid_run(verbs):
+    """The expensive falsifier.
+
+    `submit()` writes a queue envelope and the runner daemon claims what it finds
+    there, so registering thirteen delivered chronologies through the submit path
+    would launch thirteen real, paid chronology runs. This asserts the backfill
+    leaves the queue directory exactly as it found it.
+    """
+    v, _ledger, queue = verbs
+    before = sorted(p.name for p in queue.glob("*.json")) if queue.is_dir() else []
+    _backfill(v, "m-noqueue", "201200", ["a"], [], "2026-08-25")
+    after = sorted(p.name for p in queue.glob("*.json")) if queue.is_dir() else []
+    assert after == before
+
+
+def test_a_backfilled_row_never_debits_the_firms_allowance(verbs):
+    """History being written down is not billable work. Two independent reasons
+    it cannot move the meter, and this asserts the outcome of both: the row
+    carries zero cents (`_DEBITS_SQL` counts only `cents > 0`) and its
+    `created_at` is the real delivery date, outside the current cycle."""
+    v, _ledger, _queue = verbs
+    before = call(v, "medchron_allowance")
+    _backfill(v, "m-meter", "202426", ["a", "b", "c"], ["d"], "2026-08-27")
+    after = call(v, "medchron_allowance")
+    assert after["used"] == before["used"]
+    assert after["remaining"] == before["remaining"]
+
+
+def test_a_backfill_is_idempotent_so_a_partial_run_is_safe_to_repeat(verbs):
+    """A re-run corrects the record rather than leaving two rows claiming to be
+    the same delivery."""
+    v, _ledger, _queue = verbs
+    mid = "m-idem"
+    first = _backfill(v, mid, "201073", ["a"], [], "2026-08-27")["job"]["id"]
+    second = _backfill(v, mid, "201073", ["a", "b"], [], "2026-08-27")["job"]["id"]
+    assert first == second
+    matter = call(v, "medchron_job_status", matter_id=mid)["matter"]
+    assert matter["deliveries"] == 1
+    assert matter["covered_document_ids"] == ["a", "b"]
+
+
+def test_status_refuses_a_job_id_and_a_matter_id_together(verbs):
+    """Resolving by precedence would hand an update a delta measured against
+    something other than what it asked for, silently."""
+    v, _ledger, _queue = verbs
+    with pytest.raises(ValueError) as exc:
+        call(v, "medchron_job_status", job_id="01J", matter_id="m")
+    assert "not both" in str(exc.value)
+
+
+def test_the_list_paths_return_counts_not_the_id_arrays(verbs):
+    """A matter carries hundreds of document ids and `project()` returns them
+    three times over, so twenty rows of them is hundreds of kilobytes in a
+    client-facing turn on a 1 vCPU / 1GB seat. `None` survives as `None`: an
+    absent record and an empty one send an update in opposite directions."""
+    v, _ledger, _queue = verbs
+    _backfill(v, "m-list", "201277", ["a", "b"], ["c"], "2026-08-26")
+    bare = _submitted(v)
+
+    for resp in (call(v, "medchron_job_status"), call(v, "medchron_job_list", peer_uid=ROOT)):
+        rows = {r["id"]: r for r in resp["jobs"]}
+        filled = next(r for r in rows.values() if r["matter_number"] == "201277")
+        assert filled["covered_count"] == 2
+        assert filled["uncovered_count"] == 1
+        for gone in ("covered_json", "covered_document_ids", "uncovered_document_ids"):
+            assert gone not in filled
+        assert rows[bare]["covered_count"] is None
+
+
+def test_a_backfill_needs_a_real_delivery_date_and_a_coverage_object(verbs):
+    """The date is load-bearing, not decoration: it is what keeps the row out of
+    the current billing cycle and the ledger chronologically honest."""
+    v, _ledger, _queue = verbs
+    for kwargs, why in [
+        ({"delivered_at": "", "covered": {"covered": [], "uncovered": []}}, "delivered_at"),
+        ({"delivered_at": "August 27", "covered": {"covered": [], "uncovered": []}}, "YYYY-MM-DD"),
+        ({"delivered_at": "2026-08-27", "covered": "nope"}, "covered object"),
+    ]:
+        with pytest.raises(ValueError) as exc:
+            call(
+                v,
+                "medchron_backfill_covered",
+                peer_uid=ROOT,
+                matter_id="m-bad",
+                matter_number="1",
+                source="backfill",
+                **kwargs,
+            )
+        assert why in str(exc.value), (kwargs, str(exc.value))
+
+
+def test_a_backfill_is_root_only_and_writes_its_own_audit_type(verbs):
+    """No agent tool and no agent uid: an update skips whatever the record says
+    was covered, so an agent-reachable path is a path a client conversation could
+    use to make a chronology omit medical records. The audit row is the
+    governance trail the 2026-09-01 raw-sqlite incident did not leave."""
+    v, ledger, _queue = verbs
+    with pytest.raises(PermissionError):
+        call(
+            v,
+            "medchron_backfill_covered",
+            peer_uid=AGENT_UID,
+            matter_id="m-gate",
+            matter_number="1",
+            delivered_at="2026-08-27",
+            source="backfill",
+            covered={"covered": [], "uncovered": []},
+        )
+
+    _backfill(v, "m-gate", "201225", ["a"], ["b"], "2026-08-27")
+    assert "MEDCHRON_COVERAGE_BACKFILLED" in audit_types(v._db._db_path)

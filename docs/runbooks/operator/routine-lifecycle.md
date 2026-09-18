@@ -89,11 +89,41 @@ A routine that is not in Schedule A-1 is not a routine yet; it is work performed
 ## Reconstructing a covered set (routine 11 updates)
 
 An update reads only what the delivered chronology did not cover, and the covered set comes from
-the job's ledger row. A chronology delivered before that record existed, or delivered by hand,
-has no row to read: Evans 200454 is the standing case. The skill refuses to guess, names the
-delivered folder, and stops. Reconstructing it is a Captain-run seat step: read the delivered
-document's exhibit list and the job's working directory on the volume, then write the covered ids
-onto the ledger row. Do not approximate a delta from dates.
+the matter's ledger rows (`medchron_job_status(matter_id=...)`, which unions every delivered
+chronology on the matter so a second update does not re-read the first).
+
+A chronology delivered before that record existed has no row to read. The skill refuses to
+guess, names the delivered folder, and stops. **Reconstructing it is
+`operator/bin/medchron-backfill-covered.py`**, not a hand procedure:
+
+    # laptop: compute from the delivery's own artifacts, $0
+    medchron-backfill-covered.py compute --map matters.json \
+        --firm-config <engagements>/operator/customers/<slug>/medchron/firm.yaml \
+        --rule-dates rule-dates.json --out payloads.json
+
+    # seat, as root: verify against Smokeball, then write
+    medchron-backfill-covered.py write --payloads /tmp/payloads.json
+
+Three things it will refuse rather than write, and each is there because the failure it prevents
+is a chronology that silently omits a medical record:
+
+- a matter whose local document ids are not all present on the Smokeball matter — the mapping is
+  wrong, and a wrong-matter write marks the wrong documents covered. Synthetic `msgatt-` ids
+  (email attachments folded into the file) are partitioned out first rather than the check being
+  widened.
+- a file listing that cannot be paged to the end. A full page is byte-identical to a truncated
+  one, so "every id is present" would be unprovable.
+- a matter whose covered set depends on a coverage rule authored **after** that delivery.
+  `--rule-dates` carries each rule's date from the firm config's git history. Note the control is
+  per-rule and dated: emptying all exclusions instead moves category exclusions (retainers,
+  billing, insurance administration) into uncovered, which makes every later update re-read the
+  firm's paperwork at page cost and feed it back into a medical chronology.
+
+A delivery that predates the pipeline entirely has no artifacts at all — Robertus 201923 is the
+standing case. `from-document` reads the delivered `.docx` exhibit list and matches names against
+the matter's files, with the rule inverted: an exhibit that does not match exactly goes to
+**uncovered**, never covered, so a name-match mistake costs a re-read instead of dropping a
+record. Do not approximate a delta from dates.
 
 ## Preconditions for a reprovision
 

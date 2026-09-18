@@ -174,6 +174,19 @@ document set; `get_file(matter_id, file_id)` and `get_download_url(matter_id,
 file_id)` only when a delivered folder's own file must be confirmed;
 `get_memos_on_matter(matter_id)` to read the delivery ledger.
 
+**The file listing must be paged to the end, every time.** `get_files_on_matter`
+returns at most `limit` rows (500 by default) and the response carries no total,
+so a truncated listing is byte-identical to a complete one. Call it with
+`offset` stepping by `limit` until a page returns FEWER rows than `limit`, and
+read the `listingComplete` flag: `false` means this response is not provably the
+whole set. A matter at the cap exists today (201588), so this is not
+hypothetical. **Never treat a short read as the document set.** Both places the
+listing is used make an absence meaningful -- an update submits the listing
+minus what was covered, and a run records that listing as the covered set -- so
+a missing page silently drops medical records out of the chronology and out of
+every later update, with no refusal and nothing in the reply. If the listing
+cannot be completed, hold and say so; do not submit a partial set.
+
 ## The delivery ledger memo (not a chronology)
 
 The chronology itself is the runner's delivered folder on the matter. The one memo
@@ -238,7 +251,8 @@ schedule or a signal. In replies, call it a run, never a "re-run" or a "refresh"
    needs the top-level document folder that holds their records (`list_folders`);
    unclear, ask.
 3. **Report the selection as prose before submitting.** From
-   `get_files_on_matter` + `list_folders`, tell the requester what will be read and
+   `get_files_on_matter` (paged to the end -- see Inputs; a capped page is not
+   the set) + `list_folders`, tell the requester what will be read and
    what will be left out (the firm's authored exclusions apply on the runner side);
    a folder that plainly does not fit the pattern is a question, not a silent skip.
    Keep the document ids of that listing: they are the covered set DELIVER records.
@@ -275,12 +289,17 @@ matter. In replies, call it an update, never an "append" or a "re-run".
 
 **Where the delta comes from, in order.**
 
-1. **The job's own coverage record.** `medchron_job_status` on the matter's
-   delivered job returns `covered_document_ids` (accounted for in the delivered
-   chronology: cited in it, a byte-duplicate of something cited, in the billing
-   chart, or excluded by an authored rule) and `uncovered_document_ids` (read and
-   found to carry nothing citable, contentless or unreadable, retrieval failed, or
-   a documented orphan). The set to submit is **the matter's current listing minus
+1. **The matter's coverage record.** `medchron_job_status(matter_id=...)` with the
+   matter id you resolved on THIS turn returns `covered_document_ids` (accounted
+   for in the delivered chronology: cited in it, a byte-duplicate of something
+   cited, in the billing chart, or excluded by an authored rule) and
+   `uncovered_document_ids` (read and found to carry nothing citable, contentless
+   or unreadable, retrieval failed, or a documented orphan). Ask by matter, not by
+   job id: on an update turn you hold a matter id and no job id, and the answer
+   accumulates every delivered chronology on the matter, so a matter updated twice
+   does not re-read what the first chronology already covered. Pass `matter_id` or
+   `job_id`, never both -- the broker refuses both rather than choosing.
+   The set to submit is **the matter's current listing (paged to the end) minus
    `covered_document_ids`**, which therefore includes every previously uncovered
    document as well as everything that has landed since. A scan that arrived
    without a text layer is NOT covered, and an update reads it again.
@@ -289,9 +308,10 @@ matter. In replies, call it an update, never an "append" or a "re-run".
    record and say in your reply that the memo and the job record disagreed.
 3. **A job timestamp is never the source.** Never approximate a delta from dates.
 
-**When there is no coverage record** (`covered_document_ids` is null: a delivery
-made before this record existed, or one completed outside this skill, which is the
-case on any chronology delivered before 2026-09-17): say so plainly, name the
+**When there is no coverage record** (the matter lookup returns null, or
+`covered_document_ids` is null: a delivery completed outside this skill, or one
+whose record was never reconstructed -- on this firm that is Martinez 1019781,
+which was never delivered at all): say so plainly, name the
 delivered folder you can see on the matter, and **do not submit**. Tell the
 requester SMD will confirm what that chronology covered before the update runs, and
 surface it to SMD through the seat's ordinary operations route. Never offer a full

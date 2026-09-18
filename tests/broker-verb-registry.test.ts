@@ -104,6 +104,10 @@ const EXPECTED_VERBS = [
   // operator/workspace_broker/medchron_verbs.py; the table declares the
   // compound gates (submit: gateway or root; record: root only).
   'medchron_allowance',
+  // ss#2834: registers what a chronology delivered before the coverage record
+  // existed actually covered. Root only, and with no agent tool, because an
+  // update SKIPS whatever the record says was covered.
+  'medchron_backfill_covered',
   'medchron_job_list',
   'medchron_job_record',
   'medchron_job_status',

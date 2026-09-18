@@ -46,6 +46,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from . import audit_verbs, establish_verbs, job_verbs, transmit_verbs, workspace_verbs
+from . import medchron_verbs
 from .medchron_verbs import medchron_dispatch
 from .send_witness import append_escalation_event
 
@@ -134,6 +135,7 @@ VERBS: tuple[Verb, ...] = (
     Verb("medchron_allowance", GATEWAY_ROOT_OR_AGENT, _medchron),
     Verb("medchron_job_list", ROOT_OR_AGENT, _medchron),
     Verb("medchron_job_record", _only(ROOT), _medchron),
+    Verb("medchron_backfill_covered", _only(ROOT), _medchron),
     # Gateway-only from here down.
     Verb("audit_append", _only(GATEWAY), audit_verbs.audit_append),
     Verb("agentmail_send", _only(GATEWAY), transmit_verbs.agentmail),
@@ -159,6 +161,13 @@ if len(TABLE) != len(VERBS):
     raise RuntimeError("duplicate verb name in the broker verb table")
 if set(establish_verbs.VERBS) != {v.name for v in VERBS if v.handler is establish_verbs.establish}:
     raise RuntimeError("the establishment rows above and establish_verbs.VERBS disagree")
+# The same parity the establishment rows have had since they were added. It was
+# missing here, so a medchron verb could be named in one list and not the other:
+# present in medchron_verbs.VERBS but absent from this table is a verb the
+# dispatcher will never route, and the reverse is a verb the module's own
+# inventory does not know it owns. Either way the failure is silent.
+if set(medchron_verbs.VERBS) != {v.name for v in VERBS if v.handler is _medchron}:
+    raise RuntimeError("the medchron rows above and medchron_verbs.VERBS disagree")
 
 
 def peer_classes(broker: Any, peer_pid: int, peer_uid: int | None) -> frozenset[str]:
