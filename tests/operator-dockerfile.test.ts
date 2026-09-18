@@ -1363,7 +1363,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // take no inbox argument; the seat resolves its own from its own key.
     // 2bc61f71 -> dc315de4 (2026-09-18, overlay#362). The spool follows the
     // vendor's signed link rather than storing the record that carries it.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="dc315de47a75f3c76a670f79944c619cb2d5f382"')
+    // dc315de4 -> 5a0f2773 (2026-09-18, overlay#363 + #364). A timed-out gate is
+    // a failure, not a refusal; and the invoice matter resolver is classified.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="5a0f27737836343457d759819e85a01d11c1579f"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
