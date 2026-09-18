@@ -14,6 +14,12 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/.claude/bin/register
   - label: src/lib/db/obligations.ts (the reader the reconciler and CLI share)
     href: https://github.com/venturecrane/ss-console/blob/main/src/lib/db/obligations.ts
+  - label: .claude/skills/eos/SKILL.md (Check I, where capture happens)
+    href: https://github.com/venturecrane/ss-console/blob/main/.claude/skills/eos/SKILL.md
+  - label: .claude/skills/sos/SKILL.md (the session-start line)
+    href: https://github.com/venturecrane/ss-console/blob/main/.claude/skills/sos/SKILL.md
+  - label: scripts/lib/seat-clients.mjs (which seats roll up to which client)
+    href: https://github.com/venturecrane/ss-console/blob/main/scripts/lib/seat-clients.mjs
 ---
 
 ## The question this answers
@@ -56,7 +62,9 @@ The reason for that split: an earlier design had agents record everything as a b
 
 **The quote is checked, not trusted.** An extractor's citation is right about five times in six. So the CLI normalizes the quote and the source (smart quotes, line wrapping, emphasis markers) and string-matches. No match, no row, and there is no override flag.
 
-**Only dated obligations raise alarms.** Checking a quote grounds the *citation*, never the *interpretation* - a well-cited sentence can still be summarized wrongly. So a due date needs its own quote containing that date, and undated obligations appear on the page but never generate an alert. The residual error stays somewhere it gets read deliberately rather than landing in an inbox.
+**No obligation goes overdue on an invented date.** Checking a quote grounds the *citation*, never the *interpretation* - a well-cited sentence can still be summarized wrongly. So a due date needs its own quote containing that date, and a row without one never reports as overdue. The residual extraction error stays somewhere it gets read deliberately rather than landing in an inbox.
+
+That gate is strict enough that in practice almost nothing carries a date, which is why an undated row raises a different alarm on age alone. See "What a stalled row does now" below.
 
 **Nothing closes itself.** A row reaches `verified` only when a scheduled CI run probed the real surface - the mailbox, the R2 object, the GitHub state, the seat. The database enforces it: the certifying run is a foreign key, so a certification naming a run that never happened is rejected outright.
 
@@ -82,6 +90,35 @@ Stated plainly, because a register that implies full coverage is worse than one 
 - **Correspondence read and acted on without any write.** Nothing signals it happened.
 - **The contents of Smokeball.** CI has no Smokeball credential; the seat holds it. Those rows are marked `attested`, meaning we verify a receipt exists and freshness, never the filing itself.
 
+## Who records what we owe
+
+Most rows arrive on their own. The nightly reconciler derives them from GitHub issues, open alert conditions and change requests, because a source a machine can enumerate is a source nobody has to remember.
+
+The exception is prose. An obligation stated in a letter exists only in that letter, and the only thing that knows about it is the session that read the letter, for as long as that session lasts. So capture happens at session close: `/eos` Check I lists any client whose correspondence was read this session with nothing recorded, and the session either records what was promised or records that nothing was.
+
+```
+# Something was promised:
+.claude/bin/register add --client ashton-price --kind deliverable --key <stable-key> \
+  --what "<sentence>" --source <letter path> --quote "<verbatim from that letter>"
+
+# Nothing was promised - record the considered pass:
+.claude/bin/register add --kind none --client ashton-price --why "<why nothing is owed>"
+```
+
+The second form matters as much as the first. Without it, "we looked and owe nothing" is an absence, and an absence is indistinguishable from never having looked.
+
+**Check I records; it never blocks.** It is not part of the Ship Gate and never becomes a reason a session cannot close. Client obligations legitimately span sessions - that is what a register is for. A gate there would make every promise a blocker, and within a week people would be inventing reasons to get past it.
+
+**What the check cannot see.** The detector reads the session's engagement read log, which is written when a file is opened with the Read tool. A letter opened through the shell, reached by a search, or pasted into the prompt leaves no trace. A client it flags is real; a quiet session proves nothing.
+
+**SMD Services is itself a client.** Obligations on our own seats (`pilot-smokeball`, `smd-staging`, `scott`) roll up to `smd-services`. There is no internal-versus-external split in the register: there is a client list, and we are on it. Identity is the default in `scripts/lib/seat-clients.mjs`, so onboarding a client needs no change there - only a new seat of our own does.
+
+## What a stalled row does now
+
+Only a dated obligation can go overdue, and a due date is only accepted with its own quote containing that date. In practice almost nothing carries one, which left a gap: an undated row could sit open forever while the nightly run reported the register converged. That is the failure this register was built to replace, reproduced inside it.
+
+So an undated obligation that stays open becomes a finding on age alone - a warning at 30 days, critical at 60 - and that finding counts toward the run's exit code rather than merely raising an alert beside a green report. Thirty days is one billing cycle. The ladder applies only to hand-captured rows; a derived GitHub row is ordinary backlog that other surfaces already show.
+
 ## If you change X, update Y
 
 | If you change | Update |
@@ -90,3 +127,6 @@ Stated plainly, because a register that implies full coverage is worse than one 
 | What a source imports | `scripts/ci-reconcile-obligations.ts` and the source table above |
 | The alert conditions | `migrations/0118` CHECK, `src/lib/admin/fleet-alerts.ts`, and "How you hear about it" |
 | The grounding rules | `.claude/hooks/lib/register.mjs` and "What makes a row trustworthy" |
+| Who captures, and when | `.claude/skills/eos/SKILL.md` Check I, `CLAUDE.md`, and "Who records what we owe" below |
+| Which seats roll up to which client | `scripts/lib/seat-clients.mjs` and "Who records what we owe" below |
+| What the session-start line says | `.claude/skills/sos/SKILL.md` Step 4 and the `--json` allowlist in `.claude/hooks/lib/register.mjs` |

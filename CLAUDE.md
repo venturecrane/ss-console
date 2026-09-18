@@ -100,6 +100,7 @@ repeatedly is a fact the repo failed to write down.
 - **Verify secret VALUES, not just key existence.**
 - **Never auto-save to VCMS** without explicit Captain approval.
 - **Scope discipline: do the work, do not file it.** Work discovered mid-task gets **done now** if it is within reach — that is what a platoon of agents is for. Finish the current scope first, then do it. File an issue only when it is genuinely not doable now: blocked on something that does not yet exist, or a decision only the Captain can make. "I noticed something" is not a reason to file. **Standing target: zero open issues.** Automated reconcilers (`unaudited-send-reconcile`, `terminal-state-reconcile`) are exempt — their issues are alerts, and the target must never become a reason to silence a monitor.
+- **What we owe clients is written down, not remembered.** The obligation register (`client_obligations` in D1, ADR 0088, `docs/handbook/obligation-register.md`) holds every piece of work SMD owes a client. Read it from a terminal: `.claude/bin/register list [--client <slug>]`. There is deliberately no page. Most rows are IMPORTED nightly from GitHub, alert state and change requests; the one class no system can enumerate is an obligation stated in a letter, so **a session that reads client correspondence records what was promised before it closes** — `register add` with a verbatim quote that must match the source file, or `register add --kind none --why "..."` to record that nothing is owed. `/eos` Check I surfaces this; it records and never blocks, because client obligations legitimately span sessions. SMD Services is itself a client here: our own seats roll up to `smd-services`.
 - **Escalation triggers.** Credential not found in 2 min, same error 3 times, blocked >30 min — stop and escalate.
 
 ### Gone means gone (removal discipline)
@@ -290,6 +291,10 @@ to be built upon, not re-derived.
 Venture-local slash commands (currently `/medchron`), authored under `docs/skills/<name>/SKILL.md` and installed with `bash scripts/install-captain-skills.sh`, which symlinks them into the gitignored `.agents/skills/` and `.claude/commands/`. Edit the tracked file only; run the installer on a fresh checkout. These are not enterprise skills; nothing here syncs with crane-console.
 
 The governing constraint: the Captain cannot see any artifact a run produces, so every decision point arrives as prose carrying the counts, the exclusions and their reasons, the money, a recommendation, and a specific question. See `feedback_captain_cannot_see_artifacts_gates_must_be_prose.md`.
+
+**`/sos` and `/eos` are SMD's own, forked 2026-09-17.** They live at `.claude/skills/{sos,eos}/SKILL.md` — tracked, reviewed, and covered by `tests/smd-session-skills.test.ts`. They were crane-console enterprise skills, byte-identical across ke/dfg/sc/ss; ss-console is the primary venture, so the session lifecycle is authored here rather than inherited, and enterprise updates no longer reach it. Each file records its fork point so a diff against crane's copy stays possible.
+
+Note the directory is load-bearing. `.claude/commands/` is written by TWO crane mechanisms — `syncClaudeAssets` on every `crane ss` launch, and `sync-commands.sh`, which also deletes anything crane does not have — and is gitignored here, so a fork placed there would be silently overwritten with no diff to notice. Nothing in the crane toolchain writes `.claude/skills/`.
 
 ## Venture Handbook
 

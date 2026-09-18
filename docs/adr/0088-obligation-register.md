@@ -80,6 +80,22 @@ So each run prints a **coverage census**: artifacts per source class against obl
 - **Two obligation classes remain structurally uncapturable**: one created in a phone call, and correspondence read and acted on without any write. Neither is solved here, and neither should be reported as covered.
 - Recurrence stores the rule and materializes one instance ahead, so "what is due" stays a query rather than a computation, and the register cannot go quiet because nobody ran a generator.
 
+## Amendment, 2026-09-18: the register had no forcing function
+
+One day after this shipped, the register held 11 open rows, had raised zero alerts, and would never have raised one. Three defects, all mine, all found by reading production rather than the code:
+
+1. **`still_open` counted toward nothing.** `classifyRow` returned it for every undated row that probed absent, and `findingCount` summed `overdue + cannotAttested + unwitnessed + gaps`. Eleven stalled rows therefore exited `EXIT_CONVERGED` every night. That is precisely the cadence engine's failure — 7 of 16 overdue, one by 134 days, reporting itself healthy — rebuilt inside the system whose stated purpose was to replace it. The grounding gate above is strict enough that in practice nothing ever carries a `due_at`, so "only dated rows alarm" resolved to "nothing alarms, ever."
+
+   **Fix:** an undated `captured` row open past 30 days (critical at 60) is a `stale` verdict that both raises `obligation_stale` **and** counts in `findingCount`. The pairing is the point: an alert that does not move the exit code produces a run that pages the Captain and records itself converged. Scoped to `captured` because a derived GitHub row probes absent while its issue is merely open, and paging on 31-day-old backlog would train everyone to ignore this.
+
+2. **A latent client-data leak that fix 1 would have armed.** Findings interpolated `row.what`; the workflow captures stdout to `reconcile.txt` and `cat`s it into the public Actions log and a `gh issue create` body in `venturecrane/ss-console`, which is a **public** repo. It had never fired only because `overdue` was unreachable. Findings now carry ids, slugs, kinds and ages only. Alert summaries keep `what`: that path is Resend to `team@smd.services` and the admin console, both private. The same boundary governs `register list --json`, whose field allowlist is pinned by test.
+
+3. **Attribution was dead on arrival.** `register.mjs` read `CLAUDE_SESSION_ID`; the harness exports `CLAUDE_CODE_SESSION_ID`. All 11 production rows carry `created_by_session = NULL`, so nothing could answer "did the session that read the letter record what it promised" — the one question the capture check has to ask.
+
+**Also amended:** obligations now roll up to a client rather than a seat, and SMD Services is itself a client (`scripts/lib/seat-clients.mjs`; our own seats map to `smd-services`). Before this the register reported "11 open across 3 clients" while holding work for one. Identity is the default, so onboarding a client needs no entry; only a new seat of our own does.
+
+**Explicitly not done: relaxing the `date_quote` gate.** It is not the cause. It stops an invented date from paging the Captain at ~0.83 extraction faithfulness, and relaxing it would also make `obligation_overdue` untrustworthy the first time it fires. The age ladder covers the gap without weakening the citation rule.
+
 ## Rejected
 
 - **Extending `milestones` / `parking_lot` / `follow_ups`.** All three model a consulting engagement and hold **zero** production rows (verified live 2026-09-17); the live client key is `customer_configs`. Building on them would be building on something dead.

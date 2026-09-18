@@ -526,3 +526,113 @@ describe('regressions found in review', () => {
     expect(result.stdout).toMatch(/operator_change_requests unreadable/)
   })
 })
+
+/** A SQLite-shaped UTC timestamp N days back, matching CURRENT_TIMESTAMP. */
+function daysAgo(n: number): string {
+  return new Date(Date.now() - n * 86400000).toISOString().replace('T', ' ').slice(0, 19)
+}
+
+/**
+ * The stale ladder and the confidentiality split (2026-09-17).
+ *
+ * Both exist because of a defect the register shipped with: an undated row that
+ * stayed open classified `still_open`, `still_open` was counted in no total, and
+ * the nightly run therefore exited CONVERGED over eleven rows nothing was
+ * moving. That is the predecessor cadence engine's failure -- 7 of 16 items
+ * overdue, one by 134 days, reporting itself healthy -- rebuilt inside its own
+ * replacement.
+ *
+ * The pairing in the first test is the point. A verdict that raises an alert but
+ * is missing from `findingCount` produces a run that pages the Captain AND
+ * records itself converged, so asserting the alert alone would pass against the
+ * exact bug being fixed.
+ */
+describe('the stale ladder for undated obligations', () => {
+  const captured = (over: Record<string, unknown> = {}) => ({
+    obligation_id: 'o-stale',
+    customer_slug: 'ashton-price',
+    entity_id: 'e-ap',
+    kind: 'deliverable',
+    what: 'a promise made in a letter',
+    state: 'open',
+    origin: 'captured',
+    due_at: null,
+    created_at: daysAgo(45),
+    evidence_surface: null,
+    evidence_locator: null,
+    ...over,
+  })
+
+  it('a 45-day undated captured row alerts AND counts as a finding', () => {
+    setState({ obligations: [captured()] })
+    const result = run()
+    // Both halves, deliberately. Removing `stale` from the findingCount sum
+    // leaves the alert assertion passing and fails only the exit code.
+    expect(result.stdout).toMatch(/open 45d with no due date/)
+    expect(result.code).toBe(2)
+    expect(readState().writes.some((w) => w.includes('obligation_stale'))).toBe(true)
+  })
+
+  it('a 5-day undated captured row is not a finding', () => {
+    // Falsifier for the ladder: a threshold pinned at 0 days would pass every
+    // assertion above and this is the only case that would catch it.
+    setState({ obligations: [captured({ obligation_id: 'o-new', created_at: daysAgo(5) })] })
+    const result = run()
+    expect(result.code).toBe(0)
+    expect(result.stdout).not.toMatch(/with no due date/)
+  })
+
+  it('an IMPORTED undated row never goes stale, however old', () => {
+    // A derived GitHub row probes `absent` for as long as its issue is merely
+    // open, so an unscoped ladder pages on ordinary backlog -- 51 open issues
+    // at time of writing. Dropping the origin scope fails this.
+    setState({
+      obligations: [
+        captured({ obligation_id: 'o-imp', origin: 'imported', created_at: daysAgo(400) }),
+      ],
+    })
+    const result = run()
+    expect(result.code).toBe(0)
+    expect(result.stdout).not.toMatch(/with no due date/)
+  })
+})
+
+describe('findings never carry client text', () => {
+  // Findings become reconcile.txt, which obligation-reconcile.yml cats into the
+  // public Actions log AND into a `gh issue create` body in
+  // venturecrane/ss-console -- a PUBLIC repo. `what` names a real firm's real
+  // backlog. The ALERT summary keeps it, because that path is Resend to
+  // team@smd.services and the admin console. The findings list must not.
+  // Interpolating row.what into either finding line fails these.
+  const secret = 'Close the 473 orphaned overdue tasks on closed matters'
+
+  const row = (over: Record<string, unknown>) => ({
+    obligation_id: 'o-x',
+    customer_slug: 'ashton-price',
+    entity_id: 'e-ap',
+    kind: 'deliverable',
+    what: secret,
+    state: 'open',
+    origin: 'captured',
+    due_at: null,
+    created_at: daysAgo(40),
+    evidence_surface: null,
+    evidence_locator: null,
+    ...over,
+  })
+
+  it('an overdue finding names the row but not what it says', () => {
+    setState({ obligations: [row({ due_at: daysAgo(9).slice(0, 10) })] })
+    const result = run()
+    expect(result.code).toBe(2)
+    expect(result.stdout).toMatch(/overdue 9d/)
+    expect(result.stdout).not.toContain(secret)
+  })
+
+  it('a stale finding names the row but not what it says', () => {
+    setState({ obligations: [row({ created_at: daysAgo(90) })] })
+    const result = run()
+    expect(result.code).toBe(2)
+    expect(result.stdout).not.toContain(secret)
+  })
+})

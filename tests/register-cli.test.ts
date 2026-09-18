@@ -14,7 +14,15 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'fs'
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+  readdirSync,
+  chmodSync,
+} from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -338,5 +346,155 @@ describe('regressions found in review', () => {
     const { dateQuoteAnchorsDate } = await loadLib()
     expect(dateQuoteAnchorsDate('we will file before October 15th', '2026-11-30')).toBe(false)
     expect(dateQuoteAnchorsDate('no date at all in this sentence', '2026-10-15')).toBe(false)
+  })
+})
+
+/**
+ * Reading the register (2026-09-17).
+ *
+ * `list` had no test at all until now: it echoed wrangler's raw stdout, so there
+ * was nothing to assert beyond "a subprocess ran". It now parses and projects,
+ * and the projection is a CONFIDENTIALITY BOUNDARY rather than a formatting
+ * choice -- `--json` feeds /sos, whose output lands in a session transcript, and
+ * transcripts persist under ~/.claude and go to model providers while this repo
+ * is public. The allowlist test is the guard; adding `what` to the projection is
+ * the mutation that must break it.
+ */
+describe('reading the register', () => {
+  /** A wrangler stand-in that prints a canned envelope, ignoring its argv. */
+  function successStub(rows: Record<string, unknown>[], shape: 'array' | 'bare' = 'array'): string {
+    const envelope =
+      shape === 'array'
+        ? JSON.stringify([{ results: rows, success: true, meta: { served_by: 'test' } }])
+        : JSON.stringify({ results: rows, success: true })
+    const path = join(dir, shape === 'array' ? 'd1-ok-array.cjs' : 'd1-ok-bare.cjs')
+    writeFileSync(path, `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(envelope)})\n`)
+    chmodSync(path, 0o755)
+    return path
+  }
+
+  const row = (over: Record<string, unknown> = {}) => ({
+    obligation_id: 'o1',
+    customer_slug: 'ashton-price',
+    kind: 'deliverable',
+    stable_key: 'legacy-migration-quote',
+    state: 'open',
+    due_at: null,
+    created_at: new Date(Date.now() - 12 * 86400000).toISOString().replace('T', ' ').slice(0, 19),
+    what: 'Close the 473 orphaned overdue tasks on closed matters',
+    ...over,
+  })
+
+  function capture(): { lines: string[]; restore: () => void } {
+    const lines: string[] = []
+    const original = console.log
+    console.log = (...args: unknown[]) => void lines.push(args.join(' '))
+    return { lines, restore: () => void (console.log = original) }
+  }
+
+  it('--json emits only allowlisted fields, never the obligation text', async () => {
+    const { main, JSON_FIELDS } = await loadLib()
+    process.env.SS_REGISTER_D1_CMD = successStub([row()])
+    const out = capture()
+    const code = main(['list', '--json'])
+    out.restore()
+    delete process.env.SS_REGISTER_D1_CMD
+
+    expect(code).toBe(0)
+    const parsed = JSON.parse(out.lines.join('')) as Record<string, unknown>[]
+    expect(parsed).toHaveLength(1)
+    // The mutation this catches: adding `what` to projectRow.
+    expect(Object.keys(parsed[0]).sort()).toEqual([...JSON_FIELDS].sort())
+    expect(out.lines.join('')).not.toContain('473 orphaned')
+  })
+
+  it('--json rolls an SMD-owned seat up to the smd-services client', async () => {
+    const { main } = await loadLib()
+    process.env.SS_REGISTER_D1_CMD = successStub([row({ customer_slug: 'pilot-smokeball' })])
+    const out = capture()
+    main(['list', '--json'])
+    out.restore()
+    delete process.env.SS_REGISTER_D1_CMD
+
+    const parsed = JSON.parse(out.lines.join('')) as Record<string, unknown>[]
+    expect(parsed[0].client).toBe('smd-services')
+    expect(parsed[0].customer_slug).toBe('pilot-smokeball')
+  })
+
+  it('reads the bare-object envelope as well as the array-wrapped one', async () => {
+    // Wrangler emits both shapes. Before the parser was shared, lookupEntityId
+    // handled both and cmdList handled neither; re-forking the parse fails here.
+    const { main } = await loadLib()
+    process.env.SS_REGISTER_D1_CMD = successStub([row()], 'bare')
+    const out = capture()
+    const code = main(['list', '--json'])
+    out.restore()
+    delete process.env.SS_REGISTER_D1_CMD
+
+    expect(code).toBe(0)
+    expect(JSON.parse(out.lines.join(''))).toHaveLength(1)
+  })
+
+  it('says "nothing open" rather than printing an empty table', async () => {
+    // A broken selector and a clean register look identical in a zero-row
+    // table. That confusion is why the cadence engine sat at 7 of 16 overdue
+    // behind a green report.
+    const { main } = await loadLib()
+    process.env.SS_REGISTER_D1_CMD = successStub([])
+    const out = capture()
+    const code = main(['list'])
+    out.restore()
+    delete process.env.SS_REGISTER_D1_CMD
+
+    expect(code).toBe(0)
+    expect(out.lines.join('\n')).toMatch(/nothing open/)
+  })
+
+  it('the table groups by client, dates the age, and flags an all-undated register', async () => {
+    const { renderTable } = await loadLib()
+    const text = renderTable([row(), row({ obligation_id: 'o2', customer_slug: 'smd-staging' })])
+    expect(text).toMatch(/ashton-price\s+\(1\)/)
+    expect(text).toMatch(/smd-services\s+\(1\)/)
+    expect(text).toMatch(/12d old/)
+    expect(text).toMatch(/2 open across 2 clients; 0 dated/)
+    // Only a dated row can go overdue, so an all-undated register cannot alarm
+    // through that path. Saying so is the point.
+    expect(text).toMatch(/none can go overdue/)
+  })
+
+  it('never reports a row as younger than new', async () => {
+    // SQLite writes UTC without a zone marker; JS parses that as local, which
+    // printed "-1d old" for a row created minutes earlier on a UTC-7 machine.
+    const { renderTable } = await loadLib()
+    const justNow = new Date().toISOString().replace('T', ' ').slice(0, 19)
+    expect(renderTable([row({ created_at: justNow })])).toMatch(/0d old/)
+  })
+
+  it('reports WHY the register could not be read', async () => {
+    // "cannot read" with no reason is indistinguishable from an empty register
+    // at a glance, and /sos has to tell the two apart.
+    const { main } = await loadLib()
+    process.env.SS_REGISTER_D1_CMD = join(dir, 'no-such-binary')
+    const errs: string[] = []
+    const original = console.error
+    console.error = (...args: unknown[]) => void errs.push(args.join(' '))
+    const code = main(['list'])
+    console.error = original
+    delete process.env.SS_REGISTER_D1_CMD
+
+    expect(code).toBe(1)
+    expect(errs.join(' ')).toMatch(/cannot read the register \(.+\)/)
+  })
+
+  it('attributes a capture to the session the harness actually names', async () => {
+    // register.mjs read CLAUDE_SESSION_ID, which is never set; the harness
+    // exports CLAUDE_CODE_SESSION_ID. Every one of the register's first eleven
+    // production rows carries created_by_session = NULL because of it.
+    const { sessionId } = await loadLib()
+    const prior = process.env.CLAUDE_CODE_SESSION_ID
+    process.env.CLAUDE_CODE_SESSION_ID = 'sess-abc'
+    expect(sessionId()).toBe('sess-abc')
+    if (prior === undefined) delete process.env.CLAUDE_CODE_SESSION_ID
+    else process.env.CLAUDE_CODE_SESSION_ID = prior
   })
 })

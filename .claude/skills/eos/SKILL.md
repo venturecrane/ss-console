@@ -1,4 +1,20 @@
-# /eos - End of Session Handoff
+---
+name: eos
+description: End of session handoff for SMD Services — close-out audit, client-obligation capture, and the saved handoff.
+---
+
+# /eos - End of Session Handoff (SMD Services)
+
+> **Forked from crane-console on 2026-09-17.** This is SMD's own copy and no
+> longer receives enterprise updates; improvements originate here. ss-console is
+> the primary venture, so the session lifecycle is authored rather than
+> inherited. The fork point is commit `da86b27c` (verbatim copy); everything
+> after it is ours — principally **Check I**, which captures what this session
+> committed SMD to. Crane's copy still lives at `.claude/commands/eos.md` and is
+> re-synced on every `crane ss` launch, which is why this file lives in
+> `.claude/skills/`: nothing in the crane toolchain writes here. If `/eos` runs
+> crane's copy instead of this one, see the fallback ladder in
+> `.claude/skills/sos/SKILL.md` — the same precedence question governs both.
 
 > **Invocation:** As your first action, call `crane_skill_invoked(skill_name: "eos")`. This is non-blocking — if the call fails, log the warning and continue. Usage data drives `/skill-audit`.
 
@@ -113,6 +129,37 @@ If the session transcript contains failure-narrative keywords ("silent failure",
 
 For each match, the handoff's diagnostic/retro section MUST cite the memory by filename. A bare "investigate next session" or "root cause unknown" without citing a matching memory entry is rejected — re-synthesize the section with the citation. If no memory matches after an honest check, add the assertion "no matching memory found (candidate for new feedback memory)" so the gate is explicit.
 
+**I. Client obligations this session created or discharged. (SMD, added 2026-09-17.)**
+
+Every other check asks what this session left unfinished in the REPO. This one asks what it committed SMD to with a CLIENT — the only record of which, for anything stated in a letter, is the agent that read the letter. Tomorrow nobody knows.
+
+**Detection.** Read this session's engagement read log: `${SS_READ_LOG_DIR:-$HOME/.claude/ss-read-log}/<session_id>`, written by `.claude/hooks/read-tracker.mjs`. Extract the distinct slugs from lines matching `operator/customers/<slug>/correspondence/`. For each such slug, check whether this session already recorded something for it:
+
+```bash
+grep -h "$CLAUDE_CODE_SESSION_ID" ${SS_OBLIGATION_JOURNAL_DIR:-$HOME/.claude/ss-obligation-journal}/*.jsonl 2>/dev/null
+```
+
+A slug with correspondence reads and no journal entry from this session is surfaced.
+
+**Completion action** — one of exactly two, per slug:
+
+```bash
+# Something was promised:
+.claude/bin/register add --client <slug> --kind <kind> --key <stable-key> \
+  --what "<sentence>" --source <letter path> --quote "<verbatim from that letter>"
+
+# Nothing was promised — record the considered pass, do not stay silent:
+.claude/bin/register add --kind none --client <slug> --why "<why nothing is owed>"
+```
+
+The `--kind none` path exists precisely so that "we looked and owe nothing" is a recorded act rather than an absence. An absence is indistinguishable from never having looked.
+
+**This check RECORDS; it never BLOCKS.** It is explicitly **not** a Ship Gate item and its output never becomes an external blocker. Client obligations legitimately span sessions — that is what a register is for. Wiring them into the Ship Gate would make every promise a reason a session cannot close, and within a week people would be inventing blockers to get out of it. Surface it, act on it, move on.
+
+**It cannot fabricate.** `register add` refuses any row whose quote is not found in its source file, after normalization, with no `--force`. A check that could invent a client obligation would be worse than no check.
+
+**Known blind spot, stated rather than discovered.** `read-tracker.mjs` is PostToolUse on matcher `Read` only. A letter opened with Bash `cat`/`grep`, reached via Grep or Glob, or pasted into the prompt leaves no trace. So a positive signal here is trustworthy and a negative one means nothing: absence of a flagged slug is not evidence that nothing was promised. Do not report it as such.
+
 **Defensive note on `gh` JSON schema.** Fields like `mergeStateStatus` and `statusCheckRollup` have stable names but nested shape changes across `gh` minor versions. Wrap each jq call at the shell level: unexpected output formats should log a warning like `[eos:check-X] gh output unexpected, skipping this check` and proceed to the next check. Do NOT crash the skill on schema drift.
 
 #### Anti-Fabrication Gate
@@ -129,9 +176,10 @@ Every item you are about to list as a loose end must pass this gate.
 6. A memory/doc file from Check F that references an unshipped PR with post-merge prose, OR
 7. An open issue from Check G that the session asserted as resolved, OR
 8. A diagnostic note from Check H that needs memory citation, OR
-9. A specific item the Captain requested **via an explicit chat message with a verb and subject** that has not been completed. (NOT an aside summarized from context. NOT an inference. A literal user message.)
+9. A client slug from Check I with correspondence reads and no journal entry this session, OR
+10. A specific item the Captain requested **via an explicit chat message with a verb and subject** that has not been completed. (NOT an aside summarized from context. NOT an inference. A literal user message.)
 
-If NO to all nine → do not list it. Do not hedge. Do not qualify. Kill it.
+If NO to all ten → do not list it. Do not hedge. Do not qualify. Kill it.
 
 **Specifically forbidden items** (these are fabrications, never list them):
 
@@ -163,7 +211,7 @@ If **≤4 items pass the gate**, present them in ONE consolidated prompt using `
 - Question: "Session close-out: N items to resolve before handoff. Complete now?"
 - Header: `Close-out` (≤12 chars)
 - Options:
-  - **"Complete all"** — execute the obvious completion for each item per the Completion Actions table below. After actions, re-run Checks A–H; items that are still in scope roll back to a second prompt.
+  - **"Complete all"** — execute the obvious completion for each item per the Completion Actions table below. After actions, re-run Checks A–I; items that are still in scope roll back to a second prompt.
   - **"Complete selected"** — present per-item options in a second `AskUserQuestion`.
   - **"Declare external blocker"** — each item left requires a one-line reason naming an external party or system that prevents completion (vendor response pending, Captain directive required, approver identified by name, etc.). Reasons matching `(?i)(Captain to review|next session|later|will decide|I'll review)` are rejected with: "That's not an external blocker — it's a deferral. Name the actual blocker, or complete the item." Reprompt once; if the second reason also fails, default to "Complete selected."
 
@@ -186,10 +234,11 @@ If **≤4 items pass the gate**, present them in ONE consolidated prompt using `
 | F                             | Update the file to reflect actual state (e.g., "merged in PR #N" → "proposed in open PR #N")                                            | Use `Edit` with precise `old_string`/`new_string`; do not rewrite the file.                                                                                                               |
 | G                             | `gh issue close <N> --comment "Verified resolved during session {session_id}. See handoff."`                                            | Deferral disallowed. In-session verification that isn't carried through to closure is the same incomplete-work pattern Check D catches on PRs.                                            |
 | H                             | Rewrite the handoff diagnostic section to cite the matching memory filename, or add "no matching memory found (candidate for new one)". | Forces the check to run. "Root cause unknown" with no memory check is rejected.                                                                                                           |
+| I                             | `.claude/bin/register add …` for what was promised, or `register add --kind none --client <slug> --why "…"` to record a considered pass. | RECORDS, never blocks. Never a Ship Gate item and never an external blocker — client obligations legitimately span sessions. Cannot fabricate: the quote must match the source file.      |
 
 #### Post-Action Verification
 
-After completion actions run, re-run Checks A–H. Any check that still returns items means the action failed or was partial — surface those items in a second prompt with the completion result attached. Do not mark items as resolved in the handoff if the check still flags them.
+After completion actions run, re-run Checks A–I. Any check that still returns items means the action failed or was partial — surface those items in a second prompt with the completion result attached. Do not mark items as resolved in the handoff if the check still flags them.
 
 #### Blocked-Item Age Tracking
 
