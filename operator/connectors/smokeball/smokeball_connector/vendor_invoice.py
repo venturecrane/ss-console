@@ -5,8 +5,18 @@ copying, court reporters, filing services) and somebody keys each one into the
 matter's expenses by hand. This module is the connector half of doing that for
 her: ``read_attachment`` turns the emailed PDF into text the skill can extract
 from, and ``stage_vendor_invoice`` writes one unfinalized expense and files the
-PDF beside it. The skill decides WHICH matter; this module decides nothing
-about money it was not handed and never finalizes anything.
+PDF beside it. This module decides nothing about money it was not handed and
+never finalizes anything.
+
+WHICH MATTER IS NOT A JUDGEMENT EITHER, SINCE 2026-09-18. An invoice naming only
+the client, on a tenant carrying two open matters for that client, was staged on
+one of them, because the skill's correct prose ("resolve from two facts, flag
+what you cannot place") left the question inside the model's head. The matter now
+arrives as a RESOLUTION: ``matter_resolution.resolve_matter`` searches the tenant
+and mints a token only on a ``unique`` verdict, and the write below refuses
+without one, refuses a token issued for a different matter, and spends the token
+at the POST so one resolution can never write two entries. There is no argument
+by which a matter can be asserted.
 
 THE MONEY INVARIANT IS STRUCTURAL, NOT A RULE THE MODEL FOLLOWS.
 
@@ -48,6 +58,9 @@ from .attachment_source import fetch_bytes
 from .client import SmokeballApiError, SmokeballWriteError
 from .expense_ledger import classify_against_ledger, read_whole_ledger, row_amount
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML, find_folder_id
+from .resolution_token import ResolutionRefused
+from .resolution_token import consume as consume_resolution
+from .resolution_token import verify as verify_resolution
 from .task_update import MatterReferenceMismatch
 
 # ---- Reading the attachment -----------------------------------------------
@@ -388,6 +401,7 @@ def stage_vendor_invoice(
     client: Any,
     *,
     matter_id: str,
+    matter_resolution: str,
     download_url: str,
     file_name: str,
     sha256: str,
@@ -399,8 +413,9 @@ def stage_vendor_invoice(
     stamp: Callable[[str], str | None],
     config: ExpenseConfig | None = None,
 ) -> dict[str, Any]:
-    """Validate, de-duplicate, re-verify the bytes, write one unfinalized
-    expense, read it back, and file the PDF. See the module docstring."""
+    """Validate, check the resolution, de-duplicate, re-verify the bytes, write
+    one unfinalized expense, read it back, and file the PDF. See the module
+    docstring."""
     facts, problem = parse_invoice(
         vendor=vendor, invoice_number=invoice_number, invoice_date=invoice_date, amount=amount, sha256=sha256
     )
@@ -408,6 +423,14 @@ def stage_vendor_invoice(
         return _refused(problem or "invalid invoice facts")
     if not _clean(matter_id) or not _clean(file_name):
         return _refused("matter_id and file_name are required")
+    # The gate, before anything is read or written: a live resolution, for THIS
+    # matter. Checked here and SPENT at the POST, so a refusal below (a
+    # duplicate, an unreadable ledger) leaves the resolution usable for the
+    # corrected call while a written entry consumes it for good.
+    try:
+        resolution = verify_resolution(matter_resolution, matter_id)
+    except ResolutionRefused as exc:
+        return _refused(str(exc))
     cfg = config if config is not None else load_expense_config()
     if cfg.error:
         return _refused(f"the seat's expense settings are malformed: {cfg.error}")
@@ -421,6 +444,10 @@ def stage_vendor_invoice(
         return _refused(f"the attachment could not be fetched again: {exc}")
     if hashlib.sha256(blob).hexdigest() != _clean(sha256):
         return _refused("the attachment's bytes changed since it was read; read it again before staging")
+    try:
+        consume_resolution(matter_resolution, matter_id)
+    except ResolutionRefused as exc:  # a concurrent turn spent it between the two checks
+        return _refused(str(exc))
     accepted = client.request(
         "POST", f"/matters/{matter_id}/expenses", json=build_expense_body(facts, subject, description, cfg)
     )
@@ -439,6 +466,7 @@ def stage_vendor_invoice(
         "created": True,
         "expense_id": expense_id or None,
         "matter_id": matter_id,
+        "matched_on": list(resolution.matched_on),
         "amount": str(facts.amount),
         "subject": subject,
         "file_id": filed.get("fileId"),

@@ -39,6 +39,21 @@ her own.
 - **General / operational.** "Did you get the Acme invoice I sent yesterday?" is
   a question, answered directly; it stages nothing new.
 
+## The two-candidate probe is now a regression probe
+
+Run 2026-09-18 on the staging tenant: an invoice naming only the client, with no
+matter number and no second identifying fact, was staged on one of the two open
+matters that client carries. Selection was correct; the placement was not. The
+probe that catches it is the **two candidates** case below, and it passes only
+when the reply NAMES both candidate matter numbers and nothing is entered.
+
+It is no longer a test of the model's judgement. `resolve_invoice_matter`
+returns `ambiguous` and mints nothing, and `stage_vendor_invoice` refuses
+without a resolution, so a run that stages anything here is a connector defect
+rather than a selection one. What the probe still measures is the REPLY: that
+the ambiguity reaches the sender as two matter numbers and a question, not as a
+vague "could not be placed".
+
 ## Result
 
 Pending the first blind selector run on the pilot seat. The five runtime probes

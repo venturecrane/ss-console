@@ -23,8 +23,10 @@ import httpx
 import pytest
 
 from smokeball_connector import expense_ledger as ledger
+from smokeball_connector import resolution_token as rt
 from smokeball_connector import server as srv
 from smokeball_connector import vendor_invoice as vi
+from smokeball_connector import vendor_invoice_tools as vit
 from smokeball_connector.client import SmokeballClient, SmokeballWriteError
 
 MATTER = "f220c8e4-eab5-4fd9-8f1d-0becf715b390"  # the pilot fixture matter 2026-PI-101
@@ -139,6 +141,12 @@ class Tenant:
         return httpx.Response(404, json={"error": f"unscripted {method} {path}"})
 
 
+def _resolution(matter_id: str = MATTER, matched_on: tuple[str, ...] = ("matter_number", "client_name")) -> str:
+    """A REAL token from the real store: the tests spend what the resolve tool
+    mints, so a test cannot pass against a fake that the write would refuse."""
+    return rt.mint(matter_id, "2026-PI-101", matched_on)
+
+
 def _stage(tenant: Tenant, config: vi.ExpenseConfig | None = None, **overrides: Any) -> dict[str, Any]:
     args: dict[str, Any] = {
         "matter_id": MATTER,
@@ -151,6 +159,11 @@ def _stage(tenant: Tenant, config: vi.ExpenseConfig | None = None, **overrides: 
         "amount": "1250.00",
     }
     args.update(overrides)
+    # Minted only when the caller did not supply one, and NOT through
+    # setdefault, whose argument evaluates either way: a spare mint prunes the
+    # store out from under a test that is about expiry.
+    if "matter_resolution" not in args:
+        args["matter_resolution"] = _resolution()
     return vi.stage_vendor_invoice(
         tenant.client(),
         verify_reference=srv._verify_matter_reference,
@@ -178,13 +191,21 @@ def _no_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(vi, "READBACK_SECONDS", 0.0)
 
 
+@pytest.fixture(autouse=True)
+def _empty_resolution_store() -> None:
+    """No token survives a test. A leaked one would let the next test's write
+    through on a resolution it never asked for."""
+    rt._reset_for_tests()
+
+
 # ---- The money invariant ------------------------------------------------------
 
 
 def test_no_tool_argument_can_reach_finalized_or_the_billing_settings() -> None:
-    params = set(inspect.signature(srv.stage_vendor_invoice).parameters)
+    params = set(inspect.signature(vit.stage_vendor_invoice).parameters)
     assert params == {
         "matter_id",
+        "matter_resolution",
         "download_url",
         "file_name",
         "sha256",
@@ -232,6 +253,7 @@ def test_finalized_stays_false_whatever_config_and_env_say(tmp_path, monkeypatch
     out = vi.stage_vendor_invoice(
         tenant.client(),
         matter_id=MATTER,
+        matter_resolution=_resolution(),
         download_url=URL,
         file_name="Acme invoice.pdf",
         sha256=INVOICE_SHA,
@@ -328,6 +350,77 @@ def test_text_naming_another_matter_refuses() -> None:
     out = _stage(tenant, file_name="Invoice for 2026-PI-102.pdf")
     assert out["status"] == "refused" and "2026-PI-102" in out["reason"]
     assert tenant.posts("/expenses") == []
+
+
+# ---- The matter resolution gate -------------------------------------------
+#
+# The 2026-09-18 defect: an invoice naming only the client was staged on one of
+# the two matters the tenant carries open for that client. These assert that a
+# matter cannot be asserted -- only handed over by a unique resolution -- and
+# every one of them proves it by the ABSENCE of a POST, because a status is the
+# tool's claim about itself and the request log is the thing it would have to lie
+# to. The resolve tool's own arithmetic is tested in test_matter_resolution.py.
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        "",
+        "   ",
+        None,
+        7,
+        MATTER,
+        "unique",
+        "resolution:",
+        "resolution:not-hex-at-all-nope-nope-nope",
+        f"resolution:{'a' * 31}",
+        f"resolution:{'a' * 32}",  # the right SHAPE, never minted here
+    ],
+)
+def test_a_matter_cannot_be_asserted_only_resolved(token: Any) -> None:
+    tenant = Tenant()
+    out = _stage(tenant, matter_resolution=token)
+    assert out["status"] == "refused", token
+    assert "resolution" in out["reason"]
+    assert tenant.posts("/expenses") == []
+
+
+def test_a_resolution_for_another_matter_is_refused() -> None:
+    """What a model does when it resolves matter A, reads the ambiguity, and
+    stages on B anyway."""
+    tenant = Tenant()
+    other = "8f0b6a1e-0000-4000-8000-000000000002"
+    out = _stage(tenant, matter_resolution=rt.mint(other, "2026-PI-107", ("client_name", "date_of_loss")))
+    assert out["status"] == "refused" and "different matter" in out["reason"]
+    assert tenant.posts("/expenses") == []
+
+
+def test_an_expired_resolution_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    token = _resolution()
+    monkeypatch.setattr(rt, "TTL_SECONDS", -1.0)
+    tenant = Tenant()
+    out = _stage(tenant, matter_resolution=token)
+    assert out["status"] == "refused" and "expired" in out["reason"]
+    assert tenant.posts("/expenses") == []
+
+
+def test_one_resolution_writes_one_entry() -> None:
+    token = _resolution()
+    first = _stage(Tenant(), matter_resolution=token)
+    assert first["status"] == "staged"
+    assert first["matched_on"] == ["matter_number", "client_name"]
+    second_tenant = Tenant()
+    second = _stage(second_tenant, matter_resolution=token)
+    assert second["status"] == "refused" and "already used" in second["reason"]
+    assert second_tenant.posts("/expenses") == []
+
+
+def test_a_refusal_before_the_write_leaves_the_resolution_spendable() -> None:
+    """The token is spent at the POST, not at the door: a bad figure corrected
+    and restaged must not also need a second search of the firm's record."""
+    token = _resolution()
+    assert _stage(Tenant(), matter_resolution=token, amount="1,250.00")["status"] == "refused"
+    assert _stage(Tenant(), matter_resolution=token)["status"] == "staged"
 
 
 # ---- The duplicate check --------------------------------------------------------

@@ -57,6 +57,7 @@ EXPECTED_TOOLS = {
     "get_fees",
     "get_expenses",
     "read_attachment_text",
+    "resolve_invoice_matter",
     "stage_vendor_invoice",
     "get_webhook_subscriptions",
     "get_event_types",

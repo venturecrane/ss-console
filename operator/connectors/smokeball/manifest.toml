@@ -123,7 +123,18 @@ get_expenses = "read"
 # mcp_smokeball_read_attachment_text = READ (and fences it as vendor-authored
 # content) and mcp_smokeball_stage_vendor_invoice = INTERNAL_WRITE, shipped by
 # the OVERLAY_REF bump in the same ss-console change.
+#
+# COORDINATED CHANGE (resolve_invoice_matter, 2026-09-18 second live run): the
+# matching hermes-smd-overlay entry is
+# mcp_smokeball_resolve_invoice_matter = ActionClass.READ in
+# shared/action_classes.py, plus the OVERLAY_REF bump. Until it lands the tool
+# is UNREACHABLE at runtime (an unclassified tool is refused, not defaulted) —
+# and because stage_vendor_invoice now REFUSES without a resolution this tool
+# mints, the intake path stays fail-closed rather than resolving by judgement,
+# which is the direction that matters: the defect it closes is a staged expense
+# on the wrong one of two matters open for the same client.
 read_attachment_text = "read"
+resolve_invoice_matter = "read"
 stage_vendor_invoice = "internal_write"
 get_webhook_subscriptions = "read"
 get_event_types = "read"
