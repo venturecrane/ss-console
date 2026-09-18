@@ -89,18 +89,6 @@ export type ObligationState =
   | 'cancelled'
   | 'void'
 
-export const OBLIGATION_KINDS: readonly ObligationKind[] = [
-  'request',
-  'deliverable',
-  'recurring',
-  'renewal',
-  'incident',
-  'external_dependency',
-  'config_ops',
-  'provisioning',
-  'product_defect',
-]
-
 /**
  * Legal transitions.
  *
@@ -144,29 +132,6 @@ export function checkTransition(
     return { ok: false, error: 'requires_reconcile_run' }
   }
   return { ok: true }
-}
-
-/**
- * Every obligation for one client, newest-due first with undated rows last.
- *
- * Undated rows sort last deliberately: they are real obligations but they
- * never alarm (only dated ones do), so they belong below the things that have
- * a clock on them.
- */
-export async function listObligationsForCustomer(
-  db: D1Database,
-  customerSlug: string,
-  options: { includeTerminal?: boolean } = {}
-): Promise<Obligation[]> {
-  const includeTerminal = options.includeTerminal === true
-  const sql = includeTerminal
-    ? `SELECT * FROM client_obligations WHERE customer_slug = ?
-       ORDER BY due_at IS NULL, due_at ASC, created_at ASC`
-    : `SELECT * FROM client_obligations WHERE customer_slug = ?
-         AND state NOT IN ('closed','cancelled','void')
-       ORDER BY due_at IS NULL, due_at ASC, created_at ASC`
-  const rows = await db.prepare(sql).bind(customerSlug).all<Obligation>()
-  return rows.results ?? []
 }
 
 /** Every non-terminal obligation across the fleet — the "what's on our plate" read. */

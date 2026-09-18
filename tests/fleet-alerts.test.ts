@@ -199,13 +199,13 @@ describe('the obligation source (ADR 0088)', () => {
     expect(alertSeverity(row({ source: 'obligation', details_json: '{oops' }))).toBe('warning')
   })
 
-  it('links to the register filtered to that client, not to the seat', () => {
-    expect(alertLink(obligation({ severity: 'warning' }))).toBe('/admin/obligations?customer=acme')
+  it('links to the operator overview, since the register has no page of its own', () => {
+    expect(alertLink(obligation({ severity: 'warning' }))).toBe('/admin/operator/acme')
   })
 
-  it('is selectable in the source filter', () => {
-    // The gap history flagged: a fifth source added after the feed existed, with
-    // the filter list silently falling back to showing everything.
+  it('is filterable by source', () => {
+    // The feed still carries obligation rows and still emails them; only the
+    // dedicated page is gone.
     const rows = [obligation({ severity: 'warning' }), row({ source: 'cost' })]
     expect(filterAlerts(rows, { source: 'obligation' })).toHaveLength(1)
     expect(filterAlerts(rows, { source: 'cost' })).toHaveLength(1)
