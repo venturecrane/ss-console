@@ -66,14 +66,18 @@ WHAT IT REFUSES
   emptied. Those rules changed in six merges after the August deliveries, and a
   rule authored SINCE delivery would mark a document "accounted for" that the
   delivery never accounted for. The smaller set wins.
-* a matter whose delivered document cannot be found on the matter, or whose
-  cited-exhibit count does not reconcile with the covered set.
+* a matter with a covered id that has no successful download in the run's own
+  retrieval log. That is the over-claim check: you cannot have accounted for a
+  document you never retrieved. See the block above `_broker` for the reconcile
+  approach that was built, failed, and is deliberately not here.
+* a matter with a covered id that is not on the Smokeball matter today.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import socket
 import sys
@@ -99,14 +103,13 @@ SYNTHETIC_PREFIX = "msgatt-"
 #: accident.
 FROM_DOCUMENT_SOURCE = "backfill-from-document"
 
-#: How a delivered chronology is recognised among a matter's files. Deliberately
-#: loose on case and spacing and strict on the two words: a document that is not
-#: a chronology must not be mistaken for one, and a matter with no match is
-#: refused rather than assumed clean.
-CHRONOLOGY_NAME_RE = re.compile(r"medical\s*chronology", re.I)
-
-#: `Exhibit 12` / `Exhibit 12 - p. 4` inside a delivered document.
-EXHIBIT_RE = re.compile(r"\bExhibit\s+(\d+)\b")
+#: How much of a delivery's document set must still be on the matter for the
+#: mapping to be believed. Set far below the observed right-matter range
+#: (94-99.6% across this firm's thirteen matters) and far above a wrong matter
+#: (~0%), so it separates the two cases without firing on ordinary churn. A
+#: matter that has genuinely lost a tenth of its documents is worth a human look
+#: before its coverage record is written.
+MAPPING_FLOOR = 0.90
 
 
 # --- phase one: compute (laptop) ----------------------------------------------
@@ -157,6 +160,30 @@ def _load_cfg(firm_config: Path, *, drop_after: str | None = None, rule_dates: d
                 kept.append(rule)
             coverage["exclusions"] = kept
     return FirmConfig(path=firm_config, data=data)
+
+
+def _retrieval_outcome(slug_dir: Path) -> tuple[set[str], set[str]]:
+    """`(ok_ids, failed_ids)` from the run's own retrieval log.
+
+    Read straight from `raw_manifest.jsonl`'s `ok` flag, which is the one thing
+    in the run that records whether bytes actually arrived. Nothing here
+    classifies anything -- that is the coverage gate's job and this must stay
+    independent of it.
+    """
+    ok: set[str] = set()
+    failed: set[str] = set()
+    path = slug_dir / "raw_manifest.jsonl"
+    if not path.is_file():
+        return ok, failed
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        rid = row.get("id")
+        if not rid:
+            continue
+        (ok if row.get("ok") else failed).add(str(rid))
+    return ok, failed
 
 
 def _manifest_ids(slug_dir: Path) -> set[str]:
@@ -237,6 +264,33 @@ def compute(args: argparse.Namespace) -> int:
                 f"authored rules -> moved to uncovered (will be re-read)"
             )
 
+        # OVER-CLAIM CHECK. A document cannot have been accounted for in the
+        # delivered chronology if it never successfully downloaded, so `covered`
+        # must be a subset of the ids the retrieval log marks ok.
+        #
+        # This is independent of everything above it: the sets come from the
+        # coverage gate's classification, the bound comes from the download log's
+        # own flag, and the two are produced by different stages. It is the check
+        # `validate_covered`'s `pulled` arithmetic cannot be, because that total
+        # is computed from the very sets it is checking.
+        #
+        # Deliberately a ONE-DIRECTIONAL bound, not the source. covered.py refuses
+        # to source coverage from `ok` for a good reason -- bytes arriving says
+        # nothing about whether a document reached the document, so a glyph-junk
+        # scan is `ok` and uncovered. "You cannot cover what you never retrieved"
+        # carries none of that confusion.
+        ok_ids, failed_ids = _retrieval_outcome(d)
+        over = sorted(set(covered) - ok_ids)
+        if over:
+            failed_claimed = sorted(set(over) & failed_ids)
+            why = (
+                f"{len(failed_claimed)} of them are FAILED retrievals"
+                if failed_claimed
+                else "they are not in the retrieval log's ok set at all"
+            )
+            print(f"REFUSE {slug:18} {len(over)} covered id(s) have no successful download; {why}. First: {over[0]}")
+            continue
+
         out.append(
             {
                 "slug": slug,
@@ -250,7 +304,10 @@ def compute(args: argparse.Namespace) -> int:
                 "uncovered": uncovered,
             }
         )
-        print(f"OK    {slug:18} covered={len(covered):4} uncovered={len(uncovered):4} units={len(units)}")
+        print(
+            f"OK    {slug:18} covered={len(covered):4} uncovered={len(uncovered):4} "
+            f"units={len(units)} (covered ⊆ {len(ok_ids)} retrieved)"
+        )
 
     Path(args.out).write_text(json.dumps(out, indent=1, sort_keys=True), encoding="utf-8")
     print(f"\n{len(out)} matter(s) written to {args.out} (document ids only, no content)")
@@ -374,48 +431,27 @@ def _files_on_matter(matter_id: str, limit: int = 500) -> tuple[dict[str, str], 
             return out, False
 
 
-def _delivered_exhibit_count(matter_id: str, files: dict[str, str]) -> int | None:
-    """Exhibits cited by the delivered chronology AS FILED on the matter.
-
-    This is the one check whose source the pipeline did not produce. The
-    limitations section inside the document is computed from the same run
-    artifacts `covered_sets` reads, so reconciling against it would agree by
-    construction and measure nothing. The filed document is the artifact the
-    client actually received, stored separately, and reading it back is the only
-    over-claim detector available at no cost.
-    """
-
-    from smokeball_connector.server import get_download_url
-
-    import io
-    import zipfile
-    from urllib.parse import urlparse
-
-    import httpx
-
-    candidates = [fid for fid, name in files.items() if CHRONOLOGY_NAME_RE.search(name)]
-    if not candidates:
-        return None
-
-    for fid in candidates:
-        try:
-            url = get_download_url(matter_id, fid)
-            href = url.get("url") if isinstance(url, dict) else str(url)
-            # The href comes back from the vendor API, not from us, so the scheme
-            # is checked rather than trusted: a `file://` value here would make
-            # this function read the seat's own disk instead of the document.
-            if urlparse(href).scheme != "https":
-                print(f"    (refusing a non-https download url for {fid})")
-                continue
-            body = httpx.get(href, timeout=60.0, follow_redirects=True)
-            body.raise_for_status()
-            xml = zipfile.ZipFile(io.BytesIO(body.content)).read("word/document.xml")
-            nums = {int(n) for n in EXHIBIT_RE.findall(xml.decode("utf-8", "replace"))}
-            if nums:
-                return len(nums)
-        except Exception as exc:  # noqa: BLE001 - a refusal, never a crash
-            print(f"    (could not read filed chronology {fid}: {exc})")
-    return None
+# WHY THERE IS NO "read the filed chronology back and reconcile" CHECK.
+#
+# It was built and it does not work, so it is recorded here rather than left as
+# an obvious-looking gap for someone to re-attempt:
+#
+#   * Our delivered chronology cannot be found on a matter by name. The document
+#     literally named "Medical Chronology - <client>" on one live matter is a
+#     10.5-million-character records bundle carrying none of our composer's
+#     section headings, and the same matter also holds two VENDOR chronologies
+#     (a product the firm's own coverage rules exclude as a source). Reconciling
+#     against one of those would be meaningless and would have "passed".
+#   * The delivery folder id would identify ours, but it lives on the ledger row
+#     -- and these deliveries predate the row. That is the whole reason this
+#     script exists.
+#   * The limitations section inside our own document is computed from the same
+#     run artifacts `covered_sets` reads, so reconciling against it agrees by
+#     construction and measures nothing.
+#
+# The over-claim check that IS sound lives in `compute`: covered must be a
+# subset of the ids the retrieval log marks ok. It compares the classifier's
+# output against a different stage's flag, and it fails on a planted id.
 
 
 def _broker(payload: dict[str, Any], sock_path: str) -> dict[str, Any]:
@@ -465,34 +501,43 @@ def write(args: argparse.Namespace) -> int:
             )
             refused += 1
             continue
+        # THE MAPPING CHECK IS A THRESHOLD, NOT ALL-OR-NOTHING, and the reason is
+        # measured rather than assumed.
+        #
+        # What it exists to catch is a WRONG matter, and the two cases are not
+        # close together: the right matter overlaps 94-99.6% on this firm's book,
+        # a wrong one overlaps near zero (proven by pointing a matter's manifest
+        # at its namesake's matter, which intersected nothing).
+        #
+        # The few absent ids are documents that have LEFT the matter since
+        # delivery -- deleted or moved. `get_file` still resolves them by id while
+        # the files listing no longer returns them, so their absence says nothing
+        # about the mapping. It also says nothing about the historical record:
+        # what the delivered chronology accounted for in August is a fact, and a
+        # document leaving afterwards does not un-cover it.
         missing = sorted(real - set(files))
-        if missing:
+        overlap = 1.0 - (len(missing) / len(real)) if real else 1.0
+        if overlap < MAPPING_FLOOR:
             print(
-                f"REFUSE {slug:18} {len(missing)} manifest id(s) are NOT on matter "
-                f"{p['matter_number']} -- the mapping is wrong; first: {missing[0]}"
+                f"REFUSE {slug:18} only {overlap:.0%} of {len(real)} manifest id(s) are on matter "
+                f"{p['matter_number']} (floor {MAPPING_FLOOR:.0%}) -- the mapping is probably wrong; "
+                f"first absent: {missing[0]}"
             )
             refused += 1
             continue
-        print(
-            f"CHECK  {slug:18} {len(real)}/{len(real)} manifest ids present"
-            + (f", {synthetic} folded email attachment(s) not id-checked" if synthetic else "")
-        )
+        note = f", {synthetic} folded email attachment(s) not id-checked" if synthetic else ""
+        print(f"CHECK  {slug:18} {len(real) - len(missing)}/{len(real)} manifest ids present ({overlap:.0%}){note}")
+        if missing:
+            # Named, never silent: these are the documents an update will no
+            # longer find on the matter either.
+            print(f"       {slug:18} {len(missing)} id(s) have left the matter since delivery")
 
-        cited = _delivered_exhibit_count(p["matter_id"], files)
-        covered_real = [i for i in p["covered"] if not i.startswith(SYNTHETIC_PREFIX)]
-        if cited is None:
-            if not args.allow_unreconciled:
-                print(f"REFUSE {slug:18} no filed chronology found on the matter to reconcile against")
-                refused += 1
-                continue
-            print(f"WARN   {slug:18} unreconciled (--allow-unreconciled)")
-        elif cited > len(covered_real):
-            # The filed document cites more exhibits than we are claiming were
-            # covered. Under-claiming is the safe direction (those documents get
-            # re-read), so this is a warning. The reverse is not.
-            print(f"NOTE   {slug:18} filed document cites {cited} exhibits, covered set has {len(covered_real)}")
-        else:
-            print(f"CHECK  {slug:18} filed document cites {cited} exhibits <= {len(covered_real)} covered")
+        covered_real = {i for i in p["covered"] if not i.startswith(SYNTHETIC_PREFIX)}
+        gone = sorted(covered_real - set(files))
+        print(
+            f"CHECK  {slug:18} {len(covered_real) - len(gone)}/{len(covered_real)} covered id(s) "
+            f"still on the matter" + (f" ({len(gone)} since removed)" if gone else "")
+        )
 
         if args.dry_run:
             wrote += 1
@@ -553,13 +598,16 @@ def main() -> int:
 
     w = sub.add_parser("write", help="seat, as root: verify against Smokeball, then write")
     w.add_argument("--payloads", required=True)
-    w.add_argument("--socket", default="/run/smd-audit/broker.sock")
-    w.add_argument("--dry-run", action="store_true")
+    # The broker reads its own path from this env var (`server.py`
+    # `os.environ["SMD_WORKSPACE_BROKER_SOCKET"]`), so take it from the same
+    # place rather than hardcoding a guess. A wrong literal here fails at the
+    # first write with a bare FileNotFoundError, which is a confusing way to
+    # learn the path moved.
     w.add_argument(
-        "--allow-unreconciled",
-        action="store_true",
-        help="write a matter whose filed chronology cannot be found (states it per matter)",
+        "--socket",
+        default=os.environ.get("SMD_WORKSPACE_BROKER_SOCKET", "/run/smd-workspace-broker/broker.sock"),
     )
+    w.add_argument("--dry-run", action="store_true")
     w.set_defaults(fn=write)
 
     args = ap.parse_args()
