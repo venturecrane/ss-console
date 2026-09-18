@@ -88,7 +88,7 @@ class Limits:
         use of it and not a refusal. A per-matter page line was the per-job cost
         cap wearing client-facing clothes: both were sized off the same measured
         rate, so it refused matters the cycle allowance could plainly afford --
-        matter 200454 measured 3,098+ pages against a 3,000-page line while the
+        one matter measured 3,098+ pages against a 3,000-page line while the
         firm's full 15,000-page allowance sat unused. Margin is not exposed by
         its removal: ``monthly_budget_usd`` binds in DOLLARS, independently, on
         every paid stage and every paid call, and dollars are what actually

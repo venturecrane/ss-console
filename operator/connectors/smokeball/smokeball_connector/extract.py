@@ -7,7 +7,7 @@ matter folder (PDF, DOCX, plain text); everything else returns an explicit
 unsupported error so the skill can fail closed instead of guessing.
 
 SCANNED PAPER (ss#2464). A law firm's record is half photocopies: on the
-Robertus matter, 24 of 104 PDFs carry no text layer at all, and every one of
+census matter, 24 of 104 PDFs carry no text layer at all, and every one of
 them is clinical — MRI reports, office notes, the X-ray reads. pypdf returns
 ``""`` for those, which used to leave ``read_document`` reporting
 ``total_chars: 0`` with no error: a skill could not tell an empty document

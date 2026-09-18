@@ -164,7 +164,7 @@ class RecordTest(unittest.TestCase):
             self.assertTrue((Path(root) / "matter-beta" / "runs" / "matter-beta" / "usage-ledger.jsonl").exists())
 
     def test_a_stage_without_a_slug_still_writes_visibly(self):
-        # The Moussa defect: stages ran without the env block and their money
+        # The stage-env defect: stages ran without the env block and their money
         # vanished from the ledger entirely. An orphan file keeps the total
         # honest and makes the gap obvious.
         prev = os.environ.get("SMD_SLUG")

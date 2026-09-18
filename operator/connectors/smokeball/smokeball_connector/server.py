@@ -36,6 +36,8 @@ from operator_connector_sdk.server import ConnectorServer
 
 from .client import SmokeballApiError, SmokeballClient, build_client_from_env
 from .library import LOOKUP_FAILED, lookup_matter
+from .listing import contact_listing_is_complete as _contact_listing_is_complete
+from .listing import with_listing_completeness
 from .task_update import PROVENANCE_MARK as _PROVENANCE_MARK
 from .task_update import drop_probe_tasks as _drop_probe_tasks
 from .task_update import merge_task_update
@@ -263,44 +265,6 @@ def _attach_captions_to_list(client: Any, resp: Any) -> None:
     budget = [_CAPTION_MAX_LOOKUPS]
     for item in items:
         _attach_caption(client, item, cache=cache, budget=budget)
-
-
-def _contact_listing_is_complete(resp: dict, *, offset: int, limit: int, narrowed: bool) -> bool:
-    """Is a contact-filtered ``list_matters`` response provably the WHOLE set of
-    matters this contact is a party to? (ss#2264, the contact axis.)
-
-    Membership has two axes and only the matter axis was implemented. ``parties``
-    + ``parties_complete`` close a MATTER's own party list, so "this recipient is
-    not among them" proves non-membership. The other direction proves it just as
-    validly: if the full list of matters a PERSON is party to is known, and the
-    cited matter is not in it, the person is not a party. That axis is keyed off
-    the read the reply lane actually performs — ``list_matters`` fires on 34 of 86
-    reply turns against ``get_matter``'s 8 (vfy_01KZRRWG2WZKTRNZQRDEX494GZ) — so
-    it is where the gate can actually conclude something.
-
-    The fail-safe rule is the one ``_attach_parties`` is built on, applied to this
-    shape: a TRUNCATED listing is byte-identical to a complete one, so anything
-    short of proof is ``False``, which the binding must read as *membership
-    unresolved* and never as *not a party*. Four ways to be unprovable:
-
-    * ``narrowed`` — any ``status`` / ``is_lead`` / ``matter_type_id`` / ``search``
-      / ``updated_since`` filter. This is the subtle one and the reason the flag
-      is computed at the call site rather than inferred here: a listing filtered
-      to ``status=Open`` legitimately omits the CLOSED matter the recipient is a
-      party to, so an absence in it would manufacture a mismatch against a real
-      client. A narrowed listing is not a smaller answer to the same question; it
-      is an answer to a different one.
-    * a non-zero ``offset`` — one page of a set says nothing about the set.
-    * a full page (``len(items) >= limit``) — indistinguishable from a truncated
-      one, which is precisely the case that must not be trusted.
-    * a malformed envelope — no ``value`` list to count.
-    """
-    if narrowed or offset:
-        return False
-    items = resp.get("value")
-    if not isinstance(items, list):
-        return False
-    return len(items) < limit
 
 
 def _attach_parties(client: Any, matter: Any) -> None:
@@ -1204,11 +1168,26 @@ def get_files_on_matter(matter_id: str, limit: int = 500, offset: int = 0) -> An
     matter this read was scoped to and projected onto every row and onto the
     envelope (``matterNumber`` / ``matterCaption``, best-effort, one lookup for
     the whole listing). Cite those fields; a listing without them has no number
-    to cite. See the matter-ref enrichment block."""
+    to cite. See the matter-ref enrichment block.
+
+    ``listingComplete`` says whether this response is provably the WHOLE file set
+    for the matter. Read it before treating an absence as meaningful. The rule is
+    the one ``_contact_listing_is_complete`` is built on, applied to this shape: a
+    TRUNCATED listing is byte-identical to a complete one, so anything short of
+    proof is ``False``.
+
+    Why this is here (ss#2834): the medical-chronology routine computes an
+    update's document set as "the matter's current listing MINUS what the
+    delivery covered". A truncated listing silently shrinks that set, so a record
+    past the cap is never submitted, never read, and never appears in the
+    chronology -- no refusal, no hold, nothing in the reply. The response carries
+    no total, so the caller cannot notice on its own. a matter at the cap returns
+    exactly 500 today, which is the case that made this real rather than
+    theoretical."""
     client = _get_client()
     resp = client.get(f"/matters/{matter_id}/documents/files", Limit=limit, Offset=offset)
     _attach_matter_refs_to_list(client, resp, matter_id=matter_id)
-    return resp
+    return with_listing_completeness(resp, offset=offset, limit=limit)
 
 
 @server.tool()

@@ -341,7 +341,7 @@ describe('cannot-evaluate splits by evidence class', () => {
           due_at: null,
           evidence_class: 'attested',
           evidence_surface: 'smokeball',
-          evidence_locator: 'matter/201094/doc/7',
+          evidence_locator: 'matter/m-0001/doc/7',
           evidence_last_verified_at: null,
         },
       ],

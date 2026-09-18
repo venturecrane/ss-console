@@ -1,9 +1,10 @@
-"""The five ``medchron_*`` broker verbs (routine 11, ss#2614).
+"""The ``medchron_*`` broker verbs (routine 11, ss#2614).
 
 Registered on the verb table in ``verbs.py``, which declares each verb's
-peer classes (the same five rows as the list below) and checks them before
+peer classes (the same rows as the list below) and checks them before
 handing the request here; ``_gate`` below re-checks with this module's own
-message, as defence in depth.
+message, as defence in depth. ``verbs.py`` asserts at import that its medchron
+rows and this module's ``VERBS`` tuple agree, so the two cannot drift.
 
 Peer gating, per verb:
 
@@ -13,6 +14,12 @@ Peer gating, per verb:
     medchron_allowance     gateway PID, agent uid, or uid 0
     medchron_job_list      agent uid (the runtime-read gate process) or uid 0
     medchron_job_record    uid 0 only (the runner daemon)
+    medchron_backfill_covered
+                           uid 0 only, and with NO agent tool at all (ss#2834).
+                           It writes what a delivered chronology covered, and an
+                           update SKIPS whatever that record names -- so a path
+                           the agent could reach is a path a client conversation
+                           could use to make a chronology omit medical records.
 
 Every writing verb pins the audit type its transition maps to (``AUDIT_TYPE``),
 so none can forge another row. Audit rows carry counts, digests and ids —
@@ -44,7 +51,43 @@ from .medchron_ledger import (
 #: is extracted rather than assumed to be the whole value.
 _EMAIL_RE = re.compile(r"[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}")
 
-VERBS = ("medchron_job_submit", "medchron_job_status", "medchron_allowance", "medchron_job_list", "medchron_job_record")
+#: A backfilled row's `created_at`. Its own regex rather than the ledger's
+#: private one, so a change to envelope date validation cannot quietly loosen
+#: what a history write accepts.
+_BACKFILL_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+VERBS = (
+    "medchron_job_submit",
+    "medchron_job_status",
+    "medchron_allowance",
+    "medchron_job_list",
+    "medchron_job_record",
+    "medchron_backfill_covered",
+)
+
+#: The coverage arrays, replaced by counts on the LIST paths. A matter can carry
+#: several hundred document ids, and `project()` returns them three times over
+#: (the raw `covered_json` plus both parsed keys), so twenty rows of them is
+#: hundreds of kilobytes landing in a client-facing turn on a 1 vCPU / 1GB seat.
+#: The arrays are what an update needs, and an update asks by matter or by job.
+_COVERAGE_KEYS = ("covered_json", "covered_document_ids", "uncovered_document_ids")
+
+
+def _counted(row: dict[str, Any]) -> dict[str, Any]:
+    """One projected row with the id arrays swapped for their sizes.
+
+    `None` stays `None` rather than becoming `0`: "nobody wrote down what was
+    covered" and "nothing was covered" lead an update to opposite actions, and
+    that distinction is the reason `project()` returns None in the first place.
+    """
+    out = {k: v for k, v in row.items() if k not in _COVERAGE_KEYS}
+    for key, count_key in (
+        ("covered_document_ids", "covered_count"),
+        ("uncovered_document_ids", "uncovered_count"),
+    ):
+        ids = row.get(key)
+        out[count_key] = None if ids is None else len(ids)
+    return out
 
 
 def medchron_dispatch(
@@ -120,6 +163,13 @@ class MedchronVerbs:
             "medchron_allowance": is_gateway or is_root or self._is_agent(peer_uid),
             "medchron_job_list": is_root or self._is_agent(peer_uid),
             "medchron_job_record": is_root,
+            # ROOT only, and deliberately with no agent tool. This verb writes
+            # what a delivered chronology covered, and an update SKIPS whatever
+            # it says was covered -- so a path the agent could reach is a path a
+            # client conversation could use to make a chronology omit medical
+            # records. The runner's own reporting verb is root-only for the
+            # adjacent reason.
+            "medchron_backfill_covered": is_root,
         }.get(action, False)
         if not ok:
             raise PermissionError(f"{action} is not permitted for this caller")
@@ -161,16 +211,27 @@ class MedchronVerbs:
             }
         if action == "medchron_job_status":
             job_id = str(request.get("job_id") or "")
+            matter_id = str(request.get("matter_id") or "")
+            if job_id and matter_id:
+                # Refused rather than resolved by precedence: a caller that sent
+                # both does not know which answer it is getting, and silently
+                # picking one would hand an update a delta measured against the
+                # wrong thing.
+                raise ValueError("medchron_job_status takes job_id or matter_id, not both")
             if job_id:
                 row = self._db.read(job_id)
                 return {"ok": True, "job": self._db.project(row) if row else None}
-            return {"ok": True, "jobs": [self._db.project(r) for r in self._db.list_recent(20)]}
+            if matter_id:
+                return {"ok": True, "matter": self._db.delivered_coverage(matter_id)}
+            return {"ok": True, "jobs": [_counted(self._db.project(r)) for r in self._db.list_recent(20)]}
         if action == "medchron_job_list":
-            return {"ok": True, "jobs": [self._db.project(r) for r in self._db.list_recent(200)]}
+            return {"ok": True, "jobs": [_counted(self._db.project(r)) for r in self._db.list_recent(200)]}
         if action == "medchron_job_submit":
             return self._submit(request)
         if action == "medchron_job_record":
             return self._record(request)
+        if action == "medchron_backfill_covered":
+            return self._backfill(request)
         raise ValueError(f"unsupported medchron action: {action}")
 
     def _submit(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -327,3 +388,54 @@ class MedchronVerbs:
             ][:50]
         self._audit(AUDIT_TYPE[state], meta, row["matter_id"])
         return {"ok": True, "job": self._db.project(row)}
+
+    def _backfill(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Register what a pre-record chronology covered.
+
+        Every A&P chronology delivered before 2026-09-17 has no coverage record,
+        so an update on any of those matters refuses and the work falls back to
+        people. The records are recomputable from the delivery's own artifacts at
+        no AI cost; this is the door they come in through.
+
+        The audit row is not optional bookkeeping. A write to live client state
+        that leaves no governance trail is the 2026-09-01 sticky-stop incident,
+        where a production state change was made by raw sqlite and the clear
+        surface that would have logged it sat unused. Counts only in the
+        metadata, never the ids: the audit log is not a copy of the record.
+        """
+        matter_id = str(request.get("matter_id") or "")
+        matter_number = str(request.get("matter_number") or "")
+        delivered_at = str(request.get("delivered_at") or "")
+        source = str(request.get("source") or "")
+        covered = request.get("covered")
+        if not matter_id or not matter_number or not delivered_at or not source:
+            raise ValueError("medchron_backfill_covered requires matter_id, matter_number, delivered_at and source")
+        if not _BACKFILL_DATE_RE.match(delivered_at[:10]):
+            # The real delivery date is load-bearing: it keeps the ledger
+            # chronologically honest AND puts the row outside the current billing
+            # cycle, which is the second of two independent reasons it cannot
+            # move the firm's allowance.
+            raise ValueError("delivered_at must start with a YYYY-MM-DD date")
+        if not isinstance(covered, dict):
+            raise ValueError("medchron_backfill_covered requires a covered object")
+        row = self._db.backfill_delivered(
+            matter_id=matter_id,
+            matter_number=matter_number,
+            covered=covered,
+            delivered_at=delivered_at,
+            source=source,
+        )
+        projected = self._db.project(row)
+        self._audit(
+            "MEDCHRON_COVERAGE_BACKFILLED",
+            {
+                "job_id": row["id"],
+                "matter_number": row["matter_number"],
+                "delivered_at": delivered_at,
+                "source": source,
+                "covered": len(projected.get("covered_document_ids") or []),
+                "uncovered": len(projected.get("uncovered_document_ids") or []),
+            },
+            row["matter_id"],
+        )
+        return {"ok": True, "job": projected}

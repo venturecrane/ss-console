@@ -123,7 +123,7 @@ Captain's own words in your session carry them:**
   delete-first.
 - **Free discovery never waits.** Pull, email-index, and extract cost nothing
   and run the moment the matter is resolved. Measuring is what turns a range
-  into a number; the 08-27 Cadman quote moved 30% on measurement alone.
+  into a number; the 08-27 calibration quote moved 30% on measurement alone.
 
 Everything else you decide and report. Escalations arrive as one sentence of
 stakes, two options, and your pick — and you proceed on your pick unless told
@@ -410,7 +410,7 @@ Three calibration lessons that stay in prose because they are judgment, not
 data:
 
 - **Density varies by source system.** Epic EMR exports measured 63% more
-  characters per byte than a mixed corpus; the 08-27 Cadman quote was 30% low
+  characters per byte than a mixed corpus; the 08-27 calibration quote was 30% low
   because it projected from megabytes. Project from **extracted characters**,
   never from bytes.
 - **A ledger row is attribution, not truth.** One run's ledger captured USD 3.68
@@ -418,7 +418,7 @@ data:
   That is why Step 5 exports every variable for every stage, and why Step 9
   reconciles against console receipts before a row enters `calibration.jsonl`.
 - **The clean-run number is not the planning number — and neither is a
-  mid-run number.** Cadman quoted USD 62-70 by discounting the measured anchor
+  mid-run number.** That run quoted USD 62-70 by discounting the measured anchor
   for "no defect-hunting this time" (it recurred: four new defects) and
   landed at **USD 67.73** — inside the quote, but only because the discount and
   the defects happened to cancel. A figure of USD 145.11 stood here for a day: it
@@ -426,13 +426,13 @@ data:
   Sonnet 3/15 per million tokens instead of 5/25 and 2/10). Two lessons survive. First:
   a discount that assumes this run will be clean is a bet, not a projection;
   every run to date has surfaced defects. Second: the **audit-repair loop's
-  cost scales with claim count, not with extracted characters** (Cadman:
+  cost scales with claim count, not with extracted characters** (the calibration run:
   audit+repair ~USD 34, about half the run, 1,745 calls, roughly 2 cents per
   audit call; ~4.9 claims per chronology entry). The audit line of a quote is
   therefore `projected claims x rate` stated separately from the composition
   anchor — never folded into one false-precision band — with the rate re-read
   from calibration.jsonl `audit_detail` as rows accrue. Two sub-facts:
-  convergence re-runs are noise (Cadman's four extra passes cost under a dollar; the
+  convergence re-runs are noise (its four extra passes cost under a dollar; the
   first loop's completion was the money — budget the initial claim count, not
   "extra rounds"), and a spend reported mid-audit is a FLOOR, not a landing:
   say which one you are reporting.
@@ -549,9 +549,9 @@ Decisions you make yourself and report, never hand over:
   `(unattributed - resolve before exhibits)` by hand: those are root files
   whose names carry no known brand, and a filename is not a provider. Then
   check each lane for third-party documents filed under a facility they merely
-  narrate. Index attribution beats filename attribution (the Robertus "Select
+  narrate. Index attribution beats filename attribution (the census matter's "Select
   PT" case), but it inherits this failure mode: a document ABOUT a facility
-  indexes as that facility's record - on Cadman, a 30-page Sheriff's incident
+  indexes as that facility's record - on one matter, a 30-page Sheriff's incident
   report grouped under the hospital it recounts a transfer to. Filing a police
   report as a hospital record misstates its source in the exhibit list. No
   table rule can catch this; it is your eye.
@@ -767,7 +767,7 @@ Four sessions ran this pipeline from one shared checkout and one shared venv on
   2026-08-27, correctly: a gate a peer can open is not a gate, and the refusal
   also caught a substantive contract-clause error riding the relay.
 - **Do not edit shared pipeline scripts while peer runs are in flight.** Fix
-  your own run at the data layer (the Cadman session's model: repair the unit
+  your own run at the data layer (that session's model: repair the unit
   file, leave `build_units.py` alone) and report the code defect for after the
   runs land.
 - **Announce any shared-venv change** (a pip install is global to every run in
