@@ -45,9 +45,23 @@ import path from 'node:path'
 import os from 'node:os'
 import crypto from 'node:crypto'
 import { engagementsDir, engagementsRepoPresent, suffixOf } from './engagement-paths.mjs'
+// Both live under scripts/ and are shared with the CI reconciler, which runs
+// them under tsx. They are .mjs precisely so this file -- run by bare node from
+// a bash wrapper, with no build step -- can import the same implementation
+// rather than keeping a second copy that drifts.
+import { parseWranglerJson } from '../../../scripts/lib/wrangler-envelope.mjs'
+import { seatsOf } from '../../../scripts/lib/seat-clients.mjs'
+import { JSON_FIELDS, projectRow, renderTable } from '../../../scripts/lib/register-view.mjs'
+
+// Re-exported so the CLI stays the single import surface for its own tests and
+// for any caller that thinks in terms of `register`, not of where the rendering
+// happens to live.
+export { JSON_FIELDS, projectRow, renderTable }
 
 const DB = process.env.SS_REGISTER_DB || 'ss-console-db'
 const MIN_QUOTE_WORDS = 6
+/** A read that has not answered in twelve seconds is not going to. */
+const D1_TIMEOUT_MS = 12_000
 
 export const KINDS = [
   'request',
@@ -66,6 +80,22 @@ export function journalDir() {
     process.env.SS_OBLIGATION_JOURNAL_DIR ||
     path.join(os.homedir(), '.claude', 'ss-obligation-journal')
   )
+}
+
+/**
+ * The id of the session recording this row.
+ *
+ * The harness exports CLAUDE_CODE_SESSION_ID. Until 2026-09-17 this file read
+ * CLAUDE_SESSION_ID, which is never set, so `created_by_session` was NULL on
+ * every one of the register's first eleven rows -- verified against production
+ * D1. Nothing could answer "did the session that read the letter record what it
+ * promised", which is the one question /eos Check I has to ask.
+ *
+ * Subagents inherit the PARENT's id, so this attributes to the session, not the
+ * agent within it. That is the wanted granularity: the session is what closes.
+ */
+export function sessionId() {
+  return process.env.CLAUDE_CODE_SESSION_ID ?? null
 }
 
 /**
@@ -387,9 +417,7 @@ export function lookupEntityId(slug) {
   )
   if (!out.ok) return null
   try {
-    const parsed = JSON.parse(out.stdout)
-    const results = parsed?.[0]?.results ?? parsed?.results ?? []
-    return results[0]?.entity_id ?? null
+    return parseWranglerJson(out.stdout)[0]?.entity_id ?? null
   } catch {
     return null
   }
@@ -399,11 +427,15 @@ export function runD1(sql) {
   const override = process.env.SS_REGISTER_D1_CMD
   try {
     const stdout = override
-      ? execFileSync(override, [DB, sql], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
+      ? execFileSync(override, [DB, sql], {
+          encoding: 'utf8',
+          maxBuffer: 8 * 1024 * 1024,
+          timeout: D1_TIMEOUT_MS,
+        })
       : execFileSync(
           'npx',
           ['wrangler', 'd1', 'execute', DB, '--remote', '--json', '--command', sql],
-          { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }
+          { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, timeout: D1_TIMEOUT_MS }
         )
     return { ok: true, stdout }
   } catch (err) {
@@ -459,7 +491,7 @@ function cmdAdd(args) {
       client: args.client,
       key: `none-${Date.now()}`,
       why: args.why,
-      session: process.env.CLAUDE_SESSION_ID ?? null,
+      session: sessionId(),
       synced: true,
     })
     console.log(`register: recorded "nothing owed" for ${args.client}`)
@@ -501,7 +533,7 @@ function cmdAdd(args) {
     window_end: args['window-end'] ?? null,
     due_at: args.due ?? null,
     links_json: args.links ?? null,
-    created_by_session: process.env.CLAUDE_SESSION_ID ?? null,
+    created_by_session: sessionId(),
   }
 
   const entry = {
@@ -554,18 +586,43 @@ function cmdSync() {
   return synced === pending.length ? 0 : 1
 }
 
+
 function cmdList(args) {
   const conditions = [`state NOT IN ('closed','cancelled','void')`]
-  if (args.client) conditions.push(`customer_slug = ${sqlLiteral(args.client)}`)
+  // `--client` takes a CLIENT, and a client is not always a seat. Rows are keyed
+  // by seat (`customer_slug`), but SMD's three own seats roll up to the
+  // `smd-services` client, and that is the name CLAUDE.md and /sos tell people
+  // to use. Filtering the seat column by a client name matched zero rows and
+  // printed "nothing open" while all three seats had work -- a clean-looking
+  // report over open work, which is the exact failure this register exists to
+  // end. So expand the client to its seats and match any of them.
+  if (args.client) {
+    const seats = seatsOf(args.client)
+    conditions.push(`customer_slug IN (${seats.map(sqlLiteral).join(', ')})`)
+  }
   const result = runD1(
-    `SELECT customer_slug, kind, stable_key, state, due_at, what FROM client_obligations ` +
-      `WHERE ${conditions.join(' AND ')} ORDER BY due_at IS NULL, due_at;`
+    `SELECT obligation_id, customer_slug, kind, stable_key, state, due_at, created_at, what ` +
+      `FROM client_obligations WHERE ${conditions.join(' AND ')} ` +
+      `ORDER BY due_at IS NULL, due_at, created_at;`
   )
   if (!result.ok) {
-    console.error('register: cannot read the register')
+    // Say WHY. The caller is /sos or a person, and "cannot read" without a
+    // reason is indistinguishable from an empty register at a glance.
+    console.error(`register: cannot read the register (${result.error.split('\n')[0]})`)
     return 1
   }
-  console.log(result.stdout)
+  let rows
+  try {
+    rows = parseWranglerJson(result.stdout)
+  } catch {
+    console.error('register: the register returned output that is not JSON')
+    return 1
+  }
+  if (args.json) {
+    console.log(JSON.stringify(rows.map((r) => projectRow(r))))
+    return 0
+  }
+  console.log(renderTable(rows))
   return 0
 }
 

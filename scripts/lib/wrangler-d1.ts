@@ -27,6 +27,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
+import { parseWranglerJson } from './wrangler-envelope.mjs'
 
 export interface WranglerD1Options {
   /** D1 database name, e.g. 'ss-console-db'. */
@@ -90,15 +91,11 @@ export function bindSql(sql: string, values: readonly unknown[]): string {
   return out
 }
 
-export function parseWranglerJson(stdout: string): Record<string, unknown>[] {
-  const parsed: unknown = JSON.parse(stdout)
-  if (Array.isArray(parsed)) {
-    const first = parsed[0] as { results?: Record<string, unknown>[] } | undefined
-    return first?.results ?? []
-  }
-  const single = parsed as { results?: Record<string, unknown>[] }
-  return single?.results ?? []
-}
+// The implementation moved to ./wrangler-envelope.mjs so that register.mjs --
+// run by bare `node`, with no build step -- can share it instead of keeping a
+// second inline copy. Imported for use below and re-exported so every existing
+// caller is unchanged.
+export { parseWranglerJson }
 
 class WranglerStatement {
   constructor(

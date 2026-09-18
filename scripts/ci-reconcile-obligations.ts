@@ -55,6 +55,7 @@
 import { execFileSync } from 'node:child_process'
 import type { D1Database } from '@cloudflare/workers-types'
 import { sqlLiteral, wranglerD1 } from './lib/wrangler-d1'
+import { ageInDays } from './lib/sqlite-time.mjs'
 import {
   countByOriginSource,
   countObligations,
@@ -86,6 +87,7 @@ export type Verdict =
   | { verdict: 'verified' }
   | { verdict: 'still_open' }
   | { verdict: 'overdue'; days: number }
+  | { verdict: 'stale'; days: number }
   | { verdict: 'cannot_evaluate'; class: 'probeable' | 'attested' }
   | { verdict: 'unverifiable' }
 
@@ -116,12 +118,43 @@ export function classifyRow(row: Obligation, probe: ProbeResult, now: Date): Ver
       return { verdict: 'overdue', days: Math.floor((now.getTime() - due.getTime()) / 86400000) }
     }
   }
+  // An UNDATED row that stays open is the failure this register was built to
+  // replace. The predecessor cadence engine reached 7 of 16 items overdue, one
+  // by 134 days, while reporting itself healthy -- and until this branch
+  // existed, so did this one: `still_open` was counted nowhere, so eleven rows
+  // could sit untouched forever behind a converged nightly run.
+  //
+  // Scoped to `captured` rows on purpose. A derived GitHub row probes `absent`
+  // for as long as its issue is merely open, so alarming on those would page on
+  // ordinary backlog that `crane_status` already lists. Captured rows -- the
+  // letter-stated promises -- are the ones nothing else in the venture watches.
+  if (!row.due_at && row.origin === 'captured') {
+    // ageInDays, not `new Date(...)`: SQLite writes UTC with no zone marker and
+    // JS parses that as local, which reads every row younger than it is and
+    // delays the ladder by the machine's offset.
+    const days = ageInDays(row.created_at, now.getTime())
+    if (days !== null && days >= UNDATED_STALE_DAYS) return { verdict: 'stale', days }
+  }
   return { verdict: 'still_open' }
 }
 
 /** Severity ladder for an overdue obligation. Warning at due, critical a week on. */
 export function overdueSeverity(days: number): 'warning' | 'critical' {
   return days >= 7 ? 'critical' : 'warning'
+}
+
+/** The age at which an undated, still-open captured obligation becomes a finding. */
+export const UNDATED_STALE_DAYS = 30
+
+/**
+ * Severity ladder for an undated obligation that has simply sat there.
+ *
+ * Thirty days is one billing cycle, which is the shortest period over which
+ * "we still owe this" stops being ordinary work in flight. Sixty is the point
+ * past which the predecessor's 134-day silence starts to look reachable again.
+ */
+export function undatedAgeSeverity(days: number): 'warning' | 'critical' {
+  return days >= 60 ? 'critical' : 'warning'
 }
 
 /**
@@ -399,9 +432,11 @@ export function alertFor(row: Obligation, verdict: Verdict, today: string): Aler
   const condition =
     verdict.verdict === 'overdue'
       ? 'obligation_overdue'
-      : verdict.verdict === 'unverifiable'
-        ? 'obligation_unverifiable'
-        : null
+      : verdict.verdict === 'stale'
+        ? 'obligation_stale'
+        : verdict.verdict === 'unverifiable'
+          ? 'obligation_unverifiable'
+          : null
   if (!condition) return null
   return {
     entity_id: row.entity_id,
@@ -410,15 +445,25 @@ export function alertFor(row: Obligation, verdict: Verdict, today: string): Aler
     // The driver is the discriminator: several obligations for one client on
     // one day must not collapse into a single row under the composite key.
     driver: `obligation:${row.obligation_id}:${condition}`,
+    // An alert summary MAY carry `what`. This path ends at team@smd.services
+    // over Resend and at the admin console, both private. The findings list is
+    // the opposite case -- see the redaction note at the overdue finding.
     summary:
       verdict.verdict === 'overdue'
         ? `Overdue ${verdict.days}d: ${row.what}`
-        : `Certification not witnessed by a CI run: ${row.what}`,
+        : verdict.verdict === 'stale'
+          ? `Open ${verdict.days}d with no due date: ${row.what}`
+          : `Certification not witnessed by a CI run: ${row.what}`,
     details_json: JSON.stringify({
       obligation_id: row.obligation_id,
       kind: row.kind,
       due_at: row.due_at,
-      severity: verdict.verdict === 'overdue' ? overdueSeverity(verdict.days) : 'critical',
+      severity:
+        verdict.verdict === 'overdue'
+          ? overdueSeverity(verdict.days)
+          : verdict.verdict === 'stale'
+            ? undatedAgeSeverity(verdict.days)
+            : 'critical',
       source_ref: row.source_ref,
     }),
   }
@@ -575,6 +620,7 @@ export async function main(): Promise<number> {
   let cannotProbeable = 0
   let cannotAttested = 0
   let stillOpen = 0
+  let stale = 0
 
   for (const row of openRead.rows) {
     const verdict = classifyRow(row, await probeEvidence(row, db), now)
@@ -589,8 +635,25 @@ export async function main(): Promise<number> {
       }
     } else if (verdict.verdict === 'overdue') {
       overdue += 1
+      // NO `row.what` IN A FINDING. Findings become `reconcile.txt`, which the
+      // workflow cats into the Actions log AND into a `gh issue create` body in
+      // venturecrane/ss-console -- a PUBLIC repo. `what` is client-confidential:
+      // it is a sentence about a named firm's internal backlog, taken verbatim
+      // from correspondence in the private engagements repo. This line never
+      // fired only because no row carried a due_at; the stale ladder above is
+      // what makes it reachable, so the redaction ships in the same change. The
+      // obligation id is enough to look the row up with `register list` at a
+      // private terminal. Pinned by tests/obligation-reconcile.test.ts, whose
+      // fixture text is deliberately synthetic for the same reason.
       findings.push(
-        `::warning::${row.obligation_id} ${row.customer_slug}/${row.kind} overdue ${verdict.days}d — ${row.what}`
+        `::warning::${row.obligation_id} ${row.customer_slug}/${row.kind} overdue ${verdict.days}d`
+      )
+      const alert = alertFor(row, verdict, today)
+      if (alert) alerts.push(alert)
+    } else if (verdict.verdict === 'stale') {
+      stale += 1
+      findings.push(
+        `::warning::${row.obligation_id} ${row.customer_slug}/${row.kind} open ${verdict.days}d with no due date`
       )
       const alert = alertFor(row, verdict, today)
       if (alert) alerts.push(alert)
@@ -678,6 +741,7 @@ export async function main(): Promise<number> {
     `  verified this run:     ${String(verified).padStart(5)}`,
     `  still open (in window):${String(stillOpen).padStart(5)}`,
     `  overdue:               ${String(overdue).padStart(5)}`,
+    `  stale (undated, ${UNDATED_STALE_DAYS}d+):${String(stale).padStart(4)}`,
     `imported this run:       ${String(importedWritten).padStart(5)} of ${imported.length} derived`,
     `cannot evaluate:         ${String(cannotProbeable + cannotAttested).padStart(5)}  (attested: ${cannotAttested}, probeable: ${cannotProbeable})`,
     `unwitnessed certifications: ${unwitnessed.rows.length}`,
@@ -693,7 +757,12 @@ export async function main(): Promise<number> {
   // a finding forever and reconcile_runs could never show a healthy pass — the
   // ledger disagreeing with the process is the failure this whole register is
   // built to prevent, and it does not get an exemption here.
-  const findingCount = overdue + cannotAttested + unwitnessed.rows.length + gaps
+  // `stale` belongs in this sum, and its absence was the whole defect: a
+  // verdict that raises an alert but does not count as a finding produces a run
+  // that pages the Captain and then records itself CONVERGED. Eleven rows sat
+  // untouched behind exactly that arithmetic. An alert without the count is not
+  // a fix; it is the bug wearing a notification.
+  const findingCount = overdue + stale + cannotAttested + unwitnessed.rows.length + gaps
   const exitCode =
     cannotProbeable > 0 ? EXIT_CANNOT_EVALUATE : findingCount > 0 ? EXIT_FINDINGS : EXIT_CONVERGED
 
@@ -721,7 +790,7 @@ export async function main(): Promise<number> {
   }
   if (exitCode === EXIT_FINDINGS) {
     console.log(
-      `reconcile findings: ${overdue} overdue, ${cannotAttested} stale attestations, ${unwitnessed.rows.length} unwitnessed, ${gaps} capture gaps.`
+      `reconcile findings: ${overdue} overdue, ${stale} stale undated, ${cannotAttested} stale attestations, ${unwitnessed.rows.length} unwitnessed, ${gaps} capture gaps.`
     )
     return EXIT_FINDINGS
   }

@@ -407,6 +407,12 @@ mechanisms:
     success_criterion: 'Zero duplicate-featureset builds across concurrent sessions between now and the review date; board records stay accurate (no ghost peers older than 24h observed in the primer output).'
     review: 2026-09-30
     on_failure: 'If ghosts or noise teach agents to skim the board block, tighten pruning or remove the block. A peer listing that is sometimes wrong is worse than the blindness it replaced.'
+  - id: obligation-capture-at-close
+    file: .claude/skills/eos/SKILL.md
+    hypothesis: 'A session that reads client correspondence is the only thing that knows what was promised in it, and it knows only until it ends. Surfacing that at close, as a check alongside the repo close-out checks, converts a promise into a register row instead of a memory nobody holds tomorrow.'
+    success_criterion: 'Zero weeks in which correspondence was read for a slug and neither a `register add` nor a `register add --kind none` was recorded for that slug, measured by joining session ids in ~/.claude/ss-obligation-journal against the read logs in ~/.claude/ss-read-log. A RATIO was deliberately rejected: subagents append to the parent session id, so "sessions where correspondence was read" is most engagement sessions, most of which owe nothing, and the share would read low whether or not the check works. Note the measurement only became possible on 2026-09-17: register.mjs read CLAUDE_SESSION_ID, which the harness never sets, so all eleven of the register first rows carry created_by_session = NULL and no earlier week can be scored.'
+    review: 2026-10-31
+    on_failure: 'Delete Check I. Its detector is PostToolUse on `Read` only, so a letter opened with Bash, reached by Grep, or pasted into the prompt is invisible: a positive signal is trustworthy and a negative one means nothing. If the recorded rate stays low, the honest conclusion is that the trigger cannot see the work, not that agents need reminding harder. A check that fires on a fraction of the cases it names teaches everyone to treat its silence as absence.'
   - id: memory-audit
     file: .claude/hooks/memory-audit.mjs
     hypothesis: 'Making index-to-store reachability computable turns silent memory loss into a detectable state, so a tiered index (a capped always-on MEMORY.md, depth behind sub-indexes and an attic) can be compacted without dropping memories on the floor (Law 2: an index line is the pointer, and a deleted pointer is a deleted memory).'
