@@ -37,3 +37,22 @@ export const SMD_CLIENT = 'smd-services'
 export function clientOf(seatSlug) {
   return SMD_OWNED_SEATS.has(seatSlug) ? SMD_CLIENT : seatSlug
 }
+
+/**
+ * The inverse: which seats' rows belong to a client.
+ *
+ * Needed because obligations are STORED by seat and ASKED FOR by client. Without
+ * it, `register list --client smd-services` filtered the seat column by a client
+ * name, matched nothing, and printed "nothing open" while all three of our seats
+ * had work. A clean-looking report over open work is the precise failure this
+ * register exists to end, so the asymmetry cannot be left to the call site.
+ *
+ * A client that is its own seat returns itself, which keeps every real client
+ * working with no entry anywhere.
+ *
+ * @param {string} clientSlug
+ * @returns {string[]} the seat slugs whose rows roll up to that client
+ */
+export function seatsOf(clientSlug) {
+  return clientSlug === SMD_CLIENT ? [...SMD_OWNED_SEATS] : [clientSlug]
+}

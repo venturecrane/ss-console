@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest'
 import { execFileSync } from 'child_process'
 import { resolve } from 'path'
 import { parseWranglerJson } from '../scripts/lib/wrangler-envelope.mjs'
-import { clientOf, SMD_CLIENT } from '../scripts/lib/seat-clients.mjs'
+import { clientOf, seatsOf, SMD_CLIENT } from '../scripts/lib/seat-clients.mjs'
 import { ageInDays, sqliteUtcMs } from '../scripts/lib/sqlite-time.mjs'
 
 const ROOT = process.cwd()
@@ -83,6 +83,22 @@ describe('clientOf', () => {
     for (const seat of ['pilot-smokeball', 'smd-staging', 'scott']) {
       expect(clientOf(seat)).toBe(SMD_CLIENT)
     }
+  })
+
+  it('seatsOf is the inverse, so a client name can be filtered on', () => {
+    // Rows are STORED by seat and ASKED FOR by client. Without this inverse,
+    // `register list --client smd-services` filtered the seat column by a client
+    // name, matched zero rows, and printed "nothing open" while all three of our
+    // seats had work -- a clean-looking report over open work, the precise
+    // failure this register exists to end. Found in review of PR #2837 and
+    // reproduced against production before the fix.
+    expect(seatsOf(SMD_CLIENT).sort()).toEqual(['pilot-smokeball', 'scott', 'smd-staging'])
+    // Round-trips: every seat the inverse names maps back to the client.
+    for (const seat of seatsOf(SMD_CLIENT)) expect(clientOf(seat)).toBe(SMD_CLIENT)
+  })
+
+  it('seatsOf leaves an ordinary client as its own single seat', () => {
+    expect(seatsOf('ashton-price')).toEqual(['ashton-price'])
   })
 
   it('passes every other seat through as its own client', () => {

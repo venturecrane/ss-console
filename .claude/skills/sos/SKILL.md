@@ -91,4 +91,4 @@ Note SMD Services is itself a client here: obligations on our own seats (`pilot-
 - All GitHub issues this session target the repo shown in context. Targeting a different repo? STOP.
 - Do NOT start working automatically.
 - Do NOT create calendar events for cadence items.
-- If MCP tools unavailable: check `claude mcp list`, ensure started with `crane vc`.
+- If MCP tools unavailable: check `claude mcp list`, ensure started with `crane ss`.

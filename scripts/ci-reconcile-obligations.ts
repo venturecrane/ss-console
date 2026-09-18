@@ -637,12 +637,14 @@ export async function main(): Promise<number> {
       overdue += 1
       // NO `row.what` IN A FINDING. Findings become `reconcile.txt`, which the
       // workflow cats into the Actions log AND into a `gh issue create` body in
-      // venturecrane/ss-console -- a PUBLIC repo. `what` is client-confidential
-      // ("Close the 473 orphaned overdue tasks on closed matters" names a real
-      // firm's real backlog). This line never fired only because no row carried
-      // a due_at; the stale ladder above is what makes it reachable, so the
-      // redaction ships in the same change. The id is enough to look the row up
-      // with `register list`. Pinned by tests/obligation-reconcile.test.ts.
+      // venturecrane/ss-console -- a PUBLIC repo. `what` is client-confidential:
+      // it is a sentence about a named firm's internal backlog, taken verbatim
+      // from correspondence in the private engagements repo. This line never
+      // fired only because no row carried a due_at; the stale ladder above is
+      // what makes it reachable, so the redaction ships in the same change. The
+      // obligation id is enough to look the row up with `register list` at a
+      // private terminal. Pinned by tests/obligation-reconcile.test.ts, whose
+      // fixture text is deliberately synthetic for the same reason.
       findings.push(
         `::warning::${row.obligation_id} ${row.customer_slug}/${row.kind} overdue ${verdict.days}d`
       )

@@ -381,7 +381,7 @@ describe('reading the register', () => {
     state: 'open',
     due_at: null,
     created_at: new Date(Date.now() - 12 * 86400000).toISOString().replace('T', ' ').slice(0, 19),
-    what: 'Close the 473 orphaned overdue tasks on closed matters',
+    what: 'Reconcile the synthetic widget ledger for the fixture firm',
     ...over,
   })
 
@@ -405,7 +405,7 @@ describe('reading the register', () => {
     expect(parsed).toHaveLength(1)
     // The mutation this catches: adding `what` to projectRow.
     expect(Object.keys(parsed[0]).sort()).toEqual([...JSON_FIELDS].sort())
-    expect(out.lines.join('')).not.toContain('473 orphaned')
+    expect(out.lines.join('')).not.toContain('synthetic widget ledger')
   })
 
   it('--json rolls an SMD-owned seat up to the smd-services client', async () => {

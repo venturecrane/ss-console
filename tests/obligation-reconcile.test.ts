@@ -604,7 +604,7 @@ describe('findings never carry client text', () => {
   // backlog. The ALERT summary keeps it, because that path is Resend to
   // team@smd.services and the admin console. The findings list must not.
   // Interpolating row.what into either finding line fails these.
-  const secret = 'Close the 473 orphaned overdue tasks on closed matters'
+  const secret = 'Reconcile the synthetic widget ledger for the fixture firm'
 
   const row = (over: Record<string, unknown>) => ({
     obligation_id: 'o-x',
