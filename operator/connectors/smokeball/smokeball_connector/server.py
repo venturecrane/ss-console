@@ -51,7 +51,12 @@ from .task_update import PROVENANCE_MARK as _PROVENANCE_MARK
 from .task_update import MatterReferenceMismatch
 from .task_update import drop_probe_tasks as _drop_probe_tasks
 from .task_update import merge_task_update
-from .vendor_invoice import read_attachment
+
+# ``fetch_bytes`` resolves an attachment reference in either form (a
+# ``spool:<token>`` the mail tool wrote on this machine, or an allowlisted
+# vendor URL) — see attachment_source.py. Imported through vendor_invoice, which
+# is where it is chiefly used, so this file grows no import of its own.
+from .vendor_invoice import fetch_bytes, read_attachment
 from .vendor_invoice import stage_vendor_invoice as _stage_vendor_invoice
 
 server = ConnectorServer("smokeball")
@@ -1391,23 +1396,28 @@ def delete_file(matter_id: str, file_id: str) -> Any:
 
 @server.tool()
 def file_attachment_to_matter(matter_id: str, download_url: str, file_name: str, folder_id: str | None = None) -> Any:
-    """File an email attachment to a matter from its vendor-minted, time-limited
-    ``download_url`` (the AgentMail attachment contract) — the mechanical
-    cross-connector transfer the served-discovery email path needs (#1744): the
-    agent cannot shuttle binary between MCP servers through its context, so this
-    tool fetches the bytes server-side and runs the documented two-stage
+    """File an email attachment to a matter — the mechanical cross-connector
+    transfer the served-discovery and vendor-invoice email paths need (#1744):
+    the agent cannot shuttle binary between MCP servers through its context, so
+    this tool gets the bytes server-side and runs the documented two-stage
     Smokeball upload.
 
-    No credentials cross connectors: the URL's embedded token IS the fetch
-    credential, minted by the AgentMail tool the agent already called. Guardrails
-    (the URL argument can originate on a tainted turn): https only; host must be
-    an allowed attachment source (default ``download.agentmail.to``; override via
-    ``SMOKEBALL_ATTACHMENT_URL_HOSTS``); redirects are not followed; 25 MB cap.
-    Classified INTERNAL_WRITE (a matter-file write; never an external send).
-    Materialization is async — poll ``get_file`` to confirm, or use
-    ``read_document`` on the returned fileId once ingested."""
+    ``download_url`` takes EITHER form of attachment reference:
+
+    * ``spool:<token>`` — the token ``mail_spool_attachment`` returned after
+      writing the bytes on this machine. This is the normal case: the mail
+      vendor hands attachment bytes to an authenticated caller and mints no URL.
+    * a ``https://`` vendor URL, when the vendor does mint one. Guardrails (the
+      argument can originate on a tainted turn): https only; host must be an
+      allowed attachment source (default ``download.agentmail.to``; override via
+      ``SMOKEBALL_ATTACHMENT_URL_HOSTS``); redirects are not followed; 25 MB cap.
+
+    No credentials cross connectors either way. Classified INTERNAL_WRITE (a
+    matter-file write; never an external send). Materialization is async — poll
+    ``get_file`` to confirm, or use ``read_document`` on the returned fileId once
+    ingested."""
     client = _get_client()
-    blob = client.fetch_attachment_url(download_url)
+    blob = fetch_bytes(client, download_url)
     return client.add_file(matter_id, file_name, blob, folder_id=folder_id)
 
 
@@ -1942,10 +1952,15 @@ def get_expenses(
 
 @server.tool()
 def read_attachment_text(download_url: str, file_name: str) -> Any:
-    """Read an emailed attachment's TEXT from its time-limited AgentMail
-    ``download_url``, server-side, through the same allowlisted fetch
-    ``file_attachment_to_matter`` uses (https only, AgentMail hosts only, no
-    redirects, 25 MB cap). Classified ``read``: nothing is written anywhere.
+    """Read an emailed attachment's TEXT server-side. Classified ``read``:
+    nothing is written anywhere.
+
+    ``download_url`` takes EITHER form of attachment reference:
+    ``spool:<token>`` from ``mail_spool_attachment`` (the normal case — the mail
+    vendor hands attachment bytes to an authenticated caller and mints no URL),
+    or a ``https://`` vendor URL when the vendor does mint one, fetched through
+    the same allowlist ``file_attachment_to_matter`` uses (https only, allowed
+    hosts only, no redirects, 25 MB cap).
 
     Returns ``readable``, ``text``, ``method``, ``pages``, ``sha256`` and
     ``byteLength``. When ``readable`` is false, ``reason`` says why, from a
@@ -1977,11 +1992,14 @@ def stage_vendor_invoice(
     the invoice PDF beside it. Classified INTERNAL_WRITE: a write into the
     firm's own record that bills nobody and sends nothing.
 
-    Pass the facts extracted from ``read_attachment_text``: ``vendor``,
+    Pass the SAME ``download_url`` you gave ``read_attachment_text`` (normally
+    a ``spool:<token>`` from ``mail_spool_attachment``; a ``https://`` vendor URL
+    also works), and the facts extracted from that read: ``vendor``,
     ``invoice_number``, ``invoice_date`` (YYYY-MM-DD), ``amount`` (THIS
     invoice's charges as a string with at most two decimals, e.g. "1250.00"),
-    and the ``sha256`` that read returned. The subject and description are
-    composed by the connector; there is no argument for either.
+    and the ``sha256`` that read returned. The bytes are read again and the
+    entry is refused if they differ. The subject and description are composed by
+    the connector; there is no argument for either.
 
     It NEVER finalizes: ``finalized`` is always false and no argument reaches
     it. Cost type, billable flag, activity code and staff come only from the

@@ -37,6 +37,7 @@ metadata:
     action_class: read + internal_write # reads the served doc + matter; writes an internal memo (log) + a confirm task; no external send
     content_ceiling: surface_only # emits a factual captured input (type, service date, method) + an internal log; never drafts a response, never authors the deadline computation
     connectors:
+      - email # the Operator's inbox on the live path — mail_list_attachments (the event carries none) and mail_spool_attachment (bytes to the seat, a token back) before file_attachment_to_matter
       - smokeball # PracticeManagement — get_matter (responsible attorney + matching), list_matters (inbound case-name/number search), get_files_on_matter/get_file/get_download_url (find + read the served doc and its POS), get_memos_on_matter (dedup a prior capture + confirm create_memo landed), create_memo (internal log), create_task (surface to the attorney to confirm), list_tasks/get_task (confirm create_task landed)
 ---
 
@@ -100,10 +101,15 @@ Discovery reaches the firm two ways, and this body accepts either source:
   `served-document-intake` and EXECUTES this skill in the same turn (v0.3.0 —
   a route that ends the turn with no capture executed is a silent drop, the
   same `fails` class as a silent halt). On this path, in order:
-  1. **File the served document to the matter first** — get the attachment's
-     time-limited `download_url` from the AgentMail attachment tool, then
-     `file_attachment_to_matter(matter_id, download_url, file_name)` (the
+  1. **File the served document to the matter first.** The inbound event
+     carries NO attachments key, so start by asking:
+     `mail_list_attachments(inbox_id, message_id)`, then
+     `mail_spool_attachment(inbox_id, message_id, attachment_id)` for each
+     served document, then
+     `file_attachment_to_matter(matter_id, "spool:<token>", file_name)` (the
      server-side transfer, #1744; the agent never shuttles the bytes itself).
+     An empty list from
+     `mail_list_attachments`, and only that, means the message carried none.
      That is the firm's copy landing in the matter file, which the firm wants
      regardless, and it makes the document readable via `read_document` for
      the capture once Smokeball's async ingest completes. If ingest has not
