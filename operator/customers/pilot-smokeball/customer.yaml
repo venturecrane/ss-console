@@ -642,6 +642,22 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
+      # Vendor invoice intake, rehearsed HERE before any client seat: a
+      # rostered sender forwards a vendor's invoice and the router executes
+      # this skill in the same turn. Person-initiated (the forward is the
+      # request); never scheduled, never webhook-fired on its own. One write,
+      # an UNFINALIZED expense plus the PDF, under the internal_write
+      # entitlement above. No routine-grid row: this is a product rehearsal,
+      # not a routine the firm's agreement names. The seat authors no
+      # vendor_invoice_intake settings, so cost type, billable, activity code
+      # and staff are left to Smokeball's defaults and each reply says so.
+      - name: vendor-invoice-intake
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
     # Every entry is pre_run-gated (ADR 0021 Stream B, #1748). The escalator's
     # bespoke pre_run decides whether a deadline needs the ladder; the other
     # skills carry the shared empty-seat gate (operator/templates/pre_run_gate.py):

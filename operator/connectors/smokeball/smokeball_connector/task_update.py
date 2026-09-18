@@ -16,6 +16,15 @@ from typing import Any, Callable
 
 PROVENANCE_MARK = "[Operator]"
 
+
+class MatterReferenceMismatch(RuntimeError):
+    """Raised when composed text names a matter other than the one written to.
+
+    Defined here, beside the provenance mark, rather than in server.py so the
+    write helpers that live outside the MCP module (vendor_invoice.py) can catch
+    it without importing the server; server.py re-exports it unchanged."""
+
+
 # Rehearsal / self-test artifacts written into a tenant carry this subject
 # marker (ss #2403): ``[SMD-PROBE <ISO-8601 creation stamp>]``, at the start of
 # the subject (after the ``[Operator]`` provenance stamp create_task adds).

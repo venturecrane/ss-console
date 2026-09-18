@@ -56,6 +56,8 @@ EXPECTED_TOOLS = {
     "get_matter_billing_config",
     "get_fees",
     "get_expenses",
+    "read_attachment_text",
+    "stage_vendor_invoice",
     "get_webhook_subscriptions",
     "get_event_types",
     "create_webhook_subscription",
@@ -106,6 +108,8 @@ def test_conformance_every_tool_classified() -> None:
     assert runtime_map[runtime_tool_name("smokeball", "list_events")] == "read"
     assert runtime_map[runtime_tool_name("smokeball", "get_matter_balances")] == "read"
     assert runtime_map[runtime_tool_name("smokeball", "list_matters")] == "read"
+    assert runtime_map[runtime_tool_name("smokeball", "read_attachment_text")] == "read"
+    assert runtime_map[runtime_tool_name("smokeball", "stage_vendor_invoice")] == "internal_write"
 
 
 def test_write_surface_is_memo_document_and_deadline_engine() -> None:
@@ -145,6 +149,11 @@ def test_write_surface_is_memo_document_and_deadline_engine() -> None:
         # product into the firm's record, bytes never transiting the model. The
         # two differ only in which artifact their content gate is written for.
         "render_docx_draft": "internal_write",
+        # Vendor invoice intake: ONE unfinalized expense plus the invoice PDF
+        # filed beside it. internal_write, not commitment, because the entry
+        # bills nobody: finalized is always false and no argument can change it
+        # (tests/test_vendor_invoice.py pins the signature).
+        "stage_vendor_invoice": "internal_write",
     }
 
 

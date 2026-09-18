@@ -131,6 +131,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Assembles the trial binder from authored components and tracks pre-trial deadlines. Organizes and stages, never authors or argues.',
   'trust-balance-nudge':
     'Watches your IOLTA trust balance and drafts a top-up request. Read-only on funds, never moves money.',
+  'vendor-invoice-intake':
+    'Stages the vendor invoices your staff forward as unfinalized expenses on the right matter, invoice filed alongside. Never finalizes or pays; flags any invoice it cannot place.',
   'voice-establishment':
     "Establishes your firm's writing voice from documents you point it at, and names which of your own documents break the rules it derived. Admin only. Keeps none of your prose.",
   workspace: 'Reads and writes Google Workspace through trust-classified tools.',

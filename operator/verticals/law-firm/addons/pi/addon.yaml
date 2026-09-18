@@ -86,6 +86,10 @@ skills:
   - follow-up-discovery-drafter
   - demand-letter-drafter
   - mediation-brief-drafter
+  # firm operations: vendor bills forwarded by the firm's own staff, staged as
+  # UNFINALIZED expenses (never finalized, never trust, never a payment).
+  # Rehearsed on pilot-smokeball first; not bound on any client seat yet.
+  - vendor-invoice-intake
 
 # Inherits the base law-firm connectors (Smokeball PracticeManagement + the
 # Operator's AgentMail inbox carry every skill above).

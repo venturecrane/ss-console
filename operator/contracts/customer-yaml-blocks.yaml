@@ -217,6 +217,24 @@ top_level:
       OPS-OPERATOR-LIBRARY, when no `matter_number` is authored. Changing which
       matter the Operator would create is an edit HERE, in a PR, never a value
       taken from an email.
+  vendor_invoice_intake:
+    status: implemented
+    materializer: >-
+      no translate step by design, the self_initiation shape: the Smokeball
+      connector reads the block directly off the seat's own
+      /var/lib/smd-config/customer.yaml at write time
+      (smokeball_connector/vendor_invoice.py load_expense_config).
+    note: >-
+      The billing settings a staged vendor invoice carries: `cost_type`
+      (Hard | Soft), `is_billable` (bool), `activity_code`, `staff_id`, and
+      `folder_name` (where the invoice PDF is filed on the matter). The ONLY
+      path by which any of the four billing fields reaches an expense; the
+      stage tool has no argument for them, and `finalized` is never read from
+      anywhere. Each unauthored field is left to Smokeball's default and named
+      in the reply; a malformed value refuses the write. Authored on no seat
+      yet (the pilot rehearses the defaults). The overlay's on-box validator
+      does not inspect unknown top-level blocks, but run it at the pinned ref
+      against the edited file before the first authoring anyway.
   voice_library:
     status: implemented
     materializer: bootstrap Step 2a (R2 voice-vault sync) + translate _persona_config (config.yaml)

@@ -146,7 +146,7 @@ classes:
     gates: extractive_only
     delivery:
       internal_only: true
-      seams: [smokeball_memo, smokeball_task, smokeball_file, local_file]
+      seams: [smokeball_memo, smokeball_task, smokeball_file, smokeball_expense, local_file]
       external_send: forbidden
 
   staff:
@@ -351,6 +351,15 @@ skill_bindings:
       - { artifact: confirm_task, seam: smokeball_task, class: staff }
       - { artifact: memo, seam: smokeball_memo, class: record }
     outbound: none
+  # Vendor invoice intake: ONE unfinalized expense and the invoice PDF filed
+  # beside it, on the matter resolved from two facts. The expense is a record
+  # (a ledger line consumed as data, never prose); the reply to the rostered
+  # sender is outbound, its class resolved at the send site.
+  vendor-invoice-intake:
+    internal:
+      - { artifact: expense_entry, seam: smokeball_expense, class: record }
+      - { artifact: invoice_file, seam: smokeball_file, class: record }
+    outbound: derived # one reply to the rostered sender, one line per invoice
   service-confirmation-watcher:
     internal:
       - { artifact: capture_surface, seam: session_output, class: staff }
