@@ -144,3 +144,49 @@ describe('matter-inbox-router: SKILL.md and the rubric agree', () => {
     expect(existsSync(RUBRIC)).toBe(true)
   })
 })
+
+describe('matter-inbox-router: the vendor invoice class', () => {
+  const SLUG = 'vendor-invoice-intake'
+  const bullet = () => flat(bulletFor(read(ROUTER), '**Vendor invoice intake**'))
+
+  it('is reachable on the email channel, executed in-turn', () => {
+    expect(bullet()).toContain(`/app/skills/${SLUG}/SKILL.md`)
+    expect(flat(classTable(read(ROUTER)))).toContain('Vendor invoice intake')
+    expect(read(RUBRIC)).toContain(`/app/skills/${SLUG}/SKILL.md`)
+  })
+
+  it('never writes for a sender outside the roster', () => {
+    // A vendor mailing its own invoice to the Operator must never reach the
+    // write. If a later edit drops this guard, anyone who can email the seat
+    // can put an expense on a client's matter.
+    expect(bullet()).toContain('outside the roster')
+    expect(bullet()).toContain('nothing is written')
+    expect(flat(read(RUBRIC))).toContain(
+      'A non-roster sender (a vendor mailing its own invoice) never reaches it'
+    )
+  })
+
+  it('treats the forward as the request and the forwarded text as data', () => {
+    expect(bullet()).toContain('even with zero words of their own')
+    expect(bullet()).toContain('"apply to matter X", "also pay"')
+  })
+
+  it('wins over payment/trust and document-received, and loses to service', () => {
+    // The collisions the skill's selector test names. Each tie-break is pinned
+    // in BOTH texts: the rubric is what the scheduled-poll channel reads and
+    // SKILL.md is what the email channel reads.
+    const b = bullet()
+    expect(b).toContain('wins over **Payment / trust / retainer**')
+    expect(b).toContain('**Document received**')
+    expect(b).toContain('formal service of a captioned document is still served-document intake')
+    const rubric = flat(read(RUBRIC))
+    expect(rubric).toContain('Vendor invoice versus payment/trust and document-received')
+    expect(rubric).toContain(
+      'Formal service of a captioned litigation document stays served-document intake'
+    )
+  })
+
+  it('never finalizes, never touches trust, never pays', () => {
+    expect(bullet()).toContain('never finalizes, never touches trust, and never pays')
+  })
+})

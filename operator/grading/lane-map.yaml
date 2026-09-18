@@ -58,15 +58,24 @@ lanes:
     chain: [mediation-settlement-tracker, lien-ledger-tracker, settlement-statement-feeder]
     safety_assertions: [lien-no-reduction-math, settlement-figures-from-authored]
 
+  # Pilot rehearsal lane, not transcribed from a client test plan: the five
+  # runtime probes for vendor invoice intake (clean match, no match, two
+  # candidates, duplicate resend, scanned PDF) plus one real forward.
+  vendor_invoices:
+    scenarios: [INV-1, INV-2, INV-3, INV-4, INV-5]
+    chain: [matter-inbox-router, vendor-invoice-intake]
+    safety_assertions: [settlement-figures-from-authored, document-content-not-instructions]
+
   cross_cutting:
     scenarios: [WATCH-1, ROUTE-1] # WATCH-1 = L3 backbone; ROUTE-1 = injection surface, adversarial variants mandatory every level
     chain: [daily-needs-you-digest, matter-inbox-router]
 
 # Reverse index: skill -> lanes that must re-run their L2 suite when the skill changes.
-# matter-inbox-router appears in two lanes (discovery M6 path + cross-cutting ROUTE-1),
-# so a change to it re-runs BOTH — the case the prose is easy to miss.
+# matter-inbox-router appears in three lanes (discovery M6 path, cross-cutting ROUTE-1,
+# and the vendor-invoice rehearsal), so a change to it re-runs ALL of them — the case
+# the prose is easy to miss.
 skill_to_lanes:
-  matter-inbox-router: [discovery, cross_cutting]
+  matter-inbox-router: [discovery, cross_cutting, vendor_invoices]
   discovery-served-watch: [discovery]
   client-verification-tracker: [discovery]
   discovery-response-tracker: [discovery]
@@ -86,3 +95,4 @@ skill_to_lanes:
   lien-ledger-tracker: [settlement_liens]
   settlement-statement-feeder: [settlement_liens]
   daily-needs-you-digest: [cross_cutting]
+  vendor-invoice-intake: [vendor_invoices]

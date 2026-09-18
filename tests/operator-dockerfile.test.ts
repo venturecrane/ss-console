@@ -1348,7 +1348,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // the key only when truthy so the existing call shapes stay byte-identical;
     // no tracked .py twin moves (no medchron file is a tracked twin), and
     // vocabulary and heartbeat fields are untouched by the range.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="236b0ff6ab02ce13f9126bc6c36600b2e267c830"')
+    // 236b0ff6 -> 6804bf4d (2026-09-18, overlay#359). The vendor-invoice tools
+    // are classified and the attachment read is inbound-fenced; no tracked twin
+    // moves, and vocabulary and heartbeat fields are untouched by the range.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="6804bf4d1194184d2cbe536b247eebec51dd78f2"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

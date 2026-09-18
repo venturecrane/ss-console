@@ -115,6 +115,16 @@ get_matter_balances = "read"
 get_matter_billing_config = "read"
 get_fees = "read"
 get_expenses = "read"
+# Vendor invoice intake (rehearsal on pilot-smokeball first). The read fetches
+# an emailed attachment's text through the allowlisted AgentMail fetch; the
+# stage writes ONE unfinalized expense (no argument can finalize it or set its
+# billing fields) and files the PDF beside it. Both sides of the COORDINATED
+# CHANGE: hermes-smd-overlay shared/action_classes.py carries
+# mcp_smokeball_read_attachment_text = READ (and fences it as vendor-authored
+# content) and mcp_smokeball_stage_vendor_invoice = INTERNAL_WRITE, shipped by
+# the OVERLAY_REF bump in the same ss-console change.
+read_attachment_text = "read"
+stage_vendor_invoice = "internal_write"
 get_webhook_subscriptions = "read"
 get_event_types = "read"
 create_webhook_subscription = "internal_write"

@@ -822,7 +822,14 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # exact wire shape. Neither is a tracked twin, so every overlaySha256 is
 # unchanged and only overlayRef moves. The broker side of the pair ships here in
 # the same change (`delivered_coverage`, ss#2834).
-ARG OVERLAY_REF="236b0ff6ab02ce13f9126bc6c36600b2e267c830"
+# 2026-09-18 (6804bf4d, overlay #359): the two vendor-invoice tools are classified
+# (`read_attachment_text` READ, `stage_vendor_invoice` INTERNAL_WRITE) and the
+# attachment read is inbound-fenced, since every word of it is vendor-authored.
+# Runtime files: shared/action_classes.py, plugins/hermes-smd-inbound/__init__.py,
+# and a comment in shared/provenance.py. None is a tracked twin, so every
+# overlaySha256 is unchanged and only overlayRef moves. Without this pin both
+# tools are unclassified on the seat and refused.
+ARG OVERLAY_REF="6804bf4d1194184d2cbe536b247eebec51dd78f2"
 
 ARG CUSTOMER_SLUG=customer-zero
 
