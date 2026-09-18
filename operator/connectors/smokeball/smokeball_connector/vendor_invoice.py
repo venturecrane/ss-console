@@ -44,6 +44,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable
 
+from .attachment_source import fetch_bytes
 from .client import SmokeballApiError, SmokeballWriteError
 from .expense_ledger import classify_against_ledger, read_whole_ledger, row_amount
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML, find_folder_id
@@ -93,15 +94,18 @@ def _refused_type(blob: bytes, file_name: str) -> str | None:
 
 
 def read_attachment(client: Any, download_url: str, file_name: str) -> dict[str, Any]:
-    """Fetch an emailed attachment through the connector's allowlisted fetch and
-    return its TEXT, or an explicit unreadable marker. Never initiates a vision
-    read, and never returns a machine transcription as text.
+    """Read an emailed attachment's TEXT from either form of attachment
+    reference (``attachment_source.fetch_bytes``: a ``spool:<token>`` the mail
+    tool wrote on this machine, or an allowlisted vendor URL), or return an
+    explicit unreadable marker. Never initiates a vision read, and never returns
+    a machine transcription as text.
 
-    ``sha256`` is over the fetched bytes; ``stage_vendor_invoice`` fetches again
-    and refuses if the bytes differ, so what was read is what gets filed."""
+    ``sha256`` is over the bytes read; ``stage_vendor_invoice`` reads the same
+    reference again and refuses if the bytes differ, so what was read is what
+    gets filed."""
     from .extract import UnsupportedDocumentError, extract_text_ex
 
-    blob = client.fetch_attachment_url(download_url)
+    blob = fetch_bytes(client, download_url)
     out: dict[str, Any] = {
         "fileName": file_name,
         "sha256": hashlib.sha256(blob).hexdigest(),
@@ -412,7 +416,7 @@ def stage_vendor_invoice(
     if blocked is not None:
         return blocked
     try:
-        blob = client.fetch_attachment_url(download_url)
+        blob = fetch_bytes(client, download_url)
     except SmokeballWriteError as exc:
         return _refused(f"the attachment could not be fetched again: {exc}")
     if hashlib.sha256(blob).hexdigest() != _clean(sha256):

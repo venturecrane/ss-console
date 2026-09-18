@@ -829,7 +829,21 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # and a comment in shared/provenance.py. None is a tracked twin, so every
 # overlaySha256 is unchanged and only overlayRef moves. Without this pin both
 # tools are unclassified on the seat and refused.
-ARG OVERLAY_REF="6804bf4d1194184d2cbe536b247eebec51dd78f2"
+# 2026-09-18 (78601463, overlay #360): an emailed attachment becomes reachable at
+# all. The inbound event carries no `attachments` key, and the records tools all
+# wanted a download URL the mail vendor never mints, so a forwarded vendor
+# invoice was answered "your message arrived without any attachments". Two new
+# READ tools (`mail_list_attachments`, `mail_spool_attachment`) ask the vendor
+# what a message carries and drop one attachment's bytes into a seat-local spool
+# under /opt/data, handing the agent a token; both are inbound-fenced, because a
+# filename is sender-authored text. Runtime files: shared/attachment_spool.py
+# (new), shared/agentmail_broker.py, shared/action_classes.py,
+# plugins/hermes-smd-inbound/__init__.py, the new
+# plugins/hermes-smd-mail-attachments, plugin.yaml and contracts/consumes.yaml.
+# None is a tracked twin, so every overlaySha256 is unchanged and only overlayRef
+# moves. Without this pin the connector's spool_token argument has nothing to
+# fill it and the intake path stays unreachable.
+ARG OVERLAY_REF="7860146354da70efa3d72eae93f7ea262e5333b9"
 
 ARG CUSTOMER_SLUG=customer-zero
 

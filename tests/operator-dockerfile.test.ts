@@ -1351,7 +1351,15 @@ describe('Operator customer Machine Dockerfile', () => {
     // 236b0ff6 -> 6804bf4d (2026-09-18, overlay#359). The vendor-invoice tools
     // are classified and the attachment read is inbound-fenced; no tracked twin
     // moves, and vocabulary and heartbeat fields are untouched by the range.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="6804bf4d1194184d2cbe536b247eebec51dd78f2"')
+    // 6804bf4d -> 78601463 (2026-09-18, overlay#360). An emailed attachment
+    // becomes reachable: two READ tools list a message's attachments (the
+    // inbound event carries none) and spool one attachment's bytes to a
+    // seat-local path, handing over a token. Both inbound-fenced. Runtime files
+    // are shared/attachment_spool.py (new), shared/agentmail_broker.py,
+    // shared/action_classes.py, plugins/hermes-smd-inbound/__init__.py and the
+    // new plugins/hermes-smd-mail-attachments; no tracked twin moves, and
+    // vocabulary and heartbeat fields are untouched by the range.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="7860146354da70efa3d72eae93f7ea262e5333b9"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

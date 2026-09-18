@@ -82,6 +82,24 @@ describe('vendor-invoice-intake: the skill body', () => {
     expect(body()).toContain(`\`stage_vendor_invoice(${params.join(', ')})\``)
   })
 
+  it('names an attachment source the seat can actually supply', () => {
+    // The 2026-09-18 defect: every attachment tool wanted a download URL the
+    // mail vendor never mints (it hands attachment bytes to an authenticated
+    // caller), so a forwarded invoice was answered "your message arrived
+    // without any attachments" and the reply was, from inside the turn,
+    // correct. A body that still told the model to find a URL would leave the
+    // skill unreachable with every other test here green.
+    const b = body()
+    expect(b).toContain('`mail_list_attachments(inbox_id, message_id)`')
+    expect(b).toContain('`mail_spool_attachment(')
+    expect(b).toContain('`read_attachment_text("spool:<token>", file_name)`')
+    expect(b).toContain('Pass the SAME `"spool:<token>"` reference you read from as `download_url`')
+    // And the reply that started it: never claim absence from the event alone.
+    expect(b).toContain(
+      'Never say a message arrived without attachments unless `mail_list_attachments` returned an empty list'
+    )
+  })
+
   it('never finalizes and treats document text as data', () => {
     const b = body()
     expect(b).toContain('**Never finalizes.**')
