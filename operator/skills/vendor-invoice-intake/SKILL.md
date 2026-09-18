@@ -86,10 +86,12 @@ event shows none" is the normal case, not evidence of a missing file. Never
 reply that a message arrived without attachments on the strength of the event.
 Ask:
 
-1. `mail_list_attachments(inbox_id, message_id)`, using the ids on the event.
-   This returns each attachment's `attachment_id`, `filename`, `content_type`
-   and `size`. An empty list here, and only here, means the message carries
-   none.
+1. `mail_list_attachments(message_id)`, using the message id on the event. The
+   inbox is not an argument: the seat reads its own mailbox, and a message
+   exists only in the mailbox holding it, so naming the sender's address asks
+   for a message that is not there. This returns each attachment's
+   `attachment_id`, `filename`, `content_type` and `size`. An empty list here,
+   and only here, means the message carries none.
 2. For each attachment, `mail_spool_attachment(...)` on its `attachment_id`. It
    fetches the bytes onto the seat and returns a `spool_token` with the
    `filename`, `content_type`, `size` and `sha256`. The bytes never pass
@@ -107,6 +109,11 @@ pass the same token to every later step for that attachment.
   itself"), `scanned` ("a scanned PDF with no text layer; it needs a person to
   enter it"), `unsupported` or `empty` ("could not be read"). Nothing is staged
   for it.
+- A TOOL that errors is not a file that cannot be read. When a step fails (the
+  attachment list, the spool, the text read), say the step failed and what it
+  was attempting ("I could not retrieve the attachment from the mailbox"), and
+  never dress a failed call as a property of the document. Reporting a failed
+  lookup as an unsupported format tells the sender to fix a file that is fine.
 - Keep the `sha256` the read returned. The stage requires it.
 - An attachment that is plainly not an invoice (a W-9, a cover letter, a
   signature image) gets no line of its own unless it is the only attachment.

@@ -843,7 +843,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # None is a tracked twin, so every overlaySha256 is unchanged and only overlayRef
 # moves. Without this pin the connector's spool_token argument has nothing to
 # fill it and the intake path stays unreachable.
-ARG OVERLAY_REF="7860146354da70efa3d72eae93f7ea262e5333b9"
+# 2026-09-18 (2bc61f71, overlay #361): the mail attachment tools take no
+# inbox argument. The first live run named the SENDER's inbox, the vendor
+# answered 404, and the turn reported an unreadable file to that sender; the
+# seat now resolves its own inbox from its own inbox-scoped key. Runtime files:
+# shared/agentmail_broker.py and plugins/hermes-smd-mail-attachments/__init__.py,
+# neither a tracked twin, so only overlayRef moves.
+ARG OVERLAY_REF="2bc61f717abff90c1d86160f5c2363355cf8c06d"
 
 ARG CUSTOMER_SLUG=customer-zero
 
