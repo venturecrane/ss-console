@@ -1338,7 +1338,17 @@ describe('Operator customer Machine Dockerfile', () => {
     // test; no tracked .py twin moves (verify-overlay-pairs.py 10/10 PASS at
     // the new ref); vocabulary and heartbeat fields re-read as identical, both
     // sources absent from the range.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="ea5aa8161a5dddf8074644969c67efa4772c487a"')
+    // ea5aa816 -> 236b0ff6 (2026-09-17, overlay#358, ss#2834).
+    // `medchron_job_status` takes an optional `matter_id`, because an UPDATE
+    // turn holds a matter id and no job id: the job id is written into the
+    // DELIVER memo, so the tool carrying the coverage record was reachable only
+    // through the cross-check meant to confirm it, and the no-argument path
+    // returns a bounded recent list a matter's delivery falls out of. Two
+    // runtime files, the plugin schema and shared/medchron_client.py, which adds
+    // the key only when truthy so the existing call shapes stay byte-identical;
+    // no tracked .py twin moves (no medchron file is a tracked twin), and
+    // vocabulary and heartbeat fields are untouched by the range.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="236b0ff6ab02ce13f9126bc6c36600b2e267c830"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

@@ -812,7 +812,17 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # the seat's debit does (ADR 0087 amendment 2026-09-16). One tuple entry, no
 # other runtime file moves; the broker's PROJECTION on this side gains the same
 # column in the same change.
-ARG OVERLAY_REF="ea5aa8161a5dddf8074644969c67efa4772c487a"
+# 2026-09-17 (236b0ff6, overlay #358): `medchron_job_status` takes an optional
+# `matter_id`. An UPDATE turn holds a matter id and no job id -- the job id is
+# written into the DELIVER memo -- so the tool carrying the coverage record was
+# reachable only through the cross-check meant to confirm it, and the
+# no-argument path returns a bounded recent list a matter's delivery falls out
+# of. Two runtime files: the plugin's schema and `shared/medchron_client.py`,
+# which adds the key only when truthy so every existing status call keeps its
+# exact wire shape. Neither is a tracked twin, so every overlaySha256 is
+# unchanged and only overlayRef moves. The broker side of the pair ships here in
+# the same change (`delivered_coverage`, ss#2834).
+ARG OVERLAY_REF="236b0ff6ab02ce13f9126bc6c36600b2e267c830"
 
 ARG CUSTOMER_SLUG=customer-zero
 
