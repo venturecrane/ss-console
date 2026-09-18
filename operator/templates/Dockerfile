@@ -849,7 +849,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # seat now resolves its own inbox from its own inbox-scoped key. Runtime files:
 # shared/agentmail_broker.py and plugins/hermes-smd-mail-attachments/__init__.py,
 # neither a tracked twin, so only overlayRef moves.
-ARG OVERLAY_REF="2bc61f717abff90c1d86160f5c2363355cf8c06d"
+# 2026-09-18 (dc315de4, overlay #362): the spool follows the vendor's signed
+# attachment link instead of storing the JSON record that carries it. The first
+# live spool wrote 1187 bytes of record where a 1983-byte PDF belonged, and the
+# read then called the invoice unreadable. A length disagreeing with the
+# vendor's stated size now refuses. One runtime file, shared/agentmail_broker.py,
+# not a tracked twin, so only overlayRef moves.
+ARG OVERLAY_REF="dc315de47a75f3c76a670f79944c619cb2d5f382"
 
 ARG CUSTOMER_SLUG=customer-zero
 

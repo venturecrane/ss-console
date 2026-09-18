@@ -1361,7 +1361,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // vocabulary and heartbeat fields are untouched by the range.
     // 78601463 -> 2bc61f71 (2026-09-18, overlay#361). The mail attachment tools
     // take no inbox argument; the seat resolves its own from its own key.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="2bc61f717abff90c1d86160f5c2363355cf8c06d"')
+    // 2bc61f71 -> dc315de4 (2026-09-18, overlay#362). The spool follows the
+    // vendor's signed link rather than storing the record that carries it.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="dc315de47a75f3c76a670f79944c619cb2d5f382"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
