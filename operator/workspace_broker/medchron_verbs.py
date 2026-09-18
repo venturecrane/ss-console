@@ -1,9 +1,10 @@
-"""The five ``medchron_*`` broker verbs (routine 11, ss#2614).
+"""The ``medchron_*`` broker verbs (routine 11, ss#2614).
 
 Registered on the verb table in ``verbs.py``, which declares each verb's
-peer classes (the same five rows as the list below) and checks them before
+peer classes (the same rows as the list below) and checks them before
 handing the request here; ``_gate`` below re-checks with this module's own
-message, as defence in depth.
+message, as defence in depth. ``verbs.py`` asserts at import that its medchron
+rows and this module's ``VERBS`` tuple agree, so the two cannot drift.
 
 Peer gating, per verb:
 
@@ -13,6 +14,12 @@ Peer gating, per verb:
     medchron_allowance     gateway PID, agent uid, or uid 0
     medchron_job_list      agent uid (the runtime-read gate process) or uid 0
     medchron_job_record    uid 0 only (the runner daemon)
+    medchron_backfill_covered
+                           uid 0 only, and with NO agent tool at all (ss#2834).
+                           It writes what a delivered chronology covered, and an
+                           update SKIPS whatever that record names -- so a path
+                           the agent could reach is a path a client conversation
+                           could use to make a chronology omit medical records.
 
 Every writing verb pins the audit type its transition maps to (``AUDIT_TYPE``),
 so none can forge another row. Audit rows carry counts, digests and ids —

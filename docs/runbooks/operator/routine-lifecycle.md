@@ -119,8 +119,8 @@ is a chronology that silently omits a medical record:
   billing, insurance administration) into uncovered, which makes every later update re-read the
   firm's paperwork at page cost and feed it back into a medical chronology.
 
-A delivery that predates the pipeline entirely has no artifacts at all — Robertus 201923 is the
-standing case. `from-document` reads the delivered `.docx` exhibit list and matches names against
+A delivery that predates the pipeline entirely has no artifacts at all; one of this firm's
+chronologies is in that position. `from-document` reads the delivered `.docx` exhibit list and matches names against
 the matter's files, with the rule inverted: an exhibit that does not match exactly goes to
 **uncovered**, never covered, so a name-match mistake costs a re-read instead of dropping a
 record. Do not approximate a delta from dates.

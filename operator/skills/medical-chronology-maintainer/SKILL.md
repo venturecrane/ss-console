@@ -179,8 +179,7 @@ returns at most `limit` rows (500 by default) and the response carries no total,
 so a truncated listing is byte-identical to a complete one. Call it with
 `offset` stepping by `limit` until a page returns FEWER rows than `limit`, and
 read the `listingComplete` flag: `false` means this response is not provably the
-whole set. A matter at the cap exists today (201588), so this is not
-hypothetical. **Never treat a short read as the document set.** Both places the
+whole set. A matter at the cap exists today, so this is not hypothetical. **Never treat a short read as the document set.** Both places the
 listing is used make an absence meaningful -- an update submits the listing
 minus what was covered, and a run records that listing as the covered set -- so
 a missing page silently drops medical records out of the chronology and out of
@@ -310,8 +309,8 @@ matter. In replies, call it an update, never an "append" or a "re-run".
 
 **When there is no coverage record** (the matter lookup returns null, or
 `covered_document_ids` is null: a delivery completed outside this skill, or one
-whose record was never reconstructed -- on this firm that is Martinez 1019781,
-which was never delivered at all): say so plainly, name the
+whose record was never reconstructed, or a matter whose chronology was never
+delivered at all): say so plainly, name the
 delivered folder you can see on the matter, and **do not submit**. Tell the
 requester SMD will confirm what that chronology covered before the update runs, and
 surface it to SMD through the seat's ordinary operations route. Never offer a full

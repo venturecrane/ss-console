@@ -33,10 +33,20 @@ reachable from the seat. So:
 
 RUN IT ON THE SEAT (phase two)
 ------------------------------
-    b64=$(base64 < payloads.json)
-    fly ssh console -a hermes-<slug> -C "sh -lc 'echo $b64 | base64 -d > /tmp/p.json'"
+This file is NOT installed on a seat image -- nothing copies `operator/bin/`
+into it -- so the script ships ITSELF the way `seed-staging-matter.py` does,
+alongside its payload. Assuming an install path is how you get "no such file or
+directory" from a runbook that looks correct.
+
+    SCRIPT=$(base64 < operator/bin/medchron-backfill-covered.py | tr -d '\n')
+    PAYLOAD=$(base64 < payloads.json | tr -d '\n')
+    fly ssh console -a hermes-<slug> -C "sh -lc \"echo $SCRIPT | base64 -d > /tmp/bf.py; \
+        echo $PAYLOAD | base64 -d > /tmp/p.json\""
     fly ssh console -a hermes-<slug> -C "/opt/medchron/.venv/bin/python \
-        /opt/medchron/bin/medchron-backfill-covered.py write --payloads /tmp/p.json"
+        /tmp/bf.py write --payloads /tmp/p.json"
+
+The seat's runner venv is the interpreter because `write` imports the Smokeball
+connector for its verification reads.
 
 Root is required: the broker verb is ROOT-only, because an update SKIPS whatever
 the record says was covered, so an agent-reachable write is a path a client
@@ -83,6 +93,12 @@ if _RUNNER.is_dir():
 #: separately -- never by widening the check itself.
 SYNTHETIC_PREFIX = "msgatt-"
 
+#: The one source whose payloads legitimately carry no manifest ids, because the
+#: delivery predates the pipeline and left no run artifacts. Named rather than
+#: inferred from an empty list, so the id path cannot reach the same exemption by
+#: accident.
+FROM_DOCUMENT_SOURCE = "backfill-from-document"
+
 #: How a delivered chronology is recognised among a matter's files. Deliberately
 #: loose on case and spacing and strict on the two words: a document that is not
 #: a chronology must not be mistaken for one, and a matter with no match is
@@ -105,7 +121,8 @@ def _load_cfg(firm_config: Path, *, drop_after: str | None = None, rule_dates: d
     never accounted for -- and an update then skips it forever.
 
     The obvious control, emptying ALL exclusions, is WRONG here and was measured
-    to be wrong: it moved 94 of modellas' 180 covered documents to uncovered.
+    to be wrong: on one real matter it moved 94 of 180 covered documents to
+    uncovered.
     These rules are category exclusions -- retainers, billing, insurance
     administration, records requests, CVs, pay stubs, vehicle registration, firm
     work product. A retainer agreement was not a treating record in August
@@ -146,7 +163,7 @@ def _manifest_ids(slug_dir: Path) -> set[str]:
     """Document ids this delivery touched, for the mapping check.
 
     `manifest.json` is the matter's listing as the run saw it and is the first
-    choice. One A&P folder (modellas) has none, so the fallback is the run's own
+    choice. One folder in this firm's set has none, so the fallback is the run's own
     pull log, which carries the same ids for everything it fetched. Returning an
     empty set would silently disable the presence check, so a folder with
     neither raises instead.
@@ -176,7 +193,18 @@ def compute(args: argparse.Namespace) -> int:
     matters = json.loads(Path(args.map).read_text(encoding="utf-8"))
     data_root = Path(args.data_root).expanduser()
     firm = Path(args.firm_config).expanduser()
-    rule_dates = json.loads(Path(args.rule_dates).read_text(encoding="utf-8")) if args.rule_dates else {}
+    # Required, and empty is refused rather than tolerated. `_load_cfg` skips the
+    # whole drift control when the mapping is falsy, so an absent or empty file
+    # would silently compute every matter against TODAY's rules while still
+    # printing OK -- the safety net off, with nothing saying so.
+    rule_dates = json.loads(Path(args.rule_dates).read_text(encoding="utf-8"))
+    if not isinstance(rule_dates, dict) or not rule_dates:
+        raise SystemExit(
+            f"{args.rule_dates}: the rule-date mapping is empty, so the config-drift control "
+            "would silently do nothing. Derive it from the firm config's git history; if no "
+            "coverage rule postdates any delivery, pass a mapping of the rules with their dates "
+            "anyway so that fact is recorded rather than assumed."
+        )
     live = _load_cfg(firm)
 
     out: list[dict[str, Any]] = []
@@ -230,7 +258,7 @@ def compute(args: argparse.Namespace) -> int:
 
 
 def compute_from_document(args: argparse.Namespace) -> int:
-    """Robertus 201923 and anything else delivered before the pipeline existed.
+    """A chronology delivered before the pipeline existed.
 
     There are no run artifacts, so coverage comes from the delivered document's
     own exhibit list matched against the matter's Smokeball file names. Less
@@ -274,7 +302,7 @@ def compute_from_document(args: argparse.Namespace) -> int:
             "matter_number": str(args.matter_number),
             "delivered_at": args.delivered_at,
             "units": [args.slug],
-            "source": "backfill-from-document",
+            "source": FROM_DOCUMENT_SOURCE,
             # No local manifest exists, so the presence check has nothing to
             # compare and is skipped by an EMPTY list rather than by a flag: a
             # flag would be a switch someone could set on the id path too.
@@ -292,7 +320,8 @@ def _norm(s: str) -> str:
     """Match on letters and digits only, extension stripped.
 
     Smokeball's `name` field carries no extension. Comparing raw strings scored
-    0 of 49 on Robertus and looked exactly like a total mismatch rather than a
+    0 of 49 on the first matter tried, and looked exactly like a total mismatch
+    rather than a
     field-shape bug, which is why this is a named function with a reason on it.
     """
     s = re.sub(r"\.(pdf|docx?|tiff?|jpe?g|png)$", "", s.strip(), flags=re.I)
@@ -322,7 +351,8 @@ def _files_on_matter(matter_id: str, limit: int = 500) -> tuple[dict[str, str], 
 
     Paged to the end. A page that comes back exactly full is indistinguishable
     from a truncated one, so the loop continues past it and only a short page
-    ends it. Without this, Price 201588 -- which returns exactly 500 -- would
+    ends it. Without this, a matter that returns exactly 500 -- one of this firm's
+    does -- would
     report its first 500 files as the whole matter, and every document past the
     cap would look like it was never on the file.
     """
@@ -422,6 +452,19 @@ def write(args: argparse.Namespace) -> int:
 
         real = {i for i in p["manifest_ids"] if not i.startswith(SYNTHETIC_PREFIX)}
         synthetic = len(p["manifest_ids"]) - len(real)
+        if not real and p["source"] != FROM_DOCUMENT_SOURCE:
+            # With no real Smokeball ids to look for, `missing` is empty for the
+            # trivial reason and the mapping check passes having measured
+            # nothing -- which is exactly the wrong-matter write it exists to
+            # stop. The document path legitimately has no manifest, and says so
+            # by its source rather than by an empty list that any path could
+            # produce.
+            print(
+                f"REFUSE {slug:18} no Smokeball document ids to verify the mapping against "
+                f"({synthetic} synthetic id(s) only); the presence check would pass vacuously"
+            )
+            refused += 1
+            continue
         missing = sorted(real - set(files))
         if missing:
             print(
@@ -486,6 +529,7 @@ def main() -> int:
     c.add_argument("--firm-config", required=True)
     c.add_argument(
         "--rule-dates",
+        required=True,
         help=(
             'JSON {"<exclusion match pattern>": "YYYY-MM-DD"} giving the date each coverage '
             "rule entered the firm config, from that file's git history. Rules newer than a "

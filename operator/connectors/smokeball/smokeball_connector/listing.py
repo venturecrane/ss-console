@@ -9,7 +9,7 @@ Why the file listing needs it (ss#2834). The medical-chronology routine computes
 an update's document set as "the matter's current listing MINUS what the
 delivery covered". A short listing silently shrinks that set, so a record past
 the cap is never submitted, never read, and never appears in the chronology --
-with no refusal, no hold, and nothing in the reply. Matter 201588 returns
+with no refusal, no hold, and nothing in the reply. A live matter returns
 exactly 500 files against a 500 default today, which is what moved this from
 theoretical to live.
 """

@@ -1181,7 +1181,7 @@ def get_files_on_matter(matter_id: str, limit: int = 500, offset: int = 0) -> An
     delivery covered". A truncated listing silently shrinks that set, so a record
     past the cap is never submitted, never read, and never appears in the
     chronology -- no refusal, no hold, nothing in the reply. The response carries
-    no total, so the caller cannot notice on its own. Price 201588 returns
+    no total, so the caller cannot notice on its own. a matter at the cap returns
     exactly 500 today, which is the case that made this real rather than
     theoretical."""
     client = _get_client()

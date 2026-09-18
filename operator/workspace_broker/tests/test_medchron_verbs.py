@@ -839,8 +839,8 @@ def test_a_matters_coverage_is_cumulative_so_a_second_update_does_not_reread_the
     """
     v, _ledger, _queue = verbs
     mid = "m-cumulative"
-    _backfill(v, mid, "201588", ["a", "b"], ["x"], "2026-08-28")
-    _backfill(v, mid, "201588", ["c"], ["y"], "2026-09-10", source="update-1")
+    _backfill(v, mid, "900011", ["a", "b"], ["x"], "2026-08-28")
+    _backfill(v, mid, "900011", ["c"], ["y"], "2026-09-10", source="update-1")
 
     matter = call(v, "medchron_job_status", matter_id=mid)["matter"]
     assert matter["covered_document_ids"] == ["a", "b", "c"]
@@ -856,8 +856,8 @@ def test_uncovered_wins_the_union_across_deliveries(verbs):
     """
     v, _ledger, _queue = verbs
     mid = "m-conflict"
-    _backfill(v, mid, "202033", ["shared"], [], "2026-08-27")
-    _backfill(v, mid, "202033", [], ["shared"], "2026-09-01", source="update-1")
+    _backfill(v, mid, "900022", ["shared"], [], "2026-08-27")
+    _backfill(v, mid, "900022", [], ["shared"], "2026-09-01", source="update-1")
 
     matter = call(v, "medchron_job_status", matter_id=mid)["matter"]
     assert matter["covered_document_ids"] == []
@@ -883,7 +883,7 @@ def test_failed_rows_contribute_nothing_to_a_matters_coverage(verbs):
     matter_id = envelope()["matter"]["id"]
     assert call(v, "medchron_job_status", matter_id=matter_id)["matter"] is None
 
-    _backfill(v, matter_id, "200454", ["real"], [], "2026-09-16")
+    _backfill(v, matter_id, "900033", ["real"], [], "2026-09-16")
     matter = call(v, "medchron_job_status", matter_id=matter_id)["matter"]
     assert matter["covered_document_ids"] == ["real"]
     assert matter["deliveries"] == 1
@@ -899,7 +899,7 @@ def test_a_backfill_writes_no_queue_file_so_it_cannot_launch_a_paid_run(verbs):
     """
     v, _ledger, queue = verbs
     before = sorted(p.name for p in queue.glob("*.json")) if queue.is_dir() else []
-    _backfill(v, "m-noqueue", "201200", ["a"], [], "2026-08-25")
+    _backfill(v, "m-noqueue", "900044", ["a"], [], "2026-08-25")
     after = sorted(p.name for p in queue.glob("*.json")) if queue.is_dir() else []
     assert after == before
 
@@ -911,7 +911,7 @@ def test_a_backfilled_row_never_debits_the_firms_allowance(verbs):
     `created_at` is the real delivery date, outside the current cycle."""
     v, _ledger, _queue = verbs
     before = call(v, "medchron_allowance")
-    _backfill(v, "m-meter", "202426", ["a", "b", "c"], ["d"], "2026-08-27")
+    _backfill(v, "m-meter", "900055", ["a", "b", "c"], ["d"], "2026-08-27")
     after = call(v, "medchron_allowance")
     assert after["used"] == before["used"]
     assert after["remaining"] == before["remaining"]
@@ -922,8 +922,8 @@ def test_a_backfill_is_idempotent_so_a_partial_run_is_safe_to_repeat(verbs):
     the same delivery."""
     v, _ledger, _queue = verbs
     mid = "m-idem"
-    first = _backfill(v, mid, "201073", ["a"], [], "2026-08-27")["job"]["id"]
-    second = _backfill(v, mid, "201073", ["a", "b"], [], "2026-08-27")["job"]["id"]
+    first = _backfill(v, mid, "900066", ["a"], [], "2026-08-27")["job"]["id"]
+    second = _backfill(v, mid, "900066", ["a", "b"], [], "2026-08-27")["job"]["id"]
     assert first == second
     matter = call(v, "medchron_job_status", matter_id=mid)["matter"]
     assert matter["deliveries"] == 1
@@ -945,12 +945,12 @@ def test_the_list_paths_return_counts_not_the_id_arrays(verbs):
     client-facing turn on a 1 vCPU / 1GB seat. `None` survives as `None`: an
     absent record and an empty one send an update in opposite directions."""
     v, _ledger, _queue = verbs
-    _backfill(v, "m-list", "201277", ["a", "b"], ["c"], "2026-08-26")
+    _backfill(v, "m-list", "900077", ["a", "b"], ["c"], "2026-08-26")
     bare = _submitted(v)
 
     for resp in (call(v, "medchron_job_status"), call(v, "medchron_job_list", peer_uid=ROOT)):
         rows = {r["id"]: r for r in resp["jobs"]}
-        filled = next(r for r in rows.values() if r["matter_number"] == "201277")
+        filled = next(r for r in rows.values() if r["matter_number"] == "900077")
         assert filled["covered_count"] == 2
         assert filled["uncovered_count"] == 1
         for gone in ("covered_json", "covered_document_ids", "uncovered_document_ids"):
@@ -998,5 +998,5 @@ def test_a_backfill_is_root_only_and_writes_its_own_audit_type(verbs):
             covered={"covered": [], "uncovered": []},
         )
 
-    _backfill(v, "m-gate", "201225", ["a"], ["b"], "2026-08-27")
+    _backfill(v, "m-gate", "900088", ["a"], ["b"], "2026-08-27")
     assert "MEDCHRON_COVERAGE_BACKFILLED" in audit_types(v._db._db_path)
