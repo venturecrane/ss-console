@@ -32,6 +32,11 @@
  * never merges is a silently lost obligation, which is the failure this whole
  * register exists to end.
  *
+ * DELIVERY IS THE OTHER HALF. `register deliver` marks a captured row
+ * delivered by citing the SENT letter that kept the promise, read off the
+ * engagements repo's origin/main with the same quote gate. It stops at
+ * `delivered`; only a reconcile run can certify `verified`. See cmdDeliver.
+ *
  * Exit codes: 0 ok (including "journaled but unsynced"), 1 refused.
  *
  * Env: SS_OBLIGATION_JOURNAL_DIR (default ~/.claude/ss-obligation-journal)
@@ -467,6 +472,8 @@ function usage() {
       [--due <date> --date-quote "<verbatim containing the date>"] \\
       [--window-start <date>] [--window-end <date>] [--links <json>]
   register add --kind none --client <slug> --why "<reason nothing was owed>"
+  register deliver --client <slug> --key <stable-key> \\
+      --evidence <sent letter path> --quote "<verbatim from that letter>" [--kind <kind>]
   register sync
   register list [--client <slug>]`)
 }
@@ -586,9 +593,239 @@ function cmdSync() {
   return synced === pending.length ? 0 : 1
 }
 
+// ------------------------------------------------------------------ deliver
+
+/**
+ * The states a row can be delivered FROM. Mirrors the `delivered` edges in
+ * VALID_TRANSITIONS (src/lib/db/obligations.ts); this file runs under bare node
+ * and cannot import that TypeScript, so tests/register-cli.test.ts pins the two
+ * lists equal instead.
+ */
+export const DELIVERABLE_FROM = ['open', 'active', 'awaiting_external']
+
+/** The repo the receipt names. The locator must say where, not only what. */
+const ENGAGEMENTS_REPO = 'venturecrane/engagements'
+
+/**
+ * Read a letter as it stands on the engagements repo's origin/main.
+ *
+ * WHY origin/main AND NOT THE FILE ON DISK. A letter sitting in a local
+ * checkout may be a draft that was never sent, or a commit on a branch nobody
+ * merged. The archive on main is the venture's record of what went to the
+ * client, so that is the only place a delivery can be proven from. The fetch
+ * comes first, and a fetch that fails REFUSES: an archive we could not read is
+ * not an archive that lacks the letter, and it is certainly not one that has it.
+ */
+export function readArchivedLetter(letterPath) {
+  if (!engagementsRepoPresent()) return { ok: false, error: 'engagements_repo_absent' }
+  const repo = engagementsDir()
+  const suffix = suffixOf(letterPath) || letterPath
+  const git = (args) =>
+    execFileSync('git', ['-C', repo, ...args], {
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  try {
+    git(['fetch', '--quiet', 'origin', 'main'])
+  } catch {
+    return { ok: false, error: 'engagements_unreachable' }
+  }
+  let sha
+  try {
+    sha = git(['rev-parse', 'origin/main']).trim()
+  } catch {
+    return { ok: false, error: 'engagements_unreachable' }
+  }
+  try {
+    const text = git(['show', `${sha}:${suffix}`])
+    return {
+      ok: true,
+      text,
+      suffix,
+      locator: `${ENGAGEMENTS_REPO}@${sha.slice(0, 12)}:${suffix}`,
+    }
+  } catch {
+    return { ok: false, error: 'evidence_not_on_main' }
+  }
+}
+
+/**
+ * Validate a delivery. Pure over its inputs: the row and the letter are passed
+ * in, so every refusal is testable without a database or a git remote.
+ *
+ * What it refuses, and why each is a real failure rather than pedantry:
+ *   - an IMPORTED row: those close from their own source (the issue, the
+ *     alert, the change request) on the nightly run. A hand-marked delivery
+ *     would be a second opinion that can disagree with the source.
+ *   - the PROMISE cited as the DELIVERY: the letter that said "we will" cannot
+ *     be the proof that we did. The easiest wrong evidence to reach for, since
+ *     it is already sitting in the row.
+ *   - a quote not in the delivery letter: the same grounding gate `add` uses.
+ *     It ties the delivery to THIS obligation; any archived letter would
+ *     otherwise close any row.
+ */
+export function validateDelivery(row, letter, quote) {
+  if (!row) return { ok: false, error: 'no_such_obligation' }
+  if (row.origin !== 'captured') return { ok: false, error: 'imported_rows_close_from_their_source' }
+  if (!DELIVERABLE_FROM.includes(row.state)) {
+    return { ok: false, error: 'not_deliverable_from_state', state: row.state }
+  }
+  if (!letter.ok) return { ok: false, error: letter.error }
+  const promise = suffixOf(row.source_ref) || row.source_ref
+  if (promise === letter.suffix) return { ok: false, error: 'evidence_is_the_promise' }
+  const quoteCheck = checkQuote(letter.text, quote ?? '')
+  if (!quoteCheck.ok) return { ok: false, ...quoteCheck }
+  return { ok: true }
+}
+
+function explainRefusal(check, args) {
+  console.error(`register: REFUSED (${check.error})`)
+  const why = {
+    no_such_obligation: `  no open row with key "${args.key}" for ${args.client}; \`register list --client ${args.client}\` shows the keys.`,
+    ambiguous_key: `  "${args.key}" matches more than one row for ${args.client}; pass --kind to pick one.`,
+    imported_rows_close_from_their_source:
+      '  this row was imported; it closes on the nightly run when its source (issue, alert, change request) clears.',
+    not_deliverable_from_state: `  the row is "${check.state}"; only ${DELIVERABLE_FROM.join(', ')} rows can be delivered.`,
+    engagements_repo_absent: `  ${engagementsDir()} is not checked out; the delivery cannot be proven, so it is refused.`,
+    engagements_unreachable: '  could not fetch the engagements repo; an unread archive proves nothing either way.',
+    evidence_not_on_main: `  ${args.evidence} is not on engagements origin/main. Merge the letter's archive PR first.`,
+    evidence_is_the_promise: '  that is the letter that MADE the promise. Cite the letter that kept it.',
+    quote_not_found: `  the quote does not appear in ${args.evidence}${check.nearest ? `\n  nearest text: ...${check.nearest}...` : ''}`,
+    quote_too_short: `  a ${check.words}-word quote matches too much; give at least ${MIN_QUOTE_WORDS}.`,
+  }[check.error]
+  if (why) console.error(why)
+  if (check.detail) console.error(`  ${check.detail}`)
+}
+
+/**
+ * Mark a letter-captured obligation delivered, citing the letter that kept it.
+ *
+ * This is the missing half of the register. Until it existed, a captured row
+ * had no evidence pointer, the reconciler's probe returned `absent` on its
+ * first line, and every promise made in a letter stayed `open` forever however
+ * completely it had been kept (found 2026-09-19: A&P's rehearsal-results row,
+ * answered in letter 64 the same day it was recorded).
+ *
+ * It moves the row to `delivered`, never further. `verified` needs a reconcile
+ * run (schema CHECK), so the nightly CI run is still what certifies. CI holds
+ * no credential for the private engagements repo, so the evidence is ATTESTED:
+ * this command is the thing that can see the archive, it reads the letter off
+ * origin/main, and the receipt it leaves (the commit-pinned locator plus the
+ * probe time) is what CI certifies against -- the same class the schema already
+ * defines for Smokeball filings.
+ *
+ * Online only. A delivery journaled offline and replayed later would certify
+ * against an archive read hours earlier; refusing is cheaper than that.
+ */
+function cmdDeliver(args) {
+  for (const field of ['client', 'key', 'evidence', 'quote']) {
+    if (!args[field]) {
+      console.error(`register: --${field} is required`)
+      usage()
+      return 1
+    }
+  }
+  const found = findOpenRow(args)
+  if (!found.ok) {
+    if (found.error === 'ambiguous_key') explainRefusal(found, args)
+    else console.error(`register: ${found.error}`)
+    return 1
+  }
+  const row = found.row
+  const letter = row ? readArchivedLetter(args.evidence) : { ok: false, error: 'no_such_obligation' }
+  const check = validateDelivery(row, letter, args.quote)
+  if (!check.ok) {
+    explainRefusal(check, args)
+    return 1
+  }
+  const recorded = recordDelivery(row, letter)
+  if (!recorded.ok) {
+    console.error(`register: ${recorded.error}`)
+    return 1
+  }
+  journalAppend({
+    ts: new Date().toISOString(),
+    kind: 'delivered',
+    client: args.client,
+    key: row.stable_key,
+    obligation_id: row.obligation_id,
+    evidence: letter.locator,
+    quote: args.quote,
+    session: sessionId(),
+    synced: true,
+  })
+  console.log(`register: delivered ${row.customer_slug}/${row.kind}/${row.stable_key}`)
+  console.log(`  evidence ${letter.locator}`)
+  console.log('  the nightly reconcile run certifies it (delivered -> verified).')
+  return 0
+}
+
+/** The one non-terminal row a client's key names, or why there is not one. */
+function findOpenRow(args) {
+  const seats = seatsOf(args.client)
+  const conditions = [
+    `customer_slug IN (${seats.map(sqlLiteral).join(', ')})`,
+    `stable_key = ${sqlLiteral(args.key)}`,
+    `state NOT IN ('closed','cancelled','void')`,
+  ]
+  if (args.kind) conditions.push(`kind = ${sqlLiteral(args.kind)}`)
+  const found = runD1(
+    `SELECT obligation_id, customer_slug, kind, stable_key, origin, state, source_ref ` +
+      `FROM client_obligations WHERE ${conditions.join(' AND ')};`
+  )
+  if (!found.ok) {
+    return { ok: false, error: `cannot read the register (${found.error.split('\n')[0]})` }
+  }
+  let rows
+  try {
+    rows = parseWranglerJson(found.stdout)
+  } catch {
+    return { ok: false, error: 'the register returned output that is not JSON' }
+  }
+  if (rows.length > 1) return { ok: false, error: 'ambiguous_key' }
+  return { ok: true, row: rows[0] ?? null }
+}
+
+/**
+ * Write the delivery, then READ IT BACK.
+ *
+ * The UPDATE is guarded on the state we read, so a row another session moved in
+ * between is not overwritten. An UPDATE that matched nothing reports success
+ * just the same, so the read-back is what makes "delivered" mean the register
+ * says so.
+ */
+function recordDelivery(row, letter) {
+  const write = runD1(
+    `UPDATE client_obligations SET state = 'delivered', evidence_class = 'attested', ` +
+      `evidence_surface = 'engagements', evidence_locator = ${sqlLiteral(letter.locator)}, ` +
+      `evidence_last_verified_at = datetime('now') ` +
+      `WHERE obligation_id = ${sqlLiteral(row.obligation_id)} AND state = ${sqlLiteral(row.state)};`
+  )
+  if (!write.ok) return { ok: false, error: `the write failed (${write.error.split('\n')[0]})` }
+  const back = runD1(
+    `SELECT state, evidence_locator FROM client_obligations ` +
+      `WHERE obligation_id = ${sqlLiteral(row.obligation_id)};`
+  )
+  let after = null
+  try {
+    after = back.ok ? parseWranglerJson(back.stdout)[0] : null
+  } catch {
+    after = null
+  }
+  if (!after || after.state !== 'delivered' || after.evidence_locator !== letter.locator) {
+    const reads = after ? `"${after.state}"` : 'unreadable'
+    return { ok: false, error: `the write did not land: row ${row.obligation_id} reads ${reads}` }
+  }
+  return { ok: true }
+}
 
 function cmdList(args) {
-  const conditions = [`state NOT IN ('closed','cancelled','void')`]
+  // `verified` is excluded with the terminal states: a reconcile run has probed
+  // the real surface and found the work done, so it is no longer owed. Leaving
+  // it in made /sos count kept promises as open ones. `delivered` stays in --
+  // it is our claim, and it is on the list until a run certifies it.
+  const conditions = [`state NOT IN ('verified','closed','cancelled','void')`]
   // `--client` takes a CLIENT, and a client is not always a seat. Rows are keyed
   // by seat (`customer_slug`), but SMD's three own seats roll up to the
   // `smd-services` client, and that is the name CLAUDE.md and /sos tell people
@@ -632,6 +869,8 @@ export function main(argv) {
   switch (command) {
     case 'add':
       return cmdAdd(args)
+    case 'deliver':
+      return cmdDeliver(args)
     case 'sync':
       return cmdSync()
     case 'list':
