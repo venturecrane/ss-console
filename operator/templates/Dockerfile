@@ -862,7 +862,18 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # (firm-record read, provenance-seeding); unclassified it would refuse, failing
 # the whole invoice path closed. Runtime files: plugins/hermes-smd-audit,
 # shared/action_classes.py, shared/provenance.py; no tracked twin moves.
-ARG OVERLAY_REF="5a0f27737836343457d759819e85a01d11c1579f"
+# 2026-09-19 (381441d8, overlay #365): two AgentMail READ verbs the vendor
+# offers -- get_message and search_inboxes -- were classified by nobody and so
+# REFUSED on every call. Classified now, and the seat gained the instrument that
+# would have found them: a once-per-process sweep of Hermes' registered tool
+# surface against the action-class map, logging drift at ERROR (a warning is a
+# Sentry breadcrumb nobody reads) and a clean surface at INFO, so "swept and
+# clean" and "never swept" are not the same silence. The static pin that claimed
+# to prevent this was a transcription of the same stale tools/list and passed
+# vacuously. Runtime files: plugins/hermes-smd-connector-health,
+# plugins/hermes-smd-inbound, shared/action_classes.py, shared/provenance.py;
+# no tracked twin moves.
+ARG OVERLAY_REF="381441d83d6a5e259c66dba5ca561ca2335430a6"
 
 ARG CUSTOMER_SLUG=customer-zero
 
