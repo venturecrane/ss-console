@@ -873,7 +873,17 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # vacuously. Runtime files: plugins/hermes-smd-connector-health,
 # plugins/hermes-smd-inbound, shared/action_classes.py, shared/provenance.py;
 # no tracked twin moves.
-ARG OVERLAY_REF="381441d83d6a5e259c66dba5ca561ca2335430a6"
+# 2026-09-19b (657cb4da, overlay #366): the sweep the previous pin shipped ran
+# on the rebuilt seat and reported "75 registered, 14 unclassified" -- not the
+# two verbs that prompted it. Ten AgentMail verbs the vendor added after our
+# 2026-07-15 catalog read, plus four MCP protocol primitives auto-wrapped
+# around our own Smokeball server. All fourteen had been advertised to the
+# model and refusing on every call for weeks. They come OFF the menu rather
+# than onto the map: no routine connects providers or edits lists, and
+# connect_provider is an account-level action against our mail vendor that
+# should not be agent-reachable at any ceiling. Runtime file:
+# bootstrap/mcp_registry.py; not a tracked twin, so only overlayRef moves.
+ARG OVERLAY_REF="657cb4dac512f634edbf9d9c4ea04e2e32da8a6f"
 
 ARG CUSTOMER_SLUG=customer-zero
 

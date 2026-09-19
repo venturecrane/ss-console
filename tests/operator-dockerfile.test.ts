@@ -1369,7 +1369,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // the vendor offers were classified by nobody and refused on every call;
     // classified now, plus a runtime sweep that names such drift instead of
     // leaving it to be found by hand a fourth time.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="381441d83d6a5e259c66dba5ca561ca2335430a6"')
+    // 381441d8 -> 657cb4da (2026-09-19, overlay#366). The sweep the previous
+    // pin shipped named 14 unclassified tools on the live seat; all 14 come off
+    // the menu. The number is the point: we went in believing it was 2.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="657cb4dac512f634edbf9d9c4ea04e2e32da8a6f"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
