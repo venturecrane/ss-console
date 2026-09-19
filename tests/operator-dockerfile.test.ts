@@ -1365,7 +1365,11 @@ describe('Operator customer Machine Dockerfile', () => {
     // vendor's signed link rather than storing the record that carries it.
     // dc315de4 -> 5a0f2773 (2026-09-18, overlay#363 + #364). A timed-out gate is
     // a failure, not a refusal; and the invoice matter resolver is classified.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="5a0f27737836343457d759819e85a01d11c1579f"')
+    // 5a0f2773 -> 381441d8 (2026-09-19, overlay#365). Two AgentMail READ verbs
+    // the vendor offers were classified by nobody and refused on every call;
+    // classified now, plus a runtime sweep that names such drift instead of
+    // leaving it to be found by hand a fourth time.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="381441d83d6a5e259c66dba5ca561ca2335430a6"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
