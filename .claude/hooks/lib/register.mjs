@@ -620,9 +620,14 @@ export function readArchivedLetter(letterPath) {
   if (!engagementsRepoPresent()) return { ok: false, error: 'engagements_repo_absent' }
   const repo = engagementsDir()
   const suffix = suffixOf(letterPath) || letterPath
+  // GIT_* stripped: GIT_DIR and friends win over `-C`, and git exports them to
+  // every hook, so run from inside one this would read the WRONG repository and
+  // could "find" a letter there.
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')))
   const git = (args) =>
     execFileSync('git', ['-C', repo, ...args], {
       encoding: 'utf8',
+      env,
       maxBuffer: 16 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
     })

@@ -35,8 +35,22 @@ let engagements: string
 let origin: string
 let dbState: string
 
+/**
+ * GIT_* stripped and hooks off. Under `git push` the pre-push hook exports
+ * GIT_DIR / GIT_INDEX_FILE for THIS repo, and they win over `cwd`: the first
+ * draft of this fixture committed "archive letters" into the ss-console branch
+ * being pushed (a commit deleting the whole tree) and tried to push it to main.
+ */
+const FIXTURE_ENV = Object.fromEntries(
+  Object.entries({ ...process.env, HUSKY: '0' }).filter(([k]) => !k.startsWith('GIT_'))
+)
 const git = (cwd: string, ...args: string[]) =>
-  execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  execFileSync('git', ['-c', 'core.hooksPath=/dev/null', ...args], {
+    cwd,
+    encoding: 'utf8',
+    env: FIXTURE_ENV,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
 
 async function loadLib() {
   return await import('../.claude/hooks/lib/register.mjs')
@@ -167,6 +181,19 @@ describe('reading the archive', () => {
     const sha = git(engagements, 'rev-parse', 'origin/main').trim().slice(0, 12)
     expect(letter.ok).toBe(true)
     expect(letter.locator).toBe(`venturecrane/engagements@${sha}:${KEPT}`)
+  })
+
+  it('reads the engagements repo even when a git hook has exported GIT_DIR', async () => {
+    // Inside any git hook, GIT_DIR names the hook's repository and beats `-C`.
+    // Pointed at nothing, an unscrubbed read fails; pointed at a real repo, it
+    // would read the wrong one. Either way the archive must still be the one read.
+    const { readArchivedLetter } = await loadLib()
+    process.env.GIT_DIR = join(dir, 'not-a-repo')
+    try {
+      expect(readArchivedLetter(KEPT).ok).toBe(true)
+    } finally {
+      delete process.env.GIT_DIR
+    }
   })
 
   it('refuses a letter that exists on disk but was never pushed', async () => {
