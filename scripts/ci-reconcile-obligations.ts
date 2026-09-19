@@ -232,9 +232,10 @@ async function safeAll<T>(fn: () => Promise<T[]>): Promise<{ ok: boolean; rows: 
  * Client-labelled GitHub issues become product_defect obligations.
  *
  * The issue is the source of truth for the DEFECT; the obligation records that a
- * specific client is blocked by it. Closing the issue does not close the
- * obligation -- the client has to be able to do the thing (Law 9), which the
- * probe checks separately.
+ * specific client is blocked by it. The probe reads the issue's state, and a
+ * closed issue is the evidence `certify` acts on -- so under Law 9 an issue
+ * labelled `client:<slug>` is closed only when that client can do the thing,
+ * not when the PR merges.
  */
 export function importGithubIssues(
   seats: readonly Seat[],
@@ -410,11 +411,48 @@ export async function probeEvidence(row: Obligation, db: D1Database): Promise<Pr
     default:
       // An attested surface has no CI-reachable probe by definition. The
       // receipt's freshness is what stands in, and no receipt proves nothing.
+      // Two live today: a Smokeball filing (the seat's receipt) and
+      // `engagements` (the sent letter `register deliver` read off the private
+      // repo's origin/main, which no CI credential can open).
       if (row.evidence_class === 'attested') {
         return { status: row.evidence_last_verified_at ? 'present' : 'unreachable' }
       }
       return { status: 'unreachable' }
   }
+}
+
+/**
+ * Move a row whose evidence probed present into `verified`.
+ *
+ * A `delivered` row goes straight there. An IMPORTED row still sitting in a
+ * working state is walked through `delivered` first: its source clearing (the
+ * alert resolved, the change request completed, the issue closed) IS the
+ * delivery, and nobody else will ever mark it. Before this, those rows were
+ * counted in "verified this run" every night and never moved, so the count said
+ * one thing and the register another.
+ *
+ * A captured row is never walked: it reaches `delivered` only through
+ * `register deliver`, which cites the letter that kept the promise.
+ *
+ * Returns null on success, or the refusal. Refusals are reported, never
+ * swallowed -- a reconciler that dropped one would read converged while the row
+ * sat where it was.
+ */
+async function certify(db: D1Database, row: Obligation, runId: string): Promise<string | null> {
+  if (row.state !== 'delivered') {
+    if (row.origin !== 'imported') return `a ${row.origin} row in ${row.state} probed present`
+    const step = await transitionObligation(db, {
+      obligationId: row.obligation_id,
+      to: 'delivered',
+    })
+    if (!step.ok) return step.error
+  }
+  const done = await transitionObligation(db, {
+    obligationId: row.obligation_id,
+    to: 'verified',
+    reconcileRunId: runId,
+  })
+  return done.ok ? null : done.error
 }
 
 // ------------------------------------------------------------------- alerts
@@ -625,13 +663,15 @@ export async function main(): Promise<number> {
   for (const row of openRead.rows) {
     const verdict = classifyRow(row, await probeEvidence(row, db), now)
     if (verdict.verdict === 'verified') {
+      if (row.state === 'verified') continue
       verified += 1
-      if (!DRY_RUN && row.state === 'delivered') {
-        await transitionObligation(db, {
-          obligationId: row.obligation_id,
-          to: 'verified',
-          reconcileRunId: runId,
-        })
+      if (!DRY_RUN) {
+        const refused = await certify(db, row, runId)
+        if (refused) {
+          findings.push(
+            `::error::${row.obligation_id} ${row.customer_slug} not certified: ${refused}`
+          )
+        }
       }
     } else if (verdict.verdict === 'overdue') {
       overdue += 1

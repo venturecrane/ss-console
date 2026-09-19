@@ -50,6 +50,10 @@ function out(results) { process.stdout.write(JSON.stringify([{ results, success:
 
 if (/^INSERT|^UPDATE/i.test(sql.trim())) {
   state.writes.push(sql)
+  // Apply state transitions, so a two-step walk (open -> delivered -> verified)
+  // reads its own first step back the way D1 would.
+  const moved = /^UPDATE client_obligations SET\\s+state = '(\\w+)'[\\s\\S]*WHERE obligation_id = '([^']+)'/i.exec(sql.trim())
+  if (moved) for (const o of state.obligations) if (o.obligation_id === moved[2]) o.state = moved[1]
   fs.writeFileSync(process.env.STATE_PATH, JSON.stringify(state, null, 2))
   return out([])
 }
@@ -634,5 +638,89 @@ describe('findings never carry client text', () => {
     const result = run()
     expect(result.code).toBe(2)
     expect(result.stdout).not.toContain(secret)
+  })
+})
+
+describe('closing: a row whose evidence reads true actually moves', () => {
+  // Until 2026-09-19 nothing ever moved a row out of `open`. The run counted
+  // imported rows whose source had cleared as "verified this run" and left them
+  // open, and captured rows had no evidence pointer at all. Every assertion here
+  // reads the WRITES, because the printed count is exactly what lied before.
+  const obligationWrites = () =>
+    readState().writes.filter((w) => /^UPDATE client_obligations/i.test(w.trim()))
+  const statesWritten = () => obligationWrites().map((w) => /state = '(\w+)'/.exec(w)?.[1])
+
+  const row = (over: Record<string, unknown>) => ({
+    obligation_id: 'o1',
+    customer_slug: 'ashton-price',
+    entity_id: 'e-ap',
+    kind: 'incident',
+    what: 'synthetic',
+    due_at: null,
+    created_at: '2026-09-18 00:00:00',
+    ...over,
+  })
+
+  const clearedAlertRow = (state: string) =>
+    row({
+      origin: 'imported',
+      state,
+      evidence_class: 'probeable',
+      evidence_surface: 'fleet_alert_state',
+      evidence_locator: 'ashton-price:scheduler_error',
+    })
+
+  it('walks an imported row whose source cleared through delivered to verified', () => {
+    setState({ obligations: [clearedAlertRow('open')], alert_probe: [] })
+    run()
+    expect(statesWritten()).toEqual(['delivered', 'verified'])
+    expect(readState().obligations[0].state).toBe('verified')
+  })
+
+  it('leaves an imported row open while its source still stands', () => {
+    // The mirror: a closer that closed everything would pass the test above.
+    setState({ obligations: [clearedAlertRow('open')], alert_probe: [{ status: 'open' }] })
+    run()
+    expect(obligationWrites()).toHaveLength(0)
+    expect(readState().obligations[0].state).toBe('open')
+  })
+
+  it('certifies a delivered letter row from the receipt register deliver leaves', () => {
+    setState({
+      obligations: [
+        row({
+          origin: 'captured',
+          kind: 'deliverable',
+          state: 'delivered',
+          evidence_class: 'attested',
+          evidence_surface: 'engagements',
+          evidence_locator: 'venturecrane/engagements@0123456789ab:operator/x.md',
+          evidence_last_verified_at: '2026-09-19 12:00:00',
+        }),
+      ],
+    })
+    run()
+    expect(statesWritten()).toEqual(['verified'])
+  })
+
+  it('never walks a captured row: only register deliver moves it', () => {
+    // A captured row with no evidence probes absent and stays open, however
+    // complete the work is. That is the gap `register deliver` fills; the
+    // reconciler must not paper over it by promoting on its own.
+    setState({
+      obligations: [
+        row({ origin: 'captured', kind: 'deliverable', state: 'open', evidence_locator: null }),
+      ],
+    })
+    run()
+    expect(obligationWrites()).toHaveLength(0)
+  })
+
+  it('does not recount a row that is already verified', () => {
+    const verified = { ...clearedAlertRow('verified'), reconcile_run_id: 'r0' }
+    setState({ obligations: [verified], alert_probe: [] })
+    const result = run()
+    expect(obligationWrites()).toHaveLength(0)
+    expect(result.stdout).toMatch(/verified this run:\s+0/)
   })
 })

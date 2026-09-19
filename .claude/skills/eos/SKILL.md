@@ -154,6 +154,15 @@ A slug with correspondence reads and no journal entry from this session is surfa
 
 The `--kind none` path exists precisely so that "we looked and owe nothing" is a recorded act rather than an absence. An absence is indistinguishable from never having looked.
 
+**Discharged, too.** If this session SENT a letter that keeps a promise already on the register (`register list --client <slug>` shows the keys), record the delivery once the letter's archive has merged to engagements `main`:
+
+```bash
+.claude/bin/register deliver --client <slug> --key <stable-key> \
+  --evidence <path of the sent letter> --quote "<verbatim from that letter>"
+```
+
+Without this a kept promise stays on the list forever: a letter row has no other way out. The nightly reconcile run certifies it (`delivered` → `verified`).
+
 **This check RECORDS; it never BLOCKS.** It is explicitly **not** a Ship Gate item and its output never becomes an external blocker. Client obligations legitimately span sessions — that is what a register is for. Wiring them into the Ship Gate would make every promise a reason a session cannot close, and within a week people would be inventing blockers to get out of it. Surface it, act on it, move on.
 
 **It cannot fabricate.** `register add` refuses any row whose quote is not found in its source file, after normalization, with no `--force`. A check that could invent a client obligation would be worse than no check.

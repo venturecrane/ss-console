@@ -113,6 +113,25 @@ The second form matters as much as the first. Without it, "we looked and owe not
 
 **SMD Services is itself a client.** Obligations on our own seats (`pilot-smokeball`, `smd-staging`, `scott`) roll up to `smd-services`. There is no internal-versus-external split in the register: there is a client list, and we are on it. Identity is the default in `scripts/lib/seat-clients.mjs`, so onboarding a client needs no change there - only a new seat of our own does.
 
+## How a row closes
+
+A row leaves the list when the nightly run moves it to `verified`. It gets there two ways, depending on where it came from.
+
+**A derived row closes from its source.** When the issue closes, the alert condition clears, or the change request is completed, the run walks the row through `delivered` to `verified` on its own. Nobody marks it. Because a closed `client:<slug>` issue is taken as the evidence, close one only when that client can actually do the thing, not when the PR merges.
+
+**A letter row closes from the letter that kept it.** When a session sends the letter that delivers on a promise, it records the delivery:
+
+```
+.claude/bin/register deliver --client ashton-price --key <stable-key> \
+  --evidence <path of the SENT letter> --quote "<verbatim from that letter>"
+```
+
+The command reads the letter off the engagements repo's `origin/main`, never the file on disk, because a letter in a working tree may be a draft that never went out. It refuses a letter that is not merged, the letter that made the promise, an archive it could not fetch, and a quote the letter does not contain. It moves the row to `delivered` and reads the write back. It cannot go further: `verified` needs a reconcile run, so the nightly run is still what certifies.
+
+CI holds no credential for the private engagements repo, so this evidence is **attested**, the same class as a Smokeball filing. The command is the thing that can see the archive, and the receipt it leaves (the letter pinned to the commit it was read at, plus the time it was read) is what CI certifies against. The receipt proves the letter was archived as sent. It does not prove the email left the mailbox; the archive is the venture's record of what was sent.
+
+Until 2026-09-19 neither route existed. Nothing moved any row out of `open`, the run counted derived rows whose source had cleared as "verified this run" while leaving them open, and a promise kept in a sent letter stayed on the list forever. `/eos` Check I now asks for deliveries as well as captures.
+
 ## What a stalled row does now
 
 Only a dated obligation can go overdue, and a due date is only accepted with its own quote containing that date. In practice almost nothing carries one, which left a gap: an undated row could sit open forever while the nightly run reported the register converged. That is the failure this register was built to replace, reproduced inside it.
@@ -128,5 +147,6 @@ So an undated obligation that stays open becomes a finding on age alone - a warn
 | The alert conditions | `migrations/0118` CHECK, `src/lib/admin/fleet-alerts.ts`, and "How you hear about it" |
 | The grounding rules | `.claude/hooks/lib/register.mjs` and "What makes a row trustworthy" |
 | Who captures, and when | `.claude/skills/eos/SKILL.md` Check I, `CLAUDE.md`, and "Who records what we owe" below |
+| How a row closes, or what counts as delivery evidence | `.claude/hooks/lib/register.mjs` (`deliver`), `certify` in `scripts/ci-reconcile-obligations.ts`, `tests/register-deliver.test.ts`, and "How a row closes" |
 | Which seats roll up to which client | `scripts/lib/seat-clients.mjs` and "Who records what we owe" below |
 | What the session-start line says | `.claude/skills/sos/SKILL.md` Step 4 and the `--json` allowlist in `.claude/hooks/lib/register.mjs` |

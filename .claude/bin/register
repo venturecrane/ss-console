@@ -6,6 +6,8 @@
 #       --what "<sentence>" --source <ref> --quote "<verbatim from the source>" \
 #       [--due <date> --date-quote "<verbatim containing that date>"]
 #   .claude/bin/register add --kind none --client <slug> --why "<why nothing was owed>"
+#   .claude/bin/register deliver --client <slug> --key <stable-key> \
+#       --evidence <sent letter path> --quote "<verbatim from that letter>"
 #   .claude/bin/register sync
 #   .claude/bin/register list [--client <slug>]
 #
