@@ -883,7 +883,18 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # connect_provider is an account-level action against our mail vendor that
 # should not be agent-reachable at any ceiling. Runtime file:
 # bootstrap/mcp_registry.py; not a tracked twin, so only overlayRef moves.
-ARG OVERLAY_REF="657cb4dac512f634edbf9d9c4ea04e2e32da8a6f"
+# 2026-09-19c (399cbe83, overlay #367): the sweep caught the previous pin's own
+# fix failing. #366 put four MCP protocol primitives into the Smokeball
+# blocked_tools; the rebuilt seat reported "65 registered, 4 unclassified" and
+# those four were the survivors, because blocked_tools filters the server's
+# DECLARED tool surface while the Hermes client synthesizes these from its
+# prompts/resources CAPABILITIES. Classified READ + fenced + explicitly
+# non-seeding instead, and the dead blocked_tools entry reverted. They had to be
+# resolved rather than left refusing: the sweep logs at ERROR, so four
+# permanently unclassified tools would page on every boot of every seat and
+# train us to ignore the instrument. Runtime files: shared/action_classes.py,
+# plugins/hermes-smd-inbound, bootstrap/mcp_registry.py; no tracked twin moves.
+ARG OVERLAY_REF="399cbe83473dd0d3cd5547ad75f30ab41c5e1afb"
 
 ARG CUSTOMER_SLUG=customer-zero
 
