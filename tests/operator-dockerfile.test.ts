@@ -1376,7 +1376,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // exclude a tool the server never declared; the four MCP protocol
     // primitives are classified instead. The sweep caught the prior pin's fix
     // failing, which is the second thing it is for.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="399cbe83473dd0d3cd5547ad75f30ab41c5e1afb"')
+    // 399cbe83 -> 9caef0ae (2026-09-19, overlay#368). The sweep's clean line was
+    // INFO, which plugin loggers do not emit on the seat, so a healthy seat and
+    // a seat that never swept both printed nothing. WARNING now.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="9caef0ae981f090192b4fa0a5b933b6de83a2202"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

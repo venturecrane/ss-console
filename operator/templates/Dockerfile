@@ -894,7 +894,17 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # permanently unclassified tools would page on every boot of every seat and
 # train us to ignore the instrument. Runtime files: shared/action_classes.py,
 # plugins/hermes-smd-inbound, bootstrap/mcp_registry.py; no tracked twin moves.
-ARG OVERLAY_REF="399cbe83473dd0d3cd5547ad75f30ab41c5e1afb"
+# 2026-09-19d (9caef0ae, overlay #368): the sweep's CLEAN line moves from INFO
+# to WARNING. hermes_plugins.* INFO does not reach the seat's log at all -- the
+# control is the plugin's own unconditional register() line, absent from a
+# captured full boot that held sixteen boot markers -- so a healthy seat printed
+# nothing, exactly like a seat whose sweep never ran, and the instrument could
+# report drift without being able to prove it had looked. WARNING reaches the
+# log and stays below Sentry's ERROR floor, so a healthy seat still pages
+# nobody. Nothing in CI could have caught this: caplog sees records the seat's
+# handlers drop. Runtime file: plugins/hermes-smd-connector-health; not a
+# tracked twin, so only overlayRef moves.
+ARG OVERLAY_REF="9caef0ae981f090192b4fa0a5b933b6de83a2202"
 
 ARG CUSTOMER_SLUG=customer-zero
 
