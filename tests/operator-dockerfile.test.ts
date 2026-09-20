@@ -1372,7 +1372,11 @@ describe('Operator customer Machine Dockerfile', () => {
     // 381441d8 -> 657cb4da (2026-09-19, overlay#366). The sweep the previous
     // pin shipped named 14 unclassified tools on the live seat; all 14 come off
     // the menu. The number is the point: we went in believing it was 2.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="657cb4dac512f634edbf9d9c4ea04e2e32da8a6f"')
+    // 657cb4da -> 399cbe83 (2026-09-19, overlay#367). blocked_tools cannot
+    // exclude a tool the server never declared; the four MCP protocol
+    // primitives are classified instead. The sweep caught the prior pin's fix
+    // failing, which is the second thing it is for.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="399cbe83473dd0d3cd5547ad75f30ab41c5e1afb"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
