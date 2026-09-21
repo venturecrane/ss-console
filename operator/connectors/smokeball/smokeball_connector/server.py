@@ -48,7 +48,7 @@ from .parties import (
     _role_contact_id,
 )
 from .task_update import PROVENANCE_MARK as _PROVENANCE_MARK
-from .task_update import MatterReferenceMismatch
+from .task_update import MatterReferenceMismatch, verify_unless_digest_home
 from .task_update import drop_probe_tasks as _drop_probe_tasks
 from .task_update import merge_task_update
 
@@ -1921,7 +1921,7 @@ def create_memo(matter_id: str, text: str) -> Any:
     stamps the body so a human reading the matter can tell machine from person.
     See the write-side verification block."""
     client = _get_client()
-    _verify_matter_reference(client, matter_id, text)
+    verify_unless_digest_home(_verify_matter_reference, client, matter_id, text)
     return client.request("POST", f"/matters/{matter_id}/memos", json={"text": _stamp(text)})
 
 

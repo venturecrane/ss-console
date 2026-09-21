@@ -135,3 +135,46 @@ def test_does_not_stamp_empty_or_missing() -> None:
 )
 def test_matter_number_pattern(text: str, expected: list[str]) -> None:
     assert sorted(srv._MATTER_NUMBER_RE.findall(text)) == sorted(expected)
+
+
+# ---- The authored digest home may carry other matters' numbers ------------
+
+OPS = "3c191bed-cdda-48b9-a6ed-a51a349f3f94"  # 2026-OPS-001, pilot's digest home
+DIGEST = "Needs a person today. Matter 2026-PI-101: FROG Set One overdue."
+
+
+def _wire(monkeypatch, tmp_path, *, home: str | None, matters: dict[str, dict]) -> None:
+    cfg = tmp_path / "customer.yaml"
+    cfg.write_text(f"digest:\n  home_matter_id: {home}\n" if home else "firm_identity: {}\n")
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(cfg))
+    c = _client(matters)
+    read = c.request  # matter reads must still resolve, or the check fails open
+
+    def request(method, path, *a, **k):
+        if method == "POST" and path.endswith("/memos"):
+            return {"ok": True}  # the POST itself is not under test
+        return read(method, path, *a, **k)
+
+    monkeypatch.setattr(c, "request", request)
+    monkeypatch.setattr(srv, "_get_client", lambda: c)
+
+
+def test_digest_home_memo_may_cite_other_matters(monkeypatch, tmp_path) -> None:
+    """2026-09-21: the firm-wide digest memo on 2026-OPS-001 was refused for
+    citing 2026-PI-101. The authored home is a roll-up by design."""
+    _wire(monkeypatch, tmp_path, home=OPS, matters={OPS: {"id": OPS, "number": "2026-OPS-001"}})
+    srv.create_memo(OPS, DIGEST)
+
+
+def test_same_memo_is_refused_when_no_home_is_authored(monkeypatch, tmp_path) -> None:
+    """The falsifier: without the authored home, the ordinary check still refuses."""
+    _wire(monkeypatch, tmp_path, home=None, matters={OPS: {"id": OPS, "number": "2026-OPS-001"}})
+    with pytest.raises(srv.MatterReferenceMismatch):
+        srv.create_memo(OPS, DIGEST)
+
+
+def test_the_home_exemption_does_not_reach_a_client_matter(monkeypatch, tmp_path) -> None:
+    """Authoring a home exempts that one matter only."""
+    _wire(monkeypatch, tmp_path, home=OPS, matters={M101: {"id": M101, "number": "2026-PI-101"}})
+    with pytest.raises(srv.MatterReferenceMismatch):
+        srv.create_memo(M101, "See matter 2026-PI-106.")
