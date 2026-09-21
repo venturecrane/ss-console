@@ -1382,7 +1382,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // 9caef0ae -> d8bd2d6a (2026-09-21, overlay#370). Code-execution toolsets
     // come off the menu on personas that refuse them; nine refusals on the
     // morning pilot-smokeball hit HARD_STOP were routines reaching for them.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="d8bd2d6aa39984802ede2006ae283228f206b542"')
+    // d8bd2d6a -> 06372981 (2026-09-21, overlay#371). A matter number beside
+    // today's date is no longer refused as an unrecorded pair; the other ten.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="063729814dc0f95dd1f99cc9d85d51720774b719"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
