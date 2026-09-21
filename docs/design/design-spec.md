@@ -1,6 +1,6 @@
 # SMD Services Design Spec
 
-> Design system reference for SMD Services agents. Auto-synced to crane-context.
+> Design system reference for SMD Services agents. This file is the source; it is copied by hand to crane-console `docs/ventures/ss/design-spec.md`, which syncs to crane-context. Update both in the same change.
 > Design Maturity: Tier 1 - Established system with documented tokens, component library, and 7 enforced UI patterns.
 > Last updated: 2026-07-29
 
