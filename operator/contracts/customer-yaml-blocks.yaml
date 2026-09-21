@@ -217,6 +217,27 @@ top_level:
       OPS-OPERATOR-LIBRARY, when no `matter_number` is authored. Changing which
       matter the Operator would create is an edit HERE, in a PR, never a value
       taken from an email.
+  firm_identity:
+    status: implemented
+    materializer: >-
+      no translate step by design, the self_initiation shape: the Smokeball
+      connector reads the block directly off the seat's own
+      /var/lib/smd-config/customer.yaml at render time
+      (smokeball_connector/letterhead.py load_firm_identity) and prints it as
+      the first-page letterhead of letter / demand_letter documents rendered on
+      the starter base.
+    note: >-
+      The firm's letterhead, authored once: `name` (required), `street`,
+      `city_state_zip`, `phone`, `fax`, `website` (each optional; absent is an
+      omitted line, never invented, never a marker). Config printed by tool
+      code, so it never meets the template content gate. Precedence: the firm's
+      own template file for the class wins (its header is kept untouched);
+      else this block on the starter; else no letterhead, reported in
+      formatApplied.letterhead. Not printed on memos or pleadings: a pleading's
+      firm block sits beneath the per-document attorney line in the body.
+      Validated console-side by checkFirmIdentity
+      (src/lib/operator/customer-yaml/sections-firm-identity.ts); the overlay's
+      on-box validator does not inspect unknown top-level blocks.
   vendor_invoice_intake:
     status: implemented
     materializer: >-

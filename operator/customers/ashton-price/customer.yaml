@@ -31,6 +31,22 @@ schema_version: 1
 customer_id: ashton-price
 customer_name: 'Ashton & Price LLP'
 
+# ---- FIRM IDENTITY (the letterhead) ----
+# Printed by the Smokeball connector's renderer, in tool code, as the first-page
+# letterhead of every `letter` / `demand_letter` rendered on the starter base
+# (smokeball_connector/letterhead.py). The model never types these values and
+# the template content gate never sees them. A letterhead template the firm
+# files in its own Document Library under the class's name wins over this block.
+# Verbatim from the firm's own pleading header and retainer letterhead. No
+# attorney name: that varies per document and stays a marker in the drafting.
+firm_identity:
+  name: 'ASHTON & PRICE, LLP'
+  street: '8243 Greenback Lane'
+  city_state_zip: 'Fair Oaks, CA 95628'
+  phone: '(916) 786-7787'
+  fax: '(916) 786-7625'
+  website: 'www.ashtonandprice.com'
+
 # ---- SEAT DESCRIPTOR ----
 # What this seat IS. Kind and product only; lifecycle state is DERIVED from
 # probes of the running system and is deliberately absent here — a state field

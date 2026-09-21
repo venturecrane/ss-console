@@ -25,6 +25,23 @@ seat:
   kind: customer
   product: operator
 
+# ---- FIRM IDENTITY (the letterhead, optional) ----
+# The firm's letterhead, authored ONCE, verbatim from the firm's own letterhead
+# or pleading header. The Smokeball connector's renderer prints it in tool code
+# as the first-page letterhead of `letter` / `demand_letter` documents rendered
+# on the starter base; the model never types it and the template gate never
+# sees it. A letterhead template the firm files in its Document Library under
+# the class's name wins over this block. Only `name` is required; an absent
+# field is an omitted line, never invented. No attorney name (varies per
+# document). Leave commented until the values are read off the firm's paper.
+# firm_identity:
+#   name: '[FIRM NAME exactly as its letterhead prints it]'
+#   street: '[street address]'
+#   city_state_zip: '[City, ST 00000]'
+#   phone: '[telephone as printed]'
+#   fax: '[fax as printed]'
+#   website: '[website as printed]'
+
 # ADR 0022 Stream 1: vertical accepts either bare (legacy back-compat) or
 # pinned form (<vertical>@<semver>). Pin once the vertical pack ships at a
 # stable version. Bare form is fine for pre-launch customer-zero.

@@ -74,6 +74,10 @@ class FormatReport:
     fallbacks: list[str] = field(default_factory=list)
     blocks_styled: dict[str, int] = field(default_factory=lambda: {"labels": 0, "tables": 0, "headings": 0})
     notes: list[str] = field(default_factory=list)
+    #: Where the first page's letterhead came from, for the letter classes:
+    #: ``{"source": "firm_template" | "firm_identity" | "none", "lines": [...],
+    #: "reason": ...}``. None for a class that carries no letterhead.
+    letterhead: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -88,4 +92,5 @@ class FormatReport:
             "fallbacks": sorted(set(d["fallbacks"])),
             "blocksStyled": d["blocks_styled"],
             "notes": d["notes"],
+            "letterhead": d["letterhead"],
         }

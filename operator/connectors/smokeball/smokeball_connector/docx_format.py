@@ -50,6 +50,7 @@ from .docx_format_types import (
     FormatRefused,
     FormatReport,
 )
+from .letterhead import LETTERHEAD_CLASSES, FirmIdentity, apply_letterhead, load_firm_identity
 
 # ---- Document classes and their styling rules --------------------------------
 
@@ -135,14 +136,21 @@ def render_document(
     document_class: str,
     base_bytes: bytes | None,
     report: FormatReport | None = None,
+    firm_identity: FirmIdentity | None = None,
 ) -> tuple[bytes, FormatReport]:
     """Render ``markdown`` for ``document_class`` into ``base_bytes`` (the firm's
-    template) or the stock starter base. Pure: no network, no client."""
+    template) or the stock starter base. Pure: no network, no client.
+
+    ``firm_identity`` is the AUTHORED letterhead (``customer.yaml``
+    ``firm_identity``). It is printed only on the starter and only for the
+    letter classes; a firm's own base keeps whatever header the firm built.
+    See ``letterhead``."""
     if document_class not in CLASS_RULES:
         raise ValueError(f"unknown document_class {document_class!r}; known: {', '.join(DOCUMENT_CLASSES)}")
     rules = CLASS_RULES[document_class]
     report = report or FormatReport(document_class=document_class)
     doc = open_as_base(base_bytes, report)
+    _letterhead(doc, document_class, base_bytes is not None, firm_identity, report)
     writer = _Writer(doc, rules, report)
     for block in g.parse_document(markdown):
         writer.write(block)
@@ -151,6 +159,26 @@ def render_document(
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue(), report
+
+
+def _letterhead(doc, document_class: str, firm_base: bool, identity: FirmIdentity | None, report: FormatReport) -> None:
+    """Decide and record the first page's letterhead for a letter class."""
+    if document_class not in LETTERHEAD_CLASSES:
+        return
+    if firm_base:
+        report.letterhead = {"source": "firm_template", "lines": list(report.base_header_footer_text)}
+        return
+    lines = apply_letterhead(doc, identity) if identity is not None else []
+    if lines:
+        report.letterhead = {"source": "firm_identity", "lines": lines}
+        report.notes.append("letterhead printed on the first page from the firm's authored identity")
+        return
+    reason = (identity.source if identity is not None else "") or "firm_identity not authored in customer.yaml"
+    report.letterhead = {"source": "none", "lines": [], "reason": reason}
+    report.notes.append(
+        f"no letterhead: the firm has no template file for this class and {reason}; "
+        "the firm authors firm_identity once, or files its own letterhead template"
+    )
 
 
 class _Writer:
@@ -443,6 +471,7 @@ __all__ = [
     "FormatRefused",
     "FormatReport",
     "has_style",
+    "load_firm_identity",
     "open_as_base",
     "render_document",
     "usable_paragraph_style",
