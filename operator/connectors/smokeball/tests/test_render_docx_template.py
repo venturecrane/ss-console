@@ -171,6 +171,72 @@ def test_gate_refuses_a_nested_marker() -> None:
     assert "marker-syntax" in [v.rule for v in violations]
 
 
+# ---- The gate: a FILL names its source (the 2026-09-21 library defect) ------
+
+
+@pytest.mark.parametrize(
+    ("marker", "problem"),
+    [
+        ("{{FILL: plaintiff's name}}", "no '| source' segment"),
+        ("{{FILL}}", "no '| source' segment"),
+        ("{{fill: plaintiff's name}}", "no '| source' segment"),
+        ("{{FILL: plaintiff's name |   }}", "empty source"),
+        ("{{FILL: | matter contacts}}", "names no value"),
+    ],
+)
+def test_gate_refuses_a_fill_marker_without_its_source(marker: str, problem: str) -> None:
+    """Two library templates filed live with 93 FILL markers and not one
+    source between them, though the skill said the source segment is not
+    optional. A FILL that does not say where the value comes from is a blank a
+    filler will answer from plausibility, so the rule is mechanical now."""
+    with pytest.raises(TemplateContentRefused) as exc:
+        check_template_content(f"# Demand\n\nThis firm represents {marker}.\n")
+    (violation,) = exc.value.violations
+    assert violation.rule == "fill-source"
+    assert violation.line == 3
+    assert problem in violation.detail
+    assert marker in violation.detail
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "{{FILL: plaintiff's name | matter contacts}}",
+        # the first '|' splits; a source naming alternatives is still a source
+        "{{FILL: adjuster | claim correspondence | carrier letters}}",
+        # the shipped skeleton legends escape the pipe inside a table cell
+        "{{FILL: what goes here \\| source}}",
+        # the other marker kinds name what to check, not where a value lives
+        "{{NOT IN RECORD: carrier claim number, searched claim correspondence}}",
+        "{{ATTORNEY: confirm settlement authority before transmission}}",
+        "{{ATTORNEY: decision reserved}}",
+        # a word that merely starts with the letters is not a FILL marker
+        "{{FILLER PARAGRAPH: firm boilerplate}}",
+    ],
+)
+def test_gate_passes_sourced_fills_and_the_sourceless_marker_kinds(marker: str) -> None:
+    """The falsifier the other way. If NOT IN RECORD or ATTORNEY needed a
+    source, every real skeleton would refuse; ATTORNEY appears in live output
+    and is a reservation, not a value to look up."""
+    assert find_violations(f"Line: {marker}\n") == []
+
+
+def test_fill_source_rule_reports_one_violation_per_line() -> None:
+    """A row of sourceless markers is one thing to fix, like a row of figures."""
+    violations = find_violations("{{FILL: a}} and {{FILL: b}}\n{{FILL: c}}\n")
+    assert [(v.rule, v.line) for v in violations] == [("fill-source", 1), ("fill-source", 2)]
+
+
+def test_fill_source_rule_is_template_only() -> None:
+    """A filled draft's leftover markers belong to the drafting checker (its MI
+    finding), not to the draft gate: the draft gate must not start refusing
+    Word delivery over a marker the attorney will see anyway."""
+    from smokeball_connector.render import find_draft_violations
+
+    assert find_draft_violations("Signed by {{FILL: signing attorney}}.\n") == []
+    assert _rules("Signed by {{FILL: signing attorney}}.\n") == ["fill-source"]
+
+
 def test_unclosed_marker_does_not_hide_the_case_content_after_it() -> None:
     """An unterminated '{{' yields no span. If it swallowed the rest of the
     document as one giant marker, the defect being reported would conceal every

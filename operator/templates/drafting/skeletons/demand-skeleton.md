@@ -6,7 +6,7 @@ Firm template. Fixed structure and boilerplate; case-specific content is filled 
 
 ## How to use this skeleton
 
-Fill every `{{FILL: ...}}` marker from the matter record named in the marker. Do not delete a section because the record is thin. If the record does not establish the fact, mark it and move on.
+Fill every `{{FILL: what goes here | source}}` marker from the matter record named in the marker. Do not delete a section because the record is thin. If the record does not establish the fact, mark it and move on.
 
 **Marker legend (applies to every section):**
 

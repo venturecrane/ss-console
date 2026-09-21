@@ -55,7 +55,7 @@ export const SKILL_SUMMARIES: Record<string, string> = {
   'discovery-served-watch':
     'Spots served discovery, reads the service date, and surfaces the deadline input for attorney confirmation. Never computes the deadline.',
   'document-library-establishment':
-    'Surveys the documents your firm writes and proposes a library of templates, then builds only what you bless. Admin only. Case detail stays a visible marker, never filled in.',
+    "Finds your firm's own example of each kind of document and proposes a template for each, then builds only what you bless. Admin only. Case detail stays a visible marker.",
   'document-receipt-logger':
     'Logs an inbound document against the right matter and drafts a receipt entry. Records arrival, never interprets contents.',
   'email-reply':

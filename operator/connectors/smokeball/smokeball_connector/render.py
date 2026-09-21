@@ -5,7 +5,7 @@ Two halves, both deliberately mechanical:
 1. **The content gate** (:func:`check_template_content`) — a pure function over
    the markdown, unit-testable without a network or a document object. It
    REFUSES; it never strips, repairs, or downgrades. What it refuses is not a
-   style opinion, it is the four ways a *template* stops being a template:
+   style opinion, it is the five ways a *template* stops being a template:
 
    - **Case content outside a ``{{...}}`` marker.** A template carries
      structure, not a case, and content that reaches a template reaches every
@@ -41,6 +41,19 @@ Two halves, both deliberately mechanical:
    - **Malformed marker syntax** — an unbalanced ``{{`` or ``}}``, or an empty
      marker. A marker that does not close is not a marker; it is a sentence
      fragment that a filler will read as prose and quietly answer.
+   - **A FILL marker that does not name its source** — ``{{FILL: <what> |
+     <source>}}`` is the whole convention, and a ``{{FILL}}`` with no ``|``, an
+     empty source after the ``|``, or nothing before it is refused. A FILL that
+     does not say where the value comes from is a blank the filler will answer
+     from memory or plausibility. The skill has always said the source segment
+     "is not optional"; on 2026-09-21 two templates filed with 93 FILL markers
+     and not one source between them while a third, built the same afternoon,
+     carried all 57 of its sources. Prose had lost that rule once, so it is
+     mechanical here. ``{{NOT IN RECORD: ...}}``, ``{{ATTORNEY: ...}}`` and the
+     other marker kinds carry no source by design and are unaffected: a
+     reservation or a gap names what to check, not where a value lives. This
+     rule is TEMPLATE-only; a filled draft's leftover markers are the drafting
+     checker's (its MI finding), not this gate's.
    - **An em dash.** Banned in shipped copy by house style, and by drafting
      discipline rule 7 ("No em dashes") for every draft this template produces.
    - **An HTML comment.** Drafting gate 9 (visible-delta rule): a reservation or
@@ -171,6 +184,7 @@ def find_violations(markdown: str) -> list[Violation]:
     line_starts = _line_starts(markdown)
     spans, violations = _scan_markers(markdown, line_starts)
     exempt = spans + _comment_spans(markdown)
+    violations.extend(_fill_source_violations(markdown, spans, line_starts))
     violations.extend(_case_content_violations(markdown, exempt, line_starts))
     violations.extend(_literal_violations(markdown, line_starts))
     return sorted(violations, key=lambda v: (v.line, v.rule))
@@ -340,6 +354,63 @@ def _scan_markers(text: str, line_starts: list[int]) -> tuple[list[tuple[int, in
         spans.append((open_at, end + 2))
         i = end + 2
     return spans, violations
+
+
+# A FILL marker's head. Case-insensitive and word-bounded: ``{{fill: x}}`` is
+# the same instruction to a filler and is held to the same rule, while a
+# marker that merely starts with the letters (``{{FILLER ...}}``) is not one.
+_FILL_HEAD_RE = re.compile(r"\s*FILL\b", re.IGNORECASE)
+
+
+def _fill_source_violations(text: str, spans: list[tuple[int, int]], line_starts: list[int]) -> list[Violation]:
+    """Every ``{{FILL ...}}`` marker that does not carry ``<what> | <source>``.
+
+    Three ways to fail, one rule: no ``|`` at all, nothing after it, or nothing
+    before it. The split is on the FIRST ``|``, so a source that itself names
+    alternatives ("matter contacts | intake notes") passes, and a markdown
+    table's escaped pipe (``\\|``) still counts as the separator, since that is
+    how the shipped skeleton legends write the convention inside a table cell.
+
+    One violation per offending LINE, like the case-content rule: a row of
+    sourceless markers is one thing to fix. A nested marker is skipped here
+    because the syntax rule already refused it and its inner text is not a
+    marker anyone can read."""
+    out: list[Violation] = []
+    seen: set[int] = set()
+    for start, end in spans:
+        inner = text[start + 2 : end - 2]
+        head = _FILL_HEAD_RE.match(inner)
+        if head is None or "{{" in inner:
+            continue
+        rest = inner[head.end() :]
+        what_part, sep, source = rest.partition("|")
+        what = what_part.strip().lstrip(":").strip().rstrip("\\").strip()
+        if not sep:
+            problem = "has no '| source' segment"
+        elif not source.strip():
+            problem = "has an empty source after the '|'"
+        elif not what:
+            problem = "names no value before the '|'"
+        else:
+            continue
+        line = _line_of(line_starts, start)
+        if line in seen:
+            continue
+        seen.add(line)
+        marker = text[start:end]
+        if len(marker) > _SNIPPET_CHARS:
+            marker = marker[:_SNIPPET_CHARS] + "..."
+        out.append(
+            Violation(
+                "fill-source",
+                line,
+                f"FILL marker {marker!r} {problem}. Every FILL names where the filler "
+                "finds the value, e.g. {{FILL: plaintiff's name | matter contacts}}; "
+                "a FILL with no source is a blank a filler will quietly answer. "
+                "If the record may simply not hold it, use {{NOT IN RECORD: ...}}",
+            )
+        )
+    return out
 
 
 def _comment_spans(text: str) -> list[tuple[int, int]]:

@@ -6,7 +6,7 @@ Firm template for responses to inspection demands, interrogatories, and requests
 
 ## How to use this shell
 
-Fill every `{{FILL: ...}}` marker from the matter record named in the marker. Objections are drafted as candidates and are resolved by the responding attorney before service.
+Fill every `{{FILL: what goes here | source}}` marker from the matter record named in the marker. Objections are drafted as candidates and are resolved by the responding attorney before service.
 
 **Marker legend (applies to every section):**
 
@@ -200,7 +200,7 @@ I am the `{{FILL: party designation, for example "plaintiff" | operative pleadin
 
 I declare under penalty of perjury under the laws of the State of California that the foregoing is true and correct.
 
-Executed on `{{FILL: left blank for the client to complete at signing}}`, at `{{FILL: city, left blank for the client to complete at signing}}`, California.
+Executed on `{{FILL: date of execution, left blank | the client, at signing}}`, at `{{FILL: city of execution, left blank | the client, at signing}}`, California.
 
 ---
 

@@ -153,6 +153,96 @@ describe('setup-turn reply rules are pinned in skill prose', () => {
     })
   })
 
+  // The 2026-09-21 library defect. Asked to set up the document library, the
+  // seat sampled five matters, found one firm document type, and proposed only
+  // that; filed a fee agreement as the `letter` class template (so it became
+  // the format base for every client letter); filed two templates whose FILL
+  // markers named no source; checked nothing past read-back; and rebuilt one
+  // class three times without saying so. Each rule below is the prose half of
+  // that fix; the FILL-source and class-name halves are mechanical in the
+  // render tool (operator/connectors/smokeball, test_render_docx_template.py
+  // and test_library_resolution.py).
+  describe('document-library-establishment covers every class, each from its own exemplars', () => {
+    // Read the class list from the renderer, never from a copy in this test,
+    // so a class added to the renderer fails here until the skill names it.
+    const rendererClasses = (() => {
+      const src = readFileSync(
+        resolve('operator/connectors/smokeball/smokeball_connector/docx_format.py'),
+        'utf-8'
+      )
+      const tuple = src.match(/^DOCUMENT_CLASSES = \(([\s\S]*?)\)/m)
+      if (!tuple) throw new Error('DOCUMENT_CLASSES tuple not found in docx_format.py')
+      return [...tuple[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1])
+    })()
+
+    it('reads six classes out of the renderer (sanity)', () => {
+      expect(rendererClasses.length).toBe(6)
+    })
+
+    it('names every class the renderer knows', () => {
+      const text = flat('document-library-establishment')
+      const missing = rendererClasses.filter((c) => !text.includes(`\`${c}\``))
+      expect(
+        missing,
+        'the skill must name every document class the render tool accepts, so a proposal ' +
+          'reports each one rather than only the kinds a sample happened to surface'
+      ).toEqual([])
+    })
+
+    it('makes class coverage the goal and reports every class', () => {
+      const text = flat('document-library-establishment')
+      expect(text).toContain(
+        'The goal is one template per document class the drafting renderer knows'
+      )
+      expect(text).toContain('The class coverage, every class, one line each')
+      expect(text).toContain("the tool's list governs")
+      expect(text, 'the old sample-driven rule must be gone').not.toContain(
+        'The types come from the documents, not from a list'
+      )
+    })
+
+    it('derives a class template only from exemplars of that class', () => {
+      const text = flat('document-library-establishment')
+      expect(text).toContain('a class template is derived only from exemplars of that class')
+      expect(text).toContain('Derive a class template only from that class')
+      expect(text).toContain('additional template under its own name')
+      expect(text).toContain('reference skeleton')
+    })
+
+    it('never infers "not applicable" from an empty search', () => {
+      expect(flat('document-library-establishment')).toContain(
+        'Only when the admin has said this firm does not write that class'
+      )
+    })
+
+    it('plans around the matter-mixing fence and never routes around it', () => {
+      const text = flat('document-library-establishment')
+      expect(text).toContain('The matter-mixing fence')
+      expect(text).toContain('Do not retry it, and do not route around it')
+      expect(text).toContain('new conversation')
+    })
+
+    it('self-checks each template against its exemplars before calling it clean', () => {
+      const text = flat('document-library-establishment')
+      expect(text).toContain('Check each template against its exemplars')
+      expect(text).toContain('filed with findings')
+      expect(text).toContain('outside the markers')
+    })
+
+    it('tells the agent the FILL source is now enforced by the tool', () => {
+      expect(flat('document-library-establishment')).toContain(
+        'the render tool now refuses a FILL without one'
+      )
+    })
+
+    it('reports earlier versions on a rebuild and deletes nothing', () => {
+      const text = flat('document-library-establishment')
+      expect(text).toContain('earlier versions')
+      expect(text).toContain('nothing was deleted')
+      expect(text).toContain('Never delete, rename, or overwrite')
+    })
+  })
+
   describe('operator-self-initiation status board speaks to the firm', () => {
     it('forbids naming the machinery in the reply', () => {
       expect(
