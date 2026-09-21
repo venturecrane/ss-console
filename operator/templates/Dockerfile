@@ -904,7 +904,15 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # nobody. Nothing in CI could have caught this: caplog sees records the seat's
 # handlers drop. Runtime file: plugins/hermes-smd-connector-health; not a
 # tracked twin, so only overlayRef moves.
-ARG OVERLAY_REF="9caef0ae981f090192b4fa0a5b933b6de83a2202"
+# 2026-09-21 (d8bd2d6a, overlay #370; also carries #369, a comment fix):
+# translate disables the terminal, code_execution and delegation toolsets on
+# any persona whose code_execution exposure is not autonomous. Those tools are
+# refused there by construction, yet were offered, and nine of the refusals
+# pilot-smokeball logged on the morning it hit HARD_STOP (refusal cascade, 20
+# in 30 minutes) were routines reaching for them. No seat authors
+# code_execution, so what can run is unchanged. Runtime file:
+# bootstrap/translate.py; not a tracked twin, so only overlayRef moves.
+ARG OVERLAY_REF="d8bd2d6aa39984802ede2006ae283228f206b542"
 
 ARG CUSTOMER_SLUG=customer-zero
 

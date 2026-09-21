@@ -1379,7 +1379,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // 399cbe83 -> 9caef0ae (2026-09-19, overlay#368). The sweep's clean line was
     // INFO, which plugin loggers do not emit on the seat, so a healthy seat and
     // a seat that never swept both printed nothing. WARNING now.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="9caef0ae981f090192b4fa0a5b933b6de83a2202"')
+    // 9caef0ae -> d8bd2d6a (2026-09-21, overlay#370). Code-execution toolsets
+    // come off the menu on personas that refuse them; nine refusals on the
+    // morning pilot-smokeball hit HARD_STOP were routines reaching for them.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="d8bd2d6aa39984802ede2006ae283228f206b542"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
