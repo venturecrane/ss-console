@@ -13,7 +13,7 @@ description: >-
   visible marker that names its source. It reports a template delivered only after reading the
   filed document back and checking it against its exemplars. Firm-level establishment is refused
   for anyone who is not an Operator admin.
-version: 0.5.0
+version: 0.6.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -332,6 +332,25 @@ is. Where you observed the firm's own typography in the exemplars (font, spacing
 look), report it as an observation for the admin, never as something you will impose: the
 starter is a starting point, the firm's Word edit is the authority.
 
+**The letterhead is never yours to write, and never a marker.** For the `letter` and
+`demand_letter` classes the first page's letterhead comes from exactly one of two places,
+both outside the skeleton: **the firm's own template file** for the class (its header is kept
+exactly as the firm built it), or, on the starter, **the firm's authored identity**
+(`firm_identity` in the seat's customer.yaml: name, street, city/state/zip, telephone, fax,
+website), which the render tool prints into the starter's first-page header in tool code.
+So the skeleton carries no letterhead at all: do not type the firm's name block, address,
+telephone, fax or website at the top of a letter skeleton, and do not replace it with a
+`{{FILL: firm letterhead | ...}}` marker. Typed, the address and telephone digits are refused
+by the content gate; markered, every letter carries a blank where the letterhead belongs;
+either way a template's body is cleared each time it is used as a draft's base, so only the
+header survives. Read `formatApplied.letterhead` off the render's return and report it:
+`firm_template` (the firm's file supplied it), `firm_identity` (printed from the authored
+identity), or `none`, which the report states plainly as "no letterhead: the firm has no
+letterhead template for this class and no firm identity is authored", so the admin can
+either drop the firm's letterhead file into the folder or have the identity authored.
+Pleadings are different and unchanged: a pleading's attorney and firm block sits in the body
+beneath the signing attorney's name and bar number, and it stays content in the skeleton.
+
 **The storage location.** Propose a new folder, suggested name **"Document Library"**. Where it
 lives has exactly two answers, and which one you are in is decided by the seat's configuration,
 never by your judgment about a matter.
@@ -493,8 +512,10 @@ last check. A template that carries one case's plaintiff into every future matte
 failure this rule exists to prevent, and it is invisible to every mechanical control on the
 path.
 
-The firm's own name, the firm's letterhead, and the firm's fixed language are **not** case
-content and stay. A staff signature block is a judgment call the admin can make: propose it as
+The firm's own name and the firm's fixed language are **not** case content and stay. The
+firm's letterhead is not case content either, but it does not go in a letter skeleton at
+all: it comes from the firm's template file or its authored identity (step 3, "The letterhead
+is never yours to write"). A staff signature block is a judgment call the admin can make: propose it as
 a marker (`{{FILL: signing attorney | matter record}}`) unless the exemplars show one person
 signs that document class always, and say which you chose.
 
@@ -512,7 +533,9 @@ bytes you never saw. `file_name` gains a `.docx` suffix if it lacks one, and the
 **A class template passes its `document_class`.** With the class the tool renders the skeleton
 onto the class starter (the named styles defined, Times New Roman 12, a page number in the
 footer) or, when the library already holds a template for that class, INTO that file, keeping
-its letterhead and styles; the return carries `formatApplied` saying which.
+its letterhead and styles; the return carries `formatApplied` saying which. For `letter` and
+`demand_letter` on the starter the tool also prints the firm's authored identity as the
+first-page letterhead; `formatApplied.letterhead` says whether it did (step 3).
 
 **The class's template has exactly one name, and the tool tells you what it is.** The return
 carries `formatApplied.classTemplateName`, the name the renderer will look for when it drafts
@@ -631,6 +654,9 @@ Per template, in the admin's own terms:
   rendered onto the starter, so the admin can open it in Word, adjust the styles, and every
   future draft of that class follows; or rendered into the firm's own file, named) or an
   additional reference template (no format role),
+- for `letter` and `demand_letter`, the **letterhead** from `formatApplied.letterhead`: the
+  firm's own template file, printed from the firm's authored identity, or none (and then say
+  so plainly, with the two ways the firm can supply one),
 - the **exemplars it was derived from**, by name and matter,
 - **confirmed by read-back**, **filed and awaiting materialization**, or **filed, read-back
   refused by the seat's matter fence**, in those words,

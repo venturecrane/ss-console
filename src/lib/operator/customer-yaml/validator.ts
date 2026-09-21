@@ -63,6 +63,7 @@ import { checkEscalation } from './sections-escalation'
 import { checkSendPolicy } from './sections-send-policy'
 import { checkCredentialCustodyDefault } from './sections-connectors'
 import { checkGmailPush } from './sections-gmail-push'
+import { checkFirmIdentity } from './sections-firm-identity'
 import { checkTelegram } from './sections-telegram'
 import { checkObservability } from './sections-observability'
 import { checkVoiceCohorts } from './sections-voice'
@@ -286,6 +287,7 @@ function validateSections(
   const scope = checkScope(root, errors)
   checkTelegram(root, errors) // optional telegram block; validate-only (ADR 0033)
   checkGmailPush(root, errors) // optional gmail_push block; validate-only
+  checkFirmIdentity(root, errors) // optional firm_identity (letterhead); validate-only
   const escalation = checkEscalation(root, errors)
   const sendPolicy = checkSendPolicy(root, errors)
   const memory = checkMemory(root, customerId, verticalResult.vertical, errors)

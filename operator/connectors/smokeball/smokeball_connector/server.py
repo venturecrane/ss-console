@@ -1429,7 +1429,7 @@ def file_attachment_to_matter(matter_id: str, download_url: str, file_name: str,
 def _render_with_format(markdown: str, document_class: str | None) -> tuple[bytes, dict[str, Any] | None, str | None]:
     """Shared by both render tools. Returns ``(bytes, formatApplied, refusal)``;
     on a refusal ``bytes`` is empty and nothing must be uploaded."""
-    from .docx_format import DOCUMENT_CLASSES, FormatRefused, FormatReport, render_document
+    from .docx_format import DOCUMENT_CLASSES, FormatRefused, FormatReport, load_firm_identity, render_document
     from .library import NotResolved, load_library_config, resolve_template
     from .render import render_markdown_to_docx
 
@@ -1456,7 +1456,10 @@ def _render_with_format(markdown: str, document_class: str | None) -> tuple[byte
             "sha256": hashlib.sha256(resolved.bytes).hexdigest(),
         }
     try:
-        data, report = render_document(markdown, document_class, base, report)
+        # The letterhead is AUTHORED config printed by code, never model text,
+        # so it never meets the content gate. render_document applies it only
+        # on the starter; a firm's own base keeps the header the firm built.
+        data, report = render_document(markdown, document_class, base, report, firm_identity=load_firm_identity())
     except FormatRefused as exc:
         return b"", report.to_dict(), f"format refused: {exc}"
     return data, report.to_dict(), None
@@ -1545,6 +1548,14 @@ def render_docx_template(
     or starter, ``templateExpected``, fallbacks, the template's header/footer
     text): state it honestly in the delivery note. Omit ``document_class`` for
     the legacy stock render, unchanged.
+
+    **Letterhead is never yours to write.** For ``letter`` and ``demand_letter``
+    the first page's letterhead comes from the firm's own template file when
+    one resolves, else from the firm's AUTHORED identity (``firm_identity`` in
+    customer.yaml), printed by this tool into the starter's first-page header.
+    Do not type the firm's name, address, telephone, fax or website as a
+    letterhead, and do not marker one: ``formatApplied.letterhead`` says which
+    source applied, or that neither exists, and that is what the report states.
 
     **The class's template has ONE name, and this tool enforces it.** With a
     ``document_class``, ``formatApplied.classTemplateName`` is the name the
@@ -1770,6 +1781,14 @@ def render_docx_draft(
     or starter, ``templateExpected``, fallbacks, the template's header/footer
     text): state it honestly in the delivery note. Omit ``document_class`` for
     the legacy stock render, unchanged.
+
+    **Letterhead is never yours to write.** For ``letter`` and ``demand_letter``
+    the first page's letterhead comes from the firm's own template file when
+    one resolves, else from the firm's AUTHORED identity (``firm_identity`` in
+    customer.yaml), printed by this tool into the starter's first-page header.
+    Do not type the firm's name, address, telephone, fax or website as a
+    letterhead, and do not marker one: ``formatApplied.letterhead`` says which
+    source applied, or that neither exists, and that is what the report states.
 
     Classified INTERNAL_WRITE at the overlay: the Operator saving its own work
     product into the firm's record. Nothing leaves the firm; delivery to anyone
