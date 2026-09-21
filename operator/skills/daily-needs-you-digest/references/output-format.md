@@ -65,8 +65,16 @@ event for it, by another skill, whose age is within the firm's
 `escalation.refire_days` window. Render it as:
 
 ```markdown
-- <matter> (<matter id>) — <item>: under active escalation by <owning skill> (last raised <date>).
+- <matter> (<matter id>) — <item>: under active escalation by <owning skill>.
 ```
+
+The pointer carries **no date from the ledger**. The ledger is the Operator's own
+record of what it sent, not the firm's record, and the identifier gate certifies
+dates only from the firm's system of record. A "last raised <date>" copied from
+the ledger is refused on every write, and the retries count toward the seat's
+refusal brake: on 2026-09-21 pilot-smokeball's digest drafted the memo nine
+times, and the seven that carried ledger dates were all refused. The owning
+skill already tells the reader when it raised the item.
 
 The pointer is a pure surface line. The digest reads the ledger; it never writes
 it and never acts on the item.
