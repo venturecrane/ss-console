@@ -912,7 +912,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # in 30 minutes) were routines reaching for them. No seat authors
 # code_execution, so what can run is unchanged. Runtime file:
 # bootstrap/translate.py; not a tracked twin, so only overlayRef moves.
-ARG OVERLAY_REF="d8bd2d6aa39984802ede2006ae283228f206b542"
+# 2026-09-21b (06372981, overlay #371): the identifier gate's ambient-date
+# exemption now covers a (matter number, today) pair, not only the bare date.
+# The escalator's "alert fired on <today>. Matter <n> ..." memos were refused as
+# a pair no record could hold: ten of the twenty refusals behind that morning's
+# HARD_STOP. Runtime file: plugins/hermes-smd-trust/outbound.py; not a tracked
+# twin, so only overlayRef moves.
+ARG OVERLAY_REF="063729814dc0f95dd1f99cc9d85d51720774b719"
 
 ARG CUSTOMER_SLUG=customer-zero
 
