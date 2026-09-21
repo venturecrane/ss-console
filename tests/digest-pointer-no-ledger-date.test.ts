@@ -40,3 +40,16 @@ describe('daily-needs-you-digest escalation pointer', () => {
     expect(line).not.toMatch(/<date>/)
   })
 })
+
+// The digest's own rules say "No em dashes anywhere" and the outbound gate's
+// fabrication filter refuses a memo carrying one, yet every template line the
+// model copies used them: on 2026-09-21 two digest memos were refused on the
+// em dash alone. The skill must not model the character it forbids.
+describe('daily-needs-you-digest skill text carries no em dash', () => {
+  for (const file of ['SKILL.md', 'references/output-format.md', 'references/voice.md']) {
+    it(file, () => {
+      const text = readFileSync(`operator/skills/daily-needs-you-digest/${file}`, 'utf8')
+      expect(text).not.toContain('—')
+    })
+  }
+})
