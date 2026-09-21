@@ -25,7 +25,7 @@ metadata:
     action_class: read + internal_write # reads matters/tasks/dates; writes the digest (and a heartbeat row on a quiet tick) to the firm-internal surface. No send, no chase, no close.
     content_ceiling: surface_only # MAY aggregate/summarize/point; MUST NOT act on an item, decide a legal next step, or produce work product
     connectors:
-      - smokeball # PracticeManagement — open matters, tasks + due dates, events/deadlines, the tracked items the owning skills created (read)
+      - smokeball # PracticeManagement - open matters, tasks + due dates, events/deadlines, the tracked items the owning skills created (read)
     # No Email/Calendar-send connector: this skill produces an internal digest for
     # the firm. It never sends and never acts on the items it lists. Near dates come
     # from Smokeball's native tasks (due_date) and events; if a mail/calendar binding
@@ -46,7 +46,7 @@ every time an item moves; it needs one honest list of the few things that genuin
 need a human today, and silence about everything that does not. This skill is that
 list and that silence.
 
-## Pure surface — it never acts on an item (READ THIS)
+## Pure surface - it never acts on an item (READ THIS)
 
 This is a **read-and-summarize** skill. It **takes no action on any item it lists.**
 It does not chase the signer, close a verification, compute or move a deadline, send
@@ -67,7 +67,7 @@ It never recomputes a deadline, never re-decides what needs verifying, and never
 prescribes what a matter should do next. Surfacing that an item needs a person is
 connective work; deciding what to do about it is the person's.
 
-## Quiet by design — a quiet day is a quiet digest
+## Quiet by design - a quiet day is a quiet digest
 
 The whole point is to reduce noise, so the skill is disciplined about what it emits:
 
@@ -83,7 +83,7 @@ The whole point is to reduce noise, so the skill is disciplined about what it em
   (reuse `stalled-matter-nudge`'s waiting-vs-stalled logic). Waiting items are not
   surfaced as needing attention.
 
-## Anti-fiction — every line traces to a real record
+## Anti-fiction - every line traces to a real record
 
 Every item in the digest traces to a real open record read from Smokeball: a task
 with a due date, a tracked verification item, a deadline task/event, an open chase
@@ -125,13 +125,13 @@ imposed defaults). Until authored, the skill treats the windows as unset and ask
 rather than guessing. Once authored, an item is surfaced only if it is **in band** AND
 **not legitimately waiting**:
 
-- **Due soon** — an open task whose `due_date` is within the firm's due-soon window.
-- **Unsigned** — a tracked verification (or other signature) item still open past
+- **Due soon** - an open task whose `due_date` is within the firm's due-soon window.
+- **Unsigned** - a tracked verification (or other signature) item still open past
   preparation, owned by its chase skill.
-- **Deadline near** — a response, compel, motion, hearing, or SOL date within the
+- **Deadline near** - a response, compel, motion, hearing, or SOL date within the
   firm's near window (read from the task/event the deadline lane wrote; never computed
   here).
-- **Stalled** — an open item past its expected cadence with no movement (last-activity
+- **Stalled** - an open item past its expected cadence with no movement (last-activity
   older than the firm's stalled threshold), and not waiting on a future due date.
 
 ## How to Run
@@ -147,12 +147,12 @@ hermes run daily-needs-you-digest --status open   # scope (open matters by defau
 Two phases. The per-matter fetch uses the governed connector tools directly; the band
 logic and the sectioning stay in the agent's reasoning loop.
 
-### Phase 1 — Fetch (mediated connector reads)
+### Phase 1 - Fetch (mediated connector reads)
 
 **Do NOT run the fetch through `execute_code`.** The `code_execution` action class is
-unauthorable on customer seats holding gateway credentials (the #1841 custody guard —
+unauthorable on customer seats holding gateway credentials (the #1841 custody guard -
 ss #1917), so that path is REFUSED. The fetch is the same reads, made as ordinary
-governed tool calls — live-proven on the 2026-07-15 scheduled run, which produced a
+governed tool calls - live-proven on the 2026-07-15 scheduled run, which produced a
 complete digest this way.
 
 Enumerate open matters (`list_matters`, filtered by `--status`), then per matter pull
@@ -169,10 +169,10 @@ the failure is surfaced, not hidden.
 
 Per-matter reads land in context, so keep each read tight (open tasks and in-window
 events only, never full documents). If a firm's matter count ever makes per-matter
-reads untenable, that is the ss #1917 batch-fetch design conversation — do not reach
+reads untenable, that is the ss #1917 batch-fetch design conversation - do not reach
 for `execute_code` as the workaround.
 
-### Phase 2 — Reason (agent, in-context)
+### Phase 2 - Reason (agent, in-context)
 
 Per `references/output-format.md`:
 
@@ -191,13 +191,13 @@ Per `references/output-format.md`:
    shared): a short note per item on what needs doing, why it matters (the governing
    rule where the owning step has one), which step owns it, and when to bring the
    attorney in. Short; explanatory, not advisory.
-4. **Write the digest** to the firm's internal digest home — the matter your
+4. **Write the digest** to the firm's internal digest home - the matter your
    SOUL's "Digest home" section names (materialized from the seat's authored
    `digest.home_matter_id`, #1742): the full digest text goes there as one
    `create_memo`. No imposed default: if your SOUL has no Digest home section,
-   the seat has not authored one — the digest exists in this run's output plus
+   the seat has not authored one - the digest exists in this run's output plus
    the heartbeat row, and the run output says so explicitly. Internal only. **Attempt this run's write fresh, every
-   run:** a prior run's write failure is history, not this run's truth — never
+   run:** a prior run's write failure is history, not this run's truth - never
    report a write as denied unless THIS run's attempt was denied, and quote
    this run's literal error when it is.
 
@@ -259,15 +259,15 @@ guess a window and do not manufacture a digest.
 
 ## References
 
-- `references/output-format.md` — the two shapes (the batched digest; the quiet-day
+- `references/output-format.md` - the two shapes (the batched digest; the quiet-day
   digest), the section order, the per-item line format, the owning-skill pointer
-- `references/voice.md` — internal, crisp, factual; points without prescribing; never
+- `references/voice.md` - internal, crisp, factual; points without prescribing; never
   manufactures urgency; no em dashes
-- `tests/selector_test.md` — blind cross-skill selector simulation vs. its near
+- `tests/selector_test.md` - blind cross-skill selector simulation vs. its near
   neighbors (`matter-status-digest`, the owning chase skills, `deadline-miss-escalator`)
-- `_shared-training-output.md` (pack shared) — the training-note property every line
+- `_shared-training-output.md` (pack shared) - the training-note property every line
   carries
-- `escalation_ledger.py` — the shared ledger module (byte-identical to
+- `escalation_ledger.py` - the shared ledger module (byte-identical to
   `operator/workspace_broker/escalation_ledger.py`), read-only here: it tells the
   digest which items are already under active escalation so they collapse to a
   one-line pointer. Do not edit the copy; edit the canonical and restamp.
@@ -285,7 +285,7 @@ tasks). Write the FIRST draft citation-free; do not write a cited draft and
 wait for the gate to teach you.
 
 Three more first-draft rules, same rationale (the gates enforce them; a
-refusal is a stalled deliverable and a full-context redraft — write it right
+refusal is a stalled deliverable and a full-context redraft - write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.

@@ -1,10 +1,10 @@
-# Daily Needs-You Digest — Voice
+# Daily Needs-You Digest - Voice
 
 One voice: internal, to the firm. There is no client-facing or outbound draft here,
 because this skill sends nothing and acts on nothing. The digest is read by the
 principal and the paralegals; it is the "what needs me today" note.
 
-## The digest (to the firm — internal)
+## The digest (to the firm - internal)
 
 Crisp, factual, scannable. It states what needs a person, the sourced date or age, and
 who owns the next step. It reads like a competent colleague handing you the short list
@@ -39,10 +39,10 @@ not a gap to fill.
 
 ## Examples
 
-**Good — an item line (Shape A):**
+**Good - an item line (Shape A):**
 
-> <matter number> (<matter id, first 4 and last 4>) — interrogatory verification, sent
-> <date as the record prints it>, unsigned (<age>) — owns: client-verification-tracker.
+> <matter number> (<matter id, first 4 and last 4>) - interrogatory verification, sent
+> <date as the record prints it>, unsigned (<age>) - owns: client-verification-tracker.
 
 Placeholders, not sample values, and this line is why. It previously read
 "Reyes v. Doe (7a11...5001) - interrogatory verification, sent 2026-06-14,
@@ -58,19 +58,19 @@ system names matters by number (the escalator's digest renders "matter
 2026-PI-101"), and a caption in client-adjacent output is refused by the
 citation gate. The old example taught the one form the substrate rejects.
 
-**Good — a quiet day (Shape B):**
+**Good - a quiet day (Shape B):**
 
 > Nothing needs a person today across 3 open matters. Waiting/on-track items are not
 > listed.
 
-**Bad — acts on the item (surface skill must never act):**
+**Bad - acts on the item (surface skill must never act):**
 
 > Reyes verification unsigned 17 days, so I sent the client another reminder and
 > closed it out.
 
 (This skill sends nothing and closes nothing; it points to the owning skill.)
 
-**Bad — manufactures urgency to look useful:**
+**Bad - manufactures urgency to look useful:**
 
 > Quiet day, but the Okafor defense responses are due in three weeks so I flagged it as
 > needing attention now.
@@ -78,7 +78,7 @@ citation gate. The old example taught the one form the substrate rejects.
 (A future date beyond the window is waiting, not needs-a-person-now. Padding a quiet
 day is the failure this skill exists to avoid.)
 
-**Bad — prescribes the legal step:**
+**Bad - prescribes the legal step:**
 
 > Nguyen RFP deadline near, so file for a protective order and meet and confer first.
 
