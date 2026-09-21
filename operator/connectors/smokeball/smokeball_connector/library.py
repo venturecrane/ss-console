@@ -367,6 +367,40 @@ def names_agree(a: str, b: str) -> bool:
     return _norm(_strip_ext(a)) == _norm(_strip_ext(b))
 
 
+def classless_name_refusal(
+    file_name: str, document_class: str | None = None, cfg: LibraryConfig | None = None
+) -> str | None:
+    """Refuse a CLASSLESS template filed under any class's template name.
+
+    THE 2026-09-21 LIBRARY DEFECT. The drafting renderer opens whatever file
+    carries a class's template name as the FORMAT BASE for every draft of that
+    class. A template rendered with no ``document_class`` is an additional,
+    reference-only one (an intake form, a retainer); filed under a class's name
+    it would silently become that base, and every client letter would be
+    poured into a fee-contract layout. The class is chosen by passing
+    ``document_class`` deliberately, never by a file name. The reserved names
+    are the ones the renderer would OPEN, so an authored override frees the
+    convention name for that class.
+
+    Returns the refusal sentence, or None when the name is free or the call
+    names a class (a class template's name is checked after rendering, against
+    ``classTemplateName``)."""
+    if document_class:
+        return None
+    from .docx_format import DOCUMENT_CLASSES
+
+    cfg = cfg or load_library_config()
+    for cls in DOCUMENT_CLASSES:
+        if names_agree(file_name, cfg.template_name(cls)):
+            return (
+                f"{file_name!r} is the {cls} class's template name, and the renderer opens that "
+                f"file as the format base for every {cls} draft. Pass document_class={cls!r} only "
+                f"if this template is derived from {cls} exemplars. An additional template of any "
+                "other kind is filed under its own name, never a class's."
+            )
+    return None
+
+
 def name_matches(entry: dict[str, Any], wanted: str) -> bool:
     """Does this file entry carry the wanted file name?
 

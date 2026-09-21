@@ -6,7 +6,7 @@ Firm template. Fixed structure and boilerplate; case-specific content is filled 
 
 ## How to use this skeleton
 
-Fill every `{{FILL: ...}}` marker from the matter record named in the marker. The `GUIDANCE` comments in each section describe what a good fill draws from. They are instructions to the drafter and do not appear in the finished brief.
+Fill every `{{FILL: what goes here | source}}` marker from the matter record named in the marker. The `GUIDANCE` comments in each section describe what a good fill draws from. They are instructions to the drafter and do not appear in the finished brief.
 
 **Marker legend (applies to every section):**
 

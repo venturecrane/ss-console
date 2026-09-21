@@ -742,6 +742,40 @@ def test_no_document_class_means_no_name_opinion(monkeypatch, tmp_path) -> None:
     assert out["refusals"] == [] and "formatApplied" not in out
 
 
+@pytest.mark.parametrize(
+    ("file_name", "cls"),
+    [
+        ("Template - Letter.docx", "letter"),  # the convention name
+        ("template - memo", "memo"),  # case and extension do not matter
+        ("Firm Demand Shell.docx", "demand_letter"),  # the authored override
+    ],
+)
+def test_a_classless_template_may_not_take_a_class_template_name(monkeypatch, tmp_path, file_name, cls) -> None:
+    """THE 2026-09-21 REGRESSION'S COUSIN. A retainer agreement was filed as the
+    letter class's template, so every client letter would have been poured into
+    a fee-contract layout. A classless (additional) template filed under a
+    class's name would become that class's format base by accident; refused,
+    and nothing uploaded."""
+    _authored_with_override(tmp_path, monkeypatch)
+    captured: list[httpx.Request] = []
+    monkeypatch.setattr(server, "_get_client", lambda: _mock_client(_handler(captured)))
+    out = server.render_docx_template("m-1", file_name, "# Retainer Agreement\n")
+    assert out["fileId"] is None
+    assert out["refusals"] and cls in out["refusals"][0]
+    assert not [r for r in captured if r.method == "PUT"]
+
+
+def test_the_convention_name_is_free_when_the_class_is_overridden(monkeypatch, tmp_path) -> None:
+    """The reserved names are the ones the renderer would OPEN. With the demand
+    class overridden to the firm's own name, the convention demand name opens
+    nothing, so a classless template may carry it."""
+    _authored_with_override(tmp_path, monkeypatch)
+    captured: list[httpx.Request] = []
+    monkeypatch.setattr(server, "_get_client", lambda: _mock_client(_handler(captured)))
+    out = server.render_docx_template("m-1", "Template - Demand Letter.docx", "# Reference\n")
+    assert out["refusals"] == []
+
+
 # ---- the three-state matter lookup (ss-console#2536) ---------------------------------
 #
 # ``find_matter_id`` answers "the id, or None", which is right for template

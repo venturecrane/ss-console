@@ -1483,7 +1483,7 @@ def render_docx_template(
 
     **The content gate refuses; it never repairs.** Before anything is rendered
     or uploaded, the markdown is checked and the whole violation list comes back
-    in ``refusals`` with ``fileId: null``. Four rules, each mechanical:
+    in ``refusals`` with ``fileId: null``. Five rules, each mechanical:
 
     - case content outside a ``{{...}}`` marker, in four shapes: a date, a
       dollar figure, an identifier (``ZZ-9999-0001``, ``2026-PI-102``, a bates
@@ -1493,6 +1493,11 @@ def render_docx_template(
       ("section 999", "not fewer than 30 days", "CCP 2030.060(f)") are template
       structure and pass, as does anything inside a marker,
     - malformed marker syntax (unbalanced ``{{``/``}}``, or an empty marker),
+    - a ``{{FILL ...}}`` marker without its source: every FILL is
+      ``{{FILL: <what goes here> | <where the filler finds it>}}``, and a FILL
+      with no ``|``, an empty source, or nothing before the ``|`` is refused.
+      ``{{NOT IN RECORD: ...}}`` and ``{{ATTORNEY: ...}}`` carry no source by
+      design and pass as they are,
     - an em dash (house style, and drafting discipline rule 7),
     - an HTML comment (drafting gate 9: guidance and reservations must be
       render-VISIBLE body text; ``<!-- ... -->`` renders as nothing, so an
@@ -1552,12 +1557,18 @@ def render_docx_template(
     renamed and never overwritten; re-filing under the same name supersedes,
     because the resolver takes the newest.
 
+    The converse is enforced too. Without a ``document_class`` the template is an
+    additional, reference-only one (an intake form, a retainer) that no drafter
+    uses as a format base, so a ``file_name`` that is ANY class's template name
+    is refused: filed there, it would become that class's format base by
+    accident. Name an additional template for what it is.
+
     Classified INTERNAL_WRITE at the overlay: the Operator writing a template
     into the firm's own record. Nothing leaves the firm."""
+    from .library import classless_name_refusal, names_agree
     from .render import TemplateContentRefused, check_template_content
 
-    if not file_name.lower().endswith(".docx"):
-        file_name = f"{file_name}.docx"
+    file_name = file_name if file_name.lower().endswith(".docx") else f"{file_name}.docx"
     try:
         check_template_content(skeleton_markdown)
     except TemplateContentRefused as exc:
@@ -1570,6 +1581,10 @@ def render_docx_template(
             "refusals": [str(v) for v in exc.violations],
         }
     data, format_applied, refusal = _render_with_format(skeleton_markdown, document_class)
+    # A class name is a class decision (the 2026-09-21 library defect): see
+    # ``library.classless_name_refusal``, which passes any call that names a
+    # class. Checked after the (network-free, classless) render, before upload.
+    refusal = refusal or classless_name_refusal(file_name, document_class)
     if not refusal and document_class and format_applied:
         # ONE NAMING AUTHORITY (#2490). The renderer finds a class's template by
         # the name `LibraryConfig.template_name` returns; a template filed under
@@ -1577,8 +1592,6 @@ def render_docx_template(
         # it live. Prose in the skill body is what let those two drift apart, so
         # the check is mechanical here. This is a file WE are creating, so its
         # name is ours to insist on; a file the firm placed is never renamed.
-        from .library import names_agree
-
         wanted = format_applied.get("classTemplateName")
         if wanted and not names_agree(file_name, str(wanted)):
             refusal = (
