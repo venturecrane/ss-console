@@ -9,6 +9,13 @@ from typing import Any
 DEFAULT_FONT = "Times New Roman"
 DEFAULT_SIZE_PT = 12
 
+# What the starter writes into its core properties so a document rendered from
+# it can be recognized later (letterhead.is_starter_derived). The keyword is the
+# explicit marker; the comment prefix is what every starter has always written,
+# which is how templates filed before the keyword existed are recognized.
+STARTER_MARKER = "smd-starter-template"
+STARTER_COMMENT_PREFIX = "SMD starter template."
+
 NAMED_STYLES = (
     "SMD Body",
     "SMD Item Label",
