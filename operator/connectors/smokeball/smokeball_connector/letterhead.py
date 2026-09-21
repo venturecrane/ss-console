@@ -20,7 +20,15 @@ Precedence, and each step is a real authoring decision:
 
 1. **The firm's own Word file wins.** When the class resolves to a file in the
    firm's library, the renderer opens it as the base and its header, whatever
-   the firm built, is kept exactly. Nothing here runs.
+   the firm built, is kept exactly. Nothing here runs. ONE EXCEPTION: a file the
+   Operator itself rendered from the SMD starter (``is_starter_derived``) is not
+   the firm's letterhead decision. While every header in it is empty
+   (``headers_empty``) it gets the authored letterhead exactly as the starter
+   would; the moment anyone puts content in a header, it is theirs and is kept.
+   This is what lets a class template filed before the firm's identity was
+   authored (2026-09-21, both letter classes on the live seat) pick up the
+   letterhead on the next render, without deleting or renaming a file in the
+   firm's library.
 2. **Else the authored identity**, printed on the starter's first page header.
    A template filed from that starter carries the letterhead in its header, so
    it survives into every later draft rendered into that template.
@@ -44,6 +52,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
+from .docx_format_types import NAMED_STYLES, STARTER_COMMENT_PREFIX, STARTER_MARKER
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
 
 #: The classes whose starter carries the authored letterhead. See the module
@@ -120,6 +129,49 @@ def load_firm_identity(path: str | None = None) -> FirmIdentity:
     return FirmIdentity(authored=True, source=path, **values)
 
 
+def is_starter_derived(doc) -> bool:
+    """Was this document rendered from the SMD starter base?
+
+    Three signals, any one sufficient, strongest first:
+
+    1. ``STARTER_MARKER`` in the core-properties keywords, which the starter
+       writes explicitly for this purpose (since this change).
+    2. The core-properties comment the starter has always written
+       (``STARTER_COMMENT_PREFIX``), which covers every template filed before
+       the explicit marker existed.
+    3. The full SMD named-style contract defined as paragraph styles. A firm's
+       own file has no reason to carry all eight; a starter-derived file whose
+       properties Word dropped still does.
+    """
+    from docx.enum.style import WD_STYLE_TYPE
+
+    cp = doc.core_properties
+    if STARTER_MARKER in (cp.keywords or ""):
+        return True
+    if (cp.comments or "").startswith(STARTER_COMMENT_PREFIX):
+        return True
+    names = {s.name for s in doc.styles if getattr(s, "type", None) == WD_STYLE_TYPE.PARAGRAPH}
+    return all(n in names for n in NAMED_STYLES)
+
+
+def headers_empty(doc) -> bool:
+    """True when no header part the document defines carries text or a
+    picture. Parts that do not exist are not created by this check (a linked
+    header is read as "not defined")."""
+    from docx.oxml.ns import qn
+
+    for section in doc.sections:
+        for part in (section.header, section.first_page_header, section.even_page_header):
+            if part.is_linked_to_previous:
+                continue
+            el = part._element
+            if "".join(t.text or "" for t in el.iter(qn("w:t"))).strip():
+                return False
+            if el.find(f".//{qn('w:drawing')}") is not None or el.find(f".//{qn('w:pict')}") is not None:
+                return False
+    return True
+
+
 def apply_letterhead(doc, identity: FirmIdentity) -> list[str]:
     """Print ``identity`` into the first-page header of ``doc`` (the STARTER,
     never a firm's file). Returns the lines printed; an empty list means
@@ -192,4 +244,12 @@ _PBDR_SUCCESSORS = (
 )
 
 
-__all__ = ["FIELDS", "LETTERHEAD_CLASSES", "FirmIdentity", "apply_letterhead", "load_firm_identity"]
+__all__ = [
+    "FIELDS",
+    "LETTERHEAD_CLASSES",
+    "FirmIdentity",
+    "apply_letterhead",
+    "headers_empty",
+    "is_starter_derived",
+    "load_firm_identity",
+]

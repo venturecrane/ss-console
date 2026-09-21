@@ -11,7 +11,15 @@ from __future__ import annotations
 import io
 import zipfile
 
-from .docx_format_types import DEFAULT_FONT, DEFAULT_SIZE_PT, NAMED_STYLES, FormatRefused, FormatReport
+from .docx_format_types import (
+    DEFAULT_FONT,
+    DEFAULT_SIZE_PT,
+    NAMED_STYLES,
+    STARTER_COMMENT_PREFIX,
+    STARTER_MARKER,
+    FormatRefused,
+    FormatReport,
+)
 
 # ---- Base document -------------------------------------------------------------
 
@@ -63,8 +71,11 @@ def open_as_base(blob: bytes | None, report: FormatReport):
         _ensure_named_styles(doc, report)
         cp = doc.core_properties
         cp.author = "SMD Operator"
+        # The recognition marker (letterhead.is_starter_derived): a template
+        # filed from this starter is SMD's, not the firm's letterhead decision.
+        cp.keywords = STARTER_MARKER
         cp.comments = (
-            "SMD starter template. Typography lives in this file's styles "
+            f"{STARTER_COMMENT_PREFIX} Typography lives in this file's styles "
             "(SMD Body, SMD Item Label, SMD Item Text, SMD Heading 1-3, SMD Caption, "
             "SMD Signature): edit them in Word and the next draft follows."
         )

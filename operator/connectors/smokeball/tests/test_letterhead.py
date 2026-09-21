@@ -195,3 +195,103 @@ def test_draft_tool_without_authored_identity_reports_none(monkeypatch, tmp_path
     out = server.render_docx_draft("m-1", "Draft", "Body.", document_class="demand_letter")
     assert out["formatApplied"]["letterhead"]["source"] == "none"
     assert _first_page_header_lines(_put_bytes(captured)) == []
+
+
+# ---- starter-derived templates already in the firm's library -----------------------
+#
+# THE 2026-09-21 GAP. Both letter classes on the live seat already resolved to
+# templates the Operator itself had rendered from the old starter, so under a
+# plain "the firm's file wins" rule every re-render went INTO them and kept
+# their empty header. A starter-derived file is SMD's, not the firm's letterhead
+# decision, until someone puts content in its header.
+
+
+def _starter_template(*, keep_keyword: bool = True, keep_comment: bool = True, header_text: str = "") -> bytes:
+    """A class template as the Operator filed it from the starter, optionally
+    aged to the shape filed before the explicit marker existed."""
+    data, _ = render_document("# SKELETON\n\n{{FILL: body | matter record}}", "letter", None)
+    doc = Document(io.BytesIO(data))
+    if not keep_keyword:
+        doc.core_properties.keywords = ""
+    if not keep_comment:
+        doc.core_properties.comments = ""
+    if header_text:
+        doc.sections[0].header.paragraphs[0].text = header_text
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def test_the_starter_writes_its_recognition_marker() -> None:
+    from smokeball_connector.docx_format_types import STARTER_MARKER
+    from smokeball_connector.letterhead import is_starter_derived
+
+    doc = Document(io.BytesIO(_starter_template()))
+    assert doc.core_properties.keywords == STARTER_MARKER
+    assert is_starter_derived(doc)
+    assert not is_starter_derived(Document(io.BytesIO(make_firm_template(header_image=False))))
+
+
+@pytest.mark.parametrize(
+    ("keep_keyword", "keep_comment"),
+    [(True, True), (False, True), (False, False)],
+    ids=["marker", "old-starter-comment-only", "style-signature-only"],
+)
+@pytest.mark.parametrize("cls", sorted(LETTERHEAD_CLASSES))
+def test_starter_derived_template_with_empty_headers_gets_the_letterhead(
+    cls: str, keep_keyword: bool, keep_comment: bool
+) -> None:
+    base = _starter_template(keep_keyword=keep_keyword, keep_comment=keep_comment)
+    data, report = render_document("Draft body.", cls, base, FormatReport(cls), firm_identity=_FULL)
+    assert _first_page_header_lines(data) == _FULL.lines()
+    assert report.letterhead == {"source": "firm_identity", "lines": _FULL.lines(), "base": "starter_derived"}
+    doc = Document(io.BytesIO(data))
+    assert [p.text for p in doc.paragraphs if p.text.strip()] == ["Draft body."]
+
+
+def test_starter_derived_template_with_header_content_is_untouched() -> None:
+    base = _starter_template(keep_keyword=False, header_text="FIRM EDITED HEADER")
+    data, report = render_document("Draft body.", "letter", base, FormatReport("letter"), firm_identity=_FULL)
+    doc = Document(io.BytesIO(data))
+    assert doc.sections[0].header.paragraphs[0].text == "FIRM EDITED HEADER"
+    assert doc.sections[0].different_first_page_header_footer is False
+    assert "ACME LAW" not in _all_text(data)
+    assert report.letterhead == {"source": "firm_template", "lines": ["FIRM EDITED HEADER"]}
+
+
+def test_firm_file_with_an_empty_header_is_still_the_firms() -> None:
+    """Not starter-derived: a firm that prints on letterhead stock keeps an
+    empty header, and that is its decision."""
+    template = make_firm_template(header_text="", header_image=False)
+    data, report = render_document("Body.", "letter", template, FormatReport("letter"), firm_identity=_FULL)
+    assert _first_page_header_lines(data) == []
+    assert "ACME LAW" not in _all_text(data)
+    assert report.letterhead["source"] == "firm_template"
+
+
+def test_starter_derived_template_without_authored_identity_says_none() -> None:
+    data, report = render_document("Body.", "letter", _starter_template(), FormatReport("letter"), firm_identity=None)
+    assert _first_page_header_lines(data) == []
+    assert report.letterhead["source"] == "none"
+    assert any("starter" in n for n in report.notes if n.startswith("no letterhead"))
+
+
+def test_rerendering_an_old_starter_template_through_the_tool_gets_the_letterhead(monkeypatch, tmp_path) -> None:
+    """The live shape end to end: the library resolves the class to an old
+    starter-derived file (no keyword marker), the identity is authored, and the
+    re-render carries the letterhead."""
+    library = "self_initiation:\n  document_library:\n    matter_number: '2026-OPS-001'\n    folder_name: 'Document Library'\n"
+    monkeypatch.setenv(CUSTOMER_YAML_ENV, _write(tmp_path, _YAML + library))
+    old = _starter_template(keep_keyword=False)
+    listing = [{"id": "tpl-1", "name": "Template - Letter.docx", "folderId": "f-lib"}]
+    captured: list[httpx.Request] = []
+    monkeypatch.setattr(
+        server, "_get_client", lambda: _mock_client(_handler(captured, template=old, listing_files=listing))
+    )
+    out = server.render_docx_template(
+        "m-ops", "Template - Letter", "# SKELETON\n\n{{FILL: body | matter record}}\n", document_class="letter"
+    )
+    assert out["refusals"] == []
+    assert out["formatApplied"]["templateUsed"]["fileId"] == "tpl-1"
+    assert out["formatApplied"]["letterhead"]["source"] == "firm_identity"
+    assert _first_page_header_lines(_put_bytes(captured))[0] == "ACME LAW, LLP"

@@ -335,7 +335,9 @@ starter is a starting point, the firm's Word edit is the authority.
 **The letterhead is never yours to write, and never a marker.** For the `letter` and
 `demand_letter` classes the first page's letterhead comes from exactly one of two places,
 both outside the skeleton: **the firm's own template file** for the class (its header is kept
-exactly as the firm built it), or, on the starter, **the firm's authored identity**
+exactly as the firm built it; a class template the Operator itself filed from the SMD starter
+is not the firm's file for this purpose, and while its header is empty it takes the authored
+letterhead on every render, so you never delete or rename a library file to get one), or, on the starter, **the firm's authored identity**
 (`firm_identity` in the seat's customer.yaml: name, street, city/state/zip, telephone, fax,
 website), which the render tool prints into the starter's first-page header in tool code.
 So the skeleton carries no letterhead at all: do not type the firm's name block, address,

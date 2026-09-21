@@ -50,7 +50,14 @@ from .docx_format_types import (
     FormatRefused,
     FormatReport,
 )
-from .letterhead import LETTERHEAD_CLASSES, FirmIdentity, apply_letterhead, load_firm_identity
+from .letterhead import (
+    LETTERHEAD_CLASSES,
+    FirmIdentity,
+    apply_letterhead,
+    headers_empty,
+    is_starter_derived,
+    load_firm_identity,
+)
 
 # ---- Document classes and their styling rules --------------------------------
 
@@ -142,8 +149,9 @@ def render_document(
     template) or the stock starter base. Pure: no network, no client.
 
     ``firm_identity`` is the AUTHORED letterhead (``customer.yaml``
-    ``firm_identity``). It is printed only on the starter and only for the
-    letter classes; a firm's own base keeps whatever header the firm built.
+    ``firm_identity``). It is printed only for the letter classes, on the
+    starter or on a starter-derived base whose headers are empty; a firm's own
+    base keeps whatever header the firm built.
     See ``letterhead``."""
     if document_class not in CLASS_RULES:
         raise ValueError(f"unknown document_class {document_class!r}; known: {', '.join(DOCUMENT_CLASSES)}")
@@ -165,19 +173,30 @@ def _letterhead(doc, document_class: str, firm_base: bool, identity: FirmIdentit
     """Decide and record the first page's letterhead for a letter class."""
     if document_class not in LETTERHEAD_CLASSES:
         return
-    if firm_base:
+    # A base the Operator itself rendered from the SMD starter is not a firm
+    # file for letterhead purposes: while its headers are empty it gets the
+    # authored letterhead, exactly as the starter would. Any header content, or
+    # a base that is not starter-derived, is the firm's and stays untouched.
+    starter_derived = firm_base and is_starter_derived(doc)
+    if firm_base and not (starter_derived and headers_empty(doc)):
         report.letterhead = {"source": "firm_template", "lines": list(report.base_header_footer_text)}
         return
     lines = apply_letterhead(doc, identity) if identity is not None else []
     if lines:
         report.letterhead = {"source": "firm_identity", "lines": lines}
+        if starter_derived:
+            report.letterhead["base"] = "starter_derived"
         report.notes.append("letterhead printed on the first page from the firm's authored identity")
         return
     reason = (identity.source if identity is not None else "") or "firm_identity not authored in customer.yaml"
     report.letterhead = {"source": "none", "lines": [], "reason": reason}
+    base = (
+        "its class template is SMD's starter, which carries none,"
+        if starter_derived
+        else "the firm has no template file for this class"
+    )
     report.notes.append(
-        f"no letterhead: the firm has no template file for this class and {reason}; "
-        "the firm authors firm_identity once, or files its own letterhead template"
+        f"no letterhead: {base} and {reason}; the firm authors firm_identity once, or files its own letterhead template"
     )
 
 
