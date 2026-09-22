@@ -128,9 +128,38 @@ no invented tool, no assumed status API.
 3. **Read the tasks** - `list_tasks(matter_id, is_completed=false)` (and completed,
    for filed/closed items) for due-dates a human already authored (opposition/reply
    "due by" tasks, "file motion" tasks) and for filed/served markers.
-4. **Read prior surfaced state** - `get_memos_on_matter(matter_id)` to see the last
-   motion-calendar surface this skill wrote, so it reports what changed rather than
-   re-deriving from scratch.
+4. **Read prior surfaced state - ON DEMAND ONLY.** On a single matter a human named,
+   `get_memos_on_matter(matter_id)` gives the last motion-calendar surface this skill
+   wrote, so it can report what CHANGED since then rather than only the current
+   picture.
+
+   **Scheduled-scan rule: a scheduled scan never calls `get_memos_on_matter` or
+   `read_document`, because the seat refuses a second matter's content in one
+   session.** A scheduled run covers every open matter; the one-matter content fence
+   refuses the second matter's memo read, so the scan would go blind after the first
+   matter and burn the seat's refusal-cascade brake on the way.
+
+   So **on a scheduled scan there is no diff**: report the CURRENT motion-calendar
+   surface, assembled from events and tasks (steps 2 and 3, both unfenced metadata).
+   The wake's Script Output carries `memo_facts` with one date per matter:
+
+   ```json
+   {
+     "wakeAgent": true,
+     "memo_facts": {
+       "skill": "motion-calendar-tracker",
+       "matters": [{ "matterId": "...", "matterNumber": "...", "last_surface": "YYYY-MM-DD" }]
+     }
+   }
+   ```
+
+   `last_surface` is the DAY this skill last surfaced that matter, and it is the only
+   thing you may say about the prior surface: "last surfaced `<date>`" or, when it is
+   `null`, "not previously surfaced." Never describe what the previous surface SAID,
+   and never present the current picture as a change: on a scan you did not read the
+   old one. A matter whose row carries `"unreadable": true`, or that has no row at all,
+   is "prior surface unknown."
+
 5. **Assemble the surface** - bucket the record items into **Filed**, **Due**, and
    **Hearings** per `references/output-format.md`; attach each item's source id;
    name every gap and ambiguity in its own section. Never compute a missing due date;
@@ -176,8 +205,9 @@ This is where a tracker is tempted to become a calculator. It must not.
 
 **Assemble + surface autonomous; internal-only.**
 
-The agent MAY: read Smokeball (`get_matter`, `list_events`, `list_tasks`,
-`get_memos_on_matter`); assemble the motion-calendar surface with every item sourced;
+The agent MAY: read Smokeball (`get_matter`, `list_events`, `list_tasks`, and
+`get_memos_on_matter` on the on-demand single-matter path only); assemble the
+motion-calendar surface with every item sourced;
 name gaps and ambiguities; write the internal `create_memo` log (confirmed by its own read-back).
 
 The agent MUST NOT: compute or assert a final deadline; draft/file/send anything;

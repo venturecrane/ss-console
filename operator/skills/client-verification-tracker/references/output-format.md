@@ -70,7 +70,7 @@ unanswered chase on a ceiling of 3 reads `nudge 3 of 3`.
 > succeed is the item counted as chased.
 ```
 
-State-read note: this turn reads matter metadata only (`list_tasks`, `get_files_on_matter`, `get_memos_on_matter`) - no message body - so the proactive chase send is not fenced by the taint gate.
+State-read note: this turn reads matter metadata only (`list_tasks`, `get_files_on_matter`) plus the per-item state `pre_run.py` handed it - no message body - so the proactive chase send is not fenced by the taint gate. (`get_memos_on_matter` is matter CONTENT, not metadata: it does not taint the send, but the matter gate refuses a second matter's memos in one session, so it is read for one matter or not at all.)
 
 ## Shape C - Signed, logged & closed (ONLY on a confident match)
 

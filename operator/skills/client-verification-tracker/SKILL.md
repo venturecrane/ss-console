@@ -208,17 +208,27 @@ which makes any autonomous send **refused for that turn**. The fenced reads incl
 `mcp_agentmail_list_messages`, `mcp_agentmail_search_messages`,
 `mcp_agentmail_get_attachment`, `mcp_agentmail_get_draft`, `mcp_smokeball_read_document`,
 `email_get_message`, `email_get_thread`, `email_list_messages`, `email_search`,
-`web_search`, `web_extract`, and calendar reads. Unfenced and safe: **all other
+`web_search`, `web_extract`, and calendar reads. Unfenced and safe: **the
 `mcp_smokeball_*` metadata reads** (`get_matter`, `list_tasks`, `get_task`,
-`get_files_on_matter`, `get_memos_on_matter`, `get_roles_on_matter`) and
+`get_files_on_matter`, `get_roles_on_matter`) and
 `mcp_agentmail_list_inboxes` / `get_inbox`.
+
+**`get_memos_on_matter` is NOT a metadata read.** A memo is matter CONTENT, and the
+overlay fences it in the matter gate alongside `mcp_smokeball_read_document`: once a
+session has read one matter's memos, the next matter's read is refused. It does not
+taint a send the way the message-body reads above do, so a chase-send turn may still
+use it - but only for the ONE matter that turn is about. A scheduled run that walks
+several matters must not call it, and this skill's own `pre_run.py` is why it does not
+need to: it hands the turn the per-item state.
 
 **Invariant: in a turn that will issue a chase send, state checks use matter metadata
 reads only; never read a message body in that turn - a fenced read taints the turn and
 forfeits the send.** In particular, **signature-landed detection watches for the signed
 verification FILE landing on the matter via `get_files_on_matter` (metadata), never by
-reading an email body.** The attempt count and the open-item state come from
-`list_tasks` / `get_memos_on_matter` (metadata), not from reading the chase thread.
+reading an email body.** The attempt count and the open-item state come from the
+per-item state this skill's `pre_run.py` hands the turn and from `list_tasks`
+(metadata), not from reading the chase thread. `get_memos_on_matter` is matter
+CONTENT, not metadata (above): one matter per session, never a walk across matters.
 (Reading an inbound reply body is fine on a turn that only surfaces to a human and
 sends nothing - for example the say-so case - because there is no send to forfeit; the
 invariant is specifically about the chase-send turn.)
@@ -533,7 +543,9 @@ not an immutable invariant.
     signer still attests under penalty of perjury on the verification form itself).
 - **Never read a message body in a chase-send turn** - a fenced read taints the turn
   and forfeits the send; signature detection and the attempt count come from matter
-  metadata reads (`get_files_on_matter`, `list_tasks`, `get_memos_on_matter`).
+  metadata reads (`get_files_on_matter`, `list_tasks`) and the state `pre_run.py`
+  hands the turn. `get_memos_on_matter` is matter content, not metadata: one matter
+  per session.
 - **Never chase with `reply_to_message`** - a chase is a proactive
   `mcp_agentmail_send_message`; an in-thread reply bypasses recipient classification
   and silently degrades to a held draft.

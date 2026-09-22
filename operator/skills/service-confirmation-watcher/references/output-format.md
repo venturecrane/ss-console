@@ -78,6 +78,25 @@ after mailing, §415.20; mail with acknowledgment, §415.30; publication, §415.
 served date / method / defendant is not guessed.
 ```
 
+## Shape C (scan variant) - a POS is on file and has not been read
+
+A scheduled scan covers every open matter, and a scheduled scan never calls
+`get_memos_on_matter` or `read_document`, because the seat refuses a second matter's
+content in one session. So on a scan an un-captured candidate is reported from the
+FILE LISTING alone, with nothing read off the paper.
+
+```markdown
+# ⚠ Proof of service on file, unread - matter <id> - YYYY-MM-DD
+
+**Observed:** a proof of service of summons has synced onto this matter
+(`fileId <id>`, <name/date as get_files_on_matter reports it>). It is not in this
+matter's captured fileIds.
+**Not known:** which defendant was served, the served date, and the method. The
+document has not been read.
+**Decision:** surfaced for a person. Run the watcher on this matter to read the POS and
+capture the served date and method. Nothing captured, nothing calendared.
+```
+
 ## Rules
 
 1. **Shapes A/B carry only captured facts** - the served date and method, each read off
