@@ -1,4 +1,4 @@
-# Status Report Assembler — Per-Client Algorithm
+# Status Report Assembler - Per-Client Algorithm
 
 Detailed prose procedure preserved for graders. The SKILL.md's `## Procedure`
 section delegates the per-client × per-connector fetch loop to `execute_code`
@@ -33,7 +33,7 @@ surfacing have not changed from the pre-`execute_code` version of the skill.
 Any connector that returns invalid JSON appears in the payload as
 `{"error": "parse_failed", "fallback_id": "<slug>.<connector>", "raw_excerpt": "..."}`
 rather than aborting the batch. The agent treats `parse_failed` as a degraded
-data source — the affected section in the draft renders a `[TBD: <connector>
+data source - the affected section in the draft renders a `[TBD: <connector>
 returned error]` marker, not invented content.
 
 ## Per-section assembly rules
@@ -43,7 +43,7 @@ returned error]` marker, not invented content.
 A PM-tool item enters the section iff all of:
 
 1. The item's status transitioned to a "done" state (Done, Closed, Released,
-   Shipped — per the PM tool's status mapping in `config.pm_status_map`)
+   Shipped - per the PM tool's status mapping in `config.pm_status_map`)
 2. The transition timestamp falls within the report window
 3. The item is client-visible (has the client's label/tag/project membership)
 4. The item is NOT internal-only (excluded labels: `internal`, `team`, `meta`)
@@ -51,7 +51,7 @@ A PM-tool item enters the section iff all of:
 Group by epic/category, not chronologically. Owner scanning wants to see
 "what got moved" not a Tuesday-Wednesday-Thursday timeline. 2-6 bullets
 typical; group if the team shipped >6 things. Past-tense, active voice.
-Items in flight do NOT enter shipped — even if "almost done." The line is
+Items in flight do NOT enter shipped - even if "almost done." The line is
 the PM status change, not the agent's interpretation.
 
 ### "Results"
@@ -67,9 +67,9 @@ A metric is included iff all of:
 
 Format: `Metric: value (delta % WoW) [source]`. Every metric carries source
 attribution. If data is degraded (sampling, missing days, API error), the
-metric is included with a flag: `"Sessions: 12,400 (GA4 sampling at 50% —
+metric is included with a flag: `"Sessions: 12,400 (GA4 sampling at 50% -
 reduced precision)"`. If a metric dropped, surface honestly with one line of
-context where the agent has evidence — never invent attribution.
+context where the agent has evidence - never invent attribution.
 
 ### "Blockers"
 
@@ -80,7 +80,7 @@ A blocker enters the section iff all of:
 3. The blocker has been open more than 2 business days
 
 Each blocker: artifact + waiting-since-date + next-step-ask. If multiple
-blockers exist, list each as a separate bullet — do not roll up. If the
+blockers exist, list each as a separate bullet - do not roll up. If the
 agency itself is the blocker (something the team owes), that does NOT enter
 the client-facing draft; it goes in the internal Slack alert instead.
 Omit the section entirely if there are no client-side blockers.
@@ -102,11 +102,11 @@ client's broader goals." If it's not in the plan, it's not in the report.
 
 The agent surfaces ONE ask per report. Source priority order:
 
-1. **A confirmed pending decision the client owes** — budget approval, asset
+1. **A confirmed pending decision the client owes** - budget approval, asset
    approval, copy review. These get priority because they unblock work.
-2. **An information request needed to plan next sprint** — e.g., "Will the
+2. **An information request needed to plan next sprint** - e.g., "Will the
    Q3 launch date confirmed for end of June still hold?"
-3. **A relationship-maintenance question** — e.g., "Anything you'd like us
+3. **A relationship-maintenance question** - e.g., "Anything you'd like us
    to dig into for the Q3 review?" Used only when there's no pending
    decision or info request.
 
@@ -124,7 +124,7 @@ in the payload (the last N shipped reports the agency sent to this client):
 2. 1-2 prior reports → voice-match but flag as "limited sample" in the
    Slack alert
 3. 0 prior reports (new client) → use the agency's default voice from
-   `config.report_voice_default` and flag as "first report — calibration
+   `config.report_voice_default` and flag as "first report - calibration
    needed"
 
 Per-client voice overrides at `customer.yaml: clients.{slug}.report_voice`
@@ -158,7 +158,7 @@ owner skims the draft.
   the draft (linkable items go to their respective tools).
 - **Missing prior-week comparison.** If WoW data isn't available (e.g.,
   the agency just started tracking 4 days ago), use MoM or last-30-days
-  as the comparable. Format clearly: `"Sessions: 12,400 (last 30 days —
+  as the comparable. Format clearly: `"Sessions: 12,400 (last 30 days -
 no WoW comparison yet)"`.
 - **Client has multiple stakeholders.** The draft is addressed to the
   primary contact per `config.primary_contact`. CC list (if configured)
@@ -174,20 +174,20 @@ thread to the agency's `client-status-drafts` channel. The format
 (per `references/output-format.md`):
 
 ```
-*Status drafts ready — Week of {Mon DATE}*
+*Status drafts ready - Week of {Mon DATE}*
 
 Drafts written:
-- {Client Name} — drafts/{client-slug}/status-{YYYY-MM-DD}.md ({word count})
+- {Client Name} - drafts/{client-slug}/status-{YYYY-MM-DD}.md ({word count})
 - ...
 
 Flagged for review:
-- {Client Name}: voice-match uncertain — limited prior-thread history
-- {Client Name}: result anomaly — sessions down 22% WoW, surfaced in draft
+- {Client Name}: voice-match uncertain - limited prior-thread history
+- {Client Name}: result anomaly - sessions down 22% WoW, surfaced in draft
 
 _Run finished {ISO timestamp} · skill version {hash}_
 ```
 
-The Slack post is the owner's morning trigger — they read the summary,
+The Slack post is the owner's morning trigger - they read the summary,
 open each flagged draft first, then the rest.
 
 ## Why `execute_code` and not the original 7 sequential steps
@@ -200,7 +200,7 @@ agent could write the first sentence of the first draft. Token cost was
 high; per-message reasoning quality degraded as the context filled.
 
 `execute_code` collapses the fetch loop into a single child process.
-The parent receives ONE JSON document — typically 15-25k tokens covering
+The parent receives ONE JSON document - typically 15-25k tokens covering
 every client's PM activity, metrics, paid-media, CRM, and prior reports.
 The agent then iterates the structured payload in its reasoning context,
 producing one draft per client + one summary Slack post. Per-tool
@@ -215,7 +215,7 @@ structured payload does.
 - **Not invented.** Every metric, every shipped item, every next-week
   priority traces to a connector payload row OR a `[TBD]` placeholder.
   Where the agency's plan has no record of a next-week priority, the
-  agent leaves `[TBD]` for the owner — it does not infer goals from
+  agent leaves `[TBD]` for the owner - it does not infer goals from
   "the client's broader context."
 - **Not voice-fabricating.** The agent voice-matches against prior shipped
   reports the agency itself sent. With < 3 priors, the Slack alert flags

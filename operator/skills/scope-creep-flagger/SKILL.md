@@ -28,9 +28,9 @@ Continuously watches the channels where clients make work requests (per-client S
 
 Scope creep is the canonical agency-retainer profit killer. Three patterns:
 
-- **Drive-by asks** — client drops a Slack message: "Hey, can you also do X this month?" X is not in the SOW. The account manager says yes to keep the relationship warm. The agency eats the hours.
-- **Re-scoped projects** — client says "actually let's swap the email campaign for a video," knowing the video is 3× the work but feeling like a "swap."
-- **Buried in the brief** — client sends a project brief that, when read carefully, asks for deliverables the SOW didn't cover.
+- **Drive-by asks** - client drops a Slack message: "Hey, can you also do X this month?" X is not in the SOW. The account manager says yes to keep the relationship warm. The agency eats the hours.
+- **Re-scoped projects** - client says "actually let's swap the email campaign for a video," knowing the video is 3× the work but feeling like a "swap."
+- **Buried in the brief** - client sends a project brief that, when read carefully, asks for deliverables the SOW didn't cover.
 
 The owner can't read every channel every day; the AM can't always tell what's in-scope without re-reading the SOW. This skill catches it in near real-time and gives the owner the moment to decide before the AM has already said yes.
 
@@ -55,19 +55,19 @@ hermes run scope-creep-flagger --since "yesterday"
 
 ## Procedure
 
-1. **Read the incoming message.** Get the full message + thread context. Note: this includes ALL messages in the channel, not just from the client — client + agency-team are in the same channel.
+1. **Read the incoming message.** Get the full message + thread context. Note: this includes ALL messages in the channel, not just from the client - client + agency-team are in the same channel.
 2. **Identify if it's a request.** Per `references/categorization-rubric.md`, classify the message:
-   - REQUEST — client is asking for work
-   - QUESTION — client wants information; no work implied
-   - CONTEXT — sharing files / data / updates, no ask
-   - SOCIAL — relationship maintenance, no ask
-   - INTERNAL — agency team chatter, no client ask
+   - REQUEST - client is asking for work
+   - QUESTION - client wants information; no work implied
+   - CONTEXT - sharing files / data / updates, no ask
+   - SOCIAL - relationship maintenance, no ask
+   - INTERNAL - agency team chatter, no client ask
 3. **For REQUESTs only:** read the client's signed SOW (Drive path in `customer.yaml`). Identify the relevant deliverable/service line. Check if the request fits within it.
 4. **Score scope-fit.** Per the rubric:
-   - IN_SCOPE — clearly within the SOW; no flag needed; the AM responds normally
-   - AMBIGUOUS — could be argued either way; surface to owner so they choose how the AM responds
-   - OUT_OF_SCOPE_SMALL — clearly out, but small enough (< 2 hours) that the owner might absorb to maintain relationship; surface as such
-   - OUT_OF_SCOPE_MATERIAL — clearly out, material work (> 2 hours); surface with "this needs to become a separate quote"
+   - IN_SCOPE - clearly within the SOW; no flag needed; the AM responds normally
+   - AMBIGUOUS - could be argued either way; surface to owner so they choose how the AM responds
+   - OUT_OF_SCOPE_SMALL - clearly out, but small enough (< 2 hours) that the owner might absorb to maintain relationship; surface as such
+   - OUT_OF_SCOPE_MATERIAL - clearly out, material work (> 2 hours); surface with "this needs to become a separate quote"
 5. **Draft proposed disposition.** A one-paragraph note from agent to owner: what was asked, what the SOW says, why it's flagged, suggested AM response (in client voice).
 6. **Surface in Slack.** Internal channel `scope-flags`: client name + permalink to the source message + flag category + proposed disposition. Tag `@<owner>` on OUT_OF_SCOPE_MATERIAL.
 7. **Internal logging.** Append to per-client scope-history note for trend analysis (3+ flags in a week from the same client is a relationship-health signal).
@@ -89,7 +89,7 @@ The agent MUST NOT:
 - Reply to the client (Slack or email)
 - Modify the SOW
 - Send the proposed disposition to the AM (the surface is the Slack channel; AM reads if assigned to the client)
-- Categorize as IN_SCOPE silently for a client whose history shows pattern of scope creep — if the relationship is degrading, every flag matters
+- Categorize as IN_SCOPE silently for a client whose history shows pattern of scope creep - if the relationship is degrading, every flag matters
 
 ### Voice Rules
 
@@ -114,10 +114,10 @@ Common failure modes: replying to a client directly (forbidden), missing OUT_OF_
 
 ## References
 
-- `references/voice.md` — internal-flag voice + proposed-disposition voice
-- `references/output-format.md` — Slack flag format + AM-response draft template
-- `references/categorization-rubric.md` — message classification + scope-fit scoring
-- `references/test-cases.md` — synthetic client channels (10 channels × 20 messages each, varied scope-fit patterns)
+- `references/voice.md` - internal-flag voice + proposed-disposition voice
+- `references/output-format.md` - Slack flag format + AM-response draft template
+- `references/categorization-rubric.md` - message classification + scope-fit scoring
+- `references/test-cases.md` - synthetic client channels (10 channels × 20 messages each, varied scope-fit patterns)
 
 ## Cost estimate (filled by grading)
 

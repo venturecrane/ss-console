@@ -1,4 +1,4 @@
-# Retainer Hours Reconciler — Detailed Algorithm
+# Retainer Hours Reconciler - Detailed Algorithm
 
 Detailed prose procedure preserved for graders. The SKILL.md's `## Procedure`
 section delegates the per-client × per-connector fetch loop to `execute_code`
@@ -19,7 +19,7 @@ wakes the agent. It must emit either `{"wakeAgent": true}` or
 1. **Critical-band breach.** Any client's projected EOM utilization is in
    the `OVER_CRITICAL` (≥ 110%), `OVER_WARNING` (95-110%), or
    `UNDER_CRITICAL` (< 40%) band. These are the bands that need owner
-   attention before month-end — letting them sit past a cron tick risks
+   attention before month-end - letting them sit past a cron tick risks
    month-end discovery of avoidable hours-eaten or churn signals.
 
 2. **Period boundary (mandatory cadence).** The current cron tick is the
@@ -33,7 +33,7 @@ wakes the agent. It must emit either `{"wakeAgent": true}` or
    `OVER_CRITICAL` or `UNDER_CRITICAL` in the last shipped report
    continues to wake the agent until the owner has acknowledged the
    transition (recorded in the audit log). The agent never silently
-   promotes a previously-critical client to `BALANCED` — see
+   promotes a previously-critical client to `BALANCED` - see
    `## Pitfalls` in SKILL.md.
 
 ### SUPPRESS conditions
@@ -83,8 +83,8 @@ When the agent does wake, `execute_code` emits one JSON document with shape:
 Any connector that returns invalid JSON appears in the payload as
 `{"error": "parse_failed", "fallback_id": "...", "raw_excerpt": "..."}`
 rather than aborting the batch. A `parse_failed` on time-entries OR SOW
-makes the client unactionable — the Slack report surfaces them as
-`"{client}: data unavailable — owner check {connector}"`. The agent does
+makes the client unactionable - the Slack report surfaces them as
+`"{client}: data unavailable - owner check {connector}"`. The agent does
 NOT invent utilization figures.
 
 ## Bucket thresholds (post-rewrite, unchanged from rubric)
@@ -116,11 +116,11 @@ projected_eom_pct = projected_eom_hours / contracted_monthly_hours
 ```
 
 The Slack report ALWAYS labels the projection explicitly: "Projected EOM
-(linear extrapolation)" — never "EOM" alone. The owner must not mistake
+(linear extrapolation)" - never "EOM" alone. The owner must not mistake
 the projection for actual hours-spent.
 
 Per the rubric, a projection in early month (mtd_days_elapsed < 5) is
-LOW confidence; the agent flags it as `"projection: low confidence —
+LOW confidence; the agent flags it as `"projection: low confidence -
 fewer than 5 working days of data"` in the Slack post for any client
 where this applies.
 
@@ -135,7 +135,7 @@ its per-service cap WHILE another service line of the same client is at
 hours split doesn't match what the engagement actually needs.
 
 The flag appears in the Slack post as `"@<owner> Scope misalignment:
-{client} — {service-line-A} at {pct}% / {service-line-B} at {pct}%.
+{client} - {service-line-A} at {pct}% / {service-line-B} at {pct}%.
 Consider SOW restructuring."` The agent does NOT modify the SOW; the
 owner restructures.
 
@@ -184,7 +184,7 @@ next run. The transition is owner-acknowledged work:
 3. The next run sees the ack and stops the `[was-CRITICAL]` annotation.
 
 This prevents the silent-promotion failure mode the pitfall list calls
-out. The pre-run script also reads this state — a previously-critical
+out. The pre-run script also reads this state - a previously-critical
 client still pending ack is a WAKE condition regardless of current
 bucket.
 
@@ -195,7 +195,7 @@ wake gate) both edit the same SKILL.md. A.2 rewrites `## Procedure` to
 the two-phase pattern; B.2 adds the `## When the agent wakes` section
 and the `pre_run.py` file alongside. Two parallel agents independently
 editing the same SKILL.md frontmatter would pass CI in isolation and
-collide silently at merge time — the worktree system prevents
+collide silently at merge time - the worktree system prevents
 filesystem races, not semantic ones. The ADR 0021 §"One-skill =
 one-agent rule" critique safety constraint required consolidation.
 
@@ -210,10 +210,10 @@ get the SOW joins the pre-run didn't need) drives the Slack report.
   applies only to read + internal Slack post. The agent never modifies
   a SOW, never messages clients, never edits time entries.
 - **Not silently promoting critical clients.** The auto-promotion ban
-  is structural enforcement — see above.
+  is structural enforcement - see above.
 - **Not self-calibrating.** Threshold changes are owner work; the agent
   picks up new thresholds from `customer.yaml`.
 - **Not skipping the Monday report.** The weekly mandatory cadence is
-  a load-bearing signal — the owner reads "all clients balanced" as
+  a load-bearing signal - the owner reads "all clients balanced" as
   reassurance, not noise. Suppress conditions never apply to the Monday
   tick.

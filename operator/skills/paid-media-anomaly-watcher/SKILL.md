@@ -57,7 +57,7 @@ ADR 0021 Stream B: the cron daemon invokes `pre_run.py` BEFORE the agent. The sc
 
 The dashboard's watcher-health view greps `audit_log` for `SUPPRESSED_WAKE` rows in the last 24h; a firing tick writes an `EMITTED_WAKE` row instead, best-effort, which can never suppress or delay the wake (#2253). A scheduled tick with **neither** row is the alarm signal, not silence.
 
-**On wake — the wake line in the Script Output block is this turn's item list (#2253).** Hermes injects the pre-run's stdout verbatim into the woken prompt, so that line is not a flag, it is the handoff. When it carries `plans`, each entry names the `campaign_id`, the `platform` it fired on, the anomaly `kind`, its `severity`, and the `detail` — the observed-vs-baseline comparison the rubric actually made. Those entries are the firing set: work from them, verify each against the platform when the connector allows, and state the figures they carry rather than re-deriving figures of your own. When the line carries **no plans** (a fail-open `decision_basis` such as `no_audit_writer_fail_open`, `suppress_heartbeat_failed_fail_open`, `customer_slug_unset_fail_open`, or `connectors_not_wired_fail_open`), or carries `plans_truncated: true`, the gate woke blind or partial: enumerate the platforms yourself and never treat a partial list as the complete one. Anything neither the payload nor a tool call this run produced renders "unavailable (connector down)" per `docs/style/empty-state-pattern.md` — never a plausible number.
+**On wake - the wake line in the Script Output block is this turn's item list (#2253).** Hermes injects the pre-run's stdout verbatim into the woken prompt, so that line is not a flag, it is the handoff. When it carries `plans`, each entry names the `campaign_id`, the `platform` it fired on, the anomaly `kind`, its `severity`, and the `detail` - the observed-vs-baseline comparison the rubric actually made. Those entries are the firing set: work from them, verify each against the platform when the connector allows, and state the figures they carry rather than re-deriving figures of your own. When the line carries **no plans** (a fail-open `decision_basis` such as `no_audit_writer_fail_open`, `suppress_heartbeat_failed_fail_open`, `customer_slug_unset_fail_open`, or `connectors_not_wired_fail_open`), or carries `plans_truncated: true`, the gate woke blind or partial: enumerate the platforms yourself and never treat a partial list as the complete one. Anything neither the payload nor a tool call this run produced renders "unavailable (connector down)" per `docs/style/empty-state-pattern.md` - never a plausible number.
 
 `customer.yaml.personas[].cron[]` (added by ADR 0021 Stream D schema PR) declares the per-customer schedule and points `pre_run` at `pre_run.py`:
 
@@ -77,13 +77,13 @@ personas:
 
 Per client, per active campaign, the rubric (see `references/categorization-rubric.md`) checks:
 
-- **CPL spike** — cost-per-lead > 2× rolling 7-day average. Likely creative fatigue, audience saturation, bidding strategy issue, or seasonal demand drop.
-- **Frequency saturation** — frequency > 5 in a 7-day window on a prospecting campaign. Burns audience; CPM drift up follows.
-- **Ad disapprovals** — any disapproved ad active in the past 24h. Special urgency: pharma / financial / political restricted-vertical campaigns where a disapproval may pause the whole ad set.
-- **Spend pacing** — projected end-of-month spend deviating from budget cap by > ±15%. Either under-pacing (missing the budget = missing the goals) or over-pacing (going to overspend = client argument).
-- **Conversion drop** — week-over-week conversion volume down > 30% with no obvious creative or budget change. Usually a tracking/pixel issue.
-- **CTR collapse** — CTR dropping > 40% week-over-week on an evergreen ad set. Creative fatigue.
-- **Policy strikes** — any account-level strikes in the past 24h. Strike accumulation eventually disables the account.
+- **CPL spike** - cost-per-lead > 2× rolling 7-day average. Likely creative fatigue, audience saturation, bidding strategy issue, or seasonal demand drop.
+- **Frequency saturation** - frequency > 5 in a 7-day window on a prospecting campaign. Burns audience; CPM drift up follows.
+- **Ad disapprovals** - any disapproved ad active in the past 24h. Special urgency: pharma / financial / political restricted-vertical campaigns where a disapproval may pause the whole ad set.
+- **Spend pacing** - projected end-of-month spend deviating from budget cap by > ±15%. Either under-pacing (missing the budget = missing the goals) or over-pacing (going to overspend = client argument).
+- **Conversion drop** - week-over-week conversion volume down > 30% with no obvious creative or budget change. Usually a tracking/pixel issue.
+- **CTR collapse** - CTR dropping > 40% week-over-week on an evergreen ad set. Creative fatigue.
+- **Policy strikes** - any account-level strikes in the past 24h. Strike accumulation eventually disables the account.
 
 ### What the agent does
 
@@ -96,7 +96,7 @@ Per client, per active campaign, the rubric (see `references/categorization-rubr
 
 ### Trust Ceiling
 
-**autonomous** for the read + Slack post. The agent reads platform data and posts the digest without owner approval. The volume of platforms × clients makes this safe by default — no external blast radius.
+**autonomous** for the read + Slack post. The agent reads platform data and posts the digest without owner approval. The volume of platforms × clients makes this safe by default - no external blast radius.
 
 **draft_for_review** for any client-facing message (triggered by the owner asking for a draft).
 
@@ -122,17 +122,17 @@ Common failures: noisy false positives (tune rubric thresholds with owner), surf
 ## Verification
 
 1. Every active client with paid spend gets a daily digest entry (even if "no anomalies").
-2. CRITICAL findings are unmissable — Slack alerts + summary surface above other content.
+2. CRITICAL findings are unmissable - Slack alerts + summary surface above other content.
 3. False-positive rate < 1 per 5 clients per week. If the rubric is too noisy, owner adjusts thresholds; the skill follows.
-4. Trend awareness: if a campaign has been WARN for 3 days running, the digest notes "3rd day this campaign is WARN — sustained pattern, not a blip."
+4. Trend awareness: if a campaign has been WARN for 3 days running, the digest notes "3rd day this campaign is WARN - sustained pattern, not a blip."
 5. Drafts requested by owner are tight, owner-voice, ship-shaped.
 
 ## References
 
-- `references/voice.md` — Slack digest voice + client-facing draft voice
-- `references/output-format.md` — digest format; draft template
-- `references/categorization-rubric.md` — anomaly thresholds + severity scoring
-- `references/test-cases.md` — synthetic platform datasets covering each anomaly type
+- `references/voice.md` - Slack digest voice + client-facing draft voice
+- `references/output-format.md` - digest format; draft template
+- `references/categorization-rubric.md` - anomaly thresholds + severity scoring
+- `references/test-cases.md` - synthetic platform datasets covering each anomaly type
 
 ## Cost estimate (filled by grading)
 

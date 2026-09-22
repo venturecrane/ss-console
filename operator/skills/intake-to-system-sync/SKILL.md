@@ -20,27 +20,27 @@ metadata:
     skill_type: read + assembly (cross-system sync)
     action_class: read + write
     connectors:
-      - intake-crm # IntakeCRM (build:clio-grow) — the converted lead source (read). CRM-side, out of scope for the PM migration.
-      - smokeball # PracticeManagement — dedupe + draft the contact/matter (read; write gated)
+      - intake-crm # IntakeCRM (build:clio-grow) - the converted lead source (read). CRM-side, out of scope for the PM migration.
+      - smokeball # PracticeManagement - dedupe + draft the contact/matter (read; write gated)
 ---
 
 # Intake to System Sync
 
-Carries a converted intake from a **separate intake CRM** — Clio Grow, Lawmatics, or similar — into Smokeball as a contact and matter, keeping the two systems in step so a won lead doesn't get hand-re-keyed (or dropped) on the way to the practice-management system.
+Carries a converted intake from a **separate intake CRM** - Clio Grow, Lawmatics, or similar - into Smokeball as a contact and matter, keeping the two systems in step so a won lead doesn't get hand-re-keyed (or dropped) on the way to the practice-management system.
 
-It is **only load-bearing when a distinct intake CRM runs alongside Smokeball.** The pilot assumes Smokeball as the single system of record, so this skill is **authored but not enabled for the pilot** — it requires the `build:clio-grow` (IntakeCRM) connector, which the wedge deliberately avoids. It exists for firms whose intake lives in a separate front-end and needs a clean, deduped, conflict-checked handoff into Smokeball.
+It is **only load-bearing when a distinct intake CRM runs alongside Smokeball.** The pilot assumes Smokeball as the single system of record, so this skill is **authored but not enabled for the pilot** - it requires the `build:clio-grow` (IntakeCRM) connector, which the wedge deliberately avoids. It exists for firms whose intake lives in a separate front-end and needs a clean, deduped, conflict-checked handoff into Smokeball.
 
-> **Scope note (this pass).** The PM system of record migrates Clio → Smokeball; the IntakeCRM/lead-source side is unchanged. `build:clio-grow` here names the _Clio Grow intake CRM product_ (a lead front-end), not the PM connector — it stays as authored and is out of scope for the PM migration.
+> **Scope note (this pass).** The PM system of record migrates Clio → Smokeball; the IntakeCRM/lead-source side is unchanged. `build:clio-grow` here names the _Clio Grow intake CRM product_ (a lead front-end), not the PM connector - it stays as authored and is out of scope for the PM migration.
 
 ## When to Use
 
-Use only when the firm runs a dedicated intake CRM separate from Smokeball and wants converted leads to flow into Smokeball without manual re-entry. If Smokeball is the single system of record (as in the pilot), this skill stays disabled — there is nothing to sync from.
+Use only when the firm runs a dedicated intake CRM separate from Smokeball and wants converted leads to flow into Smokeball without manual re-entry. If Smokeball is the single system of record (as in the pilot), this skill stays disabled - there is nothing to sync from.
 
 Runs event-driven (a lead is marked converted in the CRM) and scheduled (sweep the CRM for converted-but-unsynced leads).
 
 ## Prerequisites
 
-Reads the **IntakeCRM** connector (`build:clio-grow` — the converted lead, its captured fields, and intake party data) and Smokeball (`get_contacts`, `list_matters` for dedupe and the conflict cross-check; the contact/matter create is a gated write). Requires `python3` for the fetch block. **Not enabled in the pilot** (`customer.yaml` for the pilot does not bind IntakeCRM).
+Reads the **IntakeCRM** connector (`build:clio-grow` - the converted lead, its captured fields, and intake party data) and Smokeball (`get_contacts`, `list_matters` for dedupe and the conflict cross-check; the contact/matter create is a gated write). Requires `python3` for the fetch block. **Not enabled in the pilot** (`customer.yaml` for the pilot does not bind IntakeCRM).
 
 ## How to Run
 
@@ -53,18 +53,18 @@ hermes run intake-to-system-sync --lead <id>     # sync one converted lead
 
 Two phases (ADR 0021 Stream A). The mechanical CRM read + Smokeball dedupe/cross-check runs in one `execute_code` block; the field mapping and sync proposal stay in the agent's reasoning loop.
 
-### Phase 1 — Fetch (single `execute_code` block)
+### Phase 1 - Fetch (single `execute_code` block)
 
 Enumerate converted-but-unsynced leads in the CRM. For each, capture the intake fields (client identity, contact channels, matter description, practice area, captured parties) and run the Smokeball dedupe + cross-check reads (`get_contacts`, `list_matters`) on the lead's parties. Accumulate in-process; `print()` one JSON document of (lead → fields, existing-Smokeball matches, conflict cross-check hits). A single unreadable lead is `parse_failed`; the sweep continues.
 
-### Phase 2 — Reason (agent, in-context)
+### Phase 2 - Reason (agent, in-context)
 
 Per `references/algorithm.md`:
 
 1. **Conflict cross-check FIRST.** Before proposing any matter create, run the same read-only name/entity cross-check the wedge carries (the `new-matter-intake` / `conflict-intake-router` invariant). On any hit, **HALT**: route to human conflict clearance, do not propose the matter. Advancing a flagged lead is a `fails` safety violation.
-2. **Dedupe.** If the lead's client already exists as a Smokeball contact/matter, propose linking rather than creating — never mint a duplicate client or a second matter for the same engagement.
+2. **Dedupe.** If the lead's client already exists as a Smokeball contact/matter, propose linking rather than creating - never mint a duplicate client or a second matter for the same engagement.
 3. **Map fields** from the CRM schema to Smokeball's (client → contact, lead detail → matter description, captured practice area / `matterTypeId`, parties). Fields the CRM didn't capture are left empty, not invented.
-4. **Draft the sync** — the proposed Smokeball contact and matter records, plus a back-link so the CRM lead is marked synced. In this phase the actual Smokeball create and the CRM mark-synced are **gated** behind human review.
+4. **Draft the sync** - the proposed Smokeball contact and matter records, plus a back-link so the CRM lead is marked synced. In this phase the actual Smokeball create and the CRM mark-synced are **gated** behind human review.
 5. **Surface for review.** The proposed records, the dedupe decision, and any conflict hold are surfaced; a human confirms before anything is written to either system.
 
 ## Trust Ceiling
@@ -108,6 +108,6 @@ Creating a duplicate matter because the dedupe match was weak and got ignored; p
 
 ## References
 
-- `references/algorithm.md` — the dedupe rule, the conflict-first ordering, the CRM→Smokeball field map, and the gated write flow
-- `references/output-format.md` — the sync proposal (mapped records + dedupe decision + holds) _(parity fast-follow)_
-- `references/test-cases.md` — fixtures incl. clean new lead, existing-client dedupe, conflict-hit, and partial-fields _(parity fast-follow)_
+- `references/algorithm.md` - the dedupe rule, the conflict-first ordering, the CRM→Smokeball field map, and the gated write flow
+- `references/output-format.md` - the sync proposal (mapped records + dedupe decision + holds) _(parity fast-follow)_
+- `references/test-cases.md` - fixtures incl. clean new lead, existing-client dedupe, conflict-hit, and partial-fields _(parity fast-follow)_

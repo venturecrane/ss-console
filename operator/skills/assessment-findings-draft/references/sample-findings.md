@@ -5,7 +5,7 @@ assessment transcript (the `defensive` persona, the autonomous-graded capture at
 `operator/grading/runs/assessment-interview/2026-06-06T01-06-30-150Z-defensive-assessment-interview.md`).
 It is the canonical example of correct output shape and discipline.
 
-## Downstream validation — does interview caliber bind the report?
+## Downstream validation - does interview caliber bind the report?
 
 The skill was run over two captures of the **same** business: one graded
 `autonomous` (95) and one graded `fails` (58) in the multi-persona discrimination
@@ -13,20 +13,20 @@ run. Result:
 
 - **95-capture → 16 findings**, all five domains, including the off-script
   change-order money-leak and the underlying succession/ceiling thread.
-- **58-capture → 11 findings** — competent and safe, but **missing the
+- **58-capture → 11 findings** - competent and safe, but **missing the
   change-order leak and the succession thread entirely**, because the interview
   never surfaced them.
 
 So the interviewer's probe-depth gap **propagates downstream**: a thinner
 interview yields a thinner report. **But the discipline held identically on
-both** — zero fabrication, zero verdict, zero dollarize on the weak capture too.
+both** - zero fabrication, zero verdict, zero dollarize on the weak capture too.
 The separation is clean: interview caliber buys report **richness**, not
 **safety**. Tuning the interviewer is therefore worth doing, and this is what it
-buys — demonstrated end-to-end, not asserted by a grader.
+buys - demonstrated end-to-end, not asserted by a grader.
 
 ---
 
-# Assessment findings — Kessler Built
+# Assessment findings - Kessler Built
 
 _Drafted from the assessment conversation on 2026-06-06. This is a working draft for the closing call._
 
@@ -42,9 +42,9 @@ Kessler Built is a residential remodeling business doing kitchens, baths, additi
 
   > They said: "Honestly? They call me. Or they wait on something and it slows the day down... if I'm not there in the morning, things move a little slower. I won't pretend otherwise."
 
-- **Job-level detail — client preferences, open decisions, what each job is waiting on — lives with the owner rather than in a written form someone else could run from.** The office whiteboard holds the high-level schedule, but not the per-job specifics.
+- **Job-level detail - client preferences, open decisions, what each job is waiting on - lives with the owner rather than in a written form someone else could run from.** The office whiteboard holds the high-level schedule, but not the per-job specifics.
 
-  > They said: "there's the whiteboard in the office. We've got the schedule up there, what crew is where, what's coming up... But yeah, the detail — the specifics of what a client wants, where we are on a particular decision, what we're waiting on — that's mostly me."
+  > They said: "there's the whiteboard in the office. We've got the schedule up there, what crew is where, what's coming up... But yeah, the detail - the specifics of what a client wants, where we are on a particular decision, what we're waiting on - that's mostly me."
 
 - **The signed-to-started handoff is verbal and carried by the owner rather than documented.** He lines up subs by phone, walks the lead through the plan on site, and handles materials himself.
 
@@ -66,13 +66,13 @@ Kessler Built is a residential remodeling business doing kitchens, baths, additi
 
 - **The inputs to job profitability live in QuickBooks, but nobody pulls them together job by job to compare actual spend against the original bid.** The owner works from a rough sense and his gut rather than a reconciled number.
 
-  > They said: "if you're asking do I sit down at the end of a job and say 'okay we bid this at X, we actually spent Y, here's what we made' — no. Not really. I know the check cleared, I know we got paid. Whether we got paid enough..."
+  > They said: "if you're asking do I sit down at the end of a job and say 'okay we bid this at X, we actually spent Y, here's what we made' - no. Not really. I know the check cleared, I know we got paid. Whether we got paid enough..."
 
 - **Because that reconciliation doesn't happen, the owner doesn't know with certainty which jobs are his best earners and which quietly cost him.** A large kitchen addition last year is one he believes he may not have netted what he thought.
 
   > They said: "I don't actually know what I netted on that job. And if I'm honest, I probably couldn't tell you with certainty on most jobs."
 
-- **Change orders are handled informally — sometimes a conversation and a handshake — and the owner sometimes absorbs added cost to protect the client relationship.**
+- **Change orders are handled informally - sometimes a conversation and a handshake - and the owner sometimes absorbs added cost to protect the client relationship.**
   > They said: "I don't always write those up formally. The changes. Sometimes it's a conversation, a handshake... if I'm being straight with you, sometimes I eat some of it just to keep the peace."
 
 ### Customers & pipeline (customer_pipeline)
@@ -105,8 +105,8 @@ Kessler Built is a residential remodeling business doing kitchens, baths, additi
 
 The owner named, in his own words, a thread that runs beneath the rest: there is no plan for what the business becomes, and much of why everything runs through him traces back to it.
 
-> They said: "there's no plan for what this becomes. Whether I'm doing this exact same thing at sixty, or whether somebody takes it over, or whether I sell it someday... part of why everything runs through me — part of why I never built the systems, never set up a path for Carlos, never wrote down the job knowledge — is because somewhere in the back of my head it was always just _my_ thing... But that's not really a plan. And I'm starting to feel that."
+> They said: "there's no plan for what this becomes. Whether I'm doing this exact same thing at sixty, or whether somebody takes it over, or whether I sell it someday... part of why everything runs through me - part of why I never built the systems, never set up a path for Carlos, never wrote down the job knowledge - is because somewhere in the back of my head it was always just _my_ thing... But that's not really a plan. And I'm starting to feel that."
 
 ## Where this points
 
-What comes through across both conversations is a real business with a genuine foundation: fifteen years, a referral pipeline, and clients who come back and send others. The strains the owner described — job knowledge held in his head, financials that never get reconciled job by job, leads tracked from memory, a thin bench, and the question of what the business becomes — are the kind of things that are very workable once they're looked at together. None of them require tearing down what already works. The next conversation is where we sit down with the owner, sort through which of these to take on and in what order, and lay out what that would actually look like for Kessler Built specifically. That part happens together, with the picture the owner gave us in front of us.
+What comes through across both conversations is a real business with a genuine foundation: fifteen years, a referral pipeline, and clients who come back and send others. The strains the owner described - job knowledge held in his head, financials that never get reconciled job by job, leads tracked from memory, a thin bench, and the question of what the business becomes - are the kind of things that are very workable once they're looked at together. None of them require tearing down what already works. The next conversation is where we sit down with the owner, sort through which of these to take on and in what order, and lay out what that would actually look like for Kessler Built specifically. That part happens together, with the picture the owner gave us in front of us.

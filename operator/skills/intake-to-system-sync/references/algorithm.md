@@ -4,7 +4,7 @@ Source of truth for moving a converted lead into Smokeball without duplicates, c
 
 ## When this skill is even live
 
-Only when `customer.yaml` binds an **IntakeCRM** connector (`build:clio-grow` or similar — the Clio Grow intake CRM product, the lead front-end, distinct from the PM connector). If Smokeball is the single system of record (the pilot), there is no separate front-end to sync from and the skill stays disabled. This is a configuration fact, not a runtime guess — the skill does not invent a CRM to read.
+Only when `customer.yaml` binds an **IntakeCRM** connector (`build:clio-grow` or similar - the Clio Grow intake CRM product, the lead front-end, distinct from the PM connector). If Smokeball is the single system of record (the pilot), there is no separate front-end to sync from and the skill stays disabled. This is a configuration fact, not a runtime guess - the skill does not invent a CRM to read.
 
 ## Ordering (the invariant comes first)
 
@@ -12,7 +12,7 @@ Only when `customer.yaml` binds an **IntakeCRM** connector (`build:clio-grow` or
 lead = read converted-unsynced lead from IntakeCRM
 parties = lead.client + captured parties
 
-# 1. CONFLICT CROSS-CHECK FIRST — before any matter is proposed
+# 1. CONFLICT CROSS-CHECK FIRST - before any matter is proposed
 hits = conflict_cross_check(parties)          # same read-only check as new-matter-intake
 if hits:
     route(hits -> human conflict clearance)
@@ -34,7 +34,7 @@ Conflict-check precedes dedupe and create because advancing a conflicted lead is
 
 ## Dedupe rule
 
-A "match" is a confident identity match on the lead's client against existing Smokeball contacts (name + a corroborating field — email/phone). On a match, propose **linking** the new matter to the existing client (or flagging a likely-existing matter) rather than minting a duplicate. A weak/ambiguous match is surfaced for a human to decide — not silently merged and not silently duplicated.
+A "match" is a confident identity match on the lead's client against existing Smokeball contacts (name + a corroborating field - email/phone). On a match, propose **linking** the new matter to the existing client (or flagging a likely-existing matter) rather than minting a duplicate. A weak/ambiguous match is surfaced for a human to decide - not silently merged and not silently duplicated.
 
 ## Field map (CRM → Smokeball)
 
@@ -46,7 +46,7 @@ lead.practice_area    -> matter.matterTypeId (only if the CRM captured it; resol
 lead.parties          -> captured for the conflict check; recorded as authored
 ```
 
-Fields the CRM did not capture are left empty. The skill never fills a plausible practice area or a guessed party — empty is honest; invented is a fabrication breach.
+Fields the CRM did not capture are left empty. The skill never fills a plausible practice area or a guessed party - empty is honest; invented is a fabrication breach.
 
 ## Fail-closed writes
 

@@ -1,4 +1,4 @@
-# Categorization rubric — retainer-hours-reconciler
+# Categorization rubric - retainer-hours-reconciler
 
 How the agent assigns each active retainer client to a bucket. The thresholds below are defaults; per-customer overrides may live in `customers/<slug>/customer.yaml` under `skills.retainer-hours-reconciler.thresholds`.
 
@@ -6,10 +6,10 @@ How the agent assigns each active retainer client to a bucket. The thresholds be
 
 The agent computes per client:
 
-- `actual_hours_mtd` — total hours logged in the current month against this client across all enabled time-tracking tools (Harvest / Toggl / Float)
-- `sow_hours_monthly` — the client's contracted monthly retainer hours from the current signed SOW
-- `business_days_elapsed_in_month` — count of business days from month-start through today
-- `business_days_in_month` — total business days in the current month
+- `actual_hours_mtd` - total hours logged in the current month against this client across all enabled time-tracking tools (Harvest / Toggl / Float)
+- `sow_hours_monthly` - the client's contracted monthly retainer hours from the current signed SOW
+- `business_days_elapsed_in_month` - count of business days from month-start through today
+- `business_days_in_month` - total business days in the current month
 - `mtd_percent = actual_hours_mtd / sow_hours_monthly`
 - `pace_factor = business_days_elapsed_in_month / business_days_in_month`
 - `projected_eom_percent = mtd_percent / pace_factor` (linear extrapolation)
@@ -42,11 +42,11 @@ These promote a bucket TO MORE SEVERE based on context. Bucket is never demoted 
 
 ## Bucket-demotion rules (override toward less severe)
 
-These demote based on context — used sparingly.
+These demote based on context - used sparingly.
 
 1. **New client (first 60 days).** If the client signed an SOW within the last 60 days, the agent applies a wider tolerance: thresholds shift by 15 percentage points wider in both directions. (New engagements have ramp variability that doesn't predict month 3.)
 
-2. **Holiday-shortened month.** If the month includes 3+ holidays (e.g., December US), the agent uses `business_days_in_month` excluding holidays per the configured holiday calendar. This is a calculation refinement, not a bucket shift — but means pace is naturally adjusted.
+2. **Holiday-shortened month.** If the month includes 3+ holidays (e.g., December US), the agent uses `business_days_in_month` excluding holidays per the configured holiday calendar. This is a calculation refinement, not a bucket shift - but means pace is naturally adjusted.
 
 ## Service-line allocation rules
 
@@ -59,13 +59,13 @@ If the SOW has no service-line caps, the agent uses total only. Service-line bre
 
 ## Tie-breakers + edge cases
 
-- **No SOW found.** If the client is active in time tracking but the agent can't find a SOW (Drive path missing, Notion link broken, etc.), the client appears in a "SOW lookup failed" bullet at the bottom of the post — NOT in any bucket. The owner needs to fix the SOW reference before the agent can grade utilization.
+- **No SOW found.** If the client is active in time tracking but the agent can't find a SOW (Drive path missing, Notion link broken, etc.), the client appears in a "SOW lookup failed" bullet at the bottom of the post - NOT in any bucket. The owner needs to fix the SOW reference before the agent can grade utilization.
 
 - **SOW shows 0 hours.** Some "non-retainer" client engagements are time-tracked even though they're not retained. Filter these out: if `sow_hours_monthly == 0`, exclude from the report entirely.
 
 - **Multiple SOWs per client.** If a client has overlapping SOWs (e.g., main retainer + a project SOW), the agent sums the caps. The owner's responsibility to flag if that's wrong; the agent uses what's in the SOW store.
 
-- **Mid-month SOW change.** If the SOW changed during the current month, the agent uses the most recent SOW for the bucket math but adds a note: "SOW updated <date> — pre-change utilization not retroactively adjusted."
+- **Mid-month SOW change.** If the SOW changed during the current month, the agent uses the most recent SOW for the bucket math but adds a note: "SOW updated <date> - pre-change utilization not retroactively adjusted."
 
 ## Calibration baseline
 
