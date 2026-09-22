@@ -68,12 +68,34 @@ done
 # command line is an exfiltration primitive here, not a debugging convenience.
 # Match on a pattern that cannot match this wrapper (as the gateway resolve
 # below does), and print pids only — never `-a`, never `-f` with output.
+#
+# The SEND credentials are stripped TWICE below, because they arrive by two
+# independent paths and removing either one alone leaves the leak intact:
+#
+#   1. `grep -vE` on the ENVV build, so the gateway's copy of them never lands
+#      on this wrapper's argv (where any `ps`-shaped command would print them).
+#   2. `env -u` on the exec, because `fly ssh` inherits the Machine's PID 1
+#      environment and `env` starts from the CALLER's environment. The hallpass
+#      session is already holding them before ENVV is assembled at all.
+#
+# Measured on ashton-price 2026-09-22: with only the grep in place, a probe
+# launched through this wrapper still reported all three MSGRAPH_SEND_* present
+# in its own environ. The `-u` flags must come BEFORE ${ENVV}, since a later
+# assignment would win over an earlier -u.
+#
+# entrypoint.sh unsets them before its own exec-drop, but an unset cannot reach
+# a process launched later by a different path, and this wrapper is that path.
+# The result was the one credential holding Mail.Send on a seat with Send As for
+# real staff, sitting in an environ any same-uid sibling can read (ADR 0044
+# Decision 8). Boot smoke checks for exactly this
+# (`msgraph-send-credential-stripped-from-agent`), and a probe that needs to
+# send should run as a gateway turn, not as a hermes-uid one-shot.
 exec fly ssh console -a "${APP_NAME}" -C "sh -c '
 GPID=\$(pgrep -f \"hermes.*gateway run\" | head -1)
 if [ -z \"\${GPID}\" ]; then
   echo \"seat-probe: no gateway process found on ${APP_NAME}\" >&2
   exit 1
 fi
-ENVV=\$(tr \"\\0\" \"\\n\" < /proc/\${GPID}/environ | grep -vE \"^(PWD|SHLVL|_)=\" | tr \"\\n\" \" \")
-exec runuser -u hermes -- env \${ENVV} PATH=/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin ${QUOTED}
+ENVV=\$(tr \"\\0\" \"\\n\" < /proc/\${GPID}/environ | grep -vE \"^(PWD|SHLVL|_|MSGRAPH_SEND_TENANT_ID|MSGRAPH_SEND_CLIENT_ID|MSGRAPH_SEND_CLIENT_SECRET|AGENTMAIL_SEND_API_KEY|AGENTMAIL_WEBHOOK_READ_API_KEY)=\" | tr \"\\n\" \" \")
+exec runuser -u hermes -- env -u MSGRAPH_SEND_TENANT_ID -u MSGRAPH_SEND_CLIENT_ID -u MSGRAPH_SEND_CLIENT_SECRET -u AGENTMAIL_SEND_API_KEY -u AGENTMAIL_WEBHOOK_READ_API_KEY \${ENVV} PATH=/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin ${QUOTED}
 '"
