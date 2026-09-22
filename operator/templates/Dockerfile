@@ -936,7 +936,7 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # internetMessageId and every staff send-as approval was refused by the
 # broker's forgery check. Runtime files: shared/msgraph_poller.py and
 # shared/msgraph_client.py; not tracked twins, so only overlayRef moves.
-ARG OVERLAY_REF="b06d8b29aa9a2d35fce78daaa674eadff1b0bd0c"
+ARG OVERLAY_REF="68ebecc1fed22ce0772f23febe5b86cd772779b7"
 
 ARG CUSTOMER_SLUG=customer-zero
 
