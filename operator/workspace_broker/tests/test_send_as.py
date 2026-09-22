@@ -339,12 +339,39 @@ def test_change_revises_and_the_next_proposal_supersedes_it(tmp_path: Path) -> N
     first = _propose(broker)["tag"]
     out = _decide(broker, first, "change", instruction="add the date of loss")
     assert out["status"] == "REVISED" and out["instruction"] == "add the date of loss"
+    # The text they already hold comes back, so the redraft turn can carry its
+    # identifiers as provenance (it read none of them itself).
+    assert out["prior_text"] and out["prior_subject"]
     second = _propose(broker, body_text="Please send the records. Date of loss: 8/24/26.")["tag"]
     stale = _decide(broker, first, "send", internet_message_id="<answer-2@examplefirm.example>")
     assert stale["status"] == "SUPERSEDED" and stale["replaced_by"] == second
     assert (
         _decide(broker, second, "send", internet_message_id="<answer-3@examplefirm.example>")["status"] == "DISPATCHED"
     )
+
+
+def test_a_requested_change_leaves_the_draft_answerable(tmp_path: Path) -> None:
+    # smd-staging, 2026-09-22: the change closed the draft, the redraft was then
+    # refused by the identifier gate, and the approver was left with a dead tag
+    # and no replacement. A revision request must keep every outcome reachable
+    # until the replacement actually exists.
+    http = SendAsGraph()
+    broker = _broker(tmp_path, http)
+    tag = _propose(broker)["tag"]
+    assert _decide(broker, tag, "change", instruction="add the date of loss")["status"] == "REVISED"
+    out = _decide(broker, tag, "send", internet_message_id="<answer-2@examplefirm.example>")
+    assert out["status"] == "DISPATCHED"
+    assert http.sent_messages[-1]["from"]["emailAddress"]["address"] == STAFF
+
+
+def test_a_change_that_never_gets_a_replacement_can_still_be_cancelled(tmp_path: Path) -> None:
+    http = SendAsGraph()
+    broker = _broker(tmp_path, http)
+    tag = _propose(broker)["tag"]
+    _decide(broker, tag, "change", instruction="add the date of loss")
+    out = _decide(broker, tag, "cancel", internet_message_id="<answer-2@examplefirm.example>")
+    assert out["status"] == "CANCELLED"
+    assert not any("from" in m for m in http.sent_messages)
 
 
 def test_a_transport_failure_is_reported_and_never_retried(tmp_path: Path) -> None:
