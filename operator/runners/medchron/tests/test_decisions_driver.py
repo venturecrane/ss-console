@@ -62,6 +62,75 @@ def test_selection_joint_matter_uses_unit_folders_and_shared(
     assert not (data_root / "example-matter" / "include.json").exists()  # dry run writes nothing
 
 
+def _one_unit_job(jd: Path, data_root: Path, *, folder_prefix: str | None) -> Path:
+    """The live shape: a TWO-client matter with ONE unit requested.
+
+    `job.joint` is False here (one unit), which is exactly the condition under
+    which selection used to fall through to "every top-level folder".
+    """
+    body = yaml.safe_load(job_yaml(data_root, joint=True))
+    unit = dict(body["units"][0])
+    unit.pop("folder_prefix", None)
+    if folder_prefix is not None:
+        unit["folder_prefix"] = folder_prefix
+    body["units"] = [unit]
+    jd.mkdir(exist_ok=True)
+    (jd / "job.yaml").write_text(yaml.safe_dump(body, sort_keys=False))
+    return jd
+
+
+def test_selection_single_unit_with_prefix_excludes_the_co_clients_folder(
+    tmp_path: Path, data_root: Path, firm_config_path: Path
+) -> None:
+    """The regression: one client asked for on a two-client matter.
+
+    Before the fix this returned every top-level folder, so a chronology for
+    Alpha was built partly out of Beta's medical file.
+    """
+    jd = _one_unit_job(tmp_path / "job", data_root, folder_prefix="/Alpha_Example")
+    seed_folders(data_root, ["Alpha_Example", "Beta_Example", "EMAILS ALL", "PHOTOS", "MISC"])
+    d = decisions.selection(job_mod.load(jd), _cfg(firm_config_path), data_root / "example-matter", dry_run=True)
+    assert not d.held
+    assert d.payload["include_prefixes"] == ["/Alpha_Example", "/EMAILS ALL"]
+    assert "/Beta_Example" not in d.payload["include_prefixes"]
+    assert any("Beta_Example" in n for n in d.notes)  # not pulled, and said so
+
+
+def test_selection_normalises_a_bare_folder_prefix(tmp_path: Path, data_root: Path, firm_config_path: Path) -> None:
+    """The submitting skill sends "Alpha_Example", not "/Alpha_Example".
+
+    `download.wanted` matches `folder_path.startswith(p)` against paths like
+    "/Alpha_Example/MEDICAL", so an unnormalised prefix matches NOTHING: the
+    run would look correctly scoped while reading only shared classes.
+    """
+    jd = _one_unit_job(tmp_path / "job", data_root, folder_prefix="Alpha_Example")
+    seed_folders(data_root, ["Alpha_Example", "Beta_Example", "EMAILS ALL"])
+    d = decisions.selection(job_mod.load(jd), _cfg(firm_config_path), data_root / "example-matter", dry_run=True)
+    assert not d.held
+    assert d.payload["include_prefixes"] == ["/Alpha_Example", "/EMAILS ALL"]
+
+
+def test_selection_single_unit_without_prefix_is_unchanged(
+    tmp_path: Path, data_root: Path, firm_config_path: Path
+) -> None:
+    """A genuine single-client matter still gets every surviving folder."""
+    jd = _one_unit_job(tmp_path / "job", data_root, folder_prefix=None)
+    seed_folders(data_root, ["MEDICAL", "INVOICES", "PHOTOS"])
+    d = decisions.selection(job_mod.load(jd), _cfg(firm_config_path), data_root / "example-matter", dry_run=True)
+    assert d.payload["include_prefixes"] == ["/INVOICES", "/MEDICAL"]
+
+
+def test_selection_holds_when_the_named_unit_folder_is_absent(
+    tmp_path: Path, data_root: Path, firm_config_path: Path
+) -> None:
+    """Fail closed: a prefix naming no real folder HOLDS, never falls back to all."""
+    jd = _one_unit_job(tmp_path / "job", data_root, folder_prefix="Alpha_Example")
+    seed_folders(data_root, ["Beta_Example", "EMAILS ALL"])
+    d = decisions.selection(job_mod.load(jd), _cfg(firm_config_path), data_root / "example-matter", dry_run=True)
+    assert d.held
+    assert any("not found at top level" in h for h in d.holds)
+
+
 def test_selection_holds_when_a_unit_folder_is_missing(tmp_path: Path, data_root: Path, firm_config_path: Path) -> None:
     jd = tmp_path / "job"
     jd.mkdir()
