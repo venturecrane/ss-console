@@ -924,7 +924,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # sent on the turn; the `[draft x] send|change|cancel` lane answers it; the
 # broker (this repo) transmits. No tracked twin changed, so only overlayRef
 # moves.
-ARG OVERLAY_REF="512d9ecc4630cfc02deaaec10a5af9abfcdaf83c"
+# 2026-09-22 (9d34de80, overlay #373): the spec pointer block stamped into
+# every SKILL.md at boot stops using the em dash. The model mirrors its
+# instructions and the outbound filter refuses the character; #2860 cleaned
+# the skills' authored text and this was the one source re-adding it.
+# Runtime file: shared/spec_stamp.py; not a tracked twin, so only overlayRef
+# moves.
+ARG OVERLAY_REF="9d34de80eb0ac3b8ad55aeed567091f333f7640d"
 
 ARG CUSTOMER_SLUG=customer-zero
 

@@ -1386,7 +1386,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // today's date is no longer refused as an unrecorded pair; the other ten.
     // 06372981 -> 512d9ecc (2026-09-22, overlay#372). ADR 0089: a send with a
     // `from` is proposed to that staff member for emailed approval.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="512d9ecc4630cfc02deaaec10a5af9abfcdaf83c"')
+    // 512d9ecc -> 9d34de80 (2026-09-22, overlay#373). The boot-stamped spec
+    // pointer block stops carrying em dashes into every SKILL.md.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="9d34de80eb0ac3b8ad55aeed567091f333f7640d"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
