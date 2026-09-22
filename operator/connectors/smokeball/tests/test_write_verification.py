@@ -182,7 +182,7 @@ def test_the_home_exemption_does_not_reach_a_client_matter(monkeypatch, tmp_path
 
 # ---- create_memo confirms its own write (memo_confirm.py) -----------------
 
-from smokeball_connector import memo_confirm as mc  # noqa: E402
+from smokeball_connector import memo_confirm as mc  # noqa: E402 - imported beside the tests that exercise it, below the older fixtures
 
 
 class _FakeClient:
