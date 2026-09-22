@@ -108,7 +108,9 @@ def test_motion_tracker_gets_the_day_of_its_own_latest_surface() -> None:
     payload = {
         "value": [
             memo(id="m1", createdDate="2026-08-01T09:00:00Z", plainText="[Operator] Motion calendar assembled for ..."),
-            memo(id="m2", createdDate="2026-09-14T09:00:00Z", plainText="[Operator] Motion calendar assembled for ..."),
+            # The SURFACE form, which SKILL.md step 6 also sanctions. Matching
+            # only the log body would read this matter as never surfaced.
+            memo(id="m2", createdDate="2026-09-14T09:00:00Z", plainText="[Operator] # Motion Calendar - Reyes ..."),
             # A LATER memo that is not this skill's surface must not win.
             memo(id="m3", createdDate="2026-09-20T09:00:00Z", plainText=f"[Operator] Captured a lien. {PROSE}"),
             # Nor an unstamped one quoting the marker.
@@ -120,7 +122,13 @@ def test_motion_tracker_gets_the_day_of_its_own_latest_surface() -> None:
 
 def test_motion_tracker_reports_no_prior_surface_as_none() -> None:
     gate = _load_gate()
-    payload = {"value": [memo(id="m1", plainText=f"[Operator] something else entirely. {PROSE}")]}
+    payload = {
+        "value": [
+            memo(id="m1", plainText=f"[Operator] something else entirely. {PROSE}"),
+            # A passing mention mid-sentence is not a surface.
+            memo(id="m2", plainText="[Operator] The attorney asked about the motion calendar this week."),
+        ]
+    }
     assert gate.derive_matter_facts("motion-calendar-tracker", payload) == {"last_surface": None}
 
 

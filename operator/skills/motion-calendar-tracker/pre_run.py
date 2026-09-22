@@ -207,9 +207,14 @@ _PROVENANCE_MARK = "[Operator]"
 #: (``skills/service-confirmation-watcher/references/output-format.md``).
 _FILE_ID_RE = re.compile(r"\bfileId\s+([A-Za-z0-9][A-Za-z0-9._:-]{0,127})")
 
-#: The motion tracker's own surface memo opens "Motion calendar assembled for
-#: ..." (``skills/motion-calendar-tracker/references/output-format.md``).
-_MOTION_SURFACE_MARKER = "motion calendar assembled"
+#: The motion tracker's own memo, in EITHER form its skill sanctions: the
+#: internal-log body opens "Motion calendar assembled for ...", while SKILL.md
+#: step 6 says to write the SURFACE, whose heading is "# Motion Calendar - ...".
+#: Both are in ``skills/motion-calendar-tracker/references/output-format.md``
+#: and the skill does not settle which one ships, so matching only the log body
+#: would report "not previously surfaced" for a matter surfaced every week.
+#: Neither marker matches a passing mention of the phrase mid-sentence.
+_MOTION_SURFACE_MARKERS = ("motion calendar assembled", "# motion calendar")
 
 #: An extension is usually papered by a PERSON, not by the Operator, so these
 #: are matched across every memo on the matter rather than only stamped ones.
@@ -347,7 +352,10 @@ def _latest_surface_day(memos: list) -> str | None:
     latest: str | None = None
     for memo in memos:
         body = _memo_body(memo)
-        if not _is_operator_memo(body) or _MOTION_SURFACE_MARKER not in body.lower():
+        if not _is_operator_memo(body):
+            continue
+        lowered = body.lower()
+        if not any(marker in lowered for marker in _MOTION_SURFACE_MARKERS):
             continue
         day = _memo_day(memo)
         if day is not None and (latest is None or day > latest):
