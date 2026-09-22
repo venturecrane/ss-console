@@ -119,7 +119,12 @@ ordinary tool results. This is an accepted latency and context tradeoff for
 credential mediation; batching must be added broker-side, never by exposing the
 credential to `execute_code`.
 
-## Managed-mailbox send-as (`From`) selection
+## Managed-mailbox reply identity (`From`) selection
+
+This is not how a staff member's "send it as me" request is handled. That
+request goes to `smd_send_message` with `from`, per "Send as a staff member" in
+SKILL.md; this section only picks the identity of a reply draft Captain sends
+himself.
 
 Applies only in managed-mailbox mode, when creating a reply draft in a mailbox
 the Operator manages on the principal's behalf. The principal's mailbox receives

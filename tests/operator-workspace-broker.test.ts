@@ -203,7 +203,15 @@ describe('ADR 0045 Workspace capability broker', () => {
     expect(emailReplySkill).toContain('workspace_gmail_create_draft')
     expect(inboxTriageSkill).not.toContain('workspace_gmail_send')
     expect(emailReplySkill).not.toContain('workspace_gmail_send')
-    expect(inboxTriageSkill).not.toContain('send_message')
+    // Narrowed for ADR 0089, not removed: the one send-shaped tool inbox-triage
+    // may name is `smd_send_message` with `from`, and only inside its "Send as a
+    // staff member" section, where the call proposes a draft to the staff member
+    // and sends nothing. Everywhere else in the skill, no send tool at all.
+    const sendAs =
+      /### Send as a staff member\n[\s\S]*?(?=\n### )/.exec(inboxTriageSkill)?.[0] ?? ''
+    expect(sendAs).toContain('smd_send_message')
+    expect(inboxTriageSkill.replace(sendAs, '')).not.toContain('send_message')
+    expect(sendAs.replaceAll('smd_send_message', '')).not.toContain('send_message')
     expect(smdCustomerConfig).not.toContain('workspace_gmail_send')
     expect(smdCustomerConfig).not.toContain('receive an autonomous reply')
   })
