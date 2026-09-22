@@ -44,13 +44,29 @@ drafts a demand. It tracks what is outstanding and chases it.
 
 The set of providers records were requested from is a **firm-authored roster** on the
 matter (the records-request list the paralegal/attorney set up, or what YoCierge was
-sent out to collect), read from the matter's memos and tasks
-(`get_memos_on_matter`, `list_tasks`). The skill acts on that authored roster. It
-**never assembles its own list of providers** and, in particular, **never infers a
-provider from the content of a record already in the file** - reading a treatment
-record to discover "there must also be an MRI at Provider X" is exactly the
-treatment-characterization line this skill does not cross. If no authored roster is
-present, it surfaces and asks; it does not invent the provider set.
+sent out to collect). The skill acts on that authored roster. It **never assembles its
+own list of providers** and, in particular, **never infers a provider from the content
+of a record already in the file** - reading a treatment record to discover "there must
+also be an MRI at Provider X" is exactly the treatment-characterization line this skill
+does not cross. If no authored roster is present, it surfaces and asks; it does not
+invent the provider set.
+
+**Where the roster is read from.** On a **scheduled wake** it is the firm's
+records-request **roster tasks** (`list_tasks`, matter metadata, unfenced), and this
+gate's `pre_run.py` has already enumerated them: the wake's `plans` name each item due
+by `matter_id` and `task_id`, with `attempt`, `last_chased` and
+`days_past_confirm_by`. Read the roster task itself for the provider. A seat whose open
+tasks carry no roster marker at all surfaces as condition (e), "NO ROSTER TASKS", from
+the gate: a missing roster is surfaced, never filled in from somewhere else.
+
+**Scheduled-scan rule: a scheduled scan never calls `get_memos_on_matter`
+or `read_document`, the only two matter-content tools the seat fences,
+because it refuses a second matter's content in one session.**
+A scheduled run covers every open matter; the one-matter content fence refuses the
+second matter's memo read, so the scan would go blind after the first matter and burn
+the seat's refusal-cascade brake on the way. **On demand** (one matter, named by a
+human) that matter's memos are readable as they always were, and a roster recorded in
+a memo there is read directly.
 
 ## Never diagnoses, never characterizes treatment, never drafts the demand (the line)
 
@@ -154,8 +170,10 @@ logged and closed, reachable only on a confident match), or **C** (surface to a 
   never Shape B (the firm's file-naming convention is unconfirmed).
 
 1. **Resolve** - read the matter (`get_matter` → `personResponsibleStaffId`,
-   `clientIds[]`) and the **authored records-request roster** from the matter's memos
-   and tasks (`get_memos_on_matter`, `list_tasks`). No authored roster → surface and
+   `clientIds[]`) and the **authored records-request roster**: on a scheduled wake the
+   roster tasks the wake's `plans` enumerate (`list_tasks`, unfenced metadata; never
+   `get_memos_on_matter` on a scan), on demand that one matter's memos and tasks
+   (`get_memos_on_matter`, `list_tasks`). No authored roster → surface and
    ask; do not invent the provider set. Resolve responsible staff via
    `personResponsibleStaffId` (`get_staff` / `search_staff` if a name needs
    resolving).

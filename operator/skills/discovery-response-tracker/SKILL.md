@@ -189,14 +189,60 @@ by-hand branch.
 **Before flagging anything as past due, check for a recorded extension.** Extensions and
 stipulations are this firm's **top source of slippage**, and they are usually granted
 informally **by email, not entered into the record**. A recorded extension (a memo,
-stipulation, or task note in the matter - `get_memos_on_matter`, `list_tasks`)
-**overrides the computed date**; the skill re-anchors to it and does not flag. Because an
+stipulation, or task note in the matter) **overrides the computed date**; the skill
+re-anchors to it and does not flag. Because an
 unrecorded email extension cannot be seen from the record, the skill **never asserts
 "late" as an established fact** off a passed computed date alone. It couples every past-due
 observation with **"the response window has passed UNLESS an extension was granted - confirm
 none is on file."** If an extension cannot be ruled out from the record, that is a "late
 cannot be established" case → **Shape D**, not a late flag. Whether the firm reliably papers
 extensions in the matter is confirmed at connect.
+
+**Where the extension check reads from.** On a single matter a human named, read the
+matter directly (`get_memos_on_matter`, `list_tasks`).
+
+**Scheduled-scan rule: a scheduled scan never calls `get_memos_on_matter`
+or `read_document`, the only two matter-content tools the seat fences,
+because it refuses a second matter's content in one session.**
+A scheduled run covers every open matter; the one-matter content fence refuses the
+second matter's memo read, so the scan would go blind after the first matter and burn
+the seat's refusal-cascade brake on the way.
+
+So on a **scheduled scan** the extension candidates are handed to you in the wake's
+Script Output, read from every open matter's memos in code before the session started:
+
+```json
+{
+  "wakeAgent": true,
+  "memo_facts": {
+    "skill": "discovery-response-tracker",
+    "matters": [
+      {
+        "matterId": "...",
+        "matterNumber": "...",
+        "extension_candidates": [{ "memoId": "...", "dates": ["YYYY-MM-DD"] }]
+      }
+    ]
+  }
+}
+```
+
+A candidate is a memo that MENTIONS an extension or a stipulation, with the ISO dates
+found in it. It is **not** a finding that an extension was granted, and nobody read the
+sentence. So:
+
+- **With a candidate**, re-anchor to its date exactly as a recorded extension always
+  has, and **cite it as a candidate**: "re-anchored to `<date>` per memo `<memoId>`,
+  confirm." Never assert the new date silently, and never state what the memo says.
+  A candidate whose `dates` list is empty re-anchors nothing: it is an extension
+  mention with no date, which is a Shape D "late cannot be established."
+- **With no candidate**, the wording is unchanged from today: couple the past-due
+  observation with "the response window has passed UNLESS an extension was granted -
+  confirm none is on file."
+- A matter whose row carries `"unreadable": true` or `"truncated": true`, or that has
+  no row at all, is **not** "no extension on file" - it is "extension state unknown",
+  which is Shape D.
+- `list_tasks` is metadata, unfenced, and is read on the scan as it always was.
 
 When the deadline has passed (extension check clear) with **no response**, or a response
 comes back that appears **thin** (boilerplate objections, non-answers, missing responses to
@@ -309,9 +355,12 @@ Outbound:
    open a tracked task (`create_task`, keyed `(matter, set, outbound)`).
 2. **Watch** across open matters on the cadence (`list_matters(updatedSince)`,
    `list_tasks(is_completed=false)`). Before flagging past-due, check for a recorded
-   extension (`get_memos_on_matter`, `list_tasks`); a recorded extension overrides the
-   computed date, and an extension that cannot be ruled out means "late" is unestablished
-   (Shape D).
+   extension: on a scheduled scan from the `extension_candidates` handed in the wake's
+   `memo_facts` plus `list_tasks`, on demand from `get_memos_on_matter` and
+   `list_tasks` for the one matter named ("Where the extension check reads from",
+   above). A recorded extension overrides the computed date and is cited as "per memo
+   `<memoId>`, confirm"; an extension that cannot be ruled out means "late" is
+   unestablished (Shape D).
 3. **Surface the track** to the responsible attorney - no/late/unverified response
    (no-response track; objections waived; RFA-late = higher severity, §2033.280) vs. a
    thin verified response (compel-further track; meet-and-confer declaration; window runs
