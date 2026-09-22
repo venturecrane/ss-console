@@ -178,3 +178,73 @@ def test_the_home_exemption_does_not_reach_a_client_matter(monkeypatch, tmp_path
     _wire(monkeypatch, tmp_path, home=OPS, matters={M101: {"id": M101, "number": "2026-PI-101"}})
     with pytest.raises(srv.MatterReferenceMismatch):
         srv.create_memo(M101, "See matter 2026-PI-106.")
+
+
+# ---- create_memo confirms its own write (memo_confirm.py) -----------------
+
+from smokeball_connector import memo_confirm as mc  # noqa: E402 - imported beside the tests that exercise it, below the older fixtures
+
+
+class _FakeClient:
+    """POST returns {id, href}; GET returns scripted read-backs in order."""
+
+    def __init__(self, reads: list, post: dict | None = None) -> None:
+        self.reads = list(reads)
+        self.post = post if post is not None else {"id": "m1", "href": "https://x/matters/A/memos/m1"}
+        self.posts: list[dict] = []
+
+    def request(self, method, path, json=None, **_):
+        self.posts.append({"path": path, "json": json})
+        return self.post
+
+    def get(self, path, **_):
+        item = self.reads.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+BODY = "[Operator] Motion calendar for matter 2026-PI-101."
+RTF = "{\\rtf1\\ansi [Operator] Motion calendar}"
+
+
+def _nosleep(_s) -> None:
+    return None
+
+
+def test_confirms_on_plaintext_match_even_when_text_is_rtf() -> None:
+    c = _FakeClient([{"id": "m1", "text": RTF, "plainText": BODY + "\n"}])
+    out = mc.post_and_confirm(c, "A", BODY, sleep=_nosleep)
+    assert out["confirmed"] is True
+    assert out["id"] == "m1" and out["href"].endswith("/memos/m1")  # original keys kept
+
+
+def test_a_404_then_success_confirms_after_retry() -> None:
+    c = _FakeClient([RuntimeError("404"), {"id": "m1", "plainText": BODY}])
+    assert mc.post_and_confirm(c, "A", BODY, sleep=_nosleep)["confirmed"] is True
+
+
+def test_unreadable_is_unknown_never_false() -> None:
+    c = _FakeClient([RuntimeError("503")] * 3)
+    out = mc.post_and_confirm(c, "A", BODY, sleep=_nosleep)
+    assert out["confirmed"] == "unknown"
+    assert len(c.posts) == 1  # never re-created
+
+
+def test_a_proven_mismatch_is_false() -> None:
+    c = _FakeClient([{"id": "m1", "plainText": "[Operator] something else"}])
+    assert mc.post_and_confirm(c, "A", BODY, sleep=_nosleep)["confirmed"] is False
+
+
+def test_no_id_in_the_response_is_unknown() -> None:
+    c = _FakeClient([], post={"ok": True})
+    assert mc.post_and_confirm(c, "A", BODY, sleep=_nosleep)["confirmed"] == "unknown"
+
+
+def test_create_memo_returns_confirmed(monkeypatch) -> None:
+    c = _FakeClient([{"id": "m1", "plainText": "[Operator] Plain note, no matter cited."}])
+    monkeypatch.setattr(srv, "_get_client", lambda: c)
+    monkeypatch.setattr(mc.time, "sleep", _nosleep)
+    out = srv.create_memo("A", "Plain note, no matter cited.")
+    assert out["confirmed"] is True
+    assert c.posts[0]["json"]["text"].startswith("[Operator]")

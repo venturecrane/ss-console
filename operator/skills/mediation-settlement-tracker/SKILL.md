@@ -160,9 +160,9 @@ done. Two writes only:
   (`personResponsibleStaffId`).
 - **`create_memo`** writes the internal log and the training note.
 
-After each write the skill reads back (`list_tasks`/`get_task` after `create_task`;
-`get_memos_on_matter` after `create_memo`) and reports the item as tracked only if the
-read shows it landed. If the read does not confirm it, the skill **surfaces the
+After each write the skill confirms it (`list_tasks`/`get_task` after `create_task`;
+the `confirmed` field `create_memo` returns, true only when it read its own memo back)
+and reports the item as tracked only if that shows it landed. If the read does not confirm it, the skill **surfaces the
 failure**, never a shape that asserts the item was created. There is **no calendar
 write** in this skill: the mediation/MSC event is read (`list_events`), and any
 proposal to add or move a calendar entry is surfaced for a human, not written.

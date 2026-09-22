@@ -31,6 +31,14 @@ A send-as proposal may be made on a tainted turn. Nothing leaves until a person 
 
 The fabrication gate, matter gate, and identifier filter run at propose time, on the proposing session, which holds the read provenance. The broker refuses a proposal whose gate pass is not all true. At approval, only session-independent facts are re-checked: the digest, expiry, approver, and whether the row is unconsumed.
 
+#### 3a. A revision inherits the draft it revises (amendment, 2026-09-22)
+
+Section 3 holds for a first draft and breaks for its revision, which the live test showed the same day it shipped: the approval reply is a later session that read neither the matter nor the request, so the identifier gate refused a redraft for the claim number the approver was reading in the email he answered. The redraft turn therefore seeds two sources, and only these two: the payload of the draft being revised, which the gates cleared when it was proposed, and the instruction the approver typed in their own reply. A value a named staff member supplies is their assertion, not the model's invention, and the revision still leaves only on their approval of the final text. Nothing the model composed in the redraft turn is seeded, so a fabricated identifier is still refused.
+
+#### 3b. A revision request keeps the draft answerable (amendment, 2026-09-22)
+
+A `change:` reply records the instruction and leaves the row OPEN. The replacement proposal is what closes it (the broker links the two). The first cut closed the row on the change, and when the redraft was refused the approver held a dead tag with no replacement, so `send` answered a closed row and nothing could be recovered. An open row keeps every outcome reachable: supersede it, send the text they were shown, or cancel.
+
 ### 4. An approved send-as is exempt from the content floor (amends ADR 0031)
 
 ADR 0031's floor exists so that money, contract, and legal wording has a person review it before it leaves. A send-as approval is exactly that review, by the person whose name is on it. Re-applying the floor would withhold the approved letter, and it would do so for exactly the words a law firm's letters contain.

@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from .digest_home import verify_unless_digest_home  # noqa: F401 - re-exported for server.py
+from .memo_confirm import post_and_confirm  # noqa: F401 - re-exported for server.py
 
 PROVENANCE_MARK = "[Operator]"
 

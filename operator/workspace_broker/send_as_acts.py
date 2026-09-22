@@ -263,18 +263,27 @@ class SendAsStore:
             return cursor.rowcount == 1
 
     def link_revision(self, approver: str, to: list[str], new_id: str) -> None:
-        """Point the newest revised, unreplaced row for this approver and these
-        recipients at the proposal that replaces it."""
+        """Close the draft this proposal replaces, and point it at the replacement.
+
+        The candidate is the newest OPEN row for this approver and these
+        recipients that carries a revision instruction. A revision request leaves
+        the row open on purpose (see ``_apply_change``), so this is the moment it
+        becomes REVISED: when the replacement exists, never before.
+        """
         since = self._now() - _REVISE_LINK_WINDOW_S
         with self._connect() as db:
             rows = db.execute(
                 "SELECT id, payload_json FROM send_as_acts WHERE status = ? AND approver = ?"
-                " AND replaced_by IS NULL AND created_at >= ? ORDER BY created_at DESC",
-                (STATUS_REVISED, approver, since),
+                " AND replaced_by IS NULL AND instruction IS NOT NULL AND instruction != ''"
+                " AND created_at >= ? ORDER BY created_at DESC",
+                (STATUS_OPEN, approver, since),
             ).fetchall()
             for row in rows:
                 if sorted(json.loads(row["payload_json"]).get("to") or []) == sorted(to):
-                    db.execute("UPDATE send_as_acts SET replaced_by = ? WHERE id = ?", (new_id, row["id"]))
+                    db.execute(
+                        "UPDATE send_as_acts SET replaced_by = ?, status = ? WHERE id = ? AND status = ?",
+                        (new_id, STATUS_REVISED, row["id"], STATUS_OPEN),
+                    )
                     return
 
     def dispatched_on(self, conversation_id: str) -> dict[str, Any] | None:
@@ -536,10 +545,31 @@ def _apply_change(
     if not instruction:
         return _refused("say what to change after 'change:'")
     fields = {"decided_by": decided_by, "decided_at": store._now(), "instruction": instruction}
-    if not store.claim(row["id"], from_status=STATUS_OPEN, to_status=STATUS_REVISED, fields=fields):
+    # The row STAYS OPEN (2026-09-22). It used to close here, which left the
+    # approver with nothing when the redraft did not arrive: on smd-staging a
+    # revision was refused by the identifier gate, and the draft they had just
+    # been shown was already gone, so "send" answered a closed row and no
+    # replacement existed to answer. An open row is the only state from which
+    # every outcome is still reachable — the replacement supersedes it
+    # (SendAsStore.link_revision), or they send the text they were shown, or they
+    # cancel. Nothing here sends anything.
+    if not store.claim(row["id"], from_status=STATUS_OPEN, to_status=STATUS_OPEN, fields=fields):
         return _refused("this draft was answered already")
     _audit(broker, "SEND_AS_REVISED", "send_as_decide", meta)
-    return {**_BASE, "status": "REVISED", "reason": "revision requested", "instruction": instruction}
+    # The text the approver already holds, returned so the seat can carry its
+    # identifiers into the redraft turn as provenance (ADR 0089 amendment): the
+    # values were gate-checked when this draft was proposed and a named person
+    # has them in hand, but the reply arrives in a later session that read none
+    # of it.
+    payload = json.loads(row["payload_json"])
+    return {
+        **_BASE,
+        "status": "REVISED",
+        "reason": "revision requested",
+        "instruction": instruction,
+        "prior_subject": payload.get("subject") or "",
+        "prior_text": payload.get("body_text") or "",
+    }
 
 
 def _report_failure(
