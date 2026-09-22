@@ -48,7 +48,7 @@ from .parties import (
     _role_contact_id,
 )
 from .task_update import PROVENANCE_MARK as _PROVENANCE_MARK
-from .task_update import MatterReferenceMismatch, verify_unless_digest_home
+from .task_update import MatterReferenceMismatch, post_and_confirm, verify_unless_digest_home
 from .task_update import drop_probe_tasks as _drop_probe_tasks
 from .task_update import merge_task_update
 
@@ -1912,17 +1912,17 @@ def get_memos_on_matter(matter_id: str, limit: int = 500, offset: int = 0) -> An
 
 @server.tool()
 def create_memo(matter_id: str, text: str) -> Any:
-    """Create an internal-log memo on a matter (the Clio create_note analogue —
-    the one autonomous internal write the wedge uses). The exact body field is
-    ASSUMED ``text`` and confirmed at the connect step against the live memo
-    schema; classified INTERNAL_WRITE at the overlay (never external send).
+    """Create an internal-log memo on a matter; classified INTERNAL_WRITE. The
+    result carries ``confirmed``: true when the memo was read back by id and
+    matches, false on a proven mismatch, "unknown" when it could not be read
+    back (do NOT re-create then; report the id as unconfirmed).
 
     Refuses if ``text`` cites a matter number other than ``matter_id``'s own, and
     stamps the body so a human reading the matter can tell machine from person.
     See the write-side verification block."""
     client = _get_client()
     verify_unless_digest_home(_verify_matter_reference, client, matter_id, text)
-    return client.request("POST", f"/matters/{matter_id}/memos", json={"text": _stamp(text)})
+    return post_and_confirm(client, matter_id, _stamp(text))  # self-confirming write (memo_confirm.py)
 
 
 # ---- Trust / bank accounts (READS ONLY — fund movement is hard-banned) -----

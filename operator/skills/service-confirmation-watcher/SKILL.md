@@ -30,7 +30,7 @@ metadata:
     action_class: read + internal_write # reads the service confirmation + matter; writes an internal memo (log) + a confirm task; no external send
     content_ceiling: surface_only # emits a factual captured input (served date, method, defendant) + an internal log; never files or drafts a responsive pleading, never authors the deadline computation
     connectors:
-      - smokeball # PracticeManagement - get_matter (responsible attorney + defendants via otherSideIds[]), get_roles_on_matter/get_relationships_on_matter (resolve which defendant), get_files_on_matter/get_file/get_download_url (find + read the proof of service of summons InfoTrack synced in), get_memos_on_matter (dedup a prior capture + confirm create_memo landed), create_memo (internal log), create_task (surface to the attorney to confirm), list_tasks/get_task (confirm create_task landed). No InfoTrack surface is read here: the service confirmation is observed through the Smokeball sync because that is the read shape pinned in smokeball-surface.md (no infotrack-surface.md exists) - a surface-scope decision, not a claim that InfoTrack lacks an endpoint (the pack connector map lists mcp:infotrack as verified for the serve toolset).
+      - smokeball # PracticeManagement - get_matter (responsible attorney + defendants via otherSideIds[]), get_roles_on_matter/get_relationships_on_matter (resolve which defendant), get_files_on_matter/get_file/get_download_url (find + read the proof of service of summons InfoTrack synced in), get_memos_on_matter (dedup a prior capture; create_memo confirms itself), create_memo (internal log), create_task (surface to the attorney to confirm), list_tasks/get_task (confirm create_task landed). No InfoTrack surface is read here: the service confirmation is observed through the Smokeball sync because that is the read shape pinned in smokeball-surface.md (no infotrack-surface.md exists) - a surface-scope decision, not a claim that InfoTrack lacks an endpoint (the pack connector map lists mcp:infotrack as verified for the serve toolset).
 ---
 
 # Service Confirmation Watcher
@@ -206,8 +206,8 @@ document says:
    attorney confirm, never silently calendared).
    - **Both `create_memo` and `create_task` are writes marked UNVERIFIED against a live
      tenant** (`_shared-write-posture.md`; `smokeball-surface.md`): report each as done
-     **only after a confirming read** (`get_memos_on_matter` after `create_memo`;
-     `list_tasks` / `get_task` after `create_task`). If the confirming read does not show
+     **only after confirmation** (`create_memo` returns `confirmed`, true only when it
+     read its own memo back; `list_tasks` / `get_task` after `create_task`). If the confirming read does not show
      the write, **surface the failure** ("the capture is logged but I could not confirm
      the confirm task was created"), never a Shape that asserts the action completed.
      **Confirm this write path at the A&P prod connect.**

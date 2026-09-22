@@ -108,7 +108,7 @@ served date / method / defendant is not guessed.
    matter's roles, not from a name typed in the body.
 9. **Dedup on `(matter, defendant, fileId)`.** A scan does not re-surface a confirmation
    whose `fileId` + resolved defendant already appears in a prior capture memo.
-10. **Writes are surfaced as done only after a confirming read** (`get_memos_on_matter`
-    after `create_memo`; `list_tasks` / `get_task` after `create_task`); otherwise the
-    write failure is surfaced.
+10. **Writes are surfaced as done only after confirmation** (`create_memo`'s own
+    `confirmed` field is `true`; `list_tasks` / `get_task` after `create_task`); otherwise
+    the write failure is surfaced.
 11. The captured input and its source are always stated, so the capture is auditable.

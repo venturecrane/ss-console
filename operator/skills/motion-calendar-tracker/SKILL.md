@@ -137,9 +137,10 @@ no invented tool, no assumed status API.
    never invent a missing hearing; never assert a missing outcome.
 6. **Log internally** - write the surface (plus the training-output note) with
    `create_memo`. Per `operator/verticals/law-firm/addons/pi/references/_shared-write-posture.md`,
-   the memo write is **unverified at connect**: confirm it landed with
-   `get_memos_on_matter`; if the confirming read does not show it, surface the write
-   failure - never assert the log persisted.
+   the memo write is **unverified at connect**: act on the `confirmed` field
+   `create_memo` returns (it reads its own memo back); only `true` means logged. On
+   `false` or `"unknown"`, surface the write failure and never re-create the memo -
+   never assert the log persisted. Do not call `get_memos_on_matter` to confirm.
 
 ## The due-date seam - surface for confirm, never assert (READ THIS)
 
@@ -177,7 +178,7 @@ This is where a tracker is tempted to become a calculator. It must not.
 
 The agent MAY: read Smokeball (`get_matter`, `list_events`, `list_tasks`,
 `get_memos_on_matter`); assemble the motion-calendar surface with every item sourced;
-name gaps and ambiguities; write the internal `create_memo` log (confirm-by-read).
+name gaps and ambiguities; write the internal `create_memo` log (confirmed by its own read-back).
 
 The agent MUST NOT: compute or assert a final deadline; draft/file/send anything;
 assert a hearing outcome not in the record; invent a hearing date or motion status;

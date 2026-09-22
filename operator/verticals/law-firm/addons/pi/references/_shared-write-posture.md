@@ -22,8 +22,13 @@ So the rule is uniform, not scoped to one write:
 
 - A write is only reported as done **after a confirming read** shows it landed
   (`list_tasks`/`get_task` after `create_task`; `get_files_on_matter` after
-  `add_file`; `list_folders` after `create_folder`; `get_memos_on_matter` after
-  `create_memo`).
+  `add_file`; `list_folders` after `create_folder`). A memo is the exception:
+  `create_memo` reads its own memo back by id and returns `confirmed`. Report a
+  memo as logged only when `confirmed` is `true`. On `"unknown"`, never write it
+  again (it very likely exists); report its id as unconfirmed. On `false`,
+  surface the failure. Do NOT call `get_memos_on_matter` to confirm a memo: on a
+  scheduled scan across matters the seat refuses every memo read after the
+  first matter, and each refusal counts toward the seat's stop brake.
 - If the confirming read does not show it, the correct output is **surface the
   failure** ("the draft is in the matter but I could not confirm the review task was
   created"), never a Shape that asserts the action completed.
@@ -61,5 +66,5 @@ prior one removed by id only after the read-back confirms the new one (the Augus
 
 The internal `create_memo` (the audit/training-output record) has an ASSUMED body
 schema. A failed memo means the action has no logged record even though a human may
-already have the surfaced note. Treat it under rule 1 (confirm or surface); do not
-assume the log persisted.
+already have the surfaced note. Treat it under rule 1: act on the `confirmed` field
+the write returns; do not assume the log persisted.
