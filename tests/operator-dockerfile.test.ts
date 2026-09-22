@@ -1388,7 +1388,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // `from` is proposed to that staff member for emailed approval.
     // 512d9ecc -> 9d34de80 (2026-09-22, overlay#373). The boot-stamped spec
     // pointer block stops carrying em dashes into every SKILL.md.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="9d34de80eb0ac3b8ad55aeed567091f333f7640d"')
+    // 9d34de80 -> b06d8b29 (2026-09-22, overlay#374). The delta poller re-syncs
+    // a cursor begun under an older $select, so approvals carry their id.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="b06d8b29aa9a2d35fce78daaa674eadff1b0bd0c"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

@@ -930,7 +930,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # the skills' authored text and this was the one source re-adding it.
 # Runtime file: shared/spec_stamp.py; not a tracked twin, so only overlayRef
 # moves.
-ARG OVERLAY_REF="9d34de80eb0ac3b8ad55aeed567091f333f7640d"
+# 2026-09-22 (b06d8b29, overlay #374): the Graph delta poller re-syncs a
+# cursor begun under an older $select. A deltaLink replays its chain's
+# original select, so every seat's cursor (older than #372) omitted
+# internetMessageId and every staff send-as approval was refused by the
+# broker's forgery check. Runtime files: shared/msgraph_poller.py and
+# shared/msgraph_client.py; not tracked twins, so only overlayRef moves.
+ARG OVERLAY_REF="b06d8b29aa9a2d35fce78daaa674eadff1b0bd0c"
 
 ARG CUSTOMER_SLUG=customer-zero
 
