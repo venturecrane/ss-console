@@ -936,7 +936,17 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # internetMessageId and every staff send-as approval was refused by the
 # broker's forgery check. Runtime files: shared/msgraph_poller.py and
 # shared/msgraph_client.py; not tracked twins, so only overlayRef moves.
-ARG OVERLAY_REF="b06d8b29aa9a2d35fce78daaa674eadff1b0bd0c"
+# 2026-09-22 (93ad0c82, overlay #375 + #376). #376: a send-as revision seeds
+# the approved draft's own text and the approver's words as provenance, so
+# the redraft turn can be composed at all (the identifier gate verifies
+# against THIS session's reads and an approval reply is a later session).
+# #375: the two mail attachment tools load on a Graph seat, which also wakes
+# discovery-served-watch's file_attachment_to_matter where that skill is
+# authored; Captain cleared that blast radius 2026-09-22. Runtime files:
+# plugins/hermes-smd-establishment, plugins/hermes-smd-mail-attachments,
+# shared/email_adapter.py, shared/msgraph_attachments.py,
+# shared/msgraph_client.py; no tracked twin changed, so only overlayRef moves.
+ARG OVERLAY_REF="93ad0c82afe2ba09420affc9e59ad936d3ed421d"
 
 ARG CUSTOMER_SLUG=customer-zero
 

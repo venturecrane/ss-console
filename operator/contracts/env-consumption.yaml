@@ -446,7 +446,11 @@ vars:
     requirement: optional
     agent_env: held
     custody: customer
-    note: Graph READ app tenant id; the delta poller and msgraph-mail MCP server read it.
+    note: >-
+      Graph READ app tenant id. Three readers: the delta poller, the
+      msgraph-mail MCP server, and (since overlay#375) the mail-attachments
+      plugin, which lists and spools the seat's own attachments over the same
+      read client.
   MSGRAPH_CLIENT_ID:
     stage: agent
     requirement: optional
@@ -460,8 +464,10 @@ vars:
     custody: customer
     note: >-
       Graph READ app secret. Agent-held DELIBERATELY: the inbound delta poller
-      runs in the gateway and the msgraph-mail MCP server is the agent's own mail
-      tool surface, so stripping it would blind the seat rather than harden it.
+      runs in the gateway, the msgraph-mail MCP server is the agent's own mail
+      tool surface, and the mail-attachments plugin reads the seat's own
+      attachments through the same client (overlay#375), so stripping it would
+      blind the seat rather than harden it.
       Until a send-only app registration exists this same credential can also
       POST /sendMail, which is the residual ss#2258 names rather than hides.
   MSGRAPH_MAILBOX:
