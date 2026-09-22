@@ -1459,6 +1459,7 @@ COPY operator/templates/agentmail-webhook-secret-probe.py /app/agentmail-webhook
 # the agent's own Graph app holds Mail.Send (it must not: with Send As granted,
 # that would let agent-run code send as a person with no approval).
 COPY operator/templates/msgraph-read-app-cannot-send-probe.py /app/msgraph-read-app-cannot-send-probe.py
+COPY operator/templates/msgraph-read-app-cannot-read-staff-probe.py /app/msgraph-read-app-cannot-read-staff-probe.py
 # ADR 0053: boot-smoke asserts every baked author-built connector's declared
 # tool_classes agree with the overlay's enforced action-class map (the cross-repo
 # manifest<=map check, run where both the baked manifest and the installed overlay
