@@ -316,7 +316,7 @@ python3 operator/templates/drafting/drafting_gate_check.py \
   around the gate by filing the same text through `add_file`.
 
 > **Until 2026-08-13 this section claimed the gate ran "harness-side on the
-> delivery path (the overlay drafting-gate hook)". No such hook existed** — the
+> delivery path (the overlay drafting-gate hook)". No such hook existed** - the
 > checker appeared in the overlay only as a presence probe, and the plugin that
 > would have been that hook disclaims the record checks in its own docstring. A
 > seat with `code_execution` refused was therefore in the discipline's **variant
@@ -379,7 +379,7 @@ as a pipe table, and the signature block written as content, exactly as the skel
 shows). Pass the privileged documents as `held_out_file_names` so gate 1's leakage
 check has its input. A refusal comes back with the checker's own findings and
 `fileId: null`; fix the draft and call again, and never route around a refusal by
-filing the same text through `add_file` — that path is ungated, it is visible in the
+filing the same text through `add_file` - that path is ungated, it is visible in the
 audit log, and using it to escape a gate is the one thing this lane cannot tolerate.
 
 The itemized report and the held-out list go into the **matter memo**

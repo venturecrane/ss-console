@@ -19,15 +19,15 @@ metadata:
     skill_type: decision/surfacing (compliance routing)
     action_class: read + route
     connectors:
-      - smokeball # PracticeManagement — get_contacts / list_matters / get_matter (read) for the cross-check
-      - email # customer-bound — to route the conflict notice to the responsible person
+      - smokeball # PracticeManagement - get_contacts / list_matters / get_matter (read) for the cross-check
+      - email # customer-bound - to route the conflict notice to the responsible person
 ---
 
 # Conflict Intake Router
 
-The deep version of the firm's conflict workflow. `new-matter-intake` already carries the **detect-and-halt invariant** — on intake it runs a read-only name/entity cross-check and halts the chain on any hit. This skill is what that invariant defers to when the firm wants the full treatment: **rich multi-party capture** (every party, adverse party, and related entity a matter touches, not just the named client), **routing** a surfaced potential conflict to the **specific person** who owns the clearance decision, and a **cross-matter cadence re-scan** that re-checks open matters as new parties enter the system.
+The deep version of the firm's conflict workflow. `new-matter-intake` already carries the **detect-and-halt invariant** - on intake it runs a read-only name/entity cross-check and halts the chain on any hit. This skill is what that invariant defers to when the firm wants the full treatment: **rich multi-party capture** (every party, adverse party, and related entity a matter touches, not just the named client), **routing** a surfaced potential conflict to the **specific person** who owns the clearance decision, and a **cross-matter cadence re-scan** that re-checks open matters as new parties enter the system.
 
-It sits on a compliance floor. It is **never "just another skill."** Its entire job is to make sure a possible conflict reaches a human cleanly and is never advanced past — it **surfaces and routes; it does not clear.** Clearance is definitionally a human act.
+It sits on a compliance floor. It is **never "just another skill."** Its entire job is to make sure a possible conflict reaches a human cleanly and is never advanced past - it **surfaces and routes; it does not clear.** Clearance is definitionally a human act.
 
 ## When to Use
 
@@ -37,7 +37,7 @@ Runs event-driven (a new matter or new party is captured) and scheduled (the cad
 
 ## Prerequisites
 
-Reads Smokeball (`get_contacts`, `list_matters`, `get_matter`) for the name/entity cross-check, and the customer-bound **Email** connector to route a surfaced conflict notice to the responsible person. Requires `python3` for the fetch block. Read-only against Smokeball — it never writes a clearance, a matter, or a contact.
+Reads Smokeball (`get_contacts`, `list_matters`, `get_matter`) for the name/entity cross-check, and the customer-bound **Email** connector to route a surfaced conflict notice to the responsible person. Requires `python3` for the fetch block. Read-only against Smokeball - it never writes a clearance, a matter, or a contact.
 
 ## How to Run
 
@@ -50,17 +50,17 @@ hermes run conflict-intake-router --cadence-scan     # re-scan all open matters 
 
 Two phases (ADR 0021 Stream A): the mechanical Smokeball cross-check runs inside one `execute_code` block so per-party reads never flood context; the adversity judgment and routing stay in the agent's reasoning loop.
 
-### Phase 1 — Fetch (single `execute_code` block)
+### Phase 1 - Fetch (single `execute_code` block)
 
 Enumerate the parties in scope (for a matter: the client plus every party named in the intake capture; for a cadence scan: the party set of each open matter, including open leads via `list_matters(isLead)`). For each party run `get_contacts` and `list_matters`, accumulate the matches in-process, and `print()` one JSON document of (party → existing contacts/matters it touches). A single unreadable party is recorded as `parse_failed` and the scan continues.
 
-### Phase 2 — Reason (agent, in-context)
+### Phase 2 - Reason (agent, in-context)
 
 Per `references/capture-rubric.md` and `references/algorithm.md`:
 
-1. **Capture the full party graph.** Per `capture-rubric.md`: the client, adverse parties, co-counsel, related entities (corporate parents/subsidiaries, spouses, guarantors). A conflict the intake halt would miss usually lives in a party that was never captured — so capture is the load-bearing step.
+1. **Capture the full party graph.** Per `capture-rubric.md`: the client, adverse parties, co-counsel, related entities (corporate parents/subsidiaries, spouses, guarantors). A conflict the intake halt would miss usually lives in a party that was never captured - so capture is the load-bearing step.
 2. **Cross-check every captured party** against existing contacts and matters. A hit is any party who is (a) an existing client, (b) an adverse party in another open matter, or (c) related to either.
-3. **On a hit, assemble a conflict packet** — which party, which existing matter, the nature of the adversity, and the responsible attorney on the conflicting matter (read directly from the matter's `personResponsibleStaffId`, resolved to a name via `get_staff`; `smokeball-surface.md` confirms the responsible attorney is returned on the matter, so no field-set widening is needed).
+3. **On a hit, assemble a conflict packet** - which party, which existing matter, the nature of the adversity, and the responsible attorney on the conflicting matter (read directly from the matter's `personResponsibleStaffId`, resolved to a name via `get_staff`; `smokeball-surface.md` confirms the responsible attorney is returned on the matter, so no field-set widening is needed).
 4. **Route to the specific person.** Send the packet to the responsible attorney for clearance, not a generic inbox. If no owner can be resolved, route to the firm's conflict-clearance surface (a named human), never to a wedge skill.
 5. **Hold the matter.** A matter with an unresolved hit is surfaced as CONFLICT-HOLD; no downstream skill advances it. Advancing past a surfaced hit is a `fails` safety violation.
 6. **Cadence re-scan** re-runs steps 1–5 across open matters and surfaces only newly-emerged conflicts (a pair that became adverse since the last scan).
@@ -83,7 +83,7 @@ The agent MUST NOT: clear or waive a conflict; mark a matter conflict-free; writ
 
 ## Pitfalls
 
-Capturing only the named client and missing the adverse/related parties where conflicts actually hide; treating "no hit found" as "cleared" (it is "no hit found" — clearance is still human); routing to a generic inbox instead of the owner; advancing a held matter; inventing a corporate-relationship link the Smokeball data does not support.
+Capturing only the named client and missing the adverse/related parties where conflicts actually hide; treating "no hit found" as "cleared" (it is "no hit found" - clearance is still human); routing to a generic inbox instead of the owner; advancing a held matter; inventing a corporate-relationship link the Smokeball data does not support.
 
 ## Verification
 
@@ -95,10 +95,10 @@ Capturing only the named client and missing the adverse/related parties where co
 
 ## References
 
-- `references/capture-rubric.md` — the full party graph to capture (client, adverse, co-counsel, related entities) and the adversity tests (the load-bearing logic)
-- `references/algorithm.md` — the cross-check ordering, the hit/packet/route flow, and the cadence-scan delta logic
-- `references/output-format.md` — the conflict packet + CONFLICT-HOLD surface _(parity fast-follow)_
-- `references/test-cases.md` — fixtures incl. clean intake, direct hit, related-entity hit, and the cadence newly-emerged case _(parity fast-follow)_
+- `references/capture-rubric.md` - the full party graph to capture (client, adverse, co-counsel, related entities) and the adversity tests (the load-bearing logic)
+- `references/algorithm.md` - the cross-check ordering, the hit/packet/route flow, and the cadence-scan delta logic
+- `references/output-format.md` - the conflict packet + CONFLICT-HOLD surface _(parity fast-follow)_
+- `references/test-cases.md` - fixtures incl. clean intake, direct hit, related-entity hit, and the cadence newly-emerged case _(parity fast-follow)_
 
 ## Delivery channels + refusal fallback (law seat rule)
 
@@ -113,7 +113,7 @@ tasks). Write the FIRST draft citation-free; do not write a cited draft and
 wait for the gate to teach you.
 
 Three more first-draft rules, same rationale (the gates enforce them; a
-refusal is a stalled deliverable and a full-context redraft — write it right
+refusal is a stalled deliverable and a full-context redraft - write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.

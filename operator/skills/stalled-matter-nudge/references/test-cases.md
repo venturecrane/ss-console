@@ -1,4 +1,4 @@
-# Stalled Matter Nudge — Test Cases
+# Stalled Matter Nudge - Test Cases
 
 Five fixtures in `operator/fixtures/law-firm/stalled-matter-nudge/`, each `input + frozen expected`. Inputs supply a small set of matters with activity timestamps and the firm's window. (For single-matter fixtures, the scan output lists just that matter in the relevant section.)
 

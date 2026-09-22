@@ -324,7 +324,7 @@ hermes run matter-initiation-setup --matter <matter-id> --action stage-filing-pa
 
 ## Escalation
 
-Red-flag to the matter's assigned staff — resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) — when: a government
+Red-flag to the matter's assigned staff - resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) - when: a government
 defendant or a minor plaintiff is present (the SOL timeline is not the default); the
 setup convention (folders / tasks) is not established for the matter type; a party or the
 defendant roster cannot be resolved with confidence; or **any write fails or cannot be
@@ -344,7 +344,7 @@ tasks). Write the FIRST draft citation-free; do not write a cited draft and
 wait for the gate to teach you.
 
 Three more first-draft rules, same rationale (the gates enforce them; a
-refusal is a stalled deliverable and a full-context redraft — write it right
+refusal is a stalled deliverable and a full-context redraft - write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.

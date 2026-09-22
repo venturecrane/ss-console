@@ -30,7 +30,7 @@ metadata:
     action_class: read + internal_write # reads matter figures and documents; writes are the tracking task and the internal log (create_memo). No autonomous external send; the lien chase is drafted and surfaced for a human to send.
     content_ceiling: connective # collates authored figures into the forms' required structure; never legal work product, never a computed figure the attorney/Smokeball owns
     connectors:
-      - smokeball # PracticeManagement — matter, roles/relationships (GAL/minor), contacts, files/documents (authored settlement figures + lien docs), tasks, calendar/events (hearing date), memo (internal log)
+      - smokeball # PracticeManagement - matter, roles/relationships (GAL/minor), contacts, files/documents (authored settlement figures + lien docs), tasks, calendar/events (hearing date), memo (internal log)
 ---
 
 # Minor's Compromise Packet
@@ -58,23 +58,23 @@ Every form number and code section this skill relies on was verified against the
 California Courts site and code publishers on 2026-07-01. If a run needs an authority
 not listed here, the skill says "confirm the form/section" rather than inventing one.
 
-- **MC-350** — Petition for Approval of Compromise of Claim or Action or Disposition
+- **MC-350** - Petition for Approval of Compromise of Claim or Action or Disposition
   of Proceeds of Judgment for Minor or Person With a Disability (Judicial Council
   form). The petition itself. Verified: courts.ca.gov.
-- **MC-351** — Order Approving Compromise of Claim or Action or Disposition of
+- **MC-351** - Order Approving Compromise of Claim or Action or Disposition of
   Proceeds of Judgment (the order the court signs). Verified: courts.ca.gov.
-- **MC-350EX** — Expedited Petition, available in non-death cases where the total
+- **MC-350EX** - Expedited Petition, available in non-death cases where the total
   proceeds are $50,000 or less and are not placed in a trust; no hearing required
   when the nine conditions of **CRC 7.950.5** are met. Verified. Whether a matter
   qualifies for the expedited path is the **attorney's** call, not the skill's.
-- **MC-355** — Order to Deposit Money Into Blocked Account, and **MC-356** —
+- **MC-355** - Order to Deposit Money Into Blocked Account, and **MC-356** -
   Acknowledgment of Receipt of Order and Funds for Deposit in Blocked Account.
   Submitted with the order when funds go to a blocked account. Verified.
-- **Probate Code §3500** — who may compromise a minor's disputed claim (a parent with
+- **Probate Code §3500** - who may compromise a minor's disputed claim (a parent with
   custody, or the Guardian ad Litem the court orders). Verified.
-- **Probate Code §3600 through §3601** — court approval of the compromise; §3601 is
+- **Probate Code §3600 through §3601** - court approval of the compromise; §3601 is
   the authority for the court to approve and allow the attorney fee. Verified.
-- **Probate Code §3611(b)** and **§3413(a)** — disposition of the funds, including
+- **Probate Code §3611(b)** and **§3413(a)** - disposition of the funds, including
   deposit into a blocked, federally insured account held in California. Verified.
 - **CRC 7.950** (petition), **7.950.5** (expedited), **7.951** (attorney's disclosure
   of interest in the compromise), **7.952** (attendance at the hearing), **7.953**
@@ -191,28 +191,28 @@ Every tool below is from `operator/verticals/law-firm/smokeball-surface.md`. The
 invents no tool. Every write is confirmed by a follow-up read per the shared write
 posture; an unconfirmed write is surfaced, never reported as done.
 
-1. **Resolve the parties** — `get_matter` (`personResponsibleStaffId`, `clientIds[]`,
+1. **Resolve the parties** - `get_matter` (`personResponsibleStaffId`, `clientIds[]`,
    `description`), `get_roles_on_matter` and `get_relationships_on_matter` (the minor
    and the Guardian ad Litem), `get_contact` for names. If no GAL is resolvable,
    surface the appointment as the gating open item.
-2. **Read the authored figures** — `get_files_on_matter`, `list_folders`,
+2. **Read the authored figures** - `get_files_on_matter`, `list_folders`,
    `get_download_url` / `get_file` to read the authored settlement figures (gross
    proceeds, fee, costs, medical and lien amounts, and the authored net to the minor).
    These are read, never computed.
-3. **Fill the forms** — place each authored figure into its MC-350 field, and prepare
+3. **Fill the forms** - place each authored figure into its MC-350 field, and prepare
    the MC-351 order where the firm prepares the order with the petition. Label any
    field whose figure is not authored as a gap. Leave the net-to-minor field to the
    authored net; if it is absent, it is a surfaced gap, never a computed fill.
-4. **Track the dates** — read the hearing date (`list_events`) and track it; open a
+4. **Track the dates** - read the hearing date (`list_events`) and track it; open a
    tracked administrative item with `create_task` (requires `staffId` and
    `dueDateOnly`; the due date is a near-term confirm-by, distinct from the court
    date). Surface the hearing date for attorney confirm rather than silently
    calendaring it.
-5. **Chase the liens** — for each payoff figure the disclosure needs that is missing
+5. **Chase the liens** - for each payoff figure the disclosure needs that is missing
    or stale, draft a payoff chase to the lienholder (surfaced for a human to send).
-6. **Surface the fund handling** — note that a post-approval disposition must be
+6. **Surface the fund handling** - note that a post-approval disposition must be
    decided; if authored, prepare the matching MC-355 / MC-356 for finalization.
-7. **Log** — `create_memo` records what was assembled, from which reads, the gaps
+7. **Log** - `create_memo` records what was assembled, from which reads, the gaps
    surfaced, and the training-output note. Confirm the memo landed with
    `get_memos_on_matter`; if it did not, surface the log failure.
 
@@ -224,10 +224,10 @@ posture; an unconfirmed write is surfaced, never reported as done.
   standard or percentage (CRC 7.955 / §3601 is the court's determination).
 - **Never advise** the GAL, the minor, or the attorney, and never choose the
   fund-handling disposition or the expedited path.
-- **Never assert a form number or code section it did not verify** — flag it instead.
+- **Never assert a form number or code section it did not verify** - flag it instead.
 - **Never file or serve** the packet, and never present it as filed. It is staged for
   the attorney.
-- **Never fill a form field with an unauthored figure** — a missing figure is a gap
+- **Never fill a form field with an unauthored figure** - a missing figure is a gap
   it surfaces.
 - **Never estimate, reduce, or negotiate a lien payoff.**
 - **Never invent a connector tool, and never report a write as done without a
@@ -258,7 +258,7 @@ hermes run minors-compromise-packet --action track
 
 ## Escalation
 
-Red-flag to the matter's assigned staff — resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) — when: no
+Red-flag to the matter's assigned staff - resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) - when: no
 Guardian ad Litem is appointed on a matter headed to compromise; the authored net to
 the minor or another required figure is missing; a lien payoff the disclosure needs is
 outstanding as the hearing approaches; the fund-handling disposition is undecided; or
@@ -278,7 +278,7 @@ tasks). Write the FIRST draft citation-free; do not write a cited draft and
 wait for the gate to teach you.
 
 Three more first-draft rules, same rationale (the gates enforce them; a
-refusal is a stalled deliverable and a full-context redraft — write it right
+refusal is a stalled deliverable and a full-context redraft - write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.

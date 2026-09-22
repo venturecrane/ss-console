@@ -1,4 +1,4 @@
-# Matter Status Responder — Test Cases
+# Matter Status Responder - Test Cases
 
 Five fixtures in `operator/fixtures/law-firm/matter-status-responder/`, each `input + frozen expected`. Inputs supply the requester, the question, and the canned Smokeball status reads (plus calendar-binding reads where an appointment is in scope).
 

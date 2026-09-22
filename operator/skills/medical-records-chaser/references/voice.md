@@ -1,4 +1,4 @@
-# Medical Records Chaser — Voice
+# Medical Records Chaser - Voice
 
 Derived from `operator/verticals/law-firm/addons/pi/references/_shared-chase-voice.md`
 (the pack's canonical chase voice). Fix the shared voice there first; this file adds
@@ -12,12 +12,12 @@ The chase body follows the shared substitution table (`_shared-chase-voice.md`,
 "Floor-clean by construction"): a graduated vendor chase is re-scanned by the
 content-sensitivity floor (ADR 0031) before it delivers, and the floor's `contract`
 category matches `signed`. So the chase offers to resend "the authorization form",
-never "the signed authorization" — the recipient knows which form it is, and the
+never "the signed authorization" - the recipient knows which form it is, and the
 body clears the floor. Internal memos and tasks keep the precise words.
 
 ## The records chase (to the provider / records vendor)
 
-Professional, businesslike, brief — a vendor/provider tone, not a client warmth
+Professional, businesslike, brief - a vendor/provider tone, not a client warmth
 tone. It moves one outstanding record request forward.
 
 The chase MAY: name the patient and the request (provider, date of request); state
@@ -50,7 +50,7 @@ never a guessed name, never a title line.
 
 ## Examples
 
-**Good — chase to the records vendor / provider:**
+**Good - chase to the records vendor / provider:**
 
 > Hi <name>, following up on the records request for <patient> (requested <date>). We
 > show the <provider> records still outstanding on our end. Could you share a status
@@ -59,14 +59,14 @@ never a guessed name, never a title line.
 > Thank you.
 > <firm name from customer_name>
 
-**Bad — characterizes treatment / reads the records (crosses the line):**
+**Bad - characterizes treatment / reads the records (crosses the line):**
 
 > We need the rest of the physical therapy notes since the ones you sent only cover
 > the first two weeks after the surgery and we can see the treatment is ongoing.
 
 (Characterizes treatment and reads clinical content; judges completeness.)
 
-**Bad — asserts receipt not observed / invents a consequence:**
+**Bad - asserts receipt not observed / invents a consequence:**
 
 > Got everything, thanks, we have all the records now and the case is ready to file,
 > so we are all set on our end.

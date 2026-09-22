@@ -1,4 +1,4 @@
-# Test Cases — Synthetic Inbox
+# Test Cases - Synthetic Inbox
 
 Twelve synthetic emails covering the categorization space. The agent should be run against these as a regression check before any change to the prompt or rubric.
 
@@ -8,7 +8,7 @@ Captain or a reviewer treats this file as the unit-test suite for the prompt.
 
 ---
 
-## #1 — Clear reply needed
+## #1 - Clear reply needed
 
 ```
 From: Jane Patel <jane@reachforward.co>
@@ -18,7 +18,7 @@ Subject: Quick question on the workflow doc
 
 Hi Scott,
 
-Looked through the workflow doc you sent over. One question — for step 4,
+Looked through the workflow doc you sent over. One question - for step 4,
 are we expecting the intake form to feed Asana automatically or is that a
 manual handoff? Want to make sure I'm reading it right before our call
 Thursday.
@@ -31,7 +31,7 @@ Jane
 
 ---
 
-## #2 — Vendor pitch, cold
+## #2 - Vendor pitch, cold
 
 ```
 From: Sarah Kim <sarah@bookingstack.io>
@@ -43,7 +43,7 @@ Hi Scott,
 
 I came across SMD Services and noticed you work with growing businesses
 on operational improvements. BookingStack helps consultancies like yours
-streamline client scheduling — saving 8+ hours per week.
+streamline client scheduling - saving 8+ hours per week.
 
 Would you be open to a 30-minute demo this week?
 
@@ -51,17 +51,17 @@ Best,
 Sarah
 ```
 
-**Expected:** REPLY · P2 · HIGH. One-line decline. OR `JUNK` if the agent decides cold pitches are filed there — both acceptable, but `REPLY` is preferred because the human reply costs nothing and keeps the door open.
+**Expected:** REPLY · P2 · HIGH. One-line decline. OR `JUNK` if the agent decides cold pitches are filed there - both acceptable, but `REPLY` is preferred because the human reply costs nothing and keeps the door open.
 
 ---
 
-## #3 — Prospect inbound (HOT)
+## #3 - Prospect inbound (HOT)
 
 ```
 From: Tom Reeves <tom@reevescontracting.com>
 To: owner@example.com
 Date: Tue, 2026-05-13 11:02
-Subject: Referral from David Chen — operations help
+Subject: Referral from David Chen - operations help
 
 Hi Scott,
 
@@ -83,7 +83,7 @@ Reeves Contracting
 
 ---
 
-## #4 — Scheduling
+## #4 - Scheduling
 
 ```
 From: Marcus Lee <marcus@dgcapitaladvisors.com>
@@ -102,7 +102,7 @@ Marcus
 
 ---
 
-## #5 — Scope/pricing question (LOW — touches money)
+## #5 - Scope/pricing question (LOW - touches money)
 
 ```
 From: Lisa Han <lisa@haccm.com>
@@ -112,7 +112,7 @@ Subject: Following up on our call
 
 Hi Scott,
 
-Thanks for the time last Friday. To move forward I need a number — what
+Thanks for the time last Friday. To move forward I need a number - what
 would a full inventory and CRM cleanup engagement run for HACCM? I'd
 like to bring this to my partner tonight.
 
@@ -123,7 +123,7 @@ Lisa
 
 ---
 
-## #6 — Newsletter
+## #6 - Newsletter
 
 ```
 From: Pinpoint Insights <newsletter@pinpoint.ai>
@@ -134,11 +134,11 @@ Subject: This week's AI ops digest
 [Long marketing newsletter content]
 ```
 
-**Expected:** JUNK section. One line: "Pinpoint Insights — weekly AI ops digest — recurring."
+**Expected:** JUNK section. One line: "Pinpoint Insights - weekly AI ops digest - recurring."
 
 ---
 
-## #7 — Thread Captain has gone dark on
+## #7 - Thread Captain has gone dark on
 
 ```
 From: Aaron Wu <aaron@wuestate.com>
@@ -146,18 +146,18 @@ To: owner@example.com
 Date: Mon, 2026-05-12 09:11
 Subject: Re: Re: Re: Process doc draft
 
-Scott — circling back on this. I sent the draft over on 4/24 and a nudge
+Scott - circling back on this. I sent the draft over on 4/24 and a nudge
 on 5/2. No rush, just want to make sure it didn't get lost. Let me know
 when you have a chance.
 
 Aaron
 ```
 
-**Expected:** REPLY · P0 · MED. Acknowledge the delay without over-apologizing. The agent should flag this in the Themes section as "Aaron Wu — 3rd follow-up, you've gone dark." Voice rule: don't write "Sorry for the delay, things have been crazy."
+**Expected:** REPLY · P0 · MED. Acknowledge the delay without over-apologizing. The agent should flag this in the Themes section as "Aaron Wu - 3rd follow-up, you've gone dark." Voice rule: don't write "Sorry for the delay, things have been crazy."
 
 ---
 
-## #8 — Action item from previous commitment
+## #8 - Action item from previous commitment
 
 ```
 From: Megan O'Brien <megan@obrienlegal.com>
@@ -167,7 +167,7 @@ Subject: Confirming the NDA you mentioned
 
 Hi Scott,
 
-Following up on what you said last week — you mentioned you'd send over
+Following up on what you said last week - you mentioned you'd send over
 a standard NDA template that I could countersign before our next session.
 Want to make sure I have it in hand before Friday.
 
@@ -178,7 +178,7 @@ Megan
 
 ---
 
-## #9 — WAIT (Captain replied last)
+## #9 - WAIT (Captain replied last)
 
 ```
 From: Scott Durgan <owner@example.com>
@@ -196,11 +196,11 @@ Scott
 > Want to grab lunch Tuesday or Wednesday next week?
 ```
 
-**Expected:** WAIT · P1 · HIGH. One line: "Waiting on David Chen — Tuesday 5/13 lunch unconfirmed." Note that this is a sent message in the thread, not unread inbound. The agent should be smart enough to either skip these or surface them as WAIT items rather than reply candidates.
+**Expected:** WAIT · P1 · HIGH. One line: "Waiting on David Chen - Tuesday 5/13 lunch unconfirmed." Note that this is a sent message in the thread, not unread inbound. The agent should be smart enough to either skip these or surface them as WAIT items rather than reply candidates.
 
 ---
 
-## #10 — Emotional/strained relationship
+## #10 - Emotional/strained relationship
 
 ```
 From: Brett Cassidy <brett@cassidymarketing.com>
@@ -220,13 +220,13 @@ Brett
 
 ---
 
-## #11 — FYI from the owner's own domain (internal-ish)
+## #11 - FYI from the owner's own domain (internal-ish)
 
 ```
 From: Crane System <noreply@example.com>
 To: owner@example.com
 Date: Tue, 2026-05-13 12:00
-Subject: Weekly venture roll-up — SS
+Subject: Weekly venture roll-up - SS
 
 Pipeline:
 - 0 active engagements
@@ -238,7 +238,7 @@ Pipeline:
 
 ---
 
-## #12 — Combined REPLY + ACT
+## #12 - Combined REPLY + ACT
 
 ```
 From: Patrick Olsen <patrick@bartolozzi.partners>

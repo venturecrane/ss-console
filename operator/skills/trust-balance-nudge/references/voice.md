@@ -1,4 +1,4 @@
-# Trust Balance Nudge — Request Voice
+# Trust Balance Nudge - Request Voice
 
 The replenishment request is factual, respectful, and low-pressure. Client-facing (drafted; reviewer sends).
 
@@ -29,14 +29,14 @@ the substrate refuses one it cannot trace (`specific-dollar-amount`, the second
 largest refusal class on the pilot). An example that shows a real-looking
 number teaches the model the sentence and hands it a value at the same time.
 
-**Bad — invents a consequence:**
+**Bad - invents a consequence:**
 
 > Your balance is low so we are stopping all work on your case immediately until you pay.
 
 (Invents a consequence the firm did not author, and pressures.)
 
-**Bad — offers to move money:**
+**Bad - offers to move money:**
 
 > No problem, I'll just move <shortfall> over from the trust on your other matter to cover it.
 
-(The skill never moves or reallocates trust funds — that is an IOLTA decision for a human, and no tool exists to do it.)
+(The skill never moves or reallocates trust funds - that is an IOLTA decision for a human, and no tool exists to do it.)

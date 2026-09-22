@@ -4,11 +4,11 @@ Source of truth for surfacing critical dates without ever computing one.
 
 ## The read-only rule
 
-Every date this skill surfaces is **read**, never computed — from a calendar-binding `list_calendar_entries` entry (court dates, hearings), a Smokeball `list_tasks` task `due_date`, or a court-rules-engine entry the engine posted into the matter. The skill performs exactly one kind of arithmetic: comparing a read date to today, to assign a bucket. It performs **no** arithmetic that _produces_ a deadline (no "incident_date + limitation_period", no "service_date + response_window"). That computation is a legal determination and is out of scope by invariant, not by omission. Reading the engine's already-computed number is not producing one.
+Every date this skill surfaces is **read**, never computed - from a calendar-binding `list_calendar_entries` entry (court dates, hearings), a Smokeball `list_tasks` task `due_date`, or a court-rules-engine entry the engine posted into the matter. The skill performs exactly one kind of arithmetic: comparing a read date to today, to assign a bucket. It performs **no** arithmetic that _produces_ a deadline (no "incident_date + limitation_period", no "service_date + response_window"). That computation is a legal determination and is out of scope by invariant, not by omission. Reading the engine's already-computed number is not producing one.
 
 ## Provenance and the engine-confirm flow
 
-Each read date carries a provenance: **human-authored** or **engine-computed**. The provenance is read from the entry (the engine's entries carry an identifiable source tag / category — a firm-configuration fact confirmed at connect); it is never guessed.
+Each read date carries a provenance: **human-authored** or **engine-computed**. The provenance is read from the entry (the engine's entries carry an identifiable source tag / category - a firm-configuration fact confirmed at connect); it is never guessed.
 
 ```
 for each read_date d on an open matter:
@@ -27,7 +27,7 @@ for each read_date d on an open matter:
         surface d and ask which provenance governs; never treat an engine date as settled
 ```
 
-The skill still computes **nothing**. It reads the engine's date, presents it unconfirmed, and on confirmation records who confirmed it and when. No confirmation memo is written before the attorney confirms, and the memo is bookkeeping only — this skill does not calendar.
+The skill still computes **nothing**. It reads the engine's date, presents it unconfirmed, and on confirmation records who confirmed it and when. No confirmation memo is written before the attorney confirms, and the memo is bookkeeping only - this skill does not calendar.
 
 ## Buckets
 
@@ -50,11 +50,11 @@ Each date carries the label the human gave it: `court-date`, `filing-deadline`, 
 
 ```
 if firm_policy.expects_sol(matter.practice_area) and no authored sol on matter:
-    surface "no authored deadline on file — needs human attention"
+    surface "no authored deadline on file - needs human attention"
 ```
 
 This is the only place the skill speaks about a date that does not exist, and it speaks by **pointing at the gap**, never by filling it. `firm_policy.expects_sol(...)` is firm-authored configuration; absent that configuration, the skill does not guess which matters "should" have an SOL.
 
 ## Why the line is absolute
 
-A computed limitation date that is wrong is a malpractice-grade error, and a computed date that is _right_ still launders a legal judgment through an automated surface. Either way the firm would come to rely on a number the system is not competent to produce. So the skill produces no such number — it is a mirror for authored dates and a flag for missing ones, nothing more.
+A computed limitation date that is wrong is a malpractice-grade error, and a computed date that is _right_ still launders a legal judgment through an automated surface. Either way the firm would come to rely on a number the system is not competent to produce. So the skill produces no such number - it is a mirror for authored dates and a flag for missing ones, nothing more.

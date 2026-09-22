@@ -7,7 +7,7 @@ Structure is fixed. The agent must produce exactly these sections in exactly thi
 ## Header block
 
 ```markdown
-# Inbox Triage — YYYY-MM-DD
+# Inbox Triage - YYYY-MM-DD
 
 **Run started:** ISO-8601 timestamp
 **Window:** what was searched (e.g., "is:unread newer_than:1d")
@@ -35,7 +35,7 @@ Three theme bullets max. The agent does not pad themes to look thorough.
 The substance of the note. Grouped by priority, within priority grouped by action class.
 
 ```markdown
-## P0 — Today
+## P0 - Today
 
 ### REPLY · HIGH · From: name <email>
 
@@ -68,13 +68,13 @@ if not applicable.
 
 (More P0 entries...)
 
-## P1 — This week
+## P1 - This week
 
 (Same format...)
 
-## P2 — Later
+## P2 - Later
 
-(Same format. Often these are just one-liners — "Saved to read later.")
+(Same format. Often these are just one-liners - "Saved to read later.")
 
 ## ARCHIVE candidates
 
@@ -89,7 +89,7 @@ Newsletters, promotions, obvious junk. One line each, no draft, no priority. Cap
 ```markdown
 ## Junk (suggested archive)
 
-- Subject — from — reason (e.g., "Newsletter, weekly cadence")
+- Subject - from - reason (e.g., "Newsletter, weekly cadence")
 - ...
 ```
 

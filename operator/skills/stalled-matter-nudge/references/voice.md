@@ -1,4 +1,4 @@
-# Stalled Matter Nudge — Follow-up Voice
+# Stalled Matter Nudge - Follow-up Voice
 
 The follow-up is a light, warm check-in. Client-facing (drafted; reviewer sends).
 
@@ -21,8 +21,8 @@ The follow-up MAY NOT: state or recommend the next legal step ("we should file y
 
 > Hi <name>, we noticed it's been a little while on your matter and we want to make sure it keeps moving. Is there anything you're waiting on from us, or anything we can help with? Happy to set up a few minutes if that's easier.
 
-**Bad — decides the next step (UPL):**
+**Bad - decides the next step (UPL):**
 
 > It's been a while, so the next thing you need to do is file your response and gather your bank records before the deadline.
 
-(Prescribes a legal next step and implies a deadline — the lawyer's call, not this skill's.)
+(Prescribes a legal next step and implies a deadline - the lawyer's call, not this skill's.)

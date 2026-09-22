@@ -1,22 +1,22 @@
-# Mediation & Settlement Tracker — Output Format
+# Mediation & Settlement Tracker - Output Format
 
 Derives from `operator/verticals/law-firm/addons/pi/references/_shared-assembler-output-format.md`
 (the assembler half) and `operator/verticals/law-firm/addons/pi/references/ca-served-discovery-capture-spec.md`
-(the deadline-capture posture — a computed date is a proposal for attorney confirm,
+(the deadline-capture posture - a computed date is a proposal for attorney confirm,
 never final). Every filled component is traceable to a matter read. The brief itself,
 any argument, and any valuation are never authored. No §998 or MSC date is asserted as
 final.
 
-## Shape A — Brief inputs assembled + deadlines tracked (proposed-confirm)
+## Shape A - Brief inputs assembled + deadlines tracked (proposed-confirm)
 
 ```markdown
-# Mediation/MSC Prep — <matter descriptor> — matter <id> — YYYY-MM-DD
+# Mediation/MSC Prep - <matter descriptor> - matter <id> - YYYY-MM-DD
 
-**Conference:** <mediation | mandatory settlement conference> — date <read from list_events, proposed-confirm> (not finalized by the skill)
+**Conference:** <mediation | mandatory settlement conference> - date <read from list_events, proposed-confirm> (not finalized by the skill)
 **Decision:** brief INPUTS assembled from matter components and staged for <attorney / co-counsel> to write the brief; §998 and conference deadlines surfaced for confirmation.
 **Source components:** <list each component + the document + folder it was read from>
 
-## Brief inputs (staged for <attorney / co-counsel> to write from — the brief is NOT written here)
+## Brief inputs (staged for <attorney / co-counsel> to write from - the brief is NOT written here)
 
 ### Liability summary
 
@@ -42,28 +42,28 @@ final.
 
 > [ATTORNEY / CO-COUNSEL TO AUTHOR: the statement of liability, the damages argument, and the case value. The tracker does not draft this.]
 
-## Deadlines (proposed — confirm with the engine/attorney; NOT calendared as final)
+## Deadlines (proposed - confirm with the engine/attorney; NOT calendared as final)
 
 - **CCP §998 offer.** Served <date, read from the offer document>. Proposed acceptance
   window: the shorter of 30 days after service or the start of trial ("whichever occurs
-  first"), deemed withdrawn thereafter — CCP §998. **Proposed, confirm** (verify the
+  first"), deemed withdrawn thereafter - CCP §998. **Proposed, confirm** (verify the
   operative cutoff against the trial date / the certified engine; cost-shifting
   consequences make this attorney-confirmed, never skill-final).
-- **Conference date.** <mediation/MSC date read from list_events> — **proposed,
+- **Conference date.** <mediation/MSC date read from list_events> - **proposed,
   confirm**; the skill reads it, it does not compute or finalize it. Any local court
   brief-lead-time/format rule is flagged, not computed (venues not yet configured).
 
-## Tracked item (create_task — confirm-by-read)
+## Tracked item (create_task - confirm-by-read)
 
 - Assigned to <responsible attorney, personResponsibleStaffId>. `dueDateOnly` is a
   near-term administrative **confirm-by** date (a day or two out) to confirm the §998
-  and MSC deadlines — distinct from the §998 acceptance date and the MSC date, which
+  and MSC deadlines - distinct from the §998 acceptance date and the MSC date, which
   stay proposed-confirm and are never silently calendared as final.
 
 ## Gaps / needs a human
 
 <any missing or unreadable brief-input component; an unreadable §998 offer or trial
-date; more than one candidate conference event — listed, never guessed>
+date; more than one candidate conference event - listed, never guessed>
 
 ## Internal log (create_memo body)
 
@@ -72,12 +72,12 @@ date; more than one candidate conference event — listed, never guessed>
 > as proposed-confirm, not finalized. Gaps: <...>.
 ```
 
-## Shape B — Cannot assemble / cannot resolve (missing or unreadable components)
+## Shape B - Cannot assemble / cannot resolve (missing or unreadable components)
 
 ```markdown
-# ⚠ Mediation/MSC Prep — cannot complete — matter <id> — YYYY-MM-DD
+# ⚠ Mediation/MSC Prep - cannot complete - matter <id> - YYYY-MM-DD
 
-**Situation:** <which required components are missing, unreadable, or ambiguous — e.g.
+**Situation:** <which required components are missing, unreadable, or ambiguous - e.g.
 "no mediation/MSC event located on the matter calendar"; "liability summary and
 damages figures not in the matter"; "§998 offer document present but its service date
 is unreadable"; "trial date the §998 'whichever occurs first' cutoff turns on cannot
@@ -86,19 +86,19 @@ be read">
 deadline finalized. No component, figure, or date was fabricated to fill the gap.
 ```
 
-## Shape C — Refuse (asked to write the brief or finalize a §998/MSC deadline)
+## Shape C - Refuse (asked to write the brief or finalize a §998/MSC deadline)
 
 ```markdown
-# ⚠ Mediation/MSC Prep — request refused, surfaced for a person — matter <id> — YYYY-MM-DD
+# ⚠ Mediation/MSC Prep - request refused, surfaced for a person - matter <id> - YYYY-MM-DD
 
 **Request:** <"write the mediation brief" / "draft the damages argument" / "state the
 case value" / "put the §998 acceptance deadline of <date> on the calendar as final">
 **Decision:** refused. The brief, its argument, and its valuation are the attorney's or
-co-counsel's work product — the tracker assembles inputs only. A §998/MSC deadline is
+co-counsel's work product - the tracker assembles inputs only. A §998/MSC deadline is
 never finalized by the skill; it is surfaced for confirmation. The §998 mechanics are
 flagged for the attorney/engine to confirm (making window "not less than 10 days before
 trial"; deemed withdrawn if not accepted before trial or within 30 days, whichever
-occurs first; cost-shifting on failure to obtain a more favorable judgment — CCP §998).
+occurs first; cost-shifting on failure to obtain a more favorable judgment - CCP §998).
 **Surfaced instead:** the assembled brief inputs (Shape A) and the §998/conference dates
 as proposed-confirm.
 ```
@@ -112,7 +112,7 @@ as proposed-confirm.
    and damages figure is a verbatim read. A value that cannot be sourced is a gap
    (Shape B), never a fill-in.
 3. **No deadline is finalized.** The §998 acceptance window and the MSC/mediation date
-   are surfaced as **proposed, confirm** — the certified engine/attorney owns the
+   are surfaced as **proposed, confirm** - the certified engine/attorney owns the
    computation; the skill captures inputs and reads the calendar. A tracked task's
    `dueDateOnly` is a near-term administrative confirm-by date, distinct from the legal
    deadline. There is no calendar write.

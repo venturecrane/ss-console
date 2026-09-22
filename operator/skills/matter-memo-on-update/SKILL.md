@@ -95,7 +95,7 @@ op-mmou:6f6a...:638609300000000000
 
 ## Hard rules (any violation → `fails`)
 
-1. **No em-dashes, anywhere in the memo body.** The character `—` (U+2014) is a banned marker on authored content and will cause the write to be refused. Write plainly: a period or "by/on/via" phrasing, never an em-dash. (Right-arrows and hyphens are fine.)
+1. **No em-dashes, anywhere in the memo body.** The character `-` (U+2014) is a banned marker on authored content and will cause the write to be refused. Write plainly: a period or "by/on/via" phrasing, never an em-dash. (Right-arrows and hyphens are fine.)
 2. **Exactly one `create_memo`, and only after the idempotency check.** Never write a second memo for the same change key. Never write any other Smokeball entity (no `patch_matter`, no `create_task`, no transaction, no fund operation).
 3. **No external send.** No Email connector is bound; never draft or send mail. If you find yourself reaching for `create_draft`, stop - that is the wrong tool for this event.
 4. **No fabrication.** The actor is the resolved name or "an unidentified user." The date comes from the event timestamp. Do not invent a field-level diff, a reason, a clock time, or any value not present in the event.
@@ -129,7 +129,7 @@ tasks). Write the FIRST draft citation-free; do not write a cited draft and
 wait for the gate to teach you.
 
 Three more first-draft rules, same rationale (the gates enforce them; a
-refusal is a stalled deliverable and a full-context redraft — write it right
+refusal is a stalled deliverable and a full-context redraft - write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.

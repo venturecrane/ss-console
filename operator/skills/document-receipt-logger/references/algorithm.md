@@ -4,7 +4,7 @@ Source of truth for filing inbound documents by receipt, without reading them.
 
 ## The metadata-only rule
 
-The skill touches attachment **metadata** (filename, MIME type, size) and never the document body. It does not extract text, OCR, parse, or summarize the contents. This is both a privilege/scope guard and the line between filing hygiene (this skill) and legal review (a human). The receipt is about provenance — who sent what, when, for which matter — not about what the document says.
+The skill touches attachment **metadata** (filename, MIME type, size) and never the document body. It does not extract text, OCR, parse, or summarize the contents. This is both a privilege/scope guard and the line between filing hygiene (this skill) and legal review (a human). The receipt is about provenance - who sent what, when, for which matter - not about what the document says.
 
 ## Sender → matter resolution
 
@@ -45,4 +45,4 @@ Resolution, proposal, and the receipt draft are autonomous. The **file move** (D
 
 ## Never destructive
 
-The skill only _adds_ a received document and a receipt note. It never overwrites, renames, moves, or deletes an existing filed document — a misrouted overwrite could destroy the only copy of a client record.
+The skill only _adds_ a received document and a receipt note. It never overwrites, renames, moves, or deletes an existing filed document - a misrouted overwrite could destroy the only copy of a client record.

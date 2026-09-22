@@ -1,4 +1,4 @@
-# Matter Status Responder — Algorithm
+# Matter Status Responder - Algorithm
 
 Source of truth for a safe, factual status reply.
 
@@ -15,9 +15,9 @@ Source of truth for a safe, factual status reply.
 
 A status reply with three facts, each sourced:
 
-- **Where it stands** — the current stage, as recorded.
-- **What happened recently** — the most recent logged activity.
-- **What's next** — the next scheduled/pending step **if it is in the record**.
+- **Where it stands** - the current stage, as recorded.
+- **What happened recently** - the most recent logged activity.
+- **What's next** - the next scheduled/pending step **if it is in the record**.
 
 Where the next step or a date is not in the record: say what is known, and that the team will confirm the rest. **Never invent** a stage, a date, or a step to sound complete.
 

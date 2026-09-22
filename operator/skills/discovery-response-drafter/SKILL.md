@@ -292,7 +292,7 @@ Those are checkable. A completeness sentence is not.
 ## Voice
 
 If your authored-spec pointer block names a `work_product` voice spec, READ that file
-and compose against it — `smd_deliver_draft` refuses the delivery if this turn did not.
+and compose against it - `smd_deliver_draft` refuses the delivery if this turn did not.
 If there is no pointer block, no spec is installed for this class: draft in a neutral
 professional register and say so in the delivery note.
 

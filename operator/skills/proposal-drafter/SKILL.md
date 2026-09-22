@@ -13,7 +13,7 @@ metadata:
     tags: [Marketing, Agency, NewBusiness, DraftForReview]
   smd:
     vertical: marketing-agency
-    weight: heavy # ADR 0049 — synthesis from a transcript into a client-facing proposal; escalate to the seat's escalation model when one is authored
+    weight: heavy # ADR 0049 - synthesis from a transcript into a client-facing proposal; escalate to the seat's escalation model when one is authored
     action_class: read + internal_write
     connectors:
       - fireflies
@@ -61,14 +61,14 @@ hermes run proposal-drafter --transcript fireflies://meeting-abc123
    - Constraints (budget hints, timeline mentions, team size, current vendors)
    - Decision-maker / approval pattern (named in the call)
    - Red flags (anything that suggests scope creep, mismatch, or unrealistic expectations)
-3. **Map to service lines.** The agency's `pricing-matrix.md` (in Drive/Dropbox, path in `customer.yaml`) lists authored service lines with descriptions. Match prospect's stated objectives to relevant service lines. Note where multiple service lines could apply — surface the choice to the owner, don't pick.
+3. **Map to service lines.** The agency's `pricing-matrix.md` (in Drive/Dropbox, path in `customer.yaml`) lists authored service lines with descriptions. Match prospect's stated objectives to relevant service lines. Note where multiple service lines could apply - surface the choice to the owner, don't pick.
 4. **Assemble the draft.** Use the agency's SOW template (Drive path). Fill: prospect company, objectives quoted from transcript, service-line descriptions, deliverables per service line, timeline shape (no specific dates without owner authoring), and explicit price placeholders the owner fills.
 5. **Surface conversation snippets.** Beneath each section, surface the verbatim transcript line(s) that justify it ("They said: 'We've stopped tracking conversion in Q2 because the dashboard was wrong.'"). Owner can verify the agent didn't hallucinate intent.
 6. **Write to drafts.** `customer_notes/drafts/proposals/{prospect}/proposal-YYYY-MM-DD.md`. Slack thread post in `proposals-drafts` channel with prospect name + draft permalink + any red flags surfaced.
 
 ### Trust Ceiling
 
-**draft_for_review** locked. The agent NEVER ships proposals — proposals are sales artifacts with money on them.
+**draft_for_review** locked. The agent NEVER ships proposals - proposals are sales artifacts with money on them.
 
 The agent MAY:
 
@@ -90,8 +90,8 @@ The agent MUST NOT:
 - Use the prospect's words for their objectives. Don't paraphrase; quote.
 - Lead with their objective, not the agency's services. "You want to ship paid social against ICP-B segments." Then service.
 - Avoid agency-marketing voice ("Our award-winning team..."). Plainspoken, business-to-business.
-- No em dashes. No "we're excited to partner." No "We're the right fit for you" — that's the prospect's call.
-- Where the call surfaced something specific the agency has the agent rephrase neutrally without commitments ("You mentioned working with X — we can speak to that approach in a follow-up if it'd help.").
+- No em dashes. No "we're excited to partner." No "We're the right fit for you" - that's the prospect's call.
+- Where the call surfaced something specific the agency has the agent rephrase neutrally without commitments ("You mentioned working with X - we can speak to that approach in a follow-up if it'd help.").
 
 ## Pitfalls
 
@@ -107,10 +107,10 @@ Common failure modes: inventing prices or timelines (forbidden), paraphrasing ra
 
 ## References
 
-- `references/voice.md` — proposal voice + prospect-quote anchoring
-- `references/output-format.md` — SOW template structure; what gets a placeholder vs an extracted value
-- `references/categorization-rubric.md` — scope-signal extraction + red-flag detection
-- `references/test-cases.md` — synthetic discovery transcripts (10 prospects, varied complexity)
+- `references/voice.md` - proposal voice + prospect-quote anchoring
+- `references/output-format.md` - SOW template structure; what gets a placeholder vs an extracted value
+- `references/categorization-rubric.md` - scope-signal extraction + red-flag detection
+- `references/test-cases.md` - synthetic discovery transcripts (10 prospects, varied complexity)
 
 ## Cost estimate (filled by grading)
 

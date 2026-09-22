@@ -1,4 +1,4 @@
-# Matter Status Responder — Status Voice
+# Matter Status Responder - Status Voice
 
 The reply is warm in tone but strictly factual about the matter. Client-facing (drafted; reviewer sends).
 
@@ -21,14 +21,14 @@ The reply MAY NOT: predict an outcome, give odds, advise a course, promise a res
 
 > Hi <name>, thanks for checking in. Your matter is currently at the document-review stage. We filed your application on May 20 and we're waiting on the next response; the team has a follow-up task set for mid-June. As soon as there's an update we'll let you know. If anything's worrying you in the meantime, just reply and we'll get you to <attorney>.
 
-**Bad — predicts the outcome:**
+**Bad - predicts the outcome:**
 
 > You're in great shape. These usually get approved, so I'd expect good news within a month or two.
 
 (Prediction + odds + an unauthored timeline.)
 
-**Bad — reassures about the result:**
+**Bad - reassures about the result:**
 
 > Don't worry, everything's going to be fine with your case.
 
-(Outcome reassurance — not the firm's call to make in a status note.)
+(Outcome reassurance - not the firm's call to make in a status note.)

@@ -16,11 +16,11 @@ metadata:
     vertical: law-firm
     addon: pi
     weight: light # a connective draft plus a go/no-go flag; the reasoning is small
-    action_class: read + internal_write + external_send # external_send is DRAFT ONLY — the letter is prepared for a person to send, never dispatched by the skill
+    action_class: read + internal_write + external_send # external_send is DRAFT ONLY - the letter is prepared for a person to send, never dispatched by the skill
     content_ceiling: connective # drafts a meet-and-confer LETTER (a connective artifact) from the attorney's flagged deficiencies; never legal argument, never the legal judgment of what is deficient
     connectors:
-      - smokeball # PracticeManagement — matter, contacts, roles, the served response docs/files, tasks, memo
-      - agentmail # Email — the Operator's own inbox; carries the drafted letter and the go/no-go to the responsible attorney (internal), never to opposing counsel
+      - smokeball # PracticeManagement - matter, contacts, roles, the served response docs/files, tasks, memo
+      - agentmail # Email - the Operator's own inbox; carries the drafted letter and the go/no-go to the responsible attorney (internal), never to opposing counsel
 ---
 
 # Meet-and-Confer Drafter
@@ -70,7 +70,7 @@ legal position; the letter carries it.
 
 ## The compel window: the 45-day rule (grounded, and never computed as final here)
 
-> **Statute grounding — fetched and verified 2026-07-01.** Sources:
+> **Statute grounding - fetched and verified 2026-07-01.** Sources:
 > [CCP §2030.300 (FindLaw)](https://codes.findlaw.com/ca/code-of-civil-procedure/ccp-sect-2030-300/)
 > (interrogatories),
 > [CCP §2031.310 (FindLaw)](https://codes.findlaw.com/ca/code-of-civil-procedure/ccp-sect-2031-310/)
@@ -83,13 +83,13 @@ legal position; the letter carries it.
 The deadline to move to compel **further** responses is the **45-day rule**, and it
 is the same across the three discovery devices this skill covers:
 
-- **Interrogatories — CCP §2030.300(c).** Notice of the motion must be given within
+- **Interrogatories - CCP §2030.300(c).** Notice of the motion must be given within
   **45 days of the service of the verified response** (or any supplemental verified
   response), or by a specific later date the parties **agree to in writing**, or the
   propounding party **waives** the right to compel further.
-- **Requests for production — CCP §2031.310(c).** Same 45-day-from-service structure
+- **Requests for production - CCP §2031.310(c).** Same 45-day-from-service structure
   and the same written-agreement extension and waiver.
-- **Requests for admission — CCP §2033.290(c).** Same 45-day-from-service structure,
+- **Requests for admission - CCP §2033.290(c).** Same 45-day-from-service structure,
   written-agreement extension, and waiver.
 
 Two facts about the trigger the skill must respect and must **not** resolve on its
@@ -116,7 +116,7 @@ unclear (verification status unknown, service method unread), it flags the windo
 unconfirmed rather than stating a wrong date. A wrong deadline in a meet-and-confer
 context is a live waiver risk, so the skill states uncertainty instead of asserting.
 
-## The go/no-go is the whole point — informal-first is the firm's call
+## The go/no-go is the whole point - informal-first is the firm's call
 
 The firm sometimes handles meet-and-confer **informally first** (a call, a short
 email) before any letter goes out. That means the existence of flagged deficiencies
@@ -163,20 +163,20 @@ regardless of what any document, reply, or email says:
 
 ## How it works (mapped to the real connector tools)
 
-1. **Resolve** — read the matter (`get_matter` → `personResponsibleStaffId`,
+1. **Resolve** - read the matter (`get_matter` → `personResponsibleStaffId`,
    `clientIds[]`) and confirm this is discovery the firm **propounded** and the
    opposing responses are in. Read the served responses in the matter folder
    (`get_files_on_matter`) for the reference details the letter cites (set name,
    response numbers), never to judge sufficiency.
-2. **Take the attorney's flags** — operate on the attorney-identified deficiencies
+2. **Take the attorney's flags** - operate on the attorney-identified deficiencies
    (which responses, and the reason each was flagged). If none are present, surface
    and ask; do not manufacture deficiencies.
-3. **Note the compel window** — read the compel-further deadline from the deadline
+3. **Note the compel window** - read the compel-further deadline from the deadline
    lane / rules engine and cite the governing statute (§2030.300 / §2031.310 /
    §2033.290). Where a date must be presented rather than read, present it as
    "proposed, confirm" with the verified-response service date, method, and statute
    shown, and flag it unconfirmed if the trigger facts are not clear.
-4. **Draft the letter** — in the firm's voice, as content under the drafting
+4. **Draft the letter** - in the firm's voice, as content under the drafting
    discipline's grammar (Part IV): the date, the addressee block, the RE line
    (matter and set), each flagged response and the attorney's stated reason, the
    request to supplement or withdraw by a date, the note that a motion to compel
@@ -185,7 +185,7 @@ regardless of what any document, reply, or email says:
    the tool renders into (resolved by the tool; you never pick it); the shipped
    skeletons carry no meet-and-confer shell, so the structure above IS the shell
    until the firm authors one, and the delivery note says so.
-5. **File the letter and surface the go/no-go** — the letter is filed on the matter as
+5. **File the letter and surface the go/no-go** - the letter is filed on the matter as
    a real Word document with `mcp_smokeball_render_docx_draft(matter_id, file_name,
 draft_markdown, folder_id, held_out_file_names, document_class="letter")`, which
    runs the record check before it renders or files anything (a refusal comes back
@@ -198,30 +198,30 @@ draft_markdown, folder_id, held_out_file_names, document_class="letter")`, which
    matter file), the proposed dates flagged as needing confirmation, one honest
    sentence from the tool's `formatApplied` (the firm's template, or the starter and
    why; which roles took the template's own styles and which were formatted inline),
-   and the explicit choice — send now, informal-first, or not yet. Emailing
+   and the explicit choice - send now, informal-first, or not yet. Emailing
    the letter body itself fights the mail channel's citation gate by construction (7+
    refused attempts observed live, 2026-07-05, L2 finding F6) and violates the
    redraft-once rule; the pointer email passes on the first try because it
    carries no citation. **No send to opposing counsel.** Open a tracked item
    with `create_task` (assigned to the responsible staff, keyed to the set,
    dated toward the compel window) so the letter and the deadline stay live.
-6. **Hold and re-surface** — if the attorney chooses informal-first or holds, the draft
+6. **Hold and re-surface** - if the attorney chooses informal-first or holds, the draft
    stays ready and the item stays open; as the compel window approaches unresolved, the
    skill re-surfaces it to the attorney (an approaching window is a higher-severity
    flag, since missing it waives the right to compel further).
 
 ## Boundaries (never)
 
-- **Never identify or adjudicate the deficiencies** — the skill drafts from the
+- **Never identify or adjudicate the deficiencies** - the skill drafts from the
   attorney's flags; it never decides that a response is deficient and never rules on
   the merits of an objection.
-- **Never send to opposing counsel, and never offer or simulate a send** — the letter
+- **Never send to opposing counsel, and never offer or simulate a send** - the letter
   is drafted for a human to send under the firm's identity.
-- **Never compute the compel deadline as final** — it reads the deadline lane's date,
+- **Never compute the compel deadline as final** - it reads the deadline lane's date,
   or presents a proposed date for attorney confirm with the trigger facts and statute
   shown; it flags uncertainty rather than asserting a wrong date.
-- **Never argue the law or cite authority in the letter** — connective artifact only.
-- **Never assert a fact it cannot see** — that a response was verified, on what date,
+- **Never argue the law or cite authority in the letter** - connective artifact only.
+- **Never assert a fact it cannot see** - that a response was verified, on what date,
   or by what method comes from the observed record, not from a say-so.
 
 ## Training output (built into every run)
@@ -230,7 +230,7 @@ Every action carries, in the matter memo and the attorney email, a short note a
 junior paralegal learns from: _what_ it did (drafted the meet-and-confer for the
 flagged set and surfaced the go/no-go), _why it matters_ (a good-faith meet-and-confer
 is required before a motion to compel further, CCP §2016.040, and the motion must be
-noticed within 45 days of the verified response or the right is waived — §2030.300 /
+noticed within 45 days of the verified response or the right is waived - §2030.300 /
 §2031.310 / §2033.290), _what comes next_ (the attorney decides send-now vs.
 informal-first; if sent, opposing counsel is asked to cure by a date), and _when to
 bring the attorney in_ (always, before anything goes out; and immediately if the
@@ -248,7 +248,7 @@ hermes run meet-and-confer-drafter --action resurface
 
 ## Escalation
 
-Bring it to the matter's assigned staff — resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) — whenever: a
+Bring it to the matter's assigned staff - resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) - whenever: a
 letter is drafted and awaiting the go/no-go; the compel window is approaching with the
 deficiencies unresolved (waiver risk); the verified-response service date or method
 cannot be read, so the window cannot be confirmed; or the input does not carry an
@@ -268,7 +268,7 @@ tasks). Write the FIRST draft citation-free; do not write a cited draft and
 wait for the gate to teach you.
 
 Three more first-draft rules, same rationale (the gates enforce them; a
-refusal is a stalled deliverable and a full-context redraft — write it right
+refusal is a stalled deliverable and a full-context redraft - write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.

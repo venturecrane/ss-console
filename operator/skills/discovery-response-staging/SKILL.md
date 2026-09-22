@@ -250,7 +250,7 @@ hermes run discovery-response-staging --action route
 
 ## Escalation
 
-Red-flag to the matter's assigned staff — resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) — when: the input
+Red-flag to the matter's assigned staff - resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) - when: the input
 folder or return-location convention is not established for the matter; **any write
 fails or cannot be confirmed by a read** - a staging write (`add_file` /
 `create_folder`), the routing write (`create_task`), or the log write (`create_memo`);
@@ -272,7 +272,7 @@ tasks). Write the FIRST draft citation-free; do not write a cited draft and
 wait for the gate to teach you.
 
 Three more first-draft rules, same rationale (the gates enforce them; a
-refusal is a stalled deliverable and a full-context redraft — write it right
+refusal is a stalled deliverable and a full-context redraft - write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.

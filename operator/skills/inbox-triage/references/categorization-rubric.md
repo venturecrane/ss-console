@@ -1,6 +1,6 @@
 # Categorization Rubric
 
-How the agent decides between action classes and priorities. This rubric is the source of truth — when the agent is uncertain, it consults this file rather than improvising.
+How the agent decides between action classes and priorities. This rubric is the source of truth - when the agent is uncertain, it consults this file rather than improvising.
 
 ## Action classes (mutually exclusive)
 
@@ -52,26 +52,26 @@ Informational only. No action expected, but Captain would want to know. Use FYI 
 
 ### JUNK
 
-Newsletters, promotions, transactional confirmations, automated notifications Captain doesn't read. Goes in the Junk section of the daily note. The agent does NOT archive — Captain bulk-acts.
+Newsletters, promotions, transactional confirmations, automated notifications Captain doesn't read. Goes in the Junk section of the daily note. The agent does NOT archive - Captain bulk-acts.
 
 If you're uncertain whether something is JUNK or FYI, default to FYI. False positives on JUNK are worse than false positives on FYI: a missed signal is worse than a moment of skimming.
 
 ## Priority (orthogonal to action class)
 
-### P0 — Today
+### P0 - Today
 
 The work happens today. Use P0 when any of:
 
 - The sender expects a same-day response.
 - The work is time-sensitive (contract deadline, scheduling window closing, prospect ready to buy).
 - Silence today causes irreversible loss or damage to the relationship.
-- It's a hot prospect inbound (SMD has no clients yet — these are rare and important).
+- It's a hot prospect inbound (SMD has no clients yet - these are rare and important).
 
-### P1 — This week
+### P1 - This week
 
 The work needs to happen by end of week. Default for most REPLY and ACT items that aren't urgent and aren't deferrable.
 
-### P2 — Later
+### P2 - Later
 
 The work can wait beyond this week. Use P2 when:
 
@@ -81,18 +81,18 @@ The work can wait beyond this week. Use P2 when:
 
 ### ARCHIVE
 
-Captain doesn't need to act and doesn't need to read it later. The agent surfaces these in the ARCHIVE candidates section but does NOT archive them — Captain decides.
+Captain doesn't need to act and doesn't need to read it later. The agent surfaces these in the ARCHIVE candidates section but does NOT archive them - Captain decides.
 
 ## Confidence
 
 Mark `LOW` confidence whenever ANY of these are true, regardless of how well the agent thinks it understands the message:
 
-1. The message touches money — pricing, contracts, invoices, payment terms, scope changes that have cost implications.
-2. The message involves a commitment Captain hasn't made yet — signing something, agreeing to a date, accepting scope.
-3. The thread has emotional content — frustration, conflict, apology, a relationship that feels strained.
+1. The message touches money - pricing, contracts, invoices, payment terms, scope changes that have cost implications.
+2. The message involves a commitment Captain hasn't made yet - signing something, agreeing to a date, accepting scope.
+3. The thread has emotional content - frustration, conflict, apology, a relationship that feels strained.
 4. The sender's identity matters and the agent isn't sure who they are (could be a prospect, could be a vendor pitch, could be a real opportunity).
 5. The agent had to guess at context (referenced a previous conversation the agent didn't see, mentioned a person or project the agent doesn't know about).
-6. The agent's draft uses any hedge language ("I think," "I believe," "if I'm reading this right") — those hedges are a tell that the agent isn't sure.
+6. The agent's draft uses any hedge language ("I think," "I believe," "if I'm reading this right") - those hedges are a tell that the agent isn't sure.
 
 `MED` confidence is the default for `REPLY` and `ACT` items that are clear but where the draft or suggestion could plausibly be wrong on a detail.
 

@@ -1,10 +1,10 @@
-# Engagement Letter Chaser — Nudge Voice
+# Engagement Letter Chaser - Nudge Voice
 
 The nudge is a short, warm, low-pressure reminder. Client-facing; whether it sends
 or is held for review follows the firm's authored ceiling (SKILL.md, safety
 invariant 4).
 
-## Floor-clean by construction (READ THIS — #1878)
+## Floor-clean by construction (READ THIS - #1878)
 
 A graduated nudge to a rostered client is re-scanned by the content-sensitivity
 floor (ADR 0031) before it delivers. The floor's `contract` category matches
@@ -26,7 +26,7 @@ nudge body keeps (from `_shared-chase-voice.md`, "Floor-clean by construction"):
 
 This governs the OUTBOUND nudge body only. Internal surfaces (memos, decision
 lines, status headers) keep the precise words ("unsigned", "signed", "engagement
-letter") — the floor scans what leaves the firm, not the matter file.
+letter") - the floor scans what leaves the firm, not the matter file.
 
 ## The line
 
@@ -55,16 +55,16 @@ matter is already underway before the letter is completed.
 > the form shows and return it here: <link>. If anything in it raises a question,
 > we are happy to set up a few minutes with the team to walk through it. Thanks.
 
-**Bad — interprets a term (UPL):**
+**Bad - interprets a term (UPL):**
 
 > The indemnification clause in section 4 just means you cover our costs if a third
 > party sues, which is standard, so you're fine to sign.
 
-(Explains and characterizes a clause — legal advice. Also carries floor trigger
+(Explains and characterizes a clause - legal advice. Also carries floor trigger
 words; a term explanation can never be floor-clean because the sensitivity is
 real, not vocabulary.)
 
-**Bad — implies work has started:**
+**Bad - implies work has started:**
 
 > We've already started pulling things together on your matter, so we just need the
 > signed letter to keep going.

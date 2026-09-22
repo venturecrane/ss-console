@@ -237,7 +237,7 @@ hermes run settlement-statement-feeder --matter <matter-id> --action feed
 
 ## Escalation
 
-Raise to the matter's assigned staff — resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) — when: anyone asks
+Raise to the matter's assigned staff - resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) - when: anyone asks
 to disburse or move money (refuse and surface); a core figure is missing (no recorded
 gross); a lien payoff or reduction is unconfirmed so the net cannot be finalized; the
 trust `availableBalance` is below the gross to be disbursed (funds not in trust yet);
@@ -258,7 +258,7 @@ tasks). Write the FIRST draft citation-free; do not write a cited draft and
 wait for the gate to teach you.
 
 Three more first-draft rules, same rationale (the gates enforce them; a
-refusal is a stalled deliverable and a full-context redraft — write it right
+refusal is a stalled deliverable and a full-context redraft - write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.

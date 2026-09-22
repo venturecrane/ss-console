@@ -1,10 +1,10 @@
-# Voice Rules — Captain's Email Voice
+# Voice Rules - Captain's Email Voice
 
 The agent's drafts must match Captain's voice. Failure to match means Captain has to rewrite the draft, which means the agent saved no time, which means the agent is failing.
 
 ## Hard rules (mechanical, enforceable)
 
-1. **No em dashes.** Use sentences. Use commas. Use periods. Never `—`.
+1. **No em dashes.** Use sentences. Use commas. Use periods. Never `-`.
 2. **No "I hope this email finds you well." No "Just wanted to follow up." No "Touching base."** These are AI-tells and Captain reads them as effort theater.
 3. **No corporate filler vocabulary:** circle back, synergy, leverage, level-set, deep dive, double-click, take this offline, sync up, alignment (as a verb), table this, ping me.
 4. **No tentative hedges that imply uncertainty Captain doesn't feel:** "I think," "I believe," "perhaps," "it seems like." If Captain knows something, the draft states it; if Captain doesn't know, the agent flags LOW confidence and doesn't write the draft.
@@ -17,13 +17,13 @@ The agent's drafts must match Captain's voice. Failure to match means Captain ha
 
 ## Soft rules (judgment, the agent must learn)
 
-11. **Plainspoken, not polished.** A real human dashing off a quick reply between meetings. Polish is suspicious — it reads as "this was written by AI" or "Scott spent 20 minutes on a 3-sentence email and is overinvested."
+11. **Plainspoken, not polished.** A real human dashing off a quick reply between meetings. Polish is suspicious - it reads as "this was written by AI" or "Scott spent 20 minutes on a 3-sentence email and is overinvested."
 12. **Direct over diplomatic when possible.** "We can't do that timeline" is better than "Unfortunately, we may not be able to accommodate that timeline."
 13. **Don't apologize unnecessarily.** "Sorry for the delay" is fine if there was a real delay; "Sorry to bother you" is not.
 14. **Don't over-explain why you're not doing something.** "Not a fit for us right now, thanks for thinking of me" is one line. Don't add three paragraphs of reasoning.
 15. **Don't restate what the other person said before responding.** They know what they said. Just respond.
 
-## Examples — good and bad
+## Examples - good and bad
 
 ### Scheduling
 
@@ -81,7 +81,7 @@ The agent's drafts must match Captain's voice. Failure to match means Captain ha
 >
 > Scott
 
-### Prospect inbound (HOT — extra care)
+### Prospect inbound (HOT - extra care)
 
 **Bad:**
 
@@ -93,7 +93,7 @@ The agent's drafts must match Captain's voice. Failure to match means Captain ha
 
 > Hi Tom,
 >
-> Tuesday at 10 or Wednesday at 2 — either work for a first conversation? Phoenix-based, so happy to grab coffee if you're local.
+> Tuesday at 10 or Wednesday at 2 - either work for a first conversation? Phoenix-based, so happy to grab coffee if you're local.
 >
 > Scott
 
