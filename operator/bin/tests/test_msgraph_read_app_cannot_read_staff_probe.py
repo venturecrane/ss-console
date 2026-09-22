@@ -14,9 +14,7 @@ import importlib.util
 import os
 from pathlib import Path
 
-PROBE = (
-    Path(__file__).resolve().parents[2] / "templates" / "msgraph-read-app-cannot-read-staff-probe.py"
-)
+PROBE = Path(__file__).resolve().parents[2] / "templates" / "msgraph-read-app-cannot-read-staff-probe.py"
 
 
 def _load():
@@ -44,9 +42,7 @@ def _seat(tmp_path: Path, yaml_text: str, *, env: bool = True) -> tuple[str, str
     body = b"PATH=/bin\x00"
     if env:
         body += (
-            b"MSGRAPH_TENANT_ID=tid\x00MSGRAPH_CLIENT_ID=cid-read\x00MSGRAPH_CLIENT_SECRET="
-            + SECRET.encode()
-            + b"\x00"
+            b"MSGRAPH_TENANT_ID=tid\x00MSGRAPH_CLIENT_ID=cid-read\x00MSGRAPH_CLIENT_SECRET=" + SECRET.encode() + b"\x00"
         )
     (proc / "123" / "environ").write_bytes(body)
     return str(yaml_path), str(proc)

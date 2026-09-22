@@ -57,11 +57,7 @@ def staff_addresses(yaml_text: str) -> list[str]:
     entries = scope.get("staff_send_as") if isinstance(scope, dict) else None
     if not isinstance(entries, list):
         return []
-    return [
-        str(e["address"]).strip()
-        for e in entries
-        if isinstance(e, dict) and str(e.get("address") or "").strip()
-    ]
+    return [str(e["address"]).strip() for e in entries if isinstance(e, dict) and str(e.get("address") or "").strip()]
 
 
 def _environ(proc_root: str, pid: str) -> dict[str, str] | None:

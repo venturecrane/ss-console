@@ -31,12 +31,8 @@ own word so neither can answer for the other.
 
 from __future__ import annotations
 
-import base64
 import hashlib
-import hmac
-import html
 import json
-import os
 import re
 import secrets
 import sqlite3
@@ -49,12 +45,9 @@ import yaml
 from .canon import canonical
 from .send_as_links import SEND_AS_TTL_SECONDS as _LINK_TTL_SECONDS
 from .send_as_links import (
-    LINK_KEY_PATH,
     notify_link_decision,
     tag_for,
     approval_email,
-    approve_base_url,
-    link_token,
     render_html,
     verify_link_token,
 )

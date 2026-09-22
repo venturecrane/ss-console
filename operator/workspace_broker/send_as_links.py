@@ -33,6 +33,7 @@ def tag_for(act_id: str) -> str:
     """The draft tag, the one string the approver, the email and the row share."""
     return f"[draft {act_id}]"
 
+
 #: Where the link-token key lives: broker-owned, 0600, minted on first use. The
 #: AGENT uid (and so the webhook gate, and so the model) can neither read nor
 #: forge it, which is what makes an approve link a key the seat can check rather
@@ -52,7 +53,6 @@ def approve_base_url() -> str:
         return authored
     slug = (os.environ.get("SMD_CUSTOMER_SLUG") or os.environ.get("CUSTOMER_SLUG") or "").strip()
     return f"https://hermes-{slug}.fly.dev" if slug else ""
-
 
 
 def _link_key() -> bytes:
@@ -104,7 +104,6 @@ def verify_link_token(token: str, approver: str) -> tuple[str, str] | None:
     return row_id, decision
 
 
-
 def approval_buttons(row_id: str, approver: str, expires_at: float) -> dict[str, str]:
     """``{"send": url, "cancel": url}``, or ``{}`` when this seat has no web face.
 
@@ -132,10 +131,8 @@ def approval_html(body_text: str, buttons: dict[str, str]) -> str:
         "<div>"
         f'<p><a href="{send_url}" style="{style}background:#1a7f37;color:#ffffff">Send it</a>'
         f'<a href="{cancel_url}" style="{style}background:#eeeeee;color:#111111">Cancel</a></p>'
-        "<p style=\"font-family:system-ui,sans-serif;font-size:13px;color:#555\">"
-        "To change it, reply to this email with what to change.</p>"
-        + render_html(body_text)
-        + "</div>"
+        '<p style="font-family:system-ui,sans-serif;font-size:13px;color:#555">'
+        "To change it, reply to this email with what to change.</p>" + render_html(body_text) + "</div>"
     )
 
 
@@ -199,9 +196,7 @@ def approval_email(
     return email
 
 
-def notify_link_decision(
-    broker: Any, row: dict[str, Any], outcome: dict[str, Any], notice: Any
-) -> None:
+def notify_link_decision(broker: Any, row: dict[str, Any], outcome: dict[str, Any], notice: Any) -> None:
     """Tell the approver what a click just did, so a click they did not make is
     visible to them rather than only to an audit reader."""
     status = str(outcome.get("status") or "").upper()
