@@ -201,8 +201,9 @@ extensions in the matter is confirmed at connect.
 **Where the extension check reads from.** On a single matter a human named, read the
 matter directly (`get_memos_on_matter`, `list_tasks`).
 
-**Scheduled-scan rule: a scheduled scan never calls `get_memos_on_matter` or
-`read_document`, because the seat refuses a second matter's content in one session.**
+**Scheduled-scan rule: a scheduled scan never calls `get_memos_on_matter`
+or `read_document`, the only two matter-content tools the seat fences,
+because it refuses a second matter's content in one session.**
 A scheduled run covers every open matter; the one-matter content fence refuses the
 second matter's memo read, so the scan would go blind after the first matter and burn
 the seat's refusal-cascade brake on the way.

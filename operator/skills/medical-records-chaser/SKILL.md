@@ -59,8 +59,9 @@ by `matter_id` and `task_id`, with `attempt`, `last_chased` and
 tasks carry no roster marker at all surfaces as condition (e), "NO ROSTER TASKS", from
 the gate: a missing roster is surfaced, never filled in from somewhere else.
 
-**Scheduled-scan rule: a scheduled scan never calls `get_memos_on_matter` or
-`read_document`, because the seat refuses a second matter's content in one session.**
+**Scheduled-scan rule: a scheduled scan never calls `get_memos_on_matter`
+or `read_document`, the only two matter-content tools the seat fences,
+because it refuses a second matter's content in one session.**
 A scheduled run covers every open matter; the one-matter content fence refuses the
 second matter's memo read, so the scan would go blind after the first matter and burn
 the seat's refusal-cascade brake on the way. **On demand** (one matter, named by a

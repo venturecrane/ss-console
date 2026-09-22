@@ -133,11 +133,12 @@ no invented tool, no assumed status API.
    wrote, so it can report what CHANGED since then rather than only the current
    picture.
 
-   **Scheduled-scan rule: a scheduled scan never calls `get_memos_on_matter` or
-   `read_document`, because the seat refuses a second matter's content in one
-   session.** A scheduled run covers every open matter; the one-matter content fence
-   refuses the second matter's memo read, so the scan would go blind after the first
-   matter and burn the seat's refusal-cascade brake on the way.
+   **Scheduled-scan rule: a scheduled scan never calls `get_memos_on_matter`
+   or `read_document`, the only two matter-content tools the seat fences,
+   because it refuses a second matter's content in one session.** A scheduled run
+   covers every open matter; the one-matter content fence refuses the second matter's
+   memo read, so the scan would go blind after the first matter and burn the seat's
+   refusal-cascade brake on the way.
 
    So **on a scheduled scan there is no diff**: report the CURRENT motion-calendar
    surface, assembled from events and tasks (steps 2 and 3, both unfenced metadata).

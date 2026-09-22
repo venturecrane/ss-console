@@ -27,9 +27,19 @@ import { describe, expect, it } from 'vitest'
 
 const ROOT = 'operator/skills'
 
-/** The rule, verbatim. Change it here and in every skill, or not at all. */
+/**
+ * The rule, verbatim. Change it here and in every skill, or not at all.
+ *
+ * It names the two fenced tools AND says they are the only two, because the
+ * first draft of this rule did not: a skill read "never calls read_document"
+ * as "no document reads on a scan" and stopped the service watcher at the file
+ * listing, which would have cost it the served date and method it exists to
+ * capture. `matter_binding._CONTENT_READ_TOOLS` fences `get_memos_on_matter`
+ * and `read_document` and nothing else; `get_files_on_matter`, `get_file` and
+ * `get_download_url` are unfenced and stay available on a scan.
+ */
 const RULE =
-  "a scheduled scan never calls `get_memos_on_matter` or `read_document`, because the seat refuses a second matter's content in one session"
+  "a scheduled scan never calls `get_memos_on_matter` or `read_document`, the only two matter-content tools the seat fences, because it refuses a second matter's content in one session"
 
 /**
  * The skills whose scheduled path used to make a fenced read. Four, not three:
