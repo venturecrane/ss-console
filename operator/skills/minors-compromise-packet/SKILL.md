@@ -213,8 +213,8 @@ posture; an unconfirmed write is surfaced, never reported as done.
 6. **Surface the fund handling** - note that a post-approval disposition must be
    decided; if authored, prepare the matching MC-355 / MC-356 for finalization.
 7. **Log** - `create_memo` records what was assembled, from which reads, the gaps
-   surfaced, and the training-output note. Confirm the memo landed with
-   `get_memos_on_matter`; if it did not, surface the log failure.
+   surfaced, and the training-output note. Confirm the memo landed from the
+   `confirmed` field `create_memo` returns; unless it is `true`, surface the log failure.
 
 ## Boundaries (never)
 

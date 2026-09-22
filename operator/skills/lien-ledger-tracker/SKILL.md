@@ -299,7 +299,8 @@ task writes are verified on prod (2026-08-31: `POST /tasks` is 202-async, so an
 immediate read 404s - read back with patience) while `create_memo` remains
 UNVERIFIED per the surface, so a write is reported as done **only after
 a confirming read** shows it landed (`list_tasks` / `get_task` after a task write;
-`get_memos_on_matter` after a memo). If the confirming read does not show it, the
+for a memo, the `confirmed` field `create_memo` returns, true only when it read its own
+memo back). If the confirming read does not show it, the
 skill surfaces the failure ("could not confirm the ledger entry was created"), never
 a shape that asserts success. `create_task` supplies the required `staffId`
 (the matter's `personResponsibleStaffId`) and a `dueDateOnly` that is a **near-term
