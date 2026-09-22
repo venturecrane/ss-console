@@ -1,4 +1,4 @@
-# Engagement Letter Chaser — Test Cases
+# Engagement Letter Chaser - Test Cases
 
 Five fixtures in `operator/fixtures/law-firm/engagement-letter-chaser/`, each `input + frozen expected`. Inputs supply the e-sign status, cadence rules, and any client reply.
 

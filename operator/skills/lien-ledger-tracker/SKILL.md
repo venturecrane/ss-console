@@ -413,7 +413,7 @@ hermes run lien-ledger-tracker --action chase
 
 ## Escalation
 
-Raise to the matter's assigned staff — resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) — when: any request
+Raise to the matter's assigned staff - resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) - when: any request
 asks the skill to compute a reduction or a payoff; any request asks to move money or
 disburse; a lien amount is disputed or two sources conflict; a payoff is stalling as
 settlement approaches (Medicare and ERISA highest, given the reimbursement exposure);
@@ -434,7 +434,7 @@ tasks). Write the FIRST draft citation-free; do not write a cited draft and
 wait for the gate to teach you.
 
 Three more first-draft rules, same rationale (the gates enforce them; a
-refusal is a stalled deliverable and a full-context redraft — write it right
+refusal is a stalled deliverable and a full-context redraft - write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.

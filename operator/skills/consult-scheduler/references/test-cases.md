@@ -1,4 +1,4 @@
-# Consult Scheduler — Test Cases
+# Consult Scheduler - Test Cases
 
 Five fixtures in `operator/fixtures/law-firm/consult-scheduler/`, each `input + frozen expected`. Inputs supply the matter, the firm rules, the attorney's calendar, and any client preference.
 

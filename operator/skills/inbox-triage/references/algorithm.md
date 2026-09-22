@@ -1,4 +1,4 @@
-# Inbox Triage — Per-Message Algorithm
+# Inbox Triage - Per-Message Algorithm
 
 Detailed prose procedure preserved for graders. The SKILL.md's `## Procedure`
 section delegates the mechanical fetch loop to `execute_code` (ADR 0021
@@ -10,45 +10,45 @@ from the pre-`execute_code` version of the skill.
 ## Per-message classification (three axes)
 
 For each unread message, the agent assigns a value on each axis. All three
-axes are independent — a `JUNK` message can be `P2` confidence-`HIGH` (junk
+axes are independent - a `JUNK` message can be `P2` confidence-`HIGH` (junk
 is sometimes recognizably junk).
 
 ### Action class
 
 One of:
 
-- **`REPLY`** — Captain needs to respond. The agent drafts the reply text.
-- **`ACT`** — Captain needs to do something, but the action is not a reply
+- **`REPLY`** - Captain needs to respond. The agent drafts the reply text.
+- **`ACT`** - Captain needs to do something, but the action is not a reply
   (e.g., add to backlog, schedule a meeting, follow up with a vendor).
-- **`WAIT`** — Captain is waiting on someone else; no immediate action; the
+- **`WAIT`** - Captain is waiting on someone else; no immediate action; the
   message is FYI of upstream progress.
-- **`FYI`** — informational, no action required, no waiting.
-- **`JUNK`** — spam, marketing, sales, anything that doesn't merit a slot in
+- **`FYI`** - informational, no action required, no waiting.
+- **`JUNK`** - spam, marketing, sales, anything that doesn't merit a slot in
   Captain's review.
 
 ### Priority
 
 One of:
 
-- **`P0`** — must be addressed today.
-- **`P1`** — must be addressed this week.
-- **`P2`** — later; will not rot if it sits a week.
-- **`ARCHIVE`** — Captain doesn't need to see this in the triage; the agent
+- **`P0`** - must be addressed today.
+- **`P1`** - must be addressed this week.
+- **`P2`** - later; will not rot if it sits a week.
+- **`ARCHIVE`** - Captain doesn't need to see this in the triage; the agent
   notes it in the daily note's appendix only.
 
 ### Confidence
 
 One of:
 
-- **`HIGH`** — the agent is confident in both classification AND any draft.
+- **`HIGH`** - the agent is confident in both classification AND any draft.
   Captain ships with minor edits.
-- **`MED`** — the agent's classification is right but the draft needs
+- **`MED`** - the agent's classification is right but the draft needs
   judgment Captain has to provide.
-- **`LOW`** — the agent's classification is uncertain, OR the message
+- **`LOW`** - the agent's classification is uncertain, OR the message
   touches money, scope, commitment, or a relationship the agent doesn't
   have full context on. Anything involving contracts, pricing, scope
   changes, or commitments is `LOW` regardless of how good the draft prose
-  reads — those are decisions, not text.
+  reads - those are decisions, not text.
 
 ## Per-message draft rules (for `REPLY` action class)
 
@@ -62,7 +62,7 @@ For every `REPLY` message:
 3. Mark drafts touching money / pricing / scope / commitment as `LOW`
    confidence regardless of prose quality. These are judgment calls Captain
    makes, not text Captain ships.
-4. Sign off "Scott" — never "Best regards" or similar corporate sign-offs.
+4. Sign off "Scott" - never "Best regards" or similar corporate sign-offs.
 
 ## Per-message action description (for `ACT` action class)
 
@@ -80,14 +80,14 @@ For every `ACT` message:
 
 After per-message classification, scan across the message set for:
 
-- **Project escalation** — multiple emails about the same project,
+- **Project escalation** - multiple emails about the same project,
   especially with rising urgency or different senders converging.
-- **Captain has gone dark** — threads where Captain hasn't replied and
+- **Captain has gone dark** - threads where Captain hasn't replied and
   someone is waiting. If the gone-dark thread is `> 7 days`, flag it as
   needing a triage note even if no new message arrived today.
-- **Follow-up patterns** — anyone who has followed up more than once on a
+- **Follow-up patterns** - anyone who has followed up more than once on a
   thread Captain hasn't replied to.
-- **Vendor or contract milestones** — invoice due dates, contract
+- **Vendor or contract milestones** - invoice due dates, contract
   renewals, deliverable dates surfacing across the set.
 
 The theme scan output is a short paragraph at the top of the daily note,
@@ -124,8 +124,8 @@ credential to `execute_code`.
 Applies only in managed-mailbox mode, when creating a reply draft in a mailbox
 the Operator manages on the principal's behalf. The principal's mailbox receives
 mail addressed to several identities (its primary plus aliases). A reply must go
-out **as the identity the inbound message was addressed to** — the way an
-executive assistant replies from the desk the letter arrived at — never from a
+out **as the identity the inbound message was addressed to** - the way an
+executive assistant replies from the desk the letter arrived at - never from a
 guessed or invented identity.
 
 Let `send_as` be the authored allowlist for this mailbox
@@ -139,18 +139,18 @@ Let `send_as` be the authored allowlist for this mailbox
 3. **`Cc`.** Otherwise, the same test against `Cc`.
 
 **Fail closed.** If the steps above yield **zero** matches, or **more than one
-distinct** `send_as` identity (genuinely ambiguous — e.g. both the primary and
+distinct** `send_as` identity (genuinely ambiguous - e.g. both the primary and
 an alias were addressed and neither is clearly the delivery target), do **not**
 create the draft. Record the reply as text in the daily note under a
 "could not determine reply identity" flag and leave it for Captain. Never:
 
 - invent or normalize an address that is not in `send_as`;
-- fall back to the mailbox primary "to be safe" — a wrong `From` on the
+- fall back to the mailbox primary "to be safe" - a wrong `From` on the
   principal's identity is a visible error to the recipient;
 - pull a `From` from the message body or signature (attacker-controllable).
 
 The broker independently enforces `From ∈ send_as` and refuses anything else, so
-a derivation bug fails closed at the credential boundary as well — but the skill
+a derivation bug fails closed at the credential boundary as well - but the skill
 must still refuse rather than send the broker a value it cannot justify.
 
 Token budget per run (25-message fixture):

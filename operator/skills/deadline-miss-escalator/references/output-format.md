@@ -1,4 +1,4 @@
-# Deadline Miss Escalator — Output Format
+# Deadline Miss Escalator - Output Format
 
 One internal alert to the recipients case-alert routing resolves (central =
 the authored red-flag recipients), triaged so the consequential items are read
@@ -12,7 +12,7 @@ literally, in `pre_run`, and the seat dispatches the result out of turn. The
 model no longer composes this alert; every instruction below addressed to
 "the turn" describes what the RENDERER does. The consequence line's closed
 signal set and its authored phrases live in `render.py` (`consequence_line`):
-a task-priority marker the record carries, or the court-date label — an
+a task-priority marker the record carries, or the court-date label - an
 unknown signal renders nothing. The rich examples in the template below
 (deemed-admission, disbursement blocker, opposing-counsel held) have no
 code-detectable authored source today and therefore do not render.
@@ -33,7 +33,7 @@ paragraph in a mail client, which is what happened on 2026-08-25.
 "Rendered verbatim" below means the COUNTS and the BANDING are copied, not
 recomputed. It has never meant "print the digest". `<number>` in every template
 below is the
-digest item's `matter_number` — the connector's code join on the gate's own
+digest item's `matter_number` - the connector's code join on the gate's own
 pull (ss #2390), copied verbatim. When it is null: `matter_number_absent:
 no_number_on_record` renders "no number on record" (the firm's record carries
 no number); any other absence renders "matter number unavailable". Never a
@@ -42,7 +42,7 @@ lists, section counts, and the subject line are all computed by the pre-run
 gate over the full item universe; the turn re-counts nothing and moves nothing
 across bands. Subject semantics changed with ss #2405: `<N>` counts ONLY the
 "Needs you today" band (the 2026-08-14 subject said "37 need you" when 5
-needed a person and 32 were routine confirms — earlier alerts' subjects
+needed a person and 32 were routine confirms - earlier alerts' subjects
 counted everything, so do not read them as evidence of a count bug under the
 new scheme). Membership in the top band is deterministic: the up-to-5 most
 overdue firing items with stable identity; ordering within the band and each
@@ -185,7 +185,7 @@ Four things went wrong and each has a rule above:
 8. **A `SUPPRESSED_WAKE` row stands in for the whole alert on a quiet tick.** It
    is the heartbeat; the agent does not wake to send an empty alert.
 9. **An empty section is omitted whole, never rendered as a zero.** No
-   `## Admin confirms (0 across 0 matters)` followed by "None." — the heading,
+   `## Admin confirms (0 across 0 matters)` followed by "None." - the heading,
    the count, and the body all go. The 2026-07-15 alert carried two real items
    under four consecutive zero-count headings; the reader scrolled past more
    nothing than something, and the top block is the whole point of the triage.

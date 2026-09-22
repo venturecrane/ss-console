@@ -348,7 +348,7 @@ hermes run discovery-response-tracker --direction outbound --action watch
 
 ## Escalation
 
-Red-flag to the matter's assigned staff — resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) — when: a response
+Red-flag to the matter's assigned staff - resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) - when: a response
 deadline is unconfirmed and near; the deadline mode is unconfigured; the engine's
 discovery-response event cannot be identified (or multiple candidates); a proof of service
 is unreadable; a computed final date lands on a weekend/holiday (§2016.060 roll to confirm);
@@ -371,7 +371,7 @@ tasks). Write the FIRST draft citation-free; do not write a cited draft and
 wait for the gate to teach you.
 
 Three more first-draft rules, same rationale (the gates enforce them; a
-refusal is a stalled deliverable and a full-context redraft — write it right
+refusal is a stalled deliverable and a full-context redraft - write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.

@@ -337,7 +337,7 @@ can check each line against the draft.
 ## Voice
 
 If your authored-spec pointer block names a `work_product` voice spec, READ that file
-and compose against it — `smd_deliver_draft` refuses the delivery if this turn did not.
+and compose against it - `smd_deliver_draft` refuses the delivery if this turn did not.
 If there is no pointer block, no spec is installed for this class: draft in the plain
 professional register of the discipline and say so in the delivery note. Voice never overrides the discipline: it does not relax the premise gate,
 does not soften a `NOT IN RECORD` marker into prose, and does not touch the statutory

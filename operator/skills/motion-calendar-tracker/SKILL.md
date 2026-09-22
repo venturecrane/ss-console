@@ -212,7 +212,7 @@ hermes run motion-calendar-tracker --action scan --window 30d
 
 ## Escalation
 
-Surface to the matter's assigned staff — resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) — when: a hearing
+Surface to the matter's assigned staff - resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) - when: a hearing
 is on the calendar with no corresponding filed motion in the record; a motion is
 filed with no hearing date set; an opposition/reply window is un-calendared as a
 hearing approaches; a status is reported in a note but not otherwise confirmed; or an
@@ -240,7 +240,7 @@ tasks). Write the FIRST draft citation-free; do not write a cited draft and
 wait for the gate to teach you.
 
 Three more first-draft rules, same rationale (the gates enforce them; a
-refusal is a stalled deliverable and a full-context redraft — write it right
+refusal is a stalled deliverable and a full-context redraft - write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.

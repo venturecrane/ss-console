@@ -1,4 +1,4 @@
-# Minor's Compromise Packet — Voice
+# Minor's Compromise Packet - Voice
 
 Derives from `operator/verticals/law-firm/addons/pi/references/_shared-chase-voice.md`.
 
@@ -7,7 +7,7 @@ This skill's only outbound draft is the **lien payoff chase**. The packet itself
 from authored figures; it carries no voice beyond the forms' own fields. Neither the
 chase nor the packet is ever sent or filed without a human.
 
-## The lien payoff chase (to a lienholder — a professional, not a client)
+## The lien payoff chase (to a lienholder - a professional, not a client)
 
 Professional and businesslike. It names the one outstanding thing (a current payoff
 figure for a specific patient/claimant), notes why timing matters at a plain level
@@ -36,21 +36,21 @@ invent urgency.
 
 ## Good / bad
 
-**Good — lien payoff chase to a lienholder:**
+**Good - lien payoff chase to a lienholder:**
 
 > Hi <name>, we are preparing the settlement approval for <claimant> and need a current
 > payoff figure on your lien (account <ref>) to complete the disclosure. Could you send
 > the current amount, or let us know if you need a fresh authorization to release it?
 > Happy to resend it. Thank you.
 
-**Bad — estimates / negotiates the payoff (out of bounds):**
+**Bad - estimates / negotiates the payoff (out of bounds):**
 
 > Your lien is probably around $8,000 by now; we will plan on paying $6,000 to close it
 > out, so consider it settled unless you object this week.
 
 (Estimates a figure, negotiates it, and asserts a resolution that is not observed.)
 
-**Bad — leaks the minor's figures / characterizes the fairness:**
+**Bad - leaks the minor's figures / characterizes the fairness:**
 
 > The minor is netting $42,000 after our reasonable one-third fee, so your lien is a
 > small piece and should be easy to release.

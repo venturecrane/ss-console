@@ -273,7 +273,7 @@ hermes run trial-binder-assembler --matter <matter-id> --action track
 
 ## Escalation
 
-Surface to the matter's assigned staff — resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) — when: a core
+Surface to the matter's assigned staff - resolution, fallback, and fail-closed floor per the case-alert routing rule (deadline-miss-escalator/references/case-alert-routing.md) - when: a core
 component (exhibit list, witness list, a deposition summary) is missing or unreadable;
 the trial date or the trial-setting order cannot be read; the firm's PDF tool for
 Bates-stamping is not configured at connect; a captured trial-prep or pre-trial-filing
@@ -295,7 +295,7 @@ tasks). Write the FIRST draft citation-free; do not write a cited draft and
 wait for the gate to teach you.
 
 Three more first-draft rules, same rationale (the gates enforce them; a
-refusal is a stalled deliverable and a full-context redraft — write it right
+refusal is a stalled deliverable and a full-context redraft - write it right
 the first time):
 
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.

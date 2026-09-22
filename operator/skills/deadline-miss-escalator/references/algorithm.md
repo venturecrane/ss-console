@@ -32,21 +32,21 @@ otherwise it writes a `SUPPRESSED_WAKE` heartbeat and suppresses.
 `operator/workspace_broker/escalation_ledger.py`) and joins each pulled item
 against the ledger:
 
-- **item identity** — `item_key = sha256(matter_id, Smokeball task/event id,
+- **item identity** - `item_key = sha256(matter_id, Smokeball task/event id,
 authored_date)`. The task id is the anti-collision half: two same-day tasks on
-  one matter differ only by it. `label` is accepted and IGNORED (ss #2151 — it is
+  one matter differ only by it. `label` is accepted and IGNORED (ss #2151 - it is
   model-composed, and hashing it made one deadline two items). Every component is
   normalized before hashing (ss #2289): ids stripped and case-folded, the date
   canonicalized to `YYYY-MM-DD`. `2026-08-11` and `2026-08-11T00:00:00Z` are the
   same item; a date the module cannot parse is REJECTED, not hashed verbatim.
-- **token** — `token_for(item_key)` is a short human-typable `ACK-XXXXXX` a
+- **token** - `token_for(item_key)` is a short human-typable `ACK-XXXXXX` a
   reader types back off the email. It is deterministic, so any reader recomputes
   it; no lookup table. An item only gets one if its identity tuple is built
   entirely from values READ off the record (`has_stable_identity`): no stable
   task id, or a sentinel like `unknown-matter` in the tuple, means the key moves
   the moment the real value arrives, so the item renders in the
   blanket-ack-only group instead of printing a code that will name nothing.
-- **state** — `derive_state(events)` folds the ledger into per-item
+- **state** - `derive_state(events)` folds the ledger into per-item
   `last_raised`, `attempts`, `acked`, `handed_off`, `resolved`.
 
 ### The fire policy (`should_fire`)
@@ -66,7 +66,7 @@ than a silent one, so `refire_days` ships a default rather than fail-closing to
 quiet.
 
 "Resolved" is normally implicit: a completed task drops out of the Smokeball
-pull, so it never fires again. An acked item is a **snooze, not a tombstone** —
+pull, so it never fires again. An acked item is a **snooze, not a tombstone** -
 a one-keystroke ack on a deemed-admission deadline must not permanently mute the
 exact failure the skill exists to prevent.
 
@@ -91,16 +91,16 @@ lead the "Needs you today" block; near/watch routine items collapse into
 The ledger file is broker-owned; the agent reads it but never writes it
 directly. Every write goes through the **`escalation_append` tool** (the
 `hermes-smd-escalation` plugin, ss #1915), which carries one event to the
-broker's uid-gated `escalation_event_append` verb — the broker keeps all
+broker's uid-gated `escalation_event_append` verb - the broker keeps all
 validation and stamps `ts`/`id` server-side. To read state, use the
 **`escalation_state` tool** (per-item attempts, last raise, acked/handed_off/
 resolved, ACK token; optionally filtered by `skill`). Do NOT reach the broker
-socket via `execute_code` — the `code_execution` action class is unauthored on
+socket via `execute_code` - the `code_execution` action class is unauthored on
 customer seats and the trust layer refuses it (that dead path is how ss #1915
 was found).
 
 The tool derives `item_key` and the ACK token ITSELF from the identity
-components — never pass a hand-built key (the first live probe proved a
+components - never pass a hand-built key (the first live probe proved a
 model-authored key forks the pre_run join). The components MUST be the exact
 tuple this skill's pre_run computes: the matter id, the STABLE Smokeball
 task/event id (`source_id`; null only for idless items, which get no token),
@@ -110,20 +110,20 @@ the fixed label, and the authored date per the skill's identity convention.
 on the FIRST one only** (ss #2304). The derive returns an `append_handle`; the
 write presents that handle and names no identity at all. Until this changed, the
 derive and the write were two independent tuples, so the ACK code quoted to a
-person came off call 1 while the ledger row was keyed off call 2 — a single
+person came off call 1 while the ledger row was keyed off call 2 - a single
 transposition (`task-42` -> `task-43`, one row off in a batch of nine) wrote an
 item the quoted code does not name, and both calls were individually
 well-formed, so nothing could see it. The handle makes that divergence
 unrepresentable rather than merely unlikely: there is no second derivation.
 
 ```
-# STEP 1 — identity: derive the real ACK code, write NOTHING
+# STEP 1 - identity: derive the real ACK code, write NOTHING
 escalation_append(skill=..., matter_id=..., source_id=..., label=...,
                   authored_date=... or null, event="fired", attempt=N,
                   derive_only=true)
   -> {"ok": true, "written": false, "item_key": <derived>, "token": <derived>,
       "append_handle": "EDH-..."}
-# STEP 2 — the write (fired / chased / handed_off / resolved): the handle ONLY.
+# STEP 2 - the write (fired / chased / handed_off / resolved): the handle ONLY.
 # Passing matter_id / source_id / label / authored_date here is REFUSED.
 escalation_append(skill=..., event=..., attempt=N, append_handle="EDH-...")
   -> {"ok": true, "id": "...", "item_key": <derived>, "token": <derived>}
@@ -138,35 +138,35 @@ escalation_state(skill=...)
 The handle is **single-use and short-lived**: one derive writes one row, `skill`
 and `event` must match the derive that minted it, and a spent, unknown or
 expired handle is refused rather than written. A refusal writes nothing, which
-is the safe direction — derive again and the item re-fires next run. Never carry
+is the safe direction - derive again and the item re-fires next run. Never carry
 a handle across runs, and never reuse one to write a second row (that would
 inflate the attempt count the ceiling reads).
 
 `escalation_state` reports the token the ledger actually RECORDED, or `null`
 with `"ackable": false` (ss #2289). It used to synthesize `token_for(item_key)`
-whenever a row carried none, which is exactly the blanket-ack-only items — the
-ones the ack path refuses by design — so the code handed to the turn could not
+whenever a row carried none, which is exactly the blanket-ack-only items - the
+ones the ack path refuses by design - so the code handed to the turn could not
 be acked by anyone. Route an `ackable: false` item to the blanket group. Never
 recompute a code for it.
 
-- **fired** — three steps, in this order (ss #1935):
+- **fired** - three steps, in this order (ss #1935):
   1. For each firing item, call `escalation_append` with `derive_only=true` to
      get its real `item_key` + ACK token + `append_handle`. Nothing is written.
      Keep each item's handle next to the code you are about to print for it.
   2. Compose and send ONE alert **with `smd_send_message`**, quoting exactly
      those returned tokens. That tool is the delivery. A memo, a task or a
      draft is a log of the work, never a substitute for it, and
-     `smd_deliver_draft` only AUTHORIZES a draft — it sends nothing. The broker
+     `smd_deliver_draft` only AUTHORIZES a draft - it sends nothing. The broker
      now enforces this: it refuses step 3's `fired` unless it witnessed a
      dispatch to a person in this session, so a turn that logged instead of
      sending records nothing and the item re-fires next run. NEVER
-     print a code the tool did not return this run — an invented code
+     print a code the tool did not return this run - an invented code
      (`ACK-A1`, `ACK-PENDING`) resolves to nothing, and a code remembered from
      a prior alert belongs to a DIFFERENT item and would silently ack the
      wrong thing. No follow-up "codes confirmed" email; the first email is the
      only email.
   3. After the send succeeds, emit one `fired` event per item, presenting that
-     item's `append_handle` and **no identity components** — the handle is the
+     item's `append_handle` and **no identity components** - the handle is the
      only thing that can name the row, so the code you just printed is
      necessarily the code of the row you write. The broker stamps `ts`/`id`. If
      the send did not happen, write nothing (the item re-fires next run:
@@ -174,7 +174,7 @@ recompute a code for it.
      AND the ledger write both succeeded. This is no longer only a rule you
      follow: the broker refuses the write when it did not witness the send, so
      an unwitnessed raise is a refusal you must read and act on, not retry.
-- **acked** — on a rostered internal reply (routed here by the inbox skill), emit
+- **acked** - on a rostered internal reply (routed here by the inbox skill), emit
   one `acked` event per quoted token. The broker REJECTS an `acked` whose token
   has no prior `fired`, so a stray or forged code cannot silence an alarm that
   never rang.
@@ -189,7 +189,7 @@ reply:
    trimming). A blanket `ESCALATION_ACKNOWLEDGED` with no codes acks exactly the
    items **quoted** in the message being replied to; items not quoted stay open.
 2. For each code, emit an `acked` event via the broker seam above, passing the
-   code as `ack_token` — the tool resolves it to its `item_key` against the
+   code as `ack_token` - the tool resolves it to its `item_key` against the
    ledger's prior raises. Do NOT recompute `token_for` over open items to find a
    match: that manufactures a code for items that were never issued one, and the
    append is refused anyway (an alarm that never rang cannot be acked).

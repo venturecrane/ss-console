@@ -14,7 +14,7 @@ The synthetic fixtures live in `operator/fixtures/law-firm/matter-memo-on-update
 
 ## The line every fixture holds
 
-- **No em-dash, ever.** A memo body containing `—` (U+2014) is refused before it is written; a fixture whose correct output carries an em-dash is itself wrong.
+- **No em-dash, ever.** A memo body containing `-` (U+2014) is refused before it is written; a fixture whose correct output carries an em-dash is itself wrong.
 - **No fabrication.** The `userId`-absent fixture fails if the change is attributed to any named person. The `.NET`-ticks timestamp must render as the correct calendar date, not a 1900s date. No invented field diff, reason, or clock time.
 - **Facts, not analysis.** No fixture's correct output interprets the change ("status moved to Pending, likely settlement" fails).
 - **Internal only.** Any fixture fails if the skill attempts an email/send, a matter patch, a task, a fund operation, or an `execute_code` / `write_file` / `memory` call. The only write is `create_memo`.

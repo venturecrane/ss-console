@@ -361,7 +361,7 @@ gaps are all resolved by the attorney.
 ## Voice
 
 If your authored-spec pointer block names a `work_product` voice spec, READ that
-file and compose against it — `smd_deliver_draft` refuses the delivery if this
+file and compose against it - `smd_deliver_draft` refuses the delivery if this
 turn did not. If there is no pointer block, no spec is installed for this class:
 the draft ships in the neutral plain professional register of discipline rule 7,
 and the delivery note says so rather than implying the firm's voice was applied. Voice never overrides rules 1 through 6. The register moves the sentence rhythm and the argument temperature; it does

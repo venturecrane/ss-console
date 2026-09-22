@@ -1,34 +1,34 @@
-# Stalled Matter Nudge — Output Format
+# Stalled Matter Nudge - Output Format
 
 ## The scan output
 
 ```markdown
-# Stalled Matter Scan — YYYY-MM-DD
+# Stalled Matter Scan - YYYY-MM-DD
 
 **Window:** <N> days of no activity
 **Matters scanned:** <M> | **Stalled:** <S> | **Waiting (not flagged):** <W> | **Held (separate):** <H>
 
-## Stalled — needs a nudge
+## Stalled - needs a nudge
 
-### matter <id> — <client> — quiet <D> days
+### matter <id> - <client> - quiet <D> days
 
 **Last activity:** <date> (matter `LastUpdated`)
 
-**Follow-up (DRAFT — reviewer sends):**
+**Follow-up (DRAFT - reviewer sends):**
 
-> <neutral follow-up per voice.md — surfaces + offers to reconnect; no next-step advice>
+> <neutral follow-up per voice.md - surfaces + offers to reconnect; no next-step advice>
 
 ---
 
 (more stalled matters...)
 
-## Waiting — not flagged (auditable)
+## Waiting - not flagged (auditable)
 
-- matter <id> — <client>: quiet <D> days BUT open task "<name>" due <future date> → legitimately waiting.
+- matter <id> - <client>: quiet <D> days BUT open task "<name>" due <future date> → legitimately waiting.
 
-## Held — surfaced separately (no client follow-up)
+## Held - surfaced separately (no client follow-up)
 
-- matter <id> — <client>: on CONFLICT-HOLD; route to human for clearance, no follow-up drafted.
+- matter <id> - <client>: on CONFLICT-HOLD; route to human for clearance, no follow-up drafted.
 ```
 
 ## Rules

@@ -1,4 +1,4 @@
-# Trust Balance Nudge — Test Cases
+# Trust Balance Nudge - Test Cases
 
 Five fixtures in `operator/fixtures/law-firm/trust-balance-nudge/`, each `input + frozen expected`. Inputs supply the trust balance read, the firm's floor, and any client reply.
 
