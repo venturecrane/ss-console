@@ -145,6 +145,16 @@ def resolve_ceiling(
     return _most_restrictive(base, floor) if floor is not None else base
 
 
+def _early_decision(action, ceiling, action_ceilings, vertical_floors) -> EnforcementDecision | None:
+    """Decisions made before the taint gate: READ is always allowed, and a send
+    AS a staff member (ADR 0089) is a proposal, decided by its own ceiling."""
+    if action == ActionClass.READ:
+        return EnforcementDecision(allowed=True, reason="read action", audit_action="allow")
+    if action == ActionClass.EXTERNAL_SEND_AS_STAFF:
+        return _send_as_staff_decision(resolve_ceiling(action, ceiling, action_ceilings, vertical_floors))
+    return None
+
+
 def _send_as_staff_decision(eff: Ceiling) -> EnforcementDecision:
     """ADR 0089. A send AS a staff member never transmits from the tool call: at
     confirm it becomes a proposal the named staff member approves by email, and
@@ -204,14 +214,9 @@ def enforce(
             audit_action="refuse",
         )
 
-    # READ always allowed regardless of ceiling
-    if action == ActionClass.READ:
-        return EnforcementDecision(allowed=True, reason="read action", audit_action="allow")
-
-    # SEND AS STAFF (ADR 0089) — ahead of the taint gate ON PURPOSE; see
-    # _send_as_staff_decision.
-    if action == ActionClass.EXTERNAL_SEND_AS_STAFF:
-        return _send_as_staff_decision(resolve_ceiling(action, ceiling, action_ceilings, vertical_floors))
+    # READ is always allowed; a send AS staff is decided ahead of the taint gate (ADR 0089).
+    if (early := _early_decision(action, ceiling, action_ceilings, vertical_floors)) is not None:
+        return early
 
     # TAINT-GATE — a turn that ingested untrusted inbound content cannot fire an
     # autonomous sensitive action (the injection-ingress → action-egress tie).
