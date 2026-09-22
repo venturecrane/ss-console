@@ -411,6 +411,7 @@ def derive_matter_facts(skill: str, payload: object) -> dict:
     if listed is None:
         return {"unreadable": True}
     memos = [memo for memo in listed if isinstance(memo, dict)]
+    row: dict
     if fact == "captured_file_ids":
         row = _capped(fact, _captured_file_ids(memos))
     elif fact == "extension_candidates":
