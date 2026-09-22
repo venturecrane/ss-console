@@ -946,7 +946,15 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # plugins/hermes-smd-establishment, plugins/hermes-smd-mail-attachments,
 # shared/email_adapter.py, shared/msgraph_attachments.py,
 # shared/msgraph_client.py; no tracked twin changed, so only overlayRef moves.
-ARG OVERLAY_REF="93ad0c82afe2ba09420affc9e59ad936d3ed421d"
+# 2026-09-22 (c9c9d632, overlay #377 + #378). #377: a staff member answers a
+# send-as draft in plain words ("send", "cancel", "change: ..."), the draft
+# taken from the tags in the thread, so nobody types an eight-character code.
+# #378: the approve page the buttons open, where GET only renders (mail
+# gateways follow links) and the POST is the person's press. Runtime files:
+# shared/rule_confirm.py, shared/approve_page.py, shared/msgraph_broker.py,
+# webhook_gate.py, plugins/hermes-smd-establishment; no tracked twin changed,
+# so only overlayRef moves.
+ARG OVERLAY_REF="c9c9d6323ba1b940a69bd8da5b6c508ac9ceec8d"
 
 ARG CUSTOMER_SLUG=customer-zero
 
@@ -1459,6 +1467,7 @@ COPY operator/templates/agentmail-webhook-secret-probe.py /app/agentmail-webhook
 # the agent's own Graph app holds Mail.Send (it must not: with Send As granted,
 # that would let agent-run code send as a person with no approval).
 COPY operator/templates/msgraph-read-app-cannot-send-probe.py /app/msgraph-read-app-cannot-send-probe.py
+COPY operator/templates/msgraph-read-app-cannot-read-staff-probe.py /app/msgraph-read-app-cannot-read-staff-probe.py
 # ADR 0053: boot-smoke asserts every baked author-built connector's declared
 # tool_classes agree with the overlay's enforced action-class map (the cross-repo
 # manifest<=map check, run where both the baked manifest and the installed overlay

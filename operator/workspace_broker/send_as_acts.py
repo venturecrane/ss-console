@@ -32,7 +32,6 @@ own word so neither can answer for the other.
 from __future__ import annotations
 
 import hashlib
-import html
 import json
 import re
 import secrets
@@ -44,14 +43,23 @@ from typing import Any
 import yaml
 
 from .canon import canonical
+from .send_as_links import SEND_AS_TTL_SECONDS as _LINK_TTL_SECONDS
+from .send_as_links import (
+    notify_link_decision,
+    tag_for,
+    approval_email,
+    render_html,
+    verify_link_token,
+)
 from .msgraph_ops import MsGraphRefused, MsGraphTransportError, collect_recipients
 from .recipient_policy import authored_policy, domain_of, normalize_address, split_blocks
 from .transmit_verbs import append_send_row, dispatch_transmit
 
 #: How long a staff member has to answer. Its own constant, deliberately not the
 #: act TTL: the act window was authorized for matter creation and widening it
-#: would widen a commitment nobody widened.
-SEND_AS_TTL_SECONDS = 86_400
+#: would widen a commitment nobody widened. ``send_as_links`` mirrors it, and
+#: ``tests/test_send_as.py`` pins the two together.
+SEND_AS_TTL_SECONDS = _LINK_TTL_SECONDS
 
 #: How far back a new proposal may claim to replace a revised one.
 _REVISE_LINK_WINDOW_S = SEND_AS_TTL_SECONDS
@@ -98,25 +106,12 @@ class SendAsRefused(ValueError):
     """A proposal or decision the seat's rules do not permit. Audited as such."""
 
 
-def tag_for(act_id: str) -> str:
-    return f"[draft {act_id}]"
-
-
 def parse_tag(value: Any) -> str:
     """The 8-hex id from ``[draft xxxxxxxx]`` or a bare id; refused otherwise."""
     match = _TAG_RE.match(value) if isinstance(value, str) else None
     if not match:
         raise SendAsRefused("not a draft tag; expected [draft xxxxxxxx]")
     return match.group(1).lower()
-
-
-def render_html(body_text: str) -> str:
-    """The HTML part, derived from the text by the broker so the digest covers it.
-
-    Escaped, newlines kept. Link targets stay as written text (no anchors are
-    minted), so what the approver read is what the recipient can see.
-    """
-    return "<div>" + html.escape(body_text).replace("\n", "<br>\n") + "</div>"
 
 
 def canonical_payload(payload: dict[str, Any], mailbox: str) -> dict[str, Any]:
@@ -295,45 +290,18 @@ class SendAsStore:
         return dict(found) if found else None
 
 
-def _approval_email(
-    row_id: str, msg: dict[str, Any], policy: Any, tainted: bool, sources: list[str], name: str
-) -> dict[str, Any]:
-    tag = tag_for(row_id)
-    lines = [
-        f"{name}, the Operator has drafted this email to send from your address. Nothing has been sent.",
-        "",
-    ]
-    for field in ("to", "cc"):
-        for address in msg[field]:
-            mark = "" if policy.allows_recipient(address) else "  (not on your firm's roster)"
-            lines.append(f"{field.upper()}: {address}{mark}")
-    lines += [f"SUBJECT: {msg['subject']}", "Replies will come to you and to the Operator.", ""]
-    if tainted:
-        shown = ", ".join(sources) if sources else "an outside message or document"
-        lines += [f"Prepared after reading outside material: {shown}.", ""]
-    lines += ["----- draft -----", msg["body_text"], "----- end of draft -----", ""]
-    lines += [
-        "Reply with one of these as the first line:",
-        f"{tag} send",
-        f"{tag} change: what to change",
-        f"{tag} cancel",
-        "",
-        f"This draft expires in {SEND_AS_TTL_SECONDS // 3600} hours if you do not answer.",
-    ]
-    return {"to": [msg["from"]], "subject": f"Approve: {msg['subject']} {tag}", "body_text": "\n".join(lines)}
-
-
 def _audited_send(broker: Any, payload: dict[str, Any], session_id: str = "") -> dict[str, Any]:
     """A seat-mailbox send (approval email or notice) through the SAME audited
     transmit every other broker send uses: recipient-fenced, and written to the
     ledger as CONFIRM_SEND_DISPATCHED with its audit header, so the console's
     send reconciler (operator/bin/reconcile-sends.py) joins it by identity
     rather than flagging the Operator's own approval mail as unaudited."""
+    keep_copy = not payload.pop("no_sent_copy", False)
     return dispatch_transmit(
         broker,
         "msgraph_send",
         {"payload": payload, "session_id": session_id},
-        send=broker.msgraph.send,
+        send=lambda message: broker.msgraph.send(message, save_to_sent_items=keep_copy),
         reply=broker.msgraph.reply,
         refused=MsGraphRefused,
         transport=MsGraphTransportError,
@@ -425,7 +393,7 @@ def propose(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
     sources = [s for s in (_clean(x, 200) for x in (request.get("sources") or [])) if s][:10]
     store = _store(broker)
     act_id, now = _insert_draft(store, msg, instructed_by, session_id, tainted, sources)
-    email = _approval_email(act_id, msg, authored_policy(broker.customer_path), tainted, sources, name)
+    email = approval_email(act_id, msg, authored_policy(broker.customer_path), tainted, sources, name)
     try:
         _audited_send(broker, email, session_id)
     except (MsGraphRefused, MsGraphTransportError) as exc:
@@ -656,6 +624,44 @@ def decide(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
     return _apply_send(broker, store, row, decided_by, meta)
 
 
+def decide_link(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
+    """Apply an approve-link click (ADR 0089 amendment 5a).
+
+    The token names the row, the verb and the expiry and is signed with a key
+    only this process can read, so the caller (the seat's web gate, running as
+    the agent uid) is transport and nothing more. Everything that makes the
+    emailed lane safe still runs here on the row itself: open, unexpired,
+    unconsumed, digest intact, approver still on the roster, and the send is the
+    same atomic consume-and-transmit. The one check that does not run is the
+    Sent Items forgery probe, which asks "did this mailbox send the answer" and
+    has no meaning for a click; the signature and the key are its counterpart.
+
+    Afterwards the approver is told, always: a click they did not make is then
+    visible to the person whose name is on the letter, within a minute.
+    """
+    _require_configured(broker)
+    store = _store(broker)
+    token = _clean(request.get("token"), 400)
+    row_id = str(token).split(".")[0] if token else ""
+    row = store.get(row_id) if row_id else None
+    if row is None:
+        return _refused("that approval link does not name a draft this seat holds")
+    verified = verify_link_token(token, row["approver"])
+    if verified is None:
+        return _refused("that approval link is expired or not valid for this draft")
+    _, decision = verified
+    meta = {"draft_id": row_id, "approver": row["approver"], "decision": decision, "via": "link"}
+    terminal = _terminal_status(row, store._now())
+    if terminal is not None:
+        return {**_BASE, **terminal}
+    if decision == "cancel":
+        outcome = _apply_cancel(broker, store, row, row["approver"], meta)
+    else:
+        outcome = _apply_send(broker, store, row, row["approver"], meta)
+    notify_link_decision(broker, row, outcome, _notice)
+    return outcome
+
+
 def match_reply(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
     """Tell the approver when an outside party answers a draft sent as them."""
     _require_configured(broker)
@@ -693,5 +699,11 @@ def _verb(fn: Any) -> Any:
 propose_verb = _verb(propose)
 decide_verb = _verb(decide)
 match_reply_verb = _verb(match_reply)
+decide_link_verb = _verb(decide_link)
 
-VERBS: tuple[str, ...] = ("send_as_propose", "send_as_decide", "send_as_match_reply")
+VERBS: tuple[str, ...] = (
+    "send_as_propose",
+    "send_as_decide",
+    "send_as_match_reply",
+    "send_as_decide_link",
+)

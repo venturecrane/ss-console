@@ -544,6 +544,14 @@ ssh_exec "msgraph-send-credential-stripped-from-agent" \
 ssh_exec "msgraph-read-app-cannot-send-on-send-as-seat" \
   "/opt/hermes/.venv/bin/python3 /app/msgraph-read-app-cannot-send-probe.py /var/lib/smd-config/customer.yaml hermes"
 
+# ADR 0089 amendment 5a. The approve buttons in an approval email are signed
+# one-decision links, and the broker keeps no Sent Items copy of that email so
+# the only mailbox holding them is the approver's. That is worth nothing if the
+# agent's read app can read the approver's mailbox, which it can unless the
+# tenant scopes it with an ApplicationAccessPolicy. Ask Microsoft.
+ssh_exec "msgraph-read-app-cannot-read-staff-mailbox" \
+  "/opt/hermes/.venv/bin/python3 /app/msgraph-read-app-cannot-read-staff-probe.py /var/lib/smd-config/customer.yaml hermes"
+
 # ---------- Step 14: the chronology runner is present, idle, capped, and fenced (ss#2614) ----------
 # The runner daemon is a root process that spends the firm's model budget on
 # its own schedule, so the checks here are the ones that would otherwise be

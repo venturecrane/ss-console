@@ -151,6 +151,12 @@ VERBS: tuple[Verb, ...] = (
     Verb("send_as_propose", _only(GATEWAY), send_as_acts.propose_verb),
     Verb("send_as_decide", _only(GATEWAY), send_as_acts.decide_verb),
     Verb("send_as_match_reply", GATEWAY_OR_AGENT, send_as_acts.match_reply_verb),
+    # A click on an approve button. The seat's web gate runs as the agent uid, so
+    # this cannot be GATEWAY-only; the authorization is the signed token, whose
+    # key is broker-owned at 0600 and unreadable to this caller (ADR 0089
+    # amendment 5a). The verb carries no approver field for the same reason: the
+    # row's approver is the only person a click can ever act as.
+    Verb("send_as_decide_link", GATEWAY_OR_AGENT, send_as_acts.decide_link_verb),
     Verb("job_create", _only(GATEWAY), job_verbs.job_create),
     Verb("job_list_claimable", _only(GATEWAY), job_verbs.job_list_claimable),
     Verb("job_list", _only(GATEWAY), job_verbs.job_list),

@@ -470,8 +470,16 @@ class MsGraphOps:
             message["internetMessageHeaders"] = headers
         return message
 
-    def send(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Fence every recipient, then transmit from this seat's pinned mailbox."""
+    def send(self, payload: dict[str, Any], *, save_to_sent_items: bool = True) -> dict[str, Any]:
+        """Fence every recipient, then transmit from this seat's pinned mailbox.
+
+        ``save_to_sent_items=False`` is for a message whose BODY is a credential
+        the agent must not read back: today that is the send-as approval email,
+        whose buttons are signed one-decision links (ADR 0089 amendment 5a). No
+        copy means no locate, so the row carries no vendor id and the send
+        reconciler has nothing on that side to join, which is correct: a message
+        that never entered Sent Items cannot appear there unaudited.
+        """
         policy = authored_policy(self._customer_path)
         recipients = collect_recipients(payload)
         enforce_recipients(policy, recipients)
@@ -480,7 +488,7 @@ class MsGraphOps:
         self._request(
             self._mail_path("sendMail"),
             "POST",
-            {"message": self._message(payload, audit_token), "saveToSentItems": True},
+            {"message": self._message(payload, audit_token), "saveToSentItems": save_to_sent_items},
         )
         return {
             # Graph still answers sendMail with 202 and no body, so this stays
@@ -493,7 +501,7 @@ class MsGraphOps:
             "recipients": recipients,
             "mailbox": mailbox,
             "audit_row_token": audit_token,
-            **self._locate_sent(audit_token),
+            **(self._locate_sent(audit_token) if save_to_sent_items else {}),
         }
 
     def send_as_staff(self, payload: dict[str, Any], from_address: str) -> dict[str, Any]:

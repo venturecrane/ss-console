@@ -119,6 +119,9 @@ const EXPECTED_VERBS = [
   'ops_resolve',
   // ADR 0089 staff send-as on the staff member's emailed approval.
   'send_as_decide',
+  // The approve buttons (amendment 5a). Not gateway-only: the seat's web gate is
+  // its own process, and the signed token is what authorizes the click.
+  'send_as_decide_link',
   'send_as_match_reply',
   'send_as_propose',
   'suppressed_wake_append',
