@@ -918,7 +918,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # a pair no record could hold: ten of the twenty refusals behind that morning's
 # HARD_STOP. Runtime file: plugins/hermes-smd-trust/outbound.py; not a tracked
 # twin, so only overlayRef moves.
-ARG OVERLAY_REF="063729814dc0f95dd1f99cc9d85d51720774b719"
+# 2026-09-22 (512d9ecc, overlay #372): ADR 0089 staff send-as. A send
+# carrying `from` is proposed to that staff member for emailed approval
+# (gates run on the proposing turn, ahead of the taint refusal) and never
+# sent on the turn; the `[draft x] send|change|cancel` lane answers it; the
+# broker (this repo) transmits. No tracked twin changed, so only overlayRef
+# moves.
+ARG OVERLAY_REF="512d9ecc4630cfc02deaaec10a5af9abfcdaf83c"
 
 ARG CUSTOMER_SLUG=customer-zero
 
