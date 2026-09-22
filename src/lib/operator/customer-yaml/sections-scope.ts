@@ -6,6 +6,7 @@ import {
   type ValidationError,
 } from './types'
 import { isPlainObject, optionalStringList, requireStringList } from './helpers'
+import { checkStaffSendAs } from './sections-staff-send-as'
 
 /**
  * Public-mail providers where a whole-@domain grant is meaningless (the domain is
@@ -44,6 +45,7 @@ export function checkScope(root: Record<string, unknown>, errors: ValidationErro
     errors
   )
   const admins = checkAdmins(raw['admins'], errors)
+  const outboundRoster = checkOutboundRoster(raw['outbound_roster'], errors)
   return {
     email_folders_visible: requireStringList(
       raw,
@@ -66,10 +68,15 @@ export function checkScope(root: Record<string, unknown>, errors: ValidationErro
     domain_blocks: requireStringList(raw, 'domain_blocks', 'scope.domain_blocks', errors),
     matter_blocks: optionalStringList(raw, 'matter_blocks', 'scope.matter_blocks', errors),
     inbound_allow_from: inboundAllowFrom,
-    outbound_roster: checkOutboundRoster(raw['outbound_roster'], errors),
+    outbound_roster: outboundRoster,
     admins,
     rule_requests_to: checkRuleRequestsTo(raw['rule_requests_to'], admins, errors),
     ops_reply_from: checkOpsReplyFrom(raw['ops_reply_from'], errors),
+    staff_send_as: checkStaffSendAs(
+      raw['staff_send_as'],
+      { inbound_allow_from: inboundAllowFrom, admins, outbound_roster: outboundRoster },
+      errors
+    ),
   }
 }
 
@@ -500,5 +507,6 @@ function emptyScope(): Scope {
     admins: [],
     rule_requests_to: [],
     ops_reply_from: [],
+    staff_send_as: [],
   }
 }

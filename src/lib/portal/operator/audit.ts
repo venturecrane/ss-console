@@ -168,6 +168,14 @@ export const AUDIT_ACTION_TYPES = [
   'OPS_REQUEST_RECORDED',
   'OPS_REQUEST_RESOLVED',
   'OPS_REQUEST_LAPSED',
+  // ADR 0089: staff send-as, written by the workspace broker.
+  'SEND_AS_PROPOSED',
+  'SEND_AS_REVISED',
+  'SEND_AS_CANCELLED',
+  'SEND_AS_SENT',
+  'SEND_AS_FAILED',
+  'SEND_AS_REFUSED',
+  'SEND_AS_REPLY_NOTICED',
   // ss#2614 routine 11: one row per chronology-job transition, written by the
   // workspace broker under its own uid (counts and ids, never the envelope).
   'MEDCHRON_JOB_SUBMITTED',

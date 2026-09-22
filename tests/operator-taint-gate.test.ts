@@ -43,8 +43,13 @@ import { resolve } from 'node:path'
 
 const ADAPTER_PATH = resolve('operator/adapter/trust_ceiling.py')
 
-/** Classes a tainted turn may still perform. Read is inert; internal_write is a draft. */
-const ALLOWED_WHEN_TAINTED = new Set(['read', 'internal_write'])
+/**
+ * Classes a tainted turn may still perform. Read is inert; internal_write is a
+ * draft; external_send_as_staff never transmits from the tool call, it is
+ * withheld as a proposal the named staff member approves by email (ADR 0089,
+ * which decides this deliberately: the approval of the exact text is the check).
+ */
+const ALLOWED_WHEN_TAINTED = new Set(['read', 'internal_write', 'external_send_as_staff'])
 
 function source(): string {
   return readFileSync(ADAPTER_PATH, 'utf-8')

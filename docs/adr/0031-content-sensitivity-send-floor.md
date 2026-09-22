@@ -9,6 +9,8 @@ related-interview: operator/customers/smd/onboarding-interview-2026-05-31.md
 related-issue: Operator task #21 (overlay PR venturecrane/hermes-smd-overlay#22, tag v0.4.0)
 ---
 
+> **Amended by [ADR 0089](./0089-staff-send-as-on-approval.md) (2026-09-21).** A send AS a staff member (`external_send_as_staff`) is exempt from this floor once that staff member approves the exact draft by email: the floor exists so a person reviews money, contract, scope, and legal wording before it leaves, and that approval is that review, by the person whose name is on the message.
+
 # ADR 0031 — Content-Sensitivity Send Floor
 
 **Status:** Accepted (Captain decision, customer-zero onboarding interview, 2026-05-31).

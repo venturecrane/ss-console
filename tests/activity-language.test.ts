@@ -61,6 +61,16 @@ describe('activity-language exhaustiveness (writer parity)', () => {
         'OPS_REQUEST_RECORDED',
         'OPS_REQUEST_RESOLVED',
         'OPS_REQUEST_LAPSED',
+        // ADR 0089. A draft sent as a staff member on their approval: every
+        // step renders, because the firm must be able to see that a message
+        // went out under a person's name and that the person said send.
+        'SEND_AS_PROPOSED',
+        'SEND_AS_REVISED',
+        'SEND_AS_CANCELLED',
+        'SEND_AS_SENT',
+        'SEND_AS_FAILED',
+        'SEND_AS_REFUSED',
+        'SEND_AS_REPLY_NOTICED',
         // ss#2614 (routine 11). A chronology package's life on the seat, five
         // rows the broker writes on the runner's report. All render: the one
         // that matters most to the firm is the hold, and a hold that shows

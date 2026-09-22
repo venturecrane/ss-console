@@ -1427,6 +1427,10 @@ COPY operator/templates/r2-account-key-strip-probe.py /app/r2-account-key-strip-
 # Boot-smoke proof that the staged AgentMail webhook secret is the vendor's
 # (scott 2026-09-15: the global value was staged, every inbound rejected 401).
 COPY operator/templates/agentmail-webhook-secret-probe.py /app/agentmail-webhook-secret-probe.py
+# ADR 0089: on a seat that may send AS staff, boot-smoke asks Microsoft whether
+# the agent's own Graph app holds Mail.Send (it must not: with Send As granted,
+# that would let agent-run code send as a person with no approval).
+COPY operator/templates/msgraph-read-app-cannot-send-probe.py /app/msgraph-read-app-cannot-send-probe.py
 # ADR 0053: boot-smoke asserts every baked author-built connector's declared
 # tool_classes agree with the overlay's enforced action-class map (the cross-repo
 # manifest<=map check, run where both the baked manifest and the installed overlay

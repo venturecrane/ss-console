@@ -14,6 +14,7 @@ import {
   type OutboundRosterClass,
   type OutboundRosterEntry,
   type Scope,
+  type StaffSendAsEntry,
   type BusinessHours,
 } from '../../operator/customer-yaml/types'
 import { isRecord } from '../../api/helpers'
@@ -36,7 +37,18 @@ export function parseScope(raw: unknown): Scope | null {
     admins: strArray(raw['admins']),
     rule_requests_to: strArray(raw['rule_requests_to']),
     ops_reply_from: strArray(raw['ops_reply_from']),
+    staff_send_as: parseStaffSendAs(raw['staff_send_as']),
   }
+}
+
+/** Read-side parser for the projected `staff_send_as` (ADR 0089); lenient like the roster. */
+function parseStaffSendAs(raw: unknown): StaffSendAsEntry[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((e) =>
+    isRecord(e) && typeof e['address'] === 'string' && typeof e['name'] === 'string'
+      ? [{ address: e['address'], name: e['name'] }]
+      : []
+  )
 }
 
 /**

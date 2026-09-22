@@ -25,6 +25,7 @@ describe('parseScope', () => {
       admins: [],
       rule_requests_to: [],
       ops_reply_from: [],
+      staff_send_as: [],
     })
     expect(parseScope(null)).toBeNull()
     expect(parseScope('nope')).toBeNull()

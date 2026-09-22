@@ -180,6 +180,7 @@ export const ACCEPTED_ACTION_CLASSES = [
   'external_send_internal',
   'external_send_client',
   'external_send_vendor',
+  'external_send_as_staff',
   'commitment',
   'destructive',
   'code_execution',
@@ -876,6 +877,23 @@ export interface Scope {
    * the `external_send` ceiling). See {@link OutboundRosterEntry}.
    */
   outbound_roster: OutboundRosterEntry[]
+  /**
+   * Staff members the Operator may send email AS (ADR 0089), each only on that
+   * person's own emailed approval of the exact draft. Empty when unauthored,
+   * which is fail-closed: no draft carries a From. See {@link StaffSendAsEntry}.
+   */
+  staff_send_as: StaffSendAsEntry[]
+}
+
+/**
+ * One entry in `scope.staff_send_as` (ADR 0089). `address` is an exact person
+ * address the Operator mailbox holds Exchange Send As on; `name` is how the
+ * approval email addresses them. The person named is the ONLY one whose reply
+ * can send a draft in their name.
+ */
+export interface StaffSendAsEntry {
+  address: string
+  name: string
 }
 
 /**
@@ -1403,6 +1421,7 @@ export type ValidationErrorCode =
   /** ss-console#2546: `scope.ops_reply_from` is not person-shaped, repeats an
    * address, or sits outside SMD's own mail domains. */
   | 'InvalidOpsReplyFrom'
+  | 'InvalidStaffSendAs'
   | 'LegacyEntitlementField'
   | 'UnknownAuthorityDomain'
   | 'DuplicateRelationshipPersonId'

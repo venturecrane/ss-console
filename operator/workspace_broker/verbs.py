@@ -45,7 +45,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from . import audit_verbs, establish_verbs, job_verbs, transmit_verbs, workspace_verbs
+from . import audit_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
 from . import medchron_verbs
 from .medchron_verbs import medchron_dispatch
 from .send_witness import append_escalation_event
@@ -78,6 +78,8 @@ def _only(cls: str) -> frozenset[str]:
 GATEWAY_OR_ROOT = frozenset({GATEWAY, ROOT})
 GATEWAY_ROOT_OR_AGENT = frozenset({GATEWAY, ROOT, AGENT})
 ROOT_OR_AGENT = frozenset({ROOT, AGENT})
+# ADR 0089: the send-as reply notice (gateway or the inbound poller's agent uid).
+GATEWAY_OR_AGENT = frozenset({GATEWAY, AGENT})
 
 
 def _medchron(broker: Any, action: str, request: dict[str, Any], pid: int, uid: int | None) -> dict[str, Any]:
@@ -142,6 +144,13 @@ VERBS: tuple[Verb, ...] = (
     Verb("agentmail_reply", _only(GATEWAY), transmit_verbs.agentmail),
     Verb("msgraph_send", _only(GATEWAY), transmit_verbs.msgraph),
     Verb("msgraph_reply", _only(GATEWAY), transmit_verbs.msgraph),
+    # ADR 0089 staff send-as: propose and decide transmit (the approval email;
+    # the send AS a staff member), so they are gateway-only like the channels.
+    # The reply notice goes to a fixed recipient about an already-sent draft and
+    # may come from the inbound poller, which runs as the agent uid.
+    Verb("send_as_propose", _only(GATEWAY), send_as_acts.propose_verb),
+    Verb("send_as_decide", _only(GATEWAY), send_as_acts.decide_verb),
+    Verb("send_as_match_reply", GATEWAY_OR_AGENT, send_as_acts.match_reply_verb),
     Verb("job_create", _only(GATEWAY), job_verbs.job_create),
     Verb("job_list_claimable", _only(GATEWAY), job_verbs.job_list_claimable),
     Verb("job_list", _only(GATEWAY), job_verbs.job_list),

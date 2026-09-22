@@ -117,6 +117,10 @@ const EXPECTED_VERBS = [
   'ops_ask_sent',
   'ops_propose',
   'ops_resolve',
+  // ADR 0089 staff send-as on the staff member's emailed approval.
+  'send_as_decide',
+  'send_as_match_reply',
+  'send_as_propose',
   'suppressed_wake_append',
   'webhook_suppressed_append',
 ]
@@ -132,6 +136,7 @@ const AUTH_TOKENS = new Set([
   '_only(AGENT)',
   '_only(GATEWAY)',
   '_only(ROOT)',
+  'GATEWAY_OR_AGENT',
   'GATEWAY_OR_ROOT',
   'GATEWAY_ROOT_OR_AGENT',
   'ROOT_OR_AGENT',

@@ -333,6 +333,14 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "OPS_REQUEST_RECORDED",
         "OPS_REQUEST_RESOLVED",
         "OPS_REQUEST_LAPSED",
+        # ADR 0089 staff send-as, written by the workspace broker.
+        "SEND_AS_PROPOSED",
+        "SEND_AS_REVISED",
+        "SEND_AS_CANCELLED",
+        "SEND_AS_SENT",
+        "SEND_AS_FAILED",
+        "SEND_AS_REFUSED",
+        "SEND_AS_REPLY_NOTICED",
     }
 )
 

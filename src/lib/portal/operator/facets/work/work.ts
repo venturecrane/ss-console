@@ -58,6 +58,7 @@ const AUTHORITY_CLASS_LABEL: Record<AuthoredExposureActionClass, string> = {
   external_send_internal: 'Email to your own team',
   external_send_client: 'Email to your clients',
   external_send_vendor: 'Email to your vendors',
+  external_send_as_staff: 'Email sent from a staff member, on their approval',
   commitment: 'Making commitments for the firm',
   destructive: 'Deleting or changing records',
   code_execution: 'Running code',

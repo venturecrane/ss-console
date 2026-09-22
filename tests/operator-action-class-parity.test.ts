@@ -56,7 +56,14 @@ describe('action-class parity: TS ⇄ Python adapter (ADR 0075)', () => {
   })
 
   it('the send classes agree between TS SEND_ACTION_CLASSES and the Python enum', () => {
-    const pySend = new Set(pyValues.filter((v) => v.startsWith('external_send')))
+    // SEND_ACTION_CLASSES are the RECIPIENT-AXIS classes: the ones the recipient
+    // classifier resolves a send to. external_send_as_staff (ADR 0089) is not
+    // one: it is selected by a `from` on the call, never by the recipient, and
+    // it has its own confirm-only rule. Excluded by name so a new recipient-axis
+    // class still has to appear on both sides.
+    const pySend = new Set(
+      pyValues.filter((v) => v.startsWith('external_send') && v !== 'external_send_as_staff')
+    )
     expect(pySend).toEqual(new Set<string>(SEND_ACTION_CLASSES as readonly string[]))
   })
 

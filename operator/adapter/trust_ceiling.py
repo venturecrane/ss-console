@@ -59,6 +59,10 @@ class ActionClass(str, enum.Enum):
     # an UNCLASSIFIABLE recipient is a hard error there, never routed here as a draft.
     EXTERNAL_SEND_CLIENT = "external_send_client"
     EXTERNAL_SEND_VENDOR = "external_send_vendor"
+    # Send AS a staff member (ADR 0089): the tool call never transmits. At the
+    # one accepted ceiling, confirm, it is withheld as a proposal the named
+    # staff member approves by email; the broker sends only on that approval.
+    EXTERNAL_SEND_AS_STAFF = "external_send_as_staff"
     COMMITMENT = "commitment"  # Sign, accept terms, agree to dates — never autonomous
     DESTRUCTIVE = "destructive"  # Delete, drop, irreversible — explicit per-call approval
     CODE_EXECUTION = "code_execution"  # Arbitrary code / shell / subagent — authored-only, fail-closed
@@ -183,6 +187,26 @@ def enforce(
     # READ always allowed regardless of ceiling
     if action == ActionClass.READ:
         return EnforcementDecision(allowed=True, reason="read action", audit_action="allow")
+
+    # SEND AS STAFF (ADR 0089) — ahead of the taint gate ON PURPOSE. This call
+    # never transmits: at confirm it becomes a proposal the named staff member
+    # approves by email, and the workspace broker sends only on that approval of
+    # the exact digest-bound text. A proposal is a draft, so a turn that read
+    # outside material may make one (that is how real letters get written);
+    # the person whose name is on it is the check. Any other ceiling refuses.
+    if action == ActionClass.EXTERNAL_SEND_AS_STAFF:
+        eff = resolve_ceiling(action, ceiling, action_ceilings, vertical_floors)
+        if eff == Ceiling.CONFIRM:
+            return EnforcementDecision(
+                allowed=False,
+                reason="external_send_as_staff at confirm; withheld as a proposal for the staff member's approval (ADR 0089)",
+                audit_action="await_approval",
+            )
+        return EnforcementDecision(
+            allowed=False,
+            reason="external_send_as_staff refused: only confirm is authorable (ADR 0089)",
+            audit_action="refuse",
+        )
 
     # TAINT-GATE — a turn that ingested untrusted inbound content cannot fire an
     # autonomous sensitive action (the injection-ingress → action-egress tie).
