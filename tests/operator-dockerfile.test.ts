@@ -1392,7 +1392,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // a cursor begun under an older $select, so approvals carry their id.
     // b06d8b29 -> 93ad0c82 (2026-09-22, overlay#375 + #376). A send-as revision
     // carries its provenance; the mail attachment tools load on a Graph seat.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="93ad0c82afe2ba09420affc9e59ad936d3ed421d"')
+    // 93ad0c82 -> c9c9d632 (2026-09-22, overlay#377 + #378). Plain-word answers,
+    // and the approve page the email's buttons open.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="c9c9d6323ba1b940a69bd8da5b6c508ac9ceec8d"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
