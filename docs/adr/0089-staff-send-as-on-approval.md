@@ -54,6 +54,12 @@ ADR 0071 section 6 sketched email approval as a signed single-use token. This la
 
 The tag word is `draft` (`[draft 1a2b3c4d]`), distinct from `[act x]`, so neither lane can answer for the other.
 
+#### 5a. Approve buttons, and what makes a link as good as a reply (amendment, 2026-09-22)
+
+The approval email carries Send it and Cancel buttons beside the reply forms. A button is a link, so the link is the credential, and four things make that safe enough to put a person's name on a letter. The link is a signed token naming one row, one approver, one verb and one expiry, signed with a key the broker mints at 0600 and no other uid can read, so the seat's web gate is transport and the broker still decides. Pressing it only ever renders a page: mail gateways follow every link before a person sees the message, so a GET that acted would be pressed by a scanner in an empty office, and the decision is the POST the person makes on that page. The broker keeps no Sent Items copy of an email carrying buttons, so the only mailbox holding the link is the approver's, and a boot probe fails a send-as seat whose read app can open that mailbox, because an unscoped app-only registration reads every mailbox in the tenant and the Operator would be able to lift its own link. Every click is followed by a note to the approver saying what it did, so a press they did not make reaches the person whose name is on the letter within a minute.
+
+Change stays a reply: a revision needs the person's words, and a button cannot carry them. What a link cannot answer is the emailed lane's Sent Items forgery probe ("did this mailbox send this answer"); the signature and the unreadable key are its counterpart.
+
 ### 6. What the approval email shows, and what the draft may carry
 
 The approval email lists every To and Cc, marking any address on no roster; the subject; the full body with link targets as written; and the three reply forms (`send`, `change: ...`, `cancel`). The draft carries no Bcc and no caller-chosen Reply-To. Reply-To is set by code to the staff member and the Operator's mailbox, so the Operator can see the answer and tell the staff member it arrived.

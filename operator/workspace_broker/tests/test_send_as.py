@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 # than fork a second model of the same mailbox.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from workspace_broker import send_as_acts
+from workspace_broker import send_as_acts, send_as_links
 from workspace_broker.send_as_acts import SEND_AS_TTL_SECONDS, canonical_payload, digest_of, parse_tag
 from workspace_broker.server import Broker
 
@@ -472,3 +472,102 @@ def test_the_generic_send_still_refuses_a_caller_supplied_from(tmp_path: Path) -
     broker = _broker(tmp_path, http)
     broker.msgraph.send({"to": [STAFF], "subject": "s", "body_text": "b", "from": OUTSIDE})
     assert "from" not in http.sent_messages[-1]
+
+
+# -- approve links (ADR 0089 amendment 5a) ----------------------------------
+
+
+@pytest.fixture
+def links(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """A seat with a web face, and a link key this test owns."""
+    monkeypatch.setattr(send_as_links, "LINK_KEY_PATH", str(tmp_path / "link.key"))
+    monkeypatch.setenv("SMD_APPROVE_BASE_URL", "https://seat.example")
+    return None
+
+
+def _click(broker: Broker, token: str) -> dict:
+    return broker.handle(
+        {"action": "send_as_decide_link", "token": token},
+        peer_pid=GATEWAY_PID + 1,  # not the gateway: the web gate is its own pid
+        peer_uid=AGENT_UID,
+    )
+
+
+def _token_from_email(http: SendAsGraph, which: str) -> str:
+    body = http.sent_messages[-1]["body"]["content"]
+    marker = "https://seat.example/approve?t="
+    first = body.index(marker)
+    start = first if which == "send" else body.index(marker, first + 1)
+    start += len(marker)
+    return body[start : body.index('"', start)]
+
+
+def _save_flags(http: SendAsGraph) -> list:
+    out = []
+    for call in http.calls:
+        if call[0] != "POST" or not str(call[1]).endswith("/sendMail") or not call[2]:
+            continue
+        body = call[2]
+        body = json.loads(body.decode()) if isinstance(body, (bytes, bytearray)) else body
+        out.append(body.get("saveToSentItems"))
+    return out
+
+
+def test_the_approval_email_carries_buttons_and_leaves_no_copy(tmp_path: Path, links) -> None:
+    http = SendAsGraph()
+    broker = _broker(tmp_path, http)
+    assert _propose(broker)["ok"] is True
+    approval = http.sent_messages[-1]
+    assert approval["body"]["contentType"] == "HTML"
+    assert ">Send it<" in approval["body"]["content"]
+    assert ">Cancel<" in approval["body"]["content"]
+    # The buttons are keys, so this mailbox must keep no copy the agent could read.
+    assert _save_flags(http)[-1] is False
+    assert "no_sent_copy" not in json.dumps(approval)
+
+
+def test_a_send_button_click_sends_once_and_tells_the_approver(tmp_path: Path, links) -> None:
+    http = SendAsGraph()
+    broker = _broker(tmp_path, http)
+    _propose(broker)
+    token = _token_from_email(http, "send")
+    out = _click(broker, token)
+    assert out["status"] == "DISPATCHED"
+    sent = [m for m in http.sent_messages if "from" in m]
+    assert sent and sent[-1]["from"]["emailAddress"]["address"] == STAFF
+    assert "was sent from your address" in http.sent_messages[-1]["body"]["content"]
+    again = _click(broker, token)
+    assert again["status"] != "DISPATCHED"
+    assert len([m for m in http.sent_messages if "from" in m]) == 1
+
+
+def test_a_cancel_button_click_sends_nothing(tmp_path: Path, links) -> None:
+    http = SendAsGraph()
+    broker = _broker(tmp_path, http)
+    _propose(broker)
+    out = _click(broker, _token_from_email(http, "cancel"))
+    assert out["status"] == "CANCELLED"
+    assert not any("from" in m for m in http.sent_messages)
+    assert "was cancelled" in http.sent_messages[-1]["body"]["content"]
+
+
+def test_a_tampered_or_foreign_token_decides_nothing(tmp_path: Path, links) -> None:
+    http = SendAsGraph()
+    broker = _broker(tmp_path, http)
+    _propose(broker)
+    row_id, decision, expires, sig = _token_from_email(http, "cancel").split(".")
+    # The signature covers the verb, so a cancel link rewritten to "send" fails.
+    assert _click(broker, f"{row_id}.send.{expires}.{sig}")["status"] == "REFUSED"
+    # And a token naming a row this seat does not hold decides nothing.
+    assert _click(broker, f"deadbeef.{decision}.{expires}.{sig}")["status"] == "REFUSED"
+    assert not any("from" in m for m in http.sent_messages)
+
+
+def test_an_expired_link_sends_nothing(tmp_path: Path, links) -> None:
+    http = SendAsGraph()
+    broker = _broker(tmp_path, http)
+    _propose(broker)
+    token = _token_from_email(http, "send")
+    broker.send_as_now.t += SEND_AS_TTL_SECONDS + 1
+    assert _click(broker, token)["status"] in ("EXPIRED", "REFUSED")
+    assert not any("from" in m for m in http.sent_messages)
