@@ -1335,6 +1335,67 @@ describe('seat-reaching scripts never print a process command line (ss#2218)', (
     // ...and leaves the safe form alone.
     expect(ARGV_PRINTERS.test('pgrep -f "hermes.*gateway run"')).toBe(false)
   })
+
+  // The same argv-copy that ss#2218 covers also hands the SEND credentials to a
+  // hermes-uid process, where a same-uid sibling can read them out of
+  // /proc/<pid>/environ (ADR 0044 Decision 8). entrypoint.sh unsets them before
+  // its own exec-drop, but an unset cannot reach a process launched later down a
+  // different path, and this wrapper is that path. Found live on A&P
+  // (2026-09-22): boot smoke failed `msgraph-send-credential-stripped-from-agent`
+  // with two agent one-shots holding Mail.Send on a seat carrying Send As for
+  // real staff. The strip belongs in the wrapper, not in each caller's flags.
+  const SEND_CREDENTIALS = [
+    'MSGRAPH_SEND_TENANT_ID',
+    'MSGRAPH_SEND_CLIENT_ID',
+    'MSGRAPH_SEND_CLIENT_SECRET',
+    'AGENTMAIL_SEND_API_KEY',
+    'AGENTMAIL_WEBHOOK_READ_API_KEY',
+  ]
+
+  // Both halves are asserted because either alone leaves the leak intact, and
+  // the half that is easy to reason about is not the half that was load-bearing:
+  // with only the grep, a probe measured on the seat still held all three
+  // MSGRAPH_SEND_* variables, because `fly ssh` inherits them from PID 1 and
+  // `env` starts from the caller's environment.
+  for (const rel of SEAT_SCRIPTS) {
+    const body = readFileSync(resolve(rel), 'utf-8')
+    const envvLine = body.split('\n').find((l) => l.includes('ENVV=')) ?? ''
+    const execLine = body.split('\n').find((l) => l.includes('runuser -u hermes')) ?? ''
+
+    it(`${rel} keeps the send credentials out of the env it copies from the gateway`, () => {
+      expect(envvLine, `${rel} no longer builds ENVV; re-point this guard`).not.toBe('')
+      const missing = SEND_CREDENTIALS.filter((v) => !envvLine.includes(v))
+      expect(
+        missing,
+        `${rel} copies ${missing.join(', ')} onto a hermes-uid command line, where ` +
+          'any ps-shaped command prints them. Add them to the ENVV grep exclusion.'
+      ).toEqual([])
+    })
+
+    it(`${rel} unsets the send credentials inherited from the ssh session`, () => {
+      expect(execLine, `${rel} no longer drops to hermes here; re-point this guard`).not.toBe('')
+      const missing = SEND_CREDENTIALS.filter((v) => !execLine.includes(`-u ${v}`))
+      expect(
+        missing,
+        `${rel} passes ${missing.join(', ')} through to the agent uid. The grep alone ` +
+          'does not stop this: fly ssh inherits the Machine environment from PID 1, so ' +
+          'env must drop them explicitly with -u.'
+      ).toEqual([])
+    })
+
+    it(`${rel} puts every -u before the copied assignments`, () => {
+      // `env -u X X=1` leaves X set. If a future edit moves ${ENVV} ahead of the
+      // flags, both guards above still pass and the credential is back.
+      const envvPos = execLine.indexOf('${ENVV}')
+      for (const v of SEND_CREDENTIALS) {
+        const flagPos = execLine.indexOf(`-u ${v}`)
+        expect(
+          flagPos >= 0 && (envvPos < 0 || flagPos < envvPos),
+          `${rel}: -u ${v} must come before \${ENVV}, or a later assignment wins.`
+        ).toBe(true)
+      }
+    })
+  }
 })
 
 // ---------------------------------------------------------------------------
