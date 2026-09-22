@@ -312,8 +312,17 @@ def _approval_email(
         shown = ", ".join(sources) if sources else "an outside message or document"
         lines += [f"Prepared after reading outside material: {shown}.", ""]
     lines += ["----- draft -----", msg["body_text"], "----- end of draft -----", ""]
+    # Plain words first, because that is what a person types. The tagged forms
+    # stay listed as the exact way to answer when more than one draft is waiting
+    # (the seat reads the tag from this email's subject and the quoted copy under
+    # a reply, so an ordinary "send" resolves itself).
     lines += [
-        "Reply with one of these as the first line:",
+        "Reply to this email with one of these:",
+        "send",
+        "change: what to change",
+        "cancel",
+        "",
+        "If more than one draft is waiting, answer with the draft named:",
         f"{tag} send",
         f"{tag} change: what to change",
         f"{tag} cancel",
