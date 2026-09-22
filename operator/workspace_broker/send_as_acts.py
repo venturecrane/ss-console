@@ -355,42 +355,34 @@ def _clean(value: Any, limit: int = 320) -> str:
     return value.strip()[:limit] if isinstance(value, str) else ""
 
 
-def propose(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
-    """Store a draft for a staff member's approval and email it to them."""
-    _require_configured(broker)
-    session_id = _clean(request.get("session_id"), 200)
-    instructed_by = normalize_address(request.get("instructed_by"))
-    raw = _mapping(request.get("payload"))
-    try:
-        data = _seat(broker.customer_path)
-        if not _authors_confirm(data):
-            raise SendAsRefused("this seat authors no persona with exposure.external_send_as_staff: confirm")
-        roster = staff_roster(data)
-        mailbox = broker.msgraph.mailbox()
-        msg = canonical_payload(raw, mailbox)
-        if msg["from"] not in roster:
-            raise SendAsRefused(f"{msg['from']} is not on scope.staff_send_as")
-        if not instructed_by or (instructed_by != msg["from"] and instructed_by not in _admins(data)):
-            raise SendAsRefused(
-                "a draft may be sent only as the staff member who asked for it, or at an administrator's request"
-            )
-        gate = _mapping(request.get("gate_pass"))
-        if not all(gate.get(k) is True for k in ("fabrication", "matter", "identifier")):
-            raise SendAsRefused("the draft did not pass the fabrication, matter, and identifier gates")
-        blocked = split_blocks(_mapping(data.get("scope")).get("domain_blocks"))
-        refused = [a for a in msg["to"] + msg["cc"] if domain_of(a) in blocked]
-        if refused:
-            raise SendAsRefused("recipient(s) in a blocked domain: " + ", ".join(sorted(refused)))
-    except SendAsRefused as exc:
-        _audit(broker, "SEND_AS_REFUSED", "send_as_propose", {"stage": "propose", "reason": str(exc)}, session_id)
-        return {"ok": False, "reason": str(exc)}
+def _validated_draft(broker: Any, request: dict[str, Any], instructed_by: str) -> tuple[dict[str, Any], str]:
+    """The canonical draft and the approver's name, or ``SendAsRefused`` naming why."""
+    data = _seat(broker.customer_path)
+    if not _authors_confirm(data):
+        raise SendAsRefused("this seat authors no persona with exposure.external_send_as_staff: confirm")
+    roster = staff_roster(data)
+    msg = canonical_payload(_mapping(request.get("payload")), broker.msgraph.mailbox())
+    if msg["from"] not in roster:
+        raise SendAsRefused(f"{msg['from']} is not on scope.staff_send_as")
+    if not instructed_by or (instructed_by != msg["from"] and instructed_by not in _admins(data)):
+        raise SendAsRefused(
+            "a draft may be sent only as the staff member who asked for it, or at an administrator's request"
+        )
+    gate = _mapping(request.get("gate_pass"))
+    if not all(gate.get(k) is True for k in ("fabrication", "matter", "identifier")):
+        raise SendAsRefused("the draft did not pass the fabrication, matter, and identifier gates")
+    blocked = split_blocks(_mapping(data.get("scope")).get("domain_blocks"))
+    refused = [a for a in msg["to"] + msg["cc"] if domain_of(a) in blocked]
+    if refused:
+        raise SendAsRefused("recipient(s) in a blocked domain: " + ", ".join(sorted(refused)))
+    return msg, roster[msg["from"]]
 
-    store = _store(broker)
+
+def _insert_draft(
+    store: SendAsStore, msg: dict[str, Any], instructed_by: str, session_id: str, tainted: bool, sources: list[str]
+) -> tuple[str, float]:
     now = store._now()
     act_id = secrets.token_hex(4)
-    digest = digest_of(msg)
-    tainted = bool(request.get("tainted"))
-    sources = [s for s in (_clean(x, 200) for x in (request.get("sources") or [])) if s][:10]
     store.insert(
         {
             "id": act_id,
@@ -401,13 +393,30 @@ def propose(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
             "instructed_by": instructed_by,
             "session_id": session_id,
             "payload_json": json.dumps(msg, sort_keys=True),
-            "digest": digest,
+            "digest": digest_of(msg),
             "tainted": 1 if tainted else 0,
             "sources_json": json.dumps(sources),
         }
     )
     store.link_revision(msg["from"], msg["to"], act_id)
-    email = _approval_email(act_id, msg, authored_policy(broker.customer_path), tainted, sources, roster[msg["from"]])
+    return act_id, now
+
+
+def propose(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
+    """Store a draft for a staff member's approval and email it to them."""
+    _require_configured(broker)
+    session_id = _clean(request.get("session_id"), 200)
+    instructed_by = normalize_address(request.get("instructed_by"))
+    try:
+        msg, name = _validated_draft(broker, request, instructed_by)
+    except SendAsRefused as exc:
+        _audit(broker, "SEND_AS_REFUSED", "send_as_propose", {"stage": "propose", "reason": str(exc)}, session_id)
+        return {"ok": False, "reason": str(exc)}
+    tainted = bool(request.get("tainted"))
+    sources = [s for s in (_clean(x, 200) for x in (request.get("sources") or [])) if s][:10]
+    store = _store(broker)
+    act_id, now = _insert_draft(store, msg, instructed_by, session_id, tainted, sources)
+    email = _approval_email(act_id, msg, authored_policy(broker.customer_path), tainted, sources, name)
     try:
         _audited_send(broker, email, session_id)
     except (MsGraphRefused, MsGraphTransportError) as exc:
@@ -425,19 +434,15 @@ def propose(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
             session_id,
         )
         return {"ok": False, "reason": f"the approval email to {msg['from']} could not be sent: {exc}"}
-    _audit(
-        broker,
-        "SEND_AS_PROPOSED",
-        "send_as_propose",
-        {
-            "act": act_id,
-            "approver": msg["from"],
-            "recipients": msg["to"] + msg["cc"],
-            "digest": digest,
-            "tainted": tainted,
-        },
-        session_id,
-    )
+    digest = digest_of(msg)
+    proposed = {
+        "act": act_id,
+        "approver": msg["from"],
+        "recipients": msg["to"] + msg["cc"],
+        "digest": digest,
+        "tainted": tainted,
+    }
+    _audit(broker, "SEND_AS_PROPOSED", "send_as_propose", proposed, session_id)
     return {
         "ok": True,
         "tag": tag_for(act_id),
@@ -445,7 +450,7 @@ def propose(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
         "digest": digest,
         "expires_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + SEND_AS_TTL_SECONDS)),
         "notified": True,
-        "approver_name": roster[msg["from"]],
+        "approver_name": name,
     }
 
 
@@ -463,121 +468,162 @@ def _terminal_status(row: dict[str, Any], now: float) -> dict[str, Any] | None:
     return None
 
 
-def decide(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
-    """Apply a staff member's answer: send it as them, revise it, or cancel it."""
-    _require_configured(broker)
-    decided_by = normalize_address(request.get("decided_by"))
-    decision = request.get("decision")
-    base = {"instruction": None, "replaced_by": None}
+_BASE: dict[str, Any] = {"instruction": None, "replaced_by": None}
+
+
+def _refused(reason: str) -> dict[str, Any]:
+    return {**_BASE, "status": "REFUSED", "reason": reason}
+
+
+def _open_row(store: SendAsStore, request: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """(row, None) for an answerable draft, else (None, the answer to give)."""
     try:
         act_id = parse_tag(request.get("tag_or_act_id"))
     except SendAsRefused as exc:
-        return {**base, "status": "REFUSED", "reason": str(exc)}
-    store = _store(broker)
+        return None, _refused(str(exc))
     row = store.get(act_id)
     if row is None:
-        return {**base, "status": "REFUSED", "reason": "no such draft"}
-    if decision not in DECISIONS:
-        return {**base, "status": "REFUSED", "reason": "decision must be send, change, or cancel"}
+        return None, _refused("no such draft")
+    if request.get("decision") not in DECISIONS:
+        return None, _refused("decision must be send, change, or cancel")
     ended = _terminal_status(row, store._now())
-    if ended is not None:
-        return {**base, **ended}
+    return (None, {**_BASE, **ended}) if ended is not None else (row, None)
 
-    data = _seat(broker.customer_path)
+
+def _authority_refusal(broker: Any, row: dict[str, Any], request: dict[str, Any], meta: dict[str, Any]) -> str | None:
+    """Why this person may not give this answer, or None. Audits a refusal.
+
+    The approver alone may send or change; the approver or an administrator may
+    cancel. Then the forgery guard: this mailbox can send AS the approver, so an
+    answer it sent itself must not count, and a check that cannot run refuses.
+    """
+    decided_by = normalize_address(request.get("decided_by"))
     approver = row["approver"]
-    admins = _admins(data)
-    allowed = decided_by == approver if decision in ("send", "change") else decided_by in ({approver} | admins)
-    meta = {"act": act_id, "decision": decision, "digest": row["digest"]}
+    if request.get("decision") in ("send", "change"):
+        allowed = decided_by == approver
+    else:
+        allowed = decided_by in ({approver} | _admins(_seat(broker.customer_path)))
     if not allowed:
         reason = "only the staff member this draft would be sent as may send or change it"
         _audit(broker, "SEND_AS_REFUSED", "send_as_decide", {**meta, "stage": "authority", "reason": reason})
-        return {**base, "status": "REFUSED", "reason": reason}
-    # The forgery guard: this mailbox can send AS the approver, so an answer it
-    # sent itself must not count. Fail closed when the check cannot run.
+        return reason
     try:
         if broker.msgraph.sent_items_holds(_clean(request.get("internet_message_id"), 998)):
             raise SendAsRefused("that answer was sent from the Operator's own mailbox")
     except (SendAsRefused, MsGraphTransportError, MsGraphRefused) as exc:
         reason = f"the answer's origin could not be confirmed: {exc}"
         _audit(broker, "SEND_AS_REFUSED", "send_as_decide", {**meta, "stage": "origin", "reason": reason})
-        return {**base, "status": "REFUSED", "reason": reason}
+        return reason
+    return None
 
-    now = store._now()
-    if decision == "cancel":
-        store.claim(
-            act_id,
-            from_status=STATUS_OPEN,
-            to_status=STATUS_CANCELLED,
-            fields={"decided_by": decided_by, "decided_at": now},
+
+def _apply_cancel(
+    broker: Any, store: SendAsStore, row: dict[str, Any], decided_by: str, meta: dict[str, Any]
+) -> dict[str, Any]:
+    store.claim(
+        row["id"],
+        from_status=STATUS_OPEN,
+        to_status=STATUS_CANCELLED,
+        fields={"decided_by": decided_by, "decided_at": store._now()},
+    )
+    _audit(broker, "SEND_AS_CANCELLED", "send_as_decide", meta)
+    return {**_BASE, "status": "CANCELLED", "reason": "cancelled; nothing was sent"}
+
+
+def _apply_change(
+    broker: Any, store: SendAsStore, row: dict[str, Any], decided_by: str, instruction: str, meta: dict[str, Any]
+) -> dict[str, Any]:
+    if not instruction:
+        return _refused("say what to change after 'change:'")
+    fields = {"decided_by": decided_by, "decided_at": store._now(), "instruction": instruction}
+    if not store.claim(row["id"], from_status=STATUS_OPEN, to_status=STATUS_REVISED, fields=fields):
+        return _refused("this draft was answered already")
+    _audit(broker, "SEND_AS_REVISED", "send_as_decide", meta)
+    return {**_BASE, "status": "REVISED", "reason": "revision requested", "instruction": instruction}
+
+
+def _report_failure(
+    broker: Any, store: SendAsStore, row: dict[str, Any], msg: dict[str, Any], exc: Exception, meta: dict[str, Any]
+) -> dict[str, Any]:
+    """No automatic retry: a transport failure's outcome is unknown and a retry
+    could deliver twice. The approver is told, never left guessing."""
+    store.claim(row["id"], from_status=STATUS_SENDING, to_status=STATUS_FAILED, fields={"result": str(exc)[:500]})
+    _audit(broker, "SEND_AS_FAILED", "send_as_decide", {**meta, "reason": str(exc)})
+    try:
+        _notice(
+            broker,
+            row["approver"],
+            f"Not sent: {msg['subject']} {tag_for(row['id'])}",
+            f"The email was not sent: {exc}. Nothing was retried.",
         )
-        _audit(broker, "SEND_AS_CANCELLED", "send_as_decide", meta)
-        return {**base, "status": "CANCELLED", "reason": "cancelled; nothing was sent"}
-    if decision == "change":
-        instruction = _clean(request.get("instruction"), _MAX_INSTRUCTION)
-        if not instruction:
-            return {**base, "status": "REFUSED", "reason": "say what to change after 'change:'"}
-        if not store.claim(
-            act_id,
-            from_status=STATUS_OPEN,
-            to_status=STATUS_REVISED,
-            fields={"decided_by": decided_by, "decided_at": now, "instruction": instruction},
-        ):
-            return {**base, "status": "REFUSED", "reason": "this draft was answered already"}
-        _audit(broker, "SEND_AS_REVISED", "send_as_decide", meta)
-        return {**base, "status": "REVISED", "reason": "revision requested", "instruction": instruction}
+    except (MsGraphRefused, MsGraphTransportError):
+        pass
+    return {**_BASE, "status": "FAILED", "reason": str(exc)}
 
+
+def _apply_send(
+    broker: Any, store: SendAsStore, row: dict[str, Any], decided_by: str, meta: dict[str, Any]
+) -> dict[str, Any]:
+    approver = row["approver"]
     msg = json.loads(row["payload_json"])
-    if digest_of(msg) != row["digest"] or msg.get("from") != approver or approver not in staff_roster(data):
+    if (
+        digest_of(msg) != row["digest"]
+        or msg.get("from") != approver
+        or approver not in staff_roster(_seat(broker.customer_path))
+    ):
         reason = "the stored draft no longer matches what was approved, or its sender is off the roster"
         _audit(broker, "SEND_AS_REFUSED", "send_as_decide", {**meta, "stage": "integrity", "reason": reason})
-        return {**base, "status": "REFUSED", "reason": reason}
+        return _refused(reason)
     if not store.claim(
-        act_id, from_status=STATUS_OPEN, to_status=STATUS_SENDING, fields={"decided_by": decided_by, "decided_at": now}
+        row["id"],
+        from_status=STATUS_OPEN,
+        to_status=STATUS_SENDING,
+        fields={"decided_by": decided_by, "decided_at": store._now()},
     ):
-        return {**base, "status": "REFUSED", "reason": "this draft was answered already"}
+        return _refused("this draft was answered already")
     try:
         result = broker.msgraph.send_as_staff(msg, approver)
     except (MsGraphRefused, MsGraphTransportError) as exc:
-        # No automatic retry: the outcome of a transport failure is unknown and
-        # a retry could deliver twice. The approver is told, never left guessing.
-        store.claim(act_id, from_status=STATUS_SENDING, to_status=STATUS_FAILED, fields={"result": str(exc)[:500]})
-        _audit(broker, "SEND_AS_FAILED", "send_as_decide", {**meta, "reason": str(exc)})
-        try:
-            _notice(
-                broker,
-                approver,
-                f"Not sent: {msg['subject']} {tag_for(act_id)}",
-                f"The email was not sent: {exc}. Nothing was retried.",
-            )
-        except (MsGraphRefused, MsGraphTransportError):
-            pass
-        return {**base, "status": "FAILED", "reason": str(exc)}
+        return _report_failure(broker, store, row, msg, exc, meta)
     conversation = broker.msgraph.conversation_of(result.get("graph_message_id") or "")
-    store.claim(
-        act_id,
-        from_status=STATUS_SENDING,
-        to_status=STATUS_DISPATCHED,
-        fields={"conversation_id": conversation, "result": result.get("lookup") or ""},
-    )
-    _audit(
-        broker,
-        "SEND_AS_SENT",
-        "send_as_decide",
-        {
-            **meta,
-            "from": approver,
-            "recipients": collect_recipients(msg),
-            "mailbox": result.get("mailbox") or "",
-            # The reconciler's exact joins (reconcile-sends.py pass 1): the
-            # header value stamped on the message itself, and the vendor id.
-            **{
-                k: result[k]
-                for k in ("audit_row_token", "vendor_message_id", "graph_message_id", "lookup")
-                if isinstance(result.get(k), str) and result[k]
-            },
-        },
-    )
-    return {**base, "status": "DISPATCHED", "reason": f"sent from {approver}"}
+    fields = {"conversation_id": conversation, "result": result.get("lookup") or ""}
+    store.claim(row["id"], from_status=STATUS_SENDING, to_status=STATUS_DISPATCHED, fields=fields)
+    # The reconciler's exact joins (reconcile-sends.py pass 1): the header value
+    # stamped on the message itself, and the vendor id.
+    joins = {
+        k: result[k]
+        for k in ("audit_row_token", "vendor_message_id", "graph_message_id", "lookup")
+        if isinstance(result.get(k), str) and result[k]
+    }
+    sent = {
+        **meta,
+        "from": approver,
+        "recipients": collect_recipients(msg),
+        "mailbox": result.get("mailbox") or "",
+        **joins,
+    }
+    _audit(broker, "SEND_AS_SENT", "send_as_decide", sent)
+    return {**_BASE, "status": "DISPATCHED", "reason": f"sent from {approver}"}
+
+
+def decide(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
+    """Apply a staff member's answer: send it as them, revise it, or cancel it."""
+    _require_configured(broker)
+    store = _store(broker)
+    row, answer = _open_row(store, request)
+    if row is None:
+        return answer or _refused("no such draft")
+    decision = request.get("decision")
+    meta = {"act": row["id"], "decision": decision, "digest": row["digest"]}
+    refusal = _authority_refusal(broker, row, request, meta)
+    if refusal is not None:
+        return _refused(refusal)
+    decided_by = normalize_address(request.get("decided_by"))
+    if decision == "cancel":
+        return _apply_cancel(broker, store, row, decided_by, meta)
+    if decision == "change":
+        return _apply_change(broker, store, row, decided_by, _clean(request.get("instruction"), _MAX_INSTRUCTION), meta)
+    return _apply_send(broker, store, row, decided_by, meta)
 
 
 def match_reply(broker: Any, request: dict[str, Any]) -> dict[str, Any]:

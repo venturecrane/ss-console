@@ -145,6 +145,26 @@ def resolve_ceiling(
     return _most_restrictive(base, floor) if floor is not None else base
 
 
+def _send_as_staff_decision(eff: Ceiling) -> EnforcementDecision:
+    """ADR 0089. A send AS a staff member never transmits from the tool call: at
+    confirm it becomes a proposal the named staff member approves by email, and
+    the workspace broker sends only on that approval of the exact digest-bound
+    text. A proposal is a draft, so a turn that read outside material may make
+    one (that is how real letters get written); the person whose name is on it
+    is the check. Any other ceiling refuses."""
+    if eff == Ceiling.CONFIRM:
+        return EnforcementDecision(
+            allowed=False,
+            reason="external_send_as_staff at confirm; withheld as a proposal for the staff member's approval (ADR 0089)",
+            audit_action="await_approval",
+        )
+    return EnforcementDecision(
+        allowed=False,
+        reason="external_send_as_staff refused: only confirm is authorable (ADR 0089)",
+        audit_action="refuse",
+    )
+
+
 def enforce(
     *,
     ceiling: Ceiling,
@@ -188,25 +208,10 @@ def enforce(
     if action == ActionClass.READ:
         return EnforcementDecision(allowed=True, reason="read action", audit_action="allow")
 
-    # SEND AS STAFF (ADR 0089) — ahead of the taint gate ON PURPOSE. This call
-    # never transmits: at confirm it becomes a proposal the named staff member
-    # approves by email, and the workspace broker sends only on that approval of
-    # the exact digest-bound text. A proposal is a draft, so a turn that read
-    # outside material may make one (that is how real letters get written);
-    # the person whose name is on it is the check. Any other ceiling refuses.
+    # SEND AS STAFF (ADR 0089) — ahead of the taint gate ON PURPOSE; see
+    # _send_as_staff_decision.
     if action == ActionClass.EXTERNAL_SEND_AS_STAFF:
-        eff = resolve_ceiling(action, ceiling, action_ceilings, vertical_floors)
-        if eff == Ceiling.CONFIRM:
-            return EnforcementDecision(
-                allowed=False,
-                reason="external_send_as_staff at confirm; withheld as a proposal for the staff member's approval (ADR 0089)",
-                audit_action="await_approval",
-            )
-        return EnforcementDecision(
-            allowed=False,
-            reason="external_send_as_staff refused: only confirm is authorable (ADR 0089)",
-            audit_action="refuse",
-        )
+        return _send_as_staff_decision(resolve_ceiling(action, ceiling, action_ceilings, vertical_floors))
 
     # TAINT-GATE — a turn that ingested untrusted inbound content cannot fire an
     # autonomous sensitive action (the injection-ingress → action-egress tie).
