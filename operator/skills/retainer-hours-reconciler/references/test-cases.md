@@ -1,4 +1,4 @@
-# Test cases — retainer-hours-reconciler synthetic fixtures
+# Test cases - retainer-hours-reconciler synthetic fixtures
 
 Twelve synthetic agency-scenarios covering the categorization space. The agent should be run against these as a regression check before any change to the prompt or rubric. Each test specifies the input dataset shape + the expected bucket assignment + the expected Slack post line (or "omitted from per-client lines" for BALANCED).
 
@@ -8,7 +8,7 @@ Fixture JSON lives at `operator/fixtures/marketing-agency/retainer-hours/fixture
 
 ---
 
-## #1 — Clean OVER_CRITICAL with consecutive pattern
+## #1 - Clean OVER_CRITICAL with consecutive pattern
 
 ```yaml
 client: 'Acme Co'
@@ -29,14 +29,14 @@ Expected:
 - Projected EOM%: 101.3% (via 87.5% / (19/22) = 101.3%)... wait this is OVER_WARNING per basic threshold
 - ACTUALLY: with consecutive-week promotion, agent should promote to OVER_CRITICAL anyway
 
-Wait — recheck. 87.5% MTD / (19/22) = 87.5% / 0.864 = 101.3% projected. That's WARNING per basic threshold (< 110%). The consecutive-week rule kicks in (2 prior weeks in WARNING → promote to CRITICAL). But promotion needs THIS week to be in WARNING for the rule to trigger.
+Wait - recheck. 87.5% MTD / (19/22) = 87.5% / 0.864 = 101.3% projected. That's WARNING per basic threshold (< 110%). The consecutive-week rule kicks in (2 prior weeks in WARNING → promote to CRITICAL). But promotion needs THIS week to be in WARNING for the rule to trigger.
 
 So bucket: OVER_CRITICAL (promoted from OVER_WARNING via consecutive-week rule).
 
 Expected line:
 
 ```
-🔴 *Acme Co* — 87% MTD, projected 101% EOM (SOW: 40hrs/mo)
+🔴 *Acme Co* - 87% MTD, projected 101% EOM (SOW: 40hrs/mo)
 Strategy 18h / 10h cap · Production 17h / 30h cap · 3rd consecutive week OVER
 Worth a call before Friday.
 ```
@@ -45,7 +45,7 @@ Worth a call before Friday.
 
 ---
 
-## #2 — Mid-month spike
+## #2 - Mid-month spike
 
 ```yaml
 client: 'Beta Studios'
@@ -67,14 +67,14 @@ Expected:
 Expected line:
 
 ```
-🔴 *Beta Studios* — 94% MTD, projected 172% EOM (SOW: 50hrs/mo)
-WoW shift from 70% → 172%. Spike — something changed.
+🔴 *Beta Studios* - 94% MTD, projected 172% EOM (SOW: 50hrs/mo)
+WoW shift from 70% → 172%. Spike - something changed.
 Worth a call today.
 ```
 
 ---
 
-## #3 — UNDER_CRITICAL with renewal proximity
+## #3 - UNDER_CRITICAL with renewal proximity
 
 ```yaml
 client: 'Cardinal Group'
@@ -96,14 +96,14 @@ Expected:
 Expected line:
 
 ```
-🔴 *Cardinal Group* — 30% MTD, projected 41% EOM (SOW: 30hrs/mo)
+🔴 *Cardinal Group* - 30% MTD, projected 41% EOM (SOW: 30hrs/mo)
 Renewal in ~45 days. Underdelivery + renewal proximity = real churn risk.
 Schedule check-in this week.
 ```
 
 ---
 
-## #4 — Clean BALANCED (should NOT appear in per-client lines)
+## #4 - Clean BALANCED (should NOT appear in per-client lines)
 
 ```yaml
 client: 'Delta Org'
@@ -124,7 +124,7 @@ Expected output: NOT included in per-client lines. Counted in summary only.
 
 ---
 
-## #5 — New client (60-day tolerance)
+## #5 - New client (60-day tolerance)
 
 ```yaml
 client: 'Echo Networks'
@@ -147,7 +147,7 @@ Expected output: NOT in per-client lines.
 
 ---
 
-## #6 — Single service line over while total balanced (service-line rule)
+## #6 - Single service line over while total balanced (service-line rule)
 
 ```yaml
 client: 'Foxtrot Agency'
@@ -169,14 +169,14 @@ Expected:
 Expected line:
 
 ```
-🟡 *Foxtrot Agency* — 55% MTD, projected 76% EOM (SOW: 40hrs/mo)
+🟡 *Foxtrot Agency* - 55% MTD, projected 76% EOM (SOW: 40hrs/mo)
 Strategy 14h / 8h cap · Production 8h / 32h cap · Scope misalignment.
 Strategy work eating production hours. Worth a scope conversation.
 ```
 
 ---
 
-## #7 — Missing SOW (lookup failure)
+## #7 - Missing SOW (lookup failure)
 
 ```yaml
 client: 'Golf Corp'
@@ -193,12 +193,12 @@ Expected:
 Expected tail line:
 
 ```
-*⚠️ SOW lookup failed for:* Golf Corp (path: clients/golf/SOW.pdf — 404). Fix the SOW reference and re-run.
+*⚠️ SOW lookup failed for:* Golf Corp (path: clients/golf/SOW.pdf - 404). Fix the SOW reference and re-run.
 ```
 
 ---
 
-## #8 — Zero-hour SOW (filter out)
+## #8 - Zero-hour SOW (filter out)
 
 ```yaml
 client: 'Hotel Project'
@@ -210,7 +210,7 @@ Expected: EXCLUDED from the report entirely (not in any section).
 
 ---
 
-## #9 — Mid-month SOW change
+## #9 - Mid-month SOW change
 
 ```yaml
 client: 'India Holdings'
@@ -232,14 +232,14 @@ Expected:
 Expected line:
 
 ```
-🟡 *India Holdings* — 56% MTD, projected 103% EOM (SOW: 50hrs/mo)
-SOW updated 2026-05-10 (30→50hrs) — pre-change utilization not retroactively adjusted.
+🟡 *India Holdings* - 56% MTD, projected 103% EOM (SOW: 50hrs/mo)
+SOW updated 2026-05-10 (30→50hrs) - pre-change utilization not retroactively adjusted.
 Tight; on pace under new cap.
 ```
 
 ---
 
-## #10 — Multiple-SOW client
+## #10 - Multiple-SOW client
 
 ```yaml
 client: 'Juliet LLC'
@@ -260,13 +260,13 @@ Expected:
 Expected line:
 
 ```
-🟡 *Juliet LLC* — 58% MTD, projected 106% EOM (SOW: 60hrs/mo combined — retainer 40 + project 20)
+🟡 *Juliet LLC* - 58% MTD, projected 106% EOM (SOW: 60hrs/mo combined - retainer 40 + project 20)
 On pace to overrun by ~4hrs.
 ```
 
 ---
 
-## #11 — Holiday-shortened month
+## #11 - Holiday-shortened month
 
 ```yaml
 client: 'Kilo Studios'
@@ -289,7 +289,7 @@ Expected output: NOT in per-client lines.
 
 ---
 
-## #12 — Cross-client theme (capacity issue)
+## #12 - Cross-client theme (capacity issue)
 
 ```yaml
 # Five clients, all production-heavy, all in OVER_WARNING
@@ -304,7 +304,7 @@ Expected:
 
 ```
 *Themes*
-- 5 clients are OVER_WARNING on production hours this week — production-team capacity is the underlying pattern, not per-client overruns. Hiring? Outsourcing? Throttling intake?
+- 5 clients are OVER_WARNING on production hours this week - production-team capacity is the underlying pattern, not per-client overruns. Hiring? Outsourcing? Throttling intake?
 ```
 
 ---
@@ -316,6 +316,6 @@ When the retainer-hours-reconciler prompt or rubric changes:
 1. Run the agent against the synthetic inbox in `operator/fixtures/marketing-agency/retainer-hours/`.
 2. Diff the output against expectations above.
 3. Any bucket / threshold / surface drift is a regression. Fix the prompt or rubric, not the test.
-4. Drift in voice (over-engineered, AI-toned) is also a regression — see voice.md.
+4. Drift in voice (over-engineered, AI-toned) is also a regression - see voice.md.
 
 The fixtures are the contract. The prompt is the implementation.

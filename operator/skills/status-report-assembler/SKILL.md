@@ -28,7 +28,7 @@ Reads the work the agency completed for each retainer client over the past week,
 
 ## When to Use
 
-Friday-night status report assembly is the canonical agency-owner bottleneck. Each client wants weekly proof of value: what shipped, what moved, what's next. Pulling that proof from 4-6 tools per client, 10-30 clients, every week, is 4-8 hours of the owner's time. Most owners do it badly under time pressure — clients notice; retention erodes.
+Friday-night status report assembly is the canonical agency-owner bottleneck. Each client wants weekly proof of value: what shipped, what moved, what's next. Pulling that proof from 4-6 tools per client, 10-30 clients, every week, is 4-8 hours of the owner's time. Most owners do it badly under time pressure - clients notice; retention erodes.
 
 This skill reduces it to: owner reads 30 drafts on Friday morning, edits/approves each in 1-2 minutes, ships from their own inbox. Saves the weekend.
 
@@ -58,9 +58,9 @@ hermes run status-report-assembler --window "last 14 days"
 
 ## Procedure
 
-The skill runs in two phases. The mechanical per-client × per-connector fetch loop runs inside a single `execute_code` block — intermediate per-client / per-tool results never enter the conversation context (ADR 0021 Stream A). Per-client voice matching, anomaly surfacing, and draft assembly stay in the agent's reasoning loop where they belong.
+The skill runs in two phases. The mechanical per-client × per-connector fetch loop runs inside a single `execute_code` block - intermediate per-client / per-tool results never enter the conversation context (ADR 0021 Stream A). Per-client voice matching, anomaly surfacing, and draft assembly stay in the agent's reasoning loop where they belong.
 
-### Phase 1 — Fetch (single `execute_code` block)
+### Phase 1 - Fetch (single `execute_code` block)
 
 Invoke `execute_code` with a Python script that iterates the agency's active retainer roster and pulls every per-client metric stream into one structured payload. The script reads connector bindings from `customer.yaml` (PM tool, analytics, paid-media, CRM, Slack, Gmail) and uses the Hermes-exposed `terminal` to call each connector's CLI:
 
@@ -135,9 +135,9 @@ print(json.dumps({
 }, ensure_ascii=False))
 ```
 
-Only the final `print()` output enters the conversation context — typically ~15-25k tokens per client for ~20 clients, instead of ~120 separate tool-call result blocks. Per-client connector parses and prior-report reads happen in the child process and stay there. A single client's connector failure is recorded as a `parse_failed` row inside the payload — the batch does not abort.
+Only the final `print()` output enters the conversation context - typically ~15-25k tokens per client for ~20 clients, instead of ~120 separate tool-call result blocks. Per-client connector parses and prior-report reads happen in the child process and stay there. A single client's connector failure is recorded as a `parse_failed` row inside the payload - the batch does not abort.
 
-### Phase 2 — Reason (agent, in-context)
+### Phase 2 - Reason (agent, in-context)
 
 The agent reads the JSON returned by `execute_code` and, per the rules in `references/algorithm.md`, processes each client in turn:
 
@@ -169,7 +169,7 @@ The agent MUST NOT:
 - Send the draft to the client (gmail.send refused per invariant 2)
 - Modify any client-facing data in the source tools
 - Promise specific results in next-week-priorities (the owner authors goals)
-- Hallucinate metrics — every number must be sourceable to a tool call
+- Hallucinate metrics - every number must be sourceable to a tool call
 
 ## Pitfalls
 
@@ -181,17 +181,17 @@ A successful weekly run satisfies:
 
 1. Every active client has a draft in `drafts/{client}/` within 30 min of run start.
 2. Every metric in every draft is sourceable to a specific tool call (audit-trail in the run log).
-3. Voice match: a sample human-graded against prior shipped reports — passes if the owner edits < 25% of the words.
-4. Flagged anomalies (campaign disapprovals, traffic drops, blocker tickets that should be in next-week-priorities) are surfaced — the value-add over a dumb template.
+3. Voice match: a sample human-graded against prior shipped reports - passes if the owner edits < 25% of the words.
+4. Flagged anomalies (campaign disapprovals, traffic drops, blocker tickets that should be in next-week-priorities) are surfaced - the value-add over a dumb template.
 5. No invented promises. If the agent doesn't have an evidence base for next-week-priorities, it leaves placeholders for the owner to fill, not made-up goals.
 
 ## References
 
-- `references/algorithm.md` — detailed per-client / per-section reasoning rules preserved for graders (post-`execute_code` rewrite)
-- `references/voice.md` — agency-to-client voice + client-specific tonal matching
-- `references/output-format.md` — exact draft structure + metric inclusion rules
-- `references/categorization-rubric.md` — what counts as a "blocker" vs "noise"; anomaly thresholds
-- `references/test-cases.md` — synthetic client datasets (10 clients, varied verticals + tone)
+- `references/algorithm.md` - detailed per-client / per-section reasoning rules preserved for graders (post-`execute_code` rewrite)
+- `references/voice.md` - agency-to-client voice + client-specific tonal matching
+- `references/output-format.md` - exact draft structure + metric inclusion rules
+- `references/categorization-rubric.md` - what counts as a "blocker" vs "noise"; anomaly thresholds
+- `references/test-cases.md` - synthetic client datasets (10 clients, varied verticals + tone)
 
 ## Cost estimate (filled by grading)
 
@@ -199,7 +199,7 @@ Post-`execute_code` rewrite (ADR 0021 Stream A). Per-connector intermediate
 results no longer enter the conversation context; only the single Phase-1
 JSON payload does.
 
-- Typical tokens-in per run (20 clients): ~300K — one JSON document covering all clients' PM activity, GA4, paid-media, CRM, and prior reports.
+- Typical tokens-in per run (20 clients): ~300K - one JSON document covering all clients' PM activity, GA4, paid-media, CRM, and prior reports.
 - Typical tokens-out per run: ~60K (one ~3K draft × 20 clients + one summary Slack post).
 - Hermes tool calls per run: 2 (one `execute_code` + one `Email.create_draft`-equivalent batch / file-write batch). The per-connector calls happen inside `execute_code` and don't count toward conversation context.
 - Typical cadence: weekly × N clients.

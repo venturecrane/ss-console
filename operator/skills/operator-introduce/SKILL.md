@@ -71,7 +71,7 @@ reads in a tool is what makes them mechanical rather than remembered.
 **That sentence was proved on this skill, by this skill.** The four working
 rules were authored in the fixed shape below on 2026-08-10, both installed
 copies on the pilot carried them, and the 2026-08-12 rehearsal introduction
-stated none of them — the reply mirrored the tool envelope's sections exactly
+stated none of them - the reply mirrored the tool envelope's sections exactly
 (ss-console#2338). The rules are now source 6 and are read like everything
 else, because two of them are seat-variable and the flat versions this file
 used to carry were false on a seat authored differently.
@@ -124,7 +124,7 @@ never render as "there was nothing there."
 **6. The working rules.** Two of the four are seat state, not doctrine, so they
 are read: the send posture from `personas[].entitlements.exposure` (every
 `external_send*` class, as authored), and the identifier rule from whether the
-A1 gate is refusing or in report mode. The third — never computing a deadline —
+A1 gate is refusing or in report mode. The third - never computing a deadline -
 is a consequence of the same gate rather than a separate mechanism, and only "no
 legal advice" is authored policy with nothing to read.
 _On failure:_ "I can't read my own send posture right now, so I won't tell you
@@ -248,10 +248,10 @@ manifest. The blessing that establishes a library is recorded there by PR, so
 that block is the record of it; the folder living in the practice-management
 system is not something this reply claims to have looked at.
 
-- `matter_number:` present — "I've learned your document library. My templates
+- `matter_number:` present - "I've learned your document library. My templates
   live on [the matter, by its number] in [the folder name]." If `templates:` is
   authored, add how many and name the document classes they cover.
-- `matter_number:` absent — "I haven't learned your document library. I don't
+- `matter_number:` absent - "I haven't learned your document library. I don't
   have a record of the kinds of documents your firm produces or what your
   versions of them look like." A `folder_name:` on its own is a proposed name,
   not an established library, and must never be reported as one.
@@ -259,8 +259,8 @@ system is not something this reply claims to have looked at.
 **This sentence is not optional.** It appears in every introduction, in both
 states, whichever way the read came out. It was silently dropped from a live
 introduction on 2026-08-20 because it was the one establishment item with prose
-and no verification line behind it (ss#2489), while the reply's voice half —
-which has a read, a per-class rule, and a verification item — came through
+and no verification line behind it (ss#2489), while the reply's voice half -
+which has a read, a per-class rule, and a verification item - came through
 intact. The gap the firm cannot see is the one they most need named.
 
 **What to do about it.** Only point the reader at the fix if the fix is bound on
@@ -442,7 +442,7 @@ introduction went well.
    manifest entry that was read, and no class is described as established on any
    other basis.
 6. Document library status is stated, in one sentence, keyed on whether
-   `self_initiation.document_library.matter_number` was read as present — never
+   `self_initiation.document_library.matter_number` was read as present - never
    omitted, and never reported as established on a `folder_name` alone.
 7. The reply contains no run-history claim, no forbidden phrasing, and no tenant
    identifier.

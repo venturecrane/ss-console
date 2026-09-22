@@ -31,7 +31,7 @@ metadata:
         FailClosed,
       ]
   smd:
-    vertical: neutral # product skill — every seat ships it; the sender invokes it by naming it
+    vertical: neutral # product skill - every seat ships it; the sender invokes it by naming it
     weight: heavy # the kickoff turn carries the self-test plus two corpus surveys; the reasoning is the bulk
     action_class: read + internal draft + one report to the requester # the conductor's own footprint; each delegated act runs under its own action_class and gates
     content_ceiling: counts_and_status_only # the status board carries counts and statuses; no matter content, no client names, no tenant identifiers
@@ -46,7 +46,7 @@ metadata:
 
 An Operator admin says **"initialize yourself"** and the Operator sets itself up for the
 firm the way a new employee gets oriented: it proves its own plumbing works, learns how the
-firm writes from the firm's own documents, and builds the firm's document library — all from
+firm writes from the firm's own documents, and builds the firm's document library - all from
 one request, with the firm blessing each result before anything is installed or created.
 
 This skill is a **conductor, not a new mechanism**. Every act it runs is an existing
@@ -61,7 +61,7 @@ check that proceeds with whatever is still open; on day one it is the full seque
 ## Who may run this (do not try to check it yourself)
 
 Self-initiation belongs to the firm's **Operator admins**. That is an authored allow list,
-it is not visible to you, and **you must not ask a person to confirm they are on it** — a
+it is not visible to you, and **you must not ask a person to confirm they are on it** - a
 self-declaration is not authorization and asking for one teaches the wrong habit.
 
 The turn's **INITIATION AUTHORITY context** (platform-resolved, injected per turn) is the
@@ -71,7 +71,7 @@ answer, never an error.
 
 **Never proceed on an unattributed turn.** A cron wake, a self-wake, or any turn with no
 sender is not an instruction to initialize anything. Self-initiation is person-initiated
-always — it never runs automatically, not at connect, not at boot, not on a schedule.
+always - it never runs automatically, not at connect, not at boot, not on a schedule.
 
 **The admin's initiation request IS the person-initiation for every act in the authored
 sequence.** The forwarded/quoted-words guard applies to the initiation request itself, never
@@ -86,11 +86,11 @@ sequence.
 Read the seat's own config with `read_file` on `/var/lib/smd-config/customer.yaml` and take
 the top-level `self_initiation:` block:
 
-- `sequence:` — the ordered list of acts this seat initializes with. Each entry names a
+- `sequence:` - the ordered list of acts this seat initializes with. Each entry names a
   skill (for example `operator-self-test`, `voice-establishment`,
-  `document-library-establishment`). The sequence is the firm's authored list — run exactly
+  `document-library-establishment`). The sequence is the firm's authored list - run exactly
   these, in exactly this order, and nothing else.
-- `document_library:` — where the library lives (`matter_hint`, `matter_number`,
+- `document_library:` - where the library lives (`matter_hint`, `matter_number`,
   `folder_name`), used by the status probe below. `folder_name` is the proposed default; the
   admin may fix a different one at the blessing, and the blessed location governs. An
   `operator_matter:` sub-block, when the firm authored one, is the internal matter the
@@ -103,19 +103,19 @@ config change, and end the turn. Never substitute a default list.
 
 ## Live status, derived every time (never stored)
 
-Every email turn is a fresh session, so this skill never remembers progress — it **derives**
+Every email turn is a fresh session, so this skill never remembers progress - it **derives**
 it, from the running system, at the start of every run. Prose about past turns is not an
 observation; these probes are:
 
-- **operator-self-test** — no durable record exists, so the self-test is always runnable.
+- **operator-self-test** - no durable record exists, so the self-test is always runnable.
   The status board notes that a re-run re-proves rather than remembers.
-- **voice-establishment** — `read_file` on `/var/lib/smd-config/specs/manifest.json`. The
+- **voice-establishment** - `read_file` on `/var/lib/smd-config/specs/manifest.json`. The
   act is **established** only when a voice spec is installed for **every output class the
   seat's `output_classes:` block declares `voice_spec: expected`**. Some-but-not-all is
-  reported as **partial**, naming the classes still open — never as established. An
+  reported as **partial**, naming the classes still open - never as established. An
   unreadable manifest is reported as **unreadable**, in those words; "not established" and
   "I could not read it" are different sentences.
-- **document-library-establishment** — resolve the library matter against
+- **document-library-establishment** - resolve the library matter against
   `mcp_smokeball_list_matters`, taking the first of `document_library.matter_hint`,
   `document_library.matter_number`, `document_library.operator_matter.number`, and the
   convention number `OPS-OPERATOR-LIBRARY` that resolves. Then
@@ -133,44 +133,44 @@ observation; these probes are:
 
 Confirm the INITIATION AUTHORITY context admits the sender (above). Read the
 `self_initiation:` block. Run the status probes for every act in the sequence. What is
-already established is reported as such and **not re-run** — re-running an established act
+already established is reported as such and **not re-run** - re-running an established act
 is the admin's explicit ask ("re-establish the voice"), never the conductor's initiative.
 
 ### 2. Run the open acts, in sequence order
 
 For each act still open, **read its skill body with `read_file` on
 `/app/skills/<slug>/SKILL.md` and carry it out exactly as written.** If you cannot read a
-skill file this turn, say so plainly rather than approximating its output — a status board
+skill file this turn, say so plainly rather than approximating its output - a status board
 line "could not load the procedure" is honest; an improvised result is the exact
 false-confidence failure this class of skill exists to prevent.
 
 What each act contributes on the kickoff turn:
 
-- **operator-self-test** — the full five-step checklist, PASS/FAILED per step, exactly as
+- **operator-self-test** - the full five-step checklist, PASS/FAILED per step, exactly as
   its body defines. The report lands inside the status board rather than as a separate
   delivery; a FAILED step prints as FAILED. Its step 3 files one certificate into the
   seat's authored ops location and reads it back (ss#2237); on a seat whose ops location
-  is not yet authored — a firm whose document library has not been blessed — step 3
+  is not yet authored - a firm whose document library has not been blessed - step 3
   reports FAILED for exactly that reason, which is the honest state and resolves itself
   once the library blessing fixes a location.
-- **voice-establishment** — **survey mode, turn one only**: enumerate, classify
+- **voice-establishment** - **survey mode, turn one only**: enumerate, classify
   firm-authored vs received vs unreadable, propose the cohort-partitioned corpus, then
   STOP, exactly as its §1b defines. Nothing is staged, nothing is submitted. The blessing
   is the admin's own later turn.
-- **document-library-establishment** — **turn one only**: survey, classify types, propose
+- **document-library-establishment** - **turn one only**: survey, classify types, propose
   the template list and the storage location, then STOP, exactly as its body defines.
   Nothing is created. The blessing is the admin's own later turn.
 
-Every gate the underlying procedure carries — the blessing boundaries, the broker's
-server-side refusals, the possession ceremony where the seat's custody requires it — is
+Every gate the underlying procedure carries - the blessing boundaries, the broker's
+server-side refusals, the possession ceremony where the seat's custody requires it - is
 honored as that procedure states it. The conductor never skips a proposal turn, never
 pre-blesses, and never batches a blessing into the kickoff.
 
 ### 3. The overflow rule (never approximate to fit)
 
 Acts run in sequence order. If an act's work cannot be completed **honestly** within this
-turn — a survey that would have to be thinned, a checklist that cannot finish — the status
-board reports that act as **"not started — reply 'continue initiation'"** rather than
+turn - a survey that would have to be thinned, a checklist that cannot finish - the status
+board reports that act as **"not started - reply 'continue initiation'"** rather than
 shipping a thinned result. A partial survey presented as a proposal is worse than no
 proposal, because the firm blesses what it sees. Never approximate to fit the turn.
 

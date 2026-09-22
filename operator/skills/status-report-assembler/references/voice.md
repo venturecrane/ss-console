@@ -1,11 +1,11 @@
-# Voice — status-report-assembler client draft
+# Voice - status-report-assembler client draft
 
 The agent produces a client-facing status report draft. Voice rules below govern the draft. The owner edits + ships from their inbox.
 
 ## Hard rules
 
 1. **Match the client's prior thread voice.** Pull the last 3-5 status reports the agency shipped to this client. If those used formal salutations + paragraph density, match. If they used casual + bullets, match. The voice is per-client, not per-agency-default.
-2. **No em dashes. Period.** This applies to ALL drafts — em dashes are an AI-tell. Use sentences, commas, periods.
+2. **No em dashes. Period.** This applies to ALL drafts - em dashes are an AI-tell. Use sentences, commas, periods.
 3. **No "I hope this email finds you well."** No "Per our weekly cadence." No "As we discussed." These templates read as filler.
 4. **Lead with results, not effort.** "Conversions up 23% week over week" before "We A/B tested two ad variations."
 5. **Active voice.** "We shipped the redesign on Tuesday" not "The redesign was shipped on Tuesday."
@@ -21,7 +21,7 @@ The agent produces a client-facing status report draft. Voice rules below govern
 12. **Asks are explicit and singular.** One ask per report max. "Could you confirm the Q3 budget by Friday so we can spin up the second campaign?" not "Let us know how you'd like to proceed on several items."
 13. **No agency-marketing voice.** No "Our team is excited to bring our award-winning strategy..." Direct, business-to-business, plainspoken.
 
-## Examples — good and bad
+## Examples - good and bad
 
 ### Bad (over-engineered, vague)
 
@@ -67,9 +67,9 @@ The agent produces a client-facing status report draft. Voice rules below govern
 
 > Next week
 >
-> - Roll the A/B test winner to 100% (Tuesday — confirmed)
+> - Roll the A/B test winner to 100% (Tuesday - confirmed)
 > - Launch retargeting campaign once Q3 budget confirmed (target Friday, contingent)
-> - [TBD: content strategy doc — pending Scott review]
+> - [TBD: content strategy doc - pending Scott review]
 
 ## Sign-off
 
@@ -77,4 +77,4 @@ Match the agency-default sign-off in `customer.yaml: agency.report_signature`. F
 
 ## When the agent can't voice-match
 
-If the agent reads its own draft and isn't confident the voice matches the client's prior threads, it marks the draft `LOW` confidence in the Slack alert and includes a one-line note: "Voice match uncertain — limited prior-thread sample size." Owner reads, calibrates, ships.
+If the agent reads its own draft and isn't confident the voice matches the client's prior threads, it marks the draft `LOW` confidence in the Slack alert and includes a one-line note: "Voice match uncertain - limited prior-thread sample size." Owner reads, calibrates, ships.

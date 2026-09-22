@@ -1,4 +1,4 @@
-# Test cases — status-report-assembler synthetic fixtures
+# Test cases - status-report-assembler synthetic fixtures
 
 Ten synthetic client scenarios covering the variation space. Fixtures live at `operator/fixtures/marketing-agency/status-reports/<client-slug>/` and include PM-tool data, analytics data, paid-media data, and prior-thread email samples for voice-matching.
 
@@ -6,7 +6,7 @@ The agent should be run against these as a regression check. Each test specifies
 
 ---
 
-## #1 — Standard paid-media client, healthy week
+## #1 - Standard paid-media client, healthy week
 
 ```yaml
 client: "Halo Marketing"
@@ -34,7 +34,7 @@ Expected verdict: **autonomous** (no calibration concerns)
 
 ---
 
-## #2 — Result drop with explanation (holiday)
+## #2 - Result drop with explanation (holiday)
 
 ```yaml
 client: 'India Networks'
@@ -50,14 +50,14 @@ prior_thread_voice: "formal, paragraph density, 'Dear' salutation"
 Expected draft characteristics:
 
 - Voice: formal, paragraph density, "Dear Mark,"
-- Results section includes context line: "Sessions: 8,400 (-22% WoW per GA4) — week included Memorial Day, holiday-normalized drop ~5%."
+- Results section includes context line: "Sessions: 8,400 (-22% WoW per GA4) - week included Memorial Day, holiday-normalized drop ~5%."
 - Surfaces the drop honestly with explanation; doesn't hide it
 
 Expected verdict: **autonomous**
 
 ---
 
-## #3 — Anomaly: result drop without explanation
+## #3 - Anomaly: result drop without explanation
 
 ```yaml
 client: 'Juliet Studios'
@@ -72,13 +72,13 @@ inputs:
 Expected:
 
 - Surfaces the drop in Results
-- Flags anomaly in Slack alert: "Juliet — conversions -41% WoW, no obvious cause"
-- Draft includes `> NOTE:` line above Results: "Investigate conversion drop before sending — check pixel + funnel"
+- Flags anomaly in Slack alert: "Juliet - conversions -41% WoW, no obvious cause"
+- Draft includes `> NOTE:` line above Results: "Investigate conversion drop before sending - check pixel + funnel"
 - Verdict: **draft_for_review** (anomaly requires owner judgment before send)
 
 ---
 
-## #4 — Engagement paused per SOW
+## #4 - Engagement paused per SOW
 
 ```yaml
 client: 'Kilo Corp'
@@ -94,7 +94,7 @@ Expected:
 
 ---
 
-## #5 — New client, no prior thread history
+## #5 - New client, no prior thread history
 
 ```yaml
 client: 'Lima Group'
@@ -111,13 +111,13 @@ prior_thread_voice: NULL (no prior reports)
 Expected:
 
 - Voice: agency-default (per customer.yaml)
-- Draft notes "First report — voice calibration pending. Edit freely; agent will learn from this version."
-- Slack alert: "Lima — first report, voice match flagged for owner review"
+- Draft notes "First report - voice calibration pending. Edit freely; agent will learn from this version."
+- Slack alert: "Lima - first report, voice match flagged for owner review"
 - Verdict: **draft_for_review** (always for first-report clients)
 
 ---
 
-## #6 — Multiple-stakeholder client
+## #6 - Multiple-stakeholder client
 
 ```yaml
 client: 'Mike Industries'
@@ -134,25 +134,25 @@ Expected:
 
 ---
 
-## #7 — Long blocker (≥ 7 business days)
+## #7 - Long blocker (≥ 7 business days)
 
 ```yaml
 client: "November Co"
 inputs:
-  blocker_a: "Brand guidelines pending since 4/30" (currently 5/19 — 14 business days)
+  blocker_a: "Brand guidelines pending since 4/30" (currently 5/19 - 14 business days)
   pm_shipped: 2 items
   analytics: steady
 ```
 
 Expected:
 
-- Blocker surfaced as anomaly in Slack alert: "November — brand guidelines pending 14 business days, owner should consider escalation outside the report"
+- Blocker surfaced as anomaly in Slack alert: "November - brand guidelines pending 14 business days, owner should consider escalation outside the report"
 - Draft blocker section includes this item normally
 - Verdict: **draft_for_review** (long blocker may need owner-side handling)
 
 ---
 
-## #8 — Shipped count = 0 (anomaly)
+## #8 - Shipped count = 0 (anomaly)
 
 ```yaml
 client: 'Oscar Studio'
@@ -166,13 +166,13 @@ inputs:
 
 Expected:
 
-- Slack alert flag: "Oscar — 0 items shipped this week despite active retainer; capacity or scope issue?"
-- Draft shipped section is empty; owner decides whether to send (likely no — they need to address the underlying issue first)
+- Slack alert flag: "Oscar - 0 items shipped this week despite active retainer; capacity or scope issue?"
+- Draft shipped section is empty; owner decides whether to send (likely no - they need to address the underlying issue first)
 - Verdict: **draft_for_review**
 
 ---
 
-## #9 — Heavy engagement, 600+ word draft
+## #9 - Heavy engagement, 600+ word draft
 
 ```yaml
 client: 'Papa Holdings'
@@ -197,7 +197,7 @@ Expected:
 
 ---
 
-## #10 — Mid-week stakeholder change
+## #10 - Mid-week stakeholder change
 
 ```yaml
 client: "Quebec Corp"
@@ -210,8 +210,8 @@ inputs:
 
 Expected:
 
-- Surfaces the contact change in Slack alert: "Quebec — primary contact changed mid-week (John → Maria); draft addressed to Maria but verify"
-- Draft uses Maria as primary contact, with a brief opening line: "Maria — welcome aboard! Here's the week-of recap..."
+- Surfaces the contact change in Slack alert: "Quebec - primary contact changed mid-week (John → Maria); draft addressed to Maria but verify"
+- Draft uses Maria as primary contact, with a brief opening line: "Maria - welcome aboard! Here's the week-of recap..."
 - Verdict: **draft_for_review** (relationship transition needs human eye)
 
 ---

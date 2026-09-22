@@ -7,7 +7,7 @@ Source of truth for thanking the referrer without breaching client confidentiali
 ```
 src = matter.referral_source (a Smokeball contact reference)
 if not src or not resolvable:
-    surface "referral source not recorded — human to confirm"   # never guess a referrer
+    surface "referral source not recorded - human to confirm"   # never guess a referrer
 contact = get_contact(src.id)   # name + contact channel
 ```
 
@@ -26,16 +26,16 @@ else:                                           # DEFAULT
         - NO client name, NO matter type, NO matter detail
 ```
 
-Default is general acknowledgment. Detail is the exception, allowed only on an explicit firm-authored permission for that source — never inferred from "they probably know already" or "they're a close referral partner."
+Default is general acknowledgment. Detail is the exception, allowed only on an explicit firm-authored permission for that source - never inferred from "they probably know already" or "they're a close referral partner."
 
 ## Why general is the safe default
 
-Often the referrer _does_ know who they sent — but the firm confirming it in writing is still a disclosure the firm may not be authorized to make, and the value of the thank-you (promptness, warmth) does not require it. So the default costs nothing and risks nothing: "Thank you for thinking of us — we appreciate you sending business our way" carries the full relationship value without naming anyone.
+Often the referrer _does_ know who they sent - but the firm confirming it in writing is still a disclosure the firm may not be authorized to make, and the value of the thank-you (promptness, warmth) does not require it. So the default costs nothing and risks nothing: "Thank you for thinking of us - we appreciate you sending business our way" carries the full relationship value without naming anyone.
 
 ## Recipient check
 
-The drafted message is addressed to the resolved referral source's contact channel only. A guard confirms the recipient is the referrer, not the client and not another matter party — a misaddressed thank-you would itself disclose the referral relationship to the wrong person.
+The drafted message is addressed to the resolved referral source's contact channel only. A guard confirms the recipient is the referrer, not the client and not another matter party - a misaddressed thank-you would itself disclose the referral relationship to the wrong person.
 
-## External send — the firm's authored ceiling
+## External send - the firm's authored ceiling
 
-Whether the thank-you sends or drafts is the firm's authored `external_send` ceiling (ADR 0035; see `operator/references/send-posture.md`). `draft_for_review` — surfaced for a human to send under their identity — is the recommended starting posture, not a floor: the law-firm `external_send` floor was removed (ADR 0073).
+Whether the thank-you sends or drafts is the firm's authored `external_send` ceiling (ADR 0035; see `operator/references/send-posture.md`). `draft_for_review` - surfaced for a human to send under their identity - is the recommended starting posture, not a floor: the law-firm `external_send` floor was removed (ADR 0073).
