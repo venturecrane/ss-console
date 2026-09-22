@@ -74,11 +74,29 @@ def _compile(patterns: list[str]) -> list[re.Pattern[str]]:
 def selection(job: Job, cfg: FirmConfig, slug_dir: Path, *, dry_run: bool) -> Decision:
     """`include.json`: every top-level folder except the excluded classes.
 
-    Joint matters: each unit's folder_prefix plus the shared classes. The
-    sixteen delivered matters had sixteen folder vocabularies, so the rule is
-    subtraction with disclosure, not an allowlist of medical folder names. A
-    top-level folder that matches an exclude class is named in `excluded`
-    (the limitations section prints it); nothing is silently left out.
+    A unit that names a `folder_prefix` is scoped to it, plus the shared
+    classes. The sixteen delivered matters had sixteen folder vocabularies, so
+    the rule is subtraction with disclosure, not an allowlist of medical folder
+    names. A top-level folder that matches an exclude class is named in
+    `excluded` (the limitations section prints it); nothing is silently left
+    out.
+
+    The scoping branch keys on a folder_prefix being PRESENT, never on
+    ``job.joint`` (which is only ``len(units) > 1``). Found live 2026-09-22 on
+    a multi-client matter where the firm asked for a chronology on ONE of its
+    clients: a single unit made ``joint`` False, the submitted folder_prefix
+    was never consulted, and the run pulled every top-level folder -- roughly
+    a third of the documents it read belonged to the co-client, and were
+    already extracted into the chronology corpus before it was stopped by
+    hand. The number of units in a job says nothing about how many clients'
+    folders the matter holds.
+
+    Prefixes are normalised to a single leading slash because
+    ``download.wanted`` matches ``folder_path.startswith(p)`` against paths
+    like ``/<folder>/MEDICAL``. The submitting skill sends the bare folder
+    name; the test fixtures happened to send ``/Alpha_Example``. Without
+    normalisation this branch would match nothing and the run would look
+    correctly scoped while reading only shared classes and root PDFs.
     """
     folders = _read_json(slug_dir / "folders.json", [])
     tops = sorted({f["path"].split("/")[1] for f in folders if f.get("path", "").count("/") >= 1})
@@ -87,11 +105,11 @@ def selection(job: Job, cfg: FirmConfig, slug_dir: Path, *, dry_run: bool) -> De
     holds: list[str] = []
     notes: list[str] = []
     excluded = [t for t in tops if any(rx.search(t) for rx in exclude)]
-    if job.joint:
-        prefixes = [u.folder_prefix for u in job.units if u.folder_prefix]
+    prefixes = [f"/{u.folder_prefix.strip('/')}" for u in job.units if u.folder_prefix]
+    if prefixes:
         missing = [p for p in prefixes if p.lstrip("/") not in tops]
         if missing:
-            holds.append(f"joint matter: unit folder(s) not found at top level: {missing}")
+            holds.append(f"unit folder(s) not found at top level: {missing}")
         include = prefixes + [f"/{t}" for t in tops if any(rx.search(t) for rx in shared) and t not in excluded]
         others = [t for t in tops if f"/{t}" not in include and t not in excluded]
         if others:
