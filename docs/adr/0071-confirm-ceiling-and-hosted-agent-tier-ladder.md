@@ -2,6 +2,8 @@
 
 **Status:** Accepted 2026-07-07 (Captain decision)
 
+**Amended by [ADR 0089](./0089-staff-send-as-on-approval.md) (2026-09-21):** for sends AS a staff member, the emailed approval is bound to the verified intra-tenant sender, an exact match to the draft's approver, a digest over the stored message, and a forgery guard against the Operator's own Sent Items, rather than the signed single-use token sketched in section 6. The confirm ceiling's other semantics are unchanged.
+
 **Amends:** [ADR 0025](./0025-autonomy-ceilings-configurable-exposure-vs-initiation.md) (adds a fourth trust-ceiling value and extends `current_turn_approval` enforcement to `EXTERNAL_SEND` under it). **Amends:** [ADR 0067](./0067-hosted-agent-self-serve-sku.md) (replaces the launch draft-only external-send posture with a confirm-on-send default). **Leans on:** [ADR 0035](./0035-no-imposed-entitlement-defaults.md) (`confirm` is an authored value, never a fallback; unauthored entitled classes stay fail-closed), [ADR 0026](./0026-config-surface-is-a-security-boundary.md) (raising a ceiling is a control-plane act), [ADR 0012](./0012-customer-yaml-storage.md) (customer.yaml is the config source of truth).
 
 ## Context

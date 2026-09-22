@@ -496,6 +496,84 @@ class MsGraphOps:
             **self._locate_sent(audit_token),
         }
 
+    def send_as_staff(self, payload: dict[str, Any], from_address: str) -> dict[str, Any]:
+        """Transmit AS a staff member, for an approved ``send_as`` row ONLY (ADR 0089).
+
+        NOT A VERB AND NOT FENCED HERE, DELIBERATELY. The only caller is
+        ``send_as_acts.decide``, which has already bound this exact payload to
+        a row the named staff member approved by digest, consumed it once, and
+        checked ``from_address`` against both the row's approver and the seat's
+        authored ``scope.staff_send_as``. The recipients are authorized by that
+        approval, which is a stronger statement than roster membership: a
+        person looked at these addresses and said send. The generic ``send``
+        above still refuses any caller-supplied identity; this method is the
+        one place a ``from`` is set, and nothing the model sends reaches it.
+
+        Exchange enforces the other half: the send app's mailbox must hold Send
+        As on ``from_address`` or Graph refuses (proven on the test tenant,
+        ``vfy_01M33RQ2H17A43CQ7777GKDNZ0``).
+        """
+        recipients = collect_recipients(payload)
+        if not recipients:
+            raise MsGraphRefused("refusing a send with no recipient")
+        mailbox = self.mailbox()
+        audit_token = new_row_token()
+        message = self._message(payload, audit_token)
+        message["from"] = {"emailAddress": {"address": from_address}}
+        self._request(self._mail_path("sendMail"), "POST", {"message": message, "saveToSentItems": True})
+        located = self._locate_sent(audit_token)
+        return {
+            "message_id": "",
+            "recipients": recipients,
+            "mailbox": mailbox,
+            "audit_row_token": audit_token,
+            **located,
+        }
+
+    def sent_items_holds(self, internet_message_id: str) -> bool:
+        """Whether a message with this RFC 5322 id is in this seat's Sent Items.
+
+        The send_as forgery guard (ADR 0089): this mailbox holds Send As on
+        every staff member it may send for, so an "approval" that arrives from
+        a staff address could in principle have been sent by this mailbox
+        itself. A message this mailbox sent is in its Sent Items, whoever the
+        From says. RAISES on any failure to look, so the caller fails closed:
+        "could not tell" must never read as "not ours".
+        """
+        if self._read_credential_path is None:
+            raise MsGraphTransportError("no msgraph read credential; cannot check an approval's origin")
+        wanted = str(internet_message_id or "").strip()
+        if not wanted:
+            raise MsGraphTransportError("no internet message id on the approval; cannot check its origin")
+        escaped = wanted.replace("'", "''")
+        path = (
+            self._mail_path("mailFolders", SENT_ITEMS_FOLDER, "messages")
+            + "?$select=id,internetMessageId&$top=5&$filter="
+            + urllib.parse.quote(f"internetMessageId eq '{escaped}'", safe="")
+        )
+        page = self._request(path, "GET", None, credential_path=self._read_credential_path, role="read")
+        value = page.get("value")
+        return any(
+            isinstance(m, dict) and str(m.get("internetMessageId") or "").strip() == wanted
+            for m in (value if isinstance(value, list) else [])
+        )
+
+    def conversation_of(self, graph_message_id: str) -> str:
+        """The conversationId of a message in this mailbox, or ``""``. Never raises."""
+        if self._read_credential_path is None or not graph_message_id:
+            return ""
+        try:
+            found = self._request(
+                self._mail_path("messages", graph_message_id) + "?$select=conversationId",
+                "GET",
+                None,
+                credential_path=self._read_credential_path,
+                role="read",
+            )
+        except (MsGraphTransportError, MsGraphRefused):
+            return ""
+        return str(found.get("conversationId") or "")
+
     def _locate_sent(self, audit_token: str, *, conversation_id: str = "") -> dict[str, str]:
         """Find the message just sent in Sent Items, by the header stamped on it.
 

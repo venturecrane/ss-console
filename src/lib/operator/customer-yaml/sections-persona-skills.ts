@@ -169,6 +169,33 @@ function restrictiveness(c: ExposureCeiling): number {
   return CEILING_RESTRICTIVENESS[c]
 }
 
+/**
+ * ADR 0089: sending AS a staff member exists only behind that person's own
+ * emailed approval, so `confirm` on the authored exposure is the one accepted
+ * value. Any other value (autonomous above all) would let the Operator put a
+ * person's name on mail they never saw, and an exposure_ceiling entry would let
+ * the runtime dial raise it; both are refused here and at the overlay validator.
+ * `allowCommitmentConfirm` is what distinguishes the authored exposure map (true)
+ * from the ceiling map (unset).
+ */
+function checkSendAsStaffCeiling(
+  value: unknown,
+  path: string,
+  options: { allowCommitmentConfirm?: boolean },
+  errors: ValidationError[]
+): boolean {
+  if (value === 'confirm' && options.allowCommitmentConfirm === true) return true
+  errors.push({
+    code: 'InvalidActionCeiling',
+    path: `${path}.external_send_as_staff`,
+    message:
+      options.allowCommitmentConfirm === true
+        ? 'exposure.external_send_as_staff may only be confirm (ADR 0089)'
+        : 'external_send_as_staff has no exposure_ceiling entry; the dial may never raise it (ADR 0089)',
+  })
+  return false
+}
+
 function checkExposureMap(
   raw: unknown,
   path: string,
@@ -215,6 +242,10 @@ function checkExposureMap(
     // equals the authored map), and commitment has no send tier to derive from.
     // Leaving it out of the ceiling map means the dial can never raise
     // commitment at all, which is the fail-closed direction.
+    if (key === 'external_send_as_staff') {
+      if (checkSendAsStaffCeiling(value, path, options, errors)) out[key] = 'confirm'
+      continue
+    }
     const confirmAllowed =
       (SEND_ACTION_CLASSES as readonly string[]).includes(key) ||
       (key === 'commitment' && options.allowCommitmentConfirm === true)

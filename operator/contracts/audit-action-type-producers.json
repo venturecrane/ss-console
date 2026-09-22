@@ -446,6 +446,41 @@
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/establishment_constants.py",
       "reason": "ss#2546 (the operations half). Appended when the person who asked has been TOLD their request to SMD lapsed unanswered, not when the sweep marks it - the mark is bookkeeping, the row is the moment the firm learned something. Its own type rather than RULE_LAPSED because nobody at the firm failed to answer it: SMD did, and a ledger filing the two under one name would misattribute the silence. A resolved request writes nothing here; OPS_REQUEST_RESOLVED already recorded that answer."
+    },
+    "SEND_AS_PROPOSED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/send_as_acts.py",
+      "reason": "ADR 0089. One row when the Operator's draft to an outside party is stored for the named staff member's approval and the approval email is sent to them. Carries the draft id, approver, recipients, digest, and whether the draft was prepared after reading outside material; never the body."
+    },
+    "SEND_AS_REVISED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/send_as_acts.py",
+      "reason": "ADR 0089. One row when the staff member answers a draft with change: ...; the draft closes as revised and the Operator redrafts under a new id. Digest and id only."
+    },
+    "SEND_AS_CANCELLED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/send_as_acts.py",
+      "reason": "ADR 0089. One row when the staff member or an administrator cancels a draft; nothing was sent."
+    },
+    "SEND_AS_SENT": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/send_as_acts.py",
+      "reason": "ADR 0089. One row when an approved draft is sent AS the staff member, the only transmit that sets a From. Carries the approver, recipients, digest, and the audit-row token stamped on the message so reconcile-sends.py joins it by identity."
+    },
+    "SEND_AS_FAILED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/send_as_acts.py",
+      "reason": "ADR 0089. One row when the send of an approved draft fails in transport; no automatic retry, and the approver is emailed that it was not sent."
+    },
+    "SEND_AS_REFUSED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/send_as_acts.py",
+      "reason": "ADR 0089. One row per proposal or answer the seat's rules refuse (sender off the roster, wrong approver, failed gate pass, blocked domain, answer that came from the Operator's own mailbox, integrity mismatch), with the stage and reason."
+    },
+    "SEND_AS_REPLY_NOTICED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/send_as_acts.py",
+      "reason": "ADR 0089. One row when an outside party replies on the conversation of a draft sent as a staff member and that staff member is told."
     }
   }
 }

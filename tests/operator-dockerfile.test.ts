@@ -1384,7 +1384,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // morning pilot-smokeball hit HARD_STOP were routines reaching for them.
     // d8bd2d6a -> 06372981 (2026-09-21, overlay#371). A matter number beside
     // today's date is no longer refused as an unrecorded pair; the other ten.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="063729814dc0f95dd1f99cc9d85d51720774b719"')
+    // 06372981 -> 512d9ecc (2026-09-22, overlay#372). ADR 0089: a send with a
+    // `from` is proposed to that staff member for emailed approval.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="512d9ecc4630cfc02deaaec10a5af9abfcdaf83c"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

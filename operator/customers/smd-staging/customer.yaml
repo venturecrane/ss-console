@@ -16,18 +16,16 @@ schema_version: 1
 #     never used for a live Google call by boot-smoke or the voice gate.
 #     Staged at provision time, NEVER committed.
 #   - No managed_mailboxes  -> touches no real Google inbox.
-#   - No Telegram, no cron. The msgraph Email binding (ADR 0078 / ss#1978
-#     sandbox e2e) was the one inbound path, proven against the smdopslab
-#     tenant we own — operator@smdopslab.onmicrosoft.com, never a real client
-#     mailbox. PARKED 2026-08-21: the M365 licences are not being retained
-#     unless a future troubleshoot needs them, and the connector cannot work
-#     without a licensed mailbox. The seat currently has NO inbound path.
-#     See the parked block under connectors: for how to revive it.
+#   - No Telegram, no cron. The msgraph Email binding (ADR 0078 / ss#1978)
+#     is the one inbound path, on the smdopslab tenant we own:
+#     operator@smdopslab.onmicrosoft.com, never a real client mailbox.
+#     Parked 2026-08-21, unparked 2026-09-21 for the ADR 0089 staff send-as
+#     proof; see the connectors block.
 #   - Own R2 prefix (vaults/smd-staging/), own D1 namespace, own skill-bodies
 #     bucket. Shares no mutable state with smd.
 #
 # Provision with (overriding the real per-customer secrets in /ss so none leak):
-#   see operator/customers/smd-staging/PROVISION.md
+#   operator/bin/reprovision-staging.sh (the Captain's act)
 
 # ---- IDENTITY ----
 customer_id: smd-staging
@@ -123,16 +121,18 @@ personas:
       exposure:
         internal_write: draft_for_review
         external_send: draft_for_review
+        # ADR 0089: the Operator may send AS a person on scope.staff_send_as,
+        # only on that person's emailed approval of the exact draft. confirm is
+        # the one accepted value; there is deliberately no exposure_ceiling entry.
+        external_send_as_staff: confirm
     skills:
       - name: inbox-triage
         version: pending
         initiation:
           manual: true
           scheduled: false
-          # webhook: WAS woken by the msgraph message.received trigger — the
-          # ADR 0078 sandbox e2e inbound path, parked 2026-08-21 with the
-          # connector. Left true so reviving the connector needs no edit here;
-          # with no trigger authored, nothing wakes this skill by webhook.
+          # webhook: woken by the msgraph message.received trigger below (the
+          # ADR 0078 test-tenant inbound path, unparked 2026-09-21).
           webhook: true
         enabled: true
       - name: workspace
@@ -151,76 +151,56 @@ personas:
 # broker — NOT the connector mechanism. The broker holds the DWD service-account
 # credential (see google_auth:) and exposes the governed workspace_* tools; no CLI to
 # shell out to.
-# EXPLICIT EMPTY MAP, not an oversight: the seat's only connector is the msgraph
-# Email one parked below, and a bare `connectors:` with every child commented out
-# parses as null, which the validator rejects with "connectors is required".
-# Restore this to `connectors:` when the Email block below is uncommented.
-connectors: {}
-  # Client-custody email (ADR 0078 / email-channel-seam spec / ss#1978) — the
-  # sandbox END-TO-END proof binding. The mailbox is operator@smdopslab
-  # .onmicrosoft.com on the smdopslab SANDBOX tenant we own (app-only
-  # client-credentials, tenant-side ApplicationAccessPolicy pins the app to
-  # exactly this mailbox — proven 2026-07-24, vfy_01KYAP100X / vfy_01KYAQ7V6Q).
-  # Inbound rides the overlay delta poller (no public webhook); every polled
-  # message enters through the same fence/taint/roster spine as webhook mail.
-  # AgentMail is deliberately NOT bound on this seat — one mail path, one
-  # custody story (ADR 0078 §1).
+connectors:
+  # Client-custody email (ADR 0078 / email-channel-seam spec / ss#1978) on the
+  # smdopslab test tenant we own: operator@smdopslab.onmicrosoft.com, never a
+  # real client mailbox. App-only client-credentials; a tenant-side
+  # ApplicationAccessPolicy pins both apps to exactly this mailbox (proven
+  # 2026-07-24, vfy_01KYAP100X / vfy_01KYAQ7V6Q). Inbound rides the overlay
+  # delta poller (no public webhook); every polled message enters through the
+  # same fence/taint/roster spine as webhook mail. AgentMail is deliberately NOT
+  # bound on this seat: one mail path, one custody story (ADR 0078 section 1).
   #
-  # TWO app registrations, both pinned to this mailbox by ApplicationAccessPolicy
-  # (Captain decision 2026-08-13; provision-customer.sh refuses a seat without
-  # both). `client_id` below is the READ-ONLY one — Mail.ReadWrite, NO Mail.Send —
-  # and it is the ONLY Graph identity the agent process ever holds. The
-  # send-capable registration reaches the workspace broker alone, via
-  # MSGRAPH_SEND_CLIENT_ID__SMD_STAGING / MSGRAPH_SEND_CLIENT_SECRET__SMD_STAGING,
-  # and is stripped from the agent's env before the exec-drop.
+  # TWO app registrations (Captain decision 2026-08-13; provision-customer.sh
+  # refuses a seat without both). `client_id` below is the READ-ONLY one
+  # (Mail.ReadWrite, NO Mail.Send) and it is the ONLY Graph identity the agent
+  # process ever holds. The send-capable registration (83a044a4-...) reaches the
+  # workspace broker alone, via MSGRAPH_SEND_CLIENT_ID__SMD_STAGING /
+  # MSGRAPH_SEND_CLIENT_SECRET__SMD_STAGING, stripped from the agent's env before
+  # the exec-drop. Split proven live 2026-08-13 (vfy_01KZXX523V6JNWEETG4PSZDQY3).
   #
-  # The split is proven live on this seat, 2026-08-13
-  # (vfy_01KZXX523V6JNWEETG4PSZDQY3): the read app below is refused sendMail with
-  # 403 ErrorAccessDenied, the broker's send app returns 202, and the read app
-  # still reads this mailbox (200) while being refused a tenant user list (403).
+  # UNPARKED 2026-09-21 for the ADR 0089 staff send-as proof. Parked 2026-08-21
+  # on the belief the licences would lapse; they did not (mailbox live 2026-09-21:
+  # token 200, inbox 200). The send secret was re-minted and vaulted, and the
+  # per-seat read secret MSGRAPH_CLIENT_SECRET__SMD_STAGING was replaced with the
+  # good value (reprovision-staging.sh isolates the bare MSGRAPH_CLIENT_SECRET, so
+  # the per-seat name is what the provisioner stages).
   #
-  # CORRECTED 2026-08-13: this field previously carried 83a044a4-…, which is the
-  # SEND-capable registration. Authoring it here is what a reprovision would have
-  # staged as MSGRAPH_CLIENT_ID — handing the agent the app that can transmit and
-  # undoing the fence. The read-only app is 9301fd6f-… , which is what the live
-  # seat actually runs.
-  # ---- MSGRAPH PARKED 2026-08-21 ----
-  # The smdopslab M365 licences are not being retained unless a future
-  # troubleshoot needs them, and without a licensed mailbox this connector
-  # cannot work regardless of how fresh its credentials are. Parked rather
-  # than deleted: the provisioner derives its authored-channel facts with
-  # yaml.safe_load, so a commented block is invisible to the msgraph gate
-  # (the gate that refuses a seat carrying no SEND app credential) while
-  # every id below stays on hand. Commenting only became safe on
-  # 2026-08-18 -- before that the gates grepped the raw file and read
-  # comments as config.
-  #
-  # TO REVIVE: re-licence the mailbox, uncomment this block and the
-  # webhook_triggers block below (indentation is preserved -- strip the
-  # leading "# " and nothing else), mint a SEND secret on the EXISTING
-  # send registration, vault it as MSGRAPH_SEND_CLIENT_ID__SMD_STAGING /
-  # MSGRAPH_SEND_CLIENT_SECRET__SMD_STAGING, and replace the stale
-  # MSGRAPH_CLIENT_SECRET__SMD_STAGING in /ss prod -- it is invalid
-  # (AADSTS7000215); the bare MSGRAPH_CLIENT_SECRET is the good read value.
-  # Email:
-  # adapter: msgraph
-  # backend: mcp:msgraph-mail
-  # enabled: true
-  # msgraph_auth:
-  # tenant_id: 'f11d2887-b7f2-4464-a9c6-d4db2166b43c'
-  # client_id: '9301fd6f-1d97-4ed4-abc3-e99e3cf326f0'
-  # mailbox: operator@smdopslab.onmicrosoft.com
-  # secret_ref: 'fly-secret:MSGRAPH_CLIENT_SECRET'
-  # poll_seconds: 45
+  # Test tenant limits, stated so nobody mistakes them for a fault: the tenant
+  # cannot deliver to addresses outside itself (Microsoft 5.7.708 on a new
+  # tenant), so every staging send, including send-as, targets smdopslab
+  # addresses. operator@ holds Exchange Send As on ScottDurgan@smdopslab
+  # (vfy_01M33R6HNHC4FV0FYVBXJR279A), and a Graph send-as through the pinned send
+  # app is proven (vfy_01M33RQ2H17A43CQ7777GKDNZ0).
+  Email:
+    adapter: msgraph
+    backend: mcp:msgraph-mail
+    enabled: true
+    msgraph_auth:
+      tenant_id: 'f11d2887-b7f2-4464-a9c6-d4db2166b43c'
+      client_id: '9301fd6f-1d97-4ed4-abc3-e99e3cf326f0'
+      mailbox: operator@smdopslab.onmicrosoft.com
+      secret_ref: 'fly-secret:MSGRAPH_CLIENT_SECRET'
+    poll_seconds: 45
 
 # ---- WEBHOOK TRIGGERS ----
 # The e2e wake path: a new message in the operator's sandbox inbox (delivered
 # by the delta poller through the signed loopback) routes to inbox-triage.
-# webhook_triggers:
-# - source: msgraph
-# event_type: message.received
-# skill: inbox-triage
-# persona: crane
+webhook_triggers:
+  - source: msgraph
+    event_type: message.received
+    skill: inbox-triage
+    persona: crane
 
 # ---- SCOPE ----
 scope:
@@ -239,6 +219,18 @@ scope:
   inbound_allow_from:
     - scott@smd.services
     - smdurgan@smdurgan.com
+    # ADR 0089 proof: the lab staff stand-in, who approves drafts sent as them.
+    - ScottDurgan@smdopslab.onmicrosoft.com
+  # The Named Administrator on staging: may cancel a staff draft, never send one
+  # as somebody else (ADR 0089 verification step 9).
+  admins:
+    - scott@smd.services
+  # ADR 0089: whose name the Operator may put on outside mail, each only on that
+  # person's own emailed approval. test-adjuster@smdopslab is the stand-in
+  # outside party and is deliberately on no roster: the approval authorizes it.
+  staff_send_as:
+    - address: ScottDurgan@smdopslab.onmicrosoft.com
+      name: Scott Durgan (lab)
   # Exposure stays draft_for_review: the model drafts, the relay delivers the
   # recipient-locked reply to the rostered sender (ADR 0072/0055 posture).
 escalation:

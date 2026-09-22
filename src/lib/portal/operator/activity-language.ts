@@ -59,6 +59,13 @@ export const CLIENT_ACTIVITY_CATEGORIES: readonly ClientActivityCategory[] = [
       'REPLY_FAILED',
       'CONFIRM_SEND_DISPATCHED',
       'CONFIRM_SEND_FAILED',
+      'SEND_AS_PROPOSED',
+      'SEND_AS_REVISED',
+      'SEND_AS_CANCELLED',
+      'SEND_AS_SENT',
+      'SEND_AS_FAILED',
+      'SEND_AS_REFUSED',
+      'SEND_AS_REPLY_NOTICED',
     ],
   },
   {
@@ -276,6 +283,15 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   REPLY_FAILED: () => 'A reply could not be sent',
   CONFIRM_SEND_DISPATCHED: () => 'Sent a confirmed message',
   CONFIRM_SEND_FAILED: () => 'A confirmed message could not be sent',
+  // ADR 0089. Written from the firm's side: what happened to the draft, never
+  // which verb ran.
+  SEND_AS_PROPOSED: () => 'Drafted an email for a staff member to approve',
+  SEND_AS_REVISED: () => 'A staff member asked for changes to a draft email',
+  SEND_AS_CANCELLED: () => 'A draft email was cancelled; nothing was sent',
+  SEND_AS_SENT: () => 'Sent an email a staff member approved, from their address',
+  SEND_AS_FAILED: () => 'An approved email could not be sent',
+  SEND_AS_REFUSED: () => 'Declined to send a draft email',
+  SEND_AS_REPLY_NOTICED: () => 'Told a staff member their email got a reply',
   CORRECTION_PROPOSED: () => 'Captured your correction',
   // ADR 0085 / ss#2529. Three lines for three different things, because a
   // client reading their feed needs to tell them apart: a rule waiting on

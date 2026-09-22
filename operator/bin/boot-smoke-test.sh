@@ -534,6 +534,16 @@ ssh_exec "agentmail-webhook-secret-matches-vendor" \
 ssh_exec "msgraph-send-credential-stripped-from-agent" \
   "/opt/hermes/.venv/bin/python3 /app/r2-account-key-strip-probe.py hermes MSGRAPH_SEND_CLIENT_SECRET MSGRAPH_SEND_CLIENT_ID MSGRAPH_SEND_TENANT_ID"
 
+# ADR 0089: the half the check above says it does NOT cover, asked of Microsoft,
+# on the seats where it matters. A seat authoring scope.staff_send_as has had the
+# firm grant its mailbox Send As on real people, so the agent's own Graph app
+# (the read app) holding Mail.Send would let agent-run code send as a person with
+# no approval and no row. The probe mints that app's token and reads its roles
+# claim; Mail.Send present fails, no credential to ask with fails, and a seat
+# with no staff_send_as passes vacuously and says so. Role names only in output.
+ssh_exec "msgraph-read-app-cannot-send-on-send-as-seat" \
+  "/opt/hermes/.venv/bin/python3 /app/msgraph-read-app-cannot-send-probe.py /var/lib/smd-config/customer.yaml hermes"
+
 # ---------- Step 14: the chronology runner is present, idle, capped, and fenced (ss#2614) ----------
 # The runner daemon is a root process that spends the firm's model budget on
 # its own schedule, so the checks here are the ones that would otherwise be
