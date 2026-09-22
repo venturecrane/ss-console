@@ -19,15 +19,15 @@ metadata:
 
 ## When to Use
 
-Reads unread mail from Captain's Gmail, produces a structured triage document with categorization, priority, and (for replies) draft text. Writes output to a daily note file. **Never sends, never archives, never replies on the user's behalf.** Captain reads, ships, and grades.
+Reads unread mail from Captain's Gmail, produces a structured triage document with categorization, priority, and (for replies) draft text. Writes output to a daily note file. **Never sends, never archives, never replies on the user's behalf.** Captain reads, ships, and grades. The one exception is a staff member's own request to send correspondence as them, which goes to the send-as tool (see "Send as a staff member" below); that call proposes, it does not send.
 
 This is SMD's customer-zero capability. We are using ourselves to learn the delivery shape before we sell it to marketing agencies.
 
 ## Mode
 
-**Gmail triage (scheduled / on-demand)** - read Captain's unread Gmail, produce the triage note, draft replies for Captain to send. Never sends from Gmail.
+**Gmail triage (scheduled / on-demand)** - read Captain's unread Gmail, produce the triage note, draft replies for Captain to send. Never sends from Gmail. A request to send something as a staff member is not a Gmail draft; it follows "Send as a staff member" below.
 
-This mode can target **either** Crane's own mailbox (default) **or an authored managed mailbox** - the principal/team inbox Crane manages on Captain's behalf, the way an executive assistant works a principal's inbox alongside their own. Pass `--mailbox <address>` (the authored primary, e.g. `smdurgan@smdurgan.com`). When a managed mailbox is targeted, every `workspace_gmail_*` call carries that `mailbox`, and REPLY messages get a **real Gmail draft** written into that mailbox's Drafts (so Captain edits and sends from Gmail), with the `From` chosen by the send-as rule in `references/algorithm.md`. With no `--mailbox`, behavior is unchanged (Crane's own box; draft text goes in the note only - Crane has no principal identity to draft as in its own mailbox). The broker fail-closes any mailbox or `From` not authored in `google_auth.managed_mailboxes`; this skill never sends.
+This mode can target **either** Crane's own mailbox (default) **or an authored managed mailbox** - the principal/team inbox Crane manages on Captain's behalf, the way an executive assistant works a principal's inbox alongside their own. Pass `--mailbox <address>` (the authored primary, e.g. `smdurgan@smdurgan.com`). When a managed mailbox is targeted, every `workspace_gmail_*` call carries that `mailbox`, and REPLY messages get a **real Gmail draft** written into that mailbox's Drafts (so Captain edits and sends from Gmail), with the `From` chosen by the reply-identity rule in `references/algorithm.md`. With no `--mailbox`, behavior is unchanged (Crane's own box; draft text goes in the note only - Crane has no principal identity to draft as in its own mailbox). The broker fail-closes any mailbox or `From` not authored in `google_auth.managed_mailboxes`; this skill never sends.
 
 ## Prerequisites
 
@@ -67,7 +67,7 @@ The skill runs in two phases.
    requested maximum. In managed-mailbox mode, pass `mailbox: <address>`.
 2. Call `workspace_gmail_get` for each returned message ID (same `mailbox`).
    Request enough of the headers to read `Delivered-To`, `To`, and `Cc` - the
-   send-as rule depends on them.
+   reply-identity rule depends on them.
 3. Continue past an individual read failure and record the failed ID. Never
    replace source data with inferred fields.
 
@@ -76,12 +76,18 @@ The skill runs in two phases.
 The agent reads the broker tool results and, per the rules in `references/algorithm.md`:
 
 1. **Classify each message** along three axes - `action_class`, `priority`, `confidence`. See `references/categorization-rubric.md`.
-2. **Draft replies** for `REPLY`-classified messages, matching Captain's voice per `references/voice.md`. Drafts touching money / scope / commitment are forced `LOW` confidence regardless of prose quality. In **managed-mailbox mode**, write the reply as a real Gmail draft with `workspace_gmail_create_draft` (`mailbox`, `thread_id`, and `from` set per the send-as rule in `references/algorithm.md`); if that rule cannot pick a single authored `From`, **do not create the draft** - record the reply as text in the note and flag it for manual handling. In own-mailbox mode, the draft is text in the note only.
+2. **Draft replies** for `REPLY`-classified messages, matching Captain's voice per `references/voice.md`. Drafts touching money / scope / commitment are forced `LOW` confidence regardless of prose quality. In **managed-mailbox mode**, write the reply as a real Gmail draft with `workspace_gmail_create_draft` (`mailbox`, `thread_id`, and `from` set per the reply-identity rule in `references/algorithm.md`); if that rule cannot pick a single authored `From`, **do not create the draft** - record the reply as text in the note and flag it for manual handling. In own-mailbox mode, the draft is text in the note only.
 3. **Name the next action** for `ACT`-classified messages - the specific tool/surface and the concrete step.
 4. **Cross-message theme scan** - escalation patterns, gone-dark threads, repeated follow-ups, vendor/contract milestones.
 5. **Write the daily note** to `~/.hermes/customer_notes/smd/triage-YYYY-MM-DD.md` per `references/output-format.md`.
 
 Detailed per-axis rules and cross-message scan heuristics live in `references/algorithm.md`. The reference is the source of truth for what "good triage" looks like; this procedure is the dispatch shape.
+
+### Send as a staff member
+
+**Send as a staff member.** When a sender asks you to prepare correspondence to someone outside the firm and send it as them ("send it as me", "from me", "once I approve it"), call `smd_send_message` with `from` set to the sender's own address and `to`, `subject`, `text` set to the outside message. That call does not send: it emails the sender the full draft for approval. Read the result by its first words. "Held for approval, not sent." means it worked: tell the sender in one line it is waiting on their approval and create nothing else, no draft and no pasted copy. "Refused:" means it did not: do exactly what the refusal says, and if it names no alternative, tell the sender in one line that this seat cannot send it as them and give them the text in your reply to them, never in a draft addressed to the outside party. Never write your own approval request and never tell anyone to reply with a word such as "approved": the approval email carries its own instructions.
+
+Only the sender's own address goes in `from`. This is not the Gmail managed-mailbox reply draft (that one picks a `From` for a reply Captain sends himself); a request to have something go out as the sender always comes here.
 
 ### Trust Ceiling
 
@@ -94,11 +100,11 @@ The agent MAY:
 - Use `workspace_calendar_list` to check Captain's availability.
 - In managed-mailbox mode, create a **reply draft** with
   `workspace_gmail_create_draft` (the review artifact - a draft is not a send).
-  The `From` must be an authored send-as; the broker refuses anything else.
+  The `From` must be one of the mailbox's authored reply identities; the broker refuses anything else.
 
 The agent MUST NOT, without explicit Captain instruction in the current invocation:
 
-- Send mail (`gmail.send`) - there is no send tool in this skill's surface.
+- Send mail (`gmail.send`) - there is no send tool in this skill's surface. The send-as call in "Send as a staff member" is the one exception, and it is a proposal: nothing leaves until the staff member approves the exact text.
 - Reply-and-send, or send a draft.
 - Modify labels, archive, or delete (`gmail.modify`).
 - Create calendar events.
@@ -113,7 +119,7 @@ If the agent infers it would help to do one of these, it MUST instead include a 
 
 **Two distinct identities - never conflate them:**
 
-**1. Draft replies** (replies the agent prepares for Captain to send to third parties). These go out AS Captain, in Captain's voice. See `references/voice.md` for the long form. Hard rules:
+**1. Draft replies** (Gmail managed-mailbox replies the agent prepares for Captain to send to third parties himself). These go out AS Captain, in Captain's voice. See `references/voice.md` for the long form. Hard rules:
 
 - No em dashes. Period.
 - No "I hope this email finds you well." No "Just wanted to follow up." No "Touching base."
