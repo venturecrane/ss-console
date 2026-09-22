@@ -186,7 +186,11 @@ _FACTS_MATTER_CAP = 40
 #: Facts per matter. A capture list this long is already a review question.
 _FACTS_PER_MATTER_CAP = 12
 
-_MEMO_PAGE_LIMIT = 200
+#: Memos per matter in one page, matching the connector's own default. A page
+#: that comes back FULL is a partial view of the matter, and the row says so:
+#: an absent capture in a truncated view is unknown, not absent (the rule the
+#: medical-records-chaser pull already applies to a full task page, ss #2404).
+_MEMO_PAGE_LIMIT = 500
 
 #: Which skill gets which fact. A skill absent here emits a bare wake, which is
 #: the whole of its behaviour before this section existed.
@@ -394,20 +398,28 @@ def derive_matter_facts(skill: str, payload: object) -> dict:
     A skill with no entry in :data:`_FACT_SKILLS` gets ``{}`` and therefore a
     bare wake. An envelope this code does not recognise is reported as
     ``unreadable`` rather than as an empty result, because "no prior capture"
-    and "could not read the memos" are opposite instructions to the model.
+    and "could not read the memos" are opposite instructions to the model. A
+    FULL memo page says ``truncated`` for the same reason: the rest of this
+    matter's memos were never read, so nothing found here is unknown rather
+    than absent, and a silent partial view is how a scan re-captures something
+    it already has.
     """
     fact = _FACT_SKILLS.get(skill)
     if fact is None:
         return {}
-    memos = _listed(payload, _MEMO_ENVELOPE_KEYS)
-    if memos is None:
+    listed = _listed(payload, _MEMO_ENVELOPE_KEYS)
+    if listed is None:
         return {"unreadable": True}
-    memos = [memo for memo in memos if isinstance(memo, dict)]
+    memos = [memo for memo in listed if isinstance(memo, dict)]
     if fact == "captured_file_ids":
-        return _capped(fact, _captured_file_ids(memos))
-    if fact == "extension_candidates":
-        return _capped(fact, _extension_candidates(memos))
-    return {"last_surface": _latest_surface_day(memos)}
+        row = _capped(fact, _captured_file_ids(memos))
+    elif fact == "extension_candidates":
+        row = _capped(fact, _extension_candidates(memos))
+    else:
+        row = {"last_surface": _latest_surface_day(memos)}
+    if len(listed) >= _MEMO_PAGE_LIMIT:
+        row["truncated"] = True
+    return row
 
 
 def _matter_row(client, matter: object, skill: str) -> dict | None:

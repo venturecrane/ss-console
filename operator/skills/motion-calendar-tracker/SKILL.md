@@ -157,8 +157,9 @@ no invented tool, no assumed status API.
    thing you may say about the prior surface: "last surfaced `<date>`" or, when it is
    `null`, "not previously surfaced." Never describe what the previous surface SAID,
    and never present the current picture as a change: on a scan you did not read the
-   old one. A matter whose row carries `"unreadable": true`, or that has no row at all,
-   is "prior surface unknown."
+   old one. A matter whose row carries `"unreadable": true` or `"truncated": true`, or
+   that has no row at all, is **"prior surface unknown"** - never "not previously
+   surfaced", which is a claim about the record you did not read.
 
 5. **Assemble the surface** - bucket the record items into **Filed**, **Due**, and
    **Hearings** per `references/output-format.md`; attach each item's source id;

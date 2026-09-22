@@ -176,6 +176,20 @@ def test_an_unrecognised_memo_envelope_is_unreadable_not_empty() -> None:
     assert gate.derive_matter_facts("service-confirmation-watcher", {"value": []}) == {"captured_file_ids": []}
 
 
+def test_a_full_memo_page_marks_the_row_truncated() -> None:
+    """A full page is a PARTIAL view of the matter. An absent capture in it is
+    unknown, not absent, and the skills read `truncated` as exactly that."""
+    gate = _load_gate()
+    memos = [memo(id=f"m{i}", plainText="a paralegal's note") for i in range(gate._MEMO_PAGE_LIMIT)]
+    assert gate.derive_matter_facts("motion-calendar-tracker", {"value": memos}) == {
+        "last_surface": None,
+        "truncated": True,
+    }
+    # The falsifier: one memo short of a full page is NOT truncated, so the
+    # flag tracks the page boundary rather than being always on.
+    assert gate.derive_matter_facts("motion-calendar-tracker", {"value": memos[:-1]}) == {"last_surface": None}
+
+
 def test_facts_per_matter_are_capped_and_the_cap_is_announced() -> None:
     gate = _load_gate()
     memos = [memo(id=f"m{i}", plainText=f"[Operator] fileId FILE-{i:03d} recorded.") for i in range(40)]
