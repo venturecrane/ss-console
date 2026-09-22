@@ -1390,7 +1390,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // pointer block stops carrying em dashes into every SKILL.md.
     // 9d34de80 -> b06d8b29 (2026-09-22, overlay#374). The delta poller re-syncs
     // a cursor begun under an older $select, so approvals carry their id.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="b06d8b29aa9a2d35fce78daaa674eadff1b0bd0c"')
+    // b06d8b29 -> 93ad0c82 (2026-09-22, overlay#375 + #376). A send-as revision
+    // carries its provenance; the mail attachment tools load on a Graph seat.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="93ad0c82afe2ba09420affc9e59ad936d3ed421d"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
