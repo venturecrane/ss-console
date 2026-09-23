@@ -120,7 +120,11 @@ retry_if_machine_cycling() {
     return 1  # the Machine was fine; the check's failure is the check's own
   fi
   log "  (Machine state=${state}, not started — waiting for it to settle, then retrying once)"
-  await_started || {
+  # The budget is passed explicitly rather than left to the default: with no
+  # caller supplying an argument, CI's shellcheck reads the optional ${1} as an
+  # unused parameter (SC2120) and fails the substrate job. Local shellcheck
+  # 0.11.0 does not flag it, which is how this reached a PR.
+  await_started "${BOOT_SMOKE_SETTLE_S}" || {
     log "  (Machine did not return to started; recording the failure as-is)"
     return 1
   }
