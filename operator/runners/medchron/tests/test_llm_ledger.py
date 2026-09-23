@@ -147,7 +147,7 @@ def test_batch_split_by_bytes_and_count() -> None:
 
 def test_model_for_reads_the_authored_tiers(firm_config_path: Path) -> None:
     cfg = config_mod.load(str(firm_config_path))
-    assert llm.model_for(cfg, "composition") == "claude-opus-5"
+    assert llm.model_for(cfg, "composition") == "claude-opus-5-5"
     with pytest.raises(llm.DoorwayError):
         llm.model_for(cfg, "oracle")
 
