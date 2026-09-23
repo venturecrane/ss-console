@@ -1214,13 +1214,14 @@ memory:
 
 # ---- STAFF MAILBOX READS (msgraph-mail list_staff_messages / read_staff_message) ----
 # Christa asked (2026-09-23) for the Operator to read a staff member's mail so
-# extensions and corrected deadlines can be found and entered in Smokeball. We
-# have asked her whose mailbox; until she names it this list is EMPTY, which
-# refuses every staff read. READ-ONLY either way: no send, draft, move or delete
+# extensions and corrected deadlines can be found and entered in Smokeball. She
+# named the mailbox and, as the firm's admin, completed the scope-group step the
+# same day; the Captain approved the grant the same day. READ-ONLY either way: no send, draft, move or delete
 # reaches a staff mailbox; sends stay pinned to operator@. Adding the address
 # here is our half. It does nothing until the firm's admin ALSO adds that
 # mailbox to the "SMD Operator Mailbox Scope" group the READ app's
 # ApplicationAccessPolicy is scoped to; until then Graph returns 403 and every
 # read fails closed. Removing the address revokes the Operator's side at once.
 staff_mailbox_reads:
-  mailboxes: []
+  mailboxes:
+    - daniela@ashtonandprice.com
