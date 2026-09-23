@@ -32,6 +32,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Drafts a per-matter status update for a client, in your voice. Reports status, never advises.',
   'client-verification-tracker':
     'Tracks discovery-response verifications and chases the signer until signed. Never signs or sends without attorney approval.',
+  'combined-post-intake':
+    'Takes the scanned daily post as one PDF, separates the letters in it, and files each on its matter. Files nothing it cannot place; names those back to you with a candidate matter.',
   'conflict-intake-router':
     'Captures conflict checks and routes them to the person who must clear them. Surfaces conflicts, never clears them.',
   'connector-auth-check':

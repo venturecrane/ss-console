@@ -59,6 +59,8 @@ EXPECTED_TOOLS = {
     "read_attachment_text",
     "resolve_invoice_matter",
     "stage_vendor_invoice",
+    "read_attachment_pages",
+    "file_attachment_pages_to_matter",
     "get_webhook_subscriptions",
     "get_event_types",
     "create_webhook_subscription",
@@ -155,6 +157,12 @@ def test_write_surface_is_memo_document_and_deadline_engine() -> None:
         # bills nobody: finalized is always false and no argument can change it
         # (tests/test_vendor_invoice.py pins the signature).
         "stage_vendor_invoice": "internal_write",
+        # Combined-post intake: ONE letter, cut out of an emailed bundle as a
+        # page range and filed onto the matter a resolution token opened.
+        # internal_write for the same reason add_file is — the firm's own
+        # record, nothing sent outside — and the page range is what keeps it
+        # from being a filing of the whole bundle onto one client's matter.
+        "file_attachment_pages_to_matter": "internal_write",
     }
 
 
