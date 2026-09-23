@@ -441,12 +441,30 @@ def test_merge_routes_a_disagreement_to_the_model_and_falsifies_its_answer(
     assert merge_stage.run(sr) == 0
     assert len(client.calls) == 1 and any("near-duplicate" in line for line in log)
     assert "The records differ on this point." in (d / "merged.md").read_text()
-    # a model answer that drops a citation is falsified and split until it cannot be: exit 1
+    # A model answer that drops a citation is falsified and split until it
+    # cannot be -- and THEN the cluster passes through UNMERGED. The bad answer
+    # is still refused; what changed (2026-09-23) is that refusing it no longer
+    # throws away the run. Merging is deduplication, so an un-merged cluster is
+    # the same content with a near-duplicate left standing, and that is
+    # strictly better than no chronology at all.
+    #
+    # Before this, one cluster that could not be split below itself returned
+    # None and discarded every batch that had already merged: on a real matter
+    # (191 clusters, 129 merged in code) two separate runs produced no document
+    # at all, losing different clusters each time.
     bad = good.replace(" (Exhibit 1 - p. 3)", "")
     client2 = Scripted(lambda p, n: _msg(bad))
-    sr2 = _sr(job_dir, firm_headings, data_root, client2)
+    log2: list[str] = []
+    sr2 = _sr(job_dir, firm_headings, data_root, client2, log=log2)
     (d / "clusters.md").write_text(disagree)
-    assert merge_stage.run(sr2) == 1
+    assert merge_stage.run(sr2) == 0
+    out = (d / "merged.md").read_text()
+    # the citation the model dropped SURVIVES, because the cluster was
+    # salvaged in code rather than the stage being abandoned
+    assert "(Exhibit 1 - p. 3)" in out
+    assert "salvaging" in "\n".join(log2)
+    # both near-duplicate readings are kept, unadjudicated: nothing is lost
+    assert "rated 6 of 10" in out and "rated 8 of 10" in out
 
 
 REWORDED = """##### CLUSTER 2023-05-10 | examplechiropractic (2 fragments)
@@ -645,11 +663,17 @@ def test_a_model_that_fuses_two_paragraphs_is_refused(job_dir: Path, firm_headin
     """The prompt now forbids fusion as well as collapse, because joining two
     cited sentences into one paragraph drops the distinct count exactly as a
     deletion does. A cluster routed for a PARSE reason (an unknown heading)
-    still reaches the model; a model that fuses is refused, bisected to one
-    cluster, cannot split, and the stage exits 1 rather than ship it.
+    still reaches the model; a model that fuses is refused and bisected to one
+    cluster, and then (2026-09-23) the cluster is SALVAGED in code rather than
+    the stage exiting 1.
+
+    What is being pinned is that the fused answer never reaches the document.
+    Refusing it is the point; throwing the matter away was never the point, and
+    an unknown heading is a structural reason so the salvage is the plain
+    fragment concatenation rather than the forced code union.
 
     Falsifier: removing the paragraph-count check from `mf.check` lets the
-    fused answer through and the run returns 0.
+    fused answer through, and the fused single paragraph appears in merged.md.
     """
     routed = CLUSTER.replace("Treatment Recommendations", "Discontinuation in Care")
     assert routed != CLUSTER
@@ -664,10 +688,15 @@ def test_a_model_that_fuses_two_paragraphs_is_refused(job_dir: Path, firm_headin
     d = sr.slug_dir / "runs" / "alpha"
     d.mkdir(parents=True)
     (d / "clusters.md").write_text(routed)
-    assert merge_stage.run(sr) == 1
+    assert merge_stage.run(sr) == 0
     assert any("unknown heading" in line for line in log), "it was routed for the parse reason, not a rewording"
     assert any("LOST 1 paragraph" in line for line in log), log
-    assert not (d / "merged.md").exists()
+    assert any("salvaging" in line for line in log), log
+    out = (d / "merged.md").read_text()
+    # the model's fused paragraph is NOT what shipped: both sentences survive
+    # as their own paragraphs, exactly as the records had them
+    assert "Cervical strain. Physical therapy twice weekly." not in out
+    assert "Cervical strain." in out and "Physical therapy twice weekly." in out
 
 
 def test_the_prompt_forbids_rewording_collapse_and_fusion(firm_headings: Path) -> None:

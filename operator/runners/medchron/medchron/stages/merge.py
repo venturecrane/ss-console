@@ -104,8 +104,17 @@ def parse_fragment(text: str, cluster: dict[str, Any], hd: mf.Headings) -> dict[
     return {"label": label, "provider": provider, "first_heading": first_h, "paras": paras}
 
 
-def merge_cluster(cluster: dict[str, Any], hd: mf.Headings) -> tuple[str | None, list[str]]:
-    """(entry_text, reasons); entry_text is None when routed to the model."""
+def merge_cluster(cluster: dict[str, Any], hd: mf.Headings, *, force: bool = False) -> tuple[str | None, list[str]]:
+    """(entry_text, reasons); entry_text is None when routed to the model.
+
+    `force` keeps the entry instead of routing when the ONLY thing stopping the
+    code is a near-duplicate it will not adjudicate. Both paragraphs are kept,
+    unmarked, exactly as the same-citation case below already does: the code
+    declines to decide which of two readings is right, and leaving both is
+    lossless. It never forces past a STRUCTURAL problem (an unparsed header, a
+    fragment count that disagrees, a fragment that will not parse, or differing
+    date labels) - those would produce a wrong entry, not a verbose one.
+    """
     reasons: list[str] = []
     if cluster["date"] is None:
         return None, ["cluster header did not parse"]
@@ -157,7 +166,7 @@ def merge_cluster(cluster: dict[str, Any], hd: mf.Headings) -> tuple[str | None,
                 # pair -- a content word differs, or one carries a number the
                 # other lacks with no two-sided conflict -- is kept as two
                 # paragraphs, unmarked. Nothing is lost; nothing is adjudicated.
-    if reasons:
+    if reasons and not force:
         return None, reasons
     provider = max((f["provider"] for f in frags), key=len)
     headings = sorted(by_heading, key=hd.index)
@@ -173,6 +182,39 @@ def merge_cluster(cluster: dict[str, Any], hd: mf.Headings) -> tuple[str | None,
         for prose, cite, _ in by_heading[h]:
             out += [f"{prose} {cite}", ""]
     return "\n".join(out).rstrip() + "\n", []
+
+
+def salvage_entry(cluster: dict[str, Any], hd: mf.Headings) -> str:
+    """One entry for a cluster the model could not merge. Never None.
+
+    Order of preference: the in-code union with near-duplicates kept (`force`),
+    then a plain concatenation of the cluster's fragments under a single date
+    line. Both keep every paragraph and every citation, which is what the
+    falsifier measures; what they give up is the DEDUPLICATION, so the entry
+    may carry a near-duplicate twice. That is a verbose chronology, and a
+    verbose chronology beats no chronology - the alternative this replaces was
+    returning nothing for the whole matter.
+    """
+    entry, _ = merge_cluster(cluster, hd, force=True)
+    if entry:
+        return entry
+    frags = [f for f in cluster["fragments"] if f.strip()]
+    if not frags:
+        return ""
+    lines = frags[0].strip().splitlines()
+    out = [lines[0].strip()]  # the date line, from the first fragment
+    provider = lines[1].split("|")[0].strip() if len(lines) > 1 and "|" in lines[1] else ""
+    for i, f in enumerate(frags):
+        fl = f.strip().splitlines()
+        if len(fl) < 2:
+            continue
+        body = fl[1:]
+        if i and provider and body[0].startswith(provider + " |"):
+            # the provider is already named on line 2; later fragments carry
+            # their heading alone so the entry reads as one block
+            body[0] = body[0].split("|", 1)[1].strip()
+        out += body
+    return "\n".join(out).rstrip() + "\n"
 
 
 def merge_all(clusters_text: str, hd: mf.Headings) -> tuple[list[dict], dict[int, str], list[dict]]:
@@ -241,14 +283,27 @@ def run(sr: StageRun) -> int:
         picked = [blocks[r["id"] - 1] for r in route]
         merged_model = merge_model.merge_blocks(sr, d, picked, hd)
         if merged_model is None:
-            sr.log("model merge failed; merged.md NOT written")
-            return 1
-        (d / "merged_model.md").write_text(merged_model, encoding="utf-8")
-        # the model wrote the routed clusters in their cluster order, and its
-        # own falsifier proved one entry per cluster, so the k-th entry is the
-        # k-th routed id.
-        for r, e in zip(route, mf.parse_entries(merged_model)):
-            model[r["id"]] = e["body"].rstrip() + "\n"
+            # The model could not merge one of the routed clusters and its
+            # falsifier refused the lossy answer - correctly. Salvage every
+            # routed cluster in code instead of discarding the matter.
+            #
+            # 2026-09-23: this used to `return 1`, so ONE unmergeable cluster
+            # threw away the whole stage. On a real matter that meant 191
+            # clusters, 129 of them already merged in code, producing no
+            # document at all - twice, losing a different cluster each time,
+            # which is what shows it is a per-cluster failure rate on dense
+            # material rather than one bad section. The deduplication is worth
+            # having; it is not worth the chronology.
+            sr.log(f"model merge failed; salvaging {len(route)} routed cluster(s) in code")
+            for r in route:
+                model[r["id"]] = salvage_entry(clusters[r["id"] - 1], hd)
+        else:
+            (d / "merged_model.md").write_text(merged_model, encoding="utf-8")
+            # the model wrote the routed clusters in their cluster order, and its
+            # own falsifier proved one entry per cluster, so the k-th entry is the
+            # k-th routed id.
+            for r, e in zip(route, mf.parse_entries(merged_model)):
+                model[r["id"]] = e["body"].rstrip() + "\n"
     parts = [code.get(i) or model.get(i) or "" for i in range(1, n + 1)]
     (d / "merged.md").write_text("\n\n".join(p.rstrip() for p in parts), encoding="utf-8")
     rc, rep = mf.check(src, (d / "merged.md").read_text(encoding="utf-8"), hd)
