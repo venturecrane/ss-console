@@ -60,7 +60,7 @@ fly_region: '[FLY REGION SLUG, e.g., iad / lax / ord]'
 # high-frequency volume cheaply; heavy work (pre-weighted skills) escalates to
 # Opus via the SOUL instruction translate.py renders when escalation_model is set.
 model: claude-sonnet-4-6
-escalation_model: claude-opus-4-8
+escalation_model: claude-opus-5-5
 hermes_ref: '[HERMES UPSTREAM PIN, e.g., v2026.5.7@<40-hex-sha>]'
 
 machine:
