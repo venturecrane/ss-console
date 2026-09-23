@@ -1394,7 +1394,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // carries its provenance; the mail attachment tools load on a Graph seat.
     // 93ad0c82 -> c9c9d632 (2026-09-22, overlay#377 + #378). Plain-word answers,
     // and the approve page the email's buttons open.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="c9c9d6323ba1b940a69bd8da5b6c508ac9ceec8d"')
+    // c9c9d632 -> eb23bff7 (2026-09-22, overlay#379). Classifies the
+    // combined-post pair ss#2882 added; without it both tools are refused.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="eb23bff7ebd046a8565f31f626b7da9e7f93016f"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
