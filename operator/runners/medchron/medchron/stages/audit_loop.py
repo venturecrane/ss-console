@@ -24,7 +24,16 @@ from ..audit.page_text import exhibit_paths
 from ..audit.run import AuditPaths, Round
 from .base import StageRun
 
-ROUNDS = 3
+# Rounds converge steeply and each one is cheap: later rounds re-audit only the
+# claims whose text changed, because a repaired claim gets a new key. Live
+# 2026-09-23 on a 1,061-claim matter the loop ran 276 flags -> 1, fixing 73
+# citations and 167 claims, and then hit the cap with a SINGLE claim still
+# carrying a widened citation - which fails the gate, because a live
+# SUPPORTED_WIDENED means the citation rewrite was skipped. Three rounds was
+# one short of a finished document; the residual after round 3 was 10 claims,
+# after round 4 it would have been ~1, so the cap was set just inside the knee
+# of the curve rather than past it.
+ROUNDS = 5
 
 
 def _rekey(sr: StageRun, paths: AuditPaths) -> None:
