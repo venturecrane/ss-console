@@ -158,14 +158,64 @@ def _matters_by_number(client: Any, number: str, records: dict[str, dict[str, An
     return found
 
 
+def _contact_tokens(contact: dict[str, Any]) -> set[str]:
+    """The lowercased name tokens a contact record carries, from either shape."""
+    person = contact.get("person") if isinstance(contact.get("person"), dict) else {}
+    company = contact.get("company") if isinstance(contact.get("company"), dict) else {}
+    parts = [
+        person.get("firstName"),
+        person.get("middleName"),
+        person.get("lastName"),
+        company.get("name"),
+        contact.get("name"),
+    ]
+    tokens: set[str] = set()
+    for part in parts:
+        if isinstance(part, str):
+            tokens.update(_SEARCH_META.sub(" ", part).lower().split())
+    return tokens
+
+
 def _contacts_by_name(client: Any, name: str) -> list[dict[str, Any]]:
     """Contacts whose name contains this one, capped. The search term is built
-    here, not taken from the invoice: see the module docstring on untrusted text."""
+    here, not taken from the invoice: see the module docstring on untrusted text.
+
+    THE SEARCH IS ON ONE TOKEN, AND THE FULL NAME IS MATCHED HERE. The vendor's
+    ``name:`` index under-reports a MULTI-token term against duplicate records,
+    which is precisely the case the ambiguous verdict exists to catch. Measured
+    on the pilot tenant 2026-09-23, with two distinct contacts both recorded as
+    firstName "Maria" / lastName "Alvarez", one on each of two open matters:
+
+        name:*Maria Alvarez*  -> 1 row    (one of the two, silently)
+        name:*Alvarez*        -> 2 rows   (both)
+
+    The shipped one-call form returned a single contact, so the resolver saw one
+    survivor and answered "one matter matched, on client_name alone" — a `none`
+    verdict naming ONE matter number, when the truth was two matters and an
+    `ambiguous` verdict. A reply built on that asks a person to confirm a
+    specific matter that is not the letter's, and a one-word yes files a
+    client's correspondence onto their own other file.
+
+    So: search the LONGEST token (the most selective single term, a surname in
+    western order and the company word otherwise), then require every token of
+    the caller's name to appear on the record. That is never looser than the
+    old behaviour — a record the full-name search matched carries all the
+    tokens — and it recovers the duplicates the vendor drops.
+    """
     safe = _SEARCH_META.sub(" ", name).strip()[:_MAX_NAME_CHARS].strip()
     if not safe:
         return []
-    rows = _get(client, "/contacts", Search=[f"name:*{safe}*"], Limit=_SEARCH_LIMIT)
-    return [c for c in rows if isinstance(c.get("id"), str) and c["id"]][:MAX_NAME_CONTACTS]
+    tokens = [t for t in safe.split() if t]
+    if not tokens:
+        return []
+    # The probe keeps the caller's CASING: the vendor's search is case
+    # insensitive either way, and a query that changes shape for no behavioural
+    # reason is a change nobody asked for.
+    probe = max(tokens, key=len)
+    wanted = {t.lower() for t in tokens}
+    rows = _get(client, "/contacts", Search=[f"name:*{probe}*"], Limit=_SEARCH_LIMIT)
+    matched = [c for c in rows if isinstance(c.get("id"), str) and c["id"] and wanted.issubset(_contact_tokens(c))]
+    return matched[:MAX_NAME_CONTACTS]
 
 
 def _matters_by_name(
