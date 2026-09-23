@@ -228,19 +228,8 @@ def validate(data: Any, *, path: str = "<memory>") -> list[str]:
     return problems
 
 
-def _semantic_checks(data: dict[str, Any]) -> list[str]:
+def _model_tier_checks(data: dict[str, Any]) -> list[str]:
     out: list[str] = []
-    levers = data.get("levers") or {}
-    for stage in levers.get("batch_stages") or []:
-        if stage == "audit":
-            out.append("levers.batch_stages: `audit` is never batchable (its cache design needs live calls)")
-        elif stage not in BATCHABLE_STAGES:
-            out.append(f"levers.batch_stages: `{stage}` is not a batchable stage {sorted(BATCHABLE_STAGES)}")
-    if levers.get("audit_mode") not in (None, *AUDIT_MODES):
-        out.append(f"levers.audit_mode: expected one of {sorted(AUDIT_MODES)}")
-    chron = data.get("chronology") or {}
-    if chron.get("pre_incident_history") not in (None, *PRE_INCIDENT_POLICIES):
-        out.append(f"chronology.pre_incident_history: expected one of {sorted(PRE_INCIDENT_POLICIES)}")
     tiers = (data.get("models") or {}).get("tiers") or {}
     for tier in ("transcription", "mechanical", "composition", "audit", "judgment"):
         if tiers and tier not in tiers:
@@ -254,6 +243,23 @@ def _semantic_checks(data: dict[str, Any]) -> list[str]:
             f"models.tiers.audit: {audit_model} rejects a forced tool_choice, which the audit's "
             "verdict call requires; keep the audit tier on a model that accepts it"
         )
+    return out
+
+
+def _semantic_checks(data: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    levers = data.get("levers") or {}
+    for stage in levers.get("batch_stages") or []:
+        if stage == "audit":
+            out.append("levers.batch_stages: `audit` is never batchable (its cache design needs live calls)")
+        elif stage not in BATCHABLE_STAGES:
+            out.append(f"levers.batch_stages: `{stage}` is not a batchable stage {sorted(BATCHABLE_STAGES)}")
+    if levers.get("audit_mode") not in (None, *AUDIT_MODES):
+        out.append(f"levers.audit_mode: expected one of {sorted(AUDIT_MODES)}")
+    chron = data.get("chronology") or {}
+    if chron.get("pre_incident_history") not in (None, *PRE_INCIDENT_POLICIES):
+        out.append(f"chronology.pre_incident_history: expected one of {sorted(PRE_INCIDENT_POLICIES)}")
+    out.extend(_model_tier_checks(data))
     for section, key in (("providers", "aliases"), ("coverage", "exclusions")):
         for i, entry in enumerate((data.get(section) or {}).get(key) or []):
             if "match" not in entry:
