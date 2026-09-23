@@ -252,11 +252,16 @@ def test_a_name_carrying_search_syntax_cannot_reach_the_query_as_syntax() -> Non
     make it a structured term is stripped before it goes near the endpoint."""
     tenant = Tenant()
     _resolve(tenant, client_name='number:*2026-PI-107* OR name:"x"')
-    (query,) = tenant.queries("/contacts")
-    term = query["Search"]
-    assert term.startswith("name:*") and term.endswith("*")
-    inside = term[len("name:*") : -1]
-    assert not set(inside) & set(':"*')
+    # EVERY query, not the first: a name that matches nothing now sends its other
+    # tokens as well (the full-or-empty fallback), and each of them is built from
+    # the same untrusted text, so each must be as clean as the first.
+    queries = tenant.queries("/contacts")
+    assert queries, "the search must have been attempted"
+    for query in queries:
+        term = query["Search"]
+        assert term.startswith("name:*") and term.endswith("*")
+        inside = term[len("name:*") : -1]
+        assert not set(inside) & set(':"*'), f"search syntax reached the query: {term!r}"
 
 
 def test_the_number_equality_is_rechecked_on_what_came_back() -> None:
@@ -377,3 +382,90 @@ def test_a_single_token_name_sends_the_same_query_it_always_did() -> None:
     _resolve(tenant, client_name="Acme")
     (query,) = tenant.queries("/contacts")
     assert query["Search"] == "name:*Acme*"
+
+
+# ---- A common first name fills the page (2026-09-23, the same day) -----------
+#
+# The fix above searched on the LONGEST token. "Daniel Porter" ties at six
+# letters and max() returns the first, so it searched "Daniel". On a client tenant
+# that filled the 50-row page with other Daniels, the client was not on it,
+# and the resolver answered `none` with no candidate for a client who has an
+# open matter. Not a misfile -- a false "not found", which the
+# reply turns into "I could not find a matter for this client".
+
+
+class CommonFirstNameTenant(Tenant):
+    """Sixty other Daniels, then the one we want, and a search that honours Limit.
+
+    The vendor returns rows in its own order and stops at ``Limit``; the target
+    is placed LAST so a first-name search cannot reach it.
+    """
+
+    TARGET = "c0000000-0000-4000-8000-0000000porter"
+
+    def __init__(self) -> None:
+        contacts: dict[str, dict[str, Any]] = {}
+        for i in range(60):
+            cid = f"c0000000-0000-4000-8000-{i:012d}"
+            contacts[cid] = {"id": cid, "person": {"firstName": "Daniel", "lastName": f"Other{i}"}}
+        contacts[self.TARGET] = {"id": self.TARGET, "person": {"firstName": "Daniel", "lastName": "Porter"}}
+        super().__init__(contact_matters={self.TARGET: [M101]}, contacts=contacts)
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/contacts":
+            self.requests.append(request)
+            term = request.url.params.get("Search", "")
+            want = term.removeprefix("name:*").removesuffix("*").strip().casefold()
+            limit = int(request.url.params.get("Limit", "50"))
+            rows = [
+                c
+                for c in self.contacts.values()
+                if want
+                and want
+                in {
+                    str((c.get("person") or {}).get("firstName", "")).casefold(),
+                    str((c.get("person") or {}).get("lastName", "")).casefold(),
+                }
+            ]
+            return httpx.Response(200, json={"value": rows[:limit]})
+        return super().handle(request)
+
+
+def test_a_tie_in_length_searches_the_later_token_first() -> None:
+    """In western order the later token is the surname, the selective one."""
+    tenant = CommonFirstNameTenant()
+    mr._contacts_by_name(tenant.client(), "Daniel Porter")
+    first = tenant.queries("/contacts")[0]
+    assert first["Search"] == "name:*Porter*"
+
+
+def test_a_client_behind_a_full_page_of_common_first_names_is_still_found() -> None:
+    """The live defect, asserted on the outcome rather than the query order.
+
+    Even if the ordering regressed to the first token, a full page must trigger
+    the other tokens, so the client is found either way.
+    """
+    out = _resolve(CommonFirstNameTenant(), client_name="Daniel Porter")
+    assert [c["matter_number"] for c in out.get("candidates") or []] == ["2026-PI-101"]
+
+
+def test_a_full_page_on_the_first_probe_searches_the_other_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The fallback on its own, with the ordering deliberately defeated.
+
+    Forcing the first-name probe reproduces the exact live shape; the client can
+    only be reached through the full-page fallback.
+    """
+    monkeypatch.setattr(mr, "_probe_order", lambda tokens: list(tokens))
+    tenant = CommonFirstNameTenant()
+    kept = mr._contacts_by_name(tenant.client(), "Daniel Porter")
+    queries = [q["Search"] for q in tenant.queries("/contacts")]
+    assert queries[0] == "name:*Daniel*"
+    assert "name:*Porter*" in queries, "a full page must send the other tokens"
+    assert [c["id"] for c in kept] == [CommonFirstNameTenant.TARGET]
+
+
+def test_a_page_that_is_neither_full_nor_empty_costs_one_query() -> None:
+    """The fallback must not fire on the ordinary case; it spends rate limit."""
+    tenant = DuplicateNameTenant()
+    mr._contacts_by_name(tenant.client(), "Maria Alvarez")
+    assert len(tenant.queries("/contacts")) == 1
