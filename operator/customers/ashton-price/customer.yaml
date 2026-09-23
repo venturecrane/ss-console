@@ -193,6 +193,18 @@ personas:
       exposure:
         internal_write: draft_for_review
         external_send: draft_for_review
+        # ADR 0089: the Operator may send AS a person on scope.staff_send_as,
+        # only on that person's emailed approval of the exact draft. confirm is
+        # the one accepted value; there is deliberately no exposure_ceiling entry.
+        #
+        # Why this is not a loosening of external_send above. That key governs
+        # what the MODEL may transmit, and it stays draft_for_review: nothing the
+        # model composes reaches a recipient on its own. This key opens a
+        # different lane entirely — the model proposes, the named person receives
+        # the exact text and says send, and only then does the broker transmit.
+        # The authority is the person's, exercised per message, on the words they
+        # read. A ceiling cannot be raised by anything the model says or does.
+        external_send_as_staff: confirm
         # Internal alert delivery to firm staff (#2004, correspondence 09/10):
         # case-level alerts route per matter to the assigned attorney/paralegal
         # "the same way work reaches them today" — an alert that waits for SMD
@@ -967,6 +979,25 @@ scope:
   # RECOMMENDED default the firm confirms or changes at onboarding (ENTITLEMENTS.md),
   # not a fixed floor (ADR 0035). Recipient-locked replies to rostered senders are
   # governed by the roster above, not by this ceiling (ADR 0055 §3).
+  # ADR 0089: whose name the Operator may put on outside mail, each only on that
+  # person's own emailed approval of the exact words. Christa asked for this
+  # posture herself (Captain, 2026-09-22): for now every draft goes out as her.
+  #
+  # One name, deliberately. Most of the firm's undone opening tasks are letters
+  # to outside parties, and until now they landed as drafts in operator@ that
+  # nobody opened. This is the smallest change that makes them reach anyone: she
+  # gets the finished letter in her inbox, reads it, and says send. Adding a
+  # second name is a one-line edit plus one Exchange grant, and it is the firm's
+  # call, not ours — whose signature goes on a letter is theirs to decide.
+  #
+  # The tenant half, which this file cannot assert: operator@ashtonandprice.com
+  # must hold Exchange Send As on this address, or Graph refuses the transmit
+  # (operator/workspace_broker/msgraph_ops.py send_as_staff). The refusal is
+  # clean and visible, so a missing grant reads as "cannot send as her", never as
+  # a silent drop.
+  staff_send_as:
+    - address: Christa@ashtonandprice.com
+      name: Christa Barrera
 
 # ---- REPLY-CHANNEL SEND POLICY (ss#2070) ----
 # Chris asked for something he can talk to. The platform default — 3 replies to
