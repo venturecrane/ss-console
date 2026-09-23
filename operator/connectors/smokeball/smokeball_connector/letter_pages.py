@@ -102,14 +102,76 @@ def page_texts(blob: bytes) -> list[str]:
         raise PageReadError("not_pdf", f"PDF could not be parsed: {exc}") from exc
 
 
-def scanned_indexes(pages: list[str]) -> list[int]:
-    """Which pages (0-based) carry too little text to be a document.
+#: A token that reads as a word, a number, or a date. Calibrated as-is on a real
+#: 59-page bundle (see LEGIBLE_WORD_SHARE); widening it raises the score of the
+#: noisy pages too and moves the calibration, so change it only with a re-measure.
+_WORD_RE = re.compile(r"^[A-Za-z][A-Za-z'\-]*[.,:;]?$|^\d{1,4}([/\-.]\d{1,4}){0,2}[.,]?$|^[A-Za-z]{1,3}[.,]?$")
 
-    Per page, never averaged. A bundle is sent to vision when ANY page is
-    scanned, because the alternative is reading the digital pages and silently
-    losing the scanned ones.
+#: Below this share of word-shaped tokens, a page's text layer is noise and the
+#: page is read with vision instead.
+#:
+#: WHY THIS EXISTS (a client seat, 2026-09-23). A 59-page stack of hand-annotated
+#: discovery charts and calendars came back ``readable: True`` from the text
+#: road, because every page HAD a text layer: the scanner's OCR of the
+#: handwriting, e.g. ``~~~, 9~2' '~`` and ``~ LC1 S~``. A character count cannot
+#: tell that from a letter. Measured on that stack: pages dominated by
+#: handwriting scored 0.46-0.67, clean typed pages 0.85-0.93, and a band of
+#: typed pages with SOME handwriting scored 0.70-0.80 -- including the page whose
+#: handwritten note named a supplemental-discovery date, at 0.75. A line at 0.70
+#: would have dropped that note, so the line is 0.80. Erring this way costs a
+#: couple of cents of transcription on a page; erring the other way loses a
+#: deadline without saying so.
+LEGIBLE_WORD_SHARE = 0.80
+
+#: A page with fewer tokens than this is judged by the character floor alone: a
+#: short page's ratio swings on one token.
+MIN_TOKENS_FOR_LEGIBILITY = 8
+
+
+def word_share(text: str) -> float:
+    """The share of whitespace-separated tokens that read as words or numbers."""
+    tokens = text.split()
+    if not tokens:
+        return 1.0
+    return sum(1 for t in tokens if _WORD_RE.match(t)) / len(tokens)
+
+
+def page_needs_vision(text: str) -> bool:
+    """True when this page's text layer cannot be trusted to BE the page.
+
+    Either too little text (paper with no layer), or a layer that is mostly not
+    words (OCR of handwriting, stamps, or a bad scan).
     """
-    return [i for i, text in enumerate(pages) if len(text) < PAGE_TEXT_FLOOR]
+    if len(text) < PAGE_TEXT_FLOOR:
+        return True
+    if len(text.split()) < MIN_TOKENS_FOR_LEGIBILITY:
+        return False
+    return word_share(text) < LEGIBLE_WORD_SHARE
+
+
+def scanned_indexes(pages: list[str]) -> list[int]:
+    """Which pages (0-based) need vision: no text layer, or an illegible one.
+
+    Per page, never averaged, and only THOSE pages are transcribed, so a bundle
+    of 59 typed pages with 20 handwritten ones spends on 20.
+    """
+    return [i for i, text in enumerate(pages) if page_needs_vision(text)]
+
+
+def extract_pages(blob: bytes, indexes: list[int]) -> bytes:
+    """A new PDF of just these pages (0-based), in the order given."""
+    from pypdf import PdfReader, PdfWriter
+
+    try:
+        reader = PdfReader(io.BytesIO(blob))
+        writer = PdfWriter()
+        for index in indexes:
+            writer.add_page(reader.pages[index])
+        buf = io.BytesIO()
+        writer.write(buf)
+        return buf.getvalue()
+    except Exception as exc:  # pypdf raises a wide family; every one means "not a PDF we can page"
+        raise PageReadError("split_failed", f"the pages could not be extracted: {exc}") from exc
 
 
 def compose(pages: list[str]) -> str:
@@ -129,22 +191,51 @@ def compose(pages: list[str]) -> str:
 def parse_marked(text: str, page_count: int) -> list[str]:
     """Marked text back into a page list, or refuse.
 
-    Refuses unless every block opens with a marker AND the numbers run exactly
-    1..page_count in order. A document we cannot number is a document we cannot
-    cut, and cutting it on a guess files one client's letter onto another
+    A page starts ONLY at a marker line that stands alone, follows a blank line
+    (or opens the text), and carries exactly the NEXT page number. Everything
+    else, blank lines included, is body.
+
+    WHY NOT SPLIT ON BLANK LINES, which is what this did until 2026-09-23. A
+    transcribed letter has paragraphs, and a paragraph break is a blank line, so
+    splitting on "\\n\\n" broke the numbering on the first real vision read and
+    refused a document that was fine. The pilot never showed it because every
+    page there had a text layer with no blank lines in it.
+
+    The forged-marker defence is the NEXT-number rule: a page's own printing of
+    "[p.9]" cannot start a page unless 9 is exactly the page expected next, and
+    even then the count check below refuses a document whose numbering no longer
+    reaches page_count cleanly. A document we cannot number is a document we
+    cannot cut, and cutting on a guess files one client's letter onto another
     client's matter.
     """
-    blocks = text.split("\n\n") if text else []
+    if not text:
+        if page_count == 0:
+            return []
+        raise PageReadError("marker_mismatch", f"no text, and the document has {page_count} pages")
     pages: list[str] = []
-    for position, block in enumerate(blocks, start=1):
-        lines = block.split("\n", 1)
-        match = _MARKER_RE.match(lines[0].strip())
-        if match is None or int(match.group(1)) != position:
+    body: list[str] = []
+    legible = True
+    started = False
+    expected = 1
+    prev_blank = True
+    for line in text.split("\n"):
+        stripped = line.strip()
+        match = _MARKER_RE.match(stripped)
+        if match is not None and prev_blank and int(match.group(1)) == expected:
+            if started:
+                pages.append("\n".join(body).strip() if legible else "")
+            body, legible, started = [], match.group(2) is None, True
+            expected += 1
+            prev_blank = False
+            continue
+        if not started:
             raise PageReadError(
-                "marker_mismatch",
-                f"page markers do not run 1..{page_count} (block {position} opens {lines[0][:40]!r})",
+                "marker_mismatch", f"text does not open with the page 1 marker (opens {stripped[:40]!r})"
             )
-        pages.append("" if match.group(2) else (lines[1].strip() if len(lines) > 1 else ""))
+        body.append(line)
+        prev_blank = stripped == ""
+    if started:
+        pages.append("\n".join(body).strip() if legible else "")
     if len(pages) != page_count:
         raise PageReadError(
             "marker_mismatch",
@@ -252,7 +343,12 @@ __all__ = [
     "PageReadError",
     "PagedText",
     "UnsupportedDocumentError",
+    "LEGIBLE_WORD_SHARE",
+    "MIN_TOKENS_FOR_LEGIBILITY",
     "compose",
+    "extract_pages",
+    "page_needs_vision",
+    "word_share",
     "page_texts",
     "parse_marked",
     "safe_file_name",
