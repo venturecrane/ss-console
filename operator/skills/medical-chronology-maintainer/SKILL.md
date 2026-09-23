@@ -355,6 +355,20 @@ comes back from `medchron_job_status`, never from the wake.
    where the folder is - through the seat's ordinary mail posture for that
    recipient; this skill names no send tool and makes no exception to the roster
    rules.
+   **Say what the delivery consumed and what is left.** Call `medchron_allowance`
+   on this turn and close the reply with two figures: what this job consumed, and
+   what remains for the period. Quote the response's `unit` field as the unit and
+   its `month` field verbatim as the phrase for the period ("the cycle ending Oct
+   14"); never call it "the month" yourself and never parse it. A delivery is the
+   moment the allowance actually moved, and a requester who has to ask what is
+   left is being handed a bill with no balance - the figure exists at submission
+   and on a hold, so its absence here was an omission, not a policy.
+   **No money, ever.** The consumed and remaining figures are stated in the
+   metered unit alone. Never convert to, estimate, or mention a dollar amount in
+   this reply, in the ledger entry, or in the review task - the content gates
+   refuse an agent-drafted dollar figure on sight (step 6), and cost is a
+   question for the job's console row. The metered unit is safe to quote plainly
+   because the firm authored the allowance in it.
 4. **Held:** no ledger entry, no task. Reply to the requester with the hold reason's
    substance (read from the status row in step 1; the wake carries only the
    stage) - which limit or gate held it and what would resume it. A hold is the

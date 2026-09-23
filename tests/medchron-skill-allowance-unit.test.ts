@@ -68,6 +68,35 @@ describe('medical-chronology-maintainer: the allowance unit', () => {
     expect(body).not.toContain('single_matter_page_threshold')
   })
 
+  it('makes a DELIVERED reply state what the job consumed and what remains', () => {
+    // Added 2026-09-22 (Captain). The remaining figure was quoted at
+    // submission and on an allowance hold, but NOT on a successful delivery --
+    // the one moment the allowance actually moved. A firm that has to ask what
+    // is left has been handed a bill with no balance.
+    const start = body.indexOf('3. **Delivered:**')
+    const end = body.indexOf('4. **Held:**')
+    expect(start, 'the Delivered step must exist').toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const delivered = body.slice(start, end)
+    expect(
+      delivered,
+      'a delivery reply must call the allowance tool on that turn, not recall a figure'
+    ).toContain('medchron_allowance')
+    expect(delivered.toLowerCase()).toContain('remain')
+  })
+
+  it('forbids a dollar amount in the delivery reply in words, not only by example', () => {
+    // The string gate above catches a MODELLED figure ("$1,200"). This catches
+    // the absence of the instruction itself, which is what a future edit would
+    // drop first.
+    const start = body.indexOf('3. **Delivered:**')
+    const end = body.indexOf('4. **Held:**')
+    const delivered = body.slice(start, end).toLowerCase()
+    expect(delivered, 'the delivery step must say in words that money is never stated').toContain(
+      'dollar'
+    )
+  })
+
   it('names each limit by the setting a hold reason carries', () => {
     for (const setting of [
       'per_job_cap_usd',
