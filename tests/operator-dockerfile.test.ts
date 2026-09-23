@@ -1396,7 +1396,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // and the approve page the email's buttons open.
     // c9c9d632 -> eb23bff7 (2026-09-22, overlay#379). Classifies the
     // combined-post pair ss#2882 added; without it both tools are refused.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="eb23bff7ebd046a8565f31f626b7da9e7f93016f"')
+    // eb23bff7 -> 62a4cccb (2026-09-23, overlay#380). Prices claude-opus-5-5
+    // for the interactive cost meter.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="62a4cccb91098c70547a7f0caf396108e8a49800"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
