@@ -954,7 +954,18 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # shared/rule_confirm.py, shared/approve_page.py, shared/msgraph_broker.py,
 # webhook_gate.py, plugins/hermes-smd-establishment; no tracked twin changed,
 # so only overlayRef moves.
-ARG OVERLAY_REF="c9c9d6323ba1b940a69bd8da5b6c508ac9ceec8d"
+# 2026-09-22 (eb23bff7, overlay #379). Classifies the combined-post pair that
+# ss#2882 added, so a firm can email the scanned daily post as one PDF and get
+# each letter filed on its own matter: read_attachment_pages is READ, fenced
+# and tainting (it returns letters outside parties wrote, transcribed when a
+# page is paper) and non-seeding (a letter the firm RECEIVED is not the firm's
+# record); file_attachment_pages_to_matter is INTERNAL_WRITE. Until this ref
+# ships, both tools are refused at runtime, which is the fail-closed direction
+# and also means the skill cannot work. Runtime files: shared/action_classes.py,
+# plugins/hermes-smd-inbound/__init__.py. Verified ref-only: all ten
+# overlay-pairs files and plugins/hermes-smd-audit/schemas.py are byte-identical
+# across c9c9d632..eb23bff7, so no paired hash and no vocabulary moves.
+ARG OVERLAY_REF="eb23bff7ebd046a8565f31f626b7da9e7f93016f"
 
 ARG CUSTOMER_SLUG=customer-zero
 
