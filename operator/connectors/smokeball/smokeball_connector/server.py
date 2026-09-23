@@ -58,11 +58,12 @@ from .task_update import merge_task_update
 # is where it is chiefly used, so this file grows no import of its own.
 from .vendor_invoice import fetch_bytes
 
-# The vendor-invoice tool surface (read_attachment_text, resolve_invoice_matter,
-# stage_vendor_invoice) lives in its own module and is registered at the BOTTOM
-# of this file, after the helpers it borrows exist. See vendor_invoice_tools.py
+# The tool surfaces that start at an emailed attachment (the vendor-invoice
+# three, the combined-post two) live in their own modules behind one registrar,
+# and are registered at the BOTTOM of this file, after the helpers they borrow
+# exist. See attachment_tools.py for why one registrar, vendor_invoice_tools.py
 # for why the split, and why the import runs one way only.
-from .vendor_invoice_tools import register as _register_vendor_invoice_tools
+from .attachment_tools import register as _register_attachment_tools
 
 server = ConnectorServer("smokeball")
 
@@ -2033,10 +2034,10 @@ def create_webhook_subscription(
     return _get_client().request("POST", "/webhooks", json=body)
 
 
-# ---- Vendor invoice intake (registered last, from its own module) ---------
+# ---- Attachment-rooted tool surfaces (registered last, from their own modules)
 #
-# Deliberately the final statement in this file: the three tools borrow
+# Deliberately the final statement in this file: these tools borrow
 # ``_get_client``, ``_verify_matter_reference`` and ``_stamp``, and registering
 # here means every one of them is defined before a tool can be called. The
-# conformance suite sees the same tool list it always did.
-_register_vendor_invoice_tools(server)
+# conformance suite sees the vendor-invoice tools in the order it always did.
+_register_attachment_tools(server)

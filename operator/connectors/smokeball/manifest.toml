@@ -136,6 +136,23 @@ get_expenses = "read"
 read_attachment_text = "read"
 resolve_invoice_matter = "read"
 stage_vendor_invoice = "internal_write"
+# Combined-post intake. A firm scans the day's post as ONE PDF holding several
+# letters for different matters; these two read it with page numbers that can be
+# trusted and file it one page RANGE at a time. The read transcribes when a page
+# is paper, which read_attachment_text deliberately never does (an invoice
+# figure must come from a text layer), so it is a SECOND read tool rather than a
+# widening of the first: nothing it returns reaches an expense. The write cuts a
+# range out and uploads it — the firm's own record, nothing sent outside.
+#
+# COORDINATED CHANGE: hermes-smd-overlay shared/action_classes.py must carry
+# mcp_smokeball_read_attachment_pages = ActionClass.READ (fenced, like its
+# sibling, as outside-party-authored content) and
+# mcp_smokeball_file_attachment_pages_to_matter = ActionClass.INTERNAL_WRITE,
+# shipped by the OVERLAY_REF bump in the same change. Until those land both
+# tools are UNREACHABLE at runtime (an unclassified tool is refused, not
+# defaulted), which is the fail-closed direction.
+read_attachment_pages = "read"
+file_attachment_pages_to_matter = "internal_write"
 get_webhook_subscriptions = "read"
 get_event_types = "read"
 create_webhook_subscription = "internal_write"

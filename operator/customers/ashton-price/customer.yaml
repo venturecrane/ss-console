@@ -370,6 +370,28 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
+      # Combined post intake (letter 65: Christa asked to email the day's post
+      # to the Operator). One scanned PDF holds several letters for several
+      # matters; this reads it page by page, cuts each letter out as its own
+      # page range, and files it on the matter that letter resolved to. The
+      # letters it cannot place are named back to her with a candidate matter,
+      # and her reply naming a number is what files them.
+      #
+      # Person-initiated, exactly like every other routine on this seat: she
+      # sends the scan and the matter-inbox-router spine executes this skill in
+      # the same turn. Never scheduled, never webhook-fired on its own, which
+      # keeps the seat's authored "nothing runs on a timer" intact (letter 26).
+      #
+      # No routine-grid row yet: the grid traces verbatim to a client letter and
+      # naming a routine there is a commitment to the firm, which is the
+      # Captain's to author. The binding is what lets her use it.
+      - name: combined-post-intake
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
       - name: stalled-matter-nudge
         version: pending
         initiation:
