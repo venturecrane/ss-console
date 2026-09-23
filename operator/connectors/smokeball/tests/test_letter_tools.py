@@ -4,8 +4,11 @@
 TOOLS make on top of it, and each is written so that removing the line it
 defends makes it fail. Four carry the weight:
 
-* ``test_a_scanned_page_anywhere_sends_the_whole_bundle_to_vision`` — the road
-  decision has to survive the trip through the tool, not just the helper.
+* ``test_only_the_pages_that_need_vision_are_sent_and_they_land_back_in_position``
+  — the road decision per page, and the splice, which is where a one-slot error
+  would move every letter boundary after it.
+* ``test_a_page_of_ocr_noise_is_read_with_vision_not_trusted_as_text`` — the
+  2026-09-23 defect: a text layer that exists and is garbage.
 * ``test_nothing_is_transcribed_when_every_page_has_text`` — the money
   falsifier. If this passes with vision stubbed to explode, the free road is
   genuinely free.
@@ -145,20 +148,26 @@ def test_nothing_is_transcribed_when_every_page_has_text(monkeypatch: pytest.Mon
     assert "[p.3]" in out["text"]
 
 
-def test_a_scanned_page_anywhere_sends_the_whole_bundle_to_vision(monkeypatch: pytest.MonkeyPatch) -> None:
-    """One digital cover sheet must not route three scans onto the free road.
+def test_only_the_pages_that_need_vision_are_sent_and_they_land_back_in_position(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One digital cover sheet must not route three scans onto the free road,
+    and the digital page must not be paid for either.
 
-    This is the shipped defect ``letter_pages`` exists to close, asserted at the
-    tool boundary: what reaches vision is the WHOLE bundle, not the scanned
-    pages, so there is one sha, one cache entry and one spend.
+    Until 2026-09-23 any scanned page sent the WHOLE bundle; now only the pages
+    that need it go, and each transcription is spliced back where its page sits.
+    The splice is the dangerous half: a page landing one slot off moves every
+    letter boundary after it, so the text of each page is asserted in place.
     """
     seen: dict[str, Any] = {}
 
     def _fake(blob: bytes, *, pages: int) -> Any:
-        seen["bytes"] = len(blob)
+        from pypdf import PdfReader
+
         seen["pages"] = pages
+        seen["sub_pages"] = len(PdfReader(io.BytesIO(blob)).pages)
         return lt.vision.VisionOutcome(
-            text="\n\n".join(f"[p.{n}]\ntranscribed page {n}" for n in range(1, pages + 1)),
+            text="\n\n".join(f"[p.{n}]\ntranscribed scan {n}" for n in range(1, pages + 1)),
             pages_read=pages,
             stop_reason="end_turn",
         )
@@ -166,13 +175,68 @@ def test_a_scanned_page_anywhere_sends_the_whole_bundle_to_vision(monkeypatch: p
     monkeypatch.setattr(lt.vision, "gate", lambda _b, *, pages: None)
     monkeypatch.setattr(lt.vision, "transcribe_pdf", _fake)
 
-    blob = _pdf([DIGITAL, "", "", ""])
+    blob = _pdf([DIGITAL, "", DIGITAL, ""])
     out = lt._read_pages(blob, "post.pdf")
     assert out["readable"] is True
     assert out["method"] == "vision"
-    assert out["scannedPages"] == 3
-    assert seen["pages"] == 4
-    assert seen["bytes"] == len(blob), "vision must receive the whole bundle, not the scanned pages"
+    assert out["scannedPages"] == 2
+    assert seen["pages"] == 2 and seen["sub_pages"] == 2, "only the two scanned pages may be sent"
+    pages = lp.parse_marked(out["text"], 4)
+    assert pages[0].startswith("Dear Counsel")
+    assert pages[1] == "transcribed scan 1"
+    assert pages[2].startswith("Dear Counsel")
+    assert pages[3] == "transcribed scan 2"
+
+
+#: What a scanner's OCR makes of handwriting: shaped like text, not words.
+#: Synthetic, modelled on the SHAPE of the 2026-09-23 stack, carrying none of it.
+OCR_NOISE = "~~~, 9~2' '~ LC1 S~ ~,{~~~,~~%.t~ ,`I V V' -~` ~?-'~' ~~ I ~ .~~ 9/~ -- C'~ ,` c ~ , -Z r_ ' B -- ~ ~~"
+
+
+def test_a_page_of_ocr_noise_is_read_with_vision_not_trusted_as_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The live defect. The page HAS a text layer, well over the character
+    floor, and it is garbage. A character count calls it readable; a legibility
+    check does not.
+    """
+    sent: dict[str, int] = {}
+
+    def _fake(blob: bytes, *, pages: int) -> Any:
+        sent["pages"] = pages
+        return lt.vision.VisionOutcome(text="[p.1]\nthe handwriting, read", pages_read=1, stop_reason="end_turn")
+
+    monkeypatch.setattr(lt.vision, "gate", lambda _b, *, pages: None)
+    monkeypatch.setattr(lt.vision, "transcribe_pdf", _fake)
+
+    assert len(OCR_NOISE) > lp.PAGE_TEXT_FLOOR, "the noise must clear the old character floor, or this proves nothing"
+    out = lt._read_pages(_pdf([DIGITAL, OCR_NOISE]), "post.pdf")
+    assert out["scannedPages"] == 1
+    assert sent.get("pages") == 1
+    assert lp.parse_marked(out["text"], 2)[1] == "the handwriting, read"
+
+
+def test_the_page_cap_counts_pages_sent_not_pages_in_the_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fifty pages, two of them scans. Under the whole-bundle rule this was 50
+    pages against a 40-page cap and a refusal; now it is 2."""
+    gated: dict[str, int] = {}
+
+    def _gate(_b: bytes, *, pages: int) -> Any:
+        gated["pages"] = pages
+        return "over_page_cap" if pages > 40 else None
+
+    monkeypatch.setattr(lt.vision, "gate", _gate)
+    monkeypatch.setattr(
+        lt.vision,
+        "transcribe_pdf",
+        lambda _b, *, pages: lt.vision.VisionOutcome(
+            text="\n\n".join(f"[p.{n}]\nscan {n}" for n in range(1, pages + 1)), pages_read=pages
+        ),
+    )
+    texts = [DIGITAL] * 50
+    texts[10] = ""
+    texts[40] = ""
+    out = lt._read_pages(_pdf(texts), "post.pdf")
+    assert gated["pages"] == 2
+    assert out["readable"] is True and out["pageCount"] == 50
 
 
 def test_a_vision_refusal_reads_nothing_and_says_why(monkeypatch: pytest.MonkeyPatch) -> None:

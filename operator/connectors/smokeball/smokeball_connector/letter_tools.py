@@ -97,9 +97,10 @@ def _read_pages(blob: bytes, file_name: str) -> dict[str, Any]:
         out["method"] = METHOD_PYPDF
         return _finish(out, letter_pages.compose(pages), count)
 
-    # ANY scanned page sends the WHOLE bundle to vision: one sha, one cache
-    # entry, one spend. Reading the digital pages mechanically and the scanned
-    # ones not at all is how letters disappear (see ``letter_pages``' docstring).
+    # Only the pages that NEED vision are transcribed; the rest keep their text
+    # layer. Until 2026-09-23 any such page sent the WHOLE bundle, so a 59-page
+    # stack with 20 handwritten pages would spend on 59 and, being over the
+    # 40-page cap, be refused outright. The cap now counts pages actually sent.
     from .extract_cache import cache_get, cache_put
 
     cached = cache_get(blob)
@@ -107,17 +108,43 @@ def _read_pages(blob: bytes, file_name: str) -> dict[str, Any]:
         out["method"] = METHOD_VISION_CACHED
         return _finish(out, cached, count)
 
-    refusal = vision.gate(blob, pages=count)
-    if refusal is not None:
-        out["reason"] = refusal
+    spliced, reason = _transcribe_needed(blob, pages, scanned)
+    if spliced is None:
+        out["reason"] = reason
         return out
-    outcome = vision.transcribe_pdf(blob, pages=count)
-    if outcome.reason is not None:
-        out["reason"] = outcome.reason
-        return out
-    cache_put(blob, outcome.text, pages=count)
+    composed = letter_pages.compose(spliced)
+    # Cached under the ORIGINAL bundle's bytes: the composed text is the best
+    # reading of exactly those bytes, so a second read of the same attachment
+    # spends nothing.
+    cache_put(blob, composed, pages=count)
     out["method"] = METHOD_VISION
-    return _finish(out, outcome.text, count)
+    return _finish(out, composed, count)
+
+
+def _transcribe_needed(blob: bytes, pages: list[str], needed: list[int]) -> tuple[list[str] | None, str | None]:
+    """Transcribe only ``needed`` (0-based) and splice them back in position.
+
+    Returns ``(pages, None)`` or ``(None, reason)``. The cap is checked against
+    the sub-bundle actually sent, both in pages and in bytes, before any spend.
+    """
+    try:
+        sub = letter_pages.extract_pages(blob, needed)
+    except PageReadError as exc:
+        return None, exc.reason
+    refusal = vision.gate(sub, pages=len(needed))
+    if refusal is not None:
+        return None, refusal
+    outcome = vision.transcribe_pdf(sub, pages=len(needed))
+    if outcome.reason is not None:
+        return None, outcome.reason
+    try:
+        read = letter_pages.parse_marked(outcome.text, len(needed))
+    except PageReadError as exc:
+        return None, exc.reason
+    spliced = list(pages)
+    for position, index in enumerate(needed):
+        spliced[index] = read[position]
+    return spliced, None
 
 
 def _finish(out: dict[str, Any], text: str, page_count: int) -> dict[str, Any]:

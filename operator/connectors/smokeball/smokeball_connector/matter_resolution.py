@@ -176,6 +176,12 @@ def _contact_tokens(contact: dict[str, Any]) -> set[str]:
     return tokens
 
 
+def _probe_order(tokens: list[str]) -> list[str]:
+    """Which token to search first: longest, and on a tie the LATER one."""
+    ordered = sorted(enumerate(tokens), key=lambda it: (len(it[1]), it[0]), reverse=True)
+    return [t for _, t in ordered]
+
+
 def _contacts_by_name(client: Any, name: str) -> list[dict[str, Any]]:
     """Contacts whose name contains this one, capped. The search term is built
     here, not taken from the invoice: see the module docstring on untrusted text.
@@ -211,10 +217,33 @@ def _contacts_by_name(client: Any, name: str) -> list[dict[str, Any]]:
     # The probe keeps the caller's CASING: the vendor's search is case
     # insensitive either way, and a query that changes shape for no behavioural
     # reason is a change nobody asked for.
-    probe = max(tokens, key=len)
+    #
+    # ORDER: longest first, and on a TIE the LATER token. "Daniel Porter" ties
+    # at six letters, and the first form of this fix searched "Daniel" -- a
+    # common first name -- which filled the 50-row page with other Daniels and
+    # returned "no matter" for a client who has one (a client seat, 2026-09-23). In
+    # western order the later token is the surname, which is the selective one.
+    probes = _probe_order(tokens)
     wanted = {t.lower() for t in tokens}
-    rows = _get(client, "/contacts", Search=[f"name:*{probe}*"], Limit=_SEARCH_LIMIT)
-    matched = [c for c in rows if isinstance(c.get("id"), str) and c["id"] and wanted.issubset(_contact_tokens(c))]
+
+    def _matching(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [c for c in rows if isinstance(c.get("id"), str) and c["id"] and wanted.issubset(_contact_tokens(c))]
+
+    rows = _get(client, "/contacts", Search=[f"name:*{probes[0]}*"], Limit=_SEARCH_LIMIT)
+    matched = _matching(rows)
+    # A page that came back FULL may have stopped before the contact we want, so
+    # a full page proves nothing about absence. The same holds for a page that
+    # held nothing matching the whole name. In either case the other tokens are
+    # searched too and the results unioned: more calls, never fewer contacts.
+    if len(rows) >= _SEARCH_LIMIT or not matched:
+        seen = {c["id"] for c in matched}
+        for probe in probes[1:]:
+            if len(probe) < 2:
+                continue
+            for c in _matching(_get(client, "/contacts", Search=[f"name:*{probe}*"], Limit=_SEARCH_LIMIT)):
+                if c["id"] not in seen:
+                    seen.add(c["id"])
+                    matched.append(c)
     return matched[:MAX_NAME_CONTACTS]
 
 

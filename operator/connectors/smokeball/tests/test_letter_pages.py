@@ -174,3 +174,74 @@ def test_a_range_released_after_a_failed_write_can_be_claimed_again() -> None:
     ledger.claim("tok", 2, 4)
     ledger.release("tok", 2, 4)
     assert ledger.claim("tok", 2, 4) is None
+
+
+# ---- A page body may contain blank lines (2026-09-23) -------------------------
+
+
+def test_a_page_with_paragraphs_parses_back_to_one_page() -> None:
+    """The latent defect. A transcribed letter has paragraph breaks, and the
+    parser used to split pages on blank lines, so the first real vision read of
+    a letter would have come back marker_mismatch and been refused."""
+    body = "Dear Counsel:\n\nWe write concerning the above.\n\nSincerely,"
+    text = lp.compose([body, "second page"])
+    assert lp.parse_marked(text, 2) == [body, "second page"]
+
+
+def test_a_marker_shaped_line_that_is_not_the_next_page_stays_body() -> None:
+    """A page's own printing of a marker cannot start a page unless it is
+    exactly the page expected next, and it never is here."""
+    body = "Exhibit list\n\n[p.7]\n\nsee tab"
+    pages = lp.parse_marked(lp.compose([body, "two"]), 2)
+    assert pages[0] == body
+    assert pages[1] == "two"
+
+
+def test_text_that_does_not_open_with_page_one_is_refused() -> None:
+    with pytest.raises(lp.PageReadError) as exc:
+        lp.parse_marked("preamble\n\n[p.1]\nx", 1)
+    assert exc.value.reason == "marker_mismatch"
+
+
+def test_a_missing_page_is_refused_not_absorbed() -> None:
+    """Pages 1 and 3 with no 2: the numbering does not reach the count."""
+    with pytest.raises(lp.PageReadError):
+        lp.parse_marked("[p.1]\na\n\n[p.3]\nc", 3)
+
+
+# ---- Legibility, not length (2026-09-23) --------------------------------------
+
+#: Synthetic noise shaped like a scanner's OCR of handwriting; no client content.
+NOISE = "~~~, 9~2' '~ LC1 S~ ~,{~~~,~~%.t~ ,`I V V' -~` ~?-'~' ~~ I ~ .~~ 9/~ -- C'~ ,` c"
+TYPED = "PLAINTIFF REQUESTS AMENDED responses served on 9/23 per the meet and confer letter of counsel."
+
+
+def test_ocr_noise_needs_vision_even_though_it_is_long() -> None:
+    assert len(NOISE) > lp.PAGE_TEXT_FLOOR, "must clear the character floor or it proves nothing"
+    assert lp.word_share(NOISE) < lp.LEGIBLE_WORD_SHARE
+    assert lp.page_needs_vision(NOISE) is True
+
+
+def test_a_typed_page_keeps_its_text_layer() -> None:
+    """The falsifier for the test above: real prose must NOT be sent."""
+    assert lp.word_share(TYPED) >= lp.LEGIBLE_WORD_SHARE
+    assert lp.page_needs_vision(TYPED) is False
+
+
+def test_a_short_page_is_judged_by_the_floor_not_the_ratio() -> None:
+    """A header-only page's ratio swings on one token; it is not re-read for that."""
+    assert lp.page_needs_vision("Discovery Deadline Chart ~~") is False
+
+
+def test_the_threshold_sits_above_the_measured_mixed_band() -> None:
+    """Pinned to the measurement: the mixed band reached 0.75 on the page whose
+    handwritten note mattered, so the line must be above it."""
+    assert lp.LEGIBLE_WORD_SHARE > 0.75
+
+
+def test_extract_pages_keeps_only_the_named_pages_in_order() -> None:
+    from pypdf import PdfReader
+
+    blob = _blank_pdf(5)
+    sub = lp.extract_pages(blob, [3, 1])
+    assert len(PdfReader(io.BytesIO(sub)).pages) == 2
