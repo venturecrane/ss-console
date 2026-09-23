@@ -34,6 +34,10 @@ class BudgetError(RuntimeError):
 class Rate:
     input_per_million_cents: int
     output_per_million_cents: int
+    # A model whose cache-read price is not the table-wide multiplier of its
+    # input rate (claude-opus-5-5 reads cache at 0.05x) carries its own; None
+    # means the table-wide multiplier applies.
+    cache_read_multiplier: float | None = None
 
 
 @dataclass(frozen=True)
@@ -56,7 +60,11 @@ class Pricing:
                 "cache rows without them (ss#2613)"
             )
         rates = {
-            model: Rate(int(row["input_per_million_cents"]), int(row["output_per_million_cents"]))
+            model: Rate(
+                int(row["input_per_million_cents"]),
+                int(row["output_per_million_cents"]),
+                float(row["cache_read_multiplier"]) if "cache_read_multiplier" in row else None,
+            )
             for model, row in (data.get("models") or {}).items()
         }
         return cls(
@@ -76,6 +84,9 @@ class Pricing:
             raise BudgetError(f"model {model!r} has no row in {self.source}; refusing to price it at zero")
         return self.rates[best]
 
+    def _cache_read(self, r: Rate) -> float:
+        return self.cache_read_multiplier if r.cache_read_multiplier is None else r.cache_read_multiplier
+
     def price_row(self, row: dict[str, Any]) -> float:
         """Dollars for one ledger row."""
         r = self.rate_for(str(row.get("model") or ""))
@@ -86,7 +97,7 @@ class Pricing:
         cents_per_m = (
             inp * r.input_per_million_cents
             + cw * r.input_per_million_cents * self.cache_write_multiplier
-            + cr * r.input_per_million_cents * self.cache_read_multiplier
+            + cr * r.input_per_million_cents * self._cache_read(r)
             + out * r.output_per_million_cents
         )
         dollars = cents_per_m / 1e8

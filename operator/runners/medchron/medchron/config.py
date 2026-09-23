@@ -128,6 +128,9 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
 
 BATCHABLE_STAGES = {"vision", "billing", "compose"}
 AUDIT_MODES = {"image", "text"}
+# Models that return HTTP 400 on tool_choice {"type": "any"|"tool"} (Anthropic
+# migration notes for Claude Fable 5.1 and Claude Opus 5.5). Prefix-matched.
+NO_FORCED_TOOL_MODELS = ("claude-opus-5-5", "claude-fable-5-1", "claude-mythos-5-1")
 PRE_INCIDENT_POLICIES = {"include", "summarize_only"}
 
 
@@ -242,6 +245,15 @@ def _semantic_checks(data: dict[str, Any]) -> list[str]:
     for tier in ("transcription", "mechanical", "composition", "audit", "judgment"):
         if tiers and tier not in tiers:
             out.append(f"models.tiers.{tier}: required")
+    # The audit forces its verdict tool (audit/verify.py TOOL_CHOICE); these
+    # models answer a forced tool_choice with HTTP 400, so the audit - the gate
+    # every chronology passes - would fail on every claim.
+    audit_model = str(tiers.get("audit") or "")
+    if any(audit_model.startswith(m) for m in NO_FORCED_TOOL_MODELS):
+        out.append(
+            f"models.tiers.audit: {audit_model} rejects a forced tool_choice, which the audit's "
+            "verdict call requires; keep the audit tier on a model that accepts it"
+        )
     for section, key in (("providers", "aliases"), ("coverage", "exclusions")):
         for i, entry in enumerate((data.get(section) or {}).get(key) or []):
             if "match" not in entry:

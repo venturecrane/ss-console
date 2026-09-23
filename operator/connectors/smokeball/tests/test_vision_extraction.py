@@ -432,6 +432,16 @@ def test_a_document_where_no_page_is_legible_is_not_a_transcription(
     assert not list(extract_cache.cache_root().glob("*.json"))
 
 
+def test_a_refused_page_is_a_refusal_not_a_truncation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A safety decline is not a page that ran out of room: recording it as
+    truncation would send someone to raise a cap that was never the cause."""
+    _install_pages(monkeypatch, ["IMPRESSION: disc extru", ("", "refusal")])
+    result = extract_text_ex(SCANNED, file_extension=".pdf", allow_vision=True)
+    assert result.method == METHOD_NONE_SCANNED
+    assert result.reason == extract.REASON_REFUSED
+    assert result.text == ""
+
+
 def test_every_reason_is_in_the_closed_set() -> None:
     for reason in (
         extract.REASON_NOT_ATTEMPTED,
@@ -442,6 +452,7 @@ def test_every_reason_is_in_the_closed_set() -> None:
         extract.REASON_API_ERROR,
         extract.REASON_TRUNCATED,
         extract.REASON_INCOMPLETE,
+        extract.REASON_REFUSED,
     ):
         assert reason in REASONS
 

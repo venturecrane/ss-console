@@ -72,6 +72,10 @@ REASON_OVER_BYTE_CAP = "over_byte_cap"
 REASON_API_ERROR = "api_error"
 REASON_TRUNCATED = "truncated"
 REASON_INCOMPLETE = "incomplete_transcription"
+# The model declined the page (stop_reason "refusal", e.g. a safety classifier
+# on a toxicology report). Distinct from truncation so a refusal is never
+# misread as a page that ran out of room.
+REASON_REFUSED = "model_refused"
 
 REASONS = frozenset(
     {
@@ -83,6 +87,7 @@ REASONS = frozenset(
         REASON_API_ERROR,
         REASON_TRUNCATED,
         REASON_INCOMPLETE,
+        REASON_REFUSED,
     }
 )
 

@@ -173,7 +173,10 @@ def price(row):
     tout = row.get("out") or 0
     cr = row.get("cache_read") or 0
     cw = row.get("cache_write") or 0
-    cents_per_m = tin * r["in"] + cw * r["in"] * m["cache_write_5m"] + cr * r["in"] * m["cache_read"] + tout * r["out"]
+    # A model row may carry its own cache-read multiple (claude-opus-5-5 reads
+    # cache at 0.05x input, not the card-wide 0.1x).
+    cache_read = r.get("cache_read", m["cache_read"])
+    cents_per_m = tin * r["in"] + cw * r["in"] * m["cache_write_5m"] + cr * r["in"] * cache_read + tout * r["out"]
     dollars = cents_per_m / 1e8
     if row.get("batch"):
         dollars *= m["batch"]

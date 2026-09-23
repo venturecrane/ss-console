@@ -58,9 +58,9 @@ SYNTHETIC_FIRM: dict[str, Any] = {
         "tiers": {
             "transcription": "claude-sonnet-5",
             "mechanical": "claude-sonnet-5",
-            "composition": "claude-opus-5",
+            "composition": "claude-opus-5-5",
             "audit": "claude-sonnet-5",
-            "judgment": "claude-opus-5",
+            "judgment": "claude-opus-5-5",
         }
     },
     "levers": {"batch_stages": [], "audit_mode": "image", "cache": True, "compose_max_tokens": 128000},
