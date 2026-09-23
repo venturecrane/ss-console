@@ -6,6 +6,9 @@ requires-python = ">=3.11"
 dependencies = [
     "operator-connector-sdk",
     "httpx>=0.27",
+    # staff_mailboxes reads the authored staff_mailbox_reads block off the
+    # seat's live customer.yaml at call time.
+    "pyyaml>=6",
     # HTML body -> text stripping uses the stdlib (html.parser + html.unescape);
     # no document-extraction deps (contrast the Smokeball connector's pypdf/docx).
 ]
