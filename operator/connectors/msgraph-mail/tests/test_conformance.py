@@ -25,6 +25,8 @@ EXPECTED_TOOLS = {
     "create_draft",
     "send_message",
     "reply_message",
+    "list_staff_messages",
+    "read_staff_message",
 }
 
 _SCRIPT = shutil.which("msgraph-mail-mcp")

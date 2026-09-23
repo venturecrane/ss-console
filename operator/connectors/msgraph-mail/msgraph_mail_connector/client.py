@@ -31,6 +31,7 @@ from __future__ import annotations
 import os
 import time
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -158,6 +159,13 @@ class MsGraphClient:
         """A Graph URL under the PINNED mailbox: ``.../users/{mailbox}/{suffix}``."""
         return f"{_GRAPH_BASE}/users/{self.mailbox}/{suffix}"
 
+    @staticmethod
+    def _staff_url(mailbox: str, suffix: str) -> str:
+        """A Graph URL under an authored STAFF mailbox. Only the two staff read
+        methods call this, and only with an address ``staff_mailboxes.authorize``
+        returned; no send, draft or delete path reaches a staff mailbox."""
+        return f"{_GRAPH_BASE}/users/{quote(mailbox, safe='@')}/{suffix}"
+
     # ---- auth -------------------------------------------------------------
     def _mint_token(self) -> int:
         try:
@@ -251,6 +259,22 @@ class MsGraphClient:
         """Get one message by id, including its full ``body`` (the read path the
         poller falls back to when a delta item omits the body)."""
         return self.request("GET", self._mail_url(f"messages/{message_id}"))
+
+    def list_staff_messages(self, mailbox: str, folder: str, top: int, search: str | None) -> Any:
+        """List a folder of an authored staff mailbox. With ``search``, Graph's
+        ``$search`` ranks the results (it cannot be combined with ``$orderby``)."""
+        params: dict[str, Any] = {"$select": _LIST_SELECT, "$top": top}
+        if search:
+            params["$search"] = f'"{search}"'
+        else:
+            params["$orderby"] = "receivedDateTime desc"
+        return self.request(
+            "GET", self._staff_url(mailbox, f"mailFolders/{quote(folder, safe='')}/messages"), params=params
+        )
+
+    def get_staff_message(self, mailbox: str, message_id: str) -> Any:
+        """One message from an authored staff mailbox, with its full body."""
+        return self.request("GET", self._staff_url(mailbox, f"messages/{quote(message_id, safe='')}"))
 
     def poll_delta(self, delta_link: str | None = None) -> tuple[list[Any], str | None, bool]:
         """Drain the inbox delta query, following ``@odata.nextLink`` pages, and

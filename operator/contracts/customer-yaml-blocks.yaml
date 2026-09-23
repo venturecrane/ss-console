@@ -256,6 +256,21 @@ top_level:
       yet (the pilot rehearses the defaults). The overlay's on-box validator
       does not inspect unknown top-level blocks, but run it at the pinned ref
       against the edited file before the first authoring anyway.
+  staff_mailbox_reads:
+    status: implemented
+    materializer: >-
+      no translate step by design, the vendor_invoice_intake shape: the
+      msgraph-mail connector reads the block directly off the seat's own
+      /var/lib/smd-config/customer.yaml at call time
+      (msgraph_mail_connector/staff_mailboxes.py load_staff_mailboxes).
+    note: >-
+      `mailboxes`, a list of staff addresses the firm lets the Operator READ
+      through list_staff_messages / read_staff_message. Every other mailbox
+      is refused before any Graph call; a missing or malformed block refuses
+      all. Read-only: no send, draft, move or delete reaches a staff mailbox.
+      Takes effect only once the firm ALSO adds the mailbox to the READ app's
+      Exchange ApplicationAccessPolicy scope group; until then Graph answers
+      403 and the read fails closed.
   voice_library:
     status: implemented
     materializer: bootstrap Step 2a (R2 voice-vault sync) + translate _persona_config (config.yaml)
