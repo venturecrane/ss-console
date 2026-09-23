@@ -13,6 +13,8 @@ import anthropicJson from '../../../operator/adapter/cost_telemetry/anthropic_pr
 export interface AnthropicModelPricing {
   input_per_million_cents: number
   output_per_million_cents: number
+  /** Per-model cache-read multiple of the input rate, when it differs from the table-wide one. */
+  cache_read_multiplier?: number
 }
 
 export interface AnthropicPricing {

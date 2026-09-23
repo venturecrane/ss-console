@@ -965,7 +965,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # plugins/hermes-smd-inbound/__init__.py. Verified ref-only: all ten
 # overlay-pairs files and plugins/hermes-smd-audit/schemas.py are byte-identical
 # across c9c9d632..eb23bff7, so no paired hash and no vocabulary moves.
-ARG OVERLAY_REF="eb23bff7ebd046a8565f31f626b7da9e7f93016f"
+# 2026-09-23 (62a4cccb, overlay #380). Prices claude-opus-5-5 in the vendored
+# table the interactive cost meter reads, so a seat running Opus 5.5 (staging
+# as main, pilot then A&P as escalation) meters its turns instead of recording
+# 0 and alarming model_unpriced. Runtime file: shared/anthropic_pricing.json;
+# no overlay-pairs file or audit schema changed, so only overlayRef moves.
+ARG OVERLAY_REF="62a4cccb91098c70547a7f0caf396108e8a49800"
 
 ARG CUSTOMER_SLUG=customer-zero
 

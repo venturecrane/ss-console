@@ -96,7 +96,7 @@ def run(sr: StageRun) -> int:
             system=prompts.load("filter-system", sr.cfg),
             max_tokens=16000,
             messages=[{"role": "user", "content": payload}],
-            effort="",
+            effort="high",
             stream=True,
             custom_id="filter",
         )

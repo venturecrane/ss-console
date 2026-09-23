@@ -99,7 +99,9 @@ fly_region: lax # Pacific — the pilot firm is California-based
 # (matter-document-review et al., pre-weighted) escalates to Opus via the SOUL
 # instruction that translate.py renders when escalation_model is set.
 model: claude-sonnet-4-6
-escalation_model: claude-opus-4-8
+# Opus 5.5 (2026-09-23): $4/$20 against 4.8's $5/$25; pilot proves the
+# delegated heavy-work path on 5.5 before A&P moves.
+escalation_model: claude-opus-5-5
 # Pin to the CURRENT overlay/hermes ref at provision time (matches OVERLAY_REF).
 # Hermes v0.18.0 → v0.20.4 promotion (Step 2, real-connector proving seat before
 # A&P, ss#2444). Rollback pin: v2026.7.1@7c1a029553d87c43ecff8a3821336bc95872213b.

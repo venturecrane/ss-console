@@ -34,7 +34,7 @@ def _run_part(
             system=system,
             messages=[{"role": "user", "content": text}],
             max_tokens=max_tokens,
-            effort="",
+            effort="high",
             stream=True,
             cache_blocks=("system",),
             custom_id=f"repair-{label}",

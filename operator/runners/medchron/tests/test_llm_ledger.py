@@ -147,7 +147,7 @@ def test_batch_split_by_bytes_and_count() -> None:
 
 def test_model_for_reads_the_authored_tiers(firm_config_path: Path) -> None:
     cfg = config_mod.load(str(firm_config_path))
-    assert llm.model_for(cfg, "composition") == "claude-opus-5"
+    assert llm.model_for(cfg, "composition") == "claude-opus-5-5"
     with pytest.raises(llm.DoorwayError):
         llm.model_for(cfg, "oracle")
 
@@ -431,3 +431,23 @@ def test_ledger_report_prices_from_the_shared_table(ledger: ledger_mod.Ledger, p
     assert blob["dollars_by_stage"]["compose"] == pytest.approx(7.9125, abs=1e-4)
     assert blob["dollars_by_stage"]["vision"] == pytest.approx((0.02 + 0.01) * 0.5, abs=1e-6)
     assert blob["tokens_by_stage"]["vision"]["pages"] == 3
+
+
+def test_opus_stages_pin_effort_high_rather_than_the_api_default() -> None:
+    """The API default effort is high on claude-opus-5 and MEDIUM on
+    claude-opus-5-5, so an Opus stage that ships at the default thinks one level
+    less the moment its tier moves. Every composition/judgment call site pins it."""
+    import ast
+
+    stages = Path(__file__).resolve().parents[1] / "medchron" / "stages"
+    for name, expected in (("compose.py", 2), ("repair.py", 1), ("summarize.py", 1), ("scope.py", 1)):
+        tree = ast.parse((stages / name).read_text(encoding="utf-8"))
+        efforts = [
+            kw.value.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            for kw in node.keywords
+            if kw.arg == "effort" and isinstance(kw.value, ast.Constant)
+        ]
+        assert efforts.count("high") == expected, (name, efforts)
+        assert "" not in efforts, (name, efforts)

@@ -70,6 +70,21 @@ def test_dated_model_id_matches_by_prefix(tmp_path: Path) -> None:
     assert pr.rate_for("claude-haiku-4-5-20251001").input_per_million_cents == 80
 
 
+def test_opus_5_5_prices_from_its_own_row_in_the_shipped_table() -> None:
+    """Without its own row, claude-opus-5-5 prefix-matches claude-opus-5 and is
+    charged $5/$25 with cache reads at 0.10x; its real price is $4/$20 with
+    cache reads at 0.05x. Read the table the seat ships, not a fixture."""
+    shipped = Path(__file__).resolve().parents[3] / "adapter" / "cost_telemetry" / "anthropic_pricing.json"
+    pr = budget_mod.Pricing.load(shipped)
+    row = {"model": "claude-opus-5-5", "in": 1_000_000, "out": 1_000_000, "cache_read": 0, "cache_write": 0}
+    assert pr.price_row(row) == pytest.approx(4.0 + 20.0)
+    cached = {"model": "claude-opus-5-5", "in": 0, "out": 0, "cache_read": 1_000_000, "cache_write": 0}
+    assert pr.price_row(cached) == pytest.approx(4.0 * 0.05)
+    # The table-wide multiplier still governs every model without an override.
+    opus5 = {**cached, "model": "claude-opus-5"}
+    assert pr.price_row(opus5) == pytest.approx(5.0 * 0.10)
+
+
 def test_missing_multipliers_refuse(tmp_path: Path) -> None:
     bad = {"_meta": {"units": "x"}, "models": PRICING["models"]}
     p = tmp_path / "p.json"
