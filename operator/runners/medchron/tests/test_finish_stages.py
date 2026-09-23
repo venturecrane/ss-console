@@ -273,6 +273,36 @@ def test_scope_omits_with_disclosure_and_keeps_unclassified(job_dir: Path, firm:
     assert (d / "entries_full.md").is_file()
 
 
+def test_scope_removes_entries_attributed_to_the_co_plaintiff(job_dir: Path, firm: Path, data_root: Path) -> None:
+    """A chronology is ONE patient's.
+
+    Live 2026-09-23 on a two-plaintiff matter: folder scoping kept every FILE out of the
+    co-client's folder and 29 of her entries still reached the document,
+    because her records sit inside files filed under the client's own folder
+    and the matter root - same collision, same providers, same dates. The
+    composer labels the patient in the provider line, so attribution can
+    separate what folders cannot.
+
+    The keeps matter as much as the drop: a clinical parenthetical carries no
+    surname and must survive, or `(PD)` home dialysis and `(CMS-1500)` billing
+    entries would vanish from every joint matter.
+    """
+    co = "01/05/2026\nSutter Health Radiology (Beta Example) | Medical Diagnoses\n\nAnkle series. (Exhibit 1 - p. 9)"
+    pd = "01/06/2026\nVacaValley Home Training (PD) | Treatments\n\nDialysis session. (Exhibit 1 - p. 10)"
+    mine = "01/07/2026\nExample Clinic (Alpha Example) | Medical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 11)"
+    sr = _sr(job_dir, firm, data_root, Scripted(lambda p, n: _msg("")))
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "entries.md").write_text("\n\n".join([co, pd, mine]))
+    assert scope_stage.run(sr) == 0
+    scoped = (d / "entries_scoped.md").read_text()
+    assert "Ankle series." not in scoped, "the co-plaintiff's entry must not reach the document"
+    assert "Dialysis session." in scoped, "a clinical parenthetical is not a patient name"
+    assert "Cervical strain." in scoped, "the client's own labelled entry stays"
+    dropped = json.loads((d / "omitted_coclient.json").read_text())
+    assert [x["patient"] for x in dropped] == ["Beta Example"]
+
+
 def test_scope_refuses_when_clusters_have_no_merge(job_dir: Path, firm: Path, data_root: Path) -> None:
     sr = _sr(job_dir, firm, data_root, Scripted(lambda p, n: _msg("")))
     d = sr.slug_dir / "runs" / "alpha"

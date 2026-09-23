@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 
 from .. import llm, prompts
 from .base import StageRun
@@ -30,6 +31,61 @@ NOTE = (
     "chronology. They record routine or unrelated care with no bearing on the claimed injuries. They remain in "
     "the exhibits and can be itemized on request.]"
 )
+
+
+def coclient_name(entry_text: str, client_name: str, surname: str) -> str | None:
+    """The OTHER patient this entry is attributed to, or None.
+
+    On a joint matter the composer labels an entry's patient in the provider
+    line's parenthetical: `Some Radiology Group (Other Patient Name) | ...`.
+    A chronology is one patient's, so an entry labelled with a DIFFERENT
+    patient is not hers however it reached the corpus.
+
+    The test is deliberately narrow: the parenthetical must contain this
+    unit's SURNAME (co-plaintiffs on a motor-vehicle matter are related and
+    share it) and must not contain the client's own given name. That keeps
+    clinical parentheticals - `VacaValley Home Training (PD)`, `(CMS-1500)`,
+    `(second interpretation)` - which carry no surname and must never be
+    dropped.
+
+    Live 2026-09-23 on a two-plaintiff matter: folder scoping kept every file out of the
+    co-client's folder, and 29 of her entries still reached the document
+    because her records sit inside files filed under the client's own folder
+    and the matter root - same collision, same providers, same dates. Folders
+    cannot separate patients; only attribution can.
+    """
+    lines = [ln for ln in entry_text.splitlines() if ln.strip()]
+    if len(lines) < 2:
+        return None
+    given = (client_name or "").split()[0].lower()
+    for m in re.finditer(r"\(([^)]{3,60})\)", lines[1]):
+        inside = m.group(1)
+        if surname.lower() in inside.lower() and given and given not in inside.lower():
+            return inside.strip()
+    return None
+
+
+def drop_coclient(sr: StageRun, d: Path, entries: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Entries belonging to this unit's client only.
+
+    A chronology is ONE patient's, so an entry the composer attributed to a
+    different patient leaves before anything else is decided about it - before
+    the pre/post-incident split, before the materiality call. What left is
+    recorded in `omitted_coclient.json` so the firm can audit the removal.
+    """
+    found = [(e, who) for e in entries if (who := coclient_name(e["text"], sr.unit.client_name, sr.unit.surname))]
+    if not found:
+        return entries
+    drop = {id(e) for e, _ in found}
+    sr.log(f"  co-client entries removed: {len(found)} ({', '.join(sorted({w for _, w in found}))[:80]})")
+    (d / "omitted_coclient.json").write_text(
+        json.dumps(
+            [{"date": e["iso"], "patient": who, "head": e["text"].splitlines()[1][:120]} for e, who in found],
+            indent=1,
+        ),
+        encoding="utf-8",
+    )
+    return [e for e in entries if id(e) not in drop]
 
 
 def split_entries(text: str) -> list[dict[str, str]]:
@@ -81,7 +137,7 @@ def run(sr: StageRun) -> int:
     full = (text + "\n\n" + merged).strip()
     if not (d / "entries_full.md").is_file():
         (d / "entries_full.md").write_text(full, encoding="utf-8")
-    entries = split_entries(full)
+    entries = drop_coclient(sr, d, split_entries(full))
     pre = [e for e in entries if e["iso"] < incident]
     post = [e for e in entries if e["iso"] >= incident]
     sr.log(f"{sr.unit.unit}: {len(pre)} pre-incident, {len(post)} post-incident")
