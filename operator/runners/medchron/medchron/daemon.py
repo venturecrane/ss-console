@@ -16,7 +16,8 @@ What it holds itself to:
   stages that finished; the daemon re-runs `medchron run` on restart.
 * The child gets an allow-listed env: the Anthropic key (the seat's workspace,
   ADR 0062), the Smokeball credentials, the firm config path. Nothing else.
-* Workdirs are wiped 72 h after a terminal state, never before.
+* Workdirs are wiped 72 h after a terminal state, and after a longer window
+  when a job stopped and waited (`retention.py`) -- never before either.
 * Liveness is a tick file and a heartbeat json (`memory_cap` says whether the
   cgroup controller was present; boot smoke reads it). No Sentry here or in
   the child: exception locals carry the envelope.
@@ -27,7 +28,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import shutil
 import signal
 import socket
 import sqlite3
@@ -40,7 +40,7 @@ from typing import Any, Callable
 
 from .covered import delivery_fields
 
-from . import config as config_mod, job as job_mod, resume as resume_mod, verdict as verdict_mod
+from . import config as config_mod, job as job_mod, resume as resume_mod, retention, verdict as verdict_mod
 
 logger = logging.getLogger("medchron.daemon")
 
@@ -188,6 +188,7 @@ class Daemon:
     cgroup_root: Path = CGROUP_ROOT
     memory_max: int = DEFAULT_MEMORY_MAX
     wipe_hours: float = DEFAULT_WIPE_HOURS
+    held_wipe_hours: float = retention.DEFAULT_HELD_WIPE_HOURS
     child_uid: str | None = None
     clock: Callable[[], float] = time.time
     child_env: dict[str, str] = field(default_factory=dict)
@@ -586,16 +587,9 @@ class Daemon:
         return True
 
     def wipe_expired(self) -> list[str]:
-        wiped = []
-        if not self.jobs.is_dir():
-            return wiped
-        for d in list(self.jobs.iterdir()):
-            st = self._daemon_state(d.name)
-            done = st.get("finished_at")
-            if st.get("state") in TERMINAL and done and self.clock() - float(done) >= self.wipe_hours * 3600:
-                shutil.rmtree(d, ignore_errors=True)
-                wiped.append(d.name)
-        return wiped
+        """Terminal jobs at `wipe_hours`, parked ones at `held_wipe_hours`
+        (`retention.py` carries the policy and why it is two windows)."""
+        return retention.wipe_expired(self, TERMINAL)
 
     def tick(self) -> str | None:
         """One iteration: resume requests, heartbeat, wipe, wakes, then one job."""
@@ -642,6 +636,7 @@ def build() -> Daemon:
         sticky_db=os.environ.get(STICKY_DB_ENV) or DEFAULT_STICKY_DB,
         memory_max=int(os.environ.get(MEMORY_MAX_ENV) or DEFAULT_MEMORY_MAX),
         wipe_hours=float(os.environ.get(WIPE_HOURS_ENV) or DEFAULT_WIPE_HOURS),
+        held_wipe_hours=float(os.environ.get(retention.HELD_WIPE_HOURS_ENV) or retention.DEFAULT_HELD_WIPE_HOURS),
         child_uid=CHILD_UID_NAME,
     )
 
