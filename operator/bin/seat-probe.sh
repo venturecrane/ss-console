@@ -96,6 +96,6 @@ if [ -z \"\${GPID}\" ]; then
   echo \"seat-probe: no gateway process found on ${APP_NAME}\" >&2
   exit 1
 fi
-ENVV=\$(tr \"\\0\" \"\\n\" < /proc/\${GPID}/environ | grep -vE \"^(PWD|SHLVL|_|MSGRAPH_SEND_TENANT_ID|MSGRAPH_SEND_CLIENT_ID|MSGRAPH_SEND_CLIENT_SECRET|AGENTMAIL_SEND_API_KEY|AGENTMAIL_WEBHOOK_READ_API_KEY)=\" | tr \"\\n\" \" \")
-exec runuser -u hermes -- env -u MSGRAPH_SEND_TENANT_ID -u MSGRAPH_SEND_CLIENT_ID -u MSGRAPH_SEND_CLIENT_SECRET -u AGENTMAIL_SEND_API_KEY -u AGENTMAIL_WEBHOOK_READ_API_KEY \${ENVV} PATH=/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin ${QUOTED}
+ENVV=\$(tr \"\\0\" \"\\n\" < /proc/\${GPID}/environ | grep -vE \"^(PWD|SHLVL|_|MSGRAPH_SEND_TENANT_ID|MSGRAPH_SEND_CLIENT_ID|MSGRAPH_SEND_CLIENT_SECRET|AGENTMAIL_SEND_API_KEY|AGENTMAIL_WEBHOOK_READ_API_KEY|R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY)=\" | tr \"\\n\" \" \")
+exec runuser -u hermes -- env -u MSGRAPH_SEND_TENANT_ID -u MSGRAPH_SEND_CLIENT_ID -u MSGRAPH_SEND_CLIENT_SECRET -u AGENTMAIL_SEND_API_KEY -u AGENTMAIL_WEBHOOK_READ_API_KEY -u R2_ACCESS_KEY_ID -u R2_SECRET_ACCESS_KEY \${ENVV} PATH=/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin ${QUOTED}
 '"
