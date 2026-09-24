@@ -435,6 +435,92 @@ def test_submit_writes_the_row_then_the_queue_file_with_the_remainder(verbs):
     assert audit_types(ledger._db_path) == ["MEDCHRON_JOB_SUBMITTED"]
 
 
+def _failed_job(v, **env_over) -> str:
+    j = call(v, "medchron_job_submit", envelope=envelope(**env_over))["job_id"]
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state="running", fields={})
+    call(
+        v,
+        "medchron_job_record",
+        peer_uid=ROOT,
+        job_id=j,
+        state="failed",
+        # Small counts on purpose: the fixture's allowance is 1000 pages, and a
+        # realistic 3568 would make the NEXT submit refuse for allowance rather
+        # than for the reason a test is about.
+        fields={"reason": "merge lost 15 paragraphs", "cents": 6201, "pages": 10},
+    )
+    return j
+
+
+def test_a_failed_job_resumes_but_a_delivered_one_never_does(verbs):
+    """ss#2903. `failed -> running` is the one new edge; `delivered` stays a
+    dead end, because a delivered package that needs redoing is new work, not a
+    rewind of the row that says it shipped."""
+    v, _ledger, queue = verbs
+    j = _failed_job(v)
+    out = call(v, "medchron_job_resume", peer_uid=ROOT, job_id=j, reason="merge salvage shipped", redo=[])
+    assert out["queued"] is True
+    marker = queue / f".resume-{j}.json"
+    assert marker.is_file()
+    # The marker leads with a dot, which is what keeps the daemon's queue scan
+    # (`_queued`, which skips dotfiles) from claiming it as an envelope and
+    # trying to run a job whose id is ".resume-...".
+    assert marker.name.startswith(".")
+    # The ledger edge itself: this raised before ss#2903.
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state="running", fields={})
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state="delivered", fields={})
+    with pytest.raises(ValueError):
+        call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state="running", fields={})
+
+
+def test_resume_refuses_without_a_reason_and_without_a_redo_list(verbs):
+    """ADR 0088: a park without a reason is the same stranding under a
+    friendlier name. A resume that does not say why is the same again."""
+    v, _ledger, _queue = verbs
+    j = _failed_job(v)
+    with pytest.raises(ValueError, match="reason"):
+        call(v, "medchron_job_resume", peer_uid=ROOT, job_id=j, reason="   ", redo=[])
+    with pytest.raises(ValueError, match="redo"):
+        call(v, "medchron_job_resume", peer_uid=ROOT, job_id=j, reason="fixed")
+    with pytest.raises(ValueError, match="redo"):
+        call(v, "medchron_job_resume", peer_uid=ROOT, job_id=j, reason="fixed", redo=["ok", ""])
+
+
+def test_resume_refuses_a_job_that_is_not_failed_and_one_that_does_not_exist(verbs):
+    v, _ledger, _queue = verbs
+    j = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    with pytest.raises(ValueError, match="not failed"):
+        call(v, "medchron_job_resume", peer_uid=ROOT, job_id=j, reason="x", redo=[])
+    with pytest.raises(ValueError, match="no such job"):
+        call(v, "medchron_job_resume", peer_uid=ROOT, job_id="nope", reason="x", redo=[])
+
+
+def test_resume_is_root_only(verbs):
+    """A resume spends money and writes to the firm's matter, and rests on a
+    judgment only a person can make. An Operator that could resume its own
+    failures is the every-tick loop the daemon learned about on 2026-08-31."""
+    v, _ledger, _queue = verbs
+    j = _failed_job(v)
+    with pytest.raises(PermissionError):
+        call(v, "medchron_job_resume", peer_uid=AGENT_UID, job_id=j, reason="x", redo=[])
+    with pytest.raises(PermissionError):
+        call(v, "medchron_job_resume", peer_pid=GATEWAY_PID, peer_uid=None, job_id=j, reason="x", redo=[])
+
+
+def test_resume_refuses_when_a_twin_already_delivered_the_same_work(verbs):
+    """The refusal a person cannot reasonably work out alone. Seen live: a
+    the standing example: failed rows whose work a later job finished. Resuming
+    the stale one uploads onto a matter that already has the package."""
+    v, _ledger, queue = verbs
+    stale = _failed_job(v)
+    fresh = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=fresh, state="running", fields={})
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=fresh, state="delivered", fields={})
+    with pytest.raises(ValueError, match="same work"):
+        call(v, "medchron_job_resume", peer_uid=ROOT, job_id=stale, reason="fixed", redo=[])
+    assert not (queue / f".resume-{stale}.json").exists()
+
+
 def test_transitions_are_monotonic_and_each_pins_its_audit_type(verbs):
     v, ledger, _ = verbs
     j = call(v, "medchron_job_submit", envelope=envelope())["job_id"]

@@ -20,6 +20,11 @@ Peer gating, per verb:
                            update SKIPS whatever that record names -- so a path
                            the agent could reach is a path a client conversation
                            could use to make a chronology omit medical records.
+    medchron_job_resume    uid 0 only, and with NO agent tool (ss#2903). Asks the
+                           runner daemon to re-run a FAILED job from the stages
+                           its state file has not finished, instead of paying for
+                           a fresh one. Requires a reason and the stages the fix
+                           touched; only a person knows a defect is fixed.
 
 Every writing verb pins the audit type its transition maps to (``AUDIT_TYPE``),
 so none can forge another row. Audit rows carry counts, digests and ids —
@@ -63,6 +68,7 @@ VERBS = (
     "medchron_job_list",
     "medchron_job_record",
     "medchron_backfill_covered",
+    "medchron_job_resume",
 )
 
 #: The coverage arrays, replaced by counts on the LIST paths. A matter can carry
@@ -170,6 +176,13 @@ class MedchronVerbs:
             # records. The runner's own reporting verb is root-only for the
             # adjacent reason.
             "medchron_backfill_covered": is_root,
+            # ROOT only, and deliberately with no agent tool (ss#2903). A resume
+            # spends money and writes to the firm's matter, and the judgment it
+            # rests on -- "the defect is fixed, the completed stages are still
+            # good" -- is one only a person can make. An Operator that could
+            # resume its own failures is the loop the daemon already learned
+            # about on 2026-08-31, when a cap-refused hold re-ran every tick.
+            "medchron_job_resume": is_root,
         }.get(action, False)
         if not ok:
             raise PermissionError(f"{action} is not permitted for this caller")
@@ -232,7 +245,65 @@ class MedchronVerbs:
             return self._record(request)
         if action == "medchron_backfill_covered":
             return self._backfill(request)
+        if action == "medchron_job_resume":
+            return self._resume(request)
         raise ValueError(f"unsupported medchron action: {action}")
+
+    def _resume(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Ask the runner daemon to re-run a FAILED job from where it stopped.
+
+        This writes a MARKER into the queue dir and nothing else. It cannot do
+        the re-queue itself: `jobs/` is root:medchron 0710 and this process is
+        workspace-broker (uid 10001, groups workspace-connectors and
+        audit-readers), so it can neither read a job's envelope nor tell a wiped
+        job dir from a present one. The daemon is root, owns `jobs/`, and is the
+        only writer of daemon state -- the same division the sticky-stop release
+        already uses. `.resume-` leads with a dot so the daemon's queue scan,
+        which skips dotfiles, can never mistake one for an envelope.
+
+        The ledger row is NOT moved here. The daemon records `running` when it
+        actually starts, so a marker that never gets resolved (the job dir was
+        wiped) leaves the row saying exactly what is true: still failed.
+        """
+        job_id = str(request.get("job_id") or "")
+        reason = str(request.get("reason") or "").strip()
+        redo = request.get("redo")
+        if not job_id:
+            raise ValueError("medchron_job_resume requires job_id")
+        # ADR 0088: a park without a reason is the same stranding under a
+        # friendlier name. A resume that does not say why is the same again.
+        if not reason:
+            raise ValueError(
+                "medchron_job_resume requires a reason: what was fixed, and why the done stages still hold"
+            )
+        if not isinstance(redo, list) or any(not isinstance(s, str) or not s.strip() for s in redo):
+            raise ValueError("medchron_job_resume requires redo: a list of stage names, [] when the fix reopens none")
+        row = self._db.read(job_id)
+        if row is None:
+            raise ValueError(f"no such job {job_id}")
+        if row["state"] != "failed":
+            raise ValueError(f"job {job_id} is {row['state']}, not failed; only a failed job resumes")
+        # The refusal a person cannot reasonably work out alone: a LATER job for
+        # the same work may already have delivered it. `active_duplicate` does
+        # not cover this -- it exempts terminal rows and is only called on
+        # submit -- and resuming the stale one re-uploads onto a matter that
+        # already has the package.
+        twin = self._db.work_twin(job_id)
+        if twin is not None:
+            raise ValueError(
+                f"job {twin['id']} carries the same work and is {twin['state']}; "
+                f"resuming {job_id} would deliver it twice"
+            )
+        self._db.queue_dir.mkdir(parents=True, exist_ok=True)
+        marker = self._db.queue_dir / f".resume-{job_id}.json"
+        payload = {"job_id": job_id, "reason": reason[:500], "redo": [s.strip() for s in redo]}
+        marker.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+        self._audit(
+            "MEDCHRON_JOB_RUNNING",
+            {"job_id": job_id, "resume_requested": True, "reason": reason[:500], "redo": len(redo)},
+            row["matter_id"],
+        )
+        return {"ok": True, "job_id": job_id, "queued": True, "redo": [s.strip() for s in redo]}
 
     def _submit(self, request: dict[str, Any]) -> dict[str, Any]:
         try:
