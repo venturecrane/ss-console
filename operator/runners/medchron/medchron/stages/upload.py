@@ -56,6 +56,34 @@ def _files_in(seat: Any, matter_id: str, folder_id: str) -> dict[str, int]:
     return out
 
 
+def _cannot_say_what_was_sent(sr: StageRun, delivery: dict[str, Any], folder_id: str) -> bool:
+    """True when the delivery record predates the `sent` flag (ss#2901).
+
+    Before that flag existed the record was written ONCE, at the end of a run,
+    for every manifest row regardless of whether it went up -- so a name in the
+    list means "this was in the manifest", not "this was sent". Combined with a
+    vendor list that lags minutes behind an upload, a resume reading such a
+    record has no way to tell a file that is already on the matter from one that
+    never left.
+
+    Live 2026-09-24 that ambiguity filed a second copy of a 13-file package onto
+    a firm's matter, which only an irreversible delete can undo -- and that is
+    fail-closed on a customer seat by design. So the stage HOLDS instead. A hold
+    is something a person clears; a duplicate is something they largely cannot.
+    That is the same rule the `sent` flag itself was written to enforce; it was
+    simply never applied to records written before the flag.
+    """
+    files = delivery.get("files") or []
+    if not files or any("sent" in f for f in files):
+        return False
+    sr.log(
+        f"delivery.json for folder {folder_id} predates the `sent` flag, so it cannot say which of {len(files)} "
+        f"file(s) are already on the matter; holding rather than risking a second copy. Read the folder and, if "
+        f"the package is there, mark the run delivered by hand."
+    )
+    return True
+
+
 def _send_missing(
     sr: StageRun,
     seat: Any,
@@ -140,6 +168,8 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
         delivery_path.write_text(json.dumps(delivery, indent=1), encoding="utf-8")
         sr.log(f"created folder '{folder_name}' (id {folder_id})")
 
+    if _cannot_say_what_was_sent(sr, delivery, folder_id):
+        return 2
     present = _files_in(seat, matter_id, folder_id)
     counts = _send_missing(sr, seat, matter_id, folder_id, manifest, present, delivery, delivery_path)
     if counts is None:
