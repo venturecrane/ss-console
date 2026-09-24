@@ -30,7 +30,9 @@ States and the audit type each transition pins:
     failed     MEDCHRON_JOB_FAILED
 
 Transitions are monotonic except held -> running (a seat pause lifting, or a
-hold the firm resolved and resubmitted through a fresh run of the same job).
+hold the firm resolved and resubmitted through a fresh run of the same job) and
+failed -> running (a resume, ss#2903: the defect was fixed and the completed
+stages on disk are still good). `delivered` remains a dead end.
 """
 
 from __future__ import annotations
@@ -62,12 +64,22 @@ AUDIT_TYPE = {
     "delivered": "MEDCHRON_JOB_DELIVERED",
     "failed": "MEDCHRON_JOB_FAILED",
 }
+# `failed -> running` is the resume edge (ss#2903). It is NOT a loosening of the
+# monotonic rule into "anything may be retried": a resume is requested by a human
+# through `medchron_job_resume`, which refuses without a reason, and the daemon
+# re-queues the job so the driver skips the stages already `done` in state.json.
+# The alternative it replaces is a fresh job that re-pays every completed stage —
+# matter 200454 paid $62.01 and then $62.80 to die at `merge` twice, while the
+# same rescue done by hand on a later matter cost $4 against $104.
+#
+# `delivered` keeps its empty set. A delivered package that needs redoing is a
+# new job with new work, not a rewind of the row that says it shipped.
 _ALLOWED_NEXT = {
     "submitted": {"running", "held", "failed"},
     "running": {"held", "delivered", "failed"},
     "held": {"running", "failed"},
     "delivered": set(),
-    "failed": set(),
+    "failed": {"running"},
 }
 
 SKILL_NAME = "medical-chronology-maintainer"
