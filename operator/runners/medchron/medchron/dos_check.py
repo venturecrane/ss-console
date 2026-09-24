@@ -21,10 +21,13 @@ this order:
                     composer is told to keep billing-only dates OUT of entries
                     (prompts/map-system.md), so this is a records gap in the
                     firm's file, not a chronology error.
-  provider_unmatched  entries carry the date and none names the billing
-                    provider: two providers billed one day and the chronology
-                    may hold only one. Reported, never held, because provider
-                    names differ between bills and records.
+  provider_unmatched  entries carry the date, none names the billing provider,
+                    and the medical records DO name it: two providers seen one
+                    day and the chronology may hold only one. (A billing name
+                    no record page uses cannot be in a record-built
+                    chronology, so the covered date counts as in_chronology.)
+                    Reported, never held, because names differ between bills
+                    and records.
   missed_visit      a record page carries the date and no entry does. This is
                     the class the check exists for.
 
@@ -194,6 +197,15 @@ def _names_provider(entry_prov: str, bill_prov: str, match: dict[str, list[str]]
     return bool(_words(bill_prov) & set().union(*(_words(lab) for lab in labels)))
 
 
+def _named_in_records(bill_prov: str, pages: dict[str, list[tuple[int, str]]]) -> bool:
+    """Does any medical-record page name the billing provider (every
+    distinctive word of it)? A billing company the records never mention (a
+    physician group invoicing for hospital care) cannot be named by a
+    chronology built from those records, so it is no evidence of a miss."""
+    want = _words(bill_prov)
+    return bool(want) and any(want <= _words(t) for plist in pages.values() for _, t in plist)
+
+
 def check(
     slug_dir: Path,
     run_dir: Path,
@@ -217,7 +229,9 @@ def check(
     missed: list[dict[str, Any]] = []
     unmatched: list[dict[str, Any]] = []
     for iso, prov in sorted(billed):
-        if iso in by_date and any(_names_provider(p, prov, match) for p in by_date[iso]):
+        if iso in by_date and (
+            any(_names_provider(p, prov, match) for p in by_date[iso]) or not _named_in_records(prov, pages)
+        ):
             cls = "in_chronology"
         elif iso < incident_iso:
             cls = "pre_incident"

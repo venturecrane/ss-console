@@ -178,7 +178,7 @@ def _two_providers_one_day(d: Path) -> None:
     pt = _bill("03/09/2026")
     img = {**_bill("03/09/2026"), "provider": "Valley Radiology Partners"}
     _bills(d, [pt, img])
-    _records(d, {1: "Visit 03/09/2026"})
+    _records(d, {1: "Visit 03/09/2026", 2: "Valley Radiology Partners MRI report 03/09/2026"})
 
 
 def test_second_provider_on_a_covered_date_is_not_hidden_by_the_first(data_root: Path, run: Path) -> None:
@@ -204,6 +204,16 @@ def test_authored_provider_match_names_the_billing_label(data_root: Path, run: P
         {"Example Clinic": ["Valley Radiology Partners"]},
     )
     assert rep["classes"]["in_chronology"] == 2
+
+
+def test_a_billing_name_no_record_uses_rides_on_the_covered_date(data_root: Path, run: Path) -> None:
+    # A physician group billing for hospital care under a name the records
+    # never print: the chronology cannot name it, so it is not a miss.
+    d = _slug(data_root)
+    _bills(d, [_bill("03/09/2026"), {**_bill("03/09/2026"), "provider": "Desert Emergency Physicians"}])
+    _records(d, {1: "Visit 03/09/2026"})
+    _entries(run, ["03/09/2026"])
+    assert _check(data_root, run)["classes"]["in_chronology"] == 2
 
 
 def test_no_billing_extraction_is_flagged_not_a_clean_pass(data_root: Path, run: Path) -> None:
