@@ -76,6 +76,13 @@ def dt(s: Any) -> str | None:
     return f"{yr:04d}-{mo:02d}-{dy:02d}" if 1 <= mo <= 12 and 1 <= dy <= 31 else None
 
 
+def quarantined(chunk: dict[str, Any], patient: str | None) -> bool:
+    """On a joint matter, a chunk naming another patient is that plaintiff's
+    bill. A blank patient field is kept (it cannot be attributed either way)."""
+    who = chunk.get("patient") or ""
+    return bool(patient and who and patient not in who.lower())
+
+
 class Matcher:
     def __init__(self, cfg: Any, slug_dir) -> None:
         self.match: dict[str, list[str]] = {k: list(v) for k, v in (cfg.get("billing", "provider_match") or {}).items()}
@@ -156,9 +163,8 @@ def run(sr: StageRun) -> int:
                 continue
             if not isinstance(c, dict) or "doc_type" not in c:
                 continue
-            who = c.get("patient") or ""
-            if patient and who and patient not in who.lower():
-                quarantine.append((r["file"], who, c.get("provider")))
+            if quarantined(c, patient):
+                quarantine.append((r["file"], c.get("patient") or "", c.get("provider")))
                 continue
             kind = c.get("doc_type")
             if kind == "VENDOR_INVOICE":

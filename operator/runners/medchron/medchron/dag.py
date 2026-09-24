@@ -38,6 +38,7 @@ from .stages import (
     compose as _compose,
     condense as _condense,
     coverage as _coverage,
+    dos_check as _dos_check,
     icd_fetch as _icd,
     identity as _identity,
     manifest as _manifest,
@@ -283,7 +284,7 @@ STAGES: tuple[Stage, ...] = (
         "",
         lambda c: [c.slug, c.unit.unit, c.unit.client_name, c.job.incident_date],
         requires=("icd_tables",),
-        invalidates=("audit", "coverage_gate", "strip_apply"),
+        invalidates=("audit", "coverage_gate", "dos_check", "strip_apply"),
         runner=_build_doc.run,
         exit_map={
             1: (
@@ -348,10 +349,22 @@ STAGES: tuple[Stage, ...] = (
         exit_map={1: (HELD, "coverage gate: a pulled file is neither cited nor explained")},
     ),
     Stage(
+        "dos_check",
+        "",
+        _slug_unit,
+        requires=("coverage_gate",),
+        runner=_dos_check.run,
+        rehearse=_dos_check.rehearse,
+        exit_map={
+            1: (HELD, "date-of-service check: a billed visit has a record page and no chronology entry"),
+            2: (REFUSED, "date-of-service check: no entries file to check"),
+        },
+    ),
+    Stage(
         "billing_chart",
         "",
         lambda c: [c.slug, c.unit.unit, "--patient", c.unit.client_name],
-        requires=("coverage_gate",),
+        requires=("dos_check",),
         runner=_bchart.run,
     ),
     Stage(

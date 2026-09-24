@@ -191,5 +191,6 @@ def test_external_stages_are_the_seat_network_and_matter_stages() -> None:
 def test_the_gates_behind_the_paid_merge_carry_standalone_probes() -> None:
     """merge routing, the coverage verdict and the audit claim count are the
     three questions a dead tree could not answer without paying; each has a
-    $0 half a rehearsal runs from whatever exists."""
-    assert {s.name for s in dag.STAGES if s.rehearse is not None} == {"merge", "coverage_gate", "audit"}
+    $0 half a rehearsal runs from whatever exists. dos_check (a billed visit
+    the chronology lacks) is the fourth."""
+    assert {s.name for s in dag.STAGES if s.rehearse is not None} == {"merge", "coverage_gate", "audit", "dos_check"}

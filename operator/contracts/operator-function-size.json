@@ -24,7 +24,7 @@
     "runners/medchron/medchron/audit/run.py::Round.run_cluster": 102,
     "runners/medchron/medchron/llm.py::Doorway._round": 105,
     "runners/medchron/medchron/llm.py::Doorway.batch_call": 87,
-    "runners/medchron/medchron/stages/billing_chart.py::run": 159,
+    "runners/medchron/medchron/stages/billing_chart.py::run": 158,
     "runners/medchron/medchron/stages/billing_docx.py::run": 154,
     "runners/medchron/medchron/stages/coverage.py::run": 96,
     "runners/medchron/medchron/stages/download.py::run": 84,
