@@ -25,6 +25,18 @@ design. So each send is recorded in delivery.json AS IT HAPPENS, and a name
 this run already sent (same sha, same bytes) is never sent twice; it goes
 straight to the read-back. Ambiguity now resolves to exit 2, which a human
 can clear, instead of to a duplicate, which they largely cannot.
+
+**Index lag was only half of that (ss#2914).** The hold above could never have
+cleared, however long the vendor took, because `_files_in` keyed on the
+vendor's bare `name` while `expected` keys on the manifest filename -- and the
+vendor returns the extension in a separate field. Every file read as short
+forever. Read back off the live matter on 2026-09-24, 15 hours after the hold:
+all 13 files present at their exact manifest byte counts, and `confirmed`
+false on every row of delivery.json. A hold whose own message says the files
+"may still be materializing" must be able to clear once they have; this one
+could not, so the deliverable sat on the firm's matter while the job said it
+had not arrived. `_vendor_name` composes the two fields the way every other
+stage already did.
 """
 
 from __future__ import annotations
@@ -48,11 +60,33 @@ def _folder_by_name(seat: Any, matter_id: str, name: str) -> dict[str, Any] | No
     return None
 
 
+def _vendor_name(row: dict[str, Any]) -> str:
+    """The full filename, which the vendor does not give us in one field.
+
+    `seat.normalize_file` maps the vendor's row to `name` WITHOUT its extension
+    and `ext` separately, so a bare `name` never equals a manifest filename.
+    Every other stage that matches vendor rows against our own names already
+    composes the two (`coverage.py`, `units.py`, `assemble.py`, `exhibits.py`,
+    `group.py`); this stage was the one that did not, which is ss#2914.
+
+    Measured against all 356 rows of a live matter on 2026-09-24: every `ext`
+    carries its leading dot, and 6 of those names ALREADY ended with their own
+    extension (an e-signature vendor's own filenames). Appending unconditionally
+    would ask the read-back for `<name>.pdf.pdf` and read a present file as
+    missing -- the same false negative one axis over.
+    """
+    name = str(row.get("name") or "")
+    ext = str(row.get("ext") or "")
+    if not ext or name.lower().endswith(ext.lower()):
+        return name
+    return name + ext
+
+
 def _files_in(seat: Any, matter_id: str, folder_id: str) -> dict[str, int]:
     out: dict[str, int] = {}
     for f in seat.list_files(matter_id):
         if str(f.get("folderId") or "") == str(folder_id) and not f.get("deleted"):
-            out[str(f.get("name") or "")] = int(f.get("size") or 0)
+            out[_vendor_name(f)] = int(f.get("size") or 0)
     return out
 
 

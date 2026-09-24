@@ -109,6 +109,43 @@ def test_upload_holds_when_the_read_back_stays_short(job_dir, firm_config_path, 
     assert not any(f["confirmed"] for f in d["files"])
 
 
+def test_the_read_back_matches_a_vendor_row_whose_name_carries_no_extension():
+    """ss#2914. The vendor returns `name` without the extension and `ext` with
+    its leading dot, so a read-back keyed on the bare name can never match a
+    manifest filename -- it held a real 13-file delivery whose every file was
+    already on the matter.
+
+    Both axes are pinned here because the obvious fix breaks the second: 6 of
+    356 rows on that live matter ALREADY ended with their own extension, and
+    appending unconditionally moves the false negative rather than removing it.
+    """
+    assert upload._vendor_name({"name": "Chronology 09-24-26", "ext": ".docx"}) == "Chronology 09-24-26.docx"
+    # already suffixed (6 of 356 live rows): must not become `.pdf.pdf`
+    assert upload._vendor_name({"name": "Signed Agreement.pdf", "ext": ".pdf"}) == "Signed Agreement.pdf"
+    # case-insensitively suffixed, and a row the vendor gave no extension at all
+    assert upload._vendor_name({"name": "Scan.PDF", "ext": ".pdf"}) == "Scan.PDF"
+    assert upload._vendor_name({"name": "no-extension", "ext": ""}) == "no-extension"
+    assert upload._vendor_name({"name": "no-extension", "ext": None}) == "no-extension"
+
+
+def test_the_fake_seat_splits_a_filename_the_way_the_vendor_does(job_dir, firm_config_path, data_root):
+    """The guard on the fixture itself (ss#2914). This fake used to echo the
+    uploaded name back whole, so `present` and `expected` were derived from one
+    string: the read-back check could not fail on the axis the real vendor
+    breaks, and 303 green tests said nothing about it. If this ever reverts to
+    returning the full name, the test above stops being a test.
+    """
+    seat = FakeSeat([], [], {})
+    log: list[str] = []
+    sr = _upload_sr(job_dir, firm_config_path, data_root, seat, log)
+    assert upload.run(sr, pause=0, tries=3) == 0
+    rows = seat.list_files("m")
+    assert rows, "the fake recorded no uploaded rows"
+    for r in rows:
+        assert r["ext"].startswith("."), f"ext must carry its leading dot: {r['ext']!r}"
+        assert not r["name"].endswith(r["ext"]), f"name must not carry the extension: {r['name']!r}"
+
+
 def test_upload_does_not_resend_what_an_earlier_attempt_already_sent(job_dir, firm_config_path, data_root):
     """The live 2026-09-24 duplicate. The read-back held at exit 2 with every
     file already on the matter; re-running the held stage re-sent all of them,
