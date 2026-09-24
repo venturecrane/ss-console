@@ -147,14 +147,22 @@ class FakeSeat:
         if self.crash_after is not None and len(self.sent) >= self.crash_after:
             raise RuntimeError("connection dropped mid-upload")
         self.sent.append({"folderId": folder_id, "name": name, "size": len(data)})
+        # The vendor splits a filename: `name` carries NO extension and `ext`
+        # carries it WITH its leading dot (`seat.normalize_file`; measured on
+        # all 356 rows of a live matter 2026-09-24). This fake used to echo the
+        # name back whole and put a dotless `ext` beside it, so `present` and
+        # `expected` were derived from one string and could not disagree on the
+        # axis the real vendor breaks -- ss#2914 held a real delivery for 15
+        # hours with every file on the matter, past a suite of 303 green tests.
+        stem, dot, tail = name.rpartition(".")
         self._pending.append(
             (
                 self._lists + self.lag,
                 {
                     "id": f"up-{len(self.sent)}",
-                    "name": name,
+                    "name": stem if dot else name,
                     "size": len(data),
-                    "ext": name.rsplit(".", 1)[-1],
+                    "ext": f".{tail}" if dot else "",
                     "folderId": folder_id,
                 },
             )
