@@ -42,8 +42,12 @@ def _entries(run: Path, dates: list[str]) -> None:
 
 
 def _bill(date: str, *, kind: str = "MEDICAL_BILL", desc: str = "Office visit", charge: str = "150.00") -> dict:
-    return {"doc_type": kind, "provider": "Example Clinic", "patient": "",
-            "line_items": [{"date": date, "description": desc, "charge": charge, "page": 1}]}
+    return {
+        "doc_type": kind,
+        "provider": "Example Clinic",
+        "patient": "",
+        "line_items": [{"date": date, "description": desc, "charge": charge, "page": 1}],
+    }
 
 
 def _check(data_root: Path, run: Path) -> dict:
@@ -68,8 +72,9 @@ def test_missed_visit_when_a_record_page_carries_the_date(data_root: Path, run: 
     _entries(run, ["03/02/2026"])
     rep = _check(data_root, run)
     assert rep["classes"]["missed_visit"] == 1
-    assert rep["missed_visits"] == [{"date": "2026-03-09", "record_file": "Clinic Records.pdf",
-                                     "record_page": 4, "nearest_entry_days": 7}]
+    assert rep["missed_visits"] == [
+        {"date": "2026-03-09", "record_file": "Clinic Records.pdf", "record_page": 4, "nearest_entry_days": 7}
+    ]
 
 
 def test_billed_with_no_record_is_a_records_gap_not_a_miss(data_root: Path, run: Path) -> None:
@@ -104,13 +109,16 @@ def test_explained_date(data_root: Path, run: Path) -> None:
     assert _check(data_root, run)["classes"]["explained"] == 1
 
 
-@pytest.mark.parametrize("kind,desc,charge", [
-    ("VENDOR_INVOICE", "Records copy", "25.00"),
-    ("MEDICAL_BILL", "Payment - insurance", "150.00"),
-    ("MEDICAL_BILL", "Contractual adjustment", "150.00"),
-    ("MEDICAL_BILL", "Office visit", "0.00"),
-    ("MEDICAL_BILL", "Office visit", "(150.00)"),
-])
+@pytest.mark.parametrize(
+    "kind,desc,charge",
+    [
+        ("VENDOR_INVOICE", "Records copy", "25.00"),
+        ("MEDICAL_BILL", "Payment - insurance", "150.00"),
+        ("MEDICAL_BILL", "Contractual adjustment", "150.00"),
+        ("MEDICAL_BILL", "Office visit", "0.00"),
+        ("MEDICAL_BILL", "Office visit", "(150.00)"),
+    ],
+)
 def test_non_visits_are_not_billed_dates(data_root: Path, run: Path, kind: str, desc: str, charge: str) -> None:
     _bills(_slug(data_root), [_bill("03/09/2026", kind=kind, desc=desc, charge=charge)])
     _records(_slug(data_root), {1: "Visit 03/09/2026"})
@@ -119,8 +127,16 @@ def test_non_visits_are_not_billed_dates(data_root: Path, run: Path, kind: str, 
 
 
 def test_itemless_bill_contributes_its_printed_dates(data_root: Path, run: Path) -> None:
-    chunk = {"doc_type": "LEDGER", "provider": "Example PT", "patient": "", "line_items": [],
-             "line_items_omitted": True, "date_first": "03/02/2026", "date_last": "03/20/2026", "page_first": 1}
+    chunk = {
+        "doc_type": "LEDGER",
+        "provider": "Example PT",
+        "patient": "",
+        "line_items": [],
+        "line_items_omitted": True,
+        "date_first": "03/02/2026",
+        "date_last": "03/20/2026",
+        "page_first": 1,
+    }
     _bills(_slug(data_root), [chunk])
     _records(_slug(data_root), {2: "PT visit 03/20/2026"})
     _entries(run, ["03/02/2026"])
@@ -130,12 +146,16 @@ def test_itemless_bill_contributes_its_printed_dates(data_root: Path, run: Path)
 
 
 def test_duplicate_visit_counts_once_and_undated_items_are_counted(data_root: Path, run: Path) -> None:
-    items = [{"date": "03/02/2026", "description": "Visit", "charge": "150", "page": 1},
-             {"date": "03/02/2026", "description": "X-ray", "charge": "90", "page": 1},
-             {"date": None, "description": "Visit", "charge": "150", "page": 1},
-             {"date": "13/45/2026", "description": "Visit", "charge": "150", "page": 1}]
-    _bills(_slug(data_root), [{"doc_type": "MEDICAL_BILL", "provider": "Example Clinic", "patient": "",
-                               "line_items": items}])
+    items = [
+        {"date": "03/02/2026", "description": "Visit", "charge": "150", "page": 1},
+        {"date": "03/02/2026", "description": "X-ray", "charge": "90", "page": 1},
+        {"date": None, "description": "Visit", "charge": "150", "page": 1},
+        {"date": "13/45/2026", "description": "Visit", "charge": "150", "page": 1},
+    ]
+    _bills(
+        _slug(data_root),
+        [{"doc_type": "MEDICAL_BILL", "provider": "Example Clinic", "patient": "", "line_items": items}],
+    )
     _records(_slug(data_root), {1: "Visit 03/02/2026"})
     _entries(run, ["03/02/2026"])
     rep = _check(data_root, run)
@@ -146,7 +166,9 @@ def test_duplicate_visit_counts_once_and_undated_items_are_counted(data_root: Pa
 def test_billing_pages_are_not_record_pages(data_root: Path, run: Path) -> None:
     # The bill's own page carries the date; that is not a medical record.
     d = _slug(data_root)
-    (d / "billing_extract.jsonl").write_text(json.dumps({"file": "Clinic Records.pdf", "chunks": [_bill("03/09/2026")]}) + "\n")
+    (d / "billing_extract.jsonl").write_text(
+        json.dumps({"file": "Clinic Records.pdf", "chunks": [_bill("03/09/2026")]}) + "\n"
+    )
     _records(d, {1: "Charge 03/09/2026 office visit $150"})
     _entries(run, ["03/02/2026"])
     assert _check(data_root, run)["classes"]["billed_no_record"] == 1
@@ -155,9 +177,16 @@ def test_billing_pages_are_not_record_pages(data_root: Path, run: Path) -> None:
 # ---- the stage and its lever ----------------------------------------------
 def _sr(job_dir: Path, firm: Path, data_root: Path, log: list[str]) -> StageRun:
     job = job_mod.load(job_dir)
-    return StageRun(job=job, cfg=config_mod.load(str(firm)), unit=job.units[0],
-                    slug_dir=data_root / "example-matter", decided={}, log=log.append,
-                    seat_factory=lambda: FakeSeat([], [], {}), client_factory=lambda: None)
+    return StageRun(
+        job=job,
+        cfg=config_mod.load(str(firm)),
+        unit=job.units[0],
+        slug_dir=data_root / "example-matter",
+        decided={},
+        log=log.append,
+        seat_factory=lambda: FakeSeat([], [], {}),
+        client_factory=lambda: None,
+    )
 
 
 def _firm(tmp_path: Path, mode: str | None) -> Path:

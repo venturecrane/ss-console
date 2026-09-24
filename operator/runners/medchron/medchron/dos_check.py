@@ -81,7 +81,9 @@ def billed_dates(slug_dir: Path, patient: str | None) -> tuple[dict[tuple[str, s
             items = [i for i in c.get("line_items") or [] if isinstance(i, dict)]
             if not items:
                 quality["itemless_bills"] += 1
-                items = [{"date": c.get(k), "charge": None, "page": c.get("page_first")} for k in ("date_first", "date_last")]
+                items = [
+                    {"date": c.get(k), "charge": None, "page": c.get("page_first")} for k in ("date_first", "date_last")
+                ]
             for i in items:
                 if not _item_is_visit(i):
                     continue
@@ -176,8 +178,14 @@ def check(slug_dir: Path, run_dir: Path, incident_iso: str, patient: str | None,
             hit = _on_record_page(iso, pages)
             cls = "missed_visit" if hit else "billed_no_record"
             if hit:
-                missed.append({"date": iso, "record_file": hit[0], "record_page": hit[1],
-                               "nearest_entry_days": _nearest_days(iso, entry_isos)})
+                missed.append(
+                    {
+                        "date": iso,
+                        "record_file": hit[0],
+                        "record_page": hit[1],
+                        "nearest_entry_days": _nearest_days(iso, entry_isos),
+                    }
+                )
         counts[cls] += 1
     return {"billed_dates": sum(counts.values()), "classes": counts, "quality": quality, "missed_visits": missed}
 

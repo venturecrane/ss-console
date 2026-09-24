@@ -29,15 +29,21 @@ def run(sr: StageRun) -> int:
     rep = dos_check.check(sr.slug_dir, rd, sr.job.incident_date, patient, src.read_text(encoding="utf-8"))
     dos_check.write(rd, rep)
     cls, q = rep["classes"], rep["quality"]
-    sr.log(f"dos_check: {rep['billed_dates']} billed date(s) of service against {src.name}: "
-           + ", ".join(f"{k} {v}" for k, v in cls.items()))
+    sr.log(
+        f"dos_check: {rep['billed_dates']} billed date(s) of service against {src.name}: "
+        + ", ".join(f"{k} {v}" for k, v in cls.items())
+    )
     sr.log("dos_check data quality: " + ", ".join(f"{k} {v}" for k, v in q.items()))
     for m in rep["missed_visits"]:
-        sr.log(f"  MISSED VISIT {m['date']}: record page {m['record_file']} p.{m['record_page']}, "
-               f"nearest entry {m['nearest_entry_days']} day(s) away")
+        sr.log(
+            f"  MISSED VISIT {m['date']}: record page {m['record_file']} p.{m['record_page']}, "
+            f"nearest entry {m['nearest_entry_days']} day(s) away"
+        )
     mode = str(sr.cfg.get("levers", "dos_check") or "report")
     if cls["missed_visit"] and mode == "hold":
-        sr.log(f"HELD: {cls['missed_visit']} billed date(s) of service have a record page and no chronology "
-               "entry; record why with `medchron explain-date` or rebuild the entries, then resume")
+        sr.log(
+            f"HELD: {cls['missed_visit']} billed date(s) of service have a record page and no chronology "
+            "entry; record why with `medchron explain-date` or rebuild the entries, then resume"
+        )
         return 1
     return 0
