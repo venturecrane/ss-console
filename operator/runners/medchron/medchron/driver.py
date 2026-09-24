@@ -456,6 +456,7 @@ class Driver:
         if self.rehearse and (stage.paid or stage.external):
             return rehearsal.stop(self, stage, ctx, extracted, notes)
         if stage.paid:
+            rehearsal.probe_before_spend(self, stage, ctx, notes)
             try:
                 self._check_limits(stage, ctx, extracted)
             except limits_mod.LimitHold as hold:

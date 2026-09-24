@@ -132,6 +132,63 @@ def run(
 
 
 # ---- the driver's rehearse half, kept here so driver.py stays under the 500-line module ceiling ----
+def probe_lines(sr: Any, stage: dag.Stage) -> list[str]:
+    """One stage's $0 probe, as report lines. A probe that cannot read its
+    inputs is a line, not a crash: it is an observer, and an observer that can
+    end the run it observes is worse than no observer.
+
+    A stage with no probe yields nothing rather than raising, so neither caller
+    has to remember to check first.
+    """
+    probe = stage.rehearse
+    if probe is None:
+        return []
+    try:
+        return [f"rehearse {stage.name}: {line}" for line in probe(sr)]
+    except Exception as exc:  # noqa: BLE001 - see above; the failure is reported, never raised
+        return [f"rehearse {stage.name}: probe could not run: {type(exc).__name__}: {str(exc)[:120]}"]
+
+
+def probe_before_spend(drv: Any, stage: dag.Stage, ctx: dag.Ctx, notes: list[str]) -> None:
+    """In a REAL run, answer a paid stage's own $0 probe immediately before it
+    spends (ss#2911). Reports; never holds.
+
+    WHY. Two stages carry a `rehearse` probe and both are paid -- `merge` and
+    `audit` -- and until now those probes ran only inside `medchron rehearse`,
+    a hand command. Probed on the live seat 2026-09-24: none of the six
+    surviving job dirs had a `rehearsal/` directory, so on this seat the
+    probes had never executed at all. A gate nobody invokes is not a gate.
+
+    Both answer something worth knowing at exactly this moment, which is why
+    the placement is per-stage rather than once at the first paid stage:
+
+    * `merge` reads `clusters.md`, written by `assemble` immediately before it,
+      and reports how many clusters the code merged and how many are routed to
+      the model, with a histogram of the reasons. That is the shape of the live
+      failure "the model could not merge a routed cluster ... CANNOT SPLIT
+      FURTHER", which cost 62.01 USD and produced no document.
+    * `audit`'s own docstring calls its probe "the cap answer, at $0, before a
+      single paid stage past composition has run" -- which is what it was
+      written to be and, in a real run, never was.
+
+    Run at the FIRST paid stage instead, both would report nothing: their
+    inputs do not exist that early. Each probe wants the artifacts its own
+    stage is about to consume.
+
+    WHY IT NEVER HOLDS. These probes have not executed in production before
+    this change. A check whose first live act can stop a client's delivery is
+    a check that gets switched off in a week. It reports into the run's notes
+    and the log, where the limits and projections already speak, and a hold is
+    a later decision made with evidence rather than with hope.
+    """
+    if stage.rehearse is None:
+        return
+    lines = probe_lines(drv._stage_run(ctx.unit, lambda _m: None), stage)
+    notes.extend(lines)
+    for line in lines:
+        drv.log(f"[before-spend] {line}")
+
+
 def stop(drv: Any, stage: dag.Stage, ctx: dag.Ctx, extracted: Path, notes: list[str]) -> Any:
     """A paid or external stage that is not done ends the walk. Before it
     does: the limits are probed (a note, never a hold), the projection is
@@ -153,12 +210,8 @@ def stop(drv: Any, stage: dag.Stage, ctx: dag.Ctx, extracted: Path, notes: list[
     notes.append(f"rehearse {stage.name}: STOP {kind}, not done ({money})")
     sr = drv._stage_run(ctx.unit, lambda _m: None)
     for s in dag.stages_from(stage.name):
-        if s.rehearse is None:
-            continue
-        try:
-            notes.extend(f"rehearse {s.name}: {line}" for line in s.rehearse(sr))
-        except Exception as exc:  # noqa: BLE001 - a probe that cannot read its inputs is a line, not a crash
-            notes.append(f"rehearse {s.name}: probe could not run: {type(exc).__name__}: {str(exc)[:120]}")
+        if s.rehearse is not None:
+            notes.extend(probe_lines(sr, s))
     pages = budget_mod.pages_read(extracted)
     reason = f"{kind} stage not done; the walk ends here"
     from .driver import Outcome  # lazy: driver imports this module
