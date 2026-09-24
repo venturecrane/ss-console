@@ -1224,6 +1224,14 @@ memory:
 # mailbox to the "SMD Operator Mailbox Scope" group the READ app's
 # ApplicationAccessPolicy is scoped to; until then Graph returns 403 and every
 # read fails closed. Removing the address revokes the Operator's side at once.
+#
+# 2026-09-24: Christa added two new hires who also handle discovery,
+# maricela@ and bhardiman@, so their mail is read for dates the same way
+# (Captain approved the same day). Each is readable only once the firm's
+# admin has also put that mailbox in the scope group; until then its reads
+# return 403 and fail closed.
 staff_mailbox_reads:
   mailboxes:
     - daniela@ashtonandprice.com
+    - maricela@ashtonandprice.com
+    - bhardiman@ashtonandprice.com
