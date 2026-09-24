@@ -332,7 +332,12 @@ log "R2 upload OK"
 # prefix as customer.yaml into the root-owned config dir. Absent on a seat that
 # runs no chronology routine; the runner refuses every job until it is there.
 MEDCHRON_FIRM_YAML="${SS_ENGAGEMENTS_DIR:-${HOME}/dev/engagements}/operator/customers/${SLUG}/medchron/firm.yaml"
-if [ -f "${MEDCHRON_FIRM_YAML}" ]; then
+
+
+# The guard (lib/firm-config-currency.sh) refuses a firm config that differs
+# from engagements origin/main; it dies, so a divergent file never reaches R2.
+# shellcheck source=lib/firm-config-currency.sh
+if [ -f "${MEDCHRON_FIRM_YAML}" ] && . "${BIN_DIR}/lib/firm-config-currency.sh" && assert_firm_config_is_main; then
   # >>> medchron-firm-validate
   # Validate against THIS CHECKOUT's runner schema before the bytes leave for
   # R2. The runner's key set is closed and its cost controls are required, so a

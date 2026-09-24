@@ -248,7 +248,9 @@ describe('step 2b: the firm config is validated before it is uploaded', () => {
   })()
 
   it('runs before the firm config is copied to R2, and inside the authored guard', () => {
-    const guard = src.indexOf('if [ -f "${MEDCHRON_FIRM_YAML}" ]; then')
+    // The authored guard also sources and runs the engagements-currency check
+    // (lib/firm-config-currency.sh) on the same line.
+    const guard = src.indexOf('if [ -f "${MEDCHRON_FIRM_YAML}" ] &&')
     const validate = src.indexOf('# >>> medchron-firm-validate')
     const upload = src.indexOf(
       's3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/medchron-firm.yaml"',
