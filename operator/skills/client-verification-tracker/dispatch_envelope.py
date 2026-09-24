@@ -8,11 +8,12 @@ gate, writing the ledger appends post-dispatch. The model composes nothing.
 
 THE DEGRADED-CHASE THROTTLE. While ``settings.return_link`` is unauthored
 (the live state on every seat — build fork 2), a due client chase cannot
-render and degrades to ONE seat-level surface line: "client reminders are due
-and the return destination is not authored; a person sends them". Like the
-config-missing surface (#1899), it is remembered under a stable seat-level
-sentinel and re-fires on the refire window — never daily, never silent, and
-never a ``chased`` row (no client was nudged; the ledger stays honest).
+render and degrades to ONE seat-level surface line naming the held matters
+and their count (``render._held_chase_line``). Like the config-missing surface
+(#1899), it is remembered under a seat-level sentinel and re-fires on the
+refire window, never daily, never silent, and never a ``chased`` row (no
+client was nudged; the ledger stays honest). The sentinel is keyed on the SET
+of held matters (``return_link_key``), so a changed set fires at once.
 
 Failure direction: any fault here degrades to "no envelope written" — the
 wake fires undecorated, ``dispatch_expected`` stays absent, and SKILL.md's
@@ -99,6 +100,77 @@ def _numbers_by_matter(items) -> dict[str, tuple[str | None, str | None]]:
         absent = getattr(item, "matter_number_absent", None)
         out.setdefault(item.matter_id, (number, absent))
     return out
+
+
+def _held_chases(plans, numbers: dict) -> dict:
+    """The due client chases this run holds back while ``return_link`` is
+    unauthored: how many, which matters, and their resolved numbers.
+
+    ``count`` counts every chase plan, so a chase whose matter number did not
+    resolve is still counted; it is only left out of ``numbers`` (the rendered
+    list names what resolved and the count tells the reader there is more).
+    Numbers come off the plan's own code-projected stamp, else the pulled
+    items map, the same resolution every other entry uses, and they reach the
+    provenance handoff through the plans in the wake payload
+    (``handoff_writer._records``: each chase plan carries ``matter_number``
+    beside ``next_chase_due``), so the send gate reads them as read, not
+    composed."""
+    count = 0
+    matter_ids: set[str] = set()
+    resolved: set[str] = set()
+    for plan in plans:
+        if plan.action != "chase":
+            continue
+        count += 1
+        matter_ids.add(plan.matter_id)
+        number = getattr(plan, "matter_number", None) or numbers.get(plan.matter_id, (None, None))[0]
+        if isinstance(number, str) and number:
+            resolved.add(number)
+    return {"count": count, "matter_ids": sorted(matter_ids), "numbers": sorted(resolved)}
+
+
+def return_link_key(ledger, held_matter_ids) -> str:
+    """The throttle sentinel's ledger key, keyed on the SET of held matters.
+
+    Before 2026-09-24 the key was one constant, so a chase that became due
+    inside the refire window of an earlier, different set was silently
+    absorbed by that set's raise. Keying on the set means a changed set is a
+    new item that fires at once, while an unchanged set still waits out the
+    refire window. Matter ids, not numbers: a number lookup that fails one
+    morning must not look like a new set. The label is ignored by
+    ``item_key`` (ss #2151), so the set rides in the source-id slot. Each
+    set's attempts count on their own key; an old set's key is simply never
+    consulted again, which costs nothing (the sentinel has no ceiling and
+    writes no ``chased`` row)."""
+    source_id = RETURN_LINK_SOURCE_ID + ":" + ",".join(sorted(held_matter_ids))
+    return ledger.item_key("", source_id, _RETURN_LINK_LABEL, "")
+
+
+def _return_link_entry(held: dict, ledger, states: dict, today, refire_days: int) -> dict | None:
+    """The one seat-level line every due chase collapses to while
+    ``return_link`` is unauthored, or None when there is no chase or the set
+    already fired inside its refire window (never daily, never silent: #1899).
+    A full Shape B render needs the authored link AND a signer lookup, and
+    neither exists yet."""
+    if not held["count"]:
+        return None
+    key = return_link_key(ledger, held["matter_ids"])
+    state = states.get(key)
+    if not ledger.should_fire(state, today, refire_days=refire_days, ack_snooze_days=refire_days):
+        return None
+    return {
+        "matter_id": "",
+        "action": "chase",
+        "attempt": ledger.next_attempt(state),
+        "ceiling": None,
+        "reason": "return_link_unauthored",
+        "item_key": key,
+        "matter_number": None,
+        "matter_number_absent": None,
+        "held_matter_numbers": held["numbers"],
+        "held_count": held["count"],
+        "event": "fired",
+    }
 
 
 def write_failure_note_envelope(
@@ -229,11 +301,12 @@ def build_and_write(
         customer_yaml = _load_yaml(customer_yaml_path)
         states = ledger.derive_state(ledger_events)
         numbers = _numbers_by_matter(items)
+        held = _held_chases(plans, numbers)
 
         # Enrich plans into render entries. Chase plans collapse into ONE
-        # seat-level degraded line (or nothing, inside the refire window).
+        # seat-level degraded line (or nothing, inside the refire window), so
+        # they fall to the unknown-action branch here and are added below.
         entries: list[dict] = []
-        chase_count = 0
         for plan in plans:
             base = {
                 "matter_id": plan.matter_id,
@@ -251,9 +324,6 @@ def build_and_write(
                 number, absent = numbers.get(plan.matter_id, (None, None))
             base["matter_number"] = number
             base["matter_number_absent"] = absent
-            if plan.action == "chase":
-                chase_count += 1
-                continue
             if plan.action == "surface_hold":
                 base["event"] = "fired"
             elif plan.action == "handoff":
@@ -261,31 +331,11 @@ def build_and_write(
             elif plan.action == "surface_config_missing":
                 base["event"] = "fired"
             else:
-                continue  # unknown action renders nothing
+                continue  # chase (collapsed below) or unknown: renders nothing here
             entries.append(base)
-
-        return_link_key = None
-        if chase_count:
-            # return_link authored AND a signer pull would be needed for a
-            # full Shape B render; neither exists yet, so every due chase
-            # degrades to the seat-level surface — throttled on the refire
-            # window under its own sentinel so it never daily-spams (#1899).
-            return_link_key = ledger.item_key("", RETURN_LINK_SOURCE_ID, _RETURN_LINK_LABEL, "")
-            sentinel_state = states.get(return_link_key)
-            if ledger.should_fire(sentinel_state, today, refire_days=refire_days, ack_snooze_days=refire_days):
-                entries.append(
-                    {
-                        "matter_id": "",
-                        "action": "chase",
-                        "attempt": ledger.next_attempt(sentinel_state),
-                        "ceiling": None,
-                        "reason": "return_link_unauthored",
-                        "item_key": return_link_key,
-                        "matter_number": None,
-                        "matter_number_absent": None,
-                        "event": "fired",
-                    }
-                )
+        link_entry = _return_link_entry(held, ledger, states, today, refire_days)
+        if link_entry:
+            entries.append(link_entry)
 
         if not entries:
             # Genuinely nothing to say: the plans rendered fine and produced no
@@ -422,7 +472,7 @@ def build_and_write(
             "dispatch_expected": True,
             "dispatch_count": len(dispatches),
             "routing_legs": legs,
-            **({"chase_degraded_return_link_unauthored": chase_count} if chase_count else {}),
+            **({"chase_degraded_return_link_unauthored": held["count"]} if held["count"] else {}),
         }
     except Exception as exc:  # noqa: BLE001 — the envelope is optional; the wake is not
         sys.stderr.write("[pre_run] dispatch envelope build failed (" + str(exc) + ")\n")

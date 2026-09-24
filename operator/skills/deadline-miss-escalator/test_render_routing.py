@@ -94,7 +94,7 @@ def test_render_digest_carries_template_markup_and_values():
 def test_conditional_sections_omitted_whole():
     body = render.render_digest(_digest(), ack_snooze_days=7)
     for heading in (
-        "## Admin confirms",
+        "## Also open",
         "## Under active escalation elsewhere",
         "## Awaiting clearance",
         "## Blanket-ack only",
@@ -145,10 +145,11 @@ def test_admin_and_elsewhere_render_grouped_lines():
         },
     )
     body = render.render_digest(digest, ack_snooze_days=7)
-    assert "## Admin confirms (3 across 2 matters)" in body
-    assert "- matter 2026-PI-102: 2 routine confirmations. [ACK-BBBBBB] [ACK-CCCCCC]" in body
-    assert "- no number on record: 1 routine confirmation. [ACK-DDDDDD]" in body
-    assert "## Under active escalation elsewhere (2 across 1 matters)" in body
+    assert "## Also open (3 across 2 matters)" in body
+    assert "More open items past the top five, collapsed per matter." in body
+    assert "- matter 2026-PI-102: 2 more items. [ACK-BBBBBB] [ACK-CCCCCC]" in body
+    assert "- no number on record: 1 more item. [ACK-DDDDDD]" in body
+    assert "## Under active escalation elsewhere (2 across 1 matter)" in body
     assert "- matter 2026-PI-103: 2 items under active escalation (last raised 2026-08-28)." in body
 
 
@@ -198,8 +199,10 @@ def test_rekey_notice_on_and_off():
 def test_skeleton_is_identifier_free():
     digest = _digest(admin_confirms={"total": 4, "matter_count": 2, "matters": [{}]})
     body = render.render_skeleton(digest)
-    assert "1 item need" in body
-    assert "4 routine confirmations" in body
+    assert "1 item needs a person now" in body
+    assert "4 more open items are tracked" in body
+    # Nothing in the record says overflow items are routine (2026-09-24).
+    assert "routine" not in body.lower()
     # Zero dates, zero matter numbers, zero ACK codes, zero task ids.
     assert not re.search(r"\d{4}-\d{2}-\d{2}", body)
     assert "ACK-" not in body

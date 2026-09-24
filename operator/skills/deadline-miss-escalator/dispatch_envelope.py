@@ -33,6 +33,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 SKILL_NAME = "deadline-miss-escalator"
 
@@ -80,6 +81,12 @@ def _load_yaml(customer_yaml_path: str | None) -> dict:
     return data if isinstance(data, dict) else {}
 
 
+#: Needs-you ordering + per-recipient re-banding, shared with pre_run.py. A
+#: missing copy makes split_digest raise inside build_and_write, which then
+#: dispatches the authored failure note instead of a mis-banded digest.
+_DIGEST_ITEMS: Any = _load_sibling("digest_items.py", "escalator_digest_items")
+
+
 # The staff pull + its authored budget live in the vendored ``routing.py``
 # (one pull, one resolution, shared with client-verification-tracker — the
 # WS-RENDER review's finding 2).
@@ -105,12 +112,19 @@ def _filter_grouped(band: dict, matter_ids: set[str]) -> dict | None:
 
 def split_digest(digest: dict, matter_ids: set[str], today_iso: str) -> dict:
     """The sub-digest for one recipient set: only ``matter_ids``'s items, every
-    count recomputed as a list length, subject counting ONLY this sub-digest's
-    needs-you band (Law 11)."""
+    count recomputed as a list length, then RE-BANDED for this recipient
+    (``digest_items.rebalance_bands``): the top five of THIS recipient's items
+    need them today, whatever their seat-wide rank. Before the re-band a
+    recipient whose items ranked sixth or lower seat-wide got "0 need you"
+    over a band of their own overdue deadlines (2026-09-22). The subject
+    counts needs-you plus blanket-ack-only for this sub-digest (Law 11).
+
+    The bands sent therefore differ from the seat-wide projection that
+    ``blind_wake.plan_counts`` fingerprints as ``digest_sha256``; that
+    fingerprint records what the gate projected for the seat, and the
+    envelope's per-dispatch body hashes record what each recipient was sent."""
     out: dict = {}
-    needs_you = [i for i in (digest.get("needs_you") or []) if i.get("matter_id") in matter_ids]
-    out["subject"] = f"[Deadlines] {len(needs_you)} need you, {today_iso}"
-    out["needs_you"] = needs_you
+    out["needs_you"] = [i for i in (digest.get("needs_you") or []) if i.get("matter_id") in matter_ids]
     admin = digest.get("admin_confirms")
     if isinstance(admin, dict):
         filtered = _filter_grouped(admin, matter_ids)
@@ -132,6 +146,8 @@ def split_digest(digest: dict, matter_ids: set[str], today_iso: str) -> dict:
         # Seat-level census, attached to every dispatch: ss#2403 wants the
         # leftover-probe fact loud daily, whoever the reader is.
         out["probe_artifacts"] = probe
+    _DIGEST_ITEMS.rebalance_bands(out)
+    out["subject"] = f"[Deadlines] {_DIGEST_ITEMS.need_you_count(out)} need you, {today_iso}"
     return out
 
 
