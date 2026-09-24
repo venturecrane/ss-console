@@ -150,10 +150,27 @@ def _resolve_argv(stage: dag.Stage, ctx: dag.Ctx, slug_dir: Path, decided: dict[
     return args
 
 
-def _stage_input_sha(slug_dir: Path, stage: dag.Stage) -> str | None:
-    """A cheap fingerprint of the artifacts a stage reads, so a state file can
-    say whether a done stage is still current. PR 1 fingerprints the authored
-    inputs; per-stage input lists arrive with each in-process port."""
+def _authored_inputs_sha(slug_dir: Path) -> str | None:
+    """A fingerprint of the five AUTHORED input files, recorded on every stage.
+
+    Read the name literally: this is not a per-stage fingerprint and never was.
+    It took a `stage` argument it never used, under a docstring promising that
+    "per-stage input lists arrive with each in-process port" -- every stage is
+    in-process now (`dag.py:20-21`) and the lists never arrived. Live proof, off
+    a delivered run's `state.json` (2026-09-24): 20 of 39 stages carried the
+    identical value and six carried none, because the only thing that moves it
+    is an authoring decision landing partway through the walk.
+
+    It is also never compared. `is_done` is `status == "done"` and nothing else
+    (`state.py:153`), which is why a resume has to be told explicitly which
+    stages to redo (`resume.py`) instead of working it out from this.
+
+    So: nothing may key staleness off this value. Deciding whether a done stage
+    is still current needs a real per-stage input list plus the pipeline sha,
+    and neither exists. The name now says what the value is rather than what it
+    was meant to become, because the old name read as a promise and a session
+    building on it in 2026-09 had to be warned off.
+    """
     names = ["include.json", "units.json", "billing_docs.json", "msg_fold.json", "orphans.json"]
     h = hashlib.sha256()
     for n in names:
@@ -466,7 +483,7 @@ class Driver:
             if script.suffix == ".sh"
             else [str(self.cfg.get("pipeline", "python") or sys.executable), str(script), *argv]
         )
-        st.start(stage.name, input_sha=_stage_input_sha(self.slug_dir, stage))
+        st.start(stage.name, input_sha=_authored_inputs_sha(self.slug_dir))
         self.log(f"[run] {stage.name}: {' '.join(cmd[1:])}")
         proc = subprocess.run(  # noqa: S603 - argv is the stage script under bash or the configured interpreter, no shell
             cmd,
@@ -556,7 +573,7 @@ class Driver:
             self.log(f"  {msg}")
 
         sr = self._stage_run(unit, log)
-        st.start(stage.name, input_sha=_stage_input_sha(self.slug_dir, stage))
+        st.start(stage.name, input_sha=_authored_inputs_sha(self.slug_dir))
         self.log(f"[run] {stage.name}: in-process")
         refusal: str | None = None
         runner = getattr(self, "_runner_override", {}).get(stage.name, stage.runner)
