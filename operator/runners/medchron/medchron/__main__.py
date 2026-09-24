@@ -94,6 +94,40 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_explain_date(args: argparse.Namespace) -> int:
+    """Record why a billed date of service is not in the chronology, so a held
+    dos_check passes on resume. Internal only: nothing here reaches the firm."""
+    import datetime
+    import json
+    from pathlib import Path
+
+    from . import dos_check, job as job_mod
+
+    try:
+        datetime.date.fromisoformat(args.date)
+    except ValueError:
+        print(f"medchron: {args.date!r} is not a date in YYYY-MM-DD form")
+        return 2
+    if not args.reason.strip():
+        print("a reason is required")
+        return 2
+    try:
+        job = job_mod.load(Path(args.job_dir))
+    except Exception as exc:  # noqa: BLE001 - the CLI prints a sentence, never a trace
+        print(f"medchron: {type(exc).__name__}: {exc}")
+        return 2
+    run = job.data_root / job.slug / "runs" / args.unit
+    if not run.is_dir():
+        print(f"no run directory {run}")
+        return 2
+    path = run / dos_check.EXPLAINED_FILE
+    rows = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else []
+    rows.append({"date": args.date, "reason": args.reason.strip()})
+    path.write_text(json.dumps(rows, indent=1) + "\n", encoding="utf-8")
+    print(f"recorded {args.date} in {path}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="medchron")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -125,6 +159,12 @@ def main(argv: list[str] | None = None) -> int:
     pr = sub.add_parser("probe", help="run a registered gate's planted violation; exit 0 only when it is refused")
     pr.add_argument("gate", choices=["claim_audit", "extractive", "cross_client", "provenance"])
     pr.set_defaults(fn=lambda a: __import__("medchron.probes", fromlist=["run_probe"]).run_probe(a.gate))
+    ex = sub.add_parser("explain-date", help="record why a billed date of service is not in the chronology")
+    ex.add_argument("job_dir")
+    ex.add_argument("unit")
+    ex.add_argument("date", help="YYYY-MM-DD")
+    ex.add_argument("reason")
+    ex.set_defaults(fn=_cmd_explain_date)
     args = p.parse_args(argv)
     return int(args.fn(args))
 

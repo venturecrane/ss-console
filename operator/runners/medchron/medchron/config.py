@@ -95,6 +95,10 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
         "audit_mode": ("str", True),
         "cache": ("bool", True),
         "compose_max_tokens": ("int", True),
+        # Date-of-service check (stages/dos_check.py): `report` measures and
+        # logs every run; `hold` also refuses to ship when a billed visit has a
+        # record page and no chronology entry. Absent means report.
+        "dos_check": ("str", False),
     },
     "chronology": {
         "treatment_gap_days": ("int", True),
@@ -128,6 +132,7 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
 
 BATCHABLE_STAGES = {"vision", "billing", "compose"}
 AUDIT_MODES = {"image", "text"}
+DOS_CHECK_MODES = {"report", "hold"}
 # Models that return HTTP 400 on tool_choice {"type": "any"|"tool"} (Anthropic
 # migration notes for Claude Fable 5.1 and Claude Opus 5.5). Prefix-matched.
 NO_FORCED_TOOL_MODELS = ("claude-opus-5-5", "claude-fable-5-1", "claude-mythos-5-1")
@@ -256,6 +261,8 @@ def _semantic_checks(data: dict[str, Any]) -> list[str]:
             out.append(f"levers.batch_stages: `{stage}` is not a batchable stage {sorted(BATCHABLE_STAGES)}")
     if levers.get("audit_mode") not in (None, *AUDIT_MODES):
         out.append(f"levers.audit_mode: expected one of {sorted(AUDIT_MODES)}")
+    if levers.get("dos_check") not in (None, *DOS_CHECK_MODES):
+        out.append(f"levers.dos_check: expected one of {sorted(DOS_CHECK_MODES)}")
     chron = data.get("chronology") or {}
     if chron.get("pre_incident_history") not in (None, *PRE_INCIDENT_POLICIES):
         out.append(f"chronology.pre_incident_history: expected one of {sorted(PRE_INCIDENT_POLICIES)}")
