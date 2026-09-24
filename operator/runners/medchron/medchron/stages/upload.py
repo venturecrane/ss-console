@@ -56,6 +56,54 @@ def _files_in(seat: Any, matter_id: str, folder_id: str) -> dict[str, int]:
     return out
 
 
+def _send_missing(
+    sr: StageRun,
+    seat: Any,
+    matter_id: str,
+    folder_id: str,
+    manifest: list[dict[str, Any]],
+    present: dict[str, int],
+    delivery: dict[str, Any],
+    delivery_path: Path,
+) -> tuple[int, int] | None:
+    """Send whatever is not already up. `(sent, skipped_known)`, or None when a
+    manifest row's local bytes no longer match its sha and the stage must refuse.
+
+    A name this run already sent is NOT sent again: the vendor's list lags, so
+    absence from `present` is not evidence the file is missing, and the delivery
+    record is. Each send is written through to disk before the next one starts,
+    so a crash mid-loop cannot lose the fact that a file is already up.
+    """
+    sent_before = {str(f.get("name")): f for f in (delivery.get("files") or []) if f.get("sent") or f.get("confirmed")}
+
+    def record(name: str, sha: str, nbytes: int) -> None:
+        files = [f for f in (delivery.get("files") or []) if str(f.get("name")) != name]
+        files.append({"name": name, "sha256": sha, "bytes": nbytes, "sent": True, "confirmed": False})
+        delivery["files"] = files
+        delivery_path.write_text(json.dumps(delivery, indent=1), encoding="utf-8")
+
+    sent = skipped_known = 0
+    for m in manifest:
+        data = Path(m["local_path"]).read_bytes()
+        sha = hashlib.sha256(data).hexdigest()
+        if sha != m["sha256"]:
+            sr.log(f"{m['name']}: local bytes changed since the manifest (sha mismatch); refusing")
+            return None
+        if present.get(m["name"]) == len(data):
+            sr.log(f"  present  {m['name']}")
+            continue
+        prior = sent_before.get(m["name"])
+        if prior and prior.get("sha256") == sha and prior.get("bytes") == len(data):
+            skipped_known += 1
+            sr.log(f"  sent earlier, not resending  {m['name']} (read-back will confirm)")
+            continue
+        r = seat.add_file(matter_id, folder_id, m["name"], data)
+        record(m["name"], sha, len(data))
+        sent += 1
+        sr.log(f"  sent     {m['name']} ({len(data)} bytes; file id {(r or {}).get('fileId') or 'pending'})")
+    return sent, skipped_known
+
+
 def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = READBACK_TRIES) -> int:
     out = sr.slug_dir / "out" / sr.unit.unit
     manifest = json.loads((out / "upload_manifest.json").read_text(encoding="utf-8"))
@@ -93,39 +141,10 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
         sr.log(f"created folder '{folder_name}' (id {folder_id})")
 
     present = _files_in(seat, matter_id, folder_id)
-    # What a PRIOR attempt of this stage already put on the matter. The vendor's
-    # list lags, so absence from `present` is not evidence a file is missing;
-    # this record is, and it outranks the list for the send decision.
-    sent_before = {str(f.get("name")): f for f in (delivery.get("files") or []) if f.get("sent") or f.get("confirmed")}
-
-    def record(name: str, sha: str, nbytes: int) -> None:
-        """Write the send through to disk BEFORE the next one starts, so a
-        crash mid-loop cannot lose the fact that a file is already up."""
-        files = [f for f in (delivery.get("files") or []) if str(f.get("name")) != name]
-        files.append({"name": name, "sha256": sha, "bytes": nbytes, "sent": True, "confirmed": False})
-        delivery["files"] = files
-        delivery_path.write_text(json.dumps(delivery, indent=1), encoding="utf-8")
-
-    sent = skipped_known = 0
-    for m in manifest:
-        p = Path(m["local_path"])
-        data = p.read_bytes()
-        sha = hashlib.sha256(data).hexdigest()
-        if sha != m["sha256"]:
-            sr.log(f"{m['name']}: local bytes changed since the manifest (sha mismatch); refusing")
-            return 1
-        if present.get(m["name"]) == len(data):
-            sr.log(f"  present  {m['name']}")
-            continue
-        prior = sent_before.get(m["name"])
-        if prior and prior.get("sha256") == sha and prior.get("bytes") == len(data):
-            skipped_known += 1
-            sr.log(f"  sent earlier, not resending  {m['name']} (read-back will confirm)")
-            continue
-        r = seat.add_file(matter_id, folder_id, m["name"], data)
-        record(m["name"], sha, len(data))
-        sent += 1
-        sr.log(f"  sent     {m['name']} ({len(data)} bytes; file id {(r or {}).get('fileId') or 'pending'})")
+    counts = _send_missing(sr, seat, matter_id, folder_id, manifest, present, delivery, delivery_path)
+    if counts is None:
+        return 1
+    sent, skipped_known = counts
     already = len(manifest) - sent - skipped_known
     sr.log(f"{sent} file(s) sent, {already} already present, {skipped_known} sent by an earlier attempt")
 
