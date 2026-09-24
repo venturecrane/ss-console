@@ -965,7 +965,22 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # plugins/hermes-smd-inbound/__init__.py. Verified ref-only: all ten
 # overlay-pairs files and plugins/hermes-smd-audit/schemas.py are byte-identical
 # across c9c9d632..eb23bff7, so no paired hash and no vocabulary moves.
-ARG OVERLAY_REF="eb23bff7ebd046a8565f31f626b7da9e7f93016f"
+# 2026-09-23 (62a4cccb, overlay #380). Prices claude-opus-5-5 in the vendored
+# table the interactive cost meter reads, so a seat running Opus 5.5 (staging
+# as main, pilot then A&P as escalation) meters its turns instead of recording
+# 0 and alarming model_unpriced. Runtime file: shared/anthropic_pricing.json;
+# no overlay-pairs file or audit schema changed, so only overlayRef moves.
+# 2026-09-23 (a15f0971, overlay #381). Classifies, fences and seeds the two
+# msgraph-mail staff-mailbox reads (list_staff_messages, read_staff_message),
+# which the connector adds in the same ss-console change; without this ref the
+# seat's boot classification probe FATALs on the baked manifest. Also adds
+# mail_spool_message (READ, fenced, non-seeding): a whole email spooled as .eml
+# so file_attachment_to_matter can file it. Runtime files:
+# shared/action_classes.py, shared/msgraph_attachments.py,
+# shared/staff_mailboxes.py, shared/provenance.py, plugins/hermes-smd-inbound,
+# plugins/hermes-smd-mail-attachments. No overlay-pairs file or audit schema
+# changed (git diff --stat 62a4cccb a15f0971), so only overlayRef moves.
+ARG OVERLAY_REF="a15f0971717e94863e09b8774cd4cb3b6af67c77"
 
 ARG CUSTOMER_SLUG=customer-zero
 

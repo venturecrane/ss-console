@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 
 from .. import llm, prompts
 from .base import StageRun
@@ -30,6 +31,99 @@ NOTE = (
     "chronology. They record routine or unrelated care with no bearing on the claimed injuries. They remain in "
     "the exhibits and can be itemized on request.]"
 )
+
+
+def is_coclient(header: str, client_name: str, surname: str) -> str | None:
+    """The OTHER patient a provider header names, or None.
+
+    A provider header is `<providers> (<patient>) | <heading>`. The test is
+    deliberately narrow: the parenthetical must contain this unit's SURNAME
+    (co-plaintiffs on a motor-vehicle matter are related and share it) and must
+    not contain the client's own given name. Clinical parentheticals carry no
+    surname and survive - a dialysis modality, a CMS-1500 form, a second
+    radiology interpretation - which matters, because dropping those would
+    empty the dialysis and billing entries out of every joint matter.
+    """
+    given = (client_name or "").split()[0].lower()
+    if not given or "|" not in header:
+        return None
+    for m in re.finditer(r"\(([^)]{3,60})\)", header.split("|", 1)[0]):
+        inside = m.group(1)
+        if surname.lower() in inside.lower() and given not in inside.lower():
+            return inside.strip()
+    return None
+
+
+def strip_coclient(entry_text: str, client_name: str, surname: str) -> tuple[str, list[str]]:
+    """(entry without the co-plaintiff's blocks, names removed).
+
+    An entry is a date line followed by one or more `provider (patient) |
+    heading` blocks. The composer does NOT always give a co-plaintiff's block
+    its own date line - live 2026-09-23, two of her blocks sat INSIDE another
+    entry, after the previous block's prose - so testing only the entry's
+    second line left them in the delivered document. Every provider header is
+    tested, wherever it sits.
+
+    Returns ("", names) when nothing but the date line survives, so the caller
+    drops the entry whole.
+    """
+    lines = entry_text.splitlines()
+    if not lines:
+        return entry_text, []
+    out, removed, dropping, kept_block = [lines[0]], [], False, False
+    for ln in lines[1:]:
+        who = is_coclient(ln, client_name, surname) if ("|" in ln and "(" in ln) else None
+        if who:
+            dropping, _ = True, removed.append(who)
+            continue
+        if "|" in ln and "(" in ln and ln.strip() and not who and _looks_like_header(ln):
+            dropping = False
+        if not dropping:
+            out.append(ln)
+            if ln.strip():
+                kept_block = True
+    if not kept_block:
+        return "", removed
+    return "\n".join(out).rstrip() + "\n", removed
+
+
+def _looks_like_header(line: str) -> bool:
+    """A provider header: text, then ` | `, then a heading - not prose that
+    happens to contain a pipe."""
+    left, _, right = line.partition("|")
+    return bool(left.strip()) and bool(right.strip()) and len(left) < 160
+
+
+def drop_coclient(sr: StageRun, d: Path, entries: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Entries carrying only this unit's client.
+
+    A chronology is ONE patient's, so material the composer attributed to a
+    different patient leaves before anything else is decided about it - before
+    the pre/post-incident split, before the materiality call. An entry whose
+    co-plaintiff block is one of several keeps its other blocks; an entry that
+    is nothing but the co-plaintiff's goes entirely. What left is recorded in
+    `omitted_coclient.json` so the firm can audit the removal.
+    """
+    kept: list[dict[str, str]] = []
+    log: list[dict[str, str]] = []
+    whole = 0
+    for e in entries:
+        text, removed = strip_coclient(e["text"], sr.unit.client_name, sr.unit.surname)
+        for who in removed:
+            log.append({"date": e["iso"], "patient": who, "head": e["text"].splitlines()[0][:40]})
+        if not removed:
+            kept.append(e)
+            continue
+        if text.strip():
+            kept.append({**e, "text": text})
+        else:
+            whole += 1
+    if not log:
+        return entries
+    names = sorted({x["patient"] for x in log})
+    sr.log(f"  co-client blocks removed: {len(log)} ({whole} whole entries) ({', '.join(names)[:70]})")
+    (d / "omitted_coclient.json").write_text(json.dumps(log, indent=1), encoding="utf-8")
+    return kept
 
 
 def split_entries(text: str) -> list[dict[str, str]]:
@@ -81,7 +175,7 @@ def run(sr: StageRun) -> int:
     full = (text + "\n\n" + merged).strip()
     if not (d / "entries_full.md").is_file():
         (d / "entries_full.md").write_text(full, encoding="utf-8")
-    entries = split_entries(full)
+    entries = drop_coclient(sr, d, split_entries(full))
     pre = [e for e in entries if e["iso"] < incident]
     post = [e for e in entries if e["iso"] >= incident]
     sr.log(f"{sr.unit.unit}: {len(pre)} pre-incident, {len(post)} post-incident")
@@ -96,7 +190,7 @@ def run(sr: StageRun) -> int:
             system=prompts.load("filter-system", sr.cfg),
             max_tokens=16000,
             messages=[{"role": "user", "content": payload}],
-            effort="",
+            effort="high",
             stream=True,
             custom_id="filter",
         )

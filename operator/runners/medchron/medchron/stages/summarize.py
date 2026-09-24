@@ -75,9 +75,12 @@ def run(sr: StageRun) -> int:
         "summarize",
         model=llm.model_for(sr.cfg, "judgment"),
         system=prompts.load("summarize-system", sr.cfg),
-        max_tokens=4000,
+        # Thinking counts toward max_tokens; at effort high a 4000 cap can be
+        # spent on reasoning before the summary is written. The cap only
+        # bounds, it is not billed unless used.
+        max_tokens=16000,
         messages=[{"role": "user", "content": "\n\n".join(pre)}],
-        effort="",
+        effort="high",
         timeout=240.0,
         custom_id="summarize",
     )

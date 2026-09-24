@@ -17,10 +17,17 @@
 # ApplicationAccessPolicy that restricts this app to the single pinned mailbox
 # (proven against the sandbox tenant 2026-07-24): the app literally cannot read or
 # send from any mailbox but MSGRAPH_MAILBOX. This connector reinforces that at the
-# code layer — EVERY tool operates ONLY on /users/{MSGRAPH_MAILBOX}/..., pinned in
-# the client from config; NO tool accepts a mailbox/user parameter, so a compromised
-# turn cannot redirect a read or a send to another mailbox even if the tenant policy
-# were ever loosened. There is deliberately NO delete tool.
+# code layer — every write and send operates ONLY on /users/{MSGRAPH_MAILBOX}/...,
+# pinned in the client from config, and takes no mailbox/user parameter, so a
+# compromised turn cannot redirect a send even if the tenant policy were loosened.
+# There is deliberately NO delete tool. The ONE exception to the pin is two READS,
+# list_staff_messages / read_staff_message, which take a mailbox and refuse, before
+# any Graph call, every mailbox the firm has not authored in the seat's
+# customer.yaml `staff_mailbox_reads` block. The firm must ALSO add that mailbox to
+# the READ app's ApplicationAccessPolicy scope group; either missing, the read fails.
+# COORDINATED CHANGE (staff reads): overlay action_classes (read), the inbound fence
+# list and provenance seeding set take mcp_msgraph_mail_list_staff_messages and
+# mcp_msgraph_mail_read_staff_message, exactly as they take list/read_message.
 #
 # required_secrets are the RUNTIME env-var names the connector reads; the overlay
 # registry binds the source/value per customer (tenant + mailbox differ per seat,
@@ -74,3 +81,5 @@ poll_delta = "read"
 create_draft = "internal_write"
 send_message = "external_send"
 reply_message = "external_send"
+list_staff_messages = "read"
+read_staff_message = "read"

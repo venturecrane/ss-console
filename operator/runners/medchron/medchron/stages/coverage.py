@@ -59,17 +59,33 @@ def composer_dispositions(run_dir: Path, unit_files: list[dict[str, Any]]) -> di
     stage that read every page, and it is the reason this gate lacked on
     2026-09-16: 97 pleadings, filings, photos and letters, each with a stated
     reason, held the run because the firm's name table had never met them.
-    `entries: 0` with no reason explains nothing, so it is not returned."""
+    `entries: 0` with no reason explains nothing, so it is not returned.
+
+    The billing-dates account is read wherever it appears in the line, not only
+    at its start. The composer writes it BOTH alone (`billing-dates: 29`) and
+    combined with the entry count (`entries: 0, billing-dates: 332`), and a
+    prefix test saw only the first form. Live 2026-09-23 on A&P 201666: two
+    ledgers carrying 348 dates of service between them -- a records-vendor
+    upload and a scanner batch -- were each written as `entries: 0,
+    billing-dates: N`, matched no billing name pattern, and held a finished
+    chronology at the last gate. Entries above zero is NOT this case: such a
+    file has citable content and its absence from the document is a real
+    question, so it stays unexplained."""
     id_to_name = {f["id"]: file_key(f) for f in unit_files}
     out: dict[str, str] = {}
     for p in sorted(run_dir.glob("map-*.md")):
         for m in SEEN_LINE.finditer(p.read_text(encoding="utf-8")):
             name = id_to_name.get(m.group("id") or "", m.group("name").strip())
             what = m.group("what").strip()
+            bills = re.search(r"billing-dates:\s*(\d+)", what)
+            entries = re.search(r"entries:\s*(\d+)", what)
             if what.startswith("nothing extractable:"):
                 out.setdefault(name, "composer: " + what[len("nothing extractable:") :].strip())
-            elif what.startswith("billing-dates:") and what != "billing-dates: 0":
-                out.setdefault(name, "evidenced billing dates only; the billing chart carries them")
+            elif bills and int(bills.group(1)) > 0 and not (entries and int(entries.group(1)) > 0):
+                out.setdefault(
+                    name,
+                    f"evidenced billing dates only ({bills.group(1)}); the billing chart carries them",
+                )
     return out
 
 

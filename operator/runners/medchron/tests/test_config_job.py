@@ -44,6 +44,23 @@ def test_audit_is_never_batchable(tmp_path: Path) -> None:
         config_mod.load(str(p))
 
 
+@pytest.mark.parametrize("model", ["claude-opus-5-5", "claude-fable-5-1"])
+def test_audit_tier_refuses_a_model_that_rejects_forced_tool_use(model: str) -> None:
+    """The audit forces its verdict tool; on these models that is an HTTP 400 on
+    every claim, so the gate would fail every chronology."""
+    data = copy.deepcopy(FIRM_CONFIG)
+    data["models"]["tiers"]["audit"] = model
+    problems = config_mod.validate(data)
+    assert any("models.tiers.audit" in p and "forced tool_choice" in p for p in problems)
+
+
+def test_opus_5_5_is_accepted_on_the_tiers_that_do_not_force_a_tool() -> None:
+    data = copy.deepcopy(FIRM_CONFIG)
+    data["models"]["tiers"]["composition"] = "claude-opus-5-5"
+    data["models"]["tiers"]["judgment"] = "claude-opus-5-5"
+    assert not [p for p in config_mod.validate(data) if "models.tiers" in p]
+
+
 def test_missing_file_is_a_refusal_not_a_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(config_mod.ENV_PATH, raising=False)
     with pytest.raises(config_mod.ConfigError, match="no built-in firm"):

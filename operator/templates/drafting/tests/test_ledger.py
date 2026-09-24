@@ -132,6 +132,16 @@ class PriceTest(unittest.TestCase):
         cached = {"model": "claude-opus-5", "in": 0, "out": 0, "cache_read": 1_000_000}
         self.assertLess(ledger.price(cached), ledger.price(fresh))
 
+    def test_opus_5_5_prices_at_its_own_row_not_the_opus_5_prefix(self):
+        # Without its own row, "claude-opus-5-5" prefix-matches "claude-opus-5"
+        # and bills $5/$25 with cache reads at 0.10x: silently, no warning.
+        row = {"model": "claude-opus-5-5", "in": 1_000_000, "out": 1_000_000}
+        self.assertAlmostEqual(ledger.price(row), 4.0 + 20.0, places=6)
+        cached = {"model": "claude-opus-5-5", "in": 0, "out": 0, "cache_read": 1_000_000}
+        self.assertAlmostEqual(ledger.price(cached), 4.0 * 0.05, places=9)
+        opus5 = dict(cached, model="claude-opus-5")
+        self.assertAlmostEqual(ledger.price(opus5), 5.0 * 0.10, places=9)
+
     def test_batch_halves_the_row(self):
         plain = {"model": "claude-sonnet-5", "in": 500_000, "out": 100_000}
         batched = dict(plain, batch=True)

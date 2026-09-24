@@ -37,10 +37,17 @@ from .ledger import Ledger, count_pages
 from .limits import LimitHold
 
 # Only rows a call site actually leaves to the table. Every other stage passes
-# effort itself or ships at the API default: every effort reading on
-# 2026-08-27 failed its content bar (vision/billing low: 9-10 of 17 pages under
-# 0.99 text similarity and a truncated date anchor; compose high: regression
-# not whole), so a table row for them would be dead text that reads as policy.
+# effort itself: every effort reading on 2026-08-27 failed its content bar
+# (vision/billing low: 9-10 of 17 pages under 0.99 text similarity and a
+# truncated date anchor; compose high: regression not whole), so a table row
+# for them would be dead text that reads as policy.
+#
+# The Opus stages (compose, map-repair, summarize, scope) pass "high" rather
+# than "" (the API default) because the default is not a constant across
+# models: it is high on claude-opus-5 and MEDIUM on claude-opus-5-5. Sending
+# high explicitly is byte-identical behaviour on opus-5 and keeps a tier move
+# to 5.5 from silently thinking one level less. vision/billing (transcription
+# tier, Sonnet) still ship at the default, which is high on every Sonnet.
 EFFORT_DEFAULTS = {"audit": "medium", "repair": "medium", "merge": "low", "condense": "low"}
 NEVER_BATCHED = {"audit"}  # the audit is the gate; it is never a batch job
 

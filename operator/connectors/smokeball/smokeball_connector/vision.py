@@ -77,6 +77,7 @@ from .extract import (
     REASON_NO_CREDENTIAL,
     REASON_OVER_BYTE_CAP,
     REASON_OVER_PAGE_CAP,
+    REASON_REFUSED,
     REASON_TRUNCATED,
 )
 
@@ -282,6 +283,8 @@ def _transcribe_page(page_pdf: bytes) -> tuple[str, str | None, str | None]:
         return "", None, REASON_API_ERROR
     finally:
         del body, headers
+    if stop_reason == "refusal":
+        return "", stop_reason, REASON_REFUSED
     if stop_reason != "end_turn":
         # Partial text is not a shorter page, it is a page with a silent hole
         # in it.

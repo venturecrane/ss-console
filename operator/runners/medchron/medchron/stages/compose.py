@@ -148,7 +148,7 @@ class _Composer:
                 system=self.system,
                 messages=[{"role": "user", "content": c.text}],
                 max_tokens=self.max_tokens,
-                effort="",
+                effort="high",
                 stream=True,
                 cache_blocks=("system",),
                 custom_id=c.out_name[:-3],
@@ -222,7 +222,7 @@ class _Composer:
                 model=self.model,
                 system=self.system,
                 max_tokens=self.max_tokens,
-                effort="",
+                effort="high",
                 cache_blocks=("system",),
                 batch_dir=self.d,
             )

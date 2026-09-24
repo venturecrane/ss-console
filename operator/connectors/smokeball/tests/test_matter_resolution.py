@@ -252,14 +252,220 @@ def test_a_name_carrying_search_syntax_cannot_reach_the_query_as_syntax() -> Non
     make it a structured term is stripped before it goes near the endpoint."""
     tenant = Tenant()
     _resolve(tenant, client_name='number:*2026-PI-107* OR name:"x"')
-    (query,) = tenant.queries("/contacts")
-    term = query["Search"]
-    assert term.startswith("name:*") and term.endswith("*")
-    inside = term[len("name:*") : -1]
-    assert not set(inside) & set(':"*')
+    # EVERY query, not the first: a name that matches nothing now sends its other
+    # tokens as well (the full-or-empty fallback), and each of them is built from
+    # the same untrusted text, so each must be as clean as the first.
+    queries = tenant.queries("/contacts")
+    assert queries, "the search must have been attempted"
+    for query in queries:
+        term = query["Search"]
+        assert term.startswith("name:*") and term.endswith("*")
+        inside = term[len("name:*") : -1]
+        assert not set(inside) & set(':"*'), f"search syntax reached the query: {term!r}"
 
 
 def test_the_number_equality_is_rechecked_on_what_came_back() -> None:
     """``/matters?Search=`` is a plain keyword, so a partial hit is not a match."""
     out = _resolve(Tenant(), matter_number="2026-PI-10", client_name=NAME)
     assert out["verdict"] == mr.VERDICT_NONE and _minted() == 0
+
+
+# ---- The vendor's own search under-reports duplicates (2026-09-23) -----------
+#
+# Found on the pilot seat by a combined-post run, not by this suite, and the
+# reason this suite missed it is worth keeping: ``Tenant.handle`` models the
+# contact search as a clean substring match, which is MORE CORRECT than the
+# vendor. A fixture kinder than reality cannot disagree with the code, so the
+# defect lived behind a passing suite.
+#
+# Measured, pilot tenant, two distinct contact records both recorded as
+# firstName "Maria" / lastName "Alvarez", one on each of two open matters:
+#
+#     name:*Maria Alvarez*  -> 1 row    (one of the two, silently)
+#     name:*Alvarez*        -> 2 rows   (both)
+#
+# The consequence was not a wrong FILE (the fail-closed design held and the
+# letter was held) but a wrong SENTENCE: "the only matter I found for that
+# client is <the other one>", which invites a one-word yes that misfiles.
+
+
+class DuplicateNameTenant(Tenant):
+    """A tenant whose contact search behaves the way the vendor's actually does.
+
+    Two contacts share a name. A term carrying MORE THAN ONE token returns only
+    the first; a single-token term returns both. Records use the ``person``
+    shape the live tenant uses, where top-level ``name`` is absent.
+    """
+
+    C1 = "c0000000-0000-4000-8000-00000000dup1"
+    C2 = "c0000000-0000-4000-8000-00000000dup2"
+
+    def __init__(self) -> None:
+        super().__init__(
+            contact_matters={self.C1: [M101], self.C2: [M107]},
+            contacts={
+                self.C1: {"id": self.C1, "person": {"firstName": "Maria", "lastName": "Alvarez"}},
+                self.C2: {"id": self.C2, "person": {"firstName": "Maria", "lastName": "Alvarez"}},
+            },
+        )
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/contacts":
+            self.requests.append(request)
+            term = request.url.params.get("Search", "")
+            inner = term.removeprefix("name:*").removesuffix("*").strip()
+            tokens = inner.casefold().split()
+            rows = [
+                c
+                for c in self.contacts.values()
+                if tokens
+                and set(tokens)
+                <= {
+                    str((c.get("person") or {}).get("firstName", "")).casefold(),
+                    str((c.get("person") or {}).get("lastName", "")).casefold(),
+                }
+            ]
+            # THE VENDOR'S BEHAVIOUR: a multi-token term returns only the first.
+            if len(tokens) > 1:
+                rows = rows[:1]
+            return httpx.Response(200, json={"value": rows})
+        return super().handle(request)
+
+
+def test_two_contacts_sharing_a_name_are_ambiguous_not_a_lone_candidate() -> None:
+    """The live defect. Both matters must surface, so the reply asks which.
+
+    Without the single-token search this returns VERDICT_NONE carrying ONE
+    candidate, and the Operator says "the only matter I found for that client
+    is 2026-PI-101" about a letter belonging to 2026-PI-107.
+    """
+    out = _resolve(DuplicateNameTenant(), client_name="Maria Alvarez")
+    assert out["verdict"] == mr.VERDICT_AMBIGUOUS, out.get("reason")
+    assert out["candidate_count"] == 2
+    assert sorted(c["matter_number"] for c in out["candidates"]) == ["2026-PI-101", "2026-PI-107"]
+    assert _minted() == 0
+
+
+def test_the_contact_search_asks_on_one_token() -> None:
+    """The mechanism the test above depends on, asserted directly: a multi-token
+    query is the thing the vendor mishandles, so we must not send one."""
+    tenant = DuplicateNameTenant()
+    _resolve(tenant, client_name="Maria Alvarez")
+    (query,) = tenant.queries("/contacts")
+    inner = query["Search"].removeprefix("name:*").removesuffix("*")
+    assert len(inner.split()) == 1, f"searched on {inner!r}; a multi-token term loses duplicates"
+    assert inner.casefold() == "alvarez", "the longest token is the most selective one"
+
+
+def test_a_one_token_search_still_requires_the_WHOLE_name_to_match() -> None:
+    """The falsifier for the fix: searching a surname must not widen the net.
+
+    A different Alvarez shares the probe token and must be filtered out here, or
+    the fix has traded a missed duplicate for a false one.
+    """
+    tenant = DuplicateNameTenant()
+    tenant.contacts[OTHER_CONTACT] = {
+        "id": OTHER_CONTACT,
+        "person": {"firstName": "Ruben", "lastName": "Alvarez"},
+    }
+    tenant.contact_matters[OTHER_CONTACT] = [M101]
+    kept = mr._contacts_by_name(tenant.client(), "Maria Alvarez")
+    assert [c["id"] for c in kept] == [DuplicateNameTenant.C1, DuplicateNameTenant.C2]
+
+
+def test_a_single_token_name_sends_the_same_query_it_always_did() -> None:
+    """A company or a mononym has one token; the fix must not change its query."""
+    tenant = Tenant(
+        contact_matters={CONTACT: [M101]},
+        contacts={CONTACT: {"id": CONTACT, "name": "Acme"}},
+    )
+    _resolve(tenant, client_name="Acme")
+    (query,) = tenant.queries("/contacts")
+    assert query["Search"] == "name:*Acme*"
+
+
+# ---- A common first name fills the page (2026-09-23, the same day) -----------
+#
+# The fix above searched on the LONGEST token. "Daniel Porter" ties at six
+# letters and max() returns the first, so it searched "Daniel". On a client tenant
+# that filled the 50-row page with other Daniels, the client was not on it,
+# and the resolver answered `none` with no candidate for a client who has an
+# open matter. Not a misfile -- a false "not found", which the
+# reply turns into "I could not find a matter for this client".
+
+
+class CommonFirstNameTenant(Tenant):
+    """Sixty other Daniels, then the one we want, and a search that honours Limit.
+
+    The vendor returns rows in its own order and stops at ``Limit``; the target
+    is placed LAST so a first-name search cannot reach it.
+    """
+
+    TARGET = "c0000000-0000-4000-8000-0000000porter"
+
+    def __init__(self) -> None:
+        contacts: dict[str, dict[str, Any]] = {}
+        for i in range(60):
+            cid = f"c0000000-0000-4000-8000-{i:012d}"
+            contacts[cid] = {"id": cid, "person": {"firstName": "Daniel", "lastName": f"Other{i}"}}
+        contacts[self.TARGET] = {"id": self.TARGET, "person": {"firstName": "Daniel", "lastName": "Porter"}}
+        super().__init__(contact_matters={self.TARGET: [M101]}, contacts=contacts)
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/contacts":
+            self.requests.append(request)
+            term = request.url.params.get("Search", "")
+            want = term.removeprefix("name:*").removesuffix("*").strip().casefold()
+            limit = int(request.url.params.get("Limit", "50"))
+            rows = [
+                c
+                for c in self.contacts.values()
+                if want
+                and want
+                in {
+                    str((c.get("person") or {}).get("firstName", "")).casefold(),
+                    str((c.get("person") or {}).get("lastName", "")).casefold(),
+                }
+            ]
+            return httpx.Response(200, json={"value": rows[:limit]})
+        return super().handle(request)
+
+
+def test_a_tie_in_length_searches_the_later_token_first() -> None:
+    """In western order the later token is the surname, the selective one."""
+    tenant = CommonFirstNameTenant()
+    mr._contacts_by_name(tenant.client(), "Daniel Porter")
+    first = tenant.queries("/contacts")[0]
+    assert first["Search"] == "name:*Porter*"
+
+
+def test_a_client_behind_a_full_page_of_common_first_names_is_still_found() -> None:
+    """The live defect, asserted on the outcome rather than the query order.
+
+    Even if the ordering regressed to the first token, a full page must trigger
+    the other tokens, so the client is found either way.
+    """
+    out = _resolve(CommonFirstNameTenant(), client_name="Daniel Porter")
+    assert [c["matter_number"] for c in out.get("candidates") or []] == ["2026-PI-101"]
+
+
+def test_a_full_page_on_the_first_probe_searches_the_other_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The fallback on its own, with the ordering deliberately defeated.
+
+    Forcing the first-name probe reproduces the exact live shape; the client can
+    only be reached through the full-page fallback.
+    """
+    monkeypatch.setattr(mr, "_probe_order", lambda tokens: list(tokens))
+    tenant = CommonFirstNameTenant()
+    kept = mr._contacts_by_name(tenant.client(), "Daniel Porter")
+    queries = [q["Search"] for q in tenant.queries("/contacts")]
+    assert queries[0] == "name:*Daniel*"
+    assert "name:*Porter*" in queries, "a full page must send the other tokens"
+    assert [c["id"] for c in kept] == [CommonFirstNameTenant.TARGET]
+
+
+def test_a_page_that_is_neither_full_nor_empty_costs_one_query() -> None:
+    """The fallback must not fire on the ordinary case; it spends rate limit."""
+    tenant = DuplicateNameTenant()
+    mr._contacts_by_name(tenant.client(), "Maria Alvarez")
+    assert len(tenant.queries("/contacts")) == 1

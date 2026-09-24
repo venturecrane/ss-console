@@ -65,6 +65,72 @@ check_fail() {
   return 0
 }
 
+# The Machine's state RIGHT NOW, or "error" if it cannot be read.
+machine_state() {
+  fly status -a "${APP_NAME}" --json 2>/dev/null \
+    | python3 -c "import sys, json
+try:
+    d = json.load(sys.stdin)
+    machines = d.get('Machines') or []
+    print(machines[0]['state'] if machines else 'none')
+except Exception:
+    print('error')" 2>/dev/null || echo "error"
+}
+
+# How long a cycling Machine is given to come back before a failing check is
+# recorded as it stands. Overridable so a slow seat can be given more, and so
+# the tests can use a budget that does not dominate their runtime.
+BOOT_SMOKE_SETTLE_S="${BOOT_SMOKE_SETTLE_S:-120}"
+
+# Wait for the Machine to be back in state=started, up to ${1:-$BOOT_SMOKE_SETTLE_S}s.
+# Returns 0 if it got there, 1 otherwise. Never fails a check by itself.
+await_started() {
+  local budget="${1:-${BOOT_SMOKE_SETTLE_S}}" waited=0 state
+  while [ "${waited}" -lt "${budget}" ]; do
+    state="$(machine_state)"
+    [ "${state}" = "started" ] && return 0
+    waited=$((waited + 3))
+    sleep 3
+  done
+  return 1
+}
+
+# Did this check fail because the MACHINE was cycling rather than because the
+# thing it measures is broken?
+#
+# ss 2026-09-23: Step 1 waits for state=started, but that gate passes once, at
+# the top, and the run that follows takes ~14 minutes. On a pilot rebuild the
+# Machine went to `replacing` at 15:27:32 and two medchron gate probes ran at
+# 15:27:39 — seven seconds later, against a Machine that was being replaced.
+# Both were reported as failed gates and the provision exited FATAL on a seat
+# that was healthy: re-run on a settled Machine, both returned REFUSED, which is
+# exactly what they are supposed to return.
+#
+# A boot smoke that cries wolf is worse than one that is merely slow, because
+# the next FATAL is the one nobody reads. So a failing check gets ONE retry, and
+# ONLY when the Machine is not in state=started at the moment it failed.
+#
+# This deliberately cannot turn a real failure green: the retry runs the SAME
+# command, and a second failure is recorded as a failure. What it removes is the
+# case where the command never had a Machine to run on.
+retry_if_machine_cycling() {
+  local state
+  state="$(machine_state)"
+  if [ "${state}" = "started" ]; then
+    return 1  # the Machine was fine; the check's failure is the check's own
+  fi
+  log "  (Machine state=${state}, not started — waiting for it to settle, then retrying once)"
+  # The budget is passed explicitly rather than left to the default: with no
+  # caller supplying an argument, CI's shellcheck reads the optional ${1} as an
+  # unused parameter (SC2120) and fails the substrate job. Local shellcheck
+  # 0.11.0 does not flag it, which is how this reached a PR.
+  await_started "${BOOT_SMOKE_SETTLE_S}" || {
+    log "  (Machine did not return to started; recording the failure as-is)"
+    return 1
+  }
+  return 0
+}
+
 # A PRECONDITION failed, and every check after it would be noise rather than
 # evidence: the Machine never started, or this checkout cannot parse the pin it
 # is supposed to compare against. Distinct from check_fail on purpose. Softening
@@ -117,6 +183,8 @@ ssh_exec() {
   # commands contain no single quotes, so the single-quoted wrapper is safe.)
   if fly ssh console -a "${APP_NAME}" --command "sh -c '${cmd}'" >/dev/null 2>&1; then
     pass "${step}"
+  elif retry_if_machine_cycling && fly ssh console -a "${APP_NAME}" --command "sh -c '${cmd}'" >/dev/null 2>&1; then
+    pass "${step} (passed on retry; the Machine was cycling on the first attempt)"
   else
     check_fail "${step} — command failed: ${cmd}"
   fi
@@ -143,6 +211,9 @@ ssh_exec_script() {
   if fly ssh console -a "${APP_NAME}" \
     --command "sh -c 'echo ${encoded} | base64 -d | sh'" >/dev/null 2>&1; then
     pass "${step}"
+  elif retry_if_machine_cycling && fly ssh console -a "${APP_NAME}" \
+    --command "sh -c 'echo ${encoded} | base64 -d | sh'" >/dev/null 2>&1; then
+    pass "${step} (passed on retry; the Machine was cycling on the first attempt)"
   else
     check_fail "${step} — command failed: ${cmd}"
   fi
@@ -152,14 +223,7 @@ ssh_exec_script() {
 log "Waiting for Machine state=started (up to 60s)..."
 ATTEMPT=0
 while [ "${ATTEMPT}" -lt 60 ]; do
-  STATE="$(fly status -a "${APP_NAME}" --json 2>/dev/null \
-    | python3 -c "import sys, json
-try:
-    d = json.load(sys.stdin)
-    machines = d.get('Machines') or []
-    print(machines[0]['state'] if machines else 'none')
-except Exception:
-    print('error')" 2>/dev/null || echo "error")"
+  STATE="$(machine_state)"
   if [ "${STATE}" = "started" ]; then
     pass "machine-state-started (after ${ATTEMPT}s)"
     break

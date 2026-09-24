@@ -409,6 +409,8 @@ def test_coverage_gate_takes_the_composers_own_account_of_an_uncited_file(
         {"id": "p", "name": "COMPLAINT", "ext": ".pdf"},
         {"id": "b", "name": "EXHIBIT B", "ext": ".pdf"},
         {"id": "s", "name": "silent scan", "ext": ".pdf"},
+        {"id": "L", "name": "ledger scan", "ext": ".pdf"},
+        {"id": "E", "name": "has entries", "ext": ".pdf"},
         {"id": "msgatt-2", "name": "image001 (2)", "ext": ".jpg"},
     ]
     (d / "units" / "alpha.json").write_text(json.dumps(files))
@@ -424,6 +426,8 @@ def test_coverage_gate_takes_the_composers_own_account_of_an_uncited_file(
         "=== FILE: clinic note.pdf (fileId a) === entries: 1\n"
         "=== FILE: COMPLAINT.pdf (fileId p) === | nothing extractable: pleading, no treatment record\n"
         "=== FILE: EXHIBIT B.pdf (fileId b) === billing-dates: 29\n"
+        "=== FILE: ledger scan.pdf (fileId L) === entries: 0, billing-dates: 332\n"
+        "=== FILE: has entries.pdf (fileId E) === entries: 4, billing-dates: 7\n"
         "=== FILE: silent scan.pdf (fileId s) === entries: 0\n"
         "=== FILE: image001.jpg (fileId msgatt-2) === nothing extractable: photo of an insurance card\n"
     )
@@ -434,16 +438,28 @@ def test_coverage_gate_takes_the_composers_own_account_of_an_uncited_file(
     log: list[str] = []
     sr = _sr(job_dir, firm, data_root, log=log)
     assert coverage.run(sr) == 1
-    assert json.loads((rd / "coverage_unexplained.json").read_text()) == ["silent scan.pdf"], log
+    # "has entries.pdf" has citable content and is not cited, so it stays a
+    # real question; the pure ledger is explained by its own billing account.
+    assert json.loads((rd / "coverage_unexplained.json").read_text()) == [
+        "has entries.pdf",
+        "silent scan.pdf",
+    ], log
     assert any("COMPLAINT.pdf" in line and "composer: pleading" in line for line in log), log
     assert any("EXHIBIT B.pdf" in line and "billing dates only" in line for line in log), log
+    # the COMBINED form the composer actually writes: `entries: 0, billing-dates: N`.
+    # A prefix test saw only the bare form and held a finished chronology on a
+    # live matter (A&P 201666, two ledgers, 348 dates of service).
+    assert any("ledger scan.pdf" in line and "billing dates only (332)" in line for line in log), log
     assert any("image001 (2).jpg" in line and "composer: photo" in line for line in log), "found by id after the rename"
     # the rehearsal answers from the same source
-    lines = coverage.rehearse(
-        sr
-    )  # "with nothing cited": the clinic note and the silent scan, never the explained three
-    assert lines[0].endswith("2 would need a citation") and any("silent scan" in ln for ln in lines), lines
-    assert not any("COMPLAINT" in ln or "EXHIBIT B" in ln or "image001" in ln for ln in lines), lines
+    lines = coverage.rehearse(sr)
+    # "with nothing cited": the clinic note, the file with entries, and the
+    # silent scan. Never the explained four -- and the pure ledger is now one
+    # of those four, by its own billing account rather than by its name.
+    assert lines[0].endswith("3 would need a citation") and any("silent scan" in ln for ln in lines), lines
+    assert not any("COMPLAINT" in ln or "EXHIBIT B" in ln or "image001" in ln or "ledger scan" in ln for ln in lines), (
+        lines
+    )
 
 
 # ---- billing chart and worksheet -------------------------------------------------------------------
