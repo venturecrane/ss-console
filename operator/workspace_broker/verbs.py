@@ -138,6 +138,7 @@ VERBS: tuple[Verb, ...] = (
     Verb("medchron_job_list", ROOT_OR_AGENT, _medchron),
     Verb("medchron_job_record", _only(ROOT), _medchron),
     Verb("medchron_backfill_covered", _only(ROOT), _medchron),
+    Verb("medchron_job_resume", _only(ROOT), _medchron),
     # Gateway-only from here down.
     Verb("audit_append", _only(GATEWAY), audit_verbs.audit_append),
     Verb("agentmail_send", _only(GATEWAY), transmit_verbs.agentmail),

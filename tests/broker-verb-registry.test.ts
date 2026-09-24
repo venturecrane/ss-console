@@ -110,6 +110,7 @@ const EXPECTED_VERBS = [
   'medchron_backfill_covered',
   'medchron_job_list',
   'medchron_job_record',
+  'medchron_job_resume',
   'medchron_job_status',
   'medchron_job_submit',
   'msgraph_reply',

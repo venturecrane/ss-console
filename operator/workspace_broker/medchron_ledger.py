@@ -30,7 +30,9 @@ States and the audit type each transition pins:
     failed     MEDCHRON_JOB_FAILED
 
 Transitions are monotonic except held -> running (a seat pause lifting, or a
-hold the firm resolved and resubmitted through a fresh run of the same job).
+hold the firm resolved and resubmitted through a fresh run of the same job) and
+failed -> running (a resume, ss#2903: the defect was fixed and the stages the
+state file already finished are still good). `delivered` remains a dead end.
 """
 
 from __future__ import annotations
@@ -67,7 +69,17 @@ _ALLOWED_NEXT = {
     "running": {"held", "delivered", "failed"},
     "held": {"running", "failed"},
     "delivered": set(),
-    "failed": set(),
+    # The resume edge (ss#2903). NOT a loosening into "anything may be retried":
+    # a resume is requested by a person through `medchron_job_resume`, which
+    # refuses without a reason, and the daemon re-queues the job so the driver
+    # skips the stages already `done` in state.json. What it replaces is a fresh
+    # job that re-pays every completed stage: one matter paid $62.01 and
+    # then $62.80 to die at `merge` twice, while the same rescue done by hand on
+    # a later matter cost $4 against $104.
+    #
+    # `delivered` keeps its empty set: a delivered package that needs redoing is
+    # new work, not a rewind of the row that says it shipped.
+    "failed": {"running"},
 }
 
 SKILL_NAME = "medical-chronology-maintainer"
@@ -698,6 +710,35 @@ class MedchronLedger:
         try:
             row = conn.execute(_ACTIVE_TWIN_SQL, (want, *_TERMINAL_ORDERED)).fetchone()
             return (str(row["id"]), str(row["state"])) if row is not None else None
+        finally:
+            conn.close()
+
+    def work_twin(self, job_id: str) -> dict[str, Any] | None:
+        """Another job carrying THIS job's work that is delivered or still live.
+
+        The refusal a resume needs and `active_duplicate` does not give it
+        (ss#2903). That one exempts terminal rows -- deliberately, so a firm may
+        resubmit a failed matter -- and is only consulted on submit. But once a
+        later job has re-run and DELIVERED the same work, resuming the older
+        failed row would upload the package onto a matter that already has it.
+        The standing example on the first client seat: two failed rows whose
+        third job finished.
+
+        A row with no `work_digest` cannot be compared, so it never matches;
+        that fails toward allowing the resume, which is the recoverable side.
+        """
+        row = self.read(job_id)
+        if row is None or not row.get("work_digest"):
+            return None
+        conn = self._connect()
+        try:
+            r = conn.execute(
+                "SELECT id, state FROM medchron_jobs "
+                "WHERE work_digest = ? AND id != ? AND state != 'failed' "
+                "ORDER BY created_at DESC LIMIT 1",
+                (row["work_digest"], job_id),
+            ).fetchone()
+            return {"id": str(r["id"]), "state": str(r["state"])} if r is not None else None
         finally:
             conn.close()
 

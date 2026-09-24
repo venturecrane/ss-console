@@ -14,6 +14,7 @@ import pytest
 import yaml
 
 from medchron import config as config_mod, job as job_mod
+from medchron import resume as resume_mod
 from medchron.daemon import BrokerError, Daemon, memory_cap_mode, sticky_level
 from medchron.stages import upload
 from medchron.stages.base import StageRun
@@ -381,6 +382,95 @@ def test_daemon_wipes_terminal_jobs_after_the_hold_and_never_live_ones(tmp_path)
     d.claim_next()
     d._now["t"] += 1000 * 3600
     assert d.wipe_expired() == [] and (d.jobs / "01B").exists()
+
+
+def _fail_job(d: Daemon, broker: FakeBroker, job_id: str = "01A") -> None:
+    """Run a job to a recorded failure, the state a resume acts on."""
+    _submit(d, broker, job_id)
+    d.tick()
+    d._report(job_id, 4, "")  # no verdict -> failed, and finished_at is stamped
+    assert d._daemon_state(job_id)["state"] == "failed"
+
+
+def test_a_failed_job_is_not_picked_up_without_a_resume_request(tmp_path):
+    """The falsifier for every test below: if the daemon ran a failed job on its
+    own, none of them would be measuring the resume."""
+    d, broker = _daemon(tmp_path)
+    _fail_job(d, broker)
+    before = list(broker.records)
+    assert d.tick() is None
+    assert broker.records == before and d._daemon_state("01A")["state"] == "failed"
+
+
+def test_a_resume_marker_re_queues_the_job_and_the_daemon_runs_it(tmp_path):
+    d, broker = _daemon(tmp_path)
+    _fail_job(d, broker)
+    (d.queue / ".resume-01A.json").write_text(json.dumps({"job_id": "01A", "reason": "merge fixed", "redo": []}))
+    assert d.tick() == "delivered"
+    # The tail is the whole claim: a FAILED row moved to running and then
+    # delivered, which `_ALLOWED_NEXT` refused outright before ss#2903.
+    assert [s for _, s, _ in broker.records][-3:] == ["failed", "running", "delivered"]
+    assert not (d.queue / ".resume-01A.json").exists()  # consumed
+    assert d._daemon_state("01A")["resumes"] == 1
+
+
+def test_a_resume_marker_is_never_mistaken_for_an_envelope(tmp_path):
+    """`_queued` skips dotfiles, so a marker must not be claimed as a job."""
+    d, _broker = _daemon(tmp_path)
+    (d.queue / ".resume-01Z.json").write_text(json.dumps({"job_id": "01Z", "reason": "x", "redo": []}))
+    assert d._queued() == []
+    # 01Z has no job dir, so the marker is refused and cleared rather than left
+    # to be retried forever.
+    assert resume_mod.take_requests(d) == []
+    assert not (d.queue / ".resume-01Z.json").exists()
+
+
+def test_a_resume_clears_finished_at_before_the_wipe_can_delete_the_work(tmp_path):
+    """The money bug. `tick` wipes BEFORE it claims, and the marker leaves
+    daemon.json otherwise untouched, so a job that crossed the window between
+    the request and the claim would lose its `data/` and silently restart from
+    stage 1 at full price -- looking exactly like a successful resume."""
+    d, broker = _daemon(tmp_path, wipe_hours=72)
+    _fail_job(d, broker)
+    d._now["t"] += 100 * 3600  # well past the wipe window
+    (d.queue / ".resume-01A.json").write_text(json.dumps({"job_id": "01A", "reason": "fixed", "redo": []}))
+    assert d.tick() == "delivered"
+    assert (d.jobs / "01A").exists(), "the resumed job's workdir was wiped out from under it"
+
+
+def test_a_resume_drops_the_stale_failure_wake(tmp_path):
+    """`_report` left a wake describing the FAILURE. Dispatching it against a
+    job that is running again is the duplicate deliver turn the daemon calls
+    worse than a lost one."""
+    d, broker = _daemon(tmp_path)
+    _fail_job(d, broker)
+    assert (d._daemon_state("01A").get("wake") or {}).get("pending") is True
+    resume_mod.take_requests(d)  # no marker yet: the wake must survive
+    assert (d._daemon_state("01A").get("wake") or {}).get("pending") is True
+    (d.queue / ".resume-01A.json").write_text(json.dumps({"job_id": "01A", "reason": "fixed", "redo": []}))
+    assert resume_mod.take_requests(d) == ["01A"]
+    assert not (d._daemon_state("01A").get("wake") or {}).get("pending")
+
+
+def test_a_resume_passes_redo_to_the_runner_and_consumes_it(tmp_path):
+    """Without --redo the driver skips every `done` stage, including the one the
+    fix changed: `is_done` is `status == "done"` and `input_sha` is never
+    compared."""
+    script = """
+import json, pathlib, sys
+pathlib.Path(sys.argv[1], 'argv.json').write_text(json.dumps(sys.argv[1:]))
+print(json.dumps([{"unit": "alpha", "outcome": "delivered", "reason": None, "stage": None, "dollars": 1.0,
+                   "pages": 1, "documents": 1, "folder_id": "f", "files": []}]))
+"""
+    d, broker = _daemon(tmp_path, script=script)
+    _fail_job(d, broker)
+    marker = {"job_id": "01A", "reason": "condense fixed", "redo": ["condense", "audit"]}
+    (d.queue / ".resume-01A.json").write_text(json.dumps(marker))
+    assert d.tick() == "delivered"
+    argv = json.loads((d.jobs / "01A" / "argv.json").read_text())
+    assert "--redo" in argv and "condense,audit" in argv
+    # One request buys ONE attempt: a job that fails again parks again.
+    assert d._daemon_state("01A")["resume_redo"] == []
 
 
 def test_daemon_defers_when_the_broker_is_down_and_child_env_is_allow_listed(tmp_path, monkeypatch):

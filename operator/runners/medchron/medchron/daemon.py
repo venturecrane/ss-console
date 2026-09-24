@@ -40,7 +40,7 @@ from typing import Any, Callable
 
 from .covered import delivery_fields
 
-from . import config as config_mod, job as job_mod
+from . import config as config_mod, job as job_mod, resume as resume_mod
 
 logger = logging.getLogger("medchron.daemon")
 
@@ -393,13 +393,11 @@ class Daemon:
         except BrokerError as exc:
             logger.warning("could not read the month's allowance for %s, deferring: %s", job_id, exc)
             return "deferred"
-        st = self._daemon_state(job_id)
         try:
             self.broker.record(job_id, "running", {})
         except BrokerError as exc:
             logger.warning("could not record running for %s: %s", job_id, exc)
             return "deferred"
-        self._write_state(job_id, state="running", attempts=int(st.get("attempts", 0)) + 1, held_paused=False)
         env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS}
         env.update(self.child_env)
         env.setdefault("MEDCHRON_SEAT", "client")
@@ -409,7 +407,7 @@ class Daemon:
         pidfile = self.run_dir / "child.pid"
         try:
             proc = subprocess.Popen(  # noqa: S603 - argv is the configured runner command plus the job dir, no shell; the env is filtered
-                [*self.runner_cmd, str(jd), "--json"],
+                resume_mod.start_run(self, job_id, [*self.runner_cmd, str(jd), "--json"]),
                 cwd=str(jd),
                 env=env,
                 stdout=subprocess.PIPE,
@@ -602,7 +600,8 @@ class Daemon:
         return wiped
 
     def tick(self) -> str | None:
-        """One iteration: heartbeat, wipe, pending wakes, then at most one job."""
+        """One iteration: resume requests, heartbeat, wipe, wakes, then one job."""
+        resume_mod.take_requests(self)
         self.wipe_expired()
         self.dispatch_wakes()
         current = self._in_progress()
