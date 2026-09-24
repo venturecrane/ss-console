@@ -316,7 +316,7 @@ vars:
     agent_env: held
     custody: infra
     note: >-
-      Transcription model override; defaults to claude-opus-5 in the connector.
+      Transcription model override; defaults to claude-opus-5-5 in the connector.
       Non-secret SMD deployment choice, like SMOKEBALL_ENVIRONMENT.
   SMOKEBALL_VISION_PAGE_CAP:
     stage: mcp-subprocess

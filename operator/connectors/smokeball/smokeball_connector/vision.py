@@ -84,7 +84,7 @@ from .extract import (
 API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
 
-DEFAULT_MODEL = "claude-opus-5"
+DEFAULT_MODEL = "claude-opus-5-5"
 #: that matter's scanned set tops out at 27 pages (the medical records at 14), so 40
 #: covers the live record with margin and still fences a 300-page deposition
 #: bundle that would cost a fortune to transcribe by accident. It is now also

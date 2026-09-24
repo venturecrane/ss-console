@@ -99,7 +99,9 @@ fly_region: sjc # Fair Oaks (Sacramento), CA — San Jose is the nearest Fly reg
 # (matter-document-review et al., pre-weighted) escalates to Opus via the SOUL
 # instruction translate.py renders when escalation_model is set.
 model: claude-sonnet-4-6
-escalation_model: claude-opus-4-8
+# Opus 5.5 (2026-09-23): $4/$20 against 4.8's $5/$25; proven on smd-staging
+# and pilot-smokeball first (ss-console #2888).
+escalation_model: claude-opus-5-5
 # Promoted to the blessed v0.20 line 2026-08-20 (ss#2444 PR-2, Captain go). The
 # four SMD-own seats moved on PR-1 (#2453) and this seat, the paying client,
 # moves last and alone — the staged order the upgrade plan exists to enforce
