@@ -37,6 +37,12 @@ Build agents consuming these specs should treat each spec as the **implementatio
 | [audit-retention.md](audit-retention.md)                       | [#893](https://github.com/venturecrane/ss-console/issues/893)                                                                | Per-vertical audit-log retention defaults; customer.yaml override-up-only; decommission carve-out preserves audit log       |
 | [email-channel-seam.md](email-channel-seam.md)                 | [#1978](https://github.com/venturecrane/ss-console/issues/1978)                                                              | ADR 0078 build spec: provider-neutral email seam, delta-poll inbound, msgraph-mail connector, normalized InboundMessage DTO |
 
+## Routines designed, build gated on client acceptance
+
+| Spec                                                     | Status                                                     | Scope                                                                                                                                 |
+| -------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| [demand-drafting-routine.md](demand-drafting-routine.md) | Design; first firm's terms decided 09-24, not yet accepted | On-request time-limited demand as a queued seat job: premise preflight, streamed drafting, filing with read-back; the low-limit watch |
+
 ## Open ambiguities requiring Captain decision
 
 These were flagged as `[AMBIGUITY: ...]` markers in the specs. Listed here for triage:
