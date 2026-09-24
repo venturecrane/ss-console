@@ -62,6 +62,30 @@ _SITUATION_CONFIG = (
 )
 
 
+def _held_chase_line(entry: dict) -> str | None:
+    """The seat-level held-reminders sentence, naming what is held, or None
+    for an entry that does not carry the held set (renders the generic line).
+
+    Authored text, values from the envelope's own plan resolution: the count
+    of held chases and the matter numbers that resolved. The parenthetical is
+    omitted when no number resolved; the count still says how many."""
+    count = entry.get("held_count")
+    if not isinstance(count, int) or count < 1:
+        return None
+    numbers = [n for n in (entry.get("held_matter_numbers") or []) if isinstance(n, str) and n]
+    named = " (" + ", ".join(f"matter {n}" for n in numbers) + ")" if numbers else ""
+    if count == 1:
+        head = f"1 client verification reminder is due and was not sent{named}"
+        pronoun = "it"
+    else:
+        head = f"{count} client verification reminders are due and were not sent{named}"
+        pronoun = "them"
+    return (
+        f"{head}. The link clients use to return a verification is not set up on "
+        f"this seat, so a person needs to send {pronoun}, or SMD can set the link up"
+    )
+
+
 def situation_line(plan: dict) -> str | None:
     """The authored situation phrase for one plan entry, or None (render
     nothing for an action this map does not know)."""
@@ -74,8 +98,10 @@ def situation_line(plan: dict) -> str | None:
         return _SITUATION_HANDOFF
     if action == "chase":
         # Reaching the renderer at all means the chase could not fully render
-        # (return_link unauthored) — the fail-closed degradation.
-        return _SITUATION_CHASE_UNROUTABLE
+        # (return_link unauthored) — the fail-closed degradation. The held
+        # sentence names the matters; the generic phrase is the fallback for
+        # an entry built without the held set.
+        return _held_chase_line(plan) or _SITUATION_CHASE_UNROUTABLE
     if action == "surface_config_missing":
         return _SITUATION_CONFIG
     return None

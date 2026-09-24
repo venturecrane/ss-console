@@ -83,8 +83,9 @@ else:                           rung = watch          # elevated flag on the int
 
 The rung is an **internal ordering signal**, not a reader-facing label. In the
 delivered alert it maps to triage: notify-rung and any authored-high-signal item
-lead the "Needs you today" block; near/watch routine items collapse into
-"Admin confirms" (see `output-format.md`).
+lead the "Needs you today" block; the rest collapse per matter into
+"Also open" (digest key `admin_confirms`; see `output-format.md`). Banding is
+per recipient: each alert's top five are that recipient's own top five.
 
 ## Writing the ledger (through the validated broker seam)
 

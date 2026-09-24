@@ -46,7 +46,7 @@ import sys
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Protocol, Sequence
+from typing import Any, Protocol, Sequence
 
 
 def _load_skill_helpers():
@@ -135,6 +135,11 @@ class MatterDeadline:
     # the renderer's consequence map renders NOTHING for None (never invented
     # urgency). WS-RENDER.
     priority_marker: str | None = None
+    # The task subject reduced to a label the send gate passes
+    # (``digest_items.display_label``), built in ``parse_pull`` for TASKS only:
+    # an event title is often a case caption and never renders. None renders no
+    # label. The raw subject never leaves ``parse_pull``.
+    subject_display: str | None = None
 
 
 class DeadlineSource(Protocol):
@@ -289,6 +294,11 @@ def _load_ledger_module():
     return _load_sibling_module("escalation_ledger.py", "escalation_ledger_vendored")
 
 
+# Label shaping + needs-you ordering, shared with dispatch_envelope.py. A
+# missing copy fails the pull loudly (blind wake + failure note), never silently.
+_DI: Any = _load_sibling_module("digest_items.py", "escalator_digest_items")
+
+
 def enrich_with_ledger(
     deadlines: Sequence[MatterDeadline],
     *,
@@ -339,6 +349,7 @@ def enrich_with_ledger(
                 task_id=d.task_id,
                 last_raised=None if state is None else state.last_raised_ts,
                 priority_marker=d.priority_marker,
+                subject_display=d.subject_display,
             )
         )
     return enriched
@@ -397,7 +408,7 @@ class WakeDecision:
 # finding). The turn renders it verbatim: it may order prose within a band and
 # write each item's one-line consequence, but it never moves an item across
 # bands and never re-counts.
-_NEEDS_YOU_MAX = 5  # output-format rule 2: three to five in the top block
+# The top-block size (output-format rule 2) is digest_items.NEEDS_YOU_MAX.
 
 
 def _digest_item(d: MatterDeadline, today: date, ack_code: str | None) -> dict:
@@ -412,33 +423,8 @@ def _digest_item(d: MatterDeadline, today: date, ack_code: str | None) -> dict:
         "ack_code": ack_code,
         "last_raised": d.last_raised,
         "priority_marker": d.priority_marker,
+        "subject_display": d.subject_display,
     }
-
-
-def _group_by_matter(items: Sequence[dict]) -> dict:
-    """Collapse a band's items into per-matter groups, counts by construction.
-
-    Every count here is a list length, never arithmetic, and the group carries
-    the matter's own ``matter_number`` (plus its typed absence) so the renderer
-    can name the matter without reaching back into an item. ``last_raised`` is
-    the LATEST across the group, because a group rendered as one line can state
-    only one date and the most recent raise is the one that answers "is anyone
-    on this?".
-    """
-    by_matter: dict[str, list[dict]] = {}
-    for item in items:
-        by_matter.setdefault(item["matter_id"], []).append(item)
-    groups = [
-        {
-            **{k: g[0][k] for k in ("matter_id", "matter_number", "matter_number_absent")},
-            "count": len(g),
-            "ack_codes": [i["ack_code"] for i in g if i["ack_code"]],
-            "last_raised": max((i["last_raised"] for i in g if i["last_raised"]), default=None),
-            "items": g,
-        }
-        for _, g in sorted(by_matter.items())
-    ]
-    return {"total": len(items), "matter_count": len(groups), "matters": groups}
 
 
 def project_digest(
@@ -454,14 +440,18 @@ def project_digest(
     Banding is deterministic, from authored signals only (output-format rule 1
     as computable here): membership in "Needs you today" is the up-to-5 MOST
     OVERDUE firing items with stable identity; every other stable firing item
-    collapses into the per-matter "Admin confirms" groups; firing items with no
+    collapses into the per-matter overflow groups (key ``admin_confirms``,
+    rendered "Also open"); firing items with no
     stable id render blanket-ack-only; in-range conflict-held matters render
     under clearance; in-range items quiet because the Operator RAISED them
     recently (not because a person acked them) render under "elsewhere" so they
     are not double-counted. Acked-and-snoozed items are omitted (a person
     silenced them). Empty sections are omitted whole (rule 9). The subject
-    counts ONLY the needs-you band — the 08-14 subject said "37 need you" when
-    5 needed a person and 32 were routine confirms (Law 11).
+    counts the items a person must act on by name, needs-you plus blanket-ack
+    only, and never the overflow: the 08-14 subject said "37 need you" when 5
+    needed a person (Law 11), and the 09-22 one said "0 need you" to a
+    recipient holding only blanket items. The per-recipient split re-bands and
+    re-counts (dispatch_envelope.split_digest).
     """
     in_range = [
         d
@@ -480,33 +470,20 @@ def project_digest(
 
     stable = [d for d in firing if ledger.has_stable_identity(d.task_id, d.matter_id)]
     blanket = [d for d in firing if not ledger.has_stable_identity(d.task_id, d.matter_id)]
-    # Deterministic needs-you ordering (WS-RENDER): authored priority marker
-    # first, then most overdue, then stable tie-breaks — ordering moves from
-    # "the turn's prose" into the projection.
-    stable.sort(
-        key=lambda d: (
-            0 if d.priority_marker else 1,
-            (d.authored_date - today).days,
-            d.matter_id,
-            d.task_id or "",
-        )
-    )
-    needs_you = stable[:_NEEDS_YOU_MAX]
-    admin = stable[_NEEDS_YOU_MAX:]
-
-    digest: dict = {
-        "subject": f"[Deadlines] {len(needs_you)} need you, {today.isoformat()}",
-        "needs_you": [_digest_item(d, today, code_for(d)) for d in needs_you],
-    }
+    # Deterministic needs-you ordering (WS-RENDER), over the digest-item dicts
+    # with the ONE key dispatch_envelope re-bands each recipient's split with:
+    # authored priority marker first, then most overdue, then stable tie-breaks.
+    needs_you, admin = _DI.band_stable_items([_digest_item(d, today, code_for(d)) for d in stable])
+    digest: dict = {"needs_you": needs_you}
     if admin:
-        digest["admin_confirms"] = _group_by_matter([_digest_item(d, today, code_for(d)) for d in admin])
+        digest["admin_confirms"] = admin
     if elsewhere:
         # Collapsed per matter for the same reason admin_confirms is (Law 11).
         # The 2026-08-25 digest rendered this band as 38 flat rows, 20 of them
         # for one matter, indistinguishable from each other because the line
         # format carries no task id. A band whose whole purpose is "already
         # handled, no action here" must not be the longest thing in the alert.
-        digest["under_active_escalation_elsewhere"] = _group_by_matter(
+        digest["under_active_escalation_elsewhere"] = _DI.group_by_matter(
             [_digest_item(d, today, None) for d in elsewhere]
         )
     if clearance:
@@ -516,6 +493,7 @@ def project_digest(
     if blanket:
         blanket.sort(key=lambda d: ((d.authored_date - today).days, d.matter_id))
         digest["blanket_ack_only"] = [_digest_item(d, today, None) for d in blanket]
+    digest["subject"] = f"[Deadlines] {_DI.need_you_count(digest)} need you, {today.isoformat()}"
     if probe_stats and (probe_stats.get("excluded") or probe_stats.get("stale")):
         # ss #2403's daily loud channel: probe artifacts present on the tenant
         # are stated in the digest (excluded from work, and stale ones named for
@@ -1095,17 +1073,24 @@ _PROBE_MARK = "[SMD-PROBE"
 _PROVENANCE_MARK = "[Operator]"
 
 
-def _is_probe_item(item: dict) -> bool:
-    subject = ""
+def _subject_of(item: dict) -> str:
+    """The item's first non-blank subject-like field, verbatim, or ""."""
     for key in _SUBJECT_KEYS:
         value = item.get(key)
         if isinstance(value, str) and value.strip():
-            subject = value
-            break
-    text = subject.lstrip()
+            return value
+    return ""
+
+
+def _after_provenance(text: str) -> str:
+    text = text.lstrip()
     if text.upper().startswith(_PROVENANCE_MARK.upper()):
         text = text[len(_PROVENANCE_MARK) :].lstrip()
-    return text.upper().startswith(_PROBE_MARK.upper())
+    return text
+
+
+def _is_probe_item(item: dict) -> bool:
+    return _after_provenance(_subject_of(item)).upper().startswith(_PROBE_MARK.upper())
 
 
 #: The closed authored-priority-marker set (output-format rule 1). The render
@@ -1116,14 +1101,10 @@ _PRIORITY_MARKERS = ("CRITICAL", "URGENT", "HIGH PRIORITY")
 
 def _priority_marker_of(item: dict) -> str | None:
     """The authored task-priority marker in the subject's own words, or None."""
-    for key in _SUBJECT_KEYS:
-        value = item.get(key)
-        if isinstance(value, str) and value.strip():
-            upper = value.upper()
-            for marker in _PRIORITY_MARKERS:
-                if marker in upper:
-                    return marker
-            return None
+    upper = _subject_of(item).upper()
+    for marker in _PRIORITY_MARKERS:
+        if marker in upper:
+            return marker
     return None
 
 
@@ -1174,16 +1155,7 @@ _PROBE_STALE_HOURS = 24
 
 
 def _probe_stamp_of(item: dict) -> datetime | None:
-    subject = ""
-    for key in _SUBJECT_KEYS:
-        value = item.get(key)
-        if isinstance(value, str) and value.strip():
-            subject = value
-            break
-    text = subject.lstrip()
-    if text.upper().startswith(_PROVENANCE_MARK.upper()):
-        text = text[len(_PROVENANCE_MARK) :].lstrip()
-    rest = text[len(_PROBE_MARK) :].lstrip()
+    rest = _after_provenance(_subject_of(item))[len(_PROBE_MARK) :].lstrip()
     stamp = rest.split("]", 1)[0].strip()
     try:
         return datetime.fromisoformat(stamp.replace("Z", "+00:00"))
@@ -1261,6 +1233,7 @@ def parse_pull(raw: dict, *, now: datetime | None = None) -> tuple[list[MatterDe
                     acknowledged=False,
                     task_id=_source_id_of(item),
                     priority_marker=_priority_marker_of(item),
+                    subject_display=_DI.display_label(_subject_of(item)) if label == "task-deadline" else None,
                 )
             )
     if total_items > 0 and not deadlines:

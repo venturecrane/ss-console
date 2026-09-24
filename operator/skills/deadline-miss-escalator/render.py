@@ -117,10 +117,15 @@ def _due_phrase(days_out: int) -> str:
 
 
 def _item_line(item: dict) -> str:
-    """``<matter head>, <label> <date> (<due phrase>)`` — the shared core of a
-    needs-you and blanket line. Values verbatim from the digest item."""
+    """``<matter head>, "<task label>", <label> <date> (<due phrase>)``, the
+    shared core of a needs-you and blanket line. Values verbatim from the
+    digest item; the quoted task label renders only for a task deadline that
+    carries one (``subject_display``, masked at parse time). An event title
+    never renders: it is often a case caption."""
+    task = item.get("subject_display") if item.get("label") == "task-deadline" else None
+    named = f'"{task}", ' if isinstance(task, str) and task else ""
     return (
-        f"{_matter_head(item)}, {item.get('label')} {item.get('authored_date')} "
+        f"{_matter_head(item)}, {named}{item.get('label')} {item.get('authored_date')} "
         f"({_due_phrase(int(item.get('days_out') or 0))})"
     )
 
@@ -156,6 +161,120 @@ _REKEY_NOTICE = (
 # ---------------------------------------------------------------------------
 
 
+def _preamble(items: list[dict]) -> str | None:
+    """The line under the needs-you heading, or None.
+
+    It states the ORDER only when the order carries information: a priority
+    marker on any item means the list is ranked by what the record says;
+    otherwise differing dates mean most-overdue first; items that share every
+    signal get no preamble, because "most consequential first" over
+    indistinguishable items claims a ranking that did not happen."""
+    if any(item.get("priority_marker") for item in items):
+        return "Ranked by what the record says, most consequential first."
+    if len({item.get("authored_date") for item in items}) > 1:
+        return "Most overdue first."
+    return None
+
+
+def _needs_you_block(items: list[dict]) -> list[str]:
+    lines = [f"## Needs you today ({len(items)})", ""]
+    if not items:
+        return lines
+    preamble = _preamble(items)
+    if preamble:
+        lines += [preamble, ""]
+    for index, item in enumerate(items, start=1):
+        code = item.get("ack_code")
+        lines.append(f"{index}. {_item_line(item)}" + (f" [{code}]" if code else ""))
+        reason = consequence_line(item)
+        if reason:
+            lines.append(f"   {reason}")
+    return lines + [""]
+
+
+def _overflow_block(band: dict | None) -> list[str]:
+    """The overflow band (digest key ``admin_confirms``): stable firing items
+    past the top five, collapsed per matter. Named for what it is, "Also
+    open": nothing in the record says these are routine, and the 2026-09-22
+    pilot email filed a recipient's overdue deadlines under "routine
+    confirmations" because they ranked sixth seat-wide."""
+    if not (isinstance(band, dict) and band.get("matters")):
+        return []
+    total = int(band.get("total") or 0)
+    lines = [
+        f"## Also open ({total} across {_plural(int(band.get('matter_count') or 0), 'matter')})",
+        "",
+        "More open items past the top five, collapsed per matter. Reply with a "
+        "matter's ACK codes to clear them, or open them in Smokeball.",
+        "",
+    ]
+    for group in band["matters"]:
+        count = int(group.get("count") or 0)
+        codes = " ".join(f"[{c}]" for c in (group.get("ack_codes") or []))
+        more = f"{count} more item" + ("" if count == 1 else "s")
+        lines.append(f"- {_matter_head(group)}: {more}." + (f" {codes}" if codes else ""))
+    return lines + [""]
+
+
+def _elsewhere_block(band: dict | None) -> list[str]:
+    if not (isinstance(band, dict) and band.get("matters")):
+        return []
+    total = int(band.get("total") or 0)
+    lines = [
+        f"## Under active escalation elsewhere ({total} across "
+        f"{_plural(int(band.get('matter_count') or 0), 'matter')})",
+        "",
+        "Already raised, shown so it is not double-counted. No action here.",
+        "",
+    ]
+    for group in band["matters"]:
+        raised = _day_of(group.get("last_raised"))
+        tail = f" (last raised {raised})" if raised else ""
+        count = _plural(int(group.get("count") or 0), "item")
+        lines.append(f"- {_matter_head(group)}: {count} under active escalation{tail}.")
+    return lines + [""]
+
+
+def _clearance_block(items: list[dict]) -> list[str]:
+    if not items:
+        return []
+    lines = [
+        f"## Awaiting clearance ({len(items)})",
+        "",
+        "Held matters with an approaching date. Surfaced for a person to clear; never a client-facing step.",
+        "",
+    ]
+    for item in items:
+        lines.append(
+            f"- {_matter_head(item)}: on CONFLICT-HOLD with {item.get('label')} {item.get('authored_date')} approaching."
+        )
+    return lines + [""]
+
+
+def _blanket_block(items: list[dict]) -> list[str]:
+    if not items:
+        return []
+    lines = [
+        f"## Blanket-ack only ({len(items)})",
+        "",
+        "Items with no stable task id, so they carry no individual ACK "
+        "code. A blanket acknowledgement (below) acks exactly the items "
+        "quoted here.",
+        "",
+    ]
+    return lines + [f"- {_item_line(item)}." for item in items] + [""]
+
+
+def _probe_line(probe: dict | None) -> list[str]:
+    if not (isinstance(probe, dict) and (probe.get("excluded") or probe.get("stale"))):
+        return []
+    note = f"Probe artifacts excluded from this digest: {int(probe.get('excluded') or 0)}."
+    stale_ids = [str(x) for x in (probe.get("stale_task_ids") or [])]
+    if stale_ids:
+        note += " Stale probe task ids awaiting teardown: " + ", ".join(stale_ids) + "."
+    return ["", note]
+
+
 def render_digest(
     digest: dict,
     *,
@@ -164,96 +283,20 @@ def render_digest(
 ) -> str:
     """Render the projected digest into the triaged alert body.
 
-    The digest supplies the VALUES and the MEMBERSHIP; this function supplies
-    the WORDS and the MARKUP (output-format.md). Counts are copied, never
-    recomputed; empty sections are omitted whole (rule 9); the footer is a
-    sibling of the lists, never nested (2026-08-14). The subject is NOT
-    included — the caller sends it as the message subject, verbatim from
+    The digest supplies the VALUES and the MEMBERSHIP; the band helpers above
+    supply the WORDS and the MARKUP (output-format.md). Counts are copied,
+    never recomputed; empty sections are omitted whole (rule 9); the footer is
+    a sibling of the lists, never nested (2026-08-14). The subject is NOT
+    included: the caller sends it as the message subject, verbatim from
     ``digest['subject']``."""
     lines: list[str] = []
     if rekey_count > 0:
-        lines.append(_REKEY_NOTICE.format(n=rekey_count, s="" if rekey_count == 1 else "s"))
-        lines.append("")
-
-    needs_you = digest.get("needs_you") or []
-    lines.append(f"## Needs you today ({len(needs_you)})")
-    lines.append("")
-    if needs_you:
-        lines.append("Ranked by what the record says, most consequential first.")
-        lines.append("")
-        for index, item in enumerate(needs_you, start=1):
-            code = item.get("ack_code")
-            suffix = f" [{code}]" if code else ""
-            lines.append(f"{index}. {_item_line(item)}{suffix}")
-            reason = consequence_line(item)
-            if reason:
-                lines.append(f"   {reason}")
-        lines.append("")
-
-    admin = digest.get("admin_confirms")
-    if isinstance(admin, dict) and admin.get("matters"):
-        total = int(admin.get("total") or 0)
-        matter_count = int(admin.get("matter_count") or 0)
-        lines.append(f"## Admin confirms ({total} across {matter_count} matters)")
-        lines.append("")
-        lines.append(
-            "Routine confirmations, collapsed per matter. Reply with a matter's "
-            "ACK codes to clear its items, or open the item in Smokeball."
-        )
-        lines.append("")
-        for group in admin["matters"]:
-            count = int(group.get("count") or 0)
-            codes = " ".join(f"[{c}]" for c in (group.get("ack_codes") or []))
-            line = f"- {_matter_head(group)}: {_plural(count, 'routine confirmation')}."
-            if codes:
-                line += f" {codes}"
-            lines.append(line)
-        lines.append("")
-
-    elsewhere = digest.get("under_active_escalation_elsewhere")
-    if isinstance(elsewhere, dict) and elsewhere.get("matters"):
-        total = int(elsewhere.get("total") or 0)
-        matter_count = int(elsewhere.get("matter_count") or 0)
-        lines.append(f"## Under active escalation elsewhere ({total} across {matter_count} matters)")
-        lines.append("")
-        lines.append("Already raised, shown so it is not double-counted. No action here.")
-        lines.append("")
-        for group in elsewhere["matters"]:
-            count = int(group.get("count") or 0)
-            raised = _day_of(group.get("last_raised"))
-            tail = f" (last raised {raised})" if raised else ""
-            lines.append(f"- {_matter_head(group)}: {_plural(count, 'item')} under active escalation{tail}.")
-        lines.append("")
-
-    clearance = digest.get("awaiting_clearance") or []
-    if clearance:
-        lines.append(f"## Awaiting clearance ({len(clearance)})")
-        lines.append("")
-        lines.append(
-            "Held matters with an approaching date. Surfaced for a person to clear; never a client-facing step."
-        )
-        lines.append("")
-        for item in clearance:
-            lines.append(
-                f"- {_matter_head(item)}: on CONFLICT-HOLD with "
-                f"{item.get('label')} {item.get('authored_date')} approaching."
-            )
-        lines.append("")
-
-    blanket = digest.get("blanket_ack_only") or []
-    if blanket:
-        lines.append(f"## Blanket-ack only ({len(blanket)})")
-        lines.append("")
-        lines.append(
-            "Items with no stable task id, so they carry no individual ACK "
-            "code. A blanket acknowledgement (below) acks exactly the items "
-            "quoted here."
-        )
-        lines.append("")
-        for item in blanket:
-            lines.append(f"- {_item_line(item)}.")
-        lines.append("")
-
+        lines += [_REKEY_NOTICE.format(n=rekey_count, s="" if rekey_count == 1 else "s"), ""]
+    lines += _needs_you_block(digest.get("needs_you") or [])
+    lines += _overflow_block(digest.get("admin_confirms"))
+    lines += _elsewhere_block(digest.get("under_active_escalation_elsewhere"))
+    lines += _clearance_block(digest.get("awaiting_clearance") or [])
+    lines += _blanket_block(digest.get("blanket_ack_only") or [])
     # The single footer, a SIBLING of the lists (rule 4; the 2026-08-14 HTML
     # rendered it as a list child).
     lines.append(
@@ -265,17 +308,7 @@ def render_digest(
         "closes it. This is an internal alert to a person at the firm; no "
         "client message has been sent."
     )
-
-    probe = digest.get("probe_artifacts")
-    if isinstance(probe, dict) and (probe.get("excluded") or probe.get("stale")):
-        lines.append("")
-        excluded = int(probe.get("excluded") or 0)
-        stale_ids = [str(x) for x in (probe.get("stale_task_ids") or [])]
-        note = f"Probe artifacts excluded from this digest: {excluded}."
-        if stale_ids:
-            note += " Stale probe task ids awaiting teardown: " + ", ".join(stale_ids) + "."
-        lines.append(note)
-
+    lines += _probe_line(digest.get("probe_artifacts"))
     return "\n".join(lines).rstrip("\n") + "\n"
 
 
@@ -289,14 +322,13 @@ def render_skeleton(digest: dict) -> str:
     """Authored minimal body. Identifier-free by construction: no matter
     numbers, no dates, no ACK codes, no task ids — only counts. Tested by
     regex assertion in test_render.py."""
-    needs_you = len(digest.get("needs_you") or [])
-    admin = digest.get("admin_confirms") or {}
-    admin_total = int(admin.get("total") or 0)
+    need = len(digest.get("needs_you") or []) + len(digest.get("blanket_ack_only") or [])
+    more = int((digest.get("admin_confirms") or {}).get("total") or 0)
     lines = [
         "## Deadline digest (details unavailable)",
         "",
-        f"{_plural(needs_you, 'item')} need a person now and "
-        f"{_plural(admin_total, 'routine confirmation')} are tracked, but the "
+        f"{_plural(need, 'item')} {'needs' if need == 1 else 'need'} a person now and "
+        f"{_plural(more, 'more open item')} {'is' if more == 1 else 'are'} tracked, but the "
         "detailed digest could not be delivered this run. Open Smokeball or "
         "the tracker view for the items; the next run will retry the full "
         "digest.",

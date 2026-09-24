@@ -121,7 +121,7 @@ Computing "X from the incident" to decide what is overdue (the cardinal sin - ov
 ## References
 
 - `references/algorithm.md` - the in-range test, the ledger join + fire policy, the item identity + ack token, the broker append seam, and the never-computes line in code
-- `references/output-format.md` - the triaged alert (Needs you today / Admin confirms / dedup pointers) and the confirmation reply
+- `references/output-format.md` - the triaged alert (Needs you today / Also open / dedup pointers) and the confirmation reply
 - `escalation_ledger.py` - the shared ledger module (byte-identical to `operator/workspace_broker/escalation_ledger.py`; item_key, token, state, fire policy). Do not edit the copy; edit the canonical and restamp.
 - `tests/selector_test.md` - selector targets this skill for "a deadline is slipping / escalate," not the standing tracker view
 - `pre_run.py` + `test_escalator_pre_run.py` - the no-agent cron decision (arithmetic + ledger join) + the `SUPPRESSED_WAKE` heartbeat and its fallback-to-wake
