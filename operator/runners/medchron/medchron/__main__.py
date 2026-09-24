@@ -9,7 +9,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import config as config_mod, dag, driver as driver_mod, rehearsal
+from . import config as config_mod, dag, driver as driver_mod, rehearsal, verdict as verdict_mod
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
@@ -18,6 +18,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
         # verdict and nothing else (the daemon parses it; live-caught
         # 2026-08-31 when interleaved [run] lines made the report unreadable
         # and a real refusal recorded as "exited 4 without a verdict").
+        # Routing our own lines away from stdout fixed the lines we emit and
+        # nothing else, so the verdict is also written to a file the daemon
+        # prefers (ss#2906, verdict.py) -- a library's banner on stdout can no
+        # longer cost a finished run its outcome.
         d = driver_mod.Driver(
             Path(args.job_dir),
             firm_config=args.firm_config,
@@ -34,6 +38,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
     except Exception as exc:  # noqa: BLE001 - the envelope or budget refused; the CLI prints a sentence, never a trace
         print(f"medchron: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
+    # Only a real run writes the file. A rehearsal is handed the SAME job dir
+    # and must never leave a verdict there: the daemon would read it as the
+    # next attempt's outcome.
+    verdict_mod.write(Path(args.job_dir), driver_mod.to_json(outcomes))
     print(driver_mod.to_json(outcomes) if args.json else driver_mod.report(outcomes))
     return _exit_code(outcomes)
 

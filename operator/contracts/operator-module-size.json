@@ -9,7 +9,7 @@
     "operator/connectors/smokeball/smokeball_connector/server.py": 1010,
     "operator/customers/pilot-smokeball/seed/seed_data.py": 590,
     "operator/customers/pilot-smokeball/seed/seed_voice_letters.py": 628,
-    "operator/runners/medchron/medchron/daemon.py": 530,
+    "operator/runners/medchron/medchron/daemon.py": 528,
     "operator/runners/medchron/medchron/llm.py": 510,
     "operator/safety_substrate/sticky_stop.py": 521,
     "operator/skills/client-verification-tracker/pre_run.py": 583,

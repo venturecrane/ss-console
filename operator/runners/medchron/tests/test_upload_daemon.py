@@ -519,6 +519,83 @@ print(json.dumps([{"unit": "alpha", "outcome": "delivered", "reason": None, "sta
     assert d._daemon_state("01A")["resume_redo"] == []
 
 
+# ---- the verdict is a file, not a line on stdout (ss#2906) ----
+# "the runner exited N without a verdict" is the largest single failure class in
+# this seat's ledger: 4 of the 15 real attempts across three matters. Each one
+# had to be cleared by hand, because `failed` is terminal.
+
+_DELIVERED = (
+    '[{"unit": "alpha", "outcome": "delivered", "reason": null, "stage": null, '
+    '"dollars": 5.0, "pages": 7, "documents": 2, "folder_id": "f", "files": []}]'
+)
+
+BANNER_RUNNER = f"""
+import pathlib, sys
+jd = pathlib.Path(sys.argv[1])
+payload = {_DELIVERED!r}
+(jd / 'verdict.json').write_text(payload)
+print("MuPDF error: cannot find builtin ICC profile")   # a library, not us
+print(payload)
+"""
+
+_FIRST_FAILURE = (
+    '[{"unit": "alpha", "outcome": "failed", "reason": "FIRST ATTEMPT REASON", '
+    '"stage": "merge", "dollars": 1.0, "pages": 1, "documents": 1}]'
+)
+
+VERDICT_THEN_DIE = f"""
+import pathlib, sys
+jd = pathlib.Path(sys.argv[1])
+marker = jd / 'ran'
+n = int(marker.read_text()) + 1 if marker.exists() else 1
+marker.write_text(str(n))
+if n == 1:
+    (jd / 'verdict.json').write_text({_FIRST_FAILURE!r})
+    sys.exit(1)
+sys.exit(9)                                             # killed: no stdout, no file
+"""
+
+
+def test_a_library_banner_on_stdout_no_longer_costs_the_run_its_verdict(tmp_path):
+    """Routing the driver's own progress to stderr fixed the lines we emit. It
+    could not fix a line emitted by something we import, and one of those turned
+    a handled outcome into a terminal `failed`."""
+    d, broker = _daemon(tmp_path, script=BANNER_RUNNER)
+    _submit(d, broker, "01A")
+    assert d.tick() == "delivered"
+    state, fields = broker.records[-1][1], broker.records[-1][2]
+    assert state == "delivered" and "without a verdict" not in str(fields.get("reason"))
+    # The falsifier: the same stdout, parsed the old way, is not JSON at all.
+    with pytest.raises(ValueError):
+        json.loads("MuPDF error: cannot find builtin ICC profile\n" + _DELIVERED)
+
+
+def test_a_stale_verdict_is_never_read_as_this_attempts_outcome(tmp_path):
+    """Since ss#2903 a failed job resumes IN PLACE, so the file the first
+    attempt wrote is sitting in the job dir when the second one starts. A second
+    attempt that dies without writing must report ITS death, not repeat the
+    first attempt's verdict."""
+    d, broker = _daemon(tmp_path, script=VERDICT_THEN_DIE)
+    _submit(d, broker, "01A")
+    assert d.tick() == "failed"
+    assert "FIRST ATTEMPT REASON" in broker.records[-1][2]["reason"]
+    assert (d.jobs / "01A" / "verdict.json").is_file()  # the stale file is really there
+    (d.queue / ".resume-01A.json").write_text(json.dumps({"job_id": "01A", "reason": "retry", "redo": []}))
+    assert d.tick() == "failed"
+    reason = broker.records[-1][2]["reason"]
+    assert "exited 9 without a verdict" in reason
+    assert "FIRST ATTEMPT REASON" not in reason
+
+
+def test_a_runner_that_writes_no_file_still_reports_through_stdout(tmp_path):
+    """The fallback is not decoration: every seat runs a runner and a daemon that
+    are deployed separately, so an older runner must keep working."""
+    d, broker = _daemon(tmp_path)  # OK_RUNNER prints its verdict and writes no file
+    _submit(d, broker, "01A")
+    assert d.tick() == "delivered"
+    assert not (d.jobs / "01A" / "verdict.json").exists()
+
+
 def test_daemon_defers_when_the_broker_is_down_and_child_env_is_allow_listed(tmp_path, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "never")
