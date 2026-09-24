@@ -21,14 +21,16 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 
 const SCRIPT = fileURLToPath(new URL('../operator/bin/provision-customer.sh', import.meta.url))
+const LIB = fileURLToPath(new URL('../operator/bin/lib/firm-config-currency.sh', import.meta.url))
 const src = readFileSync(SCRIPT, 'utf8')
+const lib = readFileSync(LIB, 'utf8')
 
 function block(): string {
-  const start = src.indexOf('# >>> firm-config-currency')
-  const end = src.indexOf('# <<< firm-config-currency')
+  const start = lib.indexOf('# >>> firm-config-currency')
+  const end = lib.indexOf('# <<< firm-config-currency')
   expect(start).toBeGreaterThan(-1)
   expect(end).toBeGreaterThan(start)
-  return src.slice(start, end)
+  return lib.slice(start, end)
 }
 
 const cleanEnv = (): NodeJS.ProcessEnv =>
@@ -120,9 +122,11 @@ describe('firm config currency guard', () => {
     expect(r.out).toContain('not a git checkout')
   })
 
-  it('runs before the firm config is validated or uploaded', () => {
-    const call = src.indexOf('  assert_firm_config_is_main\n')
-    expect(call).toBeGreaterThan(-1)
-    expect(call).toBeLessThan(src.indexOf('# >>> medchron-firm-validate'))
+  it('the provisioner sources the guard and runs it before the firm config is validated or uploaded', () => {
+    const gate = src.indexOf(
+      'if [ -f "${MEDCHRON_FIRM_YAML}" ] && . "${BIN_DIR}/lib/firm-config-currency.sh" && assert_firm_config_is_main; then'
+    )
+    expect(gate).toBeGreaterThan(-1)
+    expect(gate).toBeLessThan(src.indexOf('# >>> medchron-firm-validate'))
   })
 })
