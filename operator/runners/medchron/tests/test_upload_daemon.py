@@ -108,6 +108,35 @@ def test_upload_holds_when_the_read_back_stays_short(job_dir, firm_config_path, 
     assert not any(f["confirmed"] for f in d["files"])
 
 
+def test_upload_does_not_resend_what_an_earlier_attempt_already_sent(job_dir, firm_config_path, data_root):
+    """The live 2026-09-24 duplicate. The read-back held at exit 2 with every
+    file already on the matter; re-running the held stage re-sent all of them,
+    because the vendor's list still did not carry them and `present` read
+    empty. Absence from a lagging list is not evidence of absence -- the
+    delivery record is -- and a second copy on a firm's matter can only be
+    undone by a DESTRUCTIVE delete, which is fail-closed there by design.
+
+    Without the fix the second run sends again and `seat.sent` reaches 4.
+    """
+    seat = FakeSeat([], [], {})
+    seat.lag = 500  # the index never catches up for the life of this test
+    log: list[str] = []
+    sr = _upload_sr(job_dir, firm_config_path, data_root, seat, log)
+
+    assert upload.run(sr, pause=0, tries=2) == 2  # held: nothing read back at size
+    assert len(seat.sent) == 2
+
+    # the held stage is re-run while the vendor's list STILL lags. This is the
+    # assertion the defect trips: without the fix `seat.sent` reaches 4.
+    assert upload.run(sr, pause=0, tries=2) == 2
+    assert len(seat.sent) == 2, "a resume must never write a second copy onto the matter"
+    assert len(seat.created) == 1  # and never a second folder
+    assert any("not resending" in line for line in log)
+
+    d = json.loads((sr.slug_dir / "runs" / "alpha" / "delivery.json").read_text())
+    assert all(f.get("sent") for f in d["files"]) and not any(f["confirmed"] for f in d["files"])
+
+
 def test_upload_refuses_when_local_bytes_changed_since_the_manifest(job_dir, firm_config_path, data_root):
     seat = FakeSeat([], [], {})
     log: list[str] = []

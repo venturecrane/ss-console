@@ -31,7 +31,6 @@
     "runners/medchron/medchron/stages/exhibits.py::run": 111,
     "runners/medchron/medchron/stages/render.py::run": 95,
     "runners/medchron/medchron/stages/strip.py::_run": 147,
-    "runners/medchron/medchron/stages/upload.py::run": 76,
     "runners/medchron/medchron/stages/vision.py::run": 80,
     "runners/medchron/medchron/timeline.py::draw_year": 84,
     "safety_substrate/invariants/invariant_6.py::enforce_citations": 78,
