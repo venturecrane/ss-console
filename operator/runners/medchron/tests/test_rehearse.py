@@ -332,3 +332,62 @@ def test_a_done_slug_stage_is_done_for_every_unit_of_a_joint_matter(
     assert by_unit["alpha"].stage is None, "alpha is done through and through"
     assert by_unit["beta"].stage == "map", by_unit["beta"].notes
     assert not any(n.startswith("rehearse list_matter: STOP") for n in by_unit["beta"].notes)
+
+
+# ---- the same probes, in a REAL run, before the money (ss#2911) --------------
+
+
+def test_a_paid_stage_answers_its_own_free_probe_before_it_spends(
+    tmp_path: Path, data_root: Path, firm_config_path: Path, pricing_path: Path
+) -> None:
+    """Two stages carry a `rehearse` probe and both are paid. Until this change
+    they ran only inside `medchron rehearse` -- a hand command that, probed on
+    the live seat 2026-09-24, had never been run on any of six job dirs. A gate
+    nobody invokes is not a gate, so a real run now answers each paid stage's
+    own probe immediately before that stage spends.
+
+    `merge` reports what the code merged and what goes to the model, which is
+    the shape of the live 62.01 USD failure where the model could not merge a
+    routed cluster. `audit` reports the claim count times the rate -- what its
+    own docstring calls "the cap answer, at $0".
+
+    Falsifier: drop the `probe_before_spend` call from `driver._execute` and a
+    real run carries no `rehearse ` note at all.
+    """
+    job_dir, install_root = tmp_path / "job", tmp_path / "install"
+    job_dir.mkdir()
+    (job_dir / "job.yaml").write_text(job_yaml(data_root, install_root=install_root), encoding="utf-8")
+    outs = _driver(job_dir, firm_config_path, pricing_path, client=_NoNetwork()).run()
+    assert outs[0].outcome == "delivered", outs[0]  # the run really reached both paid probes
+    notes = outs[0].notes
+    merge_lines = [n for n in notes if n.startswith("rehearse merge: ")]
+    audit_lines = [n for n in notes if n.startswith("rehearse audit: ")]
+    assert merge_lines and "clusters" in merge_lines[0], notes
+    assert audit_lines and "claims" in audit_lines[0], notes
+
+
+def test_a_paid_stage_without_a_probe_adds_no_noise(data_root: Path) -> None:
+    """Seven of the nine paid stages carry no probe. The guard returns before
+    it touches the driver at all, which is why passing None here is safe -- and
+    why removing the guard makes this test raise AttributeError rather than
+    quietly printing empty lines on every run."""
+    notes: list[str] = []
+    rehearsal.probe_before_spend(None, dag.BY_NAME["vision"], None, notes)
+    assert dag.BY_NAME["vision"].paid and dag.BY_NAME["vision"].rehearse is None
+    assert notes == []
+
+
+def test_a_probe_that_raises_is_a_line_not_a_crash() -> None:
+    """An observer that can end the run it observes is worse than no observer."""
+
+    def boom(_sr):
+        raise RuntimeError("clusters.md is a directory")
+
+    stage = dag.BY_NAME["merge"]
+    original = stage.rehearse
+    object.__setattr__(stage, "rehearse", boom)
+    try:
+        lines = rehearsal.probe_lines(object(), stage)
+    finally:
+        object.__setattr__(stage, "rehearse", original)
+    assert lines == ["rehearse merge: probe could not run: RuntimeError: clusters.md is a directory"]
