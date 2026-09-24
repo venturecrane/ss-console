@@ -40,7 +40,7 @@ from typing import Any, Callable
 
 from .covered import delivery_fields
 
-from . import config as config_mod, job as job_mod, resume as resume_mod
+from . import config as config_mod, job as job_mod, resume as resume_mod, verdict as verdict_mod
 
 logger = logging.getLogger("medchron.daemon")
 
@@ -405,6 +405,7 @@ class Daemon:
         env.setdefault("HOME", str(jd))
         log = (jd / "daemon.log").open("a", encoding="utf-8")
         pidfile = self.run_dir / "child.pid"
+        verdict_mod.clear(jd)
         try:
             proc = subprocess.Popen(  # noqa: S603 - argv is the configured runner command plus the job dir, no shell; the env is filtered
                 resume_mod.start_run(self, job_id, [*self.runner_cmd, str(jd), "--json"]),
@@ -425,12 +426,9 @@ class Daemon:
         return self._report(job_id, code, out or "")
 
     def _report(self, job_id: str, code: int, out: str) -> str:
-        try:
-            outcomes = json.loads(out) if out.strip() else []
-        except ValueError:
-            outcomes = []
+        outcomes = verdict_mod.read(self.job_dir(job_id), out)
         stage: str | None = None
-        if not isinstance(outcomes, list) or not outcomes:
+        if not outcomes:  # `verdict.read` always returns a list; empty is "no verdict from either source"
             state, fields = "failed", {"reason": f"the runner exited {code} without a verdict"[:500]}
         else:
             rank = {"delivered": 0, "dry_run": 0, "held": 1, "refused": 2, "failed": 3}
