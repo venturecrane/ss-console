@@ -138,6 +138,52 @@ def test_upload_does_not_resend_what_an_earlier_attempt_already_sent(job_dir, fi
     assert all(f.get("sent") for f in d["files"]) and not any(f["confirmed"] for f in d["files"])
 
 
+def test_upload_holds_on_a_delivery_record_that_predates_the_sent_flag(job_dir, firm_config_path, data_root):
+    """The 2026-09-24 SECOND duplicate. #2901 decides what to re-send from the
+    `sent` flags in delivery.json -- but a record written before that flag
+    existed lists every manifest row with no `sent` key at all, so the filter saw
+    an empty set and re-sent all 13 files onto a matter that already had them.
+
+    A name in a pre-flag record means "this was in the manifest", not "this was
+    sent". With the vendor's list lagging minutes behind, that is unresolvable,
+    and the only safe answer is to hold: a hold is something a person clears, a
+    duplicate needs an irreversible delete that is fail-closed on a client seat.
+
+    Without the fix this sends 2 files. With it, zero.
+    """
+    seat = FakeSeat([], [], {})
+    seat.lag = 500  # the vendor's list will not show the files, as it did live
+    log: list[str] = []
+    sr = _upload_sr(job_dir, firm_config_path, data_root, seat, log)
+    # Exactly the legacy shape: folder recorded, every manifest row listed, no
+    # `sent` key anywhere, nothing confirmed.
+    (sr.slug_dir / "runs" / "alpha" / "delivery.json").write_text(
+        json.dumps(
+            {
+                "folder": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26",
+                "folder_id": "folder-legacy",
+                "files": [
+                    {
+                        "name": "Alpha Example - Medical Chronology 08-29-26.docx",
+                        "sha256": "x",
+                        "bytes": 10,
+                        "confirmed": False,
+                    },
+                    {
+                        "name": "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf",
+                        "sha256": "y",
+                        "bytes": 6,
+                        "confirmed": False,
+                    },
+                ],
+            }
+        )
+    )
+    assert upload.run(sr, pause=0, tries=2) == 2, "an unreadable delivery record must hold, not re-send"
+    assert seat.sent == [], "nothing may go up when the record cannot say what is already there"
+    assert any("predates the `sent` flag" in line for line in log)
+
+
 def test_upload_refuses_when_local_bytes_changed_since_the_manifest(job_dir, firm_config_path, data_root):
     seat = FakeSeat([], [], {})
     log: list[str] = []
