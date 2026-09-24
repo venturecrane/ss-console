@@ -24,6 +24,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             pricing=args.pricing,
             dry_run=args.dry_run,
             start=args.start,
+            redo=tuple(x.strip() for x in (getattr(args, "redo", "") or "").split(",") if x.strip()),
             log=lambda m: print(m, file=sys.stderr),
         )
         outcomes = d.run()
@@ -91,6 +92,11 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("run", help="run a job envelope through the DAG")
     r.add_argument("job_dir")
     r.add_argument("--from", dest="start", default=None, help="resume from this stage")
+    r.add_argument(
+        "--redo",
+        default="",
+        help="comma-separated stages to reopen before the walk; a resume names the stages the fix touched",
+    )
     r.add_argument("--dry-run", action="store_true", help="author nothing, run nothing, report decisions and holds")
     r.add_argument("--firm-config", default=None)
     r.add_argument("--pricing", default=None)

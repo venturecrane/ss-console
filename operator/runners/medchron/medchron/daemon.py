@@ -76,6 +76,10 @@ CHILD_ENV_PASS = (
     "CUSTOMER_SLUG",
 )
 TERMINAL = frozenset({"delivered", "failed"})
+#: A resume request the broker drops in the queue dir for this daemon to
+#: resolve (ss#2903). It leads with a dot so `_queued()` -- which already skips
+#: dotfiles -- can never mistake one for an envelope and try to run it.
+RESUME_MARKER_PREFIX = ".resume-"
 
 
 class BrokerError(RuntimeError):
@@ -399,7 +403,17 @@ class Daemon:
         except BrokerError as exc:
             logger.warning("could not record running for %s: %s", job_id, exc)
             return "deferred"
-        self._write_state(job_id, state="running", attempts=int(st.get("attempts", 0)) + 1, held_paused=False)
+        # `resume_redo` is consumed here, not on the next tick: one request buys
+        # one attempt. A job that fails again parks again and needs a fresh
+        # resume, which is what keeps a deterministic defect from re-running
+        # every tick the way a cap-refused hold once did.
+        self._write_state(
+            job_id,
+            state="running",
+            attempts=int(st.get("attempts", 0)) + 1,
+            held_paused=False,
+            resume_redo=[],
+        )
         env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS}
         env.update(self.child_env)
         env.setdefault("MEDCHRON_SEAT", "client")
@@ -408,8 +422,18 @@ class Daemon:
         log = (jd / "daemon.log").open("a", encoding="utf-8")
         pidfile = self.run_dir / "child.pid"
         try:
+            # A resume carries the stages the requester said the fix touched.
+            # Without it the driver skips every `done` stage, including the one
+            # the fix changed, and ships a document built by the old code --
+            # `input_sha` is recorded but never compared, so nothing else
+            # notices. The flag is consumed here and cleared by `_report`.
+            redo = [str(s) for s in (st.get("resume_redo") or [])]
+            argv = [*self.runner_cmd, str(jd), "--json"]
+            if redo:
+                argv += ["--redo", ",".join(redo)]
+                logger.info("resuming %s with --redo %s", job_id, ",".join(redo))
             proc = subprocess.Popen(  # noqa: S603 - argv is the configured runner command plus the job dir, no shell; the env is filtered
-                [*self.runner_cmd, str(jd), "--json"],
+                argv,
                 cwd=str(jd),
                 env=env,
                 stdout=subprocess.PIPE,
@@ -601,8 +625,59 @@ class Daemon:
                 wiped.append(d.name)
         return wiped
 
+    def take_resume_requests(self) -> list[str]:
+        """Re-queue jobs a human asked to resume (ss#2903). Returns the ids.
+
+        The broker CANNOT do this itself: `jobs/` is root:medchron 0710 and the
+        broker runs as workspace-broker (uid 10001, groups workspace-connectors
+        and audit-readers), so it can neither read an envelope nor tell a wiped
+        job dir from a present one. It writes a marker into `queue/`, which it
+        owns, and this -- the only process that can traverse `jobs/` -- resolves
+        it. Nothing outside the daemon writes daemon.json, exactly as with the
+        sticky-stop release.
+
+        Clearing `finished_at` here, BEFORE `wipe_expired` runs in the same
+        tick, is load-bearing: the marker leaves daemon.json otherwise
+        untouched, so a job that crossed the wipe window between the request and
+        the claim would have its `data/` deleted and then silently restart from
+        stage 1 at full price -- indistinguishable from a successful resume from
+        outside. Clearing `wake` is the second: `_report` left a pending wake
+        describing the FAILURE, and dispatching it against a job that is running
+        again is the duplicate deliver turn this daemon calls worse than a lost
+        one.
+        """
+        resumed: list[str] = []
+        for marker in sorted(self.queue.glob(f"{RESUME_MARKER_PREFIX}*.json")) if self.queue.is_dir() else []:
+            try:
+                req = json.loads(marker.read_text(encoding="utf-8"))
+                job_id = str(req.get("job_id") or "")
+            except (OSError, ValueError) as exc:
+                logger.error("unreadable resume marker %s: %s", marker.name, exc)
+                marker.unlink(missing_ok=True)
+                continue
+            env = self.job_dir(job_id) / "envelope.json"
+            if not job_id or not env.is_file():
+                logger.error("resume %s refused: the job dir or its envelope is gone (wiped?)", job_id or marker.name)
+                marker.unlink(missing_ok=True)
+                continue
+            st = self._daemon_state(job_id)
+            (self.queue / f"{job_id}.json").write_text(env.read_text(encoding="utf-8"), encoding="utf-8")
+            self._write_state(
+                job_id,
+                finished_at=None,
+                wake=None,
+                resumes=int(st.get("resumes") or 0) + 1,
+                resume_reason=str(req.get("reason") or "")[:500],
+                resume_redo=[str(s) for s in (req.get("redo") or [])],
+            )
+            marker.unlink(missing_ok=True)
+            logger.info("resume %s: re-queued, redo=%s", job_id, req.get("redo") or [])
+            resumed.append(job_id)
+        return resumed
+
     def tick(self) -> str | None:
-        """One iteration: heartbeat, wipe, pending wakes, then at most one job."""
+        """One iteration: resume requests, heartbeat, wipe, wakes, then one job."""
+        self.take_resume_requests()
         self.wipe_expired()
         self.dispatch_wakes()
         current = self._in_progress()

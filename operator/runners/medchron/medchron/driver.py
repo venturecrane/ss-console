@@ -198,7 +198,12 @@ class Driver:
             s = dag.BY_NAME.get(name)
             if s is None:
                 raise DriverError(f"--redo {name!r}: unknown stage")
-            if s.paid or s.external:
+            # A REHEARSAL is $0 by definition, so it may not reopen a stage that
+            # would spend or touch the firm's matter. A real run may: that is
+            # what a resume after a fix is for (ss#2903), and refusing it here
+            # would make the feature unable to reopen the stage the defect lived
+            # in -- which is usually a paid one.
+            if self.rehearse and (s.paid or s.external):
                 raise DriverError(f"--redo {name!r}: a paid or external stage cannot be rehearsed")
         # The seat is opened lazily by the first stage that reads the matter,
         # so a dry run and a resume past the pull never touch the firm's system.
@@ -339,7 +344,12 @@ class Driver:
         ctx = dag.Ctx(job=self.job, unit=unit, date_stamp=self.date_stamp)
         notes: list[str] = []
         extracted = self.slug_dir / "extracted.jsonl"
-        if self.rehearse and self.redo:
+        # A real run honours --redo too (ss#2903). This is the whole invalidation
+        # story for a resume: `is_done` is `status == "done"` and nothing else,
+        # and `input_sha` is recorded but never compared, so a resume after a fix
+        # would otherwise skip the very stage the fix changed and deliver a
+        # document built by the old code -- cheaply, and with a green row.
+        if self.redo:
             st.invalidate(list(self.redo))
         for stage in dag.stages_from(self.start):
             if stage.scope == "slug" and stage.name in slug_done:
