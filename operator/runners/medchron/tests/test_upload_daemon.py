@@ -430,6 +430,70 @@ def test_daemon_wipes_terminal_jobs_after_the_hold_and_never_live_ones(tmp_path)
     assert d.wipe_expired() == [] and (d.jobs / "01B").exists()
 
 
+# ---- retention: a job that stopped and waited is not kept forever (ss#2912) ----
+
+
+def _parked(d: Daemon, broker: FakeBroker, job_id: str, state: str = "held") -> None:
+    """A job that ran, stopped, and is waiting for a person: `finished_at` is
+    stamped (it always was) but the state is not terminal."""
+    _submit(d, broker, job_id)
+    d.tick()
+    d._write_state(job_id, state=state, finished_at=d.clock())
+
+
+def test_a_parked_job_is_wiped_after_its_own_longer_window(tmp_path):
+    """The live defect. `wipe_expired` tested `state in TERMINAL`, and `held`
+    is deliberately not terminal, so a parked workdir was kept forever. Found
+    2026-09-24 on the firm's seat: four job dirs 15 to 24 days old holding
+    1.77 GB of a matter's documents and the text extracted from them.
+
+    Falsifier: the first two assertions. If the window did not apply, the job
+    would still be there at 30 days; if it applied at the TERMINAL window, it
+    would be gone at 4 days and the second assertion fires.
+    """
+    d, broker = _daemon(tmp_path, wipe_hours=72, held_wipe_hours=24 * 7)
+    _parked(d, broker, "01A")
+    assert (d.jobs / "01A").exists()
+    d._now["t"] += 4 * 24 * 3600
+    assert d.wipe_expired() == [] and (d.jobs / "01A").exists(), "a hold gets longer than the terminal window"
+    d._now["t"] += 4 * 24 * 3600
+    assert d.wipe_expired() == ["01A"] and not (d.jobs / "01A").exists()
+
+
+def test_wiping_a_parked_job_takes_its_queue_entry_too(tmp_path):
+    """A hard-stopped seat records a job `held` and leaves it QUEUED on purpose.
+    Removing the workdir alone would hand the daemon a job it can claim and
+    cannot run."""
+    d, broker = _daemon(tmp_path, held_wipe_hours=24)
+    _parked(d, broker, "01A")
+    (d.queue / "01A.json").write_text(json.dumps(_envelope("01A")))
+    d._now["t"] += 2 * 24 * 3600
+    assert d.wipe_expired() == ["01A"]
+    assert not (d.queue / "01A.json").exists()
+    assert d._queued() == []
+
+
+def test_a_terminal_job_keeps_the_short_window(tmp_path):
+    """The parked window must not loosen the one that already worked."""
+    d, broker = _daemon(tmp_path, wipe_hours=72, held_wipe_hours=24 * 7)
+    _submit(d, broker, "01A")
+    d.tick()
+    assert d._daemon_state("01A")["state"] == "delivered"
+    d._now["t"] += 71 * 3600
+    assert d.wipe_expired() == []
+    d._now["t"] += 2 * 3600
+    assert d.wipe_expired() == ["01A"]
+
+
+def test_a_live_job_is_never_wiped_however_old(tmp_path):
+    """`running` is neither terminal nor parked: no window applies at all."""
+    d, broker = _daemon(tmp_path, wipe_hours=72, held_wipe_hours=24)
+    _submit(d, broker, "01B")
+    d.claim_next()
+    d._now["t"] += 1000 * 24 * 3600
+    assert d.wipe_expired() == [] and (d.jobs / "01B").exists()
+
+
 def _fail_job(d: Daemon, broker: FakeBroker, job_id: str = "01A") -> None:
     """Run a job to a recorded failure, the state a resume acts on."""
     _submit(d, broker, job_id)
