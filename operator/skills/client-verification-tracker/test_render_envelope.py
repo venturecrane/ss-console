@@ -218,13 +218,12 @@ def test_envelope_degraded_chase_collapses_to_one_throttled_line(tmp_path, monke
     assert meta["chase_degraded_return_link_unauthored"] == 2
     written = json.loads((tmp_path / ".smd" / "pre_run" / "client-verification-tracker.dispatch.json").read_text())
     [dispatch] = written["dispatches"]
-    # ONE seat-level line, not one per chase; keyed on the sentinel.
-    assert dispatch["full_body"].count("return destination") == 1
+    # ONE seat-level line, not one per chase; keyed on the held set.
+    assert dispatch["full_body"].count("client verification reminders are due") == 1
     # Seat-level, so no matter head: nothing failed to resolve.
     assert "matter number unavailable" not in dispatch["full_body"]
     [append] = dispatch["appends"]
-    sentinel_key = ledger.item_key("", envelope.RETURN_LINK_SOURCE_ID, "chase-return-link-missing", "")
-    assert append["item_key"] == sentinel_key
+    assert append["item_key"] == envelope.return_link_key(ledger, ["m-1", "m-2"])
     assert append["event"] == "fired"
     # No chased rows: no client was nudged; the ledger stays honest.
     assert all(a["event"] != "chased" for a in dispatch["appends"])
@@ -298,7 +297,7 @@ def test_failure_note_in_skill_md_matches_the_renderer():
 
 def test_envelope_degraded_chase_respects_refire_window(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-    sentinel_key = ledger.item_key("", envelope.RETURN_LINK_SOURCE_ID, "chase-return-link-missing", "")
+    sentinel_key = envelope.return_link_key(ledger, ["m-1"])
     events = [
         {
             "v": 2,
@@ -321,3 +320,116 @@ def test_envelope_degraded_chase_respects_refire_window(tmp_path, monkeypatch):
     )
     # Fired yesterday, refire window 3 days: nothing to dispatch, no envelope.
     assert meta == {}
+
+
+# ---------------------------------------------------------------------------
+# The held-reminders line names what is held (2026-09-24 pilot review: the
+# Verifications email said reminders were due and named nothing).
+# ---------------------------------------------------------------------------
+
+
+def _held_run(tmp_path, plans, events=()):
+    meta = envelope.build_and_write(
+        plans=plans,
+        items=[],
+        ledger=ledger,
+        ledger_events=list(events),
+        today=date(2026, 8, 31),
+        refire_days=3,
+        ceiling=3,
+        customer_yaml_path=_yaml(tmp_path),
+    )
+    path = tmp_path / ".smd" / "pre_run" / "client-verification-tracker.dispatch.json"
+    return meta, (json.loads(path.read_text()) if path.exists() else None)
+
+
+def test_the_held_line_lists_the_matters_and_the_count(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    plans = [
+        _plan(action="chase", matter_id="m-1", item_key="c-1", matter_number="2026-PI-104"),
+        _plan(action="chase", matter_id="m-2", item_key="c-2", matter_number="2026-PI-101"),
+    ]
+    _meta, written = _held_run(tmp_path, plans)
+    body = written["dispatches"][0]["full_body"]
+    assert (
+        "1. 2 client verification reminders are due and were not sent (matter 2026-PI-101, "
+        "matter 2026-PI-104). The link clients use to return a verification is not set up on "
+        "this seat, so a person needs to send them, or SMD can set the link up."
+    ) in body
+    assert "\u2014" not in body
+
+
+def test_the_held_line_is_singular_for_one(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    _meta, written = _held_run(tmp_path, [_plan(action="chase", matter_id="m-1", item_key="c-1")])
+    body = written["dispatches"][0]["full_body"]
+    assert "1 client verification reminder is due and was not sent (matter 2026-PI-104)." in body
+    assert "so a person needs to send it, or SMD can set the link up." in body
+
+
+def test_an_unresolved_number_is_counted_but_not_named():
+    line = render.situation_line(
+        {"action": "chase", "reason": "return_link_unauthored", "held_count": 2, "held_matter_numbers": []}
+    )
+    assert line.startswith("2 client verification reminders are due and were not sent. The link")
+    assert "(" not in line
+    partial = render.situation_line(
+        {"action": "chase", "reason": "return_link_unauthored", "held_count": 2, "held_matter_numbers": ["2026-PI-104"]}
+    )
+    assert partial.startswith("2 client verification reminders are due and were not sent (matter 2026-PI-104).")
+
+
+def test_a_changed_held_set_fires_again_inside_the_refire_window(tmp_path, monkeypatch):
+    """The set {m-1} fired yesterday. The same set stays quiet; a new chase on
+    m-2 makes a new set, which fires now instead of hiding in the window."""
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    events = [
+        {
+            "v": 2,
+            "ts": "2026-08-30T14:00:00Z",
+            "skill": "client-verification-tracker",
+            "item_key": envelope.return_link_key(ledger, ["m-1"]),
+            "event": "fired",
+            "attempt": 1,
+        }
+    ]
+    same, _ = _held_run(tmp_path, [_plan(action="chase", matter_id="m-1", item_key="c-1")], events)
+    assert same == {}
+    grown, written = _held_run(
+        tmp_path,
+        [
+            _plan(action="chase", matter_id="m-1", item_key="c-1"),
+            _plan(action="chase", matter_id="m-2", item_key="c-2", matter_number="2026-PI-101"),
+        ],
+        events,
+    )
+    assert grown["dispatch_expected"] is True
+    [append] = written["dispatches"][0]["appends"]
+    assert append["item_key"] == envelope.return_link_key(ledger, ["m-1", "m-2"])
+    assert append["attempt"] == 1  # a new set counts its own attempts
+
+
+def test_the_held_key_ignores_order_and_number_resolution():
+    assert envelope.return_link_key(ledger, ["m-2", "m-1"]) == envelope.return_link_key(ledger, ["m-1", "m-2"])
+    held = envelope._held_chases(
+        [_plan(action="chase", matter_id="m-1", matter_number=None), _plan(action="surface_hold", matter_id="m-3")],
+        {},
+    )
+    assert held == {"count": 1, "matter_ids": ["m-1"], "numbers": []}
+
+
+def test_held_matter_numbers_reach_the_provenance_handoff(tmp_path, monkeypatch, capsys):
+    """The gate passes a matter number only if the handoff seeded it as read:
+    a chase plan carries its number beside ``next_chase_due``, so the handoff
+    records it."""
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    decision = pre_run.WakeDecision(
+        wake=True,
+        decision_basis="verification_action_due",
+        pre_run_inputs_digest=b"",
+        plans=(_plan(action="chase", matter_id="m-1", item_key="c-1", matter_number="2026-PI-104"),),
+    )
+    pre_run._emit_wake(decision)
+    capsys.readouterr()
+    record = json.loads((tmp_path / ".smd" / "pre_run" / "client-verification-tracker.json").read_text())
+    assert {"matterNumber": "2026-PI-104", "dates": ["2026-08-29"]} in record["records"]

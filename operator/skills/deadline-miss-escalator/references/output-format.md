@@ -20,8 +20,8 @@ code-detectable authored source today and therefore do not render.
 ## The triaged alert (internal, to the red-flag recipient)
 
 The alert leads with the few items that genuinely need a person today, collapses
-the routine confirmations to per-matter counts, and carries a per-item ACK code
-so the reader can acknowledge one item without silencing the rest.
+the rest to per-matter counts, and carries a per-item ACK code so the reader can
+acknowledge one item without silencing the rest.
 
 **The digest supplies the VALUES and the MEMBERSHIP. The templates below supply
 the WORDS and the MARKUP.** The turn never prints the projection's field names,
@@ -40,13 +40,16 @@ no number); any other absence renders "matter number unavailable". Never a
 GUID, never a composed or remembered number. Section membership, per-matter groups, code
 lists, section counts, and the subject line are all computed by the pre-run
 gate over the full item universe; the turn re-counts nothing and moves nothing
-across bands. Subject semantics changed with ss #2405: `<N>` counts ONLY the
-"Needs you today" band (the 2026-08-14 subject said "37 need you" when 5
-needed a person and 32 were routine confirms - earlier alerts' subjects
-counted everything, so do not read them as evidence of a count bug under the
-new scheme). Membership in the top band is deterministic: the up-to-5 most
-overdue firing items with stable identity; ordering within the band and each
-item's one-line consequence remain the turn's prose. The footer paragraph is a
+across bands. Subject semantics: `<N>` counts the items a person must act on
+by name, "Needs you today" plus "Blanket-ack only", and never the "Also open"
+overflow (ss #2405: the 2026-08-14 subject said "37 need you" when 5 needed a
+person; 2026-09-24: a recipient holding only blanket items read "0 need you").
+Membership in the top band is deterministic and PER RECIPIENT: the digest is
+split by recipient, then each recipient's stable firing items are re-banded,
+top five by authored priority marker, then most overdue, then stable
+tie-breaks (`digest_items.needs_you_key`), and the rest go to "Also open". Before
+2026-09-24 the top five were picked seat-wide and split afterwards, so a
+recipient whose items ranked sixth got "0 need you". The footer paragraph is a
 SIBLING of the lists, never nested inside one (the 2026-08-14 HTML rendered it
 as a list child). When the digest carries `probe_artifacts`, render one plain
 footer line naming the excluded count and any stale probe task ids awaiting
@@ -64,23 +67,23 @@ Subject: [Deadlines] <N> need you, YYYY-MM-DD
 
 ## Needs you today (<count>)
 
-Ranked by what the record says, most consequential first. Three to five items.
+<preamble, one of three; see below>
 
-1. matter <number>, <label> <date> (<overdue by N days | due in N days>) [ACK-XXXXXX]
+1. matter <number>, "<task label>", <label> <date> (<overdue by N days | due in N days>) [ACK-XXXXXX]
    <one plain line of why it is consequential: the authored signal only, e.g.
    "an unverified response is treated as no response" / "disbursement blocked
    until the lien payoff is confirmed" / "opposing-counsel letter held N days">
 2. ...
 
-## Admin confirms (<count> across <M> matters) [omit section if 0]
+## Also open (<count> across <M> matter(s)) [omit section if 0]
 
-Routine confirmations, collapsed per matter. Reply with a matter's ACK codes to
-clear its items, or open the item in Smokeball.
+More open items past the top five, collapsed per matter. Reply with a matter's
+ACK codes to clear them, or open them in Smokeball.
 
-- matter <number>: <k> routine confirmation(s). [ACK-XXXXXX] [ACK-XXXXXX] ...
+- matter <number>: <k> more item(s). [ACK-XXXXXX] [ACK-XXXXXX] ...
 - ...
 
-## Under active escalation elsewhere (<count> across <M> matters) [omit section if 0]
+## Under active escalation elsewhere (<count> across <M> matter(s)) [omit section if 0]
 
 Already raised, shown so it is not double-counted. No action here.
 
@@ -98,7 +101,7 @@ client-facing step.
 Items with no stable task id, so they carry no individual ACK code. A blanket
 acknowledgement (below) acks exactly the ones quoted here.
 
-- matter <number>: <label> <date> (<overdue by N days | due in N days>).
+- matter <number>, "<task label>", <label> <date> (<overdue by N days | due in N days>).
 
 Reply with the ACK code(s) above to acknowledge. Reply ESCALATION_ACKNOWLEDGED
 to ack every item quoted in this message; items you do not quote stay open. An
@@ -107,6 +110,24 @@ open in Smokeball. Completing the item in Smokeball is the only thing that close
 it. This is an internal alert to a person at the firm; no client message has been
 sent.
 ```
+
+**The needs-you preamble** says what the order is, and only when the order
+carries information: "Ranked by what the record says, most consequential
+first." when any item carries an authored priority marker; "Most overdue
+first." when the items' dates differ; no preamble line at all when the items
+are indistinguishable. `<M> matter(s)` is singular for one matter.
+
+**The task label** (`"<task label>"`) is the Smokeball task subject reduced
+at parse time (`digest_items.display_label`) to what the send gate will pass:
+the `[Operator]` stamp stripped; any date, dollar figure, case or matter
+number, other identifier, or run of three or more digits masked as `…`;
+markdown characters neutralized; capped at 100 characters. A subject that
+carries a case caption (`v.`, `vs.`, `versus`, `in re`), a legal citation, or
+a fabrication marker renders NO label, and neither does a court date: event
+titles are often captions. With no label the quoted part is omitted and the
+line reads `matter <number>, <label> <date> (...)`. The raw subject never
+enters the digest, the wake payload, or the envelope. Known limit: "Also open"
+lines carry ACK codes and counts, not task labels.
 
 ## The confirmation reply (internal, after an ack)
 
@@ -164,16 +185,17 @@ Four things went wrong and each has a rule above:
    or disbursement blocker, opposing-counsel inbound held), then overdue age.
    Never invent an urgency the data does not state. If nothing carries a high
    signal, the top block is simply the most overdue items, plainly labeled.
-2. **Three to five in the top block.** More than five is not a priority list.
-   Everything else is a per-matter count in Admin confirms, with its items
-   reachable by their ACK codes.
+2. **Up to five in the top block, per recipient.** More than five is not a
+   priority list. Everything else is a per-matter count in Also open, with its
+   items reachable by their ACK codes. Nothing in the record says an overflow
+   item is routine, so the band never calls it that.
 3. **Per-item ACK codes, keyed on the stable task id.** Each item with a stable
    Smokeball id carries its own `ACK-XXXXXX`. Acking one code suppresses only
    that item. Items with no stable id carry no code and live in Blanket-ack only;
    a blanket ack covers exactly the items quoted in the message.
 4. **One disclaimer, in the footer.** The ack mechanics and the "internal alert,
    no client message sent" line appear once, at the end, not per item.
-5. **Reader-facing section names.** "Needs you today", "Admin confirms", "Under
+5. **Reader-facing section names.** "Needs you today", "Also open", "Under
    active escalation elsewhere", "Awaiting clearance". No internal ladder jargon
    (no "notify" / "re-route" / "re-surface") in the reader's copy.
 6. **Every rung is internal.** No client or tribunal send on any path. With no
@@ -185,7 +207,7 @@ Four things went wrong and each has a rule above:
 8. **A `SUPPRESSED_WAKE` row stands in for the whole alert on a quiet tick.** It
    is the heartbeat; the agent does not wake to send an empty alert.
 9. **An empty section is omitted whole, never rendered as a zero.** No
-   `## Admin confirms (0 across 0 matters)` followed by "None." - the heading,
+   `## Also open (0 across 0 matters)` followed by "None." - the heading,
    the count, and the body all go. The 2026-07-15 alert carried two real items
    under four consecutive zero-count headings; the reader scrolled past more
    nothing than something, and the top block is the whole point of the triage.

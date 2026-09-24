@@ -10,7 +10,14 @@ deterministically in `pre_run` (`render.py`, whose closed situation map holds
 the authored phrases) and dispatch out of turn; their ledger writes are
 appended by the seat post-send. The model composes neither. Shape B is
 fail-closed while `settings.return_link` is unauthored: every due chase
-degrades to a throttled Shape-D surface and no `chased` event is written.
+degrades to ONE throttled Shape-D surface line and no `chased` event is
+written. The line names what is held: "<n> client verification reminder(s)
+are due and were not sent (matter A, matter B). The link clients use to
+return a verification is not set up on this seat, so a person needs to send
+them, or SMD can set the link up." (singular: "1 client verification reminder
+is due and was not sent (matter A). ... needs to send it ..."; the
+parenthetical is omitted when no matter number resolved). Its throttle key is
+the set of held matters, so a changed set surfaces again at once.
 Shapes A and C remain the turn's own work, under the templates below.
 
 ## Shape A - Prepare & route for authenticated approval

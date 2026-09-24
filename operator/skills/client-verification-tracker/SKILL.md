@@ -404,7 +404,11 @@ surface), never a silent default.
    NO `dispatch_expected` is a degraded-chase tick inside the throttle window
    (the client reminder's `settings.return_link` is not authored, so no client
    chase can render): end the turn without composing anything - the surface
-   already went to a person on the re-fire window.
+   already went to a person on the re-fire window. That surface names the
+   held matters and their count ("2 client verification reminders are due and
+   were not sent (matter A, matter B). ..."), and its throttle is keyed on the
+   set of held matters, so a changed set surfaces again at once instead of
+   waiting out the window.
 
    A wake whose plans include any OTHER action (`surface_hold` / `handoff` /
    `surface_config_missing`) with NO `dispatch_expected` means the gate could
@@ -473,10 +477,12 @@ surface), never a silent default.
      slots filled from authored/read values (`render.py` `render_chase`;
      verification-request.md Draft 2 verbatim). While `settings.return_link`
      is unauthored - the live state - no client chase can render: the gate
-     dispatched one throttled seat-level surface instead ("a person should
-     send the reminder"), no `chased` event is recorded (no client was
-     nudged), and YOU compose no reminder. Never auto-close on an ambiguous
-     match.
+     dispatched one throttled seat-level surface instead, naming the held
+     matters ("N client verification reminder(s) are due and were not sent
+     (matter A, matter B). The link clients use to return a verification is
+     not set up on this seat, so a person needs to send them, or SMD can set
+     the link up."), no `chased` event is recorded (no client was nudged), and
+     YOU compose no reminder. Never auto-close on an ambiguous match.
    - attempt count **has reached `escalate_after_attempts`** → the client
      chase stops and the hand-off alert to the matter's assigned staff (Shape
      D) is dispatched out of turn per the case-alert routing rule
