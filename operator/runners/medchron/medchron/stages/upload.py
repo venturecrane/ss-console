@@ -160,14 +160,17 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
     else:
         short = [n for n, b in expected.items() if _files_in(seat, matter_id, folder_id).get(n) != b]
     # `sent` is carried forward, never recomputed: losing it here would hand the
-    # next attempt the same empty-list ambiguity that caused the duplicate.
-    sent_now = {str(f.get("name")) for f in (delivery.get("files") or []) if f.get("sent")}
+    # next attempt the same empty-list ambiguity that caused the duplicate. The
+    # set is read back off delivery.json, which `_send_missing` has already
+    # written through for every file it sent, so it covers this attempt and
+    # every earlier one.
+    up_already = {str(f.get("name")) for f in (delivery.get("files") or []) if f.get("sent") or f.get("confirmed")}
     delivery["files"] = [
         {
             "name": m["name"],
             "sha256": m["sha256"],
             "bytes": m["bytes"],
-            "sent": m["name"] in sent_now or m["name"] in sent_before,
+            "sent": m["name"] in up_already,
             "confirmed": present.get(m["name"]) == m["bytes"],
         }
         for m in manifest
