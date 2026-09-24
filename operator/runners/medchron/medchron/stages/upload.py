@@ -96,11 +96,7 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
     # What a PRIOR attempt of this stage already put on the matter. The vendor's
     # list lags, so absence from `present` is not evidence a file is missing;
     # this record is, and it outranks the list for the send decision.
-    sent_before = {
-        str(f.get("name")): f
-        for f in (delivery.get("files") or [])
-        if f.get("sent") or f.get("confirmed")
-    }
+    sent_before = {str(f.get("name")): f for f in (delivery.get("files") or []) if f.get("sent") or f.get("confirmed")}
 
     def record(name: str, sha: str, nbytes: int) -> None:
         """Write the send through to disk BEFORE the next one starts, so a
