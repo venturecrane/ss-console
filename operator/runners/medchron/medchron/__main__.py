@@ -95,11 +95,19 @@ def _cmd_explain_date(args: argparse.Namespace) -> int:
 
     from . import dos_check, job as job_mod
 
-    datetime.date.fromisoformat(args.date)
+    try:
+        datetime.date.fromisoformat(args.date)
+    except ValueError:
+        print(f"medchron: {args.date!r} is not a date in YYYY-MM-DD form")
+        return 2
     if not args.reason.strip():
         print("a reason is required")
         return 2
-    job = job_mod.load(Path(args.job_dir))
+    try:
+        job = job_mod.load(Path(args.job_dir))
+    except Exception as exc:  # noqa: BLE001 - the CLI prints a sentence, never a trace
+        print(f"medchron: {type(exc).__name__}: {exc}")
+        return 2
     run = job.data_root / job.slug / "runs" / args.unit
     if not run.is_dir():
         print(f"no run directory {run}")

@@ -174,6 +174,48 @@ def test_billing_pages_are_not_record_pages(data_root: Path, run: Path) -> None:
     assert _check(data_root, run)["classes"]["billed_no_record"] == 1
 
 
+def _two_providers_one_day(d: Path) -> None:
+    pt = _bill("03/09/2026")
+    img = {**_bill("03/09/2026"), "provider": "Valley Radiology Partners"}
+    _bills(d, [pt, img])
+    _records(d, {1: "Visit 03/09/2026"})
+
+
+def test_second_provider_on_a_covered_date_is_not_hidden_by_the_first(data_root: Path, run: Path) -> None:
+    # The chronology names the clinic visit that day; the imaging visit billed
+    # the same day must not ride on it into in_chronology.
+    _two_providers_one_day(_slug(data_root))
+    _entries(run, ["03/09/2026"])
+    rep = _check(data_root, run)
+    assert rep["classes"]["in_chronology"] == 1 and rep["classes"]["provider_unmatched"] == 1
+    assert rep["provider_unmatched"][0]["billing_provider"] == "Valley Radiology Partners"
+
+
+def test_authored_provider_match_names_the_billing_label(data_root: Path, run: Path) -> None:
+    _two_providers_one_day(_slug(data_root))
+    _entries(run, ["03/09/2026"])
+    rd = _slug(data_root)
+    rep = dos_check.check(
+        rd,
+        run,
+        INCIDENT,
+        None,
+        (run / "entries_scoped_final.md").read_text(),
+        {"Example Clinic": ["Valley Radiology Partners"]},
+    )
+    assert rep["classes"]["in_chronology"] == 2
+
+
+def test_no_billing_extraction_is_flagged_not_a_clean_pass(data_root: Path, run: Path) -> None:
+    _records(_slug(data_root), {1: "Visit 03/09/2026"})
+    _entries(run, ["03/02/2026"])
+    q = _check(data_root, run)["quality"]
+    assert q["billing_extract_missing"] == 1 and q["bill_chunks"] == 0
+    _bills(_slug(data_root), [_bill("03/02/2026")])
+    q = _check(data_root, run)["quality"]
+    assert q["billing_extract_missing"] == 0 and q["bill_chunks"] == 1
+
+
 # ---- the stage and its lever ----------------------------------------------
 def _sr(job_dir: Path, firm: Path, data_root: Path, log: list[str]) -> StageRun:
     job = job_mod.load(job_dir)
@@ -226,6 +268,35 @@ def test_hold_mode_holds_on_a_missed_visit_and_explain_date_releases_it(tmp_path
     assert stage.run(_sr(job_dir, firm, data_root, [])) == 0
 
 
+def test_rehearse_reports_without_writing(tmp_path, job_dir, data_root) -> None:
+    rd = _missed_scene(data_root, job_dir)
+    lines = stage.rehearse(_sr(job_dir, _firm(tmp_path, None), data_root, []))
+    assert any("MISSED VISIT 2026-03-09" in line for line in lines)
+    assert not (rd / "dos_report.json").exists()
+
+
+def test_not_measured_is_said_out_loud(tmp_path, job_dir, data_root) -> None:
+    rd = _missed_scene(data_root, job_dir)
+    (_slug(data_root) / "billing_extract.jsonl").unlink()
+    log: list[str] = []
+    assert stage.run(_sr(job_dir, _firm(tmp_path, "hold"), data_root, log)) == 0
+    assert any("NOT MEASURED" in line for line in log) and (rd / "dos_report.json").is_file()
+
+
+def test_no_entries_file_is_refused_not_a_missed_visit(tmp_path, job_dir, data_root) -> None:
+    rd = _missed_scene(data_root, job_dir)
+    (rd / "entries_scoped_final.md").unlink()
+    assert stage.run(_sr(job_dir, _firm(tmp_path, "hold"), data_root, [])) == 2
+    assert dag.BY_NAME["dos_check"].exit_map[2][0] != dag.BY_NAME["dos_check"].exit_map[1][0]
+
+
+def test_explain_date_refuses_a_non_iso_date_without_a_trace(job_dir, data_root, capsys) -> None:
+    unit = job_mod.load(job_dir).units[0].unit
+    (_slug(data_root) / "runs" / unit).mkdir(parents=True, exist_ok=True)
+    assert cli.main(["explain-date", str(job_dir), unit, "03/09/2026", "no-show"]) == 2
+    assert "YYYY-MM-DD" in capsys.readouterr().out
+
+
 def test_lever_accepts_only_report_or_hold() -> None:
     data = copy.deepcopy(FIRM_CONFIG)
     data["levers"]["dos_check"] = "block"
@@ -239,3 +310,4 @@ def test_dag_runs_dos_check_after_coverage_and_build_doc_reopens_it() -> None:
     assert names.index("coverage_gate") < names.index("dos_check") < names.index("billing_chart")
     build = next(s for s in dag.STAGES if s.name == "build_doc")
     assert "dos_check" in build.invalidates
+    assert dag.BY_NAME["dos_check"].rehearse is stage.rehearse

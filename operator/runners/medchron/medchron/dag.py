@@ -354,7 +354,11 @@ STAGES: tuple[Stage, ...] = (
         _slug_unit,
         requires=("coverage_gate",),
         runner=_dos_check.run,
-        exit_map={1: (HELD, "date-of-service check: a billed visit has a record page and no chronology entry")},
+        rehearse=_dos_check.rehearse,
+        exit_map={
+            1: (HELD, "date-of-service check: a billed visit has a record page and no chronology entry"),
+            2: (REFUSED, "date-of-service check: no entries file to check"),
+        },
     ),
     Stage(
         "billing_chart",

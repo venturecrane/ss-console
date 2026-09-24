@@ -7,9 +7,12 @@ a chronology mentioning five passes both. This check closes that gap with the
 one list of dates of service the run already extracts deterministically-ish,
 the billing stage's line items, and the page text on disk.
 
-A billed date is placed in exactly one class, in this order:
+A billed visit, one per (date, provider), is placed in exactly one class, in
+this order:
 
-  in_chronology     an entry carries that date.
+  in_chronology     an entry on that date names the billing provider (the
+                    firm's `billing.provider_match` map, else a shared
+                    distinctive name word).
   pre_incident      before the incident: `summarize` folds those entries into
                     the Prior Medical History block, so absence is by design.
   explained         a person recorded why (`billed_dates_explained.json`,
@@ -18,6 +21,10 @@ A billed date is placed in exactly one class, in this order:
                     composer is told to keep billing-only dates OUT of entries
                     (prompts/map-system.md), so this is a records gap in the
                     firm's file, not a chronology error.
+  provider_unmatched  entries carry the date and none names the billing
+                    provider: two providers billed one day and the chronology
+                    may hold only one. Reported, never held, because provider
+                    names differ between bills and records.
   missed_visit      a record page carries the date and no entry does. This is
                     the class the check exists for.
 
@@ -27,7 +34,9 @@ and non-positive charges dropped, deduplicated to (date, provider). A bill
 with no line items contributes its printed first and last dates, because the
 itemless bills are the serial-care ledgers where a missed visit would hide.
 Undated items, unreadable dates, itemless bills and failed pages are counted,
-never dropped.
+never dropped, and so are the bill chunks read and a missing extraction: zero
+billed visits because nothing was billed must not look like zero because the
+billing stage produced nothing.
 """
 
 from __future__ import annotations
@@ -45,7 +54,12 @@ DOS_TYPES = {"MEDICAL_BILL", "LEDGER"}
 NOT_A_VISIT = re.compile(r"payment|paid|pmt|refund|credit|balance|statement|posted|transfer|interest", re.I)
 PAGE = re.compile(r"\[p\.(\d+)\]")
 EXPLAINED_FILE = "billed_dates_explained.json"
-CLASSES = ("in_chronology", "pre_incident", "explained", "billed_no_record", "missed_visit")
+CLASSES = ("in_chronology", "pre_incident", "explained", "provider_unmatched", "billed_no_record", "missed_visit")
+# Words that name no provider in particular, so sharing one proves nothing.
+GENERIC = frozenset(
+    "medical center centers health healthcare hospital clinic clinics group llc inc pllc the and "
+    "services associates care physicians physician imaging radiology therapy physical".split()
+)
 
 
 def _charge(value: Any) -> float | None:
@@ -69,14 +83,23 @@ def _item_is_visit(item: dict[str, Any]) -> bool:
 def billed_dates(slug_dir: Path, patient: str | None) -> tuple[dict[tuple[str, str], dict[str, Any]], dict[str, int]]:
     """{(iso, provider): {file, page}} plus data-quality counts."""
     out: dict[tuple[str, str], dict[str, Any]] = {}
-    quality = {"undated_items": 0, "unreadable_dates": 0, "itemless_bills": 0, "failed_pages": 0}
-    for row in read_jsonl(slug_dir / "billing_extract.jsonl"):
+    src = slug_dir / "billing_extract.jsonl"
+    quality = {
+        "billing_extract_missing": 0 if src.is_file() else 1,
+        "bill_chunks": 0,
+        "undated_items": 0,
+        "unreadable_dates": 0,
+        "itemless_bills": 0,
+        "failed_pages": 0,
+    }
+    for row in read_jsonl(src):
         for c in row.get("chunks") or []:
             if "FAILED_PAGE" in c:
                 quality["failed_pages"] += 1
                 continue
             if not isinstance(c, dict) or c.get("doc_type") not in DOS_TYPES or quarantined(c, patient):
                 continue
+            quality["bill_chunks"] += 1
             prov = str(c.get("provider") or "").strip()
             items = [i for i in c.get("line_items") or [] if isinstance(i, dict)]
             if not items:
@@ -123,10 +146,10 @@ def _billing_pages(slug_dir: Path) -> set[tuple[str, int]]:
             if isinstance(c, dict) and c.get("doc_type") and c.get("doc_type") != "RECORDS_ONLY":
                 for i in c.get("line_items") or []:
                     if isinstance(i, dict) and str(i.get("page") or "").isdigit():
-                        out.add((row.get("file"), int(i["page"])))
+                        out.add((str(row.get("file") or ""), int(i["page"])))
                 for t in c.get("printed_totals") or []:
                     if isinstance(t, dict) and str(t.get("page") or "").isdigit():
-                        out.add((row.get("file"), int(t["page"])))
+                        out.add((str(row.get("file") or ""), int(t["page"])))
     return out
 
 
@@ -157,23 +180,52 @@ def _nearest_days(iso: str, entry_isos: list[str]) -> int | None:
     return min(abs((date.fromisoformat(e) - d0).days) for e in entry_isos)
 
 
-def check(slug_dir: Path, run_dir: Path, incident_iso: str, patient: str | None, entries_text: str) -> dict[str, Any]:
-    """The report: counts per class, the data-quality counts, and one row per
-    missed visit (file and page of the record carrying it, nearest entry)."""
+def _words(name: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z]{3,}", name.lower()) if w not in GENERIC}
+
+
+def _names_provider(entry_prov: str, bill_prov: str, match: dict[str, list[str]]) -> bool:
+    """Does a chronology entry's provider name the billing provider? The
+    firm's authored map first, then any shared distinctive word. A bill with
+    no provider cannot be told apart, so any entry that day names it."""
+    labels = [entry_prov, *match.get(entry_prov, [])]
+    if not bill_prov or any(lab.strip().lower() == bill_prov.lower() for lab in labels):
+        return True
+    return bool(_words(bill_prov) & set().union(*(_words(lab) for lab in labels)))
+
+
+def check(
+    slug_dir: Path,
+    run_dir: Path,
+    incident_iso: str,
+    patient: str | None,
+    entries_text: str,
+    provider_match: dict[str, list[str]] | None = None,
+) -> dict[str, Any]:
+    """The report: counts per class, the data-quality counts, one row per
+    missed visit (file and page of the record carrying it, nearest entry) and
+    one per provider_unmatched visit."""
     billed, quality = billed_dates(slug_dir, patient)
-    entry_isos = sorted({e["iso"] for e in parse_entries(entries_text)})
-    have = set(entry_isos)
+    by_date: dict[str, list[str]] = {}
+    for e in parse_entries(entries_text):
+        by_date.setdefault(e["iso"], []).append(e["provider"])
+    entry_isos = sorted(by_date)
+    match = provider_match or {}
     explained = {str(r.get("date")) for r in read_json(run_dir / EXPLAINED_FILE, []) or [] if isinstance(r, dict)}
     pages = record_pages(slug_dir, _billing_pages(slug_dir))
     counts = dict.fromkeys(CLASSES, 0)
     missed: list[dict[str, Any]] = []
-    for iso in sorted({k[0] for k in billed}):
-        if iso in have:
+    unmatched: list[dict[str, Any]] = []
+    for iso, prov in sorted(billed):
+        if iso in by_date and any(_names_provider(p, prov, match) for p in by_date[iso]):
             cls = "in_chronology"
         elif iso < incident_iso:
             cls = "pre_incident"
         elif iso in explained:
             cls = "explained"
+        elif iso in by_date:
+            cls = "provider_unmatched"
+            unmatched.append({"date": iso, "billing_provider": prov, "entry_providers": by_date[iso]})
         else:
             hit = _on_record_page(iso, pages)
             cls = "missed_visit" if hit else "billed_no_record"
@@ -187,7 +239,13 @@ def check(slug_dir: Path, run_dir: Path, incident_iso: str, patient: str | None,
                     }
                 )
         counts[cls] += 1
-    return {"billed_dates": sum(counts.values()), "classes": counts, "quality": quality, "missed_visits": missed}
+    return {
+        "billed_dates": sum(counts.values()),
+        "classes": counts,
+        "quality": quality,
+        "missed_visits": missed,
+        "provider_unmatched": unmatched,
+    }
 
 
 def write(run_dir: Path, report: dict[str, Any]) -> Path:
