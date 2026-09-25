@@ -76,6 +76,9 @@ const EXPECTED_VERBS = [
   'agentmail_send',
   'audit_append',
   'authorize',
+  // Case-manager casework ledger: proposals, a person's verdicts, and the task
+  // writes they authorize. Agent uid only, validated and stamped server-side.
+  'casework_event_append',
   'correction_propose',
   'emitted_wake_append',
   'escalation_event_append',

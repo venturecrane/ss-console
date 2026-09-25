@@ -481,6 +481,21 @@
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/send_as_acts.py",
       "reason": "ADR 0089. One row when an outside party replies on the conversation of a draft sent as a staff member and that staff member is told."
+    },
+    "CASEWORK_APPROVED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/casework_verbs.py",
+      "reason": "A person answered a numbered casework line with a yes, verified by the reply's sender and joined to the raise on the same thread and number. It is the authorization for exactly one task write; the metadata carries the casework row id, the item key, the line number, the thread and the confirmer's authored name and sender key, never the message text."
+    },
+    "CASEWORK_HELD": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/casework_verbs.py",
+      "reason": "A person answered a numbered casework line with leave it. Nothing is written to the firm's record; the row is the record that the Operator was told to hold, so a later question about why a task stayed open has an answer."
+    },
+    "CASEWORK_CLOSED_BY_RECORD": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/casework_verbs.py",
+      "reason": "The Operator closes a task it created itself because the matter record already shows it done, at a level the firm set. The metadata carries the evidence atoms it read; a close on money or a court date is refused before this row can exist."
     }
   }
 }

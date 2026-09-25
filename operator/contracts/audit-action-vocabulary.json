@@ -109,6 +109,9 @@
     "SEND_AS_SENT": "ADR 0089 staff send-as. Written by the workspace broker (send_as_acts.py), the only process holding the Send As credential; the overlay never writes it.",
     "SEND_AS_FAILED": "ADR 0089 staff send-as. Written by the workspace broker (send_as_acts.py), the only process holding the Send As credential; the overlay never writes it.",
     "SEND_AS_REFUSED": "ADR 0089 staff send-as. Written by the workspace broker (send_as_acts.py), the only process holding the Send As credential; the overlay never writes it.",
-    "SEND_AS_REPLY_NOTICED": "ADR 0089 staff send-as. Written by the workspace broker (send_as_acts.py), the only process holding the Send As credential; the overlay never writes it."
+    "SEND_AS_REPLY_NOTICED": "ADR 0089 staff send-as. Written by the workspace broker (send_as_acts.py), the only process holding the Send As credential; the overlay never writes it.",
+    "CASEWORK_APPROVED": "Case-manager casework (docs/specs/operator/case-manager-deadline-work.md). Written by operator/workspace_broker/casework_verbs.py under the broker uid when the casework_event_append verb records a verified person's approval of a numbered line (the license for one task write). Console-owned source running on the seat, so the overlay vocabulary does not gate the write.",
+    "CASEWORK_HELD": "Case-manager casework (docs/specs/operator/case-manager-deadline-work.md). Written by operator/workspace_broker/casework_verbs.py under the broker uid when the casework_event_append verb records a verified person's hold on a numbered line. Console-owned source running on the seat, so the overlay vocabulary does not gate the write.",
+    "CASEWORK_CLOSED_BY_RECORD": "Case-manager casework (docs/specs/operator/case-manager-deadline-work.md). Written by operator/workspace_broker/casework_verbs.py under the broker uid when the casework_event_append verb records the Operator closing its own task because the record already shows it done, with the evidence atoms. Console-owned source running on the seat, so the overlay vocabulary does not gate the write."
   }
 }

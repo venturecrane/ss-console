@@ -183,6 +183,12 @@ export const AUDIT_ACTION_TYPES = [
   'MEDCHRON_JOB_HELD',
   'MEDCHRON_JOB_DELIVERED',
   'MEDCHRON_JOB_FAILED',
+  // Case-manager casework: a person's answer to a numbered line about the
+  // task list, and a task the Operator closed on the record's evidence.
+  // Written by the workspace broker (casework_verbs.py).
+  'CASEWORK_APPROVED',
+  'CASEWORK_HELD',
+  'CASEWORK_CLOSED_BY_RECORD',
 ] as const
 
 /**
