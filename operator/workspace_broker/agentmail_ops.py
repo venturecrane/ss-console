@@ -71,6 +71,19 @@ def _message_id(response: dict[str, Any]) -> str:
     return ""
 
 
+def _thread_id(response: dict[str, Any]) -> str:
+    """The thread AgentMail filed this message in, under either spelling.
+
+    Recorded on the confirm row so a reply in that thread can be tied back to
+    the digest it answers (``digest_ref.py``). Absent is ``""``, never a guess.
+    """
+    for key in ("thread_id", "threadId"):
+        found = response.get(key)
+        if isinstance(found, str) and found:
+            return found
+    return ""
+
+
 def _as_addresses(value: Any) -> list[str]:
     """Normalize a recipient field that may be a bare string or a list."""
     if isinstance(value, str):
@@ -155,6 +168,7 @@ class AgentMailOps:
         )
         try:
             opener = self._opener or urllib.request.urlopen
+            # base_url is https-checked at construction; the path is a module literal.
             # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             with opener(request, timeout=TIMEOUT_S) as response:
                 raw = response.read().decode("utf-8") or "{}"
@@ -214,6 +228,7 @@ class AgentMailOps:
         response = self._request(self._path("messages", "send"), "POST", body)
         return {
             "message_id": _message_id(response),
+            "thread_id": _thread_id(response),
             "recipients": recipients,
             "inbox_id": self.inbox_id(),
         }
@@ -246,6 +261,7 @@ class AgentMailOps:
         response = self._request(self._path("messages", message_id, "reply"), "POST", body)
         return {
             "message_id": _message_id(response),
+            "thread_id": _thread_id(response),
             "recipients": [sender],
             "inbox_id": self.inbox_id(),
             # ss#2497 — the twin of the msgraph verb. The broker is the only

@@ -1404,7 +1404,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // and flattens its sheet cells for the identifier scan.
     // 12621343 -> 8757e374 (2026-09-25, overlay#383). A reply to an office
     // scanner goes to the person scope.device_senders names.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="8757e374f724c5f45a72d013a3e4fdbab1d08fd1"')
+    // 8757e374 -> 48726abb (2026-09-25, overlay#384). Plain-word replies to a
+    // numbered deadline digest (escalation_reply_ack, dispatch_ref stamping).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="48726abbbd9da1c746a63ac0a7d5800fa910a65a"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

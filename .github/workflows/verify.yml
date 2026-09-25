@@ -69,6 +69,13 @@ jobs:
       - name: Build
         run: npm run build
 
+      # npm runs this as `postbuild` too; it is a named step so a bundle that
+      # carries a secret fails with its own label (review 2026-09-25: Astro
+      # inlines private import.meta.env reads, and @clerk/astro reads its
+      # secret key that way). It prints names, never values.
+      - name: Bundle carries no inlined secret
+        run: node scripts/assert-no-inlined-secrets.mjs dist/server
+
       - name: Test
         run: npm test
 

@@ -42,48 +42,62 @@ interface TestCase {
   assertions: (extraction: Record<string, unknown>) => string[]
 }
 
+type Flags = Record<string, Record<string, boolean>> | undefined
+
+/** Keys in a flag group whose value is exactly true, in object order. */
+function trueKeys(group: Record<string, boolean> | undefined): string[] {
+  return Object.entries(group ?? {})
+    .filter(([, val]) => val === true)
+    .map(([key]) => key)
+}
+
+/** Every flag in the group must be off. */
+function expectNoneTrue(group: Record<string, boolean> | undefined, label: string): string[] {
+  return trueKeys(group).map((key) => `${label} disqualifier ${key} should be false`)
+}
+
+/** Each named soft flag must be on. */
+function expectSoftTrue(flags: Flags, names: readonly string[]): string[] {
+  return names
+    .filter((name) => !flags?.soft?.[name])
+    .map((name) => `Soft disqualifier ${name} should be true`)
+}
+
+/** The plumbing case's quote-driver expectations. */
+function plumbingQuoteErrors(qd: Record<string, unknown> | undefined): string[] {
+  const errors: string[] = []
+  // Medium complexity
+  if (qd?.estimated_complexity !== 'medium') {
+    errors.push(`Expected medium complexity, got "${String(qd?.estimated_complexity)}"`)
+  }
+
+  // Should recommend 2-3 problems
+  const rp = qd?.recommended_problems as string[] | undefined
+  if (!rp || rp.length < 2 || rp.length > 3) {
+    errors.push(`Expected 2-3 recommended problems, got ${rp?.length ?? 0}`)
+  }
+
+  // Should include scheduling_chaos and lead_leakage
+  for (const problem of ['scheduling_chaos', 'lead_leakage']) {
+    if (rp && !rp.includes(problem)) errors.push(`Missing ${problem} in recommended_problems`)
+  }
+  return errors
+}
+
 const TEST_CASES: TestCase[] = [
   {
     name: 'Transcript A — Plumbing (Qualifying)',
     transcript: PLUMBING_TRANSCRIPT,
     cacheFile: 'plumbing-qualify.json',
     assertions: (ext) => {
-      const errors: string[] = []
-      const flags = ext.disqualification_flags as Record<string, Record<string, boolean>>
-      const qd = ext.quote_drivers as Record<string, unknown>
-
-      // No hard disqualifiers
-      if (flags?.hard) {
-        for (const [key, val] of Object.entries(flags.hard)) {
-          if (val === true) errors.push(`Hard disqualifier ${key} should be false`)
-        }
-      }
-
-      // No soft disqualifiers
-      if (flags?.soft) {
-        for (const [key, val] of Object.entries(flags.soft)) {
-          if (val === true) errors.push(`Soft disqualifier ${key} should be false`)
-        }
-      }
-
-      // Medium complexity
-      if (qd?.estimated_complexity !== 'medium') {
-        errors.push(`Expected medium complexity, got "${String(qd?.estimated_complexity)}"`)
-      }
-
-      // Should recommend 2-3 problems
-      const rp = qd?.recommended_problems as string[] | undefined
-      if (!rp || rp.length < 2 || rp.length > 3) {
-        errors.push(`Expected 2-3 recommended problems, got ${rp?.length ?? 0}`)
-      }
-
-      // Should include scheduling_chaos and lead_leakage
-      if (rp && !rp.includes('scheduling_chaos')) {
-        errors.push('Missing scheduling_chaos in recommended_problems')
-      }
-      if (rp && !rp.includes('lead_leakage')) {
-        errors.push('Missing lead_leakage in recommended_problems')
-      }
+      const flags = ext.disqualification_flags as Flags
+      const qd = ext.quote_drivers as Record<string, unknown> | undefined
+      // No hard or soft disqualifiers
+      const errors = [
+        ...expectNoneTrue(flags?.hard, 'Hard'),
+        ...expectNoneTrue(flags?.soft, 'Soft'),
+        ...plumbingQuoteErrors(qd),
+      ]
 
       // Should have a champion
       if (!ext.champion_candidate) {
@@ -104,31 +118,16 @@ const TEST_CASES: TestCase[] = [
     transcript: ACCOUNTING_TRANSCRIPT,
     cacheFile: 'accounting-disqualify.json',
     assertions: (ext) => {
-      const errors: string[] = []
-      const flags = ext.disqualification_flags as Record<string, Record<string, boolean>>
-      const qd = ext.quote_drivers as Record<string, unknown>
+      const flags = ext.disqualification_flags as Flags
+      const qd = ext.quote_drivers as Record<string, unknown> | undefined
+      // No hard disqualifiers. books_behind and no_champion should be true, and
+      // no_willingness_to_change too (owner explicitly resists).
+      const errors = [
+        ...expectNoneTrue(flags?.hard, 'Hard'),
+        ...expectSoftTrue(flags, ['books_behind', 'no_champion', 'no_willingness_to_change']),
+      ]
 
-      // No hard disqualifiers
-      if (flags?.hard) {
-        for (const [key, val] of Object.entries(flags.hard)) {
-          if (val === true) errors.push(`Hard disqualifier ${key} should be false`)
-        }
-      }
-
-      // Soft disqualifiers: books_behind and no_champion should be true
-      if (!flags?.soft?.books_behind) {
-        errors.push('Soft disqualifier books_behind should be true')
-      }
-      if (!flags?.soft?.no_champion) {
-        errors.push('Soft disqualifier no_champion should be true')
-      }
-
-      // no_willingness_to_change should be true (owner explicitly resists)
-      if (!flags?.soft?.no_willingness_to_change) {
-        errors.push('Soft disqualifier no_willingness_to_change should be true')
-      }
-
-      // Medium or high complexity — both are defensible. The prompt defines
+      // Medium or high complexity are both defensible. The prompt defines
       // complexity by estimated hours, not adoption risk, so Claude may rate
       // the scope as medium even when adoption risk is high.
       const complexity = qd?.estimated_complexity
@@ -170,14 +169,141 @@ function saveCache(filename: string, data: Record<string, unknown>): void {
 
 function printResult(label: string, value: unknown, indent = 2): void {
   const pad = ' '.repeat(indent)
-  console.log(
-    `${pad}${label}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`
-  )
+  // Strings print bare; everything else (numbers, booleans, null, arrays,
+  // objects) prints as JSON, and undefined as "undefined".
+  const text = typeof value === 'string' ? value : String(JSON.stringify(value))
+  console.log(`${pad}${label}: ${text}`)
 }
 
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
+
+/** The extraction for one case, from cache or the API. Null means the case failed to load. */
+async function loadExtraction(
+  testCase: TestCase,
+  apiKey: string | undefined
+): Promise<Record<string, unknown> | null> {
+  if (USE_CACHE) {
+    const cached = loadCache(testCase.cacheFile)
+    if (!cached) {
+      console.error(`  Cache miss: ${testCase.cacheFile} not found. Run without --cached first.`)
+      return null
+    }
+    console.log('  Source: cache\n')
+    return cached
+  }
+
+  console.log('  Calling Claude API...')
+  const start = Date.now()
+  let extraction: Record<string, unknown>
+  try {
+    extraction = (await extractAssessment(apiKey!, testCase.transcript)) as unknown as Record<
+      string,
+      unknown
+    >
+  } catch (err) {
+    console.error(`  API Error: ${(err as Error).message}`)
+    return null
+  }
+  const elapsed = ((Date.now() - start) / 1000).toFixed(1)
+  console.log(`  Completed in ${elapsed}s\n`)
+
+  // Cache the result
+  saveCache(testCase.cacheFile, extraction)
+  return extraction
+}
+
+/** Schema validation. Returns whether it passed. */
+function reportValidation(extraction: Record<string, unknown>): boolean {
+  const validation = validateExtraction(extraction)
+  if (validation.valid) {
+    console.log('  Schema validation: PASSED')
+    return true
+  }
+  console.log('  Schema validation: FAILED')
+  for (const err of validation.errors) {
+    console.log(`    - ${err}`)
+  }
+  return false
+}
+
+function printKeyFields(extraction: Record<string, unknown>): void {
+  console.log('\n  Key fields:')
+  printResult('Business name', extraction.business_name)
+  printResult('Vertical', extraction.vertical)
+  printResult('Employee count', extraction.employee_count)
+  printResult('Years in business', extraction.years_in_business)
+  printResult('Geography', extraction.geography)
+
+  const problems = extraction.identified_problems as Array<Record<string, unknown>> | undefined
+  if (problems) {
+    console.log(`\n  Identified problems (${problems.length}):`)
+    for (const p of problems) {
+      console.log(`    - ${String(p.problem_id)} [${String(p.severity)}]`)
+    }
+  }
+}
+
+function printQuoteDrivers(extraction: Record<string, unknown>): void {
+  const qd = extraction.quote_drivers as Record<string, unknown> | undefined
+  if (!qd) return
+  console.log('\n  Quote drivers:')
+  printResult('Recommended problems', qd.recommended_problems)
+  printResult('Estimated complexity', qd.estimated_complexity)
+  printResult('Upward pressures', (qd.upward_pressures as string[])?.length ?? 0)
+  printResult('Downward pressures', (qd.downward_pressures as string[])?.length ?? 0)
+  printResult('ROI anchors', (qd.roi_anchors as string[])?.length ?? 0)
+}
+
+function printFlagsAndChampion(extraction: Record<string, unknown>): void {
+  const flags = extraction.disqualification_flags as Flags
+  if (flags) {
+    console.log('\n  Disqualification flags:')
+    const hardTriggered = Object.entries(flags.hard || {})
+      .filter(([, v]) => v)
+      .map(([k]) => k)
+    const softTriggered = Object.entries(flags.soft || {})
+      .filter(([, v]) => v)
+      .map(([k]) => k)
+    printResult('Hard', hardTriggered.length > 0 ? hardTriggered : 'none')
+    printResult('Soft', softTriggered.length > 0 ? softTriggered : 'none')
+  }
+
+  const champion = extraction.champion_candidate as Record<string, unknown> | null
+  console.log(
+    `\n  Champion: ${champion ? `${String(champion.name)} (${String(champion.confidence)})` : 'none identified'}`
+  )
+}
+
+/** The case's own assertions. Returns whether they all passed. */
+function reportAssertions(testCase: TestCase, extraction: Record<string, unknown>): boolean {
+  console.log('\n  Assertions:')
+  const assertionErrors = testCase.assertions(extraction)
+  if (assertionErrors.length === 0) {
+    console.log('    All assertions PASSED')
+    return true
+  }
+  for (const err of assertionErrors) {
+    console.log(`    FAILED: ${err}`)
+  }
+  return false
+}
+
+/** Run one case end to end. Returns whether it passed. */
+async function runCase(testCase: TestCase, apiKey: string | undefined): Promise<boolean> {
+  console.log(`--- ${testCase.name} ---\n`)
+  const extraction = await loadExtraction(testCase, apiKey)
+  if (!extraction) return false
+
+  const schemaOk = reportValidation(extraction)
+  printKeyFields(extraction)
+  printQuoteDrivers(extraction)
+  printFlagsAndChampion(extraction)
+  const assertionsOk = reportAssertions(testCase, extraction)
+  console.log('')
+  return schemaOk && assertionsOk
+}
 
 async function main(): Promise<void> {
   const apiKey = process.env.ANTHROPIC_API_KEY
@@ -195,111 +321,8 @@ async function main(): Promise<void> {
   }
 
   let allPassed = true
-
   for (const testCase of TEST_CASES) {
-    console.log(`--- ${testCase.name} ---\n`)
-
-    let extraction: Record<string, unknown>
-
-    if (USE_CACHE) {
-      const cached = loadCache(testCase.cacheFile)
-      if (!cached) {
-        console.error(`  Cache miss: ${testCase.cacheFile} not found. Run without --cached first.`)
-        allPassed = false
-        continue
-      }
-      extraction = cached
-      console.log('  Source: cache\n')
-    } else {
-      console.log('  Calling Claude API...')
-      const start = Date.now()
-      try {
-        extraction = (await extractAssessment(apiKey!, testCase.transcript)) as unknown as Record<
-          string,
-          unknown
-        >
-      } catch (err) {
-        console.error(`  API Error: ${(err as Error).message}`)
-        allPassed = false
-        continue
-      }
-      const elapsed = ((Date.now() - start) / 1000).toFixed(1)
-      console.log(`  Completed in ${elapsed}s\n`)
-
-      // Cache the result
-      saveCache(testCase.cacheFile, extraction)
-    }
-
-    // Schema validation
-    const validation = validateExtraction(extraction)
-    if (!validation.valid) {
-      console.log('  Schema validation: FAILED')
-      for (const err of validation.errors) {
-        console.log(`    - ${err}`)
-      }
-      allPassed = false
-    } else {
-      console.log('  Schema validation: PASSED')
-    }
-
-    // Key fields
-    console.log('\n  Key fields:')
-    printResult('Business name', extraction.business_name)
-    printResult('Vertical', extraction.vertical)
-    printResult('Employee count', extraction.employee_count)
-    printResult('Years in business', extraction.years_in_business)
-    printResult('Geography', extraction.geography)
-
-    const problems = extraction.identified_problems as Array<Record<string, unknown>> | undefined
-    if (problems) {
-      console.log(`\n  Identified problems (${problems.length}):`)
-      for (const p of problems) {
-        console.log(`    - ${String(p.problem_id)} [${String(p.severity)}]`)
-      }
-    }
-
-    const qd = extraction.quote_drivers as Record<string, unknown> | undefined
-    if (qd) {
-      console.log('\n  Quote drivers:')
-      printResult('Recommended problems', qd.recommended_problems)
-      printResult('Estimated complexity', qd.estimated_complexity)
-      printResult('Upward pressures', (qd.upward_pressures as string[])?.length ?? 0)
-      printResult('Downward pressures', (qd.downward_pressures as string[])?.length ?? 0)
-      printResult('ROI anchors', (qd.roi_anchors as string[])?.length ?? 0)
-    }
-
-    const flags = extraction.disqualification_flags as
-      Record<string, Record<string, boolean>> | undefined
-    if (flags) {
-      console.log('\n  Disqualification flags:')
-      const hardTriggered = Object.entries(flags.hard || {})
-        .filter(([, v]) => v)
-        .map(([k]) => k)
-      const softTriggered = Object.entries(flags.soft || {})
-        .filter(([, v]) => v)
-        .map(([k]) => k)
-      printResult('Hard', hardTriggered.length > 0 ? hardTriggered : 'none')
-      printResult('Soft', softTriggered.length > 0 ? softTriggered : 'none')
-    }
-
-    const champion = extraction.champion_candidate as Record<string, unknown> | null
-    console.log(
-      `\n  Champion: ${champion ? `${String(champion.name)} (${String(champion.confidence)})` : 'none identified'}`
-    )
-
-    // Assertion checks
-    console.log('\n  Assertions:')
-    const assertionErrors = testCase.assertions(extraction)
-    if (assertionErrors.length === 0) {
-      console.log('    All assertions PASSED')
-    } else {
-      for (const err of assertionErrors) {
-        console.log(`    FAILED: ${err}`)
-      }
-      allPassed = false
-    }
-
-    console.log('')
+    if (!(await runCase(testCase, apiKey))) allPassed = false
   }
 
   // Final summary

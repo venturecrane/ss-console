@@ -158,6 +158,74 @@ function textOf(content) {
   return ''
 }
 
+const pyFiles = (text) => [...text.matchAll(/([\w./-]+\.py)\b/g)].map((m) => path.basename(m[1]))
+
+/** Every message's content array in a transcript, in order. */
+function transcriptContents(file) {
+  const out = []
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    if (!line.trim()) continue
+    let rec
+    try {
+      rec = JSON.parse(line)
+    } catch {
+      continue // a partially flushed final line is normal on a live session
+    }
+    const content = rec?.message?.content
+    if (Array.isArray(content)) out.push(content)
+  }
+  return out
+}
+
+/**
+ * A mutation run is: this .py has been executed before, was edited since that
+ * run, and is being executed again. Registers every named file as seen.
+ */
+function isPyMutationRun(py, command, isRun) {
+  let pyMutationRun = false
+  for (const f of pyFiles(command)) {
+    const st = py.get(f) ?? { ran: false, editedAfterRun: false }
+    if (isRun && st.ran && st.editedAfterRun) pyMutationRun = true
+    py.set(f, st)
+  }
+  return pyMutationRun
+}
+
+/** After the step: a run resets the edit mark, an edit after a run sets it. */
+function recordPyActivity(py, command, isRun, isEdit) {
+  for (const f of pyFiles(command)) {
+    const st = py.get(f)
+    if (isRun) {
+      st.ran = true
+      st.editedAfterRun = false
+    } else if (isEdit && st.ran) {
+      st.editedAfterRun = true
+    }
+  }
+}
+
+/** Turn one tool_use block into a step, updating the per-transcript state. */
+function toolStep(block, state) {
+  const input = block.input ?? {}
+  const command = [input.command, input.file_path, input.pattern, input.path]
+    .filter(Boolean)
+    .join(' ')
+  const name = block.name ?? ''
+  const isEdit = /^(Write|Edit|NotebookEdit)$/.test(name) || /(cat\s*>|tee\s|sed -i)/.test(command)
+  const isRun = /\bpython3?\b|\bpytest\b|\.venv\/bin\/python/.test(command)
+
+  const step = {
+    tool: name,
+    command,
+    output: '',
+    sessionSawListDraftsBefore: state.sawListDrafts,
+    pyMutationRun: isPyMutationRun(state.py, command, isRun),
+  }
+  if (/list_drafts/.test(name)) state.sawListDrafts = true
+  recordPyActivity(state.py, command, isRun, isEdit)
+  return step
+}
+
 /**
  * Flatten one transcript into an ordered list of steps: a tool call paired with
  * the result that came back. Pairing is by tool_use_id, because results arrive
@@ -168,59 +236,13 @@ function textOf(content) {
 function stepsOf(file) {
   const calls = new Map()
   const order = []
-  let sawListDrafts = false
-  /** file -> {ran: boolean, editedAfterRun: boolean}, per .py basename. */
-  const py = new Map()
-  const pyFiles = (text) => [...text.matchAll(/([\w./-]+\.py)\b/g)].map((m) => path.basename(m[1]))
+  /** py: file -> {ran: boolean, editedAfterRun: boolean}, per .py basename. */
+  const state = { sawListDrafts: false, py: new Map() }
 
-  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
-    if (!line.trim()) continue
-    let rec
-    try {
-      rec = JSON.parse(line)
-    } catch {
-      continue // a partially flushed final line is normal on a live session
-    }
-    const content = rec?.message?.content
-    if (!Array.isArray(content)) continue
-
+  for (const content of transcriptContents(file)) {
     for (const block of content) {
       if (block?.type === 'tool_use') {
-        const input = block.input ?? {}
-        const command = [input.command, input.file_path, input.pattern, input.path]
-          .filter(Boolean)
-          .join(' ')
-        const name = block.name ?? ''
-        const isEdit =
-          /^(Write|Edit|NotebookEdit)$/.test(name) || /(cat\s*>|tee\s|sed -i)/.test(command)
-        const isRun = /\bpython3?\b|\bpytest\b|\.venv\/bin\/python/.test(command)
-
-        // A mutation run is: this .py has been executed before, was edited
-        // since that run, and is being executed again.
-        let pyMutationRun = false
-        for (const f of pyFiles(command)) {
-          const st = py.get(f) ?? { ran: false, editedAfterRun: false }
-          if (isRun && st.ran && st.editedAfterRun) pyMutationRun = true
-          py.set(f, st)
-        }
-
-        const step = {
-          tool: name,
-          command,
-          output: '',
-          sessionSawListDraftsBefore: sawListDrafts,
-          pyMutationRun,
-        }
-        if (/list_drafts/.test(name)) sawListDrafts = true
-        for (const f of pyFiles(command)) {
-          const st = py.get(f)
-          if (isRun) {
-            st.ran = true
-            st.editedAfterRun = false
-          } else if (isEdit && st.ran) {
-            st.editedAfterRun = true
-          }
-        }
+        const step = toolStep(block, state)
         calls.set(block.id, step)
         order.push(step)
       } else if (block?.type === 'tool_result') {
@@ -232,40 +254,29 @@ function stepsOf(file) {
   return order
 }
 
+/** Apply a trap predicate; a predicate that throws counts as false. */
+function holds(fn, step) {
+  try {
+    return fn(step)
+  } catch {
+    return false
+  }
+}
+
 function scanFile(file) {
   const steps = stepsOf(file)
   const hits = []
   for (const trap of TRAPS) {
     for (let i = 0; i < steps.length; i++) {
-      let isEncounter = false
-      try {
-        isEncounter = trap.encounter(steps[i])
-      } catch {
-        continue
-      }
-      if (!isEncounter) continue
+      if (!holds(trap.encounter, steps[i])) continue
 
       if (trap.direct) {
         hits.push({ trap: trap.id, stumble: true, at: i })
         continue
       }
       const window = steps.slice(i + 1, i + 1 + REMEDY_WINDOW)
-      const handled = window.some((s) => {
-        try {
-          return trap.remedy(s)
-        } catch {
-          return false
-        }
-      })
-      const matches = (fn) =>
-        Boolean(fn) &&
-        window.some((s) => {
-          try {
-            return fn(s)
-          } catch {
-            return false
-          }
-        })
+      const handled = window.some((s) => holds(trap.remedy, s))
+      const matches = (fn) => Boolean(fn) && window.some((s) => holds(fn, s))
       // A trap with `stumbleRequires` only counts when the named harm actually
       // follows; without it, an unremedied encounter is the stumble.
       const worsened = matches(trap.stumbleAlso)
@@ -297,7 +308,7 @@ function scan(projectDir, sinceISO) {
     TRAPS.map((t) => [t.id, { encounters: 0, stumbles: 0, sessions: [], what: t.what, memory: t.memory }])
   )
   for (const f of inWindow) {
-    let hits = []
+    let hits
     try {
       hits = scanFile(f.full)
     } catch {

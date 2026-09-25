@@ -1,10 +1,11 @@
 /**
  * Parse the JSON envelope `wrangler d1 execute --json` prints.
  *
- * This lives in a bare `.mjs` for one reason: it has two consumers that cannot
- * share a TypeScript module. `scripts/lib/wrangler-d1.ts` runs under `tsx` in
- * CI; `.claude/hooks/lib/register.mjs` is run by plain `node` from a bash
- * wrapper with no build step. Before this file existed the parse was written
+ * This lives in a bare `.mjs` because, when it was written, it had two consumers
+ * that could not share a TypeScript module: `scripts/lib/wrangler-d1.ts` under
+ * `tsx`, and `.claude/hooks/lib/register.mjs` under plain `node`. Since
+ * 2026-09-25 the CLI runs under tsx and reaches D1 only through wrangler-d1.ts,
+ * so this is that adapter's parser. Before this file existed the parse was written
  * twice -- once here, once inline inside `register.mjs`'s `lookupEntityId` --
  * and the two had already drifted (the TS copy threw on garbage, the inline one
  * returned an empty list, so the CLI read "no such customer" where CI read "the
