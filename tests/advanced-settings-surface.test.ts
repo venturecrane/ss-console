@@ -22,7 +22,11 @@ import { describe, expect, it } from 'vitest'
 import { validate } from '../src/lib/operator/customer-yaml'
 import { projectCustomerYamlToConfigRow } from '../src/lib/portal/customer-config-projection'
 import { projectRow } from '../src/lib/portal/customer-config'
-import { resolveEditableConfigFromRow } from '../src/lib/portal/operator/customer-yaml-editor'
+import {
+  applyEditableChanges,
+  projectEditableConfig,
+  resolveEditableConfigFromRow,
+} from '../src/lib/portal/operator/customer-yaml-editor'
 import { reconstructFromProjection } from '../src/lib/portal/operator/customer-config-reconstruct'
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -174,6 +178,50 @@ describe('advanced settings: no success state for a write that did not happen', 
     const savedIndex = writer.indexOf(`'spec_saved'`)
     expect(writeIndex).toBeGreaterThan(-1)
     expect(savedIndex).toBeGreaterThan(writeIndex)
+  })
+})
+
+describe('advanced settings: a portal round trip keeps device_senders', () => {
+  // A device redirect sends a scanner's replies to a person. A round trip that
+  // dropped it would send them back to the scanner, where nobody reads them.
+  const DEVICE = { address: 'scanner@firm.example', replies_to: 'office@firm.example' }
+
+  function rowWithDevice(replies_to: string) {
+    const row = projectionFor(liveSlugs()[0])
+    return {
+      ...row,
+      scope: {
+        email_folders_visible: ['Inbox'],
+        email_folders_blind: [],
+        email_keyword_blocks: [],
+        domain_blocks: [],
+        inbound_allow_from: ['@firm.example'],
+        admins: ['office@firm.example'],
+        device_senders: [{ ...DEVICE, replies_to }],
+      },
+    }
+  }
+
+  it('the reconstruction carries it, and it validates', () => {
+    const result = validate(reconstructFromProjection(rowWithDevice(DEVICE.replies_to)))
+    if (!result.ok) throw new Error(JSON.stringify(result.errors))
+    expect(result.value.scope.device_senders).toEqual([DEVICE])
+  })
+
+  it('a portal save preserves it verbatim', () => {
+    const result = validate(reconstructFromProjection(rowWithDevice(DEVICE.replies_to)))
+    if (!result.ok) throw new Error(JSON.stringify(result.errors))
+    const { editable } = projectEditableConfig(result.value)
+    const merged = applyEditableChanges(result.value, editable)
+    expect(merged.scope.device_senders).toEqual([DEVICE])
+    expect(validate(merged).ok).toBe(true)
+  })
+
+  it('is validated, not passed through: a target off the admins is refused', () => {
+    const result = validate(reconstructFromProjection(rowWithDevice('someone@firm.example')))
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.errors.map((e) => e.code)).toContain('InvalidDeviceSenders')
   })
 })
 

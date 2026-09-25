@@ -234,6 +234,13 @@ class RecipientPolicy:
     #: can write in. Sourced from ``inbound_allow_from`` alone.
     reply_exact: frozenset[str]
     reply_domains: frozenset[str]
+    #: ``scope.admins`` exact addresses: the only people a DEVICE's reply may be
+    #: redirected to (``allows_device_redirect``).
+    admin_exact: frozenset[str] = frozenset()
+    #: ``scope.device_senders`` as ``(device, replies_to)`` pairs, both
+    #: canonical. A device is a mailbox nobody reads (an office scanner), so its
+    #: reply goes to the person the seat's config names for it.
+    device_replies: tuple[tuple[str, str], ...] = ()
 
     def _blocked(self, address: str) -> bool:
         return domain_of(address) in self.blocked_domains
@@ -251,6 +258,62 @@ class RecipientPolicy:
         if not value or "@" not in value or self._blocked(value):
             return False
         return value in self.reply_exact or domain_of(value) in self.reply_domains
+
+    def device_reply_target(self, sender: str) -> str | None:
+        """The authored ``replies_to`` for a device ``sender``, else ``None``.
+
+        Exact match on the canonical device address; a domain is never a
+        device. ``None`` for every sender on a seat with no device authored.
+        """
+        value = normalize_address(sender)
+        if not value:
+            return None
+        for device, target in self.device_replies:
+            if device == value:
+                return target
+        return None
+
+    def allows_device_redirect(self, sender: str, to: str) -> bool:
+        """May a reply to ``sender`` be sent to ``to`` instead?
+
+        Only when ALL hold, each re-derived here from the seat's own config
+        rather than trusted from the validator that ran at authoring time:
+
+        * the sender may be replied to at all (``allows_reply_to``);
+        * ``to`` is exactly the ``replies_to`` authored for that sender under
+          ``scope.device_senders``;
+        * ``to`` is on ``scope.admins`` and not in a blocked domain.
+
+        Anything else is refused. The caller asks with the sender it FETCHED
+        from the source message, so a caller naming a sender gains nothing.
+        """
+        target = normalize_address(to)
+        if not target or not self.allows_reply_to(sender):
+            return False
+        if self.device_reply_target(sender) != target:
+            return False
+        return target in self.admin_exact and not self._blocked(target)
+
+
+def split_device_replies(entries: Any) -> tuple[tuple[str, str], ...]:
+    """``scope.device_senders`` as canonical ``(device, replies_to)`` pairs.
+
+    Entries that are not mappings, or whose two values are not usable exact
+    addresses, are DROPPED (an allow input: an unreadable entry never widens
+    the fence). A duplicate device keeps its first pairing.
+    """
+    out: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        device = normalize_address(entry.get("address"))
+        target = normalize_address(entry.get("replies_to"))
+        if "@" not in device or "@" not in target or device in seen:
+            continue
+        seen.add(device)
+        out.append((device, target))
+    return tuple(out)
 
 
 def _scope(customer_path: Path) -> dict[str, Any]:
@@ -292,6 +355,8 @@ def authored_policy(customer_path: Path) -> RecipientPolicy:
         blocked_domains=frozenset(split_blocks(scope.get("domain_blocks"))),
         reply_exact=frozenset(inbound_exact),
         reply_domains=frozenset(inbound_domains),
+        admin_exact=frozenset(admin_exact),
+        device_replies=split_device_replies(scope.get("device_senders")),
     )
 
 
@@ -303,4 +368,5 @@ __all__ = [
     "normalize_address",
     "split_authored",
     "split_blocks",
+    "split_device_replies",
 ]
