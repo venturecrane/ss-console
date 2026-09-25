@@ -16,14 +16,14 @@ import pytest
 
 openpyxl = pytest.importorskip("openpyxl")
 
-from smokeball_connector import server, vendor_invoice, workbook_tools  # noqa: E402
-from smokeball_connector.extract import (  # noqa: E402
+from smokeball_connector import server, vendor_invoice, workbook_tools  # noqa: E402 - imported after the openpyxl importorskip on purpose
+from smokeball_connector.extract import (  # noqa: E402 - imported after the openpyxl importorskip on purpose
     METHOD_XLSX,
     METHOD_XLSX_OPERATOR,
     UnsupportedDocumentError,
     extract_text_ex,
 )
-from smokeball_connector.xlsx_io import (  # noqa: E402
+from smokeball_connector.xlsx_io import (  # noqa: E402 - imported after the openpyxl importorskip on purpose
     NO_SAVED_VALUE,
     OLE_MAGIC,
     OPERATOR_CREATOR,

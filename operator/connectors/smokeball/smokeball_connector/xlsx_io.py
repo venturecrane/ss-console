@@ -119,7 +119,7 @@ def xlsx_creator(blob: bytes) -> str:
 
     try:
         wb = load_workbook(io.BytesIO(blob), read_only=True)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - an unreadable workbook simply has no creator stamp
         return ""
     try:
         return str(wb.properties.creator or "")
