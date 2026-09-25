@@ -111,7 +111,7 @@ TASKS: dict[str, dict] = {
         "matter": "mva-alvarez",
         "subject": "Client verification outstanding - FROG responses Set One",
         "note": "Verification sent to client 2026-06-25; not yet returned. Responses cannot be served without it.",
-        "due": "2026-07-10",
+        "due": "2027-06-30",
     },
     "records-roster-alvarez": {
         "matter": "mva-alvarez",
@@ -122,19 +122,19 @@ TASKS: dict[str, dict] = {
             "Vendor contact for status and follow-up: team@smd.services. "
             "Chase cadence: weekly until the records land in the matter."
         ),
-        "due": "2026-07-11",
+        "due": "2027-06-30",
     },
     "records-whitfield": {
         "matter": "liens-whitfield",
         "subject": "Chase Medi-Cal (DHCS) final lien payoff demand",
         "note": "Itemization requested 2026-06-12; no response. Settlement cannot disburse without final figure.",
-        "due": "2026-07-08",
+        "due": "2027-06-30",
     },
     "service-chen": {
         "matter": "premises-chen",
         "subject": "Confirm service of summons and complaint on Sunrise Plaza Properties LLC",
         "note": "Process server engaged 2026-06-26 via registered agent.",
-        "due": "2026-07-14",
+        "due": "2027-06-30",
     },
 }
 
