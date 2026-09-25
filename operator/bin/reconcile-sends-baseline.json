@@ -91,7 +91,7 @@
       "message_id": "<0100019ff87c75d4-52514dc9-0f8f-49aa-a77e-654d1269849f-000000@email.amazonses.com>",
       "timestamp": "2026-08-13T00:18:54.002Z",
       "to": "scott@smd.services",
-      "subject": "[UNAUDITED-KILLTEST-2258] deliberate unaudited send — reconciler kill test",
+      "subject": "[UNAUDITED-KILLTEST-2258] deliberate unaudited send \u2014 reconciler kill test",
       "reported_in": 2344
     },
     {
@@ -102,6 +102,42 @@
       "to": "operator@smdopslab.onmicrosoft.com",
       "subject": "[UNAUDITED-KILLTEST-2258] 2026-08-21T09:46Z mode=plant deliberate unaudited send, reconciler kill test",
       "reported_in": 2499
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160DA7F328E9E64234A430C97CF2@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-07-24T18:24:48Z",
+      "to": "operator@smdopslab.onmicrosoft.com",
+      "subject": "Operator app-only send test 20260724T182448Z",
+      "reported_in": 2859
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160DED9C622F2D46E85F58797CF2@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-07-24T22:30:24Z",
+      "to": "operator@smdopslab.onmicrosoft.com",
+      "subject": "connector smoke 20260724T223023Z",
+      "reported_in": 2859
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB71607C774EF5E08CF72C1AE397DB2@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-08-13T15:50:40Z",
+      "to": "operator@smdopslab.onmicrosoft.com",
+      "subject": "two-app fence probe SEND-app [2026-08-13T15:50:40.341730+00:00]",
+      "reported_in": 2859
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB716086F4BCABE7AA4912465197832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T05:16:26Z",
+      "to": "test-adjuster@smdopslab.onmicrosoft.com, operator@smdopslab.onmicrosoft.com",
+      "subject": "[sendas-probe-7a398698] Send As test",
+      "reported_in": 2859
     }
   ]
 }
