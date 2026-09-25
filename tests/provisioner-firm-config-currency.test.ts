@@ -47,8 +47,9 @@ const REL = 'operator/customers/acme/medchron/firm.yaml'
 const MAIN = 'models:\n  tiers:\n    composition: claude-opus-5-5\n'
 const STALE = 'models:\n  tiers:\n    composition: claude-opus-5\n'
 
-/** A clone whose origin/main carries MAIN; the working file holds `local`. */
-function scene(local: string | null): string {
+/** A clone whose origin/main carries MAIN at `mainRel`; the working file at
+ * REL holds `local`. */
+function scene(local: string | null, mainRel: string = REL): string {
   const root = mkdtempSync(join(tmpdir(), 'firm-currency-'))
   scratch.push(root)
   const origin = join(root, 'origin.git')
@@ -58,17 +59,24 @@ function scene(local: string | null): string {
   git(root, 'clone', '-q', origin, seed)
   git(seed, 'config', 'user.email', 't@t')
   git(seed, 'config', 'user.name', 't')
-  mkdirSync(join(seed, 'operator/customers/acme/medchron'), { recursive: true })
-  writeFileSync(join(seed, REL), MAIN)
+  mkdirSync(join(seed, mainRel, '..'), { recursive: true })
+  writeFileSync(join(seed, mainRel), MAIN)
   git(seed, 'add', '.')
   git(seed, 'commit', '-q', '-m', 'main')
   git(seed, 'push', '-q', 'origin', 'HEAD:main')
   git(root, 'clone', '-q', origin, clone)
+  mkdirSync(join(clone, REL, '..'), { recursive: true })
   if (local !== null) writeFileSync(join(clone, REL), local)
   return clone
 }
 
-function run(clone: string, extraEnv: Record<string, string> = {}): { code: number; out: string } {
+type Guard = 'assert_firm_config_is_main' | 'assert_engagements_checkout_present'
+
+function run(
+  clone: string,
+  extraEnv: Record<string, string> = {},
+  fn: Guard = 'assert_firm_config_is_main'
+): { code: number; out: string } {
   const script = `
 set -u
 log() { echo "LOG: $*"; }
@@ -76,7 +84,7 @@ die() { echo "DIE: $*"; exit 3; }
 SLUG=acme
 MEDCHRON_FIRM_YAML="${join(clone, REL)}"
 ${block()}
-assert_firm_config_is_main
+${fn}
 echo PASSED
 `
   try {
@@ -112,19 +120,89 @@ describe('firm config currency guard', () => {
     expect(r.out).toContain('BY REQUEST')
   })
 
-  it('warns and proceeds when the engagements tree is not a git checkout', () => {
+  // The three cannot-evaluate states (code review 2026-09-25, Law 2). Each one
+  // used to warn and upload; each now dies naming its fix, and each still
+  // yields to the escape hatch, which says so.
+  function plainTree(): string {
     const root = mkdtempSync(join(tmpdir(), 'firm-currency-plain-'))
     scratch.push(root)
     mkdirSync(join(root, 'operator/customers/acme/medchron'), { recursive: true })
     writeFileSync(join(root, REL), STALE)
-    const r = run(root)
-    expect(r.code).toBe(0)
-    expect(r.out).toContain('not a git checkout')
+    return root
+  }
+
+  function unfetchable(): string {
+    const clone = scene(MAIN)
+    git(clone, 'remote', 'set-url', 'origin', join(clone, '..', 'gone.git'))
+    return clone
+  }
+
+  const cannotEvaluate: Array<[string, () => string, string, string]> = [
+    [
+      'the engagements tree is not a git checkout',
+      plainTree,
+      'is not a git checkout',
+      'Point SS_ENGAGEMENTS_DIR at a clone',
+    ],
+    [
+      'fetching engagements origin fails',
+      unfetchable,
+      'fetching engagements origin failed',
+      'gh auth status',
+    ],
+    [
+      'the firm config is not on engagements origin/main',
+      () => scene(MAIN, 'operator/customers/other/medchron/firm.yaml'),
+      'is not on engagements origin/main',
+      'Merge the firm config to engagements main first',
+    ],
+  ]
+
+  for (const [state, make, reason, fix] of cannotEvaluate) {
+    it(`refuses when ${state}, and names the fix`, () => {
+      const r = run(make())
+      expect(r.code).toBe(3)
+      expect(r.out).toContain(reason)
+      expect(r.out).toContain(fix)
+      expect(r.out).toContain('SS_ALLOW_DIVERGENT_SOURCE=1')
+      expect(r.out).not.toContain('PASSED')
+    })
+
+    it(`proceeds when ${state} only under SS_ALLOW_DIVERGENT_SOURCE=1, and says so`, () => {
+      const r = run(make(), { SS_ALLOW_DIVERGENT_SOURCE: '1' })
+      expect(r.code).toBe(0)
+      expect(r.out).toContain('BY REQUEST')
+      expect(r.out).toContain(reason)
+    })
+  }
+
+  // One step earlier: with no engagements checkout on the machine running the
+  // reprovision, the provisioner cannot know whether this seat authors a firm
+  // config at all. pilot-smokeball authors none, so the old path logged "No
+  // medchron firm config" and carried on: cannot-evaluate read as not-authored.
+  // It dies now, and the message says to clone the repo.
+  it('refuses a missing engagements checkout and names the fix', () => {
+    const root = mkdtempSync(join(tmpdir(), 'firm-currency-none-'))
+    scratch.push(root)
+    const r = run(join(root, 'no-engagements'), {}, 'assert_engagements_checkout_present')
+    expect(r.code).toBe(3)
+    expect(r.out).toContain('engagements checkout is missing')
+    expect(r.out).toContain('Clone venturecrane/engagements')
+    expect(r.out).toContain('SS_ENGAGEMENTS_DIR')
+    expect(r.out).not.toContain('PASSED')
   })
 
-  it('the provisioner sources the guard and runs it before the firm config is validated or uploaded', () => {
+  it('a present engagements checkout passes the presence check', () => {
+    const r = run(scene(MAIN), {}, 'assert_engagements_checkout_present')
+    expect(r.code).toBe(0)
+    expect(r.out).toContain('PASSED')
+  })
+
+  it('the provisioner checks the checkout, then the firm config, before it is validated or uploaded', () => {
+    // Order inside the condition is the contract: the presence check runs for
+    // every seat, before `-f` can read a missing tree as "nothing authored".
     const gate = src.indexOf(
-      'if [ -f "${MEDCHRON_FIRM_YAML}" ] && . "${BIN_DIR}/lib/firm-config-currency.sh" && assert_firm_config_is_main; then'
+      'if . "${BIN_DIR}/lib/firm-config-currency.sh" && assert_engagements_checkout_present && [ -f "${MEDCHRON_FIRM_YAML}" ] && assert_firm_config_is_main; then'
     )
     expect(gate).toBeGreaterThan(-1)
     expect(gate).toBeLessThan(src.indexOf('# >>> medchron-firm-validate'))
