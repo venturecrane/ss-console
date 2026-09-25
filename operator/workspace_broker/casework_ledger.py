@@ -428,13 +428,81 @@ def _witnessed(kind: str, send_witness, event: dict) -> None:
         )
 
 
+def _check_raise(kind: str, event: dict, state: ItemState | None) -> None:
+    dispatch_ref = event.get("dispatch_ref")
+    if (
+        not _valid_n(event.get("n"))
+        or not (isinstance(dispatch_ref, str) and _DISPATCH_REF_RE.fullmatch(dispatch_ref))
+        or not _short_str(event.get("thread_ref"), 512)
+    ):
+        raise ValueError(
+            f"a {kind} must carry its line number n, the send's dispatch_ref, and the thread "
+            "the broker stamped from its own send record. The broker could not tie this raise "
+            "to a message it sent in this session, so a reply could never find it. Write nothing."
+        )
+    if kind == "named" and state is not None and state.named:
+        raise ValueError("this item was already handed over once; a handover is never repeated")
+
+
+def _check_answer(kind: str, event: dict, state: ItemState | None) -> None:
+    slot = _slot(event)
+    decision = state.decisions.get(slot) if state is not None and slot[0] and slot[1] else None
+    if decision is None:
+        raise ValueError(
+            f"refusing a {kind}: no line {event.get('n')!r} was raised for this item on that "
+            "thread, so the reply answers nothing this item was asked. Write nothing; ask the "
+            "person."
+        )
+    if kind == "step_started":
+        if decision.verdict != "approved" or decision.payload.get("action") != "step":
+            raise ValueError("a step starts only on an approved step line")
+        return
+    _validate_decided_by(event.get("decided_by"))
+    if decision.verdict is not None:
+        raise ValueError(f"line {slot[1]} on this thread was already answered ({decision.verdict})")
+
+
+def _check_outcome(kind, event, state, existing_events, audit_witness) -> None:
+    if state is None or state.authorization is None:
+        raise ValueError(
+            f"refusing a {kind}: nothing authorized a write on this item (no approved line and "
+            "no closed_by_record open). A write happens only on an authorization. Write nothing."
+        )
+    if kind == "write_failed":
+        if not _short_str(event.get("error"), _MAX_ERROR_CHARS):
+            raise ValueError(f"write_failed carries error, 1..{_MAX_ERROR_CHARS} characters")
+        return
+    call_id = event.get("tool_call_id")
+    if not _short_str(call_id, _MAX_ID_CHARS):
+        raise ValueError("completed carries tool_call_id, the id of the update_task call")
+    if any(
+        e.get("event") == "completed" and e.get("tool_call_id") == call_id for e in existing_events
+    ):
+        raise ValueError("that update_task call already completed another item")
+    if not callable(audit_witness) or not audit_witness(event):
+        raise ValueError(
+            f"refusing completed: the audit log holds no successful {UPDATE_TASK_TOOL} call with "
+            "that id in this session. Record write_failed if the write did not land."
+        )
+
+
+def _check_followup(kind: str, state: ItemState | None) -> None:
+    if kind == "kept" and (
+        state is None or not any(d.verdict == "held" for d in state.decisions.values())
+    ):
+        raise ValueError("kept records a person's hold; this item has no held line")
+    if kind == "mentioned" and (state is None or not state.completed):
+        raise ValueError("mentioned records telling someone a task was closed; this one was not")
+
+
 def validate_append(existing_events, new_event: dict, *, send_witness, audit_witness) -> None:
     """Raise ValueError unless ``new_event`` may be appended.
 
     ``send_witness(event) -> bool``: the broker itself dispatched to a person in
     the event's session. ``audit_witness(event) -> bool``: ``event["tool_call_id"]``
-    names this session's successful update_task call in the audit log. Both keyword-only with no
-    default, so a caller that forgets one gets a TypeError, not an open door.
+    names this session's successful update_task call in the audit log. Both
+    keyword-only with no default, so a caller that forgets one gets a TypeError,
+    not an open door.
     """
     if not isinstance(new_event, dict):
         raise ValueError("casework event must be an object")
@@ -447,71 +515,13 @@ def validate_append(existing_events, new_event: dict, *, send_witness, audit_wit
     key = new_event["item_key"]
     state = derive_state([e for e in existing_events if e.get("item_key") == key]).get(key)
     if kind in RAISING_EVENTS:
-        if (
-            not _valid_n(new_event.get("n"))
-            or not isinstance(new_event.get("dispatch_ref"), str)
-            or not _DISPATCH_REF_RE.fullmatch(new_event["dispatch_ref"])
-            or not _short_str(new_event.get("thread_ref"), 512)
-        ):
-            raise ValueError(
-                f"a {kind} must carry its line number n, the send's dispatch_ref, and the thread "
-                "the "
-                "broker stamped from its own send record. The broker could not tie this raise to a "
-                "message it sent in this session, so a reply could never find it. Write nothing."
-            )
-        if kind == "named" and state is not None and state.named:
-            raise ValueError("this item was already handed over once; a handover is never repeated")
+        _check_raise(kind, new_event, state)
     elif kind in VERDICT_EVENTS or kind == "step_started":
-        slot = _slot(new_event)
-        decision = state.decisions.get(slot) if state is not None and slot[0] and slot[1] else None
-        if decision is None:
-            raise ValueError(
-                f"refusing a {kind}: no line {new_event.get('n')!r} was raised for this item on "
-                "that thread, so "
-                "the reply answers nothing this item was asked. Write nothing; ask the person."
-            )
-        if kind == "step_started":
-            if decision.verdict != "approved" or decision.payload.get("action") != "step":
-                raise ValueError("a step starts only on an approved step line")
-        else:
-            _validate_decided_by(new_event.get("decided_by"))
-            if decision.verdict is not None:
-                raise ValueError(
-                    f"line {slot[1]} on this thread was already answered ({decision.verdict})"
-                )
-    elif kind == "kept":
-        if state is None or not any(d.verdict == "held" for d in state.decisions.values()):
-            raise ValueError("kept records a person's hold; this item has no held line")
-    elif kind == "mentioned":
-        if state is None or not state.completed:
-            raise ValueError(
-                "mentioned records telling someone a task was closed; this one was not"
-            )
+        _check_answer(kind, new_event, state)
     elif kind in OUTCOME_EVENTS:
-        if state is None or state.authorization is None:
-            raise ValueError(
-                f"refusing a {kind}: nothing authorized a write on this item (no approved line and "
-                "no closed_by_record open). A write happens only on an authorization. Write "
-                "nothing."
-            )
-        if kind == "write_failed":
-            if not _short_str(new_event.get("error"), _MAX_ERROR_CHARS):
-                raise ValueError(f"write_failed carries error, 1..{_MAX_ERROR_CHARS} characters")
-        else:
-            call_id = new_event.get("tool_call_id")
-            if not _short_str(call_id, _MAX_ID_CHARS):
-                raise ValueError("completed carries tool_call_id, the id of the update_task call")
-            if any(
-                e.get("event") == "completed" and e.get("tool_call_id") == call_id
-                for e in existing_events
-            ):
-                raise ValueError("that update_task call already completed another item")
-            if not callable(audit_witness) or not audit_witness(new_event):
-                raise ValueError(
-                    f"refusing completed: the audit log holds no successful {UPDATE_TASK_TOOL} "
-                    "call "
-                    "with that id in this session. Record write_failed if the write did not land."
-                )
+        _check_outcome(kind, new_event, state, existing_events, audit_witness)
+    else:
+        _check_followup(kind, state)
 
 
 # ---------------------------------------------------------------------------
