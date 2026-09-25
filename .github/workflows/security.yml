@@ -80,24 +80,21 @@ jobs:
       # dedicated runner cost a full billed minute per run for seconds of work.
       # Step names keep the failure signal specific in the UI.
       - name: Require substantive justification on every nosemgrep
-        # Every `// nosemgrep` or `# nosemgrep` annotation must be followed by
-        # ` — ` or `: ` and at least 20 characters of justification prose.
-        # Without this audit, the gate degrades over time as agents silently
-        # silence findings by appending a bare `nosemgrep` comment. Python is
-        # in scope: Semgrep's audit packs carry Python rules and operator/
-        # holds 52 `# nosemgrep:` suppressions that this gate ignored while it
-        # matched `//` only (2026-09-10 review, Security LOW 6).
+        # Every `// nosemgrep` or `# nosemgrep` annotation needs 20+ characters
+        # of reason after its rule id on the same line, or a non-empty comment
+        # line directly above. Without this audit, the gate degrades over time
+        # as agents silence findings by appending a bare `nosemgrep` comment.
+        # Python is in scope: Semgrep's audit packs carry Python rules
+        # (2026-09-10 review, Security LOW 6).
+        #
+        # The rule is a script, not a regex, since 2026-09-25: the regex this
+        # replaced passed any rule-id-only line whose id ran past 19
+        # characters, which is every real Semgrep id (22 such lines, 0
+        # flagged; review action item 9). scripts/nosemgrep-audit.mjs is
+        # replayed against fixtures in tests/nosemgrep-audit.test.ts.
         run: |
           set -e
-          bad=$(grep -rnP --include='*.ts' --include='*.js' --include='*.py' \
-            '(//|#)[[:space:]]*nosemgrep(:[^[:space:]]+)?[[:space:]]*(?:[—:][[:space:]]*.{0,19})?[[:space:]]*$' \
-            . \
-            --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.venv || true)
-          if [ -n "$bad" ]; then
-            echo "nosemgrep annotations require ≥20 chars of justification after ' — ' or ': ':"
-            echo "$bad"
-            exit 1
-          fi
+          node scripts/nosemgrep-audit.mjs
           block=$(grep -rnzP --include='*.ts' --include='*.js' \
             '/\*[^*]*nosemgrep[^*]*\*/' \
             . \

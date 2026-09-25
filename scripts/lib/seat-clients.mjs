@@ -20,8 +20,9 @@
  * noisy and visible rather than silent. A list of clients would have inverted
  * that, and a missing client is the failure this register exists to prevent.
  *
- * Shared by `scripts/ci-reconcile-obligations.ts` (tsx) and
- * `.claude/hooks/lib/register.mjs` (bare node), hence `.mjs`.
+ * Shared by `scripts/ci-reconcile-obligations.ts` and
+ * `.claude/hooks/lib/register.mjs`, both under the repo's pinned tsx. `.mjs`
+ * because the CLI once ran under bare node.
  */
 
 /** Seats SMD owns. Everything not listed here is its own client. */

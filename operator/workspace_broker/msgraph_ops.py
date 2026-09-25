@@ -335,6 +335,7 @@ class MsGraphOps:
         )
         try:
             opener = self._opener or urllib.request.urlopen
+            # token_host is https-checked at construction; the tenant id is url-quoted.
             # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             with opener(request, timeout=TIMEOUT_S) as response:
                 raw = response.read().decode("utf-8") or "{}"
@@ -379,6 +380,7 @@ class MsGraphOps:
         )
         try:
             opener = self._opener or urllib.request.urlopen
+            # graph_base is https-checked at construction; the path is built in this module.
             # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             with opener(request, timeout=TIMEOUT_S) as response:
                 raw = response.read().decode("utf-8")

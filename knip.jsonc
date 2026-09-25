@@ -49,7 +49,16 @@
         // a production entry, so `npm run deadcode` printed both as unused on
         // every run, and a warning list whose only entries are known-false
         // trains the reader to skip it (code review 2026-09-10, Code Quality
-        // 8). Declaring the config a production entry is the fix.
+        // 8). Declaring it a production entry is necessary but was not
+        // sufficient: the astro plugin claims the file as ITS config, and
+        // knip drops plugin config files from the production entry set
+        // whatever this list says (`knip --production --debug` shows it in the
+        // entry globber's ignore list). So both warnings kept printing until
+        // 2026-09-25 (review, Dependencies 2). The `astro` override below
+        // stops the plugin claiming it; the plugin's own entries (src/pages,
+        // src/middleware, the content config) are defaults that do not depend
+        // on reading the file. tests/knip-dependencies.test.ts runs knip and
+        // asserts zero dependency findings, so this cannot regress silently.
         "astro.config.mjs!",
 
         // Claude Code harness hooks: wired by .claude/settings.json and run by
@@ -94,6 +103,9 @@
         "public/js/*.js!",
         ".claude/hooks/**/*.mjs!",
       ],
+      // See the astro.config.mjs entry above: without this the plugin claims
+      // the file as its config, and production mode then never reads it.
+      "astro": { "config": [] },
       "ignoreDependencies": [
         // `cloudflare:workers` is a Workers runtime built-in (the adapter v13
         // env-access pattern). Knip reads the `cloudflare` prefix as a package.

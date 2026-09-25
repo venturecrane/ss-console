@@ -12,7 +12,8 @@
  * age against a 30-day threshold, and a silent seven-hour skew in the direction
  * of "younger" delays every alarm.
  *
- * Shared by the reconciler (tsx) and register.mjs (bare node), hence `.mjs`.
+ * Shared by the reconciler and register.mjs. `.mjs` because the CLI once ran
+ * under bare node; both now run under the repo's pinned tsx.
  */
 
 /**

@@ -82,8 +82,11 @@ outbound admin links - strict, no fallback), and `PORTAL_BASE_URL`
 
 Every change to main goes through a pull request, and the gate is mechanical. The
 legacy branch protection requires the verify workflow (`Typecheck, Lint, Format,
-Test`), the repository ruleset requires `Security Summary` and `substrate`, and
-branches must be up to date with main, so one merge lands at a time.
+Test`), the repository ruleset requires `Security Summary`, `substrate`, and
+`Runtime ACs carry a verification ID` (the Law 9 gate, required since
+2026-09-25; it resolves every cited `vfy_` id against the verify ledger and
+fails closed when the ledger cannot answer), and branches must be up to date
+with main, so one merge lands at a time.
 
 Required approving reviews are zero on both, and that is a decision rather than an
 oversight. The venture is one Captain plus agent sessions: the agents open and

@@ -151,6 +151,7 @@ def _urllib_fetch(path: str, key: str) -> dict:
     req = urllib.request.Request(  # noqa: S310 - fixed https vendor host; the path is allowlisted just above
         url, headers={"Authorization": "Bearer " + key}
     )
+    # Fixed https vendor host; the path is allowlisted just above.
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
     with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310 - fixed https vendor host; the path is allowlisted just above
         return json.load(resp)
