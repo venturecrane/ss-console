@@ -233,6 +233,27 @@ def load_config(slug: str) -> Optional[dict]:
     return parsed if isinstance(parsed, dict) else None
 
 
+def seat_inbox(slug: str, config: dict) -> str:
+    """The seat's OWN inbox: ``connectors.Email.inbox_address`` when authored,
+    else the ``<slug>@agentmail.to`` convention. The same resolution the
+    workspace broker applies when it pins an outbound send
+    (``operator/workspace_broker/agentmail_auth.py`` ``seat_inbox_address``).
+
+    Why the authored address must win here (2026-09-25): the scott seat's inbox
+    was created as ``agentcrane@agentmail.to`` (ss#2803), and the vendor
+    answers a lists GET on a NON-EXISTENT inbox with an empty page, HTTP 200.
+    Deriving ``scott@agentmail.to`` therefore graded a phantom inbox ``ok``
+    with zero findings, every run, while the inbox the seat actually sends
+    from was never read. A check that cannot fail has measured nothing.
+    """
+    connectors = config.get("connectors")
+    email = connectors.get("Email") if isinstance(connectors, dict) else None
+    authored = email.get("inbox_address") if isinstance(email, dict) else None
+    if isinstance(authored, str) and authored.strip():
+        return authored.strip().lower()
+    return f"{slug.strip().lower()}@agentmail.to"
+
+
 # ---------------------------------------------------------------------------
 # grading
 # ---------------------------------------------------------------------------
@@ -398,12 +419,12 @@ def check_seat(slug: str, shared_key: str, org_lists, *, opener=None) -> SeatLis
       forever;
     * any non-403 failure -> HOLD, as ever.
     """
-    inbox = f"{slug}@agentmail.to"
     config = load_config(slug)
     if config is None:
-        report = SeatListsReport(slug=slug, inbox=inbox)
+        report = SeatListsReport(slug=slug, inbox=f"{slug}@agentmail.to")
         report.held = f"customer.yaml unreadable for {slug}"
         return report
+    inbox = seat_inbox(slug, config)
     rostered = rostered_recipients(config)
     seat_env = seat_key_env(slug)
     seat_key = os.environ.get(seat_env)
