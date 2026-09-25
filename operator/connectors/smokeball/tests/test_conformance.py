@@ -36,6 +36,8 @@ EXPECTED_TOOLS = {
     "create_event",
     "update_event",
     "create_event_reminder",
+    "prepare_event_deletion",
+    "delete_events",
     "search_staff",
     "get_staff",
     "get_roles_on_matter",
@@ -105,6 +107,8 @@ def test_conformance_every_tool_classified() -> None:
     assert runtime_map[runtime_tool_name("smokeball", "create_webhook_subscription")] == "internal_write"
     assert runtime_map[runtime_tool_name("smokeball", "add_file")] == "internal_write"
     assert runtime_map[runtime_tool_name("smokeball", "delete_file")] == "destructive"
+    assert runtime_map[runtime_tool_name("smokeball", "delete_events")] == "destructive"
+    assert runtime_map[runtime_tool_name("smokeball", "prepare_event_deletion")] == "read"
     assert runtime_map[runtime_tool_name("smokeball", "create_event")] == "internal_write"
     assert runtime_map[runtime_tool_name("smokeball", "create_task")] == "internal_write"
     assert runtime_map[runtime_tool_name("smokeball", "create_folder")] == "internal_write"
@@ -120,7 +124,7 @@ def test_write_surface_is_memo_document_and_deadline_engine() -> None:
     # The write surface: the internal-log memo, the document round-trip, the
     # deadline-engine / document-organization cut (events, tasks, folders), and
     # the Operator's own matter. Every write is internal_write except
-    # delete_file (destructive, taint-gated) and create_matter (commitment,
+    # delete_file / delete_events (destructive, taint-gated) and create_matter (commitment,
     # confirm-gated). Trust fund-movement is never here.
     m = _manifest()
     writes = {t: c for t, c in m.tool_classes.items() if c != "read"}
@@ -130,6 +134,11 @@ def test_write_surface_is_memo_document_and_deadline_engine() -> None:
         "add_file": "internal_write",
         "file_attachment_to_matter": "internal_write",
         "delete_file": "destructive",
+        # Calendar events off one or more matters, as an admin-confirmed act:
+        # withheld at `destructive: confirm`, performed only on an
+        # administrator's yes to the [act ...] line, each event re-verified
+        # against the live calendar first.
+        "delete_events": "destructive",
         "create_event": "internal_write",
         "update_event": "internal_write",
         "create_event_reminder": "internal_write",

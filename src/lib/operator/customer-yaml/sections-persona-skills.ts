@@ -219,11 +219,18 @@ function checkExposureMap(
     // external_send_client / external_send_vendor), and, since ss-console#2536,
     // for `commitment` on the AUTHORED EXPOSURE only.
     //
-    // Why commitment and not destructive: a commitment is the firm's own record
-    // gaining something (the Operator's internal matter), and the firm's
-    // administrators can be shown exactly what it will be and can answer. A
-    // destructive act removes something, the read-back cannot show what would be
-    // lost, and it stays where it is until somebody argues otherwise.
+    // Why commitment: a commitment is the firm's own record gaining something
+    // (the Operator's internal matter), and the firm's administrators can be
+    // shown exactly what it will be and can answer.
+    //
+    // Why destructive too (2026-09-25, Captain decision): the one destructive
+    // act the seat can propose, deleting a set of calendar events, is shown to
+    // the administrator event by event (matter, date, subject) in the [act ...]
+    // line, and the connector deletes an event only if it still matches what
+    // they read. That answers the objection that kept destructive out: the
+    // read-back now DOES show what would be removed. Any other destructive tool
+    // at confirm still refuses at the overlay's gate, which only withholds a
+    // destructive call it has an act shape for.
     //
     // Why exposure and not exposure_ceiling: the ceiling is the entitlement
     // dial's Machine-side clamp, derived from the routine grid's send tiers
@@ -235,10 +242,7 @@ function checkExposureMap(
       if (checkSendAsStaffCeiling(value, path, options, errors)) out[key] = 'confirm'
       continue
     }
-    const confirmAllowed =
-      (SEND_ACTION_CLASSES as readonly string[]).includes(key) ||
-      (key === 'commitment' && options.allowCommitmentConfirm === true)
-    const allowedCeilings = confirmAllowed
+    const allowedCeilings = confirmAllowedFor(key, options)
       ? ACCEPTED_EXPOSURE_CEILINGS
       : ACCEPTED_EXPOSURE_CEILINGS.filter((c) => c !== 'confirm')
     if (typeof value !== 'string' || !(allowedCeilings as readonly string[]).includes(value)) {
@@ -252,6 +256,14 @@ function checkExposureMap(
     out[key as AuthoredExposureActionClass] = value as ExposureCeiling
   }
   return out
+}
+
+/** Whether `confirm` is a valid exposure ceiling for this action class: the
+ * send classes always, and `commitment` / `destructive` on the AUTHORED
+ * exposure map only (see the comment in checkExposureMap). */
+function confirmAllowedFor(key: string, options: { allowCommitmentConfirm?: boolean }): boolean {
+  if ((SEND_ACTION_CLASSES as readonly string[]).includes(key)) return true
+  return (key === 'commitment' || key === 'destructive') && options.allowCommitmentConfirm === true
 }
 
 function checkSkillInitiation(
