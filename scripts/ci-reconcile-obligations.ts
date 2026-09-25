@@ -225,6 +225,30 @@ function runGh(args: string[]): { ok: true; stdout: string } | { ok: false; erro
   }
 }
 
+/**
+ * `gh issue list --json number,title`, read field by field: a row without a
+ * numeric number and a string title makes the whole read unparseable rather
+ * than importing an obligation keyed on `undefined`.
+ */
+function parseIssueList(stdout: string): { number: number; title: string }[] | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(stdout)
+  } catch {
+    return null
+  }
+  if (!Array.isArray(parsed)) return null
+  const issues: { number: number; title: string }[] = []
+  const rows: unknown[] = parsed
+  for (const row of rows) {
+    if (typeof row !== 'object' || row === null || Array.isArray(row)) return null
+    const { number, title }: Record<string, unknown> = { ...row }
+    if (typeof number !== 'number' || typeof title !== 'string') return null
+    issues.push({ number, title })
+  }
+  return issues
+}
+
 /** Reads that must not throw: a failed read is a control failure, not a crash. */
 async function safeAll<T>(fn: () => Promise<T[]>): Promise<{ ok: boolean; rows: T[] }> {
   try {
@@ -266,12 +290,8 @@ export function importGithubIssues(
       'number,title',
     ])
     if (!result.ok) return { ok: false, error: result.error }
-    let issues: { number: number; title: string }[] = []
-    try {
-      issues = JSON.parse(result.stdout) as { number: number; title: string }[]
-    } catch {
-      return { ok: false, error: 'github_output_unparseable' }
-    }
+    const issues = parseIssueList(result.stdout)
+    if (!issues) return { ok: false, error: 'github_output_unparseable' }
     for (const issue of issues) {
       rows.push({
         customer_slug: seat.customer_slug,

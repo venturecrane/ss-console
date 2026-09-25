@@ -161,11 +161,6 @@ if (!isPostBooking) {
   <script>
     import { formDataToObject, normalizeIntakePayload } from '../lib/booking/intake-questionnaire'
 
-    interface IntakeResponse {
-      error?: string
-      message?: string
-    }
-
     ;(() => {
       const formElement = document.getElementById('intake-form')
       const formContainerElement = document.getElementById('intake-form-container')
@@ -208,8 +203,15 @@ if (!isPostBooking) {
             formContainer.classList.add('hidden')
             successPanel.classList.remove('hidden')
           } else {
-            const body = (await res.json()) as IntakeResponse
-            errorBanner.textContent = body.message || 'Something went wrong. Please try again.'
+            const body: unknown = await res.json()
+            const message =
+              typeof body === 'object' && body !== null && 'message' in body
+                ? body.message
+                : undefined
+            errorBanner.textContent =
+              typeof message === 'string' && message
+                ? message
+                : 'Something went wrong. Please try again.'
             errorBanner.classList.remove('hidden')
             submitBtn.disabled = false
             submitBtn.textContent = 'Send'

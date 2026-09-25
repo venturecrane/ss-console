@@ -16,8 +16,28 @@ import type { D1Database } from '@cloudflare/workers-types'
 import { createInvoice, updateInvoice, updateInvoiceStatus } from '../db/invoices'
 import type { InvoiceType, Invoice } from '../db/invoices'
 import { appendContext } from '../db/context'
-import { listMilestones, updateMilestoneStatus, type Milestone } from '../db/milestones'
+import {
+  getMilestone,
+  listMilestones,
+  updateMilestoneStatus,
+  type Milestone,
+} from '../db/milestones'
+import { describeLineItemsRefusal, readLineItemsExact } from '../db/quote-content'
+import { captureError } from '../observability/sentry'
 import { createStripeInvoice, sendStripeInvoice } from './client'
+
+const AREA = 'stripe/milestone-invoicing'
+
+/**
+ * The quote's stored line items cannot be read row for row, so the pro-rata
+ * amount for this milestone cannot be computed. Thrown before the milestone
+ * is marked completed, so nothing is written and the admin can fix the quote
+ * and try again. Before 2026-09-25 a row without numeric hours put NaN into
+ * the invoice amount (review 2026-09-25, Code Quality 2).
+ */
+export class MilestoneInvoiceRefusal extends Error {
+  readonly code = 'line_items_unreadable'
+}
 
 /**
  * Options for milestone completion with invoicing side effects.
@@ -39,21 +59,13 @@ export interface CompleteMilestoneResult {
   invoice: Invoice | null
 }
 
-/**
- * Complete a milestone and, if it has payment_trigger=true, create and send
- * an invoice via Stripe.
- *
- * This wraps updateMilestoneStatus() with invoicing side effects:
- * 1. Transition milestone to completed
- * 2. If payment_trigger=true:
- *    a. Determine invoice type (completion vs milestone)
- *    b. Calculate amount (remaining balance vs pro-rata)
- *    c. Create local invoice record
- *    d. Create + send via Stripe (degrades to draft if no API key)
- *    e. Append context audit trail entry
- *
- * Non-payment milestones pass through to updateMilestoneStatus() unchanged.
- */
+interface EngagementRow {
+  id: string
+  entity_id: string
+  quote_id: string
+  org_id: string
+}
+
 interface QuoteRow {
   total_price: number
   rate: number
@@ -81,7 +93,13 @@ async function calculateInvoiceAmount(
   }
 
   const paymentMilestones = allMilestones.filter((m) => m.payment_trigger)
-  const lineItems = JSON.parse(quote.line_items) as { estimated_hours: number }[]
+  const read = readLineItemsExact(quote.line_items)
+  if (!read.ok) {
+    throw new MilestoneInvoiceRefusal(
+      `Quote line items are unreadable (${describeLineItemsRefusal(read)}); the milestone invoice amount cannot be computed`
+    )
+  }
+  const lineItems = read.items
   const milestoneIndex = paymentMilestones.findIndex((m) => m.id === milestone.id)
 
   if (milestoneIndex >= 0 && milestoneIndex < lineItems.length) {
@@ -140,34 +158,42 @@ async function sendStripeInvoiceForMilestone(args: StripeInvoiceArgs): Promise<v
   await updateInvoiceStatus(db, orgId, invoice.id, 'sent')
 }
 
+/**
+ * Complete a milestone and, if it has payment_trigger=true, create and send
+ * an invoice via Stripe.
+ *
+ * This wraps updateMilestoneStatus() with invoicing side effects:
+ * 1. If payment_trigger=true, price the invoice first: determine its type
+ *    (completion vs milestone) and amount (remaining balance vs pro-rata).
+ *    A quote whose line items cannot be read row for row throws
+ *    MilestoneInvoiceRefusal here, before anything is written.
+ * 2. Transition milestone to completed
+ * 3. If payment_trigger=true:
+ *    a. Create local invoice record
+ *    b. Create + send via Stripe (degrades to draft if no API key)
+ *    c. Append context audit trail entry
+ *
+ * Non-payment milestones pass through to updateMilestoneStatus() unchanged.
+ */
 export async function completeMilestoneWithInvoicing(
   opts: CompleteMilestoneOptions
 ): Promise<CompleteMilestoneResult> {
   const { db, orgId, milestoneId, stripeApiKey, customerEmail } = opts
 
+  const current = await getMilestone(db, orgId, milestoneId)
+  if (!current) throw new Error('Milestone not found')
+  if (!current.payment_trigger) {
+    const completed = await updateMilestoneStatus(db, orgId, milestoneId, 'completed')
+    if (!completed) throw new Error('Milestone not found')
+    return { milestone: completed, invoice: null }
+  }
+
+  // Price the invoice before anything is written: a quote whose line items
+  // cannot be read refuses here and leaves the milestone as it was.
+  const { engagement, invoiceType, amount } = await priceMilestoneInvoice(db, orgId, current)
+
   const milestone = await updateMilestoneStatus(db, orgId, milestoneId, 'completed')
   if (!milestone) throw new Error('Milestone not found')
-  if (!milestone.payment_trigger) return { milestone, invoice: null }
-
-  const engagement = await db
-    .prepare('SELECT * FROM engagements WHERE id = ? AND org_id = ?')
-    .bind(milestone.engagement_id, orgId)
-    .first<{ id: string; entity_id: string; quote_id: string; org_id: string }>()
-  if (!engagement)
-    throw new Error(`Engagement ${milestone.engagement_id} not found for milestone invoicing`)
-
-  const quote = await db
-    .prepare('SELECT * FROM quotes WHERE id = ? AND org_id = ?')
-    .bind(engagement.quote_id, orgId)
-    .first<QuoteRow>()
-  if (!quote) throw new Error(`Quote ${engagement.quote_id} not found for milestone invoicing`)
-
-  const allMilestones = await listMilestones(db, orgId, milestone.engagement_id)
-  const isLastMilestone =
-    milestone.sort_order === Math.max(...allMilestones.map((m) => m.sort_order))
-  const invoiceType: InvoiceType = isLastMilestone ? 'completion' : 'milestone'
-  const amount = await calculateInvoiceAmount(db, orgId, milestone, allMilestones, quote)
-
   if (amount <= 0) return { milestone, invoice: null }
 
   const invoice = await createInvoice(db, orgId, {
@@ -192,10 +218,67 @@ export async function completeMilestoneWithInvoicing(
         amount,
       })
     } catch (err) {
+      // The local invoice stays at draft; the admin sends it by hand.
       console.error('[completeMilestoneWithInvoicing] Stripe error:', err)
+      captureError(err, AREA)
     }
   }
 
+  await recordInvoiceContext(db, orgId, { engagement, milestone, invoice, invoiceType, amount })
+
+  // Reload invoice to get final state
+  const finalInvoice = await db
+    .prepare('SELECT * FROM invoices WHERE id = ? AND org_id = ?')
+    .bind(invoice.id, orgId)
+    .first<Invoice>()
+
+  return { milestone, invoice: finalInvoice ?? invoice }
+}
+
+interface PricedMilestoneInvoice {
+  engagement: EngagementRow
+  invoiceType: InvoiceType
+  amount: number
+}
+
+async function priceMilestoneInvoice(
+  db: D1Database,
+  orgId: string,
+  milestone: Milestone
+): Promise<PricedMilestoneInvoice> {
+  const engagement = await db
+    .prepare('SELECT * FROM engagements WHERE id = ? AND org_id = ?')
+    .bind(milestone.engagement_id, orgId)
+    .first<EngagementRow>()
+  if (!engagement)
+    throw new Error(`Engagement ${milestone.engagement_id} not found for milestone invoicing`)
+
+  const quote = await db
+    .prepare('SELECT * FROM quotes WHERE id = ? AND org_id = ?')
+    .bind(engagement.quote_id, orgId)
+    .first<QuoteRow>()
+  if (!quote) throw new Error(`Quote ${engagement.quote_id} not found for milestone invoicing`)
+
+  const allMilestones = await listMilestones(db, orgId, milestone.engagement_id)
+  const isLastMilestone =
+    milestone.sort_order === Math.max(...allMilestones.map((m) => m.sort_order))
+  const invoiceType: InvoiceType = isLastMilestone ? 'completion' : 'milestone'
+  const amount = await calculateInvoiceAmount(db, orgId, milestone, allMilestones, quote)
+  return { engagement, invoiceType, amount }
+}
+
+async function recordInvoiceContext(
+  db: D1Database,
+  orgId: string,
+  args: {
+    engagement: EngagementRow
+    milestone: Milestone
+    invoice: Invoice
+    invoiceType: InvoiceType
+    amount: number
+  }
+): Promise<void> {
+  const { engagement, milestone, invoice, invoiceType, amount } = args
   try {
     await appendContext(db, orgId, {
       entity_id: engagement.entity_id,
@@ -213,17 +296,10 @@ export async function completeMilestoneWithInvoicing(
       },
     })
   } catch (err) {
-    // Context append failure is non-fatal
+    // Context append failure is non-fatal: the invoice exists either way.
     console.error('[completeMilestoneWithInvoicing] Context append error:', err)
+    captureError(err, AREA)
   }
-
-  // Reload invoice to get final state
-  const finalInvoice = await db
-    .prepare('SELECT * FROM invoices WHERE id = ? AND org_id = ?')
-    .bind(invoice.id, orgId)
-    .first<Invoice>()
-
-  return { milestone, invoice: finalInvoice ?? invoice }
 }
 
 /**

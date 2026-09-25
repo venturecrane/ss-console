@@ -27,7 +27,7 @@ import { resolve, join } from 'path'
 import { parse as parseYaml } from 'yaml'
 import { validate, type CustomerYaml } from '../src/lib/operator/customer-yaml'
 import { validateRoutineGrid, type RoutineGridRow } from '../src/lib/operator/routine-grid'
-import { isCeiling, restrictiveness } from '../src/lib/portal/operator/config-governance'
+import { isCeiling, restrictiveness } from '../src/lib/operator/vertical-floors'
 
 const SEAT_YAML_PATH = resolve('operator/customers/pilot-smokeball/customer.yaml')
 const GRID_YAML_PATH = resolve('operator/customers/pilot-smokeball/routine-grid.yaml')

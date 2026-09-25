@@ -19,6 +19,10 @@ import {
   type ValidationError,
 } from './types'
 import { isPlainObject, optionalStringList } from './helpers'
+// The one restrictiveness table (higher == more restrictive). A local mirror
+// lived here until 2026-09-25 "so the validator layer stays free of portal
+// imports"; vertical-floors.ts has not been a portal module since 2026-09-10.
+import { restrictiveness } from '../vertical-floors'
 
 export function checkPersonaSkills(
   raw: unknown,
@@ -152,21 +156,6 @@ export function checkPersonaEntitlements(
     }
   }
   return { exposure, exposure_ceiling: ceiling }
-}
-
-// Restrictiveness ordering for the exposure / exposure_ceiling coherence
-// check (higher == more restrictive). Local mirror of the frozen governance
-// table (src/lib/operator/vertical-floors.ts) — the validator layer
-// stays free of portal imports.
-const CEILING_RESTRICTIVENESS: Record<ExposureCeiling, number> = {
-  autonomous: 0,
-  confirm: 1,
-  draft_for_review: 2,
-  refused: 3,
-}
-
-function restrictiveness(c: ExposureCeiling): number {
-  return CEILING_RESTRICTIVENESS[c]
 }
 
 /**

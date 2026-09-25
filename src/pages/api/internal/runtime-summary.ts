@@ -25,17 +25,9 @@ import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 import { verifyMachineRequest } from '../../../lib/auth/machine-key'
 import type { SummaryStatus } from '../../../lib/admin/runtime-summary'
-import { jsonResponse, errorResponse } from '../../../lib/api/helpers'
+import { jsonResponse, errorResponse, isRecord } from '../../../lib/api/helpers'
 
 const STATUSES: ReadonlySet<string> = new Set(['green', 'yellow', 'red', 'unknown'])
-
-interface SummaryBody {
-  summary_status?: unknown
-  open_alerts?: unknown
-  draft_queue_depth?: unknown
-  last_activity_ts?: unknown
-  pushed_at?: unknown
-}
 
 function nonNegInt(v: unknown): number | null {
   return typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : null
@@ -45,12 +37,16 @@ export const POST: APIRoute = async ({ request }) => {
   const auth = await verifyMachineRequest(request, env.DB)
   if (!auth.ok) return errorResponse(401, 'unauthorized')
 
-  let body: SummaryBody
+  let parsed: unknown
   try {
-    body = await request.json<SummaryBody>()
+    parsed = await request.json()
   } catch {
     return errorResponse(400, 'invalid_json')
   }
+  // Signed by the seat, but read field by field all the same: a body that is
+  // not an object is refused rather than dereferenced.
+  if (!isRecord(parsed)) return errorResponse(400, 'invalid_json')
+  const body = parsed
 
   if (typeof body.pushed_at !== 'string' || body.pushed_at.length === 0) {
     return errorResponse(400, 'missing_pushed_at')

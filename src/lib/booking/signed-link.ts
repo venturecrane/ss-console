@@ -29,9 +29,9 @@
  *   exp        — Unix seconds; token invalid after this time
  */
 import { env } from 'cloudflare:workers'
+import { isRecord } from '../api/helpers'
+import { importSigningKey, signPayload, verifySignedPayload } from '../security/signed-payload'
 
-const ALGORITHM: HmacImportParams = { name: 'HMAC', hash: 'SHA-256' }
-const ENCODER = new TextEncoder()
 const SCHEMA_VERSION = 1
 
 /** 14 days is the product default per issue #467. */
@@ -62,11 +62,19 @@ export type VerifyResult =
   | { ok: true; payload: BookingLinkPayload }
   | { ok: false; error: 'malformed' | 'bad_signature' | 'expired' | 'unknown_version' }
 
+function linkSigningKey(): Promise<CryptoKey> {
+  return importSigningKey(
+    env.BOOKING_ENCRYPTION_KEY,
+    'BOOKING_ENCRYPTION_KEY',
+    'issuing signed booking links'
+  )
+}
+
 /**
  * Sign a booking-link token. Returns the token string (payload.signature).
  */
 export async function signBookingLink(input: SignBookingLinkInput): Promise<string> {
-  const key = await importSigningKey()
+  const key = await linkSigningKey()
   const ttlDays = input.ttl_days ?? DEFAULT_BOOKING_LINK_TTL_DAYS
   const exp = Math.floor(Date.now() / 1000) + ttlDays * 24 * 60 * 60
 
@@ -79,98 +87,55 @@ export async function signBookingLink(input: SignBookingLinkInput): Promise<stri
     meeting_type: input.meeting_type ?? null,
     exp,
   }
-
-  const payloadB64 = base64UrlEncode(ENCODER.encode(JSON.stringify(payload)))
-  const sigBuf = await crypto.subtle.sign(ALGORITHM, key, ENCODER.encode(payloadB64))
-  const sigB64 = base64UrlEncode(new Uint8Array(sigBuf))
-  return `${payloadB64}.${sigB64}`
+  return signPayload(key, payload)
 }
 
+const nullableString = (value: unknown): value is string | null | undefined =>
+  value == null || typeof value === 'string'
+
 /**
- * Verify a token and return the payload if valid. Uses a constant-time
- * comparison on the signature bytes to avoid timing side-channels.
+ * Verify a token and return the payload if valid. The signature is checked in
+ * constant time (crypto.subtle.verify) before the payload is read; every field
+ * the booking page uses is then checked, not cast.
  */
 export async function verifyBookingLink(token: string): Promise<VerifyResult> {
-  if (typeof token !== 'string' || token.length === 0) {
-    return { ok: false, error: 'malformed' }
-  }
+  const verified = await verifySignedPayload(token, linkSigningKey)
+  if (!verified.ok) return verified
+  const p = verified.payload
+  if (!isRecord(p)) return { ok: false, error: 'malformed' }
 
-  const dot = token.indexOf('.')
-  if (dot <= 0 || dot === token.length - 1) {
-    return { ok: false, error: 'malformed' }
-  }
-
-  const payloadB64 = token.slice(0, dot)
-  const sigB64 = token.slice(dot + 1)
-
-  let sigBytes: Uint8Array
-  try {
-    sigBytes = base64UrlDecode(sigB64)
-  } catch {
-    return { ok: false, error: 'malformed' }
-  }
-
-  const key = await importSigningKey()
-  const valid = await crypto.subtle.verify(
-    ALGORITHM,
-    key,
-    sigBytes as unknown as ArrayBuffer,
-    ENCODER.encode(payloadB64)
-  )
-  if (!valid) return { ok: false, error: 'bad_signature' }
-
-  let payload: BookingLinkPayload
-  try {
-    const json = new TextDecoder().decode(base64UrlDecode(payloadB64))
-    payload = JSON.parse(json) as BookingLinkPayload
-  } catch {
-    return { ok: false, error: 'malformed' }
-  }
-
-  if (payload.v !== SCHEMA_VERSION) {
+  if (p.v !== SCHEMA_VERSION) {
     return { ok: false, error: 'unknown_version' }
   }
 
   const now = Math.floor(Date.now() / 1000)
-  if (typeof payload.exp !== 'number' || payload.exp < now) {
+  if (typeof p.exp !== 'number' || p.exp < now) {
     return { ok: false, error: 'expired' }
   }
 
-  if (!payload.entity_id || !payload.assessment_id) {
+  const { entity_id, assessment_id, contact_id, duration_minutes, meeting_type } = p
+  if (
+    typeof entity_id !== 'string' ||
+    !entity_id ||
+    typeof assessment_id !== 'string' ||
+    !assessment_id ||
+    typeof duration_minutes !== 'number' ||
+    !nullableString(contact_id) ||
+    !nullableString(meeting_type)
+  ) {
     return { ok: false, error: 'malformed' }
   }
 
-  return { ok: true, payload }
-}
-
-// ---------------------------------------------------------------------------
-// Internals
-// ---------------------------------------------------------------------------
-
-async function importSigningKey(): Promise<CryptoKey> {
-  const raw = env.BOOKING_ENCRYPTION_KEY
-  if (!raw || typeof raw !== 'string' || raw.trim().length === 0) {
-    throw new Error(
-      'BOOKING_ENCRYPTION_KEY is not configured. Set it in wrangler env before issuing signed booking links.'
-    )
+  return {
+    ok: true,
+    payload: {
+      v: SCHEMA_VERSION,
+      entity_id,
+      contact_id: contact_id ?? null,
+      assessment_id,
+      duration_minutes,
+      meeting_type: meeting_type ?? null,
+      exp: p.exp,
+    },
   }
-  const keyBytes = Uint8Array.from(atob(raw), (c) => c.charCodeAt(0))
-  return crypto.subtle.importKey('raw', keyBytes, ALGORITHM, false, ['sign', 'verify'])
-}
-
-function base64UrlEncode(bytes: Uint8Array): string {
-  let bin = ''
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
-  const b64 = btoa(bin)
-  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-function base64UrlDecode(s: string): Uint8Array {
-  const padded = s.replace(/-/g, '+').replace(/_/g, '/')
-  const padLen = (4 - (padded.length % 4)) % 4
-  const b64 = padded + '='.repeat(padLen)
-  const bin = atob(b64)
-  const bytes = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-  return bytes
 }

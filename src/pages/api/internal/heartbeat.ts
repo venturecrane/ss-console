@@ -64,7 +64,7 @@
  * authoritative red signal.
  */
 
-import { jsonResponse, errorResponse } from '../../../lib/api/helpers'
+import { jsonResponse, errorResponse, isRecord } from '../../../lib/api/helpers'
 import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 import { verifyMachineRequest } from '../../../lib/auth/machine-key'
@@ -88,16 +88,20 @@ export const POST: APIRoute = async ({ request }) => {
     return errorResponse(401, 'unauthorized')
   }
 
-  let body: HeartbeatBody
+  let parsed: unknown
   try {
-    body = await request.json<HeartbeatBody>()
+    parsed = await request.json()
   } catch {
     return errorResponse(400, 'invalid_json')
   }
-
-  if (typeof body.heartbeat_ts !== 'string' || body.heartbeat_ts.length === 0) {
+  // Signed by the seat, but read field by field all the same (every optional
+  // field of HeartbeatBody is `unknown` and re-checked where it is read).
+  if (!isRecord(parsed)) return errorResponse(400, 'invalid_json')
+  const heartbeatTs = parsed.heartbeat_ts
+  if (typeof heartbeatTs !== 'string' || heartbeatTs.length === 0) {
     return errorResponse(400, 'missing_heartbeat_ts')
   }
+  const body: HeartbeatBody = { ...parsed, heartbeat_ts: heartbeatTs }
 
   const heartbeatStatus = deriveHeartbeatStatus(
     body.heartbeat_ts,
