@@ -218,7 +218,7 @@ describe('validation', () => {
 describe('the journal', () => {
   it('records the considered pass so a deliberate nothing is not a silent miss', async () => {
     const { main } = await loadLib()
-    const code = main([
+    const code = await main([
       'add',
       '--kind',
       'none',
@@ -238,7 +238,7 @@ describe('the journal', () => {
 
   it('refuses a considered pass with no reason', async () => {
     const { main } = await loadLib()
-    expect(main(['add', '--kind', 'none', '--client', 'ashton-price'])).toBe(1)
+    expect(await main(['add', '--kind', 'none', '--client', 'ashton-price'])).toBe(1)
   })
 
   it('journals before the remote write, so an unreachable D1 loses nothing', async () => {
@@ -246,7 +246,7 @@ describe('the journal', () => {
     // add still exits 0 and the row is on disk, recoverable by `register sync`.
     const { main, unsyncedEntries } = await loadLib()
     process.env.SS_REGISTER_D1_CMD = join(dir, 'no-such-binary')
-    const code = main([
+    const code = await main([
       'add',
       '--client',
       'ashton-price',
@@ -268,32 +268,176 @@ describe('the journal', () => {
     expect(pending).toHaveLength(1)
     expect(pending[0].key).toBe('smokeball-task-cleanup')
   })
+})
 
-  it('builds an upsert that refreshes without resetting state', async () => {
-    const { buildUpsertSql } = await loadLib()
-    const sql = buildUpsertSql({
-      obligation_id: 'o1',
+/**
+ * What the CLI WRITES, observed in a real SQLite database built from the
+ * migration that owns the table. Until 2026-09-25 this file asserted on the
+ * text of a string-built INSERT; the CLI now writes through the console's own
+ * upsertObligation, so the assertions are on the row that lands.
+ */
+// Each `add` spawns the SQLite stand-in once per statement (entity lookup,
+// upsert, read-back), a node process apiece: well under a second idle, and
+// past the 5 s unit default on a loaded machine. An integration budget, as in
+// tests/obligation-reconcile.test.ts.
+describe('writing through the console upsert', { timeout: 30_000 }, () => {
+  /** A wrangler stand-in that executes each statement against a SQLite file. */
+  const SQLITE_STUB = `#!/usr/bin/env -S node --no-warnings
+const { DatabaseSync } = require('node:sqlite')
+const fs = require('fs')
+const db = new DatabaseSync(process.env.REGISTER_SQLITE)
+const sql = process.argv[3] || ''
+if (process.env.REGISTER_SQL_LOG) fs.appendFileSync(process.env.REGISTER_SQL_LOG, JSON.stringify(sql) + '\\n')
+const results = /^\\s*SELECT/i.test(sql) ? db.prepare(sql).all() : (db.exec(sql), [])
+process.stdout.write(JSON.stringify([{ results, success: true }]))
+`
+
+  let dbFile: string
+  let sqlLog: string
+
+  beforeEach(async () => {
+    const { DatabaseSync } = await import('node:sqlite')
+    dbFile = join(dir, 'register.sqlite')
+    sqlLog = join(dir, 'sql.log')
+    const db = new DatabaseSync(dbFile)
+    // The two tables 0117 reads or references, reduced to the columns in play.
+    db.exec('CREATE TABLE entities (id TEXT PRIMARY KEY)')
+    db.exec("INSERT INTO entities VALUES ('entity-ap')")
+    db.exec('CREATE TABLE customer_configs (customer_slug TEXT PRIMARY KEY, entity_id TEXT)')
+    db.exec(readFileSync(join(process.cwd(), 'migrations/0117_client_obligations.sql'), 'utf8'))
+    db.exec("INSERT INTO customer_configs VALUES ('ashton-price', 'entity-ap')")
+    db.close()
+    const stub = join(dir, 'd1-sqlite.cjs')
+    writeFileSync(stub, SQLITE_STUB)
+    chmodSync(stub, 0o755)
+    process.env.SS_REGISTER_D1_CMD = stub
+    process.env.REGISTER_SQLITE = dbFile
+    process.env.REGISTER_SQL_LOG = sqlLog
+  })
+
+  afterEach(() => {
+    delete process.env.SS_REGISTER_D1_CMD
+    delete process.env.REGISTER_SQLITE
+    delete process.env.REGISTER_SQL_LOG
+  })
+
+  async function rows(): Promise<Record<string, unknown>[]> {
+    const { DatabaseSync } = await import('node:sqlite')
+    const db = new DatabaseSync(dbFile)
+    const out = db.prepare('SELECT * FROM client_obligations').all()
+    db.close()
+    return out
+  }
+
+  const addArgs = (what: string) => [
+    'add',
+    '--client',
+    'ashton-price',
+    '--kind',
+    'deliverable',
+    '--key',
+    'smokeball-task-cleanup',
+    '--what',
+    what,
+    '--source',
+    SOURCE,
+    '--quote',
+    'We will clean up the duplicated task set on your matters',
+  ]
+
+  it('lands one captured row with the seat entity, the quote, and the session', async () => {
+    const { main } = await loadLib()
+    process.env.CLAUDE_CODE_SESSION_ID = 'sess-write'
+    expect(await main(addArgs("Clean up the firm's duplicated task set."))).toBe(0)
+    delete process.env.CLAUDE_CODE_SESSION_ID
+
+    const [row] = await rows()
+    expect(row).toMatchObject({
       customer_slug: 'ashton-price',
-      entity_id: 'e1',
-      stable_key: 'k',
+      entity_id: 'entity-ap',
       kind: 'deliverable',
-      what: "the firm's task set",
       origin: 'captured',
       origin_source: 'letter',
-      source_kind: 'letter',
       source_ref: SOURCE,
-      source_quote: 'q',
-      date_quote: null,
-      window_start: null,
-      window_end: null,
-      due_at: null,
-      links_json: null,
-      created_by_session: null,
+      source_quote: 'We will clean up the duplicated task set on your matters',
+      state: 'open',
+      created_by_session: 'sess-write',
     })
-    expect(sql).toContain('ON CONFLICT(customer_slug, kind, stable_key) DO UPDATE SET')
-    expect(sql).not.toContain('state =')
-    // An apostrophe in client prose must not break out of the literal.
-    expect(sql).toContain("'the firm''s task set'")
+    // An apostrophe in client prose round-trips instead of breaking the statement.
+    expect(row.what).toBe("Clean up the firm's duplicated task set.")
+  })
+
+  it('refreshes the sentence on a re-capture without resetting a moved state', async () => {
+    const { main } = await loadLib()
+    await main(addArgs('First wording.'))
+    const [first] = await rows()
+    const { DatabaseSync } = await import('node:sqlite')
+    const db = new DatabaseSync(dbFile)
+    db.exec("UPDATE client_obligations SET state = 'active'")
+    db.close()
+
+    expect(await main(addArgs('Corrected wording.'))).toBe(0)
+    const after = await rows()
+    expect(after).toHaveLength(1)
+    expect(after[0].obligation_id).toBe(first.obligation_id)
+    expect(after[0].what).toBe('Corrected wording.')
+    expect(after[0].state).toBe('active')
+  })
+
+  it('writes exactly the column set the reconciler writes (parity)', async () => {
+    // Both callers now reach upsertObligation. This pins that the CLI's INSERT
+    // names the same columns as the module's, so a second writer cannot come
+    // back with its own list, which is how the two had already drifted.
+    const { main } = await loadLib()
+    await main(addArgs('Parity wording.'))
+    const cliInsert = readFileSync(sqlLog, 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l) as string)
+      .find((q) => /^INSERT INTO client_obligations/.test(q))
+
+    const { wranglerD1 } = await import('../scripts/lib/wrangler-d1')
+    const { upsertObligation } = await import('../src/lib/db/obligations')
+    writeFileSync(sqlLog, '')
+    const handle = wranglerD1({ database: 'x', commandOverride: process.env.SS_REGISTER_D1_CMD })
+    await upsertObligation(handle as never, {
+      customer_slug: 'ashton-price',
+      entity_id: 'entity-ap',
+      stable_key: 'github:venturecrane/ss-console#1',
+      kind: 'request',
+      what: 'An imported row, the way the reconciler writes one.',
+      origin: 'imported',
+      origin_source: 'github',
+      source_kind: 'github',
+      source_ref: 'venturecrane/ss-console#1',
+      evidence_class: 'probeable',
+    })
+    const reconcilerInsert = readFileSync(sqlLog, 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l) as string)
+      .find((q) => /^INSERT INTO client_obligations/.test(q))
+
+    const columns = (sql: string | undefined) =>
+      (/INSERT INTO client_obligations \(([^)]*)\)/.exec(sql ?? '')?.[1] ?? '')
+        .split(',')
+        .map((c) => c.trim())
+        .filter(Boolean)
+    expect(columns(cliInsert).length).toBeGreaterThan(15)
+    expect(columns(cliInsert)).toEqual(columns(reconcilerInsert))
+  })
+
+  it('neither caller carries its own SQL for the table', () => {
+    const cli = readFileSync(join(process.cwd(), '.claude/hooks/lib/register.mjs'), 'utf8')
+    const reconciler = readFileSync(
+      join(process.cwd(), 'scripts/ci-reconcile-obligations.ts'),
+      'utf8'
+    )
+    for (const source of [cli, reconciler]) {
+      expect(source).not.toMatch(/INSERT INTO client_obligations|UPDATE client_obligations/)
+      expect(source).toMatch(/upsertObligation/)
+    }
+    expect(cli).not.toMatch(/sqlLiteral|buildUpsertSql/)
   })
 })
 
@@ -396,7 +540,7 @@ describe('reading the register', () => {
     const { main, JSON_FIELDS } = await loadLib()
     process.env.SS_REGISTER_D1_CMD = successStub([row()])
     const out = capture()
-    const code = main(['list', '--json'])
+    const code = await main(['list', '--json'])
     out.restore()
     delete process.env.SS_REGISTER_D1_CMD
 
@@ -412,7 +556,7 @@ describe('reading the register', () => {
     const { main } = await loadLib()
     process.env.SS_REGISTER_D1_CMD = successStub([row({ customer_slug: 'pilot-smokeball' })])
     const out = capture()
-    main(['list', '--json'])
+    await main(['list', '--json'])
     out.restore()
     delete process.env.SS_REGISTER_D1_CMD
 
@@ -427,7 +571,7 @@ describe('reading the register', () => {
     const { main } = await loadLib()
     process.env.SS_REGISTER_D1_CMD = successStub([row()], 'bare')
     const out = capture()
-    const code = main(['list', '--json'])
+    const code = await main(['list', '--json'])
     out.restore()
     delete process.env.SS_REGISTER_D1_CMD
 
@@ -442,7 +586,7 @@ describe('reading the register', () => {
     const { main } = await loadLib()
     process.env.SS_REGISTER_D1_CMD = successStub([])
     const out = capture()
-    const code = main(['list'])
+    const code = await main(['list'])
     out.restore()
     delete process.env.SS_REGISTER_D1_CMD
 
@@ -478,7 +622,7 @@ describe('reading the register', () => {
     const errs: string[] = []
     const original = console.error
     console.error = (...args: unknown[]) => void errs.push(args.join(' '))
-    const code = main(['list'])
+    const code = await main(['list'])
     console.error = original
     delete process.env.SS_REGISTER_D1_CMD
 
