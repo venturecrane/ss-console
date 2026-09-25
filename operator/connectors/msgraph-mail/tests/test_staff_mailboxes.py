@@ -148,6 +148,53 @@ def test_own_mailbox_is_refused_even_when_authored(seat) -> None:
     assert seen == []
 
 
+# ---- an approver's mailbox holds the approve links (ADR 0089 amendment 5a) --
+APPROVER = "paralegal@firm.example"
+
+
+def _approver_seat(send_as: str) -> str:
+    """The overlap the validator refuses, authored anyway: the approver is on
+    the staff read list too. Only the connector stands between the model and
+    the approver's inbox here, so it must refuse on its own."""
+    return f"scope:\n  staff_send_as:\n{send_as}staff_mailbox_reads:\n  mailboxes:\n    - {STAFF}\n    - {APPROVER}\n"
+
+
+@pytest.mark.parametrize(
+    "send_as",
+    [
+        f"    - address: {APPROVER}\n      name: Pat\n",
+        # the approver second on the list, and written in another case
+        f"    - address: someone@firm.example\n      name: Sam\n    - address: ' {APPROVER.upper()} '\n      name: Pat\n",
+    ],
+)
+def test_a_send_as_approver_is_refused_even_when_authored_for_reading(seat, send_as) -> None:
+    author, seen = seat
+    author(_approver_seat(send_as))
+    for out in (srv.list_staff_messages(APPROVER), srv.read_staff_message(APPROVER, "AAMk-1")):
+        assert out["status"] == "refused"
+        assert "approve links" in out["reason"] and "staff_send_as" in out["reason"]
+    assert seen == []
+    # The same file still lets the non-approver through, so the refusal above
+    # is the approver rule and not a broken config.
+    assert srv.list_staff_messages(STAFF) == {"value": [_MESSAGE]}
+    assert len(seen) == 1
+
+
+@pytest.mark.parametrize(
+    "scope",
+    [
+        "scope:\n  staff_send_as: paralegal@firm.example\n",  # not a list
+        "scope: [not, a, mapping]\n",
+    ],
+)
+def test_an_approver_list_that_cannot_be_read_refuses_every_staff_read(seat, scope) -> None:
+    author, seen = seat
+    author(scope + AUTHORED)
+    out = srv.list_staff_messages(STAFF)
+    assert out["status"] == "refused" and "approvers cannot be told apart" in out["reason"]
+    assert seen == []
+
+
 def test_bad_folder_is_refused(seat) -> None:
     author, seen = seat
     author(AUTHORED)

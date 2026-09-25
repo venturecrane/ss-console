@@ -50,6 +50,7 @@ import { checkPersonas } from './sections-personas'
 import { checkConnectors } from './sections-connectors'
 import { checkCustodyExceptions, checkCustodyGuard } from './sections-custody-guard'
 import { checkScope } from './sections-scope'
+import { checkStaffMailboxReads } from './sections-staff-send-as'
 import {
   checkBusinessHours,
   checkDigest,
@@ -285,6 +286,7 @@ function validateSections(
   const connectors = checkConnectors(root, customerId, errors)
   const googleAuth = checkGoogleAuth(root, errors)
   const scope = checkScope(root, errors)
+  checkStaffMailboxReads(root, scope.staff_send_as, errors) // ADR 0089 5a; validate-only
   checkTelegram(root, errors) // optional telegram block; validate-only (ADR 0033)
   checkGmailPush(root, errors) // optional gmail_push block; validate-only
   checkFirmIdentity(root, errors) // optional firm_identity (letterhead); validate-only
