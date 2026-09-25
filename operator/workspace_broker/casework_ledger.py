@@ -92,7 +92,9 @@ _STEP_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,120}$")
 _SKILL_RE = re.compile(r"^[a-z0-9_-]{1,64}$")
 _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
-_COMMON = frozenset({"v", "ts", "id", "skill", "matter_id", "kind", "source_id", "item_key", "event", "session_id"})
+_COMMON = frozenset(
+    {"v", "ts", "id", "skill", "matter_id", "kind", "source_id", "item_key", "event", "session_id"}
+)
 _ALLOWED: dict[str, frozenset[str]] = {
     **{k: _COMMON | {"n", "dispatch_ref", "thread_ref", "payload"} for k in RAISING_EVENTS},
     **{k: _COMMON | {"n", "thread_ref", "decided_by"} for k in VERDICT_EVENTS},
@@ -103,7 +105,9 @@ _ALLOWED: dict[str, frozenset[str]] = {
     "mentioned": _COMMON,
     "kept": _COMMON,
 }
-_PAYLOAD_KEYS = frozenset({"action", "class", "staff_id", "to_staff_id", "reason", "evidence", "step"})
+_PAYLOAD_KEYS = frozenset(
+    {"action", "class", "staff_id", "to_staff_id", "reason", "evidence", "step"}
+)
 
 
 def ledger_path() -> str:
@@ -238,14 +242,18 @@ def _fold(state: ItemState, event: dict) -> None:
     decision = state.decisions.get(slot)
     if kind in VERDICT_EVENTS and decision is not None:
         decision.verdict, decision.verdict_ts = kind, ts
-        decision.decided_by = event.get("decided_by") if isinstance(event.get("decided_by"), dict) else None
+        decision.decided_by = (
+            event.get("decided_by") if isinstance(event.get("decided_by"), dict) else None
+        )
         if kind == "approved" and decision.payload.get("action") in WRITE_ACTIONS:
             state.authorization, state.authorized_decision = "approved", decision
     elif kind == "step_started" and decision is not None:
         decision.started = True
     elif kind == "closed_by_record":
         state.authorization, state.authorized_decision = "closed_by_record", None
-        state.record_payload = event.get("payload") if isinstance(event.get("payload"), dict) else None
+        state.record_payload = (
+            event.get("payload") if isinstance(event.get("payload"), dict) else None
+        )
     elif kind in OUTCOME_EVENTS:
         if kind == "completed":
             state.completed, state.completed_via = True, state.authorization
@@ -277,7 +285,12 @@ def pending_decisions(state: ItemState | None) -> list[Decision]:
 def needs_mention(state: ItemState | None) -> bool:
     """A task the Operator closed on the record's evidence and has not yet
     mentioned to anyone (Job 3: one line in the next message, never its own)."""
-    return bool(state and state.completed and state.completed_via == "closed_by_record" and not state.mentioned)
+    return bool(
+        state
+        and state.completed
+        and state.completed_via == "closed_by_record"
+        and not state.mentioned
+    )
 
 
 def is_kept_quiet(state: ItemState | None, today: date, keep_quiet_days: int) -> bool:
@@ -318,7 +331,8 @@ def _validate_step(step) -> None:
         or not all(_short_str(v, _MAX_EVIDENCE_CHARS) for v in params.values())
     ):
         raise ValueError(
-            "payload.step is {catalog_id, skill, level, params}: catalog_id [A-Za-z0-9_.:-]{1,120}, "
+            "payload.step is {catalog_id, skill, level, params}: catalog_id "
+            "[A-Za-z0-9_.:-]{1,120}, "
             f"skill [a-z0-9_-]{{1,64}}, level one of {LEVELS}, params at most 10 string values"
         )
 
@@ -328,7 +342,9 @@ def _validate_payload(kind: str, payload, item: str) -> None:
         raise ValueError(f"a {kind} row requires a payload object")
     unknown = sorted(set(payload) - _PAYLOAD_KEYS)
     if unknown:
-        raise ValueError(f"payload carries unknown fields {unknown}; it holds only {sorted(_PAYLOAD_KEYS)}")
+        raise ValueError(
+            f"payload carries unknown fields {unknown}; it holds only {sorted(_PAYLOAD_KEYS)}"
+        )
     action, klass = payload.get("action"), payload.get("class")
     if action not in ACTIONS:
         raise ValueError(f"payload.action must be one of {ACTIONS}")
@@ -337,7 +353,8 @@ def _validate_payload(kind: str, payload, item: str) -> None:
     if action == "close" and klass == "at_stake":
         raise ValueError(
             "refusing a close on an item classed at_stake: money or a court date is riding on it, "
-            "so it is never closed without a person doing it in the record. Offer keep or reassign, "
+            "so it is never closed without a person doing it in the record. Offer keep or "
+            "reassign, "
             "or leave it with the escalator. Retrying will fail identically."
         )
     for key in ("staff_id", "to_staff_id"):
@@ -356,9 +373,12 @@ def _validate_payload(kind: str, payload, item: str) -> None:
         raise ValueError(f"payload.evidence must be a list of at most {_MAX_EVIDENCE} atoms")
     if not all(_short_str(atom, _MAX_EVIDENCE_CHARS) for atom in evidence):
         raise ValueError(f"each evidence atom must be 1..{_MAX_EVIDENCE_CHARS} characters")
-    if kind == "closed_by_record" and (action != "close" or klass != "done" or not evidence or item != "task"):
+    if kind == "closed_by_record" and (
+        action != "close" or klass != "done" or not evidence or item != "task"
+    ):
         raise ValueError(
-            "closed_by_record means the record shows a task is done: kind task, action close, class done, "
+            "closed_by_record means the record shows a task is done: kind task, action close, "
+            "class done, "
             "and the evidence atoms that show it. Anything else goes to a person as a proposal."
         )
 
@@ -369,7 +389,9 @@ def _validate_decided_by(decided_by) -> None:
     if not isinstance(decided_by, dict) or set(decided_by) != {"name", "key"}:
         raise ValueError("decided_by holds exactly name and key")
     if not _short_str(decided_by.get("name"), _MAX_NAME_CHARS):
-        raise ValueError("decided_by.name is the firm's authored users[].full_name, 1..120 characters")
+        raise ValueError(
+            "decided_by.name is the firm's authored users[].full_name, 1..120 characters"
+        )
     if not (isinstance(decided_by.get("key"), str) and _SHA256_RE.fullmatch(decided_by["key"])):
         raise ValueError("decided_by.key is the sha256 of the verified sender's canonical address")
 
@@ -380,7 +402,9 @@ def _validate_identity(event: dict) -> None:
         raise ValueError(f"unknown casework event {kind!r}; expected one of {EVENTS}")
     unknown = sorted(set(event) - _ALLOWED[kind])
     if unknown:
-        raise ValueError(f"a {kind} row carries unknown fields {unknown}; drop them from this append")
+        raise ValueError(
+            f"a {kind} row carries unknown fields {unknown}; drop them from this append"
+        )
     if not _short_str(event.get("skill"), _MAX_ID_CHARS):
         raise ValueError("casework event requires a skill")
     if event.get("kind") not in ITEM_KINDS:
@@ -388,7 +412,9 @@ def _validate_identity(event: dict) -> None:
     for key in ("matter_id", "source_id"):
         if not _short_str(event.get(key), _MAX_ID_CHARS):
             raise ValueError(f"casework event requires {key}, read off the record")
-    derived = item_key(matter_id=event["matter_id"], kind=event["kind"], source_id=event["source_id"])
+    derived = item_key(
+        matter_id=event["matter_id"], kind=event["kind"], source_id=event["source_id"]
+    )
     if event.get("item_key") != derived:
         raise ValueError("item_key must be derived from this row's matter_id, kind and source_id")
 
@@ -428,7 +454,8 @@ def validate_append(existing_events, new_event: dict, *, send_witness, audit_wit
             or not _short_str(new_event.get("thread_ref"), 512)
         ):
             raise ValueError(
-                f"a {kind} must carry its line number n, the send's dispatch_ref, and the thread the "
+                f"a {kind} must carry its line number n, the send's dispatch_ref, and the thread "
+                "the "
                 "broker stamped from its own send record. The broker could not tie this raise to a "
                 "message it sent in this session, so a reply could never find it. Write nothing."
             )
@@ -439,7 +466,8 @@ def validate_append(existing_events, new_event: dict, *, send_witness, audit_wit
         decision = state.decisions.get(slot) if state is not None and slot[0] and slot[1] else None
         if decision is None:
             raise ValueError(
-                f"refusing a {kind}: no line {new_event.get('n')!r} was raised for this item on that thread, so "
+                f"refusing a {kind}: no line {new_event.get('n')!r} was raised for this item on "
+                "that thread, so "
                 "the reply answers nothing this item was asked. Write nothing; ask the person."
             )
         if kind == "step_started":
@@ -448,18 +476,23 @@ def validate_append(existing_events, new_event: dict, *, send_witness, audit_wit
         else:
             _validate_decided_by(new_event.get("decided_by"))
             if decision.verdict is not None:
-                raise ValueError(f"line {slot[1]} on this thread was already answered ({decision.verdict})")
+                raise ValueError(
+                    f"line {slot[1]} on this thread was already answered ({decision.verdict})"
+                )
     elif kind == "kept":
         if state is None or not any(d.verdict == "held" for d in state.decisions.values()):
             raise ValueError("kept records a person's hold; this item has no held line")
     elif kind == "mentioned":
         if state is None or not state.completed:
-            raise ValueError("mentioned records telling someone a task was closed; this one was not")
+            raise ValueError(
+                "mentioned records telling someone a task was closed; this one was not"
+            )
     elif kind in OUTCOME_EVENTS:
         if state is None or state.authorization is None:
             raise ValueError(
                 f"refusing a {kind}: nothing authorized a write on this item (no approved line and "
-                "no closed_by_record open). A write happens only on an authorization. Write nothing."
+                "no closed_by_record open). A write happens only on an authorization. Write "
+                "nothing."
             )
         if kind == "write_failed":
             if not _short_str(new_event.get("error"), _MAX_ERROR_CHARS):
@@ -468,11 +501,15 @@ def validate_append(existing_events, new_event: dict, *, send_witness, audit_wit
             call_id = new_event.get("tool_call_id")
             if not _short_str(call_id, _MAX_ID_CHARS):
                 raise ValueError("completed carries tool_call_id, the id of the update_task call")
-            if any(e.get("event") == "completed" and e.get("tool_call_id") == call_id for e in existing_events):
+            if any(
+                e.get("event") == "completed" and e.get("tool_call_id") == call_id
+                for e in existing_events
+            ):
                 raise ValueError("that update_task call already completed another item")
             if not callable(audit_witness) or not audit_witness(new_event):
                 raise ValueError(
-                    f"refusing completed: the audit log holds no successful {UPDATE_TASK_TOOL} call "
+                    f"refusing completed: the audit log holds no successful {UPDATE_TASK_TOOL} "
+                    "call "
                     "with that id in this session. Record write_failed if the write did not land."
                 )
 

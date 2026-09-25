@@ -77,8 +77,8 @@
       "adapterPath": "operator/workspace_broker/casework_ledger.py",
       "overlayPath": "shared/casework_ledger.py",
       "syncNote": "NEW PAIR 2026-09-25 (case-manager casework, docs/specs/operator/case-manager-deadline-work.md): the casework ledger module. Canonical broker-side writer/validator in the console (the casework_event_append verb calls its validate_append), vendored byte-identical into the overlay so the reply and finish tools (case_reply, casework_finish, casework_send_brief) derive the same item_key and fold the same state the broker validates and the skills' pre_run gates read. Separate from the escalation_ledger pair on purpose: that pair's bytes are untouched. overlaySha256 is recorded EQUAL to sha256 because the overlay half is a byte copy; operator/bin/verify-overlay-pairs.py reports shared/casework_ledger.py MISSING at the currently pinned overlayRef until OVERLAY_REF moves past the overlay PR that adds it. That red is the expected paired-PR window, closed by the pin bump, not by editing this entry.",
-      "sha256": "7277590eaba30257a0b87372f7fa07c1a252f591d3e61e16282207fce327aba9",
-      "overlaySha256": "7277590eaba30257a0b87372f7fa07c1a252f591d3e61e16282207fce327aba9"
+      "sha256": "621240d0725d878d8e5b2b574e8d86904604edbcf18a066adba4e0cef4271847",
+      "overlaySha256": "621240d0725d878d8e5b2b574e8d86904604edbcf18a066adba4e0cef4271847"
     }
   ]
 }

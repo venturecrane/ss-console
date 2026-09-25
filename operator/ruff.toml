@@ -123,6 +123,11 @@ exclude = [
     "workspace_broker/escalation_ledger.py",
     "safety_substrate/sticky_stop.py",
     "skills/*/escalation_ledger.py",
+    # The casework ledger twin (overlay shared/casework_ledger.py) is formatted at
+    # the OVERLAY's line-length 100, so both repos' format checks pass on one set
+    # of bytes; this repo's 120 would re-collapse it and break the twin.
+    "workspace_broker/casework_ledger.py",
+    "skills/*/casework_ledger.py",
 ]
 quote-style = "double"
 indent-style = "space"
