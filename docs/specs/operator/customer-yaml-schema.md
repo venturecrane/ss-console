@@ -516,6 +516,38 @@ Field rules:
 - **Whole-block fail-closed:** the on-box resolver (`shared/send_policy.resolve_send_policy`) resolves the ENTIRE block to platform defaults on any fault — including dropping an authored `internal_exempt`. A typo can only ever tighten a seat, never loosen it. This validator surfaces the same faults at authoring time so the silent tightening never happens unnoticed.
 - Materialization is runtime live-read (`CustomerConfig.send_policy` → `RateLimiter.check` in the overlay), not a `translate.py` step — see `operator/contracts/customer-yaml-blocks.yaml` (`send_policy`).
 
+## Case manager (the deadline jobs)
+
+**Added 2026-09-25** for the case-manager spec ([case-manager-deadline-work.md](./case-manager-deadline-work.md)). Optional block. It turns on the deadline jobs a case manager owns, each at the level the firm chose, in the portal's tier language: `surfaces` ("Surfaces it": says so, does nothing), `prepares` ("Prepares it for you": a draft or a proposal a person approves), `handles` ("Handles it": does it).
+
+```yaml
+case_manager: # OPTIONAL; absent = every job off
+  own_tasks: # OPTIONAL; the Operator's own tasks (Job 1a)
+    level: <surfaces|prepares|handles> # required
+    legacy_task_ids: [<Smokeball task id>, ...] # optional; distinct, non-empty, at most 200
+  task_cleanup: # OPTIONAL; the weekly proposal per attorney (Job 1)
+    level: <surfaces|prepares|handles> # required
+    keep_quiet_days: <int 1..365> # optional; the routine's own when absent
+    max_lines: <int 1..30> # optional; the routine's own (30) when absent
+  date_prep: # OPTIONAL; prepare for a date entering its window (Job 2)
+    level: <surfaces|prepares|handles> # required
+    window_days: <int 1..90> # required; no pack default
+    steps: # optional; an unlisted step is never offered
+      <step>: <surfaces|prepares|handles> # never above date_prep.level
+  quiet: # OPTIONAL; routine work done and mentioned in one line (Job 3)
+    level: <surfaces|prepares|handles> # required
+```
+
+`<step>` is one of `binder_assemble`, `witness_list_finalize`, `exhibit_list_finalize`, `records_refresh`, `motion_calendar_refresh`, `discovery_status_refresh` (the closed catalog, `operator/skills/date-prep-brief/references/decision-catalog.md`).
+
+Field rules:
+
+- **Absent is a state, not an error.** No block: every job is off, and `deadline-miss-escalator` renders exactly as it did before the block existed. An absent sub-block turns off that job alone (ADR 0035, no imposed default).
+- **Strict keys.** An unknown key at any level is refused (`InvalidCaseManager`), because a misspelled job (`date_perp:`) would otherwise read as "that job is off" and nobody would learn why the prep never arrived.
+- **`legacy_task_ids`** names tasks the Operator created before its `[Operator]` subject stamp existed (2026-08-01). A Smokeball task read carries no creator, so this authored list is the only other signal that a task is the Operator's own.
+- **A step never exceeds its job.** A step authored above `date_prep.level` is refused: a firm that chose "Prepares it for you" for prep has not chosen "Handles it" for any part of it.
+- Materialization is config-as-data: the `task-list-keeper`, `date-prep-brief` and `deadline-miss-escalator` pre_runs read the block off the seat's own `/var/lib/smd-config/customer.yaml` at each tick (`operator/contracts/customer-yaml-blocks.yaml`, `case_manager`). Not portal-editable yet: the levels change by PR (`src/lib/portal/operator/customer-yaml-editor.ts` keeps them locked).
+
 ## Failure modes
 
 | Condition                                                             | Validator behavior                                                                                                                                                                              |
@@ -553,6 +585,8 @@ Field rules:
 | `webhook_triggers[].source` names no inbound-carrying connector       | Reject with `UnknownWebhookSource` error (ADR 0021 Stream E). Inbound-carrying = `webhook_url` set, OR a poll-driven adapter (`msgraph`, ADR 0078 D1)                                           |
 | `webhook_triggers[].persona` does not match any declared persona      | Reject with `UnknownWebhookPersona` error (ADR 0021 Stream E)                                                                                                                                   |
 | `webhook_triggers[].skill` not an enabled skill on the target persona | Reject with `UnknownWebhookSkill` error (ADR 0021 Stream E)                                                                                                                                     |
+
+| `case_manager` unknown key, bad level, bad bound, or a step above its job | Reject with `InvalidCaseManager` error naming the JSONPath |
 
 All errors are returned as a list; the validator does not short-circuit on the first error. Authors get the full picture in one round-trip.
 

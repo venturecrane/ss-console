@@ -12,6 +12,17 @@ Both rows are blocking only on a seat that authors the escalator's cron,
 because only that routine asks for a reply. Elsewhere the recipient row is
 reported as INFO, so an ungranted address is still visible.
 
+The case-manager routines (``task-list-keeper``, ``date-prep-brief``; spec
+``docs/specs/operator/case-manager-deadline-work.md``) add rows only on a seat
+whose cron arms one of them, so a seat that arms neither reads as before:
+
+* an armed routine whose ``case_manager`` job is not authored does nothing on
+  every tick, forever, and says so only in a heartbeat basis nobody reads;
+* the date-prep brief goes to the matter's own staff and nowhere else, so it
+  needs ``escalation.case_alert_routing.mode: matter_staff``;
+* a proposal or brief held for approval or drafted for review goes out with
+  no raise rows behind its numbers, exactly the digest's failure.
+
 Split out of ``seat-readiness.py`` (module-size ceiling). Returns row dicts in
 that script's ``Row`` field order; the script adds them to its report. The
 grant test is the escalator's own ``routing._granted``, loaded by path, so
@@ -55,6 +66,90 @@ def _scheduled_personas(cfg: dict) -> list[dict]:
     ]
 
 
+#: Each case-manager routine and the ``case_manager`` sub-blocks that give it work.
+CASEWORK_ROUTINES: dict[str, tuple[str, ...]] = {
+    "task-list-keeper": ("own_tasks", "task_cleanup", "quiet"),
+    "date-prep-brief": ("date_prep",),
+}
+
+
+def _armed(cfg: dict, skill: str) -> list[dict]:
+    """Personas whose cron arms ``skill`` with a non-blank schedule."""
+    return [
+        p
+        for p in (cfg.get("personas") or [])
+        if isinstance(p, dict)
+        and any(
+            isinstance(c, dict) and c.get("skill") == skill and str(c.get("schedule") or "").strip()
+            for c in (p.get("cron") or [])
+        )
+    ]
+
+
+def _row(check: str, failed: str | None, passed: str, falsifier: str) -> dict:
+    return {
+        "section": "deadline replies",
+        "check": check,
+        "status": "FAIL" if failed else "PASS",
+        "detail": failed or passed,
+        "falsifier": falsifier,
+        "blocker": True,
+    }
+
+
+def _unrowed(personas: list[dict]) -> list[str]:
+    return sorted(
+        {
+            f"{p.get('name', '?')}: {posture}"
+            for p in personas
+            if (posture := ((p.get("entitlements") or {}).get("exposure") or {}).get("external_send_internal"))
+            in UNROWED_POSTURES
+        }
+    )
+
+
+def casework_rows(cfg: dict) -> list[dict]:
+    """Rows for the case-manager routines this seat's cron arms. None armed, no rows."""
+    armed = {skill: personas for skill in CASEWORK_ROUTINES if (personas := _armed(cfg, skill))}
+    if not armed:
+        return []
+    block = cfg.get("case_manager")
+    block = block if isinstance(block, dict) else {}
+    idle = [s for s in armed if not any(isinstance(block.get(job), dict) for job in CASEWORK_ROUTINES[s])]
+    out = [
+        _row(
+            "every armed case-manager routine has a job authored",
+            f"armed with no case_manager job: {', '.join(idle)}" if idle else None,
+            "each armed routine has its case_manager job authored",
+            "a routine armed on cron whose every tick suppresses because its job is off, reported as live",
+        )
+    ]
+    if "date-prep-brief" in armed:
+        esc = cfg.get("escalation")
+        routing = esc.get("case_alert_routing") if isinstance(esc, dict) else None
+        mode = routing.get("mode") if isinstance(routing, dict) else None
+        out.append(
+            _row(
+                "the date-prep brief reaches the matter's own staff",
+                None if mode == "matter_staff" else f"escalation.case_alert_routing.mode is {mode or 'unauthored'}",
+                "escalation.case_alert_routing.mode is matter_staff",
+                "a brief with no matter-staff routing counted as deliverable",
+            )
+        )
+    unrowed = _unrowed([p for personas in armed.values() for p in personas])
+    out.append(
+        _row(
+            "case-manager messages send with rows behind their numbers",
+            f"external_send_internal is {'; '.join(unrowed)}, so a proposal or brief goes out with no raise rows"
+            if unrowed
+            else None,
+            "external_send_internal on the case-manager persona is neither confirm nor draft_for_review",
+            "a proposal held or drafted for review, reported as answerable",
+        )
+    )
+    return out
+
+
 def rows(cfg: dict, repo_root: Path) -> list[dict]:
     scheduled = _scheduled_personas(cfg)
     esc = cfg.get("escalation")
@@ -79,7 +174,7 @@ def rows(cfg: dict, repo_root: Path) -> list[dict]:
         }
     ]
     if not scheduled:
-        return out
+        return out + casework_rows(cfg)
     unrowed = [
         f"{p.get('name', '?')}: {posture}"
         for p in scheduled
@@ -98,4 +193,4 @@ def rows(cfg: dict, repo_root: Path) -> list[dict]:
             "blocker": True,
         }
     )
-    return out
+    return out + casework_rows(cfg)

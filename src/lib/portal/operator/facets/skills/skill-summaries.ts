@@ -42,6 +42,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Offers consult times within your rules and drafts the confirmation for a human to send.',
   'daily-needs-you-digest':
     'One batched daily digest of what across your matters genuinely needs attention. Never acts, never manufactures urgency.',
+  'date-prep-brief':
+    'When a court date comes into view, checks the file is ready, does the prep you turned on, and asks the attorney only what needs them.',
   'deadline-and-sol-tracker':
     'Surfaces your court dates, filing deadlines, and statute-of-limitations dates by urgency. Reflects dates you entered, never computes them.',
   'deadline-miss-escalator':

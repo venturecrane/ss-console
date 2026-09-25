@@ -121,15 +121,21 @@ After (bracketed values are what the prep read would supply):
 Source for the dates and witness list: the pilot seed trial order and draft
 witness list (`operator/customers/pilot-smokeball/seed/seed_data.py:516-541`).
 
-**B. The Operator's own overdue tasks (2026-09-24, matters 2026-PI-106/104).**
+**B. The Operator's own overdue tasks (2026-09-24, matter 2026-PI-101).**
 Before: three lines of `task-deadline 2026-07-08 (overdue by 78 days) [ACK-...]`,
-re-sent every 3 days.
+re-sent every 3 days. The three are the July DISC-1/DISC-2 rehearsal tasks on
+2026-PI-101 (`1f5546c6`, `1ec31561`, `95de85b8`): their ack tokens, recomputed
+with `escalation_ledger.token_for` from the 2026-08-24 live pull
+(`operator/skills/deadline-miss-escalator/tests/fixtures/live-pull-2026-08-24.json`),
+are ACK-DR8B8W, ACK-K96VZS and ACK-45ABZC. The pilot authors them as
+`case_manager.own_tasks.legacy_task_ids`, because they predate the `[Operator]`
+subject stamp and a task read carries no creator.
 After: the Operator checks each task it created against the record. Done ones it
 closes. For the rest, one message, once (illustrative: which tasks are done
 depends on what the record shows at run time; the task subjects live only on the
 pilot tenant):
 
-> Three review tasks I opened in July are still open. Two are done in the file (proof of service is on file for both), so I've closed them. One I can't finish: the served-discovery confirm on Bell v. R&J Construction needs someone to say whether Halverson's responses were verified. Want me to leave it with [paralegal]?
+> Three review tasks I opened in July on 2026-PI-101 are still open. Two are done in the file (proof of service is on file for both), so I've closed them. One I can't finish: [the task, as the record reads] needs someone to say [the open question]. Want me to leave it with [paralegal]?
 
 **C. The overflow list (2026-09-24, 13 codes).**
 Before: "Admin confirms (12 across 4 matters) ... [ACK-G9HJRE] [ACK-DGS5FR] ...".
@@ -180,22 +186,63 @@ From the mechanism audit (2026-09-25) and the incidents it cites:
 - Firm-configured levels bind: a step the firm set to "Surfaces it" is never done;
   "Prepares it for you" produces a draft for review.
 
-## 8. Phases
+## 8. What is delivered
 
-| Phase | Delivers                                                                                                                                                                                                                  | Proves done when (runtime)                                                                                                                                                        |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | **Plain answers, clear items.** Numbered items with what the task is; no codes or magic words in the body; replies in words resolved to items via the replied-to message; confirmation in words; no "0 need you" message. | On the pilot seat, a digest arrives with no `ACK-` string, a reply "got it on 1" from a rostered address quiets exactly item 1 (ledger row), and the confirmation reply names it. |
-| 2     | **The Operator's own tasks.** Tasks the Operator created are checked against the record, closed when done, handed over once when not.                                                                                     | The pilot's July rehearsal tasks stop appearing; each is either completed in Smokeball by the Operator or named once to a person.                                                 |
-| 3     | **Clean task list (Job 1)** for a firm's whole list: sort, grouped proposal per attorney, approve by reply, act, keep clean.                                                                                              | A proposal for the pilot's overdue list, approved by reply, changes exactly the approved tasks in Smokeball.                                                                      |
-| 4     | **Prep for dates (Job 2):** date in window triggers a file-status read from the prep routines; one done-plus-decisions message; steps at firm-chosen levels.                                                              | The Okafor status conference produces message A with its bracketed values filled from real reads.                                                                                 |
+One delivery, not a sequence. Plain-word replies to the deadline digest shipped
+first (ss-console be2e1967, overlay 48726abb); everything below builds on them and
+lands together. Each line names the act and the observation on the pilot seat that
+proves it (the reachability rule in CLAUDE.md).
 
-Phase 1 is independent and ships first. Phases 2 to 4 need a way for a scheduled
-routine to use another routine's output; today only `matter-inbox-router` runs a
-skill from another (audit, 2026-09-25), so each of those phases starts with that
-premise.
+- **The firm's choices, written down.** A `case_manager:` block in customer.yaml:
+  `own_tasks`, `task_cleanup`, `date_prep` and `quiet`, each at a level in the tier
+  language, validated strictly (`src/lib/operator/customer-yaml/sections-case-manager.ts`,
+  schema in `customer-yaml-schema.md`). Absent block: every job off, and the
+  escalator renders byte-identical to today. The pilot authors it; a client seat
+  authors it only when its agreement names the routines.
+- **The Operator's own tasks (Job 1a)**, in `task-list-keeper`. Tasks it created
+  (the `[Operator]` stamp, or the authored `legacy_task_ids`) are checked against the
+  record, closed on the record's evidence at `handles`, or named once to the
+  paralegal. Proved when the July tasks on 2026-PI-101 are completed with
+  `closed_by_record` rows, one handover line was sent, a second run sends nothing,
+  and the digest no longer says "overdue by 78".
+- **A trustworthy task list (Job 1)**, in `task-list-keeper`: a weekly proposal per
+  attorney, grouped by matter, numbered, with a suggested call per line; approval
+  by reply ("yes except 2"); only approved lines are written, by a stored-payload
+  replay the model cannot redirect. Proved when a reply "yes except 2" changes
+  exactly the approved task ids in Smokeball and no money or court task was proposed.
+- **Prep for dates (Job 2)**, in `date-prep-brief`: a date entering its window
+  starts a file-status read, the steps the firm set to `handles` run, and one brief
+  goes to the matter's responsible attorney with the paralegal copied: done, then
+  at most two numbered decisions from a closed catalog. A "yes" runs that step's
+  routine through the router. Proved when the Okafor status conference produces a
+  brief before Oct 2 and "yes on 2" leaves an `approved` row and the routine's draft.
+- **The routine handled quietly (Job 3)**: work closed on the record becomes one
+  "Done since last time" line in the next message that person gets, and a memo on
+  the matter; never a message of its own. Proved when that line appears and the
+  digest carries no "Also open" band.
+- **One ledger of what was proposed, decided and done**, the casework ledger,
+  written only through the broker, which refuses a close on money or court work,
+  an approval with no raise behind it, and a raise nobody witnessed reach a person.
+- **The escalator stops repeating what the other jobs own** when `case_manager` is
+  authored: no Operator-own tasks, no task under a pending proposal or "leave it",
+  no court date already briefed, and one line in place of the "Also open" band. It
+  keeps its backstop: a court date whose decisions go unanswered still fires at
+  `notify_days`.
+
+Scheduled routines using another routine's output was the open premise here; it is
+met two ways. Code reads across the prep routines' records and hands the turn
+facts (`date-prep-brief/pre_run.py`), and a step a person approves runs through the
+router's existing skill path, reading the routine's own procedure.
 
 ## 9. Open questions for the Captain
 
-None blocking Phase 1. Phase 3 needs one product call when it starts: whether a
-firm's first cleanup proposal is offered as part of onboarding or as a separately
-quoted engagement.
+- **A client seat.** No client seat authors `case_manager` in this delivery. Turning
+  the jobs on for Ashton & Price means new routines in its Schedule A-1, an
+  amendment to what the firm signed, so it is the Captain's call and not a config
+  edit. Until then its `cron: []` and its escalator are untouched.
+- **The first cleanup.** Whether a firm's first task-list cleanup is part of
+  onboarding or a separately quoted engagement.
+- **Records already received.** The spec's example A asks whether to request an
+  update of records already on file. The records chaser works its open roster only,
+  so the brief does not offer that step today (it would promise one no routine can
+  run). Adding it is a change to the chaser, if the Captain wants it.

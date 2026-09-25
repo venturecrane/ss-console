@@ -17,8 +17,9 @@ from vendored_sync import OPERATOR_ROOT, assert_byte_identical, discover_copies
 _CANONICAL = OPERATOR_ROOT / "skills" / "deadline-miss-escalator" / "routing.py"
 
 #: Copies besides the canonical: client-verification-tracker (2026-09-11) and
-#: task-list-keeper (2026-09-25).
-_FLOOR = 2
+#: task-list-keeper (2026-09-25) and date-prep-brief (2026-09-25, its brief
+#: routes to the matter's own staff).
+_FLOOR = 3
 
 
 def test_canonical_exists() -> None:
