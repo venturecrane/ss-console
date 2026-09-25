@@ -163,7 +163,12 @@ def legacy_rekey_count(deadlines, states, ledger) -> int:
     return count
 
 
-def _fired_append(item: dict, ledger, states: dict) -> dict:
+def _append_cap() -> int:
+    """The per-dispatch append cap, read at call time (tests patch it)."""
+    return _MAX_APPENDS_PER_DISPATCH
+
+
+def _fired_append(item: dict, ledger, states: dict, snooze_days: int) -> dict:
     """The ``fired`` row a successful send earns for one firing item.
 
     ``n`` is the number the reader sees beside the item (``digest_items.
@@ -186,6 +191,10 @@ def _fired_append(item: dict, ledger, states: dict) -> dict:
     }
     if isinstance(item.get("n"), int):
         row["n"] = item["n"]
+        # The overlay states "quiet for N days" from this, so the reply's
+        # confirmation names the same window the ledger will honor.
+        if isinstance(snooze_days, int) and not isinstance(snooze_days, bool) and 1 <= snooze_days <= 365:
+            row["snooze_days"] = snooze_days
     return row
 
 
@@ -371,9 +380,7 @@ def build_and_write(
                 # alert did not go (the review's finding 8).
                 overflow_matters |= group["matter_ids"]
                 continue
-            sub = _DIGEST_ITEMS.number_firing(
-                split_digest(digest, group["matter_ids"], today_iso), _MAX_APPENDS_PER_DISPATCH
-            )
+            sub = _DIGEST_ITEMS.number_firing(split_digest(digest, group["matter_ids"], today_iso), _append_cap())
             firing = _firing_items(sub)
             if not firing:
                 # An alert with nothing in the needs-a-person universe is not
@@ -382,7 +389,7 @@ def build_and_write(
                 continue
             full_body = render.render_digest(sub, ack_snooze_days=ack_snooze_days, rekey_count=rekey)
             skeleton_body = render.render_skeleton(sub)
-            appends = [_fired_append(item, ledger, states) for item in firing[:_MAX_APPENDS_PER_DISPATCH]]
+            appends = [_fired_append(item, ledger, states, ack_snooze_days) for item in firing[: _append_cap()]]
             wake_items.extend({"item_key": a["item_key"], "ack_code": a["token"]} for a in appends)
             dispatches.append(
                 {

@@ -22,8 +22,14 @@ which the send witness decides independently; losing it would make the item
 re-fire on a delivered alarm. Losing only the number costs one thing: a plain
 reply to that item finds no row, and the reader is asked which item they meant.
 
+``snooze_days`` rides with the number: how long an ack of this item stays
+quiet (the escalator's ``ack_snooze_days``), so the overlay's confirmation can
+state the window from the row. It is validated (1..365) and stripped with the
+number when the join fails.
+
 Refusals are reserved for shapes that are wrong on their face: digest fields on
-an event that is not a raise, a malformed nonce, a number out of range.
+an event that is not a raise, a malformed nonce, a number or snooze out of
+range.
 
 Lives apart from ``send_witness.py`` so the witness keeps one job, and apart from
 the vendored ``escalation_ledger`` twin, whose bytes are pinned against the
@@ -52,7 +58,10 @@ MAX_ITEM_NUMBER = 999
 
 #: The digest fields a caller may send on a raise. ``thread_ref`` is not among
 #: them: it is the broker's to set.
-_DIGEST_FIELDS = ("n", "dispatch_ref")
+_DIGEST_FIELDS = ("n", "dispatch_ref", "snooze_days")
+
+#: The longest ack window a digest may state, in days.
+MAX_SNOOZE_DAYS = 365
 
 _SQL = "SELECT metadata FROM audit_log WHERE action_type = 'CONFIRM_SEND_DISPATCHED' AND metadata LIKE ?"
 
@@ -138,6 +147,11 @@ def stamp_thread_ref(audit_db_path: str | None, event: dict[str, Any]) -> None:
     n = event.get("n")
     if n is not None and not _valid_n(n):
         raise ValueError(f"n must be a whole number from 1 to {MAX_ITEM_NUMBER}")
+    snooze = event.get("snooze_days")
+    if snooze is not None and not (
+        isinstance(snooze, int) and not isinstance(snooze, bool) and 1 <= snooze <= MAX_SNOOZE_DAYS
+    ):
+        raise ValueError(f"snooze_days must be a whole number from 1 to {MAX_SNOOZE_DAYS}")
     session_id = str(event.get("session_id") or "").strip()
     thread = dispatched_thread(audit_db_path, session_id, dispatch_ref) if dispatch_ref and n else ""
     if not thread:

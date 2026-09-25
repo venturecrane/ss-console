@@ -80,12 +80,16 @@ def _matter_head(item_or_group: dict) -> str:
 
     ``no_number_on_record`` is authored absence (the firm's record carries no
     number); every other absence is a resolution failure and renders the
-    generic phrase. Never a GUID, never a supplied value (ss #2390)."""
+    generic phrase. Never a GUID, never a supplied value (ss #2390).
+
+    Every form starts with the word "matter": a numbered line must read
+    ``N. matter ...``, the shape the overlay's reply parser uses to recognize
+    quoted digest text in a reply and refuse to read numbers from it."""
     number = item_or_group.get("matter_number")
     if isinstance(number, str) and number:
         return f"matter {number}"
     if item_or_group.get("matter_number_absent") == "no_number_on_record":
-        return "no number on record"
+        return "matter with no number on record"
     return "matter number unavailable"
 
 

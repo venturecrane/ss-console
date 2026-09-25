@@ -235,3 +235,44 @@ def test_an_unreadable_audit_db_strips_rather_than_blocks() -> None:
     stamp_thread_ref("/nonexistent/audit.db", event)
     assert not {"n", "dispatch_ref", "thread_ref"} & set(event)
     assert event["event"] == "fired"
+
+
+def test_snooze_days_rides_a_joined_raise(tmp_path: Path) -> None:
+    broker = _broker(tmp_path)
+    _confirm(broker, thread_id="thr_digest")
+    _append(broker, _raise(snooze_days=7))
+    row = _rows(broker)[0]
+    assert (row["n"], row["snooze_days"], row["thread_ref"]) == (1, 7, "thr_digest")
+
+
+def test_snooze_days_is_stripped_with_the_number_when_unjoined(tmp_path: Path) -> None:
+    broker = _broker(tmp_path)
+    _confirm(broker, dispatch_ref=OTHER_REF, thread_id="thr_x")
+    _append(broker, _raise(snooze_days=7))
+    assert not {"n", "dispatch_ref", "snooze_days", "thread_ref"} & set(_rows(broker)[0])
+
+
+@pytest.mark.parametrize("bad", [0, 366, True, "7", 7.0])
+def test_an_out_of_range_snooze_is_refused(tmp_path: Path, bad) -> None:
+    broker = _broker(tmp_path)
+    _confirm(broker, thread_id="thr_digest")
+    with pytest.raises(ValueError, match="snooze_days must be"):
+        _append(broker, _raise(snooze_days=bad))
+    assert _rows(broker) == []
+
+
+def test_snooze_days_on_an_ack_is_refused(tmp_path: Path) -> None:
+    broker = _broker(tmp_path)
+    _confirm(broker, thread_id="thr_digest")
+    _append(broker, _raise())
+    ack = el.make_event(
+        skill="deadline-miss-escalator",
+        matter_id="2026-PI-101",
+        item_key="item-one",
+        event="acked",
+        attempt=1,
+        token="ACK-7Q3M2K",
+    )
+    ack["snooze_days"] = 7
+    with pytest.raises(ValueError, match="carries no digest number"):
+        _append(broker, ack)

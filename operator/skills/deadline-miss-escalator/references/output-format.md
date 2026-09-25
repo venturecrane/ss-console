@@ -36,7 +36,7 @@ recomputed. It has never meant "print the digest". `<number>` in every template
 below is the
 digest item's `matter_number` - the connector's code join on the gate's own
 pull (ss #2390), copied verbatim. When it is null: `matter_number_absent:
-no_number_on_record` renders "no number on record" (the firm's record carries
+no_number_on_record` renders "matter with no number on record" (the firm's record carries
 no number); any other absence renders "matter number unavailable". Never a
 GUID, never a composed or remembered number. Section membership, per-matter groups, item
 numbers, section counts, and the subject line are all computed by the pre-run
@@ -119,6 +119,14 @@ on every one of its rows), so what the reader types resolves to exactly the
 rows behind the line. The footer carries no example numbers: a reader who
 copies an example answers an item they never read.
 
+**Every numbered line starts `N. matter `**, single items and group lines
+alike (an absent number reads "matter with no number on record"). The
+overlay's reply parser uses that shape (`^\d{1,3}\.\s+matter\b`) to recognize
+quoted digest text in a reply and refuse to read numbers from it, so a line
+that breaks the shape would let a quoted digest be read as an answer. The item
+lines listed under an "Open without a task id" group are `-` bullets, never
+numbered.
+
 **No number without a row.** Numbering stops at the envelope's append cap
 (`dispatch_envelope._MAX_APPENDS_PER_DISPATCH`): a line whose rows would not
 all fit under the cap renders with a `-` and no number, as does every line
@@ -155,8 +163,10 @@ nothing else. The tool renders it in code from what it actually wrote: which
 numbers went quiet (naming each item), for how long, and which numbers are
 still open. When it wrote nothing (the reply named no number, named a number
 the digest does not have, or the thread holds no digest rows), its text is a
-question back to the reader; that is sent verbatim too. The turn never
-composes, trims, or adds to either.
+question back to the reader; that is sent verbatim too. An empty
+`confirmation_text` means no reply is sent at all (no verified reply, an
+automatic reply, or a sender who is not rostered). The turn never composes,
+trims, or adds to any of these.
 
 **A legacy reply quoting `ACK-XXXXXX` codes** (a digest sent before the
 numbered format) is confirmed with the template below: it enumerates exactly

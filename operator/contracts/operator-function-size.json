@@ -41,7 +41,7 @@
     "skills/client-verification-tracker/pre_run.py::decide": 162,
     "skills/client-verification-tracker/pre_run.py::run_once": 81,
     "skills/daily-needs-you-digest/escalation_ledger.py::validate_append": 99,
-    "skills/deadline-miss-escalator/dispatch_envelope.py::build_and_write": 128,
+    "skills/deadline-miss-escalator/dispatch_envelope.py::build_and_write": 126,
     "skills/deadline-miss-escalator/escalation_ledger.py::validate_append": 99,
     "skills/deadline-miss-escalator/pre_run.py::run_once": 117,
     "skills/lien-ledger-tracker/escalation_ledger.py::validate_append": 99,

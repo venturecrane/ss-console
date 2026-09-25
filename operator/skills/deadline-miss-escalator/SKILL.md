@@ -94,7 +94,7 @@ Reads Smokeball (`list_tasks` `due_date`) for authored task deadlines and the ma
    **Provenance boundary (unchanged).** `last_raised` in the wake payload records what THE OPERATOR raised, and only after a send succeeded: a null value is "no prior raise on this item", never "not raised". `ACK` codes remain the #1935 class: in any legacy reply you write (step 3), print only a code a tool call this run returned or the reader quoted.
 
 3. **On a rostered internal reply (routed here by the inbox skill):**
-   - **A reply in a `[Deadlines]` thread in plain words** (numbers, "all", or no number at all): call `escalation_reply_ack` with no arguments, then send its `confirmation_text` to the replier verbatim, and nothing else. The tool reads the reply and the thread from the verified inbound message itself; you never pass it a number, an item, or a thread. If it refuses (no digest rows in this thread, an unknown number, nothing named), its `confirmation_text` is the question to send back; send that verbatim too. Never write an `acked` row yourself for a plain-word reply.
+   - **A reply in a `[Deadlines]` thread in plain words** (numbers, "all", or no number at all): call `escalation_reply_ack` with no arguments, then send its `confirmation_text` to the replier verbatim, and nothing else. **An empty `confirmation_text` means send no reply at all** (the tool found no verified reply, an automatic reply, or a sender who is not rostered); never compose one to fill the gap. The tool reads the reply and the thread from the verified inbound message itself; you never pass it a number, an item, or a thread. If it refuses (no digest rows in this thread, an unknown number, nothing named), its `confirmation_text` is the question to send back; send that verbatim too. Never write an `acked` row yourself for a plain-word reply.
    - **A reply quoting legacy `ACK-XXXXXX` codes or `ESCALATION_ACKNOWLEDGED`** (a digest sent before the numbered format): run the per-code procedure - resolve each code against `escalation_state` output, emit an `acked` event per code with `escalation_append` (`ack_token`), and reply enumerating what was acked and counting what remains, per the legacy confirmation template in `references/output-format.md`.
 4. **Never compute, never send to a client.** No date is produced; no client/tribunal-bound message is drafted or sent.
 
@@ -130,7 +130,7 @@ Computing "X from the incident" to decide what is overdue (the cardinal sin - ov
 3. `ESCALATION_FIRED` targets the authored red-flag recipient; with none authored, no alert fires.
 4. Held matters surface for clearance, no client step.
 5. No date is computed; overdue is decided by an authored date passing today.
-6. Every rendered matter number equals a `matter_number` the wake payload or a this-turn read carries; an absent number renders explicit absence ("no number on record" / "matter number unavailable"), never a GUID and never a supplied value.
+6. Every rendered matter number equals a `matter_number` the wake payload or a this-turn read carries; an absent number renders explicit absence ("matter with no number on record" / "matter number unavailable"), never a GUID and never a supplied value.
 
 ## References
 

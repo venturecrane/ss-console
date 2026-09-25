@@ -174,7 +174,7 @@ def test_admin_and_elsewhere_render_grouped_lines():
     assert "## Also open (3 across 2 matters)" in body
     assert "More open items past the top five, one line per matter." in body
     assert "2. matter 2026-PI-102: 2 more open items" in body
-    assert "3. no number on record: 1 more open item" in body
+    assert "3. matter with no number on record: 1 more open item" in body
     assert "ACK-" not in body
     assert "## Under active escalation elsewhere (2 across 1 matter)" in body
     assert "- matter 2026-PI-103: 2 items under active escalation (last raised 2026-08-28)." in body
@@ -190,7 +190,7 @@ def test_matter_number_absences_render_exact_phrases_never_guid():
     digest["needs_you"][0]["matter_number"] = None
     digest["needs_you"][1]["matter_number"] = None
     body = render.render_digest(digest, ack_snooze_days=7)
-    assert "no number on record, due" in body
+    assert "matter with no number on record, due" in body
     assert "matter number unavailable, due" in body
     assert "m-None" not in body
 
@@ -656,6 +656,39 @@ def test_body_numbers_equal_append_numbers_one_for_one(tmp_path, monkeypatch):
     assert "ACK-" not in body and "ESCALATION_ACKNOWLEDGED" not in body
     # The legacy code still rides the row: codes already sent keep working.
     assert all(a["token"] and a["token"].startswith("ACK-") for a in dispatch["appends"])
+    # Every numbered row states the ack window the confirmation will quote.
+    assert {a["snooze_days"] for a in dispatch["appends"]} == {7}
+
+
+# The overlay's quoted-digest detector (hermes-smd-overlay#384): a numbered
+# digest line is ``N. matter ...``. A line that breaks the shape would let a
+# reply quoting the digest be read as an answer.
+_OVERLAY_DIGEST_LINE = re.compile(r"^\d{1,3}\.\s+matter\b")
+_ANY_NUMBERED = re.compile(r"^\s*\d+\.")
+
+
+def test_every_numbered_line_has_the_shape_the_overlay_detects(tmp_path, monkeypatch):
+    absent = [
+        lambda pre_run: pre_run.MatterDeadline(
+            matter_id="m-9",
+            authored_date=date(2026, 8, 29),
+            label="task-deadline",
+            task_id="t-9",
+            matter_number=None,
+            matter_number_absent="no_number_on_record",
+        ),
+        _untasked("m-8", None, 27),
+        _untasked("m-8", None, 28),
+    ]
+    deadlines = _five_needs_you_then_two_groups() + absent
+    _, written = _central_envelope(tmp_path, monkeypatch, deadlines, "esc_pre_run_shape")
+    lines = written["dispatches"][0]["full_body"].split("\n")
+    numbered = [line for line in lines if _ANY_NUMBERED.match(line)]
+    assert len(numbered) >= 8
+    assert all(_OVERLAY_DIGEST_LINE.match(line) for line in numbered), numbered
+    # The items listed under a blanket group are bullets, never numbered.
+    assert any(line.startswith("   - matter") for line in lines)
+    assert "matter with no number on record" in "\n".join(lines)
 
 
 def test_no_number_is_shown_past_the_append_cap(tmp_path, monkeypatch):
@@ -669,7 +702,7 @@ def test_no_number_is_shown_past_the_append_cap(tmp_path, monkeypatch):
     assert [int(n) for n in _NUMBERED_LINE.findall(body)] == [1, 2, 3, 4, 5, 6]
     assert len(dispatch["appends"]) == 8
     assert _numbers_by_n(dispatch["appends"]) == {1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 2}
-    assert "n" not in dispatch["appends"][-1]
+    assert "n" not in dispatch["appends"][-1] and "snooze_days" not in dispatch["appends"][-1]
     assert "- matter 2026-PI-107: 3 more open items" in body
     # A number is still shown, so the reply invitation stands.
     assert "Reply to this email with the numbers you have" in body

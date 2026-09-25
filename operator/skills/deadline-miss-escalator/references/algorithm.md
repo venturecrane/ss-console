@@ -190,6 +190,9 @@ three extra fields so a plain-word reply can be resolved in code:
   `dispatch_envelope._fired_append`. An "Also open" matter or an "Open without
   a task id" matter has one number shared by all of its rows. Numbering stops
   at the append cap, so no number is printed without a row behind it.
+- **`snooze_days`** - the escalator's `ack_snooze_days` (1..365), on every
+  numbered row, so the overlay's confirmation states the quiet window from the
+  row rather than from a constant. Stripped with `n` when the join fails.
 - **`dispatch_ref`** - a per-dispatch nonce (uuid4 hex) the overlay mints and
   sends both on the transmit (`audit_extra`, onto the broker's own
   `CONFIRM_SEND_DISPATCHED` row) and on each raise append.
