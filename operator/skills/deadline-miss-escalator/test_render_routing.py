@@ -57,6 +57,7 @@ def _item(
     marker=None,
     absent=None,
     task_id="t-1",
+    n=1,
 ):
     return {
         "matter_id": "m-" + (matter or "absent"),
@@ -69,6 +70,7 @@ def _item(
         "ack_code": code,
         "last_raised": None,
         "priority_marker": marker,
+        **({"n": n} if n is not None else {}),
     }
 
 
@@ -84,12 +86,33 @@ def _digest(**overrides):
 def test_render_digest_carries_template_markup_and_values():
     body = render.render_digest(_digest(), ack_snooze_days=7)
     assert "## Needs you today (1)" in body
-    assert "1. matter 2026-PI-101, task-deadline 2026-08-29 (overdue by 2 days) [ACK-AAAAAA]" in body
-    assert "ESCALATION_ACKNOWLEDGED" in body
+    assert "1. matter 2026-PI-101, due 2026-08-29 (overdue by 2 days)" in body
+    # Plain-word replies: no code of any kind reaches the reader.
+    assert "ACK-" not in body
+    assert "ESCALATION_ACKNOWLEDGED" not in body
+    assert body.rstrip("\n").endswith(render.REPLY_FOOTER.format(ack_snooze_days=7))
     assert "goes quiet for 7 days" in body
-    assert "no client message has been sent" in body
     # No em dashes anywhere (law-seat first-draft rule).
     assert "—" not in body
+
+
+def test_the_footer_is_exactly_the_authored_sentence():
+    body = render.render_digest(_digest(), ack_snooze_days=7)
+    assert (
+        "Reply to this email with the numbers you have, or say all. Each one you answer goes quiet "
+        "for 7 days; finishing it in Smokeball clears it for good. This is an internal note; no "
+        "client was contacted."
+    ) in body
+
+
+def test_a_body_with_no_numbered_unit_invites_no_reply():
+    """A body rendered without rows behind it (no ``n`` anywhere) must not ask
+    for numbers: a reply would find nothing to quiet."""
+    body = render.render_digest(_digest(needs_you=[_item(n=None)]), ack_snooze_days=7)
+    assert "- matter 2026-PI-101, due 2026-08-29 (overdue by 2 days)" in body
+    assert "Reply to this email" not in body
+    assert not re.search(r"^\s*\d+\. ", body, re.MULTILINE)
+    assert body.rstrip("\n").endswith(render.UNNUMBERED_FOOTER)
 
 
 def test_conditional_sections_omitted_whole():
@@ -98,7 +121,7 @@ def test_conditional_sections_omitted_whole():
         "## Also open",
         "## Under active escalation elsewhere",
         "## Awaiting clearance",
-        "## Blanket-ack only",
+        "## Open without a task id",
     ):
         assert heading not in body
 
@@ -117,6 +140,7 @@ def test_admin_and_elsewhere_render_grouped_lines():
                     "ack_codes": ["ACK-BBBBBB", "ACK-CCCCCC"],
                     "last_raised": None,
                     "items": [],
+                    "n": 2,
                 },
                 {
                     "matter_id": "m-2",
@@ -126,6 +150,7 @@ def test_admin_and_elsewhere_render_grouped_lines():
                     "ack_codes": ["ACK-DDDDDD"],
                     "last_raised": None,
                     "items": [],
+                    "n": 3,
                 },
             ],
         },
@@ -147,9 +172,10 @@ def test_admin_and_elsewhere_render_grouped_lines():
     )
     body = render.render_digest(digest, ack_snooze_days=7)
     assert "## Also open (3 across 2 matters)" in body
-    assert "More open items past the top five, collapsed per matter." in body
-    assert "- matter 2026-PI-102: 2 more items. [ACK-BBBBBB] [ACK-CCCCCC]" in body
-    assert "- no number on record: 1 more item. [ACK-DDDDDD]" in body
+    assert "More open items past the top five, one line per matter." in body
+    assert "2. matter 2026-PI-102: 2 more open items" in body
+    assert "3. no number on record: 1 more open item" in body
+    assert "ACK-" not in body
     assert "## Under active escalation elsewhere (2 across 1 matter)" in body
     assert "- matter 2026-PI-103: 2 items under active escalation (last raised 2026-08-28)." in body
 
@@ -164,8 +190,8 @@ def test_matter_number_absences_render_exact_phrases_never_guid():
     digest["needs_you"][0]["matter_number"] = None
     digest["needs_you"][1]["matter_number"] = None
     body = render.render_digest(digest, ack_snooze_days=7)
-    assert "no number on record, task-deadline" in body
-    assert "matter number unavailable, task-deadline" in body
+    assert "no number on record, due" in body
+    assert "matter number unavailable, due" in body
     assert "m-None" not in body
 
 
@@ -179,7 +205,7 @@ def test_consequence_map_is_closed():
 
 def test_footer_is_a_sibling_not_a_list_child():
     body = render.render_digest(_digest(), ack_snooze_days=7)
-    footer_line = next(line for line in body.split("\n") if line.startswith("Reply with"))
+    footer_line = next(line for line in body.split("\n") if line.startswith("Reply to this email"))
     assert not footer_line.startswith(("-", " ", "1.")), "footer must not nest in a list"
 
 
@@ -209,6 +235,9 @@ def test_skeleton_is_identifier_free():
     assert "ACK-" not in body
     assert "2026-PI" not in body
     assert "no client message has been sent" in body
+    # No numbered items, so no invitation to reply by number.
+    assert not re.search(r"^\s*\d+\. ", body, re.MULTILINE)
+    assert "Reply" not in body
 
 
 # ---------------------------------------------------------------------------
@@ -549,3 +578,153 @@ def test_bare_id_no_longer_resolves_matter(tmp_path):
     # the item is blanket-ack only.
     assert pre_run._matter_id_of({"id": "ev-1"}) == "unknown-matter"
     assert pre_run._matter_id_of({"matterId": "m-1", "id": "ev-1"}) == "m-1"
+
+
+# ---------------------------------------------------------------------------
+# The numbered map: the number a reader answers with IS the row's ``n``
+# ---------------------------------------------------------------------------
+
+_NUMBERED_LINE = re.compile(r"^(\d+)\. ", re.MULTILINE)
+
+
+def _central_envelope(tmp_path, monkeypatch, deadlines, name):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    monkeypatch.delenv("SMD_CUSTOMER_YAML_PATH", raising=False)
+    pre_run = _load("pre_run.py", name)
+    yaml_path = tmp_path / "customer.yaml"
+    yaml_path.write_text(
+        "escalation:\n  red_flag_recipients:\n    - ops@firm.example\n"
+        "scope:\n  inbound_allow_from:\n    - '@firm.example'\n"
+    )
+    built = [d(pre_run) for d in deadlines]
+    today = date(2026, 8, 31)
+    digest = pre_run.project_digest(built, pre_run.EscalationWindows(), ledger, today=today)
+    meta = envelope.build_and_write(
+        digest=digest,
+        deadlines=built,
+        states={},
+        ledger=ledger,
+        today=today,
+        ack_snooze_days=7,
+        customer_yaml_path=str(yaml_path),
+        staff_pull=lambda ids, budget: {},
+    )
+    path = tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.dispatch.json"
+    return meta, (json.loads(path.read_text()) if path.exists() else None)
+
+
+def _task(matter_id, task_id, number):
+    return lambda pre_run: _mk_deadline(pre_run, matter_id, task_id, number)
+
+
+def _untasked(matter_id, number, day):
+    return lambda pre_run: pre_run.MatterDeadline(
+        matter_id=matter_id,
+        authored_date=date(2026, 8, day),
+        label="court-date",
+        task_id=None,
+        matter_number=number,
+    )
+
+
+def _five_needs_you_then_two_groups():
+    items = [_task(f"m-{i}", f"t-{i}", f"2026-PI-10{i}") for i in range(1, 6)]
+    items += [_task("m-6", "t-6a", "2026-PI-106"), _task("m-6", "t-6b", "2026-PI-106")]
+    items += [_task("m-7", f"t-7{c}", "2026-PI-107") for c in "abc"]
+    return items
+
+
+def _numbers_by_n(appends):
+    by_n: dict[int, int] = {}
+    for append in appends:
+        if "n" in append:
+            by_n[append["n"]] = by_n.get(append["n"], 0) + 1
+    return by_n
+
+
+def test_body_numbers_equal_append_numbers_one_for_one(tmp_path, monkeypatch):
+    _, written = _central_envelope(tmp_path, monkeypatch, _five_needs_you_then_two_groups(), "esc_pre_run_numbered")
+    [dispatch] = written["dispatches"]
+    body = dispatch["full_body"]
+    shown = [int(n) for n in _NUMBERED_LINE.findall(body)]
+    assert shown == [1, 2, 3, 4, 5, 6, 7]
+    # Each needs-you number has one row; each Also-open group number has one
+    # row per item in the group, all sharing it.
+    assert _numbers_by_n(dispatch["appends"]) == {1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 2, 7: 3}
+    assert "6. matter 2026-PI-106: 2 more open items" in body
+    assert "7. matter 2026-PI-107: 3 more open items" in body
+    assert "ACK-" not in body and "ESCALATION_ACKNOWLEDGED" not in body
+    # The legacy code still rides the row: codes already sent keep working.
+    assert all(a["token"] and a["token"].startswith("ACK-") for a in dispatch["appends"])
+
+
+def test_no_number_is_shown_past_the_append_cap(tmp_path, monkeypatch):
+    """Cap 8: five needs-you rows, the 2-item group (7 rows), and the 3-item
+    group does not fit. It renders unnumbered, and its one row under the cap
+    carries no number, so nothing a reader can type resolves to a partial group."""
+    monkeypatch.setattr(envelope, "_MAX_APPENDS_PER_DISPATCH", 8)
+    _, written = _central_envelope(tmp_path, monkeypatch, _five_needs_you_then_two_groups(), "esc_pre_run_capped")
+    [dispatch] = written["dispatches"]
+    body = dispatch["full_body"]
+    assert [int(n) for n in _NUMBERED_LINE.findall(body)] == [1, 2, 3, 4, 5, 6]
+    assert len(dispatch["appends"]) == 8
+    assert _numbers_by_n(dispatch["appends"]) == {1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 2}
+    assert "n" not in dispatch["appends"][-1]
+    assert "- matter 2026-PI-107: 3 more open items" in body
+    # A number is still shown, so the reply invitation stands.
+    assert "Reply to this email with the numbers you have" in body
+
+
+def test_blanket_items_share_one_number_per_matter(tmp_path, monkeypatch):
+    deadlines = [
+        _task("m-1", "t-1", "2026-PI-101"),
+        _untasked("m-2", "2026-PI-102", 27),
+        _untasked("m-3", "2026-PI-103", 28),
+        _untasked("m-2", "2026-PI-102", 29),
+    ]
+    _, written = _central_envelope(tmp_path, monkeypatch, deadlines, "esc_pre_run_blanket")
+    [dispatch] = written["dispatches"]
+    body = dispatch["full_body"]
+    assert [int(n) for n in _NUMBERED_LINE.findall(body)] == [1, 2, 3]
+    assert "2. matter 2026-PI-102: 2 open items with no task id" in body
+    assert "3. matter 2026-PI-103: 1 open item with no task id" in body
+    assert "   - matter 2026-PI-102, court-date 2026-08-27 (overdue by 4 days)" in body
+    blanket_rows = [a for a in dispatch["appends"] if a["matter_id"] in ("m-2", "m-3")]
+    assert [(a["matter_id"], a["n"]) for a in blanket_rows] == [("m-2", 2), ("m-2", 2), ("m-3", 3)]
+    assert all(a["token"] is None for a in blanket_rows)
+
+
+def test_the_skeleton_rung_carries_no_numbers(tmp_path, monkeypatch):
+    _, written = _central_envelope(tmp_path, monkeypatch, _five_needs_you_then_two_groups(), "esc_pre_run_skel")
+    skeleton = written["dispatches"][0]["skeleton_body"]
+    assert not _NUMBERED_LINE.search(skeleton)
+    assert "Reply" not in skeleton
+
+
+def test_zero_firing_items_sends_nothing(tmp_path, monkeypatch):
+    """A recipient whose only content is informational (raised recently, so
+    under "elsewhere") gets no digest: nothing numbered, nothing sent."""
+
+    def quiet(pre_run):
+        return pre_run.MatterDeadline(
+            matter_id="m-1",
+            authored_date=date(2026, 8, 29),
+            label="task-deadline",
+            task_id="t-1",
+            matter_number="2026-PI-101",
+            acknowledged=True,
+            last_raised="2026-08-30T14:00:00Z",
+        )
+
+    meta, written = _central_envelope(tmp_path, monkeypatch, [quiet], "esc_pre_run_quiet")
+    assert meta == {}
+    assert written is None
+
+
+def test_number_firing_does_not_mutate_its_input():
+    digest_items = _load("digest_items.py", "escalator_digest_items_under_test")
+    sub = {"needs_you": [_item(n=None)], "blanket_ack_only": [_item(task_id=None, code=None, n=None)]}
+    numbered = digest_items.number_firing(sub, 200)
+    assert [i["n"] for i in numbered["needs_you"]] == [1]
+    assert [i["n"] for i in numbered["blanket_ack_only"]] == [2]
+    assert "n" not in sub["needs_you"][0] and "n" not in sub["blanket_ack_only"][0]

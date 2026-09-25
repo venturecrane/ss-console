@@ -180,11 +180,43 @@ recompute a code for it.
   has no prior `fired`, so a stray or forged code cannot silence an alarm that
   never rang.
 
-## The per-item ack procedure (reply turn)
+## The numbered map on `fired` rows (plain-word replies)
 
-The inbound reply is routed to this procedure by the inbox skill (see
+A dispatched digest numbers its lines, and each `fired` row it earns carries
+three extra fields so a plain-word reply can be resolved in code:
+
+- **`n`** - the number printed beside the item, assigned by
+  `digest_items.number_firing` and copied onto the envelope append by
+  `dispatch_envelope._fired_append`. An "Also open" matter or an "Open without
+  a task id" matter has one number shared by all of its rows. Numbering stops
+  at the append cap, so no number is printed without a row behind it.
+- **`dispatch_ref`** - a per-dispatch nonce (uuid4 hex) the overlay mints and
+  sends both on the transmit (`audit_extra`, onto the broker's own
+  `CONFIRM_SEND_DISPATCHED` row) and on each raise append.
+- **`thread_ref`** - stamped by the BROKER (`workspace_broker/digest_ref.py`),
+  never by a caller: it joins the raise's `dispatch_ref`, within the raise's own
+  session, to that confirm row and copies the vendor thread off it (AgentMail
+  `thread_id`, Graph `conversation_id`). A caller-supplied `thread_ref` is
+  always discarded. A raise the broker cannot join is still written, with `n`
+  and `dispatch_ref` stripped: the alarm reached a person, and losing the raise
+  would re-fire a delivered alarm. `n` or `dispatch_ref` on any event that is
+  not a raise is refused.
+
+A reply is answered by `escalation_reply_ack` (overlay), which takes no
+arguments from the model. It reads the reply's own words and thread from the
+verified inbound message, parses the numbers in code, finds the raise rows
+whose `thread_ref` is that thread, and writes one `acked` per item behind each
+number through `escalation_event_append`. It returns a code-rendered
+`confirmation_text` the turn sends verbatim. A reply naming no number, or a
+number no row carries, writes nothing and returns a question.
+
+## The legacy per-code ack procedure (reply turn)
+
+Digests sent before the numbered format carried `ACK-XXXXXX` codes; the rows
+still carry them as `token`, so a reply quoting one still works. The inbound
+reply is routed to this procedure by the inbox skill (see
 `matter-inbox-router`), never by the escalator itself. On a rostered internal
-reply:
+reply that quotes codes:
 
 1. Extract every `ACK-XXXXXX` code present in the reply body (they survive quote
    trimming). A blanket `ESCALATION_ACKNOWLEDGED` with no codes acks exactly the

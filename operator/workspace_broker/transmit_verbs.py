@@ -22,6 +22,7 @@ from typing import Any
 from .broker_context import BrokerContext
 from .agentmail_ops import AgentMailRefused, AgentMailTransportError, collect_recipients
 from .canon import canonical
+from .digest_ref import valid_dispatch_ref
 from .msgraph_ops import MsGraphRefused, MsGraphTransportError
 from .msgraph_ops import collect_recipients as collect_msgraph_recipients
 
@@ -44,12 +45,19 @@ VERBS: tuple[str, ...] = ("agentmail_send", "agentmail_reply", "msgraph_send", "
 #: ``lookup``           whether that resolution succeeded, and why not. Recorded
 #:                      so a blank id is never mistaken for a mailbox that had
 #:                      nothing to find.
+#: ``thread_id``        AgentMail's thread for the message; ``conversation_id``
+#: ``conversation_id``  is Graph's. A reply to a numbered digest arrives in that
+#:                      thread, and ``digest_ref.py`` reads it off THIS row to
+#:                      stamp ``thread_ref`` on the digest's raise rows, so the
+#:                      thread is the broker's fact, never the caller's.
 _OPS_AUDIT_KEYS: tuple[str, ...] = (
     "sender_key",
     "audit_row_token",
     "vendor_message_id",
     "graph_message_id",
     "lookup",
+    "thread_id",
+    "conversation_id",
 )
 
 #: Of those, the ones that stay in the ledger and never travel back to the agent.
@@ -93,6 +101,13 @@ _AUDIT_ONLY_KEYS = frozenset({"sender_key", "audit_row_token"})
 #:                          and the join fell through to hash-only attribution
 #:                          (claims review 2026-09-04, B3).
 #:
+#: ``dispatch_ref``         the overlay's per-dispatch nonce (uuid4 hex, 32
+#:                          lowercase hex), also stamped on each numbered raise
+#:                          row of the same send. ``digest_ref.py`` joins the two
+#:                          on it to find this row's thread. Shape-checked here
+#:                          (``digest_ref.DISPATCH_REF_RE``); a malformed value
+#:                          is dropped like any unnamed key.
+#:
 #: CLOSED ALLOWLIST, AND SILENTLY SO. The filter below drops any key not named
 #: here with no error and no log, which is the right posture for an untrusted
 #: caller-supplied dict but means a stamp the overlay adds WITHOUT a matching
@@ -106,6 +121,7 @@ _CALLER_AUDIT_KEYS: tuple[str, ...] = (
     "plain_body_sha256",
     "body_variant",
     "skill_name",
+    "dispatch_ref",
 )
 
 
@@ -182,11 +198,14 @@ def _audit_extra(request: dict[str, Any]) -> dict[str, str]:
     # either order.
     raw = request.get("audit_extra")
     raw_extra: dict[str, Any] = raw if isinstance(raw, dict) else {}
-    return {
+    extra = {
         key: raw_extra[key].strip()
         for key in _CALLER_AUDIT_KEYS
         if isinstance(raw_extra.get(key), str) and raw_extra[key].strip()
     }
+    if "dispatch_ref" in extra and not valid_dispatch_ref(extra["dispatch_ref"]):
+        del extra["dispatch_ref"]
+    return extra
 
 
 def _clean(request: dict[str, Any], key: str) -> str:

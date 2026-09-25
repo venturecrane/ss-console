@@ -99,15 +99,18 @@ def _due_phrase(days_out: int) -> str:
 
 
 def _item_line(item: dict) -> str:
-    """``<matter head>, "<task label>", <label> <date> (<due phrase>)``, the
+    """``<matter head>, "<task label>", due <date> (<due phrase>)``, the
     shared core of a needs-you and blanket line. Values verbatim from the
     digest item; the quoted task label renders only for a task deadline that
-    carries one (``subject_display``, masked at parse time). An event title
-    never renders: it is often a case caption."""
-    task = item.get("subject_display") if item.get("label") == "task-deadline" else None
+    carries one (``subject_display``, masked at parse time). A task deadline
+    reads "due <date>"; any other kind keeps its label ("court-date <date>").
+    An event title never renders: it is often a case caption."""
+    is_task = item.get("label") == "task-deadline"
+    task = item.get("subject_display") if is_task else None
     named = f'"{task}", ' if isinstance(task, str) and task else ""
+    kind = "due" if is_task else item.get("label")
     return (
-        f"{_matter_head(item)}, {named}{item.get('label')} {item.get('authored_date')} "
+        f"{_matter_head(item)}, {named}{kind} {item.get('authored_date')} "
         f"({_due_phrase(int(item.get('days_out') or 0))})"
     )
 
@@ -133,14 +136,25 @@ def _plural(n: int, word: str) -> str:
 
 _REKEY_NOTICE = (
     "Item identity was corrected for {n} calendar item{s}; previously "
-    "acknowledged items may resurface once and now clear only with a blanket "
-    "acknowledgment."
+    "acknowledged items may resurface once, listed under their matter below."
 )
 
 
 # ---------------------------------------------------------------------------
 # render_digest — references/output-format.md, literally.
 # ---------------------------------------------------------------------------
+
+#: The footer of a numbered digest. No literal example numbers: a reader who
+#: copies an example would answer an item they never read.
+REPLY_FOOTER = (
+    "Reply to this email with the numbers you have, or say all. Each one you "
+    "answer goes quiet for {ack_snooze_days} days; finishing it in Smokeball "
+    "clears it for good. This is an internal note; no client was contacted."
+)
+
+#: The footer of a body with no answerable number (every unit past the append
+#: cap, or rendered with no rows behind it). No invitation to reply.
+UNNUMBERED_FOOTER = "Finishing an item in Smokeball clears it. This is an internal note; no client was contacted."
 
 
 def _preamble(items: list[dict]) -> str | None:
@@ -158,6 +172,22 @@ def _preamble(items: list[dict]) -> str | None:
     return None
 
 
+def _marker(unit: dict) -> str:
+    """``N.`` for a unit that carries the number its ledger rows carry, else a
+    plain bullet. The number comes from ``digest_items.number_firing`` and is
+    the one the reader answers with; a unit past the append cap, or a body
+    rendered with no rows behind it, has none and must not invite a reply."""
+    n = unit.get("n")
+    return f"{n}." if isinstance(n, int) and not isinstance(n, bool) else "-"
+
+
+def _numbered(digest: dict) -> bool:
+    """Whether any line in this body carries an answerable number."""
+    units = list(digest.get("needs_you") or []) + list(digest.get("blanket_ack_only") or [])
+    units += list((digest.get("admin_confirms") or {}).get("matters") or [])
+    return any(_marker(u) != "-" for u in units)
+
+
 def _needs_you_block(items: list[dict]) -> list[str]:
     lines = [f"## Needs you today ({len(items)})", ""]
     if not items:
@@ -165,9 +195,8 @@ def _needs_you_block(items: list[dict]) -> list[str]:
     preamble = _preamble(items)
     if preamble:
         lines += [preamble, ""]
-    for index, item in enumerate(items, start=1):
-        code = item.get("ack_code")
-        lines.append(f"{index}. {_item_line(item)}" + (f" [{code}]" if code else ""))
+    for item in items:
+        lines.append(f"{_marker(item)} {_item_line(item)}")
         reason = consequence_line(item)
         if reason:
             lines.append(f"   {reason}")
@@ -186,15 +215,14 @@ def _overflow_block(band: dict | None) -> list[str]:
     lines = [
         f"## Also open ({total} across {_plural(int(band.get('matter_count') or 0), 'matter')})",
         "",
-        "More open items past the top five, collapsed per matter. Reply with a "
-        "matter's ACK codes to clear them, or open them in Smokeball.",
+        "More open items past the top five, one line per matter. Answering a "
+        "matter's number covers all of its items; each one is listed in Smokeball.",
         "",
     ]
     for group in band["matters"]:
         count = int(group.get("count") or 0)
-        codes = " ".join(f"[{c}]" for c in (group.get("ack_codes") or []))
-        more = f"{count} more item" + ("" if count == 1 else "s")
-        lines.append(f"- {_matter_head(group)}: {more}." + (f" {codes}" if codes else ""))
+        more = f"{count} more open item" + ("" if count == 1 else "s")
+        lines.append(f"{_marker(group)} {_matter_head(group)}: {more}")
     return lines + [""]
 
 
@@ -233,18 +261,34 @@ def _clearance_block(items: list[dict]) -> list[str]:
     return lines + [""]
 
 
+def _blanket_runs(items: list[dict]) -> list[list[dict]]:
+    """Blanket items per matter, in first-appearance order. ``number_firing``
+    already made each matter's items contiguous and gave them one number; this
+    only re-forms the runs for rendering."""
+    runs: dict[object, list[dict]] = {}
+    for item in items:
+        runs.setdefault(item.get("matter_id"), []).append(item)
+    return list(runs.values())
+
+
 def _blanket_block(items: list[dict]) -> list[str]:
+    """Items with no stable task id in Smokeball: they cannot be told apart by
+    a task, so they are answered per matter. The group line says exactly that,
+    and the items are listed under it so the reader sees what a number covers."""
     if not items:
         return []
     lines = [
-        f"## Blanket-ack only ({len(items)})",
+        f"## Open without a task id ({len(items)})",
         "",
-        "Items with no stable task id, so they carry no individual ACK "
-        "code. A blanket acknowledgement (below) acks exactly the items "
-        "quoted here.",
+        "Items with no task id in Smokeball, one line per matter. Answering a "
+        "matter's number covers every item listed under it.",
         "",
     ]
-    return lines + [f"- {_item_line(item)}." for item in items] + [""]
+    for run in _blanket_runs(items):
+        count = f"{len(run)} open item" + ("" if len(run) == 1 else "s")
+        lines.append(f"{_marker(run[0])} {_matter_head(run[0])}: {count} with no task id")
+        lines += [f"   - {_item_line(item)}" for item in run]
+    return lines + [""]
 
 
 def _probe_line(probe: dict | None) -> list[str]:
@@ -280,16 +324,10 @@ def render_digest(
     lines += _clearance_block(digest.get("awaiting_clearance") or [])
     lines += _blanket_block(digest.get("blanket_ack_only") or [])
     # The single footer, a SIBLING of the lists (rule 4; the 2026-08-14 HTML
-    # rendered it as a list child).
-    lines.append(
-        "Reply with the ACK code(s) above to acknowledge. Reply "
-        "ESCALATION_ACKNOWLEDGED to ack every item quoted in this message; "
-        f"items you do not quote stay open. An acked item goes quiet for "
-        f"{ack_snooze_days} days, then re-surfaces if it is still open in "
-        "Smokeball. Completing the item in Smokeball is the only thing that "
-        "closes it. This is an internal alert to a person at the firm; no "
-        "client message has been sent."
-    )
+    # rendered it as a list child). It invites a reply only when a number in
+    # the body has a ledger row behind it; otherwise a reply would find
+    # nothing to quiet, so it says only how an item closes.
+    lines.append(REPLY_FOOTER.format(ack_snooze_days=ack_snooze_days) if _numbered(digest) else UNNUMBERED_FOOTER)
     lines += _probe_line(digest.get("probe_artifacts"))
     return "\n".join(lines).rstrip("\n") + "\n"
 
@@ -302,8 +340,9 @@ def render_digest(
 
 def render_skeleton(digest: dict) -> str:
     """Authored minimal body. Identifier-free by construction: no matter
-    numbers, no dates, no ACK codes, no task ids — only counts. Tested by
-    regex assertion in test_render.py."""
+    numbers, no dates, no item numbers, no task ids, only counts. It carries
+    no numbered items, so it does not invite a reply. Tested by regex
+    assertion in test_render_routing.py."""
     need = len(digest.get("needs_you") or []) + len(digest.get("blanket_ack_only") or [])
     more = int((digest.get("admin_confirms") or {}).get("total") or 0)
     lines = [

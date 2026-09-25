@@ -134,18 +134,17 @@ def _pull(task_subject: str, event_title: str = "Smith v. Jones status conferenc
 
 
 def _parsed_digest(task_subject: str, event_title: str = "Status conference") -> dict:
+    """The projection, numbered the way the envelope numbers every sent body."""
     deadlines, problem, _stats = pre_run.parse_pull(_pull(task_subject, event_title))
     assert problem is None
-    return pre_run.project_digest(deadlines, pre_run.EscalationWindows(), ledger, today=TODAY)
+    digest = pre_run.project_digest(deadlines, pre_run.EscalationWindows(), ledger, today=TODAY)
+    return items_mod.number_firing(digest, 200)
 
 
 def test_a_task_line_names_the_task_masked():
     digest = _parsed_digest(HOSTILE_SUBJECT)
     body = render.render_digest(digest, ack_snooze_days=7)
-    assert (
-        '1. matter 2026-PI-101, "Pay \u2026 by \u2026 on \u2026 now", task-deadline 2026-09-20 (overdue by 2 days)'
-        in body
-    )
+    assert '1. matter 2026-PI-101, "Pay \u2026 by \u2026 on \u2026 now", due 2026-09-20 (overdue by 2 days)' in body
 
 
 def test_an_event_title_never_renders():
@@ -172,7 +171,7 @@ def test_the_raw_subject_never_reaches_the_digest():
 def test_a_caption_task_renders_without_a_label():
     digest = _parsed_digest(CAPTION_SUBJECT)
     body = render.render_digest(digest, ack_snooze_days=7)
-    assert "1. matter 2026-PI-101, task-deadline 2026-09-20 (overdue by 2 days)" in body
+    assert "1. matter 2026-PI-101, due 2026-09-20 (overdue by 2 days)" in body
     assert "Smith" not in body and "Jones" not in body
     first = next(line for line in body.split("\n") if line.startswith("1. "))
     assert '"' not in first
@@ -190,12 +189,14 @@ def test_blanket_lines_carry_the_label_too():
                     "authored_date": "2026-09-20",
                     "days_out": -2,
                     "subject_display": "Call client",
+                    "n": 1,
                 }
             ],
         },
         ack_snooze_days=7,
     )
-    assert '- matter 2026-PI-101, "Call client", task-deadline 2026-09-20 (overdue by 2 days).' in body
+    assert "1. matter 2026-PI-101: 1 open item with no task id" in body
+    assert '   - matter 2026-PI-101, "Call client", due 2026-09-20 (overdue by 2 days)' in body
 
 
 # ---------------------------------------------------------------------------

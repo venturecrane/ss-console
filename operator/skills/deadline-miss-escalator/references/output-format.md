@@ -20,8 +20,9 @@ code-detectable authored source today and therefore do not render.
 ## The triaged alert (internal, to the red-flag recipient)
 
 The alert leads with the few items that genuinely need a person today, collapses
-the rest to per-matter counts, and carries a per-item ACK code so the reader can
-acknowledge one item without silencing the rest.
+the rest to per-matter counts, and numbers every line a reader can answer, so
+they can reply in plain words ("got it on 1") and quiet one item without
+silencing the rest. No code of any kind appears in the email.
 
 **The digest supplies the VALUES and the MEMBERSHIP. The templates below supply
 the WORDS and the MARKUP.** The turn never prints the projection's field names,
@@ -37,11 +38,11 @@ digest item's `matter_number` - the connector's code join on the gate's own
 pull (ss #2390), copied verbatim. When it is null: `matter_number_absent:
 no_number_on_record` renders "no number on record" (the firm's record carries
 no number); any other absence renders "matter number unavailable". Never a
-GUID, never a composed or remembered number. Section membership, per-matter groups, code
-lists, section counts, and the subject line are all computed by the pre-run
+GUID, never a composed or remembered number. Section membership, per-matter groups, item
+numbers, section counts, and the subject line are all computed by the pre-run
 gate over the full item universe; the turn re-counts nothing and moves nothing
 across bands. Subject semantics: `<N>` counts the items a person must act on
-by name, "Needs you today" plus "Blanket-ack only", and never the "Also open"
+by name, "Needs you today" plus "Open without a task id", and never the "Also open"
 overflow (ss #2405: the 2026-08-14 subject said "37 need you" when 5 needed a
 person; 2026-09-24: a recipient holding only blanket items read "0 need you").
 Membership in the top band is deterministic and PER RECIPIENT: the digest is
@@ -69,7 +70,7 @@ Subject: [Deadlines] <N> need you, YYYY-MM-DD
 
 <preamble, one of three; see below>
 
-1. matter <number>, "<task label>", <label> <date> (<overdue by N days | due in N days>) [ACK-XXXXXX]
+1. matter <number>, "<task label>", due <date> (<overdue by N days | due in N days>)
    <one plain line of why it is consequential: the authored signal only, e.g.
    "an unverified response is treated as no response" / "disbursement blocked
    until the lien payoff is confirmed" / "opposing-counsel letter held N days">
@@ -77,11 +78,11 @@ Subject: [Deadlines] <N> need you, YYYY-MM-DD
 
 ## Also open (<count> across <M> matter(s)) [omit section if 0]
 
-More open items past the top five, collapsed per matter. Reply with a matter's
-ACK codes to clear them, or open them in Smokeball.
+More open items past the top five, one line per matter. Answering a matter's
+number covers all of its items; each one is listed in Smokeball.
 
-- matter <number>: <k> more item(s). [ACK-XXXXXX] [ACK-XXXXXX] ...
-- ...
+6. matter <number>: <k> more open item(s)
+7. ...
 
 ## Under active escalation elsewhere (<count> across <M> matter(s)) [omit section if 0]
 
@@ -96,20 +97,36 @@ client-facing step.
 
 - matter <number>: on CONFLICT-HOLD with <label> <date> approaching.
 
-## Blanket-ack only (<count>) [omit section if 0]
+## Open without a task id (<count>) [omit section if 0]
 
-Items with no stable task id, so they carry no individual ACK code. A blanket
-acknowledgement (below) acks exactly the ones quoted here.
+Items with no task id in Smokeball, one line per matter. Answering a matter's
+number covers every item listed under it.
 
-- matter <number>, "<task label>", <label> <date> (<overdue by N days | due in N days>).
+8. matter <number>: <k> open item(s) with no task id
+   - matter <number>, <label> <date> (<overdue by N days | due in N days>)
+   - ...
 
-Reply with the ACK code(s) above to acknowledge. Reply ESCALATION_ACKNOWLEDGED
-to ack every item quoted in this message; items you do not quote stay open. An
-acked item goes quiet for <ack_snooze_days> days, then re-surfaces if it is still
-open in Smokeball. Completing the item in Smokeball is the only thing that closes
-it. This is an internal alert to a person at the firm; no client message has been
-sent.
+Reply to this email with the numbers you have, or say all. Each one you answer
+goes quiet for <ack_snooze_days> days; finishing it in Smokeball clears it for
+good. This is an internal note; no client was contacted.
 ```
+
+**The numbers** are assigned in code (`digest_items.number_firing`) in the
+order the lines render: one per needs-you item, then one per "Also open"
+matter, then one per "Open without a task id" matter, continuous from 1. The
+number on a line IS the `n` on that item's `fired` rows (a matter's number is
+on every one of its rows), so what the reader types resolves to exactly the
+rows behind the line. The footer carries no example numbers: a reader who
+copies an example answers an item they never read.
+
+**No number without a row.** Numbering stops at the envelope's append cap
+(`dispatch_envelope._MAX_APPENDS_PER_DISPATCH`): a line whose rows would not
+all fit under the cap renders with a `-` and no number, as does every line
+after it. A body with no numbered line at all (the skeleton rung, or any body
+delivered with no raise rows behind it) carries no invitation to reply; its
+footer reads "Finishing an item in Smokeball clears it. This is an internal
+note; no client was contacted." Elsewhere and clearance lines are never
+numbered: there is nothing to answer.
 
 **The needs-you preamble** says what the order is, and only when the order
 carries information: "Ranked by what the record says, most consequential
@@ -125,14 +142,25 @@ markdown characters neutralized; capped at 100 characters. A subject that
 carries a case caption (`v.`, `vs.`, `versus`, `in re`), a legal citation, or
 a fabrication marker renders NO label, and neither does a court date: event
 titles are often captions. With no label the quoted part is omitted and the
-line reads `matter <number>, <label> <date> (...)`. The raw subject never
-enters the digest, the wake payload, or the envelope. Known limit: "Also open"
-lines carry ACK codes and counts, not task labels.
+line reads `matter <number>, due <date> (...)` for a task, or
+`matter <number>, <label> <date> (...)` for any other kind ("court-date"). The
+raw subject never enters the digest, the wake payload, or the envelope. Known
+limit: "Also open" lines carry a count, not task labels.
 
 ## The confirmation reply (internal, after an ack)
 
-When a rostered person replies acking codes, the confirmation reply enumerates
-exactly what was acked and counts what remains, so an under-ack (a mail client
+**A plain-word reply** ("got it on 1 and 3", "all") is confirmed with the
+`confirmation_text` that `escalation_reply_ack` returns, sent verbatim and
+nothing else. The tool renders it in code from what it actually wrote: which
+numbers went quiet (naming each item), for how long, and which numbers are
+still open. When it wrote nothing (the reply named no number, named a number
+the digest does not have, or the thread holds no digest rows), its text is a
+question back to the reader; that is sent verbatim too. The turn never
+composes, trims, or adds to either.
+
+**A legacy reply quoting `ACK-XXXXXX` codes** (a digest sent before the
+numbered format) is confirmed with the template below: it enumerates exactly
+what was acked and counts what remains, so an under-ack (a mail client
 trimming quoted text) stays visible.
 
 ```markdown
@@ -186,17 +214,18 @@ Four things went wrong and each has a rule above:
    Never invent an urgency the data does not state. If nothing carries a high
    signal, the top block is simply the most overdue items, plainly labeled.
 2. **Up to five in the top block, per recipient.** More than five is not a
-   priority list. Everything else is a per-matter count in Also open, with its
-   items reachable by their ACK codes. Nothing in the record says an overflow
+   priority list. Everything else is a per-matter count in Also open, answerable
+   by the matter's one number. Nothing in the record says an overflow
    item is routine, so the band never calls it that.
-3. **Per-item ACK codes, keyed on the stable task id.** Each item with a stable
-   Smokeball id carries its own `ACK-XXXXXX`. Acking one code suppresses only
-   that item. Items with no stable id carry no code and live in Blanket-ack only;
-   a blanket ack covers exactly the items quoted in the message.
-4. **One disclaimer, in the footer.** The ack mechanics and the "internal alert,
-   no client message sent" line appear once, at the end, not per item.
+3. **Numbers, never codes.** Each needs-you item carries its own number, and
+   answering it quiets only that item. An "Also open" matter or an "Open
+   without a task id" matter carries one number covering all of its items. The
+   rows still carry the legacy `ACK-XXXXXX` token so codes already sent keep
+   working, but no code is printed.
+4. **One disclaimer, in the footer.** The reply mechanics and the "internal
+   note; no client was contacted" line appear once, at the end, not per item.
 5. **Reader-facing section names.** "Needs you today", "Also open", "Under
-   active escalation elsewhere", "Awaiting clearance". No internal ladder jargon
+   active escalation elsewhere", "Awaiting clearance", "Open without a task id". No internal ladder jargon
    (no "notify" / "re-route" / "re-surface") in the reader's copy.
 6. **Every rung is internal.** No client or tribunal send on any path. With no
    authored red-flag recipient, the alert has nowhere to fire and does not fire
