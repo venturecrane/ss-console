@@ -60,8 +60,12 @@ function SOWHeader({
   client: SOWTemplateProps['client']
   doc: SOWTemplateProps['document']
 }) {
+  // A <View>, never a fragment, at the root of every component here:
+  // @formepdf/react serializes a function component whose result is a fragment
+  // to nothing, which is how the header and the price went missing from every
+  // SOW rendered after #2771 (tests/sow-render.test.ts renders it and checks).
   return (
-    <>
+    <View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
         <View>
           <Text
@@ -114,7 +118,7 @@ function SOWHeader({
         ))}
       </View>
       <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 16 }} />
-    </>
+    </View>
   )
 }
 
@@ -209,8 +213,11 @@ function SOWPaymentBlock({ payment }: { payment: SOWTemplateProps['payment'] }) 
     fontSize: 14,
     color: colors.textPrimary,
   }
+  // A <View> root, not a fragment: see SOWHeader. wrap={false} keeps the total
+  // and every installment on one page: when page 1 runs long the whole block
+  // moves to the next page instead of splitting the price from its schedule.
   return (
-    <>
+    <View wrap={false}>
       <View
         style={{
           backgroundColor: colors.surfaceLight,
@@ -245,7 +252,7 @@ function SOWPaymentBlock({ payment }: { payment: SOWTemplateProps['payment'] }) 
       <Text style={{ ...finePrintStyle, marginBottom: 16 }}>
         Payment is due regardless of scope additions surfaced during the engagement.
       </Text>
-    </>
+    </View>
   )
 }
 
@@ -261,6 +268,7 @@ interface Page1Props {
 function SOWPage1({ client, doc, engagement, items, payment, rowPadding }: Page1Props) {
   return (
     <Page size="Letter" margin={pageMargins}>
+      <SOWFooter sowNumber={doc.sowNumber} />
       <SOWHeader client={client} doc={doc} />
       <Text style={sectionHeadingStyle}>ENGAGEMENT OVERVIEW</Text>
       <Text style={{ ...bodyTextStyle, marginBottom: 16 }}>{engagement.overview}</Text>
@@ -299,7 +307,6 @@ function SOWPage1({ client, doc, engagement, items, payment, rowPadding }: Page1
       </View>
       <Text style={sectionHeadingStyle}>PROJECT INVESTMENT</Text>
       <SOWPaymentBlock payment={payment} />
-      <SOWFooter sowNumber={doc.sowNumber} pageLabel="Page 1 of 3" />
     </Page>
   )
 }

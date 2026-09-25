@@ -11,7 +11,7 @@
  */
 
 import React from 'react'
-import { View, Text } from '@formepdf/react'
+import { Fixed, View, Text } from '@formepdf/react'
 import { BRAND_NAME } from '../config/brand'
 
 export const SIGNATURE_BLOCK_WIDTH = 216
@@ -86,23 +86,26 @@ export const finePrintStyle = { fontFamily: fonts.body, fontWeight: 400 as const
 // prettier-ignore
 export const pageMargins = { top: 54, bottom: 54, left: 72, right: 72 }
 
-export function SOWFooter({ sowNumber, pageLabel }: { sowNumber: string; pageLabel: string }) {
+/**
+ * The footer, as a fixed region the engine repeats on every page it lays out,
+ * numbered by the engine. It used to be an absolutely positioned View with a
+ * hard-coded page label on each page component: when page 1's content ran
+ * long (eight deliverables do), the overflow page carried no footer and the
+ * one it did carry claimed to be page one of three on the second of four.
+ * It is the first child of each page component because a fixed region applies
+ * from where it is declared: placed last, page 1 lost it whenever the price
+ * block moved to the next page.
+ */
+export function SOWFooter({ sowNumber }: { sowNumber: string }) {
   return (
-    <View
-      style={{
-        position: 'absolute',
-        bottom: pageMargins.bottom,
-        left: pageMargins.left,
-        right: pageMargins.right,
-      }}
-    >
+    <Fixed position="footer">
       <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 8 }} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Text style={finePrintStyle}>{BRAND_NAME} | smd.services</Text>
         <Text style={finePrintStyle}>
-          {sowNumber} | {pageLabel}
+          {sowNumber} | Page {'{{pageNumber}}'} of {'{{totalPages}}'}
         </Text>
       </View>
-    </View>
+    </Fixed>
   )
 }

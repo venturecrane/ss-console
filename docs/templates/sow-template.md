@@ -396,11 +396,11 @@ Field placement uses **SignWell text tags** embedded in the PDF — not hardcode
 
 ### 5.5 Footer
 
-Present on all three pages.
+Present on every page: a fixed footer region, numbered by the engine (`{{pageNumber}}` of `{{totalPages}}`), so a page added by overflow is numbered truly.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  SMD Services | smd.services           {{document.sow_number}} | Page X of 3  │
+│  SMD Services | smd.services           {{document.sow_number}} | Page N of M  │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -455,6 +455,8 @@ If `{{client.contact_title}}` is empty, omit the title line in the signature blo
 ### 7.3 Deliverable Count
 
 The scope table must render 1-8 rows dynamically. If items exceed 6, reduce row padding to 4pt vertical to maintain page 1 fit. If items exceed 8, the template should not render — surface an error to the admin. (Exceeding 8 deliverables likely signals scope that's too broad for one engagement.)
+
+Measured 2026-09-25 with the header rendering: page 1 holds the full header, overview, timeline and price with up to three one-line (two two-line) deliverables, fewer than the three to six this spec calls typical. Past that, page 1 overflows; fitting six on page 1 is a layout decision this note does not make. The overflow is handled, not prevented: the Project Investment block is kept together (`wrap={false}`) and moves whole to the next page, so the price is never split from its schedule, and the footer is a fixed region numbered by the engine, so every page, including an overflow page, reads its true "Page N of M". `tests/sow-render.test.ts` renders both the typical and the eight-deliverable case and asserts this.
 
 ---
 
