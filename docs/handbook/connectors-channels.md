@@ -83,6 +83,10 @@ Letters and demand letters rendered on the starter base carry the firm's letterh
 
 `add_workbook` (`workbook_tools.py`, #2923) lets the Operator hand the firm a spreadsheet, such as a costs-and-advances workbook, filed on a matter. The model supplies rows as structured data; tool code does the encoding, the cell typing and the arithmetic, because a workbook is binary and model-written base64 corrupts silently. It is an internal write, like `add_file`, and its cells pass the identifier scan before anything is filed.
 
+#### Deleting calendar events
+
+Deleting events is an act an administrator confirms (#2944). `prepare_event_deletion` reads each matter's live calendar and returns a manifest of at most 50 events as the vendor holds them; `delete_events` takes that manifest and is destructive. On a seat that authors `destructive: confirm`, the overlay withholds it, the broker renders the manifest as one act line, and only an administrator's emailed yes replays it into the tool, which re-reads every entry and deletes it only if it is still on its matter with the same subject, date and matter number. Every other destructive tool at `confirm` still refuses.
+
 ### The connector inventory
 
 Generated from `operator/connectors/*/manifest.toml` and each package's `*_tools.py` modules. A change that adds, removes, or reclassifies a tool, or adds a tools module, fails `tests/handbook-integrity.test.ts` until this block is regenerated, which puts the author on this page in the same PR.
@@ -102,12 +106,12 @@ Generated from `operator/connectors/*/manifest.toml` and each package's `*_tools
 - read: `list_messages`, `read_message`, `poll_delta`, `list_staff_messages`, `read_staff_message`
 - tool modules: none (tools register in server.py)
 
-**`mcp:smokeball`** (`operator/connectors/smokeball/`): capability `PracticeManagement`, manifest auth default `client_credentials`, 49 tools.
+**`mcp:smokeball`** (`operator/connectors/smokeball/`): capability `PracticeManagement`, manifest auth default `client_credentials`, 51 tools.
 
 - commitment: `create_matter`
-- destructive: `delete_file`
+- destructive: `delete_file`, `delete_events`
 - internal_write: `create_task`, `update_task`, `create_event`, `update_event`, `create_event_reminder`, `create_folder`, `add_file`, `file_attachment_to_matter`, `render_docx_template`, `render_docx_draft`, `stage_vendor_invoice`, `file_attachment_pages_to_matter`, `add_workbook`, `create_webhook_subscription`, `create_memo`
-- read: `auth_status`, `list_matters`, `get_matter`, `list_matter_types`, `get_stage_sets`, `get_stage_to_matter_mappings`, `get_contacts`, `get_contact`, `get_contact_relations`, `list_tasks`, `get_task`, `list_events`, `search_staff`, `get_staff`, `get_roles_on_matter`, `get_relationships_on_matter`, `get_files_on_matter`, `get_file`, `get_download_url`, `read_document`, `list_folders`, `get_memos_on_matter`, `get_bank_accounts`, `get_matter_balances`, `get_matter_billing_config`, `get_fees`, `get_expenses`, `read_attachment_text`, `resolve_invoice_matter`, `read_attachment_pages`, `get_webhook_subscriptions`, `get_event_types`
+- read: `auth_status`, `list_matters`, `get_matter`, `list_matter_types`, `get_stage_sets`, `get_stage_to_matter_mappings`, `get_contacts`, `get_contact`, `get_contact_relations`, `list_tasks`, `get_task`, `list_events`, `search_staff`, `get_staff`, `get_roles_on_matter`, `get_relationships_on_matter`, `get_files_on_matter`, `get_file`, `get_download_url`, `read_document`, `list_folders`, `prepare_event_deletion`, `get_memos_on_matter`, `get_bank_accounts`, `get_matter_balances`, `get_matter_billing_config`, `get_fees`, `get_expenses`, `read_attachment_text`, `resolve_invoice_matter`, `read_attachment_pages`, `get_webhook_subscriptions`, `get_event_types`
 - tool modules: `smokeball_connector/attachment_tools.py`, `smokeball_connector/letter_tools.py`, `smokeball_connector/vendor_invoice_tools.py`, `smokeball_connector/workbook_tools.py`
 
 <!-- END GENERATED: connector inventory -->
