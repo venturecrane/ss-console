@@ -476,6 +476,32 @@ def _retry_after(response: object) -> float | None:
     return value if value >= 0 else None
 
 
+def _sse_event(line: str, abort: threading.Event | None) -> dict | None:
+    """One SSE line as an event dict, or None for a line that carries none.
+
+    Raises ``_StreamFailed`` when the document was aborted, the payload does not
+    parse, or the stream reports an error (retryable when the error is the
+    service's, not the request's)."""
+    if abort is not None and abort.is_set():
+        raise _StreamFailed("aborted: another page of this document failed")
+    if not line.startswith("data:"):
+        return None
+    raw = line[len("data:") :].strip()
+    if not raw:
+        return None
+    try:
+        event = json.loads(raw)
+    except ValueError as exc:
+        raise _StreamFailed("unparseable SSE payload") from exc
+    if not isinstance(event, dict):
+        return None
+    if event.get("type") == "error":
+        error = event.get("error")
+        kind_of_error = error.get("type") if isinstance(error, dict) else None
+        raise _StreamFailed("error event", retryable=kind_of_error in _RETRYABLE_ERROR_TYPES)
+    return event
+
+
 def _stream(
     body: bytes,
     headers: dict[str, str],
@@ -501,24 +527,10 @@ def _stream(
                     retry_after=_retry_after(response),
                 )
             for line in response.iter_lines():
-                if abort is not None and abort.is_set():
-                    raise _StreamFailed("aborted: another page of this document failed")
-                if not line.startswith("data:"):
-                    continue
-                raw = line[len("data:") :].strip()
-                if not raw:
-                    continue
-                try:
-                    event = json.loads(raw)
-                except ValueError as exc:
-                    raise _StreamFailed("unparseable SSE payload") from exc
-                if not isinstance(event, dict):
+                event = _sse_event(line, abort)
+                if event is None:
                     continue
                 kind = event.get("type")
-                if kind == "error":
-                    error = event.get("error")
-                    kind_of_error = error.get("type") if isinstance(error, dict) else None
-                    raise _StreamFailed("error event", retryable=kind_of_error in _RETRYABLE_ERROR_TYPES)
                 if kind == "content_block_start":
                     block = event.get("content_block") or {}
                     if isinstance(block, dict) and block.get("type") == "text":
