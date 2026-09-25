@@ -1,0 +1,337 @@
+{
+  "envelope": {
+    "dispatches": [
+      {
+        "appends": [
+          {
+            "attempt": 1,
+            "event": "fired",
+            "item_key": "31e9671d3e82df06",
+            "matter_id": "54bc1371-5c82-47ae-b722-da1b29e79ef5",
+            "n": 1,
+            "snooze_days": 7,
+            "token": "ACK-GES293"
+          },
+          {
+            "attempt": 1,
+            "event": "fired",
+            "item_key": "d0ddf5b44f216ca6",
+            "matter_id": "cd710b6b-a7ae-44b0-bb8a-be79e8c5d351",
+            "n": 2,
+            "snooze_days": 7,
+            "token": "ACK-V9PNJ9"
+          },
+          {
+            "attempt": 1,
+            "event": "fired",
+            "item_key": "7a9c72d952c31404",
+            "matter_id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+            "n": 3,
+            "snooze_days": 7,
+            "token": "ACK-K96VZS"
+          },
+          {
+            "attempt": 1,
+            "event": "fired",
+            "item_key": "9ee3c253d77d6457",
+            "matter_id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+            "n": 4,
+            "snooze_days": 7,
+            "token": "ACK-DR8B8W"
+          },
+          {
+            "attempt": 1,
+            "event": "fired",
+            "item_key": "8f0e3a610d488f15",
+            "matter_id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+            "n": 5,
+            "snooze_days": 7,
+            "token": "ACK-45ABZC"
+          },
+          {
+            "attempt": 1,
+            "event": "fired",
+            "item_key": "6679aef1b220b984",
+            "matter_id": "404b292e-ec0f-4c12-aa53-3ea27784cd0e",
+            "n": 6,
+            "snooze_days": 7,
+            "token": "ACK-G9HJRE"
+          },
+          {
+            "attempt": 1,
+            "event": "fired",
+            "item_key": "687b931638abe1b0",
+            "matter_id": "cd710b6b-a7ae-44b0-bb8a-be79e8c5d351",
+            "n": 7,
+            "snooze_days": 7,
+            "token": "ACK-Q7HQ5N"
+          }
+        ],
+        "body_sha256_full": "47f7d99d8696723d203e6983acfb0ac3542cb9e17871d9b5de3b6c9d78285680",
+        "body_sha256_skeleton": "e74b45b47e2fa37deec72579f529748bc12276be504262f859b89ae90cd810f3",
+        "cc": [],
+        "full_body": "## Needs you today (5)\n\nMost overdue first.\n\n1. matter PI-2026-0001, \"Request certified medical records from Valley Imaging\", due 2026-06-30 (overdue by 20 days)\n2. matter 2026-PI-104, \"Chase Medi-Cal (DHCS) final lien payoff demand\", due 2026-07-08 (overdue by 12 days)\n3. matter 2026-PI-101, due 2026-07-08 (overdue by 12 days)\n4. matter 2026-PI-101, due 2026-07-08 (overdue by 12 days)\n5. matter 2026-PI-101, due 2026-07-08 (overdue by 12 days)\n\n## Also open (2 across 2 matters)\n\nMore open items past the top five, one line per matter. Answering a matter's number covers all of its items; each one is listed in Smokeball.\n\n6. matter 2026-PI-102: 1 more open item\n7. matter 2026-PI-104: 1 more open item\n\n## Under active escalation elsewhere (1 across 1 matter)\n\nAlready raised, shown so it is not double-counted. No action here.\n\n- matter 2026-PI-101: 1 item under active escalation (last raised 2026-07-19).\n\nReply to this email with the numbers you have, or say all. Each one you answer goes quiet for 7 days; finishing it in Smokeball clears it for good. This is an internal note; no client was contacted.\n",
+        "recipients": ["triage@example-firm.test"],
+        "routing_leg": "central",
+        "skeleton_body": "## Deadline digest (details unavailable)\n\n5 items need a person now and 2 more open items are tracked, but the detailed digest could not be delivered this run. Open Smokeball or the tracker view for the items; the next run will retry the full digest.\n\nThis is an internal alert to a person at the firm; no client message has been sent.\n",
+        "subject": "[Deadlines] 5 need you, 2026-07-20"
+      }
+    ],
+    "in_turn": [
+      {
+        "name": "failure_note",
+        "slots": {},
+        "template": "The deadline digest run failed and needs attention; no digest was delivered this run. The items are in Smokeball and the tracker view."
+      }
+    ],
+    "memo_matters": [],
+    "render_mode": "templated",
+    "skill": "deadline-miss-escalator",
+    "unroutable": []
+  },
+  "wake": {
+    "decision_basis": "deadline_in_escalation_range",
+    "digest": {
+      "admin_confirms": {
+        "matter_count": 2,
+        "matters": [
+          {
+            "ack_codes": ["ACK-G9HJRE"],
+            "count": 1,
+            "items": [
+              {
+                "ack_code": "ACK-G9HJRE",
+                "authored_date": "2026-07-14",
+                "days_out": -6,
+                "label": "task-deadline",
+                "last_raised": null,
+                "matter_id": "404b292e-ec0f-4c12-aa53-3ea27784cd0e",
+                "matter_number": "2026-PI-102",
+                "matter_number_absent": null,
+                "priority_marker": null,
+                "subject_display": "Confirm service of summons and complaint on Sunrise Plaza Properties LLC",
+                "task_id": "e1f6b2db-fca3-4981-9f7e-4043f2b3916e"
+              }
+            ],
+            "last_raised": null,
+            "matter_id": "404b292e-ec0f-4c12-aa53-3ea27784cd0e",
+            "matter_number": "2026-PI-102",
+            "matter_number_absent": null
+          },
+          {
+            "ack_codes": ["ACK-Q7HQ5N"],
+            "count": 1,
+            "items": [
+              {
+                "ack_code": "ACK-Q7HQ5N",
+                "authored_date": "2026-07-23",
+                "days_out": 3,
+                "label": "court-date",
+                "last_raised": null,
+                "matter_id": "cd710b6b-a7ae-44b0-bb8a-be79e8c5d351",
+                "matter_number": "2026-PI-104",
+                "matter_number_absent": null,
+                "priority_marker": null,
+                "subject_display": null,
+                "task_id": "ev-okafor-fsc"
+              }
+            ],
+            "last_raised": null,
+            "matter_id": "cd710b6b-a7ae-44b0-bb8a-be79e8c5d351",
+            "matter_number": "2026-PI-104",
+            "matter_number_absent": null
+          }
+        ],
+        "total": 2
+      },
+      "needs_you": [
+        {
+          "ack_code": "ACK-GES293",
+          "authored_date": "2026-06-30",
+          "days_out": -20,
+          "label": "task-deadline",
+          "last_raised": null,
+          "matter_id": "54bc1371-5c82-47ae-b722-da1b29e79ef5",
+          "matter_number": "PI-2026-0001",
+          "matter_number_absent": null,
+          "priority_marker": null,
+          "subject_display": "Request certified medical records from Valley Imaging",
+          "task_id": "57d7a3b8-a91b-4465-ad44-335e88dc4934"
+        },
+        {
+          "ack_code": "ACK-V9PNJ9",
+          "authored_date": "2026-07-08",
+          "days_out": -12,
+          "label": "task-deadline",
+          "last_raised": null,
+          "matter_id": "cd710b6b-a7ae-44b0-bb8a-be79e8c5d351",
+          "matter_number": "2026-PI-104",
+          "matter_number_absent": null,
+          "priority_marker": null,
+          "subject_display": "Chase Medi-Cal (DHCS) final lien payoff demand",
+          "task_id": "843e1ade-2b39-4a11-9ae3-952eb78d856d"
+        },
+        {
+          "ack_code": "ACK-K96VZS",
+          "authored_date": "2026-07-08",
+          "days_out": -12,
+          "label": "task-deadline",
+          "last_raised": null,
+          "matter_id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+          "matter_number": "2026-PI-101",
+          "matter_number_absent": null,
+          "priority_marker": null,
+          "subject_display": null,
+          "task_id": "1ec31561-1136-4986-9692-1457dae9513a"
+        },
+        {
+          "ack_code": "ACK-DR8B8W",
+          "authored_date": "2026-07-08",
+          "days_out": -12,
+          "label": "task-deadline",
+          "last_raised": null,
+          "matter_id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+          "matter_number": "2026-PI-101",
+          "matter_number_absent": null,
+          "priority_marker": null,
+          "subject_display": null,
+          "task_id": "1f5546c6-2e64-4879-b5c8-8fb7c09d0038"
+        },
+        {
+          "ack_code": "ACK-45ABZC",
+          "authored_date": "2026-07-08",
+          "days_out": -12,
+          "label": "task-deadline",
+          "last_raised": null,
+          "matter_id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+          "matter_number": "2026-PI-101",
+          "matter_number_absent": null,
+          "priority_marker": null,
+          "subject_display": null,
+          "task_id": "95de85b8-7b9e-4d06-89f8-0ad88c8ce1ad"
+        }
+      ],
+      "subject": "[Deadlines] 5 need you, 2026-07-20",
+      "under_active_escalation_elsewhere": {
+        "matter_count": 1,
+        "matters": [
+          {
+            "ack_codes": [],
+            "count": 1,
+            "items": [
+              {
+                "ack_code": null,
+                "authored_date": "2026-07-10",
+                "days_out": -10,
+                "label": "task-deadline",
+                "last_raised": "2026-07-19T14:00:00Z",
+                "matter_id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+                "matter_number": "2026-PI-101",
+                "matter_number_absent": null,
+                "priority_marker": null,
+                "subject_display": "Client verification outstanding - FROG responses Set One",
+                "task_id": "be08487c-1d5c-4c29-a52b-987876336ad9"
+              }
+            ],
+            "last_raised": "2026-07-19T14:00:00Z",
+            "matter_id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+            "matter_number": "2026-PI-101",
+            "matter_number_absent": null
+          }
+        ],
+        "total": 1
+      }
+    },
+    "dispatch_expected": true,
+    "plans": [
+      {
+        "authored_date": "2026-06-30",
+        "days_out": -20,
+        "label": "task-deadline",
+        "last_raised": null,
+        "last_raised_source": "operator_ledger",
+        "matter_id": "54bc1371-5c82-47ae-b722-da1b29e79ef5",
+        "matter_number": "PI-2026-0001",
+        "matter_number_absent": null,
+        "rung": "notify",
+        "task_id": "57d7a3b8-a91b-4465-ad44-335e88dc4934"
+      },
+      {
+        "authored_date": "2026-07-08",
+        "days_out": -12,
+        "label": "task-deadline",
+        "last_raised": null,
+        "last_raised_source": "operator_ledger",
+        "matter_id": "cd710b6b-a7ae-44b0-bb8a-be79e8c5d351",
+        "matter_number": "2026-PI-104",
+        "matter_number_absent": null,
+        "rung": "notify",
+        "task_id": "843e1ade-2b39-4a11-9ae3-952eb78d856d"
+      },
+      {
+        "authored_date": "2026-07-14",
+        "days_out": -6,
+        "label": "task-deadline",
+        "last_raised": null,
+        "last_raised_source": "operator_ledger",
+        "matter_id": "404b292e-ec0f-4c12-aa53-3ea27784cd0e",
+        "matter_number": "2026-PI-102",
+        "matter_number_absent": null,
+        "rung": "notify",
+        "task_id": "e1f6b2db-fca3-4981-9f7e-4043f2b3916e"
+      },
+      {
+        "authored_date": "2026-07-08",
+        "days_out": -12,
+        "label": "task-deadline",
+        "last_raised": null,
+        "last_raised_source": "operator_ledger",
+        "matter_id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+        "matter_number": "2026-PI-101",
+        "matter_number_absent": null,
+        "rung": "notify",
+        "task_id": "1f5546c6-2e64-4879-b5c8-8fb7c09d0038"
+      },
+      {
+        "authored_date": "2026-07-08",
+        "days_out": -12,
+        "label": "task-deadline",
+        "last_raised": null,
+        "last_raised_source": "operator_ledger",
+        "matter_id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+        "matter_number": "2026-PI-101",
+        "matter_number_absent": null,
+        "rung": "notify",
+        "task_id": "1ec31561-1136-4986-9692-1457dae9513a"
+      },
+      {
+        "authored_date": "2026-07-08",
+        "days_out": -12,
+        "label": "task-deadline",
+        "last_raised": null,
+        "last_raised_source": "operator_ledger",
+        "matter_id": "f220c8e4-eab5-4fd9-8f1d-0becf715b390",
+        "matter_number": "2026-PI-101",
+        "matter_number_absent": null,
+        "rung": "notify",
+        "task_id": "95de85b8-7b9e-4d06-89f8-0ad88c8ce1ad"
+      },
+      {
+        "authored_date": "2026-07-23",
+        "days_out": 3,
+        "label": "court-date",
+        "last_raised": null,
+        "last_raised_source": "operator_ledger",
+        "matter_id": "cd710b6b-a7ae-44b0-bb8a-be79e8c5d351",
+        "matter_number": "2026-PI-104",
+        "matter_number_absent": null,
+        "rung": "notify",
+        "task_id": "ev-okafor-fsc"
+      }
+    ],
+    "plans_emitted": 7,
+    "plans_total": 7,
+    "plans_truncated": false,
+    "wakeAgent": true
+  }
+}

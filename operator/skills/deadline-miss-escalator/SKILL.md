@@ -58,8 +58,10 @@ page is the `n` on the item's `fired` rows, and the broker ties those rows to
 the thread the digest went out in (`references/algorithm.md`), so a reply can
 only quiet items from the digest it answers. Reading the numbers out of the
 reply, matching them to rows, writing the `acked` rows, and wording the
-confirmation are all done in code by `escalation_reply_ack`; the turn chooses
-nothing and sends the tool's `confirmation_text` verbatim. A reply that names no
+confirmation are all done in code by `reply_verdicts` (which answers every
+plain-word reply, and takes the digest path on its own when the thread holds
+digest rows); the turn chooses nothing and sends the tool's `confirmation_text`
+verbatim. A reply that names no
 number ("thanks") or an unknown number writes nothing and gets a question back.
 
 An ack is a **snooze, not a tombstone**: the item goes quiet for
@@ -70,6 +72,17 @@ open in Smokeball. Only resolution in Smokeball closes an item.
 per-item `ACK-XXXXXX` codes and a blanket `ESCALATION_ACKNOWLEDGED`. The rows
 still carry those codes (`token`), so a reply quoting them takes the legacy
 path below. New digests print no code.
+
+## On a case-manager seat (only when `case_manager:` is authored)
+
+A firm that turns on the case-manager jobs (`docs/specs/operator/case-manager-deadline-work.md`) moves work out of this alarm and into the routines that own it. `casework_filter.py` reads the casework ledger after the escalation-ledger join and before the wake decision, and every change below applies only when the firm's customer.yaml authors a `case_manager:` block. Without one, the run is byte-identical to a seat that never heard of it (`test_case_manager_golden.py`).
+
+- **The Operator's own tasks leave the digest** (when `case_manager.own_tasks` is authored): a task whose subject carries the `[Operator]` stamp, or whose id is in `own_tasks.legacy_task_ids`, is closed or handed over once by `task-list-keeper`, never re-alarmed here.
+- **A task the review holds leaves the digest**: a proposal is out, a person said to leave it (held, a kept row, or an approved keep, for `keep_quiet_days`), an approved write is on its way, or the task was handed over.
+- **A court date with a date-prep brief leaves the digest, with a backstop.** Once every decision in the brief is answered, the date is the brief's. While any is unanswered, the date comes back here as soon as it is inside `notify_days`: an unanswered brief never silences a court date.
+- **The overflow line.** When `case_manager.task_cleanup` is authored, a recipient's overdue tasks past the top five collapse into one line, "N more overdue tasks are in Monday's task review." (the day read from the firm's own `task-list-keeper` cron entry; "the next task review" when the schedule names no single day). Those tasks are not raised here (no `fired` row): they are the review's. Court dates and not-yet-overdue tasks past the top five stay in "Also open".
+
+A seat with no `case_manager:` block (ashton-price today) sees none of this.
 
 ## Prerequisites
 
@@ -94,7 +107,7 @@ Reads Smokeball (`list_tasks` `due_date`) for authored task deadlines and the ma
    **Provenance boundary (unchanged).** `last_raised` in the wake payload records what THE OPERATOR raised, and only after a send succeeded: a null value is "no prior raise on this item", never "not raised". `ACK` codes remain the #1935 class: in any legacy reply you write (step 3), print only a code a tool call this run returned or the reader quoted.
 
 3. **On a rostered internal reply (routed here by the inbox skill):**
-   - **A reply in a `[Deadlines]` thread in plain words** (numbers, "all", or no number at all): call `escalation_reply_ack` with no arguments, then send its `confirmation_text` to the replier verbatim, and nothing else. **An empty `confirmation_text` means send no reply at all** (the tool found no verified reply, an automatic reply, or a sender who is not rostered); never compose one to fill the gap. The tool reads the reply and the thread from the verified inbound message itself; you never pass it a number, an item, or a thread. If it refuses (no digest rows in this thread, an unknown number, nothing named), its `confirmation_text` is the question to send back; send that verbatim too. Never write an `acked` row yourself for a plain-word reply.
+   - **A reply in a `[Deadlines]` thread in plain words** (numbers, "all", or no number at all): call `reply_verdicts` with no arguments, then send its `confirmation_text` to the replier verbatim, and nothing else. **An empty `confirmation_text` means send no reply at all** (the tool found no verified reply, an automatic reply, or a sender who is not rostered); never compose one to fill the gap. The tool reads the reply and the thread from the verified inbound message itself; you never pass it a number, an item, or a thread. If it refuses (no digest rows in this thread, an unknown number, nothing named), its `confirmation_text` is the question to send back; send that verbatim too. Never write an `acked` row yourself for a plain-word reply.
    - **A reply quoting legacy `ACK-XXXXXX` codes or `ESCALATION_ACKNOWLEDGED`** (a digest sent before the numbered format): run the per-code procedure - resolve each code against `escalation_state` output, emit an `acked` event per code with `escalation_append` (`ack_token`), and reply enumerating what was acked and counting what remains, per the legacy confirmation template in `references/output-format.md`.
 4. **Never compute, never send to a client.** No date is produced; no client/tribunal-bound message is drafted or sent.
 
@@ -104,7 +117,7 @@ Reads Smokeball (`list_tasks` `due_date`) for authored task deadlines and the ma
 
 **Read + internal surface + internal named-human notify; zero date computation; zero external send.**
 
-The agent MAY: read authored dates; compare them to today; read the escalation ledger (`escalation_state`); emit the triaged alert to the firm's authored red-flag channel; append `fired`/`acked` escalation events **with the `escalation_append` tool (or, for a plain-word reply, `escalation_reply_ack`, which appends in code) through the broker's validated `escalation_event_append` verb** (the broker rejects an `acked` with no prior `fired`).
+The agent MAY: read authored dates; compare them to today; read the escalation ledger (`escalation_state`); emit the triaged alert to the firm's authored red-flag channel; append `fired`/`acked` escalation events **with the `escalation_append` tool (or, for a plain-word reply, `reply_verdicts`, which appends in code) through the broker's validated `escalation_event_append` verb** (the broker rejects an `acked` with no prior `fired`).
 
 The agent MUST NOT: compute or infer a deadline; send anything to a client or tribunal; move or author a date; escalate a held matter into a client-facing step; write the escalation ledger file directly (every event goes through the broker seam, so an injected reply cannot silence an alarm that never rang). **Fail-closed (ADR 0035):** if the firm has authored no `red_flag_recipients`, the notify rung has nowhere to fire - the escalator raises no named-human alert and never invents a recipient.
 
@@ -136,6 +149,8 @@ Computing "X from the incident" to decide what is overdue (the cardinal sin - ov
 
 - `references/algorithm.md` - the in-range test, the ledger join + fire policy, the item identity + ack token, the broker append seam, and the never-computes line in code
 - `references/output-format.md` - the triaged alert (Needs you today / Also open / dedup pointers) and the confirmation reply
+- `casework_filter.py` + `test_case_manager_escalator.py` - the case-manager drops, the brief backstop, and the task-review line; `test_case_manager_golden.py` pins the unconfigured path byte for byte
+- `casework_ledger.py` / `casework_view.py` - vendored copies (the ledger's canonical is `operator/workspace_broker/casework_ledger.py`; the view's lives in the task-list-keeper skill); do not edit the copies
 - `escalation_ledger.py` - the shared ledger module (byte-identical to `operator/workspace_broker/escalation_ledger.py`; item_key, token, state, fire policy). Do not edit the copy; edit the canonical and restamp.
 - `tests/selector_test.md` - selector targets this skill for "a deadline is slipping / escalate," not the standing tracker view
 - `pre_run.py` + `test_escalator_pre_run.py` - the no-agent cron decision (arithmetic + ledger join) + the `SUPPRESSED_WAKE` heartbeat and its fallback-to-wake

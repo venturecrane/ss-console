@@ -155,12 +155,14 @@ def resolve_case_alert_routing(
     "assisting": [<staff record>...]}`` as pulled by the caller (absent entry =
     UNPOPULATED). ``customer_yaml`` is the parsed trusted-volume config."""
     data = customer_yaml if isinstance(customer_yaml, dict) else {}
-    esc = data.get("escalation") if isinstance(data.get("escalation"), dict) else {}
+    raw_esc = data.get("escalation")
+    esc: dict = raw_esc if isinstance(raw_esc, dict) else {}
     red_flag = _string_list(esc.get("red_flag_recipients"))
     routing = esc.get("case_alert_routing")
     routing = routing if isinstance(routing, dict) else {}
     mode = routing.get("mode")
-    scope = data.get("scope") if isinstance(data.get("scope"), dict) else {}
+    raw_scope = data.get("scope")
+    scope: dict = raw_scope if isinstance(raw_scope, dict) else {}
     grants = _string_list(scope.get("inbound_allow_from"))
     fallback = _string_list(routing.get("fallback_recipients"))
 
@@ -296,7 +298,8 @@ def staff_lookup_budget(customer_yaml: dict) -> int:
     Zero is legitimate (disables the pull — the staging lever); junk takes
     the default."""
     data = customer_yaml if isinstance(customer_yaml, dict) else {}
-    esc = data.get("escalation") if isinstance(data.get("escalation"), dict) else {}
+    raw_esc = data.get("escalation")
+    esc: dict = raw_esc if isinstance(raw_esc, dict) else {}
     raw = esc.get("staff_lookup_budget")
     if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0:
         return DEFAULT_STAFF_LOOKUP_BUDGET

@@ -140,6 +140,10 @@ class MatterDeadline:
     # an event title is often a case caption and never renders. None renders no
     # label. The raw subject never leaves ``parse_pull``.
     subject_display: str | None = None
+    # The subject starts with the connector's "[Operator]" provenance stamp:
+    # the Operator created this task. Read only by casework_filter.py, and only
+    # on a seat that authored ``case_manager.own_tasks``.
+    operator_stamped: bool = False
 
 
 class DeadlineSource(Protocol):
@@ -297,6 +301,8 @@ def _load_ledger_module():
 # Label shaping + needs-you ordering, shared with dispatch_envelope.py. A
 # missing copy fails the pull loudly (blind wake + failure note), never silently.
 _DI: Any = _load_sibling_module("digest_items.py", "escalator_digest_items")
+# The case-manager filter (casework_filter.py); a no-op without case_manager.
+_CW: Any = _load_sibling_module("casework_filter.py", "escalator_casework_filter")
 
 
 def enrich_with_ledger(
@@ -336,20 +342,11 @@ def enrich_with_ledger(
             ack_snooze_days=policy.ack_snooze_days,
         )
         enriched.append(
-            MatterDeadline(
-                matter_id=d.matter_id,
-                matter_number=d.matter_number,
-                matter_number_absent=d.matter_number_absent,
-                authored_date=d.authored_date,
-                label=d.label,
-                matter_open=d.matter_open,
-                conflict_hold=d.conflict_hold,
+            replace(
+                d,
                 acknowledged=not fire,
                 acked=False if state is None else bool(state.acked),
-                task_id=d.task_id,
                 last_raised=None if state is None else state.last_raised_ts,
-                priority_marker=d.priority_marker,
-                subject_display=d.subject_display,
             )
         )
     return enriched
@@ -824,6 +821,21 @@ def _degradation(deadlines: Sequence[MatterDeadline], today: date) -> tuple[int,
     return resolved, failed, reason
 
 
+def _probe_stats(sources) -> dict:
+    """ss #2403's probe census, summed across sources (split out of run_once
+    for the function-size ratchet; behaviour unchanged)."""
+    probe_stats: dict = {}
+    for source in sources:
+        stats = getattr(source, "probe_stats", None)
+        if isinstance(stats, dict):
+            for k in ("excluded", "stale"):
+                probe_stats[k] = probe_stats.get(k, 0) + int(stats.get(k) or 0)
+            ids = stats.get("stale_task_ids") or []
+            if ids:
+                probe_stats.setdefault("stale_task_ids", []).extend(ids[:5])
+    return probe_stats
+
+
 async def run_once(
     sources: Sequence[DeadlineSource],
     windows: EscalationWindows,
@@ -858,6 +870,10 @@ async def run_once(
         raw_input_blob += json.dumps([_deadline_to_dict(d) for d in pulled], sort_keys=True).encode("utf-8")
 
     deadlines = enrich_with_ledger(deadlines, today=today, policy=fire_policy, ledger_events=ledger_events)
+    # Case-manager seats only: drop what the task review or a date brief holds
+    # (casework_filter.py). Without an authored block this returns the input.
+    casework = _CW.apply(deadlines, helpers=_H, anchor=__file__, today=today, notify_days=windows.notify_days)
+    deadlines = casework.deadlines
 
     decision = decide(deadlines, windows, raw_inputs_for_digest=raw_input_blob, today=today)
     if decision.wake:
@@ -866,15 +882,7 @@ async def run_once(
         # composes without one and states that the projection was unavailable.
         ledger = _load_ledger_module()
         if ledger is not None:
-            probe_stats: dict = {}
-            for source in sources:
-                stats = getattr(source, "probe_stats", None)
-                if isinstance(stats, dict):
-                    for k in ("excluded", "stale"):
-                        probe_stats[k] = probe_stats.get(k, 0) + int(stats.get(k) or 0)
-                    ids = stats.get("stale_task_ids") or []
-                    if ids:
-                        probe_stats.setdefault("stale_task_ids", []).extend(ids[:5])
+            probe_stats = _probe_stats(sources)
             decision = replace(
                 decision,
                 digest=project_digest(
@@ -885,6 +893,7 @@ async def run_once(
                     probe_stats=probe_stats or None,
                 ),
             )
+        decision = casework.annotate(decision)
         resolved, failed, degraded_reason = _degradation(deadlines, today)
         if resolved == 0 and failed > 0:
             # THE 2026-08-24 RULE: a digest in which not one matter resolved a
@@ -1230,6 +1239,7 @@ def parse_pull(raw: dict, *, now: datetime | None = None) -> tuple[list[MatterDe
                     task_id=_source_id_of(item),
                     priority_marker=_priority_marker_of(item),
                     subject_display=_DI.display_label(_subject_of(item)) if label == "task-deadline" else None,
+                    operator_stamped=_subject_of(item).lstrip().upper().startswith(_PROVENANCE_MARK.upper()),
                 )
             )
     if total_items > 0 and not deadlines:

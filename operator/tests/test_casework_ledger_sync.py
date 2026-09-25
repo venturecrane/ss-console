@@ -29,7 +29,8 @@ _CANONICAL_REL = "operator/workspace_broker/casework_ledger.py"
 # Copies are discovered by glob (skills/*/casework_ledger.py). The floor starts
 # at zero because the broker half lands first; the PR that vendors the first
 # skill copy raises it, and a skill dropping its copy lowers it on purpose.
-_FLOOR = 0
+# Two copies as of 2026-09-25: task-list-keeper, deadline-miss-escalator.
+_FLOOR = 2
 
 
 def _pair() -> dict:

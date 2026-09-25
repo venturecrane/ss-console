@@ -84,6 +84,15 @@ number covers all of its items; each one is listed in Smokeball.
 6. matter <number>: <k> more open item(s)
 7. ...
 
+<N> more overdue task(s) are in <Day>'s task review. [case-manager seats with task_cleanup only; omit if 0]
+
+On a seat that authored `case_manager.task_cleanup`, this line takes the
+overdue tasks out of "Also open": they are in the weekly task review
+(`task-list-keeper`), so the digest counts them instead of listing them, and
+raises none of them. `<Day>` is the weekday of the firm's own review schedule;
+with no single day it reads "the next task review". Court dates and tasks not
+yet overdue stay in "Also open". Unconfigured seats never render this line.
+
 ## Under active escalation elsewhere (<count> across <M> matter(s)) [omit section if 0]
 
 Already raised, shown so it is not double-counted. No action here.
@@ -158,7 +167,7 @@ limit: "Also open" lines carry a count, not task labels.
 ## The confirmation reply (internal, after an ack)
 
 **A plain-word reply** ("got it on 1 and 3", "all") is confirmed with the
-`confirmation_text` that `escalation_reply_ack` returns, sent verbatim and
+`confirmation_text` that `reply_verdicts` returns, sent verbatim and
 nothing else. The tool renders it in code from what it actually wrote: which
 numbers went quiet (naming each item), for how long, and which numbers are
 still open. When it wrote nothing (the reply named no number, named a number

@@ -87,6 +87,29 @@ lead the "Needs you today" block; the rest collapse per matter into
 "Also open" (digest key `admin_confirms`; see `output-format.md`). Banding is
 per recipient: each alert's top five are that recipient's own top five.
 
+## The casework join (case-manager seats only)
+
+After the escalation-ledger join and before `decide`, `casework_filter.apply`
+reads the casework ledger (`SMD_CASEWORK_LEDGER_PATH`, the broker-written
+JSONL) through the vendored `casework_view.py`, the same reading
+`task-list-keeper` uses, so a task cannot be both in the review and in the
+digest. It returns its input untouched unless customer.yaml authors
+`case_manager:`. With it:
+
+```
+task-deadline, Operator-own (stamp or legacy id), own_tasks authored -> drop
+task-deadline, keeper_owns_task(state)                                 -> drop
+court-date, brief_status == answered                                   -> drop
+court-date, brief_status == unanswered and days_out >  notify_days     -> drop
+court-date, brief_status == unanswered and days_out <= notify_days     -> keep (backstop)
+```
+
+Drop counts ride the EMITTED_WAKE row as `casework_dropped`. When
+`task_cleanup` is authored the projected digest carries `task_review: {day}`,
+and `dispatch_envelope.split_digest` runs `digest_items.extract_task_review`
+per recipient after re-banding: overdue tasks past the top five become the
+count on the review line and get no `fired` append.
+
 ## Writing the ledger (through the validated broker seam)
 
 The ledger file is broker-owned; the agent reads it but never writes it
@@ -205,7 +228,8 @@ three extra fields so a plain-word reply can be resolved in code:
   would re-fire a delivered alarm. `n` or `dispatch_ref` on any event that is
   not a raise is refused.
 
-A reply is answered by `escalation_reply_ack` (overlay), which takes no
+A reply is answered by `reply_verdicts` (overlay; it answers every plain-word
+reply and takes this digest path when the thread holds digest rows), which takes no
 arguments from the model. It reads the reply's own words and thread from the
 verified inbound message, parses the numbers in code, finds the raise rows
 whose `thread_ref` is that thread, and writes one `acked` per item behind each

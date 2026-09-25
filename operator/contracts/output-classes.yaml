@@ -421,6 +421,13 @@ skill_bindings:
       - { artifact: memo, seam: smokeball_memo, class: record }
       - { artifact: task, seam: smokeball_task, class: record }
     outbound: derived # confirmation reply enumerating acked codes
+  task-list-keeper:
+    internal:
+      - { artifact: task_review, seam: email_send, class: staff }
+      - { artifact: memo, seam: smokeball_memo, class: record }
+      - { artifact: task, seam: smokeball_task, class: record }
+      - { artifact: heartbeat_row, seam: local_file, class: record }
+    outbound: none # the review goes to firm staff only; a reply is answered by matter-inbox-router
   mediation-settlement-tracker:
     internal:
       - { artifact: brief_inputs, seam: session_output, class: staff }
