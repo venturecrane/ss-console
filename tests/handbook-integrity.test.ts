@@ -25,6 +25,13 @@ import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, existsSync } from 'fs'
 import { resolve, join } from 'path'
 import { parse as parseYaml } from 'yaml'
+import { buildAdrRows, indexSummaries, renderAdrIndex } from '../scripts/lib/handbook-adr-index'
+import {
+  buildConnectorInventory,
+  committedBlock,
+  parseManifest,
+  renderConnectorInventory,
+} from '../scripts/lib/handbook-connector-inventory'
 
 const HANDBOOK = resolve('docs/handbook')
 const REPO_ROOT = resolve('.')
@@ -153,5 +160,81 @@ describe('handbook integrity', () => {
       if (p.raw.includes('—')) errors.push(`${p.file}: contains an em dash (use a spaced hyphen)`)
     }
     expect(errors, errors.join('\n')).toEqual([])
+  })
+})
+
+/**
+ * Pages whose claim is completeness are generated, and pinned to the tree
+ * (2026-09-25 code review, Documentation 1 and 2). adr-index.md said "every
+ * ADR" and stopped at 0065 with 0089 on disk; connectors-channels.md went
+ * eleven weeks without the tools the window added to live connectors. Both are
+ * now rendered from their sources, and these cases fail when the committed text
+ * and the tree disagree. Regenerate with `npm run handbook:adr-index -- --write`
+ * and `npm run handbook:connectors -- --write`.
+ */
+describe('generated handbook content matches the tree', () => {
+  const ADR_DIR = resolve('docs/adr')
+  const adrPage = readFileSync(join(HANDBOOK, 'adr-index.md'), 'utf8')
+  const connectorsPage = readFileSync(join(HANDBOOK, 'connectors-channels.md'), 'utf8')
+
+  it('adr-index.md is exactly what the ADR corpus renders', () => {
+    expect(adrPage).toBe(renderAdrIndex(buildAdrRows(ADR_DIR)) + '\n')
+  })
+
+  it('adr-index.md names every numbered ADR file (the claim its summary makes)', () => {
+    const files = readdirSync(ADR_DIR).filter((f) => /^\d{4}-.*\.md$/.test(f))
+    expect(files.length).toBeGreaterThan(80)
+    expect(files.filter((f) => !adrPage.includes(f))).toEqual([])
+  })
+
+  it('the ADR renderer strips em dashes and relative links (the check can fail)', () => {
+    const summaries = indexSummaries(
+      '- [0001-x.md](./0001-x.md) - A \u2014 see [0002](./0002-y.md)\n'
+    )
+    expect(summaries.get('0001-x.md')).toContain('\u2014')
+    const page = renderAdrIndex([
+      {
+        number: '0001',
+        file: '0001-x.md',
+        title: 'T \u2014 U',
+        summary: summaries.get('0001-x.md') ?? '',
+      },
+    ])
+    expect(page).not.toContain('\u2014')
+    expect(page).not.toContain('](./')
+  })
+
+  it('the connector inventory block is exactly what operator/connectors renders', () => {
+    const rendered = renderConnectorInventory(
+      buildConnectorInventory(resolve('operator/connectors'))
+    )
+    expect(
+      committedBlock(connectorsPage),
+      'connectors-channels.md lost its generated-block markers'
+    ).toBe(rendered)
+  })
+
+  it('the inventory sees every connector manifest and every tool in it', () => {
+    const entries = buildConnectorInventory(resolve('operator/connectors'))
+    const manifests = readdirSync(resolve('operator/connectors')).filter((d) =>
+      existsSync(resolve('operator/connectors', d, 'manifest.toml'))
+    )
+    expect(entries.map((e) => e.dir).sort()).toEqual(manifests.sort())
+    for (const e of entries) {
+      expect(e.name, `${e.dir}: no [connector] name parsed`).not.toBe('')
+      expect(e.tools.length, `${e.dir}: no tool_classes parsed`).toBeGreaterThan(0)
+    }
+  })
+
+  it('a new tool in a manifest changes the block (the check can fail)', () => {
+    const base = parseManifest(
+      '[connector]\nname = "x"\n[connector.tool_classes]\nread_a = "read"\n'
+    )
+    const grown = parseManifest(
+      '[connector]\nname = "x"\n[connector.tool_classes]\nread_a = "read"\nsend_b = "external_send"\n'
+    )
+    const render = (m: typeof base) =>
+      renderConnectorInventory([{ dir: 'x', toolModules: [], ...m }])
+    expect(render(grown)).not.toBe(render(base))
   })
 })

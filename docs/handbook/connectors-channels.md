@@ -10,10 +10,26 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0021-leverage-hermes-native-primitives.md
   - label: ADR 0045 - Mediated Connector Capability Broker
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0045-mediated-connector-capability-broker.md
+  - label: ADR 0053 - Author-built MCP connectors, per-customer installed
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0053-author-built-mcp-connectors-per-customer-installed.md
   - label: ADR 0057 - Operator Claude-connector access model
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0057-operator-claude-connector-access-model.md
+  - label: ADR 0078 - Client-custody email channel
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0078-client-custody-email-channel.md
   - label: operator/README.md - connector code location
     href: https://github.com/venturecrane/ss-console/blob/main/operator/README.md
+  - label: operator/connectors/README.md - the author-built connector contract
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/README.md
+  - label: msgraph-mail manifest
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/msgraph-mail/manifest.toml
+  - label: msgraph-mail staff_mailboxes.py
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/msgraph-mail/msgraph_mail_connector/staff_mailboxes.py
+  - label: Smokeball manifest
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/smokeball/manifest.toml
+  - label: Smokeball letter_tools.py (the scanned-post pipeline)
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/smokeball/smokeball_connector/letter_tools.py
+  - label: Smokeball letterhead.py
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/smokeball/smokeball_connector/letterhead.py
 ---
 
 ## Two sides of the same boundary
@@ -27,10 +43,70 @@ Both sides follow one rule that is easy to get wrong: **a channel is a dumb pipe
 Connectors are governed by [ADR 0020](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0020-connector-strategy.md), locked 2026-05-24. Every system the Operator touches resolves at runtime through one of three backend patterns, distinguished by the `customer.yaml.connectors{}.backend:` prefix:
 
 - **`mcp:<server>`** - a Model Context Protocol server, vendor-official or vetted community. The MCP server boots as a child process of Hermes from the per-profile config; **there is no in-tree code** for an `mcp:` binding. Examples: M365 Mail/Calendar/Teams, QuickBooks (Intuit, 144 tools), Xero, Stripe, HubSpot, Salesforce, Slack, CourtListener, Clio (`oktopeak/clio-mcp`), Twilio.
-- **`build:<vendor>`** - a Python adapter we maintain. Used only where no acceptable MCP exists, or where trust-ceiling enforcement is safer to own end-to-end (for example trust-account writes against LawPay). Adapters that predate the 2026-05-24 realignment stay in `operator/connectors/<vendor>/` (`filevine/`, `lawpay/`, `no_pm/`); **new** BUILD adapters land in the `venturecrane/hermes-smd-overlay` repo, never in this tree, per ADR 0015.
+- **`build:<vendor>`** - a Python adapter we maintain, reserved by ADR 0020 for a vendor with no acceptable MCP. No `build:` adapter exists today: the pre-realignment adapter directories are gone from `operator/connectors/`, and when we did have to write a connector ourselves, [ADR 0053](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0053-author-built-mcp-connectors-per-customer-installed.md) made it an MCP server rather than a `build:` adapter (next section).
 - **`synthetic:<name>`** - an in-process substrate backed by per-customer D1 and R2 (for example `no_pm`, for a firm with no real practice-management system).
 
-The decision order for a new binding is: vendor-direct MCP first, then a vetted community MCP (subject to a code-review acceptance checklist in ADR 0020), then a BUILD adapter only when neither exists. The per-vendor decision table in ADR 0020 records the reasoned choice for each vendor we expect to wire.
+The decision order for a new binding is: vendor-direct MCP first, then a vetted community MCP (subject to a code-review acceptance checklist in ADR 0020), then one we author ourselves only when neither exists. The per-vendor decision table in ADR 0020 records the reasoned choice for each vendor we expect to wire.
+
+### Author-built connectors: MCP servers we write
+
+When no acceptable MCP exists, we write one. [ADR 0053](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0053-author-built-mcp-connectors-per-customer-installed.md) (accepted 2026-06-22, extends ADR 0020) settles the shape: the connector is a Python stdio **MCP server** in `operator/connectors/<name>/`, baked into the image in its own hash-locked venv, and **inert until a customer binds it** with `backend: mcp:<name>`. An unbound connector is never launched, surfaces no tools, and receives no secrets. The overlay stays substrate-only, so adding a connector one firm needs never forces an overlay release. The declarative contract (package, `manifest.toml`, conformance test, overlay registration, binding) is in [operator/connectors/README.md](https://github.com/venturecrane/ss-console/blob/main/operator/connectors/README.md).
+
+Every tool is classified twice on purpose: the manifest's `tool_classes` table is the conformance oracle, and the overlay's `shared/action_classes.py` is the enforced authority. A tool that is in one and not the other fails conformance or fails closed at boot, so a new tool is a two-repo change reviewed on both sides.
+
+Two vendor connectors live here today, plus a synthetic self-test (`_reference`) that proves every rail, including refusal of an unclassified tool:
+
+- **`mcp:smokeball`** - the law vertical's practice-management system of record, and the first author-built connector. Matters, contacts, tasks, events, documents, memos, and billing reads; task, event, folder, and document writes; `create_matter` as a commitment and `delete_file` as destructive. The manifest's default auth is `client_credentials`; a firm-delegated seat selects `authorization_code` in its `customer.yaml`, and that consent lands on the customer's Machine ([ADR 0054](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0054-machine-hosted-oauth-callback.md)), never on shared infrastructure.
+- **`mcp:msgraph-mail`** - Microsoft Graph mail, app-only, and the first provider adapter behind the client-custody email seam of [ADR 0078](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0078-client-custody-email-channel.md): the Operator's mailbox lives on the firm's own mail system. Every write and send is pinned in code to the one Operator mailbox named in `MSGRAPH_MAILBOX` and takes no mailbox argument; tenant-side, an Exchange `ApplicationAccessPolicy` restricts the app to that mailbox as well. There is deliberately no delete tool.
+
+#### Reading a staff member's mailbox
+
+A firm can let the Operator **read** a named staff member's mailbox, so it can find a letter that person received without their forwarding it. The two tools, `list_staff_messages` and `read_staff_message`, are the only msgraph-mail tools that take a mailbox, and they refuse, before any Graph call, every address not listed in the seat's `customer.yaml` `staff_mailbox_reads` block (`staff_mailboxes.py`). A missing, empty, or malformed block refuses everything. The firm must also add the mailbox to the read app's `ApplicationAccessPolicy` scope group; either one missing and the read fails. Nothing can send, draft, move, or delete in a staff mailbox. The permission is the firm's to give, so each address is authored in a reviewed change, never inferred.
+
+A rostered sender can also ask the Operator to **file an email on a matter**: it spools the message as an `.eml`, resolves the matter from the sender's own words only (never from words inside the email), files it with `file_attachment_to_matter`, and replies once saying where it went. Smokeball's Emails tab cannot be written from outside its desktop app, so the filed `.eml` in Documents is the filed copy.
+
+Sending *as* a staff member is a different act with its own decision: [ADR 0089](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0089-staff-send-as-on-approval.md) routes it through the workspace broker and allows it only on that staff member's emailed approval of the exact draft. See `/admin/playbook/autonomy-governance`.
+
+#### The scanned daily post
+
+Firms scan the day's post as **one PDF holding several letters for several matters** and email it in. Filing it whole would put one client's letter on another client's matter, which the filing turn cannot undo (`delete_file` is destructive and taint-gated). So the Smokeball connector reads and files it by page (`letter_tools.py`, `letter_pages.py`):
+
+- `read_attachment_pages` returns page-marked text, deciding per page whether the page needs transcription, so a letter is a checkable **range of page numbers** rather than a span of prose.
+- `file_attachment_pages_to_matter` cuts one range out and files it as its own document. It refuses without a live resolution token for that exact matter, and refuses a page the process already filed from the same bundle.
+- The `combined-post-intake` skill holds the fail-closed hinge: if the pages cannot be partitioned into letters contiguously and completely, **nothing** from the bundle is filed. A letter it cannot place comes back named with a candidate matter, and the sender's reply naming the matter is what files it.
+
+#### The firm's letterhead
+
+Letters and demand letters rendered on the starter base carry the firm's letterhead, printed by tool code from the `firm_identity` block the firm authors in `customer.yaml` (`letterhead.py`). The model never types it, so it never meets the content gate that would refuse its street number and phone digits. The firm's own Word template wins untouched; with no template and no authored identity, the document carries no letterhead and says so, rather than inventing one.
+
+### The connector inventory
+
+Generated from `operator/connectors/*/manifest.toml` and each package's `*_tools.py` modules. A change that adds, removes, or reclassifies a tool, or adds a tools module, fails `tests/handbook-integrity.test.ts` until this block is regenerated, which puts the author on this page in the same PR.
+
+<!-- BEGIN GENERATED: connector inventory. Regenerate with `npm run handbook:connectors -- --write`; tests/handbook-integrity.test.ts fails while it is stale. -->
+
+**`mcp:reference`** (`operator/connectors/_reference/`): capability `Reference`, manifest auth default `static`, 2 tools.
+
+- internal_write: `record`
+- read: `echo`
+- tool modules: none (tools register in server.py)
+
+**`mcp:msgraph-mail`** (`operator/connectors/msgraph-mail/`): capability `Email`, manifest auth default `client_credentials`, 8 tools.
+
+- external_send: `send_message`, `reply_message`
+- internal_write: `create_draft`
+- read: `list_messages`, `read_message`, `poll_delta`, `list_staff_messages`, `read_staff_message`
+- tool modules: none (tools register in server.py)
+
+**`mcp:smokeball`** (`operator/connectors/smokeball/`): capability `PracticeManagement`, manifest auth default `client_credentials`, 48 tools.
+
+- commitment: `create_matter`
+- destructive: `delete_file`
+- internal_write: `create_task`, `update_task`, `create_event`, `update_event`, `create_event_reminder`, `create_folder`, `add_file`, `file_attachment_to_matter`, `render_docx_template`, `render_docx_draft`, `stage_vendor_invoice`, `file_attachment_pages_to_matter`, `create_webhook_subscription`, `create_memo`
+- read: `auth_status`, `list_matters`, `get_matter`, `list_matter_types`, `get_stage_sets`, `get_stage_to_matter_mappings`, `get_contacts`, `get_contact`, `get_contact_relations`, `list_tasks`, `get_task`, `list_events`, `search_staff`, `get_staff`, `get_roles_on_matter`, `get_relationships_on_matter`, `get_files_on_matter`, `get_file`, `get_download_url`, `read_document`, `list_folders`, `get_memos_on_matter`, `get_bank_accounts`, `get_matter_balances`, `get_matter_billing_config`, `get_fees`, `get_expenses`, `read_attachment_text`, `resolve_invoice_matter`, `read_attachment_pages`, `get_webhook_subscriptions`, `get_event_types`
+- tool modules: `smokeball_connector/attachment_tools.py`, `smokeball_connector/letter_tools.py`, `smokeball_connector/vendor_invoice_tools.py`
+
+<!-- END GENERATED: connector inventory -->
 
 ### Composio is dropped
 

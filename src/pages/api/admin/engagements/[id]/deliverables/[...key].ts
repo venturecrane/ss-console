@@ -1,3 +1,9 @@
+/**
+ * Download one of an engagement's deliverable documents from R2 as an attachment.
+ *
+ * The key is resolved under the admin session's org and the engagement's docs
+ * prefix, so a path can only reach that engagement's own files.
+ */
 import type { APIRoute } from 'astro'
 import { getEngagement } from '../../../../../../lib/db/engagements'
 import { streamDocument } from '../../../../../../lib/storage/r2'

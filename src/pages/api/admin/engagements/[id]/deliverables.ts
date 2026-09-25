@@ -1,3 +1,10 @@
+/**
+ * Upload and list an engagement's deliverable documents in R2.
+ *
+ * POST stores one uploaded file under the engagement's docs prefix with a
+ * collision-resistant key; GET lists what is stored there. Both are scoped to
+ * the admin session's org and refuse an engagement outside it.
+ */
 import type { APIRoute } from 'astro'
 import { getEngagement } from '../../../../../lib/db/engagements'
 import { getEngagementDocumentKey, listDocuments } from '../../../../../lib/storage/r2'

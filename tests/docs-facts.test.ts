@@ -109,14 +109,46 @@ describe('ADR range in CLAUDE.md is not a stale upper bound', () => {
   })
 })
 
-describe('README names the TypeScript major the repo declares', () => {
-  it('README.md "TypeScript N" equals the major of devDependencies.typescript', () => {
-    const pkg = JSON.parse(read('package.json')) as { devDependencies?: Record<string, string> }
-    const declared = pkg.devDependencies?.typescript ?? ''
-    const major = declared.match(/(\d+)\./)?.[1]
-    expect(major, 'package.json must declare typescript').toBeDefined()
-    const readme = read('README.md').match(/TypeScript (\d+)\b/)
-    expect(readme, 'README.md must name a TypeScript major').not.toBeNull()
-    expect(readme![1]).toBe(major)
+/**
+ * Every major the README's Stack list states is the major package.json
+ * declares. TypeScript was the first pinned (2026-09-10 review: "TypeScript 5"
+ * against ^6); the 2026-09-25 review then found "Vitest 4" against ^5.0.0,
+ * because only TypeScript was pinned. So every version on the list is pinned
+ * here, and a Stack line naming a version this table does not know fails too.
+ */
+describe('README names the majors the repo declares', () => {
+  const pkg = JSON.parse(read('package.json')) as {
+    dependencies?: Record<string, string>
+    devDependencies?: Record<string, string>
+  }
+  const declared = { ...pkg.dependencies, ...pkg.devDependencies }
+  const stack = read('README.md').match(/## Stack\n([\s\S]*?)\n## /)?.[1] ?? ''
+  const STATED: Array<[label: string, pkgName: string]> = [
+    ['Astro', 'astro'],
+    ['React', 'react'],
+    ['TypeScript', 'typescript'],
+    ['Vitest', 'vitest'],
+    ['ESLint', 'eslint'],
+    ['Tailwind', 'tailwindcss'],
+  ]
+
+  it('finds the Stack section (sanity: the check can fail)', () => {
+    expect(stack.length).toBeGreaterThan(0)
+  })
+
+  for (const [label, pkgName] of STATED) {
+    it(`README.md "${label} N" equals the major of ${pkgName}`, () => {
+      const major = (declared[pkgName] ?? '').match(/(\d+)\./)?.[1]
+      expect(major, `package.json must declare ${pkgName}`).toBeDefined()
+      const readme = stack.match(new RegExp(`\\b${label} (\\d+)\\b`))
+      expect(readme, `README.md Stack must name a ${label} major`).not.toBeNull()
+      expect(readme![1]).toBe(major)
+    })
+  }
+
+  it('every "<Name> <major>" the Stack section states is in the table above', () => {
+    const known = new Set(STATED.map(([label]) => label))
+    const stated = [...stack.matchAll(/\b([A-Z][A-Za-z]+) (\d+)\b/g)].map((m) => m[1])
+    expect(stated.filter((name) => !known.has(name))).toEqual([])
   })
 })

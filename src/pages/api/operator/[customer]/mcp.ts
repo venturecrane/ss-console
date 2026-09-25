@@ -1,3 +1,13 @@
+/**
+ * The per-customer MCP endpoint a firm's Claude connector talks to (ADR 0057).
+ *
+ * The slug must resolve to a customer whose authored resource URI matches this
+ * URL exactly, or the route answers 404. That resolution reads the live
+ * mcp_issued_grants rows on every request (the kill switch), and POST hands the
+ * request to handleMcpPost, which validates the bearer token against that
+ * principal set before a tool runs; runtime reads, handoffs and turns then reach
+ * that customer's Machine only.
+ */
 import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 import {

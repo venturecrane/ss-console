@@ -64,6 +64,14 @@ describe('invariants the inventory makes visible', () => {
     expect(helpers).toEqual([])
   })
 
+  it('every route file states its purpose in a leading header comment', () => {
+    // 2026-09-25 code review, Documentation 3: four rows read "(no header
+    // comment)" and one read a constant's doc comment as the route's purpose,
+    // because that JSDoc block came first in the file. The header goes first.
+    const undocumented = rows.filter((r) => r.purpose === '(no header comment)').map((r) => r.file)
+    expect(undocumented).toEqual([])
+  })
+
   it('the page carries no em dash', () => {
     expect(readFileSync(PAGE, 'utf8')).not.toContain('—')
   })
