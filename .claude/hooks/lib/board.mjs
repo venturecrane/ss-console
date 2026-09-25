@@ -80,6 +80,78 @@ function branchOf(root) {
   }
 }
 
+function focusSuffix(rec) {
+  return rec.focus ? ` (focus: ${rec.focus})` : ''
+}
+
+function cmdSet(own, root, rest) {
+  const args = {}
+  for (let i = 0; i < rest.length; i += 2) args[rest[i]?.replace(/^--/, '')] = rest[i + 1]
+  const rec = readRecord(own) || {}
+  writeRecord(own, {
+    ...rec,
+    worktree: root,
+    branch: branchOf(root) || rec.branch || '',
+    pid: args.pid ? Number(args.pid) : rec.pid,
+    session_id: args.session || rec.session_id,
+    mission: args.mission ?? rec.mission ?? '',
+    focus: args.focus ?? rec.focus ?? '',
+    updated: new Date().toISOString(),
+  })
+}
+
+function cmdRefresh(own) {
+  const rec = readRecord(own)
+  if (!rec) return
+  writeRecord(own, { ...rec, updated: new Date().toISOString() })
+  if (rec.mission) {
+    process.stdout.write(`[mission] ${rec.mission}${focusSuffix(rec)} -- if the next action does not serve this, stop.\n`)
+  }
+}
+
+/** Stale by age, unparseable age, or a provably dead pid. */
+function isStale(rec) {
+  const ageH = (Date.now() - Date.parse(rec.updated || 0)) / 3600000
+  return !Number.isFinite(ageH) || ageH > MAX_AGE_H || pidDead(rec.pid)
+}
+
+function prune(path) {
+  try {
+    unlinkSync(path)
+  } catch {
+    /* concurrent prune -- fine */
+  }
+}
+
+/** One peer's board line, or null when the record is absent or pruned. */
+function peerLine(path) {
+  const rec = readRecord(path)
+  if (!rec) return null
+  if (isStale(rec)) {
+    prune(path)
+    return null
+  }
+  const name = (rec.worktree || '?').split('/').pop()
+  const what = rec.mission || '(no mission set)'
+  return `  ${name}${rec.branch ? ` [${rec.branch}]` : ''}: ${what}${focusSuffix(rec)}`
+}
+
+function cmdPeers(dir, own) {
+  const lines = []
+  for (const f of readdirSync(dir)) {
+    if (!f.startsWith('wt-') || !f.endsWith('.json')) continue
+    const path = join(dir, f)
+    if (path === own) continue
+    const line = peerLine(path)
+    if (line) lines.push(line)
+  }
+  if (lines.length > 0) {
+    process.stdout.write(
+      `[board] Live peer sessions -- if your work overlaps one of these, stop and surface it before building:\n${lines.join('\n')}\n`,
+    )
+  }
+}
+
 function main() {
   const [cmd, root, ...rest] = process.argv.slice(2)
   if (!cmd || !root) return
@@ -87,61 +159,9 @@ function main() {
   mkdirSync(dir, { recursive: true })
   const own = join(dir, keyFor(root))
 
-  if (cmd === 'set') {
-    const args = {}
-    for (let i = 0; i < rest.length; i += 2) args[rest[i]?.replace(/^--/, '')] = rest[i + 1]
-    const rec = readRecord(own) || {}
-    writeRecord(own, {
-      ...rec,
-      worktree: root,
-      branch: branchOf(root) || rec.branch || '',
-      pid: args.pid ? Number(args.pid) : rec.pid,
-      session_id: args.session || rec.session_id,
-      mission: args.mission ?? rec.mission ?? '',
-      focus: args.focus ?? rec.focus ?? '',
-      updated: new Date().toISOString(),
-    })
-    return
-  }
-
-  if (cmd === 'refresh') {
-    const rec = readRecord(own)
-    if (!rec) return
-    writeRecord(own, { ...rec, updated: new Date().toISOString() })
-    if (rec.mission) {
-      process.stdout.write(`[mission] ${rec.mission}${rec.focus ? ` (focus: ${rec.focus})` : ''} -- if the next action does not serve this, stop.\n`)
-    }
-    return
-  }
-
-  if (cmd === 'peers') {
-    const lines = []
-    for (const f of readdirSync(dir)) {
-      if (!f.startsWith('wt-') || !f.endsWith('.json')) continue
-      const path = join(dir, f)
-      if (path === own) continue
-      const rec = readRecord(path)
-      if (!rec) continue
-      const ageH = (Date.now() - Date.parse(rec.updated || 0)) / 3600000
-      if (!Number.isFinite(ageH) || ageH > MAX_AGE_H || pidDead(rec.pid)) {
-        try {
-          unlinkSync(path)
-        } catch {
-          /* concurrent prune -- fine */
-        }
-        continue
-      }
-      const name = (rec.worktree || '?').split('/').pop()
-      const what = rec.mission || '(no mission set)'
-      lines.push(`  ${name}${rec.branch ? ` [${rec.branch}]` : ''}: ${what}${rec.focus ? ` (focus: ${rec.focus})` : ''}`)
-    }
-    if (lines.length > 0) {
-      process.stdout.write(
-        `[board] Live peer sessions -- if your work overlaps one of these, stop and surface it before building:\n${lines.join('\n')}\n`,
-      )
-    }
-    return
-  }
+  if (cmd === 'set') cmdSet(own, root, rest)
+  else if (cmd === 'refresh') cmdRefresh(own)
+  else if (cmd === 'peers') cmdPeers(dir, own)
 }
 
 try {

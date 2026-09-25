@@ -92,6 +92,21 @@ function auditHatch(suffix, scope, sessionId) {
   }
 }
 
+/** Subagent fallback: does any sufficiently fresh read log show the dossier? */
+function freshLogSawDossier(logDir, dossierSuffix) {
+  const now = Date.now()
+  for (const f of fs.readdirSync(logDir)) {
+    try {
+      const full = path.join(logDir, f)
+      if (now - fs.statSync(full).mtimeMs > SUBAGENT_WINDOW_MS) continue
+      if (fs.readFileSync(full, 'utf8').includes(dossierSuffix)) return true
+    } catch {
+      /* per-file read errors don't decide anything */
+    }
+  }
+  return false
+}
+
 try {
   const payload = JSON.parse(fs.readFileSync(0, 'utf8'))
   const target = payload?.tool_input?.file_path ?? payload?.tool_input?.notebook_path
@@ -140,17 +155,7 @@ try {
     if (fs.existsSync(own) && fs.readFileSync(own, 'utf8').includes(dossierSuffix)) {
       process.exit(0)
     }
-    // Subagent fallback: any sufficiently fresh log that saw the dossier.
-    const now = Date.now()
-    for (const f of fs.readdirSync(logDir)) {
-      try {
-        const full = path.join(logDir, f)
-        if (now - fs.statSync(full).mtimeMs > SUBAGENT_WINDOW_MS) continue
-        if (fs.readFileSync(full, 'utf8').includes(dossierSuffix)) process.exit(0)
-      } catch {
-        /* per-file read errors don't decide anything */
-      }
-    }
+    if (freshLogSawDossier(logDir, dossierSuffix)) process.exit(0)
   }
 
   process.stderr.write(
