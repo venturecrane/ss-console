@@ -27,8 +27,6 @@ pre_run never stamps. Nothing may suppress or delay a wake.
 from __future__ import annotations
 
 import importlib.util
-import json
-import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -44,53 +42,27 @@ _MAX_DISPATCHES = 10
 _MAX_APPENDS_PER_DISPATCH = 200
 
 
-def _load_sibling(filename: str, module_name: str):
-    candidates = [Path(__file__).resolve().parent]
-    for base in ("/opt/data/skills", "/app/skills"):
-        candidates.append(Path(base) / SKILL_NAME)
-    for cand in candidates:
-        module_path = cand / filename
-        if module_path.is_file():
-            spec = importlib.util.spec_from_file_location(module_name, module_path)
-            if spec is None or spec.loader is None:
-                continue
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[spec.name] = module
-            spec.loader.exec_module(module)
-            return module
-    return None
+def _load_skill_helpers():
+    """The shared helpers vendored beside this file (canonical: operator/templates/skill_helpers.py).
+
+    Reuses the module ``pre_run.py`` already loaded (it registers the same
+    name), else loads the copy beside this file, which the sync gate
+    guarantees is there. A missing copy is a packaging defect, not a runtime
+    condition to tolerate.
+    """
+    name = "skill_helpers_" + SKILL_NAME.replace("-", "_")
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / "skill_helpers.py")
+    if spec is None or spec.loader is None:
+        raise RuntimeError("skill_helpers.py is missing beside dispatch_envelope.py for " + SKILL_NAME)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
-def _load_yaml(customer_yaml_path: str | None) -> dict:
-    path = customer_yaml_path or os.environ.get("SMD_CUSTOMER_YAML_PATH")
-    if not path:
-        return {}
-    try:
-        import yaml
-    except ImportError:
-        return {}
-    try:
-        with open(path, encoding="utf-8") as handle:
-            data = yaml.safe_load(handle) or {}
-    except Exception:  # noqa: BLE001 — unreadable config = unauthored routing
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
-def _write_envelope(payload: dict) -> bool:
-    try:
-        directory = Path(os.environ.get("HERMES_HOME") or "/opt/data") / ".smd" / "pre_run"
-        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-        tmp = directory / ("." + SKILL_NAME + ".dispatch.json.tmp")
-        tmp.unlink(missing_ok=True)
-        handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(handle, "w", encoding="utf-8") as fh:
-            json.dump(payload, fh)
-        os.replace(tmp, directory / (SKILL_NAME + ".dispatch.json"))
-        return True
-    except Exception as exc:  # noqa: BLE001 — never change the wake
-        sys.stderr.write("[pre_run] dispatch envelope write failed (" + str(exc) + ")\n")
-        return False
+_H = _load_skill_helpers()
 
 
 def _numbers_by_matter(items) -> dict[str, tuple[str | None, str | None]]:
@@ -203,10 +175,10 @@ def write_failure_note_envelope(
     pre_run now always writes is what makes the slot visible.
     """
     try:
-        render = _load_sibling("render.py", "cvt_render")
+        render = _H.load_sibling(SKILL_NAME, __file__, "render.py", "cvt_render")
         if render is None:
             return {}
-        customer_yaml = _load_yaml(customer_yaml_path)
+        customer_yaml = _H.load_customer_yaml(customer_yaml_path)
         esc = customer_yaml.get("escalation") or {}
         if not isinstance(esc, dict):
             return {}
@@ -241,8 +213,8 @@ def write_failure_note_envelope(
                     # note. The overlay's full -> skeleton ladder therefore
                     # cannot turn this into something shorter and vaguer.
                     "skeleton_body": body,
-                    "body_sha256_full": render.canonical_body_sha256(body),
-                    "body_sha256_skeleton": render.canonical_body_sha256(body),
+                    "body_sha256_full": _H.canonical_body_sha256(body),
+                    "body_sha256_skeleton": _H.canonical_body_sha256(body),
                     # Nothing was raised, so nothing is appended. A `fired`
                     # append here would record an escalation that never
                     # happened.
@@ -254,7 +226,7 @@ def write_failure_note_envelope(
             "in_turn": [],
             "failure_note_reason": reason,
         }
-        if not _write_envelope(envelope):
+        if not _H.write_dispatch_envelope(SKILL_NAME, envelope):
             return write_failure_note_envelope(reason="envelope_write_failed", customer_yaml_path=customer_yaml_path)
         return {
             "render_mode": "slot-templated",
@@ -290,15 +262,15 @@ def build_and_write(
     responsible attorney instead of dumping every alert on the fallback leg
     (the WS-RENDER review's finding 2)."""
     try:
-        render = _load_sibling("render.py", "cvt_render")
-        routing = _load_sibling("routing.py", "cvt_routing")
+        render = _H.load_sibling(SKILL_NAME, __file__, "render.py", "cvt_render")
+        routing = _H.load_sibling(SKILL_NAME, __file__, "routing.py", "cvt_routing")
         if render is None or routing is None:
             return write_failure_note_envelope(
                 reason="sibling_module_unavailable", customer_yaml_path=customer_yaml_path
             )
         if staff_pull is None:
             staff_pull = routing.pull_matter_staff
-        customer_yaml = _load_yaml(customer_yaml_path)
+        customer_yaml = _H.load_customer_yaml(customer_yaml_path)
         states = ledger.derive_state(ledger_events)
         numbers = _numbers_by_matter(items)
         held = _held_chases(plans, numbers)
@@ -401,8 +373,8 @@ def build_and_write(
                     "subject": subject,
                     "full_body": full_body,
                     "skeleton_body": skeleton_body,
-                    "body_sha256_full": render.canonical_body_sha256(full_body),
-                    "body_sha256_skeleton": render.canonical_body_sha256(skeleton_body),
+                    "body_sha256_full": _H.canonical_body_sha256(full_body),
+                    "body_sha256_skeleton": _H.canonical_body_sha256(skeleton_body),
                     "appends": appends,
                 }
             )
@@ -463,7 +435,7 @@ def build_and_write(
             "in_turn": [{"name": "failure_note", "template": render.FAILURE_NOTE, "slots": {}}],
             "in_turn_enforce": False,
         }
-        if not _write_envelope(envelope):
+        if not _H.write_dispatch_envelope(SKILL_NAME, envelope):
             return write_failure_note_envelope(reason="envelope_write_failed", customer_yaml_path=customer_yaml_path)
         return {
             "render_mode": "slot-templated",

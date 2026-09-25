@@ -31,6 +31,7 @@ import sqlite3
 import time
 from typing import Any
 
+from .broker_context import BrokerContext
 from . import escalation_ledger
 
 logger = logging.getLogger(__name__)
@@ -111,7 +112,7 @@ def dispatched_to_a_person(audit_db_path: str | None, event: dict[str, Any]) -> 
     return False
 
 
-def append_escalation_event(broker: Any, request: dict[str, Any], peer_uid: int) -> dict[str, Any]:
+def append_escalation_event(broker: BrokerContext, request: dict[str, Any], peer_uid: int | None) -> dict[str, Any]:
     """The ``escalation_event_append`` verb: uid-gated, validated, server-stamped.
 
     Lifted out of ``server.py`` when the raise witness pushed that module past its

@@ -45,12 +45,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from .broker_context import BrokerContext
 from . import audit_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
 from . import medchron_verbs
 from .medchron_verbs import medchron_dispatch
 from .send_witness import append_escalation_event
 
-Handler = Callable[[Any, str, dict[str, Any], int, "int | None"], dict[str, Any]]
+Handler = Callable[[BrokerContext, str, dict[str, Any], int, "int | None"], dict[str, Any]]
 
 GATEWAY = "gateway"
 AGENT = "agent_uid"
@@ -82,18 +83,22 @@ ROOT_OR_AGENT = frozenset({ROOT, AGENT})
 GATEWAY_OR_AGENT = frozenset({GATEWAY, AGENT})
 
 
-def _medchron(broker: Any, action: str, request: dict[str, Any], pid: int, uid: int | None) -> dict[str, Any]:
+def _medchron(broker: BrokerContext, action: str, request: dict[str, Any], pid: int, uid: int | None) -> dict[str, Any]:
     return medchron_dispatch(broker.medchron, action, request, pid, uid)
 
 
-def _escalation(broker: Any, _action: str, request: dict[str, Any], _pid: int, uid: int | None) -> dict[str, Any]:
+def _escalation(
+    broker: BrokerContext, _action: str, request: dict[str, Any], _pid: int, uid: int | None
+) -> dict[str, Any]:
     # Body lives in send_witness.append_escalation_event, beside the witness
     # it has to consult. It re-checks the agent uid with the same sentence;
     # that is defence in depth, not a second policy.
     return append_escalation_event(broker, request, uid)
 
 
-def _health(broker: Any, _action: str, _request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def _health(
+    broker: BrokerContext, _action: str, _request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     return {
         "ok": True,
         "credential_ready": broker.credential_path.is_file(),
@@ -186,7 +191,7 @@ if set(medchron_verbs.VERBS) != {v.name for v in VERBS if v.handler is _medchron
     raise RuntimeError("the medchron rows above and medchron_verbs.VERBS disagree")
 
 
-def peer_classes(broker: Any, peer_pid: int, peer_uid: int | None) -> frozenset[str]:
+def peer_classes(broker: BrokerContext, peer_pid: int, peer_uid: int | None) -> frozenset[str]:
     """The auth classes this peer satisfies, from its socket credentials."""
     classes = {ANY}
     if peer_pid == broker.gateway_pid:
@@ -207,12 +212,12 @@ def _refusal(action: str, auth: frozenset[str]) -> PermissionError:
     return PermissionError(f"{action} is not permitted for this caller")
 
 
-def check_auth(broker: Any, action: str, auth: frozenset[str], peer_pid: int, peer_uid: int | None) -> None:
+def check_auth(broker: BrokerContext, action: str, auth: frozenset[str], peer_pid: int, peer_uid: int | None) -> None:
     if not (auth & peer_classes(broker, peer_pid, peer_uid)):
         raise _refusal(action, auth)
 
 
-def dispatch(broker: Any, request: dict[str, Any], peer_pid: int, peer_uid: int | None) -> dict[str, Any]:
+def dispatch(broker: BrokerContext, request: dict[str, Any], peer_pid: int, peer_uid: int | None) -> dict[str, Any]:
     action = request.get("action")
     verb = TABLE.get(action) if isinstance(action, str) else None
     if verb is not None:

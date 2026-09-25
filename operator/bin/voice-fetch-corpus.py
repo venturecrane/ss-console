@@ -84,7 +84,6 @@ from typing import Any, Iterable
 
 _HERE = Path(__file__).resolve()
 _OPERATOR = _HERE.parents[1]
-sys.path.insert(0, str(_OPERATOR))  # operator/ on sys.path
 # The Smokeball connector is a standalone installable package; put its source
 # root on the path so the REAL text extractor is reachable without installing
 # it. `smokeball_connector.extract` imports only stdlib at module level (PDF and

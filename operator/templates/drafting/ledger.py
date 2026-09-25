@@ -136,8 +136,10 @@ def record(stage, model, usage, extra=None):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "a") as fh:
             fh.write(json.dumps(rec) + "\n")
-    except Exception:  # noqa: BLE001 - the ledger is best-effort telemetry; a write failure must never break the drafting call it records
-        pass
+    except Exception as exc:  # noqa: BLE001 - the ledger is best-effort telemetry; a write failure must never break the drafting call it records
+        # Never break the call, but never lose a paid call's receipt silently
+        # either: the money totals read this file.
+        sys.stderr.write(f"[drafting-ledger] usage row not written ({type(exc).__name__}: {exc})\n")
 
 
 def rate_for(model):
@@ -192,7 +194,10 @@ def _read_rows(path):
                 continue
             try:
                 rows.append(json.loads(line))
-            except Exception:  # noqa: BLE001 - a corrupt ledger line is skipped so the readable rows are still returned
+            except Exception as exc:  # noqa: BLE001 - a corrupt ledger line is skipped so the readable rows are still returned
+                # Skipped, and said: a total over a ledger with an unreadable
+                # line is an undercount, and whoever reads it should know.
+                sys.stderr.write(f"[drafting-ledger] skipped unreadable line in {path} ({type(exc).__name__})\n")
                 continue
     return rows
 
