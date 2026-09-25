@@ -82,7 +82,11 @@ All of it is on the Script Output line under `date_prep`: `matter_number`,
    and "Reply here and I'll take it from there." You write no greeting and no
    sign-off.
 5. **If no decision remains** after step 2, call nothing. No decision, no message:
-   the spec's rule 7. The gate will not wake again for this date today.
+   the spec's rule 7. The gate will not wake again for this date today. The step's
+   own routine left its trace on the matter (its `[Operator]` memo), and that is how
+   the next brief on this matter knows: a prep routine's run since the last brief
+   shows in `file_status.memo_markers`, and it belongs in that brief's `done` lines
+   ("The trial binder was reassembled on Sep 25.").
 
 Full brief shape and wording rules: `references/output-format.md`.
 
