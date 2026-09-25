@@ -26,6 +26,11 @@ const clerkAstroConfigVirtualPlugin = {
 export default getViteConfig(
   {
     plugins: [clerkAstroConfigVirtualPlugin],
+    // The same JSX transform astro.config.mjs pins for the build (see the note
+    // there): without it Oxc honors tsconfig's `jsx: "preserve"` and a test
+    // that imports src/lib/pdf/sow-template.tsx cannot parse it.
+    // tests/sow-render.test.ts renders that template, so the pin applies here.
+    oxc: { jsx: { runtime: 'classic' } },
     resolve: {
       alias: {
         // `cloudflare:workers` is a runtime-only module; Node can't resolve it.

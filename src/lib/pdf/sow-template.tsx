@@ -60,9 +60,13 @@ function SOWHeader({
   client: SOWTemplateProps['client']
   doc: SOWTemplateProps['document']
 }) {
+  // A <View>, never a fragment, at the root of every component here:
+  // @formepdf/react serializes a function component whose result is a fragment
+  // to nothing, which is how the header and the price went missing from every
+  // SOW rendered after #2771 (tests/sow-render.test.ts renders it and checks).
   return (
-    <>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
+    <View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
         <View>
           <Text
             style={{
@@ -97,24 +101,34 @@ function SOWHeader({
           STATEMENT OF WORK
         </Text>
       </View>
-      <View style={{ marginBottom: 16 }}>
+      {/* Two columns: who it is for on the left, which document on the right.
+          Five stacked rows cost page 1 two deliverables' worth of height. */}
+      <View style={{ flexDirection: 'row', marginBottom: 12 }}>
         {(
           [
-            ['Prepared for:', client.businessName],
-            ['Attn:', client.contactName],
-            ['Date:', doc.date],
-            ['Valid through:', doc.expirationDate],
-            ['SOW #:', doc.sowNumber],
-          ] as [string, string][]
-        ).map(([label, value]) => (
-          <View style={{ flexDirection: 'row', marginBottom: 4 }}>
-            <Text style={{ ...labelStyle, width: 100 }}>{label}</Text>
-            <Text style={bodyTextStyle}>{value}</Text>
+            [
+              ['Prepared for:', client.businessName],
+              ['Attn:', client.contactName],
+            ],
+            [
+              ['Date:', doc.date],
+              ['Valid through:', doc.expirationDate],
+              ['SOW #:', doc.sowNumber],
+            ],
+          ] as [string, string][][]
+        ).map((column, c) => (
+          <View key={c} style={{ flex: 1 }}>
+            {column.map(([label, value]) => (
+              <View key={label} style={{ flexDirection: 'row', marginBottom: 2 }}>
+                <Text style={{ ...labelStyle, width: 72 }}>{label}</Text>
+                <Text style={{ ...bodyTextStyle, flex: 1 }}>{value}</Text>
+              </View>
+            ))}
           </View>
         ))}
       </View>
-      <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 16 }} />
-    </>
+      <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 12 }} />
+    </View>
   )
 }
 
@@ -178,7 +192,7 @@ function SOWScopeTable({
   rowPadding: number
 }) {
   return (
-    <View style={{ border: `1px solid ${colors.border}`, marginBottom: 16 }}>
+    <View style={{ border: `1px solid ${colors.border}`, marginBottom: 12 }}>
       <SOWScopeTableHeader rowPadding={rowPadding} />
       {items.map((item, index) => (
         <SOWScopeTableRow
@@ -209,14 +223,19 @@ function SOWPaymentBlock({ payment }: { payment: SOWTemplateProps['payment'] }) 
     fontSize: 14,
     color: colors.textPrimary,
   }
+  // A <View> root, not a fragment: see SOWHeader. wrap={false} keeps the
+  // heading, the total and every installment on one page: when page 1 runs
+  // long the whole block moves to the next page instead of splitting the
+  // price from its schedule or orphaning its heading.
   return (
-    <>
+    <View wrap={false}>
+      <Text style={sectionHeadingStyle}>PROJECT INVESTMENT</Text>
       <View
         style={{
           backgroundColor: colors.surfaceLight,
           border: `1px solid ${colors.border}`,
           borderRadius: 4,
-          padding: 12,
+          padding: 10,
           marginBottom: 8,
         }}
       >
@@ -245,7 +264,7 @@ function SOWPaymentBlock({ payment }: { payment: SOWTemplateProps['payment'] }) 
       <Text style={{ ...finePrintStyle, marginBottom: 16 }}>
         Payment is due regardless of scope additions surfaced during the engagement.
       </Text>
-    </>
+    </View>
   )
 }
 
@@ -261,13 +280,14 @@ interface Page1Props {
 function SOWPage1({ client, doc, engagement, items, payment, rowPadding }: Page1Props) {
   return (
     <Page size="Letter" margin={pageMargins}>
+      <SOWFooter sowNumber={doc.sowNumber} />
       <SOWHeader client={client} doc={doc} />
       <Text style={sectionHeadingStyle}>ENGAGEMENT OVERVIEW</Text>
-      <Text style={{ ...bodyTextStyle, marginBottom: 16 }}>{engagement.overview}</Text>
+      <Text style={{ ...bodyTextStyle, marginBottom: 12 }}>{engagement.overview}</Text>
       <Text style={sectionHeadingStyle}>SCOPE OF WORK</Text>
       <SOWScopeTable items={items} rowPadding={rowPadding} />
       <Text style={sectionHeadingStyle}>TIMELINE</Text>
-      <View style={{ flexDirection: 'row', gap: 40, marginBottom: 16 }}>
+      <View style={{ flexDirection: 'row', gap: 40, marginBottom: 12 }}>
         <View>
           <Text style={labelStyle}>Estimated start</Text>
           <Text
@@ -297,9 +317,7 @@ function SOWPage1({ client, doc, engagement, items, payment, rowPadding }: Page1
           </Text>
         </View>
       </View>
-      <Text style={sectionHeadingStyle}>PROJECT INVESTMENT</Text>
       <SOWPaymentBlock payment={payment} />
-      <SOWFooter sowNumber={doc.sowNumber} pageLabel="Page 1 of 3" />
     </Page>
   )
 }
@@ -318,7 +336,9 @@ export function SOWTemplate(props: SOWTemplateProps) {
     )
   }
 
-  const rowPadding = items.length > 6 ? 4 : 6
+  // Row padding tightens past six items so eight fit on page 1 (spec 7.3);
+  // measured by rendering, not estimated: see tests/sow-render.test.ts.
+  const rowPadding = items.length > 6 ? 3 : 5
 
   return (
     <Document>
