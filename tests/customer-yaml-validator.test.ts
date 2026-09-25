@@ -4005,3 +4005,85 @@ describe('staff_mailbox_reads never includes a send-as approver (ADR 0089 amendm
     if (!r.ok) throw new Error(JSON.stringify(r.errors))
   })
 })
+
+describe('scope.device_senders: a scanner reply is redirected only to an admin', () => {
+  // A device (an office scanner) emails scans to the Operator; a reply sent back
+  // to it reaches nobody. Each rule below is a way the redirect could widen who
+  // the seat writes to. Mirrors the overlay validator (shared parity fixtures).
+  function withDevices(devices: unknown): Record<string, unknown> {
+    const f = validFixture()
+    const scope = f['scope'] as Record<string, unknown>
+    scope['inbound_allow_from'] = ['@firm.example']
+    scope['admins'] = ['office@firm.example']
+    scope['device_senders'] = devices
+    return f
+  }
+
+  function codesFor(devices: unknown): string[] {
+    const r = validate(withDevices(devices))
+    if (r.ok) return []
+    return r.errors.filter((e) => e.path.startsWith('scope.device_senders')).map((e) => e.code)
+  }
+
+  it('accepts a device on the roster whose replies go to an admin, canonicalized', () => {
+    const r = validate(
+      withDevices([{ address: 'Scanner@Firm.example', replies_to: 'Office@firm.example' }])
+    )
+    if (!r.ok) throw new Error(JSON.stringify(r.errors))
+    expect(r.value.scope.device_senders).toEqual([
+      { address: 'scanner@firm.example', replies_to: 'office@firm.example' },
+    ])
+  })
+
+  it('absent is valid and means no device', () => {
+    const r = validate(validFixture())
+    if (!r.ok) throw new Error(JSON.stringify(r.errors))
+    expect(r.value.scope.device_senders).toEqual([])
+  })
+
+  it.each([
+    ['not a list', 'scanner@firm.example', 'TypeMismatch'],
+    ['a bare string entry', ['scanner@firm.example'], 'TypeMismatch'],
+    [
+      'a domain as the device',
+      [{ address: '@firm.example', replies_to: 'office@firm.example' }],
+      'InvalidDeviceSenders',
+    ],
+    [
+      'a domain as the target',
+      [{ address: 'scanner@firm.example', replies_to: '@firm.example' }],
+      'InvalidDeviceSenders',
+    ],
+    [
+      'an unknown key',
+      [
+        {
+          address: 'scanner@firm.example',
+          replies_to: 'office@firm.example',
+          cc: 'boss@firm.example',
+        },
+      ],
+      'InvalidDeviceSenders',
+    ],
+    [
+      'a device the seat never answers',
+      [{ address: 'fax@elsewhere.example', replies_to: 'office@firm.example' }],
+      'InvalidDeviceSenders',
+    ],
+    [
+      'a target who is not an admin',
+      [{ address: 'scanner@firm.example', replies_to: 'someone@firm.example' }],
+      'InvalidDeviceSenders',
+    ],
+    [
+      'the same device twice, in any case',
+      [
+        { address: 'scanner@firm.example', replies_to: 'office@firm.example' },
+        { address: 'SCANNER@firm.example', replies_to: 'office@firm.example' },
+      ],
+      'InvalidDeviceSenders',
+    ],
+  ])('refuses %s', (_label, devices, code) => {
+    expect(codesFor(devices)).toContain(code)
+  })
+})

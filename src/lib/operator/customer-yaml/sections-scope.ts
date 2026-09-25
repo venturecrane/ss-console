@@ -7,6 +7,7 @@ import {
 } from './types'
 import { isPlainObject, optionalStringList, requireStringList } from './helpers'
 import { checkStaffSendAs } from './sections-staff-send-as'
+import { checkDeviceSenders } from './sections-device-senders'
 
 /**
  * Public-mail providers where a whole-@domain grant is meaningless (the domain is
@@ -75,6 +76,11 @@ export function checkScope(root: Record<string, unknown>, errors: ValidationErro
     staff_send_as: checkStaffSendAs(
       raw['staff_send_as'],
       { inbound_allow_from: inboundAllowFrom, admins, outbound_roster: outboundRoster },
+      errors
+    ),
+    device_senders: checkDeviceSenders(
+      raw['device_senders'],
+      { inbound_allow_from: inboundAllowFrom, admins },
       errors
     ),
   }
@@ -508,5 +514,6 @@ function emptyScope(): Scope {
     rule_requests_to: [],
     ops_reply_from: [],
     staff_send_as: [],
+    device_senders: [],
   }
 }
