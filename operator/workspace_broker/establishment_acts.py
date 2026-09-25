@@ -199,6 +199,19 @@ class ActProposals(ProposalLifecycle):
                 out[key] = _require_text(value.get(key), f"payload.{key}", _MAX_SHORT_TEXT)
         return out
 
+    @staticmethod
+    def _require_names_match(payload_names: dict[str, str], authored_names: dict[str, str]) -> None:
+        """Names in the payload must be the authored names: the read-back the
+        administrator says yes to is rendered from them, so a caller-composed
+        name is the one fabrication this verb exists to refuse."""
+        for key, value in payload_names.items():
+            if key in authored_names and value != authored_names[key]:
+                raise EstablishmentValidationError(
+                    f"the proposed payload's {key} does not match the authored "
+                    + ".".join(ACT_CONFIG_KEYS)
+                    + " block; the read-back carries the authored name"
+                )
+
     def act_propose(self, request: dict[str, Any]) -> dict[str, Any]:
         """Record one TOOL CALL as pending and return the line to send.
 
@@ -221,16 +234,7 @@ class ActProposals(ProposalLifecycle):
         authored = self._authored_act_payload(tool)
         authored_names = self._authored_act_names(tool)
         payload_names = self._payload_names(request.get("payload"), tool)
-        # Names in the payload must be the authored names: the read-back the
-        # administrator says yes to is rendered from them, so a caller-composed
-        # name is the one fabrication this verb exists to refuse.
-        for key, value in payload_names.items():
-            if key in authored_names and value != authored_names[key]:
-                raise EstablishmentValidationError(
-                    f"the proposed payload's {key} does not match the authored "
-                    + ".".join(ACT_CONFIG_KEYS)
-                    + " block; the read-back carries the authored name"
-                )
+        self._require_names_match(payload_names, authored_names)
         contact_name = _require_display_name(
             request.get("contact_name")
             or payload_names.get("client_contact_name")
