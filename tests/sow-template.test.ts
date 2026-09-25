@@ -135,9 +135,10 @@ describe('sow-template: no hourly rates in output (Decision #16)', () => {
     expect(code).toContain('payment.totalPrice')
     // Payment section should NOT show any hourly breakdown
     const investmentSection = code.substring(
-      code.indexOf('PROJECT INVESTMENT'),
-      code.indexOf('Page 1 of 3')
+      code.indexOf('function SOWPaymentBlock'),
+      code.indexOf('interface Page1Props')
     )
+    expect(investmentSection).toContain('Project total')
     expect(investmentSection).not.toContain('per hour')
     expect(investmentSection).not.toContain('hourly')
   })
@@ -297,11 +298,13 @@ describe('sow-template: 3-page structure', () => {
     expect(pageMatches.length).toBe(3)
   })
 
-  it('page footers show correct page count', () => {
+  it('page footers are numbered by the engine, not hard-coded', () => {
+    // A hard-coded label mis-numbers any page an overflow adds (2026-09-25);
+    // tests/sow-render.test.ts renders the footer and checks it per page.
     const code = source()
-    expect(code).toContain('Page 1 of 3')
-    expect(code).toContain('Page 2 of 3')
-    expect(code).toContain('Page 3 of 3')
+    expect(code).toContain('<Fixed position="footer">')
+    expect(code).toContain("Page {'{{pageNumber}}'} of {'{{totalPages}}'}")
+    expect(code).not.toMatch(/Page \d of \d/)
   })
 
   it('does not depend on the deleted coordinate-based signing-layout module', () => {
