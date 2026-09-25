@@ -39,6 +39,12 @@ export interface WranglerD1Options {
   commandOverride?: string | null
   /** Max bytes of stdout to accept from one query. */
   maxBuffer?: number
+  /**
+   * Kill a query that has not answered in this many milliseconds. The register
+   * CLI sets it (a terminal read that hangs is worse than one that says why);
+   * the scheduled reconciler leaves it unset and relies on the job timeout.
+   */
+  timeoutMs?: number
 }
 
 export function sqlLiteral(value: unknown): string {
@@ -48,7 +54,12 @@ export function sqlLiteral(value: unknown): string {
     return String(value)
   }
   if (typeof value === 'boolean') return value ? '1' : '0'
-  return `'${String(value).replaceAll("'", "''")}'`
+  if (typeof value === 'string') return `'${value.replaceAll("'", "''")}'`
+  // An object would bind as '[object Object]': a statement that runs and
+  // writes the wrong value. Refuse it rather than corrupt a row silently.
+  throw new Error(
+    `refusing to bind a ${typeof value}; only strings, numbers, booleans and null bind`
+  )
 }
 
 /**
@@ -91,10 +102,10 @@ export function bindSql(sql: string, values: readonly unknown[]): string {
   return out
 }
 
-// The implementation moved to ./wrangler-envelope.mjs so that register.mjs --
-// run by bare `node`, with no build step -- can share it instead of keeping a
-// second inline copy. Imported for use below and re-exported so every existing
-// caller is unchanged.
+// The implementation lives in ./wrangler-envelope.mjs, written when
+// register.mjs ran under bare `node` and could not import TypeScript. Since
+// 2026-09-25 the CLI runs under tsx and uses this adapter directly. Imported
+// for use below and re-exported so every existing caller is unchanged.
 export { parseWranglerJson }
 
 class WranglerStatement {
@@ -112,8 +123,13 @@ class WranglerStatement {
     const sql = bindSql(this.sql, this.values)
     const override = this.options.commandOverride
     const maxBuffer = this.options.maxBuffer ?? 32 * 1024 * 1024
+    const timeout = this.options.timeoutMs
     const stdout = override
-      ? execFileSync(override, [this.options.database, sql], { encoding: 'utf8', maxBuffer })
+      ? execFileSync(override, [this.options.database, sql], {
+          encoding: 'utf8',
+          maxBuffer,
+          timeout,
+        })
       : execFileSync(
           'npx',
           [
@@ -126,23 +142,31 @@ class WranglerStatement {
             '--command',
             sql,
           ],
-          { encoding: 'utf8', maxBuffer }
+          { encoding: 'utf8', maxBuffer, timeout }
         )
     return parseWranglerJson(stdout)
   }
 
-  async first<T>(): Promise<T | null> {
-    const rows = this.execute()
-    return (rows[0] as T) ?? null
+  /**
+   * Run the statement and settle a Promise with the result. The query itself is
+   * synchronous (execFileSync); the Promise keeps the D1Database shape, and a
+   * throw inside the executor becomes a rejection exactly as it would from an
+   * async method, so callers' `.catch` and `try { await }` both still see it.
+   */
+  private settle<R>(fn: (rows: Record<string, unknown>[]) => R): Promise<R> {
+    return new Promise<R>((resolve) => resolve(fn(this.execute())))
   }
 
-  async all<T>(): Promise<{ results: T[]; success: true }> {
-    return { results: this.execute() as T[], success: true }
+  first<T>(): Promise<T | null> {
+    return this.settle((rows) => (rows[0] as T) ?? null)
   }
 
-  async run(): Promise<{ success: true }> {
-    this.execute()
-    return { success: true }
+  all<T>(): Promise<{ results: T[]; success: true }> {
+    return this.settle((rows) => ({ results: rows as T[], success: true as const }))
+  }
+
+  run(): Promise<{ success: true }> {
+    return this.settle(() => ({ success: true as const }))
   }
 
   raw(): never {

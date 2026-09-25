@@ -1022,6 +1022,15 @@ scope:
   staff_send_as:
     - address: Christa@ashtonandprice.com
       name: Christa Barrera
+  # The office scanner emails its scans to the Operator from its own mailbox,
+  # which nobody reads. A reply sent back to the scanner reaches no one, so the
+  # Operator's answer to a scan goes to Christa instead. The redirect is limited
+  # to exactly this pair: the device must be on inbound_allow_from, replies_to
+  # must be on scope.admins (validator-enforced), and the broker re-checks the
+  # pairing against the sender of the message it answers.
+  device_senders:
+    - address: KonicaFax@ashtonandprice.com
+      replies_to: Christa@ashtonandprice.com
 
 # ---- REPLY-CHANNEL SEND POLICY (ss#2070) ----
 # Chris asked for something he can talk to. The platform default — 3 replies to

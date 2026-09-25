@@ -95,6 +95,7 @@ def _post(path: str, body: dict, api_key: str) -> dict:
         },
     )
     try:
+        # The request targets the https API_BASE constant; no caller-supplied URL.
         # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310 - the request above targets the https API_BASE constant
             return json.loads(response.read().decode())
@@ -108,6 +109,7 @@ def _inbox_exists(inbox_id: str, api_key: str) -> bool:
         API_BASE + "/inboxes",
         headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
     )
+    # The request targets the https API_BASE constant; no caller-supplied URL.
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
     with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310 - the request above targets the https API_BASE constant
         listing = json.loads(response.read().decode())

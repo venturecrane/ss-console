@@ -1402,7 +1402,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // msgraph staff-mailbox reads and adds mail_spool_message (an email as .eml).
     // a15f0971 -> 12621343 (2026-09-25, overlay#382). Classifies add_workbook
     // and flattens its sheet cells for the identifier scan.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="12621343b5c3b5d339c83f75d0837c63a3e09c22"')
+    // 12621343 -> 8757e374 (2026-09-25, overlay#383). A reply to an office
+    // scanner goes to the person scope.device_senders names.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="8757e374f724c5f45a72d013a3e4fdbab1d08fd1"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

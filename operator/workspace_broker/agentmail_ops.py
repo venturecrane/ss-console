@@ -155,6 +155,7 @@ class AgentMailOps:
         )
         try:
             opener = self._opener or urllib.request.urlopen
+            # base_url is https-checked at construction; the path is a module literal.
             # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             with opener(request, timeout=TIMEOUT_S) as response:
                 raw = response.read().decode("utf-8") or "{}"

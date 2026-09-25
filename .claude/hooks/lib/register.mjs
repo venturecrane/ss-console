@@ -11,13 +11,10 @@
  * commitment sitting unread for months (the Smokeball task cleanup, stated in
  * correspondence letters 26/27/28 and tracked nowhere).
  *
- * THE GROUNDING GATE IS THE POINT. Extraction faithfulness tops out around
- * 0.83 -- roughly one statement in six is unsupported by its source. No amount
- * of prompting fixes that, so the control is mechanical instead: every row
- * carries a verbatim quote, the quote is string-matched against the source
- * file, and a row whose quote is not found is REFUSED. There is no --force.
- * The same discipline legal-extraction work uses, and the same one this repo
- * already applies to routine-grid.yaml's *_verbatim fields.
+ * THE GROUNDING GATE IS THE POINT. Every row carries a verbatim quote, the
+ * quote is string-matched against the source file, and a row whose quote is
+ * not found is REFUSED. There is no --force. The gate itself lives in
+ * register-grounding.mjs; this file resolves sources and applies it.
  *
  * It grounds the CITATION, never the INTERPRETATION. A hallucinated `what`
  * attached to a real quote still passes, which is why only DATED obligations
@@ -32,6 +29,18 @@
  * never merges is a silently lost obligation, which is the failure this whole
  * register exists to end.
  *
+ * ONE WRITE IMPLEMENTATION. Rows reach D1 through `upsertObligation`
+ * (src/lib/db/obligations.ts) and `markDeliveredAttested`
+ * (src/lib/db/obligation-capture.ts), over the wrangler-backed D1 handle in
+ * scripts/lib/wrangler-d1.ts: the same functions the reconciler and the console
+ * use. Until 2026-09-25 this file string-built its own upsert with a hand
+ * escaper, and its column list had already drifted from the module's (review
+ * 2026-09-25, top action item 5). That is why this file runs under tsx rather
+ * than bare node: `.claude/bin/register` execs the repo's pinned
+ * node_modules/.bin/tsx, which loads the TypeScript directly with no build
+ * step, in one process, so there is no second copy and no IPC shape to keep in
+ * sync.
+ *
  * DELIVERY IS THE OTHER HALF. `register deliver` marks a captured row
  * delivered by citing the SENT letter that kept the promise, read off the
  * engagements repo's origin/main with the same quote gate. It stops at
@@ -40,7 +49,8 @@
  * Exit codes: 0 ok (including "journaled but unsynced"), 1 refused.
  *
  * Env: SS_OBLIGATION_JOURNAL_DIR (default ~/.claude/ss-obligation-journal)
- *      SS_REGISTER_D1_CMD        override the wrangler invocation (tests)
+ *      SS_REGISTER_D1_CMD        override the wrangler invocation (tests); called
+ *                                as `<cmd> <database> <sql>`
  *      SS_REGISTER_DB            D1 database name (default ss-console-db)
  */
 
@@ -50,21 +60,32 @@ import path from 'node:path'
 import os from 'node:os'
 import crypto from 'node:crypto'
 import { engagementsDir, engagementsRepoPresent, suffixOf } from './engagement-paths.mjs'
-// Both live under scripts/ and are shared with the CI reconciler, which runs
-// them under tsx. They are .mjs precisely so this file -- run by bare node from
-// a bash wrapper, with no build step -- can import the same implementation
-// rather than keeping a second copy that drifts.
-import { parseWranglerJson } from '../../../scripts/lib/wrangler-envelope.mjs'
+import {
+  MIN_QUOTE_WORDS,
+  checkQuote,
+  dateQuoteAnchorsDate,
+  dateQuoteForms,
+  normalize,
+  wordCount,
+} from './register-grounding.mjs'
+// Shared with the CI reconciler. The .ts imports are why the wrapper runs tsx.
 import { seatsOf } from '../../../scripts/lib/seat-clients.mjs'
 import { JSON_FIELDS, projectRow, renderTable } from '../../../scripts/lib/register-view.mjs'
+import { wranglerD1 } from '../../../scripts/lib/wrangler-d1.ts'
+import { upsertObligation } from '../../../src/lib/db/obligations.ts'
+import {
+  entityIdForSeat,
+  findOpenByKey,
+  listOwedObligations,
+  markDeliveredAttested,
+} from '../../../src/lib/db/obligation-capture.ts'
 
 // Re-exported so the CLI stays the single import surface for its own tests and
 // for any caller that thinks in terms of `register`, not of where the rendering
-// happens to live.
+// or the quote gate happens to live.
 export { JSON_FIELDS, projectRow, renderTable }
+export { checkQuote, dateQuoteAnchorsDate, dateQuoteForms, normalize, wordCount }
 
-const DB = process.env.SS_REGISTER_DB || 'ss-console-db'
-const MIN_QUOTE_WORDS = 6
 /** A read that has not answered in twelve seconds is not going to. */
 const D1_TIMEOUT_MS = 12_000
 
@@ -79,6 +100,23 @@ export const KINDS = [
   'provisioning',
   'product_defect',
 ]
+
+/**
+ * The register's D1 handle. Read from the environment on every call, so a test
+ * (or a caller) that sets SS_REGISTER_D1_CMD after import is honoured.
+ */
+export function registerDb() {
+  return wranglerD1({
+    database: process.env.SS_REGISTER_DB || 'ss-console-db',
+    commandOverride: process.env.SS_REGISTER_D1_CMD || null,
+    timeoutMs: D1_TIMEOUT_MS,
+  })
+}
+
+/** The first line of a failure, which is the line that says why. */
+function firstLine(err) {
+  return String(err?.message ?? err).split('\n')[0]
+}
 
 export function journalDir() {
   return (
@@ -103,33 +141,27 @@ export function sessionId() {
   return process.env.CLAUDE_CODE_SESSION_ID ?? null
 }
 
-/**
- * Normalize for comparison.
- *
- * Both sides get the same treatment, so a quote that differs from its source
- * only in line wrapping, smart quotes, or markdown emphasis still matches. A
- * quote spanning several lines matches for free: the newline has already
- * become a space by the time we compare.
- *
- * Deliberately NOT stripping punctuation wholesale -- a quote that matches
- * only after its commas are removed is a paraphrase, and paraphrase is exactly
- * what this gate exists to reject.
- */
-export function normalize(text) {
-  return String(text)
-    .normalize('NFKC')
-    .replace(/[‘’‛′]/g, "'")
-    .replace(/[“”‟″]/g, '"')
-    .replace(/[‐-―−]/g, '-')
-    .replace(/[*_`]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase()
+/** Read the first candidate path that is a file. */
+function readFirstFile(candidates) {
+  for (const candidate of candidates) {
+    try {
+      if (fs.statSync(candidate).isFile()) {
+        return { ok: true, text: fs.readFileSync(candidate, 'utf8'), resolved: candidate }
+      }
+    } catch {
+      /* next candidate */
+    }
+  }
+  return { ok: false, error: 'source_not_found' }
 }
 
-export function wordCount(text) {
-  const t = normalize(text)
-  return t.length === 0 ? 0 : t.split(' ').length
+/** Run a read-only command whose stdout is the source text. */
+function readCommand(cmd, args, cwd, resolved, maxBuffer) {
+  try {
+    return { ok: true, text: execFileSync(cmd, args, { cwd, encoding: 'utf8', maxBuffer }), resolved }
+  } catch {
+    return { ok: false, error: 'source_not_found' }
+  }
 }
 
 /**
@@ -144,25 +176,13 @@ export function wordCount(text) {
 export function resolveSource(sourceKind, sourceRef, opts = {}) {
   const cwd = opts.cwd || process.cwd()
   if (sourceKind === 'letter') {
-    if (!engagementsRepoPresent()) {
-      return { ok: false, error: 'engagements_repo_absent' }
-    }
+    if (!engagementsRepoPresent()) return { ok: false, error: 'engagements_repo_absent' }
     const suffix = suffixOf(sourceRef) || sourceRef
-    const candidates = [
+    return readFirstFile([
       path.resolve(cwd, sourceRef),
       path.join(engagementsDir(), suffix),
       path.join(engagementsDir(), sourceRef),
-    ]
-    for (const candidate of candidates) {
-      try {
-        if (fs.statSync(candidate).isFile()) {
-          return { ok: true, text: fs.readFileSync(candidate, 'utf8'), resolved: candidate }
-        }
-      } catch {
-        /* next candidate */
-      }
-    }
-    return { ok: false, error: 'source_not_found' }
+    ])
   }
 
   if (sourceKind === 'git') {
@@ -170,67 +190,18 @@ export function resolveSource(sourceKind, sourceRef, opts = {}) {
     // of the file cannot retroactively ungroundize a row.
     const m = /^git:([0-9a-f]{7,40}):(.+)$/.exec(sourceRef)
     if (!m) return { ok: false, error: 'malformed_git_ref' }
-    try {
-      const text = execFileSync('git', ['show', `${m[1]}:${m[2]}`], {
-        cwd,
-        encoding: 'utf8',
-        maxBuffer: 16 * 1024 * 1024,
-      })
-      return { ok: true, text, resolved: sourceRef }
-    } catch {
-      return { ok: false, error: 'source_not_found' }
-    }
+    return readCommand('git', ['show', `${m[1]}:${m[2]}`], cwd, sourceRef, 16 * 1024 * 1024)
   }
 
   if (sourceKind === 'github') {
     const m = /^([\w.-]+\/[\w.-]+)#(\d+)$/.exec(sourceRef)
     if (!m) return { ok: false, error: 'malformed_github_ref' }
-    try {
-      const text = execFileSync(
-        'gh',
-        ['issue', 'view', m[2], '--repo', m[1], '--json', 'title,body', '-q', '.title + "\\n" + .body'],
-        { cwd, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 }
-      )
-      return { ok: true, text, resolved: sourceRef }
-    } catch {
-      return { ok: false, error: 'source_not_found' }
-    }
+    const args = ['issue', 'view', m[2], '--repo', m[1], '--json', 'title,body']
+    args.push('-q', '.title + "\\n" + .body')
+    return readCommand('gh', args, cwd, sourceRef, 4 * 1024 * 1024)
   }
 
   return { ok: false, error: 'unsupported_source_kind' }
-}
-
-/**
- * Is this quote actually in this source?
- *
- * On failure, returns the highest-overlap window from the source so the drift
- * is visible. An agent that mis-clipped a sentence by two words should be able
- * to see that immediately rather than guess.
- */
-export function checkQuote(sourceText, quote) {
-  if (wordCount(quote) < MIN_QUOTE_WORDS) {
-    return { ok: false, error: 'quote_too_short', words: wordCount(quote) }
-  }
-  const haystack = normalize(sourceText)
-  const needle = normalize(quote)
-  if (haystack.includes(needle)) return { ok: true }
-  return { ok: false, error: 'quote_not_found', nearest: nearestWindow(haystack, needle) }
-}
-
-function nearestWindow(haystack, needle) {
-  const terms = needle.split(' ').filter((w) => w.length > 3)
-  if (terms.length === 0) return null
-  const words = haystack.split(' ')
-  const span = needle.split(' ').length
-  let best = { score: 0, at: -1 }
-  for (let i = 0; i + span <= words.length; i += Math.max(1, Math.floor(span / 4))) {
-    const window = words.slice(i, i + span).join(' ')
-    let score = 0
-    for (const term of terms) if (window.includes(term)) score += 1
-    if (score > best.score) best = { score, at: i }
-  }
-  if (best.at < 0) return null
-  return words.slice(best.at, best.at + span * 2).join(' ').slice(0, 200)
 }
 
 /**
@@ -265,65 +236,6 @@ export function validateCapture(args, opts = {}) {
   return { ok: true, sourceKind, resolved: source.resolved }
 }
 
-const MONTHS = [
-  'january',
-  'february',
-  'march',
-  'april',
-  'may',
-  'june',
-  'july',
-  'august',
-  'september',
-  'october',
-  'november',
-  'december',
-]
-
-/**
- * The forms a letter might legitimately use to state one date.
- *
- * A client writes "before October 15th", not "2026-10-15". An earlier version
- * required the raw --due string to appear verbatim in the quote, which refused
- * every properly-grounded obligation whose letter used ordinary English -- a
- * false refusal on exactly the cases this gate exists to admit. The gate must
- * be strict about whether the date is ANCHORED in the source, never about the
- * client's formatting.
- *
- * Returns the accepted spellings; the caller passes if the quote contains any.
- * A non-ISO --due (a recurring anchor like "the 15th") is matched literally,
- * which is the right behaviour for a duty with no calendar date.
- */
-export function dateQuoteForms(due) {
-  const raw = normalize(due)
-  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw)
-  if (!iso) return [raw]
-
-  const month = MONTHS[Number(iso[2]) - 1]
-  const day = String(Number(iso[3]))
-  const year = iso[1]
-  if (!month) return [raw]
-
-  return [
-    raw, // 2026-10-15
-    `${month} ${day}`, // october 15
-    `${month} ${day}st`,
-    `${month} ${day}nd`,
-    `${month} ${day}rd`,
-    `${month} ${day}th`, // october 15th
-    `${day} ${month}`, // 15 october
-    `${month} ${day}, ${year}`, // october 15, 2026
-    `${iso[2]}/${day}/${year}`, // 10/15/2026
-    `${iso[2]}/${iso[3]}/${year}`,
-  ]
-}
-
-/** Does the date quote anchor the due date in the source's own words? */
-export function dateQuoteAnchorsDate(dateQuote, due) {
-  const quote = normalize(dateQuote)
-  return dateQuoteForms(due).some((form) => quote.includes(form))
-}
-
 export function inferSourceKind(ref) {
   if (/^git:/.test(ref)) return 'git'
   if (/^[\w.-]+\/[\w.-]+#\d+$/.test(ref)) return 'github'
@@ -342,22 +254,28 @@ export function journalAppend(entry) {
   return file
 }
 
-export function journalEntries() {
-  const dir = journalDir()
-  if (!fs.existsSync(dir)) return []
+/** Parse one journal file, skipping corrupt lines: a bad line must not hide the rest. */
+function journalFileEntries(file) {
   const out = []
-  for (const name of fs.readdirSync(dir).sort()) {
-    if (!name.endsWith('.jsonl')) continue
-    for (const line of fs.readFileSync(path.join(dir, name), 'utf8').split('\n')) {
-      if (!line.trim()) continue
-      try {
-        out.push({ ...JSON.parse(line), _file: path.join(dir, name) })
-      } catch {
-        /* a corrupt line must not hide the rest */
-      }
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    if (!line.trim()) continue
+    try {
+      out.push({ ...JSON.parse(line), _file: file })
+    } catch {
+      /* skip the corrupt line */
     }
   }
   return out
+}
+
+export function journalEntries() {
+  const dir = journalDir()
+  if (!fs.existsSync(dir)) return []
+  return fs
+    .readdirSync(dir)
+    .sort()
+    .filter((name) => name.endsWith('.jsonl'))
+    .flatMap((name) => journalFileEntries(path.join(dir, name)))
 }
 
 /** Unsynced journal lines, newest state per obligation key. */
@@ -378,73 +296,29 @@ export function unsyncedEntries() {
   return [...byKey.values()].filter((e) => !e.synced)
 }
 
-function sqlLiteral(value) {
-  if (value === null || value === undefined) return 'NULL'
-  return `'${String(value).replaceAll("'", "''")}'`
-}
-
-export function buildUpsertSql(row) {
-  const cols = [
-    'obligation_id',
-    'customer_slug',
-    'entity_id',
-    'stable_key',
-    'kind',
-    'what',
-    'origin',
-    'origin_source',
-    'source_kind',
-    'source_ref',
-    'source_quote',
-    'date_quote',
-    'window_start',
-    'window_end',
-    'due_at',
-    'links_json',
-    'created_by_session',
-  ]
-  const values = cols.map((c) => sqlLiteral(row[c]))
-  return (
-    `INSERT INTO client_obligations (${cols.join(', ')}) VALUES (${values.join(', ')}) ` +
-    `ON CONFLICT(customer_slug, kind, stable_key) DO UPDATE SET ` +
-    `what = excluded.what, source_ref = excluded.source_ref, ` +
-    `source_quote = excluded.source_quote, date_quote = excluded.date_quote, ` +
-    `window_start = excluded.window_start, window_end = excluded.window_end, ` +
-    `due_at = excluded.due_at, links_json = excluded.links_json, ` +
-    `last_seen_at = datetime('now');`
-  )
-}
-
-/** Look up the entity_id for a seat. Returns null when D1 is unreachable. */
-export function lookupEntityId(slug) {
-  const out = runD1(
-    `SELECT entity_id FROM customer_configs WHERE customer_slug = ${sqlLiteral(slug)};`
-  )
-  if (!out.ok) return null
+/** The seat's entity, or null when D1 cannot say (unreachable, or no such seat). */
+export async function lookupEntityId(slug) {
   try {
-    return parseWranglerJson(out.stdout)[0]?.entity_id ?? null
+    return await entityIdForSeat(registerDb(), slug)
   } catch {
     return null
   }
 }
 
-export function runD1(sql) {
-  const override = process.env.SS_REGISTER_D1_CMD
+/**
+ * Write one captured row through the console's own upsert.
+ *
+ * Journal rows written before 2026-09-25 carry an `obligation_id` the old
+ * string-built insert used; the module mints its own and keeps the existing
+ * id on conflict, so that field is simply not passed.
+ */
+export async function writeCapturedRow(row) {
+  const { obligation_id: _legacyId, ...input } = row
   try {
-    const stdout = override
-      ? execFileSync(override, [DB, sql], {
-          encoding: 'utf8',
-          maxBuffer: 8 * 1024 * 1024,
-          timeout: D1_TIMEOUT_MS,
-        })
-      : execFileSync(
-          'npx',
-          ['wrangler', 'd1', 'execute', DB, '--remote', '--json', '--command', sql],
-          { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, timeout: D1_TIMEOUT_MS }
-        )
-    return { ok: true, stdout }
+    await upsertObligation(registerDb(), input)
+    return { ok: true }
   } catch (err) {
-    return { ok: false, error: String(err?.message ?? err) }
+    return { ok: false, error: firstLine(err) }
   }
 }
 
@@ -478,61 +352,55 @@ function usage() {
   register list [--client <slug>]`)
 }
 
-function cmdAdd(args) {
-  if (!args.client) {
-    console.error('register: --client is required')
+/**
+ * The considered pass. An agent that looked and found nothing owed records
+ * that, so a silent miss and a deliberate "nothing here" stop being
+ * indistinguishable. Journal-only: it is not an obligation.
+ */
+function recordNothingOwed(args) {
+  if (!args.why) {
+    console.error('register: --kind none requires --why')
     return 1
   }
+  journalAppend({
+    ts: new Date().toISOString(),
+    kind: 'none',
+    client: args.client,
+    key: `none-${Date.now()}`,
+    why: args.why,
+    session: sessionId(),
+    synced: true,
+  })
+  console.log(`register: recorded "nothing owed" for ${args.client}`)
+  return 0
+}
 
-  // The considered pass. An agent that looked and found nothing owed records
-  // that, so a silent miss and a deliberate "nothing here" stop being
-  // indistinguishable. Journal-only: it is not an obligation.
-  if (args.kind === 'none') {
-    if (!args.why) {
-      console.error('register: --kind none requires --why')
-      return 1
-    }
-    journalAppend({
-      ts: new Date().toISOString(),
-      kind: 'none',
-      client: args.client,
-      key: `none-${Date.now()}`,
-      why: args.why,
-      session: sessionId(),
-      synced: true,
-    })
-    console.log(`register: recorded "nothing owed" for ${args.client}`)
-    return 0
+function explainCaptureRefusal(check, args) {
+  console.error(`register: REFUSED (${check.error})`)
+  if (check.error === 'quote_not_found' && check.nearest) {
+    console.error(`  the quote does not appear in ${args.source}`)
+    console.error(`  nearest text: ...${check.nearest}...`)
   }
-
-  const check = validateCapture(args)
-  if (!check.ok) {
-    console.error(`register: REFUSED (${check.error})`)
-    if (check.error === 'quote_not_found' && check.nearest) {
-      console.error(`  the quote does not appear in ${args.source}`)
-      console.error(`  nearest text: ...${check.nearest}...`)
-    }
-    if (check.error === 'engagements_repo_absent') {
-      console.error(`  ${engagementsDir()} is not checked out; cannot verify the quote.`)
-      console.error('  This fails closed on purpose: an unverifiable citation is not a citation.')
-    }
-    if (check.error === 'quote_too_short') {
-      console.error(`  a ${check.words}-word quote matches too much; give at least ${MIN_QUOTE_WORDS}.`)
-    }
-    return 1
+  if (check.error === 'engagements_repo_absent') {
+    console.error(`  ${engagementsDir()} is not checked out; cannot verify the quote.`)
+    console.error('  This fails closed on purpose: an unverifiable citation is not a citation.')
   }
+  if (check.error === 'quote_too_short') {
+    console.error(`  a ${check.words}-word quote matches too much; give at least ${MIN_QUOTE_WORDS}.`)
+  }
+}
 
-  const entityId = lookupEntityId(args.client)
-  const row = {
-    obligation_id: crypto.randomUUID(),
+/** The UpsertObligationInput a grounded capture becomes. */
+export function capturedRow(args, sourceKind, entityId) {
+  return {
     customer_slug: args.client,
     entity_id: entityId,
     stable_key: args.key,
     kind: args.kind,
     what: args.what,
     origin: 'captured',
-    origin_source: check.sourceKind,
-    source_kind: check.sourceKind,
+    origin_source: sourceKind,
+    source_kind: sourceKind,
     source_ref: args.source,
     source_quote: args.quote,
     date_quote: args['date-quote'] ?? null,
@@ -542,16 +410,25 @@ function cmdAdd(args) {
     links_json: args.links ?? null,
     created_by_session: sessionId(),
   }
+}
 
-  const entry = {
-    ts: new Date().toISOString(),
-    client: args.client,
-    kind: args.kind,
-    key: args.key,
-    row,
-    synced: false,
+async function cmdAdd(args) {
+  if (!args.client) {
+    console.error('register: --client is required')
+    return 1
   }
-  journalAppend(entry)
+  if (args.kind === 'none') return recordNothingOwed(args)
+
+  const check = validateCapture(args)
+  if (!check.ok) {
+    explainCaptureRefusal(check, args)
+    return 1
+  }
+
+  const entityId = await lookupEntityId(args.client)
+  const row = capturedRow(args, check.sourceKind, entityId)
+  const entry = { ts: new Date().toISOString(), client: args.client, kind: args.kind, key: args.key }
+  journalAppend({ ...entry, row, synced: false })
 
   if (!entityId) {
     console.log(`register: journaled ${args.client}/${args.key} (UNSYNCED — D1 unreachable)`)
@@ -559,19 +436,19 @@ function cmdAdd(args) {
     return 0
   }
 
-  const result = runD1(buildUpsertSql(row))
+  const result = await writeCapturedRow(row)
   if (!result.ok) {
     console.log(`register: journaled ${args.client}/${args.key} (UNSYNCED — write failed)`)
-    console.error(`  ${result.error.split('\n')[0]}`)
+    console.error(`  ${result.error}`)
     return 0
   }
 
-  journalAppend({ ...entry, synced: true })
+  journalAppend({ ...entry, row, synced: true })
   console.log(`register: recorded ${args.client}/${args.kind}/${args.key}`)
   return 0
 }
 
-function cmdSync() {
+async function cmdSync() {
   const pending = unsyncedEntries()
   if (pending.length === 0) {
     console.log('register: nothing to sync')
@@ -580,10 +457,10 @@ function cmdSync() {
   let synced = 0
   for (const entry of pending) {
     if (!entry.row) continue
-    const row = entry.row.entity_id ? entry.row : { ...entry.row, entity_id: lookupEntityId(entry.client) }
-    if (!row.entity_id) continue
-    const result = runD1(buildUpsertSql(row))
-    if (result.ok) {
+    const entityId = entry.row.entity_id || (await lookupEntityId(entry.client))
+    if (!entityId) continue
+    const row = { ...entry.row, entity_id: entityId }
+    if ((await writeCapturedRow(row)).ok) {
       journalAppend({ ...entry, row, synced: true })
       synced += 1
     }
@@ -597,14 +474,28 @@ function cmdSync() {
 
 /**
  * The states a row can be delivered FROM. Mirrors the `delivered` edges in
- * VALID_TRANSITIONS (src/lib/db/obligations.ts); this file runs under bare node
- * and cannot import that TypeScript, so tests/register-cli.test.ts pins the two
- * lists equal instead.
+ * VALID_TRANSITIONS (src/lib/db/obligations.ts); tests/register-deliver.test.ts
+ * pins the two lists equal, and markDeliveredAttested re-checks the edge.
  */
 export const DELIVERABLE_FROM = ['open', 'active', 'awaiting_external']
 
 /** The repo the receipt names. The locator must say where, not only what. */
 const ENGAGEMENTS_REPO = 'venturecrane/engagements'
+
+/** A git runner pinned to the engagements repo, with the hook environment stripped. */
+function engagementsGit(repo) {
+  // GIT_* stripped: GIT_DIR and friends win over `-C`, and git exports them to
+  // every hook, so run from inside one this would read the WRONG repository and
+  // could "find" a letter there.
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')))
+  return (args) =>
+    execFileSync('git', ['-C', repo, ...args], {
+      encoding: 'utf8',
+      env,
+      maxBuffer: 16 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+}
 
 /**
  * Read a letter as it stands on the engagements repo's origin/main.
@@ -618,38 +509,18 @@ const ENGAGEMENTS_REPO = 'venturecrane/engagements'
  */
 export function readArchivedLetter(letterPath) {
   if (!engagementsRepoPresent()) return { ok: false, error: 'engagements_repo_absent' }
-  const repo = engagementsDir()
+  const git = engagementsGit(engagementsDir())
   const suffix = suffixOf(letterPath) || letterPath
-  // GIT_* stripped: GIT_DIR and friends win over `-C`, and git exports them to
-  // every hook, so run from inside one this would read the WRONG repository and
-  // could "find" a letter there.
-  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')))
-  const git = (args) =>
-    execFileSync('git', ['-C', repo, ...args], {
-      encoding: 'utf8',
-      env,
-      maxBuffer: 16 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-  try {
-    git(['fetch', '--quiet', 'origin', 'main'])
-  } catch {
-    return { ok: false, error: 'engagements_unreachable' }
-  }
   let sha
   try {
+    git(['fetch', '--quiet', 'origin', 'main'])
     sha = git(['rev-parse', 'origin/main']).trim()
   } catch {
     return { ok: false, error: 'engagements_unreachable' }
   }
   try {
     const text = git(['show', `${sha}:${suffix}`])
-    return {
-      ok: true,
-      text,
-      suffix,
-      locator: `${ENGAGEMENTS_REPO}@${sha.slice(0, 12)}:${suffix}`,
-    }
+    return { ok: true, text, suffix, locator: `${ENGAGEMENTS_REPO}@${sha.slice(0, 12)}:${suffix}` }
   } catch {
     return { ok: false, error: 'evidence_not_on_main' }
   }
@@ -703,6 +574,41 @@ function explainRefusal(check, args) {
   if (check.detail) console.error(`  ${check.detail}`)
 }
 
+/** The one non-terminal row a client's key names, or why there is not one. */
+async function findOpenRow(args) {
+  try {
+    const found = await findOpenByKey(registerDb(), {
+      seats: seatsOf(args.client),
+      key: args.key,
+      kind: args.kind || null,
+    })
+    return found.ok ? found : { ok: false, error: found.error }
+  } catch (err) {
+    return { ok: false, error: `cannot read the register (${firstLine(err)})` }
+  }
+}
+
+/** Write the delivery through the module, which guards the state and reads it back. */
+async function recordDelivery(row, letter) {
+  let write
+  try {
+    write = await markDeliveredAttested(registerDb(), {
+      obligationId: row.obligation_id,
+      fromState: row.state,
+      surface: 'engagements',
+      locator: letter.locator,
+    })
+  } catch (err) {
+    return { ok: false, error: `the write failed (${firstLine(err)})` }
+  }
+  if (write.ok) return { ok: true }
+  if (write.error === 'illegal_transition') {
+    return { ok: false, error: `the register refuses ${row.state} -> delivered` }
+  }
+  const reads = write.reads ? `"${write.reads}"` : 'unreadable'
+  return { ok: false, error: `the write did not land: row ${row.obligation_id} reads ${reads}` }
+}
+
 /**
  * Mark a letter-captured obligation delivered, citing the letter that kept it.
  *
@@ -723,15 +629,14 @@ function explainRefusal(check, args) {
  * Online only. A delivery journaled offline and replayed later would certify
  * against an archive read hours earlier; refusing is cheaper than that.
  */
-function cmdDeliver(args) {
-  for (const field of ['client', 'key', 'evidence', 'quote']) {
-    if (!args[field]) {
-      console.error(`register: --${field} is required`)
-      usage()
-      return 1
-    }
+async function cmdDeliver(args) {
+  const absent = ['client', 'key', 'evidence', 'quote'].find((field) => !args[field])
+  if (absent) {
+    console.error(`register: --${absent} is required`)
+    usage()
+    return 1
   }
-  const found = findOpenRow(args)
+  const found = await findOpenRow(args)
   if (!found.ok) {
     if (found.error === 'ambiguous_key') explainRefusal(found, args)
     else console.error(`register: ${found.error}`)
@@ -744,7 +649,7 @@ function cmdDeliver(args) {
     explainRefusal(check, args)
     return 1
   }
-  const recorded = recordDelivery(row, letter)
+  const recorded = await recordDelivery(row, letter)
   if (!recorded.ok) {
     console.error(`register: ${recorded.error}`)
     return 1
@@ -766,71 +671,7 @@ function cmdDeliver(args) {
   return 0
 }
 
-/** The one non-terminal row a client's key names, or why there is not one. */
-function findOpenRow(args) {
-  const seats = seatsOf(args.client)
-  const conditions = [
-    `customer_slug IN (${seats.map(sqlLiteral).join(', ')})`,
-    `stable_key = ${sqlLiteral(args.key)}`,
-    `state NOT IN ('closed','cancelled','void')`,
-  ]
-  if (args.kind) conditions.push(`kind = ${sqlLiteral(args.kind)}`)
-  const found = runD1(
-    `SELECT obligation_id, customer_slug, kind, stable_key, origin, state, source_ref ` +
-      `FROM client_obligations WHERE ${conditions.join(' AND ')};`
-  )
-  if (!found.ok) {
-    return { ok: false, error: `cannot read the register (${found.error.split('\n')[0]})` }
-  }
-  let rows
-  try {
-    rows = parseWranglerJson(found.stdout)
-  } catch {
-    return { ok: false, error: 'the register returned output that is not JSON' }
-  }
-  if (rows.length > 1) return { ok: false, error: 'ambiguous_key' }
-  return { ok: true, row: rows[0] ?? null }
-}
-
-/**
- * Write the delivery, then READ IT BACK.
- *
- * The UPDATE is guarded on the state we read, so a row another session moved in
- * between is not overwritten. An UPDATE that matched nothing reports success
- * just the same, so the read-back is what makes "delivered" mean the register
- * says so.
- */
-function recordDelivery(row, letter) {
-  const write = runD1(
-    `UPDATE client_obligations SET state = 'delivered', evidence_class = 'attested', ` +
-      `evidence_surface = 'engagements', evidence_locator = ${sqlLiteral(letter.locator)}, ` +
-      `evidence_last_verified_at = datetime('now') ` +
-      `WHERE obligation_id = ${sqlLiteral(row.obligation_id)} AND state = ${sqlLiteral(row.state)};`
-  )
-  if (!write.ok) return { ok: false, error: `the write failed (${write.error.split('\n')[0]})` }
-  const back = runD1(
-    `SELECT state, evidence_locator FROM client_obligations ` +
-      `WHERE obligation_id = ${sqlLiteral(row.obligation_id)};`
-  )
-  let after = null
-  try {
-    after = back.ok ? parseWranglerJson(back.stdout)[0] : null
-  } catch {
-    after = null
-  }
-  if (!after || after.state !== 'delivered' || after.evidence_locator !== letter.locator) {
-    const reads = after ? `"${after.state}"` : 'unreadable'
-    return { ok: false, error: `the write did not land: row ${row.obligation_id} reads ${reads}` }
-  }
-  return { ok: true }
-}
-
-function cmdList(args) {
-  // `verified` is excluded with the terminal states: a reconcile run has probed
-  // the real surface and found the work done, so it is no longer owed. Leaving
-  // it in made /sos count kept promises as open ones. `delivered` stays in --
-  // it is our claim, and it is on the list until a run certifies it.
-  const conditions = [`state NOT IN ('verified','closed','cancelled','void')`]
+async function cmdList(args) {
   // `--client` takes a CLIENT, and a client is not always a seat. Rows are keyed
   // by seat (`customer_slug`), but SMD's three own seats roll up to the
   // `smd-services` client, and that is the name CLAUDE.md and /sos tell people
@@ -838,26 +679,13 @@ function cmdList(args) {
   // printed "nothing open" while all three seats had work -- a clean-looking
   // report over open work, which is the exact failure this register exists to
   // end. So expand the client to its seats and match any of them.
-  if (args.client) {
-    const seats = seatsOf(args.client)
-    conditions.push(`customer_slug IN (${seats.map(sqlLiteral).join(', ')})`)
-  }
-  const result = runD1(
-    `SELECT obligation_id, customer_slug, kind, stable_key, state, due_at, created_at, what ` +
-      `FROM client_obligations WHERE ${conditions.join(' AND ')} ` +
-      `ORDER BY due_at IS NULL, due_at, created_at;`
-  )
-  if (!result.ok) {
-    // Say WHY. The caller is /sos or a person, and "cannot read" without a
-    // reason is indistinguishable from an empty register at a glance.
-    console.error(`register: cannot read the register (${result.error.split('\n')[0]})`)
-    return 1
-  }
   let rows
   try {
-    rows = parseWranglerJson(result.stdout)
-  } catch {
-    console.error('register: the register returned output that is not JSON')
+    rows = await listOwedObligations(registerDb(), args.client ? seatsOf(args.client) : null)
+  } catch (err) {
+    // Say WHY. The caller is /sos or a person, and "cannot read" without a
+    // reason is indistinguishable from an empty register at a glance.
+    console.error(`register: cannot read the register (${firstLine(err)})`)
     return 1
   }
   if (args.json) {
@@ -868,7 +696,7 @@ function cmdList(args) {
   return 0
 }
 
-export function main(argv) {
+export async function main(argv) {
   const [command, ...rest] = argv
   const args = parseArgs(rest)
   switch (command) {
@@ -888,5 +716,5 @@ export function main(argv) {
 
 const invokedDirectly = process.argv[1] && process.argv[1].endsWith('register.mjs')
 if (invokedDirectly) {
-  process.exit(main(process.argv.slice(2)))
+  process.exitCode = await main(process.argv.slice(2))
 }

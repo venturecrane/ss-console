@@ -28,6 +28,7 @@ import {
 export function SOWPage2({ sowNumber }: { sowNumber: string }) {
   return (
     <Page size="Letter" margin={pageMargins}>
+      <SOWFooter sowNumber={sowNumber} />
       <Text style={sectionHeadingStyle}>WHAT&apos;S INCLUDED</Text>
       <Text style={{ ...bodyTextStyle, marginBottom: 16 }}>
         This engagement includes problem diagnosis, process documentation, tool configuration, one
@@ -101,7 +102,6 @@ export function SOWPage2({ sowNumber }: { sowNumber: string }) {
           </Text>
         ))}
       </View>
-      <SOWFooter sowNumber={sowNumber} pageLabel="Page 2 of 3" />
     </Page>
   )
 }
@@ -115,6 +115,7 @@ export function SOWPage3({
 }) {
   return (
     <Page size="Letter" margin={pageMargins}>
+      <SOWFooter sowNumber={sowNumber} />
       <Text style={sectionHeadingStyle}>NEXT STEPS</Text>
       <Text style={{ ...bodyTextStyle, marginBottom: 24 }}>
         Once you sign below, we will send a deposit invoice. Work begins after the deposit is
@@ -178,7 +179,6 @@ export function SOWPage3({
           {BRAND_NAME} assents to this agreement by presenting this Statement of Work for signature.
         </Text>
       </View>
-      <SOWFooter sowNumber={sowNumber} pageLabel="Page 3 of 3" />
     </Page>
   )
 }

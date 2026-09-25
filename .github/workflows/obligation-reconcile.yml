@@ -119,7 +119,8 @@ jobs:
           # findings path is the one path that exits non-zero, so the control
           # would be mute in exactly the case it exists for.
           STATUS=0
-          npx tsx scripts/ci-reconcile-obligations.ts > reconcile.txt 2>&1 || STATUS=$?
+          # --no-install: tsx is a pinned devDependency; never fetch an unpinned one.
+          npx --no-install tsx scripts/ci-reconcile-obligations.ts > reconcile.txt 2>&1 || STATUS=$?
           cat reconcile.txt
           echo "status=${STATUS}" >> "$GITHUB_OUTPUT"
           # Exit 2 is a finding, handled by the next step. Anything else that is

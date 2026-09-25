@@ -384,21 +384,50 @@ export default tseslint.config(
     files: ['src/lib/operator/customer-yaml/types.ts'],
     rules: { 'max-lines': 'off' },
   },
+  // The tooling trees: the CI scripts under scripts/ and the Claude Code hooks
+  // and CLIs under .claude/. Both were ignored wholesale until 2026-09-25, and
+  // the window's two largest new modules grew over the ceiling there unseen
+  // (review 2026-09-25, Architecture 2: the obligation reconciler's `main` at
+  // 249 lines and complexity 50, the register CLI at 627 logical lines). They
+  // are live code: obligation-reconcile.yml runs the first on a schedule and
+  // `.claude/bin/register` execs the second, and the enforcement hooks
+  // (worktree-guard, engagement-guard) are the controls the doctrine leans on.
+  //
+  // Every structural ceiling applies at error, as everywhere else. What is
+  // relaxed is only what cannot work: plain JavaScript carries no types, and
+  // the `.claude/` files sit outside tsconfig (its default include skips dot
+  // directories), so the type-aware rules are turned off for JS files in these
+  // trees. TypeScript under scripts/ is inside tsconfig and keeps them.
+  {
+    files: [
+      'scripts/**/*.js',
+      'scripts/**/*.mjs',
+      'scripts/**/*.cjs',
+      '.claude/**/*.js',
+      '.claude/**/*.mjs',
+      '.claude/**/*.cjs',
+    ],
+    ...tseslint.configs.disableTypeChecked,
+  },
   {
     ignores: [
       '**/dist/**',
       '**/node_modules/**',
       '**/.wrangler/**',
       '**/.astro/**',
-      '**/.claude/**',
+      // Agent worktrees: full checkouts of other branches, each with its own
+      // lint run. Only the worktrees are skipped; the tracked hooks and CLIs
+      // under .claude/ are linted (block above). This was `**/.claude/**`
+      // until 2026-09-25, which exempted every enforcement hook as a side
+      // effect of excluding the worktrees.
+      '**/.claude/worktrees/**',
       // Stale git worktrees from a pre-`.claude/worktrees/` tooling
       // convention. Real registered worktrees (`git worktree list`) but
       // not committed; pre-push verify failed locally on dirty checkouts
       // that have nothing to do with the branch being pushed. Treat the
-      // same as `.claude/**` above.
+      // same as `.claude/worktrees/**` above.
       '**/.worktrees/**',
       'coverage/**',
-      'scripts/**',
       // Python virtualenvs. `operator/`'s own test instructions create one
       // (`uv venv .venv` under operator/), it is gitignored, and site-packages
       // ships .js assets (matplotlib's web backend) that projectService cannot

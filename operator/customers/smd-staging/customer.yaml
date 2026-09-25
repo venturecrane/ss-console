@@ -229,6 +229,13 @@ scope:
   # as somebody else (ADR 0089 verification step 9).
   admins:
     - scott@smd.services
+  # The office-scanner reply redirect (scope.device_senders), proven here before
+  # a client seat relies on it: staging has Microsoft 365 mail and the pilot does
+  # not. The Captain's Gmail stands in for the scanner, so a reply to mail from it
+  # lands in scott@smd.services and nothing goes back to the Gmail inbox.
+  device_senders:
+    - address: smdurgan@smdurgan.com
+      replies_to: scott@smd.services
   # ADR 0089: whose name the Operator may put on outside mail, each only on that
   # person's own emailed approval. test-adjuster@smdopslab is the stand-in
   # outside party and is deliberately on no roster: the approval authorizes it.
