@@ -109,6 +109,25 @@ file_attachment_to_matter = "internal_write"
 render_docx_template = "internal_write"
 render_docx_draft = "internal_write"
 delete_file = "destructive"
+# Calendar-event deletion as an ADMIN-CONFIRMED ACT (2026-09-25). Two tools:
+# prepare_event_deletion READS each matter's live calendar and returns the
+# manifest (event id, matter id, matter number, subject, start time, as the
+# vendor holds them; at most 50). delete_events takes that manifest and is
+# DESTRUCTIVE: on a seat that authors `destructive: confirm` the overlay's gate
+# WITHHOLDS it, the broker renders the manifest as one "[act ...]" line, and only
+# an administrator's emailed yes replays the stored manifest into the tool. At
+# that point every entry is re-read and deleted only if it is still on its
+# matter with the same subject, date and matter number. Any other destructive
+# tool at `confirm` still refuses; this tool is the only destructive act shape.
+#
+# COORDINATED CHANGE: hermes-smd-overlay shared/action_classes.py carries
+# mcp_smokeball_prepare_event_deletion = READ and
+# mcp_smokeball_delete_events = DESTRUCTIVE, plus the destructive-confirm act
+# path (enforce, act_broker, validator, SOUL line), shipped by the OVERLAY_REF
+# bump in the same ss-console change. An unclassified tool fails the seat's
+# boot classification probe, so these entries never land ahead of the overlay.
+prepare_event_deletion = "read"
+delete_events = "destructive"
 get_memos_on_matter = "read"
 get_bank_accounts = "read"
 get_matter_balances = "read"
