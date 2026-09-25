@@ -123,19 +123,31 @@ def dispatched_thread(audit_db_path: str | None, session_id: str, dispatch_ref: 
     return ""
 
 
-def stamp_thread_ref(audit_db_path: str | None, event: dict[str, Any]) -> None:
+def stamp_thread_ref(
+    audit_db_path: str | None,
+    event: dict[str, Any],
+    *,
+    raising_events: tuple[str, ...] = escalation_ledger.RAISING_EVENTS,
+) -> None:
     """Complete (or strip) the digest fields on ``event`` in place, before validation.
 
     Raises ValueError for a shape that is wrong on its face; otherwise leaves the
     event either carrying ``n``, ``dispatch_ref`` and a broker-derived
     ``thread_ref``, or carrying none of the three.
+
+    ``raising_events`` names the ledger's raise kinds: the escalation ledger's by
+    default, the casework ledger's (``casework_verbs``) for a proposal, handover
+    or brief. The join is the same for both; what differs is what a stripped
+    number costs. An escalation raise is still written without it; a casework
+    raise is then refused by ``casework_ledger.validate_append``, because a
+    proposal nobody can answer must not exist.
     """
     event.pop("thread_ref", None)
     present = [field for field in _DIGEST_FIELDS if field in event]
     if not present:
         return
     kind = event.get("event")
-    if kind not in escalation_ledger.RAISING_EVENTS:
+    if kind not in raising_events:
         raise ValueError(
             f"{' and '.join(present)} number an item in a delivered digest, and only a raise "
             f"delivers one; a {kind} carries no digest number. Drop "

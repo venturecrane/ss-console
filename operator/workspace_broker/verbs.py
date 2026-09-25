@@ -27,8 +27,8 @@ THE FOUR CLASSES.
                channels, the job control plane, the reviewed-Workspace pair.
 ``AGENT``      the peer uid is the agent uid (resolved lazily, see
                ``Broker._resolve_agent_uid``; unresolvable stays fail-closed).
-               The one-pinned-action_type appenders, the escalation ledger,
-               the establishment verbs.
+               The one-pinned-action_type appenders, the escalation and
+               casework ledgers, the establishment verbs.
 ``ROOT``       uid 0: the runner daemon, the rehearsal, a Captain-side skill.
 ``ANY``        no gate. Only ``health``, which is read-only.
 
@@ -46,7 +46,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from .broker_context import BrokerContext
-from . import audit_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
+from . import audit_verbs, casework_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
 from . import medchron_verbs
 from .medchron_verbs import medchron_dispatch
 from .send_witness import append_escalation_event
@@ -121,6 +121,8 @@ VERBS: tuple[Verb, ...] = (
     Verb("webhook_suppressed_append", _only(AGENT), audit_verbs.webhook_suppressed_append),
     Verb("correction_propose", _only(AGENT), audit_verbs.correction_propose),
     Verb("escalation_event_append", _only(AGENT), _escalation),
+    # Case-manager casework ledger (proposals, verdicts, task writes).
+    Verb("casework_event_append", _only(AGENT), casework_verbs.append_casework_event),
     # ADR 0085 establishment (fourteen verbs, one handler, one lock).
     Verb("establish_stage_document", _only(AGENT), establish_verbs.establish),
     Verb("establish_propose", _only(AGENT), establish_verbs.establish),

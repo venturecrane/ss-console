@@ -318,6 +318,13 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "MEDCHRON_JOB_HELD",
         "MEDCHRON_JOB_DELIVERED",
         "MEDCHRON_JOB_FAILED",
+        # Case-manager casework (docs/specs/operator/case-manager-deadline-work.md):
+        # a verified person approved or held a numbered line about the firm's
+        # task list, or the Operator closed its own task on the record's evidence.
+        # Broker-side (operator/workspace_broker/casework_verbs.py).
+        "CASEWORK_APPROVED",
+        "CASEWORK_HELD",
+        "CASEWORK_CLOSED_BY_RECORD",
         # ss#2546 (the operations half). The three beats of a change only SMD
         # makes -- a routine, a schedule, a channel, a memory setting, an
         # autonomy level, an on/off. Recorded when somebody at the firm asks and

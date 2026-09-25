@@ -54,6 +54,13 @@ describe('activity-language exhaustiveness (writer parity)', () => {
         'ACT_COMMITTED',
         'ACT_PROPOSED',
         'AGENT_RESUMED',
+        // Case-manager casework. A person's answer to a numbered line about the
+        // firm's task list, and a task the Operator closed on the record's own
+        // evidence. All render: a change to the firm's task list that shows
+        // nothing on the feed reads exactly like it never happening.
+        'CASEWORK_APPROVED',
+        'CASEWORK_HELD',
+        'CASEWORK_CLOSED_BY_RECORD',
         // ss#2546 (the operations half). A routine, a schedule, a channel, a
         // memory setting, an autonomy level, an on/off: the firm asks, SMD
         // decides. All three render, because a request whose answer shows

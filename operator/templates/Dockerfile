@@ -1021,7 +1021,15 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # confirm SOUL lines say SEND; committed act rows keep the tool's reference
 # through Hermes' result wrapper. No overlay-pairs file or audit schema changed
 # (git diff --stat f3f4c9f1 822d9573), so only overlayRef moves.
-ARG OVERLAY_REF="822d957357fdd4eb5d3b1765ae3f49244b6e6096"
+# 2026-09-25 (6b1f5751, the overlay #386 merge commit). Case-manager
+# casework: shared/casework_ledger.py, the byte-identical twin of
+# operator/workspace_broker/casework_ledger.py (new overlay-pairs entry,
+# sha ed3711fe on both sides); shared/casework_acts.py, the stored task-write
+# replay queue enforce.py substitutes for mcp_smokeball_update_task arguments;
+# and the casework_finish, casework_brief and reply_verdicts tools.
+# plugins/hermes-smd-audit/schemas.py is untouched and every other tracked
+# twin re-hashes identical (git diff --stat 822d9573 6b1f5751).
+ARG OVERLAY_REF="6b1f5751e919428eeb5892763a1493e2190a8ce2"
 
 ARG CUSTOMER_SLUG=customer-zero
 

@@ -116,6 +116,9 @@ export const CLIENT_ACTIVITY_CATEGORIES: readonly ClientActivityCategory[] = [
       'MEDCHRON_JOB_HELD',
       'MEDCHRON_JOB_DELIVERED',
       'MEDCHRON_JOB_FAILED',
+      'CASEWORK_APPROVED',
+      'CASEWORK_HELD',
+      'CASEWORK_CLOSED_BY_RECORD',
     ],
   },
   {
@@ -323,6 +326,12 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   MEDCHRON_JOB_HELD: () => 'Paused a medical chronology package and surfaced why',
   MEDCHRON_JOB_DELIVERED: () => 'Filed a medical chronology package on the matter',
   MEDCHRON_JOB_FAILED: () => 'Could not finish a medical chronology package',
+  // Case-manager casework. Each line is a fact about the firm's own task list:
+  // what a person answered, and what the Operator closed because the record
+  // already showed it done.
+  CASEWORK_APPROVED: () => 'Recorded your go-ahead on a task change',
+  CASEWORK_HELD: () => 'Left a task as it is, as you asked',
+  CASEWORK_CLOSED_BY_RECORD: () => 'Closed a task the matter record shows is done',
   // ss#2546 (the operations half). Three lines for a change the firm asked for
   // and SMD makes. Written from the reader's side, and the middle one stays
   // deliberately vague about WHICH answer: the outcome the client cares about
