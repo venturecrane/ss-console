@@ -821,6 +821,21 @@ def _degradation(deadlines: Sequence[MatterDeadline], today: date) -> tuple[int,
     return resolved, failed, reason
 
 
+def _probe_stats(sources) -> dict:
+    """ss #2403's probe census, summed across sources (split out of run_once
+    for the function-size ratchet; behaviour unchanged)."""
+    probe_stats: dict = {}
+    for source in sources:
+        stats = getattr(source, "probe_stats", None)
+        if isinstance(stats, dict):
+            for k in ("excluded", "stale"):
+                probe_stats[k] = probe_stats.get(k, 0) + int(stats.get(k) or 0)
+            ids = stats.get("stale_task_ids") or []
+            if ids:
+                probe_stats.setdefault("stale_task_ids", []).extend(ids[:5])
+    return probe_stats
+
+
 async def run_once(
     sources: Sequence[DeadlineSource],
     windows: EscalationWindows,
@@ -867,15 +882,7 @@ async def run_once(
         # composes without one and states that the projection was unavailable.
         ledger = _load_ledger_module()
         if ledger is not None:
-            probe_stats: dict = {}
-            for source in sources:
-                stats = getattr(source, "probe_stats", None)
-                if isinstance(stats, dict):
-                    for k in ("excluded", "stale"):
-                        probe_stats[k] = probe_stats.get(k, 0) + int(stats.get(k) or 0)
-                    ids = stats.get("stale_task_ids") or []
-                    if ids:
-                        probe_stats.setdefault("stale_task_ids", []).extend(ids[:5])
+            probe_stats = _probe_stats(sources)
             decision = replace(
                 decision,
                 digest=project_digest(

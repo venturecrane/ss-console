@@ -34,6 +34,7 @@ from datetime import date
 from typing import Any
 
 _MAX_MESSAGES = 10
+_MAX_MEMOS = 50
 _ORDER = {"done": 0, "stale": 1, "handover": 2, "open": 3}
 
 
@@ -292,7 +293,10 @@ def build(ctx: _Ctx) -> Plan:
         message = _message(ctx, group_key, groups[group_key], done_since.get(group_key, []), plan)
         if message is not None:
             plan.messages.append(message)
-    plan.memos = [{"matter_id": mid, "text": ctx.lines.memo_text(evs)} for mid, evs in sorted(memos.items())]
+    # The overlay accepts at most 50 memos and refuses the whole envelope past
+    # that; a matter past the cap gets its line but no memo this run.
+    memo_rows = [{"matter_id": mid, "text": ctx.lines.memo_text(evs)} for mid, evs in sorted(memos.items())]
+    plan.memos = memo_rows[:_MAX_MEMOS]
     return plan
 
 
