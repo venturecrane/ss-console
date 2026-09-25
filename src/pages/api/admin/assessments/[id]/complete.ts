@@ -1,22 +1,9 @@
-import type { APIContext, APIRoute } from 'astro'
-import {
-  getAssessment,
-  updateAssessment,
-  updateAssessmentStatus,
-} from '../../../../../lib/db/assessments'
-import { getEntity, transitionStage } from '../../../../../lib/db/entities'
-import { appendContext } from '../../../../../lib/db/context'
-import { createQuote, type LineItem } from '../../../../../lib/db/quotes'
-import { uploadTranscript } from '../../../../../lib/storage/r2'
-import { env } from 'cloudflare:workers'
-import { requireAdminSession } from '../../../../../lib/auth/admin-session'
-import { errorResponse } from '../../../../../lib/api/helpers'
-
-/** Default hourly rate at launch (per Decision Stack #16, evolved). */
-const DEFAULT_RATE = 175
-
 /**
  * POST /api/admin/assessments/:id/complete — legacy, kept for backward compat
+ *
+ * Completes an assessment the pre-Meetings way: stores the extraction JSON,
+ * marks the assessment completed, drafts a quote, and moves the entity to
+ * proposing.
  *
  * The Meetings generalization (#468, #470) split this endpoint into two new
  * routes scoped under the entity:
@@ -36,6 +23,23 @@ const DEFAULT_RATE = 175
  *
  * Protected by auth middleware (requires admin role).
  */
+
+import type { APIContext, APIRoute } from 'astro'
+import {
+  getAssessment,
+  updateAssessment,
+  updateAssessmentStatus,
+} from '../../../../../lib/db/assessments'
+import { getEntity, transitionStage } from '../../../../../lib/db/entities'
+import { appendContext } from '../../../../../lib/db/context'
+import { createQuote, type LineItem } from '../../../../../lib/db/quotes'
+import { uploadTranscript } from '../../../../../lib/storage/r2'
+import { env } from 'cloudflare:workers'
+import { requireAdminSession } from '../../../../../lib/auth/admin-session'
+import { errorResponse } from '../../../../../lib/api/helpers'
+
+/** Default hourly rate at launch (per Decision Stack #16, evolved). */
+const DEFAULT_RATE = 175
 
 type Redirect = APIContext['redirect']
 

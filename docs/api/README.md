@@ -12,7 +12,7 @@ Hosts: admin routes are served on admin.smd.services, portal routes on portal.sm
 |---|---|---|---|---|
 | `/api/admin/assessments` | POST | admin session | Creates a new assessment from form data and redirects to the assessment detail page. | `src/pages/api/admin/assessments/index.ts` |
 | `/api/admin/assessments/:id` | POST | admin session | Updates an existing assessment from form data. | `src/pages/api/admin/assessments/[id].ts` |
-| `/api/admin/assessments/:id/complete` | POST | admin session | Default hourly rate at launch (per Decision Stack #16, evolved). | `src/pages/api/admin/assessments/[id]/complete.ts` |
+| `/api/admin/assessments/:id/complete` | POST | admin session | Completes an assessment the pre-Meetings way: stores the extraction JSON, marks the assessment completed, drafts a quote, and moves the entity to proposing. | `src/pages/api/admin/assessments/[id]/complete.ts` |
 | `/api/admin/assessments/:id/live-notes` | PUT | admin session | Auto-saves live notes for an assessment during the call. | `src/pages/api/admin/assessments/[id]/live-notes.ts` |
 | `/api/admin/assessments/:id/transcript` | GET | admin session | Streams the transcript file from R2. | `src/pages/api/admin/assessments/[id]/transcript.ts` |
 | `/api/admin/clients` | POST | admin session | Minimal add-a-client: create a record at stage `prospect` (the honest entry point, a business we have started working, not yet signed), with an optional prim... | `src/pages/api/admin/clients/index.ts` |
@@ -24,8 +24,8 @@ Hosts: admin routes are served on admin.smd.services, portal routes on portal.sm
 | `/api/admin/engagements/:id` | POST | admin session | Updates an existing engagement from form data. | `src/pages/api/admin/engagements/[id].ts` |
 | `/api/admin/engagements/:id/consultant-photo` | POST, DELETE | admin session | Consultant photo upload endpoint. | `src/pages/api/admin/engagements/[id]/consultant-photo.ts` |
 | `/api/admin/engagements/:id/contacts` | POST | admin session | Manages engagement_contacts rows: add, remove, or set-primary. | `src/pages/api/admin/engagements/[id]/contacts.ts` |
-| `/api/admin/engagements/:id/deliverables` | GET, POST | admin session | (no header comment) | `src/pages/api/admin/engagements/[id]/deliverables.ts` |
-| `/api/admin/engagements/:id/deliverables/*key` | GET | admin session | (no header comment) | `src/pages/api/admin/engagements/[id]/deliverables/[...key].ts` |
+| `/api/admin/engagements/:id/deliverables` | GET, POST | admin session | Upload and list an engagement's deliverable documents in R2. | `src/pages/api/admin/engagements/[id]/deliverables.ts` |
+| `/api/admin/engagements/:id/deliverables/*key` | GET | admin session | Download one of an engagement's deliverable documents from R2 as an attachment. | `src/pages/api/admin/engagements/[id]/deliverables/[...key].ts` |
 | `/api/admin/engagements/:id/milestones` | POST | admin session | Creates a new milestone for an engagement, handles status transitions, or deletes a milestone (via _method=DELETE). | `src/pages/api/admin/engagements/[id]/milestones.ts` |
 | `/api/admin/engagements/:id/parking-lot` | POST | admin session | Manages parking lot items on an engagement (Decision Stack #11). | `src/pages/api/admin/engagements/[id]/parking-lot.ts` |
 | `/api/admin/entities/:id/contacts` | POST | admin session | Create a contact attached to an entity. | `src/pages/api/admin/entities/[id]/contacts.ts` |
@@ -144,7 +144,7 @@ Hosts: admin routes are served on admin.smd.services, portal routes on portal.sm
 
 | Path | Methods | Gate | Purpose | File |
 |---|---|---|---|---|
-| `/api/operator/:customer/mcp` | GET, POST | MCP grant (inside handleMcpPost) | (no header comment) | `src/pages/api/operator/[customer]/mcp.ts` |
+| `/api/operator/:customer/mcp` | GET, POST | MCP grant (inside handleMcpPost) | The per-customer MCP endpoint a firm's Claude connector talks to (ADR 0057). | `src/pages/api/operator/[customer]/mcp.ts` |
 
 ## Public (top level) (5)
 
@@ -154,5 +154,5 @@ Hosts: admin routes are served on admin.smd.services, portal routes on portal.sm
 | `/api/events` | POST | public, IP rate-limited | Batched event ingestion for the marketing surface (apex smd.services). | `src/pages/api/events.ts` |
 | `/api/health` | GET | shared bearer, constant-time | Health check endpoint. | `src/pages/api/health.ts` |
 | `/api/intake` | POST | public, IP rate-limited | Standalone intake endpoint, prospects share business info without booking a call. | `src/pages/api/intake.ts` |
-| `/api/mcp` | GET, POST | retired (410) | (no header comment) | `src/pages/api/mcp.ts` |
+| `/api/mcp` | GET, POST | retired (410) | Retired shared MCP endpoint: every method answers 410 Gone. | `src/pages/api/mcp.ts` |
 
