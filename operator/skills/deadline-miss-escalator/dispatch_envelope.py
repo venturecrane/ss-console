@@ -132,6 +132,11 @@ def split_digest(digest: dict, matter_ids: set[str], today_iso: str) -> dict:
         # leftover-probe fact loud daily, whoever the reader is.
         out["probe_artifacts"] = probe
     _DIGEST_ITEMS.rebalance_bands(out)
+    if isinstance(digest.get("task_review"), dict):
+        # Case-manager seats only (the marker is absent otherwise): this
+        # recipient's overdue tasks past the top five are in the task review.
+        out["task_review"] = digest["task_review"]
+        _DIGEST_ITEMS.extract_task_review(out)
     out["subject"] = f"[Deadlines] {_DIGEST_ITEMS.need_you_count(out)} need you, {today_iso}"
     return out
 

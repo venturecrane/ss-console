@@ -33,8 +33,9 @@ _OVERLAY_REL = "shared/escalation_ledger.py"
 # until 2026-09-11 this was a hand-maintained tuple (code review 2026-09-10,
 # Architecture 5). Five copies as of 2026-09-11: deadline-miss-escalator,
 # daily-needs-you-digest, client-verification-tracker, medical-records-chaser,
-# lien-ledger-tracker. A skill dropping its copy lowers the floor on purpose.
-_FLOOR = 5
+# lien-ledger-tracker; six since 2026-09-25 with task-list-keeper (it reads the
+# records chase's resolutions). A skill dropping its copy lowers the floor on purpose.
+_FLOOR = 6
 
 
 def _escalation_pair() -> dict:

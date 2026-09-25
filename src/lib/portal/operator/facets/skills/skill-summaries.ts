@@ -129,6 +129,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Surfaces matters with no recent activity and drafts a neutral follow-up. Flags inactivity, never decides what a matter needs.',
   'status-report-assembler':
     'Assembles a weekly client status report from your PM tools and analytics.',
+  'task-list-keeper':
+    'Keeps your task list honest: each week it sorts overdue tasks and sends each attorney suggested calls to answer in plain words. Nothing changes until someone says yes.',
   'trial-binder-assembler':
     'Assembles the trial binder from authored components and tracks pre-trial deadlines. Organizes and stages, never authors or argues.',
   'trust-balance-nudge':

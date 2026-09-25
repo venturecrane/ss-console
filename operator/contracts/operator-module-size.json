@@ -13,7 +13,7 @@
     "operator/runners/medchron/medchron/llm.py": 510,
     "operator/safety_substrate/sticky_stop.py": 521,
     "operator/skills/client-verification-tracker/pre_run.py": 582,
-    "operator/skills/deadline-miss-escalator/pre_run.py": 719,
+    "operator/skills/deadline-miss-escalator/pre_run.py": 716,
     "operator/skills/lien-ledger-tracker/pre_run.py": 880,
     "operator/skills/medical-records-chaser/pre_run.py": 575,
     "operator/templates/drafting/drafting_gate_check.py": 1135,

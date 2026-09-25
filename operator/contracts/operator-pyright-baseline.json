@@ -1,6 +1,6 @@
 {
   "_comment": "pyright errors per file at adoption, generated and enforced by bin/pyright-ratchet.py. Do not hand-edit. Regenerate with `pyright --outputjson > r.json; python3 bin/pyright-ratchet.py r.json --update`. A file leaves this list by reaching zero; no count may grow.",
-  "total": 98,
+  "total": 90,
   "files": {
     "adapter/voice/transform.py": 3,
     "bin/control-probes.py": 5,
@@ -36,8 +36,6 @@
     "runners/medchron/medchron/stages/msg.py": 2,
     "safety_substrate/sticky_stop.py": 1,
     "skills/client-verification-tracker/pre_run.py": 1,
-    "skills/client-verification-tracker/routing.py": 4,
-    "skills/deadline-miss-escalator/routing.py": 4,
     "skills/lien-ledger-tracker/pre_run.py": 2,
     "skills/medical-records-chaser/pre_run.py": 1,
     "templates/drafting/drafting_gate_check.py": 14,

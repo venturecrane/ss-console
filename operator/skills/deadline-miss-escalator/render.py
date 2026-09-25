@@ -230,6 +230,21 @@ def _overflow_block(band: dict | None) -> list[str]:
     return lines + [""]
 
 
+def _task_review_block(review: dict | None) -> list[str]:
+    """One line for the overdue tasks the task review holds (case-manager
+    seats only; the key is absent everywhere else). The day is the firm's own
+    schedule for the review, read from its cron entry, or no day at all."""
+    if not isinstance(review, dict):
+        return []
+    count = int(review.get("count") or 0)
+    if count <= 0:
+        return []
+    day = review.get("day")
+    where = f"{day}'s task review" if isinstance(day, str) and day else "the next task review"
+    noun = "overdue task is" if count == 1 else "overdue tasks are"
+    return [f"{count} more {noun} in {where}.", ""]
+
+
 def _elsewhere_block(band: dict | None) -> list[str]:
     if not (isinstance(band, dict) and band.get("matters")):
         return []
@@ -324,6 +339,7 @@ def render_digest(
         lines += [_REKEY_NOTICE.format(n=rekey_count, s="" if rekey_count == 1 else "s"), ""]
     lines += _needs_you_block(digest.get("needs_you") or [])
     lines += _overflow_block(digest.get("admin_confirms"))
+    lines += _task_review_block(digest.get("task_review"))
     lines += _elsewhere_block(digest.get("under_active_escalation_elsewhere"))
     lines += _clearance_block(digest.get("awaiting_clearance") or [])
     lines += _blanket_block(digest.get("blanket_ack_only") or [])
