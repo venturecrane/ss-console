@@ -119,13 +119,27 @@ def require_event_set(value: Any) -> dict[str, Any]:
     return {"events": out}
 
 
+#: The opening of anything the seat's confirmation matcher reads as a tag
+#: (hermes-smd-overlay shared/rule_confirm.py: ``[rule|act|ops XXXXXXXX]`` and
+#: ``[draft XXXXXXXX]``), case-insensitive, whitespace-tolerant.
+_TAG_OPEN = re.compile(r"\[(?=\s*(?:rule|act|ops|draft)\b)", re.IGNORECASE)
+
+
 def _shown(text: str | None, limit: int) -> str:
-    """A vendor string as the act line shows it: one line, no square brackets
-    (a bracket could render a second ``[act ...]`` tag and bind a yes to the
-    wrong row), no double quotes, bounded. The stored payload keeps the raw
-    value, because the connector compares that against the vendor."""
+    """A vendor string as the act line shows it: one line, bounded, with any
+    bracket that OPENS a tag-shaped word turned into a parenthesis (it could
+    otherwise render a second ``[act ...]`` tag and bind a yes to the wrong
+    row) and double quotes turned into single ones.
+
+    Only tag-shaped brackets. Read live on pilot-smokeball 2026-09-25: the
+    first version turned EVERY bracket into a parenthesis, so a subject
+    ``[SMD-PROBE] ...`` read ``(SMD-PROBE) ...`` in the act line, and the model
+    "corrected" it back before replying, which is exactly the edit the seat's
+    readback gate refuses. An ordinary bracket is left as the firm wrote it.
+    The stored payload keeps the raw value, because the connector compares that
+    against the vendor."""
     text = re.sub(r"\s+", " ", text or "").strip()
-    text = text.replace("[", "(").replace("]", ")").replace('"', "'")
+    text = _TAG_OPEN.sub("(", text).replace('"', "'")
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 

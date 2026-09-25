@@ -1014,7 +1014,14 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # `destructive: confirm` in exposure; the SOUL line names the two calls. No
 # overlay-pairs file or audit schema changed (git diff --stat 48726abb
 # f3f4c9f1), so only overlayRef moves.
-ARG OVERLAY_REF="f3f4c9f1dd2defdb4e2fb313045c407a08c64421"
+# 2026-09-25 (822d9573, the overlay #387 merge commit). An act line the
+# turn did not send is delivered by the seat at the end of the turn
+# (plugins/hermes-smd-reply/act_delivery.py, post_llm_call + on_session_end),
+# loud on failure (REPLY_FAILED + Sentry); the withheld instruction and both
+# confirm SOUL lines say SEND; committed act rows keep the tool's reference
+# through Hermes' result wrapper. No overlay-pairs file or audit schema changed
+# (git diff --stat f3f4c9f1 822d9573), so only overlayRef moves.
+ARG OVERLAY_REF="822d957357fdd4eb5d3b1765ae3f49244b6e6096"
 
 ARG CUSTOMER_SLUG=customer-zero
 

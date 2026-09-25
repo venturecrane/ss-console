@@ -1408,7 +1408,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // numbered deadline digest (escalation_reply_ack, dispatch_ref stamping).
     // 48726abb -> f3f4c9f1 (2026-09-25, overlay#385 merge commit). Deleting calendar events
     // is an act an administrator confirms.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="f3f4c9f1dd2defdb4e2fb313045c407a08c64421"')
+    // f3f4c9f1 -> 822d9573 (2026-09-25, overlay#387 merge commit). The seat
+    // delivers an act line the turn did not send.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="822d957357fdd4eb5d3b1765ae3f49244b6e6096"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
