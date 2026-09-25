@@ -26,6 +26,7 @@ def _load(filename: str, name: str):
 render = _load("render.py", "escalator_render_under_test")
 routing = _load("routing.py", "escalator_routing_under_test")
 envelope = _load("dispatch_envelope.py", "escalator_envelope_under_test")
+helpers = _load("skill_helpers.py", "escalator_skill_helpers_under_test")
 ledger = _load("escalation_ledger.py", "escalator_ledger_under_test")
 
 
@@ -40,7 +41,7 @@ def test_canonical_hash_matches_arbiter_vectors():
     names = {v["name"] for v in vectors}
     assert "trailing_newline" in names  # the REQUIRED vector
     for vector in vectors:
-        assert render.canonical_body_sha256(vector["input"]) == vector["sha256"], vector["name"]
+        assert helpers.canonical_body_sha256(vector["input"]) == vector["sha256"], vector["name"]
 
 
 # ---------------------------------------------------------------------------
@@ -367,8 +368,8 @@ def test_build_and_write_envelope_shape(tmp_path, monkeypatch):
     assert dispatch["recipients"] == ["ops@firm.example"]
     assert dispatch["routing_leg"] == "central"
     # The stamps ARE the canonical hash of the bodies (the hash-join contract).
-    assert dispatch["body_sha256_full"] == render.canonical_body_sha256(dispatch["full_body"])
-    assert dispatch["body_sha256_skeleton"] == render.canonical_body_sha256(dispatch["skeleton_body"])
+    assert dispatch["body_sha256_full"] == helpers.canonical_body_sha256(dispatch["full_body"])
+    assert dispatch["body_sha256_skeleton"] == helpers.canonical_body_sha256(dispatch["skeleton_body"])
     assert meta["body_sha256"] == [
         {
             "body_sha256_full": dispatch["body_sha256_full"],

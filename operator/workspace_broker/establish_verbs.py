@@ -43,6 +43,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .broker_context import BrokerContext
+
 #: verb -> EstablishmentStore method name. ``establish_status`` is the
 #: fall-through the old dispatcher used for the last name in its list.
 _METHODS: dict[str, str] = {
@@ -65,7 +67,9 @@ _METHODS: dict[str, str] = {
 VERBS: tuple[str, ...] = tuple(_METHODS)
 
 
-def establish(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def establish(
+    broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     if broker.ledger is None:
         raise ValueError("audit ledger not configured on this broker")
     if broker.establishment is None:

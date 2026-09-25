@@ -13,10 +13,11 @@ import hashlib
 import time
 from typing import Any
 
+from .broker_context import BrokerContext
 from .canon import canonical
 
 
-def _operation_and_digest(broker: Any, request: dict[str, Any]) -> tuple[str, dict[str, Any], str]:
+def _operation_and_digest(broker: BrokerContext, request: dict[str, Any]) -> tuple[str, dict[str, Any], str]:
     operation = str(request.get("operation") or "")
     payload = request.get("payload")
     if not operation.startswith("workspace_") or not isinstance(payload, dict):
@@ -26,7 +27,9 @@ def _operation_and_digest(broker: Any, request: dict[str, Any]) -> tuple[str, di
     return operation, payload, hashlib.sha256(canonical(payload)).hexdigest()
 
 
-def authorize(broker: Any, _action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def authorize(
+    broker: BrokerContext, _action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     operation, _payload, digest = _operation_and_digest(broker, request)
     grant = broker.grants.mint(
         {
@@ -40,7 +43,9 @@ def authorize(broker: Any, _action: str, request: dict[str, Any], _pid: int, _ui
     return {"ok": True, "grant": grant, "payload_digest": digest}
 
 
-def execute(broker: Any, _action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def execute(
+    broker: BrokerContext, _action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     operation, payload, digest = _operation_and_digest(broker, request)
     claims = broker.grants.consume(
         str(request.get("grant") or ""),
@@ -68,7 +73,9 @@ def execute(broker: Any, _action: str, request: dict[str, Any], _pid: int, _uid:
     return {"ok": True, "result": result, "receipt": receipt}
 
 
-def unknown_action(broker: Any, _action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def unknown_action(
+    broker: BrokerContext, _action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     """An action the table does not carry. Validated like a Workspace verb
     first (the original dispatcher's fall-through order), then refused by
     name, so ``audit_update`` and friends answer exactly as they always have:

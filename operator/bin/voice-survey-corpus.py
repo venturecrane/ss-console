@@ -103,7 +103,6 @@ from typing import Any
 
 _HERE = Path(__file__).resolve()
 _OPERATOR = _HERE.parents[1]
-sys.path.insert(0, str(_OPERATOR))  # operator/ on sys.path
 sys.path.insert(0, str(_OPERATOR / "connectors" / "smokeball"))  # real extractor
 
 

@@ -19,6 +19,7 @@ import hashlib
 import json
 from typing import Any
 
+from .broker_context import BrokerContext
 from .agentmail_ops import AgentMailRefused, AgentMailTransportError, collect_recipients
 from .canon import canonical
 from .msgraph_ops import MsGraphRefused, MsGraphTransportError
@@ -109,7 +110,7 @@ _CALLER_AUDIT_KEYS: tuple[str, ...] = (
 
 
 def append_send_row(
-    broker: Any,
+    broker: BrokerContext,
     action_type: str,
     verb: str,
     metadata: dict[str, Any],
@@ -179,7 +180,8 @@ def _audit_extra(request: dict[str, Any]) -> dict[str, str]:
     # like the two joins, filtered through a closed allowlist (string values
     # only). Optional at both ends, so the overlay and this process deploy in
     # either order.
-    raw_extra = request.get("audit_extra") if isinstance(request.get("audit_extra"), dict) else {}
+    raw = request.get("audit_extra")
+    raw_extra: dict[str, Any] = raw if isinstance(raw, dict) else {}
     return {
         key: raw_extra[key].strip()
         for key in _CALLER_AUDIT_KEYS
@@ -193,7 +195,7 @@ def _clean(request: dict[str, Any], key: str) -> str:
 
 
 def dispatch_transmit(
-    broker: Any,
+    broker: BrokerContext,
     action: str,
     request: dict[str, Any],
     *,
@@ -299,7 +301,9 @@ def dispatch_transmit(
     return {"ok": True, **{k: v for k, v in result.items() if k not in _AUDIT_ONLY_KEYS}}
 
 
-def agentmail(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def agentmail(
+    broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     if broker.agentmail is None or broker.ledger is None:
         raise ValueError(
             "agentmail transmit is not configured on this broker "
@@ -318,7 +322,7 @@ def agentmail(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid
     )
 
 
-def msgraph(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def msgraph(broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
     if broker.msgraph is None or broker.ledger is None:
         raise ValueError(
             "msgraph transmit is not configured on this broker (needs SMD_MSGRAPH_CREDENTIAL_PATH and an audit ledger)"
