@@ -39,6 +39,13 @@ from bin.lib.decommission_backends import (  # noqa: E402 - the import needs the
     seat_inbox_address,
 )
 from bin.lib.console_d1 import ConsoleD1  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from adapter.evidence import EvidencePacketError  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from adapter.evidence.signing import SIGNING_KEY_ENV, EvidenceSigningError  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+from bin.lib.decommission_archiver import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
+    EvidencePacketArchiver,
+    ledger_period,
+)
+from bin.lib.seam_pull import _write_audit_snapshot  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 
 def _run(coro):
@@ -434,19 +441,24 @@ def test_backends_from_env_wires_nothing_without_credentials(tmp_path):
     }
 
 
-def test_backends_from_env_wires_all_five_with_credentials(tmp_path):
+def test_backends_from_env_wires_all_six_with_credentials(tmp_path):
     env = {
         "CLOUDFLARE_API_TOKEN": "t",
         "CLOUDFLARE_ACCOUNT_ID": "a",
         "AGENTMAIL_API_KEY": "m",
         "FLY_API_TOKEN": "f",
         "HEALTHCHECKS_API_KEY": "h",
+        SIGNING_KEY_ENV: "k",
     }
     kwargs, wired = backends_from_env("acme", tmp_path, env, runner=_FakeRunner({}), http=_FakeHttp({}))
-    assert set(kwargs) == {"r2_deleter", "vectorize_deleter", "agentmail", "fly", "observability"}
+    assert set(kwargs) == {"r2_deleter", "vectorize_deleter", "agentmail", "fly", "observability", "archiver"}
     assert all(wired.values())
     assert isinstance(kwargs["r2_deleter"], CloudflareR2NamespaceDeleter)
     assert isinstance(kwargs["fly"], FlyAppDestroyer)
+    assert isinstance(kwargs["archiver"], EvidencePacketArchiver)
+    # The archiver signs with the key it was handed, not whatever the process
+    # environment holds.
+    assert kwargs["archiver"].signing_env == {SIGNING_KEY_ENV: "k"}
 
 
 def test_backends_from_env_accepts_the_provisioning_scripts_cf_aliases(tmp_path):
@@ -474,3 +486,213 @@ def test_backends_from_env_arms_fly_only_from_a_staged_token(tmp_path):
         "acme", tmp_path, {"FLY_API_TOKEN": "f"}, runner=_FakeRunner({}), http=_FakeHttp({})
     )
     assert wired["fly"] is True and isinstance(kwargs["fly"], FlyAppDestroyer)
+
+
+def test_backends_from_env_arms_the_archiver_only_with_key_and_wrangler_token(tmp_path):
+    only_key, wired = backends_from_env(
+        "acme", tmp_path, {SIGNING_KEY_ENV: "k"}, runner=_FakeRunner({}), http=_FakeHttp({})
+    )
+    assert wired["compliance_archiver"] is False and "archiver" not in only_key
+    blank_key, wired = backends_from_env(
+        "acme",
+        tmp_path,
+        {SIGNING_KEY_ENV: "  ", "CLOUDFLARE_API_TOKEN": "t"},
+        runner=_FakeRunner({}),
+        http=_FakeHttp({}),
+    )
+    assert wired["compliance_archiver"] is False and "archiver" not in blank_key
+
+
+# ---------------------------------------------------------------------------
+# Compliance archiver (step 07): the real packet, read back from disk
+# ---------------------------------------------------------------------------
+
+
+def _signing_key_b64() -> str:
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    pem = Ed25519PrivateKey.generate().private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+    )
+    return base64.b64encode(pem).decode()
+
+
+_ROW_HASH = "a" * 64
+
+
+def _archiver_world(tmp_path, *, snapshot: bool = True):
+    """A customers root with the smd fixture, an archive dir holding the
+    snapshot step 02 writes, and the decommission trail's audit writer."""
+    import shutil
+    import sqlite3
+
+    from bin.lib.decommission_cli import _build_local_audit_writer
+
+    customers_root = tmp_path / "customers"
+    shutil.copytree(_HERE.parent.parent / "fixtures" / "smd", customers_root / "smd")
+    archive_dir = tmp_path / "archive" / "smd"
+    archive_dir.mkdir(parents=True)
+    if snapshot:
+        conn = sqlite3.connect(str(archive_dir / "machine-snapshot-2026-09-25.sqlite"))
+        _write_audit_snapshot(
+            conn,
+            [
+                {
+                    "id": "r1",
+                    "ts": "2026-09-01T10:00:00.123456+00:00",
+                    "action_type": "DRAFT_CREATED",
+                    "actor": "operator",
+                    "row_hash": "0" * 64,
+                },
+                {
+                    "id": "r2",
+                    "ts": "2026-09-20T08:30:00Z",
+                    "action_type": "DRAFT_SENT",
+                    "actor": "operator",
+                    "row_hash": _ROW_HASH,
+                },
+            ],
+        )
+        conn.close()
+    writer, trail = _build_local_audit_writer(tmp_path / "trail.sqlite")
+    return customers_root, archive_dir, writer, trail
+
+
+def _archiver(customers_root, writer, *, key=None, pin=None):
+    from datetime import datetime, timezone
+
+    return EvidencePacketArchiver(
+        customers_root=customers_root,
+        signing_env={SIGNING_KEY_ENV: key or _signing_key_b64()},
+        audit_writer=writer,
+        pin_source=(lambda slug: pin),
+        clock=lambda: datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc),
+    )
+
+
+def test_archiver_builds_the_signed_packet_and_reports_what_is_on_disk(tmp_path):
+    import hashlib
+    import tarfile
+
+    customers_root, archive_dir, writer, trail = _archiver_world(tmp_path)
+    snapshot = archive_dir / "machine-snapshot-2026-09-25.sqlite"
+    before = hashlib.sha256(snapshot.read_bytes()).hexdigest()
+
+    result = _run(_archiver(customers_root, writer, pin=_ROW_HASH).archive("smd", archive_dir))
+
+    packet = archive_dir / "compliance-packet-2026-09-25.tar.gz"
+    assert result["skipped"] is False
+    assert result["archive_path"] == str(packet)
+    with tarfile.open(packet, "r:gz") as tar:
+        names = [m.name for m in tar.getmembers() if m.isfile()]
+        manifest = tar.extractfile("manifest.json").read()  # type: ignore[union-attr]
+        audit_csv = tar.extractfile("03-audit-log.csv").read().decode()  # type: ignore[union-attr]
+    # Every number in the manifest is read back from the file, not echoed.
+    assert result["file_count"] == len(names)
+    assert "manifest.sig" in names
+    assert result["signed"] is True and result["signature_verified"] is True
+    assert result["manifest_sha256"] == hashlib.sha256(manifest).hexdigest()
+    assert result["bytes_on_disk"] == packet.stat().st_size
+    assert result["chain_pin_checked"] is True
+    # The period holds every ledger row, including the fractional-second one
+    # that sorts below a ...Z bound of the same second.
+    assert result["period_start"] == "2026-08-31T00:00:00Z"
+    assert "r1" in audit_csv and "r2" in audit_csv
+    # The preserved snapshot is evidence: opened read-only, left byte-identical.
+    assert hashlib.sha256(snapshot.read_bytes()).hexdigest() == before
+    # The chain-of-custody row lands in the decommission trail.
+    exported = trail.execute(
+        "SELECT COUNT(*) FROM audit_log WHERE action_type = 'COMPLIANCE_PACKET_EXPORTED'"
+    ).fetchone()
+    assert exported[0] == 1
+
+
+def test_archiver_rerun_reads_the_existing_packet_back_as_a_skip(tmp_path):
+    customers_root, archive_dir, writer, _trail = _archiver_world(tmp_path)
+    key = _signing_key_b64()
+    first = _run(_archiver(customers_root, writer, key=key).archive("smd", archive_dir))
+    second = _run(_archiver(customers_root, writer, key=key).archive("smd", archive_dir))
+    assert second["skipped"] is True and second["reason"] == "packet_already_archived"
+    assert second["file_count"] == first["file_count"]
+    assert second["signature_verified"] is True
+
+
+def test_archiver_without_a_snapshot_fails_rather_than_build_an_empty_packet(tmp_path):
+    customers_root, archive_dir, writer, _trail = _archiver_world(tmp_path, snapshot=False)
+    with pytest.raises(RuntimeError, match="machine-snapshot"):
+        _run(_archiver(customers_root, writer).archive("smd", archive_dir))
+    assert not list(archive_dir.glob("compliance-packet*"))
+
+
+def test_archiver_halts_when_the_console_pin_is_missing_from_the_ledger(tmp_path):
+    customers_root, archive_dir, writer, _trail = _archiver_world(tmp_path)
+    with pytest.raises(EvidencePacketError):
+        _run(_archiver(customers_root, writer, pin="b" * 64).archive("smd", archive_dir))
+    assert not list(archive_dir.glob("compliance-packet*.tar.gz"))
+
+
+def test_archiver_with_an_unusable_key_raises_never_ships_unsigned(tmp_path):
+    import base64
+
+    customers_root, archive_dir, writer, _trail = _archiver_world(tmp_path)
+    not_a_pem = base64.b64encode(b"this is not a PEM private key").decode()
+    with pytest.raises(EvidenceSigningError):
+        _run(_archiver(customers_root, writer, key=not_a_pem).archive("smd", archive_dir))
+    assert not list(archive_dir.glob("compliance-packet*.tar.gz"))
+
+
+def test_archiver_refuses_a_packet_it_cannot_verify(tmp_path):
+    """A packet on disk signed by some other key is not reported as archived."""
+    customers_root, archive_dir, writer, _trail = _archiver_world(tmp_path)
+    _run(_archiver(customers_root, writer).archive("smd", archive_dir))
+    with pytest.raises(RuntimeError, match="not signed by the staged key"):
+        _run(_archiver(customers_root, writer).archive("smd", archive_dir))
+
+
+def test_archiver_failure_halts_the_pipeline_at_step_07(tmp_path):
+    from bin.lib.decommission import DecommissionStepFailed
+
+    customers_root, archive_dir, writer, _trail = _archiver_world(tmp_path, snapshot=False)
+
+    class _Wired:
+        async def preserve(self, slug, archive_dir, days):
+            return {"skipped": False, "rows_preserved": 0}
+
+    pipeline = DecommissionPipeline(
+        customer_slug="smd",
+        customers_root=customers_root,
+        archive_root=tmp_path / "archive",
+        audit_writer=writer,
+        audit_log_preserver=_Wired(),
+        archiver=_archiver(customers_root, writer),
+    )
+    with pytest.raises(DecommissionStepFailed) as exc:
+        _run(pipeline.run())
+    assert exc.value.step_name == "07_compliance_archive"
+    # Halted before the tombstone: a resumed run still finds the customer dir.
+    assert (customers_root / "smd" / "customer.yaml").exists()
+
+
+def test_ledger_period_brackets_fractional_and_offset_timestamps():
+    import sqlite3
+    from datetime import datetime, timezone
+
+    conn = sqlite3.connect(":memory:")
+    _write_audit_snapshot(
+        conn,
+        [
+            {"id": "a", "ts": "2026-09-01T00:00:00.5+00:00", "action_type": "X", "actor": "o"},
+            {"id": "b", "ts": "2026-09-30T23:59:59.9", "action_type": "X", "actor": "o"},
+        ],
+    )
+    start, end = ledger_period(conn, datetime(2026, 9, 25, tzinfo=timezone.utc))
+    rows = conn.execute("SELECT COUNT(*) FROM audit_log WHERE ts >= ? AND ts <= ?", (start, end)).fetchone()[0]
+    assert rows == 2
+    empty = sqlite3.connect(":memory:")
+    assert ledger_period(empty, datetime(2026, 9, 25, 12, tzinfo=timezone.utc)) == (
+        "2026-09-24T00:00:00Z",
+        "2026-09-25T12:00:01Z",
+    )

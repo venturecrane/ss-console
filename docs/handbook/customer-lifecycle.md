@@ -121,7 +121,7 @@ The exit path for an Operator seat, locked by Captain 2026-07-04. Every conseque
 
 1. **Final export** - deliver the audit record and operational memory (the `audit_export` / `memory_export` runtime-read kinds the decommission pipeline serves) within 14 days of the termination date.
 2. **Access revocation** - MCP grants revoked (the ADR 0057 kill switch), connector credentials revoked or returned per custody posture, managed mailbox closed.
-3. **Destruction** - `decommission-customer.sh` destroys the Machine, volume, and per-customer stores; residual control-plane data deleted except legal, tax, and accounting records.
+3. **Destruction** - `decommission-customer.sh` destroys the Machine, volume, and per-customer stores; residual control-plane data deleted except legal, tax, and accounting records. Before the customer directory is tombstoned, the same run builds the signed compliance evidence packet from the ledger it preserved off the Machine, and its report gives the packet's path, file count and signature check as read back from disk. A live run refuses to start without the signing key staged.
 4. **Attestation** - destruction confirmed in writing on request.
 
 Complete return and destruction within 30 days of termination; that number and the 30-day sub-processor notice are the DPA standard terms. A dry run of the full sequence against the staging seat precedes the first paid contract carrying these terms.

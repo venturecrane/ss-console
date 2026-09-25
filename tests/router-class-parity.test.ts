@@ -190,3 +190,39 @@ describe('matter-inbox-router: the vendor invoice class', () => {
     expect(bullet()).toContain('never finalizes, never touches trust, and never pays')
   })
 })
+
+describe('matter-inbox-router: the combined post class', () => {
+  const SLUG = 'combined-post-intake'
+  const POST = `${SKILLS_DIR}/${SLUG}/SKILL.md`
+  const bullet = () => flat(bulletFor(read(ROUTER), '**Combined post intake**'))
+
+  it('is reachable on the email channel, executed in-turn', () => {
+    expect(bullet()).toContain(`/app/skills/${SLUG}/SKILL.md`)
+    expect(flat(classTable(read(ROUTER)))).toContain('Combined post intake')
+    expect(read(RUBRIC)).toContain(`/app/skills/${SLUG}/SKILL.md`)
+  })
+
+  it('selects a rostered bare PDF with an empty or boilerplate body', () => {
+    // A front desk scans the post and sends it with no words. If the router
+    // counts letters before routing, a one-letter scan falls to "document
+    // received", which files nothing. Pinned in BOTH texts: the rubric is what
+    // the scheduled-poll channel reads, SKILL.md is what the email channel reads.
+    expect(bullet()).toContain('empty or boilerplate body')
+    expect(bullet()).toContain('a scan holding one letter is a bundle of one')
+    expect(flat(classTable(read(ROUTER)))).toContain('a PDF with an empty or boilerplate body')
+    const rubric = flat(read(RUBRIC))
+    expect(rubric).toContain('**A bare PDF is combined post.**')
+    expect(rubric).toContain('bare scanned PDF is combined post intake, not this')
+  })
+
+  it('files a court paper or a vendor bill in the bundle with a flag, never an expense or a deadline', () => {
+    const b = bullet()
+    expect(b).toContain('filed on its resolved matter by the same rules as any letter')
+    expect(b).toContain('never creates an expense and never sets a deadline')
+    const post = flat(read(POST))
+    expect(post).toContain('filed; court paper, needs calendaring')
+    expect(post).toContain('filed; looks like a vendor bill, not entered as an expense')
+    expect(post).toContain('1 court paper filed and needs calendaring')
+    expect(post).not.toContain('never filed here')
+  })
+})

@@ -867,14 +867,13 @@ async def run_once(
                         extra_metadata={**decision.extra_metadata, **envelope_meta},
                     )
         # The row goes in BEFORE the wake line, and cannot stop it (#2253).
-        _wake = _load_sibling_module("blind_wake.py", "cvt_blind_wake")
-        if _wake is not None:
-            await _wake.try_write_emitted_wake(
-                audit_writer_factory,
-                decision,
-                skill_name=SKILL_NAME,
-                next_scheduled_at=_next_scheduled_at(now),
-            )
+        await _H.try_write_emitted_wake(
+            audit_writer_factory,
+            decision,
+            skill_name=SKILL_NAME,
+            next_scheduled_at=_next_scheduled_at(now),
+            plan_counts=_H.plan_counts_total,
+        )
         return _emit_wake(decision)
 
     writer = audit_writer_factory()
@@ -1000,7 +999,7 @@ def parse_pull(raw: dict, *, today: date) -> tuple[list[VerificationItem], str |
         subject = _parse().first_str(task, _TASK_SUBJECT_KEYS)
         if not _is_verification_task(subject):
             continue
-        due = _parse().first_date(task, _TASK_DATE_KEYS) or today
+        due = _H.first_date(task, _TASK_DATE_KEYS) or today
         number, number_absent = _matter_number_of(task)
         items.append(
             VerificationItem(

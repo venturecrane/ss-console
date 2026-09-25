@@ -3,7 +3,8 @@
 Bounded, dependency-light, and deliberately dumb: the goal is to hand the
 agent the document's TEXT as data — never to render, execute, or interpret
 anything inside it. Supported types are the three that cover a law office's
-matter folder (PDF, DOCX, plain text); everything else returns an explicit
+matter folder (PDF, DOCX, plain text), plus Excel workbooks (``xlsx_io``);
+everything else returns an explicit
 unsupported error so the skill can fail closed instead of guessing.
 
 SCANNED PAPER (ss#2464). A law firm's record is half photocopies: on the
@@ -37,6 +38,8 @@ from __future__ import annotations
 import io
 from dataclasses import dataclass
 
+from .xlsx_io import OLE_MAGIC, OPERATOR_CREATOR, is_pptx, is_xlsx, xlsx_creator, xlsx_text
+
 _PDF_MAGIC = b"%PDF"
 _ZIP_MAGIC = b"PK\x03\x04"
 
@@ -50,6 +53,11 @@ METHOD_PLAIN = "plain"
 METHOD_VISION = "vision"
 METHOD_VISION_CACHED = "vision_cached"
 METHOD_NONE_SCANNED = "none_scanned"
+METHOD_XLSX = "xlsx"
+#: A workbook the Operator itself built (``add_workbook``). Readable like any
+#: other, but never counted as the firm's record by the drafting check: the
+#: Operator's own figures must not be able to validate a later draft.
+METHOD_XLSX_OPERATOR = "xlsx_operator"
 
 METHODS = frozenset(
     {
@@ -59,8 +67,14 @@ METHODS = frozenset(
         METHOD_VISION,
         METHOD_VISION_CACHED,
         METHOD_NONE_SCANNED,
+        METHOD_XLSX,
+        METHOD_XLSX_OPERATOR,
     }
 )
+
+#: The roads whose text is the document's own, mechanically read, and so may
+#: stand as the firm's record in a drafting check.
+MECHANICAL_METHODS = (METHOD_PYPDF, METHOD_DOCX, METHOD_PLAIN, METHOD_XLSX)
 
 #: Why a scanned PDF produced no text. Closed set — never an exception message
 #: (which can carry a URL or a credential fragment) and never model output.
@@ -76,9 +90,14 @@ REASON_INCOMPLETE = "incomplete_transcription"
 # on a toxicology report). Distinct from truncation so a refusal is never
 # misread as a page that ran out of room.
 REASON_REFUSED = "model_refused"
+# Another document was being transcribed and did not finish within the wait
+# (``vision.lock_timeout``). Nothing was sent; the same read can simply be asked
+# again, and a cached neighbour costs nothing.
+REASON_BUSY = "busy"
 
 REASONS = frozenset(
     {
+        REASON_BUSY,
         REASON_NOT_ATTEMPTED,
         REASON_NO_CREDENTIAL,
         REASON_DISABLED,
@@ -175,6 +194,13 @@ def _extract(
     ext = (file_extension or "").lower().lstrip(".")
     if blob.startswith(_PDF_MAGIC) or ext == "pdf":
         return _pdf_result(blob, allow_vision=allow_vision, allow_cache=allow_cache)
+    if blob.startswith(_ZIP_MAGIC) and _office_kind(blob) is not None:
+        return _office_result(blob, file_name)
+    if blob.startswith(OLE_MAGIC):
+        raise UnsupportedDocumentError(
+            f"{file_name or 'document'!r} is a legacy Office file (.xls/.doc/.msg) or an encrypted one; "
+            "needs manual review"
+        )
     if blob.startswith(_ZIP_MAGIC) and (ext in ("docx", "dotx", "docm", "dotm", "") or _looks_like_docx(blob)):
         return ExtractResult(_docx_text(blob), METHOD_DOCX)
     if ext in ("txt", "text", "md", "csv", "log", "eml"):
@@ -219,6 +245,24 @@ def _looks_scanned(text: str, pages: int) -> bool:
     if pages <= 0:
         return False
     return len(text.strip()) < SCANNED_CHARS_PER_PAGE * pages
+
+
+def _office_kind(blob: bytes) -> str | None:
+    """``"xlsx"`` or ``"pptx"`` for the two Office Open XML types that also
+    carry ``[Content_Types].xml`` and would otherwise take the DOCX road."""
+    if is_xlsx(blob):
+        return "xlsx"
+    return "pptx" if is_pptx(blob) else None
+
+
+def _office_result(blob: bytes, file_name: str) -> ExtractResult:
+    if _office_kind(blob) == "pptx":
+        raise UnsupportedDocumentError(f"{file_name or 'document'!r} is a PowerPoint file; needs manual review")
+    try:
+        text = xlsx_text(blob)
+    except ValueError as exc:
+        raise UnsupportedDocumentError(str(exc)) from exc
+    return ExtractResult(text, METHOD_XLSX_OPERATOR if xlsx_creator(blob) == OPERATOR_CREATOR else METHOD_XLSX)
 
 
 def _looks_like_docx(blob: bytes) -> bool:

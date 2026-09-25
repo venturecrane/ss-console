@@ -28,19 +28,14 @@ like ``dispatch_envelope.py`` and ``broker_writer.py``.
 
 Kept parallel with the escalator's copy in SHAPE, not byte-for-byte: the two
 skills are the only `templated` / `slot-templated` senders and their
-blind-wake behaviour must not diverge, but ``plan_counts`` differs on purpose
-(this gate serializes every plan; the escalator caps at 50).
+blind-wake behaviour must not diverge. The DECIDED path's row is
+``skill_helpers.try_write_emitted_wake`` in both (2026-09-25 review,
+Architecture 8); this skill hands it ``plan_counts_total`` because it
+serializes every plan, and the escalator hands it its own capped
+``blind_wake.plan_counts``.
 """
 
 from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    # The skill's own pre_run module, which loads this file beside itself at
-    # runtime; a type-only import so the WakeDecision annotation names a real
-    # class (pyright 2026-09-10: it was an undefined name).
-    from pre_run import WakeDecision
 
 import asyncio
 import sys
@@ -160,71 +155,3 @@ def _run_to_completion(coro_factory) -> None:
     thread.join()
     if "error" in outcome:
         raise outcome["error"]
-
-
-# ---------------------------------------------------------------------------
-# The DECISION path's row, moved here from pre_run.py so that every
-# EMITTED_WAKE write -- blind and decided -- lives in one module.
-# ---------------------------------------------------------------------------
-
-
-def _plan_counts(decision: "WakeDecision") -> dict:
-    """How many per-item plans the gate handed over.
-
-    Only ``plans_total`` here: this gate serializes the whole plan list (no
-    ``_MAX_SERIALIZED_PLANS`` cap, unlike its three siblings), so emitted and
-    total are the same number and a ``plans_truncated`` field would be a
-    constant dressed as a measurement.
-    """
-    if not decision.plans:
-        return {}
-    return {"plans_total": len(decision.plans)}
-
-
-async def try_write_emitted_wake(
-    audit_writer_factory,
-    decision,
-    *,
-    skill_name: str,
-    next_scheduled_at: str,
-) -> None:
-    """Best-effort EMITTED_WAKE row for a real-decision wake (#2253).
-
-    The suppress path logged its reasoning and the wake path logged nothing, so
-    the ledger held a record of every tick the gate stayed quiet and no record
-    of the ticks it fired. On 2026-08-10 the sibling escalator woke with its
-    connector down and sent an alert stating a date it could not read; the only
-    way anyone found it was reading the mailbox.
-
-    BEST-EFFORT IS THE CONTRACT, and it inverts the suppress path's on purpose.
-    Below, an audit failure escalates to a wake, because a silent suppress is
-    indistinguishable from a broken gate. Here the wake is already the decision,
-    so every failure — no writer wired, socket down, broker refusal, a writer
-    object too old to have the method — is swallowed. A wake that a failed audit
-    write could suppress or delay would be a gate made of observability.
-
-    It is not free, and the cost is stated rather than assumed away: the
-    broker-socket writer blocks for up to its heartbeat timeout against a
-    hung broker — the same bound the suppress path already accepts. Bounded, and
-    never a change of decision.
-
-    Not called on the fail-open paths: `ledger_unavailable_fail_open` returns
-    before there is a decision to record, `no_audit_writer_fail_open` fires
-    because there is no writer to call, and `suppress_heartbeat_failed_fail_open`
-    fires because a write to that writer just failed.
-    """
-    try:
-        writer = audit_writer_factory()
-        if writer is None:
-            return
-        await writer.write_emitted_wake(
-            skill_name=skill_name,
-            pre_run_inputs=decision.pre_run_inputs_digest,
-            decision_basis=decision.decision_basis,
-            next_scheduled_at=next_scheduled_at,
-            extra_metadata={**decision.extra_metadata, **_plan_counts(decision)},
-        )
-    except Exception as exc:  # noqa: BLE001 - observability never gates the wake; the failure is written to stderr and the wake proceeds
-        sys.stderr.write(
-            "[pre_run] blind-wake emitted-wake row write failed (" + type(exc).__name__ + ": " + str(exc) + ")\n"
-        )

@@ -61,6 +61,7 @@ EXPECTED_TOOLS = {
     "stage_vendor_invoice",
     "read_attachment_pages",
     "file_attachment_pages_to_matter",
+    "add_workbook",
     "get_webhook_subscriptions",
     "get_event_types",
     "create_webhook_subscription",
@@ -163,6 +164,9 @@ def test_write_surface_is_memo_document_and_deadline_engine() -> None:
         # record, nothing sent outside — and the page range is what keeps it
         # from being a filing of the whole bundle onto one client's matter.
         "file_attachment_pages_to_matter": "internal_write",
+        # A workbook built in code from JSON rows and filed on the matter: the
+        # same two-stage upload as add_file, bytes never composed by the model.
+        "add_workbook": "internal_write",
     }
 
 
