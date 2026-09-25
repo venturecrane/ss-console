@@ -251,7 +251,14 @@ def _done_since(ctx: _Ctx, recipients_by_matter: dict) -> tuple[dict, dict]:
         line = ctx.lines.done_since_line(ctx.lines.matter_head(number, None), state.last_completed_date, evidence)
         days = [state.last_completed_date, ctx.lines.evidence_day(atoms)]
         by_recipient.setdefault(target[0], []).append(
-            {"item_key": state.item_key, "matter_id": state.matter_id, "line": line, "_number": number, "_days": days}
+            {
+                "item_key": state.item_key,
+                "matter_id": state.matter_id,
+                "task_id": state.source_id,
+                "line": line,
+                "_number": number,
+                "_days": days,
+            }
         )
         if ctx.cm.quiet_level == "handles":
             memos.setdefault(state.matter_id, []).append(evidence)
@@ -346,7 +353,8 @@ def _message(ctx: _Ctx, group_key, es: list[Entry], since: list, plan: Plan) -> 
                 "task_id": e.task.task_id,
                 "staff_id": e.staff_id,
                 "line": e.text,
-                "payload": _payload(e),
+                "evidence": list(e.verdict.evidence),
+                "reason": e.verdict.reason,
             }
             for e in closes
         ],

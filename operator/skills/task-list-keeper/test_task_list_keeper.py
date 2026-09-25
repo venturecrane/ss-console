@@ -216,7 +216,7 @@ def test_own_done_task_closes_and_the_rest_are_handed_over_once(tmp_path, monkey
     # Set Two") closes; one document never closes every service task.
     assert {c["task_id"] for c in closes} == {"1ec31561-1136-4986-9692-1457dae9513a"}
     for c in closes:
-        assert c["payload"]["class"] == "done" and c["payload"]["evidence"]
+        assert c["reason"] == "document_on_file" and c["evidence"] == ["document:proof_of_service:2026-07-09"]
         assert c["staff_id"] == "s-atty"
         assert c["item_key"] == ledger.item_key(matter_id=c["matter_id"], kind="task", source_id=c["task_id"])
     handovers = [i for i in _items(envelope) if i["task_id"] in LEGACY and i["payload"]["action"] == "reassign"]
@@ -363,6 +363,7 @@ def test_done_since_last_time_and_its_memo(tmp_path, monkeypatch):
         {
             "item_key": key,
             "matter_id": M001,
+            "task_id": task_id,
             "line": "matter PI-2026-0001: a task I closed on 2026-09-21, a proof of service dated 2026-07-09 was on file",
         }
     ]
@@ -396,3 +397,30 @@ def test_money_and_priority_words_are_at_stake(subject):
         classify.classify(task, classify.MatterFacts("m"), today=TODAY, window_days=14, duplicates=set()).klass
         == "at_stake"
     )
+
+
+def test_every_row_the_envelope_implies_passes_the_ledger_validator(tmp_path, monkeypatch):
+    """The overlay refuses a whole envelope when one payload fails the casework
+    ledger's own validator; run that validator (the vendored twin) over every
+    item and every close this skill writes."""
+    records = {"name": "Valley Imaging certified records.pdf", "date": "2026-07-03"}
+    _out, envelope, _ = _run(_raw(files={M101: [POS_FILE], M001: [records]}), _yaml(), tmp_path, monkeypatch)
+    checked = 0
+    for message in envelope["messages"]:
+        numbers = [i["n"] for i in message["items"]]
+        assert numbers == list(range(1, len(numbers) + 1))
+        for item in message["items"]:
+            ledger._validate_payload(item["event"], item["payload"], "task")
+            assert item["payload"]["action"] == "keep" or item["payload"]["staff_id"]
+            checked += 1
+        for close in message["closes"]:
+            payload = {
+                "action": "close",
+                "class": "done",
+                "staff_id": close["staff_id"],
+                "evidence": close["evidence"],
+                "reason": close["reason"],
+            }
+            ledger._validate_payload("closed_by_record", payload, "task")
+            checked += 1
+    assert checked >= 3
