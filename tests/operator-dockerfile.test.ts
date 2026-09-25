@@ -1406,9 +1406,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // scanner goes to the person scope.device_senders names.
     // 8757e374 -> 48726abb (2026-09-25, overlay#384). Plain-word replies to a
     // numbered deadline digest (escalation_reply_ack, dispatch_ref stamping).
-    // 48726abb -> ed60de15 (2026-09-25, overlay#385). Deleting calendar events
+    // 48726abb -> f3f4c9f1 (2026-09-25, overlay#385 merge commit). Deleting calendar events
     // is an act an administrator confirms.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="ed60de15ac6c9d2349c89060ffa7dd42bf2e7c98"')
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="f3f4c9f1dd2defdb4e2fb313045c407a08c64421"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
