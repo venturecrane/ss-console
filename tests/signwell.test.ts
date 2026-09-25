@@ -40,6 +40,12 @@ import {
   type MemoryBucket,
 } from './_stubs/behavioural'
 
+vi.mock('../src/lib/observability/sentry', () => ({
+  captureError: vi.fn(),
+  captureWarning: vi.fn(),
+}))
+import { captureError } from '../src/lib/observability/sentry'
+
 const handleDocumentCompleted = vi.fn()
 vi.mock('../src/lib/webhooks/signwell-handler', () => ({
   handleDocumentCompleted: (...args: unknown[]) => handleDocumentCompleted(...args),
@@ -384,7 +390,11 @@ describe('finalizeCompletedSOWSignature: the paths the happy-path suite does not
     } as unknown as MemoryBucket['bucket']
     const res = await finalize('sw-doc-1', failing)
     expect(res.status).toBe(500)
-    expect(await res.json()).toEqual({ error: 'INTERNAL_ERROR' })
+    expect(await res.json()).toEqual({
+      error: 'internal_error',
+      message: 'Internal server error.',
+    })
+    expect(captureError).toHaveBeenCalledWith(expect.any(Error), 'sow/finalize')
     expect((await getQuote(db, ORG, seeded.quoteId))?.status).toBe('sent')
     expect(
       await db.prepare('SELECT COUNT(*) AS c FROM engagements').first<{ c: number }>()
@@ -392,6 +402,36 @@ describe('finalizeCompletedSOWSignature: the paths the happy-path suite does not
       c: 0,
     })
   })
+
+  for (const [label, lineItems] of [
+    [
+      'a row without estimated_hours',
+      '[{"problem":"intake","description":"Rebuild the intake form"}]',
+    ],
+    [
+      'a row with non-numeric estimated_hours',
+      '[{"problem":"intake","description":"Rebuild the intake form","estimated_hours":"ten"}]',
+    ],
+  ]) {
+    it(`a quote whose line items carry ${label} is refused before anything is written, and Sentry hears it`, async () => {
+      await db
+        .prepare('UPDATE quotes SET line_items = ? WHERE id = ?')
+        .bind(lineItems, seeded.quoteId)
+        .run()
+      vi.mocked(captureError).mockClear()
+      const res = await finalize('sw-doc-1')
+      expect(res.status).toBe(500)
+      expect(await res.json()).toMatchObject({ error: 'internal_error' })
+      expect(vi.mocked(captureError).mock.calls[0]?.[1]).toBe('sow/finalize')
+      expect(String(vi.mocked(captureError).mock.calls[0]?.[0])).toContain('invalid_row at row 0')
+      const signedKey = `orgs/${ORG}/quotes/${seeded.quoteId}/sow/${seeded.revisionId}/signed.pdf`
+      expect(storage.store.has(signedKey)).toBe(false)
+      expect(
+        await db.prepare('SELECT COUNT(*) AS c FROM engagements').first<{ c: number }>()
+      ).toEqual({ c: 0 })
+      expect((await getQuote(db, ORG, seeded.quoteId))?.status).toBe('sent')
+    })
+  }
 
   it('a completed signature is persisted at the revisioned signed key and the quote is accepted', async () => {
     const res = await finalize('sw-doc-1')

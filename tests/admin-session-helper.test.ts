@@ -25,7 +25,10 @@ describe('auth: admin session helper', () => {
     if (result.ok) throw new Error('expected unauthorized result')
     expect(result.response.status).toBe(401)
     expect(result.response.headers.get('Content-Type')).toBe('application/json')
-    await expect(result.response.json()).resolves.toEqual({ error: 'Unauthorized' })
+    await expect(result.response.json()).resolves.toEqual({
+      error: 'unauthorized',
+      message: 'Unauthorized.',
+    })
   })
 
   it('returns a JSON 401 for non-admin requests', async () => {
@@ -42,7 +45,10 @@ describe('auth: admin session helper', () => {
     expect(result.ok).toBe(false)
     if (result.ok) throw new Error('expected unauthorized result')
     expect(result.response.status).toBe(401)
-    await expect(result.response.json()).resolves.toEqual({ error: 'Unauthorized' })
+    await expect(result.response.json()).resolves.toEqual({
+      error: 'unauthorized',
+      message: 'Unauthorized.',
+    })
   })
 
   it('narrows admin sessions for route handlers', () => {

@@ -10,6 +10,7 @@
  */
 
 import { decrypt } from '../security/encryption.js'
+import { parseJsonRecord } from '../api/helpers'
 
 export interface Integration {
   id: string
@@ -191,13 +192,9 @@ async function maybeMarkRevoked(
   body: string
 ): Promise<void> {
   if (status !== 400 && status !== 401) return
-  try {
-    const parsed = JSON.parse(body) as { error?: string }
-    if (parsed.error === 'invalid_grant') {
-      await updateIntegrationStatus(db, integrationId, 'revoked', 'Refresh token revoked by Google')
-    }
-  } catch {
-    // JSON parse failed — leave status as-is
+  // A body that is not a JSON object leaves the status as it is.
+  if (parseJsonRecord(body)?.error === 'invalid_grant') {
+    await updateIntegrationStatus(db, integrationId, 'revoked', 'Refresh token revoked by Google')
   }
 }
 

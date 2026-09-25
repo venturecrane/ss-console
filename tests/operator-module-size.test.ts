@@ -13,12 +13,14 @@ import { resolve, join, relative } from 'node:path'
  *      `line-length` — the per-line character width behind E501. There is no
  *      equivalent of eslint's `max-lines`, so the ceiling cannot be expressed
  *      as a ruff rule at all.
- *   2. `.github/workflows/operator-substrate.yml` is NOT a required status
- *      check. The only contexts gating a merge to main are
- *      "Typecheck, Lint, Format, Test" (this suite, via `npm run verify`) and
- *      "Security Summary". On 2026-08-21 PR #2526 merged with the substrate
- *      suite red, which is what a non-required gate buys you. A ceiling placed
- *      there would not gate.
+ *   2. When this file was written, `.github/workflows/operator-substrate.yml`
+ *      was NOT a required status check: on 2026-08-21 PR #2526 merged with
+ *      the substrate suite red, so a ceiling placed there would not have
+ *      gated. `substrate` has since become a required context in ruleset
+ *      15555219 (probed 2026-09-25 with `gh api .../rulesets/15555219`), but
+ *      the ceiling stays here, in "Typecheck, Lint, Format, Test" via
+ *      `npm run verify`, because this suite owns the counter and the baseline
+ *      it regenerates (see ONE COUNTER, ONE ARTIFACT below).
  *
  * WHAT IT COUNTS. Logical lines: blanks, comment-only lines, and docstring
  * bodies excluded. That matches what `eslint.config.js:20` already does for

@@ -33,7 +33,7 @@ import { join, resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { validate } from '../src/lib/operator/customer-yaml'
 import { validateRoutineGrid } from '../src/lib/operator/routine-grid'
-import { isCeiling, restrictiveness } from '../src/lib/portal/operator/config-governance'
+import { isCeiling, restrictiveness } from '../src/lib/operator/vertical-floors'
 
 const CUSTOMERS_DIR = resolve('operator/customers')
 

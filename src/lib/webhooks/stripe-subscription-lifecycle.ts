@@ -17,7 +17,8 @@ import {
   setSubscriptionCancelSchedule,
   type SubscriptionBillingRow,
 } from '../db/subscriptions'
-import { alertTeam, entityName, ok, serverError, unixToIso } from './stripe-subscription-shared'
+import { failedResponse } from '../api/failures'
+import { alertTeam, entityName, ok, unixToIso } from './stripe-subscription-shared'
 
 /** The subscription-payload fields the status mirror consumes. */
 export interface StripeSubscriptionEventPayload {
@@ -91,8 +92,7 @@ export async function handleSubscriptionLifecycle(
     await mirrorCancelSchedule(db, resendApiKey, sub, payload)
     return ok()
   } catch (err) {
-    console.error('[stripe-subscription] lifecycle mirror failed:', err)
-    return serverError()
+    return failedResponse(err, 'webhook/stripe/subscription-lifecycle')
   }
 }
 

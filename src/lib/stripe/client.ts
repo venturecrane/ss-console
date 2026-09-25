@@ -11,9 +11,15 @@
 
 import type { StripeCreateInvoiceParams, StripeInvoiceResult } from './types'
 
-const STRIPE_API_BASE = 'https://api.stripe.com/v1'
+/**
+ * The Stripe REST base and request headers: the one home for both. checkout.ts
+ * and subscriptions.ts each carried a byte-identical private copy until
+ * 2026-09-25 (review 2026-09-25, Code Quality 3); the no-restricted-syntax
+ * guard in eslint.config.js refuses a new one.
+ */
+export const STRIPE_API_BASE = 'https://api.stripe.com/v1'
 
-function stripeHeaders(apiKey: string): Record<string, string> {
+export function stripeHeaders(apiKey: string): Record<string, string> {
   return {
     Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/x-www-form-urlencoded',
