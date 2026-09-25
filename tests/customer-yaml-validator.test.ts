@@ -3526,11 +3526,24 @@ describe('validate — send exposure classes (ADR 0075)', () => {
     if (!r.ok) expect(codesOf(r.errors)).toContain('InvalidActionCeiling')
   })
 
-  it('still rejects confirm on destructive', () => {
-    // A destructive act REMOVES something, and the read-back cannot show the
-    // admin what would be lost. It stays refused-or-drafted until somebody
-    // argues otherwise in writing.
+  // 2026-09-25 (Captain decision). `destructive: confirm` is the admin-confirmed
+  // calendar-event deletion: the [act ...] line lists every event it would
+  // remove, which answers the objection that kept destructive out. Exposure
+  // only, for the same reason as commitment.
+  it('accepts confirm on destructive in exposure', () => {
     const r = validate(withExposure({ destructive: 'confirm' }))
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.value.personas[0].entitlements.exposure.destructive).toBe('confirm')
+  })
+
+  it('rejects confirm on destructive in exposure_ceiling', () => {
+    const f = validFixture()
+    const persona = (f['personas'] as Record<string, unknown>[])[0]
+    persona['entitlements'] = {
+      exposure: { destructive: 'confirm' },
+      exposure_ceiling: { destructive: 'confirm' },
+    }
+    const r = validate(f)
     expect(r.ok).toBe(false)
     if (!r.ok) expect(codesOf(r.errors)).toContain('InvalidActionCeiling')
   })

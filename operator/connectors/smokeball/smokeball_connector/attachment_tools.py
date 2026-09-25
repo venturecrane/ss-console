@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .event_delete import register as _register_event_delete_tools
 from .letter_tools import register as _register_letter_tools
 from .vendor_invoice_tools import register as _register_vendor_invoice_tools
 from .workbook_tools import register as _register_workbook_tools
@@ -27,10 +28,12 @@ def register(server: Any) -> None:
 
     ``add_workbook`` is not attachment-rooted. It registers here because this
     is the one registrar the size-ratcheted ``server.py`` already calls, and it
-    goes LAST so the earlier tools keep their positions."""
+    goes LAST so the earlier tools keep their positions. The calendar-event
+    deletion pair is not attachment-rooted either and registers after it for the same reason."""
     _register_vendor_invoice_tools(server)
     _register_letter_tools(server)
     _register_workbook_tools(server)
+    _register_event_delete_tools(server)
 
 
 __all__ = ["register"]

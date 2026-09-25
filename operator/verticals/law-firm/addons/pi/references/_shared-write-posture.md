@@ -62,6 +62,16 @@ folder). `add_file` never overwrites: a superseding file is uploaded first and t
 prior one removed by id only after the read-back confirms the new one (the August
 2026 delivery posture); a skill never deletes.
 
+Calendar events are deleted only as an act an Operator administrator confirms,
+and never by a skill on its own initiative. When an administrator asks, call
+`prepare_event_deletion` for the matters, then `delete_events` with the `events`
+it returned, unchanged (at most 50 per act). The seat withholds the delete and
+returns an `[act ...]` line listing every event; put it in the reply verbatim.
+Only the administrator's yes performs it. The result reads each event back and
+reports `deleted`, `pending` (accepted, not yet applied: never delete again),
+`skipped` with the reason (changed, moved, or already gone since the proposal)
+and `failed`. Recurring events are never deleted.
+
 ## 4. `create_memo` is the audit log — but it too can fail
 
 The internal `create_memo` (the audit/training-output record) has an ASSUMED body
